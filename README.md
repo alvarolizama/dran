@@ -38,9 +38,33 @@ mix setup
 
 `mix setup` runs:
 1. `mix deps.get` — install Elixir dependencies
-2. `mix ecto.setup` — create DB, run migrations, seed default context
-3. `mix assets.setup` — install Tailwind & esbuild
-4. `mix assets.build` — build CSS & JS bundles
+2. `mix ecto.create` — create the database
+3. `mix ecto.migrate` — run migrations
+4. `mix assets.setup` — install Tailwind & esbuild
+5. `mix assets.build` — build CSS & JS bundles
+6. `mix seed` — create the default context from env vars
+
+### Creating the default context
+
+The seed step creates a context from `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME` (defaults to `personal` / `Personal`):
+
+```bash
+# Use defaults (personal / Personal)
+mix seed
+
+# Or set custom context before seeding
+export DRAN_CONTEXT_SLUG="work"
+export DRAN_CONTEXT_NAME="Work"
+mix seed
+```
+
+In production, run migrations without seeds, then seed the context separately:
+
+```bash
+mix ecto.create
+mix ecto.migrate
+mix seed  # creates the default context only
+```
 
 ### Running
 
@@ -85,7 +109,8 @@ Migrations create the schema automatically:
 
 ```bash
 mix ecto.create    # create the database
-mix ecto.migrate   # run migrations
+mix ecto.migrate   # run migrations (no seeds)
+mix seed           # create default context from env vars
 ```
 
 The migrations create:
@@ -97,13 +122,13 @@ The migrations create:
 
 ### Seeds
 
-Seeds create the default context from `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME`:
+Seeds create **only the default context** (no test data) from `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME`:
 
 ```bash
-mix run priv/repo/seeds.exs
+mix seed
 ```
 
-Or automatically via `mix ecto.setup`.
+This is a separate step — `mix ecto.create` + `mix ecto.migrate` do NOT run seeds. The `mix setup` alias includes `mix seed` at the end for convenience.
 
 ### Reset
 
