@@ -84,7 +84,64 @@ defmodule DranWeb.GoalLive do
               </div>
             </div>
 
-            <div :if={@active_tab == "overview"}></div>
+            <div :if={@active_tab == "overview"}>
+              <%= if @editing do %>
+                <.form
+                  for={@form}
+                  id="page-edit-form"
+                  phx-change="validate_page"
+                  phx-submit="save_page"
+                >
+                  <div class="space-y-5">
+                    <.input
+                      field={@form[:title]}
+                      type="text"
+                      label="Title"
+                      placeholder="Enter a title…"
+                      class="text-lg font-medium"
+                    />
+                    <div class="grid grid-cols-2 gap-4">
+                      <.input
+                        field={@form[:slug]}
+                        type="text"
+                        label="Slug"
+                        placeholder="slug"
+                        class="w-full font-mono text-sm"
+                      />
+                      <.input
+                        field={@form[:summary]}
+                        type="text"
+                        label="Summary"
+                        placeholder="One-line description"
+                        class="w-full text-sm"
+                      />
+                    </div>
+                    <.input
+                      field={@form[:tags]}
+                      type="text"
+                      label="Tags"
+                      placeholder="comma, separated, tags"
+                      class="w-full text-sm"
+                    />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
+                    <.markdown_editor
+                      id="goal-editor"
+                      body={@page.body}
+                      context_id={@context_id}
+                      save_status={@save_status}
+                    />
+                    <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">Cancel</button>
+                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                    </div>
+                  </div>
+                </.form>
+              <% else %>
+                <div class="prose prose-base dark:prose-invert max-w-none">
+                  {render_markdown(@page.body, context_id: @page.context_id)}
+                </div>
+              <% end %>
+            </div>
 
             <div :if={@active_tab == "notes"}>
               <div :for={note <- @goal_notes} class="p-3 rounded-lg border border-base-300 mb-2">
@@ -362,7 +419,7 @@ defmodule DranWeb.GoalLive do
      )}
   end
 
-  def handle_params(%{"slug" => slug}, _url, socket) do
+  def handle_params(%{"slug" => slug} = params, _url, socket) do
     context = socket.assigns.context
 
     if context do

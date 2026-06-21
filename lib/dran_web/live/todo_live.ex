@@ -234,6 +234,7 @@ defmodule DranWeb.TodoLive do
                       placeholder="comma, separated, tags"
                       class="text-sm"
                     />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
                     <.markdown_editor
                       id="todo-editor"
                       body={@page.body}

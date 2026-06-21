@@ -86,6 +86,7 @@ defmodule DranWeb.ReferenceLive do
                       placeholder="Tags (comma separated)"
                       class="w-full"
                     />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
                     <.markdown_editor
                       id="reference-editor"
                       body={@page.body}

@@ -78,6 +78,8 @@ defmodule DranWeb.PageNewLive do
               class="text-sm"
             />
 
+            <.meta_fields page_type={@page_type} meta={%{}} />
+
             <div>
               <span class="label mb-1 block text-sm font-medium text-base-content/70">Content</span>
               <.markdown_editor

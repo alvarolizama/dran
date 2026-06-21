@@ -172,8 +172,12 @@ defmodule Dran.Brain.PageMeta do
     validate_inclusion(cs, :health, @healths)
   end
 
+  @plan_statuses ~w(draft active on_hold completed archived)
+
   defp validate_meta_for_type(cs, "plan") do
-    validate_inclusion(cs, :horizon, @horizons)
+    cs
+    |> validate_inclusion(:horizon, @horizons)
+    |> validate_inclusion(:status, @plan_statuses)
   end
 
   defp validate_meta_for_type(cs, _type), do: cs
@@ -185,4 +189,87 @@ defmodule Dran.Brain.PageMeta do
   def artifact_kinds, do: @artifact_kinds
   def kanban_statuses, do: @kanban_statuses
   def priorities, do: @priorities
+  def healths, do: @healths
+  def horizons, do: @horizons
+  def plan_statuses, do: @plan_statuses
+
+  @doc "Returns the metadata fields and their select options for a given page type."
+  def meta_fields_for("note") do
+    [
+      {:select, "kind", "Kind", Enum.map(@note_kinds, &{String.capitalize(&1), &1})},
+      {:date, "date", "Date"},
+      {:text, "author", "Author"}
+    ]
+  end
+
+  def meta_fields_for("concept") do
+    [
+      {:select, "kind", "Kind", Enum.map(@concept_kinds, &{String.capitalize(&1), &1})},
+      {:text, "domain", "Domain"},
+      {:text, "parent_concept", "Parent concept"}
+    ]
+  end
+
+  def meta_fields_for("entity") do
+    [
+      {:select, "kind", "Kind", Enum.map(@entity_kinds, &{String.capitalize(&1), &1})},
+      {:text, "location", "Location"},
+      {:text, "external_url", "External URL"}
+    ]
+  end
+
+  def meta_fields_for("reference") do
+    [
+      {:select, "kind", "Kind", Enum.map(@reference_kinds, &{String.capitalize(&1), &1})},
+      {:text, "source_url", "Source URL"},
+      {:date, "published_at", "Published at"}
+    ]
+  end
+
+  def meta_fields_for("artifact") do
+    [
+      {:select, "kind", "Kind", Enum.map(@artifact_kinds, &{String.capitalize(&1), &1})}
+    ]
+  end
+
+  def meta_fields_for("plan") do
+    [
+      {:select, "horizon", "Horizon", Enum.map(@horizons, &{String.capitalize(&1), &1})},
+      {:select, "status", "Status", Enum.map(@plan_statuses, &{String.capitalize(&1), &1})},
+      {:text, "period", "Period"},
+      {:text, "goal_slug", "Goal slug"}
+    ]
+  end
+
+  def meta_fields_for("goal") do
+    [
+      {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
+      {:date, "start_date", "Start date"},
+      {:date, "target_date", "Target date"}
+    ]
+  end
+
+  def meta_fields_for("todo") do
+    [
+      {:select, "kanban_status", "Status",
+       [
+         {"Backlog", "backlog"},
+         {"This Week", "this_week"},
+         {"Today", "today"},
+         {"In Progress", "in_progress"},
+         {"Done", "done"},
+         {"Cancelled", "cancelled"}
+       ]},
+      {:select, "priority", "Priority",
+       [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
+      {:date, "due_date", "Due date"},
+      {:text, "goal_slug", "Goal slug"}
+    ]
+  end
+
+  def meta_fields_for("comparison") do
+    []
+  end
+
+  def meta_fields_for(_), do: []
 end

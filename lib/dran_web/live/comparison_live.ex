@@ -86,6 +86,7 @@ defmodule DranWeb.ComparisonLive do
                       placeholder="Tags (comma separated)"
                       class="w-full"
                     />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
                     <.markdown_editor
                       id="comparison-editor"
                       body={@page.body}

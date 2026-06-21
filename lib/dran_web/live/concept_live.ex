@@ -90,6 +90,7 @@ defmodule DranWeb.ConceptLive do
                       class="w-full"
                     />
 
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
                     <.markdown_editor
                       id="concept-editor"
                       body={@page.body}

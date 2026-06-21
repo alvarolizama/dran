@@ -57,7 +57,7 @@ defmodule DranWeb do
       # Shared function components for LiveViews
       import DranWeb.PageComponents
       import DranWeb.PageListComponents
-      import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1]
+      import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1, meta_fields: 1]
 
       # Shared helpers for graph tab event handling
       import DranWeb.GraphEvents

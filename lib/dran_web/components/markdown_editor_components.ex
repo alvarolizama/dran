@@ -126,4 +126,64 @@ defmodule DranWeb.MarkdownEditorComponents do
     </button>
     """
   end
+
+  @doc """
+  Renders type-specific metadata fields (selects, date pickers, text inputs)
+  based on the page type. Reads from `@form[:meta_kind]`, `@form[:meta_horizon]`,
+  etc. — the LiveView must expose these as form fields.
+  """
+  attr :page_type, :string, required: true
+  attr :meta, :map, default: %{}
+
+  def meta_fields(assigns) do
+    fields = Dran.Brain.PageMeta.meta_fields_for(assigns.page_type)
+    assigns = assign(assigns, :fields, fields)
+
+    ~H"""
+    <div :if={@fields != []} class="space-y-4">
+      <div class="text-sm font-semibold text-base-content/70">Metadata</div>
+      <div class="grid grid-cols-2 gap-4">
+        <%= for {type, key, label, opts} <- @fields do %>
+          <% value = Map.get(@meta, key) || Map.get(@meta, to_string(key)) || "" %>
+          <%= case type do %>
+            <% :select -> %>
+              <div>
+                <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
+                <select
+                  name={"page[meta][#{key}]"}
+                  class="select select-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
+                >
+                  <option value=""></option>
+                  <%= for {opt_label, opt_val} <- opts do %>
+                    <option value={opt_val} selected={value == opt_val}>{opt_label}</option>
+                  <% end %>
+                </select>
+              </div>
+            <% :date -> %>
+              <div>
+                <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
+                <input
+                  type="date"
+                  name={"page[meta][#{key}]"}
+                  value={value}
+                  class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
+                />
+              </div>
+            <% :text -> %>
+              <div>
+                <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
+                <input
+                  type="text"
+                  name={"page[meta][#{key}]"}
+                  value={value}
+                  placeholder={label}
+                  class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
+                />
+              </div>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
 end
