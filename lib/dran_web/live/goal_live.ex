@@ -419,7 +419,7 @@ defmodule DranWeb.GoalLive do
      )}
   end
 
-  def handle_params(%{"slug" => slug} = params, _url, socket) do
+  def handle_params(%{"slug" => slug} = _params, _url, socket) do
     context = socket.assigns.context
 
     if context do

@@ -2,10 +2,19 @@
 #
 #     mix run priv/repo/seeds.exs
 #
-# Inside the script, you can read and write to any of your
-# repositories directly:
-#
-#     Dran.Repo.insert!(%Dran.SomeSchema{})
-#
-# We recommend using the bang functions (`insert!`, `update!`
-# and so on) as they will fail if something goes wrong.
+# Creates the default context from environment variables (or defaults).
+
+alias Dran.Repo
+alias Dran.Brain.Context
+
+context_slug = Dran.Auth.default_context_slug()
+context_name = Dran.Auth.default_context_name()
+
+case Repo.get_by(Context, slug: context_slug) do
+  nil ->
+    Repo.insert!(%Context{name: context_name, slug: context_slug})
+    IO.puts("Created context: #{context_name} (#{context_slug})")
+
+  existing ->
+    IO.puts("Context already exists: #{existing.name} (#{existing.slug})")
+end
