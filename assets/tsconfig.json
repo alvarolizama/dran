@@ -1,0 +1,21 @@
+// This file is needed on most editors to enable the intelligent autocompletion
+// of LiveView's JavaScript API methods. You can safely delete it if you don't need it.
+//
+// With a package.json in assets/, esbuild resolves npm packages from
+// assets/node_modules and Phoenix deps from ../deps. We expose both via
+// path aliases so editors and esbuild agree on module resolution.
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "*": ["./node_modules/*", "../deps/*"]
+    },
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022"
+  },
+  "include": ["js/**/*"]
+}

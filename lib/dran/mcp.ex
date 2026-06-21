@@ -1,0 +1,779 @@
+defmodule Dran.MCP do
+  @moduledoc """
+  MCP (Model Context Protocol) server for Dran — Streamable HTTP transport.
+
+  Served from Phoenix at `/mcp`. Supports POST, GET, and DELETE per
+  MCP spec 2025-03-26 Streamable HTTP transport.
+
+  ## Endpoints
+  - `POST /mcp` — send JSON-RPC request → JSON or SSE response
+  - `GET /mcp` — open SSE stream for server-initiated messages
+  - `DELETE /mcp` — terminate session
+
+  ## Tools
+  - `search` — FTS search across pages
+  - `create_page` — create a new page
+  - `update_page` — update an existing page
+  - `get_page` — get a page by slug (returns markdown)
+  - `create_todo` — create a todo item
+  - `lint` — run lint report for a context
+  - `ingest_url` — save a URL or download a file as a reference page
+
+  ## Resources
+  - `page://{context}/{slug}` — page content as markdown
+  - `goal://{context}/{slug}` — goal detail with todos and plans
+  - `wiki://{context}/index` — wiki index (all slugs + titles)
+
+  ## Prompts
+  - `research_topic` — scaffold a research page
+  - `brainstorm` — generate ideas around a topic
+  - `goal_review` — review a goal's status
+  """
+
+  alias Dran.Brain
+
+  @protocol_version "2025-03-26"
+
+  @tools [
+    %{
+      "name" => "search",
+      "description" =>
+        "Full-text search across pages in a context. Returns compact results with title, slug, type, and excerpt. Use this to find pages by content.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "query" => %{"type" => "string", "description" => "Search query (natural language)"},
+          "context" => %{"type" => "string", "description" => "Context slug (e.g. 'personal')"},
+          "type" => %{
+            "type" => "string",
+            "description" =>
+              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)"
+          }
+        },
+        "required" => ["query", "context"]
+      }
+    },
+    %{
+      "name" => "create_page",
+      "description" => """
+      Create a new page in the second brain. Each page has a type that determines its purpose and metadata.
+
+      Page types and their subtypes (use 'kind' in meta):
+      - note: thought, journal, idea, meeting, question, quote
+      - concept: technique, pattern, discipline, theory
+      - entity: person, company, product, tool, place, event
+      - reference: article, paper, video, podcast, book
+      - artifact: document, code, design, deliverable, file
+      - goal: has health (green/yellow/red), target_date
+      - plan: has horizon (weekly/monthly/quarterly/yearly), status
+      - todo: has kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
+      - comparison: has entities, criteria, verdict
+
+      Use [[slug]] in body to wikilink to other pages. Use ![[slug]] to embed artifacts.
+      """,
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "title" => %{"type" => "string", "description" => "Page title"},
+          "slug" => %{
+            "type" => "string",
+            "description" => "URL-friendly slug (kebab-case, unique per context)"
+          },
+          "body" => %{
+            "type" => "string",
+            "description" =>
+              "Page content in Markdown. Use [[slug]] for wikilinks, ![[slug]] for embeds."
+          },
+          "page_type" => %{
+            "type" => "string",
+            "description" =>
+              "Page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison",
+            "enum" => [
+              "note",
+              "concept",
+              "entity",
+              "reference",
+              "goal",
+              "plan",
+              "todo",
+              "artifact",
+              "comparison"
+            ]
+          },
+          "tags" => %{
+            "type" => "array",
+            "items" => %{"type" => "string"},
+            "description" => "Tags (kebab-case)"
+          },
+          "meta" => %{
+            "type" => "object",
+            "description" =>
+              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kanban_status, priority, goal_slug, due_date}, goal→{health, target_date, start_date, team}, plan→{horizon, status}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, artifact→{kind, filename, mime_type, storage_path}, comparison→{entities, criteria, verdict}."
+          },
+          "summary" => %{"type" => "string", "description" => "One-line summary (optional)"},
+          "owner" => %{"type" => "string", "description" => "Owner identity (defaults to system)"},
+          "created_by" => %{
+            "type" => "string",
+            "description" => "Who created this page (defaults to system)"
+          }
+        },
+        "required" => ["context", "title", "slug", "page_type"]
+      }
+    },
+    %{
+      "name" => "update_page",
+      "description" =>
+        "Update an existing page by slug. Can update title, body, tags, or meta. Version auto-increments on body change. Wikilinks in body are auto-resolved into relations.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "slug" => %{"type" => "string", "description" => "Page slug to update"},
+          "title" => %{"type" => "string", "description" => "New title (optional)"},
+          "body" => %{
+            "type" => "string",
+            "description" => "New markdown body (optional). Use [[slug]] for wikilinks."
+          },
+          "tags" => %{
+            "type" => "array",
+            "items" => %{"type" => "string"},
+            "description" => "New tags (optional)"
+          },
+          "meta" => %{"type" => "object", "description" => "Updated metadata (optional)"},
+          "updated_by" => %{
+            "type" => "string",
+            "description" => "Who is updating (defaults to system)"
+          }
+        },
+        "required" => ["context", "slug"]
+      }
+    },
+    %{
+      "name" => "get_page",
+      "description" =>
+        "Get a page by slug. Returns full markdown content with metadata. Use this to read a single page's content.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "slug" => %{"type" => "string", "description" => "Page slug"}
+        },
+        "required" => ["context", "slug"]
+      }
+    },
+    %{
+      "name" => "create_todo",
+      "description" =>
+        "Create a todo item linked to a goal. Todos have kanban_status (backlog/this_week/today/in_progress/done/cancelled) and priority (low/medium/high/urgent).",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "title" => %{"type" => "string", "description" => "Todo title"},
+          "slug" => %{"type" => "string", "description" => "Todo slug (kebab-case)"},
+          "goal_slug" => %{
+            "type" => "string",
+            "description" => "Goal this todo belongs to (optional)"
+          },
+          "body" => %{
+            "type" => "string",
+            "description" => "Todo description in markdown (optional)"
+          },
+          "priority" => %{
+            "type" => "string",
+            "description" => "low, medium, high, urgent (default: medium)",
+            "enum" => ["low", "medium", "high", "urgent"]
+          },
+          "kanban_status" => %{
+            "type" => "string",
+            "description" =>
+              "backlog, this_week, today, in_progress, done, cancelled (default: backlog)",
+            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+          },
+          "due_date" => %{"type" => "string", "description" => "Due date YYYY-MM-DD (optional)"},
+          "owner" => %{"type" => "string", "description" => "Owner identity (defaults to system)"},
+          "created_by" => %{
+            "type" => "string",
+            "description" => "Who created this todo (defaults to system)"
+          }
+        },
+        "required" => ["context", "title", "slug"]
+      }
+    },
+    %{
+      "name" => "lint",
+      "description" =>
+        "Run a quality lint report for a context. Returns orphans (pages with no inbound links), broken wikilinks ([[slug]] pointing to non-existent pages), stale pages (not updated in 90 days), and contested knowledge. Use this to identify maintenance tasks.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{"type" => "string", "description" => "Context slug"}
+        },
+        "required" => ["context"]
+      }
+    },
+    %{
+      "name" => "ingest_url",
+      "description" =>
+        "Save a URL into the second brain. For web pages (HTML), saves the URL as a reference page — the agent can read the content later via the URL. For files (PDF, documents, images), downloads and stores the file, creating a reference with a download link. Does NOT extract or parse content — that's the agent's job.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "url" => %{"type" => "string", "description" => "URL to ingest (HTML article or PDF)"},
+          "slug" => %{
+            "type" => "string",
+            "description" => "Custom slug (auto from title if omitted)"
+          },
+          "tags" => %{
+            "type" => "array",
+            "items" => %{"type" => "string"},
+            "description" => "Tags (optional)"
+          }
+        },
+        "required" => ["context", "url"]
+      }
+    }
+  ]
+
+  @resources [
+    %{
+      "uri" => "page://{context}/{slug}",
+      "name" => "Page content",
+      "description" => "Full page content as markdown",
+      "mimeType" => "text/markdown"
+    },
+    %{
+      "uri" => "goal://{context}/{slug}",
+      "name" => "Goal detail",
+      "description" => "Goal with related todos and plans",
+      "mimeType" => "application/json"
+    },
+    %{
+      "uri" => "wiki://{context}/index",
+      "name" => "Wiki index",
+      "description" => "All pages in a context (slug + title + type)",
+      "mimeType" => "application/json"
+    }
+  ]
+
+  @prompts [
+    %{
+      "name" => "research_topic",
+      "description" => "Scaffold a research page with outline, sources, and questions.",
+      "arguments" => [
+        %{"name" => "topic", "description" => "The topic to research", "required" => true},
+        %{"name" => "context", "description" => "Context slug", "required" => true}
+      ]
+    },
+    %{
+      "name" => "brainstorm",
+      "description" => "Generate ideas around a topic.",
+      "arguments" => [
+        %{"name" => "topic", "description" => "The topic to brainstorm", "required" => true},
+        %{"name" => "context", "description" => "Context slug", "required" => true}
+      ]
+    },
+    %{
+      "name" => "goal_review",
+      "description" => "Review a goal's status, todos, and plans.",
+      "arguments" => [
+        %{"name" => "goal_slug", "description" => "Goal slug", "required" => true},
+        %{"name" => "context", "description" => "Context slug", "required" => true}
+      ]
+    }
+  ]
+
+  # ── Public API for controller ──────────────────────────────────────────────
+
+  @doc "Process a JSON-RPC message and return the response map"
+  def process_message(msg) do
+    case msg do
+      %{"jsonrpc" => "2.0", "method" => "initialize", "id" => id} ->
+        initialize_response(id)
+
+      %{"jsonrpc" => "2.0", "method" => "initialized"} ->
+        nil
+
+      %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => id} ->
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "result" => %{"tools" => @tools}
+        }
+
+      %{"jsonrpc" => "2.0", "method" => "tools/call", "id" => id, "params" => params} ->
+        tool_name = params["name"]
+        args = params["arguments"] || %{}
+        result = execute_tool(tool_name, args)
+
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "result" => %{
+            "content" => [%{"type" => "text", "text" => result}]
+          }
+        }
+
+      %{"jsonrpc" => "2.0", "method" => "resources/list", "id" => id} ->
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "result" => %{"resources" => @resources}
+        }
+
+      %{"jsonrpc" => "2.0", "method" => "resources/read", "id" => id, "params" => params} ->
+        uri = params["uri"]
+        content = read_resource(uri)
+
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "result" => %{
+            "contents" => [%{"uri" => uri, "mimeType" => "text/markdown", "text" => content}]
+          }
+        }
+
+      %{"jsonrpc" => "2.0", "method" => "prompts/list", "id" => id} ->
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "result" => %{"prompts" => @prompts}
+        }
+
+      %{"jsonrpc" => "2.0", "method" => "prompts/get", "id" => id, "params" => params} ->
+        prompt_name = params["name"]
+        args = params["arguments"] || %{}
+        messages = get_prompt(prompt_name, args)
+
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "result" => %{"messages" => messages}
+        }
+
+      %{"jsonrpc" => "2.0", "method" => _method, "id" => id} ->
+        %{
+          "jsonrpc" => "2.0",
+          "id" => id,
+          "error" => %{"code" => -32601, "message" => "Method not found"}
+        }
+
+      %{"jsonrpc" => "2.0", "method" => _method} ->
+        nil
+
+      _ ->
+        %{
+          "jsonrpc" => "2.0",
+          "id" => nil,
+          "error" => %{"code" => -32700, "message" => "Parse error"}
+        }
+    end
+  end
+
+  @doc "Check if a message is a notification (has method but no id)"
+  def notification?(%{"jsonrpc" => "2.0", "method" => _} = msg), do: not Map.has_key?(msg, "id")
+  def notification?(_), do: false
+
+  @doc "Generate a new session ID"
+  def generate_session_id do
+    :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+  end
+
+  @doc "Get protocol version"
+  def protocol_version, do: @protocol_version
+
+  # ── Initialize ──────────────────────────────────────────────────────────────
+
+  defp initialize_response(id) do
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => %{
+        "protocolVersion" => @protocol_version,
+        "capabilities" => %{
+          "tools" => %{},
+          "resources" => %{},
+          "prompts" => %{}
+        },
+        "serverInfo" => %{
+          "name" => "dran",
+          "version" => "0.1.0"
+        }
+      }
+    }
+  end
+
+  # ── Tool execution ─────────────────────────────────────────────────────────
+
+  defp execute_tool("search", %{"query" => query, "context" => context_slug} = args) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      opts = [context_id: context.id]
+      opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
+
+      {:ok, results} = Brain.search(query, opts)
+
+      lines =
+        Enum.map(results, fn {page, excerpt} ->
+          "- **#{page.title}** (`#{page.slug}`, type: #{page.page_type})\n  #{excerpt}"
+        end)
+
+      Enum.join(lines, "\n\n")
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "create_page",
+         %{"context" => context_slug, "title" => title, "slug" => slug, "page_type" => page_type} =
+           args
+       ) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      attrs =
+        %{
+          context_id: context.id,
+          title: title,
+          slug: slug,
+          page_type: page_type,
+          body: Map.get(args, "body", ""),
+          tags: Map.get(args, "tags", []),
+          summary: Map.get(args, "summary"),
+          meta: Map.get(args, "meta", %{}),
+          created_by: Map.get(args, "created_by", "agent"),
+          owner: Map.get(args, "owner", "agent")
+        }
+        |> maybe_put(:on_behalf_of, args["on_behalf_of"])
+
+      case Brain.create_page(attrs) do
+        {:ok, page} ->
+          Brain.resolve_wikilinks(page)
+          "Created page: #{page.title} (#{page.slug})"
+
+        {:error, changeset} ->
+          "Error: #{format_changeset_errors(changeset)}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("update_page", %{"context" => context_slug, "slug" => slug} = args) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: page '#{slug}' not found in context '#{context_slug}'"
+
+        page ->
+          attrs =
+            Map.take(args, ["title", "body", "tags", "meta", "summary"])
+            |> Map.put("updated_by", Map.get(args, "updated_by", "agent"))
+
+          case Brain.update_page(page, attrs) do
+            {:ok, updated} ->
+              Brain.resolve_wikilinks(updated)
+              "Updated page: #{updated.title} (v#{updated.version})"
+
+            {:error, changeset} ->
+              "Error: #{format_changeset_errors(changeset)}"
+          end
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("get_page", %{"context" => context_slug, "slug" => slug}) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: page '#{slug}' not found"
+
+        page ->
+          "# #{page.title}\n\n#{page.body}\n\n---\nType: #{page.page_type} | Tags: #{Enum.join(page.tags, ", ")} | Version: #{page.version}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "create_todo",
+         %{"context" => context_slug, "title" => title, "slug" => slug} = args
+       ) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      meta =
+        %{}
+        |> Map.put("kanban_status", Map.get(args, "kanban_status", "backlog"))
+        |> maybe_put_meta("goal_slug", args["goal_slug"])
+        |> maybe_put_meta("priority", args["priority"])
+        |> maybe_put_meta("due_date", args["due_date"])
+
+      attrs = %{
+        context_id: context.id,
+        title: title,
+        slug: slug,
+        page_type: "todo",
+        body: Map.get(args, "body", ""),
+        meta: meta,
+        created_by: Map.get(args, "created_by", "agent"),
+        owner: Map.get(args, "owner", "agent")
+      }
+
+      case Brain.create_page(attrs) do
+        {:ok, todo} ->
+          status = Map.get(meta, "kanban_status")
+          "Created todo: #{todo.title} (#{todo.slug}) — status: #{status}"
+
+        {:error, changeset} ->
+          "Error: #{format_changeset_errors(changeset)}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("lint", %{"context" => context_slug}) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      report = Brain.lint(context.id)
+
+      """
+      # Lint Report for '#{context_slug}'
+
+      ## Orphan pages (no inbound links): #{length(report.orphans)}
+      #{format_page_list(report.orphans)}
+
+      ## Broken wikilinks: #{length(report.broken_wikilinks)}
+      #{format_broken_links(report.broken_wikilinks)}
+
+      ## Stale pages (>90 days): #{length(report.stale)}
+      #{format_page_list(report.stale)}
+
+      ## Contested pages: #{length(report.contested)}
+      #{format_page_list(report.contested)}
+      """
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("ingest_url", %{"context" => context_slug, "url" => url} = args) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case DranWeb.API.IngestController.do_ingest(context, url, args) do
+        {:ok, page} ->
+          "Ingested '#{page.title}' as #{page.page_type} (#{page.slug}) from #{url}"
+
+        {:error, reason} ->
+          "Error: failed to ingest URL: #{reason}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool(tool_name, _args) do
+    "Error: unknown tool '#{tool_name}'"
+  end
+
+  # ── Resource reading ──────────────────────────────────────────────────────
+
+  defp read_resource("page://" <> rest) do
+    [context_slug, slug] = String.split(rest, "/", parts: 2)
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: page not found"
+
+        page ->
+          "# #{page.title}\n\n#{page.body}\n\n---\nType: #{page.page_type} | Tags: #{Enum.join(page.tags, ", ")}"
+      end
+    else
+      "Error: context not found"
+    end
+  end
+
+  defp read_resource("goal://" <> rest) do
+    [context_slug, slug] = String.split(rest, "/", parts: 2)
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: goal not found"
+
+        goal ->
+          todos =
+            Brain.list_pages(
+              context_id: context.id,
+              type: "todo",
+              limit: 500,
+              include_body: false
+            )
+
+          goal_todos = Enum.filter(todos, fn t -> get_in(t.meta, ["goal_slug"]) == slug end)
+
+          plans =
+            Brain.list_pages(
+              context_id: context.id,
+              type: "plan",
+              limit: 100,
+              include_body: false
+            )
+
+          goal_plans = Enum.filter(plans, fn p -> get_in(p.meta, ["goal_slug"]) == slug end)
+
+          Jason.encode!(%{
+            goal: %{title: goal.title, slug: goal.slug, body: goal.body},
+            todos:
+              Enum.map(
+                goal_todos,
+                &%{title: &1.title, slug: &1.slug, status: get_in(&1.meta, ["kanban_status"])}
+              ),
+            plans: Enum.map(goal_plans, &%{title: &1.title, slug: &1.slug})
+          })
+      end
+    else
+      "Error: context not found"
+    end
+  end
+
+  defp read_resource("wiki://" <> rest) do
+    [context_slug, "index"] = String.split(rest, "/", parts: 2)
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      pages = Brain.list_pages(context_id: context.id, limit: 10_000)
+
+      lines =
+        Enum.map(pages, fn page ->
+          "- `#{page.slug}` — #{page.title} (#{page.page_type})"
+        end)
+
+      Enum.join(lines, "\n")
+    else
+      "Error: context not found"
+    end
+  end
+
+  defp read_resource(_uri) do
+    "Error: unknown resource URI format"
+  end
+
+  # ── Prompts ─────────────────────────────────────────────────────────────────
+
+  defp get_prompt("research_topic", %{"topic" => topic, "context" => context}) do
+    [
+      %{
+        "role" => "user",
+        "content" => %{
+          "type" => "text",
+          "text" => """
+          Research the topic: #{topic}
+
+          1. Create an outline for a research page
+          2. List key sources to consult
+          3. Formulate 3-5 research questions
+          4. Suggest tags and wikilinks to related topics
+
+          Save the result as a page in context '#{context}' using the create_page tool.
+          """
+        }
+      }
+    ]
+  end
+
+  defp get_prompt("brainstorm", %{"topic" => topic, "context" => context}) do
+    [
+      %{
+        "role" => "user",
+        "content" => %{
+          "type" => "text",
+          "text" => """
+          Brainstorm ideas around: #{topic}
+
+          Generate 5-10 ideas as pages in context '#{context}'.
+          Use page_type 'note' with meta.kind 'idea' and interlink them with wikilinks where relevant.
+          """
+        }
+      }
+    ]
+  end
+
+  defp get_prompt("goal_review", %{"goal_slug" => slug, "context" => context}) do
+    [
+      %{
+        "role" => "user",
+        "content" => %{
+          "type" => "text",
+          "text" => """
+          Review goal '#{slug}' in context '#{context}'.
+
+          1. Get the goal page and all its todos and plans
+          2. Summarize current status
+          3. Identify blockers and overdue items
+          4. Suggest next actions
+          """
+        }
+      }
+    ]
+  end
+
+  defp get_prompt(_name, _args) do
+    [
+      %{
+        "role" => "user",
+        "content" => %{"type" => "text", "text" => "Error: unknown prompt"}
+      }
+    ]
+  end
+
+  # ── Helpers ────────────────────────────────────────────────────────────────
+
+  defp format_page_list(pages) do
+    pages
+    |> Enum.map(fn p -> "- #{p.title} (`#{p.slug}`)" end)
+    |> Enum.join("\n")
+  end
+
+  defp format_broken_links(links) do
+    links
+    |> Enum.map(fn %{page_slug: page_slug, missing_slug: missing} ->
+      "- `#{page_slug}` references missing `#{missing}`"
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp format_changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, val}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(val))
+      end)
+    end)
+    |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
+    |> Enum.join("; ")
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp maybe_put_meta(map, _key, nil), do: map
+  defp maybe_put_meta(map, _key, ""), do: map
+  defp maybe_put_meta(map, key, value), do: Map.put(map, key, value)
+end
