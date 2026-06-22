@@ -16,9 +16,12 @@ import Config
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
-if System.get_env("PHX_SERVER") do
-  config :dran, DranWeb.Endpoint, server: true
-end
+# Always start the HTTP listener. The endpoint is a child of Dran.Application
+# and is the only listener in this app, so the boot script (start/daemon)
+# will pick it up automatically. Leaving this on `true` makes the release
+# work the same whether started via `bin/server`, `bin/dran start`, or any
+# other entrypoint (Coolify, Railpack, Nixpacks, bare metal).
+config :dran, DranWeb.Endpoint, server: true
 
 config :dran, DranWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
