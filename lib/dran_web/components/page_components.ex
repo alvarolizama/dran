@@ -451,7 +451,8 @@ defmodule DranWeb.PageComponents do
             ~s|<span class="wikilink-broken" title="link target not found: #{escape_html(slug)}">#{escape_html(display)}</span>|
 
           page ->
-            path = "/#{Map.get(@type_routes, page.page_type, page.page_type)}/#{escape_html(slug)}"
+            path =
+              "/#{Map.get(@type_routes, page.page_type, page.page_type)}/#{escape_html(slug)}"
 
             ~s|<a href="#{path}" class="wikilink" data-wikilink="#{escape_html(slug)}" data-wikilink-type="#{escape_html(page.page_type)}">#{escape_html(display)}</a>|
         end
