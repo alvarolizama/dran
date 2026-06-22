@@ -107,10 +107,14 @@ The migrations create:
 Seeds create **only the default context** (no test data). The seed script is idempotent — it checks if the context already exists before inserting.
 
 ```bash
+# Dev
 mix seed
+
+# Production (release)
+bin/dran eval Dran.Release.seed
 ```
 
-This is a separate step from migrations. `mix setup` includes `mix seed` at the end for convenience.
+This is a separate step from migrations. `mix setup` includes `mix seed` at the end for convenience. In production, `bin/setup` runs create DB → migrate → seed (all idempotent).
 
 ### Reset (destructive)
 
