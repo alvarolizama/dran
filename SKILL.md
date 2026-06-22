@@ -42,7 +42,7 @@ should be classified correctly.
 | Item        | Value                                                              |
 | ----------- | ------------------------------------------------------------------ |
 | Transport   | Streamable HTTP (MCP spec 2025-03-26)                              |
-| POST        | `POST http://local-apps.vpn.cloud:5000/api/mcp` — JSON-RPC → JSON  |
+| POST        | `POST http://<dran-host>/api/mcp` — JSON-RPC → JSON             |
 | GET         | `GET /api/mcp` → 405 (server-initiated SSE not supported in v1)    |
 | DELETE      | `DELETE /api/mcp` — terminate session, returns 200                 |
 | Auth header | `Authorization: Bearer ${MCP_DRAN_API_KEY}` (read `~/.hermes/.env`) |
@@ -72,17 +72,17 @@ las tools nuevas después de un deploy:
 ### 1. Verificar que el server está corriendo con el código nuevo
 ```bash
 # Health check
-curl -fsS http://local-apps.vpn.cloud:5000/health
+curl -fsS http://<dran-host>/health
 
 # Initialize MCP + ver protocolVersion
-curl -sS http://local-apps.vpn.cloud:5000/api/mcp \
-  -H "Authorization: Bearer *** \
+curl -sS http://<dran-host>/api/mcp \
+  -H "Authorization: Bearer $MCP_DRAN_API_KEY" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 
 # Listar tools — debe dar 15
-curl -sS http://local-apps.vpn.cloud:5000/api/mcp \
-  -H "Authorization: Bearer *** \
+curl -sS http://<dran-host>/api/mcp \
+  -H "Authorization: Bearer $MCP_DRAN_API_KEY" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python3 -c "import sys,json; print(len(json.load(sys.stdin)['result']['tools']),'tools')"
 ```
@@ -126,7 +126,7 @@ echo "MCP_DRAN_API_KEY=<token-de-dran>" >> ~/.hermes/.env
 netbird status          # ver estado
 netbird up              # reconectar
 # Verificar conectividad
-curl -fsS http://local-apps.vpn.cloud:5000/health
+curl -fsS http://<dran-host>/health
 ```
 
 ## Agent Workflow — The Operating Manual
@@ -631,7 +631,7 @@ bin/dran stop                       # stop node
 {
   "mcpServers": {
     "dran": {
-      "url": "http://local-apps.vpn.cloud:5000/api/mcp",
+      "url": "http://<dran-host>/api/mcp",
       "headers": { "Authorization": "Bearer ${MCP_DRAN_API_KEY}" }
     }
   }
@@ -640,8 +640,8 @@ bin/dran stop                       # stop node
 
 ### Verifying connectivity
 ```bash
-curl -fsS http://local-apps.vpn.cloud:5000/api/mcp \
-  -H "Authorization: Bearer $MCP_DRAN_API_KEY" \
+curl -fsS http://<dran-host>/api/mcp \
+  -H "Authorization: Bearer $MCP_D...EY" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
