@@ -425,8 +425,8 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Read</strong>
           — use <code>get_page</code>
-          to read full content, or read the <code>wiki://&#123;context&#125;/index</code>
-          resource for an overview.
+          to read full content, or <code>list_pages</code>
+          for a filtered overview.
         </li>
         <li>
           <strong>Create</strong>
@@ -438,7 +438,39 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Update</strong>
           — use <code>update_page</code>
-          to refine content. Version auto-increments.
+          to refine content. Use <code>update_todo</code>
+          to change a todo's status (merges meta).
+        </li>
+        <li>
+          <strong>Delete</strong>
+          — use <code>delete_page</code>
+          to remove a page (cascades to relations + versions).
+        </li>
+        <li>
+          <strong>Relate</strong>
+          — use <code>create_relation</code>
+          for typed relationships. Use <code>delete_relation</code>
+          to remove. Wikilinks auto-create <code>related</code> relations.
+        </li>
+        <li>
+          <strong>Inspect</strong>
+          — use <code>get_links</code>
+          to see inbound + outbound relations for a page.
+        </li>
+        <li>
+          <strong>Stats</strong>
+          — use <code>stats</code>
+          for a context overview (page counts, todos by status, orphans).
+        </li>
+        <li>
+          <strong>Rename</strong>
+          — use <code>rename_slug</code>
+          to rename a page and auto-relink all wikilinks across the context.
+        </li>
+        <li>
+          <strong>Ingest</strong>
+          — use <code>ingest_url</code>
+          to save web pages or download files as references.
         </li>
         <li>
           <strong>Lint</strong>
@@ -600,6 +632,14 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
+          name="delete_page"
+          desc="Delete a page by slug. Cascades to relations and page versions. Irreversible."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="slug" type="string" required="yes" desc="Slug of the page to delete" />
+        </.mcp_tool>
+
+        <.mcp_tool
           name="create_todo"
           desc="Create a todo with kanban status and priority, optionally linked to a goal."
         >
@@ -616,6 +656,86 @@ defmodule DranWeb.DocsLive do
           <:param name="priority" type="string" required="no" desc="low, medium, high, urgent" />
           <:param name="due_date" type="string" required="no" desc="YYYY-MM-DD" />
           <:param name="body" type="string" required="no" desc="Todo description (markdown)" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="update_todo"
+          desc="Update a todo's status, priority, due date, or goal. Merges meta — only pass changed fields."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="slug" type="string" required="yes" desc="Todo slug to update" />
+          <:param name="kanban_status" type="string" required="no" desc="New kanban status" />
+          <:param name="priority" type="string" required="no" desc="New priority" />
+          <:param name="due_date" type="string" required="no" desc="New due date YYYY-MM-DD" />
+          <:param name="goal_slug" type="string" required="no" desc="New goal slug" />
+          <:param name="title" type="string" required="no" desc="New title" />
+          <:param name="body" type="string" required="no" desc="New body (markdown)" />
+          <:param name="tags" type="array" required="no" desc="New tags (replaces existing)" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="create_relation"
+          desc="Create a typed relation between two pages. Use for contradicts, supersedes, part_of, embeds."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="source_slug" type="string" required="yes" desc="Source page slug" />
+          <:param name="target_slug" type="string" required="yes" desc="Target page slug" />
+          <:param
+            name="relation_type"
+            type="string"
+            required="no"
+            desc="related, contradicts, supersedes, part_of, embeds (default: related)"
+          />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="delete_relation"
+          desc="Delete a relation between two pages. Without relation_type, deletes ALL relations between them."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="source_slug" type="string" required="yes" desc="Source page slug" />
+          <:param name="target_slug" type="string" required="yes" desc="Target page slug" />
+          <:param
+            name="relation_type"
+            type="string"
+            required="no"
+            desc="Only delete this type (optional, deletes all if omitted)"
+          />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="get_links"
+          desc="Get all inbound + outbound relations for a page. Shows backlinks and graph connections."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="slug" type="string" required="yes" desc="Page slug" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="list_pages"
+          desc="List pages with optional filters. Returns lightweight metadata (no body)."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="type" type="string" required="no" desc="Filter by page type" />
+          <:param name="tag" type="string" required="no" desc="Filter by tag" />
+          <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
+          <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="stats"
+          desc="Aggregate statistics for a context. Returns page counts, todos by status, orphans, broken links."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="rename_slug"
+          desc="Rename a page's slug and auto-update all [[wikilinks]] and ![[embeds]] across the context."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="old_slug" type="string" required="yes" desc="Current slug to rename" />
+          <:param name="new_slug" type="string" required="yes" desc="New slug (kebab-case)" />
         </.mcp_tool>
 
         <.mcp_tool
