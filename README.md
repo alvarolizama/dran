@@ -280,15 +280,19 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 **Available tools:**
 
-| Tool           | Description                                                            |
-| -------------- | ---------------------------------------------------------------------- |
-| `search`       | Full-text search across pages (returns title, slug, type, excerpt)     |
-| `get_page`     | Get a page by slug (returns full markdown content)                     |
-| `create_page`  | Create a new page with type-specific meta                              |
-| `update_page`  | Update an existing page (title, body, tags, meta)                      |
-| `create_todo`  | Create a todo with kanban status, priority, due date                   |
-| `lint`         | Quality report: orphans, broken wikilinks, stale pages                 |
-| `ingest_url`   | Save a URL (HTML to save link; files to download and store)            |
+| Tool              | Description                                                            |
+| ----------------- | ---------------------------------------------------------------------- |
+| `search`          | Full-text search across pages (returns title, slug, type, excerpt)     |
+| `get_page`        | Get a page by slug (returns full markdown content)                     |
+| `create_page`    | Create a new page with type-specific meta                              |
+| `update_page`    | Update an existing page (title, body, tags, meta)                      |
+| `delete_page`     | Delete a page by slug (cascades to relations + versions)               |
+| `create_todo`     | Create a todo with kanban status, priority, due date                   |
+| `create_relation` | Create a typed relation between two pages                              |
+| `get_links`       | Get inbound + outbound relations for a page                            |
+| `list_pages`      | List pages with filters (type, tag, status, limit)                     |
+| `lint`            | Quality report: orphans, broken wikilinks, stale pages                 |
+| `ingest_url`      | Save a URL (HTML to save link; files to download and store)            |
 
 **Resources:**
 
@@ -309,11 +313,14 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 ### Agent workflow
 
 1. **Search** — use `search` to find existing pages before creating new ones
-2. **Read** — use `get_page` to read full content, or read `wiki://{context}/index` for an overview
-3. **Create** — use `create_page` with the appropriate `page_type` and `meta`. Use `create_todo` for action items.
-4. **Update** — use `update_page` to refine content. Version auto-increments on body change.
-5. **Ingest** — use `ingest_url` to save web pages or download files as references
-6. **Lint** — use `lint` to find orphans, broken links, and stale pages
+2. **Read** — use `get_page` to read full content, or `list_pages` for a filtered overview
+3. **Create** — use `create_page` with the appropriate `page_type` and `meta`. Use `create_todo` for action items
+4. **Update** — use `update_page` to refine content. Version auto-increments on body change
+5. **Delete** — use `delete_page` to remove a page (cascades to relations + versions)
+6. **Relate** — use `create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Wikilinks auto-create `related` relations
+7. **Inspect** — use `get_links` to see inbound + outbound relations for a page
+8. **Ingest** — use `ingest_url` to save web pages or download files as references
+9. **Lint** — use `lint` to find orphans, broken links, and stale pages
 
 ### Example: create a note with a wikilink
 

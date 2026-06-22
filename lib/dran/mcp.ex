@@ -15,7 +15,11 @@ defmodule Dran.MCP do
   - `create_page` — create a new page
   - `update_page` — update an existing page
   - `get_page` — get a page by slug (returns markdown)
+  - `delete_page` — delete a page by slug (cascades to relations + versions)
   - `create_todo` — create a todo item
+  - `create_relation` — create a typed relation between two pages
+  - `get_links` — get inbound + outbound relations for a page
+  - `list_pages` — list pages with filters (type, tag, status, limit)
   - `lint` — run lint report for a context
   - `ingest_url` — save a URL or download a file as a reference page
 
@@ -220,19 +224,87 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "url" => %{"type" => "string", "description" => "URL to ingest (HTML article or PDF)"},
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "url" => %{ "type" => "string", "description" => "URL to ingest (HTML article or PDF)" },
           "slug" => %{
             "type" => "string",
             "description" => "Custom slug (auto from title if omitted)"
           },
           "tags" => %{
             "type" => "array",
-            "items" => %{"type" => "string"},
+            "items" => %{ "type" => "string" },
             "description" => "Tags (optional)"
           }
         },
         "required" => ["context", "url"]
+      }
+    },
+    %{
+      "name" => "delete_page",
+      "description" =>
+        "Delete a page by slug. Cascades to relations and page versions. This is irreversible — confirm with the user before deleting. Logs the action to the audit log.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "slug" => %{ "type" => "string", "description" => "Slug of the page to delete" }
+        },
+        "required" => ["context", "slug"]
+      }
+    },
+    %{
+      "name" => "create_relation",
+      "description" =>
+        "Create a typed relation between two pages. Relation types: 'related' (generic connection), 'contradicts' (source contradicts target), 'supersedes' (source replaces target), 'part_of' (source is part of target), 'embeds' (source embeds target). Use this for explicit relationships beyond what wikilinks auto-create.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "source_slug" => %{ "type" => "string", "description" => "Slug of the source page" },
+          "target_slug" => %{ "type" => "string", "description" => "Slug of the target page" },
+          "relation_type" => %{
+            "type" => "string",
+            "description" => "Type of relation",
+            "enum" => ["related", "contradicts", "supersedes", "part_of", "embeds"]
+          }
+        },
+        "required" => ["context", "source_slug", "target_slug"]
+      }
+    },
+    %{
+      "name" => "get_links",
+      "description" =>
+        "Get all inbound and outbound relations for a page. Returns outbound (pages this page links to) and inbound (pages that link to this page), with relation types.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "slug" => %{ "type" => "string", "description" => "Page slug" }
+        },
+        "required" => ["context", "slug"]
+      }
+    },
+    %{
+      "name" => "list_pages",
+      "description" =>
+        "List pages in a context with optional filters. Returns lightweight metadata (no body) by default. Use type filter to list specific page types (e.g. todos, goals). Useful for getting an overview without fetching full content.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "type" => %{
+            "type" => "string",
+            "description" => "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)",
+            "enum" => ["note", "concept", "entity", "reference", "goal", "plan", "todo", "artifact", "comparison"]
+          },
+          "tag" => %{ "type" => "string", "description" => "Filter by tag (optional)" },
+          "status" => %{
+            "type" => "string",
+            "description" => "Filter by kanban_status (for todos): backlog, this_week, today, in_progress, done, cancelled (optional)"
+          },
+          "limit" => %{ "type" => "integer", "description" => "Max results (default 50, max 500)" }
+        },
+        "required" => ["context"]
       }
     }
   ]
@@ -581,6 +653,116 @@ defmodule Dran.MCP do
         {:error, reason} ->
           "Error: failed to ingest URL: #{reason}"
       end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("delete_page", %{"context" => context_slug, "slug" => slug}) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: page '#{slug}' not found in context '#{context_slug}'"
+
+        page ->
+          case Brain.delete_page(page) do
+            {:ok, _} ->
+              "Deleted page: #{page.title} (#{page.slug})"
+
+            {:error, _} ->
+              "Error: could not delete page '#{slug}'"
+          end
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "create_relation",
+         %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
+           args
+       ) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      relation_type = Map.get(args, "relation_type", "related")
+
+      case Brain.create_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
+        {:ok, _relation} ->
+          "Created relation: #{source_slug} --#{relation_type}--> #{target_slug}"
+
+        {:error, :source_not_found} ->
+          "Error: source page '#{source_slug}' not found"
+
+        {:error, :target_not_found} ->
+          "Error: target page '#{target_slug}' not found"
+
+        {:error, changeset} ->
+          "Error: #{format_changeset_errors(changeset)}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("get_links", %{"context" => context_slug, "slug" => slug}) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: page '#{slug}' not found"
+
+        page ->
+          relations = Brain.list_relations_for_page(page.id)
+
+          outbound =
+            Enum.map(relations.outbound, fn rel ->
+              "- --#{rel.relation_type}--> #{rel.target.title} (`#{rel.target.slug}`)"
+            end)
+
+          inbound =
+            Enum.map(relations.inbound, fn rel ->
+              "- #{rel.source.title} (`#{rel.source.slug}`) --#{rel.relation_type}-->"
+            end)
+
+          """
+          # Relations for '#{page.title}'
+
+          ## Outbound (#{length(outbound)})
+          #{Enum.join(outbound, "\n")}
+
+          ## Inbound (#{length(inbound)})
+          #{Enum.join(inbound, "\n")}
+          """
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("list_pages", %{"context" => context_slug} = args) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      limit = min(Map.get(args, "limit", 50), 500)
+
+      opts = [context_id: context.id, limit: limit]
+      opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
+      opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
+      opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts
+
+      pages = Brain.list_pages(opts)
+
+      lines =
+        Enum.map(pages, fn page ->
+          "- **#{page.title}** (`#{page.slug}`, type: #{page.page_type})"
+        end)
+
+      "Found #{length(pages)} pages:\n\n#{Enum.join(lines, "\n")}"
     else
       "Error: context '#{context_slug}' not found"
     end
