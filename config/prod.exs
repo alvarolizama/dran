@@ -10,14 +10,26 @@ config :dran, DranWeb.Endpoint, cache_static_manifest: "priv/static/cache_manife
 # Force using SSL in production. This also sets the "strict-security-transport" header,
 # known as HSTS. If you have a health check endpoint, you may want to exclude it below.
 # Note `:force_ssl` is required to be set at compile-time.
-config :dran, DranWeb.Endpoint,
-  force_ssl: [
-    rewrite_on: [:x_forwarded_proto],
-    exclude: [
-      # paths: ["/health"],
-      hosts: ["localhost", "127.0.0.1"]
+#
+# Set DISABLE_FORCE_SSL=1 at build time to skip this entirely. Use this when
+# serving the app over plain HTTP (e.g. behind a NetBird / Wireguard tunnel
+# without a TLS terminator in front).
+endpoint_config =
+  if System.get_env("DISABLE_FORCE_SSL") == "1" do
+    []
+  else
+    [
+      force_ssl: [
+        rewrite_on: [:x_forwarded_proto],
+        exclude: [
+          # paths: ["/health"],
+          hosts: ["localhost", "127.0.0.1"]
+        ]
+      ]
     ]
-  ]
+  end
+
+config :dran, DranWeb.Endpoint, endpoint_config
 
 # Configure Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Req
