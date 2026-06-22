@@ -406,6 +406,7 @@ defmodule DranWeb.PageComponents do
   def render_markdown(body, opts) when is_binary(body) do
     context_id = Keyword.get(opts, :context_id)
     embeds = if context_id, do: Dran.Brain.fetch_embeds(body, context_id), else: %{}
+    links = if context_id, do: Dran.Brain.fetch_wikilinks(body, context_id), else: %{}
 
     html =
       case MDEx.to_html(body, @markdown_options) do
@@ -414,14 +415,30 @@ defmodule DranWeb.PageComponents do
       end
 
     html
-    |> rewrite_wikilinks()
+    |> rewrite_wikilinks(links)
     |> rewrite_embeds(embeds)
     |> raw()
   end
 
-  # Rewrite MDEx wikilink anchors into internal page links.
+  # Rewrite MDEx wikilink anchors into type-specific page links.
   # MDEx emits: <a href="slug" data-wikilink="true">display</a>
-  defp rewrite_wikilinks(html) do
+  #
+  # When the slug resolves to a page, the URL becomes `/{type_plural}/{slug}` so
+  # clicking follows the right route. Unresolved slugs render as a
+  # broken-link span (no navigation).
+  @type_routes %{
+    "note" => "notes",
+    "concept" => "concepts",
+    "entity" => "entities",
+    "reference" => "references",
+    "goal" => "goals",
+    "plan" => "plans",
+    "todo" => "todos",
+    "artifact" => "artifacts",
+    "comparison" => "comparisons"
+  }
+
+  defp rewrite_wikilinks(html, links) do
     Regex.replace(
       ~r/<a href="([^"]+)" data-wikilink="true">([^<]*)<\/a>/,
       html,
@@ -429,7 +446,15 @@ defmodule DranWeb.PageComponents do
         slug = String.trim(slug)
         display = if display == "", do: slug, else: display
 
-        ~s|<a href="/-/q/#{escape_html(slug)}" class="wikilink" data-wikilink="#{escape_html(slug)}">#{escape_html(display)}</a>|
+        case Map.get(links, slug) do
+          nil ->
+            ~s|<span class="wikilink-broken" title="link target not found: #{escape_html(slug)}">#{escape_html(display)}</span>|
+
+          page ->
+            path = "/#{Map.get(@type_routes, page.page_type, page.page_type)}/#{escape_html(slug)}"
+
+            ~s|<a href="#{path}" class="wikilink" data-wikilink="#{escape_html(slug)}" data-wikilink-type="#{escape_html(page.page_type)}">#{escape_html(display)}</a>|
+        end
       end
     )
   end

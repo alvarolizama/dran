@@ -792,6 +792,27 @@ defmodule Dran.Brain do
   end
 
   @doc """
+  Fetch all wikilink targets from a body, returning a map of
+  `slug => %Page{}` for each one that resolves to a page in the
+  given context. Slugs that don't resolve are omitted.
+
+  Used by the renderer to know which type-specific URL to emit for
+  each `[[slug]]` link (e.g. `/notes/{slug}`, `/concepts/{slug}`).
+  """
+  def fetch_wikilinks(body, context_id) when is_binary(body) and is_binary(context_id) do
+    body
+    |> extract_wikilinks()
+    |> Enum.map(& &1.slug)
+    |> Enum.uniq()
+    |> Enum.reduce(%{}, fn slug, acc ->
+      case get_page_by_slug(slug, context_id) do
+        nil -> acc
+        page -> Map.put(acc, slug, page)
+      end
+    end)
+  end
+
+  @doc """
   Find all pages in a context whose body references the given slug via
   wikilinks (`[[slug]]`) or embeds (`![[slug]]`).
 

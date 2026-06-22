@@ -213,6 +213,16 @@
 }
 .wikilink:hover { text-decoration: underline; }
 
+.wikilink-broken {
+  color: var(--color-base-content);
+  background: oklch(from var(--color-error) l c h / 10%);
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.25rem;
+  text-decoration: line-through;
+  opacity: 0.7;
+  cursor: help;
+}
+
 .embed img,
 .embed video,
 .embed embed {
