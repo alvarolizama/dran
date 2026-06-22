@@ -4,6 +4,8 @@ A personal second-brain application built with Phoenix LiveView. It stores your 
 
 Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent integration, and a REST API.
 
+> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 15 tools, 10 agent rules, 9 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+
 ## Features
 
 - **9 page types** with type-specific metadata (kinds, statuses, priorities, etc.)
