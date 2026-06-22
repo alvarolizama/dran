@@ -38,3 +38,8 @@ npm-debug.log
 # Ignore uploaded files (user-generated content).
 /priv/static/uploads/
 
+# Local environment files. Never commit secrets. Commit only `.env.example`.
+/.env
+/.env.local
+/.env.*.local
+

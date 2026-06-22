@@ -20,53 +20,39 @@ Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent i
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
 - **Quality lint** — find orphan pages, broken wikilinks, stale pages
 
-## Quick Start
+## Quick start (local dev)
 
 ### Prerequisites
 
-- Elixir 1.15+
+- Elixir 1.15+ and OTP 26+
 - PostgreSQL 14+ (with `pg_trgm` and `uuid-ossp` extensions)
 - Node.js 18+ (for asset building)
 
-### Installation
+### First-time setup
 
 ```bash
+# 1. Clone and enter the project
 git clone git@github.com:alvarolizama/dran.git
 cd dran
+
+# 2. Copy the env template and edit values
+cp .env.example .env
+$EDITOR .env    # set SECRET_KEY_BASE, DRAN_PASSWORD, etc.
+
+# 3. Install deps, create the DB, run migrations, build assets, and seed
 mix setup
 ```
 
-`mix setup` runs:
+`mix setup` runs (in order):
+
 1. `mix deps.get` — install Elixir dependencies
 2. `mix ecto.create` — create the database
 3. `mix ecto.migrate` — run migrations
 4. `mix assets.setup` — install Tailwind & esbuild
 5. `mix assets.build` — build CSS & JS bundles
-6. `mix seed` — create the default context from env vars
+6. `mix seed` — create the default context (uses `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME`)
 
-### Creating the default context
-
-The seed step creates a context from `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME` (defaults to `personal` / `Personal`):
-
-```bash
-# Use defaults (personal / Personal)
-mix seed
-
-# Or set custom context before seeding
-export DRAN_CONTEXT_SLUG="work"
-export DRAN_CONTEXT_NAME="Work"
-mix seed
-```
-
-In production, run migrations without seeds, then seed the context separately:
-
-```bash
-mix ecto.create
-mix ecto.migrate
-mix seed  # creates the default context only
-```
-
-### Running
+### Running the dev server
 
 ```bash
 mix phx.server
@@ -74,46 +60,41 @@ mix phx.server
 
 Visit [localhost:4000](http://localhost:4000). You'll be redirected to login.
 
-### Default credentials
+### Default dev credentials
 
-| Setting | Default | Env var |
-|---|---|---|
-| Username | `admin` | `DRAN_USERNAME` |
-| Password | `dran` | `DRAN_PASSWORD` |
-| API token | `dran-token` | `DRAN_API_TOKEN` |
-| Context slug | `personal` | `DRAN_CONTEXT_SLUG` |
-| Context name | `Personal` | `DRAN_CONTEXT_NAME` |
+| Setting      | Default       | Env var             |
+| ------------ | ------------- | ------------------- |
+| Username     | `admin`       | `DRAN_USERNAME`     |
+| Password     | `dran`        | `DRAN_PASSWORD`     |
+| API token    | `dran-token`  | `DRAN_API_TOKEN`    |
+| Context slug | `personal`    | `DRAN_CONTEXT_SLUG` |
+| Context name | `Personal`    | `DRAN_CONTEXT_NAME` |
 
-**Change these in production!** Set the environment variables before running `mix setup` (so the seed creates the right context) and before starting the server.
+> **Never use these defaults in production.** Set `DRAN_PASSWORD` and `DRAN_API_TOKEN` to strong random values before deploying.
 
 ### Environment variables
 
+See [`.env.example`](.env.example) for the full list with comments. The most important ones for local dev:
+
 ```bash
-export DRAN_USERNAME="myuser"
-export DRAN_PASSWORD="strongpassword"
-export DRAN_API_TOKEN="my-secret-token"
-export DRAN_CONTEXT_SLUG="work"
-export DRAN_CONTEXT_NAME="Work"
-export DATABASE_URL="ecto://user:pass@localhost/dran"
-export SECRET_KEY_BASE="$(mix phx.gen.secret)"
-export PORT=4000
-export UPLOADS_DIR="priv/static/uploads"
-export UPLOADS_MAX_SIZE=104857600  # 100MB in bytes
+SECRET_KEY_BASE=...nssl rand -hex 64)
+DATABASE_URL=ecto://postgres:postgres@localhost/dran_dev
+DRAN_PASSWORD=...nssl rand -hex 32)
 ```
 
-## Database setup
+## Database
 
 ### Migrations
 
-Migrations create the schema automatically:
+Migrations create the schema automatically. They are pure DDL — no data is inserted.
 
 ```bash
 mix ecto.create    # create the database
 mix ecto.migrate   # run migrations (no seeds)
-mix seed           # create default context from env vars
 ```
 
 The migrations create:
+
 - `contexts` — workspaces (personal, work, etc.)
 - `pages` — knowledge pages with JSONB `meta` field
 - `relations` — directed links between pages
@@ -122,15 +103,15 @@ The migrations create:
 
 ### Seeds
 
-Seeds create **only the default context** (no test data) from `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME`:
+Seeds create **only the default context** (no test data). The seed script is idempotent — it checks if the context already exists before inserting.
 
 ```bash
 mix seed
 ```
 
-This is a separate step — `mix ecto.create` + `mix ecto.migrate` do NOT run seeds. The `mix setup` alias includes `mix seed` at the end for convenience.
+This is a separate step from migrations. `mix setup` includes `mix seed` at the end for convenience.
 
-### Reset
+### Reset (destructive)
 
 ```bash
 mix ecto.reset  # drop + create + migrate + seed
@@ -140,24 +121,24 @@ mix ecto.reset  # drop + create + migrate + seed
 
 Every piece of knowledge is a page with a `page_type`. Some types have a `kind` sub-type (in `meta.kind`):
 
-| Type | Purpose | Subtypes (meta.kind) | Key meta fields |
-|---|---|---|---|
-| `note` | Thoughts, journal, ideas | thought, journal, idea, meeting, question, quote | kind, date, author |
-| `concept` | Abstract ideas, techniques | technique, pattern, discipline, theory | kind, domain, parent_concept |
-| `entity` | People, companies, tools | person, company, product, tool, place, event | kind, location, external_url |
-| `reference` | External sources | article, paper, video, podcast, book | kind, source_url, published_at |
-| `artifact` | Files and deliverables | document, code, design, deliverable, file | kind, filename, mime_type, storage_path |
-| `goal` | Objectives with target dates | — | health (green/yellow/red), target_date, start_date |
-| `plan` | Time-horizoned plans | — | horizon (weekly/monthly/quarterly/yearly), status (draft/active/on_hold/completed/archived) |
-| `todo` | Actionable items | — | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, due_date |
-| `comparison` | Side-by-side analyses | — | entities, criteria, verdict |
+| Type         | Purpose                       | Subtypes (meta.kind)                                  | Key meta fields                                    |
+| ------------ | ----------------------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| `note`       | Thoughts, journal, ideas      | thought, journal, idea, meeting, question, quote      | kind, date, author                                 |
+| `concept`    | Abstract ideas, techniques    | technique, pattern, discipline, theory                | kind, domain, parent_concept                       |
+| `entity`     | People, companies, tools      | person, company, product, tool, place, event          | kind, location, external_url                       |
+| `reference`  | External sources              | article, paper, video, podcast, book                  | kind, source_url, published_at                     |
+| `artifact`   | Files and deliverables        | document, code, design, deliverable, file             | kind, filename, mime_type, storage_path            |
+| `goal`       | Objectives with target dates  | —                                                     | health (green/yellow/red), target_date, start_date |
+| `plan`       | Time-horizoned plans          | —                                                     | horizon, status                                    |
+| `todo`       | Actionable items              | —                                                     | kanban_status, priority, goal_slug, due_date       |
+| `comparison` | Side-by-side analyses         | —                                                     | entities, criteria, verdict                        |
 
 ### Wikilinks & embeds
 
 - `[[slug]]` — link to another page (auto-creates `related` relation)
-- `[[slug\|Display Text]]` — link with custom display text
+- `[[slug|Display Text]]` — link with custom display text
 - `![[slug]]` — embed an artifact (renders as image/video/audio/PDF)
-- `![[slug\|Alt Text]]` — embed with alt text
+- `![[slug|Alt Text]]` — embed with alt text
 
 ### Relations
 
@@ -166,6 +147,115 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 - `supersedes` — replacement (A replaces B)
 - `contradicts` — conflict (A contradicts B)
 - `embeds` — source embeds target (auto-created from `![[slug]]`)
+
+## Production deployment
+
+Dran ships as a standard Elixir release with three helper scripts in `rel/overlays/bin/`:
+
+| Script         | What it does                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `bin/server`   | Starts the Phoenix server (`PHX_SERVER=true bin/dran start`). Use this as the **start command**. |
+| `bin/migrate`  | Runs `Dran.Release.migrate/0` (pending migrations only). Use this for incremental deploys.    |
+| `bin/setup`    | Idempotent: creates the DB (if missing), then migrates, then seeds. Use this for the **first deploy** or as a pre-deploy hook. |
+
+All three are wrapped in `rel/overlays/bin/` and ship inside the release at `_build/prod/rel/dran/bin/`.
+
+### Step 1 — Build the release
+
+```bash
+# Install Hex/Rebar (first time only)
+mix local.hex --force
+mix local.rebar --force
+
+# Fetch prod-only deps
+MIX_ENV=prod mix deps.get --only prod
+
+# Compile and build production assets
+MIX_ENV=prod mix compile
+MIX_ENV=prod mix assets.deploy
+
+# Assemble the release
+MIX_ENV=prod mix release
+```
+
+The release ends up in `_build/prod/rel/dran/`. The whole directory is self-contained — copy it to the target machine, or build a container image from it.
+
+### Step 2 — Provision the database
+
+The release expects a Postgres database to exist. Create it once, manually, **before the first deploy**:
+
+```bash
+# From any host that can reach the DB:
+PGPASSWORD=ADMIN_PASSWORD createdb -h DB_HOST -U ADMIN_USER dran_prod
+```
+
+The app's DB user only needs `CONNECT`, `USAGE`, and DML/DDL on `dran_prod`. If you prefer, you can skip this step entirely and let `bin/setup` create the database on the first run — but the user in `DATABASE_URL` needs `CREATEDB` privilege for that.
+
+### Step 3 — Configure environment variables
+
+The release reads all configuration from environment variables at startup. There is no `.env` file inside the release. Set these in your platform's secret manager (Coolify env vars, Fly secrets, BWS, etc.):
+
+| Variable            | Required | Notes                                                                                |
+| ------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `SECRET_KEY_BASE`   | yes      | Output of `mix phx.gen.secret`                                                       |
+| `DATABASE_URL`      | yes      | `postgres://user:pass@host:5432/dran_prod`                                           |
+| `DRAN_PASSWORD`     | yes      | Strong password for the admin user                                                   |
+| `DRAN_API_TOKEN`    | yes      | Long random token for MCP / REST clients (`openssl rand -hex 32`)                    |
+| `PHX_HOST`          | yes      | Public domain (e.g. `dran.example.com`)                                              |
+| `PORT`              | no       | Defaults to `4000`. Most platforms inject it.                                        |
+| `POOL_SIZE`         | no       | Defaults to `10`. Bump under load.                                                   |
+| `UPLOADS_DIR`       | no       | Defaults to `priv/static/uploads`. Mount a persistent volume here.                   |
+| `UPLOADS_MAX_SIZE`  | no       | Defaults to `104857600` (100 MiB).                                                   |
+| `ECTO_IPV6`         | no       | `true` or `1` to force IPv6 DB socket.                                               |
+| `DNS_CLUSTER_QUERY` | no       | libcluster query, only for multi-node setups.                                        |
+
+> **Never bake secrets into a Dockerfile.** Pass them as runtime env vars only. Coolify, Fly, and Kubernetes all support this natively.
+
+### Step 4 — Start the release
+
+#### Option A — Bare metal / VM
+
+```bash
+# 1. Copy release to the server
+rsync -avz _build/prod/rel/dran/ user@server:/opt/dran/
+
+# 2. First deploy: create DB, run migrations, seed
+ssh user@server 'cd /opt/dran && bin/setup'
+
+# 3. Start the server (foreground, for systemd)
+ssh user@server 'cd /opt/dran && bin/server'
+
+# Or run as a daemon
+ssh user@server 'cd /opt/dran && bin/dran daemon'
+```
+
+For a systemd unit, point `ExecStart` at `/opt/dran/bin/server`.
+
+#### Option B — Container (Coolify / Railpack / Nixpacks)
+
+The simplest path is letting the build pack auto-detect the Elixir app and produce a container. Set these in the resource config:
+
+- **Build pack:** Nixpacks or Railpack (auto-detects `mix.exs`)
+- **Start command:** `bin/server`
+- **Pre-deploy command:** `bin/setup` (creates DB → migrates → seeds, all idempotent)
+- **Port:** `4000` (or whatever your reverse proxy expects)
+
+> `bin/setup` is safe to run on every deploy. On a fresh database it creates the schema and seeds the default context. On subsequent deploys it short-circuits (the DB already exists) and only runs pending migrations + the idempotent seed.
+
+#### Option C — Custom `docker run`
+
+If you build a custom image (e.g. with `mix phx.gen.release --docker`), the final `CMD` should be `["bin/server"]` and you should run `bin/setup` as a one-off init container or via an entrypoint wrapper.
+
+### Step 5 — Verify
+
+```bash
+# Health check (replace with your real domain)
+curl -fsSL https://dran.example.com/health
+
+# MCP endpoint (requires bearer token)
+curl -fsSL https://dran.example.com/api/mcp \
+  -H "Authorization: Bearer your-token-here"
+```
 
 ## AI Agent Integration
 
@@ -190,31 +280,31 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 **Available tools:**
 
-| Tool | Description |
-|---|---|
-| `search` | Full-text search across pages (returns title, slug, type, excerpt) |
-| `get_page` | Get a page by slug (returns full markdown content) |
-| `create_page` | Create a new page with type-specific meta |
-| `update_page` | Update an existing page (title, body, tags, meta) |
-| `create_todo` | Create a todo with kanban status, priority, due date |
-| `lint` | Quality report: orphans, broken wikilinks, stale pages |
-| `ingest_url` | Save a URL (HTML → save link; files → download & store) |
+| Tool           | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| `search`       | Full-text search across pages (returns title, slug, type, excerpt)     |
+| `get_page`     | Get a page by slug (returns full markdown content)                     |
+| `create_page`  | Create a new page with type-specific meta                              |
+| `update_page`  | Update an existing page (title, body, tags, meta)                      |
+| `create_todo`  | Create a todo with kanban status, priority, due date                   |
+| `lint`         | Quality report: orphans, broken wikilinks, stale pages                 |
+| `ingest_url`   | Save a URL (HTML to save link; files to download and store)            |
 
 **Resources:**
 
-| URI | Description |
-|---|---|
-| `page://{context}/{slug}` | Full page content as markdown |
-| `goal://{context}/{slug}` | Goal detail with related todos and plans (JSON) |
-| `wiki://{context}/index` | All pages in a context (slug + title + type) |
+| URI                       | Description                                       |
+| ------------------------- | ------------------------------------------------- |
+| `page://{context}/{slug}` | Full page content as markdown                     |
+| `goal://{context}/{slug}` | Goal detail with related todos and plans (JSON)   |
+| `wiki://{context}/index`  | All pages in a context (slug + title + type)      |
 
 **Prompts:**
 
-| Prompt | Description |
-|---|---|
-| `research_topic` | Scaffold a research page with outline, sources, and questions |
-| `brainstorm` | Generate ideas around a topic (creates notes with kind: idea) |
-| `goal_review` | Review a goal's status, todos, and plans |
+| Prompt           | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| `research_topic` | Scaffold a research page with outline, sources, and questions        |
+| `brainstorm`     | Generate ideas around a topic (creates notes with kind: idea)        |
+| `goal_review`    | Review a goal's status, todos, and plans                             |
 
 ### Agent workflow
 
@@ -249,54 +339,30 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 ## REST API
 
-All API endpoints require a bearer token: `Authorization: Bearer dran-token`
+All API endpoints require a bearer token: `Authorization: Bearer <DRAN_API_TOKEN>`.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/pages?context=personal` | List pages (no body by default, `?include=body` for full) |
-| `POST` | `/api/pages` | Create a page |
-| `GET` | `/api/pages/:slug?context=personal` | Get a page (no body by default, `?include=body` for full) |
-| `PUT` | `/api/pages/:slug?context=personal` | Update a page |
-| `DELETE` | `/api/pages/:slug?context=personal` | Delete a page |
-| `GET` | `/api/pages/:slug/links?context=personal` | Get page relations (outbound + inbound) |
-| `GET` | `/api/pages/:slug/graph?context=personal` | Get page subgraph |
-| `GET` | `/api/search?q=...&context=personal` | Full-text search |
-| `GET` | `/api/search/fuzzy?q=...&context=personal` | Fuzzy search (trigram similarity) |
-| `POST` | `/api/ingest` | Ingest a URL (`{url, context, slug?, tags?}`) |
-| `GET` | `/api/index?context=personal` | Wiki index (all slugs + titles) |
-| `GET` | `/api/graph?context=personal` | Full knowledge graph |
-| `GET` | `/api/lint?context=personal` | Quality lint report |
-| `GET` | `/api/log?context=personal` | Audit log |
-| `GET` | `/api/contexts` | List contexts |
-
-## Production deployment
-
-### Using environment variables
-
-```bash
-export PHX_SERVER=true
-export DATABASE_URL="ecto://user:pass@host/dran"
-export SECRET_KEY_BASE="$(mix phx.gen.secret)"
-export DRAN_USERNAME="admin"
-export DRAN_PASSWORD="strong-password"
-export DRAN_API_TOKEN="strong-token"
-export DRAN_CONTEXT_SLUG="personal"
-export DRAN_CONTEXT_NAME="Personal"
-export PORT=4000
-```
-
-### Build and run
-
-```bash
-mix assets.deploy
-mix release
-PORT=4000 _build/dev/rel/dran/bin/dran start
-```
+| Method   | Path                                       | Description                                                  |
+| -------- | ------------------------------------------ | ------------------------------------------------------------ |
+| `GET`    | `/api/pages?context=personal`              | List pages (no body by default, `?include=body` for full)   |
+| `POST`   | `/api/pages`                               | Create a page                                                |
+| `GET`    | `/api/pages/:slug?context=personal`        | Get a page (no body by default, `?include=body` for full)    |
+| `PUT`    | `/api/pages/:slug?context=personal`        | Update a page                                                |
+| `DELETE` | `/api/pages/:slug?context=personal`        | Delete a page                                                |
+| `GET`    | `/api/pages/:slug/links?context=personal`  | Get page relations (outbound + inbound)                      |
+| `GET`    | `/api/pages/:slug/graph?context=personal`  | Get page subgraph                                            |
+| `GET`    | `/api/search?q=...&context=personal`       | Full-text search                                             |
+| `GET`    | `/api/search/fuzzy?q=...&context=personal` | Fuzzy search (trigram similarity)                            |
+| `POST`   | `/api/ingest`                              | Ingest a URL (`{url, context, slug?, tags?}`)                 |
+| `GET`    | `/api/index?context=personal`              | Wiki index (all slugs + titles)                              |
+| `GET`    | `/api/graph?context=personal`              | Full knowledge graph                                         |
+| `GET`    | `/api/lint?context=personal`               | Quality lint report                                          |
+| `GET`    | `/api/log?context=personal`                | Audit log                                                    |
+| `GET`    | `/api/contexts`                            | List contexts                                                |
 
 ## Tech stack
 
 - **Phoenix 1.8** with LiveView
-- **Ecto + PostgreSQL** with pg_trgm (fuzzy search) and generated tsvector (FTS)
+- **Ecto + PostgreSQL** with `pg_trgm` (fuzzy search) and generated `tsvector` (FTS)
 - **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
 - **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
 - **MCP** (Model Context Protocol) for AI agent integration
