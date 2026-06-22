@@ -14,11 +14,12 @@ Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent i
 - **Dashboard** — metrics, recent pages, quick access, todo board summary
 - **Kanban board** — drag & drop todos with 6 statuses
 - **Goal kanban** — per-goal todo board with drag & drop
-- **MCP server** — AI agents can search, create, update, read, and lint pages
+- **MCP server** — 15 tools for AI agents to search, read, create, update, delete, relate, lint, and manage the knowledge graph
 - **REST API** — full CRUD for pages, contexts, relations, search, and ingest
 - **Backlinks** — see which pages link to the current page
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
 - **Quality lint** — find orphan pages, broken wikilinks, stale pages
+- **Slug rename** — rename a page and auto-relink all wikilinks across the context
 
 ## Quick start (local dev)
 
@@ -123,14 +124,14 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 
 | Type         | Purpose                       | Subtypes (meta.kind)                                  | Key meta fields                                    |
 | ------------ | ----------------------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| `note`       | Thoughts, journal, ideas      | thought, journal, idea, meeting, question, quote      | kind, date, author                                 |
+| `note`       | Thoughts, journal, ideas      | thought, journal, idea, meeting, question, quote      | kind, date, author, attendees                      |
 | `concept`    | Abstract ideas, techniques    | technique, pattern, discipline, theory                | kind, domain, parent_concept                       |
-| `entity`     | People, companies, tools      | person, company, product, tool, place, event          | kind, location, external_url                       |
+| `entity`     | People, companies, tools      | person, company, product, tool, place, event          | kind, location, external_url, aliases              |
 | `reference`  | External sources              | article, paper, video, podcast, book                  | kind, source_url, published_at                     |
-| `artifact`   | Files and deliverables        | document, code, design, deliverable, file             | kind, filename, mime_type, storage_path            |
-| `goal`       | Objectives with target dates  | —                                                     | health (green/yellow/red), target_date, start_date |
-| `plan`       | Time-horizoned plans          | —                                                     | horizon, status                                    |
-| `todo`       | Actionable items              | —                                                     | kanban_status, priority, goal_slug, due_date       |
+| `artifact`   | Files and deliverables        | document, code, design, deliverable, file             | kind, filename, mime_type, storage_path, sha256     |
+| `goal`       | Objectives with target dates  | —                                                     | health (green/yellow/red), target_date, start_date, team |
+| `plan`       | Time-horizoned plans          | —                                                     | horizon (weekly/monthly/quarterly/yearly), status (draft/active/on_hold/completed/archived), period |
+| `todo`       | Actionable items              | —                                                     | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, due_date |
 | `comparison` | Side-by-side analyses         | —                                                     | entities, criteria, verdict                        |
 
 ### Wikilinks & embeds
@@ -142,11 +143,17 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 
 ### Relations
 
-- `related` — generic connection (auto-created from wikilinks)
+Relations are **directed** (source → target) and typed:
+
+- `related` — generic connection (auto-created from `[[wikilinks]]`)
 - `part_of` — hierarchy (A is part of B)
-- `supersedes` — replacement (A replaces B)
+- `supersedes` — replacement (A replaces/obsoletes B)
 - `contradicts` — conflict (A contradicts B)
 - `embeds` — source embeds target (auto-created from `![[slug]]`)
+
+Wikilinks and embeds auto-create relations on page save. For explicit typed
+relations (`contradicts`, `supersedes`, `part_of`), use the MCP `create_relation`
+tool or the `POST /api/relations` REST endpoint.
 
 ## Production deployment
 
@@ -352,7 +359,7 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 ## REST API
 
-All API endpoints require a bearer token: `Authorization: Bearer <DRAN_API_TOKEN>`.
+All API endpoints require a bearer token: `Authorization: Bearer <DRAN_...N>`.
 
 | Method   | Path                                       | Description                                                  |
 | -------- | ------------------------------------------ | ------------------------------------------------------------ |
@@ -363,14 +370,25 @@ All API endpoints require a bearer token: `Authorization: Bearer <DRAN_API_TOKEN
 | `DELETE` | `/api/pages/:slug?context=personal`        | Delete a page                                                |
 | `GET`    | `/api/pages/:slug/links?context=personal`  | Get page relations (outbound + inbound)                      |
 | `GET`    | `/api/pages/:slug/graph?context=personal`  | Get page subgraph                                            |
+| `POST`   | `/api/relations`                           | Create a relation (`{source_slug, target_slug, relation_type, context}`) |
+| `DELETE` | `/api/relations/:id`                       | Delete a relation                                            |
 | `GET`    | `/api/search?q=...&context=personal`       | Full-text search                                             |
 | `GET`    | `/api/search/fuzzy?q=...&context=personal` | Fuzzy search (trigram similarity)                            |
+| `GET`    | `/api/goals?context=personal`              | List goals                                                   |
+| `GET`    | `/api/goals/:slug?context=personal`        | Goal detail with related todos and plans                     |
+| `GET`    | `/api/todos?context=personal&status=...`   | List todos (filterable by kanban status)                     |
+| `POST`   | `/api/todos`                               | Create a todo                                                |
+| `PUT`    | `/api/todos/:id`                           | Update a todo (e.g. change status, merges meta)              |
 | `POST`   | `/api/ingest`                              | Ingest a URL (`{url, context, slug?, tags?}`)                 |
 | `GET`    | `/api/index?context=personal`              | Wiki index (all slugs + titles)                              |
 | `GET`    | `/api/graph?context=personal`              | Full knowledge graph                                         |
 | `GET`    | `/api/lint?context=personal`               | Quality lint report                                          |
 | `GET`    | `/api/log?context=personal`                | Audit log                                                    |
 | `GET`    | `/api/contexts`                            | List contexts                                                |
+| `POST`   | `/api/contexts`                            | Create a context                                             |
+| `GET`    | `/api/contexts/:slug`                      | Get a context                                                |
+| `PUT`    | `/api/contexts/:slug`                      | Update a context                                             |
+| `DELETE` | `/api/contexts/:slug`                      | Delete a context                                             |
 
 ## Tech stack
 
