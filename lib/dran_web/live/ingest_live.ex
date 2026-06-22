@@ -36,22 +36,13 @@ defmodule DranWeb.IngestLive do
                 autofocus
               />
 
-              <div class="grid grid-cols-2 gap-4">
-                <.input
-                  field={@form[:slug]}
-                  type="text"
-                  label="Slug (optional)"
-                  placeholder="auto from title"
-                  class="w-full font-mono text-sm"
-                />
-                <.input
-                  field={@form[:tags]}
-                  type="text"
-                  label="Tags (optional)"
-                  placeholder="comma, separated"
-                  class="w-full text-sm"
-                />
-              </div>
+              <.input
+                field={@form[:tags]}
+                type="text"
+                label="Tags (optional)"
+                placeholder="comma, separated"
+                class="w-full text-sm"
+              />
 
               <div class="flex justify-end gap-2 pt-2">
                 <button type="submit" class="btn btn-primary btn-sm" disabled={@ingesting}>
@@ -113,7 +104,7 @@ defmodule DranWeb.IngestLive do
     {:ok,
      assign(socket,
        context: context,
-       form: to_form(%{"url" => "", "slug" => "", "tags" => ""}, as: :ingest),
+       form: to_form(%{"url" => "", "tags" => ""}, as: :ingest),
        ingesting: false,
        result: nil,
        result_path: nil,
