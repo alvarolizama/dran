@@ -280,19 +280,23 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 **Available tools:**
 
-| Tool              | Description                                                            |
-| ----------------- | ---------------------------------------------------------------------- |
-| `search`          | Full-text search across pages (returns title, slug, type, excerpt)     |
-| `get_page`        | Get a page by slug (returns full markdown content)                     |
-| `create_page`    | Create a new page with type-specific meta                              |
-| `update_page`    | Update an existing page (title, body, tags, meta)                      |
-| `delete_page`     | Delete a page by slug (cascades to relations + versions)               |
-| `create_todo`     | Create a todo with kanban status, priority, due date                   |
-| `create_relation` | Create a typed relation between two pages                              |
-| `get_links`       | Get inbound + outbound relations for a page                            |
-| `list_pages`      | List pages with filters (type, tag, status, limit)                     |
-| `lint`            | Quality report: orphans, broken wikilinks, stale pages                 |
-| `ingest_url`      | Save a URL (HTML to save link; files to download and store)            |
+| Tool               | Description                                                            |
+| ------------------ | ---------------------------------------------------------------------- |
+| `search`           | Full-text search across pages (returns title, slug, type, excerpt)     |
+| `get_page`         | Get a page by slug (returns full markdown content)                     |
+| `create_page`      | Create a new page with type-specific meta                              |
+| `update_page`      | Update an existing page (title, body, tags, meta)                      |
+| `delete_page`      | Delete a page by slug (cascades to relations + versions)               |
+| `create_todo`      | Create a todo with kanban status, priority, due date                   |
+| `update_todo`      | Update a todo's status/priority/due date (merges meta, no full replace)|
+| `create_relation`  | Create a typed relation between two pages                              |
+| `delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
+| `get_links`        | Get inbound + outbound relations for a page                            |
+| `list_pages`       | List pages with filters (type, tag, status, limit)                     |
+| `stats`            | Aggregate statistics for a context (page counts, todos by status)      |
+| `lint`             | Quality report: orphans, broken wikilinks, stale pages                 |
+| `rename_slug`      | Rename a page's slug and relink all wikilinks across the context       |
+| `ingest_url`       | Save a URL (HTML to save link; files to download and store)           |
 
 **Resources:**
 
@@ -315,12 +319,14 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 1. **Search** — use `search` to find existing pages before creating new ones
 2. **Read** — use `get_page` to read full content, or `list_pages` for a filtered overview
 3. **Create** — use `create_page` with the appropriate `page_type` and `meta`. Use `create_todo` for action items
-4. **Update** — use `update_page` to refine content. Version auto-increments on body change
+4. **Update** — use `update_page` to refine content. Use `update_todo` to change a todo's status/priority (merges meta)
 5. **Delete** — use `delete_page` to remove a page (cascades to relations + versions)
-6. **Relate** — use `create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Wikilinks auto-create `related` relations
+6. **Relate** — use `create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Use `delete_relation` to remove. Wikilinks auto-create `related` relations
 7. **Inspect** — use `get_links` to see inbound + outbound relations for a page
-8. **Ingest** — use `ingest_url` to save web pages or download files as references
-9. **Lint** — use `lint` to find orphans, broken links, and stale pages
+8. **Stats** — use `stats` for a context overview (page counts, todos by status, orphans)
+9. **Rename** — use `rename_slug` to rename a page and auto-relink all wikilinks across the context
+10. **Ingest** — use `ingest_url` to save web pages or download files as references
+11. **Lint** — use `lint` to find orphans, broken links, and stale pages
 
 ### Example: create a note with a wikilink
 

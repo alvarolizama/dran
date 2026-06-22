@@ -17,10 +17,14 @@ defmodule Dran.MCP do
   - `get_page` — get a page by slug (returns markdown)
   - `delete_page` — delete a page by slug (cascades to relations + versions)
   - `create_todo` — create a todo item
+  - `update_todo` — update a todo's kanban status, priority, or due date (merges meta)
   - `create_relation` — create a typed relation between two pages
+  - `delete_relation` — delete a relation between two pages (by slug pair + optional type)
   - `get_links` — get inbound + outbound relations for a page
   - `list_pages` — list pages with filters (type, tag, status, limit)
+  - `stats` — aggregate statistics for a context (page counts, todos by status, orphans)
   - `lint` — run lint report for a context
+  - `rename_slug` — rename a page's slug and relink all wikilinks/embeds across the context
   - `ingest_url` — save a URL or download a file as a reference page
 
   ## Resources
@@ -305,6 +309,83 @@ defmodule Dran.MCP do
           "limit" => %{ "type" => "integer", "description" => "Max results (default 50, max 500)" }
         },
         "required" => ["context"]
+      }
+    },
+    %{
+      "name" => "update_todo",
+      "description" =>
+        "Update a todo's kanban status, priority, due date, or goal. Merges meta — you only need to pass the fields you want to change, existing meta is preserved.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "slug" => %{ "type" => "string", "description" => "Todo slug to update" },
+          "kanban_status" => %{
+            "type" => "string",
+            "description" => "New kanban status (optional)",
+            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+          },
+          "priority" => %{
+            "type" => "string",
+            "description" => "New priority (optional)",
+            "enum" => ["low", "medium", "high", "urgent"]
+          },
+          "due_date" => %{ "type" => "string", "description" => "New due date YYYY-MM-DD (optional)" },
+          "goal_slug" => %{ "type" => "string", "description" => "New goal slug to link this todo to (optional)" },
+          "title" => %{ "type" => "string", "description" => "New title (optional)" },
+          "body" => %{ "type" => "string", "description" => "New body in markdown (optional)" },
+          "tags" => %{
+            "type" => "array",
+            "items" => %{ "type" => "string" },
+            "description" => "New tags (optional, replaces existing)"
+          }
+        },
+        "required" => ["context", "slug"]
+      }
+    },
+    %{
+      "name" => "delete_relation",
+      "description" =>
+        "Delete a relation between two pages. If relation_type is provided, only deletes that type. Otherwise, deletes ALL relations between the two pages (both directions). Use get_links first to see what relations exist.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "source_slug" => %{ "type" => "string", "description" => "Slug of the source page" },
+          "target_slug" => %{ "type" => "string", "description" => "Slug of the target page" },
+          "relation_type" => %{
+            "type" => "string",
+            "description" => "Only delete relations of this type (optional, deletes all if omitted)",
+            "enum" => ["related", "contradicts", "supersedes", "part_of", "embeds"]
+          }
+        },
+        "required" => ["context", "source_slug", "target_slug"]
+      }
+    },
+    %{
+      "name" => "stats",
+      "description" =>
+        "Get aggregate statistics for a context. Returns total pages, pages by type, todos by kanban status, orphan count, broken link count, and total relations. Use this for dashboard-style overviews and weekly reviews.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" }
+        },
+        "required" => ["context"]
+      }
+    },
+    %{
+      "name" => "rename_slug",
+      "description" =>
+        "Rename a page's slug and automatically update all wikilinks [[old-slug]] and embeds ![[old-slug]] across the entire context to use the new slug. Use this when a page was created with a wrong slug. The page itself is also updated.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "old_slug" => %{ "type" => "string", "description" => "Current slug to rename" },
+          "new_slug" => %{ "type" => "string", "description" => "New slug (kebab-case)" }
+        },
+        "required" => ["context", "old_slug", "new_slug"]
       }
     }
   ]
@@ -763,6 +844,142 @@ defmodule Dran.MCP do
         end)
 
       "Found #{length(pages)} pages:\n\n#{Enum.join(lines, "\n")}"
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("update_todo", %{"context" => context_slug, "slug" => slug} = args) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: todo '#{slug}' not found"
+
+        todo ->
+          # Merge meta: start with existing, overlay changes
+          existing_meta = todo.meta || %{}
+
+          new_meta =
+            existing_meta
+            |> maybe_put_meta("kanban_status", args["kanban_status"])
+            |> maybe_put_meta("priority", args["priority"])
+            |> maybe_put_meta("due_date", args["due_date"])
+            |> maybe_put_meta("goal_slug", args["goal_slug"])
+
+          attrs = %{"meta" => new_meta}
+          attrs = Map.put(attrs, "updated_by", "agent")
+          attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
+          attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
+          attrs = if args["tags"], do: Map.put(attrs, "tags", args["tags"]), else: attrs
+
+          case Brain.update_page(todo, attrs) do
+            {:ok, updated} ->
+              status = get_in(updated.meta, ["kanban_status"]) || "unknown"
+              "Updated todo: #{updated.title} (#{updated.slug}) — status: #{status}"
+
+            {:error, changeset} ->
+              "Error: #{format_changeset_errors(changeset)}"
+          end
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "delete_relation",
+         %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
+           args
+       ) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      relation_type = Map.get(args, "relation_type")
+
+      case Brain.delete_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
+        {count, []} ->
+          "Deleted #{count} relation(s) between '#{source_slug}' and '#{target_slug}'"
+
+        {count, errors} ->
+          "Deleted #{count} relation(s), but encountered errors: #{Enum.join(errors, ", ")}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("stats", %{"context" => context_slug}) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      s = Brain.stats(context.id)
+
+      by_type =
+        s.by_type
+        |> Enum.map(fn {type, count} -> "- #{type}: #{count}" end)
+        |> Enum.join("\n")
+
+      todos_by_status =
+        s.todos_by_status
+        |> Enum.map(fn {status, count} -> "- #{status}: #{count}" end)
+        |> Enum.join("\n")
+
+      """
+      # Stats for '#{context_slug}'
+
+      Total pages: #{s.total_pages}
+      Total relations: #{s.total_relations}
+      Orphan pages: #{s.orphan_count}
+      Broken wikilinks: #{s.broken_link_count}
+
+      ## Pages by type
+      #{by_type}
+
+      ## Todos by status
+      #{todos_by_status}
+      """
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "rename_slug",
+         %{"context" => context_slug, "old_slug" => old_slug, "new_slug" => new_slug}
+       ) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      if old_slug == new_slug do
+        "Error: old_slug and new_slug are the same"
+      else
+        case Brain.get_page_by_slug(old_slug, context.id) do
+          nil ->
+            "Error: page '#{old_slug}' not found"
+
+          page ->
+            # Check that new_slug doesn't already exist
+            case Brain.get_page_by_slug(new_slug, context.id) do
+              nil ->
+                # 1. Relink all wikilinks/embeds across the context
+                {relinked_count, _} = Brain.relink_wikilinks(context.id, old_slug, new_slug)
+
+                # 2. Update the page's own slug
+                case Brain.update_page(page, %{"slug" => new_slug, "updated_by" => "agent"}) do
+                  {:ok, _updated} ->
+                    "Renamed '#{old_slug}' → '#{new_slug}' and relinked #{relinked_count} page(s)"
+
+                  {:error, changeset} ->
+                    "Error: relinked #{relinked_count} page(s) but failed to rename page: #{format_changeset_errors(changeset)}"
+                end
+
+              _existing ->
+                "Error: a page with slug '#{new_slug}' already exists"
+            end
+        end
+      end
     else
       "Error: context '#{context_slug}' not found"
     end

@@ -397,6 +397,53 @@ defmodule Dran.Brain do
   def delete_relation(%Relation{} = relation), do: Repo.delete(relation)
 
   @doc """
+  Delete relations between two pages by slug.
+
+  If `relation_type` is provided, only deletes relations of that type.
+  Otherwise, deletes ALL relations between the two pages (both directions).
+
+  Returns `{deleted_count, []}` on success or `{0, errors}` on failure.
+  """
+  def delete_relation_by_slugs(source_slug, target_slug, relation_type \\ nil, context_id) do
+    source = get_page_by_slug(source_slug, context_id)
+    target = get_page_by_slug(target_slug, context_id)
+
+    cond do
+      is_nil(source) ->
+        {:error, :source_not_found}
+
+      is_nil(target) ->
+        {:error, :target_not_found}
+
+      true ->
+        query =
+          from r in Relation,
+            where:
+              (r.source_id == ^source.id and r.target_id == ^target.id) or
+                (r.source_id == ^target.id and r.target_id == ^source.id)
+
+        query =
+          if relation_type do
+            where(query, [r], r.relation_type == ^relation_type)
+          else
+            query
+          end
+
+        relations = Repo.all(query)
+
+        {count, errors} =
+          Enum.reduce(relations, {0, []}, fn rel, {acc_count, acc_errors} ->
+            case Repo.delete(rel) do
+              {:ok, _} -> {acc_count + 1, acc_errors}
+              {:error, _} -> {acc_count, ["failed to delete relation" | acc_errors]}
+            end
+          end)
+
+        {count, Enum.reverse(errors)}
+    end
+  end
+
+  @doc """
   Build the full graph (nodes + edges) for a context.
 
   Returns `%{nodes: [...], edges: [...]}` where each node is
