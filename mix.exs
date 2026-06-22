@@ -71,6 +71,11 @@ defmodule Dran.MixProject do
     ]
   end
 
+  # Releases: `rel/overlays/bin/migrate` and `rel/overlays/bin/server` are
+  # auto-injected into the release by `mix phx.gen.release`. They wrap
+  # `bin/dran eval Dran.Release.migrate` and `bin/dran start` (with PHX_SERVER=true).
+  # Coolify invokes /app/bin/migrate as a one-off / pre-deploy step.
+
   # Aliases are shortcuts or tasks specific to the current project.
   # For example, to install project dependencies and perform other setup tasks, run:
   #
