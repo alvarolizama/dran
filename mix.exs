@@ -53,7 +53,7 @@ defmodule Dran.MixProject do
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:heroicons,
        github: "tailwindlabs/heroicons",
-       tag: "v2.2.0",
+       ref: "0435d4ca364a608cc75e2f8683d374e55abbae26",
        sparse: "optimized",
        app: false,
        compile: false,
