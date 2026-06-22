@@ -228,15 +228,15 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
-          "url" => %{ "type" => "string", "description" => "URL to ingest (HTML article or PDF)" },
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "url" => %{"type" => "string", "description" => "URL to ingest (HTML article or PDF)"},
           "slug" => %{
             "type" => "string",
             "description" => "Custom slug (auto from title if omitted)"
           },
           "tags" => %{
             "type" => "array",
-            "items" => %{ "type" => "string" },
+            "items" => %{"type" => "string"},
             "description" => "Tags (optional)"
           }
         },
@@ -250,8 +250,8 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
-          "slug" => %{ "type" => "string", "description" => "Slug of the page to delete" }
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "slug" => %{"type" => "string", "description" => "Slug of the page to delete"}
         },
         "required" => ["context", "slug"]
       }
@@ -263,9 +263,9 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
-          "source_slug" => %{ "type" => "string", "description" => "Slug of the source page" },
-          "target_slug" => %{ "type" => "string", "description" => "Slug of the target page" },
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "source_slug" => %{"type" => "string", "description" => "Slug of the source page"},
+          "target_slug" => %{"type" => "string", "description" => "Slug of the target page"},
           "relation_type" => %{
             "type" => "string",
             "description" => "Type of relation",
@@ -282,8 +282,8 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
-          "slug" => %{ "type" => "string", "description" => "Page slug" }
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "slug" => %{"type" => "string", "description" => "Page slug"}
         },
         "required" => ["context", "slug"]
       }
@@ -295,18 +295,30 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
+          "context" => %{"type" => "string", "description" => "Context slug"},
           "type" => %{
             "type" => "string",
-            "description" => "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)",
-            "enum" => ["note", "concept", "entity", "reference", "goal", "plan", "todo", "artifact", "comparison"]
+            "description" =>
+              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)",
+            "enum" => [
+              "note",
+              "concept",
+              "entity",
+              "reference",
+              "goal",
+              "plan",
+              "todo",
+              "artifact",
+              "comparison"
+            ]
           },
-          "tag" => %{ "type" => "string", "description" => "Filter by tag (optional)" },
+          "tag" => %{"type" => "string", "description" => "Filter by tag (optional)"},
           "status" => %{
             "type" => "string",
-            "description" => "Filter by kanban_status (for todos): backlog, this_week, today, in_progress, done, cancelled (optional)"
+            "description" =>
+              "Filter by kanban_status (for todos): backlog, this_week, today, in_progress, done, cancelled (optional)"
           },
-          "limit" => %{ "type" => "integer", "description" => "Max results (default 50, max 500)" }
+          "limit" => %{"type" => "integer", "description" => "Max results (default 50, max 500)"}
         },
         "required" => ["context"]
       }
@@ -318,8 +330,8 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
-          "slug" => %{ "type" => "string", "description" => "Todo slug to update" },
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "slug" => %{"type" => "string", "description" => "Todo slug to update"},
           "kanban_status" => %{
             "type" => "string",
             "description" => "New kanban status (optional)",
@@ -330,13 +342,19 @@ defmodule Dran.MCP do
             "description" => "New priority (optional)",
             "enum" => ["low", "medium", "high", "urgent"]
           },
-          "due_date" => %{ "type" => "string", "description" => "New due date YYYY-MM-DD (optional)" },
-          "goal_slug" => %{ "type" => "string", "description" => "New goal slug to link this todo to (optional)" },
-          "title" => %{ "type" => "string", "description" => "New title (optional)" },
-          "body" => %{ "type" => "string", "description" => "New body in markdown (optional)" },
+          "due_date" => %{
+            "type" => "string",
+            "description" => "New due date YYYY-MM-DD (optional)"
+          },
+          "goal_slug" => %{
+            "type" => "string",
+            "description" => "New goal slug to link this todo to (optional)"
+          },
+          "title" => %{"type" => "string", "description" => "New title (optional)"},
+          "body" => %{"type" => "string", "description" => "New body in markdown (optional)"},
           "tags" => %{
             "type" => "array",
-            "items" => %{ "type" => "string" },
+            "items" => %{"type" => "string"},
             "description" => "New tags (optional, replaces existing)"
           }
         },
@@ -350,12 +368,13 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
-          "source_slug" => %{ "type" => "string", "description" => "Slug of the source page" },
-          "target_slug" => %{ "type" => "string", "description" => "Slug of the target page" },
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "source_slug" => %{"type" => "string", "description" => "Slug of the source page"},
+          "target_slug" => %{"type" => "string", "description" => "Slug of the target page"},
           "relation_type" => %{
             "type" => "string",
-            "description" => "Only delete relations of this type (optional, deletes all if omitted)",
+            "description" =>
+              "Only delete relations of this type (optional, deletes all if omitted)",
             "enum" => ["related", "contradicts", "supersedes", "part_of", "embeds"]
           }
         },
@@ -369,7 +388,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" }
+          "context" => %{"type" => "string", "description" => "Context slug"}
         },
         "required" => ["context"]
       }
@@ -381,9 +400,9 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{ "type" => "string", "description" => "Context slug" },
-          "old_slug" => %{ "type" => "string", "description" => "Current slug to rename" },
-          "new_slug" => %{ "type" => "string", "description" => "New slug (kebab-case)" }
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "old_slug" => %{"type" => "string", "description" => "Current slug to rename"},
+          "new_slug" => %{"type" => "string", "description" => "New slug (kebab-case)"}
         },
         "required" => ["context", "old_slug", "new_slug"]
       }

@@ -450,7 +450,8 @@ defmodule DranWeb.DocsLive do
           <strong>Relate</strong>
           — use <code>create_relation</code>
           for typed relationships. Use <code>delete_relation</code>
-          to remove. Wikilinks auto-create <code>related</code> relations.
+          to remove. Wikilinks auto-create <code>related</code>
+          relations.
         </li>
         <li>
           <strong>Inspect</strong>
