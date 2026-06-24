@@ -20,8 +20,11 @@ Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent i
 - **REST API** — full CRUD for pages, contexts, relations, search, and ingest
 - **Backlinks** — see which pages link to the current page
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
+- **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
 - **Quality lint** — find orphan pages, broken wikilinks, stale pages
 - **Slug rename** — rename a page and auto-relink all wikilinks across the context
+- **Hybrid search** — unified `search` tool picks full-text, fuzzy, semantic or hybrid
+- **Automatic relations** — `PageAugmenter` creates `related` links via embeddings after every capture
 
 ## Quick start (local dev)
 
@@ -127,9 +130,11 @@ The current local/VPN server exposes these models (verify at runtime with `GET /
 
 ### How Dran can use it
 
-1. **Semantic search** — generate embeddings for page title/body, store them in the `pgvector` column, and add vector + hybrid search over the knowledge graph.
-2. **Better search ranking** — use the reranker to reorder FTS/vector candidates before returning them.
-3. **Rich file ingest** — convert uploaded PDFs, Word docs and PowerPoints to Markdown with `MarkItDown`, then index them as pages.
+1. **Unified search** — `Brain.search/2` picks full-text, fuzzy, semantic or hybrid automatically based on the query and inference availability.
+2. **Semantic search** — generate embeddings for page title/body, store them in the `pgvector` column, and add vector search over the knowledge graph.
+3. **Better search ranking** — use the reranker to reorder FTS/vector candidates before returning them.
+4. **Rich file ingest** — convert uploaded PDFs, Word docs and PowerPoints to Markdown with `MarkItDown`, then index them as pages.
+5. **Automatic relations** — after a page is created/updated, `Dran.Brain.PageAugmenter` asynchronously finds semantically similar pages and creates `related` relations when confidence is high.
 
 For endpoint request/response examples and integration patterns, see [`references/inference-api.md`](references/inference-api.md). For the implementation roadmap, see [`references/inference-implementation-plan.md`](references/inference-implementation-plan.md).
 
@@ -341,7 +346,8 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 | Tool               | Description                                                            |
 | ------------------ | ---------------------------------------------------------------------- |
-| `search`           | Full-text search across pages (returns title, slug, type, excerpt)     |
+| `search`           | Unified search: auto picks full-text, fuzzy, semantic or hybrid         |
+| `semantic_search`  | Deprecated alias for `search` with `strategy=semantic`                   |
 | `get_page`         | Get a page by slug (returns full markdown content)                     |
 | `create_page`      | Create a new page with type-specific meta                              |
 | `update_page`      | Update an existing page (title, body, tags, meta)                      |
@@ -424,8 +430,9 @@ All API endpoints require a bearer token: `Authorization: Bearer <DRAN_...N>`.
 | `GET`    | `/api/pages/:slug/graph?context=personal`  | Get page subgraph                                            |
 | `POST`   | `/api/relations`                           | Create a relation (`{source_slug, target_slug, relation_type, context}`) |
 | `DELETE` | `/api/relations/:id`                       | Delete a relation                                            |
-| `GET`    | `/api/search?q=...&context=personal`       | Full-text search                                             |
-| `GET`    | `/api/search/fuzzy?q=...&context=personal` | Fuzzy search (trigram similarity)                            |
+| `GET`    | `/api/search?q=...&context=personal`       | Unified search (auto, or `?strategy=fts\|fuzzy\|semantic\|hybrid`) |
+| `GET`    | `/api/search/fuzzy?q=...&context=personal` | Fuzzy search alias (`?strategy=fuzzy`)                            |
+| `GET`    | `/api/search/semantic?q=...&context=personal` | Semantic/hybrid alias (`?strategy=semantic\|hybrid`)           |
 | `GET`    | `/api/goals?context=personal`              | List goals                                                   |
 | `GET`    | `/api/goals/:slug?context=personal`        | Goal detail with related todos and plans                     |
 | `GET`    | `/api/todos?context=personal&status=...`   | List todos (filterable by kanban status)                     |

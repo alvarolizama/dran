@@ -576,11 +576,32 @@ defmodule DranWeb.DocsLive do
       <div class="not-prose space-y-3">
         <.mcp_tool
           name="search"
-          desc="Full-text search across pages. Returns compact results (title, slug, type, excerpt)."
+          desc="Unified search across pages. Auto picks full-text, fuzzy, semantic or hybrid."
         >
           <:param name="query" type="string" required="yes" desc="Search query (natural language)" />
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="type" type="string" required="no" desc="Filter by page type" />
+          <:param
+            name="strategy"
+            type="string"
+            required="no"
+            desc="auto, fts, fuzzy, semantic, hybrid"
+          />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="semantic_search"
+          desc="Deprecated alias for search with strategy=semantic. Use search instead."
+        >
+          <:param name="query" type="string" required="yes" desc="Search query (natural language)" />
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="type" type="string" required="no" desc="Filter by page type" />
+          <:param
+            name="hybrid"
+            type="boolean"
+            required="no"
+            desc="Use hybrid strategy instead of semantic"
+          />
         </.mcp_tool>
 
         <.mcp_tool

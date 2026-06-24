@@ -242,6 +242,7 @@ defmodule DranWeb.API.IngestController do
                 body: markdown,
                 page_type: "note",
                 tags: tags,
+                summary: summarize_text(markdown),
                 meta: %{
                   "kind" => "file",
                   "source_url" => stored.storage_path,
@@ -361,6 +362,15 @@ defmodule DranWeb.API.IngestController do
       "" -> "untitled"
       other -> other
     end
+  end
+
+  defp summarize_text(markdown) do
+    markdown
+    |> String.split("\n", trim: true)
+    |> Enum.take(3)
+    |> Enum.join(" ")
+    |> String.trim()
+    |> String.slice(0, 240)
   end
 
   defp format_errors_string(changeset) do

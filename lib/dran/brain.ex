@@ -266,6 +266,7 @@ defmodule Dran.Brain do
 
         broadcast_page_change(page.context_id, :created, page)
         Dran.Embeddings.schedule(page)
+        Dran.Brain.PageAugmenter.schedule(page)
         {:ok, page}
 
       {:error, changeset} ->
@@ -310,6 +311,7 @@ defmodule Dran.Brain do
 
         broadcast_page_change(updated_page.context_id, :updated, updated_page)
         Dran.Embeddings.schedule(updated_page)
+        Dran.Brain.PageAugmenter.schedule(updated_page)
         {:ok, updated_page}
 
       {:error, changeset} ->
@@ -493,6 +495,53 @@ defmodule Dran.Brain do
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
+  Unified search across pages.
+
+  Automatically picks the best available strategy:
+
+  - `:hybrid` — when inference is configured and the query is "meaningful"
+    (more than 2 words or >25 chars). Combines FTS + semantic search + RRF.
+  - `:fuzzy_fts` — short queries (≤2 words or ≤20 chars). Tries fuzzy title
+    match plus full-text search.
+  - `:fts` — fallback full-text search.
+
+  You can force a strategy with `:strategy`:
+
+      Brain.search("elixir phoenix", context_id: ctx.id, strategy: :fuzzy)
+      Brain.search("cómo funciona el embedding", context_id: ctx.id, strategy: :hybrid)
+
+  ## Options
+  - `:context_id` — scope to a context (recommended)
+  - `:type` — filter by page_type
+  - `:limit` — max results (default 20)
+  - `:strategy` — `:auto` (default), `:fts`, `:fuzzy`, `:semantic`, `:hybrid`
+  - `:k` — RRF constant for hybrid (default 60)
+  - `:rerank` — boolean, overrides `DRAN_INFERENCE_USE_RERANK`
+
+  Returns `{:ok, [result]}` where each result is a normalized map:
+
+      %{
+        id: ..., title: ..., slug: ..., page_type: ..., tags: [...],
+        excerpt: "...", similarity: nil, distance: nil, score: nil,
+        source: :fts | :fuzzy | :fuzzy_fts | :semantic | :hybrid
+      }
+  """
+  def search(query_string, opts \\ []) do
+    strategy = resolve_strategy(Keyword.get(opts, :strategy, :auto), query_string)
+
+    case do_search(query_string, opts, strategy) do
+      {:error, :not_configured} when strategy != :auto ->
+        {:error, :not_configured}
+
+      {:error, :not_configured} ->
+        do_search(query_string, opts, :fts) |> normalize_results(:fts)
+
+      result ->
+        normalize_results(result, strategy)
+    end
+  end
+
+  @doc """
   Full-text search across pages within a context.
 
   Uses PostgreSQL FTS with Spanish stemming + unaccent. Returns
@@ -503,7 +552,7 @@ defmodule Dran.Brain do
   - `:type` — filter by page_type
   - `:limit` — max results (default 20)
   """
-  def search(query_string, opts \\ []) do
+  def fts_search(query_string, opts \\ []) do
     context_id = Keyword.get(opts, :context_id)
     type = Keyword.get(opts, :type)
     limit = Keyword.get(opts, :limit, 20)
@@ -565,6 +614,7 @@ defmodule Dran.Brain do
           slug: p.slug,
           title: p.title,
           page_type: p.page_type,
+          tags: p.tags,
           similarity: fragment("similarity(immutable_unaccent(title), ?)", ^query_string)
         }
 
@@ -639,7 +689,7 @@ defmodule Dran.Brain do
   def hybrid_search(query_string, opts \\ []) do
     k = Keyword.get(opts, :k, 60)
 
-    with {:ok, fts} <- search(query_string, Keyword.put(opts, :limit, 50)),
+    with {:ok, fts} <- fts_search(query_string, Keyword.put(opts, :limit, 50)),
          {:ok, semantic} <- semantic_search(query_string, Keyword.put(opts, :limit, 50)) do
       fts =
         Enum.map(fts, fn {page, excerpt} ->
@@ -692,6 +742,102 @@ defmodule Dran.Brain do
 
       Map.put(acc, id, merged)
     end)
+  end
+
+  # ── Unified search internals ──
+
+  defp resolve_strategy(:auto, query_string) do
+    inference? = Dran.Inference.enabled?()
+    meaningful? = meaningful_query?(query_string)
+
+    cond do
+      meaningful? and inference? -> :hybrid
+      meaningful? -> :fts
+      inference? -> :fuzzy_fts
+      true -> :fuzzy_fts
+    end
+  end
+
+  defp resolve_strategy(strategy, _query)
+       when strategy in [:fts, :fuzzy, :fuzzy_fts, :semantic, :hybrid] do
+    strategy
+  end
+
+  defp resolve_strategy(_strategy, _query), do: :fts
+
+  defp meaningful_query?(query_string) do
+    words = query_string |> String.split(~r/\s+/, trim: true) |> length()
+    chars = String.length(query_string)
+    words > 2 or chars > 25
+  end
+
+  defp do_search(query_string, opts, :fts) do
+    fts_search(query_string, opts)
+  end
+
+  defp do_search(query_string, opts, :fuzzy) do
+    fuzzy_search(query_string, opts)
+  end
+
+  defp do_search(query_string, opts, :fuzzy_fts) do
+    limit = Keyword.get(opts, :limit, 20)
+
+    with {:ok, fuzzy} <- fuzzy_search(query_string, Keyword.put(opts, :limit, limit)),
+         {:ok, fts} <- fts_search(query_string, Keyword.put(opts, :limit, limit)) do
+      scored =
+        %{}
+        |> fuse_rank(fuzzy, 60, :similarity)
+        |> fuse_rank(fts, 60, :excerpt)
+        |> Enum.sort_by(fn {_id, %{score: s}} -> s end, :desc)
+        |> Enum.take(limit)
+        |> Enum.map(fn {_id, result} -> result end)
+
+      apply_rerank(query_string, scored, opts)
+    end
+  end
+
+  defp do_search(query_string, opts, :semantic) do
+    semantic_search(query_string, opts)
+  end
+
+  defp do_search(query_string, opts, :hybrid) do
+    hybrid_search(query_string, opts)
+  end
+
+  defp normalize_results({:error, _} = error, _strategy), do: error
+
+  defp normalize_results({:ok, results}, strategy) when is_list(results) do
+    {:ok, Enum.map(results, &normalize_item(&1, strategy))}
+  end
+
+  defp normalize_item({%Dran.Brain.Page{} = page, excerpt}, strategy) do
+    %{
+      id: page.id,
+      title: page.title,
+      slug: page.slug,
+      page_type: page.page_type,
+      tags: page.tags || [],
+      excerpt: excerpt || "",
+      similarity: nil,
+      distance: nil,
+      score: nil,
+      source: strategy
+    }
+  end
+
+  defp normalize_item(%{} = item, strategy) do
+    %{
+      id: Map.get(item, :id) || Map.get(item, "id"),
+      title: Map.get(item, :title) || Map.get(item, "title"),
+      slug: Map.get(item, :slug) || Map.get(item, "slug"),
+      page_type: Map.get(item, :page_type) || Map.get(item, "page_type"),
+      tags: List.wrap(Map.get(item, :tags) || Map.get(item, "tags")),
+      excerpt: Map.get(item, :excerpt) || Map.get(item, "excerpt") || "",
+      similarity: Map.get(item, :similarity) || Map.get(item, "similarity"),
+      distance: Map.get(item, :distance) || Map.get(item, "distance"),
+      score: Map.get(item, :score) || Map.get(item, "score"),
+      source: strategy
+    }
   end
 
   # ──────────────────────────────────────────────────────────────────────────

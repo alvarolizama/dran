@@ -79,14 +79,19 @@ defmodule DranWeb.SearchLive do
 
         <div class="space-y-2">
           <div
-            :for={{page, excerpt} <- @results}
+            :for={result <- @results}
             class="p-3 rounded-lg border border-base-300"
           >
             <div class="flex items-center justify-between">
-              <span class="font-medium">{page.title}</span>
-              <span class="text-xs text-base-content/50">{page.page_type}</span>
+              <span class="font-medium">{result.title}</span>
+              <span class="text-xs text-base-content/50">{result.page_type}</span>
             </div>
-            <div class="mt-1 text-sm text-base-content/70">{raw(excerpt)}</div>
+            <div
+              :if={result.excerpt && result.excerpt != ""}
+              class="mt-1 text-sm text-base-content/70"
+            >
+              {raw(result.excerpt)}
+            </div>
           </div>
 
           <p :if={@query != "" && @results == []} class="text-base-content/60">

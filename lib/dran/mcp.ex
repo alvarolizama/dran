@@ -47,7 +47,7 @@ defmodule Dran.MCP do
     %{
       "name" => "search",
       "description" =>
-        "Full-text search across pages in a context. Returns compact results with title, slug, type, and excerpt. Use this to find pages by content.",
+        "Unified search across pages in a context. Automatically picks the best available strategy: full-text, fuzzy, semantic or hybrid. Requires the inference API for semantic/hybrid strategies; degrades gracefully to full-text if inference is unavailable.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -57,6 +57,12 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" =>
               "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)"
+          },
+          "strategy" => %{
+            "type" => "string",
+            "enum" => ["auto", "fts", "fuzzy", "semantic", "hybrid"],
+            "description" =>
+              "Search strategy. 'auto' picks the best one. 'semantic' and 'hybrid' require inference API."
           }
         },
         "required" => ["query", "context"]
@@ -65,7 +71,7 @@ defmodule Dran.MCP do
     %{
       "name" => "semantic_search",
       "description" =>
-        "Semantic vector search across pages in a context. Finds pages by meaning even when they use different words than the query. Requires the inference API to be configured.",
+        "Deprecated alias for search with strategy='semantic'. Use 'search' instead.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -78,7 +84,7 @@ defmodule Dran.MCP do
           },
           "hybrid" => %{
             "type" => "boolean",
-            "description" => "Combine semantic search with full-text search (default: false)"
+            "description" => "Use hybrid strategy (default: false, i.e. semantic)"
           }
         },
         "required" => ["query", "context"]
@@ -608,42 +614,20 @@ defmodule Dran.MCP do
     if context do
       opts = [context_id: context.id]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
+      opts = if args["strategy"], do: Keyword.put(opts, :strategy, args["strategy"]), else: opts
 
-      {:ok, results} = Brain.search(query, opts)
-
-      lines =
-        Enum.map(results, fn {page, excerpt} ->
-          "- **#{page.title}** (`#{page.slug}`, type: #{page.page_type})\n  #{excerpt}"
-        end)
-
-      Enum.join(lines, "\n\n")
-    else
-      "Error: context '#{context_slug}' not found"
-    end
-  end
-
-  defp execute_tool("semantic_search", %{"query" => query, "context" => context_slug} = args) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
-      opts = [context_id: context.id]
-      opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
-
-      search_fn =
-        if args["hybrid"] == true, do: &Brain.hybrid_search/2, else: &Brain.semantic_search/2
-
-      case search_fn.(query, opts) do
+      case Brain.search(query, opts) do
         {:ok, results} ->
           lines =
             Enum.map(results, fn result ->
-              distance = Map.get(result, :distance) || Map.get(result, :semantic_distance)
-
               distance_text =
-                if distance, do: " (distance: #{:erlang.float_to_binary(distance, decimals: 4)})"
+                if result.distance,
+                  do: " (distance: #{:erlang.float_to_binary(result.distance, decimals: 4)})",
+                  else: ""
 
-              excerpt = Map.get(result, :excerpt, "")
+              source_text = " (source: #{result.source})"
 
-              "- **#{result.title}** (`#{result.slug}`, type: #{result.page_type})#{distance_text}\n  #{excerpt}"
+              "- **#{result.title}** (`#{result.slug}`, type: #{result.page_type})#{distance_text}#{source_text}\n  #{result.excerpt}"
             end)
 
           Enum.join(lines, "\n\n")
@@ -657,6 +641,11 @@ defmodule Dran.MCP do
     else
       "Error: context '#{context_slug}' not found"
     end
+  end
+
+  defp execute_tool("semantic_search", %{} = args) do
+    strategy = if args["hybrid"] == true, do: "hybrid", else: "semantic"
+    execute_tool("search", Map.put(args, "strategy", strategy))
   end
 
   defp execute_tool(

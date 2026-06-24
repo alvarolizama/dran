@@ -167,6 +167,7 @@ The reranker takes a query and a list of candidate texts and returns relevance s
 
 - Hook this into the ingest pipeline after a file is downloaded.
 - Convert PDF, DOCX, PPTX and TXT uploaded via `ingest_url` or the editor.
+- **MarkItDown does NOT accept URLs** — the content part requires base64-encoded file bytes in `file.file_data`. To ingest a URL that returns HTML, Dran must download the page first and pass the raw bytes (or use a chat-completion fallback to convert/clean HTML to markdown).
 - Sanitize the resulting markdown before storing it in the page body.
 - Keep the original file as an `artifact`/`reference` and store the extracted markdown in a `note` or `artifact` page.
 

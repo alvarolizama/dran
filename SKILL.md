@@ -226,6 +226,12 @@ group todos/plans under a goal). Either alone works, both together is cleanest.
 **Wikilinks** — use `[[slug]]` (or `[[slug|Display Text]]`) inline in the body.
 Dran auto-resolves these into `related` relations on `create_page` / `update_page`.
 
+In addition, when the inference API is configured, `Dran.Brain.PageAugmenter`
+runs asynchronously after every create/update and can create extra `related`
+relations based on semantic similarity. These auto-relations have
+`{"auto": true, "confidence": "high"}` in `meta` and are only created when
+confidence is high.
+
 **Embeds** — use `![[slug]]` to embed an artifact (renders image / video / audio / PDF
 inline). Auto-creates an `embeds` relation.
 
@@ -330,16 +336,32 @@ The pattern for adding a new MCP tool to Dran:
 Most new tools are 15-20 lines: resolve context → resolve page(s) by slug → call
 existing `Brain` function → format the response as a string.
 
-## Tools Reference (15 MCP tools)
+## Tools Reference (16 MCP tools)
 
 ### `search`
-Full-text search using PostgreSQL FTS (Spanish stemming + unaccent). Returns
-compact results: title, slug, type, excerpt.
+Unified knowledge search. `Brain.search/2` automatically picks the best
+strategy depending on the query and whether the inference API is configured:
+
+- Short query (≤2 words / ≤25 chars) → FTS + fuzzy (`:fuzzy_fts`)
+- Longer meaningful query + inference available → hybrid (`:hybrid`)
+- No inference configured → FTS (`:fts`)
+- You can override with `"strategy": "fts"`, `"fuzzy"`, `"semantic"` or `"hybrid"`.
+
+Returns compact results: title, slug, type, excerpt, score, source and (for
+semantic/hybrid) cosine distance.
 ```json
-{ "query": "elixir pattern matching", "context": "personal", "type": "note" }
+{ "query": "elixir pattern matching", "context": "personal", "type": "note", "strategy": "auto" }
 ```
 The `type` filter is optional but **highly recommended** when you know the type —
 saves tokens and noise.
+
+### `semantic_search`
+Deprecated alias for `search` with `"strategy": "semantic"`. Existing agents keep
+working, but prefer `search` for new integrations.
+```json
+{ "query": "elixir pattern matching", "context": "personal", "type": "note", "hybrid": false }
+```
+Setting `hybrid: true` is equivalent to `"strategy": "hybrid"`.
 
 ### `get_page`
 Returns the full markdown body of a page by slug. Use this to actually read content
@@ -671,8 +693,9 @@ curl -fsS http://<dran-host>/api/mcp \
    you're acting on behalf of someone, pass `owner: "alvaro"` or `on_behalf_of`.
 9. **Updating body when only metadata changed.** Body change bumps `version` and
    creates a `page_versions` snapshot. Pass only the fields you're actually changing.
-10. **Assuming `search` is exact match.** It's full-text with Spanish stemming.
-    "programar" matches "programación". Use `fuzzy_search` (REST, not MCP) for typos.
+10. **Assuming `search` is exact match.** It's unified search: picks FTS, fuzzy,
+    semantic or hybrid automatically. "programar" matches "programación" via FTS,
+    and semantic finds related meanings. Use `"strategy": "fuzzy"` for typos.
 11. **Deleting without confirmation.** `delete_page` is irreversible and cascades.
     Always confirm with Álvaro first. After delete, run `lint` to catch orphans.
 12. **Using `create_relation` for `related` when a wikilink would do.** If the
@@ -717,6 +740,8 @@ Before any `create_page`:
 After any `create_page` / `update_page`:
 - [ ] Response confirms version (for updates) or slug (for creates).
 - [ ] If errors: changeset errors are surfaced to Álvaro, not silently retried.
+- [ ] If inference is configured, `PageAugmenter` may create `related`
+  auto-relations asynchronously. That's expected — do not manually recreate them.
 
 After adding/modifying MCP tools:
 - [ ] `@tools` array + `@moduledoc` updated in `mcp.ex`.

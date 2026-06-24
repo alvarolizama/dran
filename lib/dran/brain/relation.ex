@@ -22,6 +22,7 @@ defmodule Dran.Brain.Relation do
 
   schema "relations" do
     field :relation_type, :string, default: "related"
+    field :meta, :map, default: %{}
 
     belongs_to :source, Dran.Brain.Page
     belongs_to :target, Dran.Brain.Page
@@ -32,7 +33,7 @@ defmodule Dran.Brain.Relation do
   @doc "Changeset for creating a relation"
   def changeset(relation, attrs) do
     relation
-    |> cast(attrs, [:source_id, :target_id, :relation_type])
+    |> cast(attrs, [:source_id, :target_id, :relation_type, :meta])
     |> validate_required([:source_id, :target_id])
     |> validate_inclusion(:relation_type, @relation_types)
     |> unique_constraint([:source_id, :target_id, :relation_type],
