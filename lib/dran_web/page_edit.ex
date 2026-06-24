@@ -31,12 +31,12 @@ defmodule DranWeb.PageEdit do
 
   alias Dran.Brain
   alias Dran.Brain.Page
+  alias Dran.Summaries
   alias Dran.Uploads
 
   @doc """
   Handles inline editing events: toggle_edit, cancel_edit, validate_page,
-  save_page, body_change (autosave), field_change (autosave title/slug/etc),
-  request_upload, and upload_complete.
+  save_page, body_change (autosave), request_upload, and upload_complete.
   """
   def handle_event("toggle_edit", _params, %{assigns: %{page: page, page_type: type}} = socket) do
     editing = Map.get(socket.assigns, :editing, false)
@@ -59,6 +59,22 @@ defmodule DranWeb.PageEdit do
 
   def handle_event("cancel_edit", _params, socket) do
     {:noreply, push_navigate(socket, to: "/notes")}
+  end
+
+  def handle_event("suggest_summary", _params, %{assigns: %{page: %Page{}}} = socket) do
+    apply_suggestion(socket, "summary", &Summaries.summarize_page/1)
+  end
+
+  def handle_event("suggest_summary", _params, socket) do
+    {:noreply, put_flash(socket, :error, "Cannot suggest summary: no page loaded.")}
+  end
+
+  def handle_event("suggest_tags", _params, %{assigns: %{page: %Page{}}} = socket) do
+    apply_suggestion(socket, "tags", &Summaries.suggest_tags/1)
+  end
+
+  def handle_event("suggest_tags", _params, socket) do
+    {:noreply, put_flash(socket, :error, "Cannot suggest tags: no page loaded.")}
   end
 
   def handle_event("validate_page", %{"page" => page_params}, socket) do
@@ -412,4 +428,37 @@ defmodule DranWeb.PageEdit do
       end
     end
   end
+
+  # ── Suggestion helpers ──
+
+  defp apply_suggestion(socket, field, suggest_fn) do
+    page = socket.assigns.page
+
+    case suggest_fn.(page) do
+      {:ok, value} ->
+        value = normalize_suggested_value(field, value)
+        params = Map.merge(socket.assigns.form.params || %{}, %{field => value})
+        handle_event("validate_page", %{"page" => params}, socket)
+
+      {:error, :not_configured} ->
+        {:noreply, put_flash(socket, :error, "Inference is not configured.")}
+
+      {:error, reason} ->
+        message = "Could not suggest #{field}: #{format_error(reason)}"
+        {:noreply, put_flash(socket, :error, message)}
+    end
+  end
+
+  defp normalize_suggested_value("tags", tags) when is_list(tags) do
+    tags
+    |> Enum.map(&to_string/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join(", ")
+  end
+
+  defp normalize_suggested_value("tags", tags) when is_binary(tags), do: tags
+  defp normalize_suggested_value(_field, value), do: value
+
+  defp format_error(reason) when is_binary(reason), do: reason
+  defp format_error(reason), do: inspect(reason)
 end

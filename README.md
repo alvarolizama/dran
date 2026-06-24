@@ -80,12 +80,58 @@ Visit [localhost:4000](http://localhost:4000). You'll be redirected to login.
 See [`.env.example`](.env.example) for the full list with comments. The most important ones for local dev:
 
 ```bash
-SECRET_KEY_BASE=...nssl rand -hex 64)
+SECRET_KEY_BASE=$(openssl rand -hex 64)
 DATABASE_URL=ecto://postgres:postgres@localhost/dran_dev
-DRAN_PASSWORD=...nssl rand -hex 32)
+DRAN_PASSWORD=$(openssl rand -hex 32)
 ```
 
-## Database
+| Variable                | Required | Notes                                                          |
+| ----------------------- | -------- | -------------------------------------------------------------- |
+| `SECRET_KEY_BASE`       | yes      | `openssl rand -hex 64`                                         |
+| `DATABASE_URL`          | yes      | Postgres connection string                                     |
+| `DRAN_PASSWORD`         | yes      | Admin login password                                           |
+| `DRAN_API_TOKEN`        | yes      | Bearer token for API / MCP                                     |
+| `DRAN_INFERENCE_API_URL`| no       | Base URL of the OpenAI-compatible inference server (`…/v1`)    |
+| `DRAN_INFERENCE_API_KEY`| no*      | API key for the inference server (required if URL is set)      |
+
+> `DRAN_INFERENCE_API_KEY` is required whenever `DRAN_INFERENCE_API_URL` is set.
+
+## Inference API
+
+Dran can talk to an OpenAI-compatible inference server to add embeddings, reranking, and document-to-markdown conversion to the second brain.
+
+Supported capabilities:
+
+- **Embeddings** — `POST /v1/embeddings`
+- **Reranking** — `POST /v1/rerank`
+- **Document-to-markdown** — `POST /v1/chat/completions` with a file content part
+
+The server is configured via two environment variables:
+
+```bash
+DRAN_INFERENCE_API_URL=http://<inference-host>:8000/v1
+DRAN_INFERENCE_API_KEY=<your-key>
+```
+
+> Don't put real hostnames, VPN domains, or tokens in public repo files. Use `.env` for the real values.
+
+### Available models
+
+The current local/VPN server exposes these models (verify at runtime with `GET /v1/models`):
+
+| Model | Capability | Endpoint |
+| ----- | ---------- | -------- |
+| `Qwen3-Embedding` | text embeddings | `POST /v1/embeddings` |
+| `Qwen3-Reranker` | rerank search results | `POST /v1/rerank` |
+| `MarkItDown` | PDF/DOCX/PPTX/TXT → markdown | `POST /v1/chat/completions` |
+
+### How Dran can use it
+
+1. **Semantic search** — generate embeddings for page title/body, store them in the `pgvector` column, and add vector + hybrid search over the knowledge graph.
+2. **Better search ranking** — use the reranker to reorder FTS/vector candidates before returning them.
+3. **Rich file ingest** — convert uploaded PDFs, Word docs and PowerPoints to Markdown with `MarkItDown`, then index them as pages.
+
+For endpoint request/response examples and integration patterns, see [`references/inference-api.md`](references/inference-api.md). For the implementation roadmap, see [`references/inference-implementation-plan.md`](references/inference-implementation-plan.md).
 
 ### Migrations
 

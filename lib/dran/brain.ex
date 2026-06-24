@@ -171,6 +171,14 @@ defmodule Dran.Brain do
     where(query, [p], p.created_by == ^created_by)
   end
 
+  defp apply_rerank(query_string, results, opts) do
+    if Keyword.get(opts, :rerank, Dran.Inference.Config.use_rerank?()) do
+      Dran.Rerank.rerank(query_string, results)
+    else
+      {:ok, results}
+    end
+  end
+
   @doc "List todos in a context, optionally filtered by kanban_status"
   def list_todos(context_id) when is_binary(context_id) do
     list_todos(context_id: context_id)
@@ -241,8 +249,9 @@ defmodule Dran.Brain do
   def create_page(attrs) do
     attrs =
       attrs
-      |> default_owner_field(:owner, "system")
-      |> default_owner_field(:created_by, "system")
+      |> normalize_attrs()
+      |> default_owner_field("owner", "system")
+      |> default_owner_field("created_by", "system")
 
     changeset = Page.create_changeset(attrs)
 
@@ -256,6 +265,7 @@ defmodule Dran.Brain do
         })
 
         broadcast_page_change(page.context_id, :created, page)
+        Dran.Embeddings.schedule(page)
         {:ok, page}
 
       {:error, changeset} ->
@@ -264,13 +274,15 @@ defmodule Dran.Brain do
   end
 
   defp default_owner_field(attrs, key, value) do
-    str_key = Atom.to_string(key)
-
-    if Map.has_key?(attrs, key) or Map.has_key?(attrs, str_key) do
+    if Map.has_key?(attrs, key) do
       attrs
     else
-      Map.put(attrs, str_key, value)
+      Map.put(attrs, key, value)
     end
+  end
+
+  defp normalize_attrs(attrs) when is_map(attrs) do
+    Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
   end
 
   @doc """
@@ -297,6 +309,7 @@ defmodule Dran.Brain do
         })
 
         broadcast_page_change(updated_page.context_id, :updated, updated_page)
+        Dran.Embeddings.schedule(updated_page)
         {:ok, updated_page}
 
       {:error, changeset} ->
@@ -530,7 +543,7 @@ defmodule Dran.Brain do
         {page, excerpt}
       end)
 
-    {:ok, excerpts}
+    apply_rerank(query_string, excerpts, opts)
   end
 
   @doc """
@@ -563,6 +576,122 @@ defmodule Dran.Brain do
       end
 
     {:ok, Repo.all(query)}
+  end
+
+  @doc """
+  Semantic search using pgvector + cosine distance.
+
+  Returns pages sorted by cosine distance to the query embedding (ascending).
+
+  ## Options
+  - `:context_id` — scope to a context
+  - `:type` — filter by page_type
+  - `:limit` — max results (default 20)
+  """
+  @spec semantic_search(String.t(), keyword()) :: {:ok, list(map())} | {:error, term()}
+  def semantic_search(query_string, opts \\ []) do
+    context_id = Keyword.get(opts, :context_id)
+    type = Keyword.get(opts, :type)
+    limit = Keyword.get(opts, :limit, 20)
+
+    case Dran.Inference.embed(query_string) do
+      {:ok, vector} ->
+        vec = Pgvector.new(vector)
+
+        query =
+          from p in Page,
+            where: not is_nil(p.embedding),
+            order_by: fragment("? <=> ?", p.embedding, ^vec),
+            limit: ^limit,
+            select: %{
+              id: p.id,
+              title: p.title,
+              slug: p.slug,
+              page_type: p.page_type,
+              tags: p.tags,
+              distance: fragment("? <=> ?", p.embedding, ^vec)
+            }
+
+        query =
+          query
+          |> maybe_filter_context(context_id)
+          |> maybe_filter_type(type)
+
+        results = Repo.all(query)
+        apply_rerank(query_string, results, opts)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Hybrid search combining full-text search and semantic search using
+  Reciprocal Rank Fusion (RRF).
+
+  ## Options
+  - `:context_id` — scope to a context
+  - `:type` — filter by page_type
+  - `:limit` — max results (default 20)
+  - `:k` — RRF constant (default 60)
+  """
+  @spec hybrid_search(String.t(), keyword()) :: {:ok, list(map())} | {:error, term()}
+  def hybrid_search(query_string, opts \\ []) do
+    k = Keyword.get(opts, :k, 60)
+
+    with {:ok, fts} <- search(query_string, Keyword.put(opts, :limit, 50)),
+         {:ok, semantic} <- semantic_search(query_string, Keyword.put(opts, :limit, 50)) do
+      fts =
+        Enum.map(fts, fn {page, excerpt} ->
+          %{
+            id: page.id,
+            title: page.title,
+            slug: page.slug,
+            page_type: page.page_type,
+            tags: page.tags,
+            excerpt: excerpt
+          }
+        end)
+
+      scored =
+        %{}
+        |> fuse_rank(fts, k, :excerpt)
+        |> fuse_rank(semantic, k, :semantic_distance)
+
+      results =
+        scored
+        |> Enum.sort_by(fn {_id, %{score: s}} -> s end, :desc)
+        |> Enum.take(Keyword.get(opts, :limit, 20))
+        |> Enum.map(fn {_id, result} -> result end)
+
+      apply_rerank(query_string, results, opts)
+    end
+  end
+
+  defp fuse_rank(acc, list, k, extra_field) do
+    list
+    |> Enum.with_index(1)
+    |> Enum.reduce(acc, fn {item, rank}, acc ->
+      id = item.id
+      score = 1.0 / (k + rank)
+
+      existing =
+        Map.get(acc, id, %{
+          id: id,
+          title: item.title,
+          slug: item.slug,
+          page_type: item.page_type,
+          tags: item.tags,
+          score: 0.0
+        })
+
+      merged =
+        existing
+        |> Map.put(:score, existing.score + score)
+        |> Map.put_new(extra_field, Map.get(item, extra_field))
+
+      Map.put(acc, id, merged)
+    end)
   end
 
   # ──────────────────────────────────────────────────────────────────────────

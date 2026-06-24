@@ -12,6 +12,7 @@ defmodule Dran.Application do
       Dran.Repo,
       {DNSCluster, query: Application.get_env(:dran, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Dran.PubSub},
+      Dran.Embeddings.Supervisor,
       # Start a worker by calling: Dran.Worker.start_link(arg)
       # {Dran.Worker, arg},
       # Start to serve requests, typically the last entry

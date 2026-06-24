@@ -172,6 +172,7 @@ defmodule DranWeb.Router do
     # Search
     get "/search", SearchController, :search
     get "/search/fuzzy", SearchController, :fuzzy
+    get "/search/semantic", SearchController, :semantic
 
     # Goals
     get "/goals", GoalController, :index
@@ -184,6 +185,7 @@ defmodule DranWeb.Router do
 
     # Ingest
     post "/ingest", IngestController, :ingest
+    post "/ingest/file", IngestController, :file
 
     # Quality / maintenance
     get "/lint", LintController, :lint

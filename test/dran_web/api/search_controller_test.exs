@@ -1,0 +1,84 @@
+defmodule DranWeb.API.SearchControllerTest do
+  use DranWeb.ConnCase, async: false
+
+  alias Dran.Brain
+
+  setup %{conn: conn} do
+    original = Application.get_env(:dran, :inference)
+
+    Application.put_env(:dran, :inference,
+      base_url: "http://localhost:8000/v1",
+      api_key: "test-key",
+      embedding_model: "Qwen3-Embedding",
+      rerank_model: "Qwen3-Reranker",
+      markitdown_model: "MarkItDown",
+      timeout: 5_000,
+      req_plug: {Req.Test, Dran.Inference.Client},
+      schedule_async: false,
+      embedding_dimensions: 1024
+    )
+
+    on_exit(fn ->
+      if is_nil(original) do
+        Application.delete_env(:dran, :inference)
+      else
+        Application.put_env(:dran, :inference, original)
+      end
+    end)
+
+    {:ok, conn: put_req_header(conn, "authorization", "Bearer dran-token")}
+  end
+
+  describe "GET /api/search/semantic" do
+    test "returns semantic search results", %{conn: conn} do
+      Req.Test.stub(Dran.Inference.Client, fn conn ->
+        Req.Test.json(conn, %{
+          "object" => "list",
+          "data" => [
+            %{"object" => "embedding", "index" => 0, "embedding" => List.duplicate(0.0, 1024)}
+          ]
+        })
+      end)
+
+      context = Brain.get_context_by_slug("personal")
+
+      {:ok, page} =
+        Brain.create_page(%{
+          context_id: context.id,
+          title: "Semantic hit",
+          slug: "semantic-hit",
+          body: "Body",
+          page_type: "note",
+          embedding: Pgvector.new(List.duplicate(0.0, 1024)),
+          embedding_hash: "hash"
+        })
+
+      conn =
+        get(conn, ~p"/api/search/semantic", %{
+          "q" => "test query",
+          "context" => "personal"
+        })
+
+      assert json_response(conn, 200)
+      %{"data" => data} = json_response(conn, 200)
+
+      assert length(data) == 1
+      assert hd(data)["slug"] == page.slug
+    end
+
+    test "returns 503 when inference is not configured", %{conn: conn} do
+      Application.put_env(:dran, :inference, nil)
+
+      conn =
+        get(conn, ~p"/api/search/semantic", %{
+          "q" => "test",
+          "context" => "personal"
+        })
+
+      assert json_response(conn, 503)
+
+      assert %{"errors" => %{"detail" => "Inference API is not configured"}} =
+               json_response(conn, 503)
+    end
+  end
+end

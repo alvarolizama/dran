@@ -12,6 +12,7 @@ defmodule Dran.MCP do
 
   ## Tools
   - `search` — FTS search across pages
+  - `semantic_search` — vector search across pages (needs inference API)
   - `create_page` — create a new page
   - `update_page` — update an existing page
   - `get_page` — get a page by slug (returns markdown)
@@ -56,6 +57,28 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" =>
               "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)"
+          }
+        },
+        "required" => ["query", "context"]
+      }
+    },
+    %{
+      "name" => "semantic_search",
+      "description" =>
+        "Semantic vector search across pages in a context. Finds pages by meaning even when they use different words than the query. Requires the inference API to be configured.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "query" => %{"type" => "string", "description" => "Search query (natural language)"},
+          "context" => %{"type" => "string", "description" => "Context slug (e.g. 'personal')"},
+          "type" => %{
+            "type" => "string",
+            "description" =>
+              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)"
+          },
+          "hybrid" => %{
+            "type" => "boolean",
+            "description" => "Combine semantic search with full-text search (default: false)"
           }
         },
         "required" => ["query", "context"]
@@ -594,6 +617,43 @@ defmodule Dran.MCP do
         end)
 
       Enum.join(lines, "\n\n")
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("semantic_search", %{"query" => query, "context" => context_slug} = args) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      opts = [context_id: context.id]
+      opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
+
+      search_fn =
+        if args["hybrid"] == true, do: &Brain.hybrid_search/2, else: &Brain.semantic_search/2
+
+      case search_fn.(query, opts) do
+        {:ok, results} ->
+          lines =
+            Enum.map(results, fn result ->
+              distance = Map.get(result, :distance) || Map.get(result, :semantic_distance)
+
+              distance_text =
+                if distance, do: " (distance: #{:erlang.float_to_binary(distance, decimals: 4)})"
+
+              excerpt = Map.get(result, :excerpt, "")
+
+              "- **#{result.title}** (`#{result.slug}`, type: #{result.page_type})#{distance_text}\n  #{excerpt}"
+            end)
+
+          Enum.join(lines, "\n\n")
+
+        {:error, :not_configured} ->
+          "Error: inference API is not configured"
+
+        {:error, reason} ->
+          "Error: #{inspect(reason)}"
+      end
     else
       "Error: context '#{context_slug}' not found"
     end

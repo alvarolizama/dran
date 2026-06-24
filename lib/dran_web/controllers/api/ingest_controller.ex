@@ -2,6 +2,7 @@ defmodule DranWeb.API.IngestController do
   use DranWeb, :controller
 
   alias Dran.Brain
+  alias Dran.Ingest.Converter
   alias Dran.Uploads
 
   @doc "POST /api/ingest — save a URL or download a file as a reference page"
@@ -31,6 +32,37 @@ defmodule DranWeb.API.IngestController do
     conn
     |> put_status(:bad_request)
     |> json(%{errors: %{detail: "url and context are required"}})
+  end
+
+  @doc "POST /api/ingest/file — upload and convert a file to a markdown note"
+  def file(conn, %{"context" => context_slug, "file" => %Plug.Upload{} = upload} = params) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      tag_list = parse_tags(params["tags"])
+
+      case upload_file(context, upload, tag_list) do
+        {:ok, page} ->
+          conn
+          |> put_status(:created)
+          |> json(%{data: %{slug: page.slug, title: page.title, page_type: page.page_type}})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: %{detail: reason}})
+      end
+    else
+      conn
+      |> put_status(:not_found)
+      |> json(%{errors: %{detail: "context not found"}})
+    end
+  end
+
+  def file(conn, _params) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{errors: %{detail: "file and context are required"}})
   end
 
   @doc """
@@ -178,6 +210,76 @@ defmodule DranWeb.API.IngestController do
         {:error, format_errors_string(changeset)}
     end
   end
+
+  # ── Multipart file ingest (upload + MarkItDown) ──
+
+  defp upload_file(
+         context,
+         %Plug.Upload{
+           filename: filename,
+           content_type: content_type,
+           path: path
+         },
+         tags
+       ) do
+    case File.read(path) do
+      {:ok, binary} ->
+        max_size = Uploads.max_size()
+
+        if byte_size(binary) > max_size do
+          {:error, "file too large (max #{max_size} bytes)"}
+        else
+          stored = Uploads.store(context.id, binary, filename, content_type)
+          title = Converter.title(filename)
+          slug = slugify(title)
+
+          case Converter.convert(filename, content_type, binary) do
+            {:ok, %{body: markdown}} ->
+              page_attrs = %{
+                context_id: context.id,
+                title: title,
+                slug: slug,
+                body: markdown,
+                page_type: "note",
+                tags: tags,
+                meta: %{
+                  "kind" => "file",
+                  "source_url" => stored.storage_path,
+                  "filename" => stored.filename,
+                  "mime_type" => stored.mime_type,
+                  "size" => stored.size,
+                  "storage_path" => stored.storage_path,
+                  "sha256" => stored.sha256
+                },
+                kb_source_url: stored.storage_path,
+                owner: "system",
+                created_by: "system"
+              }
+
+              create_page(page_attrs)
+
+            {:error, reason} ->
+              {:error, to_error_string(reason)}
+          end
+        end
+
+      {:error, reason} ->
+        {:error, "failed to read upload: #{inspect(reason)}"}
+    end
+  end
+
+  defp parse_tags(nil), do: []
+  defp parse_tags(""), do: []
+
+  defp parse_tags(tags) when is_binary(tags) do
+    tags |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  defp parse_tags(tags) when is_list(tags), do: tags
+  defp parse_tags(_), do: []
+
+  defp to_error_string(reason) when is_binary(reason), do: reason
+  defp to_error_string(reason), do: inspect(reason)
 
   # ── URL helpers ──
 

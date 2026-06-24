@@ -83,6 +83,10 @@ defmodule Dran.Brain.Page do
     field :body_hash, :string
     field :version, :integer, default: 1
 
+    # Embeddings
+    field :embedding_hash, :string
+    field :embedding, Pgvector.Ecto.Vector
+
     # Owner tracking
     field :owner, :string, default: "system"
     field :created_by, :string, default: "system"

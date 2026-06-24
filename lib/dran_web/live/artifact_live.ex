@@ -79,6 +79,13 @@ defmodule DranWeb.ArtifactLive do
                         placeholder="Summary (optional)"
                         class="w-full"
                       />
+                      <button
+                        type="button"
+                        phx-click="suggest_summary"
+                        class="btn btn-ghost btn-xs mt-1"
+                      >
+                        <.icon name="hero-sparkles" class="size-3" /> Suggest
+                      </button>
                     </div>
                     <.input
                       field={@form[:tags]}
@@ -86,6 +93,9 @@ defmodule DranWeb.ArtifactLive do
                       placeholder="Tags (comma separated)"
                       class="w-full"
                     />
+                    <button type="button" phx-click="suggest_tags" class="btn btn-ghost btn-xs mt-1">
+                      <.icon name="hero-sparkles" class="size-3" /> Suggest
+                    </button>
                     <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
                     <.markdown_editor
                       id="artifact-editor"
@@ -225,5 +235,7 @@ defmodule DranWeb.ArtifactLive do
   def handle_event("field_change", p, s), do: PageEdit.handle_event("field_change", p, s)
   def handle_event("request_upload", p, s), do: PageEdit.handle_event("request_upload", p, s)
   def handle_event("upload_complete", p, s), do: PageEdit.handle_event("upload_complete", p, s)
+  def handle_event("suggest_summary", p, s), do: PageEdit.handle_event("suggest_summary", p, s)
+  def handle_event("suggest_tags", p, s), do: PageEdit.handle_event("suggest_tags", p, s)
   defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
 end

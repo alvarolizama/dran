@@ -1,5 +1,6 @@
 defmodule Dran.Repo do
   use Ecto.Repo,
     otp_app: :dran,
-    adapter: Ecto.Adapters.Postgres
+    adapter: Ecto.Adapters.Postgres,
+    types: Dran.PostgresTypes
 end

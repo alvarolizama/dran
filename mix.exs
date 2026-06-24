@@ -67,6 +67,7 @@ defmodule Dran.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:mdex, "~> 0.13.1"},
+      {:pgvector, "~> 0.3"},
       {:tidewave, "~> 0.6", only: :dev}
     ]
   end
