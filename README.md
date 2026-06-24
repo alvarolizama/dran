@@ -28,7 +28,7 @@ Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent i
 ### Prerequisites
 
 - Elixir 1.15+ and OTP 26+
-- PostgreSQL 14+ (with `pg_trgm` and `uuid-ossp` extensions)
+- PostgreSQL 14+ (with `pg_trgm`, `uuid-ossp`, and `pgvector` extensions)
 - Node.js 18+ (for asset building)
 
 ### First-time setup
@@ -399,7 +399,7 @@ All API endpoints require a bearer token: `Authorization: Bearer <DRAN_...N>`.
 ## Tech stack
 
 - **Phoenix 1.8** with LiveView
-- **Ecto + PostgreSQL** with `pg_trgm` (fuzzy search) and generated `tsvector` (FTS)
+- **Ecto + PostgreSQL** with `pg_trgm` (fuzzy search), generated `tsvector` (FTS), and `pgvector`
 - **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
 - **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
 - **MCP** (Model Context Protocol) for AI agent integration
