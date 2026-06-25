@@ -252,6 +252,7 @@ defmodule Dran.Brain do
       |> normalize_attrs()
       |> default_owner_field("owner", "system")
       |> default_owner_field("created_by", "system")
+      |> ensure_title_and_slug()
 
     changeset = Page.create_changeset(attrs)
 
@@ -271,6 +272,53 @@ defmodule Dran.Brain do
 
       {:error, changeset} ->
         {:error, changeset}
+    end
+  end
+
+  defp ensure_title_and_slug(attrs) do
+    body = attrs["body"] || ""
+    title = attrs["title"]
+    slug = attrs["slug"]
+
+    title =
+      if is_binary(title) and String.trim(title) != "" do
+        title
+      else
+        derive_title(body)
+      end
+
+    slug =
+      if is_binary(slug) and String.trim(slug) != "" do
+        slug
+      else
+        slugify_title(title)
+      end
+
+    attrs
+    |> Map.put("title", title)
+    |> Map.put("slug", slug)
+  end
+
+  defp derive_title(body) when is_binary(body) do
+    body
+    |> String.split("\n")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> List.first()
+    |> case do
+      nil -> "Untitled"
+      line -> String.slice(line, 0, 80)
+    end
+  end
+
+  defp slugify_title(title) do
+    title
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.replace(~r/^-+|-+$/, "")
+    |> case do
+      "" -> "untitled"
+      slug -> slug
     end
   end
 
@@ -358,6 +406,53 @@ defmodule Dran.Brain do
     %Relation{}
     |> Relation.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @doc """
+  Create auto-relations from a page to its top semantic neighbours.
+
+  Looks at pages in the same context ordered by cosine distance and creates
+  `:semantic` relations for the closest `k` neighbours.
+  """
+  def auto_relate(page_or_nil, opts \\ [])
+
+  def auto_relate(%Page{context_id: nil}, _opts), do: {:ok, []}
+
+  def auto_relate(%Page{} = page, opts) do
+    import Ecto.Query
+
+    k = Keyword.get(opts, :k, 3)
+    exclude_ids = [page.id | Keyword.get(opts, :exclude_ids, [])]
+
+    text = Dran.Embeddings.text_for_page(page)
+
+    case semantic_search(text, context_id: page.context_id, limit: k + 5) do
+      {:ok, results} ->
+        targets =
+          results
+          |> Enum.reject(&(&1.id in exclude_ids))
+          |> Enum.take(k)
+
+        created =
+          Enum.reduce(targets, [], fn target, acc ->
+            attrs = %{
+              source_id: page.id,
+              target_id: target.id,
+              relation_type: "semantic",
+              meta: %{"distance" => Map.get(target, :distance)}
+            }
+
+            case create_relation(attrs) do
+              {:ok, rel} -> [rel | acc]
+              _ -> acc
+            end
+          end)
+
+        {:ok, Enum.reverse(created)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc "Create a relation by slugs instead of IDs"

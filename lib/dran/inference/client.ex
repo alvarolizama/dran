@@ -40,18 +40,20 @@ defmodule Dran.Inference.Client do
         {:error, :not_configured}
 
       true ->
-        payload = %{
-          "model" => model,
-          "input" => inputs,
-          "dimensions" => Config.embedding_dimensions()
-        }
+        Dran.Inference.Queue.run(:embed, fn ->
+          payload = %{
+            "model" => model,
+            "input" => inputs,
+            "dimensions" => Config.embedding_dimensions()
+          }
 
-        request(:post, "/embeddings", json: payload)
-        |> map_response(fn body ->
-          body
-          |> Map.get("data", [])
-          |> Enum.sort_by(& &1["index"])
-          |> Enum.map(& &1["embedding"])
+          request(:post, "/embeddings", json: payload)
+          |> map_response(fn body ->
+            body
+            |> Map.get("data", [])
+            |> Enum.sort_by(& &1["index"])
+            |> Enum.map(& &1["embedding"])
+          end)
         end)
     end
   end
@@ -66,14 +68,16 @@ defmodule Dran.Inference.Client do
         {:error, :not_configured}
 
       true ->
-        payload = %{
-          "model" => model,
-          "query" => query,
-          "documents" => documents
-        }
+        Dran.Inference.Queue.run(:rerank, fn ->
+          payload = %{
+            "model" => model,
+            "query" => query,
+            "documents" => documents
+          }
 
-        request(:post, "/rerank", json: payload)
-        |> map_response(fn body -> Map.get(body, "results", []) end)
+          request(:post, "/rerank", json: payload)
+          |> map_response(fn body -> Map.get(body, "results", []) end)
+        end)
     end
   end
 
@@ -87,21 +91,34 @@ defmodule Dran.Inference.Client do
         {:error, :not_configured}
 
       true ->
-        request(:post, "/chat/completions", json: payload)
-        |> map_response(fn body ->
-          body
-          |> Map.get("choices", [])
-          |> List.first(%{})
-          |> Map.get("message", %{"content" => nil})
-          |> Map.put("model", body["model"])
-          |> Map.put("usage", body["usage"] || %{})
+        capability = chat_capability(payload["model"])
+
+        Dran.Inference.Queue.run(capability, fn ->
+          request(:post, "/chat/completions", json: payload)
+          |> map_response(fn body ->
+            body
+            |> Map.get("choices", [])
+            |> List.first(%{})
+            |> Map.get("message", %{"content" => nil})
+            |> Map.put("model", body["model"])
+            |> Map.put("usage", body["usage"] || %{})
+          end)
         end)
     end
   end
 
-  # ── Internal ──
+  def chat_capability(model) when is_binary(model) do
+    cond do
+      model == Config.markitdown_model() -> :markdown
+      model == Config.vision_model() -> :vision
+      true -> :chat
+    end
+  end
 
-  defp request(method, path, opts \\ []) do
+  def chat_capability(_), do: :chat
+
+  @doc false
+  def request(method, path, opts \\ []) do
     base = Config.base_url()
     key = Config.api_key()
 

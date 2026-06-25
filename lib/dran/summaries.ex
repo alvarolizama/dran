@@ -6,15 +6,17 @@ defmodule Dran.Summaries do
   (default "Qwen3.6-35B-A3B") through `Dran.Inference.chat/1`. The main entry
   point is `augment_page/1` which asks for summary, tags, entities and
   suggested wikilinks in a single request.
+
+  All text sent to the model is truncated via `Dran.Embeddings.truncate_body/1`
+  so the embedding and the augmentation use the same window.
   """
 
   require Logger
 
   alias Dran.Brain
   alias Dran.Brain.Page
+  alias Dran.Embeddings
   alias Dran.Inference
-
-  @max_body_chars 3_000
 
   @doc """
   Suggest a one-line summary, kebab-case tags, entity names and existing page
@@ -30,6 +32,7 @@ defmodule Dran.Summaries do
       decoded = decode_json_with_fallback(content)
 
       result = %{
+        title: Map.get(decoded, "title", "") |> String.trim(),
         summary: Map.get(decoded, "summary", "") |> String.trim(),
         tags:
           Map.get(decoded, "tags", [])
@@ -125,6 +128,7 @@ defmodule Dran.Summaries do
     """
     You are a knowledge-base assistant. Analyze the given page and return a single JSON object with these keys:
 
+    - "title": a concise title for the page (max 80 chars)
     - "summary": one concise sentence describing the page (max 120 chars)
     - "tags": 1-5 kebab-case tags
     - "entities": names of people, companies, products, tools or places mentioned (optional)
@@ -136,7 +140,7 @@ defmodule Dran.Summaries do
 
     Respond with valid JSON and nothing else:
 
-    {"summary": "...", "tags": [...], "entities": [...], "links": [...]}
+    {"title": "...", "summary": "...", "tags": [...], "entities": [...], "links": [...]}
     """
   end
 
@@ -160,7 +164,7 @@ defmodule Dran.Summaries do
   end
 
   defp page_text(%Page{} = page) do
-    body = String.slice(page.body || "", 0, @max_body_chars)
+    body = Embeddings.truncate_body(page.body)
 
     parts = [
       "Title: #{page.title || ""}",

@@ -20,10 +20,12 @@ defmodule Dran.Embeddings do
   """
   @spec text_for_page(Page.t()) :: String.t()
   def text_for_page(%Page{} = page) do
+    body = page.body || "" |> String.slice(0, body_limit())
+
     parts = [
       page.title,
       page.summary,
-      page.body,
+      body,
       Enum.join(page.tags || [], " ")
     ]
 
@@ -32,6 +34,20 @@ defmodule Dran.Embeddings do
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.join("\n\n")
+  end
+
+  @doc """
+  Truncate the page body to the configured embedding limit.
+  """
+  @spec truncate_body(String.t() | nil) :: String.t()
+  def truncate_body(nil), do: ""
+
+  def truncate_body(body) when is_binary(body) do
+    String.slice(body, 0, Dran.Inference.Config.embedding_body_limit())
+  end
+
+  defp body_limit do
+    Dran.Inference.Config.embedding_body_limit()
   end
 
   @doc """

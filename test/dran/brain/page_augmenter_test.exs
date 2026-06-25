@@ -122,6 +122,6 @@ defmodule Dran.Brain.PageAugmenterTest do
     assert "phoenix" in refreshed.tags
 
     %{outbound: outbound} = Brain.list_relations_for_page(page.id)
-    assert Enum.any?(outbound, &(&1.target_id == target.id and &1.relation_type == "related"))
+    assert Enum.any?(outbound, &(&1.target_id == target.id and &1.relation_type == "semantic"))
   end
 end

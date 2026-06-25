@@ -62,11 +62,8 @@ defmodule Dran.Inference do
   def chat_model, do: Config.chat_model()
 
   @doc """
-  Check that the inference server is reachable and that the four models
-  configured for Dran are advertised by `/v1/models`.
-
-  Returns `{:ok, missing_models}` where `missing_models` may be empty or a
-  list of strings to warn about.
+  Check that the inference server is reachable and that the configured models
+  are advertised by `/v1/models`.
   """
   @spec health_check() :: Client.result({list(String.t()), list(String.t())})
   def health_check do
@@ -74,7 +71,9 @@ defmodule Dran.Inference do
       Config.embedding_model(),
       Config.rerank_model(),
       Config.markitdown_model(),
-      Config.chat_model()
+      Config.chat_model(),
+      Config.asr_model(),
+      Config.vision_model()
     ]
 
     with {:ok, models} <- models() do

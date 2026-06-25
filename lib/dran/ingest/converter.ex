@@ -8,8 +8,13 @@ defmodule Dran.Ingest.Converter do
   resulting markdown is sanitized before being stored as a page body.
   """
 
+  alias Dran.Inference.ASR
   alias Dran.Inference.MarkItDown
+  alias Dran.Inference.Vision
   alias Dran.Uploads
+
+  @audio_mime_types ~w(audio/mpeg audio/mp3 audio/wav audio/x-wav audio/ogg audio/aac audio/webm audio/flac)
+  @image_mime_types ~w(image/png image/jpeg image/gif image/webp image/svg+xml)
 
   @allowed_tags ~w(
     p br h1 h2 h3 h4 h5 h6 hr
@@ -51,6 +56,16 @@ defmodule Dran.Ingest.Converter do
     cond do
       byte_size(bytes) > max_size ->
         {:error, "file too large (max #{max_size} bytes)"}
+
+      mime_type in @audio_mime_types ->
+        with {:ok, transcript} <- ASR.transcribe(bytes, filename) do
+          {:ok, %{title: title(filename), body: transcript}}
+        end
+
+      mime_type in @image_mime_types ->
+        with {:ok, description} <- Vision.describe(bytes) do
+          {:ok, %{title: title(filename), body: description}}
+        end
 
       mime_type not in MarkItDown.supported_mime_types() ->
         {:error, "unsupported file type (#{mime_type})"}

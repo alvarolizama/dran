@@ -18,7 +18,7 @@ defmodule Dran.Brain.Relation do
   @foreign_key_type :binary_id
 
   @derive {Jason.Encoder, only: [:id, :source_id, :target_id, :relation_type, :inserted_at]}
-  @relation_types ~w(related contradicts supersedes part_of embeds)
+  @relation_types ~w(related contradicts supersedes part_of embeds semantic)
 
   schema "relations" do
     field :relation_type, :string, default: "related"

@@ -84,8 +84,9 @@ defmodule Dran.Brain.PageAugmenter do
 
   defp maybe_enrich_metadata(%Page{} = page) do
     case Summaries.augment_page(page) do
-      {:ok, %{summary: summary, tags: tags}} ->
+      {:ok, %{title: title, summary: summary, tags: tags}} ->
         attrs = %{
+          title: pick_title(page.title, title),
           summary: pick_summary(page.summary, summary),
           tags: merge_tags(page.tags || [], tags)
         }
@@ -101,6 +102,14 @@ defmodule Dran.Brain.PageAugmenter do
         {:error, reason}
     end
   end
+
+  defp pick_title(existing, _suggested) when is_binary(existing) and existing != "",
+    do: existing
+
+  defp pick_title(_existing, suggested) when is_binary(suggested) and suggested != "",
+    do: suggested
+
+  defp pick_title(existing, _), do: existing
 
   defp pick_summary(existing, _suggested) when is_binary(existing) and existing != "",
     do: existing
@@ -180,6 +189,8 @@ defmodule Dran.Brain.PageAugmenter do
         target -> maybe_create_relation(page, target, :high)
       end
     end)
+
+    {:ok, :done}
   end
 
   defp maybe_create_relation(page, target, confidence) do
@@ -194,7 +205,7 @@ defmodule Dran.Brain.PageAugmenter do
       case Brain.create_relation(%{
              source_id: page.id,
              target_id: target.id,
-             relation_type: "related",
+             relation_type: "semantic",
              meta: %{"auto" => true, "confidence" => Atom.to_string(confidence)}
            }) do
         {:ok, _} -> :ok

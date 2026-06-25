@@ -19,10 +19,23 @@ all knowledge as **typed pages** linked together by **relations**, forming a que
 knowledge graph. The agent (yo) drives Dran through its **MCP endpoint** (`POST /api/mcp`,
 Streamable HTTP, spec 2025-03-26) using a bearer token.
 
-The agent's job is not to dump data — it is to **capture, link, and maintain** Álvaro's
-knowledge graph so the second brain stays useful. Quality > volume. Every new page
-should connect to existing knowledge, every goal should be actionable, every URL
-should be classified correctly.
+The agent's job is not to dump data — it is to **capture, enrich, and maintain**
+Álvaro's knowledge graph so the second brain stays useful. Quality > volume. Every
+new page should be meaningful; Dran then links it automatically to existing
+knowledge.
+
+## How Dran captures knowledge now
+
+The agent/MCP **passes page content as plain text** (no wikilinks required). On
+every `create_page` / `update_page`, Dran:
+
+1. Extracts or refines `summary` and `tags` via the configured inference model.
+2. Generates and stores a vector embedding of `title + summary + body`.
+3. Asynchronously finds the closest semantic neighbours in the same context.
+4. Creates `semantic` relations to those neighbours automatically.
+
+Wikilinks (`[[slug]]`) still work, but **they are optional**. The graph grows
+mainly through embeddings + automatic `semantic` relations.
 
 ## When to Use
 
@@ -141,8 +154,8 @@ knowledge graph — duplicates are noise. Before `create_page`:
 1. `search` with 2-3 keyword variants (the topic, the slug candidate, related terms).
 2. If a relevant page exists: `update_page` instead of `create_page`. **Editing is
    better than creating a duplicate.**
-3. If you must create (truly new knowledge), link it to the closest existing page
-   via a `[[wikilink]]` in the body.
+3. If you must create (truly new knowledge), pass clean body text. **Do not worry
+   about wikilinks** — Dran will auto-create `semantic` relations via embeddings.
 
 ### Rule 1: Pick the right page_type
 

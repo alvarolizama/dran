@@ -45,14 +45,23 @@ defmodule Dran.Inference.Config do
   @spec chat_model :: String.t()
   def chat_model, do: get(:chat_model)
 
+  @spec asr_model :: String.t()
+  def asr_model, do: get(:asr_model) || @default_models.chat
+
+  @spec vision_model :: String.t()
+  def vision_model, do: get(:vision_model) || @default_models.chat
+
   @spec use_rerank?() :: boolean()
   def use_rerank?, do: get(:use_rerank) || false
 
   @spec embedding_dimensions :: pos_integer()
   def embedding_dimensions, do: get(:embedding_dimensions) || 1024
 
+  @spec embedding_body_limit :: pos_integer()
+  def embedding_body_limit, do: get(:embedding_body_limit) || 10_000
+
   @spec timeout :: pos_integer()
-  def timeout, do: get(:timeout)
+  def timeout, do: get(:timeout) || 30_000
 
   defp get(key) do
     case config() do
@@ -81,9 +90,13 @@ defmodule Dran.Inference.Config do
           markitdown_model:
             System.get_env("DRAN_INFERENCE_MARKITDOWN_MODEL", @default_models.markitdown),
           chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL", @default_models.chat),
+          asr_model: System.get_env("DRAN_INFERENCE_ASR_MODEL", @default_models.chat),
+          vision_model: System.get_env("DRAN_INFERENCE_VISION_MODEL", @default_models.chat),
           timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
           use_rerank: parse_boolean(System.get_env("DRAN_INFERENCE_USE_RERANK", "true")),
-          embedding_dimensions: 1024
+          embedding_dimensions: 1024,
+          embedding_body_limit:
+            parse_int(System.get_env("DRAN_EMBEDDING_BODY_LIMIT", "10000"), 10000)
         ]
     end
   end
@@ -100,6 +113,13 @@ defmodule Dran.Inference.Config do
     case Integer.parse(value) do
       {n, ""} when n > 0 -> n
       _ -> 30_000
+    end
+  end
+
+  defp parse_int(value, default) do
+    case Integer.parse(value) do
+      {n, ""} when n > 0 -> n
+      _ -> default
     end
   end
 

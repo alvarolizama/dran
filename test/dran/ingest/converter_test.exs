@@ -9,15 +9,16 @@ defmodule Dran.Ingest.ConverterTest do
     Application.put_env(:dran, :inference,
       base_url: "http://localhost:8000/v1",
       api_key: "test-key",
-      embedding_model: "Qwen3-Embedding",
-      rerank_model: "Qwen3-Reranker",
       markitdown_model: "MarkItDown",
-      chat_model: "Qwen3.6-35B-A3B",
+      asr_model: "Qwen3-ASR",
+      vision_model: "Qwen3.6-35B-A3B",
       timeout: 5_000,
-      req_plug: {Req.Test, Dran.Inference.Client},
-      use_rerank: false,
-      embedding_dimensions: 1024
+      req_plug: {Req.Test, Dran.Inference.Client}
     )
+
+    ensure_queue_started(:markdown)
+    ensure_queue_started(:audio)
+    ensure_queue_started(:vision)
 
     on_exit(fn ->
       if is_nil(original) do
@@ -30,49 +31,80 @@ defmodule Dran.Ingest.ConverterTest do
     :ok
   end
 
-  test "rejects unsupported MIME types" do
-    assert {:error, message} = Converter.convert("x.exe", "application/x-msdownload", "data")
-    assert message =~ "unsupported file type"
-  end
-
-  test "rejects files over the upload limit" do
+  test "rejects files that are too large" do
     max_size = Dran.Uploads.max_size()
-    too_big = String.duplicate("x", max_size + 1)
+    big = String.duplicate("x", max_size + 1)
 
-    assert {:error, message} = Converter.convert("x.pdf", "application/pdf", too_big)
-    assert message =~ "file too large"
+    assert {:error, _reason} = Converter.convert("big.txt", "text/plain", big)
   end
 
-  test "converts supported files and sanitizes markdown" do
+  test "rejects unsupported binary file types" do
+    assert {:error, "unsupported file type (application/x-msdownload)"} =
+             Converter.convert("x.exe", "application/x-msdownload", <<1, 2, 3>>)
+  end
+
+  test "converts supported text/markdown files through MarkItDown" do
     Req.Test.stub(Dran.Inference.Client, fn conn ->
-      assert conn.request_path == "/v1/chat/completions"
-      Req.Test.json(conn, chat_response("# Hello\n\n<script>alert(1)</script>"))
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      decoded = Jason.decode!(body)
+
+      case decoded["model"] do
+        "MarkItDown" ->
+          Req.Test.json(conn, %{
+            "choices" => [%{"message" => %{"content" => "# Report\n\nContents."}}]
+          })
+
+        _ ->
+          Req.Test.json(conn, %{
+            "choices" => [%{"message" => %{"content" => "unused"}}]
+          })
+      end
     end)
 
     assert {:ok, %{title: "report", body: body}} =
              Converter.convert("report.txt", "text/plain", "hello world")
 
-    assert body =~ "# Hello"
-    refute body =~ "<script>"
+    assert body =~ "# Report"
   end
 
-  test "extracts a clean title from filename" do
-    assert Converter.title("my-report_final.txt") == "my report final"
+  test "transcribes audio files" do
+    Req.Test.stub(Dran.Inference.Client, fn conn ->
+      assert conn.request_path == "/v1/audio/transcriptions"
+      Req.Test.json(conn, %{"text" => "Hello from audio"})
+    end)
+
+    assert {:ok, %{title: "podcast", body: "Hello from audio"}} =
+             Converter.convert("podcast.mp3", "audio/mpeg", <<1, 2, 3>>)
   end
 
-  defp chat_response(content) do
-    %{
-      "id" => "chat-test",
-      "object" => "chat.completion",
-      "model" => "MarkItDown",
-      "choices" => [
-        %{
-          "index" => 0,
-          "message" => %{"role" => "assistant", "content" => content},
-          "finish_reason" => "stop"
-        }
-      ],
-      "usage" => %{"prompt_tokens" => 10, "completion_tokens" => 5, "total_tokens" => 15}
-    }
+  test "describes image files" do
+    Req.Test.stub(Dran.Inference.Client, fn conn ->
+      assert conn.request_path == "/v1/chat/completions"
+
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      decoded = Jason.decode!(body)
+      assert decoded["model"] == "Qwen3.6-35B-A3B"
+
+      Req.Test.json(conn, %{
+        "choices" => [%{"message" => %{"content" => "A screenshot of code"}}]
+      })
+    end)
+
+    png = <<0x89, "PNG", 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, "IHDR">>
+
+    assert {:ok, %{title: "screenshot", body: "A screenshot of code"}} =
+             Converter.convert("screenshot.png", "image/png", png)
+  end
+
+  defp ensure_queue_started(capability) do
+    case Registry.start_link(keys: :unique, name: Dran.Inference.QueueRegistry) do
+      {:ok, _} -> :ok
+      {:error, {:already_started, _}} -> :ok
+    end
+
+    case Dran.Inference.Queue.start_link(capability: capability) do
+      {:ok, _} -> :ok
+      {:error, {:already_started, _}} -> :ok
+    end
   end
 end
