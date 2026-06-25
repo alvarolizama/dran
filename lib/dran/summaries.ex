@@ -93,7 +93,7 @@ defmodule Dran.Summaries do
     """
     You are a knowledge-base assistant. Analyze the given page and return a single JSON object with these keys:
 
-    - "title": a concise title for the page (max 80 chars)
+    - "title": a concise title for the page (max 512 chars)
     - "summary": one concise sentence describing the page (max 120 chars)
     - "tags": 1-5 kebab-case tags
     - "entities": names of people, companies, products, tools or places mentioned (optional)

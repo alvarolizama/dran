@@ -307,7 +307,7 @@ defmodule Dran.Brain do
     |> List.first()
     |> case do
       nil -> "Untitled"
-      line -> String.slice(line, 0, 80)
+      line -> String.slice(line, 0, 512)
     end
   end
 
