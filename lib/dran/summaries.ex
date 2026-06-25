@@ -4,14 +4,12 @@ defmodule Dran.Summaries do
 
   Provides chat-based helpers that call the configured chat-compatible model
   (default "Qwen3.6-35B-A3B") through `Dran.Inference.chat/1`. The main entry
-  point is `augment_page/1` which asks for summary, tags, entities and
-  suggested wikilinks in a single request.
+  point is `augment_page/1` which asks for summary, tags, and entities in a
+  single request.
 
   All text sent to the model is truncated via `Dran.Embeddings.truncate_body/1`
   so the embedding and the augmentation use the same window.
   """
-
-  require Logger
 
   alias Dran.Brain
   alias Dran.Brain.Page
@@ -19,10 +17,10 @@ defmodule Dran.Summaries do
   alias Dran.Inference
 
   @doc """
-  Suggest a one-line summary, kebab-case tags, entity names and existing page
-  slugs for `page` in a single inference call.
+  Suggest a one-line summary, kebab-case tags, and entity names for `page`
+  in a single inference call.
 
-  Returns `{:ok, %{summary: "...", tags: [...], entities: [...], links: [...]}}`
+  Returns `{:ok, %{summary: "...", tags: [...], entities: [...]}}`
   or `{:error, :not_configured}`.
   """
   @spec augment_page(Page.t()) :: {:ok, map()} | {:error, term()}
@@ -43,11 +41,6 @@ defmodule Dran.Summaries do
           |> Enum.uniq(),
         entities:
           Map.get(decoded, "entities", [])
-          |> List.wrap()
-          |> Enum.map(&to_string/1)
-          |> Enum.reject(&(&1 == "")),
-        links:
-          Map.get(decoded, "links", [])
           |> List.wrap()
           |> Enum.map(&to_string/1)
           |> Enum.reject(&(&1 == ""))
@@ -79,34 +72,6 @@ defmodule Dran.Summaries do
     end
   end
 
-  @doc """
-  Suggest existing page slugs in the same context that are related to `page`.
-
-  Returns an empty list when inference is not configured (with a warning).
-  """
-  @spec suggest_wikilinks(Page.t()) :: {:ok, [String.t()]} | {:error, term()}
-  def suggest_wikilinks(%Page{context_id: nil}), do: {:ok, []}
-
-  def suggest_wikilinks(%Page{} = page) do
-    existing_slugs =
-      Brain.list_pages(context_id: page.context_id)
-      |> Enum.map(& &1.slug)
-      |> MapSet.new()
-
-    if not Inference.enabled?() do
-      Logger.warning("Inference not configured; returning empty wikilink suggestions")
-      {:ok, []}
-    else
-      case augment_page(page) do
-        {:ok, %{links: links}} ->
-          {:ok, Enum.filter(links, &MapSet.member?(existing_slugs, &1))}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
-    end
-  end
-
   # ── Prompts ──
 
   defp augment_prompt(%Page{context_id: context_id}) do
@@ -132,7 +97,6 @@ defmodule Dran.Summaries do
     - "summary": one concise sentence describing the page (max 120 chars)
     - "tags": 1-5 kebab-case tags
     - "entities": names of people, companies, products, tools or places mentioned (optional)
-    - "links": slugs from the available pages list that are genuinely related to the current page
 
     Available pages in this context:
 
@@ -140,7 +104,7 @@ defmodule Dran.Summaries do
 
     Respond with valid JSON and nothing else:
 
-    {"title": "...", "summary": "...", "tags": [...], "entities": [...], "links": [...]}
+    {"title": "...", "summary": "...", "tags": [...], "entities": [...]}
     """
   end
 

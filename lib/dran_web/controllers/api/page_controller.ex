@@ -64,9 +64,6 @@ defmodule DranWeb.API.PageController do
 
     case Brain.create_page(params) do
       {:ok, page} ->
-        # Auto-resolve wikilinks in background
-        Brain.resolve_wikilinks(page)
-
         conn
         |> put_status(:created)
         |> json(%{data: page})
@@ -94,7 +91,6 @@ defmodule DranWeb.API.PageController do
 
           case Brain.update_page(page, params) do
             {:ok, updated} ->
-              Brain.resolve_wikilinks(updated)
               json(conn, %{data: updated})
 
             {:error, changeset} ->

@@ -8,6 +8,22 @@ defmodule Dran.Brain.PageAugmenterTest do
   setup do
     original = Application.get_env(:dran, :inference)
 
+    # Start the inference queue registry + queue for :embed capability
+    case Registry.start_link(keys: :unique, name: Dran.Inference.QueueRegistry) do
+      {:ok, _} -> :ok
+      {:error, {:already_started, _}} -> :ok
+    end
+
+    case Dran.Inference.Queue.start_link(capability: :embed) do
+      {:ok, _} -> :ok
+      {:error, {:already_started, _}} -> :ok
+    end
+
+    case Dran.Inference.Queue.start_link(capability: :chat) do
+      {:ok, _} -> :ok
+      {:error, {:already_started, _}} -> :ok
+    end
+
     on_exit(fn ->
       if is_nil(original) do
         Application.delete_env(:dran, :inference)
@@ -57,7 +73,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     target
     |> Ecto.Changeset.change(
-      embedding: Pgvector.new(List.duplicate(0.0, 1024)),
+      embedding: Pgvector.new(List.duplicate(0.1, 1024)),
       embedding_hash: "hash"
     )
     |> Dran.Repo.update!()
@@ -91,7 +107,7 @@ defmodule Dran.Brain.PageAugmenterTest do
           Req.Test.json(conn, %{
             "object" => "list",
             "data" => [
-              %{"object" => "embedding", "index" => 0, "embedding" => List.duplicate(0.0, 1024)}
+              %{"object" => "embedding", "index" => 0, "embedding" => List.duplicate(0.1, 1024)}
             ]
           })
 

@@ -5,11 +5,9 @@ defmodule Dran.Brain.PageAugmenter do
   The augmentation pipeline:
 
   1. Generates and stores an embedding for the page (no-op if already current).
-  2. Calls the inference API once to extract summary, keywords, entities and
-     suggested wikilinks.
+  2. Calls the inference API once to extract summary, keywords, and entities.
   3. Finds semantically similar pages in the same context.
-  4. Creates `semantic` relations when both semantic similarity and the LLM agree
-     (high confidence path).
+  4. Creates `semantic` relations for the closest neighbours.
 
   All work runs under `Dran.Relations.TaskSupervisor` so the HTTP/MCP request
   that created the page returns immediately.
@@ -60,14 +58,13 @@ defmodule Dran.Brain.PageAugmenter do
 
     with {:ok, enrich} <- maybe_enrich_metadata(page),
          :ok <- ensure_embedding(enrich),
-         {:ok, neighbors} <- find_semantic_neighbors(enrich),
-         {:ok, suggestions} <- Summaries.suggest_wikilinks(enrich) do
+         {:ok, neighbors} <- find_semantic_neighbors(enrich) do
       target_ids =
         neighbors
         |> Enum.filter(fn %{distance: distance} -> distance <= @semantic_threshold end)
         |> Enum.map(& &1.id)
 
-      create_relations(enrich, target_ids, suggestions)
+      create_relations(enrich, target_ids)
       :ok
     else
       {:error, :not_configured} ->
@@ -159,9 +156,7 @@ defmodule Dran.Brain.PageAugmenter do
 
   # ── Relations ──
 
-  defp create_relations(page, neighbor_ids, suggested_slugs) do
-    suggested_set = MapSet.new(suggested_slugs)
-
+  defp create_relations(page, neighbor_ids) do
     neighbor_ids
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
@@ -169,24 +164,7 @@ defmodule Dran.Brain.PageAugmenter do
       target = Repo.get(Page, target_id)
 
       if target && target.id != page.id do
-        confidence =
-          if target.slug in suggested_set do
-            :high
-          else
-            :medium
-          end
-
-        maybe_create_relation(page, target, confidence)
-      end
-    end)
-
-    suggested_slugs
-    |> Enum.reject(&(&1 == page.slug))
-    |> Enum.uniq()
-    |> Enum.each(fn slug ->
-      case Brain.get_page_by_slug(slug, page.context_id) do
-        nil -> :ok
-        target -> maybe_create_relation(page, target, :high)
+        maybe_create_relation(page, target, :medium)
       end
     end)
 

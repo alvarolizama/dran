@@ -25,7 +25,7 @@ defmodule Dran.MCP do
   - `list_pages` — list pages with filters (type, tag, status, limit)
   - `stats` — aggregate statistics for a context (page counts, todos by status, orphans)
   - `lint` — run lint report for a context
-  - `rename_slug` — rename a page's slug and relink all wikilinks/embeds across the context
+  - `rename_slug` — rename a page's slug
   - `ingest_url` — save a URL or download a file as a reference page
 
   ## Resources
@@ -106,7 +106,7 @@ defmodule Dran.MCP do
       - todo: has kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
       - comparison: has entities, criteria, verdict
 
-      Use [[slug]] in body to wikilink to other pages. Use ![[slug]] to embed artifacts.
+      Use ![[slug]] to embed artifacts.
       """,
       "inputSchema" => %{
         "type" => "object",
@@ -120,7 +120,7 @@ defmodule Dran.MCP do
           "body" => %{
             "type" => "string",
             "description" =>
-              "Page content in Markdown. Use [[slug]] for wikilinks, ![[slug]] for embeds."
+              "Page content in Markdown. Use ![[slug]] for embeds."
           },
           "page_type" => %{
             "type" => "string",
@@ -170,7 +170,7 @@ defmodule Dran.MCP do
           "title" => %{"type" => "string", "description" => "New title (optional)"},
           "body" => %{
             "type" => "string",
-            "description" => "New markdown body (optional). Use [[slug]] for wikilinks."
+            "description" => "New markdown body (optional). Use ![[slug]] for embeds."
           },
           "tags" => %{
             "type" => "array",
@@ -241,7 +241,7 @@ defmodule Dran.MCP do
     %{
       "name" => "lint",
       "description" =>
-        "Run a quality lint report for a context. Returns orphans (pages with no inbound links), broken wikilinks ([[slug]] pointing to non-existent pages), stale pages (not updated in 90 days), and contested knowledge. Use this to identify maintenance tasks.",
+        "Run a quality lint report for a context. Returns orphans (pages with no inbound links), stale pages (not updated in 90 days), and contested knowledge. Use this to identify maintenance tasks.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -288,7 +288,7 @@ defmodule Dran.MCP do
     %{
       "name" => "create_relation",
       "description" =>
-        "Create a typed relation between two pages. Relation types: 'related' (generic connection), 'contradicts' (source contradicts target), 'supersedes' (source replaces target), 'part_of' (source is part of target), 'embeds' (source embeds target). Use this for explicit relationships beyond what wikilinks auto-create.",
+        "Create a typed relation between two pages. Relation types: 'related' (generic connection), 'contradicts' (source contradicts target), 'supersedes' (source replaces target), 'part_of' (source is part of target), 'embeds' (source embeds target). Use this for explicit relationships.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -425,7 +425,7 @@ defmodule Dran.MCP do
     %{
       "name" => "rename_slug",
       "description" =>
-        "Rename a page's slug and automatically update all wikilinks [[old-slug]] and embeds ![[old-slug]] across the entire context to use the new slug. Use this when a page was created with a wrong slug. The page itself is also updated.",
+        "Rename a page's slug. The page itself is updated. Use this when a page was created with a wrong slug.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -672,7 +672,6 @@ defmodule Dran.MCP do
 
       case Brain.create_page(attrs) do
         {:ok, page} ->
-          Brain.resolve_wikilinks(page)
           "Created page: #{page.title} (#{page.slug})"
 
         {:error, changeset} ->
@@ -698,7 +697,6 @@ defmodule Dran.MCP do
 
           case Brain.update_page(page, attrs) do
             {:ok, updated} ->
-              Brain.resolve_wikilinks(updated)
               "Updated page: #{updated.title} (v#{updated.version})"
 
             {:error, changeset} ->
@@ -775,9 +773,6 @@ defmodule Dran.MCP do
 
       ## Orphan pages (no inbound links): #{length(report.orphans)}
       #{format_page_list(report.orphans)}
-
-      ## Broken wikilinks: #{length(report.broken_wikilinks)}
-      #{format_broken_links(report.broken_wikilinks)}
 
       ## Stale pages (>90 days): #{length(report.stale)}
       #{format_page_list(report.stale)}
@@ -999,7 +994,6 @@ defmodule Dran.MCP do
       Total pages: #{s.total_pages}
       Total relations: #{s.total_relations}
       Orphan pages: #{s.orphan_count}
-      Broken wikilinks: #{s.broken_link_count}
 
       ## Pages by type
       #{by_type}
@@ -1030,16 +1024,13 @@ defmodule Dran.MCP do
             # Check that new_slug doesn't already exist
             case Brain.get_page_by_slug(new_slug, context.id) do
               nil ->
-                # 1. Relink all wikilinks/embeds across the context
-                {relinked_count, _} = Brain.relink_wikilinks(context.id, old_slug, new_slug)
-
-                # 2. Update the page's own slug
+                # Update the page's own slug
                 case Brain.update_page(page, %{"slug" => new_slug, "updated_by" => "agent"}) do
                   {:ok, _updated} ->
-                    "Renamed '#{old_slug}' → '#{new_slug}' and relinked #{relinked_count} page(s)"
+                    "Renamed '#{old_slug}' → '#{new_slug}'"
 
                   {:error, changeset} ->
-                    "Error: relinked #{relinked_count} page(s) but failed to rename page: #{format_changeset_errors(changeset)}"
+                    "Error: failed to rename page: #{format_changeset_errors(changeset)}"
                 end
 
               _existing ->
@@ -1156,7 +1147,7 @@ defmodule Dran.MCP do
           1. Create an outline for a research page
           2. List key sources to consult
           3. Formulate 3-5 research questions
-          4. Suggest tags and wikilinks to related topics
+          4. Suggest tags to related topics
 
           Save the result as a page in context '#{context}' using the create_page tool.
           """
@@ -1175,7 +1166,7 @@ defmodule Dran.MCP do
           Brainstorm ideas around: #{topic}
 
           Generate 5-10 ideas as pages in context '#{context}'.
-          Use page_type 'note' with meta.kind 'idea' and interlink them with wikilinks where relevant.
+          Use page_type 'note' with meta.kind 'idea' and interlink them with create_relation where relevant.
           """
         }
       }
@@ -1215,14 +1206,6 @@ defmodule Dran.MCP do
   defp format_page_list(pages) do
     pages
     |> Enum.map(fn p -> "- #{p.title} (`#{p.slug}`)" end)
-    |> Enum.join("\n")
-  end
-
-  defp format_broken_links(links) do
-    links
-    |> Enum.map(fn %{page_slug: page_slug, missing_slug: missing} ->
-      "- `#{page_slug}` references missing `#{missing}`"
-    end)
     |> Enum.join("\n")
   end
 

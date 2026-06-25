@@ -14,7 +14,6 @@ defmodule DranWeb.PageComponents do
   attr :versions, :list, default: []
   attr :logs, :list, default: []
   attr :context_slug, :string, default: "personal"
-  attr :backlinks, :list, default: []
 
   slot :actions
   slot :tabs
@@ -110,22 +109,6 @@ defmodule DranWeb.PageComponents do
                 <span class="text-base-content/60">{format_meta_key(key)}:</span>
                 {format_meta_value(value)}
               </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
-              Backlinks
-            </h3>
-            <div class="space-y-1">
-              <div :for={page <- @backlinks} class="text-sm">
-                <.link navigate={page_show_path(page)} class="text-primary hover:underline">
-                  {page.title}
-                </.link>
-              </div>
-              <p :if={@backlinks == []} class="text-sm text-base-content/40">
-                No backlinks
-              </p>
             </div>
           </div>
 
@@ -406,7 +389,7 @@ defmodule DranWeb.PageComponents do
   def render_markdown(body, opts) when is_binary(body) do
     context_id = Keyword.get(opts, :context_id)
     embeds = if context_id, do: Dran.Brain.fetch_embeds(body, context_id), else: %{}
-    links = if context_id, do: Dran.Brain.fetch_wikilinks(body, context_id), else: %{}
+    links = %{}
 
     html =
       case MDEx.to_html(body, @markdown_options) do

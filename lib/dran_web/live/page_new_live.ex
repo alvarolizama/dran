@@ -198,7 +198,6 @@ defmodule DranWeb.PageNewLive do
 
     case Brain.create_page(page_params) do
       {:ok, page} ->
-        Task.start(fn -> Brain.resolve_links(page) end)
         type_path = @type_to_path[page.page_type] || "notes"
 
         {:noreply,

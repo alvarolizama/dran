@@ -203,7 +203,6 @@ defmodule DranWeb.API.IngestController do
   defp create_page(page_attrs) do
     case Brain.create_page(page_attrs) do
       {:ok, page} ->
-        Task.start(fn -> Brain.resolve_wikilinks(page) end)
         {:ok, page}
 
       {:error, changeset} ->

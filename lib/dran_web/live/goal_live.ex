@@ -47,7 +47,6 @@ defmodule DranWeb.GoalLive do
           versions={@versions}
           logs={@logs}
           context_slug={@context_slug}
-          backlinks={@backlinks}
         >
           <:actions>
             <.link navigate={~p"/goals"} class="btn btn-primary btn-sm">
@@ -431,7 +430,6 @@ defmodule DranWeb.GoalLive do
           relations = Brain.list_relations_for_page(page.id)
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
-          backlinks = Brain.find_backlinks(page.slug, context.id)
           %{nodes: graph_nodes, edges: graph_edges} = GraphHelpers.build_page_subgraph(page)
 
           goal_todos =
@@ -503,7 +501,6 @@ defmodule DranWeb.GoalLive do
              relations: relations,
              versions: versions,
              logs: logs,
-             backlinks: backlinks,
              page_title: page.title,
              active_tab: "overview",
              goal_todos: goal_todos,

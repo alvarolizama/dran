@@ -1048,71 +1048,8 @@ defmodule Dran.Brain do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Wikilinks
+  # Embeds
   # ──────────────────────────────────────────────────────────────────────────
-
-  @doc """
-  Extract [[wikilinks]] from a markdown body.
-
-  Returns a list of `%{slug: "some-slug", display: "Some Slug"}` maps.
-  Display text defaults to the slug if not specified.
-
-  ## Formats
-  - `[[slug]]` → `%{slug: "slug", display: "slug"}`
-  - `[[slug|Display Text]]` → `%{slug: "slug", display: "Display Text"}`
-
-  ## Example
-
-      iex> Dran.Brain.extract_wikilinks("See [[elixir]] and [[phoenix|Phoenix Framework]]")
-      [
-        %{slug: "elixir", display: "elixir"},
-        %{slug: "phoenix", display: "Phoenix Framework"}
-      ]
-  """
-  def extract_wikilinks(body) when is_binary(body) do
-    regex = ~r/\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/
-
-    Regex.scan(regex, body)
-    |> Enum.map(fn
-      [_, slug, display] -> %{slug: String.trim(slug), display: String.trim(display)}
-      [_, slug] -> %{slug: String.trim(slug), display: String.trim(slug)}
-    end)
-    |> Enum.uniq_by(& &1.slug)
-  end
-
-  def extract_wikilinks(_), do: []
-
-  @doc """
-  Resolve wikilinks in a page's body and create relations for each.
-
-  For each `[[slug]]` found in the body, creates a `related` relation
-  from this page to the target page (if it exists in the same context).
-
-  Returns `{created_count, not_found_slugs}`.
-  """
-  def resolve_wikilinks(%Page{} = page) do
-    links = extract_wikilinks(page.body)
-
-    {created, not_found} =
-      Enum.reduce(links, {0, []}, fn %{slug: slug}, {acc_created, acc_missing} ->
-        target = get_page_by_slug(slug, page.context_id)
-
-        if target && target.id != page.id do
-          case create_relation(%{
-                 source_id: page.id,
-                 target_id: target.id,
-                 relation_type: "related"
-               }) do
-            {:ok, _} -> {acc_created + 1, acc_missing}
-            {:error, _} -> {acc_created, [slug | acc_missing]}
-          end
-        else
-          {acc_created, [slug | acc_missing]}
-        end
-      end)
-
-    {created, Enum.reverse(not_found)}
-  end
 
   @doc """
   Extract ![[embeds]] from a markdown body.
@@ -1167,13 +1104,12 @@ defmodule Dran.Brain do
   end
 
   @doc """
-  Resolve both wikilinks and embeds, returning a combined result map:
+  Resolve embeds in a page's body, returning a result map:
 
-      %{related: {c, missing}, embeds: {c, missing}}
+      %{embeds: {c, missing}}
   """
   def resolve_links(%Page{} = page) do
     %{
-      related: resolve_wikilinks(page),
       embeds: resolve_embeds(page)
     }
   end
@@ -1198,104 +1134,11 @@ defmodule Dran.Brain do
   end
 
   @doc """
-  Fetch all wikilink targets from a body, returning a map of
-  `slug => %Page{}` for each one that resolves to a page in the
-  given context. Slugs that don't resolve are omitted.
-
-  Used by the renderer to know which type-specific URL to emit for
-  each `[[slug]]` link (e.g. `/notes/{slug}`, `/concepts/{slug}`).
-  """
-  def fetch_wikilinks(body, context_id) when is_binary(body) and is_binary(context_id) do
-    body
-    |> extract_wikilinks()
-    |> Enum.map(& &1.slug)
-    |> Enum.uniq()
-    |> Enum.reduce(%{}, fn slug, acc ->
-      case get_page_by_slug(slug, context_id) do
-        nil -> acc
-        page -> Map.put(acc, slug, page)
-      end
-    end)
-  end
-
-  @doc """
-  Find all pages in a context whose body references the given slug via
-  wikilinks (`[[slug]]`) or embeds (`![[slug]]`).
-
-  Returns a list of `%Page{}` structs (lightweight, without body) that
-  link to `slug`. Useful for displaying backlinks on a page detail view.
-  """
-  def find_backlinks(slug, context_id)
-      when is_binary(slug) and is_binary(context_id) do
-    link_re = ~r/\[\[(#{Regex.escape(slug)})(?:\|[^\]]+)?\]\]/
-    embed_re = ~r/!\[\[(#{Regex.escape(slug)})(?:\|[^\]]+)?\]\]/
-
-    pages = list_pages(context_id: context_id, limit: 10_000, include_body: true)
-
-    pages
-    |> Enum.filter(fn page ->
-      page.slug != slug and
-        (Regex.match?(link_re, page.body || "") or
-           Regex.match?(embed_re, page.body || ""))
-    end)
-    |> Enum.map(fn page ->
-      %{page | body: ""}
-    end)
-  end
-
-  @doc """
-  Re-link all wikilinks and embeds across a context when a page's slug changes.
-
-  Finds every page in the context whose body references `old_slug` (via
-  `[[old_slug]]`, `[[old_slug|...]]`, `![[old_slug]]`, or `![[old_slug|...]]`)
-  and replaces the reference with `new_slug`, preserving any display text.
-
-  Returns `{updated_count, updated_pages}` where `updated_pages` is the list
-  of `%Page{}` structs that were changed.
-  """
-  def relink_wikilinks(context_id, old_slug, new_slug)
-      when is_binary(context_id) and is_binary(old_slug) and is_binary(new_slug) do
-    if old_slug == new_slug do
-      {0, []}
-    else
-      pages = list_pages(context_id: context_id, limit: 10_000, include_body: true)
-
-      pages
-      |> Enum.filter(fn page -> page.slug != old_slug end)
-      |> Enum.reduce({0, []}, fn page, {count, updated} ->
-        new_body = replace_slug_in_body(page.body, old_slug, new_slug)
-
-        if new_body != page.body do
-          case update_page(page, %{body: new_body}) do
-            {:ok, updated_page} -> {count + 1, [updated_page | updated]}
-            {:error, _} -> {count, updated}
-          end
-        else
-          {count, updated}
-        end
-      end)
-      |> then(fn {count, updated} -> {count, Enum.reverse(updated)} end)
-    end
-  end
-
-  @doc """
   Replace references to `old_slug` with `new_slug` in a markdown body,
-  preserving any display text. Handles both wikilinks and embeds.
+  preserving any display text. Handles embeds.
   """
   def replace_slug_in_body(body, old_slug, new_slug)
       when is_binary(body) and is_binary(old_slug) and is_binary(new_slug) do
-    # Wikilinks: [[old-slug]] and [[old-slug|display]]
-    wikilink_pattern = ~r/\[\[(#{Regex.escape(old_slug)})(\|([^\]]+))?\]\]/
-
-    body =
-      Regex.replace(wikilink_pattern, body, fn _full, _slug, _pipe_display, display ->
-        if display != "" and display != nil do
-          "[[#{new_slug}|#{display}]]"
-        else
-          "[[#{new_slug}]]"
-        end
-      end)
-
     # Embeds: ![[old-slug]] and ![[old-slug|display]]
     embed_pattern = ~r/!\[\[(#{Regex.escape(old_slug)})(\|([^\]]+))?\]\]/
 
@@ -1322,20 +1165,6 @@ defmodule Dran.Brain do
         order_by: [asc: p.title],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
-  end
-
-  @doc "Find broken wikilinks: [[slug]] that don't resolve to any page"
-  def broken_wikilinks(context_id) do
-    pages = list_pages(context_id: context_id, limit: 10_000, include_body: true)
-
-    Enum.flat_map(pages, fn page ->
-      links = extract_wikilinks(page.body)
-
-      Enum.filter(links, fn %{slug: slug} ->
-        is_nil(get_page_by_slug(slug, context_id))
-      end)
-      |> Enum.map(fn %{slug: slug} -> %{page_slug: page.slug, missing_slug: slug} end)
-    end)
   end
 
   @doc "Find stale pages (not updated in X days)"
@@ -1365,14 +1194,12 @@ defmodule Dran.Brain do
 
   Returns a map with:
   - `:orphans` — pages with no inbound links
-  - `:broken_wikilinks` — `[[slug]]` that don't resolve
   - `:stale` — pages not updated in 90 days
   - `:contested` — pages flagged as contested
   """
   def lint(context_id) do
     %{
       orphans: orphan_pages(context_id),
-      broken_wikilinks: broken_wikilinks(context_id),
       stale: stale_pages(context_id),
       contested: contested_pages(context_id)
     }
@@ -1387,7 +1214,6 @@ defmodule Dran.Brain do
   - `:recent` — 5 most recently updated pages
   - `:todos_by_status` — map of kanban_status => count (for todos)
   - `:orphan_count` — number of orphan pages
-  - `:broken_link_count` — number of broken wikilinks
   - `:total_relations` — number of relations in the context
   """
   def stats(context_id) when is_binary(context_id) do
@@ -1426,7 +1252,6 @@ defmodule Dran.Brain do
       recent: recent,
       todos_by_status: todos_by_status,
       orphan_count: length(orphan_pages(context_id)),
-      broken_link_count: length(broken_wikilinks(context_id)),
       total_relations: total_relations
     }
   end

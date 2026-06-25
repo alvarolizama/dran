@@ -27,7 +27,6 @@ defmodule DranWeb.NoteLive do
           versions={@versions}
           logs={@logs}
           context_slug={@context_slug}
-          backlinks={@backlinks}
         >
           <:actions>
             <.link navigate={~p"/notes"} class="btn btn-primary btn-sm">
@@ -195,7 +194,6 @@ defmodule DranWeb.NoteLive do
           relations = Brain.list_relations_for_page(page.id)
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
-          backlinks = Brain.find_backlinks(page.slug, context.id)
           %{nodes: graph_nodes, edges: graph_edges} = GraphHelpers.build_page_subgraph(page)
           editing = Map.get(params, "edit") == "true"
 
@@ -212,7 +210,6 @@ defmodule DranWeb.NoteLive do
              relations: relations,
              versions: versions,
              logs: logs,
-             backlinks: backlinks,
              page_title: page.title,
              active_tab: "content",
              graph_nodes: graph_nodes,

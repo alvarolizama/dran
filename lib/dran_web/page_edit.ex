@@ -86,8 +86,7 @@ defmodule DranWeb.PageEdit do
     socket = assign(socket, form: to_form(changeset, as: :page))
 
     # Autosave metadata fields (title, summary, tags) for existing pages.
-    # The slug is NOT autosaved — it only saves on Save button click,
-    # which triggers wikilink re-linking if the slug changed.
+    # The slug is NOT autosaved — it only saves on Save button click.
     socket =
       case page do
         %Page{slug: slug} when is_binary(slug) ->
@@ -132,9 +131,6 @@ defmodule DranWeb.PageEdit do
 
       case Brain.update_page(page, %{slug: final_slug}) do
         {:ok, updated_page} ->
-          # Re-link all wikilinks/embeds across the context
-          Task.start(fn -> Brain.relink_wikilinks(context_id, old_slug, final_slug) end)
-
           {:noreply,
            socket
            |> assign(page: updated_page, save_status: "saved")
@@ -182,8 +178,7 @@ defmodule DranWeb.PageEdit do
         {:ok, updated_page} ->
           {:noreply,
            socket
-           |> assign(page: updated_page, save_status: "saved")
-           |> maybe_resolve_links(updated_page)}
+           |> assign(page: updated_page, save_status: "saved")}
 
         {:error, _changeset} ->
           {:noreply, assign(socket, save_status: "idle")}
@@ -241,7 +236,6 @@ defmodule DranWeb.PageEdit do
   defp create_page(socket, page_params) do
     case Brain.create_page(page_params) do
       {:ok, page} ->
-        maybe_resolve_links(page)
         type = page.page_type
 
         {:noreply,
@@ -254,21 +248,13 @@ defmodule DranWeb.PageEdit do
     end
   end
 
-  defp update_page_with_relink(socket, %Page{} = page, page_params, context_id) do
-    old_slug = page.slug
-    new_slug = Map.get(page_params, "slug")
-
+  defp update_page_with_relink(socket, %Page{} = page, page_params, _context_id) do
     case Brain.update_page(page, page_params) do
       {:ok, updated_page} ->
         socket =
           socket
           |> assign(page: updated_page, save_status: "saved")
           |> put_flash(:info, "Saved.")
-
-        # Re-link wikilinks if the slug changed
-        if new_slug && new_slug != old_slug do
-          Task.start(fn -> Brain.relink_wikilinks(context_id, old_slug, new_slug) end)
-        end
 
         {:noreply,
          push_patch(socket,
@@ -313,16 +299,6 @@ defmodule DranWeb.PageEdit do
         socket
       end
     end
-  end
-
-  defp maybe_resolve_links(page) do
-    Task.start(fn -> Brain.resolve_links(page) end)
-    page
-  end
-
-  defp maybe_resolve_links(socket, page) do
-    Task.start(fn -> Brain.resolve_links(page) end)
-    socket
   end
 
   defp context_id(socket) do
