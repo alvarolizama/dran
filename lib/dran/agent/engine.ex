@@ -20,6 +20,9 @@ defmodule Dran.Agent.Engine do
   alias Dran.Agent.{Session, Step}
 
   @max_steps 15
+  @per_step_timeout 120_000
+  @max_tool_result_chars 2_000
+  @max_completion_tokens 4_096
 
   @doc """
   Start an agent session and spawn the ReAct loop asynchronously.
@@ -120,12 +123,46 @@ defmodule Dran.Agent.Engine do
     loop(state)
   end
 
-  defp loop(%{step: step}) when step >= @max_steps do
-    Logger.info("Agent.Engine: max steps reached (#{@max_steps})")
+  defp loop(%{step: step} = state) when step >= @max_steps do
+    finish_session(state, %{"summary" => "Agent reached max steps (#{@max_steps})"})
     :ok
   end
 
   defp loop(state) do
+    task =
+      Task.Supervisor.async_nolink(Dran.Relations.TaskSupervisor, fn ->
+        single_turn(state)
+      end)
+
+    case Task.yield(task, @per_step_timeout) do
+      nil ->
+        Task.shutdown(task)
+
+        finish_session(state, %{
+          "summary" => "Agent step timed out after #{@per_step_timeout}ms"
+        })
+
+      {:ok, {:continue, state}} ->
+        loop(state)
+
+      {:ok, {:done, _state}} ->
+        :ok
+
+      {:ok, {:error, state, reason}} ->
+        Logger.warning("Agent.Engine: step failed: #{inspect(reason)}")
+        finish_session(state, %{"summary" => "Agent step failed: #{inspect(reason)}"})
+
+      {:ok, result} ->
+        Logger.warning("Agent.Engine: unexpected step result: #{inspect(result)}")
+        finish_session(state, %{"summary" => "Agent step returned unexpected result"})
+
+      {:exit, reason} ->
+        Logger.warning("Agent.Engine: step crashed: #{inspect(reason)}")
+        finish_session(state, %{"summary" => "Agent step crashed: #{inspect(reason)}"})
+    end
+  end
+
+  defp single_turn(state) do
     case call_llm(state) do
       {:ok, %{reasoning: reasoning, tool: tool, args: args, assistant_message: assistant_message}} ->
         state = %{state | step: state.step + 1}
@@ -138,15 +175,18 @@ defmodule Dran.Agent.Engine do
 
         if tool == "done" do
           finish_session(state, args)
+          {:done, state}
         else
           state = add_to_messages(state, assistant_message, tool, result)
-          loop(state)
+          {:continue, state}
         end
 
       {:error, reason} ->
-        Logger.warning("Agent.Engine: LLM/tool-call error: #{inspect(reason)}")
-        finish_session(state, %{"summary" => "LLM error: #{inspect(reason)}"})
+        {:error, state, reason}
     end
+  rescue
+    reason ->
+      {:error, state, reason}
   end
 
   # ── LLM ──
@@ -157,7 +197,8 @@ defmodule Dran.Agent.Engine do
       "messages" => state.messages,
       "tools" => state.module.tools(),
       "tool_choice" => "auto",
-      "temperature" => 0.4
+      "temperature" => 0.4,
+      "max_tokens" => @max_completion_tokens
     }
 
     case Inference.chat(payload) do
@@ -350,14 +391,19 @@ defmodule Dran.Agent.Engine do
   defp get_tool_call_id(_), do: "call_fallback"
 
   defp format_tool_result(result, module) do
-    case summarize_result(result, module) do
+    summary = summarize_result(result, module)
+
+    case summary do
       %{data: data} when is_list(data) ->
-        Enum.map_join(data, "\n", fn item ->
-          "- #{item[:title] || item[:url] || item[:slug] || inspect(item)}"
+        data
+        |> Enum.take(5)
+        |> Enum.map_join("\n", fn item ->
+          text = "- #{item[:title] || item[:url] || item[:slug] || inspect(item)}"
+          String.slice(text, 0, 200)
         end)
 
       %{data: data} when is_map(data) ->
-        Jason.encode!(data) |> String.slice(0, 2000)
+        Jason.encode!(data) |> String.slice(0, @max_tool_result_chars)
 
       %{status: status} ->
         to_string(status)

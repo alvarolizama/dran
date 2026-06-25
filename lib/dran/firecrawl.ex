@@ -87,10 +87,13 @@ defmodule Dran.Firecrawl do
        %{
          url: Map.get(data, "url", url),
          title: Map.get(data, "title"),
-         markdown: Map.get(data, "markdown")
+         markdown: data |> Map.get("markdown") |> truncate_scrape()
        }}
     end
   end
+
+  defp truncate_scrape(nil), do: nil
+  defp truncate_scrape(text) when is_binary(text), do: String.slice(text, 0, 8_000)
 
   # --- Internals ---
 
