@@ -78,13 +78,24 @@ defmodule DranWeb.AgentLive do
   defp session_header(assigns) do
     ~H"""
     <div class="flex items-center justify-between p-4 rounded-lg border border-base-300 bg-base-200/30">
-      <div>
+      <div class="flex-1 min-w-0">
         <div class="text-sm text-base-content/60">Input</div>
-        <div class="font-medium">{@session.input}</div>
+        <div class="font-medium truncate">{@session.input}</div>
       </div>
-      <div class="text-right">
-        <div class="text-sm text-base-content/60">Status</div>
-        <span class={status_badge_class(@session.status)}>{@session.status}</span>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <div class="text-sm text-base-content/60">Status</div>
+          <span class={status_badge_class(@session.status)}>{@session.status}</span>
+        </div>
+        <button
+          :if={@session.status == "running"}
+          type="button"
+          phx-click="stop"
+          data-confirm="Stop this agent session?"
+          class="btn btn-error btn-sm"
+        >
+          <.icon name="hero-stop" class="size-4" /> Stop
+        </button>
       </div>
     </div>
     """
@@ -93,6 +104,7 @@ defmodule DranWeb.AgentLive do
   defp status_badge_class("done"), do: "badge badge-success"
   defp status_badge_class("running"), do: "badge badge-primary"
   defp status_badge_class("error"), do: "badge badge-error"
+  defp status_badge_class("cancelled"), do: "badge badge-warning"
   defp status_badge_class(_), do: "badge"
 
   defp recent_sessions(assigns) do
@@ -307,6 +319,16 @@ defmodule DranWeb.AgentLive do
       end
     else
       {:noreply, put_flash(socket, :error, "Input and context are required")}
+    end
+  end
+
+  @impl true
+  def handle_event("stop", _params, socket) do
+    if socket.assigns.session && socket.assigns.session.status == "running" do
+      :ok = Dran.Agent.Engine.cancel(socket.assigns.session.id)
+      {:noreply, refresh_session(socket) |> put_flash(:info, "Agent stopped")}
+    else
+      {:noreply, socket}
     end
   end
 

@@ -8,6 +8,9 @@ defmodule Dran.Agent.Engine do
 
   Each step is persisted and broadcasted via `Dran.PubSub` on
   `agents:<session_id>` and `agents:all`.
+
+  Running tasks are registered in `Dran.Agent.SessionRegistry` under the
+  session id so they can be cancelled with `cancel/1`.
   """
 
   require Logger
@@ -29,10 +32,63 @@ defmodule Dran.Agent.Engine do
     session = create_session!(module, input, context_id, opts)
 
     Task.Supervisor.start_child(Dran.Relations.TaskSupervisor, fn ->
-      execute_loop(module, session, opts)
+      register_runner(session.id)
+
+      try do
+        execute_loop(module, session, opts)
+      after
+        unregister_runner(session.id)
+      end
     end)
 
     {:ok, session}
+  end
+
+  @doc """
+  Cancel a running agent session.
+
+  Sends a graceful shutdown to the task. If the session is already done or
+  the runner is gone, it updates the session to `"cancelled"`.
+  """
+  @spec cancel(Ecto.UUID.t()) :: :ok | {:error, :not_found}
+  def cancel(session_id) do
+    case Registry.lookup(Dran.Agent.SessionRegistry, session_id) do
+      [{pid, _} | _] ->
+        Process.exit(pid, :shutdown)
+        mark_cancelled!(session_id)
+        :ok
+
+      [] ->
+        case Repo.get(Session, session_id) do
+          nil ->
+            {:error, :not_found}
+
+          %{status: "running"} ->
+            mark_cancelled!(session_id)
+            :ok
+
+          _ ->
+            :ok
+        end
+    end
+  end
+
+  defp register_runner(session_id) do
+    Registry.register(Dran.Agent.SessionRegistry, session_id, nil)
+  end
+
+  defp unregister_runner(session_id) do
+    Registry.unregister(Dran.Agent.SessionRegistry, session_id)
+  end
+
+  defp mark_cancelled!(session_id) do
+    Repo.get!(Session, session_id)
+    |> Session.changeset(%{
+      status: "cancelled",
+      summary: "Agent session was cancelled by the user.",
+      completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+    |> Repo.update!()
   end
 
   defp create_session!(module, input, context_id, opts) do
