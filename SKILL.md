@@ -303,7 +303,7 @@ Use `start_agent` when Álvaro wants a multi-step task, not a single page captur
 - **Ingest** (`agent_type: "ingest"`) — validates/inspects/downloads a URL and
   creates a `reference` page (useful for files or link capture).
 - **Search** (`agent_type: "search"`) — orchestrates semantic + full-text + web
-  search, and can create a summary `note`.
+  search, and returns a report of top results and relations (does not create pages).
 
 Agents run asynchronously on the server. Always call `start_agent`, then poll
 `get_agent_session` until `status` is `"done"` or `"error"`. A session keeps running

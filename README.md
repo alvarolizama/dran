@@ -403,7 +403,7 @@ Dran can delegate longer tasks to autonomous ReAct agents:
 - **`start_agent` / `get_agent_session`** — start a research, ingest, or search session and poll for progress.
 - **Research agent** — searches the web, scrapes sources, checks existing pages, and creates 1-5 new pages.
 - **Ingest agent** — validates, inspects, downloads, and creates reference pages from URLs.
-- **Search agent** — orchestrates semantic/full-text/web search and can save a synthesized note.
+- **Search agent** — orchestrates semantic/full-text/web search and reports the top results and relations.
 
 Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and to PubSub topics (`agents:<session_id>` and `agents:all`).
 

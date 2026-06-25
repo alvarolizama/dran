@@ -1,7 +1,9 @@
 defmodule Dran.Agent.Search do
   @moduledoc """
   Search agent: answers a query by orchestrating semantic, full-text, and web
-  search, optionally creating a note with the synthesized answer.
+  search, producing a report of top results and semantic relations.
+
+  It does **not** create pages — it only searches and reports findings.
   """
 
   @behaviour Dran.Agent.Engine.Behaviour
@@ -69,31 +71,15 @@ defmodule Dran.Agent.Search do
       %{
         "type" => "function",
         "function" => %{
-          "name" => "create_note",
-          "description" => "Save a note summarizing the answer to the query.",
-          "parameters" => %{
-            "type" => "object",
-            "properties" => %{
-              "title" => %{"type" => "string", "description" => "Note title"},
-              "slug" => %{"type" => "string", "description" => "Optional slug"},
-              "body" => %{
-                "type" => "string",
-                "description" => "Markdown body with answer and citations"
-              }
-            },
-            "required" => ["title", "body"]
-          }
-        }
-      },
-      %{
-        "type" => "function",
-        "function" => %{
           "name" => "done",
-          "description" => "Finish the search session with a summary.",
+          "description" => "Finish the search session with a summary report.",
           "parameters" => %{
             "type" => "object",
             "properties" => %{
-              "summary" => %{"type" => "string", "description" => "Short answer"}
+              "summary" => %{
+                "type" => "string",
+                "description" => "Concise answer with top results and semantic relations"
+              }
             },
             "required" => ["summary"]
           }
@@ -105,14 +91,14 @@ defmodule Dran.Agent.Search do
   @impl true
   def system_prompt do
     """
-    You are a search agent for Dran. Answer the user's query using the brain.
+    You are a search agent for Dran. Answer the user's query by searching the brain.
+    You do NOT create pages — only produce a final report.
 
     - Use `semantic_search` for conceptual/natural-language queries.
     - Use `full_text_search` for exact phrases or keywords.
     - Use `web_search` only when the brain lacks the answer and Firecrawl is available.
-    - Synthesize a concise answer.
-    - Optionally use `create_note` to save the answer.
-    - Call `done` when finished.
+    - Synthesize a concise answer with the top results and key semantic relations.
+    - Always end by calling `done` with the summary.
     """
   end
 
@@ -159,36 +145,6 @@ defmodule Dran.Agent.Search do
   end
 
   @impl true
-  def execute_tool("create_note", args, state) do
-    attrs = %{
-      context_id: state.session.context_id,
-      title: args["title"],
-      slug: args["slug"],
-      body: args["body"],
-      page_type: "note",
-      tags: ["search-result"],
-      created_by: "search-agent",
-      owner: "search-agent",
-      meta: %{"agent_session_id" => state.session.id}
-    }
-
-    case Brain.create_page(attrs) do
-      {:ok, page} ->
-        Phoenix.PubSub.broadcast(
-          Dran.PubSub,
-          "agents:#{state.session.id}",
-          {:page_created, page}
-        )
-
-        {{:ok, %{slug: page.slug, id: page.id, title: page.title}},
-         %{state | pages_created: state.pages_created + 1}}
-
-      {:error, cs} ->
-        {{:error, format_changeset_errors(cs)}, state}
-    end
-  end
-
-  @impl true
   def execute_tool("done", _args, state), do: {{:ok, :done}, state}
 
   @impl true
@@ -200,20 +156,7 @@ defmodule Dran.Agent.Search do
   def summarize_result({:ok, results}) when is_list(results),
     do: %{status: "ok", count: length(results), data: results}
 
-  def summarize_result({:ok, %{slug: slug, title: title}}),
-    do: %{status: "ok", slug: slug, title: title}
-
   def summarize_result({:ok, :done}), do: %{status: "done"}
   def summarize_result({:error, reason}), do: %{status: "error", error: inspect(reason)}
   def summarize_result(other), do: %{status: "ok", data: other}
-
-  defp format_changeset_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, val}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(val))
-      end)
-    end)
-    |> Enum.map(fn {field, errors} -> "#{field}: #{Enum.join(errors, ", ")}" end)
-    |> Enum.join("; ")
-  end
 end
