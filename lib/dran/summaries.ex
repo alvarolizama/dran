@@ -43,7 +43,13 @@ defmodule Dran.Summaries do
           Map.get(decoded, "entities", [])
           |> List.wrap()
           |> Enum.map(&to_string/1)
-          |> Enum.reject(&(&1 == ""))
+          |> Enum.reject(&(&1 == "")),
+        inline_links:
+          Map.get(decoded, "inline_links", [])
+          |> List.wrap()
+          |> Enum.map(&parse_inline_link/1)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.uniq()
       }
 
       {:ok, result}
@@ -97,6 +103,7 @@ defmodule Dran.Summaries do
     - "summary": one concise sentence describing the page (max 120 chars)
     - "tags": 1-5 kebab-case tags
     - "entities": names of people, companies, products, tools or places mentioned (optional)
+    - "inline_links": array of {"text": "exact text from body", "slug": "slug from available pages"} — link body text to related pages. Only use slugs from the available pages list. Pick the most relevant 1-5 links. The "text" must be an exact substring from the page body.
 
     Available pages in this context:
 
@@ -104,7 +111,7 @@ defmodule Dran.Summaries do
 
     Respond with valid JSON and nothing else:
 
-    {"title": "...", "summary": "...", "tags": [...], "entities": [...]}
+    {"title": "...", "summary": "...", "tags": [...], "entities": [...], "inline_links": [{"text": "...", "slug": "..."}]}
     """
   end
 
@@ -196,4 +203,16 @@ defmodule Dran.Summaries do
     |> String.replace(~r/[^a-z0-9]+/, "-")
     |> String.replace(~r/^-+|-+$/, "")
   end
+
+  defp parse_inline_link(%{"text" => text, "slug" => slug})
+       when is_binary(text) and is_binary(slug) do
+    text = String.trim(text)
+    slug = String.trim(slug)
+
+    if text != "" and slug != "" do
+      %{text: text, slug: slug}
+    end
+  end
+
+  defp parse_inline_link(_), do: nil
 end

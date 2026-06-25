@@ -81,11 +81,15 @@ defmodule Dran.Brain.PageAugmenter do
 
   defp maybe_enrich_metadata(%Page{} = page) do
     case Summaries.augment_page(page) do
-      {:ok, %{title: title, summary: summary, tags: tags}} ->
+      {:ok, %{title: title, summary: summary, tags: tags, inline_links: inline_links}} ->
+        existing_meta = page.meta || %{}
+        updated_meta = Map.put(existing_meta, "inline_links", serialize_inline_links(inline_links))
+
         attrs = %{
           title: pick_title(page.title, title),
           summary: pick_summary(page.summary, summary),
-          tags: merge_tags(page.tags || [], tags)
+          tags: merge_tags(page.tags || [], tags),
+          meta: updated_meta
         }
 
         page
@@ -191,6 +195,14 @@ defmodule Dran.Brain.PageAugmenter do
       end
     end
   end
+
+  defp serialize_inline_links(links) when is_list(links) do
+    Enum.map(links, fn %{text: text, slug: slug} ->
+      %{"text" => text, "slug" => slug}
+    end)
+  end
+
+  defp serialize_inline_links(_), do: []
 
   # ── Config ──
 

@@ -46,7 +46,7 @@ defmodule DranWeb.PageComponents do
           {render_slot(@tabs)}
 
           <div :if={@tabs == []} class="prose prose-base dark:prose-invert max-w-none">
-            {render_markdown(@page.body, context_id: @page.context_id)}
+            {render_markdown(@page.body, context_id: @page.context_id, inline_links: @page.meta["inline_links"])}
           </div>
 
           <div :if={@tabs == []} class="border-t border-base-300 pt-4">
@@ -388,8 +388,8 @@ defmodule DranWeb.PageComponents do
 
   def render_markdown(body, opts) when is_binary(body) do
     context_id = Keyword.get(opts, :context_id)
+    inline_links = Keyword.get(opts, :inline_links, [])
     embeds = if context_id, do: Dran.Brain.fetch_embeds(body, context_id), else: %{}
-    links = %{}
 
     html =
       case MDEx.to_html(body, @markdown_options) do
@@ -398,17 +398,15 @@ defmodule DranWeb.PageComponents do
       end
 
     html
-    |> rewrite_wikilinks(links)
+    |> apply_inline_links(inline_links, context_id)
     |> rewrite_embeds(embeds)
     |> raw()
   end
 
-  # Rewrite MDEx wikilink anchors into type-specific page links.
-  # MDEx emits: <a href="slug" data-wikilink="true">display</a>
-  #
-  # When the slug resolves to a page, the URL becomes `/{type_plural}/{slug}` so
-  # clicking follows the right route. Unresolved slugs render as a
-  # broken-link span (no navigation).
+  # Insert inline links into the rendered HTML.
+  # Each link is %{"text" => "...", "slug" => "..."}.
+  # We find the first occurrence of text inside <p> tags that isn't already
+  # inside an <a> tag, and wrap it in a link to the target page.
   @type_routes %{
     "note" => "notes",
     "concept" => "concepts",
@@ -421,26 +419,54 @@ defmodule DranWeb.PageComponents do
     "comparison" => "comparisons"
   }
 
-  defp rewrite_wikilinks(html, links) do
-    Regex.replace(
-      ~r/<a href="([^"]+)" data-wikilink="true">([^<]*)<\/a>/,
-      html,
-      fn _match, slug, display ->
-        slug = String.trim(slug)
-        display = if display == "", do: slug, else: display
-
-        case Map.get(links, slug) do
-          nil ->
-            ~s|<span class="wikilink-broken" title="link target not found: #{escape_html(slug)}">#{escape_html(display)}</span>|
-
-          page ->
-            path =
-              "/#{Map.get(@type_routes, page.page_type, page.page_type)}/#{escape_html(slug)}"
-
-            ~s|<a href="#{path}" class="wikilink" data-wikilink="#{escape_html(slug)}" data-wikilink-type="#{escape_html(page.page_type)}">#{escape_html(display)}</a>|
-        end
+  defp apply_inline_links(html, links, context_id)
+       when is_list(links) and links != [] do
+    # Resolve slugs to page types for correct URLs
+    slug_to_path =
+      if context_id do
+        links
+        |> Enum.map(fn %{"slug" => slug} -> slug end)
+        |> Enum.uniq()
+        |> Enum.reduce(%{}, fn slug, acc ->
+          case Dran.Brain.get_page_by_slug(slug, context_id) do
+            nil -> acc
+            page -> Map.put(acc, slug, "/#{Map.get(@type_routes, page.page_type, "notes")}/#{slug}")
+          end
+        end)
+      else
+        %{}
       end
-    )
+
+    Enum.reduce(links, html, fn link, acc ->
+      case link do
+        %{"text" => text, "slug" => slug} when is_binary(text) and is_binary(slug) ->
+          path = Map.get(slug_to_path, slug, "/#{slug}")
+          insert_link(acc, text, path)
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  defp apply_inline_links(html, _, _), do: html
+
+  defp insert_link(html, text, path) do
+    escaped = Regex.escape(text)
+
+    # Match text that is NOT inside an existing <a>...</a> tag.
+    # Only replace the first occurrence to avoid double-linking.
+    pattern = ~r/(<(?:p|li|h[1-6]|td|blockquote)[^>]*>(?:(?!<a\b).)*?)(#{escaped})/s
+
+    if Regex.match?(pattern, html) do
+      Regex.replace(pattern, html, fn _full, prefix, matched_text ->
+        "#{prefix}<a href=\"#{path}\" class=\"inline-link\">#{matched_text}</a>"
+      end,
+        global: false
+      )
+    else
+      html
+    end
   end
 
   # Rewrite ![[slug|display]] embeds into media elements.
