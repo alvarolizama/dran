@@ -64,7 +64,7 @@ defmodule DranWeb.SearchLive do
       contexts={@contexts}
       active_nav={@active_nav}
     >
-      <div class="p-6 overflow-y-auto max-w-3xl">
+      <div class="p-6 overflow-y-auto w-full">
         <h1 class="text-2xl font-bold mb-4">Search</h1>
 
         <form phx-submit="search" class="mb-6">

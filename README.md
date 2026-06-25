@@ -25,6 +25,7 @@ Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent i
 - **Slug rename** — rename a page and auto-relink all wikilinks across the context
 - **Hybrid search** — unified `search` tool picks full-text, fuzzy, semantic or hybrid
 - **Automatic relations** — `PageAugmenter` creates `related` links via embeddings after every capture
+- **Autonomous agents** — research, ingest, and search agents that run asynchronously, log every step, and create pages automatically
 
 ## Quick start (local dev)
 
@@ -362,6 +363,8 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `lint`             | Quality report: orphans, broken wikilinks, stale pages                 |
 | `rename_slug`      | Rename a page's slug and relink all wikilinks across the context       |
 | `ingest_url`       | Save a URL (HTML to save link; files to download and store)           |
+| `start_agent`      | Start an autonomous agent (research, ingest, search)                  |
+| `get_agent_session`| Poll an agent session for status, summary, and steps                  |
 
 **Resources:**
 
@@ -390,8 +393,21 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 7. **Inspect** — use `get_links` to see inbound + outbound relations for a page
 8. **Stats** — use `stats` for a context overview (page counts, todos by status, orphans)
 9. **Rename** — use `rename_slug` to rename a page and auto-relink all wikilinks across the context
-10. **Ingest** — use `ingest_url` to save web pages or download files as references
-11. **Lint** — use `lint` to find orphans, broken links, and stale pages
+11. **Ingest** — use `ingest_url` to save web pages or download files as references
+12. **Lint** — use `lint` to find orphans, broken links, and stale pages
+
+### Autonomous agents
+
+Dran can delegate longer tasks to autonomous ReAct agents:
+
+- **`start_agent` / `get_agent_session`** — start a research, ingest, or search session and poll for progress.
+- **Research agent** — searches the web, scrapes sources, checks existing pages, and creates 1-5 new pages.
+- **Ingest agent** — validates, inspects, downloads, and creates reference pages from URLs.
+- **Search agent** — orchestrates semantic/full-text/web search and can save a synthesized note.
+
+Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and to PubSub topics (`agents:<session_id>` and `agents:all`).
+
+Agents are also exposed as LiveView pages at `/agents/:type` and individual sessions at `/agents/:type/:id`. From the CLI, run an agent with `mix dran.agent --type research --context personal --input "topic"`.
 
 ### Example: create a note with a wikilink
 
@@ -448,11 +464,20 @@ All API endpoints require a bearer token: `Authorization: Bearer <DRAN_...N>`.
 | `GET`    | `/api/contexts/:slug`                      | Get a context                                                |
 | `PUT`    | `/api/contexts/:slug`                      | Update a context                                             |
 | `DELETE` | `/api/contexts/:slug`                      | Delete a context                                             |
+| `POST`   | `/api/mcp`                                 | MCP JSON-RPC endpoint                                        |
+
+### Agents CLI
+
+Run agents from the terminal:
+
+```bash
+mix dran.agent --type research --context personal --input "Yeshe Walmo"
+mix dran.agent --type ingest  --context personal --input "https://example.com/article"
+mix dran.agent --type search  --context personal --input "Bön deities" --sync
+```
 
 ## Tech stack
-
 - **Phoenix 1.8** with LiveView
-- **Ecto + PostgreSQL** with `pg_trgm` (fuzzy search), generated `tsvector` (FTS), and `pgvector`
 - **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
 - **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
 - **MCP** (Model Context Protocol) for AI agent integration

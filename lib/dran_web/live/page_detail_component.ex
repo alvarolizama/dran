@@ -12,7 +12,7 @@ defmodule DranWeb.PageDetailComponent do
   def page_detail(assigns) do
     ~H"""
     <%= if @page do %>
-      <div class="space-y-3 max-w-3xl">
+      <div class="space-y-3 w-full">
         <h2 class="text-xl font-semibold">{@page.title}</h2>
         <div class="flex flex-wrap items-center gap-2 text-sm text-base-content/60">
           <span>{@label}</span>

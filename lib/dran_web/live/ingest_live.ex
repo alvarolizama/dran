@@ -27,7 +27,7 @@ defmodule DranWeb.IngestLive do
       contexts={@contexts}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full max-w-2xl mx-auto p-6 space-y-6">
+        <div class="w-full p-6 space-y-6">
           <div>
             <h1 class="text-2xl font-bold">Ingest</h1>
             <p class="text-sm text-base-content/50 mt-1">

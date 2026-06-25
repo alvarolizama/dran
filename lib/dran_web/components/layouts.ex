@@ -72,9 +72,9 @@ defmodule DranWeb.Layouts do
         </div>
       </aside>
 
-      <main class="flex-1 overflow-hidden flex flex-col">
+      <div class="flex-1 overflow-hidden flex flex-col w-full">
         {render_slot(@inner_block)}
-      </main>
+      </div>
 
       <.flash_group flash={@flash} />
     </div>

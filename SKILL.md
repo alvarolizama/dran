@@ -1,6 +1,6 @@
 ---
 name: dran-second-brain
-description: "Use when operating Álvaro's Dran second brain via MCP. 15 tools: search, read, create, update, delete, relate, lint, rename, stats, ingest. 9 page types (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons) in a personal knowledge graph backed by Phoenix LiveView + PostgreSQL. Triggers on any Dran / segundo cerebro / brain task: capturing thoughts, research, ingesting URLs, managing goals and todos, running the knowledge graph lint, wikilinking pages, renaming slugs."
+description: "Use when operating Álvaro's Dran second brain via MCP. 17 tools: search, read, create, update, delete, relate, lint, rename, stats, ingest, start_agent, get_agent_session. 9 page types (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons) in a personal knowledge graph backed by Phoenix LiveView + PostgreSQL. Triggers on any Dran / segundo cerebro / brain task: capturing thoughts, research, ingesting URLs, managing goals and todos, running the knowledge graph lint, wikilinking pages, renaming slugs, or delegating to agents."
 version: 2.0.0
 author: Álvaro Lizama
 license: MIT
@@ -44,7 +44,8 @@ mainly through embeddings + automatic `semantic` relations.
   he wants stored, a research topic to scaffold, or a URL/article to ingest.
 - Use for: capturing thoughts, journaling, taking research notes, ingesting URLs,
   managing todos + goals + plans, querying the knowledge graph, linting for orphans
-  and broken links, building comparisons between tools/concepts.
+  and broken links, building comparisons between tools/concepts, or delegating longer
+  discovery tasks to agents.
 - Do **not** use for: ephemeral chat (use memory tool), session-only state, large
   binary file storage (use `artifact` page type with a `storage_path` only when the
   file is genuinely worth keeping), duplicating content that already lives in another
@@ -226,6 +227,7 @@ sus propios meta fields específicos (ver tabla de Rule 1).
 - **An objective with a target date** → `goal` via `create_page` with `meta.health` and `meta.target_date`
 - **Comparing 2+ things (e.g. Phoenix vs Rails)** → `comparison` via `create_page` with `meta.entities` and `meta.criteria`
 - **Saving a PDF / file** → use `ingest_url` (the agent does NOT extract content — that is the agent's job via the resulting page's `source_url`)
+- **Delegating a multi-step research/ingest/search task** → `start_agent` with `agent_type=research|ingest|search` and poll with `get_agent_session`
 
 **Hierarchy is a graph, not a tree.** Plans and todos are **optionally** linked to
 goals via `meta.goal_slug` (free-form string, no FK). A todo can exist with no
@@ -288,9 +290,32 @@ and decide what to do). For files (PDF, docs) it downloads and stores them. The
 the content is worth a full page, `create_page` with a `note` summarizing + wikilinking
 the reference.
 
-`ingest_url` has **SSRF protection** — blocks localhost, private IPs (10.x,
+- `ingest_url` has **SSRF protection** — blocks localhost, private IPs (10.x,
 172.16-31.x, 192.168.x, 169.254.x), CGNAT (100.64-127.x), and IPv6 loopback/link-local.
 This means `ingest_url` with `http://localhost:...` **will fail**.
+
+### Rule 5a: Autonomous agents
+
+Use `start_agent` when Álvaro wants a multi-step task, not a single page capture:
+
+- **Research** (`agent_type: "research"`) — searches/scrapes the web, reads current
+  pages, and creates new `note`/`reference` pages.
+- **Ingest** (`agent_type: "ingest"`) — validates/inspects/downloads a URL and
+  creates a `reference` page (useful for files or link capture).
+- **Search** (`agent_type: "search"`) — orchestrates semantic + full-text + web
+  search, and can create a summary `note`.
+
+Agents run asynchronously on the server. Always call `start_agent`, then poll
+`get_agent_session` until `status` is `"done"` or `"error"`. A session keeps running
+even if the chat session closes — it is not tied to a specific UI tab.
+
+| Field | Expect |
+|-------|--------|
+| session_id | UUID returned by `start_agent` |
+| status | `running` → `done` or `error` |
+| summary | Human-readable result when `done` |
+| steps | List of tool calls the agent executed |
+| pages_created | Array of `{id, title, slug}` for new pages |
 
 ### Rule 6: Update vs create vs rename
 
@@ -349,7 +374,13 @@ The pattern for adding a new MCP tool to Dran:
 Most new tools are 15-20 lines: resolve context → resolve page(s) by slug → call
 existing `Brain` function → format the response as a string.
 
-## Tools Reference (16 MCP tools)
+## Autonomous agents
+
+Dran has three ReAct agents (research, ingest, search). They persist every step
+and report progress via `agent_sessions` / `agent_steps`. Use them for longer
+tasks instead of doing everything in one MCP round-trip.
+
+## Tools Reference (17 MCP tools)
 
 ### `search`
 Unified knowledge search. `Brain.search/2` automatically picks the best
@@ -526,6 +557,26 @@ and stores. **Does NOT extract content** — that's the agent's job later.
 { "context": "personal", "url": "https://example.com/article.html", "slug": "example-article", "tags": ["research"] }
 ```
 
+### `start_agent`
+Start an autonomous agent. Research, ingest, or search. Runs async, persists every
+step, and can create pages. Returns the `session_id` you poll with `get_agent_session`.
+```json
+{
+  "agent_type": "research",
+  "context": "personal",
+  "input": "Yeshe Walmo"
+}
+```
+Supported types: `research`, `ingest`, `search`.
+
+### `get_agent_session`
+Poll an agent session by `session_id`. Use it after `start_agent` to wait for
+completion in synchronous contexts.
+```json
+{ "session_id": "04d2..." }
+```
+Response includes `status`, `summary`, `pages_created`, and `steps`.
+
 ## MCP Resources (3)
 
 Read these via `resources/read` with the URI:
@@ -622,7 +673,9 @@ No direct upload via MCP or REST — only via `ingest_url` (remote URLs only, SS
 | `stats`             | `Brain.stats/1`                                           |
 | `lint`              | `Brain.lint/1`                                            |
 | `rename_slug`       | `Brain.relink_wikilinks/3` + `Brain.update_page/2`       |
-| `ingest_url`        | `DranWeb.API.IngestController.do_ingest/3`               |
+| `ingest_url`        | `Dran.Agent.Ingest.Utils.do_ingest/3`                    |
+| `start_agent`       | `Dran.Agent.Engine.run/4`                                |
+| `get_agent_session` | `Dran.Repo.get(Agent.Session, id) + preload steps`       |
 
 Brain functions **not** exposed via MCP: `fuzzy_search` (search FTS covers 95%),
 `list_contexts` / `create_context` / `delete_context` (admin ops), `graph_data`

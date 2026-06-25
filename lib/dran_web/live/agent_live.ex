@@ -24,8 +24,8 @@ defmodule DranWeb.AgentLive do
       contexts={@contexts}
       active_nav={@active_nav}
     >
-      <div class="flex-1 overflow-y-auto">
-        <div class="w-full max-w-4xl mx-auto p-6 space-y-6">
+      <div class="flex-1 overflow-y-auto w-full">
+        <div class="w-full p-6 space-y-6">
           <div>
             <h1 class="text-2xl font-bold capitalize">{@type} Agent</h1>
             <p class="text-sm text-base-content/50 mt-1">{@description}</p>
@@ -54,9 +54,11 @@ defmodule DranWeb.AgentLive do
                 </button>
               </div>
             </.form>
+
+            <.recent_sessions sessions={@recent_sessions} type={@type} />
           <% end %>
 
-          <.steps_timeline steps={@steps} session={@session} />
+          <.steps_timeline steps={@steps} />
 
           <%= if @session && @session.status == "done" do %>
             <div class="alert alert-success">
@@ -92,6 +94,61 @@ defmodule DranWeb.AgentLive do
   defp status_badge_class("running"), do: "badge badge-primary"
   defp status_badge_class("error"), do: "badge badge-error"
   defp status_badge_class(_), do: "badge"
+
+  defp recent_sessions(assigns) do
+    ~H"""
+    <div :if={@sessions != []} class="space-y-3">
+      <h2 class="text-sm font-semibold text-base-content/60">Recent sessions</h2>
+
+      <div class="space-y-2">
+        <div
+          :for={session <- @sessions}
+          id={"session-#{session.id}"}
+          class="agent-step flex items-center justify-between p-3 rounded-lg border border-base-300 hover:bg-base-200/50 transition"
+        >
+          <div class="min-w-0">
+            <div class="font-medium text-sm truncate">{session.input}</div>
+            <div class="text-xs text-base-content/50">
+              {format_session_date(session.inserted_at)} · {session.steps_count} steps · {session.pages_created} pages
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class={status_badge_class(session.status)}>{session.status}</span>
+            <.link
+              navigate={~p"/agents/#{@type}/#{session.id}"}
+              class="btn btn-ghost btn-xs"
+            >
+              Resume
+            </.link>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp recent_sessions(socket, type) do
+    context = socket.assigns.context
+
+    if context do
+      Repo.all(
+        from s in Session,
+          where: s.context_id == ^context.id and s.agent_type == ^type,
+          order_by: [desc: s.inserted_at],
+          limit: 10
+      )
+    else
+      []
+    end
+  end
+
+  defp format_session_date(%DateTime{} = dt) do
+    dt
+    |> DateTime.to_naive()
+    |> NaiveDateTime.to_string()
+  end
+
+  defp format_session_date(_), do: ""
 
   defp steps_timeline(assigns) do
     ~H"""
@@ -153,6 +210,7 @@ defmodule DranWeb.AgentLive do
        active_nav: "agents",
        session: nil,
        steps: [],
+       recent_sessions: [],
        form: to_form(%{"input" => ""}, as: :agent)
      )}
   end
@@ -162,6 +220,7 @@ defmodule DranWeb.AgentLive do
     socket =
       socket
       |> assign(agent_type_label(type))
+      |> assign(recent_sessions: recent_sessions(socket, type))
       |> maybe_load_session(params["id"])
 
     {:noreply, socket}
@@ -238,7 +297,7 @@ defmodule DranWeb.AgentLive do
 
           {:noreply,
            socket
-           |> assign(session: session, steps: [])
+           |> assign(session: session, steps: [], recent_sessions: recent_sessions(socket, type))
            |> push_navigate(to: ~p"/agents/#{type}/#{session.id}")}
 
         {:error, reason} ->
@@ -262,19 +321,31 @@ defmodule DranWeb.AgentLive do
 
   @impl true
   def handle_info({:agent, session_id, message}, socket) do
-    if socket.assigns.session && socket.assigns.session.id == session_id do
-      {:noreply, handle_agent_message(socket, message)}
-    else
-      {:noreply, socket}
-    end
+    socket =
+      if socket.assigns.session && socket.assigns.session.id == session_id do
+        handle_agent_message(socket, message)
+      else
+        socket
+      end
+
+    # Refresh recent list if we're on the index page (no session loaded)
+    {:noreply,
+     if socket.assigns.session do
+       socket
+     else
+       assign(socket, recent_sessions: recent_sessions(socket, socket.assigns.type))
+     end}
   end
 
   def handle_info(message, socket) do
-    if socket.assigns.session do
-      {:noreply, handle_agent_message(socket, message)}
-    else
-      {:noreply, socket}
-    end
+    socket =
+      if socket.assigns.session do
+        handle_agent_message(socket, message)
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   defp handle_agent_message(socket, {:step_started, _step}) do
