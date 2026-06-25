@@ -84,7 +84,7 @@ defmodule DranWeb.Layouts do
   @doc """
   Renders the grouped sidebar navigation for the second brain.
 
-  Links are grouped by category (Knowledge, Planning, Outputs, Views).
+  Links are grouped by category (Knowledge, Planning, Outputs, Agents).
   Pass `active` with the nav key of the current page to highlight it.
   """
   attr :active, :string, default: nil
@@ -94,7 +94,8 @@ defmodule DranWeb.Layouts do
       %{
         label: nil,
         items: [
-          %{key: "dashboard", label: "Dashboard", icon: "hero-home", path: ~p"/"}
+          %{key: "dashboard", label: "Dashboard", icon: "hero-home", path: ~p"/"},
+          %{key: "graph", label: "Graph", icon: "hero-share", path: ~p"/graph"}
         ]
       },
       %{
@@ -127,16 +128,26 @@ defmodule DranWeb.Layouts do
         ]
       },
       %{
-        label: "Views",
+        label: "Agents",
         items: [
-          %{key: "graph", label: "Graph", icon: "hero-share", path: ~p"/graph"},
+          %{
+            key: "ingest",
+            label: "Ingest",
+            icon: "hero-arrow-down-tray",
+            path: ~p"/agents/ingest"
+          },
           %{
             key: "search",
             label: "Search",
             icon: "hero-magnifying-glass",
-            path: ~p"/search"
+            path: ~p"/agents/search"
           },
-          %{key: "ingest", label: "Ingest URL", icon: "hero-arrow-down-tray", path: ~p"/ingest"}
+          %{
+            key: "research",
+            label: "Research",
+            icon: "hero-beaker",
+            path: ~p"/agents/research"
+          }
         ]
       },
       %{
