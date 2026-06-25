@@ -155,7 +155,7 @@ defmodule Dran.MCP do
             "description" => "Who created this page (defaults to system)"
           }
         },
-        "required" => ["context", "title", "slug", "page_type"]
+        "required" => ["context", "page_type"]
       }
     },
     %{
@@ -650,8 +650,7 @@ defmodule Dran.MCP do
 
   defp execute_tool(
          "create_page",
-         %{"context" => context_slug, "title" => title, "slug" => slug, "page_type" => page_type} =
-           args
+         %{"context" => context_slug, "page_type" => page_type} = args
        ) do
     context = Brain.get_context_by_slug(context_slug)
 
@@ -659,8 +658,8 @@ defmodule Dran.MCP do
       attrs =
         %{
           context_id: context.id,
-          title: title,
-          slug: slug,
+          title: Map.get(args, "title"),
+          slug: Map.get(args, "slug"),
           page_type: page_type,
           body: Map.get(args, "body", ""),
           tags: Map.get(args, "tags", []),
