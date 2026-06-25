@@ -44,13 +44,31 @@ defmodule DranWeb.PageComponents do
               </div>
               <h1 class="text-3xl font-bold break-words">{@page.title}</h1>
               <div class="flex flex-wrap gap-2 mt-2">
-                <span :for={tag <- @page.tags || []} class="px-2 py-0.5 text-xs rounded bg-base-300">
+                <.link
+                  :for={tag <- @page.tags || []}
+                  navigate={tag_link_path(tag, @page.context_id)}
+                  class={[
+                    "px-2 py-0.5 text-xs rounded transition",
+                    "tag-link",
+                    tag_page_exists?(tag, @page.context_id) && "tag-link-exists",
+                    not tag_page_exists?(tag, @page.context_id) && "tag-link-missing"
+                  ]}
+                >
                   {tag}
-                </span>
+                </.link>
               </div>
             </div>
             <div class="flex gap-2 shrink-0">
               {render_slot(@actions)}
+              <button
+                :if={Dran.Firecrawl.enabled?()}
+                phx-click="enrich_page"
+                phx-value-slug={@page.slug}
+                class="btn btn-ghost btn-sm"
+                title="Search the web and enrich this page with new content"
+              >
+                <.icon name="hero-sparkles" class="w-4 h-4" /> Enrich
+              </button>
             </div>
           </div>
 
@@ -316,6 +334,24 @@ defmodule DranWeb.PageComponents do
   end
 
   def page_show_path(_), do: "#"
+
+  def tag_page_exists?(tag, context_id) when is_binary(tag) and is_binary(context_id) do
+    Dran.Brain.get_page_by_slug(tag, context_id) != nil
+  end
+
+  def tag_page_exists?(_tag, _context_id), do: false
+
+  def tag_link_path(tag, context_id) when is_binary(tag) and is_binary(context_id) do
+    case Dran.Brain.get_page_by_slug(tag, context_id) do
+      %Page{page_type: type, slug: slug} ->
+        "/#{type_path(type)}/#{slug}"
+
+      nil ->
+        "/search?q=#{URI.encode_www_form(tag)}"
+    end
+  end
+
+  def tag_link_path(tag, _context_id), do: "/search?q=#{URI.encode_www_form(tag)}"
 
   def format_date(nil), do: ""
 

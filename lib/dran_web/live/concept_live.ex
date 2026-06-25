@@ -262,6 +262,18 @@ defmodule DranWeb.ConceptLive do
   def handle_event("upload_complete", params, socket),
     do: PageEdit.handle_event("upload_complete", params, socket)
 
+  def handle_event("enrich_page", %{"slug" => slug}, socket),
+    do: DranWeb.EnrichHandler.handle_enrich(slug, socket)
+
+  def handle_info({:enriched, slug}, socket) do
+    page = Dran.Brain.get_page_by_slug(slug, socket.assigns.context.id)
+    {:noreply, assign(socket, page: page) |> put_flash(:info, "Page enriched with web content.")}
+  end
+
+  def handle_info({:enrich_failed, _slug, reason}, socket) do
+    {:noreply, put_flash(socket, :error, "Enrichment failed: #{inspect(reason)}")}
+  end
+
   defp handle_progress(:file, _entry, socket) do
     {:noreply, socket}
   end

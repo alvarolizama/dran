@@ -32,6 +32,11 @@ config :dran, :uploads,
 # Inference API configuration. Disabled when DRAN_INFERENCE_API_URL is not set.
 config :dran, :inference, Dran.Inference.Config.load_from_env()
 
+# Firecrawl configuration. Disabled when FIRECRAWL_API_KEY is not set.
+config :dran, :firecrawl,
+  api_key: System.get_env("FIRECRAWL_API_KEY"),
+  base_url: "https://api.firecrawl.dev/v1"
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

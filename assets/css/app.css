@@ -203,6 +203,20 @@
 
 /* ── Rendered markdown (read view) ── */
 
+.inline-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-color: oklch(from var(--color-primary) l c h / 30%);
+  text-underline-offset: 2px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.inline-link:hover {
+  text-decoration-color: var(--color-primary);
+  background: oklch(from var(--color-primary) l c h / 10%);
+  border-radius: 0.25rem;
+}
+
 .wikilink {
   color: var(--color-primary);
   background: oklch(from var(--color-primary) l c h / 10%);
@@ -241,4 +255,38 @@
   color: var(--color-error);
   text-decoration: line-through;
   opacity: 0.7;
+}
+
+/* ── Tag links (page detail) ── */
+
+.tag-link {
+  background: var(--color-base-300);
+  color: var(--color-base-content);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tag-link:hover {
+  background: oklch(from var(--color-primary) l c h / 20%);
+  color: var(--color-primary);
+}
+
+.tag-link-exists {
+  background: oklch(from var(--color-primary) l c h / 10%);
+  color: var(--color-primary);
+}
+
+.tag-link-exists:hover {
+  background: oklch(from var(--color-primary) l c h / 25%);
+}
+
+.tag-link-missing {
+  background: oklch(from var(--color-warning) l c h / 12%);
+  color: var(--color-warning);
+}
+
+.tag-link-missing:hover {
+  background: oklch(from var(--color-warning) l c h / 25%);
+  color: var(--color-warning);
 }
