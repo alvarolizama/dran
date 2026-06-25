@@ -20,7 +20,7 @@ defmodule Dran.Embeddings do
   """
   @spec text_for_page(Page.t()) :: String.t()
   def text_for_page(%Page{} = page) do
-    body = page.body || "" |> String.slice(0, body_limit())
+    body = truncate_body(page.body)
 
     parts = [
       page.title,
@@ -44,10 +44,6 @@ defmodule Dran.Embeddings do
 
   def truncate_body(body) when is_binary(body) do
     String.slice(body, 0, Dran.Inference.Config.embedding_body_limit())
-  end
-
-  defp body_limit do
-    Dran.Inference.Config.embedding_body_limit()
   end
 
   @doc """

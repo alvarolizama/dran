@@ -123,8 +123,6 @@ defmodule Dran.Inference.Queue do
 
   @impl true
   def handle_info({:DOWN, ref, :process, _pid, _reason}, %{holder: {_, ref, _}} = state) do
-    {_pid, old_ref, _count} = state.holder
-    Process.demonitor(old_ref, [:flush])
     {:noreply, take_next(state)}
   end
 

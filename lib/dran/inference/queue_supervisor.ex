@@ -6,6 +6,8 @@ defmodule Dran.Inference.QueueSupervisor do
   - `:embed`
   - `:rerank`
   - `:markdown`
+  - `:vision`
+  - `:audio`
   - `:chat`
   """
 

@@ -107,6 +107,7 @@ defmodule Dran.Inference.Client do
     end
   end
 
+  @doc false
   def chat_capability(model) when is_binary(model) do
     cond do
       model == Config.markitdown_model() -> :markdown

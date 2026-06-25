@@ -8,7 +8,7 @@ defmodule Dran.Brain.PageAugmenter do
   2. Calls the inference API once to extract summary, keywords, entities and
      suggested wikilinks.
   3. Finds semantically similar pages in the same context.
-  4. Creates `related` relations when both semantic similarity and the LLM agree
+  4. Creates `semantic` relations when both semantic similarity and the LLM agree
      (high confidence path).
 
   All work runs under `Dran.Relations.TaskSupervisor` so the HTTP/MCP request

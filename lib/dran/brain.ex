@@ -412,7 +412,8 @@ defmodule Dran.Brain do
   Create auto-relations from a page to its top semantic neighbours.
 
   Looks at pages in the same context ordered by cosine distance and creates
-  `:semantic` relations for the closest `k` neighbours.
+  `:semantic` relations for the closest `k` neighbours. Skips relations
+  that already exist to avoid duplicates on repeated runs.
   """
   def auto_relate(page_or_nil, opts \\ [])
 
@@ -424,34 +425,69 @@ defmodule Dran.Brain do
     k = Keyword.get(opts, :k, 3)
     exclude_ids = [page.id | Keyword.get(opts, :exclude_ids, [])]
 
-    text = Dran.Embeddings.text_for_page(page)
+    {results, err} =
+      if page.embedding do
+        vec = Pgvector.new(page.embedding)
 
-    case semantic_search(text, context_id: page.context_id, limit: k + 5) do
-      {:ok, results} ->
-        targets =
-          results
-          |> Enum.reject(&(&1.id in exclude_ids))
-          |> Enum.take(k)
+        hits =
+          Repo.all(
+            from p in Page,
+              where: p.context_id == ^page.context_id and not is_nil(p.embedding),
+              where: p.id not in ^exclude_ids,
+              order_by: fragment("? <=> ?", p.embedding, ^vec),
+              limit: ^k,
+              select: %{
+                id: p.id,
+                distance: fragment("? <=> ?", p.embedding, ^vec)
+              }
+          )
 
-        created =
-          Enum.reduce(targets, [], fn target, acc ->
-            attrs = %{
-              source_id: page.id,
-              target_id: target.id,
-              relation_type: "semantic",
-              meta: %{"distance" => Map.get(target, :distance)}
-            }
+        {hits, nil}
+      else
+        # Fallback: embed the text if the page has no stored vector yet
+        text = Dran.Embeddings.text_for_page(page)
 
-            case create_relation(attrs) do
-              {:ok, rel} -> [rel | acc]
-              _ -> acc
-            end
-          end)
+        case semantic_search(text, context_id: page.context_id, limit: k + 5) do
+          {:ok, hits} ->
+            targets =
+              hits
+              |> Enum.reject(&(&1.id in exclude_ids))
+              |> Enum.take(k)
 
-        {:ok, Enum.reverse(created)}
+            {targets, nil}
 
-      {:error, reason} ->
-        {:error, reason}
+          {:error, reason} ->
+            {[], reason}
+        end
+      end
+
+    if err do
+      {:error, err}
+    else
+      existing_target_ids =
+        list_relations_for_page(page.id)
+        |> Map.get(:outbound, [])
+        |> Enum.map(& &1.target_id)
+        |> MapSet.new()
+
+      created =
+        results
+        |> Enum.reject(&MapSet.member?(existing_target_ids, &1.id))
+        |> Enum.reduce([], fn target, acc ->
+          attrs = %{
+            source_id: page.id,
+            target_id: target.id,
+            relation_type: "semantic",
+            meta: %{"distance" => Map.get(target, :distance)}
+          }
+
+          case create_relation(attrs) do
+            {:ok, rel} -> [rel | acc]
+            _ -> acc
+          end
+        end)
+
+      {:ok, Enum.reverse(created)}
     end
   end
 
