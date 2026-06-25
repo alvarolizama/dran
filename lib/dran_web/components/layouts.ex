@@ -131,22 +131,22 @@ defmodule DranWeb.Layouts do
         label: "Agents",
         items: [
           %{
+            key: "research",
+            label: "Research",
+            icon: "hero-beaker",
+            path: ~p"/agents/research"
+          },
+          %{
             key: "ingest",
-            label: "Ingest",
+            label: "Files Ingest",
             icon: "hero-arrow-down-tray",
             path: ~p"/agents/ingest"
           },
           %{
             key: "search",
-            label: "Search",
+            label: "Advanced Search",
             icon: "hero-magnifying-glass",
             path: ~p"/agents/search"
-          },
-          %{
-            key: "research",
-            label: "Research",
-            icon: "hero-beaker",
-            path: ~p"/agents/research"
           }
         ]
       },

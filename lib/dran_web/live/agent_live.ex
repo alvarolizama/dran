@@ -247,8 +247,8 @@ defmodule DranWeb.AgentLive do
       active_nav: "ingest",
       input_label: "URL to ingest",
       input_placeholder: "https://example.com/article",
-      description: "Ingest a URL and optionally enrich the resulting page.",
-      page_title: "Ingest Agent"
+      description: "Ingest files or URLs and optionally enrich the resulting page.",
+      page_title: "Files Ingest"
     }
   end
 
@@ -258,8 +258,8 @@ defmodule DranWeb.AgentLive do
       active_nav: "search",
       input_label: "Search query",
       input_placeholder: "Bön deities",
-      description: "Search the brain and optionally the web.",
-      page_title: "Search Agent"
+      description: "Advanced search across the brain and the web with a synthesized report.",
+      page_title: "Advanced Search"
     }
   end
 

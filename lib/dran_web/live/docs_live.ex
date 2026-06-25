@@ -471,12 +471,12 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Agents</strong>
           — use <code>start_agent</code>
-          to delegate research, ingest, or search to an autonomous agent.
+          to delegate research, file ingest, or advanced search to an autonomous agent.
           Poll <code>get_agent_session</code>
           for progress and results.
         </li>
         <li>
-          <strong>Ingest</strong>
+          <strong>Files Ingest</strong>
           — use <code>ingest_url</code>
           to save web pages or download files as references.
         </li>
