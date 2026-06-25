@@ -236,7 +236,7 @@ defmodule DranWeb.IngestLive do
   end
 
   defp ingest_for_mode(socket, "url", params) do
-    DranWeb.API.IngestController.do_ingest(socket.assigns.context, params["url"], params)
+    Dran.Agent.Ingest.Utils.do_ingest(socket.assigns.context, params["url"], params)
   end
 
   defp ingest_for_mode(socket, "file", params) do

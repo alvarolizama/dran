@@ -27,6 +27,8 @@ defmodule Dran.MCP do
   - `lint` — run lint report for a context
   - `rename_slug` — rename a page's slug
   - `ingest_url` — save a URL or download a file as a reference page
+  - `start_agent` — start an autonomous agent (research, ingest, search)
+  - `get_agent_session` — poll an agent session for status and steps
 
   ## Resources
   - `page://{context}/{slug}` — page content as markdown
@@ -39,7 +41,8 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.Brain
+  alias Dran.{Agent, Brain, Repo}
+  import Ecto.Query, warn: false
 
   @protocol_version "2025-03-26"
 
@@ -119,8 +122,7 @@ defmodule Dran.MCP do
           },
           "body" => %{
             "type" => "string",
-            "description" =>
-              "Page content in Markdown. Use ![[slug]] for embeds."
+            "description" => "Page content in Markdown. Use ![[slug]] for embeds."
           },
           "page_type" => %{
             "type" => "string",
@@ -434,6 +436,39 @@ defmodule Dran.MCP do
           "new_slug" => %{"type" => "string", "description" => "New slug (kebab-case)"}
         },
         "required" => ["context", "old_slug", "new_slug"]
+      }
+    },
+    %{
+      "name" => "start_agent",
+      "description" =>
+        "Start an autonomous agent session. Returns immediately; poll get_agent_session for progress.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "agent_type" => %{
+            "type" => "string",
+            "enum" => ["research", "ingest", "search"],
+            "description" => "Agent type"
+          },
+          "context" => %{"type" => "string", "description" => "Context slug"},
+          "input" => %{"type" => "string", "description" => "Topic, URL, or query"},
+          "opts" => %{
+            "type" => "object",
+            "description" => "Optional agent options"
+          }
+        },
+        "required" => ["agent_type", "context", "input"]
+      }
+    },
+    %{
+      "name" => "get_agent_session",
+      "description" => "Poll an agent session for status, summary, and steps.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "session_id" => %{"type" => "string", "description" => "Agent session UUID"}
+        },
+        "required" => ["session_id"]
       }
     }
   ]
@@ -789,7 +824,7 @@ defmodule Dran.MCP do
     context = Brain.get_context_by_slug(context_slug)
 
     if context do
-      case DranWeb.API.IngestController.do_ingest(context, url, args) do
+      case Dran.Agent.Ingest.Utils.do_ingest(context, url, args) do
         {:ok, page} ->
           "Ingested '#{page.title}' as #{page.page_type} (#{page.slug}) from #{url}"
 
@@ -1043,8 +1078,98 @@ defmodule Dran.MCP do
     end
   end
 
+  defp execute_tool(
+         "start_agent",
+         %{"agent_type" => agent_type, "context" => context_slug, "input" => input} = args
+       ) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      opts = Map.get(args, "opts", [])
+
+      case start_agent_by_type(agent_type, input, context.id, opts) do
+        {:ok, session} ->
+          """
+          Started #{agent_type} agent session.
+
+          - session_id: #{session.id}
+          - status: #{session.status}
+          - track_url: /agents/#{agent_type}/#{session.id}
+
+          Poll `get_agent_session` with session_id for updates.
+          """
+
+        {:error, reason} ->
+          "Error: failed to start agent: #{inspect(reason)}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
+  defp execute_tool("get_agent_session", %{"session_id" => session_id}) do
+    case Ecto.UUID.cast(session_id) do
+      {:ok, id} ->
+        case Repo.get(Agent.Session, id) do
+          nil ->
+            "Error: session not found"
+
+          session ->
+            steps =
+              Repo.all(
+                from(s in Agent.Step,
+                  where: s.session_id == ^session.id,
+                  order_by: [asc: s.step_number]
+                )
+              )
+
+            render_session(session, steps)
+        end
+
+      :error ->
+        "Error: invalid session_id"
+    end
+  end
+
   defp execute_tool(tool_name, _args) do
     "Error: unknown tool '#{tool_name}'"
+  end
+
+  # ── Agent helpers ─────────────────────────────────────────────────────────
+
+  defp start_agent_by_type("research", input, context_id, opts),
+    do: Agent.Research.run(input, context_id, opts)
+
+  defp start_agent_by_type("ingest", input, context_id, opts),
+    do: Agent.Ingest.run(input, context_id, opts)
+
+  defp start_agent_by_type("search", input, context_id, opts),
+    do: Agent.Search.run(input, context_id, opts)
+
+  defp start_agent_by_type(_type, _input, _context_id, _opts),
+    do: {:error, :unknown_agent_type}
+
+  defp render_session(session, steps) do
+    steps_text =
+      Enum.map(steps, fn step ->
+        "- Step #{step.step_number}: #{step.tool_name} → #{Map.get(step.tool_result || %{}, "status", "pending")}"
+      end)
+      |> Enum.join("\n")
+
+    """
+    # Agent session
+
+    - type: #{session.agent_type}
+    - input: #{session.input}
+    - status: #{session.status}
+    - summary: #{session.summary || "(pending)"}
+    - pages_created: #{session.pages_created}
+    - steps_count: #{session.steps_count}
+
+    ## Steps
+
+    #{steps_text}
+    """
   end
 
   # ── Resource reading ──────────────────────────────────────────────────────

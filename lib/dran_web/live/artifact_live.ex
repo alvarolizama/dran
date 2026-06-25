@@ -110,7 +110,10 @@ defmodule DranWeb.ArtifactLive do
                 </.form>
               <% else %>
                 <div class="prose prose-base dark:prose-invert max-w-none">
-                  {render_markdown(@page.body, context_id: @page.context_id, inline_links: Map.get(@page.meta || %{}, "inline_links", []))}
+                  {render_markdown(@page.body,
+                    context_id: @page.context_id,
+                    inline_links: Map.get(@page.meta || %{}, "inline_links", [])
+                  )}
                 </div>
                 <div class="border-t border-base-300 pt-4">
                   <h3 class="text-sm font-semibold text-base-content/60 mb-2">Changelog</h3>

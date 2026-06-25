@@ -24,13 +24,16 @@ defmodule Mix.Tasks.Dran.Enrich do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} = OptionParser.parse(args, strict: [
-      context: :string,
-      slug: :string,
-      tags: :boolean,
-      stubs_only: :boolean,
-      limit: :integer
-    ])
+    {opts, _, _} =
+      OptionParser.parse(args,
+        strict: [
+          context: :string,
+          slug: :string,
+          tags: :boolean,
+          stubs_only: :boolean,
+          limit: :integer
+        ]
+      )
 
     context_slug = opts[:context] || raise "--context is required"
     limit = opts[:limit] || 50
@@ -84,6 +87,7 @@ defmodule Mix.Tasks.Dran.Enrich do
 
       if body_len < 500 do
         Mix.shell().info("  Enriching: #{page.slug} (body: #{body_len} chars)")
+
         case TagEnricher.enrich_page(page) do
           {:ok, _} -> Mix.shell().info("    ✓ Enriched")
           {:error, reason} -> Mix.shell().info("    ✗ Failed: #{inspect(reason)}")

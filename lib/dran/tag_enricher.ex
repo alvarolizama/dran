@@ -61,7 +61,8 @@ defmodule Dran.TagEnricher do
          {:ok, improved_body} <- synthesize_body(page, content) do
       attrs = %{
         body: improved_body,
-        meta: Map.put(page.meta || %{}, "enriched_at", DateTime.utc_now() |> DateTime.to_iso8601())
+        meta:
+          Map.put(page.meta || %{}, "enriched_at", DateTime.utc_now() |> DateTime.to_iso8601())
       }
 
       case Brain.update_page(page, attrs) do
@@ -200,7 +201,11 @@ defmodule Dran.TagEnricher do
     payload = %{
       "model" => Inference.chat_model(),
       "messages" => [
-        %{"role" => "system", "content" => "You are a knowledge-base assistant. Generate concise, informative content in Markdown."},
+        %{
+          "role" => "system",
+          "content" =>
+            "You are a knowledge-base assistant. Generate concise, informative content in Markdown."
+        },
         %{"role" => "user", "content" => prompt}
       ],
       "temperature" => 0.4

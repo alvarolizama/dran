@@ -83,7 +83,9 @@ defmodule Dran.Brain.PageAugmenter do
     case Summaries.augment_page(page) do
       {:ok, %{title: title, summary: summary, tags: tags, inline_links: inline_links}} ->
         existing_meta = page.meta || %{}
-        updated_meta = Map.put(existing_meta, "inline_links", serialize_inline_links(inline_links))
+
+        updated_meta =
+          Map.put(existing_meta, "inline_links", serialize_inline_links(inline_links))
 
         attrs = %{
           title: pick_title(page.title, title),

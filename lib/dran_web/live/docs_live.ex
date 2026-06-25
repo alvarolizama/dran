@@ -469,6 +469,13 @@ defmodule DranWeb.DocsLive do
           to rename a page and auto-relink all wikilinks across the context.
         </li>
         <li>
+          <strong>Agents</strong>
+          — use <code>start_agent</code>
+          to delegate research, ingest, or search to an autonomous agent.
+          Poll <code>get_agent_session</code>
+          for progress and results.
+        </li>
+        <li>
           <strong>Ingest</strong>
           — use <code>ingest_url</code>
           to save web pages or download files as references.

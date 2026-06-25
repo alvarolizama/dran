@@ -23,11 +23,14 @@ defmodule DranWeb.PageComponents do
       cond do
         is_map(assigns.page.meta) and Map.has_key?(assigns.page.meta, "inline_links") ->
           Map.get(assigns.page.meta, "inline_links")
+
         is_map(assigns.page.meta) and Map.has_key?(assigns.page.meta, :inline_links) ->
           Map.get(assigns.page.meta, :inline_links)
+
         true ->
           []
       end
+
     assigns = assign(assigns, :inline_links, inline_links)
 
     ~H"""
@@ -134,9 +137,10 @@ defmodule DranWeb.PageComponents do
               :if={map_size(@page.meta || %{}) > 0}
               class="mt-3 pt-3 border-t border-base-300/50 space-y-1"
             >
-              <div :for={
-                {key, value} <- Enum.reject(@page.meta, fn {k, _v} -> k == "inline_links" end)
-              } class="text-sm break-words">
+              <div
+                :for={{key, value} <- Enum.reject(@page.meta, fn {k, _v} -> k == "inline_links" end)}
+                class="text-sm break-words"
+              >
                 <span class="text-base-content/60">{format_meta_key(key)}:</span>
                 {format_meta_value(value)}
               </div>
@@ -478,8 +482,11 @@ defmodule DranWeb.PageComponents do
         |> Enum.uniq()
         |> Enum.reduce(%{}, fn slug, acc ->
           case Dran.Brain.get_page_by_slug(slug, context_id) do
-            nil -> acc
-            page -> Map.put(acc, slug, "/#{Map.get(@type_routes, page.page_type, "notes")}/#{slug}")
+            nil ->
+              acc
+
+            page ->
+              Map.put(acc, slug, "/#{Map.get(@type_routes, page.page_type, "notes")}/#{slug}")
           end
         end)
       else
@@ -508,11 +515,12 @@ defmodule DranWeb.PageComponents do
     pattern = ~r/(<(?:p|li|h[1-6]|td|blockquote)[^>]*>(?:(?!<a\b).)*?)(#{escaped})/s
 
     if Regex.match?(pattern, html) do
-      Regex.replace(pattern, html, fn _full, prefix, matched_text ->
-        "#{prefix}<a href=\"#{path}\" class=\"inline-link\">#{matched_text}</a>"
-      end,
-        global: false
-      )
+      Regex.replace(
+        pattern,
+        html,
+        fn _full, prefix, matched_text ->
+          "#{prefix}<a href=\"#{path}\" class=\"inline-link\">#{matched_text}</a>"
+        end, global: false)
     else
       html
     end
