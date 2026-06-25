@@ -19,6 +19,17 @@ defmodule DranWeb.PageComponents do
   slot :tabs
 
   def page_detail(assigns) do
+    inline_links =
+      cond do
+        is_map(assigns.page.meta) and Map.has_key?(assigns.page.meta, "inline_links") ->
+          Map.get(assigns.page.meta, "inline_links")
+        is_map(assigns.page.meta) and Map.has_key?(assigns.page.meta, :inline_links) ->
+          Map.get(assigns.page.meta, :inline_links)
+        true ->
+          []
+      end
+    assigns = assign(assigns, :inline_links, inline_links)
+
     ~H"""
     <div class="flex h-full">
       <div class="flex-1 overflow-y-auto">
@@ -46,7 +57,7 @@ defmodule DranWeb.PageComponents do
           {render_slot(@tabs)}
 
           <div :if={@tabs == []} class="prose prose-base dark:prose-invert max-w-none">
-            {render_markdown(@page.body, context_id: @page.context_id, inline_links: @page.meta["inline_links"])}
+            {render_markdown(@page.body, context_id: @page.context_id, inline_links: @inline_links)}
           </div>
 
           <div :if={@tabs == []} class="border-t border-base-300 pt-4">
@@ -105,7 +116,9 @@ defmodule DranWeb.PageComponents do
               :if={map_size(@page.meta || %{}) > 0}
               class="mt-3 pt-3 border-t border-base-300/50 space-y-1"
             >
-              <div :for={{key, value} <- @page.meta} class="text-sm break-words">
+              <div :for={
+                {key, value} <- Enum.reject(@page.meta, fn {k, _v} -> k == "inline_links" end)
+              } class="text-sm break-words">
                 <span class="text-base-content/60">{format_meta_key(key)}:</span>
                 {format_meta_value(value)}
               </div>
@@ -388,7 +401,7 @@ defmodule DranWeb.PageComponents do
 
   def render_markdown(body, opts) when is_binary(body) do
     context_id = Keyword.get(opts, :context_id)
-    inline_links = Keyword.get(opts, :inline_links, [])
+    inline_links = Keyword.get(opts, :inline_links) || []
     embeds = if context_id, do: Dran.Brain.fetch_embeds(body, context_id), else: %{}
 
     html =

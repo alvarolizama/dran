@@ -191,7 +191,7 @@ defmodule DranWeb.TodoLive do
               </div>
 
               <div class="prose prose-base dark:prose-invert max-w-none">
-                {render_markdown(@page.body, context_id: @page.context_id)}
+                {render_markdown(@page.body, context_id: @page.context_id, inline_links: Map.get(@page.meta || %{}, "inline_links", []))}
               </div>
 
               <%= if @editing do %>
