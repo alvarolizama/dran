@@ -40,9 +40,12 @@ defmodule DranWeb.Layouts do
     <div class="flex h-screen bg-base-100 text-base-content">
       <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
         <div class="p-4 border-b border-base-300">
-          <a href={~p"/"} class="flex items-center gap-2">
-            <span class="text-lg font-bold tracking-tight">Dran</span>
-          </a>
+          <div class="flex items-center gap-2">
+            <a href={~p"/"} class="flex items-center gap-2 shrink-0">
+              <span class="text-lg font-bold tracking-tight">Dran</span>
+            </a>
+            <.context_selector context_slug={@context_slug} contexts={@contexts} />
+          </div>
         </div>
 
         <div class="p-3 border-b border-base-300">
@@ -59,8 +62,6 @@ defmodule DranWeb.Layouts do
             />
           </form>
         </div>
-
-        <.context_selector context_slug={@context_slug} contexts={@contexts} />
 
         <nav class="flex-1 overflow-y-auto p-2 space-y-4">
           <.sidebar_nav active={@active_nav} />
@@ -104,7 +105,13 @@ defmodule DranWeb.Layouts do
           %{key: "notes", label: "Notes", icon: "hero-document-text", path: ~p"/notes"},
           %{key: "concepts", label: "Concepts", icon: "hero-light-bulb", path: ~p"/concepts"},
           %{key: "entities", label: "Entities", icon: "hero-user-group", path: ~p"/entities"},
-          %{key: "references", label: "References", icon: "hero-bookmark", path: ~p"/references"}
+          %{key: "references", label: "References", icon: "hero-bookmark", path: ~p"/references"},
+          %{
+            key: "queries",
+            label: "Queries",
+            icon: "hero-question-mark-circle",
+            path: ~p"/queries"
+          }
         ]
       },
       %{
@@ -141,13 +148,19 @@ defmodule DranWeb.Layouts do
             label: "Files Ingest",
             icon: "hero-arrow-down-tray",
             path: ~p"/agents/ingest"
-          },
-          %{
-            key: "search",
-            label: "Advanced Search",
-            icon: "hero-magnifying-glass",
-            path: ~p"/agents/search"
           }
+        ]
+      },
+      %{
+        label: "Configs",
+        items: [
+          %{
+            key: "contexts",
+            label: "Contexts",
+            icon: "hero-rectangle-stack",
+            path: ~p"/contexts"
+          },
+          %{key: "settings", label: "Settings", icon: "hero-cog-6-tooth", path: ~p"/settings"}
         ]
       },
       %{
@@ -257,12 +270,9 @@ defmodule DranWeb.Layouts do
 
   def context_selector(assigns) do
     ~H"""
-    <div :if={length(@contexts) > 0} class="p-3 border-b border-base-300">
+    <div :if={length(@contexts) > 0} class="flex-1">
       <form action={~p"/context"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-        <label class="text-xs text-base-content/50 uppercase tracking-wider mb-1 block">
-          Context
-        </label>
         <select
           name="context_slug"
           onchange="this.form.submit()"

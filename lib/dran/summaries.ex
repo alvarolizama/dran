@@ -3,7 +3,7 @@ defmodule Dran.Summaries do
   High-level helpers for suggesting page metadata with the inference API.
 
   Provides chat-based helpers that call the configured chat-compatible model
-  (default "Qwen3.6-35B-A3B") through `Dran.Inference.chat/1`. The main entry
+  (default "Ornith-1.0-9B") through `Dran.Inference.chat/1`. The main entry
   point is `augment_page/1` which asks for summary, tags, and entities in a
   single request.
 

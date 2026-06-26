@@ -10,11 +10,11 @@ defmodule Dran.MCP do
   - `GET /mcp` — open SSE stream for server-initiated messages
   - `DELETE /mcp` — terminate session
 
-  ## Tools
-  - `search` — FTS search across pages
-  - `semantic_search` — vector search across pages (needs inference API)
-  - `create_page` — create a new page
-  - `update_page` — update an existing page
+  ## Tools (18)
+  - `search` — unified full-text, fuzzy, semantic or hybrid search across pages
+  - `semantic_search` — deprecated alias for `search` with `strategy=semantic`
+  - `create_page` — create a new page (title/slug optional, derived from body)
+  - `update_page` — update title, body, tags, or meta; version auto-increments on body change
   - `get_page` — get a page by slug (returns markdown)
   - `delete_page` — delete a page by slug (cascades to relations + versions)
   - `create_todo` — create a todo item
@@ -23,11 +23,11 @@ defmodule Dran.MCP do
   - `delete_relation` — delete a relation between two pages (by slug pair + optional type)
   - `get_links` — get inbound + outbound relations for a page
   - `list_pages` — list pages with filters (type, tag, status, limit)
-  - `stats` — aggregate statistics for a context (page counts, todos by status, orphans)
-  - `lint` — run lint report for a context
+  - `stats` — aggregate statistics for a context
+  - `lint` — run lint report for a context (orphans, stale pages, contested knowledge)
   - `rename_slug` — rename a page's slug
   - `ingest_url` — save a URL or download a file as a reference page
-  - `start_agent` — start an autonomous agent (research, ingest, search)
+  - `start_agent` — start an autonomous agent (`research` or `ingest`)
   - `get_agent_session` — poll an agent session for status and steps
 
   ## Resources
@@ -108,6 +108,7 @@ defmodule Dran.MCP do
       - plan: has horizon (weekly/monthly/quarterly/yearly), status
       - todo: has kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
       - comparison: has entities, criteria, verdict
+      - query: question+answer; has kind (factual/conceptual/how_to/opinion), difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
 
       Use ![[slug]] to embed artifacts.
       """,
@@ -127,7 +128,7 @@ defmodule Dran.MCP do
           "page_type" => %{
             "type" => "string",
             "description" =>
-              "Page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison",
+              "Page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison, query",
             "enum" => [
               "note",
               "concept",
@@ -137,7 +138,8 @@ defmodule Dran.MCP do
               "plan",
               "todo",
               "artifact",
-              "comparison"
+              "comparison",
+              "query"
             ]
           },
           "tags" => %{
@@ -148,7 +150,7 @@ defmodule Dran.MCP do
           "meta" => %{
             "type" => "object",
             "description" =>
-              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kanban_status, priority, goal_slug, due_date}, goal→{health, target_date, start_date, team}, plan→{horizon, status}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, artifact→{kind, filename, mime_type, storage_path}, comparison→{entities, criteria, verdict}."
+              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kanban_status, priority, goal_slug, due_date}, goal→{health, target_date, start_date, team}, plan→{horizon, status}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, artifact→{kind, filename, mime_type, storage_path}, comparison→{entities, criteria, verdict}, query→{kind, difficulty, status, answered_by}."
           },
           "summary" => %{"type" => "string", "description" => "One-line summary (optional)"},
           "owner" => %{"type" => "string", "description" => "Owner identity (defaults to system)"},
@@ -163,7 +165,7 @@ defmodule Dran.MCP do
     %{
       "name" => "update_page",
       "description" =>
-        "Update an existing page by slug. Can update title, body, tags, or meta. Version auto-increments on body change. Wikilinks in body are auto-resolved into relations.",
+        "Update an existing page by slug. Can update title, body, tags, or meta. Version auto-increments on body change. Embeds (`![[slug]]`) in body are auto-resolved into embeds relations.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -330,7 +332,7 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)",
+              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison, query (optional)",
             "enum" => [
               "note",
               "concept",
@@ -340,7 +342,8 @@ defmodule Dran.MCP do
               "plan",
               "todo",
               "artifact",
-              "comparison"
+              "comparison",
+              "query"
             ]
           },
           "tag" => %{"type" => "string", "description" => "Filter by tag (optional)"},
@@ -447,7 +450,7 @@ defmodule Dran.MCP do
         "properties" => %{
           "agent_type" => %{
             "type" => "string",
-            "enum" => ["research", "ingest", "search"],
+            "enum" => ["research", "ingest"],
             "description" => "Agent type"
           },
           "context" => %{"type" => "string", "description" => "Context slug"},
@@ -1142,9 +1145,6 @@ defmodule Dran.MCP do
 
   defp start_agent_by_type("ingest", input, context_id, opts),
     do: Agent.Ingest.run(input, context_id, opts)
-
-  defp start_agent_by_type("search", input, context_id, opts),
-    do: Agent.Search.run(input, context_id, opts)
 
   defp start_agent_by_type(_type, _input, _context_id, _opts),
     do: {:error, :unknown_agent_type}

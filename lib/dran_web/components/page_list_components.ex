@@ -5,7 +5,7 @@ defmodule DranWeb.PageListComponents do
 
   use Phoenix.Component
   import DranWeb.CoreComponents, only: [icon: 1]
-  import DranWeb.PageComponents, only: [type_icon: 1, type_label: 1, type_path: 1]
+  import DranWeb.PageComponents, only: [type_icon: 1, type_path: 1, type_plural: 1]
 
   attr :pages, :list, required: true
   attr :page_type, :string, default: nil
@@ -16,7 +16,7 @@ defmodule DranWeb.PageListComponents do
     <div class="p-6">
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">
-          {if @page_type, do: "#{type_label(@page_type)}s", else: "All Pages"}
+          {if @page_type, do: type_plural(@page_type), else: "All Pages"}
         </h1>
         <.link navigate={"/#{type_path(@page_type)}/new"} class="btn btn-primary btn-sm">
           <.icon name="hero-plus" class="w-4 h-4" /> New

@@ -1,6 +1,6 @@
 defmodule DranWeb.AgentLive do
   @moduledoc """
-  Unified LiveView for running Dran agents (research, ingest, search).
+  Unified LiveView for running Dran agents (research, ingest).
   """
 
   use DranWeb, :live_view
@@ -11,7 +11,7 @@ defmodule DranWeb.AgentLive do
 
   import Ecto.Query
 
-  @valid_types ~w(research ingest search)
+  @valid_types ~w(research ingest)
 
   @impl true
   def render(assigns) do
@@ -33,6 +33,22 @@ defmodule DranWeb.AgentLive do
 
           <%= if @session do %>
             <.session_header session={@session} />
+
+            <%= if @session.status == "running" do %>
+              <.working_indicator session={@session} steps={@steps} />
+            <% end %>
+
+            <.steps_timeline steps={@steps} />
+
+            <%= if @session.status == "done" do %>
+              <div class="alert alert-success">
+                <.icon name="hero-check-circle" class="size-5" />
+                <div>
+                  <p class="font-medium">Done</p>
+                  <p class="text-sm">{@session.summary}</p>
+                </div>
+              </div>
+            <% end %>
           <% else %>
             <.form
               for={@form}
@@ -48,26 +64,32 @@ defmodule DranWeb.AgentLive do
                 class="w-full"
                 autofocus
               />
-              <div class="flex justify-end">
-                <button type="submit" class="btn btn-primary btn-sm">
+              <div class="flex items-end gap-3">
+                <div class="flex-1">
+                  <span class="label mb-1 block text-sm font-medium text-base-content/70">
+                    Output language
+                  </span>
+                  <select
+                    name="agent[lang]"
+                    class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="es" selected>Español</option>
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                    <option value="pt">Português</option>
+                    <option value="it">Italiano</option>
+                    <option value="ja">日本語</option>
+                    <option value="zh">中文</option>
+                  </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm shrink-0">
                   <.icon name="hero-play" class="size-4" /> Start
                 </button>
               </div>
             </.form>
 
             <.recent_sessions sessions={@recent_sessions} type={@type} />
-          <% end %>
-
-          <.steps_timeline steps={@steps} />
-
-          <%= if @session && @session.status == "done" do %>
-            <div class="alert alert-success">
-              <.icon name="hero-check-circle" class="size-5" />
-              <div>
-                <p class="font-medium">Done</p>
-                <p class="text-sm">{@session.summary}</p>
-              </div>
-            </div>
           <% end %>
         </div>
       </div>
@@ -81,6 +103,9 @@ defmodule DranWeb.AgentLive do
       <div class="flex-1 min-w-0">
         <div class="text-sm text-base-content/60">Input</div>
         <div class="font-medium truncate">{@session.input}</div>
+        <div class="text-xs text-base-content/40 mt-0.5">
+          Language: {session_lang_name(@session)}
+        </div>
       </div>
       <div class="flex items-center gap-3">
         <div class="text-right">
@@ -99,6 +124,104 @@ defmodule DranWeb.AgentLive do
       </div>
     </div>
     """
+  end
+
+  defp working_indicator(assigns) do
+    ~H"""
+    <div
+      id={"working-#{@session.id}"}
+      class="rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-4"
+    >
+      <span class="relative flex size-3 shrink-0">
+        <span class="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 motion-safe:animate-ping"></span>
+        <span class="relative inline-flex size-3 rounded-full bg-primary"></span>
+      </span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium text-primary">
+            {current_action_label(@steps)}
+          </span>
+        </div>
+        <div class="mt-1.5 h-1 w-full rounded-full bg-base-300 overflow-hidden">
+          <div
+            class="h-full rounded-full bg-primary motion-safe:transition-all duration-500"
+            style={"width: #{progress_pct(@session, @steps)}%"}
+          >
+          </div>
+        </div>
+        <div class="mt-1 text-xs text-base-content/50">
+          Step {num_steps(@steps)}
+          <%= if @session.steps_count > 0 do %>
+            of up to {@session.steps_count}
+          <% end %>
+          · {count_by_status(@steps, "ok")} completed, {count_by_status(@steps, "error")} failed
+        </div>
+      </div>
+      <span class="loading loading-dots loading-sm text-primary shrink-0"></span>
+    </div>
+    """
+  end
+
+  defp current_action_label([]), do: "Starting agent…"
+
+  defp current_action_label(steps) do
+    case List.last(steps) do
+      %{tool_name: tool, tool_args: args, tool_result: %{"status" => "pending"}} ->
+        "Running #{humanize_tool(tool, args)}…"
+
+      %{tool_name: tool, tool_args: args} ->
+        "Preparing next step after #{humanize_tool(tool, args)}…"
+
+      _ ->
+        "Working…"
+    end
+  end
+
+  defp humanize_tool("web_search", args) do
+    query = args["query"] || ""
+    if query != "", do: "web search for \"#{truncate(query, 50)}\"", else: "web search"
+  end
+
+  defp humanize_tool("web_scrape", args) do
+    url = args["url"] || ""
+    if url != "", do: "scraping #{truncate(url, 60)}", else: "page scrape"
+  end
+
+  defp humanize_tool("search_pages", args) do
+    query = args["query"] || ""
+    if query != "", do: "brain search for \"#{truncate(query, 50)}\"", else: "brain search"
+  end
+
+  defp humanize_tool("create_page", args) do
+    title = args["title"] || ""
+    if title != "", do: "creating page \"#{truncate(title, 50)}\"", else: "page creation"
+  end
+
+  defp humanize_tool("done", _args), do: "finishing up"
+
+  defp humanize_tool(other, _args), do: other
+
+  defp truncate(text, max) when is_binary(text) do
+    if String.length(text) > max do
+      String.slice(text, 0, max) <> "…"
+    else
+      text
+    end
+  end
+
+  defp truncate(text, _max), do: text
+
+  defp num_steps(steps), do: length(steps)
+
+  defp count_by_status(steps, status) do
+    Enum.count(steps, fn s -> Map.get(s.tool_result || %{}, "status") == status end)
+  end
+
+  defp progress_pct(_session, []), do: 3
+
+  defp progress_pct(session, steps) do
+    max_steps = max(session.steps_count, length(steps))
+    if max_steps > 0, do: min(length(steps) * 100 / max(max_steps, 1), 100), else: 3
   end
 
   defp status_badge_class("done"), do: "badge badge-success"
@@ -121,7 +244,9 @@ defmodule DranWeb.AgentLive do
           <div class="min-w-0">
             <div class="font-medium text-sm truncate">{session.input}</div>
             <div class="text-xs text-base-content/50">
-              {format_session_date(session.inserted_at)} · {session.steps_count} steps · {session.pages_created} pages
+              {format_session_date(session.inserted_at)} · {session.steps_count} steps · {session.pages_created} pages<%= if session_lang(session) != "es" do %>
+                · {session_lang(session)}
+              <% end %>
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -162,6 +287,29 @@ defmodule DranWeb.AgentLive do
 
   defp format_session_date(_), do: ""
 
+  defp session_lang(%{meta: %{"opts" => opts}}) when is_list(opts) do
+    Keyword.get(opts, :lang, "es")
+  end
+
+  defp session_lang(%{meta: %{"opts" => %{"lang" => lang}}}) when is_binary(lang), do: lang
+  defp session_lang(_), do: "es"
+
+  @lang_names %{
+    "es" => "Español",
+    "en" => "English",
+    "fr" => "Français",
+    "de" => "Deutsch",
+    "pt" => "Português",
+    "it" => "Italiano",
+    "ja" => "日本語",
+    "zh" => "中文"
+  }
+
+  defp session_lang_name(session) do
+    lang = session_lang(session)
+    Map.get(@lang_names, lang, lang)
+  end
+
   defp steps_timeline(assigns) do
     ~H"""
     <div class="space-y-3">
@@ -174,10 +322,19 @@ defmodule DranWeb.AgentLive do
           <div
             :for={step <- @steps}
             id={"step-#{step.id}"}
-            class="agent-step p-3 rounded-lg border border-base-300"
+            class={[
+              "agent-step p-3 rounded-lg border transition",
+              pending?(step) && "border-primary/40 bg-primary/5",
+              not pending?(step) && "border-base-300"
+            ]}
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
+                <.icon
+                  :if={pending?(step)}
+                  name="hero-arrow-path"
+                  class="size-4 text-primary motion-safe:animate-spin"
+                />
                 <span class="font-medium text-sm">{step.step_number}. {step.tool_name}</span>
               </div>
               <span class={result_badge_class(step.tool_result)}>
@@ -187,12 +344,22 @@ defmodule DranWeb.AgentLive do
             <%= if step.reasoning && step.reasoning != "" do %>
               <p class="text-xs text-base-content/60 mt-1">{step.reasoning}</p>
             <% end %>
+            <%= if pending?(step) do %>
+              <div class="mt-2 flex items-center gap-2 text-xs text-primary">
+                <span class="loading loading-dots loading-xs"></span>
+                <span>Executing…</span>
+              </div>
+            <% end %>
           </div>
         </div>
       <% end %>
     </div>
     """
   end
+
+  defp pending?(%{tool_result: %{}}), do: false
+  defp pending?(%{tool_result: nil}), do: true
+  defp pending?(_), do: false
 
   defp result_badge_class(%{"status" => "error"}), do: "badge badge-error badge-sm"
   defp result_badge_class(%{"status" => "done"}), do: "badge badge-success badge-sm"
@@ -264,17 +431,6 @@ defmodule DranWeb.AgentLive do
     }
   end
 
-  defp agent_type_label("search") do
-    %{
-      type: "search",
-      active_nav: "search",
-      input_label: "Search query",
-      input_placeholder: "Bön deities",
-      description: "Advanced search across the brain and the web with a synthesized report.",
-      page_title: "Advanced Search"
-    }
-  end
-
   defp maybe_load_session(socket, nil), do: socket
 
   defp maybe_load_session(socket, id) when is_binary(id) do
@@ -298,12 +454,13 @@ defmodule DranWeb.AgentLive do
   end
 
   @impl true
-  def handle_event("start", %{"agent" => %{"input" => input}}, socket) do
+  def handle_event("start", %{"agent" => %{"input" => input, "lang" => lang}}, socket) do
     context = socket.assigns.context
     type = socket.assigns.type
+    lang = lang || "es"
 
     if context && String.trim(input) != "" do
-      case start_agent(type, input, context.id) do
+      case start_agent(type, input, context.id, lang: lang) do
         {:ok, session} ->
           Phoenix.PubSub.subscribe(Dran.PubSub, "agents:#{session.id}")
 
@@ -332,14 +489,11 @@ defmodule DranWeb.AgentLive do
     end
   end
 
-  defp start_agent("research", input, context_id),
-    do: Agent.Research.run(input, context_id)
+  defp start_agent("research", input, context_id, opts),
+    do: Agent.Research.run(input, context_id, opts)
 
-  defp start_agent("ingest", input, context_id),
+  defp start_agent("ingest", input, context_id, _opts),
     do: Agent.Ingest.run(input, context_id)
-
-  defp start_agent("search", input, context_id),
-    do: Agent.Search.run(input, context_id)
 
   @impl true
   def handle_info({:agent, session_id, message}, socket) do
@@ -371,7 +525,7 @@ defmodule DranWeb.AgentLive do
   end
 
   defp handle_agent_message(socket, {:step_started, _step}) do
-    socket
+    refresh_steps(socket)
   end
 
   defp handle_agent_message(socket, {:step_completed, _step, _result}) do

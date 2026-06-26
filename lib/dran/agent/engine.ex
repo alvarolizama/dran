@@ -19,10 +19,13 @@ defmodule Dran.Agent.Engine do
   alias Dran.{Inference, Repo}
   alias Dran.Agent.{Session, Step}
 
-  @max_steps 15
-  @per_step_timeout 120_000
   @max_tool_result_chars 2_000
   @max_completion_tokens 4_096
+  @max_consecutive_errors 5
+  @max_synthesis_nudges 2
+
+  defp max_steps, do: Application.get_env(:dran, :agent_max_steps, 150)
+  defp per_step_timeout, do: Application.get_env(:dran, :agent_per_step_timeout, 120_000)
 
   @doc """
   Start an agent session and spawn the ReAct loop asynchronously.
@@ -103,62 +106,86 @@ defmodule Dran.Agent.Engine do
         context_id: context_id,
         status: "running",
         started_at: DateTime.utc_now() |> DateTime.truncate(:second),
-        meta: %{model: Inference.chat_model(), opts: opts}
+        meta: %{model: Inference.chat_model(), opts: opts_to_map(opts)}
       })
       |> Repo.insert()
 
     session
   end
 
+  defp opts_to_map(opts) when is_list(opts) do
+    opts
+    |> Enum.map(fn
+      {k, v} when is_atom(k) -> {Atom.to_string(k), v}
+      {k, v} -> {k, v}
+    end)
+    |> Map.new()
+  end
+
+  defp opts_to_map(opts) when is_map(opts), do: opts
+  defp opts_to_map(_), do: %{}
+
   defp execute_loop(module, %Session{} = session, opts) do
-    state = %{
-      session: session,
-      module: module,
-      messages: module.build_messages(session.input, session),
-      step: 0,
-      pages_created: 0,
-      opts: opts
-    }
+    state =
+      if function_exported?(module, :init_state, 3) do
+        module.init_state(session, module, opts)
+      else
+        messages =
+          if function_exported?(module, :build_messages, 3) do
+            module.build_messages(session.input, session, opts)
+          else
+            module.build_messages(session.input, session)
+          end
+
+        %{
+          session: session,
+          module: module,
+          messages: messages,
+          step: 0,
+          pages_created: 0,
+          opts: opts
+        }
+      end
 
     loop(state)
   end
 
-  defp loop(%{step: step} = state) when step >= @max_steps do
-    finish_session(state, %{"summary" => "Agent reached max steps (#{@max_steps})"})
-    :ok
-  end
+  defp loop(%{step: step} = state) do
+    if step >= max_steps() do
+      finish_session(state, %{"summary" => "Agent reached max steps (#{max_steps()})"})
+      :ok
+    else
+      task =
+        Task.Supervisor.async_nolink(Dran.Relations.TaskSupervisor, fn ->
+          single_turn(state)
+        end)
 
-  defp loop(state) do
-    task =
-      Task.Supervisor.async_nolink(Dran.Relations.TaskSupervisor, fn ->
-        single_turn(state)
-      end)
+      case Task.yield(task, per_step_timeout()) do
+        nil ->
+          Task.shutdown(task)
 
-    case Task.yield(task, @per_step_timeout) do
-      nil ->
-        Task.shutdown(task)
+          finish_session(state, %{
+            "summary" => "Agent step timed out after #{per_step_timeout()}ms"
+          })
 
-        finish_session(state, %{
-          "summary" => "Agent step timed out after #{@per_step_timeout}ms"
-        })
+        {:ok, {:continue, state}} ->
+          loop(state)
 
-      {:ok, {:continue, state}} ->
-        loop(state)
+        {:ok, {:done, _state}} ->
+          :ok
 
-      {:ok, {:done, _state}} ->
-        :ok
+        {:ok, {:error, state, reason}} ->
+          Logger.warning("Agent.Engine: step failed: #{inspect(reason)}")
+          finish_session(state, %{"summary" => "Agent step failed: #{inspect(reason)}"})
 
-      {:ok, {:error, state, reason}} ->
-        Logger.warning("Agent.Engine: step failed: #{inspect(reason)}")
-        finish_session(state, %{"summary" => "Agent step failed: #{inspect(reason)}"})
+        {:ok, result} ->
+          Logger.warning("Agent.Engine: unexpected step result: #{inspect(result)}")
+          finish_session(state, %{"summary" => "Agent step returned unexpected result"})
 
-      {:ok, result} ->
-        Logger.warning("Agent.Engine: unexpected step result: #{inspect(result)}")
-        finish_session(state, %{"summary" => "Agent step returned unexpected result"})
-
-      {:exit, reason} ->
-        Logger.warning("Agent.Engine: step crashed: #{inspect(reason)}")
-        finish_session(state, %{"summary" => "Agent step crashed: #{inspect(reason)}"})
+        {:exit, reason} ->
+          Logger.warning("Agent.Engine: step crashed: #{inspect(reason)}")
+          finish_session(state, %{"summary" => "Agent step crashed: #{inspect(reason)}"})
+      end
     end
   end
 
@@ -170,15 +197,51 @@ defmodule Dran.Agent.Engine do
         broadcast(state, {:step_started, step})
 
         {result, state} = state.module.execute_tool(tool, args, state)
+
+        is_error =
+          case result do
+            {:error, _} -> true
+            _ -> false
+          end
+
         update_step!(step, result, state.module)
         broadcast(state, {:step_completed, step, summarize_result(result, state.module)})
 
-        if tool == "done" do
-          finish_session(state, args)
-          {:done, state}
+        consecutive_errors =
+          if is_error,
+            do: Map.get(state, :consecutive_errors, 0) + 1,
+            else: 0
+
+        state = Map.put(state, :consecutive_errors, consecutive_errors)
+
+        # Abort if too many consecutive tool errors (LLM is stuck in a loop)
+        if consecutive_errors >= @max_consecutive_errors do
+          # Try to nudge the LLM toward synthesis before giving up
+          state = inject_synthesis_prompt(state)
+
+          # Reset error counter so the LLM gets a chance to recover
+          state = Map.put(state, :consecutive_errors, 0)
+
+          if Map.get(state, :synthesis_nudges, 0) >= @max_synthesis_nudges do
+            finish_session(state, %{
+              "summary" =>
+                "Agent stopped after #{@max_consecutive_errors} consecutive tool errors " <>
+                  "and #{@max_synthesis_nudges} recovery attempts. The LLM kept repeating " <>
+                  "failed actions instead of synthesizing."
+            })
+
+            {:done, state}
+          else
+            {:continue, state}
+          end
         else
-          state = add_to_messages(state, assistant_message, tool, result)
-          {:continue, state}
+          if tool == "done" do
+            finish_session(state, args)
+            {:done, state}
+          else
+            state = add_to_messages(state, assistant_message, tool, result)
+            {:continue, state}
+          end
         end
 
       {:error, reason} ->
@@ -387,6 +450,37 @@ defmodule Dran.Agent.Engine do
     %{state | messages: state.messages ++ [assistant_entry, tool_entry]}
   end
 
+  defp inject_synthesis_prompt(state) do
+    nudge_count = Map.get(state, :synthesis_nudges, 0) + 1
+    state = Map.put(state, :synthesis_nudges, nudge_count)
+
+    # Build a summary of what the agent has gathered so far
+    sources_summary = gather_sources_summary(state)
+
+    nudge_msg = %{
+      "role" => "user",
+      "content" =>
+        "IMPORTANT: You have repeated the same action #{@max_consecutive_errors} times and it keeps failing. " <>
+          "STOP trying to scrape or search more. You have gathered enough material. " <>
+          "You MUST now synthesize what you have:\n\n" <>
+          sources_summary <>
+          "\n\nNow call create_page with the content you have, then call done. " <>
+          "Do NOT call web_search or web_scrape again."
+    }
+
+    %{state | messages: state.messages ++ [nudge_msg]}
+  end
+
+  defp gather_sources_summary(state) do
+    cond do
+      function_exported?(state.module, :gathered_summary, 1) ->
+        state.module.gathered_summary(state)
+
+      true ->
+        "Review your previous tool results above and create pages from what you learned."
+    end
+  end
+
   defp get_tool_call_id(%{"tool_calls" => [%{"id" => id} | _]}), do: id
   defp get_tool_call_id(_), do: "call_fallback"
 
@@ -404,6 +498,9 @@ defmodule Dran.Agent.Engine do
 
       %{data: data} when is_map(data) ->
         Jason.encode!(data) |> String.slice(0, @max_tool_result_chars)
+
+      %{status: "error", error: error} when is_binary(error) ->
+        "ERROR: #{error}"
 
       %{status: status} ->
         to_string(status)

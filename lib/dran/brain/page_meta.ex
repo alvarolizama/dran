@@ -41,7 +41,6 @@ defmodule Dran.Brain.PageMeta do
     field :period, :string
     field :status, :string
 
-    # todo
     field :kanban_status, :string
     field :priority, :string
     field :due_date, :date
@@ -78,6 +77,11 @@ defmodule Dran.Brain.PageMeta do
     field :storage_path, :string
     field :sha256, :string
     field :version, :string
+
+    # query
+    field :difficulty, :string
+    field :answer_status, :string
+    field :answered_by, :string
   end
 
   @note_kinds ~w(thought journal idea meeting question quote)
@@ -85,10 +89,13 @@ defmodule Dran.Brain.PageMeta do
   @concept_kinds ~w(technique pattern discipline theory)
   @reference_kinds ~w(article paper video podcast book)
   @artifact_kinds ~w(document code design deliverable file)
+  @query_kinds ~w(factual conceptual how_to opinion)
   @kanban_statuses ~w(backlog this_week today in_progress done cancelled)
   @priorities ~w(low medium high urgent)
   @healths ~w(green yellow red)
   @horizons ~w(weekly monthly quarterly yearly)
+  @query_difficulties ~w(simple intermediate advanced)
+  @query_statuses ~w(open answered verified)
 
   def changeset(meta, attrs, page_type) do
     meta
@@ -139,11 +146,14 @@ defmodule Dran.Brain.PageMeta do
       :size,
       :storage_path,
       :sha256,
-      :version
+      :version,
+      :difficulty,
+      :answer_status,
+      :answered_by
     ]
   end
 
-  defp validate_kind(cs, type) when type in ~w(note entity concept reference artifact) do
+  defp validate_kind(cs, type) when type in ~w(note entity concept reference artifact query) do
     kinds = kinds_for(type)
 
     if kinds do
@@ -160,6 +170,7 @@ defmodule Dran.Brain.PageMeta do
   defp kinds_for("concept"), do: @concept_kinds
   defp kinds_for("reference"), do: @reference_kinds
   defp kinds_for("artifact"), do: @artifact_kinds
+  defp kinds_for("query"), do: @query_kinds
   defp kinds_for(_), do: nil
 
   defp validate_meta_for_type(cs, "todo") do
@@ -180,6 +191,12 @@ defmodule Dran.Brain.PageMeta do
     |> validate_inclusion(:status, @plan_statuses)
   end
 
+  defp validate_meta_for_type(cs, "query") do
+    cs
+    |> validate_inclusion(:difficulty, @query_difficulties)
+    |> validate_inclusion(:answer_status, @query_statuses)
+  end
+
   defp validate_meta_for_type(cs, _type), do: cs
 
   def note_kinds, do: @note_kinds
@@ -187,11 +204,14 @@ defmodule Dran.Brain.PageMeta do
   def concept_kinds, do: @concept_kinds
   def reference_kinds, do: @reference_kinds
   def artifact_kinds, do: @artifact_kinds
+  def query_kinds, do: @query_kinds
   def kanban_statuses, do: @kanban_statuses
   def priorities, do: @priorities
   def healths, do: @healths
   def horizons, do: @horizons
   def plan_statuses, do: @plan_statuses
+  def query_difficulties, do: @query_difficulties
+  def query_statuses, do: @query_statuses
 
   @doc "Returns the metadata fields and their select options for a given page type."
   def meta_fields_for("note") do
@@ -269,6 +289,17 @@ defmodule Dran.Brain.PageMeta do
 
   def meta_fields_for("comparison") do
     []
+  end
+
+  def meta_fields_for("query") do
+    [
+      {:select, "kind", "Kind", Enum.map(@query_kinds, &{String.capitalize(&1), &1})},
+      {:select, "difficulty", "Difficulty",
+       Enum.map(@query_difficulties, &{String.capitalize(&1), &1})},
+      {:select, "answer_status", "Status",
+       Enum.map(@query_statuses, &{String.capitalize(&1), &1})},
+      {:text, "answered_by", "Answered by"}
+    ]
   end
 
   def meta_fields_for(_), do: []

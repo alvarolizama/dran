@@ -12,7 +12,7 @@ defmodule DranWeb.API.IngestControllerTest do
       embedding_model: "Qwen3-Embedding",
       rerank_model: "Qwen3-Reranker",
       markitdown_model: "MarkItDown",
-      chat_model: "Qwen3.6-35B-A3B",
+      chat_model: "Qwen3.5-9B",
       timeout: 5_000,
       req_plug: {Req.Test, Dran.Inference.Client},
       schedule_async: false,

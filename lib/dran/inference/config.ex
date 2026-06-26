@@ -11,7 +11,9 @@ defmodule Dran.Inference.Config do
     embedding: "Qwen3-Embedding",
     rerank: "Qwen3-Reranker",
     markitdown: "MarkItDown",
-    chat: "Qwen3.6-35B-A3B"
+    chat: "Ornith-1.0-9B",
+    vision: "Ornith-1.0-9B",
+    asr: "Qwen3-ASR"
   }
 
   @spec config() :: keyword() | nil
@@ -46,10 +48,10 @@ defmodule Dran.Inference.Config do
   def chat_model, do: get(:chat_model)
 
   @spec asr_model :: String.t()
-  def asr_model, do: get(:asr_model) || @default_models.chat
+  def asr_model, do: get(:asr_model) || @default_models.asr
 
   @spec vision_model :: String.t()
-  def vision_model, do: get(:vision_model) || @default_models.chat
+  def vision_model, do: get(:vision_model) || @default_models.vision
 
   @spec use_rerank?() :: boolean()
   def use_rerank?, do: get(:use_rerank) || false
@@ -90,8 +92,8 @@ defmodule Dran.Inference.Config do
           markitdown_model:
             System.get_env("DRAN_INFERENCE_MARKITDOWN_MODEL", @default_models.markitdown),
           chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL", @default_models.chat),
-          asr_model: System.get_env("DRAN_INFERENCE_ASR_MODEL", @default_models.chat),
-          vision_model: System.get_env("DRAN_INFERENCE_VISION_MODEL", @default_models.chat),
+          asr_model: System.get_env("DRAN_INFERENCE_ASR_MODEL", @default_models.asr),
+          vision_model: System.get_env("DRAN_INFERENCE_VISION_MODEL", @default_models.vision),
           timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
           use_rerank: parse_boolean(System.get_env("DRAN_INFERENCE_USE_RERANK", "true")),
           embedding_dimensions: 1024,

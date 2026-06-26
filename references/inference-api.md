@@ -1,10 +1,12 @@
 # Dran Inference API Reference
 
-Dran consumes an **OpenAI-compatible** local/VPN inference server for three capabilities used to organize information and data:
+Dran consumes an **OpenAI-compatible** local/VPN inference server for several capabilities used to organize information and data:
 
 - **Embeddings** (`Qwen3-Embedding`) for semantic search.
 - **Reranking** (`Qwen3-Reranker`) for better search result ordering.
 - **Document-to-Markdown** (`MarkItDown`) for extracting text from uploaded files.
+- **Chat / text generation** (`Ornith-1.0-9B`) for summaries, tags, agents, and image descriptions.
+- **Audio transcription** (`Qwen3-ASR`) for converting audio files to text.
 
 Connection is configured with two environment variables:
 
@@ -20,6 +22,9 @@ DRAN_INFERENCE_API_KEY=<your-...n
 | Embeddings | `POST /v1/embeddings` | `Qwen3-Embedding` |
 | Reranking | `POST /v1/rerank` | `Qwen3-Reranker` |
 | Document → Markdown | `POST /v1/chat/completions` with file part | `MarkItDown` |
+| Chat / text generation | `POST /v1/chat/completions` | `Ornith-1.0-9B` |
+| Audio transcription | `POST /v1/audio/transcriptions` | `Qwen3-ASR` |
+| Image description | `POST /v1/chat/completions` with image part | `Ornith-1.0-9B` |
 
 You can list available models with:
 
@@ -33,7 +38,9 @@ curl -sS http://<inference-host>:8000/v1/models \
   "data": [
     {"id": "Qwen3-Embedding", "object": "model", "owned_by": "omlx"},
     {"id": "Qwen3-Reranker", "object": "model", "owned_by": "omlx"},
-    {"id": "MarkItDown", "object": "model", "owned_by": "omlx"}
+    {"id": "MarkItDown", "object": "model", "owned_by": "omlx"},
+    {"id": "Qwen3.5-9B", "object": "model", "owned_by": "omlx"},
+    {"id": "Qwen3-ASR", "object": "model", "owned_by": "omlx"}
   ]
 }
 ```
@@ -179,7 +186,10 @@ config :dran, :inference,
   api_key: System.fetch_env!("DRAN_INFERENCE_API_KEY"),
   embedding_model: System.get_env("DRAN_INFERENCE_EMBEDDING_MODEL", "Qwen3-Embedding"),
   rerank_model: System.get_env("DRAN_INFERENCE_RERANK_MODEL", "Qwen3-Reranker"),
-  markitdown_model: System.get_env("DRAN_INFERENCE_MARKITDOWN_MODEL", "MarkItDown")
+  markitdown_model: System.get_env("DRAN_INFERENCE_MARKITDOWN_MODEL", "MarkItDown"),
+  chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL", "Ornith-1.0-9B"),
+  asr_model: System.get_env("DRAN_INFERENCE_ASR_MODEL", "Qwen3-ASR"),
+  vision_model: System.get_env("DRAN_INFERENCE_VISION_MODEL", "Ornith-1.0-9B")
 ```
 
 This keeps model names configurable without code changes when the server restarts with different IDs.

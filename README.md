@@ -4,28 +4,27 @@ A personal second-brain application built with Phoenix LiveView. It stores your 
 
 Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent integration, and a REST API.
 
-> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 15 tools, 10 agent rules, 9 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 18 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
 ## Features
 
-- **9 page types** with type-specific metadata (kinds, statuses, priorities, etc.)
-- **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, wikilinks `[[slug]]`, and embeds `![[slug]]`
-- **Knowledge graph** — visual graph with pan/zoom, auto-generated from wikilinks
+- **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, artifact, goal, plan, todo, comparison, and query
+- **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, and artifact embeds `![[slug]]`
+- **Knowledge graph** — visual graph with pan/zoom, built from explicit and semantic relations
 - **Inline editing** — edit any page in-place with autosave
 - **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
 - **Dashboard** — metrics, recent pages, quick access, todo board summary
 - **Kanban board** — drag & drop todos with 6 statuses
 - **Goal kanban** — per-goal todo board with drag & drop
-- **MCP server** — 15 tools for AI agents to search, read, create, update, delete, relate, lint, and manage the knowledge graph
-- **REST API** — full CRUD for pages, contexts, relations, search, and ingest
-- **Backlinks** — see which pages link to the current page
+- **MCP server** — 18 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph
+- **REST API** — full CRUD for pages, contexts, relations, search, ingest, and maintenance
+- **Relations** — see inbound and outbound relations for any page
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
-- **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
-- **Quality lint** — find orphan pages, broken wikilinks, stale pages
-- **Slug rename** — rename a page and auto-relink all wikilinks across the context
-- **Hybrid search** — unified `search` tool picks full-text, fuzzy, semantic or hybrid
-- **Automatic relations** — `PageAugmenter` creates `related` links via embeddings after every capture
-- **Autonomous agents** — research, ingest, and search agents that run asynchronously, log every step, and create pages automatically
+- **Quality lint** — find orphan pages, stale pages, and contested knowledge
+- **Slug rename** — rename a page slug
+- **Hybrid search** — unified `search` tool picks full-text, fuzzy, semantic, or hybrid
+- **Automatic relations** — `PageAugmenter` creates `semantic` links via embeddings after every capture
+- **Autonomous agents** — research and ingest agents that run asynchronously, log every step, and create pages automatically
 
 ## Quick start (local dev)
 
@@ -97,6 +96,12 @@ DRAN_PASSWORD=$(openssl rand -hex 32)
 | `DRAN_API_TOKEN`        | yes      | Bearer token for API / MCP                                     |
 | `DRAN_INFERENCE_API_URL`| no       | Base URL of the OpenAI-compatible inference server (`…/v1`)    |
 | `DRAN_INFERENCE_API_KEY`| no*      | API key for the inference server (required if URL is set)      |
+| `DRAN_INFERENCE_CHAT_MODEL` | no   | Chat/text model (default: `Ornith-1.0-9B`)                     |
+| `DRAN_INFERENCE_EMBEDDING_MODEL` | no | Embeddings model (default: `Qwen3-Embedding`)               |
+| `DRAN_INFERENCE_RERANK_MODEL` | no | Rerank model (default: `Qwen3-Reranker`)                       |
+| `DRAN_INFERENCE_MARKITDOWN_MODEL` | no | Document-to-markdown model (default: `MarkItDown`)         |
+| `DRAN_INFERENCE_ASR_MODEL` | no    | Audio transcription model (default: `Qwen3-ASR`)               |
+| `DRAN_INFERENCE_VISION_MODEL` | no | Vision/chat model for images (default: `Ornith-1.0-9B`)          |
 
 > `DRAN_INFERENCE_API_KEY` is required whenever `DRAN_INFERENCE_API_URL` is set.
 
@@ -109,8 +114,11 @@ Supported capabilities:
 - **Embeddings** — `POST /v1/embeddings`
 - **Reranking** — `POST /v1/rerank`
 - **Document-to-markdown** — `POST /v1/chat/completions` with a file content part
+- **Chat / text generation** — `POST /v1/chat/completions`
+- **Audio transcription** — `POST /v1/audio/transcriptions`
+- **Image descriptions** — `POST /v1/chat/completions` with image content part
 
-The server is configured via two environment variables:
+The server is configured via environment variables:
 
 ```bash
 DRAN_INFERENCE_API_URL=http://<inference-host>:8000/v1
@@ -128,6 +136,8 @@ The current local/VPN server exposes these models (verify at runtime with `GET /
 | `Qwen3-Embedding` | text embeddings | `POST /v1/embeddings` |
 | `Qwen3-Reranker` | rerank search results | `POST /v1/rerank` |
 | `MarkItDown` | PDF/DOCX/PPTX/TXT → markdown | `POST /v1/chat/completions` |
+| `Qwen3.5-9B` | chat / text generation / vision | `POST /v1/chat/completions` |
+| `Qwen3-ASR` | audio transcription | `POST /v1/audio/transcriptions` |
 
 ### How Dran can use it
 
@@ -192,25 +202,25 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 | `todo`       | Actionable items              | —                                                     | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, due_date |
 | `comparison` | Side-by-side analyses         | —                                                     | entities, criteria, verdict                        |
 
-### Wikilinks & embeds
+### Embeds
 
-- `[[slug]]` — link to another page (auto-creates `related` relation)
-- `[[slug|Display Text]]` — link with custom display text
 - `![[slug]]` — embed an artifact (renders as image/video/audio/PDF)
 - `![[slug|Alt Text]]` — embed with alt text
+
+Embeds auto-create `embeds` relations. Plain `[[slug]]` wikilinks are no longer supported — link pages explicitly with `create_relation` or let the `PageAugmenter` create `semantic` relations automatically.
 
 ### Relations
 
 Relations are **directed** (source → target) and typed:
 
-- `related` — generic connection (auto-created from `[[wikilinks]]`)
+- `related` — generic connection (create manually via `create_relation`)
 - `part_of` — hierarchy (A is part of B)
 - `supersedes` — replacement (A replaces/obsoletes B)
 - `contradicts` — conflict (A contradicts B)
 - `embeds` — source embeds target (auto-created from `![[slug]]`)
+- `semantic` — auto-created by `PageAugmenter` when pages are semantically similar
 
-Wikilinks and embeds auto-create relations on page save. For explicit typed
-relations (`contradicts`, `supersedes`, `part_of`), use the MCP `create_relation`
+For explicit typed relations (`contradicts`, `supersedes`, `part_of`), use the MCP `create_relation`
 tool or the `POST /api/relations` REST endpoint.
 
 ## Production deployment
@@ -359,11 +369,11 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
 | `get_links`        | Get inbound + outbound relations for a page                            |
 | `list_pages`       | List pages with filters (type, tag, status, limit)                     |
-| `stats`            | Aggregate statistics for a context (page counts, todos by status)      |
-| `lint`             | Quality report: orphans, broken wikilinks, stale pages                 |
-| `rename_slug`      | Rename a page's slug and relink all wikilinks across the context       |
+| `stats`            | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
+| `lint`             | Quality report: orphans, stale pages, and contested knowledge          |
+| `rename_slug`      | Rename a page's slug                                                   |
 | `ingest_url`       | Save a URL (HTML to save link; files to download and store)           |
-| `start_agent`      | Start an autonomous agent (research, ingest, search)                  |
+| `start_agent`      | Start an autonomous agent (`research` or `ingest`)                       |
 | `get_agent_session`| Poll an agent session for status, summary, and steps                  |
 
 **Resources:**
@@ -389,27 +399,28 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 3. **Create** — use `create_page` with the appropriate `page_type` and `meta`. Use `create_todo` for action items
 4. **Update** — use `update_page` to refine content. Use `update_todo` to change a todo's status/priority (merges meta)
 5. **Delete** — use `delete_page` to remove a page (cascades to relations + versions)
-6. **Relate** — use `create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Use `delete_relation` to remove. Wikilinks auto-create `related` relations
+6. **Relate** — use `create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Use `delete_relation` to remove. Embeds (`![[slug]]`) auto-create `embeds` relations
 7. **Inspect** — use `get_links` to see inbound + outbound relations for a page
-8. **Stats** — use `stats` for a context overview (page counts, todos by status, orphans)
-9. **Rename** — use `rename_slug` to rename a page and auto-relink all wikilinks across the context
-11. **Ingest** — use `ingest_url` to save web pages or download files as references
-12. **Lint** — use `lint` to find orphans, broken links, and stale pages
+8. **Stats** — use `stats` for a context overview (page counts, todos by status, orphans, total relations)
+9. **Rename** — use `rename_slug` to rename a page slug
+10. **Ingest** — use `ingest_url` to save web pages or download files as references
+11. **Lint** — use `lint` to find orphans, stale pages, and contested knowledge
 
 ### Autonomous agents
 
 Dran can delegate longer tasks to autonomous ReAct agents:
 
-- **`start_agent` / `get_agent_session`** — start a research, ingest, or search session and poll for progress.
+- **`start_agent` / `get_agent_session`** — start a research or ingest session and poll for progress.
 - **Research agent** — searches the web, scrapes sources, checks existing pages, and creates 1-5 new pages.
 - **Ingest agent** — validates, inspects, downloads, and creates reference pages from URLs.
-- **Search agent** — orchestrates semantic/full-text/web search and reports the top results and relations.
+
+> A search-only agent is on the roadmap; today `search` / `semantic_search` tools return results directly without creating pages.
 
 Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and to PubSub topics (`agents:<session_id>` and `agents:all`).
 
 Agents are also exposed as LiveView pages at `/agents/:type` and individual sessions at `/agents/:type/:id`. From the CLI, run an agent with `mix dran.agent --type research --context personal --input "topic"`.
 
-### Example: create a note with a wikilink
+### Example: create a note
 
 ```json
 {
@@ -423,7 +434,7 @@ Agents are also exposed as LiveView pages at `/agents/:type` and individual sess
       "title": "Learning Elixir",
       "slug": "learning-elixir",
       "page_type": "note",
-      "body": "Today I learned about [[elixir|Elixir]] pattern matching.\n\nSee [[phoenix]] for web framework.",
+      "body": "Today I learned about Elixir pattern matching and the `=` match operator.",
       "meta": {"kind": "journal", "date": "2026-06-21"},
       "tags": ["programming", "elixir"]
     }
@@ -473,7 +484,6 @@ Run agents from the terminal:
 ```bash
 mix dran.agent --type research --context personal --input "Yeshe Walmo"
 mix dran.agent --type ingest  --context personal --input "https://example.com/article"
-mix dran.agent --type search  --context personal --input "Bön deities" --sync
 ```
 
 ## Tech stack

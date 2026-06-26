@@ -1,7 +1,7 @@
 ---
 name: dran-second-brain
-description: "Use when operating Álvaro's Dran second brain via MCP. 17 tools: search, read, create, update, delete, relate, lint, rename, stats, ingest, start_agent, get_agent_session. 9 page types (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons) in a personal knowledge graph backed by Phoenix LiveView + PostgreSQL. Triggers on any Dran / segundo cerebro / brain task: capturing thoughts, research, ingesting URLs, managing goals and todos, running the knowledge graph lint, wikilinking pages, renaming slugs, or delegating to agents."
-version: 2.0.0
+description: "Use when operating Álvaro's Dran second brain via MCP. 18 tools: search, semantic_search, get_page, create_page, update_page, delete_page, create_todo, update_todo, create_relation, delete_relation, get_links, list_pages, stats, lint, rename_slug, ingest_url, start_agent, get_agent_session. 10 page types (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons, queries) in a personal knowledge graph backed by Phoenix LiveView + PostgreSQL. Triggers on any Dran / segundo cerebro / brain task: capturing thoughts, research, ingesting URLs, managing goals and todos, running the knowledge graph lint, renaming slugs, or delegating to agents."
+version: 2.2.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -29,13 +29,17 @@ knowledge.
 The agent/MCP **passes page content as plain text** (no wikilinks required). On
 every `create_page` / `update_page`, Dran:
 
-1. Extracts or refines `summary` and `tags` via the configured inference model.
+1. Extracts or refines `title`, `summary` and `tags` via the configured inference model.
 2. Generates and stores a vector embedding of `title + summary + body`.
 3. Asynchronously finds the closest semantic neighbours in the same context.
 4. Creates `semantic` relations to those neighbours automatically.
 
-Wikilinks (`[[slug]]`) still work, but **they are optional**. The graph grows
-mainly through embeddings + automatic `semantic` relations.
+Plain wikilinks (`[[slug]]`) are **no longer supported**. The graph grows through
+embeddings and automatic `semantic` relations. Use `![[slug]]` to embed artifacts, and
+use `create_relation` for explicit typed relationships.
+
+> Note: `title` and `slug` are optional when calling `create_page` — Dran derives
+> them from the first non-empty body line when omitted.
 
 ## When to Use
 
@@ -44,7 +48,7 @@ mainly through embeddings + automatic `semantic` relations.
   he wants stored, a research topic to scaffold, or a URL/article to ingest.
 - Use for: capturing thoughts, journaling, taking research notes, ingesting URLs,
   managing todos + goals + plans, querying the knowledge graph, linting for orphans
-  and broken links, building comparisons between tools/concepts, or delegating longer
+  and stale pages, building comparisons between tools/concepts, or delegating longer
   discovery tasks to agents.
 - Do **not** use for: ephemeral chat (use memory tool), session-only state, large
   binary file storage (use `artifact` page type with a `storage_path` only when the
@@ -94,7 +98,7 @@ curl -sS http://<dran-host>/api/mcp \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 
-# Listar tools — debe dar 15
+# Listar tools — debe dar 18
 curl -sS http://<dran-host>/api/mcp \
   -H "Authorization: Bearer $MCP_DRAN_API_KEY" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
@@ -171,6 +175,7 @@ knowledge graph — duplicates are noise. Before `create_page`:
 | `plan`       | Time-horizoned plan                                            | —                                                    | horizon (weekly/monthly/quarterly/yearly), status (draft/active/on_hold/completed/archived), period |
 | `todo`       | Actionable item                                               | —                                                    | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, due_date |
 | `comparison` | Side-by-side analysis                                          | —                                                    | entities, criteria, verdict                        |
+| `query`      | Question with answer            | factual, conceptual, how_to, opinion                 | kind, difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by |
 
 **Default to `note`** if you genuinely don't know. Promote later via `update_page`
 once the knowledge crystallizes. Meta enums are **validated** — passing invalid
@@ -227,48 +232,45 @@ sus propios meta fields específicos (ver tabla de Rule 1).
 - **An objective with a target date** → `goal` via `create_page` with `meta.health` and `meta.target_date`
 - **Comparing 2+ things (e.g. Phoenix vs Rails)** → `comparison` via `create_page` with `meta.entities` and `meta.criteria`
 - **Saving a PDF / file** → use `ingest_url` (the agent does NOT extract content — that is the agent's job via the resulting page's `source_url`)
-- **Delegating a multi-step research/ingest/search task** → `start_agent` with `agent_type=research|ingest|search` and poll with `get_agent_session`
+- **Delegating a multi-step research or ingest task** → `start_agent` with `agent_type=research|ingest` and poll with `get_agent_session`
 
 **Hierarchy is a graph, not a tree.** Plans and todos are **optionally** linked to
 goals via `meta.goal_slug` (free-form string, no FK). A todo can exist with no
-goal, a plan can exist with no goal, and the link is created both by the
-`[[wikilink]]` in the body (auto-creates a `related` relation, visible in the
-graph) AND by `meta.goal_slug` (textual link that `goal://` resource uses to
-group todos/plans under a goal). Either alone works, both together is cleanest.
+goal, a plan can exist with no goal, and either textual link alone works.
 
-### Rule 3: Wikilinks and relations are how the graph grows
+### Rule 3: Relations are how the graph grows
 
-**Wikilinks** — use `[[slug]]` (or `[[slug|Display Text]]`) inline in the body.
-Dran auto-resolves these into `related` relations on `create_page` / `update_page`.
+When the inference API is configured, `Dran.Brain.PageAugmenter` runs
+asynchronously after every `create_page` / `update_page` and:
 
-In addition, when the inference API is configured, `Dran.Brain.PageAugmenter`
-runs asynchronously after every create/update and can create extra `related`
-relations based on semantic similarity. These auto-relations have
-`{"auto": true, "confidence": "high"}` in `meta` and are only created when
-confidence is high.
+1. Generates/stores an embedding for the page.
+2. Finds semantically similar pages in the same context.
+3. Automatically creates `semantic` relations for the closest neighbours (skipping duplicates).
+
+These auto-relations have `meta` with `auto: true` and `confidence: medium`. They
+appear in `get_links`. The agent does not need to create them manually.
 
 **Embeds** — use `![[slug]]` to embed an artifact (renders image / video / audio / PDF
 inline). Auto-creates an `embeds` relation.
 
-**Typed relations** — for explicit relationships beyond wikilinks, use
-`create_relation`. Relations are **directed** (source → target):
+**Typed relations** — for explicit relationships, use `create_relation`. Relations are
+**directed** (source → target):
 
 | Type | Cuándo usarlo | Ejemplo |
 |------|--------------|---------|
-| `related` | Generic connection — ya lo hacen los wikilinks automáticamente. Solo usar `create_relation` si no hay wikilink en el body. | `[[elixir]]` en el body → auto-crea `related` |
-| `contradicts` | Source contradice target. Cuando dos pages tienen info conflictiva. | `new-research --contradicts--> old-research` |
-| `supersedes` | Source reemplaza/obsoleta target. Nueva versión de un concepto. | `phoenix-1.8 --supersedes--> phoenix-1.7` |
-| `part_of` | Source es parte de target. Jerarquía explícita. | `tummo --part_of--> six-yogas-of-naropa` |
+| `related` | Generic manual connection. | `create_relation(source, target, related)` |
+| `contradicts` | Source contradice target. | `new-research --contradicts--> old-research` |
+| `supersedes` | Source reemplaza target. | `phoenix-1.8 --supersedes--> phoenix-1.7` |
+| `part_of` | Source es parte de target. | `tummo --part_of--> six-yogas-of-naropa` |
 | `embeds` | Source embebe target. Ya lo hace `![[slug]]` automáticamente. | `![[tummo-diagram]]` en el body → auto-crea `embeds` |
+| `semantic` | Auto-created by PageAugmenter. Do not create manually. | new-page --semantic--> similar-page |
 
-**Cuándo usar wikilink vs `create_relation`:**
-- Si la relación es solo "related" → pon `[[slug]]` en el body (auto-crea)
-- Si la relación es `contradicts`, `supersedes`, `part_of` → usa `create_relation` (no se auto-crean con wikilinks)
-- Si quieres ambos (related + typed) → wikilink en body + `create_relation` explícito
+Cuándo usar `create_relation`:
+- Para relaciones tipadas explicitas (`contradicts`, `supersedes`, `part_of`).
+- Para `related` manual si quieres una conexion que el augmenter no detecto.
+- No para `semantic` — el augmenter lo hace automáticamente.
 
-**Always wikilink to at least one existing page** when creating — this is how the
-graph becomes useful. If the page is genuinely isolated, that's a lint signal, not
-a feature.
+If the inference API is not configured, augmentation is silently skipped.
 
 ### Rule 4: Slug conventions
 
@@ -287,8 +289,8 @@ and decide what to do). For files (PDF, docs) it downloads and stores them. The
 **agent** is responsible for reading the content, summarizing, and linking.
 
 **Workflow:** `ingest_url` → later, fetch the URL yourself via `web_extract` → if
-the content is worth a full page, `create_page` with a `note` summarizing + wikilinking
-the reference.
+the content is worth a full page, `create_page` with a `note` summarizing and link
+to the reference with `create_relation`.
 
 - `ingest_url` has **SSRF protection** — blocks localhost, private IPs (10.x,
 172.16-31.x, 192.168.x, 169.254.x), CGNAT (100.64-127.x), and IPv6 loopback/link-local.
@@ -302,28 +304,18 @@ Use `start_agent` when Álvaro wants a multi-step task, not a single page captur
   pages, and creates new `note`/`reference` pages.
 - **Ingest** (`agent_type: "ingest"`) — validates/inspects/downloads a URL and
   creates a `reference` page (useful for files or link capture).
-- **Search** (`agent_type: "search"`) — orchestrates semantic + full-text + web
-  search, and returns a report of top results and relations (does not create pages).
 
-Agents run asynchronously on the server. Always call `start_agent`, then poll
-`get_agent_session` until `status` is `"done"` or `"error"`. A session keeps running
-even if the chat session closes — it is not tied to a specific UI tab.
-
-| Field | Expect |
-|-------|--------|
-| session_id | UUID returned by `start_agent` |
-| status | `running` → `done` or `error` |
-| summary | Human-readable result when `done` |
-| steps | List of tool calls the agent executed |
-| pages_created | Array of `{id, title, slug}` for new pages |
+> **Search agent:** A dedicated search-only agent is on the roadmap. Today, use the
+> `search` / `semantic_search` tools directly — they return results without creating
+> pages.
 
 ### Rule 6: Update vs create vs rename
 
 - Body changed → `update_page` (auto-bumps version, saves snapshot to `page_versions`).
 - Title / tags / meta changed → `update_page`.
 - Todo status / priority / due_date changed → **`update_todo`** (merges meta, no need to pass full meta).
-- Slug needs to change → use `rename_slug` — it updates the page's slug AND relinks
-  all `[[old-slug]]` and `![[old-slug]]` across the entire context automatically.
+- Slug needs to change → use `rename_slug` — it updates the page's slug.
+  Existing `![[old-slug]]` embeds are not updated automatically.
 - If a page is genuinely wrong → note the issue, ask Álvaro before deleting.
 
 ### Rule 7: Read before you answer
@@ -337,8 +329,7 @@ When Álvaro asks "what do I know about X":
 ### Rule 8: Infer when you can, ask when you must
 
 **Infer (don't ask):** page_type from context, slug from title, tags from body, kind
-from the kind of note (e.g. meeting notes → kind=meeting), wikilinks from obvious
-relations.
+from the kind of note (e.g. meeting notes → kind=meeting), or obvious relations.
 
 **Ask (don't guess):** the context slug if not `personal`, whether a goal needs a
 target date, whether something is private vs shareable, deletion of a page, renaming
@@ -346,7 +337,7 @@ a slug, anything that touches identity / finances / relationships.
 
 ### Rule 9: Lint periodically
 
-`lint` returns orphans, broken wikilinks, stale pages (>90d), contested knowledge.
+`lint` returns orphans, stale pages (>90d), and contested knowledge.
 After a batch of captures, run `lint` and surface the results so Álvaro can decide
 what to clean up. Do NOT auto-fix lint output — present it and ask.
 
@@ -368,19 +359,21 @@ The pattern for adding a new MCP tool to Dran:
 7. Update `lib/dran_web/live/docs_live.ex` MCP tool cards + Agent Quick Start.
 8. Update this skill's Tools Reference + pitfalls if relevant.
 
-**Three documentation surfaces must stay in sync**: `mcp.ex` (code), `README.md`
-(repo), `docs_live.ex` (in-app `/docs` page). Forgetting any one causes drift.
+**Four documentation surfaces must stay in sync**: `mcp.ex` (code), `README.md`
+(repo), `docs_live.ex` (in-app `/docs` page), and `SKILL.md`. Forgetting any one causes drift.
 
 Most new tools are 15-20 lines: resolve context → resolve page(s) by slug → call
 existing `Brain` function → format the response as a string.
 
 ## Autonomous agents
 
-Dran has three ReAct agents (research, ingest, search). They persist every step
+Dran has two ReAct agents (`research` and `ingest`). They persist every step
 and report progress via `agent_sessions` / `agent_steps`. Use them for longer
 tasks instead of doing everything in one MCP round-trip.
 
-## Tools Reference (17 MCP tools)
+A dedicated `search` agent is on the roadmap; today use the `search` tool directly.
+
+## Tools Reference (18 MCP tools)
 
 ### `search`
 Unified knowledge search. `Brain.search/2` automatically picks the best
@@ -416,16 +409,15 @@ before editing, summarizing, or referencing.
 Response: `# Title\n\nBody markdown\n\n---\nType: ... | Tags: ... | Version: N`
 
 ### `create_page`
-Create a typed page. **Required:** `context`, `title`, `slug`, `page_type`. Optional:
-`body`, `tags`, `meta`, `summary`, `owner`, `created_by`. Wikilinks in `body` are
-auto-resolved into relations.
+Create a typed page. **Required:** `context`, `page_type`. `title` and `slug` are
+optional — Dran derives them from the first non-empty body line when omitted.
+Optional: `body`, `tags`, `meta`, `summary`, `owner`, `created_by`. Embeds
+(`![[slug]]`) in `body` are auto-resolved into `embeds` relations.
 ```json
 {
   "context": "personal",
-  "title": "Pattern Matching in Elixir",
-  "slug": "elixir-pattern-matching",
   "page_type": "note",
-  "body": "The `=` operator in Elixir is actually a match operator. See [[elixir]].",
+  "body": "The `=` operator in Elixir is actually a match operator.",
   "meta": { "kind": "journal", "date": "2026-06-21" },
   "tags": ["elixir", "programming"]
 }
@@ -433,12 +425,12 @@ auto-resolved into relations.
 
 ### `update_page`
 Update title, body, tags, or meta. Body change auto-bumps version and saves a
-`page_versions` snapshot. Wikilinks in the new body are auto-resolved.
+`page_versions` snapshot. Embeds (`![[slug]]`) in the new body are auto-resolved.
 ```json
 {
   "context": "personal",
   "slug": "elixir-pattern-matching",
-  "body": "Updated body with new [[elixir]] examples.",
+  "body": "Updated body with new examples.",
   "updated_by": "agent"
 }
 ```
@@ -479,7 +471,7 @@ Can also update `title`, `body`, and `tags` (tags replaces existing).
 
 ### `create_relation`
 Create a typed relation between two pages by slug. Default `relation_type` is
-`related`. Use this for explicit relationships beyond what wikilinks auto-create.
+`related`. Use this for explicit relationships.
 ```json
 {
   "context": "personal",
@@ -488,8 +480,9 @@ Create a typed relation between two pages by slug. Default `relation_type` is
   "relation_type": "supersedes"
 }
 ```
-**Relation types:** `related` (default, auto-created by wikilinks), `contradicts`,
-`supersedes`, `part_of`, `embeds` (auto-created by `![[embeds]]`).
+**Relation types:** `related` (default, manual), `contradicts`,
+`supersedes`, `part_of`, `embeds` (auto-created by `![[slug]]`).
+`semantic` relations are auto-created by the PageAugmenter — do not create them manually.
 
 ### `delete_relation`
 Delete a relation between two pages by slug pair. Optionally filter by
@@ -510,10 +503,12 @@ Get all inbound + outbound relations for a page. Returns a formatted report.
 { "context": "personal", "slug": "elixir" }
 ```
 Response shows outbound (pages this page links to) and inbound (pages linking to
-this page), with relation types. Use this to see backlinks and graph connections.
+this page), with relation types. Use this to see graph connections.
 
 ### `list_pages`
-List pages with optional filters. Returns lightweight metadata (no body).
+List pages with optional filters. The `type` filter accepts: `note`, `concept`,
+`entity`, `reference`, `goal`, `plan`, `todo`, `artifact`, `comparison`, `query`.
+Returns lightweight metadata (no body).
 ```json
 { "context": "personal", "type": "todo", "status": "this_week", "limit": 20 }
 ```
@@ -523,7 +518,7 @@ queries without fetching full content.
 
 ### `stats`
 Aggregate statistics for a context. Returns total pages, pages by type, todos by
-kanban status, orphan count, broken link count, and total relations. Use this for
+kanban status, orphan count, and total relations. Use this for
 dashboard-style overviews and weekly reviews.
 ```json
 { "context": "personal" }
@@ -533,7 +528,6 @@ Response is a formatted report — no need to parse JSON.
 ### `lint`
 Quality report. Returns:
 - **orphans** — pages with no inbound links (consider linking or deleting)
-- **broken_wikilinks** — `[[slug]]` pointing to non-existent pages
 - **stale** — pages not updated in 90+ days
 - **contested** — pages flagged with `kb_contested: true`
 ```json
@@ -541,14 +535,12 @@ Quality report. Returns:
 ```
 
 ### `rename_slug`
-Rename a page's slug and **automatically update all wikilinks `[[old-slug]]` and
-embeds `![[old-slug]]` across the entire context** to use the new slug. The page
-itself is also updated. Use this when a page was created with a wrong slug.
+Rename a page's slug. The page itself is updated. Existing `![[old-slug]]` embeds
+are not updated automatically. Use this when a page was created with a wrong slug.
 ```json
 { "context": "personal", "old_slug": "lerning-elixir", "new_slug": "learning-elixir" }
 ```
-Response confirms the rename and how many pages were relinked. Fails if the new
-slug already exists.
+Response confirms the rename. Fails if the new slug already exists.
 
 ### `ingest_url`
 Save a URL. For HTML: creates a `reference` page with the URL. For files: downloads
@@ -558,7 +550,7 @@ and stores. **Does NOT extract content** — that's the agent's job later.
 ```
 
 ### `start_agent`
-Start an autonomous agent. Research, ingest, or search. Runs async, persists every
+Start an autonomous agent. `research` or `ingest`. Runs async, persists every
 step, and can create pages. Returns the `session_id` you poll with `get_agent_session`.
 ```json
 {
@@ -567,7 +559,8 @@ step, and can create pages. Returns the `session_id` you poll with `get_agent_se
   "input": "Yeshe Walmo"
 }
 ```
-Supported types: `research`, `ingest`, `search`.
+Supported types: `research`, `ingest`. A dedicated `search` agent is planned;
+today use the `search` tool directly.
 
 ### `get_agent_session`
 Poll an agent session by `session_id`. Use it after `start_agent` to wait for
@@ -660,9 +653,10 @@ No direct upload via MCP or REST — only via `ingest_url` (remote URLs only, SS
 | MCP Tool           | Brain Function Called                                      |
 | ------------------ | --------------------------------------------------------- |
 | `search`            | `Brain.search/2`                                          |
+| `semantic_search`   | `Brain.search/2` (with `strategy: "semantic"`)             |
 | `get_page`          | `Brain.get_page_by_slug/2`                                |
-| `create_page`       | `Brain.create_page/1` + `Brain.resolve_wikilinks/1`      |
-| `update_page`       | `Brain.update_page/2` + `Brain.resolve_wikilinks/1`     |
+| `create_page`       | `Brain.create_page/1`                                    |
+| `update_page`       | `Brain.update_page/2`                                    |
 | `delete_page`       | `Brain.delete_page/1`                                     |
 | `create_todo`       | `Brain.create_page/1` (with todo meta defaults)          |
 | `update_todo`       | `Brain.get_page_by_slug/2` + `Brain.update_page/2`       |
@@ -672,16 +666,14 @@ No direct upload via MCP or REST — only via `ingest_url` (remote URLs only, SS
 | `list_pages`        | `Brain.list_pages/1`                                      |
 | `stats`             | `Brain.stats/1`                                           |
 | `lint`              | `Brain.lint/1`                                            |
-| `rename_slug`       | `Brain.relink_wikilinks/3` + `Brain.update_page/2`       |
+| `rename_slug`       | `Brain.update_page/2`                                    |
 | `ingest_url`        | `Dran.Agent.Ingest.Utils.do_ingest/3`                    |
 | `start_agent`       | `Dran.Agent.Engine.run/4`                                |
 | `get_agent_session` | `Dran.Repo.get(Agent.Session, id) + preload steps`       |
 
-Brain functions **not** exposed via MCP: `fuzzy_search` (search FTS covers 95%),
+Brain functions **not** exposed via MCP: `fuzzy_search` (`search` covers it),
 `list_contexts` / `create_context` / `delete_context` (admin ops), `graph_data`
-(visualization only), `list_log` / `list_page_versions` / `get_page_version` (niche),
-`extract_wikilinks` / `extract_embeds` / `resolve_embeds` / `resolve_links` (internal
-utilities).
+(visualization only), `list_log` / `list_page_versions` / `get_page_version` (niche).
 
 ## Setup
 
@@ -745,13 +737,12 @@ curl -fsS http://<dran-host>/api/mcp \
    it sets `meta.kanban_status` and `meta.priority` defaults correctly. Manual
    `create_page` will skip those defaults and the todo will be invisible on the
    kanban board.
-4. **Wikilinking non-existent slugs.** `[[foo-bar]]` creates a broken link if
-   `foo-bar` doesn't exist. The link is stored but the target page is missing —
-   `lint` will catch it. Always verify the slug exists or create the target first.
+4. **Relying on `[[slug]]` wikilinks.** Plain wikilinks are no longer supported. The graph grows through embeddings and automatic `semantic` relations. Use `create_relation` for explicit typed relations and `![[slug]]` only for artifact embeds.
 5. **Treating `ingest_url` as content extraction.** It is not. It saves a URL or
    downloads a file. The agent must fetch and read the content separately.
 6. **Embedding with `![[slug]]` for non-artifact pages.** Embeds only render for
-   `artifact` page types (image/video/audio/PDF). For other types, use a wikilink.
+   `artifact` page types (image/video/audio/PDF). For other types, use `create_relation`
+   to link pages.
 7. **Long bodies without summaries.** Always set `summary` (1-line) for pages
    that the agent or Álvaro will need to find later via `search` — search results
    show the excerpt, but a clear summary helps in listings.
@@ -764,10 +755,10 @@ curl -fsS http://<dran-host>/api/mcp \
     and semantic finds related meanings. Use `"strategy": "fuzzy"` for typos.
 11. **Deleting without confirmation.** `delete_page` is irreversible and cascades.
     Always confirm with Álvaro first. After delete, run `lint` to catch orphans.
-12. **Using `create_relation` for `related` when a wikilink would do.** If the
-    relation is just "related", put `[[slug]]` in the body instead — it auto-creates
-    the relation on save. Use `create_relation` only for typed relations
-    (`contradicts`, `supersedes`, `part_of`, `embeds`).
+12. **Using `create_relation` for `semantic` relations.** `semantic` relations are
+    auto-created by the PageAugmenter based on embeddings. Only use `create_relation`
+    for manual `related` / typed relations (`contradicts`, `supersedes`, `part_of`) or
+    `embeds`.
 13. **Using `list_pages` when `wiki://` resource is enough.** For a full
     overview, `wiki://personal/index` returns everything in one call. Use
     `list_pages` only when you need filtering (type, tag, status).
@@ -797,7 +788,7 @@ Before any `create_page`:
 - [ ] If exists, considered `update_page` instead.
 - [ ] Right `page_type` for the knowledge kind.
 - [ ] Slug is kebab-case, unique, matches title.
-- [ ] Body has at least one `[[wikilink]]` to an existing page.
+- [ ] Body contains the actual knowledge; it can be the only text you pass.
 - [ ] `meta` has the type-required fields (kind, date, kanban_status, etc.).
 - [ ] `meta` enum values are valid (see Meta Validation table).
 - [ ] Tags are kebab-case, 2-5 tags typically.
@@ -806,7 +797,7 @@ Before any `create_page`:
 After any `create_page` / `update_page`:
 - [ ] Response confirms version (for updates) or slug (for creates).
 - [ ] If errors: changeset errors are surfaced to Álvaro, not silently retried.
-- [ ] If inference is configured, `PageAugmenter` may create `related`
+- [ ] If inference is configured, `PageAugmenter` may create `semantic`
   auto-relations asynchronously. That's expected — do not manually recreate them.
 
 After adding/modifying MCP tools:
@@ -814,10 +805,11 @@ After adding/modifying MCP tools:
 - [ ] `execute_tool/2` clause implemented.
 - [ ] README.md "Available tools" table + "Agent workflow" updated.
 - [ ] `docs_live.ex` "Available tools" cards + "Agent Quick Start" updated.
+- [ ] Repo `SKILL.md` Tools Reference updated.
 - [ ] `mix compile --warnings-as-errors && mix test` passes.
 
 After batches of changes:
-- [ ] Run `lint` to surface new orphans / broken links.
+- [ ] Run `lint` to surface new orphans / stale pages.
 - [ ] Surface lint output to Álvaro, don't auto-fix.
 
 ## Quick Recipes
@@ -825,14 +817,16 @@ After batches of changes:
 ### Capture a thought
 ```
 1. search("...topic...", "personal") → check for duplicates
-2. create_page({ title, slug, page_type: "note", body: "Thought... [[related]]", meta: { kind: "thought" } })
+2. create_page({ context: "personal", page_type: "note", body: "Thought...", meta: { kind: "thought" } })
 ```
+No wikilinks needed — Dran auto-creates semantic relations via embeddings.
 
 ### Ingest a research article
 ```
 1. ingest_url({ url, context: "personal", tags: ["research"] })
 2. Later: web_extract(url) to read the content
-3. If worth a full summary: create_page({ page_type: "note", kind: "journal", body: "Summary... [[the-reference-slug]]" })
+3. If worth a full summary: create_page({ context: "personal", page_type: "note", kind: "journal", body: "Summary..." })
+4. create_relation({ context: "personal", source_slug: "<note-slug>", target_slug: "<reference-slug>", relation_type: "part_of" })
 ```
 
 ### Add a todo to a goal
@@ -884,10 +878,10 @@ Use cases: `supersedes` (new version replaces old), `contradicts` (conflict),
 ```
 1. get_page({ context: "personal", slug: "<old-slug>" }) → confirm exists
 2. rename_slug({ context: "personal", old_slug: "lerning-elixir", new_slug: "learning-elixir" })
-3. Response confirms rename + how many pages were relinked
+3. Response confirms the rename.
 ```
 
-### See what links to a page (backlinks)
+### See what links to a page
 ```
 1. get_links({ context: "personal", slug: "elixir" })
 2. Returns outbound (pages this links to) + inbound (pages linking here)
@@ -905,14 +899,14 @@ Use cases: `supersedes` (new version replaces old), `contradicts` (conflict),
 2. list_pages({ context: "personal", type: "goal" }) → active goals
 3. goal://personal/<goal-slug> for each active goal → status snapshot
 4. list_pages({ context: "personal", type: "todo", status: "in_progress" }) → in-progress todos
-5. lint({ context: "personal" }) → orphans + broken links to clean up
+5. lint({ context: "personal" }) → orphans + stale pages to clean up
 ```
 
 ### Scaffold research
 ```
 1. prompts/get("research_topic", { topic, context: "personal" })
 2. Follow the prompt's instructions to create outline + sources + questions
-3. Capture each source as a reference page, link them in the research note
+3. Capture each source as a reference page, link them in the research note with create_relation
 4. create_relation to link related concepts with typed relations
 ```
 
@@ -920,24 +914,26 @@ Use cases: `supersedes` (new version replaces old), `contradicts` (conflict),
 
 For every capture batch, plan BEFORE writing any code:
 
-1. **Pages** — slug + page_type + meta.kind + 1-line description
-2. **Wikilinks** — which page wikilinks to which (auto-creates `related`)
-3. **Typed relations** — source → target, type (these you must call explicitly)
+1. **Pages** — page_type + body content
+2. **Typed relations** — source → target, type (only for explicit: contradicts, supersedes, part_of)
+3. **Semantic relations** — automatic, no action needed
 4. **Validation targets** — which slugs will you `get_links` after
 
 **Order of operations:**
 ```
-1. Create madre/base page first — base of the graph
-2. Create children with wikilinks to madre + peers
-3. Fix any broken wikilinks surfaced by lint (update_page)
-4. create_relation for typed connections
-5. get_links on EVERY page, both sides of every relation
-6. lint() → 0 orphans, 0 broken
-7. stats() → confirm relation count moved as expected
+1. Create pages with just context, page_type, and body
+2. Dran auto-generates title, slug, summary, tags, embeddings, and
+   semantic relations asynchronously
+3. create_relation for typed connections (contradicts, supersedes, part_of)
+4. get_links on key pages to verify graph connectivity
+5. lint() → check orphans
+6. stats() → confirm relation count
 ```
 
+No wikilinks needed — the graph grows through embeddings.
+
 **Directional gap to watch:** the most common failure is `get_links(A)` shows
-`related → B`, but `get_links(B)` does NOT show `related from A` because B's body
-never mentioned A. For every wikilink A → B, ask "should B also mention A?" If
-yes, add `[[A]]` to B's body. If no (e.g. B is a foundational concept), leave it —
-but document the asymmetry.
+`semantic → B`, but `get_links(B)` does not show a relation from A because the
+augmenter only links one way (source → target). For any important connection A → B,
+check both sides and add a manual `related` or typed relation if the reverse
+matters.

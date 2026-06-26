@@ -37,6 +37,12 @@ config :dran, :firecrawl,
   api_key: System.get_env("FIRECRAWL_API_KEY"),
   base_url: "https://api.firecrawl.dev/v1"
 
+config :dran, :agent_max_steps, String.to_integer(System.get_env("AGENT_MAX_STEPS", "150"))
+
+config :dran,
+       :agent_per_step_timeout,
+       String.to_integer(System.get_env("AGENT_PER_STEP_TIMEOUT", "120000"))
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

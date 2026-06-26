@@ -303,6 +303,7 @@ defmodule DranWeb.PageComponents do
   def type_icon("concept"), do: "hero-light-bulb"
   def type_icon("reference"), do: "hero-bookmark"
   def type_icon("artifact"), do: "hero-paper-clip"
+  def type_icon("query"), do: "hero-question-mark-circle"
   def type_icon(_), do: "hero-document"
 
   def type_label("note"), do: "Note"
@@ -314,7 +315,20 @@ defmodule DranWeb.PageComponents do
   def type_label("concept"), do: "Concept"
   def type_label("reference"), do: "Reference"
   def type_label("artifact"), do: "Artifact"
+  def type_label("query"), do: "Query"
   def type_label(other), do: other |> to_string() |> String.capitalize()
+
+  def type_plural("note"), do: "Notes"
+  def type_plural("comparison"), do: "Comparisons"
+  def type_plural("plan"), do: "Plans"
+  def type_plural("todo"), do: "Todos"
+  def type_plural("goal"), do: "Goals"
+  def type_plural("entity"), do: "Entities"
+  def type_plural("concept"), do: "Concepts"
+  def type_plural("reference"), do: "References"
+  def type_plural("artifact"), do: "Artifacts"
+  def type_plural("query"), do: "Queries"
+  def type_plural(other), do: type_label(other) <> "s"
 
   def type_path("note"), do: "notes"
   def type_path("comparison"), do: "comparisons"
@@ -325,6 +339,7 @@ defmodule DranWeb.PageComponents do
   def type_path("concept"), do: "concepts"
   def type_path("reference"), do: "references"
   def type_path("artifact"), do: "artifacts"
+  def type_path("query"), do: "queries"
   def type_path(other), do: to_string(other) <> "s"
 
   def page_show_path(%Page{page_type: type, slug: slug})
@@ -469,7 +484,8 @@ defmodule DranWeb.PageComponents do
     "plan" => "plans",
     "todo" => "todos",
     "artifact" => "artifacts",
-    "comparison" => "comparisons"
+    "comparison" => "comparisons",
+    "query" => "queries"
   }
 
   defp apply_inline_links(html, links, context_id)
@@ -520,7 +536,9 @@ defmodule DranWeb.PageComponents do
         html,
         fn _full, prefix, matched_text ->
           "#{prefix}<a href=\"#{path}\" class=\"inline-link\">#{matched_text}</a>"
-        end, global: false)
+        end,
+        global: false
+      )
     else
       html
     end

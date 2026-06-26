@@ -7,7 +7,7 @@ defmodule Dran.Inference do
   - embeddings (`Qwen3-Embedding`)
   - reranking (`Qwen3-Reranker`)
   - document-to-markdown (`MarkItDown`)
-  - chat helpers (`Qwen3.6-35B-A3B`)
+  - chat helpers (`Ornith-1.0-9B`)
 
   When DRAN_INFERENCE_API_URL is not set, every function returns
   {:error, :not_configured} so the rest of the app can degrade gracefully.

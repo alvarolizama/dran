@@ -21,7 +21,8 @@ defmodule DranWeb.PageNewLive do
     "plan" => "plans",
     "todo" => "todos",
     "artifact" => "artifacts",
-    "comparison" => "comparisons"
+    "comparison" => "comparisons",
+    "query" => "queries"
   }
 
   def render(assigns) do
@@ -129,7 +130,8 @@ defmodule DranWeb.PageNewLive do
        form: nil,
        body: "",
        context_id: if(context, do: context.id),
-       save_status: "idle"
+       save_status: "idle",
+       slug_touched: false
      )}
   end
 
@@ -155,12 +157,29 @@ defmodule DranWeb.PageNewLive do
        page_type: page_type,
        back_path: back_path,
        form: to_form(changeset, as: :page),
-       page_title: "New #{DranWeb.PageComponents.type_label(page_type)}"
+       page_title: "New #{DranWeb.PageComponents.type_label(page_type)}",
+       slug_touched: false
      )}
   end
 
-  def handle_event("validate_page", %{"page" => page_params}, socket) do
+  def handle_event("validate_page", %{"page" => page_params} = event, socket) do
     context_id = if socket.assigns[:context], do: socket.assigns.context.id
+    slug_touched = socket.assigns[:slug_touched] || false
+
+    target = Map.get(event, "_target", [])
+
+    # If user edited the slug field directly, stop auto-generating
+    slug_touched =
+      if target == ["page", "slug"], do: true, else: slug_touched
+
+    # Auto-generate slug from title unless user has manually edited it
+    page_params =
+      if slug_touched do
+        page_params
+      else
+        title = Map.get(page_params, "title", "")
+        Map.put(page_params, "slug", slugify(title))
+      end
 
     changeset =
       Brain.change_page(
@@ -174,7 +193,7 @@ defmodule DranWeb.PageNewLive do
 
     {:noreply,
      socket
-     |> assign(form: to_form(changeset, as: :page), body: body)}
+     |> assign(form: to_form(changeset, as: :page), body: body, slug_touched: slug_touched)}
   end
 
   def handle_event("validate_page", params, socket) do
@@ -244,6 +263,7 @@ defmodule DranWeb.PageNewLive do
   defp type_to_page("todos"), do: "todo"
   defp type_to_page("artifacts"), do: "artifact"
   defp type_to_page("comparisons"), do: "comparison"
+  defp type_to_page("queries"), do: "query"
   defp type_to_page(_), do: "note"
 
   defp ensure_slug(%{"slug" => slug} = params, _context_id) when is_binary(slug) and slug != "",

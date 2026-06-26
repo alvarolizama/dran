@@ -107,6 +107,10 @@ defmodule DranWeb.DocsLive do
         <li><strong>todo</strong> — actionable items with kanban status</li>
         <li><strong>artifact</strong> — deliverables or files</li>
         <li><strong>comparison</strong> — side-by-side analyses</li>
+        <li>
+          <strong>query</strong>
+          — questions with answers, linked semantically to concepts and entities
+        </li>
       </ul>
       <p>
         Pages store a body (Markdown), summary, tags, and an arbitrary <code>meta</code> map
@@ -125,6 +129,10 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>embeds</strong>
           — source embeds target (e.g. a note embeds an artifact via <code>![[slug]]</code>)
+        </li>
+        <li>
+          <strong>semantic</strong>
+          — auto-created by the PageAugmenter when two pages are semantically similar
         </li>
       </ul>
 
@@ -450,7 +458,7 @@ defmodule DranWeb.DocsLive do
           <strong>Relate</strong>
           — use <code>create_relation</code>
           for typed relationships. Use <code>delete_relation</code>
-          to remove. Wikilinks auto-create <code>related</code>
+          to remove. Embeds (<code>![[slug]]</code>) auto-create <code>embeds</code>
           relations.
         </li>
         <li>
@@ -466,12 +474,13 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Rename</strong>
           — use <code>rename_slug</code>
-          to rename a page and auto-relink all wikilinks across the context.
+          to rename a page slug. Update existing <code>![[slug]]</code>
+          embeds manually if needed.
         </li>
         <li>
           <strong>Agents</strong>
           — use <code>start_agent</code>
-          to delegate research, file ingest, or advanced search to an autonomous agent.
+          to delegate research or file ingest to an autonomous agent.
           Poll <code>get_agent_session</code>
           for progress and results.
         </li>
@@ -481,9 +490,7 @@ defmodule DranWeb.DocsLive do
           to save web pages or download files as references.
         </li>
         <li>
-          <strong>Lint</strong>
-          — use <code>lint</code>
-          to find orphans, broken links, and stale pages.
+          <strong>Lint</strong> — use <code>lint</code> to find orphans and stale pages.
         </li>
       </ol>
 
@@ -562,17 +569,26 @@ defmodule DranWeb.DocsLive do
               <td class="p-2 text-xs text-base-content/40">—</td>
               <td class="p-2 text-xs">entities, criteria, verdict</td>
             </tr>
+            <tr class="border-t border-base-300">
+              <td class="p-2 font-mono text-primary">query</td>
+              <td class="p-2">Question with answer (LLM wiki style)</td>
+              <td class="p-2 text-xs">factual, conceptual, how_to, opinion</td>
+              <td class="p-2 text-xs">
+                kind, difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
 
-      <h3>Wikilinks &amp; Embeds</h3>
+      <h3>Embeds</h3>
       <p>
-        Use <code>[[slug]]</code>
-        in page bodies to link to other pages. Use <code>[[slug|Display Text]]</code>
-        for custom display text. These are auto-resolved
-        into relations. Use <code>![[slug]]</code>
-        to embed an artifact (image, video, file).
+        Use <code>![[slug]]</code>
+        in page bodies to embed an artifact (image, video, audio, PDF). Embeds
+        are auto-resolved into <code>embeds</code>
+        relations. Plain <code>[[slug]]</code>
+        wikilinks are no longer supported — relations are
+        created automatically via embeddings or explicitly via <code>create_relation</code>.
       </p>
 
       <h3>Available tools</h3>
@@ -630,13 +646,13 @@ defmodule DranWeb.DocsLive do
             name="page_type"
             type="string"
             required="yes"
-            desc="note, concept, entity, reference, goal, plan, todo, artifact, comparison"
+            desc="note, concept, entity, reference, goal, plan, todo, artifact, comparison, query"
           />
           <:param
             name="body"
             type="string"
             required="no"
-            desc="Markdown body. Use [[slug]] for wikilinks."
+            desc="Markdown body. Use ![[slug]] for artifact embeds."
           />
           <:param
             name="meta"
@@ -734,7 +750,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="get_links"
-          desc="Get all inbound + outbound relations for a page. Shows backlinks and graph connections."
+          desc="Get all inbound + outbound relations for a page. Shows inbound and outbound graph connections."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Page slug" />
@@ -745,7 +761,12 @@ defmodule DranWeb.DocsLive do
           desc="List pages with optional filters. Returns lightweight metadata (no body)."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
-          <:param name="type" type="string" required="no" desc="Filter by page type" />
+          <:param
+            name="type"
+            type="string"
+            required="no"
+            desc="note, concept, entity, reference, goal, plan, todo, artifact, comparison, query"
+          />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
@@ -753,14 +774,14 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="stats"
-          desc="Aggregate statistics for a context. Returns page counts, todos by status, orphans, broken links."
+          desc="Aggregate statistics for a context. Returns page counts, todos by status, orphans, and total relations."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
 
         <.mcp_tool
           name="rename_slug"
-          desc="Rename a page's slug and auto-update all [[wikilinks]] and ![[embeds]] across the context."
+          desc="Rename a page's slug. Existing ![[slug]] embeds are not updated automatically."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="old_slug" type="string" required="yes" desc="Current slug to rename" />
@@ -769,7 +790,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="lint"
-          desc="Quality report: orphans, broken wikilinks, stale pages, contested knowledge."
+          desc="Quality report: orphans, stale pages, and contested knowledge."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
@@ -787,6 +808,23 @@ defmodule DranWeb.DocsLive do
             desc="Custom slug (auto from title if omitted)"
           />
           <:param name="tags" type="array" required="no" desc="Tags" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="start_agent"
+          desc="Start an autonomous agent session. Returns immediately; poll get_agent_session for progress."
+        >
+          <:param name="agent_type" type="string" required="yes" desc="research or ingest" />
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />
+          <:param name="opts" type="object" required="no" desc="Optional agent options" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="get_agent_session"
+          desc="Poll an agent session for status, summary, and steps."
+        >
+          <:param name="session_id" type="string" required="yes" desc="Agent session UUID" />
         </.mcp_tool>
       </div>
 

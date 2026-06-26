@@ -107,7 +107,10 @@ defmodule DranWeb.Router do
     live "/references/new", PageNewLive, :new
     live "/references/:slug", ReferenceLive, :show
 
-    # Planning
+    live "/queries", QueryLive, :index
+    live "/queries/new", PageNewLive, :new
+    live "/queries/:slug", QueryLive, :show
+
     live "/goals", GoalLive, :index
     live "/goals/new", PageNewLive, :new
     live "/goals/:slug", GoalLive, :show
@@ -142,6 +145,10 @@ defmodule DranWeb.Router do
 
     # Docs
     live "/docs", DocsLive, :index
+
+    live "/contexts", ContextLive, :index
+
+    live "/settings", SettingsLive, :index
 
     # Context switching
     post "/context", SessionController, :switch_context

@@ -6,10 +6,9 @@ defmodule Mix.Tasks.Dran.Agent do
 
       mix dran.agent --type research --context personal --input "Yeshe Walmo"
       mix dran.agent --type ingest --context personal --input "https://example.com/article"
-      mix dran.agent --type search --context personal --input "Bön deities" --sync
 
   Options:
-    * `--type` — one of `research`, `ingest`, `search` (required)
+    * `--type` — one of `research`, `ingest` (required)
     * `--context` — context slug (required)
     * `--input` — agent input, e.g. topic, URL, or query (required)
     * `--sync` — block until the session completes and print summary
@@ -60,7 +59,6 @@ defmodule Mix.Tasks.Dran.Agent do
 
   defp start_agent("research", input, context_id), do: Agent.Research.run(input, context_id)
   defp start_agent("ingest", input, context_id), do: Agent.Ingest.run(input, context_id)
-  defp start_agent("search", input, context_id), do: Agent.Search.run(input, context_id)
 
   defp wait_for_session(session_id) do
     :timer.sleep(500)

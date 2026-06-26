@@ -13,7 +13,7 @@ defmodule Dran.SummariesTest do
       embedding_model: "Qwen3-Embedding",
       rerank_model: "Qwen3-Reranker",
       markitdown_model: "MarkItDown",
-      chat_model: "Qwen3.6-35B-A3B",
+      chat_model: "Qwen3.5-9B",
       timeout: 5_000,
       req_plug: {Req.Test, Dran.Inference.Client},
       use_rerank: false,
@@ -75,7 +75,7 @@ defmodule Dran.SummariesTest do
     %{
       "id" => "chat-test",
       "object" => "chat.completion",
-      "model" => "Qwen3.6-35B-A3B",
+      "model" => "Qwen3.5-9B",
       "choices" => [
         %{
           "index" => 0,

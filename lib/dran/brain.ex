@@ -853,27 +853,31 @@ defmodule Dran.Brain do
     list
     |> Enum.with_index(1)
     |> Enum.reduce(acc, fn {item, rank}, acc ->
-      id = item.id
+      {page, excerpt} = normalize_fuse_item(item)
       score = 1.0 / (k + rank)
 
       existing =
-        Map.get(acc, id, %{
-          id: id,
-          title: item.title,
-          slug: item.slug,
-          page_type: item.page_type,
-          tags: item.tags,
+        Map.get(acc, page.id, %{
+          id: page.id,
+          title: page.title,
+          slug: page.slug,
+          page_type: page.page_type,
+          tags: page.tags,
+          excerpt: excerpt,
           score: 0.0
         })
 
       merged =
         existing
         |> Map.put(:score, existing.score + score)
-        |> Map.put_new(extra_field, Map.get(item, extra_field))
+        |> Map.put_new(extra_field, Map.get(page, extra_field))
 
-      Map.put(acc, id, merged)
+      Map.put(acc, page.id, merged)
     end)
   end
+
+  defp normalize_fuse_item({%Dran.Brain.Page{} = page, excerpt}), do: {page, excerpt}
+  defp normalize_fuse_item(%{} = map), do: {map, Map.get(map, :excerpt)}
 
   # ── Unified search internals ──
 
