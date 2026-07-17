@@ -10,7 +10,7 @@ defmodule Dran.MCP do
   - `GET /mcp` — open SSE stream for server-initiated messages
   - `DELETE /mcp` — terminate session
 
-  ## Tools (18)
+  ## Tools (19)
   - `search` — unified full-text, fuzzy, semantic or hybrid search across pages
   - `semantic_search` — deprecated alias for `search` with `strategy=semantic`
   - `create_page` — create a new page (title/slug optional, derived from body)
@@ -22,13 +22,19 @@ defmodule Dran.MCP do
   - `create_relation` — create a typed relation between two pages
   - `delete_relation` — delete a relation between two pages (by slug pair + optional type)
   - `get_links` — get inbound + outbound relations for a page
-  - `list_pages` — list pages with filters (type, tag, status, limit)
+  - `list_pages` — list pages with filters (type, tag, status, owner, created_by, limit)
   - `stats` — aggregate statistics for a context
   - `lint` — run lint report for a context (orphans, stale pages, contested knowledge)
-  - `rename_slug` — rename a page's slug
+  - `rename_slug` — rename a page's slug and rewrite all `![[old-slug]]` embeds in the same context
+  - `reaugment_page` — re-run augmentation (summary/tags/embedding/relations) for a page
   - `ingest_url` — save a URL or download a file as a reference page
   - `start_agent` — start an autonomous agent (`research` or `ingest`)
   - `get_agent_session` — poll an agent session for status and steps
+
+  ## Embeds
+  Embeds are auto-resolved into embeds relations on create and update; stale ones
+  are removed on body update. Use `![[other-slug]]` in a page body to embed another
+  page. `rename_slug` rewrites embed references across the whole context.
 
   ## Resources
   - `page://{context}/{slug}` — page content as markdown
@@ -489,6 +495,15 @@ defmodule Dran.MCP do
           "limit" => %{
             "type" => "integer",
             "description" => "Maximum number of results (default 50, hard max 500)."
+          },
+          "owner" => %{
+            "type" => "string",
+            "description" => "Optional filter: only pages whose `owner` matches this value."
+          },
+          "created_by" => %{
+            "type" => "string",
+            "description" =>
+              "Optional filter: only pages whose `created_by` (provenance) matches this value."
           }
         },
         "required" => ["context"]
@@ -593,7 +608,7 @@ defmodule Dran.MCP do
     %{
       "name" => "rename_slug",
       "description" =>
-        "Rename a page's slug. Updates the page's slug in place; version history and relations are preserved. **Fails if `new_slug` already exists** in the context, and returns an error if `old_slug == new_slug`. Use this to fix a wrongly named page without deleting and recreating it.",
+        "Rename a page's slug. Updates the page's slug in place; version history and relations are preserved. **Fails if `new_slug` already exists** in the context, and returns an error if `old_slug == new_slug`. All `![[old-slug]]` embeds in other pages of the same context are rewritten automatically. Use this to fix a wrongly named page without deleting and recreating it.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -612,6 +627,25 @@ defmodule Dran.MCP do
           }
         },
         "required" => ["context", "old_slug", "new_slug"]
+      }
+    },
+    %{
+      "name" => "reaugment_page",
+      "description" =>
+        "Re-run the augmentation pipeline for a page: regenerate summary/tags/embedding and refresh semantic relations. Use when inference was unavailable or the page body changed significantly. Clears the stored `embedding_hash` so the pipeline treats the page as stale, then schedules async augmentation.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing the page."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "Slug of the page to reaugment."
+          }
+        },
+        "required" => ["context", "slug"]
       }
     },
     %{
@@ -1121,6 +1155,12 @@ defmodule Dran.MCP do
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
       opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts
+      opts = if args["owner"], do: Keyword.put(opts, :owner, args["owner"]), else: opts
+
+      opts =
+        if args["created_by"],
+          do: Keyword.put(opts, :created_by, args["created_by"]),
+          else: opts
 
       pages = Brain.list_pages(opts)
 
@@ -1248,14 +1288,11 @@ defmodule Dran.MCP do
             # Check that new_slug doesn't already exist
             case Brain.get_page_by_slug(new_slug, context.id) do
               nil ->
-                # Update the page's own slug
-                case Brain.update_page(page, %{"slug" => new_slug, "updated_by" => "agent"}) do
-                  {:ok, _updated} ->
-                    "Renamed '#{old_slug}' → '#{new_slug}'"
+                # Brain.rename_slug updates the page's slug in place and rewrites
+                # all ![[old-slug]] embeds in other pages of the same context.
+                Brain.rename_slug(page, new_slug)
 
-                  {:error, changeset} ->
-                    "Error: failed to rename page: #{format_changeset_errors(changeset)}"
-                end
+                "Renamed '#{old_slug}' → '#{new_slug}'. Updated ![[#{old_slug}]] references in this context."
 
               _existing ->
                 "Error: a page with slug '#{new_slug}' already exists"
@@ -1317,6 +1354,26 @@ defmodule Dran.MCP do
 
       :error ->
         "Error: invalid session_id"
+    end
+  end
+
+  defp execute_tool("reaugment_page", %{"context" => context_slug, "slug" => slug}) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          "Error: page '#{slug}' not found in context '#{context_slug}'"
+
+        page ->
+          # Clear embedding_hash so the augmenter treats the page as stale,
+          # then schedule async augmentation (summary/tags/embedding/relations).
+          Ecto.Changeset.change(page, embedding_hash: nil) |> Repo.update!()
+          Brain.PageAugmenter.schedule(page)
+          "Reaugmentation scheduled for '#{slug}'"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
     end
   end
 
