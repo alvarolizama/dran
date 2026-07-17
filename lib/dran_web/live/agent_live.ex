@@ -65,24 +65,26 @@ defmodule DranWeb.AgentLive do
                 autofocus
               />
               <div class="flex items-end gap-3">
-                <div class="flex-1">
-                  <span class="label mb-1 block text-sm font-medium text-base-content/70">
-                    Output language
-                  </span>
-                  <select
-                    name="agent[lang]"
-                    class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="es" selected>Español</option>
-                    <option value="en">English</option>
-                    <option value="fr">Français</option>
-                    <option value="de">Deutsch</option>
-                    <option value="pt">Português</option>
-                    <option value="it">Italiano</option>
-                    <option value="ja">日本語</option>
-                    <option value="zh">中文</option>
-                  </select>
-                </div>
+                <%= if @type == "research" do %>
+                  <div class="flex-1">
+                    <span class="label mb-1 block text-sm font-medium text-base-content/70">
+                      Output language
+                    </span>
+                    <select
+                      name="agent[lang]"
+                      class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="es" selected>Español</option>
+                      <option value="en">English</option>
+                      <option value="fr">Français</option>
+                      <option value="de">Deutsch</option>
+                      <option value="pt">Português</option>
+                      <option value="it">Italiano</option>
+                      <option value="ja">日本語</option>
+                      <option value="zh">中文</option>
+                    </select>
+                  </div>
+                <% end %>
                 <button type="submit" class="btn btn-primary btn-sm shrink-0">
                   <.icon name="hero-play" class="size-4" /> Start
                 </button>
@@ -454,10 +456,11 @@ defmodule DranWeb.AgentLive do
   end
 
   @impl true
-  def handle_event("start", %{"agent" => %{"input" => input, "lang" => lang}}, socket) do
+  def handle_event("start", %{"agent" => agent_params}, socket) do
     context = socket.assigns.context
     type = socket.assigns.type
-    lang = lang || "es"
+    input = agent_params["input"]
+    lang = if type == "research", do: agent_params["lang"] || "es", else: nil
 
     if context && String.trim(input) != "" do
       case start_agent(type, input, context.id, lang: lang) do
