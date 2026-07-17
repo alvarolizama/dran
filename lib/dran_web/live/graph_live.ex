@@ -31,7 +31,7 @@ defmodule DranWeb.GraphLive do
        page: nil,
        nodes: [],
        edges: [],
-       type_colors: Enum.to_list(@type_colors),
+       type_colors: Enum.to_list(GraphHelpers.type_colors()),
        type_counts: %{},
        node_count: 0,
        edge_count: 0
@@ -126,11 +126,11 @@ defmodule DranWeb.GraphLive do
               slug: n.slug,
               label: n.title,
               type: n.type,
-              color: Map.get(@type_colors, n.type, "#94A3B8"),
+              color: Map.get(GraphHelpers.type_colors(), n.type, "#94A3B8"),
               radius: 12
             }
           end)
-          |> circular_layout(400, 300, 250)
+          |> GraphHelpers.circular_layout(400, 300, 250)
 
         positions = Map.new(nodes, fn n -> {n.id, {n.x, n.y}} end)
 
@@ -146,7 +146,7 @@ defmodule DranWeb.GraphLive do
                   y1: y1,
                   x2: x2,
                   y2: y2,
-                  color: Map.get(@edge_colors, e.type, "#94A3B8")
+                  color: Map.get(GraphHelpers.edge_colors(), e.type, "#94A3B8")
                 }
               ]
             else
@@ -169,73 +169,7 @@ defmodule DranWeb.GraphLive do
   end
 
   defp load_show_graph(socket, page) do
-    %{outbound: outbound, inbound: inbound} = Brain.list_relations_for_page(page.id)
-
-    neighbors =
-      (Enum.map(outbound, fn r ->
-         t = r.target
-
-         %{
-           id: t.id,
-           slug: t.slug,
-           title: t.title,
-           type: t.page_type,
-           relation_type: r.relation_type
-         }
-       end) ++
-         Enum.map(inbound, fn r ->
-           s = r.source
-
-           %{
-             id: s.id,
-             slug: s.slug,
-             title: s.title,
-             type: s.page_type,
-             relation_type: r.relation_type
-           }
-         end))
-      |> Enum.uniq_by(& &1.id)
-
-    center = %{
-      id: page.id,
-      slug: page.slug,
-      label: page.title,
-      type: page.page_type,
-      color: Map.get(@type_colors, page.page_type, "#94A3B8"),
-      radius: 30,
-      x: 400,
-      y: 300
-    }
-
-    neighbors_laid =
-      neighbors
-      |> Enum.map(fn n ->
-        %{
-          id: n.id,
-          slug: n.slug,
-          label: n.title,
-          type: n.type,
-          color: Map.get(@type_colors, n.type, "#94A3B8"),
-          radius: 20,
-          relation_type: n.relation_type
-        }
-      end)
-      |> circular_layout(400, 300, 200)
-
-    edges =
-      Enum.map(neighbors_laid, fn n ->
-        %{
-          source_id: center.id,
-          target_id: n.id,
-          x1: 400,
-          y1: 300,
-          x2: n.x,
-          y2: n.y,
-          color: Map.get(@edge_colors, n.relation_type, "#94A3B8")
-        }
-      end)
-
-    nodes = [center | neighbors_laid]
+    %{nodes: nodes, edges: edges} = GraphHelpers.build_page_subgraph(page)
 
     assign(socket,
       nodes: nodes,
@@ -250,26 +184,6 @@ defmodule DranWeb.GraphLive do
     nodes
     |> Enum.group_by(& &1.type)
     |> Map.new(fn {type, ns} -> {type, length(ns)} end)
-  end
-
-  # ── Layout ─────────────────────────────────────────────────────────────────
-
-  defp circular_layout(nodes, center_x, center_y, radius) do
-    count = length(nodes)
-
-    if count == 0 do
-      []
-    else
-      nodes
-      |> Enum.with_index()
-      |> Enum.map(fn {node, i} ->
-        angle = i / count * 2 * :math.pi()
-
-        node
-        |> Map.put(:x, center_x + radius * :math.cos(angle))
-        |> Map.put(:y, center_y + radius * :math.sin(angle))
-      end)
-    end
   end
 
   # ── Render ─────────────────────────────────────────────────────────────────
