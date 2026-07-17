@@ -44,14 +44,35 @@ defmodule DranWeb.Layouts do
 
   def app(assigns) do
     counts = compute_counts(assigns[:context_slug])
-    assigns = assign(assigns, :counts, counts)
+
+    # If the caller didn't forward page_counts, compute them here so the
+    # sidebar context selector never silently shows "Context (0)".
+    page_counts =
+      case assigns[:page_counts] do
+        counts_by_context when is_map(counts_by_context) and map_size(counts_by_context) > 0 ->
+          counts_by_context
+
+        _ ->
+          try do
+            Dran.Brain.page_counts_by_context()
+          rescue
+            _ -> %{}
+          catch
+            _, _ -> %{}
+          end
+      end
+
+    assigns = assign(assigns, counts: counts, page_counts: page_counts)
 
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
       <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
         <div class="p-4 border-b border-base-300">
           <div class="flex items-center gap-2">
-            <a href={~p"/"} class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
+            <a
+              href={~p"/"}
+              class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
+            >
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
@@ -489,7 +510,11 @@ defmodule DranWeb.Layouts do
         onsubmit="this.method='delete'; this.submit(); return false;"
       >
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-        <button type="submit" class="btn btn-ghost btn-xs transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded" title={gettext("Logout")}>
+        <button
+          type="submit"
+          class="btn btn-ghost btn-xs transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
+          title={gettext("Logout")}
+        >
           <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
         </button>
       </form>
@@ -512,7 +537,10 @@ defmodule DranWeb.Layouts do
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="system"
       >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150" />
+        <.icon
+          name="hero-computer-desktop-micro"
+          class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150"
+        />
       </button>
 
       <button
@@ -520,7 +548,10 @@ defmodule DranWeb.Layouts do
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="light"
       >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150" />
+        <.icon
+          name="hero-sun-micro"
+          class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150"
+        />
       </button>
 
       <button
@@ -528,7 +559,10 @@ defmodule DranWeb.Layouts do
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="dark"
       >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150" />
+        <.icon
+          name="hero-moon-micro"
+          class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150"
+        />
       </button>
     </div>
     """
