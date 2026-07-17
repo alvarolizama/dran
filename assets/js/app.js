@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/dran"
 import topbar from "../vendor/topbar"
 import "../vendor/svg-pan-zoom.min.js"
 import MarkdownEditor from "./hooks/markdown_editor.js"
+import Graph3D from "./hooks/graph_3d.js"
 
 const GraphPanZoom = {
   mounted() {
@@ -218,7 +219,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor},
+  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Graph3D},
 })
 
 // Show progress bar on live navigation and form submits
