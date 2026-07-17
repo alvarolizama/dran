@@ -182,6 +182,9 @@ defmodule DranWeb.Router do
     delete "/contexts/:slug", ContextController, :delete
     get "/contexts/:slug/export", ExportController, :show
 
+    # Full export (by context id)
+    get "/export/:context/full", ExportController, :full
+
     # Pages
     get "/pages", PageController, :index
     post "/pages", PageController, :create

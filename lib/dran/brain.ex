@@ -415,6 +415,38 @@ defmodule Dran.Brain do
     Phoenix.PubSub.broadcast(Dran.PubSub, "brain:#{context_id}", {:page_changed, action, page})
   end
 
+  @doc """
+  Ensure a daily journal note exists for the given date.
+
+  Idempotent: if a page with slug `daily-YYYY-MM-DD` already exists in
+  the context, it is returned as-is. Otherwise a new `note` page is
+  created with `meta = %{"kind" => "journal", "date" => iso}` and
+  `created_by = "system"`.
+
+  Returns `{:ok, %Page{}}` on success or `{:error, changeset}` on failure.
+  """
+  def ensure_daily_note(context_id, date \\ Date.utc_today())
+      when is_binary(context_id) do
+    slug = "daily-" <> Date.to_iso8601(date)
+    iso = Date.to_iso8601(date)
+
+    case get_page_by_slug(slug, context_id) do
+      %Page{} = page ->
+        {:ok, page}
+
+      nil ->
+        create_page(%{
+          context_id: context_id,
+          title: "Daily — #{iso}",
+          slug: slug,
+          page_type: "note",
+          body: "",
+          meta: %{"kind" => "journal", "date" => iso},
+          created_by: "system"
+        })
+    end
+  end
+
   # ──────────────────────────────────────────────────────────────────────────
   # Relations
   # ──────────────────────────────────────────────────────────────────────────
@@ -1065,6 +1097,49 @@ defmodule Dran.Brain do
       changed_by: page.updated_by || "system"
     })
     |> Repo.insert()
+  end
+
+  @doc """
+  Compute a line-level diff between a page's current body and a
+  historical version.
+
+  Returns `{:ok, %{from:, to:, changes: %{added:, removed:, unchanged:}}}`
+  on success, or `{:error, :version_not_found}` when the requested
+  version doesn't exist.
+
+  The diff is multiset-based: each line is counted by frequency, so
+  `added` = lines present in the new body but not in the old (by count),
+  `removed` = lines present in the old body but not in the new (by count),
+  and `unchanged` = lines common to both (by count).
+  """
+  def version_diff(%Page{} = page, version) when is_integer(version) do
+    case get_page_version(page.id, version) do
+      nil ->
+        {:error, :version_not_found}
+
+      %PageVersion{} = old ->
+        new_lines = String.split(page.body || "", "\n")
+        old_lines = String.split(old.body || "", "\n")
+
+        new_freq = Enum.frequencies(new_lines)
+        old_freq = Enum.frequencies(old_lines)
+
+        all_lines = MapSet.new(Map.keys(new_freq) ++ Map.keys(old_freq))
+
+        {added, removed, unchanged} =
+          Enum.reduce(all_lines, {0, 0, 0}, fn line, {a, r, u} ->
+            n = Map.get(new_freq, line, 0)
+            o = Map.get(old_freq, line, 0)
+            {a + max(0, n - o), r + max(0, o - n), u + min(n, o)}
+          end)
+
+        {:ok,
+         %{
+           from: old.version,
+           to: page.version,
+           changes: %{added: added, removed: removed, unchanged: unchanged}
+         }}
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────────────

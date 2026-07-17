@@ -78,4 +78,64 @@ defmodule DranWeb.API.ExportControllerTest do
       assert %{"errors" => %{"detail" => "context not found"}} = json_response(conn, 404)
     end
   end
+
+  describe "GET /api/export/:context/full" do
+    test "returns full export with pages, relations, and versions keys", %{conn: conn} do
+      context = Brain.get_context_by_slug("personal")
+
+      {:ok, page_a} =
+        Brain.create_page(%{
+          context_id: context.id,
+          title: "Full A",
+          slug: "full-page-a",
+          body: "v1 body",
+          page_type: "note"
+        })
+
+      # Create a version snapshot by updating the body
+      {:ok, _} = Brain.update_page(page_a, %{"body" => "v2 body"})
+
+      {:ok, page_b} =
+        Brain.create_page(%{
+          context_id: context.id,
+          title: "Full B",
+          slug: "full-page-b",
+          body: "Body B",
+          page_type: "concept"
+        })
+
+      Brain.create_relation(%{
+        source_id: page_a.id,
+        target_id: page_b.id,
+        relation_type: "related"
+      })
+
+      conn = get(conn, "/api/export/#{context.id}/full")
+
+      assert conn.status == 200
+      assert [disp | _] = Plug.Conn.get_resp_header(conn, "content-disposition")
+      assert disp =~ "attachment"
+
+      body = json_response(conn, 200)
+
+      assert body["context"]["slug"] == "personal"
+      assert Map.has_key?(body, "exported_at")
+      assert is_list(body["pages"])
+      assert is_list(body["relations"])
+      assert is_list(body["versions"])
+
+      # The page_a version snapshot should be present
+      assert Enum.any?(body["versions"], &(&1["page_slug"] == "full-page-a"))
+
+      # The relation should be present
+      assert Enum.any?(body["relations"], fn r ->
+               r["source_slug"] == "full-page-a" and r["target_slug"] == "full-page-b"
+             end)
+    end
+
+    test "returns 404 for unknown context id", %{conn: conn} do
+      conn = get(conn, "/api/export/00000000-0000-0000-0000-000000000000/full")
+      assert json_response(conn, 404)
+    end
+  end
 end

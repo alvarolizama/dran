@@ -206,4 +206,65 @@ defmodule Dran.BrainTest do
       assert_in_delta edge.weight, 0.85, 0.001
     end
   end
+
+  describe "version_diff/2" do
+    test "diffs v1 against current body with added/removed lines", %{context: ctx} do
+      {:ok, page} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Diffable",
+          slug: "diffable",
+          page_type: "note",
+          body: "line one\nline two\nline three"
+        })
+
+      # v1 snapshot is saved on first body change; update twice.
+      {:ok, _} = Brain.update_page(page, %{"body" => "line one\nline two changed\nline three"})
+      page = Brain.get_page!(page.id)
+      {:ok, _} = Brain.update_page(page, %{"body" => "line one\nline two changed\nline four"})
+      page = Brain.get_page!(page.id)
+
+      {:ok, diff} = Brain.version_diff(page, 1)
+
+      assert diff.from == 1
+      assert diff.to == page.version
+      # old body: "line one", "line two", "line three"
+      # new body: "line one", "line two changed", "line four"
+      # added:   "line two changed", "line four" => 2
+      # removed: "line two", "line three" => 2
+      # unchanged: "line one" => 1
+      assert diff.changes.added == 2
+      assert diff.changes.removed == 2
+      assert diff.changes.unchanged == 1
+    end
+
+    test "returns error for non-existent version", %{context: ctx} do
+      {:ok, page} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "NoVer",
+          slug: "no-ver",
+          page_type: "note",
+          body: "x"
+        })
+
+      assert {:error, :version_not_found} = Brain.version_diff(page, 99)
+    end
+  end
+
+  describe "ensure_daily_note/2" do
+    test "creates a daily note and is idempotent", %{context: ctx} do
+      date = ~D[2026-07-17]
+
+      {:ok, note1} = Brain.ensure_daily_note(ctx.id, date)
+      assert note1.slug == "daily-2026-07-17"
+      assert note1.page_type == "note"
+      assert note1.meta["kind"] == "journal"
+      assert note1.meta["date"] == "2026-07-17"
+      assert note1.created_by == "system"
+
+      {:ok, note2} = Brain.ensure_daily_note(ctx.id, date)
+      assert note2.id == note1.id
+    end
+  end
 end
