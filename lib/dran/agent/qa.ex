@@ -126,7 +126,7 @@ defmodule Dran.Agent.QA do
                 "enum" => Brain.PageMeta.query_statuses(),
                 "description" =>
                   "Estado de la respuesta. \"answered\" si se encontró información, " <>
-                  "\"open\" si no había páginas relevantes."
+                    "\"open\" si no había páginas relevantes."
               },
               "tags" => %{
                 "type" => "array",

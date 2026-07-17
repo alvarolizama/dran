@@ -88,7 +88,8 @@ goal_aprender_elixir =
     - Elixir in Action (Saša Jurić)
     - Hexdocs oficial
     """,
-    "summary" => "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes en tiempo real.",
+    "summary" =>
+      "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes en tiempo real.",
     "tags" => ["programacion", "elixir", "phoenix", "aprendizaje"],
     "meta" => %{
       "kanban_status" => "in_progress",
@@ -120,7 +121,8 @@ goal_escribir_libro =
     ## Estado
     Borrador del capítulo 1 completo. Trabajando en capítulo 2.
     """,
-    "summary" => "Libro práctico sobre sistemas de gestión de conocimiento personal (Zettelkasten, PARA).",
+    "summary" =>
+      "Libro práctico sobre sistemas de gestión de conocimiento personal (Zettelkasten, PARA).",
     "tags" => ["escritura", "libro", "conocimiento", "zettelkasten"],
     "meta" => %{
       "kanban_status" => "in_progress",
@@ -150,7 +152,8 @@ goal_mejorar_salud_fisica =
     ## Progreso
     Actualmente corriendo 3K. Mejorando la consistencia.
     """,
-    "summary" => "Rutina sostenible de ejercicio, alimentación y descanso para mejorar la salud física.",
+    "summary" =>
+      "Rutina sostenible de ejercicio, alimentación y descanso para mejorar la salud física.",
     "tags" => ["salud", "fitness", "bienestar"],
     "meta" => %{
       "kanban_status" => "backlog",
@@ -171,7 +174,8 @@ Seeder.page!(ctx_id, %{
   "slug" => "todo-completar-curso-elixir-school",
   "title" => "Completar curso de Elixir School",
   "page_type" => "todo",
-  "body" => "Avanzar en las lecciones de https://elixirschool.com/es/ hasta completar el módulo de GenServer.",
+  "body" =>
+    "Avanzar en las lecciones de https://elixirschool.com/es/ hasta completar el módulo de GenServer.",
   "tags" => ["elixir", "aprendizaje"],
   "meta" => %{"kanban_status" => "done", "goal_slug" => "goal-aprender-elixir-phoenix"},
   "owner" => "alvaro",
@@ -182,7 +186,8 @@ Seeder.page!(ctx_id, %{
   "slug" => "todo-construir-app-liveview-tareas",
   "title" => "Construir app LiveView de tareas",
   "page_type" => "todo",
-  "body" => "Crear una pequeña aplicación de gestión de tareas con Phoenix LiveView para practicar pubsub y assigns.",
+  "body" =>
+    "Crear una pequeña aplicación de gestión de tareas con Phoenix LiveView para practicar pubsub y assigns.",
   "tags" => ["elixir", "phoenix", "proyecto"],
   "meta" => %{"kanban_status" => "in_progress", "goal_slug" => "goal-aprender-elixir-phoenix"},
   "owner" => "alvaro",
@@ -204,7 +209,8 @@ Seeder.page!(ctx_id, %{
   "slug" => "todo-borrador-capitulo-1-libro",
   "title" => "Borrador capítulo 1 del libro",
   "page_type" => "todo",
-  "body" => "Escribir el primer borrador del capítulo introductorio del libro sobre segundo cerebro.",
+  "body" =>
+    "Escribir el primer borrador del capítulo introductorio del libro sobre segundo cerebro.",
   "tags" => ["escritura", "libro"],
   "meta" => %{"kanban_status" => "done", "goal_slug" => "goal-escribir-libro-segundo-cerebro"},
   "owner" => "alvaro",
@@ -217,7 +223,10 @@ Seeder.page!(ctx_id, %{
   "page_type" => "todo",
   "body" => "Definir la estructura y puntos clave del capítulo sobre captura de información.",
   "tags" => ["escritura", "libro"],
-  "meta" => %{"kanban_status" => "in_progress", "goal_slug" => "goal-escribir-libro-segundo-cerebro"},
+  "meta" => %{
+    "kanban_status" => "in_progress",
+    "goal_slug" => "goal-escribir-libro-segundo-cerebro"
+  },
   "owner" => "alvaro",
   "created_by" => "alvaro"
 })
@@ -226,7 +235,8 @@ Seeder.page!(ctx_id, %{
   "slug" => "todo-rutina-correr-3x-semana",
   "title" => "Correr 3 veces por semana",
   "page_type" => "todo",
-  "body" => "Establecer rutina de carrera: martes, jueves y sábado. Empezar con 3K y aumentar gradualmente.",
+  "body" =>
+    "Establecer rutina de carrera: martes, jueves y sábado. Empezar con 3K y aumentar gradualmente.",
   "tags" => ["salud", "fitness"],
   "meta" => %{"kanban_status" => "pending", "goal_slug" => "goal-mejorar-salud-fisica"},
   "owner" => "alvaro",
@@ -277,7 +287,8 @@ note_zettelkasten =
 
     También conecta con el concepto de ![[concepto-grafo-de-conocimiento]].
     """,
-    "summary" => "Sistema de notas interconectadas desarrollado por Niklas Luhmann basado en atomicidad y conexiones.",
+    "summary" =>
+      "Sistema de notas interconectadas desarrollado por Niklas Luhmann basado en atomicidad y conexiones.",
     "tags" => ["productividad", "conocimiento", "zettelkasten", "metodo"],
     "meta" => %{"kind" => "idea"},
     "owner" => "alvaro",
@@ -341,7 +352,8 @@ note_daily_standup =
 
     Estos métodos son útiles solo si sirven al trabajo creativo.
     """,
-    "summary" => "Reflexión sobre cómo la obsesión por optimizar sistemas puede ser contraproducente.",
+    "summary" =>
+      "Reflexión sobre cómo la obsesión por optimizar sistemas puede ser contraproducente.",
     "tags" => ["productividad", "reflexion", "filosofia"],
     "meta" => %{"kind" => "journal", "mood" => "reflective"},
     "owner" => "alvaro",
@@ -384,7 +396,8 @@ note_elixir_pattern =
 
     El concepto de actores se explica en ![[concepto-modelo-actores]].
     """,
-    "summary" => "GenServer implementa el modelo cliente-servidor con estado, llamadas síncronas y asíncronas.",
+    "summary" =>
+      "GenServer implementa el modelo cliente-servidor con estado, llamadas síncronas y asíncronas.",
     "tags" => ["elixir", "programacion", "genserver", "patron"],
     "meta" => %{"kind" => "technical"},
     "owner" => "alvaro",
@@ -414,7 +427,8 @@ note_writing_routine =
     Las ideas sobre productividad de ![[nota-reflexion-productividad-diaria]]
     me ayudaron a diseñar esta rutina sin obsesionarme con la perfección.
     """,
-    "summary" => "Rutina de escritura matutina de 90 minutos que produce los mejores resultados creativos.",
+    "summary" =>
+      "Rutina de escritura matutina de 90 minutos que produce los mejores resultados creativos.",
     "tags" => ["escritura", "rutina", "productividad", "habitos"],
     "meta" => %{"kind" => "journal"},
     "owner" => "alvaro",
@@ -449,7 +463,8 @@ concept_segundo_cerebro =
 
     Un segundo cerebro se implementa como un ![[concepto-grafo-de-conocimiento]].
     """,
-    "summary" => "Sistema de gestión de conocimiento personal que externaliza la memoria y conecta ideas.",
+    "summary" =>
+      "Sistema de gestión de conocimiento personal que externaliza la memoria y conecta ideas.",
     "tags" => ["conocimiento", "productividad", "sistema"],
     "owner" => "alvaro",
     "created_by" => "alvaro"
@@ -477,7 +492,8 @@ concept_grafo =
     El modelo de actores de ![[concepto-modelo-actores]] comparte la filosofía
     de sistemas distribuidos con nodos autónomos que se comunican.
     """,
-    "summary" => "Estructura de datos que representa conocimiento como nodos y aristas, permitiendo conexiones semánticas.",
+    "summary" =>
+      "Estructura de datos que representa conocimiento como nodos y aristas, permitiendo conexiones semánticas.",
     "tags" => ["grafo", "conocimiento", "estructura", "datos"],
     "owner" => "alvaro",
     "created_by" => "alvaro"
@@ -508,7 +524,8 @@ concept_actores =
     Al igual que un ![[concepto-grafo-de-conocimiento]], los actores forman
     una red de nodos que se comunican.
     """,
-    "summary" => "Modelo de computación concurrente con actores que tienen estado privado y se comunican por mensajes.",
+    "summary" =>
+      "Modelo de computación concurrente con actores que tienen estado privado y se comunican por mensajes.",
     "tags" => ["programacion", "concurrencia", "elixir", "actores"],
     "owner" => "alvaro",
     "created_by" => "alvaro"
@@ -540,7 +557,8 @@ artifact_building_second_brain =
 
     Referenciado en ![[concepto-segundo-cerebro]] y ![[nota-metodo-para]].
     """,
-    "summary" => "Libro fundacional de Tiago Forte sobre el método PARA y la filosofía del segundo cerebro.",
+    "summary" =>
+      "Libro fundacional de Tiago Forte sobre el método PARA y la filosofía del segundo cerebro.",
     "tags" => ["libro", "referencia", "productividad"],
     "meta" => %{
       "kind" => "link",
@@ -586,6 +604,7 @@ if daily_note.body == "" or is_nil(daily_note.body) do
     """,
     "tags" => ["diario", "journal"]
   })
+
   IO.puts("  ✓ Daily note content added")
 else
   IO.puts("  · Daily note already has content")
@@ -609,16 +628,46 @@ Seeder.rel!(ctx_id, "concepto-grafo-de-conocimiento", "concepto-modelo-actores",
 Seeder.rel!(ctx_id, "concepto-segundo-cerebro", "concepto-modelo-actores", "semantic")
 
 # Part_of: todos are part of goals
-Seeder.rel!(ctx_id, "todo-completar-curso-elixir-school", "goal-aprender-elixir-phoenix", "part_of")
-Seeder.rel!(ctx_id, "todo-construir-app-liveview-tareas", "goal-aprender-elixir-phoenix", "part_of")
-Seeder.rel!(ctx_id, "todo-leer-programming-phoenix-liveview", "goal-aprender-elixir-phoenix", "part_of")
-Seeder.rel!(ctx_id, "todo-borrador-capitulo-1-libro", "goal-escribir-libro-segundo-cerebro", "part_of")
+Seeder.rel!(
+  ctx_id,
+  "todo-completar-curso-elixir-school",
+  "goal-aprender-elixir-phoenix",
+  "part_of"
+)
+
+Seeder.rel!(
+  ctx_id,
+  "todo-construir-app-liveview-tareas",
+  "goal-aprender-elixir-phoenix",
+  "part_of"
+)
+
+Seeder.rel!(
+  ctx_id,
+  "todo-leer-programming-phoenix-liveview",
+  "goal-aprender-elixir-phoenix",
+  "part_of"
+)
+
+Seeder.rel!(
+  ctx_id,
+  "todo-borrador-capitulo-1-libro",
+  "goal-escribir-libro-segundo-cerebro",
+  "part_of"
+)
+
 Seeder.rel!(ctx_id, "todo-esquema-capitulo-2", "goal-escribir-libro-segundo-cerebro", "part_of")
 Seeder.rel!(ctx_id, "todo-rutina-correr-3x-semana", "goal-mejorar-salud-fisica", "part_of")
 Seeder.rel!(ctx_id, "todo-ajustar-dieta-reducir-azucar", "goal-mejorar-salud-fisica", "part_of")
 
 # Related: notes to goals
-Seeder.rel!(ctx_id, "nota-rutina-escritura-manana", "goal-escribir-libro-segundo-cerebro", "related")
+Seeder.rel!(
+  ctx_id,
+  "nota-rutina-escritura-manana",
+  "goal-escribir-libro-segundo-cerebro",
+  "related"
+)
+
 Seeder.rel!(ctx_id, "nota-patron-genserver-elixir", "goal-aprender-elixir-phoenix", "related")
 Seeder.rel!(ctx_id, "nota-reflexion-productividad-diaria", "goal-mejorar-salud-fisica", "related")
 

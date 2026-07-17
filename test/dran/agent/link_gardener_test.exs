@@ -34,7 +34,9 @@ defmodule Dran.Agent.LinkGardenerTest do
   end
 
   defp create_context! do
-    {:ok, ctx} = Brain.create_context(%{name: "Test Context", slug: "test-ctx-#{:rand.uniform(999_999)}"})
+    {:ok, ctx} =
+      Brain.create_context(%{name: "Test Context", slug: "test-ctx-#{:rand.uniform(999_999)}"})
+
     ctx
   end
 
@@ -384,17 +386,18 @@ defmodule Dran.Agent.LinkGardenerTest do
       {tool1, args1} = extract_tool_from_message(message1)
       assert tool1 == "list_orphans"
 
-      state = LinkGardener.init_state(
-        struct!(Session, %{
-          id: Ecto.UUID.generate(),
-          context_id: ctx.id,
-          agent_type: "link_gardener",
-          input: "tend links",
-          status: "running"
-        }),
-        LinkGardener,
-        []
-      )
+      state =
+        LinkGardener.init_state(
+          struct!(Session, %{
+            id: Ecto.UUID.generate(),
+            context_id: ctx.id,
+            agent_type: "link_gardener",
+            input: "tend links",
+            status: "running"
+          }),
+          LinkGardener,
+          []
+        )
 
       {result1, state} = LinkGardener.execute_tool(tool1, args1, state)
       assert match?({:ok, [_ | _]}, result1) or match?({:ok, []}, result1)

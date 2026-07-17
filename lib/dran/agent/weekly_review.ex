@@ -155,8 +155,7 @@ defmodule Dran.Agent.WeeklyReview do
   def build_messages(input, session, _opts \\ []) do
     [
       %{"role" => "system", "content" => system_prompt()},
-      %{"role" => "user",
-        "content" => "Weekly review task: #{input}\nSession: #{session.id}"}
+      %{"role" => "user", "content" => "Weekly review task: #{input}\nSession: #{session.id}"}
     ]
   end
 

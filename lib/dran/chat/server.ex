@@ -110,9 +110,7 @@ defmodule Dran.Chat.Server do
       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
-    case Brain.answer(state.context_id, text, state.messages,
-           current_page: state.page_slug
-         ) do
+    case Brain.answer(state.context_id, text, state.messages, current_page: state.page_slug) do
       {:ok, reply, sources} ->
         assistant_msg = %{
           "role" => "assistant",

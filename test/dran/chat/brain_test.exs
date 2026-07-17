@@ -151,7 +151,8 @@ defmodule Dran.Chat.BrainTest do
         insert_page!(context.id,
           title: "Elixir Language",
           slug: "elixir",
-          body: "Elixir is a functional, concurrent programming language that runs on the Erlang VM.",
+          body:
+            "Elixir is a functional, concurrent programming language that runs on the Erlang VM.",
           embedding: Pgvector.new(matching_vector())
         )
 

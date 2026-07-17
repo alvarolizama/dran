@@ -94,12 +94,27 @@ defmodule Dran.Agent.CuratorTest do
 
     test "returns only the close pair, not the far page", %{context: ctx} do
       # Insert two pages with very close embeddings
-      _page_a = insert_page!(ctx.id, title: "Page A", slug: "page-a", embedding: Pgvector.new(close_vector_a()))
+      _page_a =
+        insert_page!(ctx.id,
+          title: "Page A",
+          slug: "page-a",
+          embedding: Pgvector.new(close_vector_a())
+        )
 
-      _page_b = insert_page!(ctx.id, title: "Page B", slug: "page-b", embedding: Pgvector.new(close_vector_b()))
+      _page_b =
+        insert_page!(ctx.id,
+          title: "Page B",
+          slug: "page-b",
+          embedding: Pgvector.new(close_vector_b())
+        )
 
       # Insert a page with a far embedding
-      _page_c = insert_page!(ctx.id, title: "Page C", slug: "page-c", embedding: Pgvector.new(far_vector()))
+      _page_c =
+        insert_page!(ctx.id,
+          title: "Page C",
+          slug: "page-c",
+          embedding: Pgvector.new(far_vector())
+        )
 
       state = build_state(ctx.id)
       {{:ok, pairs}, new_state} = Curator.execute_tool("find_duplicates", %{}, state)
@@ -119,7 +134,13 @@ defmodule Dran.Agent.CuratorTest do
 
     test "returns empty list when no pages have embeddings", %{context: ctx} do
       # Insert pages without embeddings
-      _page = insert_page!(ctx.id, title: "No Embed", slug: "no-embed", embedding: nil, embedding_hash: nil)
+      _page =
+        insert_page!(ctx.id,
+          title: "No Embed",
+          slug: "no-embed",
+          embedding: nil,
+          embedding_hash: nil
+        )
 
       state = build_state(ctx.id)
       {{:ok, pairs}, new_state} = Curator.execute_tool("find_duplicates", %{}, state)

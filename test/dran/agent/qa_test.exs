@@ -205,7 +205,8 @@ defmodule Dran.Agent.QATest do
           context_id: context.id,
           title: "Elixir Language",
           slug: "elixir-lang",
-          body: "Elixir es un lenguaje de programación funcional, concurrente, que corre sobre la VM de Erlang.",
+          body:
+            "Elixir es un lenguaje de programación funcional, concurrente, que corre sobre la VM de Erlang.",
           page_type: "concept",
           tags: ["programming", "elixir"]
         })
@@ -279,7 +280,11 @@ defmodule Dran.Agent.QATest do
           Req.Test.json(conn, %{
             "object" => "list",
             "data" => [
-              %{"object" => "embedding", "index" => 0, "embedding" => [0.1 | List.duplicate(0.0, 1023)]}
+              %{
+                "object" => "embedding",
+                "index" => 0,
+                "embedding" => [0.1 | List.duplicate(0.0, 1023)]
+              }
             ]
           })
 

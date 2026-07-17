@@ -55,7 +55,11 @@ defmodule DranWeb.Layouts do
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
-            <.context_selector context_slug={@context_slug} contexts={@contexts} page_counts={@page_counts} />
+            <.context_selector
+              context_slug={@context_slug}
+              contexts={@contexts}
+              page_counts={@page_counts}
+            />
           </div>
         </div>
 

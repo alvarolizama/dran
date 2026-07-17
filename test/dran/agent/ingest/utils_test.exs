@@ -253,7 +253,9 @@ defmodule Dran.Agent.Ingest.UtilsTest do
 
         Req.Test.json(conn, %{
           "choices" => [
-            %{"message" => %{"role" => "assistant", "content" => "# Report\n\nExtracted content."}}
+            %{
+              "message" => %{"role" => "assistant", "content" => "# Report\n\nExtracted content."}
+            }
           ]
         })
       end)

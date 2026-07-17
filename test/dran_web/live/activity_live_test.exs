@@ -81,9 +81,7 @@ defmodule DranWeb.ActivityLiveTest do
 
     import Ecto.Query
 
-    Dran.Repo.delete_all(
-      from(l in Dran.Brain.Log, where: l.context_id == ^context.id)
-    )
+    Dran.Repo.delete_all(from(l in Dran.Brain.Log, where: l.context_id == ^context.id))
 
     {:ok, _view, html} = live(conn, ~p"/activity")
 

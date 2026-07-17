@@ -78,8 +78,7 @@ defmodule Dran.Agent.LinkGardener do
         "type" => "function",
         "function" => %{
           "name" => "get_page",
-          "description" =>
-            "Read the full content of a page by its slug.",
+          "description" => "Read the full content of a page by its slug.",
           "parameters" => %{
             "type" => "object",
             "properties" => %{
@@ -136,7 +135,7 @@ defmodule Dran.Agent.LinkGardener do
                 "enum" => @allowed_relation_types,
                 "description" =>
                   "One of: part_of, supersedes, contradicts, related. " <>
-                  "Never \"semantic\"."
+                    "Never \"semantic\"."
               },
               "justification" => %{
                 "type" => "string",
@@ -323,8 +322,7 @@ defmodule Dran.Agent.LinkGardener do
                     target_slug: target.slug,
                     relation_type: relation_type,
                     justification: justification
-                  }},
-                 %{state | proposals_made: state.proposals_made + 1}}
+                  }}, %{state | proposals_made: state.proposals_made + 1}}
 
               {:error, cs} ->
                 {{:error, format_changeset_errors(cs)}, state}

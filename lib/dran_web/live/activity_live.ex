@@ -112,7 +112,10 @@ defmodule DranWeb.ActivityLive do
   defp activity_entry(assigns) do
     ~H"""
     <div class="flex items-start gap-3 p-4">
-      <div class={["shrink-0 size-8 rounded-lg flex items-center justify-center", icon_bg(@entry.action)]}>
+      <div class={[
+        "shrink-0 size-8 rounded-lg flex items-center justify-center",
+        icon_bg(@entry.action)
+      ]}>
         <.icon name={action_icon(@entry.action)} class={["size-4", icon_color(@entry.action)]} />
       </div>
 
@@ -130,7 +133,10 @@ defmodule DranWeb.ActivityLive do
             {@entry.subject}
           </.link>
 
-          <span :if={@entry.subject && !page_path_for(@entry)} class="text-sm text-base-content/80 truncate">
+          <span
+            :if={@entry.subject && !page_path_for(@entry)}
+            class="text-sm text-base-content/80 truncate"
+          >
             {@entry.subject}
           </span>
         </div>

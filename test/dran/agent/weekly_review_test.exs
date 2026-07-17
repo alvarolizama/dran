@@ -284,7 +284,7 @@ defmodule Dran.Agent.WeeklyReviewTest do
             Req.Test.json(conn, %{
               "object" => "list",
               "data" => [
-                %{ "object" => "embedding", "index" => 0, "embedding" => List.duplicate(0.0, 1024) }
+                %{"object" => "embedding", "index" => 0, "embedding" => List.duplicate(0.0, 1024)}
               ]
             })
 
@@ -338,7 +338,7 @@ defmodule Dran.Agent.WeeklyReviewTest do
                   }
                 }
               ],
-              "usage" => %{ "total_tokens" => 100 }
+              "usage" => %{"total_tokens" => 100}
             })
         end
       end)

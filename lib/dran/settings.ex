@@ -25,15 +25,20 @@ defmodule Dran.Settings do
 
   def put(key, value) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    Repo.insert_all("settings", [%{key: key, value: %{"value" => value}, inserted_at: now, updated_at: now}],
+
+    Repo.insert_all(
+      "settings",
+      [%{key: key, value: %{"value" => value}, inserted_at: now, updated_at: now}],
       on_conflict: [set: [value: %{"value" => value}, updated_at: now]],
       conflict_target: :key
     )
   end
 
   def all do
-    db = Repo.all(from s in "settings", select: {s.key, s.value})
-    |> Map.new(fn {k, v} -> {k, if(is_map(v), do: Map.get(v, "value"), else: v)} end)
+    db =
+      Repo.all(from s in "settings", select: {s.key, s.value})
+      |> Map.new(fn {k, v} -> {k, if(is_map(v), do: Map.get(v, "value"), else: v)} end)
+
     Map.merge(@defaults, db)
   end
 end

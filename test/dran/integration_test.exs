@@ -46,7 +46,10 @@ defmodule Dran.IntegrationTest do
 
     # Create a fresh context for this test
     {:ok, context} =
-      Brain.create_context(%{name: "Integration Test", slug: "integration-test-#{System.unique_integer()}"})
+      Brain.create_context(%{
+        name: "Integration Test",
+        slug: "integration-test-#{System.unique_integer()}"
+      })
 
     {:ok, context: context}
   end

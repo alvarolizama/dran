@@ -146,15 +146,25 @@ defmodule DranWeb.DashboardLive do
                     {@brain_metrics[:pages_this_week] || 0}
                   </div>
                   <div class="text-caption">{gettext("This week")}</div>
-                  <div :if={(@brain_metrics[:pages_this_week] || 0) != (@brain_metrics[:pages_last_week] || 0)}
+                  <div
+                    :if={
+                      (@brain_metrics[:pages_this_week] || 0) !=
+                        (@brain_metrics[:pages_last_week] || 0)
+                    }
                     class={[
                       "text-xs font-medium",
-                      if((@brain_metrics[:pages_this_week] || 0) > (@brain_metrics[:pages_last_week] || 0),
+                      if(
+                        (@brain_metrics[:pages_this_week] || 0) >
+                          (@brain_metrics[:pages_last_week] || 0),
                         do: "text-success",
                         else: "text-base-content/50"
                       )
-                    ]}>
-                    {delta_label(@brain_metrics[:pages_this_week] || 0, @brain_metrics[:pages_last_week] || 0)}
+                    ]}
+                  >
+                    {delta_label(
+                      @brain_metrics[:pages_this_week] || 0,
+                      @brain_metrics[:pages_last_week] || 0
+                    )}
                   </div>
                 </div>
               </div>
@@ -182,7 +192,10 @@ defmodule DranWeb.DashboardLive do
                     >
                     </div>
                   </div>
-                  <div :if={(@brain_metrics[:embedding_coverage] || 0.0) < 0.9} class="text-xs text-warning mt-0.5">
+                  <div
+                    :if={(@brain_metrics[:embedding_coverage] || 0.0) < 0.9}
+                    class="text-xs text-warning mt-0.5"
+                  >
                     {gettext("Below 90%")}
                   </div>
                 </div>
@@ -199,9 +212,13 @@ defmodule DranWeb.DashboardLive do
                   </div>
                   <div class="text-caption">{gettext("Relations")}</div>
                   <div class="text-xs text-base-content/60 mt-0.5">
-                    {gettext("semantic: %{n}", n: (@brain_metrics[:relations_by_type] || %{})["semantic"] || 0)}
-                    · {gettext("related: %{n}", n: (@brain_metrics[:relations_by_type] || %{})["related"] || 0)}
-                    · {gettext("embeds: %{n}", n: (@brain_metrics[:relations_by_type] || %{})["embeds"] || 0)}
+                    {gettext("semantic: %{n}",
+                      n: (@brain_metrics[:relations_by_type] || %{})["semantic"] || 0
+                    )} · {gettext("related: %{n}",
+                      n: (@brain_metrics[:relations_by_type] || %{})["related"] || 0
+                    )} · {gettext("embeds: %{n}",
+                      n: (@brain_metrics[:relations_by_type] || %{})["embeds"] || 0
+                    )}
                   </div>
                 </div>
               </div>
@@ -217,15 +234,19 @@ defmodule DranWeb.DashboardLive do
                   </div>
                   <div class="text-caption">{gettext("Agents")}</div>
                   <div class="text-xs text-base-content/60 mt-0.5">
-                    {gettext("%{n} tokens", n: (@brain_metrics[:agents] || %{})[:tokens_this_week] || 0)}
+                    {gettext("%{n} tokens",
+                      n: (@brain_metrics[:agents] || %{})[:tokens_this_week] || 0
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
             <%!-- Daily note CTA --%>
-            <div :if={@daily_note_status in [:missing, :empty]}
-              class="flex items-center justify-between p-3 rounded-lg bg-base-200">
+            <div
+              :if={@daily_note_status in [:missing, :empty]}
+              class="flex items-center justify-between p-3 rounded-lg bg-base-200"
+            >
               <div class="flex items-center gap-2">
                 <.icon name="hero-pencil-square" class="size-5 text-primary" />
                 <span class="text-sm">{gettext("No daily note for today yet.")}</span>
@@ -237,8 +258,10 @@ defmodule DranWeb.DashboardLive do
                 {gettext("Open today's note")}
               </button>
             </div>
-            <div :if={@daily_note_status == :exists}
-              class="flex items-center justify-between p-3 rounded-lg bg-base-200">
+            <div
+              :if={@daily_note_status == :exists}
+              class="flex items-center justify-between p-3 rounded-lg bg-base-200"
+            >
               <div class="flex items-center gap-2">
                 <.icon name="hero-check-circle" class="size-5 text-success" />
                 <span class="text-sm">{gettext("Today's daily note is ready.")}</span>

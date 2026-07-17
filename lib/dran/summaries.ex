@@ -96,6 +96,7 @@ defmodule Dran.Summaries do
       |> Enum.take(50)
       |> Enum.map_join("\n", fn %{slug: slug, title: title, summary: summary} ->
         summary = summary || ""
+
         "- slug: #{slug}, title: #{title}#{if summary != "", do: ", summary: " <> summary, else: ""}"
       end)
 

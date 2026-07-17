@@ -151,12 +151,24 @@ defmodule Dran.Agent.Engine do
       loop(state)
     rescue
       reason ->
-        Logger.error("Agent.Engine: fatal crash: #{inspect(reason)}\n#{Exception.format_stacktrace(__STACKTRACE__)}")
-        finish_session(%{session: session, pages_created: 0}, %{"summary" => "Agent crashed: #{Exception.format(:error, reason, __STACKTRACE__)}"}, "failed")
+        Logger.error(
+          "Agent.Engine: fatal crash: #{inspect(reason)}\n#{Exception.format_stacktrace(__STACKTRACE__)}"
+        )
+
+        finish_session(
+          %{session: session, pages_created: 0},
+          %{"summary" => "Agent crashed: #{Exception.format(:error, reason, __STACKTRACE__)}"},
+          "failed"
+        )
     catch
       kind, reason ->
         Logger.error("Agent.Engine: fatal crash (#{kind}): #{inspect(reason)}")
-        finish_session(%{session: session, pages_created: 0}, %{"summary" => "Agent crashed: #{kind}: #{inspect(reason)}"}, "failed")
+
+        finish_session(
+          %{session: session, pages_created: 0},
+          %{"summary" => "Agent crashed: #{kind}: #{inspect(reason)}"},
+          "failed"
+        )
     end
   end
 
@@ -201,7 +213,9 @@ defmodule Dran.Agent.Engine do
 
   defp single_turn(state) do
     case call_llm(state) do
-      {state, {:ok, %{reasoning: reasoning, tool: tool, args: args, assistant_message: assistant_message}}} ->
+      {state,
+       {:ok,
+        %{reasoning: reasoning, tool: tool, args: args, assistant_message: assistant_message}}} ->
         state = %{state | step: state.step + 1}
         step = log_step!(state, tool, args, reasoning)
         broadcast(state, {:step_started, step})
@@ -259,7 +273,10 @@ defmodule Dran.Agent.Engine do
     end
   rescue
     reason ->
-      Logger.error("Agent.Engine single_turn crash: #{Exception.format(:error, reason, __STACKTRACE__)}")
+      Logger.error(
+        "Agent.Engine single_turn crash: #{Exception.format(:error, reason, __STACKTRACE__)}"
+      )
+
       {:error, state, reason}
   end
 
@@ -287,7 +304,11 @@ defmodule Dran.Agent.Engine do
       {:error, {:http_error, status, _}}
       when status in @retryable_http_statuses and attempt < @max_llm_retries ->
         backoff = trunc(:math.pow(2, attempt) * 500)
-        Logger.warning("Agent.Engine: LLM call failed (HTTP #{status}), retrying in #{backoff}ms (attempt #{attempt + 1}/#{@max_llm_retries})")
+
+        Logger.warning(
+          "Agent.Engine: LLM call failed (HTTP #{status}), retrying in #{backoff}ms (attempt #{attempt + 1}/#{@max_llm_retries})"
+        )
+
         Process.sleep(backoff)
         call_llm(state, attempt + 1)
 

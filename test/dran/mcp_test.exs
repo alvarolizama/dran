@@ -69,7 +69,12 @@ defmodule Dran.MCPTest do
           body: "See ![[old-art]] for details"
         })
 
-      result = call_tool("rename_slug", %{"context" => "personal", "old_slug" => "old-art", "new_slug" => "new-art"})
+      result =
+        call_tool("rename_slug", %{
+          "context" => "personal",
+          "old_slug" => "old-art",
+          "new_slug" => "new-art"
+        })
 
       assert result =~ "Renamed 'old-art' → 'new-art'"
       assert result =~ "![[old-art]]"
@@ -84,16 +89,29 @@ defmodule Dran.MCPTest do
     end
 
     test "errors when old_slug is not found", %{context: _ctx} do
-      result = call_tool("rename_slug", %{"context" => "personal", "old_slug" => "nope", "new_slug" => "still-nope"})
+      result =
+        call_tool("rename_slug", %{
+          "context" => "personal",
+          "old_slug" => "nope",
+          "new_slug" => "still-nope"
+        })
 
       assert result =~ "Error: page 'nope' not found"
     end
 
     test "errors when new_slug already exists", %{context: ctx} do
-      {:ok, _a} = Brain.create_page(%{context_id: ctx.id, title: "A", slug: "exists-a", page_type: "note"})
-      {:ok, b} = Brain.create_page(%{context_id: ctx.id, title: "B", slug: "exists-b", page_type: "note"})
+      {:ok, _a} =
+        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "exists-a", page_type: "note"})
 
-      result = call_tool("rename_slug", %{"context" => "personal", "old_slug" => "exists-b", "new_slug" => "exists-a"})
+      {:ok, b} =
+        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "exists-b", page_type: "note"})
+
+      result =
+        call_tool("rename_slug", %{
+          "context" => "personal",
+          "old_slug" => "exists-b",
+          "new_slug" => "exists-a"
+        })
 
       assert result =~ "already exists"
       # The source page kept its slug.
@@ -130,7 +148,8 @@ defmodule Dran.MCPTest do
     end
 
     test "errors when context is not found" do
-      result = call_tool("reaugment_page", %{"context" => "no-such-context", "slug" => "whatever"})
+      result =
+        call_tool("reaugment_page", %{"context" => "no-such-context", "slug" => "whatever"})
 
       assert result =~ "Error: context 'no-such-context' not found"
     end

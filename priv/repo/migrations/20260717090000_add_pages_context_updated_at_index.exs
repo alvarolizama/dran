@@ -16,9 +16,7 @@ defmodule Dran.Repo.Migrations.AddPagesContextUpdatedAtIndex do
   @disable_migration_lock true
 
   def up do
-    create index(:pages, [:context_id, :updated_at],
-             name: :pages_context_updated_at_idx
-           )
+    create index(:pages, [:context_id, :updated_at], name: :pages_context_updated_at_idx)
   end
 
   def down do

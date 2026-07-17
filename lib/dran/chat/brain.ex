@@ -68,8 +68,17 @@ defmodule Dran.Chat.Brain do
   defp references_current_page?(question) do
     down = String.downcase(question)
 
-    ["esta página", "esta pagina", "esta nota", "este concepto",
-     "este documento", "aquí", "aqui", "esto", "esta entrada"]
+    [
+      "esta página",
+      "esta pagina",
+      "esta nota",
+      "este concepto",
+      "este documento",
+      "aquí",
+      "aqui",
+      "esto",
+      "esta entrada"
+    ]
     |> Enum.any?(&String.contains?(down, &1))
   end
 

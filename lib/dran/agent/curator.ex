@@ -84,9 +84,7 @@ defmodule Dran.Agent.Curator do
         "function" => %{
           "name" => "find_duplicates",
           "description" =>
-            "Find pairs of pages in the brain with very similar embeddings (cosine distance < #{
-              duplicate_threshold()
-            }). " <>
+            "Find pairs of pages in the brain with very similar embeddings (cosine distance < #{duplicate_threshold()}). " <>
               "Returns up to 20 pairs. Use this to identify potential duplicate content.",
           "parameters" => %{
             "type" => "object",

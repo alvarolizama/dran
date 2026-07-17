@@ -1395,7 +1395,7 @@ defmodule Dran.Brain do
     Repo.all(
       from p in Page,
         left_join: r in Relation,
-          on: r.target_id == p.id,
+        on: r.target_id == p.id,
         where: p.context_id == ^context_id and is_nil(r.id),
         order_by: [asc: p.title],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
@@ -1468,8 +1468,7 @@ defmodule Dran.Brain do
         from p in Page,
           where: p.context_id == ^context_id and p.page_type == "todo",
           group_by: fragment("coalesce(meta->>'kanban_status', 'backlog')"),
-          select:
-            {fragment("coalesce(meta->>'kanban_status', 'backlog')"), count(p.id)}
+          select: {fragment("coalesce(meta->>'kanban_status', 'backlog')"), count(p.id)}
       )
       |> Map.new()
 
