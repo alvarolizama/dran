@@ -8,6 +8,9 @@ defmodule Dran.Agent.Ingest.Utils do
 
   alias Dran.{Brain, Uploads}
   alias Dran.Ingest.Converter
+  alias Dran.Inference.{ASR, Config, MarkItDown, Vision}
+
+  require Logger
 
   @max_download_size 100 * 1024 * 1024
   @blocked_schemes ~w(http https)
@@ -163,18 +166,25 @@ defmodule Dran.Agent.Ingest.Utils do
 
   @doc """
   Store a downloaded binary and create a reference page from it.
+
+  When inference is configured, the file body is enriched with the
+  extracted content (markdown for documents, description for images,
+  transcription for audio). When inference is disabled or extraction
+  fails, the page falls back to a simple download link — preserving
+  the previous behaviour.
   """
   @spec ingest_file(Brain.Context.t(), String.t(), binary(), String.t(), String.t(), map()) ::
           {:ok, Brain.Page.t()} | {:error, String.t()}
   def ingest_file(context, url, binary, filename, content_type, params) do
     stored = Uploads.store(context.id, binary, filename, content_type)
     slug = params["slug"] || slugify(filename)
+    body = build_file_body(url, stored, filename, content_type, binary)
 
     page_attrs = %{
       context_id: context.id,
       title: filename,
       slug: slug,
-      body: "Source: #{url}\n\n[Download](#{stored.storage_path})",
+      body: body,
       page_type: "reference",
       tags: params["tags"] || [],
       meta:
@@ -194,6 +204,80 @@ defmodule Dran.Agent.Ingest.Utils do
     }
 
     create_page(page_attrs)
+  end
+
+  @doc """
+  Decide which extraction strategy applies to a content type.
+
+  Returns one of `:markitdown`, `:vision`, `:asr`, or `:none`. This is a
+  pure function over the content type and the supported MIME types of
+  `MarkItDown`; it does not check whether inference is configured. Callers
+  must handle the case where the chosen strategy fails at runtime.
+  """
+  @spec extraction_strategy(String.t()) :: :markitdown | :vision | :asr | :none
+  def extraction_strategy(content_type) when is_binary(content_type) do
+    cond do
+      content_type in MarkItDown.supported_mime_types() -> :markitdown
+      String.starts_with?(content_type, "image/") -> :vision
+      String.starts_with?(content_type, "audio/") -> :asr
+      true -> :none
+    end
+  end
+
+  # Builds the page body for an ingested file. When inference is enabled
+  # and extraction succeeds, the body is enriched with the extracted
+  # content (prefixed by the source URL). On any failure — inference
+  # disabled, network error, or unexpected response — the body falls
+  # back to a plain download link, preserving the original behaviour.
+  defp build_file_body(url, stored, filename, content_type, binary) do
+    fallback_body = "Source: #{url}\n\n[Download](#{stored.storage_path})"
+
+    if not Config.enabled?() do
+      fallback_body
+    else
+      case extract_content(extraction_strategy(content_type), filename, content_type, binary) do
+        {:ok, extracted} ->
+          format_extracted_body(url, extraction_strategy(content_type), extracted, stored)
+
+        {:error, reason} ->
+          Logger.info(
+            "ingest extraction failed for #{filename} (#{content_type}): #{inspect(reason)}; falling back to download link"
+          )
+
+          fallback_body
+      end
+    end
+  end
+
+  defp extract_content(:markitdown, filename, content_type, binary) do
+    MarkItDown.to_markdown(filename, content_type, binary)
+  end
+
+  defp extract_content(:vision, _filename, _content_type, binary) do
+    Vision.describe(
+      binary,
+      "Describe this image in detail, in Spanish. Include visible text, objects, and context."
+    )
+  end
+
+  defp extract_content(:asr, filename, _content_type, binary) do
+    ASR.transcribe(binary, filename)
+  end
+
+  defp extract_content(:none, _filename, _content_type, _binary) do
+    {:error, :no_extraction_strategy}
+  end
+
+  defp format_extracted_body(url, :vision, description, stored) do
+    "Source: #{url}\n\n**Description:** #{description}\n\n[View image](#{stored.storage_path})"
+  end
+
+  defp format_extracted_body(url, :asr, transcript, stored) do
+    "Source: #{url}\n\n**Transcription:** #{transcript}\n\n[Listen](#{stored.storage_path})"
+  end
+
+  defp format_extracted_body(url, _strategy, markdown, _stored) do
+    "Source: #{url}\n\n#{markdown}"
   end
 
   @doc """
