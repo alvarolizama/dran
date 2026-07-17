@@ -126,9 +126,28 @@ defmodule DranWeb.Layouts do
         stats = Dran.Brain.stats(context.id)
         by_type = stats[:by_type] || %{}
 
+        contexts_count =
+          try do
+            length(Dran.Brain.list_contexts())
+          rescue
+            _ -> 0
+          end
+
         %{
           dashboard: stats[:total_pages] || 0,
-          todos: by_type["todo"] || 0
+          notes: by_type["note"] || 0,
+          concepts: by_type["concept"] || 0,
+          entities: by_type["entity"] || 0,
+          references: by_type["reference"] || 0,
+          queries: by_type["query"] || 0,
+          goals: by_type["goal"] || 0,
+          plans: by_type["plan"] || 0,
+          todos: by_type["todo"] || 0,
+          artifacts: by_type["artifact"] || 0,
+          comparisons: by_type["comparison"] || 0,
+          contexts: contexts_count,
+          graph: stats[:total_relations] || 0,
+          activity: Dran.Brain.count_log(context.id)
         }
       else
         %{}
@@ -162,54 +181,60 @@ defmodule DranWeb.Layouts do
             path: ~p"/",
             badge: counts[:dashboard]
           },
-          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph"},
+          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph", badge: counts[:graph]},
           %{
             key: "activity",
             label: gettext("Activity"),
             icon: "hero-clock",
-            path: ~p"/activity"
+            path: ~p"/activity",
+            badge: counts[:activity]
           }
         ]
       },
       %{
         label: gettext("Knowledge"),
         items: [
-          %{key: "notes", label: gettext("Notes"), icon: "hero-document-text", path: ~p"/notes"},
+          %{key: "notes", label: gettext("Notes"), icon: "hero-document-text", path: ~p"/notes", badge: counts[:notes]},
           %{
             key: "concepts",
             label: gettext("Concepts"),
             icon: "hero-light-bulb",
-            path: ~p"/concepts"
+            path: ~p"/concepts",
+            badge: counts[:concepts]
           },
           %{
             key: "entities",
             label: gettext("Entities"),
             icon: "hero-user-group",
-            path: ~p"/entities"
+            path: ~p"/entities",
+            badge: counts[:entities]
           },
           %{
             key: "references",
             label: gettext("References"),
             icon: "hero-bookmark",
-            path: ~p"/references"
+            path: ~p"/references",
+            badge: counts[:references]
           },
           %{
             key: "queries",
             label: gettext("Queries"),
             icon: "hero-question-mark-circle",
-            path: ~p"/queries"
+            path: ~p"/queries",
+            badge: counts[:queries]
           }
         ]
       },
       %{
         label: gettext("Planning"),
         items: [
-          %{key: "goals", label: gettext("Goals"), icon: "hero-flag", path: ~p"/goals"},
+          %{key: "goals", label: gettext("Goals"), icon: "hero-flag", path: ~p"/goals", badge: counts[:goals]},
           %{
             key: "plans",
             label: gettext("Plans"),
             icon: "hero-clipboard-document-list",
-            path: ~p"/plans"
+            path: ~p"/plans",
+            badge: counts[:plans]
           },
           %{
             key: "todos",
@@ -227,13 +252,15 @@ defmodule DranWeb.Layouts do
             key: "artifacts",
             label: gettext("Artifacts"),
             icon: "hero-cube",
-            path: ~p"/artifacts"
+            path: ~p"/artifacts",
+            badge: counts[:artifacts]
           },
           %{
             key: "comparisons",
             label: gettext("Comparisons"),
             icon: "hero-scale",
-            path: ~p"/comparisons"
+            path: ~p"/comparisons",
+            badge: counts[:comparisons]
           }
         ]
       },
@@ -261,13 +288,15 @@ defmodule DranWeb.Layouts do
             key: "contexts",
             label: gettext("Contexts"),
             icon: "hero-rectangle-stack",
-            path: ~p"/contexts"
+            path: ~p"/contexts",
+            badge: counts[:contexts]
           },
           %{
             key: "settings",
             label: gettext("Settings"),
             icon: "hero-cog-6-tooth",
-            path: ~p"/settings"
+            path: ~p"/settings",
+            badge: counts[:settings]
           }
         ]
       },

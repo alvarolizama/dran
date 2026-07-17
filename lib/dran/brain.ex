@@ -1209,6 +1209,10 @@ defmodule Dran.Brain do
     Repo.all(query)
   end
 
+  def count_log(context_id) when is_binary(context_id) do
+    Repo.aggregate(from(l in Log, where: l.context_id == ^context_id), :count)
+  end
+
   defp log_action(context_id, action, subject, details) do
     %Log{}
     |> Log.changeset(%{
