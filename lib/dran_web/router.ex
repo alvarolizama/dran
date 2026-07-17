@@ -151,6 +151,11 @@ defmodule DranWeb.Router do
 
     live "/tags/:tag", TagLive, :index
 
+    # Smart Collections (saved live queries)
+    live "/collections", SmartCollectionLive, :index
+    live "/collections/new", SmartCollectionLive, :new
+    live "/collections/:slug", SmartCollectionLive, :show
+
     live "/ingest", IngestLive, :index
 
     # Docs

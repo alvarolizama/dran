@@ -34,7 +34,8 @@ defmodule DranWeb.GraphLive do
        type_colors: Enum.to_list(GraphHelpers.type_colors()),
        type_counts: %{},
        node_count: 0,
-       edge_count: 0
+       edge_count: 0,
+       view_mode: "2d"
      )}
   end
 
@@ -70,6 +71,12 @@ defmodule DranWeb.GraphLive do
   @impl true
   def handle_event("node_click", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/graph/#{slug}")}
+  end
+
+  @impl true
+  def handle_event("toggle_view_mode", %{"mode" => mode}, socket)
+      when mode in ["2d", "3d"] do
+    {:noreply, assign(socket, view_mode: mode)}
   end
 
   @impl true
@@ -188,6 +195,30 @@ defmodule DranWeb.GraphLive do
 
   # ── Render ─────────────────────────────────────────────────────────────────
 
+  defp graph_json(assigns) do
+    nodes =
+      Enum.map(assigns.nodes, fn n ->
+        %{
+          id: n.id,
+          slug: n.slug,
+          label: n.label,
+          type: n.type,
+          color: n.color
+        }
+      end)
+
+    edges =
+      Enum.map(assigns.edges, fn e ->
+        %{
+          source_id: e.source_id,
+          target_id: e.target_id,
+          color: e.color
+        }
+      end)
+
+    Jason.encode!(%{nodes: nodes, edges: edges})
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -226,59 +257,90 @@ defmodule DranWeb.GraphLive do
               <span class="text-sm flex-1">Edges</span>
               <span class="text-xs text-base-content/40 tabular-nums">{@edge_count}</span>
             </div>
+
+            <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">View Mode</h3>
+            <div class="join">
+              <button
+                class={["btn btn-xs join-item", @view_mode == "2d" && "btn-primary", @view_mode != "2d" && "btn-ghost"]}
+                phx-click="toggle_view_mode"
+                phx-value-mode="2d"
+              >
+                2D
+              </button>
+              <button
+                class={["btn btn-xs join-item", @view_mode == "3d" && "btn-primary", @view_mode != "3d" && "btn-ghost"]}
+                phx-click="toggle_view_mode"
+                phx-value-mode="3d"
+              >
+                3D
+              </button>
+            </div>
           </div>
 
           <div class="flex-1 bg-base-200 rounded-lg overflow-hidden relative">
-            <svg
-              id="graph-svg"
-              width="100%"
-              height="600"
-              phx-hook="GraphPanZoom"
-            >
-              <line
-                :for={edge <- @edges}
-                x1={edge.x1}
-                y1={edge.y1}
-                x2={edge.x2}
-                y2={edge.y2}
-                stroke={edge.color}
-                stroke-width="1.5"
-                opacity="0.6"
-                data-source={edge.source_id}
-                data-target={edge.target_id}
-              />
-
-              <g
-                :for={node <- @nodes}
-                class="cursor-pointer"
-                phx-click="node_click"
-                phx-value-slug={node.slug}
-                data-node-id={node.id}
-                data-node-x={node.x}
-                data-node-y={node.y}
+            <%= if @view_mode == "2d" do %>
+              <svg
+                id="graph-svg"
+                width="100%"
+                height="600"
+                phx-hook="GraphPanZoom"
               >
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={node.radius}
-                  fill={node.color}
-                  stroke="white"
-                  stroke-width="2"
+                <line
+                  :for={edge <- @edges}
+                  x1={edge.x1}
+                  y1={edge.y1}
+                  x2={edge.x2}
+                  y2={edge.y2}
+                  stroke={edge.color}
+                  stroke-width="1.5"
+                  opacity="0.6"
+                  data-source={edge.source_id}
+                  data-target={edge.target_id}
                 />
-                <text
-                  x={node.x}
-                  y={node.y + node.radius + 15}
-                  text-anchor="middle"
-                  class="text-xs fill-current"
-                >
-                  {node.label}
-                </text>
-              </g>
-            </svg>
 
-            <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
-              Scroll para zoom · Arrastra el fondo para moverte · Arrastra un nodo para reposicionar
-            </div>
+                <g
+                  :for={node <- @nodes}
+                  class="cursor-pointer"
+                  phx-click="node_click"
+                  phx-value-slug={node.slug}
+                  data-node-id={node.id}
+                  data-node-x={node.x}
+                  data-node-y={node.y}
+                >
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={node.radius}
+                    fill={node.color}
+                    stroke="white"
+                    stroke-width="2"
+                  />
+                  <text
+                    x={node.x}
+                    y={node.y + node.radius + 15}
+                    text-anchor="middle"
+                    class="text-xs fill-current"
+                  >
+                    {node.label}
+                  </text>
+                </g>
+              </svg>
+
+              <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
+                Scroll para zoom · Arrastra el fondo para moverte · Arrastra un nodo para reposicionar
+              </div>
+            <% else %>
+              <div
+                id="graph-3d"
+                phx-hook="Graph3D"
+                data-graph={graph_json(assigns)}
+                style="width: 100%; height: 600px; background: #0f172a;"
+              >
+              </div>
+              <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
+                Arrastra para rotar · Scroll para zoom · Click-derecho para mover
+              </div>
+            <% end %>
           </div>
         </div>
       </div>

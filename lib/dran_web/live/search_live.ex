@@ -82,7 +82,7 @@ defmodule DranWeb.SearchLive do
       active_nav={@active_nav}
     >
       <div class="p-6 overflow-y-auto w-full">
-        <h1 class="text-2xl font-bold mb-4">Search</h1>
+        <h1 class="text-2xl font-bold mb-4">{gettext("Search")}</h1>
 
         <form phx-submit="search" class="mb-6">
           <.input
@@ -90,14 +90,14 @@ defmodule DranWeb.SearchLive do
             type="text"
             name="q"
             value={@query}
-            placeholder="Search pages..."
+            placeholder={gettext("Search pages...")}
           />
         </form>
 
         <div class="mb-6">
           <div
             role="group"
-            aria-label="Search strategy"
+            aria-label={gettext("Search strategy")}
             class="inline-flex rounded-lg border border-base-300 overflow-hidden"
           >
             <button
@@ -106,7 +106,7 @@ defmodule DranWeb.SearchLive do
               phx-value-mode="auto"
               class={"px-3 py-1.5 text-sm transition-colors #{if @search_mode == "auto", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
             >
-              Auto
+              {gettext("Auto")}
             </button>
             <button
               type="button"
@@ -114,7 +114,7 @@ defmodule DranWeb.SearchLive do
               phx-value-mode="fts"
               class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "fts", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
             >
-              FTS
+              {gettext("FTS")}
             </button>
             <button
               type="button"
@@ -122,7 +122,7 @@ defmodule DranWeb.SearchLive do
               phx-value-mode="semantic"
               class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "semantic", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
             >
-              Semantic
+              {gettext("Semantic")}
             </button>
             <button
               type="button"
@@ -130,7 +130,7 @@ defmodule DranWeb.SearchLive do
               phx-value-mode="hybrid"
               class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "hybrid", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
             >
-              Hybrid
+              {gettext("Hybrid")}
             </button>
           </div>
         </div>
@@ -153,11 +153,11 @@ defmodule DranWeb.SearchLive do
           </div>
 
           <p :if={@query != "" && @results == []} class="text-base-content/60">
-            No results found for "{@query}".
+            {gettext("No results found for \"%{query}\".") |> then(&String.replace(&1, "%{query}", @query))}
           </p>
 
           <p :if={@query == ""} class="text-base-content/60">
-            Enter a query above to search across all pages.
+            {gettext("Enter a query above to search across all pages.")}
           </p>
         </div>
       </div>
