@@ -116,31 +116,37 @@ defmodule DranWeb.PageEdit do
   def handle_event(
         "field_change",
         %{"page" => %{"slug" => new_slug}},
-        %{assigns: %{page: %Page{} = page, context: %{id: context_id}}} = socket
+        %{assigns: %{page: %Page{} = page}} = socket
       ) do
-    new_slug = String.trim(new_slug)
-    old_slug = page.slug
+    context_id = context_id(socket)
 
-    # Update the form's slug field
-    changeset = Brain.change_page(page, %{"slug" => new_slug})
-    socket = assign(socket, form: to_form(changeset, as: :page))
-
-    if new_slug != "" and new_slug != old_slug do
-      # Ensure uniqueness
-      final_slug = ensure_unique_slug(new_slug, context_id, page.slug, 0)
-
-      case Brain.update_page(page, %{slug: final_slug}) do
-        {:ok, updated_page} ->
-          {:noreply,
-           socket
-           |> assign(page: updated_page, save_status: "saved")
-           |> push_patch(to: page_path(updated_page.page_type, final_slug) <> "?edit=true")}
-
-        {:error, changeset} ->
-          {:noreply, assign(socket, form: to_form(changeset, as: :page))}
-      end
+    if is_nil(context_id) do
+      {:noreply, put_flash(socket, :error, "No context available for slug rename.")}
     else
-      {:noreply, socket}
+      new_slug = String.trim(new_slug)
+      old_slug = page.slug
+
+      # Update the form's slug field
+      changeset = Brain.change_page(page, %{"slug" => new_slug})
+      socket = assign(socket, form: to_form(changeset, as: :page))
+
+      if new_slug != "" and new_slug != old_slug do
+        # Ensure uniqueness
+        final_slug = ensure_unique_slug(new_slug, context_id, page.slug, 0)
+
+        case Brain.update_page(page, %{slug: final_slug}) do
+          {:ok, updated_page} ->
+            {:noreply,
+             socket
+             |> assign(page: updated_page, save_status: "saved")
+             |> push_patch(to: page_path(updated_page.page_type, final_slug) <> "?edit=true")}
+
+          {:error, changeset} ->
+            {:noreply, assign(socket, form: to_form(changeset, as: :page))}
+        end
+      else
+        {:noreply, socket}
+      end
     end
   end
 
