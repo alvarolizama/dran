@@ -191,10 +191,10 @@ defmodule DranWeb.DashboardLive do
                     </.link>
                   </div>
                   <div class="space-y-2 mt-2">
-                    <div
+                    <.link
                       :for={page <- @stats[:recent] || []}
+                      navigate={page_path(page)}
                       class="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition cursor-pointer"
-                      onclick={"window.location.href='#{page_path(page)}'"}
                     >
                       <.icon
                         name={@type_icons[page.page_type] || "hero-document"}
@@ -214,7 +214,7 @@ defmodule DranWeb.DashboardLive do
                       >
                         {page.summary}
                       </span>
-                    </div>
+                    </.link>
                     <p
                       :if={(@stats[:recent] || []) == []}
                       class="text-sm text-base-content/40 py-4 text-center"
