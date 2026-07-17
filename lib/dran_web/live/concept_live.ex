@@ -25,6 +25,7 @@ defmodule DranWeb.ConceptLive do
           page={@page}
           relations={@relations}
           versions={@versions}
+          compare_version={@compare_version}
           logs={@logs}
           context_slug={@context_slug}
         >
@@ -194,6 +195,7 @@ defmodule DranWeb.ConceptLive do
              page: page,
              relations: relations,
              versions: versions,
+             compare_version: nil,
              logs: logs,
              page_title: page.title,
              active_tab: "content",
@@ -267,6 +269,14 @@ defmodule DranWeb.ConceptLive do
 
   def handle_event("enrich_page", %{"slug" => slug}, socket),
     do: DranWeb.EnrichHandler.handle_enrich(slug, socket)
+
+  # ── Version comparison ──
+
+  def handle_event("compare_version", params, socket),
+    do: DranWeb.VersionCompare.handle_event("compare_version", params, socket)
+
+  def handle_event("clear_compare", params, socket),
+    do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
 
   def handle_info({:enriched, slug}, socket) do
     page = Dran.Brain.get_page_by_slug(slug, socket.assigns.context.id)

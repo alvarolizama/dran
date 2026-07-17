@@ -156,6 +156,7 @@ defmodule DranWeb.TodoLive do
           page={@page}
           relations={@relations}
           versions={@versions}
+          compare_version={@compare_version}
           logs={@logs}
           context_slug={@context_slug}
         >
@@ -375,6 +376,7 @@ defmodule DranWeb.TodoLive do
              page: page,
              relations: relations,
              versions: versions,
+             compare_version: nil,
              logs: logs,
              page_title: page.title,
              active_tab: "content",
@@ -504,6 +506,15 @@ defmodule DranWeb.TodoLive do
   def handle_event("field_change", p, s), do: PageEdit.handle_event("field_change", p, s)
   def handle_event("request_upload", p, s), do: PageEdit.handle_event("request_upload", p, s)
   def handle_event("upload_complete", p, s), do: PageEdit.handle_event("upload_complete", p, s)
+
+
+  # ── Version comparison ──
+
+  def handle_event("compare_version", params, socket),
+    do: DranWeb.VersionCompare.handle_event("compare_version", params, socket)
+
+  def handle_event("clear_compare", params, socket),
+    do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
 
   defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
 

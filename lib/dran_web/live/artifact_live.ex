@@ -25,6 +25,7 @@ defmodule DranWeb.ArtifactLive do
           page={@page}
           relations={@relations}
           versions={@versions}
+          compare_version={@compare_version}
           logs={@logs}
           context_slug={@context_slug}
         >
@@ -188,6 +189,7 @@ defmodule DranWeb.ArtifactLive do
              page: page,
              relations: relations,
              versions: versions,
+             compare_version: nil,
              logs: logs,
              page_title: page.title,
              active_tab: "content",
@@ -237,5 +239,14 @@ defmodule DranWeb.ArtifactLive do
   def handle_event("upload_complete", p, s), do: PageEdit.handle_event("upload_complete", p, s)
   def handle_event("suggest_summary", p, s), do: PageEdit.handle_event("suggest_summary", p, s)
   def handle_event("suggest_tags", p, s), do: PageEdit.handle_event("suggest_tags", p, s)
+
+  # ── Version comparison ──
+
+  def handle_event("compare_version", params, socket),
+    do: DranWeb.VersionCompare.handle_event("compare_version", params, socket)
+
+  def handle_event("clear_compare", params, socket),
+    do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
+
   defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
 end

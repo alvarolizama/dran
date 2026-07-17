@@ -1009,6 +1009,9 @@ defmodule Dran.Brain do
     )
   end
 
+  @doc "Alias for list_page_versions/1"
+  def list_versions(page_id), do: list_page_versions(page_id)
+
   @doc "Get a specific version of a page"
   def get_page_version(page_id, version) do
     Repo.one(

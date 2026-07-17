@@ -15,6 +15,7 @@ defmodule DranWeb.PageComponents do
   attr :relations, :map, default: %{outbound: [], inbound: []}
   attr :versions, :list, default: []
   attr :logs, :list, default: []
+  attr :compare_version, :map, default: nil
   attr :context_slug, :string, default: "personal"
 
   slot :actions
@@ -111,6 +112,13 @@ defmodule DranWeb.PageComponents do
               </p>
             </div>
           </div>
+
+          <div :if={@compare_version} class="border-t border-base-300 pt-4">
+            <DranWeb.VersionDiffComponent.diff
+              old_version={@compare_version}
+              new_version={@page}
+            />
+          </div>
         </div>
       </div>
 
@@ -201,6 +209,29 @@ defmodule DranWeb.PageComponents do
                 class="text-sm text-base-content/40"
               >
                 No relations
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+              Versions
+            </h3>
+            <div class="space-y-1">
+              <div :for={version <- @versions} class="flex items-center justify-between gap-2">
+                <span class="text-sm text-base-content/60">
+                  v{version.version} — {format_date(version.inserted_at)}
+                </span>
+                <button
+                  phx-click="compare_version"
+                  phx-value-version={version.version}
+                  class="btn btn-ghost btn-xs"
+                >
+                  Compare
+                </button>
+              </div>
+              <p :if={@versions == []} class="text-sm text-base-content/40">
+                No version history yet.
               </p>
             </div>
           </div>
