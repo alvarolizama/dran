@@ -1398,6 +1398,9 @@ defmodule Dran.MCP do
   defp start_agent_by_type("curator", input, context_id, opts),
     do: Agent.Curator.run(input, context_id, opts)
 
+  defp start_agent_by_type("weekly_review", input, context_id, opts),
+    do: Agent.WeeklyReview.run(input, context_id, opts)
+
   defp start_agent_by_type(_type, _input, _context_id, _opts),
     do: {:error, :unknown_agent_type}
 
