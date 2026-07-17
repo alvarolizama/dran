@@ -181,7 +181,13 @@ defmodule DranWeb.Layouts do
             path: ~p"/",
             badge: counts[:dashboard]
           },
-          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph", badge: counts[:graph]},
+          %{
+            key: "graph",
+            label: gettext("Graph"),
+            icon: "hero-share",
+            path: ~p"/graph",
+            badge: counts[:graph]
+          },
           %{
             key: "activity",
             label: gettext("Activity"),
@@ -194,7 +200,13 @@ defmodule DranWeb.Layouts do
       %{
         label: gettext("Knowledge"),
         items: [
-          %{key: "notes", label: gettext("Notes"), icon: "hero-document-text", path: ~p"/notes", badge: counts[:notes]},
+          %{
+            key: "notes",
+            label: gettext("Notes"),
+            icon: "hero-document-text",
+            path: ~p"/notes",
+            badge: counts[:notes]
+          },
           %{
             key: "concepts",
             label: gettext("Concepts"),
@@ -228,7 +240,13 @@ defmodule DranWeb.Layouts do
       %{
         label: gettext("Planning"),
         items: [
-          %{key: "goals", label: gettext("Goals"), icon: "hero-flag", path: ~p"/goals", badge: counts[:goals]},
+          %{
+            key: "goals",
+            label: gettext("Goals"),
+            icon: "hero-flag",
+            path: ~p"/goals",
+            badge: counts[:goals]
+          },
           %{
             key: "plans",
             label: gettext("Plans"),

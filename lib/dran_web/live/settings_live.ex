@@ -17,7 +17,7 @@ defmodule DranWeb.SettingsLive do
 
     socket =
       socket
-      |> assign(active_nav: "settings", page_title: "Settings")
+      |> assign(active_nav: "settings", page_title: gettext("Settings"))
       |> assign_brain_form()
 
     {:ok, socket}
@@ -101,105 +101,112 @@ defmodule DranWeb.SettingsLive do
       <div class="p-6 overflow-y-auto w-full">
         <div class="w-full space-y-6">
           <div>
-            <h1 class="text-2xl font-bold">Settings</h1>
+            <h1 class="text-2xl font-bold">{gettext("Settings")}</h1>
             <p class="text-sm text-base-content/50 mt-1">
-              Current configuration. Values are read from environment variables
-              at startup.
+              {gettext(
+                "Current configuration. Values are read from environment variables at startup."
+              )}
             </p>
           </div>
 
-          <.config_section title="Inference API" subtitle="LLM, embeddings, and reranking">
-            <.config_row label="Status" env="DRAN_INFERENCE_API_URL">
+          <.config_section
+            title={gettext("Inference API")}
+            subtitle={gettext("LLM, embeddings, and reranking")}
+          >
+            <.config_row label={gettext("Status")} env="DRAN_INFERENCE_API_URL">
               <.status_badge active={Config.enabled?()} />
             </.config_row>
-            <.config_row label="API URL" env="DRAN_INFERENCE_API_URL">
+            <.config_row label={gettext("API URL")} env="DRAN_INFERENCE_API_URL">
               <code class="text-sm font-mono text-primary">
                 {Config.base_url() || "—"}
               </code>
             </.config_row>
-            <.config_row label="API Key" env="DRAN_INFERENCE_API_KEY">
+            <.config_row label={gettext("API Key")} env="DRAN_INFERENCE_API_KEY">
               <span class="text-sm text-base-content/60">
                 {if Config.api_key(), do: "••••••••", else: "—"}
               </span>
             </.config_row>
-            <.config_row label="Chat model" env="DRAN_INFERENCE_CHAT_MODEL">
+            <.config_row label={gettext("Chat model")} env="DRAN_INFERENCE_CHAT_MODEL">
               <code class="text-sm font-mono text-primary">
                 {Config.chat_model() || "—"}
               </code>
             </.config_row>
-            <.config_row label="Embedding model" env="DRAN_INFERENCE_EMBEDDING_MODEL">
+            <.config_row label={gettext("Embedding model")} env="DRAN_INFERENCE_EMBEDDING_MODEL">
               <code class="text-sm font-mono text-primary">
                 {Config.embedding_model() || "—"}
               </code>
             </.config_row>
-            <.config_row label="Embedding dimensions">
+            <.config_row label={gettext("Embedding dimensions")}>
               <span class="text-sm text-base-content/60">{Config.embedding_dimensions()}</span>
             </.config_row>
-            <.config_row label="Embedding body limit" env="DRAN_EMBEDDING_BODY_LIMIT">
+            <.config_row label={gettext("Embedding body limit")} env="DRAN_EMBEDDING_BODY_LIMIT">
               <span class="text-sm text-base-content/60">
-                {Config.embedding_body_limit()} chars
+                {Config.embedding_body_limit()} {gettext("chars")}
               </span>
             </.config_row>
-            <.config_row label="Rerank model" env="DRAN_INFERENCE_RERANK_MODEL">
+            <.config_row label={gettext("Rerank model")} env="DRAN_INFERENCE_RERANK_MODEL">
               <code class="text-sm font-mono text-primary">
                 {Config.rerank_model() || "—"}
               </code>
             </.config_row>
-            <.config_row label="Rerank enabled" env="DRAN_INFERENCE_USE_RERANK">
+            <.config_row label={gettext("Rerank enabled")} env="DRAN_INFERENCE_USE_RERANK">
               <.status_badge active={Config.use_rerank?()} />
             </.config_row>
-            <.config_row label="Vision model" env="DRAN_INFERENCE_VISION_MODEL">
+            <.config_row label={gettext("Vision model")} env="DRAN_INFERENCE_VISION_MODEL">
               <code class="text-sm font-mono text-primary">{Config.vision_model()}</code>
             </.config_row>
-            <.config_row label="ASR model" env="DRAN_INFERENCE_ASR_MODEL">
+            <.config_row label={gettext("ASR model")} env="DRAN_INFERENCE_ASR_MODEL">
               <code class="text-sm font-mono text-primary">{Config.asr_model()}</code>
             </.config_row>
-            <.config_row label="MarkItDown model" env="DRAN_INFERENCE_MARKITDOWN_MODEL">
+            <.config_row label={gettext("MarkItDown model")} env="DRAN_INFERENCE_MARKITDOWN_MODEL">
               <code class="text-sm font-mono text-primary">
                 {Config.markitdown_model() || "—"}
               </code>
             </.config_row>
-            <.config_row label="Request timeout" env="DRAN_INFERENCE_TIMEOUT">
-              <span class="text-sm text-base-content/60">{Config.timeout()} ms</span>
+            <.config_row label={gettext("Request timeout")} env="DRAN_INFERENCE_TIMEOUT">
+              <span class="text-sm text-base-content/60">{Config.timeout()} {gettext("ms")}</span>
             </.config_row>
           </.config_section>
 
-          <.config_section title="Agents" subtitle="Autonomous research and ingest agents">
-            <.config_row label="Max steps" env="AGENT_MAX_STEPS">
+          <.config_section
+            title={gettext("Agents")}
+            subtitle={gettext("Autonomous research and ingest agents")}
+          >
+            <.config_row label={gettext("Max steps")} env="AGENT_MAX_STEPS">
               <span class="text-sm text-base-content/60">
                 {Application.get_env(:dran, :agent_max_steps, 150)}
               </span>
             </.config_row>
-            <.config_row label="Per-step timeout" env="AGENT_PER_STEP_TIMEOUT">
+            <.config_row label={gettext("Per-step timeout")} env="AGENT_PER_STEP_TIMEOUT">
               <span class="text-sm text-base-content/60">
-                {Application.get_env(:dran, :agent_per_step_timeout, 120_000)} ms
+                {Application.get_env(:dran, :agent_per_step_timeout, 120_000)} {gettext("ms")}
               </span>
             </.config_row>
           </.config_section>
 
           <.brain_tuning_section form={@brain_form} />
 
-          <.config_section title="Firecrawl" subtitle="Web search and scraping">
-            <.config_row label="Status" env="FIRECRAWL_API_KEY">
+          <.config_section title={gettext("Firecrawl")} subtitle={gettext("Web search and scraping")}>
+            <.config_row label={gettext("Status")} env="FIRECRAWL_API_KEY">
               <.status_badge active={Dran.Firecrawl.enabled?()} />
             </.config_row>
-            <.config_row label="API Key" env="FIRECRAWL_API_KEY">
+            <.config_row label={gettext("API Key")} env="FIRECRAWL_API_KEY">
               <span class="text-sm text-base-content/60">
                 {if Dran.Firecrawl.enabled?(), do: "••••••••", else: "—"}
               </span>
             </.config_row>
-            <.config_row label="Base URL">
+            <.config_row label={gettext("Base URL")}>
               <code class="text-sm font-mono text-primary">https://api.firecrawl.dev/v1</code>
             </.config_row>
           </.config_section>
 
-          <.config_section title="Uploads" subtitle="File attachment storage">
-            <.config_row label="Directory" env="UPLOADS_DIR">
+          <.config_section title={gettext("Uploads")} subtitle={gettext("File attachment storage")}>
+            <.config_row label={gettext("Directory")} env="UPLOADS_DIR">
               <code class="text-sm font-mono text-primary">
                 {Application.get_env(:dran, :uploads, []) |> Keyword.get(:dir, "priv/static/uploads")}
               </code>
             </.config_row>
-            <.config_row label="Max file size" env="UPLOADS_MAX_SIZE">
+            <.config_row label={gettext("Max file size")} env="UPLOADS_MAX_SIZE">
               <span class="text-sm text-base-content/60">
                 {Application.get_env(:dran, :uploads, [])
                 |> Keyword.get(:max_size, 104_857_600)
@@ -210,8 +217,9 @@ defmodule DranWeb.SettingsLive do
 
           <div class="text-xs text-base-content/40 pt-4 border-t border-base-300">
             <p>
-              To change these settings, set the corresponding environment
-              variables and restart the application.
+              {gettext(
+                "To change these settings, set the corresponding environment variables and restart the application."
+              )}
             </p>
           </div>
         </div>
@@ -327,7 +335,7 @@ defmodule DranWeb.SettingsLive do
         </div>
 
         <div class="flex justify-end pt-2">
-          <button type="submit" class="btn btn-primary btn-sm">
+          <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Saving…")}>
             {gettext("Save")}
           </button>
         </div>
@@ -343,7 +351,7 @@ defmodule DranWeb.SettingsLive do
       @active && "badge-success",
       !@active && "badge-ghost"
     ]}>
-      {if @active, do: "Enabled", else: "Disabled"}
+      {if @active, do: gettext("Enabled"), else: gettext("Disabled")}
     </span>
     """
   end

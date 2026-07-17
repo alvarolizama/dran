@@ -46,7 +46,7 @@ defmodule DranWeb.GraphLive do
 
   defp apply_action(socket, :index, _params) do
     socket
-    |> assign(page: nil, page_title: "Knowledge Graph")
+    |> assign(page: nil, page_title: gettext("Knowledge Graph"))
     |> load_index_graph()
   end
 
@@ -60,7 +60,7 @@ defmodule DranWeb.GraphLive do
 
         page ->
           socket
-          |> assign(page: page, page_title: "Graph: #{page.title}")
+          |> assign(page: page, page_title: gettext("Graph: %{title}", title: page.title))
           |> load_show_graph(page)
       end
     else
@@ -232,14 +232,18 @@ defmodule DranWeb.GraphLive do
     >
       <div class="p-6 overflow-y-auto">
         <h1 class="text-2xl font-bold mb-4">
-          <div :if={@live_action == :index}>Knowledge Graph</div>
-          <div :if={@live_action == :show and @page}>Graph: {@page.title}</div>
-          <div :if={@live_action == :show and @page == nil}>Graph</div>
+          <div :if={@live_action == :index}>{gettext("Knowledge Graph")}</div>
+          <div :if={@live_action == :show and @page}>
+            {gettext("Graph: %{title}", title: @page.title)}
+          </div>
+          <div :if={@live_action == :show and @page == nil}>{gettext("Graph")}</div>
         </h1>
 
         <div class="flex gap-4">
           <div class="w-48 shrink-0">
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase mb-2">Types</h3>
+            <h3 class="text-xs font-semibold text-base-content/40 uppercase mb-2">
+              {gettext("Types")}
+            </h3>
             <div :for={{type, color} <- @type_colors} class="flex items-center gap-2 mb-1">
               <div class="w-3 h-3 rounded-full" style={"background: #{color}"}></div>
               <span class="text-sm capitalize flex-1">{type}</span>
@@ -248,17 +252,21 @@ defmodule DranWeb.GraphLive do
               </span>
             </div>
 
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">Totals</h3>
+            <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">
+              {gettext("Totals")}
+            </h3>
             <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm flex-1">Nodes</span>
+              <span class="text-sm flex-1">{gettext("Nodes")}</span>
               <span class="text-xs text-base-content/40 tabular-nums">{@node_count}</span>
             </div>
             <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm flex-1">Edges</span>
+              <span class="text-sm flex-1">{gettext("Edges")}</span>
               <span class="text-xs text-base-content/40 tabular-nums">{@edge_count}</span>
             </div>
 
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">View Mode</h3>
+            <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">
+              {gettext("View Mode")}
+            </h3>
             <div class="join">
               <button
                 class={[
@@ -285,7 +293,10 @@ defmodule DranWeb.GraphLive do
             </div>
           </div>
 
-          <div class="flex-1 bg-base-200 rounded-lg overflow-hidden relative" style="min-height: calc(100vh - 180px);">
+          <div
+            class="flex-1 bg-base-200 rounded-lg overflow-hidden relative"
+            style="min-height: calc(100vh - 180px);"
+          >
             <%= if @view_mode == "2d" do %>
               <svg
                 id="graph-svg"
@@ -335,7 +346,7 @@ defmodule DranWeb.GraphLive do
               </svg>
 
               <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
-                Scroll para zoom · Arrastra el fondo para moverte · Arrastra un nodo para reposicionar
+                {gettext("Scroll to zoom · Drag the background to pan · Drag a node to reposition")}
               </div>
             <% else %>
               <div
@@ -346,7 +357,7 @@ defmodule DranWeb.GraphLive do
               >
               </div>
               <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
-                Arrastra para rotar · Scroll para zoom · Click-derecho para mover
+                {gettext("Drag to rotate · Scroll to zoom · Right-click to pan")}
               </div>
             <% end %>
           </div>

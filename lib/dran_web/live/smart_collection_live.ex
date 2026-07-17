@@ -62,9 +62,7 @@ defmodule DranWeb.SmartCollectionLive do
             {gettext("No smart collections yet.")}
           </h2>
           <p class="text-sm text-base-content/50 mt-1 max-w-sm mx-auto">
-            {gettext(
-              "Save a set of filters from search or any page list to create one."
-            )}
+            {gettext("Save a set of filters from search or any page list to create one.")}
           </p>
           <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm mt-4">
             <.icon name="hero-plus" class="w-4 h-4" />
@@ -183,7 +181,10 @@ defmodule DranWeb.SmartCollectionLive do
           </div>
 
           <div :if={@results == []} class="text-center py-12">
-            <.icon name="hero-document-magnifying-glass" class="w-12 h-12 mx-auto mb-3 text-base-content/30" />
+            <.icon
+              name="hero-document-magnifying-glass"
+              class="w-12 h-12 mx-auto mb-3 text-base-content/30"
+            />
             <p class="text-sm text-base-content/50">
               {gettext("No pages match this collection's filters.")}
             </p>
@@ -280,7 +281,11 @@ defmodule DranWeb.SmartCollectionLive do
             <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">
               {gettext("Cancel")}
             </.link>
-            <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Creating…")}>
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm"
+              phx-disable-with={gettext("Creating…")}
+            >
               <.icon name="hero-check" class="w-4 h-4" /> {gettext("Save Collection")}
             </button>
           </div>

@@ -100,7 +100,9 @@ defmodule DranWeb.QueryLive do
                     />
 
                     <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext(
+                        "Cancel"
+                      )}</button>
                       <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
@@ -111,7 +113,9 @@ defmodule DranWeb.QueryLive do
                 </div>
 
                 <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
+                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">
+                    {gettext("Changelog")}
+                  </h3>
                   <div class="space-y-1">
                     <div :for={version <- @versions} class="text-sm text-base-content/60">
                       {gettext("v%{version} — %{date} by %{author}",
@@ -288,11 +292,14 @@ defmodule DranWeb.QueryLive do
 
   def handle_info({:enriched, slug}, socket) do
     page = Dran.Brain.get_page_by_slug(slug, socket.assigns.context.id)
-    {:noreply, assign(socket, page: page) |> put_flash(:info, gettext("Page enriched with web content."))}
+
+    {:noreply,
+     assign(socket, page: page) |> put_flash(:info, gettext("Page enriched with web content."))}
   end
 
   def handle_info({:enrich_failed, _slug, reason}, socket) do
-    {:noreply, put_flash(socket, :error, gettext("Enrichment failed: %{reason}", reason: inspect(reason)))}
+    {:noreply,
+     put_flash(socket, :error, gettext("Enrichment failed: %{reason}", reason: inspect(reason)))}
   end
 
   defp handle_progress(:file, _entry, socket) do

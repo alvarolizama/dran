@@ -27,7 +27,7 @@ defmodule DranWeb.AgentLive do
       <div class="flex-1 overflow-y-auto w-full">
         <div class="w-full p-6 space-y-6">
           <div>
-            <h1 class="text-2xl font-bold capitalize">{@type} Agent</h1>
+            <h1 class="text-2xl font-bold capitalize">{@type} {gettext("Agent")}</h1>
             <p class="text-sm text-base-content/50 mt-1">{@description}</p>
           </div>
 
@@ -44,7 +44,7 @@ defmodule DranWeb.AgentLive do
               <div class="alert alert-success">
                 <.icon name="hero-check-circle" class="size-5" />
                 <div>
-                  <p class="font-medium">Done</p>
+                  <p class="font-medium">{gettext("Done")}</p>
                   <p class="text-sm">{@session.summary}</p>
                 </div>
               </div>
@@ -68,7 +68,7 @@ defmodule DranWeb.AgentLive do
                 <%= if @type == "research" do %>
                   <div class="flex-1">
                     <span class="label mb-1 block text-sm font-medium text-base-content/70">
-                      Output language
+                      {gettext("Output language")}
                     </span>
                     <select
                       name="agent[lang]"
@@ -85,8 +85,12 @@ defmodule DranWeb.AgentLive do
                     </select>
                   </div>
                 <% end %>
-                <button type="submit" class="btn btn-primary btn-sm shrink-0">
-                  <.icon name="hero-play" class="size-4" /> Start
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-sm shrink-0"
+                  phx-disable-with={gettext("Starting…")}
+                >
+                  <.icon name="hero-play" class="size-4" /> {gettext("Start")}
                 </button>
               </div>
             </.form>
@@ -103,25 +107,25 @@ defmodule DranWeb.AgentLive do
     ~H"""
     <div class="flex items-center justify-between p-4 rounded-lg border border-base-300 bg-base-200/30">
       <div class="flex-1 min-w-0">
-        <div class="text-sm text-base-content/60">Input</div>
+        <div class="text-sm text-base-content/60">{gettext("Input")}</div>
         <div class="font-medium truncate">{@session.input}</div>
         <div class="text-xs text-base-content/40 mt-0.5">
-          Language: {session_lang_name(@session)}
+          {gettext("Language")}: {session_lang_name(@session)}
         </div>
       </div>
       <div class="flex items-center gap-3">
         <div class="text-right">
-          <div class="text-sm text-base-content/60">Status</div>
+          <div class="text-sm text-base-content/60">{gettext("Status")}</div>
           <span class={status_badge_class(@session.status)}>{@session.status}</span>
         </div>
         <button
           :if={@session.status == "running"}
           type="button"
           phx-click="stop"
-          data-confirm="Stop this agent session?"
+          data-confirm={gettext("Stop this agent session?")}
           class="btn btn-error btn-sm"
         >
-          <.icon name="hero-stop" class="size-4" /> Stop
+          <.icon name="hero-stop" class="size-4" /> {gettext("Stop")}
         </button>
       </div>
     </div>
@@ -152,11 +156,13 @@ defmodule DranWeb.AgentLive do
           </div>
         </div>
         <div class="mt-1 text-xs text-base-content/50">
-          Step {num_steps(@steps)}
+          {gettext("Step %{n}", n: num_steps(@steps))}
           <%= if @session.steps_count > 0 do %>
-            of up to {@session.steps_count}
+            {gettext("of up to %{n}", n: @session.steps_count)}
           <% end %>
-          · {count_by_status(@steps, "ok")} completed, {count_by_status(@steps, "error")} failed
+          · {gettext("%{n} completed", n: count_by_status(@steps, "ok"))}, {gettext("%{n} failed",
+            n: count_by_status(@steps, "error")
+          )}
         </div>
       </div>
       <span class="loading loading-dots loading-sm text-primary shrink-0"></span>
@@ -164,42 +170,54 @@ defmodule DranWeb.AgentLive do
     """
   end
 
-  defp current_action_label([]), do: "Starting agent…"
+  defp current_action_label([]), do: gettext("Starting agent…")
 
   defp current_action_label(steps) do
     case List.last(steps) do
       %{tool_name: tool, tool_args: args, tool_result: %{"status" => "pending"}} ->
-        "Running #{humanize_tool(tool, args)}…"
+        gettext("Running %{action}…", action: humanize_tool(tool, args))
 
       %{tool_name: tool, tool_args: args} ->
-        "Preparing next step after #{humanize_tool(tool, args)}…"
+        gettext("Preparing next step after %{action}…", action: humanize_tool(tool, args))
 
       _ ->
-        "Working…"
+        gettext("Working…")
     end
   end
 
   defp humanize_tool("web_search", args) do
     query = args["query"] || ""
-    if query != "", do: "web search for \"#{truncate(query, 50)}\"", else: "web search"
+
+    if query != "",
+      do: gettext("web search for \"%{q}\"", q: truncate(query, 50)),
+      else: gettext("web search")
   end
 
   defp humanize_tool("web_scrape", args) do
     url = args["url"] || ""
-    if url != "", do: "scraping #{truncate(url, 60)}", else: "page scrape"
+
+    if url != "",
+      do: gettext("scraping %{url}", url: truncate(url, 60)),
+      else: gettext("page scrape")
   end
 
   defp humanize_tool("search_pages", args) do
     query = args["query"] || ""
-    if query != "", do: "brain search for \"#{truncate(query, 50)}\"", else: "brain search"
+
+    if query != "",
+      do: gettext("brain search for \"%{q}\"", q: truncate(query, 50)),
+      else: gettext("brain search")
   end
 
   defp humanize_tool("create_page", args) do
     title = args["title"] || ""
-    if title != "", do: "creating page \"#{truncate(title, 50)}\"", else: "page creation"
+
+    if title != "",
+      do: gettext("creating page \"%{title}\"", title: truncate(title, 50)),
+      else: gettext("page creation")
   end
 
-  defp humanize_tool("done", _args), do: "finishing up"
+  defp humanize_tool("done", _args), do: gettext("finishing up")
 
   defp humanize_tool(other, _args), do: other
 
@@ -235,7 +253,7 @@ defmodule DranWeb.AgentLive do
   defp recent_sessions(assigns) do
     ~H"""
     <div :if={@sessions != []} class="space-y-3">
-      <h2 class="text-sm font-semibold text-base-content/60">Recent sessions</h2>
+      <h2 class="text-sm font-semibold text-base-content/60">{gettext("Recent sessions")}</h2>
 
       <div class="space-y-2">
         <div
@@ -246,7 +264,10 @@ defmodule DranWeb.AgentLive do
           <div class="min-w-0">
             <div class="font-medium text-sm truncate">{session.input}</div>
             <div class="text-xs text-base-content/50">
-              {format_session_date(session.inserted_at)} · {session.steps_count} steps · {session.pages_created} pages<%= if session_lang(session) != "es" do %>
+              {format_session_date(session.inserted_at)} · {gettext("%{n} steps",
+                n: session.steps_count
+              )} · {gettext("%{n} pages", n: session.pages_created)}
+              <%= if session_lang(session) != "es" do %>
                 · {session_lang(session)}
               <% end %>
             </div>
@@ -257,7 +278,7 @@ defmodule DranWeb.AgentLive do
               navigate={~p"/agents/#{@type}/#{session.id}"}
               class="btn btn-ghost btn-xs"
             >
-              Resume
+              {gettext("Resume")}
             </.link>
           </div>
         </div>
@@ -315,10 +336,10 @@ defmodule DranWeb.AgentLive do
   defp steps_timeline(assigns) do
     ~H"""
     <div class="space-y-3">
-      <h2 class="text-sm font-semibold text-base-content/60">Steps</h2>
+      <h2 class="text-sm font-semibold text-base-content/60">{gettext("Steps")}</h2>
 
       <%= if @steps == [] do %>
-        <p class="text-sm text-base-content/50">No steps yet.</p>
+        <p class="text-sm text-base-content/50">{gettext("No steps yet.")}</p>
       <% else %>
         <div class="space-y-2">
           <div
@@ -349,7 +370,7 @@ defmodule DranWeb.AgentLive do
             <%= if pending?(step) do %>
               <div class="mt-2 flex items-center gap-2 text-xs text-primary">
                 <span class="loading loading-dots loading-xs"></span>
-                <span>Executing…</span>
+                <span>{gettext("Executing…")}</span>
               </div>
             <% end %>
           </div>
@@ -415,10 +436,10 @@ defmodule DranWeb.AgentLive do
     %{
       type: "research",
       active_nav: "research",
-      input_label: "Research topic",
+      input_label: gettext("Research topic"),
       input_placeholder: "Yeshe Walmo",
-      description: "Explore a topic on the web and create pages.",
-      page_title: "Research Agent"
+      description: gettext("Explore a topic on the web and create pages."),
+      page_title: gettext("Research Agent")
     }
   end
 
@@ -426,10 +447,10 @@ defmodule DranWeb.AgentLive do
     %{
       type: "ingest",
       active_nav: "ingest",
-      input_label: "URL to ingest",
+      input_label: gettext("URL to ingest"),
       input_placeholder: "https://example.com/article",
-      description: "Ingest files or URLs and optionally enrich the resulting page.",
-      page_title: "Files Ingest"
+      description: gettext("Ingest files or URLs and optionally enrich the resulting page."),
+      page_title: gettext("Files Ingest")
     }
   end
 
@@ -475,10 +496,13 @@ defmodule DranWeb.AgentLive do
         {:error, reason} ->
           {:noreply,
            socket
-           |> put_flash(:error, "Failed to start agent: #{inspect(reason)}")}
+           |> put_flash(
+             :error,
+             gettext("Failed to start agent: %{reason}", reason: inspect(reason))
+           )}
       end
     else
-      {:noreply, put_flash(socket, :error, "Input and context are required")}
+      {:noreply, put_flash(socket, :error, gettext("Input and context are required"))}
     end
   end
 
@@ -486,7 +510,7 @@ defmodule DranWeb.AgentLive do
   def handle_event("stop", _params, socket) do
     if socket.assigns.session && socket.assigns.session.status == "running" do
       :ok = Dran.Agent.Engine.cancel(socket.assigns.session.id)
-      {:noreply, refresh_session(socket) |> put_flash(:info, "Agent stopped")}
+      {:noreply, refresh_session(socket) |> put_flash(:info, gettext("Agent stopped"))}
     else
       {:noreply, socket}
     end

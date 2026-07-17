@@ -87,6 +87,7 @@ msgstr "Actividad"
 
 #: lib/dran_web/components/layouts.ex:268
 #: lib/dran_web/live/dashboard_live.ex:235
+#: lib/dran_web/live/settings_live.ex:168
 #, elixir-autogen, elixir-format
 msgid "Agents"
 msgstr "Agentes"
@@ -269,15 +270,18 @@ msgid "Delete"
 msgstr "Eliminar"
 
 #: lib/dran_web/components/layouts.ex:304
+#: lib/dran_web/live/docs_live.ex:70
 #, elixir-autogen, elixir-format
 msgid "Docs"
 msgstr "Documentación"
 
 #: lib/dran_web/components/layouts.ex:306
+#: lib/dran_web/live/docs_live.ex:38
 #, elixir-autogen, elixir-format
 msgid "Documentation"
 msgstr "Documentación"
 
+#: lib/dran_web/live/agent_live.ex:47
 #: lib/dran_web/live/dashboard_live.ex:61
 #: lib/dran_web/live/todo_live.ex:26
 #, elixir-autogen, elixir-format
@@ -327,6 +331,7 @@ msgid "Entities"
 msgstr "Entidades"
 
 #: lib/dran_web/components/layouts.ex:278
+#: lib/dran_web/live/agent_live.ex:432
 #, elixir-autogen, elixir-format
 msgid "Files Ingest"
 msgstr "Importar archivos"
@@ -348,6 +353,7 @@ msgstr "Objetivos"
 #: lib/dran_web/live/concept_live.ex:12
 #: lib/dran_web/live/dashboard_live.ex:90
 #: lib/dran_web/live/entity_live.ex:12
+#: lib/dran_web/live/graph_live.ex:237
 #: lib/dran_web/live/note_live.ex:12
 #: lib/dran_web/live/plan_live.ex:12
 #: lib/dran_web/live/query_live.ex:12
@@ -564,7 +570,7 @@ msgstr "Investigación"
 #: lib/dran_web/live/query_live.ex:104
 #: lib/dran_web/live/reference_live.ex:45
 #: lib/dran_web/live/reference_live.ex:99
-#: lib/dran_web/live/settings_live.ex:331
+#: lib/dran_web/live/settings_live.ex:333
 #: lib/dran_web/live/todo_live.ex:197
 #: lib/dran_web/live/todo_live.ex:275
 #, elixir-autogen, elixir-format
@@ -582,6 +588,7 @@ msgid "Save as smart collection"
 msgstr "Guardar como colección inteligente"
 
 #: lib/dran_web/components/page_components.ex:501
+#: lib/dran_web/live/graph_live.ex:338
 #, elixir-autogen, elixir-format
 msgid "Scroll to zoom · Drag the background to pan · Drag a node to reposition"
 msgstr "Desplaza para acercar · Arrastra el fondo para moverte · Arrastra un nodo para reposicionar"
@@ -597,6 +604,8 @@ msgid "Search..."
 msgstr "Buscar..."
 
 #: lib/dran_web/components/layouts.ex:296
+#: lib/dran_web/live/settings_live.ex:20
+#: lib/dran_web/live/settings_live.ex:104
 #, elixir-autogen, elixir-format
 msgid "Settings"
 msgstr "Ajustes"
@@ -680,6 +689,8 @@ msgid "Total Pages"
 msgstr "Páginas totales"
 
 #: lib/dran_web/components/page_components.ex:170
+#: lib/dran_web/live/docs_live.ex:612
+#: lib/dran_web/live/docs_live.ex:1049
 #, elixir-autogen, elixir-format
 msgid "Type"
 msgstr "Tipo"
@@ -964,17 +975,17 @@ msgstr "hace %{n}m"
 msgid "%{n}w ago"
 msgstr "hace %{n}sem"
 
-#: lib/dran_web/live/settings_live.ex:306
+#: lib/dran_web/live/settings_live.ex:308
 #, elixir-autogen, elixir-format
 msgid "Agent max pages"
 msgstr "Máx. páginas del agente"
 
-#: lib/dran_web/live/settings_live.ex:311
+#: lib/dran_web/live/settings_live.ex:313
 #, elixir-autogen, elixir-format
 msgid "Agent max sources"
 msgstr "Máx. fuentes del agente"
 
-#: lib/dran_web/live/settings_live.ex:268
+#: lib/dran_web/live/settings_live.ex:270
 #, elixir-autogen, elixir-format
 msgid "Brain tuning"
 msgstr "Ajuste del cerebro"
@@ -989,7 +1000,7 @@ msgstr "Revisa la ortografía o prueba una estrategia diferente arriba."
 msgid "Command palette"
 msgstr "Paleta de comandos"
 
-#: lib/dran_web/live/settings_live.ex:325
+#: lib/dran_web/live/settings_live.ex:327
 #, elixir-autogen, elixir-format
 msgid "Daily note enabled"
 msgstr "Nota diaria habilitada"
@@ -1049,7 +1060,7 @@ msgstr "Acciones rápidas"
 msgid "Recent changes in %{name}"
 msgstr "Cambios recientes en %{name}"
 
-#: lib/dran_web/live/settings_live.ex:319
+#: lib/dran_web/live/settings_live.ex:321
 #, elixir-autogen, elixir-format
 msgid "Research language"
 msgstr "Idioma de investigación"
@@ -1059,22 +1070,22 @@ msgstr "Idioma de investigación"
 msgid "Search pages, actions..."
 msgstr "Buscar páginas, acciones..."
 
-#: lib/dran_web/live/settings_live.ex:298
+#: lib/dran_web/live/settings_live.ex:300
 #, elixir-autogen, elixir-format
 msgid "Semantic threshold (long)"
 msgstr "Umbral semántico (largo)"
 
-#: lib/dran_web/live/settings_live.ex:292
+#: lib/dran_web/live/settings_live.ex:294
 #, elixir-autogen, elixir-format
 msgid "Semantic threshold (mid)"
 msgstr "Umbral semántico (medio)"
 
-#: lib/dran_web/live/settings_live.ex:286
+#: lib/dran_web/live/settings_live.ex:288
 #, elixir-autogen, elixir-format
 msgid "Semantic threshold (short)"
 msgstr "Umbral semántico (corto)"
 
-#: lib/dran_web/live/settings_live.ex:270
+#: lib/dran_web/live/settings_live.ex:272
 #, elixir-autogen, elixir-format
 msgid "Semantic thresholds, agent limits, and research preferences"
 msgstr "Umbrales semánticos, límites del agente y preferencias de investigación"
@@ -1345,3 +1356,475 @@ msgstr "semánticas: %{n}"
 #, elixir-autogen, elixir-format
 msgid "Suggest"
 msgstr "Sugerir"
+
+#: lib/dran_web/live/agent_live.ex:159
+#, elixir-autogen, elixir-format
+msgid "%{n} completed"
+msgstr "%{n} completados"
+
+#: lib/dran_web/live/agent_live.ex:159
+#, elixir-autogen, elixir-format
+msgid "%{n} failed"
+msgstr "%{n} fallidos"
+
+#: lib/dran_web/live/agent_live.ex:249
+#, elixir-autogen, elixir-format
+msgid "%{n} pages"
+msgstr "%{n} páginas"
+
+#: lib/dran_web/live/agent_live.ex:249
+#, elixir-autogen, elixir-format
+msgid "%{n} steps"
+msgstr "%{n} pasos"
+
+#: lib/dran_web/live/docs_live.ex:18
+#, elixir-autogen, elixir-format
+msgid "API"
+msgstr "API"
+
+#: lib/dran_web/live/settings_live.ex:121
+#: lib/dran_web/live/settings_live.ex:187
+#, elixir-autogen, elixir-format
+msgid "API Key"
+msgstr "Clave API"
+
+#: lib/dran_web/live/settings_live.ex:116
+#, elixir-autogen, elixir-format
+msgid "API URL"
+msgstr "URL de API"
+
+#: lib/dran_web/live/settings_live.ex:155
+#, elixir-autogen, elixir-format
+msgid "ASR model"
+msgstr "Modelo ASR"
+
+#: lib/dran_web/live/agent_live.ex:30
+#, elixir-autogen, elixir-format
+msgid "Agent"
+msgstr "Agente"
+
+#: lib/dran_web/live/agent_live.ex:489
+#, elixir-autogen, elixir-format
+msgid "Agent stopped"
+msgstr "Agente detenido"
+
+#: lib/dran_web/live/docs_live.ex:20
+#, elixir-autogen, elixir-format
+msgid "Auth"
+msgstr "Autenticación"
+
+#: lib/dran_web/live/settings_live.ex:168
+#, elixir-autogen, elixir-format
+msgid "Autonomous research and ingest agents"
+msgstr "Agentes autónomos de investigación e ingesta"
+
+#: lib/dran_web/live/settings_live.ex:192
+#, elixir-autogen, elixir-format
+msgid "Base URL"
+msgstr "URL base"
+
+#: lib/dran_web/live/settings_live.ex:126
+#, elixir-autogen, elixir-format
+msgid "Chat model"
+msgstr "Modelo de chat"
+
+#: lib/dran_web/live/settings_live.ex:106
+#, elixir-autogen, elixir-format
+msgid "Current configuration. Values are read from environment variables at startup."
+msgstr "Configuración actual. Los valores se leen de variables de entorno al iniciar."
+
+#: lib/dran_web/live/docs_live.ex:240
+#, elixir-autogen, elixir-format
+msgid "Default"
+msgstr "Predeterminado"
+
+#: lib/dran_web/live/docs_live.ex:1051
+#, elixir-autogen, elixir-format
+msgid "Description"
+msgstr "Descripción"
+
+#: lib/dran_web/live/settings_live.ex:198
+#, elixir-autogen, elixir-format
+msgid "Directory"
+msgstr "Directorio"
+
+#: lib/dran_web/live/settings_live.ex:348
+#, elixir-autogen, elixir-format
+msgid "Disabled"
+msgstr "Desactivado"
+
+#: lib/dran_web/live/docs_live.ex:80
+#, elixir-autogen, elixir-format
+msgid "Docs · %{tab}"
+msgstr "Documentación · %{tab}"
+
+#: lib/dran_web/live/graph_live.ex:349
+#, elixir-autogen, elixir-format
+msgid "Drag to rotate · Scroll to zoom · Right-click to pan"
+msgstr "Arrastra para rotar · Desplaza para acercar · Clic derecho para mover"
+
+#: lib/dran_web/live/graph_live.ex:257
+#, elixir-autogen, elixir-format
+msgid "Edges"
+msgstr "Aristas"
+
+#: lib/dran_web/live/settings_live.ex:139
+#, elixir-autogen, elixir-format
+msgid "Embedding body limit"
+msgstr "Límite de cuerpo de embedding"
+
+#: lib/dran_web/live/settings_live.ex:136
+#, elixir-autogen, elixir-format
+msgid "Embedding dimensions"
+msgstr "Dimensiones de embedding"
+
+#: lib/dran_web/live/settings_live.ex:131
+#, elixir-autogen, elixir-format
+msgid "Embedding model"
+msgstr "Modelo de embedding"
+
+#: lib/dran_web/live/settings_live.ex:348
+#, elixir-autogen, elixir-format
+msgid "Enabled"
+msgstr "Activado"
+
+#: lib/dran_web/live/agent_live.ex:352
+#, elixir-autogen, elixir-format
+msgid "Executing…"
+msgstr "Ejecutando…"
+
+#: lib/dran_web/live/agent_live.ex:420
+#, elixir-autogen, elixir-format
+msgid "Explore a topic on the web and create pages."
+msgstr "Explora un tema en la web y crea páginas."
+
+#: lib/dran_web/live/agent_live.ex:478
+#, elixir-autogen, elixir-format
+msgid "Failed to start agent: %{reason}"
+msgstr "No se pudo iniciar el agente: %{reason}"
+
+#: lib/dran_web/live/settings_live.ex:197
+#, elixir-autogen, elixir-format
+msgid "File attachment storage"
+msgstr "Almacenamiento de archivos adjuntos"
+
+#: lib/dran_web/live/settings_live.ex:183
+#, elixir-autogen, elixir-format
+msgid "Firecrawl"
+msgstr "Firecrawl"
+
+#: lib/dran_web/live/graph_live.ex:63
+#: lib/dran_web/live/graph_live.ex:236
+#, elixir-autogen, elixir-format
+msgid "Graph: %{title}"
+msgstr "Grafo: %{title}"
+
+#: lib/dran_web/live/settings_live.ex:112
+#, elixir-autogen, elixir-format
+msgid "Inference API"
+msgstr "API de inferencia"
+
+#: lib/dran_web/live/agent_live.ex:431
+#, elixir-autogen, elixir-format
+msgid "Ingest files or URLs and optionally enrich the resulting page."
+msgstr "Importa archivos o URLs y opcionalmente enriquece la página resultante."
+
+#: lib/dran_web/live/agent_live.ex:106
+#, elixir-autogen, elixir-format
+msgid "Input"
+msgstr "Entrada"
+
+#: lib/dran_web/live/agent_live.ex:481
+#, elixir-autogen, elixir-format
+msgid "Input and context are required"
+msgstr "Se requiere entrada y contexto"
+
+#: lib/dran_web/live/docs_live.ex:615
+#, elixir-autogen, elixir-format
+msgid "Key meta fields"
+msgstr "Campos meta clave"
+
+#: lib/dran_web/live/graph_live.ex:49
+#: lib/dran_web/live/graph_live.ex:235
+#, elixir-autogen, elixir-format
+msgid "Knowledge Graph"
+msgstr "Grafo de conocimiento"
+
+#: lib/dran_web/live/settings_live.ex:112
+#, elixir-autogen, elixir-format
+msgid "LLM, embeddings, and reranking"
+msgstr "LLM, embeddings y reranking"
+
+#: lib/dran_web/live/agent_live.ex:109
+#, elixir-autogen, elixir-format
+msgid "Language"
+msgstr "Idioma"
+
+#: lib/dran_web/live/docs_live.ex:19
+#, elixir-autogen, elixir-format
+msgid "MCP"
+msgstr "MCP"
+
+#: lib/dran_web/live/settings_live.ex:158
+#, elixir-autogen, elixir-format
+msgid "MarkItDown model"
+msgstr "Modelo MarkItDown"
+
+#: lib/dran_web/live/settings_live.ex:203
+#, elixir-autogen, elixir-format
+msgid "Max file size"
+msgstr "Tamaño máximo de archivo"
+
+#: lib/dran_web/live/settings_live.ex:169
+#, elixir-autogen, elixir-format
+msgid "Max steps"
+msgstr "Pasos máximos"
+
+#: lib/dran_web/live/agent_live.ex:321
+#, elixir-autogen, elixir-format
+msgid "No steps yet."
+msgstr "Aún no hay pasos."
+
+#: lib/dran_web/live/graph_live.ex:253
+#, elixir-autogen, elixir-format
+msgid "Nodes"
+msgstr "Nodos"
+
+#: lib/dran_web/live/agent_live.ex:71
+#, elixir-autogen, elixir-format
+msgid "Output language"
+msgstr "Idioma de salida"
+
+#: lib/dran_web/live/docs_live.ex:17
+#, elixir-autogen, elixir-format
+msgid "Overview"
+msgstr "Visión general"
+
+#: lib/dran_web/live/docs_live.ex:1048
+#, elixir-autogen, elixir-format
+msgid "Parameter"
+msgstr "Parámetro"
+
+#: lib/dran_web/live/settings_live.ex:174
+#, elixir-autogen, elixir-format
+msgid "Per-step timeout"
+msgstr "Tiempo límite por paso"
+
+#: lib/dran_web/live/agent_live.ex:175
+#, elixir-autogen, elixir-format
+msgid "Preparing next step after %{action}…"
+msgstr "Preparando el siguiente paso tras %{action}…"
+
+#: lib/dran_web/live/docs_live.ex:241
+#: lib/dran_web/live/docs_live.ex:613
+#, elixir-autogen, elixir-format
+msgid "Purpose"
+msgstr "Propósito"
+
+#: lib/dran_web/live/agent_live.ex:238
+#, elixir-autogen, elixir-format
+msgid "Recent sessions"
+msgstr "Sesiones recientes"
+
+#: lib/dran_web/live/settings_live.ex:163
+#, elixir-autogen, elixir-format
+msgid "Request timeout"
+msgstr "Tiempo límite de petición"
+
+#: lib/dran_web/live/docs_live.ex:1050
+#, elixir-autogen, elixir-format
+msgid "Required"
+msgstr "Requerido"
+
+#: lib/dran_web/live/settings_live.ex:149
+#, elixir-autogen, elixir-format
+msgid "Rerank enabled"
+msgstr "Rerank activado"
+
+#: lib/dran_web/live/settings_live.ex:144
+#, elixir-autogen, elixir-format
+msgid "Rerank model"
+msgstr "Modelo de rerank"
+
+#: lib/dran_web/live/agent_live.ex:421
+#, elixir-autogen, elixir-format
+msgid "Research Agent"
+msgstr "Agente de investigación"
+
+#: lib/dran_web/live/agent_live.ex:418
+#, elixir-autogen, elixir-format
+msgid "Research topic"
+msgstr "Tema de investigación"
+
+#: lib/dran_web/live/agent_live.ex:260
+#, elixir-autogen, elixir-format
+msgid "Resume"
+msgstr "Reanudar"
+
+#: lib/dran_web/live/agent_live.ex:172
+#, elixir-autogen, elixir-format
+msgid "Running %{action}…"
+msgstr "Ejecutando %{action}…"
+
+#: lib/dran_web/live/settings_live.ex:332
+#, elixir-autogen, elixir-format
+msgid "Saving…"
+msgstr "Guardando…"
+
+#: lib/dran_web/live/agent_live.ex:89
+#, elixir-autogen, elixir-format
+msgid "Start"
+msgstr "Iniciar"
+
+#: lib/dran_web/live/agent_live.ex:167
+#, elixir-autogen, elixir-format
+msgid "Starting agent…"
+msgstr "Iniciando agente…"
+
+#: lib/dran_web/live/agent_live.ex:88
+#, elixir-autogen, elixir-format
+msgid "Starting…"
+msgstr "Iniciando…"
+
+#: lib/dran_web/live/agent_live.ex:114
+#: lib/dran_web/live/settings_live.ex:113
+#: lib/dran_web/live/settings_live.ex:184
+#, elixir-autogen, elixir-format
+msgid "Status"
+msgstr "Estado"
+
+#: lib/dran_web/live/agent_live.ex:155
+#, elixir-autogen, elixir-format
+msgid "Step %{n}"
+msgstr "Paso %{n}"
+
+#: lib/dran_web/live/agent_live.ex:318
+#, elixir-autogen, elixir-format
+msgid "Steps"
+msgstr "Pasos"
+
+#: lib/dran_web/live/agent_live.ex:124
+#, elixir-autogen, elixir-format
+msgid "Stop"
+msgstr "Detener"
+
+#: lib/dran_web/live/agent_live.ex:121
+#, elixir-autogen, elixir-format
+msgid "Stop this agent session?"
+msgstr "¿Detener esta sesión del agente?"
+
+#: lib/dran_web/live/docs_live.ex:614
+#, elixir-autogen, elixir-format
+msgid "Subtypes (meta.kind)"
+msgstr "Subtipos (meta.kind)"
+
+#: lib/dran_web/live/settings_live.ex:214
+#, elixir-autogen, elixir-format
+msgid "To change these settings, set the corresponding environment variables and restart the application."
+msgstr "Para cambiar estos ajustes, define las variables de entorno correspondientes y reinicia la aplicación."
+
+#: lib/dran_web/live/graph_live.ex:251
+#, elixir-autogen, elixir-format
+msgid "Totals"
+msgstr "Totales"
+
+#: lib/dran_web/live/graph_live.ex:242
+#, elixir-autogen, elixir-format
+msgid "Types"
+msgstr "Tipos"
+
+#: lib/dran_web/live/agent_live.ex:429
+#, elixir-autogen, elixir-format
+msgid "URL to ingest"
+msgstr "URL a importar"
+
+#: lib/dran_web/live/settings_live.ex:197
+#, elixir-autogen, elixir-format
+msgid "Uploads"
+msgstr "Subidas"
+
+#: lib/dran_web/live/docs_live.ex:239
+#, elixir-autogen, elixir-format
+msgid "Variable"
+msgstr "Variable"
+
+#: lib/dran_web/live/graph_live.ex:261
+#, elixir-autogen, elixir-format
+msgid "View Mode"
+msgstr "Modo de vista"
+
+#: lib/dran_web/live/settings_live.ex:152
+#, elixir-autogen, elixir-format
+msgid "Vision model"
+msgstr "Modelo de visión"
+
+#: lib/dran_web/live/settings_live.ex:183
+#, elixir-autogen, elixir-format
+msgid "Web search and scraping"
+msgstr "Búsqueda web y scraping"
+
+#: lib/dran_web/live/agent_live.ex:178
+#, elixir-autogen, elixir-format
+msgid "Working…"
+msgstr "Trabajando…"
+
+#: lib/dran_web/live/agent_live.ex:194
+#, elixir-autogen, elixir-format
+msgid "brain search"
+msgstr "búsqueda cerebral"
+
+#: lib/dran_web/live/agent_live.ex:194
+#, elixir-autogen, elixir-format
+msgid "brain search for \"%{q}\""
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:141
+#, elixir-autogen, elixir-format
+msgid "chars"
+msgstr "caracteres"
+
+#: lib/dran_web/live/agent_live.ex:199
+#, elixir-autogen, elixir-format
+msgid "creating page \"%{title}\""
+msgstr ""
+
+#: lib/dran_web/live/agent_live.ex:202
+#, elixir-autogen, elixir-format
+msgid "finishing up"
+msgstr "finalizando"
+
+#: lib/dran_web/live/settings_live.ex:164
+#: lib/dran_web/live/settings_live.ex:176
+#, elixir-autogen, elixir-format
+msgid "ms"
+msgstr "ms"
+
+#: lib/dran_web/live/agent_live.ex:157
+#, elixir-autogen, elixir-format
+msgid "of up to %{n}"
+msgstr "de hasta %{n}"
+
+#: lib/dran_web/live/agent_live.ex:199
+#, elixir-autogen, elixir-format
+msgid "page creation"
+msgstr "creación de página"
+
+#: lib/dran_web/live/agent_live.ex:189
+#, elixir-autogen, elixir-format
+msgid "page scrape"
+msgstr "scrapeo de página"
+
+#: lib/dran_web/live/agent_live.ex:189
+#, elixir-autogen, elixir-format
+msgid "scraping %{url}"
+msgstr "scrapeando %{url}"
+
+#: lib/dran_web/live/agent_live.ex:184
+#, elixir-autogen, elixir-format
+msgid "web search"
+msgstr "búsqueda web"
+
+#: lib/dran_web/live/agent_live.ex:184
+#, elixir-autogen, elixir-format
+msgid "web search for \"%{q}\""
+msgstr ""

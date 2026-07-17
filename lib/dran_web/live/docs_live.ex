@@ -8,11 +8,21 @@ defmodule DranWeb.DocsLive do
   alias DranWeb.Plugs.Auth
 
   @tabs [
-    {"overview", "Overview"},
-    {"api", "API"},
-    {"mcp", "MCP"},
-    {"auth", "Auth"}
+    {"overview", "overview"},
+    {"api", "api"},
+    {"mcp", "mcp"},
+    {"auth", "auth"}
   ]
+
+  defp tab_label("overview"), do: gettext("Overview")
+  defp tab_label("api"), do: gettext("API")
+  defp tab_label("mcp"), do: gettext("MCP")
+  defp tab_label("auth"), do: gettext("Auth")
+  defp tab_label(other), do: other
+
+  defp translated_tabs do
+    Enum.map(@tabs, fn {key, _} -> {key, tab_label(key)} end)
+  end
 
   def render(assigns) do
     ~H"""
@@ -25,9 +35,9 @@ defmodule DranWeb.DocsLive do
       active_nav="docs"
     >
       <div class="p-6 w-full overflow-y-auto h-full">
-        <h1 class="text-2xl font-bold mb-6">Documentation</h1>
+        <h1 class="text-2xl font-bold mb-6">{gettext("Documentation")}</h1>
 
-        <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
+        <.tabs_bar tabs={translated_tabs()} active_tab={@active_tab} />
 
         <%= if @active_tab == "overview" do %>
           <.overview />
@@ -57,7 +67,7 @@ defmodule DranWeb.DocsLive do
        active_nav: "docs",
        tabs: @tabs,
        active_tab: "overview",
-       page_title: "Docs"
+       page_title: gettext("Docs")
      )}
   end
 
@@ -65,7 +75,10 @@ defmodule DranWeb.DocsLive do
     tab = params["tab"] || "overview"
 
     {:noreply,
-     assign(socket, active_tab: tab, page_title: "Docs · #{tab |> String.capitalize()}")}
+     assign(socket,
+       active_tab: tab,
+       page_title: gettext("Docs · %{tab}", tab: tab |> String.capitalize())
+     )}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
@@ -138,9 +151,12 @@ defmodule DranWeb.DocsLive do
 
       <h3>Knowledge graph</h3>
       <p>
-        Pages and relations form a directed graph. The <code>/graph</code> view renders the full
-        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong> tab
-        showing the page as the center with its direct neighbors. Relations carry a <code>weight</code>
+        Pages and relations form a directed graph. The <code>/graph</code>
+        view renders the full
+        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong>
+        tab
+        showing the page as the center with its direct neighbors. Relations carry a
+        <code>weight</code>
         that reflects semantic similarity strength.
       </p>
 
@@ -154,10 +170,21 @@ defmodule DranWeb.DocsLive do
       <h3>Autonomous agents</h3>
       <p>Beyond the interactive Research and Ingest agents, Dran runs scheduled batch agents:</p>
       <ul>
-        <li><strong>QA</strong> — audits pages for missing frontmatter, broken links, empty content</li>
-        <li><strong>Curator</strong> — consolidates duplicates, generates summaries, cleans the graph (daily)</li>
-        <li><strong>Link Gardener</strong> — resolves broken <code>[[links]]</code>, suggests backlinks via embeddings</li>
-        <li><strong>Weekly Review</strong> — auto-generates a weekly summary note with activity, goals progress, and stats (Mondays)</li>
+        <li>
+          <strong>QA</strong> — audits pages for missing frontmatter, broken links, empty content
+        </li>
+        <li>
+          <strong>Curator</strong>
+          — consolidates duplicates, generates summaries, cleans the graph (daily)
+        </li>
+        <li>
+          <strong>Link Gardener</strong>
+          — resolves broken <code>[[links]]</code>, suggests backlinks via embeddings
+        </li>
+        <li>
+          <strong>Weekly Review</strong>
+          — auto-generates a weekly summary note with activity, goals progress, and stats (Mondays)
+        </li>
       </ul>
       <p>
         All agents can also be triggered manually via MCP with <code>start_agent</code>.
@@ -223,9 +250,9 @@ defmodule DranWeb.DocsLive do
         <table class="w-full text-sm">
           <thead>
             <tr class="text-xs text-base-content/40 uppercase border-b border-base-300">
-              <th class="text-left px-4 py-2 font-medium">Variable</th>
-              <th class="text-left px-4 py-2 font-medium">Default</th>
-              <th class="text-left px-4 py-2 font-medium">Purpose</th>
+              <th class="text-left px-4 py-2 font-medium">{gettext("Variable")}</th>
+              <th class="text-left px-4 py-2 font-medium">{gettext("Default")}</th>
+              <th class="text-left px-4 py-2 font-medium">{gettext("Purpose")}</th>
             </tr>
           </thead>
           <tbody>
@@ -375,8 +402,16 @@ defmodule DranWeb.DocsLive do
         <:endpoint method="DELETE" path="/api/pages/:slug" desc="Delete a page" />
         <:endpoint method="GET" path="/api/pages/:slug/links" desc="Inbound + outbound relations" />
         <:endpoint method="GET" path="/api/pages/:slug/graph" desc="Subgraph centered on a page" />
-        <:endpoint method="GET" path="/api/pages/:slug/backlinks" desc="Pages that reference this page, grouped by relation type" />
-        <:endpoint method="GET" path="/api/pages/:slug/diff?v1=N&v2=M" desc="Version diff between two versions" />
+        <:endpoint
+          method="GET"
+          path="/api/pages/:slug/backlinks"
+          desc="Pages that reference this page, grouped by relation type"
+        />
+        <:endpoint
+          method="GET"
+          path="/api/pages/:slug/diff?v1=N&v2=M"
+          desc="Version diff between two versions"
+        />
       </.api_group>
 
       <.api_group title="Relations">
@@ -428,11 +463,19 @@ defmodule DranWeb.DocsLive do
           desc="Wiki index (all page slugs + titles)"
         />
         <:endpoint method="GET" path="/api/graph?context=..." desc="Full graph (nodes + edges)" />
-        <:endpoint method="GET" path="/api/graph/3d?context=..." desc="3D graph data (nodes with x,y,z coords)" />
+        <:endpoint
+          method="GET"
+          path="/api/graph/3d?context=..."
+          desc="3D graph data (nodes with x,y,z coords)"
+        />
       </.api_group>
 
       <.api_group title="Export">
-        <:endpoint method="GET" path="/api/export/:context/full" desc="Full brain export (all pages + relations + metadata as JSON)" />
+        <:endpoint
+          method="GET"
+          path="/api/export/:context/full"
+          desc="Full brain export (all pages + relations + metadata as JSON)"
+        />
       </.api_group>
 
       <.api_group title="Settings">
@@ -596,10 +639,10 @@ defmodule DranWeb.DocsLive do
         <table class="w-full text-sm border border-base-300 rounded-lg">
           <thead class="bg-base-200">
             <tr>
-              <th class="text-left p-2 font-semibold">Type</th>
-              <th class="text-left p-2 font-semibold">Purpose</th>
-              <th class="text-left p-2 font-semibold">Subtypes (meta.kind)</th>
-              <th class="text-left p-2 font-semibold">Key meta fields</th>
+              <th class="text-left p-2 font-semibold">{gettext("Type")}</th>
+              <th class="text-left p-2 font-semibold">{gettext("Purpose")}</th>
+              <th class="text-left p-2 font-semibold">{gettext("Subtypes (meta.kind)")}</th>
+              <th class="text-left p-2 font-semibold">{gettext("Key meta fields")}</th>
             </tr>
           </thead>
           <tbody>
@@ -904,7 +947,12 @@ defmodule DranWeb.DocsLive do
           name="start_agent"
           desc="Start an autonomous agent session. Returns immediately; poll get_agent_session for progress."
         >
-          <:param name="agent_type" type="string" required="yes" desc="research, ingest, qa, curator, link_gardener, weekly_review" />
+          <:param
+            name="agent_type"
+            type="string"
+            required="yes"
+            desc="research, ingest, qa, curator, link_gardener, weekly_review"
+          />
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />
           <:param name="opts" type="object" required="no" desc="Optional agent options" />
@@ -924,7 +972,10 @@ defmodule DranWeb.DocsLive do
           <:param name="context" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
 
-        <.mcp_tool name="update_setting" desc="Update a runtime brain setting. Persisted in DB, takes effect immediately.">
+        <.mcp_tool
+          name="update_setting"
+          desc="Update a runtime brain setting. Persisted in DB, takes effect immediately."
+        >
           <:param name="key" type="string" required="yes" desc="Setting key" />
           <:param name="value" type="string" required="yes" desc="New value" />
         </.mcp_tool>
@@ -1032,10 +1083,10 @@ defmodule DranWeb.DocsLive do
       <table class="w-full text-sm">
         <thead>
           <tr class="text-xs text-base-content/40 uppercase">
-            <th class="text-left py-1 font-medium">Parameter</th>
-            <th class="text-left py-1 font-medium">Type</th>
-            <th class="text-left py-1 font-medium">Required</th>
-            <th class="text-left py-1 font-medium">Description</th>
+            <th class="text-left py-1 font-medium">{gettext("Parameter")}</th>
+            <th class="text-left py-1 font-medium">{gettext("Type")}</th>
+            <th class="text-left py-1 font-medium">{gettext("Required")}</th>
+            <th class="text-left py-1 font-medium">{gettext("Description")}</th>
           </tr>
         </thead>
         <tbody>

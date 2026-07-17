@@ -105,7 +105,9 @@ defmodule DranWeb.ArtifactLive do
                       save_status={@save_status}
                     />
                     <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext(
+                        "Cancel"
+                      )}</button>
                       <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
@@ -115,7 +117,9 @@ defmodule DranWeb.ArtifactLive do
                   {@rendered_body}
                 </div>
                 <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
+                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">
+                    {gettext("Changelog")}
+                  </h3>
                   <div class="space-y-1">
                     <div :for={version <- @versions} class="text-sm text-base-content/60">
                       {gettext("v%{version} — %{date} by %{author}",

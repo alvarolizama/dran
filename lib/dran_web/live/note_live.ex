@@ -108,7 +108,9 @@ defmodule DranWeb.NoteLive do
                     <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
 
                     <div>
-                      <span class="label mb-1 block text-sm font-medium text-base-content/70">{gettext("Content")}</span>
+                      <span class="label mb-1 block text-sm font-medium text-base-content/70">{gettext(
+                        "Content"
+                      )}</span>
                       <.markdown_editor
                         id="note-editor"
                         body={@page.body}
@@ -118,7 +120,9 @@ defmodule DranWeb.NoteLive do
                     </div>
 
                     <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext(
+                        "Cancel"
+                      )}</button>
                       <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
@@ -129,7 +133,9 @@ defmodule DranWeb.NoteLive do
                 </div>
 
                 <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
+                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">
+                    {gettext("Changelog")}
+                  </h3>
                   <div class="space-y-1">
                     <div :for={version <- @versions} class="text-sm text-base-content/60">
                       {gettext("v%{version} — %{date} by %{author}",
