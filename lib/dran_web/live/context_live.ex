@@ -7,6 +7,7 @@ defmodule DranWeb.ContextLive do
 
   alias Dran.Brain
   alias Dran.Brain.Context
+  alias Dran.Slug
   alias DranWeb.Plugs.Auth
 
   @impl true
@@ -41,7 +42,7 @@ defmodule DranWeb.ContextLive do
       if slug_touched do
         params
       else
-        Map.put(params, "slug", slugify(name))
+        Map.put(params, "slug", Slug.slugify(name))
       end
 
     form = %Context{} |> Context.changeset(params) |> to_form(as: :context)
@@ -90,17 +91,6 @@ defmodule DranWeb.ContextLive do
       {:noreply, socket}
     end
   end
-
-  defp slugify(name) when is_binary(name) do
-    name
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9\s-]/, "")
-    |> String.replace(~r/\s+/, "-")
-    |> String.replace(~r/-+/, "-")
-    |> String.trim("-")
-  end
-
-  defp slugify(_), do: ""
 
   @impl true
   def render(assigns) do

@@ -10,20 +10,8 @@ defmodule DranWeb.PageNewLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
+  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
-
-  @type_to_path %{
-    "note" => "notes",
-    "concept" => "concepts",
-    "entity" => "entities",
-    "reference" => "references",
-    "goal" => "goals",
-    "plan" => "plans",
-    "todo" => "todos",
-    "artifact" => "artifacts",
-    "comparison" => "comparisons",
-    "query" => "queries"
-  }
 
   def render(assigns) do
     ~H"""
@@ -37,7 +25,7 @@ defmodule DranWeb.PageNewLive do
       <div class="w-full mx-auto p-6">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold">
-            New {DranWeb.PageComponents.type_label(@page_type)}
+            New {PageTypes.label(@page_type)}
           </h1>
           <.link navigate={@back_path} class="btn btn-ghost btn-sm">
             <.icon name="hero-arrow-left" class="size-4" /> Back
@@ -139,7 +127,7 @@ defmodule DranWeb.PageNewLive do
     # Derive the page type from the URL path (e.g. "/notes/new" → "note")
     path = URI.parse(url).path || ""
     page_type = type_from_path(path)
-    back_path = "/#{@type_to_path[page_type] || "notes"}"
+    back_path = "/#{PageTypes.path(page_type)}"
 
     context = socket.assigns[:context]
     context_id = if context, do: context.id
@@ -157,7 +145,7 @@ defmodule DranWeb.PageNewLive do
        page_type: page_type,
        back_path: back_path,
        form: to_form(changeset, as: :page),
-       page_title: "New #{DranWeb.PageComponents.type_label(page_type)}",
+       page_title: "New #{PageTypes.label(page_type)}",
        slug_touched: false
      )}
   end
@@ -217,7 +205,7 @@ defmodule DranWeb.PageNewLive do
 
     case Brain.create_page(page_params) do
       {:ok, page} ->
-        type_path = @type_to_path[page.page_type] || "notes"
+        type_path = PageTypes.path(page.page_type)
 
         {:noreply,
          socket

@@ -6,6 +6,7 @@ defmodule DranWeb.GoalLive do
   alias Dran.Brain
   alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
+  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
   @page_type "goal"
@@ -149,7 +150,7 @@ defmodule DranWeb.GoalLive do
               <div :for={note <- @goal_notes} class="p-3 rounded-lg border border-base-300 mb-2">
                 <div class="flex items-center justify-between">
                   <.link
-                    navigate={page_show_path(note)}
+                    navigate={PageTypes.page_show_path(note)}
                     class="font-medium text-primary hover:underline"
                   >
                     {note.title}
@@ -168,7 +169,7 @@ defmodule DranWeb.GoalLive do
               <div :for={concept <- @goal_concepts} class="p-3 rounded-lg border border-base-300 mb-2">
                 <div class="flex items-center justify-between">
                   <.link
-                    navigate={page_show_path(concept)}
+                    navigate={PageTypes.page_show_path(concept)}
                     class="font-medium text-primary hover:underline"
                   >
                     {concept.title}
@@ -187,7 +188,7 @@ defmodule DranWeb.GoalLive do
               <div :for={entity <- @goal_entities} class="p-3 rounded-lg border border-base-300 mb-2">
                 <div class="flex items-center justify-between">
                   <.link
-                    navigate={page_show_path(entity)}
+                    navigate={PageTypes.page_show_path(entity)}
                     class="font-medium text-primary hover:underline"
                   >
                     {entity.title}
@@ -258,7 +259,7 @@ defmodule DranWeb.GoalLive do
               <div :for={plan <- @goal_plans} class="p-3 rounded-lg border border-base-300 mb-2">
                 <div class="flex items-center justify-between">
                   <.link
-                    navigate={page_show_path(plan)}
+                    navigate={PageTypes.page_show_path(plan)}
                     class="font-medium text-primary hover:underline"
                   >
                     {plan.title}
@@ -283,7 +284,7 @@ defmodule DranWeb.GoalLive do
               >
                 <div class="flex items-center justify-between">
                   <.link
-                    navigate={page_show_path(artifact)}
+                    navigate={PageTypes.page_show_path(artifact)}
                     class="font-medium text-primary hover:underline"
                   >
                     {artifact.title}
@@ -311,7 +312,7 @@ defmodule DranWeb.GoalLive do
               >
                 <div class="flex items-center justify-between">
                   <.link
-                    navigate={page_show_path(reference)}
+                    navigate={PageTypes.page_show_path(reference)}
                     class="font-medium text-primary hover:underline"
                   >
                     {reference.title}

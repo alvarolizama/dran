@@ -373,7 +373,7 @@ defmodule DranWeb.PageEdit do
   end
 
   defp page_path(type, slug) do
-    "/#{DranWeb.PageComponents.type_path(type)}/#{slug}"
+    "/#{DranWeb.PageTypes.path(type)}/#{slug}"
   end
 
   defp store_file_and_create_artifact(socket, context_id, binary, filename, client_type) do

@@ -215,7 +215,7 @@ defmodule DranWeb.IngestLive do
 
       case ingest_for_mode(socket, socket.assigns.mode, params) do
         {:ok, page} ->
-          type_path = DranWeb.PageComponents.type_path(page.page_type)
+          type_path = DranWeb.PageTypes.path(page.page_type)
 
           {:noreply,
            assign(socket,
