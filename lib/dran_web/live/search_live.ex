@@ -153,7 +153,7 @@ defmodule DranWeb.SearchLive do
           </div>
 
           <p :if={@query != "" && @results == []} class="text-base-content/60">
-            {gettext("No results found for \"%{query}\".") |> then(&String.replace(&1, "%{query}", @query))}
+            {gettext("No results found for \"%{query}\".", query: @query)}
           </p>
 
           <p :if={@query == ""} class="text-base-content/60">

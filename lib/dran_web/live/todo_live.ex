@@ -143,7 +143,7 @@ defmodule DranWeb.TodoLive do
                 :if={column_items(@items, status) == []}
                 class="text-xs text-base-content/30 text-center py-4"
               >
-                Drop here
+                {gettext("Drop here")}
               </p>
             </div>
           </div>
@@ -163,16 +163,16 @@ defmodule DranWeb.TodoLive do
         >
           <:actions>
             <.link navigate={~p"/todos"} class="btn btn-primary btn-sm">
-              <.icon name="hero-arrow-left" class="size-4" /> Back
+              <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
             <button :if={not @editing} phx-click="toggle_edit" class="btn btn-primary btn-sm">
-              <.icon name="hero-pencil" class="size-4" /> Edit
+              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
             </button>
             <button :if={@editing} phx-click="save_page" class="btn btn-success btn-sm">
-              <.icon name="hero-check" class="size-4" /> Save
+              <.icon name="hero-check" class="size-4" /> {gettext("Save")}
             </button>
             <button :if={@editing} phx-click="cancel_edit" class="btn btn-ghost btn-sm">
-              <.icon name="hero-x-mark" class="size-4" /> Cancel
+              <.icon name="hero-x-mark" class="size-4" /> {gettext("Cancel")}
             </button>
           </:actions>
 
@@ -181,7 +181,7 @@ defmodule DranWeb.TodoLive do
 
             <div :if={@active_tab == "content"} class="space-y-4">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs text-base-content/50 mr-1">Status:</span>
+                <span class="text-xs text-base-content/50 mr-1">{gettext("Status:")}</span>
                 <button
                   :for={{status, label, badge_class} <- @kanban_columns}
                   phx-click="change_status"
@@ -208,32 +208,32 @@ defmodule DranWeb.TodoLive do
                     <.input
                       field={@form[:title]}
                       type="text"
-                      label="Title"
-                      placeholder="Enter a title…"
+                      label={gettext("Title")}
+                      placeholder={gettext("Enter a title…")}
                       class="text-lg font-medium"
                     />
                     <div class="grid grid-cols-2 gap-4">
                       <.input
                         field={@form[:slug]}
                         type="text"
-                        label="Slug"
-                        placeholder="slug"
+                        label={gettext("Slug")}
+                        placeholder={gettext("slug")}
                         class="font-mono text-sm"
                         phx-blur="field_change"
                       />
                       <.input
                         field={@form[:summary]}
                         type="text"
-                        label="Summary"
-                        placeholder="One-line description"
+                        label={gettext("Summary")}
+                        placeholder={gettext("One-line description")}
                         class="text-sm"
                       />
                     </div>
                     <.input
                       field={@form[:tags]}
                       type="text"
-                      label="Tags"
-                      placeholder="comma, separated, tags"
+                      label={gettext("Tags")}
+                      placeholder={gettext("comma, separated, tags")}
                       class="text-sm"
                     />
                     <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
@@ -244,22 +244,25 @@ defmodule DranWeb.TodoLive do
                       save_status={@save_status}
                     />
                     <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">Cancel</button>
-                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
                 </.form>
               <% end %>
 
               <div class="border-t border-base-300 pt-4">
-                <h3 class="text-sm font-semibold text-base-content/60 mb-2">Changelog</h3>
+                <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
                 <div class="space-y-1">
                   <div :for={version <- @versions} class="text-sm text-base-content/60">
-                    v{version.version} — {format_date(version.inserted_at)} by {version.changed_by ||
-                      "system"}
+                    {gettext("v%{version} — %{date} by %{author}",
+                      version: version.version,
+                      date: format_date(version.inserted_at),
+                      author: version.changed_by || gettext("system")
+                    )}
                   </div>
                   <p :if={@versions == []} class="text-sm text-base-content/40">
-                    No version history yet.
+                    {gettext("No version history yet.")}
                   </p>
                 </div>
               </div>
@@ -345,7 +348,7 @@ defmodule DranWeb.TodoLive do
        active_tab: "content",
        kanban_columns: @kanban_columns,
        priority_options: Enum.map(@priorities, fn {value, label, _class} -> {label, value} end),
-       goal_options: [{"No goal", ""}],
+       goal_options: [{gettext("No goal"), ""}],
        show_form: false,
        form: %{"title" => "", "priority" => "medium", "goal_slug" => "", "due_date" => ""},
        editing: false,
@@ -403,13 +406,13 @@ defmodule DranWeb.TodoLive do
       items = Brain.list_todos(socket.assigns.context.id)
       goals = Brain.list_goals(socket.assigns.context.id)
 
-      goal_options = [{"No goal", ""} | Enum.map(goals, &{&1.title, &1.slug})]
+      goal_options = [{gettext("No goal"), ""} | Enum.map(goals, &{&1.title, &1.slug})]
 
       {:noreply,
-       assign(socket, items: items, goals: goals, goal_options: goal_options, page_title: "Todos")}
+       assign(socket, items: items, goals: goals, goal_options: goal_options, page_title: gettext("Todos"))}
     else
       {:noreply,
-       assign(socket, items: [], goals: [], goal_options: [{"No goal", ""}], page_title: "Todos")}
+       assign(socket, items: [], goals: [], goal_options: [{gettext("No goal"), ""}], page_title: gettext("Todos"))}
     end
   end
 
@@ -443,10 +446,10 @@ defmodule DranWeb.TodoLive do
 
     cond do
       context == nil ->
-        {:noreply, put_flash(socket, :error, "No context available.")}
+        {:noreply, put_flash(socket, :error, gettext("No context available."))}
 
       title == "" ->
-        {:noreply, put_flash(socket, :error, "Title is required.")}
+        {:noreply, put_flash(socket, :error, gettext("Title is required."))}
 
       true ->
         priority = params["priority"] || "medium"
@@ -471,10 +474,10 @@ defmodule DranWeb.TodoLive do
             {:noreply,
              socket
              |> assign(items: Brain.list_todos(context.id), show_form: false)
-             |> put_flash(:info, "Todo created.")}
+             |> put_flash(:info, gettext("Todo created."))}
 
-          {:error, _changeset} ->
-            {:noreply, put_flash(socket, :error, "Could not create todo.")}
+            {:error, _changeset} ->
+              {:noreply, put_flash(socket, :error, gettext("Could not create todo."))}
         end
     end
   end
@@ -533,7 +536,7 @@ defmodule DranWeb.TodoLive do
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          {:error, put_flash(socket, :error, "Todo not found.")}
+          {:error, put_flash(socket, :error, gettext("Todo not found."))}
 
         page ->
           # Be explicit: `|>` binds tighter than `||`, so apply the updater
@@ -546,7 +549,7 @@ defmodule DranWeb.TodoLive do
               {:ok, assign(socket, page: updated)}
 
             {:error, _changeset} ->
-              {:error, put_flash(socket, :error, "Could not update todo.")}
+              {:error, put_flash(socket, :error, gettext("Could not update todo."))}
           end
       end
     else

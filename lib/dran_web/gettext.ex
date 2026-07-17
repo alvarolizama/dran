@@ -21,5 +21,5 @@ defmodule DranWeb.Gettext do
 
   See the [Gettext Docs](https://gettext.hexdocs.pm) for detailed usage.
   """
-  use Gettext.Backend, otp_app: :dran
+  use Gettext.Backend, otp_app: :dran, default_locale: "es"
 end
