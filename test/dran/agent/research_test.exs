@@ -1,8 +1,8 @@
 defmodule Dran.Agent.ResearchTest do
-  # Pure unit tests for Dran.Agent.Research.execute_tool/3.
-  # No DB access required: we only exercise the limit-check logic, which
-  # short-circuits before Brain.create_page is ever called.
-  use ExUnit.Case, async: true
+  # Unit tests for Dran.Agent.Research.execute_tool/3.
+  # Uses DataCase because the page-limit check reads runtime defaults from
+  # Dran.Settings (DB-backed with fallback to module defaults).
+  use Dran.DataCase, async: true
 
   alias Dran.Agent.Research
   alias Dran.Agent.Research.State
@@ -63,19 +63,18 @@ defmodule Dran.Agent.ResearchTest do
     end
 
     test "does not block when under the limit" do
-      # pages_created strictly below the limit should NOT trip the guard.
-      # We pick pages_created = max - 1 with max_pages: 10, so the guard
-      # must NOT fire and execution must proceed into Brain.create_page.
-      #
-      # Brain.create_page requires a DB sandbox we don't set up here, so it
-      # raises a DBConnection.OwnershipError. That exception is the proof
-      # we reached the create path (the limit guard returns {:error, _},
-      # never raises). We assert on that: the guard did NOT short-circuit.
-      state = build_state(pages_created: 9, opts: [max_pages: 10])
+      # pages_created strictly below the limit should NOT trip the guard:
+      # execution proceeds into Brain.create_page and the page is created.
+      {:ok, ctx} = Dran.Brain.create_context(%{name: "Limit Test", slug: "limit-test"})
 
-      assert_raise DBConnection.OwnershipError, fn ->
+      session = build_session(context_id: ctx.id)
+      state = build_state(pages_created: 9, opts: [max_pages: 10], session: session)
+
+      {{:ok, page}, new_state} =
         Research.execute_tool("create_page", %{"title" => "x", "body" => "y"}, state)
-      end
+
+      assert page.title == "x"
+      assert new_state.pages_created == 10
     end
   end
 end

@@ -176,13 +176,13 @@ defmodule Dran.Brain.PageAugmenter do
   @spec semantic_threshold(Page.t()) :: float()
   def semantic_threshold(%Page{body: body}) when is_binary(body) do
     cond do
-      String.length(body) < 500 -> 0.15
-      String.length(body) > 4000 -> 0.28
-      true -> 0.22
+      String.length(body) < 500 -> Dran.Settings.get("semantic_threshold_short")
+      String.length(body) > 4000 -> Dran.Settings.get("semantic_threshold_long")
+      true -> Dran.Settings.get("semantic_threshold_mid")
     end
   end
 
-  def semantic_threshold(%Page{body: _}), do: 0.22
+  def semantic_threshold(%Page{body: _}), do: Dran.Settings.get("semantic_threshold_mid")
 
   defp create_relations(page, neighbor_ids) do
     target_ids =

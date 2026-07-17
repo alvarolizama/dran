@@ -44,7 +44,7 @@ defmodule Dran.Agent.Research do
   def agent_type, do: @agent_type
 
   @doc "Maximum number of distinct sources the agent will scrape."
-  def max_sources, do: @max_sources
+  def max_sources, do: Dran.Settings.get("agent_max_sources") || @max_sources
 
   @doc "Maximum number of distinct web_search queries the agent will run."
   def max_search_queries, do: @max_search_queries
@@ -270,9 +270,9 @@ defmodule Dran.Agent.Research do
             "Scrape a DIFFERENT URL from your search results, or move to create_page / done."},
          state}
 
-      MapSet.size(state.scraped_urls) >= @max_sources ->
+      MapSet.size(state.scraped_urls) >= max_sources() ->
         {{:error,
-          "You have scraped the maximum of #{@max_sources} sources. " <>
+          "You have scraped the maximum of #{max_sources()} sources. " <>
             "You have enough material. STOP scraping and call create_page to synthesize, then call done."},
          state}
 
@@ -300,11 +300,13 @@ defmodule Dran.Agent.Research do
   end
 
   def execute_tool("create_page", args, %State{} = state) do
+    default_max = Dran.Settings.get("agent_max_pages") || @max_pages_per_session
+
     max_pages =
       case state.opts do
-        opts when is_list(opts) -> Keyword.get(opts, :max_pages, @max_pages_per_session)
-        opts when is_map(opts) -> Map.get(opts, :max_pages, @max_pages_per_session)
-        _ -> @max_pages_per_session
+        opts when is_list(opts) -> Keyword.get(opts, :max_pages, default_max)
+        opts when is_map(opts) -> Map.get(opts, :max_pages, default_max)
+        _ -> default_max
       end
 
     if state.pages_created >= max_pages do
