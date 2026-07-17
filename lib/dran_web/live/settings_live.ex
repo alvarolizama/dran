@@ -1,25 +1,91 @@
 defmodule DranWeb.SettingsLive do
   @moduledoc """
-  Read-only settings page showing the current configuration of models,
-  agents, inference API, Firecrawl, and uploads.
+  Settings page showing the current configuration of models,
+  agents, inference API, Firecrawl, and uploads — plus an editable
+  "Brain tuning" section backed by `Dran.Settings`.
   """
 
   use DranWeb, :live_view
 
   alias Dran.Inference.Config
+  alias Dran.Settings
   alias DranWeb.Plugs.Auth
 
   @impl true
   def mount(_params, session, socket) do
     {socket, _context} = Auth.assign_to_socket(socket, session)
 
-    {:ok, assign(socket, active_nav: "settings", page_title: "Settings")}
+    socket =
+      socket
+      |> assign(active_nav: "settings", page_title: "Settings")
+      |> assign_brain_form()
+
+    {:ok, socket}
   end
 
   @impl true
   def handle_params(_params, _url, socket) do
     {:noreply, socket}
   end
+
+  # -- Brain tuning form ------------------------------------------------------
+
+  @brain_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long
+                 agent_max_pages agent_max_sources research_lang daily_note_enabled)
+
+  defp assign_brain_form(socket) do
+    values =
+      Settings.all()
+      |> Map.take(@brain_keys)
+
+    assign(socket, brain_form: to_form(values, as: :settings))
+  end
+
+  @impl true
+  def handle_event("save", %{"settings" => params}, socket) do
+    casts = %{
+      "semantic_threshold_short" => &cast_float/1,
+      "semantic_threshold_mid" => &cast_float/1,
+      "semantic_threshold_long" => &cast_float/1,
+      "agent_max_pages" => &cast_int/1,
+      "agent_max_sources" => &cast_int/1,
+      "research_lang" => &to_string/1,
+      "daily_note_enabled" => &cast_bool/1
+    }
+
+    for key <- @brain_keys do
+      raw = Map.get(params, key, "")
+      cast = Map.fetch!(casts, key)
+      Settings.put(key, cast.(raw))
+    end
+
+    socket =
+      socket
+      |> assign_brain_form()
+      |> put_flash(:info, gettext("Settings saved"))
+
+    {:noreply, socket}
+  end
+
+  defp cast_float(str) when is_binary(str) do
+    case Float.parse(str) do
+      {f, _} -> f
+      :error -> nil
+    end
+  end
+
+  defp cast_int(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {i, _} -> i
+      :error -> nil
+    end
+  end
+
+  # `value="true"` is sent for a checked checkbox; the hidden `value="false"`
+  # companion is sent when unchecked. Phoenix's checkbox input emits both
+  # (hidden first), so the boolean string is the final parsed value.
+  defp cast_bool("true"), do: true
+  defp cast_bool(_), do: false
 
   @impl true
   def render(assigns) do
@@ -111,6 +177,8 @@ defmodule DranWeb.SettingsLive do
             </.config_row>
           </.config_section>
 
+          <.brain_tuning_section form={@brain_form} />
+
           <.config_section title="Firecrawl" subtitle="Web search and scraping">
             <.config_row label="Status" env="FIRECRAWL_API_KEY">
               <.status_badge active={Dran.Firecrawl.enabled?()} />
@@ -186,6 +254,84 @@ defmodule DranWeb.SettingsLive do
       <div class="shrink-0 text-right">
         {render_slot(@inner_block)}
       </div>
+    </div>
+    """
+  end
+
+  attr :form, :any, required: true
+
+  defp brain_tuning_section(assigns) do
+    ~H"""
+    <div class="rounded-lg border border-base-300 overflow-hidden">
+      <div class="px-4 py-3 bg-base-200/50 border-b border-base-300 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-semibold">{gettext("Brain tuning")}</h2>
+          <p class="text-xs text-base-content/50 mt-0.5">
+            {gettext("Semantic thresholds, agent limits, and research preferences")}
+          </p>
+        </div>
+      </div>
+
+      <.form
+        for={@form}
+        id="brain-tuning-form"
+        phx-submit="save"
+        class="px-4 py-4 space-y-4"
+      >
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <.input
+            field={@form[:semantic_threshold_short]}
+            type="number"
+            step="0.01"
+            label={gettext("Semantic threshold (short)")}
+          />
+          <.input
+            field={@form[:semantic_threshold_mid]}
+            type="number"
+            step="0.01"
+            label={gettext("Semantic threshold (mid)")}
+          />
+          <.input
+            field={@form[:semantic_threshold_long]}
+            type="number"
+            step="0.01"
+            label={gettext("Semantic threshold (long)")}
+          />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <.input
+            field={@form[:agent_max_pages]}
+            type="number"
+            label={gettext("Agent max pages")}
+          />
+          <.input
+            field={@form[:agent_max_sources]}
+            type="number"
+            label={gettext("Agent max sources")}
+          />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+          <.input
+            field={@form[:research_lang]}
+            type="select"
+            label={gettext("Research language")}
+            options={[{"Español", "es"}, {"English", "en"}]}
+          />
+          <.input
+            field={@form[:daily_note_enabled]}
+            type="checkbox"
+            label={gettext("Daily note enabled")}
+          />
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button type="submit" class="btn btn-primary btn-sm">
+            {gettext("Save")}
+          </button>
+        </div>
+      </.form>
     </div>
     """
   end
