@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 19 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
-version: 4.0.0
+version: 4.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -75,7 +75,7 @@ groups in order: capture → read/find → organize → maintain → automate.
 | Tool | Purpose | Use when / don't use when |
 | --- | --- | --- |
 | `create_page` | Create any page type. | Use for notes, concepts, entities, references, goals, plans, artifacts, comparisons, queries. **Don't use for todos** — use `create_todo`. |
-| `create_todo` | Create a todo with kanban status, priority, due date, goal linkage. | Use for action items. **Don't use `create_page` with `page_type=todo`** — it won't get the right meta shape. |
+| `create_todo` | Create a todo with kanban status, priority, due date, plan/goal linkage. | Use for action items. Optional `plan_slug` links to a plan (goal derived); `goal_slug` links directly. **Don't use `create_page` with `page_type=todo`** — it won't get the right meta shape. |
 | `ingest_url` | Save a URL as a `reference` page, or download a file. With inference enabled, extracts content (MarkItDown/Vision/ASR). | Use for web articles and file URLs. **Don't pass local/private IPs** — SSRF protection blocks them. |
 
 ### Read & find
@@ -84,7 +84,7 @@ groups in order: capture → read/find → organize → maintain → automate.
 | --- | --- | --- |
 | `search` | Unified search: auto picks FTS, fuzzy, semantic, or hybrid. | **Use FIRST** whenever you're looking for something — before `create_page`, before answering a question. Use the `type` filter when you can. |
 | `get_page` | Full markdown body of one page. | Use to actually **read** a page after finding it via `search` / `list_pages`. **Don't call without searching first** unless Álvaro gave you the exact slug. |
-| `list_pages` | Filtered lightweight list (type, tag, status, limit). | Use for filtered overviews. **Don't loop it to build an index** — use the `wiki://{context}/index` resource instead. |
+| `list_pages` | Filtered lightweight list (type, tag, status, goal_slug, plan_slug, limit). | Use for filtered overviews and planning-hierarchy exploration — `goal_slug`/`plan_slug` filter by goal/plan; pass `'none'` for orphans (plans without a goal, todos without a plan). **Don't loop it to build an index** — use the `wiki://{context}/index` resource instead. |
 | `get_links` | Inbound + outbound relations for a page. | Use to inspect the graph around a page before relating or deleting. |
 
 ### Organize
@@ -210,11 +210,30 @@ There is no dedicated search agent; for search-only tasks use `search` directly.
 | `artifact` | Files, code snippets, designs, deliverables | document, code, design, deliverable, file | kind, filename, mime_type, storage_path, sha256 |
 | `goal` | Objectives with target date | — | health (green/yellow/red), start_date, target_date, team |
 | `plan` | Time-horizoned plans | — | horizon, status, period, goal_slug |
-| `todo` | Actionable items | — | kanban_status, priority, due_date, goal_slug, assignee |
+| `todo` | Actionable items | — | kanban_status, priority, due_date, goal_slug, plan_slug, assignee |
 | `comparison` | Side-by-side analyses | — | entities, criteria, verdict |
 | `query` | Questions with answers | factual, conceptual, how_to, opinion | kind, difficulty, answer_status, answered_by |
 
 Default to `note` when unsure. Promote later with `update_page`.
+
+### Planning hierarchy
+
+```
+goal ◄── plan ◄── todo
+         meta.goal_slug   meta.plan_slug (goal derived from plan)
+```
+
+- A **todo** can exist with no plan and no goal (inbox todo), under a plan
+  (`plan_slug`), or linked directly to a goal (`goal_slug`).
+- A **plan** can exist without a goal (orphan plan) or link to one via
+  `meta.goal_slug`.
+- When a todo has `plan_slug`, its goal is **derived from the plan** — do not
+  also set `goal_slug` (it can contradict the plan's goal).
+- `part_of` relations (todo→plan, plan→goal, todo→goal direct) are
+  **auto-materialized** when the slugs are set; you do not create them
+  manually with `create_relation`.
+- Use `list_pages` with `goal_slug="none"` or `plan_slug="none"` to find
+  orphans (plans without a goal, todos without a plan).
 
 ### Meta validation reference (condensed)
 
@@ -351,6 +370,55 @@ Use `update_todo`, not `update_page` — `update_todo` merges meta safely.
    → embeds `![[phoenix]]` and `![[rails]]` auto-create `embeds` relations
 ```
 
+### Plan a goal
+
+```
+1. search({ context: "personal", query: "<goal name>", type: "goal" })
+   → confirm the goal doesn't already exist
+2. create_page({
+     context: "personal",
+     page_type: "goal",
+     title: "Ship Dran v2",
+     body: "## Ship Dran v2\n...",
+     meta: { health: "green", start_date: "2026-07-01", target_date: "2026-10-31", team: ["alvaro"] }
+   })
+3. create_page({
+     context: "personal",
+     page_type: "plan",
+     title: "Q3 2026 plan — Ship Dran v2",
+     body: "## Q3 plan\n...",
+     meta: { horizon: "quarterly", status: "active", period: "2026-Q3", goal_slug: "ship-dran-v2" }
+   })
+4. create_todo({
+     context: "personal",
+     title: "Implement planning hierarchy",
+     slug: "implement-planning-hierarchy",
+     plan_slug: "q3-2026-plan-ship-dran-v2",
+     kanban_status: "this_week",
+     priority: "high"
+   })
+   → repeat for each todo in the plan (goal is derived from the plan — don't set goal_slug)
+5. list_pages({ context: "personal", type: "todo", plan_slug: "q3-2026-plan-ship-dran-v2" })
+   → see all todos in the plan
+6. list_pages({ context: "personal", type: "todo", goal_slug: "ship-dran-v2" })
+   → full goal view: todos linked directly + todos under any plan of the goal
+7. list_pages({ context: "personal", type: "plan", goal_slug: "none" })
+   → find orphan plans that aren't linked to any goal yet
+```
+
+### Triage the inbox
+
+```
+1. list_pages({ context: "personal", type: "todo", plan_slug: "none", goal_slug: "none" })
+   → todos with no plan and no goal (the inbox)
+2. For each todo, decide where it belongs:
+   update_todo({ context: "personal", slug: "<todo-slug>", plan_slug: "<plan-slug>" })
+   → assigns it to a plan (goal derived automatically)
+   OR
+   update_todo({ context: "personal", slug: "<todo-slug>", goal_slug: "<goal-slug>" })
+   → links it directly to a goal (no plan)
+```
+
 ### Brain hygiene
 
 ```
@@ -383,6 +451,10 @@ Use `update_todo`, not `update_page` — `update_todo` merges meta safely.
   and `create_relation` for explicit links.
 - **Treating `ingest_url` as extraction-only.** It stores the page and (with
   inference) extracts content — it's a capture tool, not just a reader.
+- **Setting `goal_slug` on a todo that already has `plan_slug`.** The goal is
+  derived from the plan — setting both can contradict the plan's goal. Set
+  only `plan_slug` (goal comes automatically) or only `goal_slug` (direct
+  link, no plan), never both.
 - **Passing `status` for `query` pages.** The correct field is `answer_status`.
 - **Deleting without confirmation.** Always ask Álvaro — `delete_page` is
   irreversible.

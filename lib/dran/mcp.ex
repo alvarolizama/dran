@@ -22,7 +22,7 @@ defmodule Dran.MCP do
   - `create_relation` — create a typed relation between two pages
   - `delete_relation` — delete a relation between two pages; **irreversible**
   - `get_links` — graph exploration: inbound + outbound relations of a page
-  - `list_pages` — lightweight listing with filters; prefer wiki:// resource for full index
+  - `list_pages` — lightweight listing with filters (type/tag/status/goal_slug/plan_slug); prefer wiki:// resource for full index
   - `stats` — context dashboard numbers: totals, by-type, todos by status, orphans
   - `lint` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
@@ -153,6 +153,8 @@ defmodule Dran.MCP do
       - todo: has kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
       - comparison: has entities, criteria, verdict
       - query: question+answer; has kind (factual/conceptual/how_to/opinion), difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
+
+      Planning hierarchy: plans link to goals via meta.goal_slug; todos link to plans via meta.plan_slug (goal derived) or directly to goals. All links optional — orphan plans/todos are allowed. part_of relations are auto-materialized.
       """,
       "inputSchema" => %{
         "type" => "object",
@@ -310,6 +312,11 @@ defmodule Dran.MCP do
             "description" =>
               "Slug of the goal this todo belongs to (optional). Set this to group todos under a goal."
           },
+          "plan_slug" => %{
+            "type" => "string",
+            "description" =>
+              "Slug of the plan this todo belongs to. Optional — todos can exist standalone (inbox) or linked directly to a goal via goal_slug. If plan_slug is set, the todo's goal is derived from the plan automatically — do NOT also set goal_slug unless linking directly to a goal without a plan."
+          },
           "body" => %{
             "type" => "string",
             "description" => "Todo description in Markdown (optional)."
@@ -457,7 +464,7 @@ defmodule Dran.MCP do
     %{
       "name" => "list_pages",
       "description" =>
-        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type, `tag` to filter by tag, and `status` to filter todos by kanban status. For a full index overview, prefer the `wiki://{context}/index` resource instead. Use `get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
+        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type, `tag` to filter by tag, and `status` to filter todos by kanban status. Use `goal_slug`/`plan_slug` to explore the planning hierarchy: plans of a goal, todos of a plan, or orphans with 'none'. For a full index overview, prefer the `wiki://{context}/index` resource instead. Use `get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -491,6 +498,16 @@ defmodule Dran.MCP do
             "description" =>
               "Optional filter for todos by kanban_status: backlog, this_week, today, in_progress, done, or cancelled.",
             "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+          },
+          "goal_slug" => %{
+            "type" => "string",
+            "description" =>
+              "Filter plans/todos by goal. For todos, matches both todos linked directly to the goal and todos under any plan of that goal (the goal is derived from the plan — single source of truth). Use the literal value 'none' to list pages WITHOUT a goal (e.g. orphan plans or inbox todos)."
+          },
+          "plan_slug" => %{
+            "type" => "string",
+            "description" =>
+              "Filter todos by plan. Use the literal value 'none' to list todos not attached to any plan."
           },
           "limit" => %{
             "type" => "integer",
@@ -543,6 +560,11 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" =>
               "Slug of a goal to link this todo to (optional). Replaces the existing goal_slug."
+          },
+          "plan_slug" => %{
+            "type" => "string",
+            "description" =>
+              "Slug of a plan to link this todo to (optional). Replaces the existing plan_slug. If set, the todo's goal is derived from the plan — do NOT also set goal_slug unless linking directly to a goal without a plan."
           },
           "title" => %{
             "type" => "string",
@@ -993,6 +1015,7 @@ defmodule Dran.MCP do
         %{}
         |> Map.put("kanban_status", Map.get(args, "kanban_status", "backlog"))
         |> maybe_put_meta("goal_slug", args["goal_slug"])
+        |> maybe_put_meta("plan_slug", args["plan_slug"])
         |> maybe_put_meta("priority", args["priority"])
         |> maybe_put_meta("due_date", args["due_date"])
 
@@ -1155,6 +1178,8 @@ defmodule Dran.MCP do
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
       opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts
+      opts = if args["goal_slug"], do: Keyword.put(opts, :goal_slug, args["goal_slug"]), else: opts
+      opts = if args["plan_slug"], do: Keyword.put(opts, :plan_slug, args["plan_slug"]), else: opts
       opts = if args["owner"], do: Keyword.put(opts, :owner, args["owner"]), else: opts
 
       opts =
@@ -1193,6 +1218,7 @@ defmodule Dran.MCP do
             |> maybe_put_meta("priority", args["priority"])
             |> maybe_put_meta("due_date", args["due_date"])
             |> maybe_put_meta("goal_slug", args["goal_slug"])
+            |> maybe_put_meta("plan_slug", args["plan_slug"])
 
           attrs = %{"meta" => new_meta}
           attrs = Map.put(attrs, "updated_by", "agent")
