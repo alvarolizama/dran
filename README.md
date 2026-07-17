@@ -30,9 +30,9 @@ Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent i
 
 ### Prerequisites
 
-- Elixir 1.15+ and OTP 26+
-- PostgreSQL 14+ (with `pg_trgm`, `uuid-ossp`, and `pgvector` extensions)
-- Node.js 18+ (for asset building)
+- **Elixir 1.15+ and OTP 26+** — managed via [mise](https://mise.jdx.dev) (see `mise.toml`)
+- **PostgreSQL 14+** (with `pg_trgm`, `uuid-ossp`, and `pgvector` extensions)
+- **Node.js 18+** (for asset building)
 
 ### First-time setup
 
@@ -48,6 +48,8 @@ $EDITOR .env    # set SECRET_KEY_BASE, DRAN_PASSWORD, etc.
 # 3. Install deps, create the DB, run migrations, build assets, and seed
 mix setup
 ```
+
+> **mise auto-loads `.env`:** If you use `mise`, the `.env` file is loaded automatically via `mise.toml` (`_.file = ".env"`). No need to `source .env` manually. If you don't use mise, use `direnv allow` or export the vars in your shell.
 
 `mix setup` runs (in order):
 
@@ -83,27 +85,73 @@ Visit [localhost:4000](http://localhost:4000). You'll be redirected to login.
 See [`.env.example`](.env.example) for the full list with comments. The most important ones for local dev:
 
 ```bash
-SECRET_KEY_BASE=$(openssl rand -hex 64)
-DATABASE_URL=ecto://postgres:postgres@localhost/dran_dev
+SECRET_KEY_BASE=$(mix phx.gen.secret)
+DATABASE_URL=ecto://brain:brain_dev_2026@localhost/dran_dev
 DRAN_PASSWORD=$(openssl rand -hex 32)
+DRAN_API_TOKEN=$(openssl rand -hex 32)
 ```
 
-| Variable                | Required | Notes                                                          |
-| ----------------------- | -------- | -------------------------------------------------------------- |
-| `SECRET_KEY_BASE`       | yes      | `openssl rand -hex 64`                                         |
-| `DATABASE_URL`          | yes      | Postgres connection string                                     |
-| `DRAN_PASSWORD`         | yes      | Admin login password                                           |
-| `DRAN_API_TOKEN`        | yes      | Bearer token for API / MCP                                     |
-| `DRAN_INFERENCE_API_URL`| no       | Base URL of the OpenAI-compatible inference server (`…/v1`)    |
-| `DRAN_INFERENCE_API_KEY`| no*      | API key for the inference server (required if URL is set)      |
-| `DRAN_INFERENCE_CHAT_MODEL` | no   | Chat/text model (default: `Ornith-1.0-9B`)                     |
-| `DRAN_INFERENCE_EMBEDDING_MODEL` | no | Embeddings model (default: `Qwen3-Embedding`)               |
-| `DRAN_INFERENCE_RERANK_MODEL` | no | Rerank model (default: `Qwen3-Reranker`)                       |
-| `DRAN_INFERENCE_MARKITDOWN_MODEL` | no | Document-to-markdown model (default: `MarkItDown`)         |
-| `DRAN_INFERENCE_ASR_MODEL` | no    | Audio transcription model (default: `Qwen3-ASR`)               |
-| `DRAN_INFERENCE_VISION_MODEL` | no | Vision/chat model for images (default: `Ornith-1.0-9B`)          |
+#### Core
+
+| Variable          | Required | Notes                                                          |
+| ----------------- | -------- | -------------------------------------------------------------- |
+| `SECRET_KEY_BASE` | yes      | Output of `mix phx.gen.secret`                                 |
+| `DATABASE_URL`    | yes      | Postgres connection string                                     |
+| `DRAN_PASSWORD`   | yes      | Admin login password                                           |
+| `DRAN_API_TOKEN`  | yes      | Bearer token for API / MCP                                     |
+| `PHX_HOST`        | yes      | Public hostname (e.g. `localhost`, `dran.example.com`)         |
+| `PHX_PORT`        | no       | External port for generated URLs (default: `443`)              |
+| `PHX_SCHEME`      | no       | `https` or `http` (default: `https`)                           |
+| `PORT`            | no       | HTTP listener port (default: `4000`)                           |
+| `POOL_SIZE`       | no       | DB connection pool size (default: `10`)                        |
+| `ECTO_IPV6`       | no       | `true` or `1` to force IPv6 DB socket                          |
+
+#### Inference API (optional)
+
+| Variable                        | Required | Notes                                                    |
+| ------------------------------- | -------- | -------------------------------------------------------- |
+| `DRAN_INFERENCE_API_URL`        | no       | Base URL of OpenAI-compatible inference server (`…/v1`)  |
+| `DRAN_INFERENCE_API_KEY`        | no*      | API key (required if URL is set)                         |
+| `DRAN_INFERENCE_CHAT_MODEL`     | no       | Chat/text model (default: `Ornith-1.0-9B`)               |
+| `DRAN_INFERENCE_EMBEDDING_MODEL`| no       | Embeddings model (default: `Qwen3-Embedding`)            |
+| `DRAN_INFERENCE_RERANK_MODEL`   | no       | Rerank model (default: `Qwen3-Reranker`)                 |
+| `DRAN_INFERENCE_MARKITDOWN_MODEL`| no      | Document-to-markdown model (default: `MarkItDown`)       |
+| `DRAN_INFERENCE_ASR_MODEL`      | no       | Audio transcription model (default: `Qwen3-ASR`)         |
+| `DRAN_INFERENCE_VISION_MODEL`   | no       | Vision/chat model for images (default: `Ornith-1.0-9B`)  |
 
 > `DRAN_INFERENCE_API_KEY` is required whenever `DRAN_INFERENCE_API_URL` is set.
+
+#### Agents (optional)
+
+| Variable                  | Required | Notes                                      |
+| ------------------------- | -------- | ------------------------------------------ |
+| `AGENT_MAX_STEPS`         | no       | Max steps per agent run (default: `150`)   |
+| `AGENT_PER_STEP_TIMEOUT`  | no       | Per-step timeout in ms (default: `120000`)|
+
+#### Firecrawl (optional)
+
+| Variable           | Required | Notes                              |
+| ------------------ | -------- | ---------------------------------- |
+| `FIRECRAWL_API_KEY`| no       | API key for web search + scrape    |
+
+#### Production-only
+
+| Variable            | Required | Notes                                                        |
+| ------------------- | -------- | ------------------------------------------------------------ |
+| `DISABLE_FORCE_SSL` | no       | Set to `1` at **build time** to disable `force_ssl` redirect |
+| `DNS_CLUSTER_QUERY` | no       | libcluster query for multi-node setups                       |
+| `UPLOADS_DIR`       | no       | Upload storage path (default: `priv/static/uploads`)         |
+| `UPLOADS_MAX_SIZE`  | no       | Max upload bytes (default: `104857600` = 100 MiB)            |
+
+### Pre-commit checks
+
+Before committing, always run:
+
+```bash
+mix precommit
+```
+
+This runs `compile --warnings-as-errors`, `deps.unlock --unused`, `format`, and `test`. Fix any issues it reports before pushing.
 
 ## Inference API
 
@@ -273,16 +321,22 @@ The release reads all configuration from environment variables at startup. There
 | Variable            | Required | Notes                                                                                |
 | ------------------- | -------- | ------------------------------------------------------------------------------------ |
 | `SECRET_KEY_BASE`   | yes      | Output of `mix phx.gen.secret`                                                       |
-| `DATABASE_URL`      | yes      | `postgres://user:pass@host:5432/dran_prod`                                           |
+| `DATABASE_URL`      | yes      | `postgres://user:***@host:5432/dran_prod`                                           |
 | `DRAN_PASSWORD`     | yes      | Strong password for the admin user                                                   |
 | `DRAN_API_TOKEN`    | yes      | Long random token for MCP / REST clients (`openssl rand -hex 32`)                    |
 | `PHX_HOST`          | yes      | Public domain (e.g. `dran.example.com`)                                              |
+| `PHX_PORT`          | no       | External port for generated URLs (default: `443`)                                    |
+| `PHX_SCHEME`        | no       | `https` or `http` (default: `https`)                                                 |
 | `PORT`              | no       | Defaults to `4000`. Most platforms inject it.                                        |
 | `POOL_SIZE`         | no       | Defaults to `10`. Bump under load.                                                   |
 | `UPLOADS_DIR`       | no       | Defaults to `priv/static/uploads`. Mount a persistent volume here.                   |
 | `UPLOADS_MAX_SIZE`  | no       | Defaults to `104857600` (100 MiB).                                                   |
 | `ECTO_IPV6`         | no       | `true` or `1` to force IPv6 DB socket.                                               |
 | `DNS_CLUSTER_QUERY` | no       | libcluster query, only for multi-node setups.                                        |
+| `DISABLE_FORCE_SSL` | no       | Set to `1` at **build time** to disable `force_ssl` redirect (plain HTTP deployments). |
+| `AGENT_MAX_STEPS`   | no       | Max steps per agent run (default: `150`)                                             |
+| `AGENT_PER_STEP_TIMEOUT` | no  | Per-step timeout in ms (default: `120000`)                                           |
+| `FIRECRAWL_API_KEY` | no       | API key for Firecrawl web search + scrape                                            |
 
 > **Never bake secrets into a Dockerfile.** Pass them as runtime env vars only. Coolify, Fly, and Kubernetes all support this natively.
 
