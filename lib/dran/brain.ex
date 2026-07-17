@@ -330,7 +330,7 @@ defmodule Dran.Brain do
       if is_binary(slug) and String.trim(slug) != "" do
         slug
       else
-        slugify_title(title)
+        Dran.Slug.slugify(title)
       end
 
     attrs
@@ -342,16 +342,12 @@ defmodule Dran.Brain do
     body
     |> String.split("\n")
     |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
+    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "![[") or String.starts_with?(&1, "[[")))
     |> List.first()
     |> case do
       nil -> "Untitled"
       line -> String.slice(line, 0, 512)
     end
-  end
-
-  defp slugify_title(title) do
-    Dran.Slug.slugify(title)
   end
 
   defp default_owner_field(attrs, key, value) do
@@ -606,29 +602,52 @@ defmodule Dran.Brain do
 
   @doc "List all relations for a page (inbound + outbound)"
   def list_relations_for_page(page_id) do
+    # Lightweight select: join pages but only fetch id, title, slug, page_type — no body.
+    # This avoids loading large text bodies that are never needed for relation listing.
     outbound =
       from r in Relation,
         where: r.source_id == ^page_id,
-        preload: [:target]
+        left_join: t in assoc(r, :target),
+        select: %Relation{
+          id: r.id,
+          source_id: r.source_id,
+          target_id: r.target_id,
+          relation_type: r.relation_type,
+          weight: r.weight,
+          meta: r.meta,
+          inserted_at: r.inserted_at,
+          target: %Page{
+            id: t.id,
+            title: t.title,
+            slug: t.slug,
+            page_type: t.page_type
+          }
+        }
 
     inbound =
       from r in Relation,
         where: r.target_id == ^page_id,
-        preload: [:source]
+        left_join: s in assoc(r, :source),
+        select: %Relation{
+          id: r.id,
+          source_id: r.source_id,
+          target_id: r.target_id,
+          relation_type: r.relation_type,
+          weight: r.weight,
+          meta: r.meta,
+          inserted_at: r.inserted_at,
+          source: %Page{
+            id: s.id,
+            title: s.title,
+            slug: s.slug,
+            page_type: s.page_type
+          }
+        }
 
     %{
-      outbound: trim_preloaded_pages(Repo.all(outbound), :target),
-      inbound: trim_preloaded_pages(Repo.all(inbound), :source)
+      outbound: Repo.all(outbound),
+      inbound: Repo.all(inbound)
     }
-  end
-
-  defp trim_preloaded_pages(relations, assoc_key) do
-    Enum.map(relations, fn rel ->
-      case Map.get(rel, assoc_key) do
-        %Page{} = page -> Map.put(rel, assoc_key, %{page | body: ""})
-        _ -> rel
-      end
-    end)
   end
 
   @doc "Delete a relation"
@@ -1371,13 +1390,13 @@ defmodule Dran.Brain do
 
   @doc "Find pages with no inbound relations (orphans)"
   def orphan_pages(context_id) do
-    subquery =
-      from r in Relation,
-        select: r.target_id
-
+    # left_join + is_nil is more efficient than NOT IN subquery,
+    # especially as the relations table grows.
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id and p.id not in subquery(subquery),
+        left_join: r in Relation,
+          on: r.target_id == p.id,
+        where: p.context_id == ^context_id and is_nil(r.id),
         order_by: [asc: p.title],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
@@ -1433,25 +1452,60 @@ defmodule Dran.Brain do
   - `:total_relations` — number of relations in the context
   """
   def stats(context_id) when is_binary(context_id) do
-    pages = list_pages(context_id: context_id, limit: 10_000)
-
+    # by_type: single group_by query instead of loading all pages into memory
     by_type =
-      pages
-      |> Enum.group_by(& &1.page_type)
-      |> Enum.map(fn {type, list} -> {type, length(list)} end)
+      Repo.all(
+        from p in Page,
+          where: p.context_id == ^context_id,
+          group_by: p.page_type,
+          select: {p.page_type, count(p.id)}
+      )
       |> Map.new()
 
+    # todos_by_status: group_by on meta->>'kanban_status' for todo pages only
     todos_by_status =
-      pages
-      |> Enum.filter(&(&1.page_type == "todo"))
-      |> Enum.group_by(fn p -> (p.meta || %{})["kanban_status"] || "backlog" end)
-      |> Enum.map(fn {status, list} -> {status, length(list)} end)
+      Repo.all(
+        from p in Page,
+          where: p.context_id == ^context_id and p.page_type == "todo",
+          group_by: fragment("coalesce(meta->>'kanban_status', 'backlog')"),
+          select:
+            {fragment("coalesce(meta->>'kanban_status', 'backlog')"), count(p.id)}
+      )
       |> Map.new()
 
+    # recent: lightweight query — only 5 rows, no body needed
     recent =
-      pages
-      |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
-      |> Enum.take(5)
+      Repo.all(
+        from p in Page,
+          where: p.context_id == ^context_id,
+          order_by: [desc: p.updated_at],
+          limit: 5,
+          select: %Page{
+            id: p.id,
+            context_id: p.context_id,
+            title: p.title,
+            slug: p.slug,
+            body: "",
+            page_type: p.page_type,
+            summary: p.summary,
+            tags: p.tags,
+            meta: p.meta,
+            kb_confidence: p.kb_confidence,
+            kb_source_url: p.kb_source_url,
+            kb_contested: p.kb_contested,
+            body_hash: p.body_hash,
+            version: p.version,
+            owner: p.owner,
+            created_by: p.created_by,
+            updated_by: p.updated_by,
+            on_behalf_of: p.on_behalf_of,
+            inserted_at: p.inserted_at,
+            updated_at: p.updated_at
+          }
+      )
+
+    total_pages =
+      Repo.aggregate(from(p in Page, where: p.context_id == ^context_id), :count)
 
     total_relations =
       Repo.aggregate(
@@ -1463,7 +1517,7 @@ defmodule Dran.Brain do
       )
 
     %{
-      total_pages: length(pages),
+      total_pages: total_pages,
       by_type: by_type,
       recent: recent,
       todos_by_status: todos_by_status,
@@ -1473,4 +1527,108 @@ defmodule Dran.Brain do
   end
 
   def stats(_), do: %{}
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Extended metrics (brain health)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Compute extended brain-health metrics for a context.
+
+  All queries use SQL aggregates (count / sum / group_by) — no pages are
+  loaded into memory. Returns a map with:
+
+  - `:pages_this_week` — pages created in the last 7 days
+  - `:pages_last_week` — pages created in the 7 days before that
+  - `:embedding_coverage` — fraction of pages with an embedding (0.0–1.0)
+  - `:relations_by_type` — map of relation_type => count
+  - `:contested_count` — number of contested pages
+  - `:agents` — `%{sessions_this_week, tokens_this_week, total_sessions}`
+  """
+  def metrics(context_id) when is_binary(context_id) do
+    now = DateTime.utc_now()
+    week_ago = DateTime.add(now, -7 * 86400, :second)
+    two_weeks_ago = DateTime.add(now, -14 * 86400, :second)
+
+    %{
+      pages_this_week: count_pages_since(context_id, week_ago),
+      pages_last_week:
+        count_pages_since(context_id, two_weeks_ago) - count_pages_since(context_id, week_ago),
+      embedding_coverage: embedding_coverage(context_id),
+      relations_by_type: relations_by_type(context_id),
+      contested_count: length(contested_pages(context_id)),
+      agents: agent_metrics(context_id)
+    }
+  end
+
+  def metrics(_), do: %{}
+
+  defp count_pages_since(context_id, since) do
+    Repo.aggregate(
+      from(p in Page,
+        where: p.context_id == ^context_id and p.inserted_at >= ^since
+      ),
+      :count
+    )
+  end
+
+  defp embedding_coverage(context_id) do
+    total = Repo.aggregate(from(p in Page, where: p.context_id == ^context_id), :count)
+
+    if total == 0 do
+      0.0
+    else
+      embedded =
+        Repo.aggregate(
+          from(p in Page, where: p.context_id == ^context_id and not is_nil(p.embedding)),
+          :count
+        )
+
+      embedded / total
+    end
+  end
+
+  defp relations_by_type(context_id) do
+    Repo.all(
+      from r in Relation,
+        join: p in assoc(r, :source),
+        where: p.context_id == ^context_id,
+        group_by: r.relation_type,
+        select: {r.relation_type, count(r.id)}
+    )
+    |> Map.new()
+  end
+
+  defp agent_metrics(context_id) do
+    week_ago = DateTime.add(DateTime.utc_now(), -7 * 86400, :second)
+
+    sessions_this_week =
+      Repo.aggregate(
+        from(s in Dran.Agent.Session,
+          where: s.context_id == ^context_id and s.inserted_at >= ^week_ago
+        ),
+        :count
+      )
+
+    tokens_this_week =
+      Repo.one(
+        from s in Dran.Agent.Session,
+          where: s.context_id == ^context_id and s.inserted_at >= ^week_ago,
+          select: coalesce(sum(fragment("(meta->>'tokens_used')::bigint")), 0)
+      )
+
+    tokens_this_week = Decimal.to_integer(tokens_this_week)
+
+    total_sessions =
+      Repo.aggregate(
+        from(s in Dran.Agent.Session, where: s.context_id == ^context_id),
+        :count
+      )
+
+    %{
+      sessions_this_week: sessions_this_week,
+      tokens_this_week: tokens_this_week,
+      total_sessions: total_sessions
+    }
+  end
 end

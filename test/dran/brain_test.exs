@@ -267,4 +267,342 @@ defmodule Dran.BrainTest do
       assert note2.id == note1.id
     end
   end
+
+  describe "metrics/1" do
+    test "returns extended brain-health metrics with all expected keys", %{context: ctx} do
+      # Create some pages and relations so the metrics are non-trivial
+      {:ok, a} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Metric A",
+          slug: "metric-a",
+          page_type: "note",
+          body: "content a"
+        })
+
+      {:ok, b} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Metric B",
+          slug: "metric-b",
+          page_type: "concept",
+          body: "content b"
+        })
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: a.id,
+          target_id: b.id,
+          relation_type: "related"
+        })
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: a.id,
+          target_id: b.id,
+          relation_type: "semantic"
+        })
+
+      metrics = Brain.metrics(ctx.id)
+
+      assert Map.has_key?(metrics, :pages_this_week)
+      assert Map.has_key?(metrics, :pages_last_week)
+      assert Map.has_key?(metrics, :embedding_coverage)
+      assert Map.has_key?(metrics, :relations_by_type)
+      assert Map.has_key?(metrics, :contested_count)
+      assert Map.has_key?(metrics, :agents)
+
+      # Pages created this week (just created)
+      assert metrics.pages_this_week >= 2
+
+      # Embedding coverage is a float between 0.0 and 1.0
+      assert is_float(metrics.embedding_coverage)
+      assert metrics.embedding_coverage >= 0.0
+      assert metrics.embedding_coverage <= 1.0
+
+      # Relations by type includes "related" and "semantic"
+      assert metrics.relations_by_type["related"] >= 1
+      assert metrics.relations_by_type["semantic"] >= 1
+
+      # Contested count is a non-negative integer
+      assert is_integer(metrics.contested_count)
+      assert metrics.contested_count >= 0
+
+      # Agents map has expected keys
+      assert Map.has_key?(metrics.agents, :sessions_this_week)
+      assert Map.has_key?(metrics.agents, :tokens_this_week)
+      assert Map.has_key?(metrics.agents, :total_sessions)
+    end
+
+    test "embedding_coverage is 0.0 when context has no pages" do
+      # Use a fresh context with no pages
+      {:ok, empty_ctx} = Brain.create_context(%{name: "Empty Metrics", slug: "empty-metrics"})
+
+      metrics = Brain.metrics(empty_ctx.id)
+      assert metrics.embedding_coverage == 0.0
+      assert metrics.pages_this_week == 0
+      assert metrics.relations_by_type == %{}
+      assert metrics.contested_count == 0
+      assert metrics.agents.sessions_this_week == 0
+      assert metrics.agents.tokens_this_week == 0
+      assert metrics.agents.total_sessions == 0
+    end
+
+    test "agents metrics counts sessions and tokens from agent_sessions", %{context: ctx} do
+      # Insert an agent session with tokens_used in meta
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      Dran.Repo.insert!(%Dran.Agent.Session{
+        context_id: ctx.id,
+        agent_type: "research",
+        input: "test query",
+        status: "done",
+        started_at: now,
+        meta: %{"tokens_used" => 1500}
+      })
+
+      metrics = Brain.metrics(ctx.id)
+
+      assert metrics.agents.sessions_this_week >= 1
+      assert metrics.agents.tokens_this_week >= 1500
+      assert metrics.agents.total_sessions >= 1
+    end
+  end
+
+  describe "edge cases — derive_title ignores embed lines" do
+    test "create_page with body containing only ![[embed]] derives Untitled", %{context: ctx} do
+      {:ok, artifact} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Artifact",
+          slug: "artifact-1",
+          page_type: "artifact"
+        })
+
+      {:ok, page} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          page_type: "note",
+          body: "![[artifact-1]]"
+        })
+
+      assert page.title == "Untitled"
+      assert page.slug == "untitled"
+
+      # The embed itself is still resolved
+      rels = Brain.list_relations_for_page(page.id).outbound
+      assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == artifact.id))
+    end
+
+    test "create_page with embed + text uses the text line as title", %{context: ctx} do
+      {:ok, page} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          page_type: "note",
+          body: "![[nonexistent]]\nActual Title Here"
+        })
+
+      assert page.title == "Actual Title Here"
+    end
+
+    test "create_page with body containing only [[wikilink]] derives Untitled", %{context: ctx} do
+      {:ok, page} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          page_type: "note",
+          body: "[[Some Link]]"
+        })
+
+      assert page.title == "Untitled"
+    end
+  end
+
+  describe "edge cases — reresolve_embeds with empty body" do
+    test "clears all embeds when body becomes empty", %{context: ctx} do
+      {:ok, _a} =
+        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "ea", page_type: "artifact"})
+
+      {:ok, _b} =
+        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "eb", page_type: "artifact"})
+
+      {:ok, note} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "N",
+          slug: "en",
+          page_type: "note",
+          body: "![[ea]] ![[eb]]"
+        })
+
+      # Verify embeds exist
+      embeds =
+        Brain.list_relations_for_page(note.id).outbound
+        |> Enum.filter(&(&1.relation_type == "embeds"))
+
+      assert length(embeds) == 2
+
+      # Now clear the body
+      {:ok, note} = Brain.update_page(note, %{"body" => ""})
+
+      embeds =
+        Brain.list_relations_for_page(note.id).outbound
+        |> Enum.filter(&(&1.relation_type == "embeds"))
+
+      assert embeds == []
+    end
+
+    test "reresolve_embeds directly with empty body", %{context: ctx} do
+      {:ok, a} =
+        Brain.create_page(%{context_id: ctx.id, title: "A2", slug: "ea2", page_type: "artifact"})
+
+      {:ok, note} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "N2",
+          slug: "en2",
+          page_type: "note",
+          body: "![[ea2]]"
+        })
+
+      # Verify embed exists
+      assert Brain.list_relations_for_page(note.id).outbound
+             |> Enum.any?(&(&1.relation_type == "embeds" and &1.target_id == a.id))
+
+      # Update body to empty and re-resolve
+      {:ok, note} = Brain.update_page(note, %{"body" => ""})
+      {created, not_found} = Brain.reresolve_embeds(note)
+
+      assert created == 0
+      assert not_found == []
+
+      embeds =
+        Brain.list_relations_for_page(note.id).outbound
+        |> Enum.filter(&(&1.relation_type == "embeds"))
+
+      assert embeds == []
+    end
+  end
+
+  describe "edge cases — rename_slug" do
+    test "case-only change (My-Page → my-page) works without unique constraint violation", %{
+      context: ctx
+    } do
+      {:ok, page} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Test",
+          slug: "My-Page",
+          page_type: "note"
+        })
+
+      {:ok, renamed} = Brain.rename_slug(page, "my-page")
+      assert renamed.slug == "my-page"
+    end
+
+    test "preserves semantic relations (by IDs) when page is relation target", %{context: ctx} do
+      {:ok, target} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Target",
+          slug: "target-page",
+          page_type: "concept"
+        })
+
+      {:ok, source} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Source",
+          slug: "source-page",
+          page_type: "concept"
+        })
+
+      {:ok, _rel} =
+        Brain.create_relation(%{
+          source_id: source.id,
+          target_id: target.id,
+          relation_type: "related",
+          weight: 0.9
+        })
+
+      # Rename the target
+      {:ok, _renamed} = Brain.rename_slug(target, "renamed-target")
+
+      # The relation should still exist (it uses IDs, not slugs)
+      rels = Brain.list_relations_for_page(source.id).outbound
+      assert Enum.any?(rels, &(&1.relation_type == "related" and &1.target_id == target.id))
+    end
+  end
+
+  describe "edge cases — Brain.stats" do
+    test "returns valid stats for context with 0 pages" do
+      {:ok, empty_ctx} = Brain.create_context(%{name: "Empty Context", slug: "empty-ctx"})
+
+      stats = Brain.stats(empty_ctx.id)
+
+      assert stats.total_pages == 0
+      assert stats.by_type == %{}
+      assert stats.recent == []
+      assert stats.todos_by_status == %{}
+      assert stats.orphan_count == 0
+      assert stats.total_relations == 0
+    end
+  end
+
+  describe "edge cases — resolve_embeds with non-existent slug" do
+    test "returns slug in not_found without creating broken relation", %{context: ctx} do
+      {:ok, note} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Note",
+          slug: "note-missing",
+          page_type: "note",
+          body: "![[does-not-exist]]"
+        })
+
+      # resolve_embeds is called during create_page, so the relation should
+      # already have been attempted. Let's verify directly.
+      {created, not_found} = Brain.resolve_embeds(note)
+
+      assert created == 0
+      assert "does-not-exist" in not_found
+
+      # No embeds relation should exist
+      embeds =
+        Brain.list_relations_for_page(note.id).outbound
+        |> Enum.filter(&(&1.relation_type == "embeds"))
+
+      assert embeds == []
+    end
+
+    test "mixed existing and non-existent embeds", %{context: ctx} do
+      {:ok, artifact} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Art",
+          slug: "art-exists",
+          page_type: "artifact"
+        })
+
+      {:ok, note} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "N",
+          slug: "n-mixed",
+          page_type: "note",
+          body: "![[art-exists]] and ![[nope-not-here]]"
+        })
+
+      {created, not_found} = Brain.resolve_embeds(note)
+
+      assert created == 1
+      assert "nope-not-here" in not_found
+
+      embeds =
+        Brain.list_relations_for_page(note.id).outbound
+        |> Enum.filter(&(&1.relation_type == "embeds"))
+
+      assert length(embeds) == 1
+      assert hd(embeds).target_id == artifact.id
+    end
+  end
 end
