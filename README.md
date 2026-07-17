@@ -13,13 +13,13 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
 <table>
   <tr>
     <td align="center"><b>Dashboard — brain health metrics</b><br><img src="docs/screenshots/dashboard.png" alt="Dashboard with brain health metrics" width="100%"></td>
+    <td align="center"><b>Kanban board — full-viewport, real-time</b><br><img src="docs/screenshots/kanban.png" alt="Kanban board with drag & drop todos" width="100%"></td>
+    <td align="center"><b>In-app documentation — tabbed guides</b><br><img src="docs/screenshots/docs.png" alt="In-app documentation with TOC and tabs" width="100%"></td>
     <td align="center"><b>Knowledge graph — 2D/3D</b><br><img src="docs/screenshots/graph.png" alt="Knowledge graph" width="100%"></td>
   </tr>
   <tr>
-    <td align="center"><b>Floating brain copilot</b><br><img src="docs/screenshots/chat.png" alt="Floating brain copilot chat" width="100%"></td>
     <td align="center"><b>Page detail — relations & versions</b><br><img src="docs/screenshots/note-detail.png" alt="Page detail with backlinks and relations" width="100%"></td>
-  </tr>
-  <tr>
+    <td align="center"><b>Floating brain copilot</b><br><img src="docs/screenshots/chat.png" alt="Floating brain copilot chat" width="100%"></td>
     <td align="center"><b>Activity feed — real-time log</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
     <td align="center"><b>Settings — brain tuning</b><br><img src="docs/screenshots/settings.png" alt="Settings — brain tuning" width="100%"></td>
   </tr>
@@ -105,6 +105,9 @@ to give any MCP-compatible agent the operational context it needs.
 For the full operational guide — tool-by-tool usage, recipes, pitfalls, and
 agent limits — see [**SKILL.md**](SKILL.md).
 
+> **Schema verification:** run `scripts/mcp_smoke.sh` to verify the live MCP
+> endpoint returns all 19 tools with up-to-date schemas.
+
 ## Features
 
 - **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, artifact, goal, plan, todo, comparison, and query
@@ -132,7 +135,9 @@ agent limits — see [**SKILL.md**](SKILL.md).
 - **Inline editing** — edit any page in-place with autosave
 - **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
 - **Dashboard** — metrics, recent pages, quick access, todo board summary, daily-note status
-- **Kanban board** — drag & drop todos with 6 statuses
+- **Kanban board** — full-viewport 6-column board with drag & drop, updates in real time via PubSub when agents create or move todos
+- **Planning hierarchy** — goals → plans → todos with auto-materialized `part_of` relations, orphan filters (`goal_slug="none"` / `plan_slug="none"`), and lint checks
+- **In-app documentation** at `/docs` with tabbed guides, MCP reference, and copy-ready code examples
 - **Goal kanban** — per-goal todo board with drag & drop
 - **MCP server** — 19 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph (see [SKILL.md](SKILL.md))
 - **REST API** — full CRUD for pages, contexts, relations, search, ingest, export, and maintenance
@@ -541,7 +546,7 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `create_relation`  | Create a typed relation between two pages                              |
 | `delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
 | `get_links`        | Get inbound + outbound relations for a page                            |
-| `list_pages`       | List pages with filters (type, tag, status, limit)                     |
+| `list_pages`       | List pages with filters (type, tag, status, `goal_slug`, `plan_slug`, limit); pass `goal_slug="none"` / `plan_slug="none"` for orphans |
 | `stats`            | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
 | `lint`             | Quality report: orphans, stale pages, and contested knowledge          |
 | `rename_slug`      | Rename a page's slug                                                   |
