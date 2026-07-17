@@ -1,3 +1,5 @@
+<img src="docs/header.png" alt="Dran — personal second brain" width="100%">
+
 # Dran
 
 A personal second-brain application built with Phoenix LiveView. It stores your knowledge as typed pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons) and links them with relations, forming a queryable knowledge graph.
@@ -5,6 +7,23 @@ A personal second-brain application built with Phoenix LiveView. It stores your 
 Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP endpoint for AI agent integration, a floating copilot chat, and a REST API.
 
 > **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 19 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><b>Dashboard — brain health metrics</b><br><img src="docs/screenshots/dashboard.png" alt="Dashboard with brain health metrics" width="100%"></td>
+    <td align="center"><b>Knowledge graph — 2D/3D</b><br><img src="docs/screenshots/graph.png" alt="Knowledge graph" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Floating brain copilot</b><br><img src="docs/screenshots/chat.png" alt="Floating brain copilot chat" width="100%"></td>
+    <td align="center"><b>Page detail — relations & versions</b><br><img src="docs/screenshots/note-detail.png" alt="Page detail with backlinks and relations" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Activity feed — real-time log</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
+    <td align="center"><b>Settings — brain tuning</b><br><img src="docs/screenshots/settings.png" alt="Settings — brain tuning" width="100%"></td>
+  </tr>
+</table>
 
 ## Features
 
@@ -572,20 +591,6 @@ mix dran.agent --type ingest  --context personal --input "https://example.com/ar
 - **MCP** (Model Context Protocol) for AI agent integration
 - **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily) and `weekly_review` (weekly) agents
 - **Tailwind CSS v4** + daisyUI for styling
-
-## Screenshots
-
-![Dashboard with brain health metrics](docs/screenshots/dashboard.png)
-
-![Knowledge graph](docs/screenshots/graph.png)
-
-![Floating brain copilot chat](docs/screenshots/chat.png)
-
-![Page detail with backlinks and relations](docs/screenshots/note-detail.png)
-
-![Activity feed](docs/screenshots/activity.png)
-
-![Settings — brain tuning](docs/screenshots/settings.png)
 
 ## License
 
