@@ -1389,6 +1389,15 @@ defmodule Dran.MCP do
   defp start_agent_by_type("ingest", input, context_id, opts),
     do: Agent.Ingest.run(input, context_id, opts)
 
+  defp start_agent_by_type("ask", input, context_id, opts),
+    do: Agent.QA.run(input, context_id, opts)
+
+  defp start_agent_by_type("link_gardener", input, context_id, opts),
+    do: Agent.LinkGardener.run(input, context_id, opts)
+
+  defp start_agent_by_type("curator", input, context_id, opts),
+    do: Agent.Curator.run(input, context_id, opts)
+
   defp start_agent_by_type(_type, _input, _context_id, _opts),
     do: {:error, :unknown_agent_type}
 

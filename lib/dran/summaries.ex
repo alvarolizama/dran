@@ -95,6 +95,7 @@ defmodule Dran.Summaries do
       pages
       |> Enum.take(50)
       |> Enum.map_join("\n", fn %{slug: slug, title: title, summary: summary} ->
+        summary = summary || ""
         "- slug: #{slug}, title: #{title}#{if summary != "", do: ", summary: " <> summary, else: ""}"
       end)
 
@@ -135,7 +136,7 @@ defmodule Dran.Summaries do
           where: not is_nil(p.embedding),
           order_by: fragment("? <=> ?", p.embedding, ^vec),
           limit: 50,
-          select: %{slug: p.slug, title: p.title, summary: p.summary}
+          select: %{slug: p.slug, title: p.title, summary: coalesce(p.summary, "")}
       )
     else
       Brain.list_pages(context_id: page.context_id, limit: 50)

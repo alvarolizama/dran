@@ -259,6 +259,7 @@ defmodule Dran.Agent.Engine do
     end
   rescue
     reason ->
+      Logger.error("Agent.Engine single_turn crash: #{Exception.format(:error, reason, __STACKTRACE__)}")
       {:error, state, reason}
   end
 
