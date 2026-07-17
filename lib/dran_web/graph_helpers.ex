@@ -104,7 +104,7 @@ defmodule DranWeb.GraphHelpers do
     %{nodes: [center | neighbors_laid], edges: edges}
   end
 
-  defp circular_layout(nodes, center_x, center_y, radius) do
+  def circular_layout(nodes, center_x, center_y, radius) do
     count = length(nodes)
 
     if count == 0 do

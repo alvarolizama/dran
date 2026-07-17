@@ -516,6 +516,11 @@ defmodule DranWeb.AgentLive do
      end}
   end
 
+  @impl true
+  def handle_info(:refresh_steps, socket) do
+    {:noreply, refresh_steps(socket) |> assign(:steps_refresh_timer, nil)}
+  end
+
   def handle_info(message, socket) do
     socket =
       if socket.assigns.session do
@@ -528,11 +533,11 @@ defmodule DranWeb.AgentLive do
   end
 
   defp handle_agent_message(socket, {:step_started, _step}) do
-    refresh_steps(socket)
+    schedule_steps_refresh(socket)
   end
 
   defp handle_agent_message(socket, {:step_completed, _step, _result}) do
-    refresh_steps(socket)
+    schedule_steps_refresh(socket)
   end
 
   defp handle_agent_message(socket, {:session_done, summary, _pages_created}) do
@@ -563,5 +568,14 @@ defmodule DranWeb.AgentLive do
       )
 
     assign(socket, steps: steps)
+  end
+
+  defp schedule_steps_refresh(socket) do
+    if socket.assigns[:steps_refresh_timer] do
+      Process.cancel_timer(socket.assigns[:steps_refresh_timer])
+    end
+
+    timer = Process.send_after(self(), :refresh_steps, 200)
+    assign(socket, steps_refresh_timer: timer)
   end
 end

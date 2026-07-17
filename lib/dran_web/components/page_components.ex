@@ -7,6 +7,7 @@ defmodule DranWeb.PageComponents do
   import Phoenix.HTML, only: [raw: 1]
   import DranWeb.CoreComponents, only: [icon: 1]
 
+  alias Dran.Brain
   alias Dran.Brain.Page
 
   attr :page, :map, required: true
@@ -33,6 +34,15 @@ defmodule DranWeb.PageComponents do
 
     assigns = assign(assigns, :inline_links, inline_links)
 
+    tag_map =
+      case assigns.page.tags do
+        nil -> %{}
+        [] -> %{}
+        tags -> Brain.get_pages_by_slugs(tags, assigns.page.context_id)
+      end
+
+    assigns = assign(assigns, :tag_map, tag_map)
+
     ~H"""
     <div class="flex h-full">
       <div class="flex-1 overflow-y-auto">
@@ -49,12 +59,12 @@ defmodule DranWeb.PageComponents do
               <div class="flex flex-wrap gap-2 mt-2">
                 <.link
                   :for={tag <- @page.tags || []}
-                  navigate={tag_link_path(tag, @page.context_id)}
+                  navigate={tag_link_path(tag, @page.context_id, @tag_map)}
                   class={[
                     "px-2 py-0.5 text-xs rounded transition",
                     "tag-link",
-                    tag_page_exists?(tag, @page.context_id) && "tag-link-exists",
-                    not tag_page_exists?(tag, @page.context_id) && "tag-link-missing"
+                    Map.has_key?(@tag_map, tag) && "tag-link-exists",
+                    not Map.has_key?(@tag_map, tag) && "tag-link-missing"
                   ]}
                 >
                   {tag}
@@ -360,7 +370,19 @@ defmodule DranWeb.PageComponents do
 
   def tag_page_exists?(_tag, _context_id), do: false
 
-  def tag_link_path(tag, context_id) when is_binary(tag) and is_binary(context_id) do
+  def tag_link_path(tag, context_id, tag_map \\ nil)
+
+  def tag_link_path(tag, _context_id, tag_map) when is_binary(tag) and is_map(tag_map) do
+    case Map.get(tag_map, tag) do
+      nil ->
+        "/search?q=#{URI.encode_www_form(tag)}"
+
+      page_type ->
+        "/#{type_path(page_type)}/#{tag}"
+    end
+  end
+
+  def tag_link_path(tag, context_id, nil) when is_binary(tag) and is_binary(context_id) do
     case Dran.Brain.get_page_by_slug(tag, context_id) do
       %Page{page_type: type, slug: slug} ->
         "/#{type_path(type)}/#{slug}"
@@ -370,7 +392,7 @@ defmodule DranWeb.PageComponents do
     end
   end
 
-  def tag_link_path(tag, _context_id), do: "/search?q=#{URI.encode_www_form(tag)}"
+  def tag_link_path(tag, _context_id, _tag_map), do: "/search?q=#{URI.encode_www_form(tag)}"
 
   def format_date(nil), do: ""
 
@@ -490,19 +512,20 @@ defmodule DranWeb.PageComponents do
 
   defp apply_inline_links(html, links, context_id)
        when is_list(links) and links != [] do
-    # Resolve slugs to page types for correct URLs
+    # Resolve slugs to page types for correct URLs (batched to avoid N+1)
     slug_to_path =
       if context_id do
-        links
-        |> Enum.map(fn %{"slug" => slug} -> slug end)
-        |> Enum.uniq()
-        |> Enum.reduce(%{}, fn slug, acc ->
-          case Dran.Brain.get_page_by_slug(slug, context_id) do
-            nil ->
-              acc
+        slugs =
+          links
+          |> Enum.map(fn %{"slug" => slug} -> slug end)
+          |> Enum.uniq()
 
-            page ->
-              Map.put(acc, slug, "/#{Map.get(@type_routes, page.page_type, "notes")}/#{slug}")
+        slug_types = Dran.Brain.get_pages_by_slugs(slugs, context_id)
+
+        Enum.reduce(slugs, %{}, fn slug, acc ->
+          case Map.get(slug_types, slug) do
+            nil -> acc
+            page_type -> Map.put(acc, slug, "/#{Map.get(@type_routes, page_type, "notes")}/#{slug}")
           end
         end)
       else

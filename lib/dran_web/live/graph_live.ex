@@ -13,26 +13,8 @@ defmodule DranWeb.GraphLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
+  alias DranWeb.GraphHelpers
   alias DranWeb.Plugs.Auth
-
-  @type_colors %{
-    "note" => "#60A5FA",
-    "todo" => "#34D399",
-    "goal" => "#F59E0B",
-    "plan" => "#A78BFA",
-    "entity" => "#FB7185",
-    "concept" => "#FBBF24",
-    "reference" => "#60A5FA",
-    "artifact" => "#94A3B8",
-    "comparison" => "#F472B6"
-  }
-
-  @edge_colors %{
-    "related" => "#94A3B8",
-    "contradicts" => "#EF4444",
-    "supersedes" => "#F59E0B",
-    "part_of" => "#10B981"
-  }
 
   @impl true
   def mount(_params, session, socket) do

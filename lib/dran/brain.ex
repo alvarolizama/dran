@@ -221,6 +221,27 @@ defmodule Dran.Brain do
     Repo.one(from p in Page, where: p.slug == ^slug and p.context_id == ^context_id)
   end
 
+  @doc "Batch-fetch slug → page_type map for many slugs in one query"
+  def get_pages_by_slugs(slugs, context_id) when is_list(slugs) and is_binary(context_id) do
+    slugs =
+      slugs
+      |> Enum.filter(&is_binary/1)
+      |> Enum.uniq()
+
+    case slugs do
+      [] ->
+        %{}
+
+      [_ | _] = slugs ->
+        Repo.all(
+          from p in Page,
+            where: p.context_id == ^context_id and p.slug in ^slugs,
+            select: {p.slug, p.page_type}
+        )
+        |> Map.new()
+    end
+  end
+
   @doc "Get a page by id"
   def get_page!(id), do: Repo.get!(Page, id)
 
