@@ -270,7 +270,7 @@ defmodule DranWeb.GraphLive do
             <div class="join">
               <button
                 class={[
-                  "btn btn-xs join-item",
+                  "btn btn-xs join-item transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
                   @view_mode == "2d" && "btn-primary",
                   @view_mode != "2d" && "btn-ghost"
                 ]}
@@ -281,7 +281,7 @@ defmodule DranWeb.GraphLive do
               </button>
               <button
                 class={[
-                  "btn btn-xs join-item",
+                  "btn btn-xs join-item transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
                   @view_mode == "3d" && "btn-primary",
                   @view_mode != "3d" && "btn-ghost"
                 ]}

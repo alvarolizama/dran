@@ -51,7 +51,7 @@ defmodule DranWeb.Layouts do
       <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
         <div class="p-4 border-b border-base-300">
           <div class="flex items-center gap-2">
-            <a href={~p"/"} class="flex items-center gap-2 shrink-0">
+            <a href={~p"/"} class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
@@ -73,7 +73,7 @@ defmodule DranWeb.Layouts do
               type="text"
               name="q"
               placeholder={gettext("Search...")}
-              class="w-full pl-8 pr-12 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
+              class="w-full pl-8 pr-12 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
             />
             <kbd class="absolute right-2.5 top-2 text-[10px] font-mono text-base-content/40 border border-base-300 rounded px-1">
               ⌘K
@@ -341,7 +341,7 @@ defmodule DranWeb.Layouts do
         />
       </div>
       <details :if={group.label} open class="group">
-        <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none hover:text-base-content/70">
+        <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
           <.icon
             name="hero-chevron-right"
             class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
@@ -374,7 +374,7 @@ defmodule DranWeb.Layouts do
     <a
       href={@path}
       class={[
-        "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-colors duration-150",
+        "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
         @active && "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
         !@active && "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
       ]}
@@ -460,7 +460,7 @@ defmodule DranWeb.Layouts do
           id="context-selector"
           name="context_slug"
           onchange="this.form.submit()"
-          class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
+          class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
         >
           <option :for={ctx <- @contexts} value={ctx.slug} selected={ctx.slug == @context_slug}>
             {ctx.name} ({Map.get(@page_counts, ctx.id, 0)})
@@ -489,7 +489,7 @@ defmodule DranWeb.Layouts do
         onsubmit="this.method='delete'; this.submit(); return false;"
       >
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-        <button type="submit" class="btn btn-ghost btn-xs" title={gettext("Logout")}>
+        <button type="submit" class="btn btn-ghost btn-xs transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded" title={gettext("Logout")}>
           <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
         </button>
       </form>
@@ -508,27 +508,27 @@ defmodule DranWeb.Layouts do
       <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 [[data-theme-source=system]_&]:!left-0 transition-[left]" />
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        class="flex p-2 cursor-pointer w-1/3 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded-full"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="system"
       >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150" />
       </button>
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        class="flex p-2 cursor-pointer w-1/3 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded-full"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="light"
       >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150" />
       </button>
 
       <button
-        class="flex p-2 cursor-pointer w-1/3"
+        class="flex p-2 cursor-pointer w-1/3 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded-full"
         phx-click={JS.dispatch("phx:set-theme")}
         data-phx-theme="dark"
       >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
+        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100 transition-opacity duration-150" />
       </button>
     </div>
     """
