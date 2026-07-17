@@ -139,8 +139,53 @@ defmodule DranWeb.DocsLive do
       <h3>Knowledge graph</h3>
       <p>
         Pages and relations form a directed graph. The <code>/graph</code> view renders the full
-        graph with zoom and pan. Each page detail view also has a <strong>Graph</strong> tab
-        showing the page as the center with its direct neighbors.
+        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong> tab
+        showing the page as the center with its direct neighbors. Relations carry a <code>weight</code>
+        that reflects semantic similarity strength.
+      </p>
+
+      <h3>AI Chat</h3>
+      <p>
+        Dran includes a built-in AI chat assistant (bottom-right FAB on every page). The chat
+        has full context of your brain — it can search pages, create content, answer questions
+        with citations, and suggest related actions. Chat sessions are persisted per context.
+      </p>
+
+      <h3>Autonomous agents</h3>
+      <p>Beyond the interactive Research and Ingest agents, Dran runs scheduled batch agents:</p>
+      <ul>
+        <li><strong>QA</strong> — audits pages for missing frontmatter, broken links, empty content</li>
+        <li><strong>Curator</strong> — consolidates duplicates, generates summaries, cleans the graph (daily)</li>
+        <li><strong>Link Gardener</strong> — resolves broken <code>[[links]]</code>, suggests backlinks via embeddings</li>
+        <li><strong>Weekly Review</strong> — auto-generates a weekly summary note with activity, goals progress, and stats (Mondays)</li>
+      </ul>
+      <p>
+        All agents can also be triggered manually via MCP with <code>start_agent</code>.
+      </p>
+
+      <h3>Backlinks</h3>
+      <p>
+        Every page shows a collapsible backlinks section listing all pages that reference it,
+        grouped by relation type with badges. This makes it easy to discover reverse connections.
+      </p>
+
+      <h3>Smart Collections</h3>
+      <p>
+        Dynamic page groupings based on filters (type, tags, date ranges). Collections auto-update
+        as pages change, giving you live views like "All todos from this week" or "Concepts tagged AI".
+      </p>
+
+      <h3>Full Export</h3>
+      <p>
+        Export your entire brain as a structured JSON snapshot via <code>GET /api/export/:context/full</code>.
+        Includes all pages, relations, and metadata — useful for backups or migrations.
+      </p>
+
+      <h3>Settings</h3>
+      <p>
+        The Settings page (<code>/settings</code>) lets you tune brain behavior at runtime:
+        semantic similarity threshold, auto-linking, page augmenter on/off, and more — stored
+        in the database, no restart needed.
       </p>
 
       <h2>Architecture</h2>
@@ -194,10 +239,30 @@ defmodule DranWeb.DocsLive do
               <td class="px-4 py-2 font-mono text-base-content/60">dran</td>
               <td class="px-4 py-2">Web login password</td>
             </tr>
-            <tr>
+            <tr class="border-b border-base-300">
               <td class="px-4 py-2 font-mono text-primary">DRAN_API_TOKEN</td>
               <td class="px-4 py-2 font-mono text-base-content/60">dran-token</td>
               <td class="px-4 py-2">Bearer token for API and MCP</td>
+            </tr>
+            <tr class="border-b border-base-300">
+              <td class="px-4 py-2 font-mono text-primary">DRAN_INFERENCE_URL</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">http://localhost:8080/v1</td>
+              <td class="px-4 py-2">LLM inference endpoint</td>
+            </tr>
+            <tr class="border-b border-base-300">
+              <td class="px-4 py-2 font-mono text-primary">DRAN_INFERENCE_API_KEY</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">(empty)</td>
+              <td class="px-4 py-2">API key for inference endpoint</td>
+            </tr>
+            <tr class="border-b border-base-300">
+              <td class="px-4 py-2 font-mono text-primary">DRAN_EMBEDDING_MODEL</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">nomic-embed-text</td>
+              <td class="px-4 py-2">Embedding model name</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2 font-mono text-primary">DRAN_CHAT_MODEL</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">qwen3</td>
+              <td class="px-4 py-2">Chat/LLM model name</td>
             </tr>
           </tbody>
         </table>
@@ -210,9 +275,9 @@ defmodule DranWeb.DocsLive do
         a session cookie is set and the user is redirected back to the requested page.
       </p>
       <p>
-        A context selector in the sidebar lets you switch between contexts (e.g.
-        "personal", "work"). The selected context is stored in the session and used
-        by all pages.
+        A context selector in the sidebar lets you switch between contexts. The
+        selection persists via a signed cookie (dran_last_context) and is restored
+        on next visit. The selector also shows page counts per context.
       </p>
 
       <h3>API authentication</h3>
@@ -259,6 +324,13 @@ defmodule DranWeb.DocsLive do
         }
       </code></pre>
 
+      <h3>Runtime Settings</h3>
+      <p>
+        Brain behavior can be tuned at runtime without restarting. Settings are stored
+        in the database and managed via the Settings page (/settings) or the API.
+        Key settings include similarity threshold, page augmenter toggle, and auto-linking.
+      </p>
+
       <h3>Security notes</h3>
       <ul>
         <li>Change the default credentials in production via environment variables.</li>
@@ -303,6 +375,8 @@ defmodule DranWeb.DocsLive do
         <:endpoint method="DELETE" path="/api/pages/:slug" desc="Delete a page" />
         <:endpoint method="GET" path="/api/pages/:slug/links" desc="Inbound + outbound relations" />
         <:endpoint method="GET" path="/api/pages/:slug/graph" desc="Subgraph centered on a page" />
+        <:endpoint method="GET" path="/api/pages/:slug/backlinks" desc="Pages that reference this page, grouped by relation type" />
+        <:endpoint method="GET" path="/api/pages/:slug/diff?v1=N&v2=M" desc="Version diff between two versions" />
       </.api_group>
 
       <.api_group title="Relations">
@@ -354,6 +428,22 @@ defmodule DranWeb.DocsLive do
           desc="Wiki index (all page slugs + titles)"
         />
         <:endpoint method="GET" path="/api/graph?context=..." desc="Full graph (nodes + edges)" />
+        <:endpoint method="GET" path="/api/graph/3d?context=..." desc="3D graph data (nodes with x,y,z coords)" />
+      </.api_group>
+
+      <.api_group title="Export">
+        <:endpoint method="GET" path="/api/export/:context/full" desc="Full brain export (all pages + relations + metadata as JSON)" />
+      </.api_group>
+
+      <.api_group title="Settings">
+        <:endpoint method="GET" path="/api/settings" desc="List all runtime settings" />
+        <:endpoint method="PUT" path="/api/settings/:key" desc="Update a setting value" />
+      </.api_group>
+
+      <.api_group title="Chat">
+        <:endpoint method="POST" path="/api/chat/sessions" desc="Create a chat session" />
+        <:endpoint method="GET" path="/api/chat/sessions/:id" desc="Get session + messages" />
+        <:endpoint method="POST" path="/api/chat/sessions/:id/messages" desc="Send a message" />
       </.api_group>
     </div>
     """
@@ -480,7 +570,7 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Agents</strong>
           — use <code>start_agent</code>
-          to delegate research or file ingest to an autonomous agent.
+          to delegate tasks to autonomous agents (research, ingest, qa, curator, link_gardener, weekly_review).
           Poll <code>get_agent_session</code>
           for progress and results.
         </li>
@@ -814,7 +904,7 @@ defmodule DranWeb.DocsLive do
           name="start_agent"
           desc="Start an autonomous agent session. Returns immediately; poll get_agent_session for progress."
         >
-          <:param name="agent_type" type="string" required="yes" desc="research or ingest" />
+          <:param name="agent_type" type="string" required="yes" desc="research, ingest, qa, curator, link_gardener, weekly_review" />
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />
           <:param name="opts" type="object" required="no" desc="Optional agent options" />
@@ -825,6 +915,18 @@ defmodule DranWeb.DocsLive do
           desc="Poll an agent session for status, summary, and steps."
         >
           <:param name="session_id" type="string" required="yes" desc="Agent session UUID" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="get_settings"
+          desc="Get all runtime brain settings (similarity threshold, augmenter on/off, etc)."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+        </.mcp_tool>
+
+        <.mcp_tool name="update_setting" desc="Update a runtime brain setting. Persisted in DB, takes effect immediately.">
+          <:param name="key" type="string" required="yes" desc="Setting key" />
+          <:param name="value" type="string" required="yes" desc="New value" />
         </.mcp_tool>
       </div>
 
@@ -845,6 +947,10 @@ defmodule DranWeb.DocsLive do
           <code class="font-mono text-primary">wiki://&#123;context&#125;/index</code>
           <span class="text-sm text-base-content/60 ml-2">All pages in a context (slug + title + type)</span>
         </div>
+        <div class="rounded-lg border border-base-300 p-3">
+          <code class="font-mono text-primary">settings://current</code>
+          <span class="text-sm text-base-content/60 ml-2">Current runtime brain settings (JSON)</span>
+        </div>
       </div>
 
       <h3>Prompts</h3>
@@ -863,6 +969,10 @@ defmodule DranWeb.DocsLive do
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">goal_review</code>
           <span class="text-sm text-base-content/60 ml-2">Review a goal's status, todos, and plans. Args: goal_slug, context.</span>
+        </div>
+        <div class="rounded-lg border border-base-300 p-3">
+          <code class="font-mono text-primary">weekly_review</code>
+          <span class="text-sm text-base-content/60 ml-2">Generate a weekly review summary. Args: context.</span>
         </div>
       </div>
 
