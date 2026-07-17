@@ -70,8 +70,11 @@ defmodule DranWeb.TagLive do
           {length(@pages)} {if length(@pages) == 1, do: "page", else: "pages"} with this tag
         </p>
 
-        <div :if={@pages == []} class="text-center py-12 text-base-content/40">
-          No pages found with this tag.
+        <div :if={@pages == []} class="text-center py-12">
+          <.icon name="hero-tag" class="w-12 h-12 mx-auto mb-3 text-base-content/30" />
+          <p class="text-sm text-base-content/50">
+            {gettext("No pages found with this tag.")}
+          </p>
         </div>
 
         <div class="space-y-2">

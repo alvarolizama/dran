@@ -67,7 +67,7 @@ defmodule DranWeb.CoreComponents do
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
+        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap transition",
         @kind == :info && "alert-info",
         @kind == :error && "alert-error"
       ]}>
@@ -79,7 +79,7 @@ defmodule DranWeb.CoreComponents do
         </div>
         <div class="flex-1" />
         <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70 transition-opacity" />
         </button>
       </div>
     </div>

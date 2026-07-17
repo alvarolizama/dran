@@ -9,7 +9,7 @@ defmodule DranWeb.ArtifactLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "artifact"
-  @tabs [{"content", "Content"}, {"graph", "Graph"}]
+  @tabs [{"content", gettext("Content")}, {"graph", gettext("Graph")}]
 
   def render(assigns) do
     ~H"""
@@ -34,19 +34,19 @@ defmodule DranWeb.ArtifactLive do
             <.link navigate={~p"/artifacts"} class="btn btn-primary btn-sm"><.icon
               name="hero-arrow-left"
               class="size-4"
-            /> Back</.link>
+            /> {gettext("Back")}</.link>
             <button :if={not @editing} phx-click="toggle_edit" class="btn btn-primary btn-sm"><.icon
               name="hero-pencil"
               class="size-4"
-            /> Edit</button>
+            /> {gettext("Edit")}</button>
             <button :if={@editing} phx-click="save_page" class="btn btn-success btn-sm"><.icon
               name="hero-check"
               class="size-4"
-            /> Save</button>
+            /> {gettext("Save")}</button>
             <button :if={@editing} phx-click="cancel_edit" class="btn btn-ghost btn-sm"><.icon
               name="hero-x-mark"
               class="size-4"
-            /> Cancel</button>
+            /> {gettext("Cancel")}</button>
           </:actions>
           <:tabs>
             <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
@@ -62,22 +62,22 @@ defmodule DranWeb.ArtifactLive do
                     <.input
                       field={@form[:title]}
                       type="text"
-                      label="Title"
-                      placeholder="Enter a title…"
+                      label={gettext("Title")}
+                      placeholder={gettext("Enter a title…")}
                       class="text-lg font-medium"
                     />
                     <div class="grid grid-cols-2 gap-4">
                       <.input
                         field={@form[:slug]}
                         type="text"
-                        placeholder="slug"
+                        placeholder={gettext("slug")}
                         class="w-full"
                         phx-blur="field_change"
                       />
                       <.input
                         field={@form[:summary]}
                         type="text"
-                        placeholder="Summary (optional)"
+                        placeholder={gettext("Summary (optional)")}
                         class="w-full"
                       />
                       <button
@@ -85,17 +85,17 @@ defmodule DranWeb.ArtifactLive do
                         phx-click="suggest_summary"
                         class="btn btn-ghost btn-xs mt-1"
                       >
-                        <.icon name="hero-sparkles" class="size-3" /> Suggest
+                        <.icon name="hero-sparkles" class="size-3" /> {gettext("Suggest")}
                       </button>
                     </div>
                     <.input
                       field={@form[:tags]}
                       type="text"
-                      placeholder="Tags (comma separated)"
+                      placeholder={gettext("Tags (comma separated)")}
                       class="w-full"
                     />
                     <button type="button" phx-click="suggest_tags" class="btn btn-ghost btn-xs mt-1">
-                      <.icon name="hero-sparkles" class="size-3" /> Suggest
+                      <.icon name="hero-sparkles" class="size-3" /> {gettext("Suggest")}
                     </button>
                     <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
                     <.markdown_editor
@@ -105,8 +105,8 @@ defmodule DranWeb.ArtifactLive do
                       save_status={@save_status}
                     />
                     <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">Cancel</button>
-                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
                 </.form>
@@ -115,14 +115,17 @@ defmodule DranWeb.ArtifactLive do
                   {@rendered_body}
                 </div>
                 <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">Changelog</h3>
+                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
                   <div class="space-y-1">
                     <div :for={version <- @versions} class="text-sm text-base-content/60">
-                      v{version.version} — {format_date(version.inserted_at)} by {version.changed_by ||
-                        "system"}
+                      {gettext("v%{version} — %{date} by %{author}",
+                        version: version.version,
+                        date: format_date(version.inserted_at),
+                        author: version.changed_by || gettext("system")
+                      )}
                     </div>
                     <p :if={@versions == []} class="text-sm text-base-content/40">
-                      No version history yet.
+                      {gettext("No version history yet.")}
                     </p>
                   </div>
                 </div>
@@ -217,7 +220,7 @@ defmodule DranWeb.ArtifactLive do
         do: Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
         else: []
 
-    {:noreply, assign(socket, pages: pages, page_title: "Artifacts")}
+    {:noreply, assign(socket, pages: pages, page_title: gettext("Artifacts"))}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}

@@ -142,8 +142,8 @@ defmodule DranWeb.ContextLive do
                 />
               </div>
               <div class="flex justify-end">
-                <button type="submit" class="btn btn-primary btn-sm">
-                  <.icon name="hero-plus" class="size-4" /> Create
+                <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Creating…")}>
+                  <.icon name="hero-plus" class="size-4" /> {gettext("Create")}
                 </button>
               </div>
             </.form>
@@ -154,8 +154,11 @@ defmodule DranWeb.ContextLive do
               Existing contexts ({length(@contexts)})
             </h2>
 
-            <div :if={@contexts == []} class="text-sm text-base-content/50 p-4">
-              No contexts yet. Create one above.
+            <div :if={@contexts == []} class="text-center py-12">
+              <.icon name="hero-square-3-stack-3d" class="w-12 h-12 mx-auto mb-3 text-base-content/30" />
+              <p class="text-sm text-base-content/50">
+                {gettext("No contexts yet. Create one above.")}
+              </p>
             </div>
 
             <div

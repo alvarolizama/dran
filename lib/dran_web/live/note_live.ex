@@ -9,7 +9,7 @@ defmodule DranWeb.NoteLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "note"
-  @tabs [{"content", "Content"}, {"graph", "Graph"}]
+  @tabs [{"content", gettext("Content")}, {"graph", gettext("Graph")}]
 
   def render(assigns) do
     ~H"""
@@ -32,7 +32,7 @@ defmodule DranWeb.NoteLive do
         >
           <:actions>
             <.link navigate={~p"/notes"} class="btn btn-primary btn-sm">
-              <.icon name="hero-arrow-left" class="size-4" /> Back
+              <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
 
             <button
@@ -40,7 +40,7 @@ defmodule DranWeb.NoteLive do
               phx-click="toggle_edit"
               class="btn btn-primary btn-sm"
             >
-              <.icon name="hero-pencil" class="size-4" /> Edit
+              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
             </button>
 
             <button
@@ -48,7 +48,7 @@ defmodule DranWeb.NoteLive do
               phx-click="save_page"
               class="btn btn-success btn-sm"
             >
-              <.icon name="hero-check" class="size-4" /> Save
+              <.icon name="hero-check" class="size-4" /> {gettext("Save")}
             </button>
 
             <button
@@ -56,7 +56,7 @@ defmodule DranWeb.NoteLive do
               phx-click="cancel_edit"
               class="btn btn-ghost btn-sm"
             >
-              <.icon name="hero-x-mark" class="size-4" /> Cancel
+              <.icon name="hero-x-mark" class="size-4" /> {gettext("Cancel")}
             </button>
           </:actions>
 
@@ -75,8 +75,8 @@ defmodule DranWeb.NoteLive do
                     <.input
                       field={@form[:title]}
                       type="text"
-                      label="Title"
-                      placeholder="Enter a title…"
+                      label={gettext("Title")}
+                      placeholder={gettext("Enter a title…")}
                       class="text-lg font-medium"
                     />
 
@@ -84,15 +84,15 @@ defmodule DranWeb.NoteLive do
                       <.input
                         field={@form[:slug]}
                         type="text"
-                        label="Slug"
-                        placeholder="slug"
+                        label={gettext("Slug")}
+                        placeholder={gettext("slug")}
                         class="font-mono text-sm"
                       />
                       <.input
                         field={@form[:summary]}
                         type="text"
-                        label="Summary"
-                        placeholder="One-line description"
+                        label={gettext("Summary")}
+                        placeholder={gettext("One-line description")}
                         class="text-sm"
                       />
                     </div>
@@ -100,15 +100,15 @@ defmodule DranWeb.NoteLive do
                     <.input
                       field={@form[:tags]}
                       type="text"
-                      label="Tags"
-                      placeholder="comma, separated, tags"
+                      label={gettext("Tags")}
+                      placeholder={gettext("comma, separated, tags")}
                       class="text-sm"
                     />
 
                     <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
 
                     <div>
-                      <span class="label mb-1 block text-sm font-medium text-base-content/70">Content</span>
+                      <span class="label mb-1 block text-sm font-medium text-base-content/70">{gettext("Content")}</span>
                       <.markdown_editor
                         id="note-editor"
                         body={@page.body}
@@ -118,8 +118,8 @@ defmodule DranWeb.NoteLive do
                     </div>
 
                     <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">Cancel</button>
-                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
                 </.form>
@@ -129,14 +129,17 @@ defmodule DranWeb.NoteLive do
                 </div>
 
                 <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">Changelog</h3>
+                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
                   <div class="space-y-1">
                     <div :for={version <- @versions} class="text-sm text-base-content/60">
-                      v{version.version} — {format_date(version.inserted_at)} by {version.changed_by ||
-                        "system"}
+                      {gettext("v%{version} — %{date} by %{author}",
+                        version: version.version,
+                        date: format_date(version.inserted_at),
+                        author: version.changed_by || gettext("system")
+                      )}
                     </div>
                     <p :if={@versions == []} class="text-sm text-base-content/40">
-                      No version history yet.
+                      {gettext("No version history yet.")}
                     </p>
                   </div>
                 </div>
@@ -243,7 +246,7 @@ defmodule DranWeb.NoteLive do
         []
       end
 
-    {:noreply, assign(socket, pages: pages, page_title: "Notes")}
+    {:noreply, assign(socket, pages: pages, page_title: gettext("Notes"))}
   end
 
   # ── Graph events (from GraphEvents import) ──

@@ -116,7 +116,7 @@ defmodule DranWeb.PageListComponents do
         </div>
         <.link
           navigate={"/#{PageTypes.path(@page_type)}/new"}
-          class="btn btn-primary btn-sm transition active:scale-95"
+          class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
         >
           <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
         </.link>
@@ -125,7 +125,7 @@ defmodule DranWeb.PageListComponents do
       <div class="space-y-2">
         <div
           :for={page <- @pages}
-          class="surface-2 lift cursor-pointer p-4 rounded-xl"
+          class="surface-2 lift hover:border-primary/40 cursor-pointer p-4 rounded-xl"
           phx-click="show_page"
           phx-value-slug={page.slug}
           data-testid={"page-card-" <> page.slug}

@@ -120,7 +120,7 @@ defmodule DranWeb.MarkdownEditorComponents do
     ~H"""
     <button
       type="button"
-      class="tb-btn inline-flex items-center justify-center min-w-7 h-7 px-1.5 rounded text-sm text-base-content/70 hover:bg-base-300 hover:text-base-content transition"
+      class="tb-btn inline-flex items-center justify-center min-w-7 h-7 px-1.5 rounded text-sm text-base-content/70 hover:bg-base-300 hover:text-base-content active:scale-95 transition"
       data-editor={@id}
       data-cmd={@cmd}
       data-testid={@testid}

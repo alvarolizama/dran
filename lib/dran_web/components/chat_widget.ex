@@ -96,7 +96,7 @@ defmodule DranWeb.ChatWidget do
       <button
         id={"#{@id}-fab"}
         type="button"
-        class="fixed bottom-4 right-4 z-50 btn btn-primary btn-circle shadow-lg"
+        class="fixed bottom-4 right-4 z-50 btn btn-primary btn-circle shadow-lg hover:scale-105 active:scale-95 transition-transform"
         phx-click="toggle"
         phx-target={@myself}
         aria-label={gettext("Open Brain Copilot")}
@@ -107,7 +107,7 @@ defmodule DranWeb.ChatWidget do
 
       <div
         :if={@open}
-        class="fixed bottom-20 right-4 z-50 w-96 max-w-[calc(100vw-2rem)]"
+        class="fixed bottom-20 right-4 z-50 w-96 max-w-[calc(100vw-2rem)] transition"
       >
         <div class="flex flex-col h-[32rem] rounded-xl border border-base-300 bg-base-100 shadow-2xl">
           <%!-- Header --%>
@@ -216,7 +216,7 @@ defmodule DranWeb.ChatWidget do
               phx-debounce="200"
               phx-target={@myself}
               placeholder={gettext("Type a message...")}
-              class="input input-sm input-bordered flex-1"
+              class="input input-sm input-bordered flex-1 focus:ring-1 focus:ring-primary"
               autocomplete="off"
             />
             <button type="submit" class="btn btn-sm btn-primary" disabled={@loading}>

@@ -73,7 +73,7 @@ defmodule DranWeb.CommandPalette do
               placeholder={gettext("Search pages, actions...")}
               autocomplete="off"
               aria-label={gettext("Search")}
-              class="w-full pl-10 pr-4 py-3 text-sm rounded-t-xl bg-transparent border-b border-base-300 focus:outline-none"
+              class="w-full pl-10 pr-4 py-3 text-sm rounded-t-xl bg-transparent border-b border-base-300 focus:outline-none focus:ring-1 focus:ring-primary"
               autofocus
             />
           </div>
@@ -85,7 +85,7 @@ defmodule DranWeb.CommandPalette do
                 role="option"
                 aria-selected={i == @selected}
                 class={[
-                  "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm hover:bg-base-200 transition",
                   i == @selected && "bg-primary/10"
                 ]}
                 phx-click="navigate_action"
@@ -105,7 +105,7 @@ defmodule DranWeb.CommandPalette do
                 role="option"
                 aria-selected={i == @selected}
                 class={[
-                  "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm hover:bg-base-200 transition",
                   i == @selected && "bg-primary/10"
                 ]}
                 phx-click="navigate"

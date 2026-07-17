@@ -9,7 +9,7 @@ defmodule DranWeb.ConceptLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "concept"
-  @tabs [{"content", "Content"}, {"graph", "Graph"}]
+  @tabs [{"content", gettext("Content")}, {"graph", gettext("Graph")}]
 
   def render(assigns) do
     ~H"""
@@ -32,19 +32,19 @@ defmodule DranWeb.ConceptLive do
         >
           <:actions>
             <.link navigate={~p"/concepts"} class="btn btn-primary btn-sm">
-              <.icon name="hero-arrow-left" class="size-4" /> Back
+              <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
 
             <button :if={not @editing} phx-click="toggle_edit" class="btn btn-primary btn-sm">
-              <.icon name="hero-pencil" class="size-4" /> Edit
+              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
             </button>
 
             <button :if={@editing} phx-click="save_page" class="btn btn-success btn-sm">
-              <.icon name="hero-check" class="size-4" /> Save
+              <.icon name="hero-check" class="size-4" /> {gettext("Save")}
             </button>
 
             <button :if={@editing} phx-click="cancel_edit" class="btn btn-ghost btn-sm">
-              <.icon name="hero-x-mark" class="size-4" /> Cancel
+              <.icon name="hero-x-mark" class="size-4" /> {gettext("Cancel")}
             </button>
           </:actions>
 
@@ -63,8 +63,8 @@ defmodule DranWeb.ConceptLive do
                     <.input
                       field={@form[:title]}
                       type="text"
-                      label="Title"
-                      placeholder="Enter a title…"
+                      label={gettext("Title")}
+                      placeholder={gettext("Enter a title…")}
                       class="text-lg font-medium"
                     />
 
@@ -72,14 +72,14 @@ defmodule DranWeb.ConceptLive do
                       <.input
                         field={@form[:slug]}
                         type="text"
-                        placeholder="slug"
+                        placeholder={gettext("slug")}
                         class="w-full"
                         phx-blur="field_change"
                       />
                       <.input
                         field={@form[:summary]}
                         type="text"
-                        placeholder="Summary (optional)"
+                        placeholder={gettext("Summary (optional)")}
                         class="w-full"
                       />
                     </div>
@@ -87,7 +87,7 @@ defmodule DranWeb.ConceptLive do
                     <.input
                       field={@form[:tags]}
                       type="text"
-                      placeholder="Tags (comma separated)"
+                      placeholder={gettext("Tags (comma separated)")}
                       class="w-full"
                     />
 
@@ -100,8 +100,8 @@ defmodule DranWeb.ConceptLive do
                     />
 
                     <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">Cancel</button>
-                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
                 </.form>
@@ -111,14 +111,17 @@ defmodule DranWeb.ConceptLive do
                 </div>
 
                 <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">Changelog</h3>
+                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
                   <div class="space-y-1">
                     <div :for={version <- @versions} class="text-sm text-base-content/60">
-                      v{version.version} — {format_date(version.inserted_at)} by {version.changed_by ||
-                        "system"}
+                      {gettext("v%{version} — %{date} by %{author}",
+                        version: version.version,
+                        date: format_date(version.inserted_at),
+                        author: version.changed_by || gettext("system")
+                      )}
                     </div>
                     <p :if={@versions == []} class="text-sm text-base-content/40">
-                      No version history yet.
+                      {gettext("No version history yet.")}
                     </p>
                   </div>
                 </div>
@@ -225,7 +228,7 @@ defmodule DranWeb.ConceptLive do
         []
       end
 
-    {:noreply, assign(socket, pages: pages, page_title: "Concepts")}
+    {:noreply, assign(socket, pages: pages, page_title: gettext("Concepts"))}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
@@ -285,11 +288,11 @@ defmodule DranWeb.ConceptLive do
 
   def handle_info({:enriched, slug}, socket) do
     page = Dran.Brain.get_page_by_slug(slug, socket.assigns.context.id)
-    {:noreply, assign(socket, page: page) |> put_flash(:info, "Page enriched with web content.")}
+    {:noreply, assign(socket, page: page) |> put_flash(:info, gettext("Page enriched with web content."))}
   end
 
   def handle_info({:enrich_failed, _slug, reason}, socket) do
-    {:noreply, put_flash(socket, :error, "Enrichment failed: #{inspect(reason)}")}
+    {:noreply, put_flash(socket, :error, gettext("Enrichment failed: %{reason}", reason: inspect(reason)))}
   end
 
   defp handle_progress(:file, _entry, socket) do
