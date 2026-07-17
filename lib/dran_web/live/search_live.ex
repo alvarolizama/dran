@@ -21,7 +21,8 @@ defmodule DranWeb.SearchLive do
        context: context,
        active_nav: "search",
        query: "",
-       results: []
+       results: [],
+       search_mode: "auto"
      )}
   end
 
@@ -30,7 +31,11 @@ defmodule DranWeb.SearchLive do
     case params["q"] do
       q when is_binary(q) and q != "" ->
         {:ok, results} =
-          Brain.search(q, context_id: socket.assigns.context.id, limit: 20)
+          Brain.search(q,
+            context_id: socket.assigns.context.id,
+            limit: 20,
+            strategy: String.to_atom(socket.assigns.search_mode)
+          )
 
         {:noreply, assign(socket, query: q, results: results)}
 
@@ -44,7 +49,13 @@ defmodule DranWeb.SearchLive do
     results =
       case q do
         q when is_binary(q) and q != "" ->
-          {:ok, r} = Brain.search(q, context_id: socket.assigns.context.id, limit: 20)
+          {:ok, r} =
+            Brain.search(q,
+              context_id: socket.assigns.context.id,
+              limit: 20,
+              strategy: String.to_atom(socket.assigns.search_mode)
+            )
+
           r
 
         _ ->
@@ -52,6 +63,11 @@ defmodule DranWeb.SearchLive do
       end
 
     {:noreply, assign(socket, query: q, results: results)}
+  end
+
+  @impl true
+  def handle_event("set_mode", %{"mode" => mode}, socket) do
+    {:noreply, assign(socket, search_mode: mode)}
   end
 
   @impl true
@@ -77,6 +93,43 @@ defmodule DranWeb.SearchLive do
             placeholder="Search pages..."
           />
         </form>
+
+        <div class="mb-6">
+          <div role="group" aria-label="Search strategy" class="inline-flex rounded-lg border border-base-300 overflow-hidden">
+            <button
+              type="button"
+              phx-click="set_mode"
+              phx-value-mode="auto"
+              class={"px-3 py-1.5 text-sm transition-colors #{if @search_mode == "auto", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
+            >
+              Auto
+            </button>
+            <button
+              type="button"
+              phx-click="set_mode"
+              phx-value-mode="fts"
+              class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "fts", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
+            >
+              FTS
+            </button>
+            <button
+              type="button"
+              phx-click="set_mode"
+              phx-value-mode="semantic"
+              class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "semantic", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
+            >
+              Semantic
+            </button>
+            <button
+              type="button"
+              phx-click="set_mode"
+              phx-value-mode="hybrid"
+              class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "hybrid", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
+            >
+              Hybrid
+            </button>
+          </div>
+        </div>
 
         <div class="space-y-2">
           <div
