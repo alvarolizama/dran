@@ -29,32 +29,37 @@
   default: false;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: oklch(30.33% 0.016 252.42);
-  --color-base-200: oklch(25.26% 0.014 253.1);
-  --color-base-300: oklch(20.15% 0.012 254.09);
-  --color-base-content: oklch(97.807% 0.029 256.847);
-  --color-primary: oklch(58% 0.233 277.117);
-  --color-primary-content: oklch(96% 0.018 272.314);
-  --color-secondary: oklch(58% 0.233 277.117);
-  --color-secondary-content: oklch(96% 0.018 272.314);
-  --color-accent: oklch(60% 0.25 292.717);
-  --color-accent-content: oklch(96% 0.016 293.756);
-  --color-neutral: oklch(37% 0.044 257.287);
-  --color-neutral-content: oklch(98% 0.003 247.858);
-  --color-info: oklch(58% 0.158 241.966);
-  --color-info-content: oklch(97% 0.013 236.62);
-  --color-success: oklch(60% 0.118 184.704);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
+  /* Gris-azulado muy oscuro y neutro (hue ~255, chroma bajo) */
+  --color-base-100: oklch(17.5% 0.008 255);
+  --color-base-200: oklch(21% 0.008 255);
+  --color-base-300: oklch(26.5% 0.008 255);
+  --color-base-content: oklch(95% 0.004 255);
+  /* Teal / verde-azulado sobrio */
+  --color-primary: oklch(72% 0.13 175);
+  --color-primary-content: oklch(98% 0.01 175);
+  /* Gris neutro */
+  --color-secondary: oklch(55% 0.006 255);
+  --color-secondary-content: oklch(95% 0.004 255);
+  /* Ámbar discreto */
+  --color-accent: oklch(75% 0.09 75);
+  --color-accent-content: oklch(20% 0.02 75);
+  --color-neutral: oklch(30% 0.008 255);
+  --color-neutral-content: oklch(98% 0.003 255);
+  /* Tonos sobrios armonizados */
+  --color-info: oklch(62% 0.09 240);
+  --color-info-content: oklch(97% 0.01 240);
+  --color-success: oklch(62% 0.10 160);
+  --color-success-content: oklch(98% 0.01 160);
+  --color-warning: oklch(70% 0.10 75);
+  --color-warning-content: oklch(20% 0.02 75);
+  --color-error: oklch(60% 0.13 25);
+  --color-error-content: oklch(97% 0.01 25);
+  --radius-selector: 0.375rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.625rem;
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
-  --border: 1.5px;
+  --border: 1px;
   --depth: 1;
   --noise: 0;
 }
@@ -64,32 +69,37 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(98% 0 0);
-  --color-base-200: oklch(96% 0.001 286.375);
-  --color-base-300: oklch(92% 0.004 286.32);
-  --color-base-content: oklch(21% 0.006 285.885);
-  --color-primary: oklch(70% 0.213 47.604);
-  --color-primary-content: oklch(98% 0.016 73.684);
-  --color-secondary: oklch(55% 0.027 264.364);
-  --color-secondary-content: oklch(98% 0.002 247.839);
-  --color-accent: oklch(0% 0 0);
-  --color-accent-content: oklch(100% 0 0);
-  --color-neutral: oklch(44% 0.017 285.786);
-  --color-neutral-content: oklch(98% 0 0);
-  --color-info: oklch(62% 0.214 259.815);
-  --color-info-content: oklch(97% 0.014 254.604);
-  --color-success: oklch(70% 0.14 182.503);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
+  /* Fondos casi blancos con tinte frío */
+  --color-base-100: oklch(99% 0.003 255);
+  --color-base-200: oklch(96.5% 0.004 255);
+  --color-base-300: oklch(92% 0.005 255);
+  --color-base-content: oklch(24% 0.006 255);
+  /* Teal más oscuro para contraste */
+  --color-primary: oklch(55% 0.12 180);
+  --color-primary-content: oklch(98% 0.01 180);
+  /* Gris neutro */
+  --color-secondary: oklch(50% 0.006 255);
+  --color-secondary-content: oklch(98% 0.003 255);
+  /* Ámbar discreto */
+  --color-accent: oklch(68% 0.09 75);
+  --color-accent-content: oklch(20% 0.02 75);
+  --color-neutral: oklch(40% 0.008 255);
+  --color-neutral-content: oklch(98% 0.003 255);
+  /* Tonos sobrios armonizados */
+  --color-info: oklch(55% 0.10 240);
+  --color-info-content: oklch(98% 0.01 240);
+  --color-success: oklch(55% 0.10 160);
+  --color-success-content: oklch(98% 0.01 160);
+  --color-warning: oklch(68% 0.10 75);
+  --color-warning-content: oklch(20% 0.02 75);
+  --color-error: oklch(55% 0.13 25);
+  --color-error-content: oklch(98% 0.01 25);
+  --radius-selector: 0.375rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.625rem;
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
-  --border: 1.5px;
+  --border: 1px;
   --depth: 1;
   --noise: 0;
 }
@@ -113,8 +123,36 @@
   background: var(--color-base-100);
 }
 
+/* Toolbar: sticky al hacer scroll dentro del editor, fondo blur */
 .editor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   flex-wrap: wrap;
+  background: oklch(from var(--color-base-100) l c h / 85%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid oklch(from var(--color-base-content) l c h / 8%);
+}
+
+/* Separadores verticales entre grupos de botones */
+.tb-separator {
+  width: 1px;
+  height: 1.25rem;
+  background: oklch(from var(--color-base-content) l c h / 12%);
+  margin: 0 0.25rem;
+  flex-shrink: 0;
+}
+
+/* Botones del toolbar */
+.tb-btn {
+  border-radius: 0.375rem;
+  padding: 0.375rem;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.tb-btn:hover {
+  background: var(--color-base-300);
 }
 
 .tb-btn.is-active {
@@ -122,48 +160,87 @@
   color: var(--color-primary-content);
 }
 
+.tb-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* TipTap content area */
 .tiptap {
   min-height: 300px;
+  max-width: 65ch;
   outline: none;
   line-height: 1.6;
+  padding: 1.5rem 2rem;
+  caret-color: var(--color-primary);
 }
 
+/* Placeholder cuando el editor está vacío */
+.tiptap.is-editor-empty::before {
+  content: attr(data-placeholder);
+  color: oklch(from var(--color-base-content) l c h / 35%);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* Tipografía de headings: más ajustados tipo Notion */
 .tiptap p { margin: 0.5rem 0; }
-.tiptap h1 { font-size: 1.875rem; font-weight: 700; margin: 1.25rem 0 0.5rem; }
-.tiptap h2 { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.5rem; }
-.tiptap h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.5rem; }
+.tiptap h1 { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; margin: 1.25rem 0 0.5rem; }
+.tiptap h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; margin: 1rem 0 0.5rem; }
+.tiptap h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; margin: 0.75rem 0 0.5rem; }
 .tiptap ul, .tiptap ol { padding-left: 1.5rem; margin: 0.5rem 0; }
 .tiptap ul { list-style: disc; }
 .tiptap ol { list-style: decimal; }
 .tiptap li { margin: 0.25rem 0; }
+
+/* Blockquote con acento primary */
 .tiptap blockquote {
-  border-left: 3px solid var(--color-base-300);
-  padding-left: 1rem;
+  border-left: 3px solid oklch(from var(--color-primary) l c h / 40%);
+  background: oklch(from var(--color-base-200) l c h / 50%);
+  border-radius: 0 0.375rem 0.375rem 0;
+  padding: 0.5rem 1rem;
   margin: 0.75rem 0;
   color: var(--color-base-content);
-  opacity: 0.8;
+  opacity: 0.85;
   font-style: italic;
 }
+
+/* Code blocks */
 .tiptap pre {
   background: oklch(20% 0.02 250);
   color: oklch(95% 0.01 250);
   padding: 0.75rem 1rem;
+  border: 1px solid var(--color-base-300);
   border-radius: 0.375rem;
   overflow-x: auto;
   margin: 0.75rem 0;
   font-size: 0.875rem;
 }
+
+/* Inline code con tinte primary */
 .tiptap code {
-  background: var(--color-base-300);
+  color: var(--color-primary);
+  background: oklch(from var(--color-primary) l c h / 8%);
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875rem;
   font-family: ui-monospace, monospace;
 }
-.tiptap pre code { background: transparent; padding: 0; }
+.tiptap pre code {
+  color: inherit;
+  background: transparent;
+  padding: 0;
+}
 .tiptap hr { border-color: var(--color-base-300); margin: 1.5rem 0; }
 .tiptap a { color: var(--color-primary); text-decoration: underline; }
+
+/* Selección de texto con tinte primary */
+.tiptap ::selection {
+  background: oklch(from var(--color-primary) l c h / 20%);
+}
+
+/* Tablas */
 .tiptap table {
   border-collapse: collapse;
   width: 100%;
@@ -175,6 +252,7 @@
   text-align: left;
 }
 .tiptap th { background: var(--color-base-200); font-weight: 600; }
+.tiptap tr:hover td { background: oklch(from var(--color-base-200) l c h / 40%); }
 .tiptap img { max-width: 100%; border-radius: 0.375rem; margin: 0.5rem 0; }
 
 /* Wikilink and embed nodes inside the editor */
@@ -186,8 +264,11 @@
   text-decoration: none;
   font-weight: 500;
   cursor: pointer;
+  transition: background 150ms ease;
 }
-.tiptap .wikilink:hover { text-decoration: underline; }
+.tiptap .wikilink:hover {
+  background: oklch(from var(--color-primary) l c h / 18%);
+}
 
 .tiptap .embed-placeholder {
   display: inline-flex;
@@ -199,6 +280,10 @@
   border-radius: 0.25rem;
   font-size: 0.875rem;
   cursor: pointer;
+  transition: background 150ms ease;
+}
+.tiptap .embed-placeholder:hover {
+  background: oklch(from var(--color-primary) l c h / 18%);
 }
 
 /* ── Rendered markdown (read view) ── */
@@ -304,4 +389,134 @@
 @keyframes slide-in {
   from { opacity: 0; transform: translateX(-10px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DRAN DESIGN SYSTEM — Utilidades custom (CSS plano, sin @apply)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Escala tipográfica ── */
+
+.text-display {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.text-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.text-heading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.text-body {
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.text-caption {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+}
+
+/* ── Sistema de elevación ──
+   Las sombras usan oklch con alpha bajo para funcionar en ambos temas.
+   En dark, las variables proporcionan sombras más profundas.           */
+
+:root {
+  --shadow-surface-2: 0 1px 2px oklch(0% 0 0 / 0.08);
+  --shadow-surface-3: 0 4px 12px oklch(0% 0 0 / 0.12);
+}
+
+:root:where([data-theme="dark"]) {
+  --shadow-surface-2: 0 1px 3px oklch(0% 0 0 / 0.30);
+  --shadow-surface-3: 0 4px 16px oklch(0% 0 0 / 0.40);
+}
+
+:root:where([data-theme="light"]) {
+  --shadow-surface-2: 0 1px 2px oklch(20% 0.005 255 / 0.08);
+  --shadow-surface-3: 0 4px 12px oklch(20% 0.005 255 / 0.12);
+}
+
+.surface-1 {
+  background: var(--color-base-200);
+  border: 1px solid oklch(from var(--color-base-content) l c h / 8%);
+  border-radius: var(--radius-box);
+}
+
+.surface-2 {
+  background: var(--color-base-100);
+  border: 1px solid oklch(from var(--color-base-content) l c h / 8%);
+  border-radius: var(--radius-box);
+  box-shadow: var(--shadow-surface-2);
+}
+
+.surface-3 {
+  background: var(--color-base-100);
+  border: 1px solid oklch(from var(--color-base-content) l c h / 8%);
+  border-radius: var(--radius-box);
+  box-shadow: var(--shadow-surface-3);
+}
+
+/* ── Skeleton loading con shimmer ── */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-base-300) 0%,
+    var(--color-base-200) 50%,
+    var(--color-base-300) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-field);
+  animation: shimmer 1.5s infinite linear;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background-size: 100%;
+  }
+}
+
+/* ── Micro-interacción base ── */
+
+.lift {
+  transition: all 150ms ease;
+}
+
+.lift:hover {
+  transform: translateY(-0.5px);
+  box-shadow: var(--shadow-surface-3);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Focus-visible global para accesibilidad en elementos interactivos */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

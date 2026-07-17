@@ -215,11 +215,46 @@ const GraphPanZoom = {
   }
 }
 
+const CommandPalette = {
+  mounted() {
+    this._keyHandler = (e) => {
+      // Cmd+K / Ctrl+K toggles the palette
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        this.pushEventTo(this.el, "toggle", {})
+        return
+      }
+
+      // If the palette is open, handle Escape and arrow/enter navigation
+      const isOpen = this.el.querySelector('[role="dialog"]') !== null
+      if (!isOpen) return
+
+      if (e.key === "Escape") {
+        e.preventDefault()
+        this.pushEventTo(this.el, "close", {})
+        return
+      }
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
+        e.preventDefault()
+        this.pushEventTo(this.el, "key", {key: e.key})
+      }
+    }
+    window.addEventListener("keydown", this._keyHandler)
+  },
+
+  destroyed() {
+    if (this._keyHandler) {
+      window.removeEventListener("keydown", this._keyHandler)
+    }
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Graph3D},
+  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Graph3D, CommandPalette},
 })
 
 // Show progress bar on live navigation and form submits

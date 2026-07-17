@@ -36,12 +36,16 @@ defmodule DranWeb.Layouts do
   slot :inner_block, required: true
 
   def app(assigns) do
+    counts = compute_counts(assigns[:context_slug])
+    assigns = assign(assigns, :counts, counts)
+
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
       <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
         <div class="p-4 border-b border-base-300">
           <div class="flex items-center gap-2">
             <a href={~p"/"} class="flex items-center gap-2 shrink-0">
+              <.icon name="hero-cube-transparent" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
             <.context_selector context_slug={@context_slug} contexts={@contexts} />
@@ -58,13 +62,16 @@ defmodule DranWeb.Layouts do
               type="text"
               name="q"
               placeholder={gettext("Search...")}
-              class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
+              class="w-full pl-8 pr-12 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
             />
+            <kbd class="absolute right-2.5 top-2 text-[10px] font-mono text-base-content/40 border border-base-300 rounded px-1">
+              ⌘K
+            </kbd>
           </form>
         </div>
 
         <nav class="flex-1 overflow-y-auto p-2 space-y-4">
-          <.sidebar_nav active={@active_nav} />
+          <.sidebar_nav active={@active_nav} counts={@counts} />
         </nav>
 
         <div class="p-3 border-t border-base-300 space-y-2">
@@ -77,25 +84,63 @@ defmodule DranWeb.Layouts do
         {render_slot(@inner_block)}
       </div>
 
+      <.live_component
+        module={DranWeb.CommandPalette}
+        id="command-palette"
+        context_slug={@context_slug}
+      />
+
       <.flash_group flash={@flash} />
     </div>
     """
   end
 
+  defp compute_counts(nil), do: %{}
+
+  defp compute_counts(context_slug) when is_binary(context_slug) do
+    try do
+      context = Dran.Brain.get_context_by_slug(context_slug)
+
+      if context do
+        stats = Dran.Brain.stats(context.id)
+        by_type = stats[:by_type] || %{}
+
+        %{
+          dashboard: stats[:total_pages] || 0,
+          todos: by_type["todo"] || 0
+        }
+      else
+        %{}
+      end
+    rescue
+      _ -> %{}
+    end
+  end
+
   @doc """
   Renders the grouped sidebar navigation for the second brain.
-
-  Links are grouped by category (Knowledge, Planning, Outputs, Agents).
+  Links are grouped by category (Knowledge, Planning, Outputs, Agents,
+  Configs, Docs). Each labelled group is a collapsible `<details>` section.
   Pass `active` with the nav key of the current page to highlight it.
+  Pass `counts` with optional badge data: `%{dashboard: n, todos: n}`.
   """
   attr :active, :string, default: nil
+  attr :counts, :map, default: %{}
 
   def sidebar_nav(assigns) do
+    counts = assigns[:counts] || %{}
+
     groups = [
       %{
         label: nil,
         items: [
-          %{key: "dashboard", label: gettext("Dashboard"), icon: "hero-home", path: ~p"/"},
+          %{
+            key: "dashboard",
+            label: gettext("Dashboard"),
+            icon: "hero-home",
+            path: ~p"/",
+            badge: counts[:dashboard]
+          },
           %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph"}
         ]
       },
@@ -103,9 +148,24 @@ defmodule DranWeb.Layouts do
         label: gettext("Knowledge"),
         items: [
           %{key: "notes", label: gettext("Notes"), icon: "hero-document-text", path: ~p"/notes"},
-          %{key: "concepts", label: gettext("Concepts"), icon: "hero-light-bulb", path: ~p"/concepts"},
-          %{key: "entities", label: gettext("Entities"), icon: "hero-user-group", path: ~p"/entities"},
-          %{key: "references", label: gettext("References"), icon: "hero-bookmark", path: ~p"/references"},
+          %{
+            key: "concepts",
+            label: gettext("Concepts"),
+            icon: "hero-light-bulb",
+            path: ~p"/concepts"
+          },
+          %{
+            key: "entities",
+            label: gettext("Entities"),
+            icon: "hero-user-group",
+            path: ~p"/entities"
+          },
+          %{
+            key: "references",
+            label: gettext("References"),
+            icon: "hero-bookmark",
+            path: ~p"/references"
+          },
           %{
             key: "queries",
             label: gettext("Queries"),
@@ -124,14 +184,30 @@ defmodule DranWeb.Layouts do
             icon: "hero-clipboard-document-list",
             path: ~p"/plans"
           },
-          %{key: "todos", label: gettext("Todos"), icon: "hero-check-circle", path: ~p"/todos"}
+          %{
+            key: "todos",
+            label: gettext("Todos"),
+            icon: "hero-check-circle",
+            path: ~p"/todos",
+            badge: counts[:todos]
+          }
         ]
       },
       %{
         label: gettext("Outputs"),
         items: [
-          %{key: "artifacts", label: gettext("Artifacts"), icon: "hero-cube", path: ~p"/artifacts"},
-          %{key: "comparisons", label: gettext("Comparisons"), icon: "hero-scale", path: ~p"/comparisons"}
+          %{
+            key: "artifacts",
+            label: gettext("Artifacts"),
+            icon: "hero-cube",
+            path: ~p"/artifacts"
+          },
+          %{
+            key: "comparisons",
+            label: gettext("Comparisons"),
+            icon: "hero-scale",
+            path: ~p"/comparisons"
+          }
         ]
       },
       %{
@@ -160,7 +236,12 @@ defmodule DranWeb.Layouts do
             icon: "hero-rectangle-stack",
             path: ~p"/contexts"
           },
-          %{key: "settings", label: gettext("Settings"), icon: "hero-cog-6-tooth", path: ~p"/settings"}
+          %{
+            key: "settings",
+            label: gettext("Settings"),
+            icon: "hero-cog-6-tooth",
+            path: ~p"/settings"
+          }
         ]
       },
       %{
@@ -174,20 +255,36 @@ defmodule DranWeb.Layouts do
     assigns = assign(assigns, :groups, groups)
 
     ~H"""
-    <div :for={group <- @groups} class="space-y-1">
-      <div
-        :if={group.label}
-        class="px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50"
-      >
-        {group.label}
+    <div :for={group <- @groups}>
+      <div :if={!group.label} class="space-y-1">
+        <.nav_link
+          :for={item <- group.items}
+          label={item.label}
+          icon={item.icon}
+          path={item.path}
+          active={@active == item.key}
+          badge={item[:badge]}
+        />
       </div>
-      <.nav_link
-        :for={item <- group.items}
-        label={item.label}
-        icon={item.icon}
-        path={item.path}
-        active={@active == item.key}
-      />
+      <details :if={group.label} open class="group">
+        <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none hover:text-base-content/70">
+          <.icon
+            name="hero-chevron-right"
+            class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+          />
+          {group.label}
+        </summary>
+        <div class="space-y-1 mt-1">
+          <.nav_link
+            :for={item <- group.items}
+            label={item.label}
+            icon={item.icon}
+            path={item.path}
+            active={@active == item.key}
+            badge={item[:badge]}
+          />
+        </div>
+      </details>
     </div>
     """
   end
@@ -196,19 +293,26 @@ defmodule DranWeb.Layouts do
   attr :icon, :string, required: true
   attr :path, :any, required: true
   attr :active, :boolean, default: false
+  attr :badge, :any, default: nil
 
   def nav_link(assigns) do
     ~H"""
     <a
       href={@path}
       class={[
-        "flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition",
-        @active && "bg-primary/10 text-primary font-medium",
-        !@active && "text-base-content/80 hover:bg-base-200 hover:text-base-content"
+        "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-colors duration-150",
+        @active && "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
+        !@active && "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
       ]}
     >
       <.icon name={@icon} class="size-4 shrink-0" />
       <span>{@label}</span>
+      <span
+        :if={@badge && @badge > 0}
+        class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60"
+      >
+        {@badge}
+      </span>
     </a>
     """
   end
