@@ -17,6 +17,7 @@ defmodule Dran.Agent.Research do
   @agent_type "research"
   @max_sources 10
   @max_search_queries 10
+  @max_pages_per_session 10
 
   defmodule State do
     @moduledoc false
@@ -299,31 +300,44 @@ defmodule Dran.Agent.Research do
   end
 
   def execute_tool("create_page", args, %State{} = state) do
-    page_attrs = %{
-      context_id: state.session.context_id,
-      title: args["title"],
-      slug: args["slug"],
-      body: args["body"],
-      page_type: args["page_type"] || "concept",
-      tags: args["tags"] || [],
-      created_by: "research-agent",
-      owner: "research-agent",
-      meta: Map.merge(args["meta"] || %{}, %{"agent_session_id" => state.session.id})
-    }
+    max_pages =
+      case state.opts do
+        opts when is_list(opts) -> Keyword.get(opts, :max_pages, @max_pages_per_session)
+        opts when is_map(opts) -> Map.get(opts, :max_pages, @max_pages_per_session)
+        _ -> @max_pages_per_session
+      end
 
-    case Brain.create_page(page_attrs) do
-      {:ok, page} ->
-        Phoenix.PubSub.broadcast(
-          Dran.PubSub,
-          "agents:#{state.session.id}",
-          {:page_created, page}
-        )
+    if state.pages_created >= max_pages do
+      {{:error,
+        "You have created the maximum of #{max_pages} pages for this session. " <>
+          "Call done to finish."}, state}
+    else
+      page_attrs = %{
+        context_id: state.session.context_id,
+        title: args["title"],
+        slug: args["slug"],
+        body: args["body"],
+        page_type: args["page_type"] || "concept",
+        tags: args["tags"] || [],
+        created_by: "research-agent",
+        owner: "research-agent",
+        meta: Map.merge(args["meta"] || %{}, %{"agent_session_id" => state.session.id})
+      }
 
-        {{:ok, %{slug: page.slug, id: page.id, title: page.title}},
-         %{state | pages_created: state.pages_created + 1}}
+      case Brain.create_page(page_attrs) do
+        {:ok, page} ->
+          Phoenix.PubSub.broadcast(
+            Dran.PubSub,
+            "agents:#{state.session.id}",
+            {:page_created, page}
+          )
 
-      {:error, cs} ->
-        {{:error, format_changeset_errors(cs)}, state}
+          {{:ok, %{slug: page.slug, id: page.id, title: page.title}},
+           %{state | pages_created: state.pages_created + 1}}
+
+        {:error, cs} ->
+          {{:error, format_changeset_errors(cs)}, state}
+      end
     end
   end
 

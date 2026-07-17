@@ -126,28 +126,38 @@ defmodule Dran.Agent.Engine do
   defp opts_to_map(_), do: %{}
 
   defp execute_loop(module, %Session{} = session, opts) do
-    state =
-      if function_exported?(module, :init_state, 3) do
-        module.init_state(session, module, opts)
-      else
-        messages =
-          if function_exported?(module, :build_messages, 3) do
-            module.build_messages(session.input, session, opts)
-          else
-            module.build_messages(session.input, session)
-          end
+    try do
+      state =
+        if function_exported?(module, :init_state, 3) do
+          module.init_state(session, module, opts)
+        else
+          messages =
+            if function_exported?(module, :build_messages, 3) do
+              module.build_messages(session.input, session, opts)
+            else
+              module.build_messages(session.input, session)
+            end
 
-        %{
-          session: session,
-          module: module,
-          messages: messages,
-          step: 0,
-          pages_created: 0,
-          opts: opts
-        }
-      end
+          %{
+            session: session,
+            module: module,
+            messages: messages,
+            step: 0,
+            pages_created: 0,
+            opts: opts
+          }
+        end
 
-    loop(state)
+      loop(state)
+    rescue
+      reason ->
+        Logger.error("Agent.Engine: fatal crash: #{inspect(reason)}\n#{Exception.format_stacktrace(__STACKTRACE__)}")
+        finish_session(%{session: session, pages_created: 0}, %{"summary" => "Agent crashed: #{Exception.format(:error, reason, __STACKTRACE__)}"}, "failed")
+    catch
+      kind, reason ->
+        Logger.error("Agent.Engine: fatal crash (#{kind}): #{inspect(reason)}")
+        finish_session(%{session: session, pages_created: 0}, %{"summary" => "Agent crashed: #{kind}: #{inspect(reason)}"}, "failed")
+    end
   end
 
   defp loop(%{step: step} = state) do
@@ -191,7 +201,7 @@ defmodule Dran.Agent.Engine do
 
   defp single_turn(state) do
     case call_llm(state) do
-      {:ok, %{reasoning: reasoning, tool: tool, args: args, assistant_message: assistant_message}} ->
+      {state, {:ok, %{reasoning: reasoning, tool: tool, args: args, assistant_message: assistant_message}}} ->
         state = %{state | step: state.step + 1}
         step = log_step!(state, tool, args, reasoning)
         broadcast(state, {:step_started, step})
@@ -244,7 +254,7 @@ defmodule Dran.Agent.Engine do
           end
         end
 
-      {:error, reason} ->
+      {state, {:error, reason}} ->
         {:error, state, reason}
     end
   rescue
@@ -254,7 +264,10 @@ defmodule Dran.Agent.Engine do
 
   # ── LLM ──
 
-  defp call_llm(state) do
+  @retryable_http_statuses [429, 500, 502, 503, 504]
+  @max_llm_retries 2
+
+  defp call_llm(state, attempt \\ 0) do
     payload = %{
       "model" => Inference.chat_model(),
       "messages" => state.messages,
@@ -265,8 +278,20 @@ defmodule Dran.Agent.Engine do
     }
 
     case Inference.chat(payload) do
-      {:ok, message} -> extract_tool_call(message)
-      {:error, reason} -> {:error, reason}
+      {:ok, message} ->
+        tokens = get_in(message, ["usage", "total_tokens"]) || 0
+        state = Map.update(state, :tokens_used, tokens, &(&1 + tokens))
+        {state, extract_tool_call(message)}
+
+      {:error, {:http_error, status, _}}
+      when status in @retryable_http_statuses and attempt < @max_llm_retries ->
+        backoff = trunc(:math.pow(2, attempt) * 500)
+        Logger.warning("Agent.Engine: LLM call failed (HTTP #{status}), retrying in #{backoff}ms (attempt #{attempt + 1}/#{@max_llm_retries})")
+        Process.sleep(backoff)
+        call_llm(state, attempt + 1)
+
+      {:error, reason} ->
+        {state, {:error, reason}}
     end
   end
 
@@ -407,15 +432,27 @@ defmodule Dran.Agent.Engine do
 
   # ── Session lifecycle ──
 
-  defp finish_session(state, args) do
+  defp finish_session(state, args, status \\ "done") do
     summary = args["summary"] || "Agent completed"
+
+    existing_meta =
+      case Repo.get(Session, state.session.id) do
+        nil -> %{}
+        session -> session.meta || %{}
+      end
+
+    meta =
+      Map.merge(existing_meta, %{
+        "tokens_used" => Map.get(state, :tokens_used, 0)
+      })
 
     Repo.get!(Session, state.session.id)
     |> Session.changeset(%{
-      status: "done",
+      status: status,
       summary: summary,
       pages_created: state.pages_created,
-      completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      completed_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      meta: meta
     })
     |> Repo.update!()
 
@@ -497,13 +534,109 @@ defmodule Dran.Agent.Engine do
         end)
 
       %{data: data} when is_map(data) ->
-        Jason.encode!(data) |> String.slice(0, @max_tool_result_chars)
+        Jason.encode!(data) |> smart_truncate(@max_tool_result_chars)
 
       %{status: "error", error: error} when is_binary(error) ->
         "ERROR: #{error}"
 
       %{status: status} ->
         to_string(status)
+    end
+  end
+
+  @truncation_marker "\n…[truncated]"
+
+  @doc """
+  Truncates a string to at most `max_chars` characters, trying to find a
+  clean boundary so the result stays useful.
+
+  Strategy:
+    1. If the string fits within `max_chars`, return it as-is.
+    2. If the string looks like JSON (starts with `{` or `[`), try decoding
+       progressively shorter prefixes until one parses, and cut there.
+    3. Otherwise, cut at the last newline before the limit.
+    4. If no newline is found, cut at the last space before the limit.
+    5. Always append `\\n…[truncated]` when truncation occurred.
+  """
+  def smart_truncate(str, max_chars) when is_binary(str) and is_integer(max_chars) do
+    marker_len = String.length(@truncation_marker)
+    effective_limit = max(0, max_chars - marker_len)
+
+    if String.length(str) <= max_chars do
+      str
+    else
+      truncated =
+        cond do
+          # JSON-like: try to find a parseable prefix
+          String.starts_with?(String.trim(str), ["{", "["]) ->
+            find_json_boundary(str, effective_limit)
+
+          # Plain text: cut at last newline before limit
+          true ->
+            find_line_boundary(str, effective_limit)
+        end
+
+      truncated <> @truncation_marker
+    end
+  end
+
+  defp find_json_boundary(str, limit) do
+    # Try progressively shorter prefixes to find a valid JSON boundary.
+    # We look for the last closing brace/bracket at or before the limit.
+    prefix = String.slice(str, 0, limit)
+
+    case find_last_json_close(prefix) do
+      nil ->
+        # No valid JSON close found; fall back to line boundary
+        find_line_boundary(str, limit)
+
+      close_pos ->
+        String.slice(str, 0, close_pos)
+    end
+  end
+
+  defp find_last_json_close(str) do
+    # Find the last } or ] in the string, then verify the prefix up to and
+    # including that position is valid JSON.
+    bytes = :binary.matches(str, ["}", "]"])
+
+    bytes
+    |> Enum.reverse()
+    |> Enum.find_value(fn {pos, _len} ->
+      candidate = String.slice(str, 0, pos + 1)
+
+      case Jason.decode(candidate) do
+        {:ok, _} -> pos + 1
+        _ -> nil
+      end
+    end)
+  end
+
+  defp find_line_boundary(str, limit) do
+    prefix = String.slice(str, 0, limit)
+
+    case String.split(prefix, "\n", parts: :infinity) do
+      [_single] ->
+        # No newline found; try last space
+        find_space_boundary(prefix)
+
+      lines ->
+        # Rejoin all but the last (incomplete) line
+        lines
+        |> Enum.drop(-1)
+        |> Enum.join("\n")
+    end
+  end
+
+  defp find_space_boundary(prefix) do
+    case :binary.matches(prefix, " ") do
+      [] ->
+        # No space found either; just cut at the limit
+        prefix
+
+      positions ->
+        {pos, _len} = List.last(positions)
+        String.slice(prefix, 0, pos)
     end
   end
 end
