@@ -141,7 +141,13 @@ defmodule DranWeb.Layouts do
             path: ~p"/",
             badge: counts[:dashboard]
           },
-          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph"}
+          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph"},
+          %{
+            key: "activity",
+            label: gettext("Activity"),
+            icon: "hero-clock",
+            path: ~p"/activity"
+          }
         ]
       },
       %{

@@ -144,6 +144,8 @@ defmodule DranWeb.Router do
     live "/graph", GraphLive, :index
     live "/graph/:slug", GraphLive, :show
 
+    live "/activity", ActivityLive, :index
+
     live "/agents/:type", AgentLive, :index
     live "/agents/:type/:id", AgentLive, :show
 
