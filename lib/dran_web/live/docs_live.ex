@@ -1,6 +1,6 @@
 defmodule DranWeb.DocsLive do
   @moduledoc """
-  Documentation pages for Dran: Overview, API reference, and MCP integration.
+  Documentation pages for Dran: Getting started, Concepts, Guides, REST API, and MCP integration.
   """
 
   use DranWeb, :live_view
@@ -8,13 +8,17 @@ defmodule DranWeb.DocsLive do
   alias DranWeb.Plugs.Auth
 
   @tabs [
-    {"overview", "overview"},
+    {"getting-started", "getting-started"},
+    {"concepts", "concepts"},
+    {"guides", "guides"},
     {"api", "api"},
     {"mcp", "mcp"},
     {"auth", "auth"}
   ]
 
-  defp tab_label("overview"), do: gettext("Overview")
+  defp tab_label("getting-started"), do: gettext("Getting started")
+  defp tab_label("concepts"), do: gettext("Concepts")
+  defp tab_label("guides"), do: gettext("Guides")
   defp tab_label("api"), do: gettext("API")
   defp tab_label("mcp"), do: gettext("MCP")
   defp tab_label("auth"), do: gettext("Auth")
@@ -39,8 +43,16 @@ defmodule DranWeb.DocsLive do
 
         <.tabs_bar tabs={translated_tabs()} active_tab={@active_tab} />
 
-        <%= if @active_tab == "overview" do %>
-          <.overview />
+        <%= if @active_tab == "getting-started" do %>
+          <.getting_started />
+        <% end %>
+
+        <%= if @active_tab == "concepts" do %>
+          <.concepts />
+        <% end %>
+
+        <%= if @active_tab == "guides" do %>
+          <.guides />
         <% end %>
 
         <%= if @active_tab == "api" do %>
@@ -55,6 +67,31 @@ defmodule DranWeb.DocsLive do
           <.auth_reference />
         <% end %>
       </div>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyCode">
+        export default {
+          mounted() {
+            this.el.addEventListener("click", () => {
+              const pre = this.el.parentElement.querySelector("pre");
+              if (pre) {
+                const text = pre.textContent.trim();
+                navigator.clipboard.writeText(text).then(() => {
+                  const icon = this.el.querySelector("[data-copy-icon]");
+                  const check = this.el.querySelector("[data-check-icon]");
+                  if (icon && check) {
+                    icon.classList.add("hidden");
+                    check.classList.remove("hidden");
+                    setTimeout(() => {
+                      icon.classList.remove("hidden");
+                      check.classList.add("hidden");
+                    }, 1500);
+                  }
+                });
+              }
+            });
+          }
+        }
+      </script>
     </Layouts.app>
     """
   end
@@ -66,13 +103,13 @@ defmodule DranWeb.DocsLive do
      assign(socket,
        active_nav: "docs",
        tabs: @tabs,
-       active_tab: "overview",
+       active_tab: "getting-started",
        page_title: gettext("Docs")
      )}
   end
 
   def handle_params(params, _url, socket) do
-    tab = params["tab"] || "overview"
+    tab = params["tab"] || "getting-started"
 
     {:noreply,
      assign(socket,
@@ -85,28 +122,192 @@ defmodule DranWeb.DocsLive do
     {:noreply, assign(socket, active_tab: tab)}
   end
 
-  # ── Overview ──
+  # ── Shared Components ──
 
-  def overview(assigns) do
+  attr :items, :list, required: true, doc: "list of {slug, label} tuples"
+
+  defp toc(assigns) do
+    ~H"""
+    <div class="surface-1 rounded-lg p-4 mb-6 not-prose">
+      <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">
+        {gettext("On this page")}
+      </p>
+      <ul class="space-y-1">
+        <li :for={{slug, label} <- @items}>
+          <a href={"#docs-#{slug}"} class="text-primary hover:underline text-sm">
+            {label}
+          </a>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  attr :variant, :atom, default: :info
+  slot :inner_block, required: true
+
+  defp callout(assigns) do
+    ~H"""
+    <div
+      class={[
+        "not-prose flex gap-3 rounded-lg border-l-4 p-4 my-4",
+        callout_classes(@variant)
+      ]}
+    >
+      <.icon name={callout_icon(@variant)} class="w-5 h-5 shrink-0 mt-0.5" />
+      <div class="text-sm">
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
+  end
+
+  defp callout_icon(:info), do: "hero-information-circle"
+  defp callout_icon(:warning), do: "hero-exclamation-triangle"
+  defp callout_icon(:tip), do: "hero-light-bulb"
+
+  defp callout_classes(:info), do: "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+  defp callout_classes(:warning), do: "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  defp callout_classes(:tip), do: "border-green-500 bg-green-500/10 text-green-700 dark:text-green-300"
+
+  attr :id, :string, required: true
+  attr :code, :string, required: true
+
+  defp code_block(assigns) do
+    ~H"""
+    <div class="relative not-prose my-4 group">
+      <button
+        type="button"
+        id={"#{@id}-copy-btn"}
+        phx-hook=".CopyCode"
+        class="absolute top-2 right-2 p-1.5 rounded-md bg-base-200/80 hover:bg-base-300 transition opacity-0 group-hover:opacity-100"
+        aria-label={gettext("Copy")}
+      >
+        <span data-copy-icon>
+          <.icon name="hero-clipboard-document" class="w-4 h-4 text-base-content/60" />
+        </span>
+        <span data-check-icon class="hidden">
+          <.icon name="hero-check" class="w-4 h-4 text-green-500" />
+        </span>
+      </button>
+      <pre id={@id} class="overflow-x-auto rounded-lg bg-base-200 p-4 text-sm"><code>{@code}</code></pre>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :icon, :string, required: true
+  attr :label, :string, required: true
+
+  defp h2_heading(assigns) do
+    ~H"""
+    <h2 id={"docs-#{@id}"} class="scroll-mt-20 flex items-center gap-2 text-xl font-bold mt-8 mb-4">
+      <.icon name={@icon} class="w-6 h-6 text-primary" />
+      {@label}
+    </h2>
+    """
+  end
+
+  # ── Getting Started ──
+
+  def getting_started(assigns) do
     ~H"""
     <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
-      <h2>What is Dran?</h2>
+      <.toc items={[
+        {"what-is-dran", "What is Dran?"},
+        {"architecture", "Architecture"},
+        {"getting-started", "Getting started"},
+        {"next-steps", "Next steps"}
+      ]} />
+
+      <.h2_heading id="what-is-dran" icon="hero-book-open" label="What is Dran?" />
       <p>
         Dran is a personal second-brain application built with Phoenix LiveView. It stores
         your knowledge as typed pages (notes, concepts, entities, references) and links them
         with relations, forming a queryable knowledge graph.
       </p>
 
-      <h2>Core concepts</h2>
+      <.h2_heading id="architecture" icon="hero-cube" label="Architecture" />
+      <p>
+        Dran is a Phoenix 1.8 application using LiveView for real-time UI, Ecto + PostgreSQL for
+        persistence, and a JSON REST API at <code>/api</code>. It also exposes an MCP
+        (Model Context Protocol) endpoint for AI agent integration.
+      </p>
 
-      <h3>Contexts</h3>
+      <.h2_heading id="getting-started" icon="hero-rocket-launch" label="Getting started" />
+      <ol>
+        <li>Create pages from the UI or the API</li>
+        <li>Link pages with relations</li>
+        <li>Explore the graph to discover connections</li>
+        <li>Use goals to group related pages and track progress</li>
+      </ol>
+
+      <.h2_heading id="next-steps" icon="hero-sparkles" label="Next steps" />
+      <div class="not-prose grid grid-cols-1 md:grid-cols-3 gap-4">
+        <a
+          href="#"
+          phx-click="switch_tab"
+          phx-value-tab="concepts"
+          class="surface-1 lift rounded-lg p-4 block hover:border-primary transition"
+        >
+          <.icon name="hero-cube" class="w-8 h-8 text-primary mb-2" />
+          <h3 class="font-semibold">{gettext("Concepts")}</h3>
+          <p class="text-sm text-base-content/60">
+            Contexts, pages, relations, knowledge graph, and more.
+          </p>
+        </a>
+        <a
+          href="#"
+          phx-click="switch_tab"
+          phx-value-tab="guides"
+          class="surface-1 lift rounded-lg p-4 block hover:border-primary transition"
+        >
+          <.icon name="hero-chat-bubble-left-right" class="w-8 h-8 text-primary mb-2" />
+          <h3 class="font-semibold">{gettext("Guides")}</h3>
+          <p class="text-sm text-base-content/60">
+            AI chat, autonomous agents, kanban board, and settings.
+          </p>
+        </a>
+        <a
+          href="#"
+          phx-click="switch_tab"
+          phx-value-tab="mcp"
+          class="surface-1 lift rounded-lg p-4 block hover:border-primary transition"
+        >
+          <.icon name="hero-command-line" class="w-8 h-8 text-primary mb-2" />
+          <h3 class="font-semibold">{gettext("MCP")}</h3>
+          <p class="text-sm text-base-content/60">
+            Model Context Protocol integration for AI agents.
+          </p>
+        </a>
+      </div>
+    </div>
+    """
+  end
+
+  # ── Concepts ──
+
+  def concepts(assigns) do
+    ~H"""
+    <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
+      <.toc items={[
+        {"contexts", "Contexts"},
+        {"pages", "Pages"},
+        {"relations", "Relations"},
+        {"knowledge-graph", "Knowledge graph"},
+        {"backlinks", "Backlinks"},
+        {"smart-collections", "Smart Collections"},
+        {"planning-hierarchy", "Planning hierarchy"}
+      ]} />
+
+      <.h2_heading id="contexts" icon="hero-squares-2x2" label="Contexts" />
       <p>
         A context is a self-contained workspace (e.g. "personal", "work"). All pages, relations,
         and logs belong to a single context. Most operations require a context, identified by
         its slug.
       </p>
 
-      <h3>Pages</h3>
+      <.h2_heading id="pages" icon="hero-document-text" label="Pages" />
       <p>
         Every piece of knowledge is a page with a <code>page_type</code>. The built-in types are:
       </p>
@@ -130,7 +331,7 @@ defmodule DranWeb.DocsLive do
         for type-specific metadata (e.g. kanban status, priority, horizon).
       </p>
 
-      <h3>Relations</h3>
+      <.h2_heading id="relations" icon="hero-link" label="Relations" />
       <p>
         Relations connect pages with a <code>relation_type</code>:
       </p>
@@ -149,25 +350,66 @@ defmodule DranWeb.DocsLive do
         </li>
       </ul>
 
-      <h3>Knowledge graph</h3>
+      <.h2_heading id="knowledge-graph" icon="hero-circle-stack" label="Knowledge graph" />
       <p>
         Pages and relations form a directed graph. The <code>/graph</code>
         view renders the full
-        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong>
-        tab
+        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong> tab
         showing the page as the center with its direct neighbors. Relations carry a
         <code>weight</code>
         that reflects semantic similarity strength.
       </p>
 
-      <h3>AI Chat</h3>
+      <.h2_heading id="backlinks" icon="hero-arrow-uturn-left" label="Backlinks" />
+      <p>
+        Every page shows a collapsible backlinks section listing all pages that reference it,
+        grouped by relation type with badges. This makes it easy to discover reverse connections.
+      </p>
+
+      <.h2_heading id="smart-collections" icon="hero-squares-2x2" label="Smart Collections" />
+      <p>
+        Dynamic page groupings based on filters (type, tags, date ranges). Collections auto-update
+        as pages change, giving you live views like "All todos from this week" or "Concepts tagged AI".
+      </p>
+
+      <.h2_heading id="planning-hierarchy" icon="hero-clipboard-document-check" label="Planning hierarchy" />
+      <p>
+        Dran organizes planning into a three-level hierarchy: <strong>goals</strong> → <strong>plans</strong> → <strong>todos</strong>.
+        Plans link to goals via <code>meta.goal_slug</code>, and todos link to plans via <code>meta.plan_slug</code>
+        (the goal is derived from the plan). Todos and plans can be orphans — i.e. not linked to any
+        parent. The <code>part_of</code> relation is materialized automatically when these links exist.
+        Use <code>list_pages</code> with <code>goal_slug</code> or <code>plan_slug</code> filters
+        (value <code>"none"</code> returns orphans).
+      </p>
+      <.code_block
+        id="planning-hierarchy-diagram"
+        code={DranWeb.DocsContent.planning_hierarchy_diagram()}
+      />
+    </div>
+    """
+  end
+
+  # ── Guides ──
+
+  def guides(assigns) do
+    ~H"""
+    <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
+      <.toc items={[
+        {"ai-chat", "AI Chat"},
+        {"autonomous-agents", "Autonomous agents"},
+        {"kanban-board", "Kanban board"},
+        {"using-dran-from-agents", "Using Dran from agents"},
+        {"settings", "Settings"}
+      ]} />
+
+      <.h2_heading id="ai-chat" icon="hero-chat-bubble-left-right" label="AI Chat" />
       <p>
         Dran includes a built-in AI chat assistant (bottom-right FAB on every page). The chat
         has full context of your brain — it can search pages, create content, answer questions
         with citations, and suggest related actions. Chat sessions are persisted per context.
       </p>
 
-      <h3>Autonomous agents</h3>
+      <.h2_heading id="autonomous-agents" icon="hero-cpu-chip" label="Autonomous agents" />
       <p>Beyond the interactive Research and Ingest agents, Dran runs scheduled batch agents:</p>
       <ul>
         <li>
@@ -189,46 +431,42 @@ defmodule DranWeb.DocsLive do
       <p>
         All agents can also be triggered manually via MCP with <code>start_agent</code>.
       </p>
+      <.callout variant={:info}>
+        <p>
+          <strong>Agent dispatch:</strong>
+          Agents are dispatched asynchronously. Use <code>start_agent</code> to launch and
+          <code>get_agent_session</code> to poll for progress, summary, and steps.
+        </p>
+      </.callout>
 
-      <h3>Backlinks</h3>
+      <.h2_heading id="kanban-board" icon="hero-view-columns" label="Kanban board" />
       <p>
-        Every page shows a collapsible backlinks section listing all pages that reference it,
-        grouped by relation type with badges. This makes it easy to discover reverse connections.
+        The <code>/todos</code> page is a full-viewport kanban board with 6 columns
+        (backlog, this_week, today, in_progress, done, cancelled). You can drag and drop cards
+        between columns to update their <code>kanban_status</code>. The board updates in real
+        time — when an autonomous agent creates or moves a todo, the change is pushed to all
+        connected clients via PubSub.
       </p>
 
-      <h3>Smart Collections</h3>
+      <.h2_heading id="using-dran-from-agents" icon="hero-command-line" label="Using Dran from agents" />
       <p>
-        Dynamic page groupings based on filters (type, tags, date ranges). Collections auto-update
-        as pages change, giving you live views like "All todos from this week" or "Concepts tagged AI".
+        AI agents can connect to Dran via the MCP endpoint at <code>/api/mcp</code> using the
+        Streamable HTTP transport. The repository includes a <code>SKILL.md</code> file with the
+        full operational manual for agent integration. To verify your MCP schema is live and
+        correct, run <code>scripts/mcp_smoke.sh</code> — it exercises the tools list and validates
+        the response schema.
       </p>
+      <.code_block
+        id="agent-connect-example"
+        code={DranWeb.DocsContent.agent_connect_example()}
+      />
 
-      <h3>Full Export</h3>
-      <p>
-        Export your entire brain as a structured JSON snapshot via <code>GET /api/export/:context/full</code>.
-        Includes all pages, relations, and metadata — useful for backups or migrations.
-      </p>
-
-      <h3>Settings</h3>
+      <.h2_heading id="settings" icon="hero-cog-6-tooth" label="Settings" />
       <p>
         The Settings page (<code>/settings</code>) lets you tune brain behavior at runtime:
         semantic similarity threshold, auto-linking, page augmenter on/off, and more — stored
         in the database, no restart needed.
       </p>
-
-      <h2>Architecture</h2>
-      <p>
-        Dran is a Phoenix 1.8 application using LiveView for real-time UI, Ecto + PostgreSQL for
-        persistence, and a JSON REST API at <code>/api</code>. It also exposes an MCP
-        (Model Context Protocol) endpoint for AI agent integration.
-      </p>
-
-      <h2>Getting started</h2>
-      <ol>
-        <li>Create pages from the UI or the API</li>
-        <li>Link pages with relations</li>
-        <li>Explore the graph to discover connections</li>
-        <li>Use goals to group related pages and track progress</li>
-      </ol>
     </div>
     """
   end
@@ -238,55 +476,66 @@ defmodule DranWeb.DocsLive do
   def auth_reference(assigns) do
     ~H"""
     <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
-      <h2>Authentication</h2>
+      <.toc items={[
+        {"authentication", "Authentication"},
+        {"environment-variables", "Environment variables"},
+        {"web-ui-authentication", "Web UI authentication"},
+        {"api-authentication", "API authentication"},
+        {"mcp-authentication", "MCP authentication"},
+        {"configuring-mcp-client", "Configuring an MCP client"},
+        {"runtime-settings", "Runtime Settings"},
+        {"security-notes", "Security notes"}
+      ]} />
+
+      <.h2_heading id="authentication" icon="hero-key" label="Authentication" />
       <p>
         Dran uses single-user authentication. The same credentials protect both the
         web UI (session-based) and the REST/MCP API (bearer token). Credentials are
         read from environment variables at startup.
       </p>
 
-      <h3>Environment variables</h3>
-      <div class="not-prose overflow-hidden rounded-lg border border-base-300">
+      <.h2_heading id="environment-variables" icon="hero-cog-6-tooth" label="Environment variables" />
+      <div class="not-prose overflow-x-auto rounded-lg border border-base-300">
         <table class="w-full text-sm">
-          <thead>
-            <tr class="text-xs text-base-content/40 uppercase border-b border-base-300">
-              <th class="text-left px-4 py-2 font-medium">{gettext("Variable")}</th>
-              <th class="text-left px-4 py-2 font-medium">{gettext("Default")}</th>
-              <th class="text-left px-4 py-2 font-medium">{gettext("Purpose")}</th>
+          <thead class="bg-base-200 text-left">
+            <tr>
+              <th class="px-4 py-2 font-semibold">{gettext("Variable")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Default")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Purpose")}</th>
             </tr>
           </thead>
-          <tbody>
-            <tr class="border-b border-base-300">
+          <tbody class="divide-y divide-base-300">
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_USERNAME</td>
               <td class="px-4 py-2 font-mono text-base-content/60">admin</td>
               <td class="px-4 py-2">Web login username</td>
             </tr>
-            <tr class="border-b border-base-300">
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_PASSWORD</td>
               <td class="px-4 py-2 font-mono text-base-content/60">dran</td>
               <td class="px-4 py-2">Web login password</td>
             </tr>
-            <tr class="border-b border-base-300">
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_API_TOKEN</td>
               <td class="px-4 py-2 font-mono text-base-content/60">dran-token</td>
               <td class="px-4 py-2">Bearer token for API and MCP</td>
             </tr>
-            <tr class="border-b border-base-300">
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_INFERENCE_URL</td>
               <td class="px-4 py-2 font-mono text-base-content/60">http://localhost:8080/v1</td>
               <td class="px-4 py-2">LLM inference endpoint</td>
             </tr>
-            <tr class="border-b border-base-300">
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_INFERENCE_API_KEY</td>
               <td class="px-4 py-2 font-mono text-base-content/60">(empty)</td>
               <td class="px-4 py-2">API key for inference endpoint</td>
             </tr>
-            <tr class="border-b border-base-300">
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_EMBEDDING_MODEL</td>
               <td class="px-4 py-2 font-mono text-base-content/60">nomic-embed-text</td>
               <td class="px-4 py-2">Embedding model name</td>
             </tr>
-            <tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_CHAT_MODEL</td>
               <td class="px-4 py-2 font-mono text-base-content/60">qwen3</td>
               <td class="px-4 py-2">Chat/LLM model name</td>
@@ -295,7 +544,7 @@ defmodule DranWeb.DocsLive do
         </table>
       </div>
 
-      <h3>Web UI authentication</h3>
+      <h3 id="web-ui-authentication" class="scroll-mt-20">Web UI authentication</h3>
       <p>
         The web UI is protected by a session-based login at <code>/login</code>.
         Unauthenticated requests are redirected there. After a successful login,
@@ -307,64 +556,57 @@ defmodule DranWeb.DocsLive do
         on next visit. The selector also shows page counts per context.
       </p>
 
-      <h3>API authentication</h3>
+      <h3 id="api-authentication" class="scroll-mt-20">API authentication</h3>
       <p>
         All endpoints under <code>/api</code>
         require a Bearer token in the <code>Authorization</code>
         header:
       </p>
-      <pre phx-no-curly-interpolation><code>
-        curl -H "Authorization: Bearer dran-token" \\
-             http://localhost:4000/api/pages?context=personal
-      </code></pre>
+      <.code_block
+        id="auth-api-curl"
+        code={DranWeb.DocsContent.auth_api_curl()}
+      />
       <p>
         Without a valid token, the API responds with <code>401 Unauthorized</code>.
       </p>
 
-      <h3>MCP authentication</h3>
+      <h3 id="mcp-authentication" class="scroll-mt-20">MCP authentication</h3>
       <p>
         The MCP endpoint at <code>/api/mcp</code> uses the same Bearer token.
         MCP clients should send the token in the <code>Authorization</code> header
         of every request:
       </p>
-      <pre phx-no-curly-interpolation><code>
-        POST /api/mcp
-        Authorization: Bearer dran-token
-        Content-Type: application/json
-      </code></pre>
+      <.code_block
+        id="auth-mcp-headers"
+        code={"POST /api/mcp\nAuthorization: Bearer ***\nContent-Type: application/json"}
+      />
 
-      <h3>Configuring an MCP client</h3>
+      <h3 id="configuring-mcp-client" class="scroll-mt-20">Configuring an MCP client</h3>
       <p>
         To use Dran with an MCP-compatible client (e.g. Claude Desktop), add this
         to your client config, including the bearer token:
       </p>
-      <pre phx-no-curly-interpolation><code>
-        {
-          "mcpServers": {
-            "dran": {
-              "url": "http://localhost:4000/api/mcp",
-              "headers": {
-                "Authorization": "Bearer dran-token"
-              }
-            }
-          }
-        }
-      </code></pre>
+      <.code_block
+        id="auth-mcp-config"
+        code={"{\"mcpServers\": {\"dran\": {\"url\": \"http://localhost:4000/api/mcp\", \"headers\": {\"Authorization\": \"Bearer dran-token\"}}}}"}
+      />
 
-      <h3>Runtime Settings</h3>
+      <h3 id="runtime-settings" class="scroll-mt-20">Runtime Settings</h3>
       <p>
         Brain behavior can be tuned at runtime without restarting. Settings are stored
         in the database and managed via the Settings page (/settings) or the API.
         Key settings include similarity threshold, page augmenter toggle, and auto-linking.
       </p>
 
-      <h3>Security notes</h3>
-      <ul>
-        <li>Change the default credentials in production via environment variables.</li>
-        <li>The API token grants full read/write access — protect it like a password.</li>
-        <li>Use HTTPS in production to prevent credential interception.</li>
-        <li>There is no multi-user support; the same credentials are used by everyone.</li>
-      </ul>
+      <h3 id="security-notes" class="scroll-mt-20">Security notes</h3>
+      <.callout variant={:warning}>
+        <ul class="space-y-1">
+          <li>Change the default credentials in production via environment variables.</li>
+          <li>The API token grants full read/write access — protect it like a password.</li>
+          <li>Use HTTPS in production to prevent credential interception.</li>
+          <li>There is no multi-user support; the same credentials are used by everyone.</li>
+        </ul>
+      </.callout>
     </div>
     """
   end
@@ -373,154 +615,96 @@ defmodule DranWeb.DocsLive do
 
   def api_reference(assigns) do
     ~H"""
-    <div class="space-y-8">
-      <div class="prose prose-base dark:prose-invert max-w-none">
-        <h2>REST API</h2>
-        <p>
-          All endpoints are served under <code>/api</code> and return JSON. Most endpoints
-          accept a <code>context</code> query parameter (context slug) to scope the operation.
-        </p>
+    <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
+      <.toc items={[
+        {"rest-api", "REST API"},
+        {"contexts-api", "Contexts"},
+        {"pages-api", "Pages"},
+        {"relations-api", "Relations"},
+        {"search-api", "Search"},
+        {"goals-api", "Goals"},
+        {"todos-api", "Todos"},
+        {"ingest-api", "Ingest"},
+        {"maintenance-api", "Maintenance"},
+        {"wiki-api", "Wiki"},
+        {"export-api", "Export"},
+        {"settings-api", "Settings"},
+        {"chat-api", "Chat"}
+      ]} />
+
+      <.h2_heading id="rest-api" icon="hero-command-line" label="REST API" />
+      <p>
+        All endpoints are served under <code>/api</code> and return JSON. Most endpoints
+        accept a <code>context</code> query parameter (context slug) to scope the operation.
+      </p>
+
+      <div class="not-prose overflow-x-auto rounded-lg border border-base-300">
+        <table class="w-full text-sm">
+          <thead class="bg-base-200 text-left">
+            <tr>
+              <th class="px-4 py-2 font-semibold">{gettext("Method")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Endpoint")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Description")}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-base-300">
+            <tr :for={ep <- api_endpoints()} class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2">
+                <span class={[
+                  "rounded px-1.5 py-0.5 text-xs font-mono font-semibold",
+                  method_class(ep.method)
+                ]}>
+                  {ep.method}
+                </span>
+              </td>
+              <td class="px-4 py-2 font-mono text-primary break-all">{ep.path}</td>
+              <td class="px-4 py-2 text-base-content/60">{ep.desc}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-
-      <.api_group title="Contexts">
-        <:endpoint method="GET" path="/api/contexts" desc="List all contexts" />
-        <:endpoint method="POST" path="/api/contexts" desc="Create a context" />
-        <:endpoint method="GET" path="/api/contexts/:slug" desc="Get a context by slug" />
-        <:endpoint method="PUT" path="/api/contexts/:slug" desc="Update a context" />
-        <:endpoint method="DELETE" path="/api/contexts/:slug" desc="Delete a context" />
-      </.api_group>
-
-      <.api_group title="Pages">
-        <:endpoint
-          method="GET"
-          path="/api/pages"
-          desc="List pages (filters: context, type, tag, status, owner, limit)"
-        />
-        <:endpoint method="POST" path="/api/pages" desc="Create a page" />
-        <:endpoint method="GET" path="/api/pages/:slug" desc="Get a page" />
-        <:endpoint method="PUT" path="/api/pages/:slug" desc="Update a page" />
-        <:endpoint method="DELETE" path="/api/pages/:slug" desc="Delete a page" />
-        <:endpoint method="GET" path="/api/pages/:slug/links" desc="Inbound + outbound relations" />
-        <:endpoint method="GET" path="/api/pages/:slug/graph" desc="Subgraph centered on a page" />
-        <:endpoint
-          method="GET"
-          path="/api/pages/:slug/backlinks"
-          desc="Pages that reference this page, grouped by relation type"
-        />
-        <:endpoint
-          method="GET"
-          path="/api/pages/:slug/diff?v1=N&v2=M"
-          desc="Version diff between two versions"
-        />
-      </.api_group>
-
-      <.api_group title="Relations">
-        <:endpoint
-          method="POST"
-          path="/api/relations"
-          desc="Create a relation (source, target, relation_type)"
-        />
-        <:endpoint method="DELETE" path="/api/relations/:id" desc="Delete a relation" />
-      </.api_group>
-
-      <.api_group title="Search">
-        <:endpoint method="GET" path="/api/search?q=...&context=...&type=..." desc="Full-text search" />
-        <:endpoint method="GET" path="/api/search/fuzzy?q=...&context=..." desc="Fuzzy search" />
-      </.api_group>
-
-      <.api_group title="Goals">
-        <:endpoint method="GET" path="/api/goals?context=..." desc="List goals" />
-        <:endpoint
-          method="GET"
-          path="/api/goals/:slug?context=..."
-          desc="Goal detail with todos and plans"
-        />
-      </.api_group>
-
-      <.api_group title="Todos">
-        <:endpoint
-          method="GET"
-          path="/api/todos?context=...&status=..."
-          desc="List todos (filterable by kanban status)"
-        />
-        <:endpoint method="POST" path="/api/todos" desc="Create a todo" />
-        <:endpoint method="PUT" path="/api/todos/:id" desc="Update a todo (e.g. change status)" />
-      </.api_group>
-
-      <.api_group title="Ingest">
-        <:endpoint method="POST" path="/api/ingest" desc="Ingest a URL as a raw page" />
-      </.api_group>
-
-      <.api_group title="Maintenance">
-        <:endpoint method="GET" path="/api/lint?context=..." desc="Lint pages for quality issues" />
-        <:endpoint method="GET" path="/api/log?context=...&action=...&limit=..." desc="Activity log" />
-      </.api_group>
-
-      <.api_group title="Wiki">
-        <:endpoint
-          method="GET"
-          path="/api/index?context=..."
-          desc="Wiki index (all page slugs + titles)"
-        />
-        <:endpoint method="GET" path="/api/graph?context=..." desc="Full graph (nodes + edges)" />
-        <:endpoint
-          method="GET"
-          path="/api/graph/3d?context=..."
-          desc="3D graph data (nodes with x,y,z coords)"
-        />
-      </.api_group>
-
-      <.api_group title="Export">
-        <:endpoint
-          method="GET"
-          path="/api/export/:context/full"
-          desc="Full brain export (all pages + relations + metadata as JSON)"
-        />
-      </.api_group>
-
-      <.api_group title="Settings">
-        <:endpoint method="GET" path="/api/settings" desc="List all runtime settings" />
-        <:endpoint method="PUT" path="/api/settings/:key" desc="Update a setting value" />
-      </.api_group>
-
-      <.api_group title="Chat">
-        <:endpoint method="POST" path="/api/chat/sessions" desc="Create a chat session" />
-        <:endpoint method="GET" path="/api/chat/sessions/:id" desc="Get session + messages" />
-        <:endpoint method="POST" path="/api/chat/sessions/:id/messages" desc="Send a message" />
-      </.api_group>
     </div>
     """
   end
 
-  attr :title, :string, required: true
-
-  slot :endpoint, required: true do
-    attr :method, :string, required: true
-    attr :path, :string, required: true
-    attr :desc, :string, required: true
-  end
-
-  def api_group(assigns) do
-    ~H"""
-    <div>
-      <h3 class="text-lg font-semibold mb-3">{@title}</h3>
-      <div class="rounded-lg border border-base-300 overflow-hidden">
-        <div
-          :for={ep <- @endpoint}
-          class="flex items-start gap-3 px-4 py-2.5 border-b border-base-300 last:border-b-0 hover:bg-base-200/50 transition"
-        >
-          <span class={[
-            "font-mono text-xs font-bold px-2 py-0.5 rounded shrink-0",
-            method_class(ep.method)
-          ]}>
-            {ep.method}
-          </span>
-          <code class="text-sm text-primary flex-1 break-all">{ep.path}</code>
-          <span class="text-xs text-base-content/60 shrink-0 max-w-xs text-right">{ep.desc}</span>
-        </div>
-      </div>
-    </div>
-    """
+  defp api_endpoints do
+    [
+      %{group: "Contexts", method: "GET", path: "/api/contexts", desc: "List all contexts"},
+      %{group: "Contexts", method: "POST", path: "/api/contexts", desc: "Create a context"},
+      %{group: "Contexts", method: "GET", path: "/api/contexts/:slug", desc: "Get a context by slug"},
+      %{group: "Contexts", method: "PUT", path: "/api/contexts/:slug", desc: "Update a context"},
+      %{group: "Contexts", method: "DELETE", path: "/api/contexts/:slug", desc: "Delete a context"},
+      %{group: "Pages", method: "GET", path: "/api/pages", desc: "List pages (filters: context, type, tag, status, owner, limit)"},
+      %{group: "Pages", method: "POST", path: "/api/pages", desc: "Create a page"},
+      %{group: "Pages", method: "GET", path: "/api/pages/:slug", desc: "Get a page"},
+      %{group: "Pages", method: "PUT", path: "/api/pages/:slug", desc: "Update a page"},
+      %{group: "Pages", method: "DELETE", path: "/api/pages/:slug", desc: "Delete a page"},
+      %{group: "Pages", method: "GET", path: "/api/pages/:slug/links", desc: "Inbound + outbound relations"},
+      %{group: "Pages", method: "GET", path: "/api/pages/:slug/graph", desc: "Subgraph centered on a page"},
+      %{group: "Pages", method: "GET", path: "/api/pages/:slug/backlinks", desc: "Pages that reference this page, grouped by relation type"},
+      %{group: "Pages", method: "GET", path: "/api/pages/:slug/diff?v1=N&v2=M", desc: "Version diff between two versions"},
+      %{group: "Relations", method: "POST", path: "/api/relations", desc: "Create a relation (source, target, relation_type)"},
+      %{group: "Relations", method: "DELETE", path: "/api/relations/:id", desc: "Delete a relation"},
+      %{group: "Search", method: "GET", path: "/api/search?q=...&context=...&type=...", desc: "Full-text search"},
+      %{group: "Search", method: "GET", path: "/api/search/fuzzy?q=...&context=...", desc: "Fuzzy search"},
+      %{group: "Goals", method: "GET", path: "/api/goals?context=...", desc: "List goals"},
+      %{group: "Goals", method: "GET", path: "/api/goals/:slug?context=...", desc: "Goal detail with todos and plans"},
+      %{group: "Todos", method: "GET", path: "/api/todos?context=...&status=...", desc: "List todos (filterable by kanban status)"},
+      %{group: "Todos", method: "POST", path: "/api/todos", desc: "Create a todo"},
+      %{group: "Todos", method: "PUT", path: "/api/todos/:id", desc: "Update a todo (e.g. change status)"},
+      %{group: "Ingest", method: "POST", path: "/api/ingest", desc: "Ingest a URL as a raw page"},
+      %{group: "Maintenance", method: "GET", path: "/api/lint?context=...", desc: "Lint pages for quality issues"},
+      %{group: "Maintenance", method: "GET", path: "/api/log?context=...&action=...&limit=...", desc: "Activity log"},
+      %{group: "Wiki", method: "GET", path: "/api/index?context=...", desc: "Wiki index (all page slugs + titles)"},
+      %{group: "Wiki", method: "GET", path: "/api/graph?context=...", desc: "Full graph (nodes + edges)"},
+      %{group: "Wiki", method: "GET", path: "/api/graph/3d?context=...", desc: "3D graph data (nodes with x,y,z coords)"},
+      %{group: "Export", method: "GET", path: "/api/export/:context/full", desc: "Full brain export (all pages + relations + metadata as JSON)"},
+      %{group: "Settings", method: "GET", path: "/api/settings", desc: "List all runtime settings"},
+      %{group: "Settings", method: "PUT", path: "/api/settings/:key", desc: "Update a setting value"},
+      %{group: "Chat", method: "POST", path: "/api/chat/sessions", desc: "Create a chat session"},
+      %{group: "Chat", method: "GET", path: "/api/chat/sessions/:id", desc: "Get session + messages"},
+      %{group: "Chat", method: "POST", path: "/api/chat/sessions/:id/messages", desc: "Send a message"}
+    ]
   end
 
   defp method_class("GET"), do: "bg-blue-500/20 text-blue-700"
@@ -534,26 +718,37 @@ defmodule DranWeb.DocsLive do
   def mcp_reference(assigns) do
     ~H"""
     <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
-      <h2>MCP (Model Context Protocol)</h2>
+      <.toc items={[
+        {"mcp-endpoint", "MCP (Model Context Protocol)"},
+        {"session-management", "Session management"},
+        {"agent-quick-start", "Agent Quick Start"},
+        {"page-types", "Page Types & Subtypes"},
+        {"embeds", "Embeds"},
+        {"available-tools", "Available tools"},
+        {"resources", "Resources"},
+        {"prompts", "Prompts"},
+        {"example-initialize", "Example: initialize session"}
+      ]} />
+
+      <.h2_heading id="mcp-endpoint" icon="hero-command-line" label="MCP (Model Context Protocol)" />
       <p>
         Dran exposes an MCP endpoint at <code>/api/mcp</code> using the Streamable HTTP
         transport. AI agents can connect to Dran and use it as a knowledge tool.
       </p>
 
-      <h3>Endpoint</h3>
-      <pre phx-no-curly-interpolation><code>
-        POST /api/mcp   - send JSON-RPC message
-        GET /api/mcp    - open SSE stream (optional, returns 405 if unsupported)
-        DELETE /api/mcp - terminate session
-      </code></pre>
+      <h3 id="mcp-endpoint-methods">Endpoint</h3>
+      <.code_block
+        id="mcp-endpoint-list"
+        code={"POST /api/mcp   - send JSON-RPC message\nGET /api/mcp    - open SSE stream (optional, returns 405 if unsupported)\nDELETE /api/mcp - terminate session"}
+      />
 
-      <h3>Session management</h3>
+      <h3 id="session-management" class="scroll-mt-20">Session management</h3>
       <p>
         The server returns a <code>Mcp-Session-Id</code> header on the first request. Include
         this header in subsequent requests to maintain session state.
       </p>
 
-      <h3>Agent Quick Start</h3>
+      <.h2_heading id="agent-quick-start" icon="hero-rocket-launch" label="Agent Quick Start" />
       <p>
         When an agent connects to Dran, it should follow this workflow:
       </p>
@@ -613,7 +808,7 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Agents</strong>
           — use <code>start_agent</code>
-          to delegate tasks to autonomous agents (research, ingest, qa, curator, link_gardener, weekly_review).
+          to delegate tasks to autonomous agents (research, ingest, ask, curator, link_gardener, weekly_review).
           Poll <code>get_agent_session</code>
           for progress and results.
         </li>
@@ -627,7 +822,7 @@ defmodule DranWeb.DocsLive do
         </li>
       </ol>
 
-      <h3>Page Types &amp; Subtypes</h3>
+      <.h2_heading id="page-types" icon="hero-document-text" label="Page Types & Subtypes" />
       <p>
         Every page has a <code>page_type</code>
         that determines its purpose. Some types have a <code>kind</code>
@@ -635,78 +830,78 @@ defmodule DranWeb.DocsLive do
         the agent structure knowledge correctly.
       </p>
 
-      <div class="not-prose overflow-x-auto">
-        <table class="w-full text-sm border border-base-300 rounded-lg">
-          <thead class="bg-base-200">
+      <div class="not-prose overflow-x-auto rounded-lg border border-base-300">
+        <table class="w-full text-sm">
+          <thead class="bg-base-200 text-left">
             <tr>
-              <th class="text-left p-2 font-semibold">{gettext("Type")}</th>
-              <th class="text-left p-2 font-semibold">{gettext("Purpose")}</th>
-              <th class="text-left p-2 font-semibold">{gettext("Subtypes (meta.kind)")}</th>
-              <th class="text-left p-2 font-semibold">{gettext("Key meta fields")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Type")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Purpose")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Subtypes (meta.kind)")}</th>
+              <th class="px-4 py-2 font-semibold">{gettext("Key meta fields")}</th>
             </tr>
           </thead>
-          <tbody>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">note</td>
-              <td class="p-2">Ephemeral thoughts, journal, ideas</td>
-              <td class="p-2 text-xs">thought, journal, idea, meeting, question, quote</td>
-              <td class="p-2 text-xs">kind, date, attendees, author</td>
+          <tbody class="divide-y divide-base-300">
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">note</td>
+              <td class="px-4 py-2">Ephemeral thoughts, journal, ideas</td>
+              <td class="px-4 py-2 text-xs">thought, journal, idea, meeting, question, quote</td>
+              <td class="px-4 py-2 text-xs">kind, date, attendees, author</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">concept</td>
-              <td class="p-2">Abstract ideas, techniques, theories</td>
-              <td class="p-2 text-xs">technique, pattern, discipline, theory</td>
-              <td class="p-2 text-xs">kind, domain, parent_concept</td>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">concept</td>
+              <td class="px-4 py-2">Abstract ideas, techniques, theories</td>
+              <td class="px-4 py-2 text-xs">technique, pattern, discipline, theory</td>
+              <td class="px-4 py-2 text-xs">kind, domain, parent_concept</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">entity</td>
-              <td class="p-2">Concrete things (people, companies, tools)</td>
-              <td class="p-2 text-xs">person, company, product, tool, place, event</td>
-              <td class="p-2 text-xs">kind, aliases, external_url, location</td>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">entity</td>
+              <td class="px-4 py-2">Concrete things (people, companies, tools)</td>
+              <td class="px-4 py-2 text-xs">person, company, product, tool, place, event</td>
+              <td class="px-4 py-2 text-xs">kind, aliases, external_url, location</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">reference</td>
-              <td class="p-2">External sources (articles, papers, videos)</td>
-              <td class="p-2 text-xs">article, paper, video, podcast, book</td>
-              <td class="p-2 text-xs">kind, source_url, published_at</td>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">reference</td>
+              <td class="px-4 py-2">External sources (articles, papers, videos)</td>
+              <td class="px-4 py-2 text-xs">article, paper, video, podcast, book</td>
+              <td class="px-4 py-2 text-xs">kind, source_url, published_at</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">artifact</td>
-              <td class="p-2">Files and deliverables (uploaded via UI)</td>
-              <td class="p-2 text-xs">document, code, design, deliverable, file</td>
-              <td class="p-2 text-xs">kind, filename, mime_type, storage_path, sha256</td>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">artifact</td>
+              <td class="px-4 py-2">Files and deliverables (uploaded via UI)</td>
+              <td class="px-4 py-2 text-xs">document, code, design, deliverable, file</td>
+              <td class="px-4 py-2 text-xs">kind, filename, mime_type, storage_path, sha256</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">goal</td>
-              <td class="p-2">Objectives with target dates and health</td>
-              <td class="p-2 text-xs text-base-content/40">—</td>
-              <td class="p-2 text-xs">health (green/yellow/red), target_date, start_date, team</td>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">goal</td>
+              <td class="px-4 py-2">Objectives with target dates and health</td>
+              <td class="px-4 py-2 text-xs text-base-content/40">—</td>
+              <td class="px-4 py-2 text-xs">health (green/yellow/red), target_date, start_date, team</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">plan</td>
-              <td class="p-2">Time-horizoned plans</td>
-              <td class="p-2 text-xs text-base-content/40">—</td>
-              <td class="p-2 text-xs">horizon (weekly/monthly/quarterly/yearly), status, period</td>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">plan</td>
+              <td class="px-4 py-2">Time-horizoned plans</td>
+              <td class="px-4 py-2 text-xs text-base-content/40">—</td>
+              <td class="px-4 py-2 text-xs">horizon (weekly/monthly/quarterly/yearly), status, period, goal_slug</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">todo</td>
-              <td class="p-2">Actionable items with kanban status</td>
-              <td class="p-2 text-xs text-base-content/40">—</td>
-              <td class="p-2 text-xs">
-                kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, due_date
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">todo</td>
+              <td class="px-4 py-2">Actionable items with kanban status</td>
+              <td class="px-4 py-2 text-xs text-base-content/40">—</td>
+              <td class="px-4 py-2 text-xs">
+                kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, plan_slug, due_date
               </td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">comparison</td>
-              <td class="p-2">Side-by-side comparison of entities</td>
-              <td class="p-2 text-xs text-base-content/40">—</td>
-              <td class="p-2 text-xs">entities, criteria, verdict</td>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">comparison</td>
+              <td class="px-4 py-2">Side-by-side comparison of entities</td>
+              <td class="px-4 py-2 text-xs text-base-content/40">—</td>
+              <td class="px-4 py-2 text-xs">entities, criteria, verdict</td>
             </tr>
-            <tr class="border-t border-base-300">
-              <td class="p-2 font-mono text-primary">query</td>
-              <td class="p-2">Question with answer (LLM wiki style)</td>
-              <td class="p-2 text-xs">factual, conceptual, how_to, opinion</td>
-              <td class="p-2 text-xs">
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">query</td>
+              <td class="px-4 py-2">Question with answer (LLM wiki style)</td>
+              <td class="px-4 py-2 text-xs">factual, conceptual, how_to, opinion</td>
+              <td class="px-4 py-2 text-xs">
                 kind, difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
               </td>
             </tr>
@@ -714,7 +909,7 @@ defmodule DranWeb.DocsLive do
         </table>
       </div>
 
-      <h3>Embeds</h3>
+      <.h2_heading id="embeds" icon="hero-paper-clip" label="Embeds" />
       <p>
         Use <code>![[slug]]</code>
         in page bodies to embed an artifact (image, video, audio, PDF). Embeds
@@ -724,7 +919,7 @@ defmodule DranWeb.DocsLive do
         created automatically via embeddings or explicitly via <code>create_relation</code>.
       </p>
 
-      <h3>Available tools</h3>
+      <.h2_heading id="available-tools" icon="hero-wrench-screwdriver" label="Available tools" />
       <p>
         Once connected, the MCP server exposes the following tools that agents can call:
       </p>
@@ -819,12 +1014,13 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="create_todo"
-          desc="Create a todo with kanban status and priority, optionally linked to a goal."
+          desc="Create a todo with kanban status and priority, optionally linked to a goal and/or plan."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="title" type="string" required="yes" desc="Todo title" />
           <:param name="slug" type="string" required="yes" desc="Todo slug" />
           <:param name="goal_slug" type="string" required="no" desc="Goal this todo belongs to" />
+          <:param name="plan_slug" type="string" required="no" desc="Plan this todo belongs to (goal derived from plan)" />
           <:param
             name="kanban_status"
             type="string"
@@ -838,7 +1034,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="update_todo"
-          desc="Update a todo's status, priority, due date, or goal. Merges meta — only pass changed fields."
+          desc="Update a todo's status, priority, due date, goal, or plan. Merges meta — only pass changed fields."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Todo slug to update" />
@@ -846,6 +1042,7 @@ defmodule DranWeb.DocsLive do
           <:param name="priority" type="string" required="no" desc="New priority" />
           <:param name="due_date" type="string" required="no" desc="New due date YYYY-MM-DD" />
           <:param name="goal_slug" type="string" required="no" desc="New goal slug" />
+          <:param name="plan_slug" type="string" required="no" desc="New plan slug" />
           <:param name="title" type="string" required="no" desc="New title" />
           <:param name="body" type="string" required="no" desc="New body (markdown)" />
           <:param name="tags" type="array" required="no" desc="New tags (replaces existing)" />
@@ -902,6 +1099,8 @@ defmodule DranWeb.DocsLive do
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
+          <:param name="goal_slug" type="string" required="no" desc="Filter by goal slug ('none' for orphans)" />
+          <:param name="plan_slug" type="string" required="no" desc="Filter by plan slug ('none' for orphans)" />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
         </.mcp_tool>
 
@@ -951,7 +1150,7 @@ defmodule DranWeb.DocsLive do
             name="agent_type"
             type="string"
             required="yes"
-            desc="research, ingest, qa, curator, link_gardener, weekly_review"
+            desc="research, ingest, ask, curator, link_gardener, weekly_review"
           />
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />
@@ -981,7 +1180,15 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
       </div>
 
-      <h3>Resources</h3>
+      <.callout variant={:warning}>
+        <p>
+          <strong>Deprecated:</strong>
+          <code>semantic_search</code> is deprecated — use <code>search</code> with
+          <code>strategy: "semantic"</code> instead.
+        </p>
+      </.callout>
+
+      <.h2_heading id="resources" icon="hero-archive-box" label="Resources" />
       <p>
         Agents can also read resources for structured access:
       </p>
@@ -1004,7 +1211,7 @@ defmodule DranWeb.DocsLive do
         </div>
       </div>
 
-      <h3>Prompts</h3>
+      <.h2_heading id="prompts" icon="hero-sparkles" label="Prompts" />
       <p>
         Pre-built prompt templates for common agent workflows:
       </p>
@@ -1027,38 +1234,28 @@ defmodule DranWeb.DocsLive do
         </div>
       </div>
 
-      <h3>Example: initialize session</h3>
-      <pre phx-no-curly-interpolation><code>
-        POST /api/mcp
-        Content-Type: application/json
-
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-         "params": {"protocolVersion": "2025-03-26", "capabilities": {},
-                    "clientInfo": {"name": "my-agent", "version": "1.0"}}}
-      </code></pre>
-
+      <.h2_heading id="example-initialize" icon="hero-code-bracket" label="Example: initialize session" />
+      <.code_block
+        id="mcp-example-init"
+        code={"{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"initialize\",\n \"params\": {\"protocolVersion\": \"2025-03-26\", \"capabilities\": {},\n            \"clientInfo\": {\"name\": \"my-agent\", \"version\": \"1.0\"}}}"}
+      />
       <p>
         The response includes a <code>Mcp-Session-Id</code> header. Use it in subsequent requests:
       </p>
+      <.code_block
+        id="mcp-example-call"
+        code={"{\"jsonrpc\": \"2.0\", \"id\": 2, \"method\": \"tools/call\",\n \"params\": {\"name\": \"search\",\n            \"arguments\": {\"query\": \"elixir\", \"context\": \"personal\"}}}"}
+      />
 
-      <pre phx-no-curly-interpolation><code>
-        POST /api/mcp
-        Content-Type: application/json
-        Mcp-Session-Id: your-session-id
-
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-         "params": {"name": "search",
-                    "arguments": {"query": "elixir", "context": "personal"}}}
-      </code></pre>
-
-      <h3>Client configuration</h3>
+      <h3 id="mcp-client-configuration" class="scroll-mt-20">Client configuration</h3>
       <p>
         To use Dran with an MCP-compatible client (e.g. Claude Desktop), add this to your
         client config:
       </p>
-      <pre phx-no-curly-interpolation><code>
-        {"mcpServers": {"dran": {"url": "http://localhost:4000/api/mcp", "headers": {"Authorization": "Bearer dran-token"}}}}
-      </code></pre>
+      <.code_block
+        id="mcp-client-config"
+        code={"{\"mcpServers\": {\"dran\": {\"url\": \"http://localhost:4000/api/mcp\", \"headers\": {\"Authorization\": \"Bearer dran-token\"}}}}"}
+      />
     </div>
     """
   end
