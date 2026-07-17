@@ -21,6 +21,7 @@ defmodule Dran.Brain.PageMeta do
     # Common
     field :kind, :string
     field :goal_slug, :string
+    field :plan_slug, :string
 
     # note sub-types
     field :date, :date
@@ -108,6 +109,7 @@ defmodule Dran.Brain.PageMeta do
     [
       :kind,
       :goal_slug,
+      :plan_slug,
       :date,
       :feasibility,
       :impact,
@@ -283,7 +285,8 @@ defmodule Dran.Brain.PageMeta do
       {:select, "priority", "Priority",
        [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
       {:date, "due_date", "Due date"},
-      {:text, "goal_slug", "Goal slug"}
+      {:text, "goal_slug", "Goal slug"},
+      {:text, "plan_slug", "Plan slug"}
     ]
   end
 

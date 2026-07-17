@@ -93,6 +93,14 @@ defmodule Dran.Brain do
   - `:type` — filter by page_type
   - `:tag` — filter by a single tag
   - `:status` — filter by kanban_status (for todos)
+  - `:goal_slug` — filter by planning goal. A page matches when its own
+    `meta.goal_slug` equals the value OR (for todos) its `meta.plan_slug`
+    points to a plan whose `meta.goal_slug` equals the value. The special
+    value `"none"` matches pages with no direct goal_slug and no plan
+    goal_slug. Mainly meaningful with `type: "plan"` or `type: "todo"`.
+  - `:plan_slug` — filter by `meta.plan_slug`. The special value `"none"`
+    matches pages with no/empty plan_slug. Mainly meaningful with
+    `type: "todo"`.
   - `:limit` — limit results (default 50)
   - `:include_body` — include full body (default false, lightweight listing)
 
@@ -105,6 +113,8 @@ defmodule Dran.Brain do
     status = Keyword.get(opts, :status)
     owner = Keyword.get(opts, :owner)
     created_by = Keyword.get(opts, :created_by)
+    goal_slug = Keyword.get(opts, :goal_slug)
+    plan_slug = Keyword.get(opts, :plan_slug)
     limit = Keyword.get(opts, :limit, 50)
     include_body = Keyword.get(opts, :include_body, false)
 
@@ -145,6 +155,9 @@ defmodule Dran.Brain do
       |> maybe_filter_status(status)
       |> maybe_filter_owner(owner)
       |> maybe_filter_created_by(created_by)
+      |> maybe_filter_plan_slug(plan_slug)
+      |> maybe_filter_goal_slug(goal_slug)
+      |> maybe_distinct_for_planning(goal_slug)
       |> order_by([p], desc: p.updated_at)
       |> limit(^limit)
 
@@ -186,6 +199,70 @@ defmodule Dran.Brain do
   defp maybe_filter_created_by(query, created_by) do
     where(query, [p], p.created_by == ^created_by)
   end
+
+  # ── Planning hierarchy filters (goal_slug / plan_slug) ─────────────────────
+  #
+  # meta is a jsonb/map column; we read it via the `p.meta->>'key'` fragment.
+  # plan_slug: nil → no filter; "none" → empty/null plan_slug; value → exact match.
+  defp maybe_filter_plan_slug(query, nil), do: query
+
+  defp maybe_filter_plan_slug(query, "none") do
+    where(
+      query,
+      [p],
+      is_nil(fragment("?->>'plan_slug'", p.meta)) or fragment("?->>'plan_slug'", p.meta) == ""
+    )
+  end
+
+  defp maybe_filter_plan_slug(query, plan_slug) do
+    where(query, [p], fragment("?->>'plan_slug'", p.meta) == ^plan_slug)
+  end
+
+  # goal_slug: nil → no filter; "none" → no direct goal AND no plan-with-goal;
+  # value → direct match OR (via join) the plan pointed to by plan_slug has that goal.
+  defp maybe_filter_goal_slug(query, nil), do: query
+
+  defp maybe_filter_goal_slug(query, "none") do
+    # LEFT JOIN the plan page so we can check both the page's own goal_slug
+    # and the goal_slug of the plan it references.
+    query
+    |> join(:left, [p], plan in Page,
+      on:
+        plan.slug == fragment("?->>'plan_slug'", p.meta) and
+          plan.context_id == p.context_id and
+          plan.page_type == "plan"
+    )
+    |> where(
+      [p, plan],
+      (is_nil(fragment("?->>'goal_slug'", p.meta)) or
+         fragment("?->>'goal_slug'", p.meta) == "") and
+        (is_nil(fragment("?->>'goal_slug'", plan.meta)) or
+           fragment("?->>'goal_slug'", plan.meta) == "")
+    )
+  end
+
+  defp maybe_filter_goal_slug(query, goal_slug) do
+    query
+    |> join(:left, [p], plan in Page,
+      on:
+        plan.slug == fragment("?->>'plan_slug'", p.meta) and
+          plan.context_id == p.context_id and
+          plan.page_type == "plan"
+    )
+    |> where(
+      [p, plan],
+      fragment("?->>'goal_slug'", p.meta) == ^goal_slug or
+        fragment("?->>'goal_slug'", plan.meta) == ^goal_slug
+    )
+  end
+
+  # The goal_slug join can duplicate rows when a todo matches both via its own
+  # goal_slug and via its plan's goal_slug. Dedupe when that filter is active.
+  # We use `distinct: true` (full-row DISTINCT) rather than DISTINCT ON (p.id)
+  # so it doesn't conflict with the subsequent order_by(desc: updated_at).
+  # Duplicated rows from the join are byte-identical, so this is safe.
+  defp maybe_distinct_for_planning(query, nil), do: query
+  defp maybe_distinct_for_planning(query, _goal_slug), do: distinct(query, true)
 
   defp apply_rerank(query_string, results, opts) do
     if Keyword.get(opts, :rerank, Dran.Inference.Config.use_rerank?()) do
@@ -303,6 +380,7 @@ defmodule Dran.Brain do
         })
 
         resolve_embeds(page)
+        sync_planning_relations(page)
 
         broadcast_page_change(page.context_id, :created, page)
         Dran.Embeddings.schedule(page)
@@ -386,6 +464,7 @@ defmodule Dran.Brain do
         })
 
         reresolve_embeds(updated_page)
+        sync_planning_relations(updated_page, page)
 
         broadcast_page_change(updated_page.context_id, :updated, updated_page)
         Dran.Embeddings.schedule(updated_page)
@@ -699,6 +778,107 @@ defmodule Dran.Brain do
         {count, Enum.reverse(errors)}
     end
   end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Planning hierarchy materialization (part_of relations)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Synchronize `part_of` relations to match the page's current `meta`.
+
+  Given a page of type `plan` or `todo`, this ensures the page's `part_of`
+  relation to its goal/plan matches its current `meta.goal_slug` /
+  `meta.plan_slug`. Stale relations pointing to a *previous* goal/plan slug
+  are removed; the new one is created (idempotently).
+
+  `prior_page` is the page as it was *before* the update (used to know which
+  old slugs to clean up). Pass `nil` (or omit) for freshly-created pages.
+
+  ## Rules
+
+  - **plan** with `goal_slug` → ensures `part_of` plan→goal.
+  - **todo** with `plan_slug` → ensures `part_of` todo→plan.
+  - **todo** with `goal_slug` (and no `plan_slug`) → ensures `part_of` todo→goal.
+  - If the slug changed or was removed, the old `part_of` to that previous
+    target is deleted. We only ever delete the `part_of` whose target slug
+    equals the *prior* meta value — manually-created `part_of` relations to
+    other targets are never touched.
+  - If the target page (goal/plan) doesn't exist yet, no relation is created
+    (the lint report will flag the broken ref). Never raises.
+  """
+  def sync_planning_relations(page, prior_page \\ nil)
+
+  def sync_planning_relations(%Page{page_type: type} = page, prior_page)
+      when type in ~w(plan todo) do
+    context_id = page.context_id
+    new_goal = meta_string(page.meta, "goal_slug")
+    new_plan = meta_string(page.meta, "plan_slug")
+    prior_goal = if prior_page, do: meta_string(prior_page.meta, "goal_slug"), else: nil
+    prior_plan = if prior_page, do: meta_string(prior_page.meta, "plan_slug"), else: nil
+
+    case type do
+      "plan" ->
+        # Clean up a prior goal link if it differs from the current one.
+        maybe_drop_planning_part_of(page.slug, prior_goal, new_goal, context_id)
+        ensure_part_of(page.slug, new_goal, context_id)
+
+      "todo" ->
+        # plan_slug takes precedence; when present, the todo hangs off the plan
+        # and its own goal_slug is ignored for materialization.
+        maybe_drop_planning_part_of(page.slug, prior_plan, new_plan, context_id)
+        ensure_part_of(page.slug, new_plan, context_id)
+
+        if blank?(new_plan) do
+          # No plan: manage the direct todo→goal link instead.
+          maybe_drop_planning_part_of(page.slug, prior_goal, new_goal, context_id)
+          ensure_part_of(page.slug, new_goal, context_id)
+        else
+          # A plan is set now: drop any stale direct todo→goal part_of left
+          # over from when the todo hung directly off the goal.
+          maybe_drop_planning_part_of(page.slug, prior_goal, nil, context_id)
+        end
+    end
+
+    :ok
+  end
+
+  def sync_planning_relations(_page, _prior_page), do: :ok
+
+  # Create a part_of source→target (by slug) if the target exists. Idempotent.
+  defp ensure_part_of(_source_slug, nil, _context_id), do: :ok
+  defp ensure_part_of(_source_slug, "", _context_id), do: :ok
+
+  defp ensure_part_of(source_slug, target_slug, context_id) do
+    create_relation_by_slugs(source_slug, target_slug, "part_of", context_id)
+    :ok
+  end
+
+  # Delete the part_of source→prior_target_slug ONLY when that slug is no
+  # longer the current one. This is what keeps manual part_of relations to
+  # unrelated targets intact: we only ever touch the exact prior slug.
+  defp maybe_drop_planning_part_of(_source_slug, nil, _new_slug, _context_id), do: :ok
+
+  defp maybe_drop_planning_part_of(_source_slug, "", _new_slug, _context_id), do: :ok
+
+  defp maybe_drop_planning_part_of(_source_slug, prior_slug, prior_slug, _context_id),
+    do: :ok
+
+  defp maybe_drop_planning_part_of(source_slug, prior_slug, _new_slug, context_id) do
+    delete_relation_by_slugs(source_slug, prior_slug, "part_of", context_id)
+    :ok
+  end
+
+  defp meta_string(nil, _key), do: nil
+  defp meta_string(meta, key) when is_map(meta) do
+    case Map.get(meta, key) do
+      val when is_binary(val) -> val
+      _ -> nil
+    end
+  end
+
+  defp blank?(nil), do: true
+  defp blank?(""), do: true
+  defp blank?(_), do: false
 
   @doc """
   Build the full graph (nodes + edges) for a context.
@@ -1429,18 +1609,89 @@ defmodule Dran.Brain do
   end
 
   @doc """
+  Find todos whose `meta.plan_slug` does not resolve to an existing plan page
+  in the same context (broken planning references).
+  """
+  def broken_plan_refs(context_id) do
+    # All todos with a non-empty plan_slug whose slug isn't a plan in the context.
+    known_plan_slugs =
+      from(p in Page,
+        where: p.context_id == ^context_id and p.page_type == "plan",
+        select: p.slug
+      )
+
+    Repo.all(
+      from p in Page,
+        where:
+          p.context_id == ^context_id and p.page_type == "todo" and
+            not is_nil(fragment("?->>'plan_slug'", p.meta)) and
+            fragment("?->>'plan_slug'", p.meta) != "" and
+            fragment("?->>'plan_slug'", p.meta) not in subquery(known_plan_slugs),
+        order_by: [asc: p.title],
+        select: %{slug: p.slug, title: p.title, page_type: p.page_type}
+    )
+  end
+
+  @doc """
+  Find plans and todos whose `meta.goal_slug` does not resolve to an existing
+  goal page in the same context (broken planning references).
+  """
+  def broken_goal_refs(context_id) do
+    known_goal_slugs =
+      from(p in Page,
+        where: p.context_id == ^context_id and p.page_type == "goal",
+        select: p.slug
+      )
+
+    Repo.all(
+      from p in Page,
+        where:
+          p.context_id == ^context_id and p.page_type in ^["plan", "todo"] and
+            not is_nil(fragment("?->>'goal_slug'", p.meta)) and
+            fragment("?->>'goal_slug'", p.meta) != "" and
+            fragment("?->>'goal_slug'", p.meta) not in subquery(known_goal_slugs),
+        order_by: [asc: p.title],
+        select: %{slug: p.slug, title: p.title, page_type: p.page_type}
+    )
+  end
+
+  @doc """
+  Find todos with neither a `plan_slug` nor a `goal_slug` — informational,
+  not an error (inbox/orphan todos are legitimate).
+  """
+  def unplanned_todos(context_id) do
+    Repo.all(
+      from p in Page,
+        where:
+          p.context_id == ^context_id and p.page_type == "todo" and
+            (is_nil(fragment("?->>'plan_slug'", p.meta)) or
+               fragment("?->>'plan_slug'", p.meta) == "") and
+            (is_nil(fragment("?->>'goal_slug'", p.meta)) or
+               fragment("?->>'goal_slug'", p.meta) == ""),
+        order_by: [asc: p.title],
+        select: %{slug: p.slug, title: p.title, page_type: p.page_type}
+    )
+  end
+
+  @doc """
   Run a full lint report for a context.
 
   Returns a map with:
   - `:orphans` — pages with no inbound links
   - `:stale` — pages not updated in 90 days
   - `:contested` — pages flagged as contested
+  - `:broken_plan_refs` — todos whose plan_slug doesn't resolve to a plan
+  - `:broken_goal_refs` — plans/todos whose goal_slug doesn't resolve to a goal
+  - `:unplanned_todos` — todos with no plan_slug and no goal_slug (informational)
   """
   def lint(context_id) do
     %{
       orphans: orphan_pages(context_id),
       stale: stale_pages(context_id),
-      contested: contested_pages(context_id)
+      contested: contested_pages(context_id),
+      broken_plan_refs: broken_plan_refs(context_id),
+      broken_goal_refs: broken_goal_refs(context_id),
+      unplanned_todos: unplanned_todos(context_id)
     }
   end
 
