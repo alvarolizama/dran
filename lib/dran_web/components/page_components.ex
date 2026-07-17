@@ -75,6 +75,13 @@ defmodule DranWeb.PageComponents do
             <div class="flex gap-2 shrink-0">
               {render_slot(@actions)}
               <button
+                phx-click="delete_page"
+                data-confirm="Are you sure? This cannot be undone."
+                class="btn btn-ghost btn-sm text-error"
+              >
+                <.icon name="hero-trash" class="size-4" /> Delete
+              </button>
+              <button
                 :if={Dran.Firecrawl.enabled?()}
                 phx-click="enrich_page"
                 phx-value-slug={@page.slug}

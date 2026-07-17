@@ -25,6 +25,11 @@ defmodule DranWeb.PageEdit do
   """
 
   use Phoenix.LiveView
+  use Phoenix.VerifiedRoutes,
+    endpoint: DranWeb.Endpoint,
+    router: DranWeb.Router,
+    statics: DranWeb.static_paths()
+
   import Phoenix.LiveView, only: [put_flash: 3, push_navigate: 2, push_patch: 2, push_event: 3]
   import Phoenix.Component, only: [to_form: 2, assign: 2]
   alias Phoenix.LiveView.Upload, as: Upload
@@ -194,6 +199,23 @@ defmodule DranWeb.PageEdit do
 
   def handle_event("body_change", _params, socket) do
     {:noreply, socket}
+  end
+
+  def handle_event("delete_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
+    case Brain.delete_page(page) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Page deleted.")
+         |> push_navigate(to: ~p"/")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not delete page.")}
+    end
+  end
+
+  def handle_event("delete_page", _params, socket) do
+    {:noreply, put_flash(socket, :error, "Cannot delete: no page loaded.")}
   end
 
   def handle_event("request_upload", _params, socket) do
