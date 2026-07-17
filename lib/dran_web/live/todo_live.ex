@@ -38,6 +38,7 @@ defmodule DranWeb.TodoLive do
   # Render
   # ──────────────────────────────────────────────────────────────────────────
 
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -46,15 +47,16 @@ defmodule DranWeb.TodoLive do
       current_user={@current_user}
       context_slug={@context_slug}
       contexts={@contexts}
+      fluid={@live_action == :index}
     >
       <div
         :if={@live_action == :index}
         id="kanban-board"
         data-testid="todo-board"
         phx-hook=".KanbanBoard"
-        class="p-6"
+        class="flex flex-col h-[calc(100vh-4rem)] p-4"
       >
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-3 shrink-0">
           <div>
             <h1 class="text-title">{gettext("Todos")}</h1>
             <p class="text-caption mt-0.5">
@@ -69,7 +71,7 @@ defmodule DranWeb.TodoLive do
         <form
           :if={@show_form}
           phx-submit="create_todo"
-          class="mb-4 p-4 surface-1"
+          class="mb-3 p-4 surface-1 shrink-0"
         >
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <.input
@@ -110,13 +112,13 @@ defmodule DranWeb.TodoLive do
           </div>
         </form>
 
-        <div class="flex gap-4 overflow-x-auto pb-4">
+        <div class="flex gap-3 overflow-x-auto pb-2 flex-1 min-h-0">
           <div
             :for={{status, label, badge_class} <- @kanban_columns}
             data-kanban-status={status}
-            class="w-72 shrink-0 flex flex-col surface-1 transition-all"
+            class="flex-1 min-w-56 flex flex-col surface-1 transition-all min-h-0"
           >
-            <div class="flex items-center justify-between px-3 py-2 border-b border-base-300">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-base-300 shrink-0">
               <span class="text-heading">{label}</span>
               <span
                 :if={column_count(@items, status) > 0}
@@ -125,7 +127,7 @@ defmodule DranWeb.TodoLive do
                 {column_count(@items, status)}
               </span>
             </div>
-            <div class="p-2 space-y-2 min-h-[120px] flex-1 overflow-y-auto">
+            <div class="p-2 space-y-2 flex-1 overflow-y-auto min-h-0">
               <div
                 :for={item <- column_items(@items, status)}
                 data-kanban-slug={item.slug}
@@ -372,11 +374,16 @@ defmodule DranWeb.TodoLive do
   # Lifecycle
   # ──────────────────────────────────────────────────────────────────────────
 
+  @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
     socket =
       if context do
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
+        end
+
         allow_upload(
           socket,
           :file,
@@ -406,6 +413,7 @@ defmodule DranWeb.TodoLive do
      )}
   end
 
+  @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
     context = socket.assigns.context
 
@@ -480,6 +488,20 @@ defmodule DranWeb.TodoLive do
   # Events
   # ──────────────────────────────────────────────────────────────────────────
 
+  @impl true
+  def handle_info({:page_changed, _action, _page}, socket) do
+    # A page changed (agent, MCP, another tab) — reload the board if we're on
+    # the index so moved/created/deleted todos appear in real time.
+    if socket.assigns.live_action == :index and socket.assigns.context do
+      {:noreply, assign(socket, items: Brain.list_todos(socket.assigns.context.id))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, switch_tab(socket, tab)}
   end
