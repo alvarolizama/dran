@@ -71,7 +71,7 @@ defmodule DranWeb.Router do
     |> Plug.Conn.halt()
   end
 
-  # ── Public routes (login page, session) ──
+  # ── Public routes (login page, session, health) ──
 
   scope "/", DranWeb do
     pipe_through :browser
@@ -79,6 +79,14 @@ defmodule DranWeb.Router do
     post "/session", SessionController, :create
     delete "/session", SessionController, :delete
     live "/login", LoginLive, :index
+  end
+
+  # ── Public health check (no auth) ──
+
+  scope "/", DranWeb do
+    pipe_through :api
+
+    get "/health", HealthController, :show
   end
 
   # ── Authenticated web UI ──
@@ -165,6 +173,7 @@ defmodule DranWeb.Router do
     get "/contexts/:slug", ContextController, :show
     put "/contexts/:slug", ContextController, :update
     delete "/contexts/:slug", ContextController, :delete
+    get "/contexts/:slug/export", ExportController, :show
 
     # Pages
     get "/pages", PageController, :index
