@@ -250,17 +250,48 @@ const CommandPalette = {
   }
 }
 
+const ScrollBottom = {
+  mounted() {
+    this.scrollToBottom()
+  },
+  updated() {
+    this.scrollToBottom()
+  },
+  scrollToBottom() {
+    this.el.scrollTop = this.el.scrollHeight
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Graph3D, CommandPalette},
+  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Graph3D, CommandPalette, ScrollBottom},
 })
 
 // Show progress bar on live navigation and form submits
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
+
+// ⌘⇧C / Ctrl+Shift+C — focus and open the context selector dropdown
+window.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "c" || e.key === "C")) {
+    const select = document.getElementById("context-selector")
+    if (select) {
+      e.preventDefault()
+      select.focus()
+      // Show the dropdown options (works in most browsers)
+      try {
+        const event = new MouseEvent("mousedown")
+        select.dispatchEvent(event)
+      } catch (_err) {
+        // Fallback: some browsers need a different approach
+        select.size = select.options.length
+      }
+    }
+  }
+})
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
