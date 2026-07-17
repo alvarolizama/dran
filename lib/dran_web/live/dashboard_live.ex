@@ -7,6 +7,7 @@ defmodule DranWeb.DashboardLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
+  alias Dran.Settings
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
@@ -123,6 +124,132 @@ defmodule DranWeb.DashboardLive do
               icon="hero-link-slash"
               color={if (@stats[:broken_link_count] || 0) > 0, do: "text-error", else: "text-success"}
             />
+          </div>
+
+          <%!-- Brain health --%>
+          <div class="surface-2 p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-heading">{gettext("Brain health")}</h2>
+              <span :if={@brain_metrics[:contested_count] > 0} class="text-xs text-warning">
+                {gettext("%{count} contested", count: @brain_metrics[:contested_count])}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <%!-- This week --%>
+              <div class="flex items-center gap-3">
+                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-info/10">
+                  <.icon name="hero-calendar-days" class="size-5 text-info" />
+                </div>
+                <div class="min-w-0">
+                  <div class="text-2xl font-bold tabular-nums">
+                    {@brain_metrics[:pages_this_week] || 0}
+                  </div>
+                  <div class="text-caption">{gettext("This week")}</div>
+                  <div :if={(@brain_metrics[:pages_this_week] || 0) != (@brain_metrics[:pages_last_week] || 0)}
+                    class={[
+                      "text-xs font-medium",
+                      if((@brain_metrics[:pages_this_week] || 0) > (@brain_metrics[:pages_last_week] || 0),
+                        do: "text-success",
+                        else: "text-base-content/50"
+                      )
+                    ]}>
+                    {delta_label(@brain_metrics[:pages_this_week] || 0, @brain_metrics[:pages_last_week] || 0)}
+                  </div>
+                </div>
+              </div>
+
+              <%!-- Embedding coverage --%>
+              <div class="flex items-center gap-3">
+                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-accent/10">
+                  <.icon name="hero-cpu-chip" class="size-5 text-accent" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="text-2xl font-bold tabular-nums">
+                    {trunc((@brain_metrics[:embedding_coverage] || 0.0) * 100)}%
+                  </div>
+                  <div class="text-caption">{gettext("Embedding coverage")}</div>
+                  <div class="h-1.5 rounded-full bg-base-200 overflow-hidden mt-1">
+                    <div
+                      class={[
+                        "h-full rounded-full transition-all",
+                        if((@brain_metrics[:embedding_coverage] || 0.0) >= 0.9,
+                          do: "bg-success",
+                          else: "bg-warning"
+                        )
+                      ]}
+                      style={"width: #{trunc((@brain_metrics[:embedding_coverage] || 0.0) * 100)}%"}
+                    >
+                    </div>
+                  </div>
+                  <div :if={(@brain_metrics[:embedding_coverage] || 0.0) < 0.9} class="text-xs text-warning mt-0.5">
+                    {gettext("Below 90%")}
+                  </div>
+                </div>
+              </div>
+
+              <%!-- Relations by type --%>
+              <div class="flex items-center gap-3">
+                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-secondary/10">
+                  <.icon name="hero-share" class="size-5 text-secondary" />
+                </div>
+                <div class="min-w-0">
+                  <div class="text-2xl font-bold tabular-nums">
+                    {relations_total(@brain_metrics[:relations_by_type])}
+                  </div>
+                  <div class="text-caption">{gettext("Relations")}</div>
+                  <div class="text-xs text-base-content/60 mt-0.5">
+                    {gettext("semantic: %{n}", n: (@brain_metrics[:relations_by_type] || %{})["semantic"] || 0)}
+                    · {gettext("related: %{n}", n: (@brain_metrics[:relations_by_type] || %{})["related"] || 0)}
+                    · {gettext("embeds: %{n}", n: (@brain_metrics[:relations_by_type] || %{})["embeds"] || 0)}
+                  </div>
+                </div>
+              </div>
+
+              <%!-- Agents --%>
+              <div class="flex items-center gap-3">
+                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-primary/10">
+                  <.icon name="hero-user-group" class="size-5 text-primary" />
+                </div>
+                <div class="min-w-0">
+                  <div class="text-2xl font-bold tabular-nums">
+                    {(@brain_metrics[:agents] || %{})[:sessions_this_week] || 0}
+                  </div>
+                  <div class="text-caption">{gettext("Agents")}</div>
+                  <div class="text-xs text-base-content/60 mt-0.5">
+                    {gettext("%{n} tokens", n: (@brain_metrics[:agents] || %{})[:tokens_this_week] || 0)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <%!-- Daily note CTA --%>
+            <div :if={@daily_note_status in [:missing, :empty]}
+              class="flex items-center justify-between p-3 rounded-lg bg-base-200">
+              <div class="flex items-center gap-2">
+                <.icon name="hero-pencil-square" class="size-5 text-primary" />
+                <span class="text-sm">{gettext("No daily note for today yet.")}</span>
+              </div>
+              <button
+                phx-click="open_daily_note"
+                class="btn btn-primary btn-sm transition-colors active:scale-95"
+              >
+                {gettext("Open today's note")}
+              </button>
+            </div>
+            <div :if={@daily_note_status == :exists}
+              class="flex items-center justify-between p-3 rounded-lg bg-base-200">
+              <div class="flex items-center gap-2">
+                <.icon name="hero-check-circle" class="size-5 text-success" />
+                <span class="text-sm">{gettext("Today's daily note is ready.")}</span>
+              </div>
+              <.link
+                navigate={"/notes/daily-#{Date.to_iso8601(Date.utc_today())}"}
+                class="btn btn-ghost btn-sm transition-colors active:scale-95"
+              >
+                {gettext("Open today's note")}
+              </.link>
+            </div>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -245,17 +372,28 @@ defmodule DranWeb.DashboardLive do
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
-    stats =
+    {stats, brain_metrics, daily_note_status} =
       if context do
-        Brain.stats(context.id)
+        metrics = Brain.metrics(context.id)
+
+        daily_note_status =
+          if Settings.get("daily_note_enabled") do
+            compute_daily_note_status(context.id)
+          else
+            :disabled
+          end
+
+        {Brain.stats(context.id), metrics, daily_note_status}
       else
-        %{}
+        {%{}, %{}, :disabled}
       end
 
     {:ok,
      assign(socket,
        context: context,
        stats: stats,
+       brain_metrics: brain_metrics,
+       daily_note_status: daily_note_status,
        kanban_columns: @kanban_columns,
        nav_groups: @nav_groups,
        page_title: gettext("Dashboard")
@@ -264,6 +402,25 @@ defmodule DranWeb.DashboardLive do
 
   def handle_params(_params, _url, socket) do
     {:noreply, socket}
+  end
+
+  def handle_event("open_daily_note", _params, socket) do
+    if socket.assigns.context do
+      {:ok, _page} = Brain.ensure_daily_note(socket.assigns.context.id)
+      slug = "daily-" <> Date.to_iso8601(Date.utc_today())
+      {:noreply, push_navigate(socket, to: "/notes/#{slug}")}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  defp compute_daily_note_status(context_id) do
+    slug = "daily-" <> Date.to_iso8601(Date.utc_today())
+
+    case Brain.get_page_by_slug(slug, context_id) do
+      nil -> :missing
+      %{body: body} -> if body == "", do: :empty, else: :exists
+    end
   end
 
   # ── Components ──
@@ -346,6 +503,24 @@ defmodule DranWeb.DashboardLive do
 
   defp pct(count, total) when total > 0, do: trunc(count / total * 100)
   defp pct(_count, _total), do: 0
+
+  defp delta_label(this_week, last_week) do
+    diff = this_week - last_week
+
+    if diff > 0 do
+      "+#{diff}"
+    else
+      "#{diff}"
+    end
+  end
+
+  defp relations_total(relations_by_type) when is_map(relations_by_type) do
+    relations_by_type
+    |> Map.values()
+    |> Enum.sum()
+  end
+
+  defp relations_total(_), do: 0
 
   defp page_path(%Dran.Brain.Page{} = page) do
     "/#{PageTypes.path(page.page_type)}/#{page.slug}"
