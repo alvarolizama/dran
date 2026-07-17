@@ -15,6 +15,7 @@ defmodule Dran.Application do
     Dran.Inference.QueueSupervisor,
     Dran.Embeddings.Supervisor,
     Dran.Relations.Supervisor,
+    Dran.Scheduler,
     DranWeb.Endpoint
   ]
 

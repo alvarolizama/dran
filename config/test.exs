@@ -27,6 +27,11 @@ config :dran, Dran.Mailer, adapter: Swoosh.Adapters.Test
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
+# Disable Quantum scheduler jobs during tests so nothing fires while the
+# suite runs. The Scheduler process still starts (so the supervision tree
+# shape is verified), but `jobs: []` means it has nothing to execute.
+config :dran, Dran.Scheduler, jobs: []
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

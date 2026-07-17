@@ -66,6 +66,26 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Quantum scheduler jobs
+#
+# Defined for dev/prod only. `config/test.exs` sets `jobs: []` to disable the
+# scheduler during the test suite. We guard with `config_env() != :test` here
+# because `Config` deep-merges keyword lists, so an empty `jobs: []` in
+# test.exs would NOT override the nested job entries defined below.
+if config_env() != :test do
+  config :dran, Dran.Scheduler,
+    jobs: [
+      curator_daily: [
+        schedule: "0 6 * * *",
+        task: {Dran.Agent.Curator, :run_scheduled, []}
+      ],
+      weekly_review: [
+        schedule: "0 8 * * 0",
+        task: {Dran.Agent.WeeklyReview, :run_scheduled, []}
+      ]
+    ]
+end
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
