@@ -5,7 +5,8 @@ defmodule DranWeb.PageListComponents do
 
   use Phoenix.Component
   import DranWeb.CoreComponents, only: [icon: 1]
-  import DranWeb.PageComponents, only: [type_icon: 1, type_path: 1, type_plural: 1]
+
+  alias DranWeb.PageTypes
 
   attr :pages, :list, required: true
   attr :page_type, :string, default: nil
@@ -16,9 +17,9 @@ defmodule DranWeb.PageListComponents do
     <div class="p-6">
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">
-          {if @page_type, do: type_plural(@page_type), else: "All Pages"}
+          {if @page_type, do: PageTypes.plural(@page_type), else: "All Pages"}
         </h1>
-        <.link navigate={"/#{type_path(@page_type)}/new"} class="btn btn-primary btn-sm">
+        <.link navigate={"/#{PageTypes.path(@page_type)}/new"} class="btn btn-primary btn-sm">
           <.icon name="hero-plus" class="w-4 h-4" /> New
         </.link>
       </div>
@@ -35,7 +36,7 @@ defmodule DranWeb.PageListComponents do
           phx-value-slug={page.slug}
         >
           <div class="flex items-center gap-2">
-            <.icon name={type_icon(page.page_type)} class="w-4 h-4 text-base-content/40" />
+            <.icon name={PageTypes.icon(page.page_type)} class="w-4 h-4 text-base-content/40" />
             <span class="font-medium">{page.title}</span>
           </div>
           <p :if={page.summary} class="text-sm text-base-content/60 mt-1">{page.summary}</p>

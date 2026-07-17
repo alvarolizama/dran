@@ -9,6 +9,7 @@ defmodule DranWeb.PageComponents do
 
   alias Dran.Brain
   alias Dran.Brain.Page
+  alias DranWeb.PageTypes
 
   attr :page, :map, required: true
   attr :relations, :map, default: %{outbound: [], inbound: []}
@@ -50,9 +51,9 @@ defmodule DranWeb.PageComponents do
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0">
               <div class="flex items-center gap-2 mb-1">
-                <.icon name={type_icon(@page.page_type)} class="w-5 h-5 text-base-content/60" />
+                <.icon name={PageTypes.icon(@page.page_type)} class="w-5 h-5 text-base-content/60" />
                 <span class="text-sm text-base-content/60 uppercase tracking-wider">
-                  {type_label(@page.page_type)}
+                  {PageTypes.label(@page.page_type)}
                 </span>
               </div>
               <h1 class="text-3xl font-bold break-words">{@page.title}</h1>
@@ -165,7 +166,7 @@ defmodule DranWeb.PageComponents do
               <div :if={length(@relations.outbound) > 0}>
                 <div class="text-xs text-base-content/40 mb-1">Outbound</div>
                 <div :for={rel <- @relations.outbound} class="text-sm">
-                  <.link navigate={page_show_path(rel.target)} class="text-primary hover:underline">
+                  <.link navigate={PageTypes.page_show_path(rel.target)} class="text-primary hover:underline">
                     {rel.target.title}
                   </.link>
                   <span class="text-base-content/40 text-xs ml-1">{rel.relation_type}</span>
@@ -175,7 +176,7 @@ defmodule DranWeb.PageComponents do
               <div :if={length(@relations.inbound) > 0}>
                 <div class="text-xs text-base-content/40 mb-1">Inbound</div>
                 <div :for={rel <- @relations.inbound} class="text-sm">
-                  <.link navigate={page_show_path(rel.source)} class="text-primary hover:underline">
+                  <.link navigate={PageTypes.page_show_path(rel.source)} class="text-primary hover:underline">
                     {rel.source.title}
                   </.link>
                   <span class="text-base-content/40 text-xs ml-1">{rel.relation_type}</span>
@@ -304,65 +305,11 @@ defmodule DranWeb.PageComponents do
 
   # ── Helpers ──
 
-  def type_icon("note"), do: "hero-document-text"
-  def type_icon("comparison"), do: "hero-scale"
-  def type_icon("plan"), do: "hero-calendar-days"
-  def type_icon("todo"), do: "hero-check-circle"
-  def type_icon("goal"), do: "hero-flag"
-  def type_icon("entity"), do: "hero-user"
-  def type_icon("concept"), do: "hero-light-bulb"
-  def type_icon("reference"), do: "hero-bookmark"
-  def type_icon("artifact"), do: "hero-paper-clip"
-  def type_icon("query"), do: "hero-question-mark-circle"
-  def type_icon(_), do: "hero-document"
-
-  def type_label("note"), do: "Note"
-  def type_label("comparison"), do: "Comparison"
-  def type_label("plan"), do: "Plan"
-  def type_label("todo"), do: "Todo"
-  def type_label("goal"), do: "Goal"
-  def type_label("entity"), do: "Entity"
-  def type_label("concept"), do: "Concept"
-  def type_label("reference"), do: "Reference"
-  def type_label("artifact"), do: "Artifact"
-  def type_label("query"), do: "Query"
-  def type_label(other), do: other |> to_string() |> String.capitalize()
-
-  def type_plural("note"), do: "Notes"
-  def type_plural("comparison"), do: "Comparisons"
-  def type_plural("plan"), do: "Plans"
-  def type_plural("todo"), do: "Todos"
-  def type_plural("goal"), do: "Goals"
-  def type_plural("entity"), do: "Entities"
-  def type_plural("concept"), do: "Concepts"
-  def type_plural("reference"), do: "References"
-  def type_plural("artifact"), do: "Artifacts"
-  def type_plural("query"), do: "Queries"
-  def type_plural(other), do: type_label(other) <> "s"
-
-  def type_path("note"), do: "notes"
-  def type_path("comparison"), do: "comparisons"
-  def type_path("plan"), do: "plans"
-  def type_path("todo"), do: "todos"
-  def type_path("goal"), do: "goals"
-  def type_path("entity"), do: "entities"
-  def type_path("concept"), do: "concepts"
-  def type_path("reference"), do: "references"
-  def type_path("artifact"), do: "artifacts"
-  def type_path("query"), do: "queries"
-  def type_path(other), do: to_string(other) <> "s"
-
-  def page_show_path(%Page{page_type: type, slug: slug})
-      when is_binary(type) and is_binary(slug) do
-    "/#{type_path(type)}/#{slug}"
-  end
-
-  def page_show_path(%{page_type: type, slug: slug})
-      when is_binary(type) and is_binary(slug) do
-    "/#{type_path(type)}/#{slug}"
-  end
-
-  def page_show_path(_), do: "#"
+  defdelegate type_icon(type), to: DranWeb.PageTypes, as: :icon
+  defdelegate type_label(type), to: DranWeb.PageTypes, as: :label
+  defdelegate type_plural(type), to: DranWeb.PageTypes, as: :plural
+  defdelegate type_path(type), to: DranWeb.PageTypes, as: :path
+  defdelegate page_show_path(page), to: DranWeb.PageTypes
 
   def tag_page_exists?(tag, context_id) when is_binary(tag) and is_binary(context_id) do
     Dran.Brain.get_page_by_slug(tag, context_id) != nil
@@ -378,14 +325,14 @@ defmodule DranWeb.PageComponents do
         "/search?q=#{URI.encode_www_form(tag)}"
 
       page_type ->
-        "/#{type_path(page_type)}/#{tag}"
+        "/#{PageTypes.path(page_type)}/#{tag}"
     end
   end
 
   def tag_link_path(tag, context_id, nil) when is_binary(tag) and is_binary(context_id) do
     case Dran.Brain.get_page_by_slug(tag, context_id) do
       %Page{page_type: type, slug: slug} ->
-        "/#{type_path(type)}/#{slug}"
+        "/#{PageTypes.path(type)}/#{slug}"
 
       nil ->
         "/search?q=#{URI.encode_www_form(tag)}"
@@ -461,7 +408,7 @@ defmodule DranWeb.PageComponents do
 
   Wikilinks `[[slug|display]]` are rendered by MDEx as
   `<a href="slug" data-wikilink="true">display</a>`. We post-process
-  those into proper internal links using `page_show_path/1`.
+  those into proper internal links using `PageTypes.page_show_path/1`.
 
   Embeds `![[slug|display]]` are not native to MDEx; we post-process
   the HTML to replace the literal `![[...]]` text with `<img>` or
@@ -497,18 +444,6 @@ defmodule DranWeb.PageComponents do
   # Each link is %{"text" => "...", "slug" => "..."}.
   # We find the first occurrence of text inside <p> tags that isn't already
   # inside an <a> tag, and wrap it in a link to the target page.
-  @type_routes %{
-    "note" => "notes",
-    "concept" => "concepts",
-    "entity" => "entities",
-    "reference" => "references",
-    "goal" => "goals",
-    "plan" => "plans",
-    "todo" => "todos",
-    "artifact" => "artifacts",
-    "comparison" => "comparisons",
-    "query" => "queries"
-  }
 
   defp apply_inline_links(html, links, context_id)
        when is_list(links) and links != [] do
@@ -525,7 +460,7 @@ defmodule DranWeb.PageComponents do
         Enum.reduce(slugs, %{}, fn slug, acc ->
           case Map.get(slug_types, slug) do
             nil -> acc
-            page_type -> Map.put(acc, slug, "/#{Map.get(@type_routes, page_type, "notes")}/#{slug}")
+            page_type -> Map.put(acc, slug, "/#{PageTypes.path(page_type)}/#{slug}")
           end
         end)
       else

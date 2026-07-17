@@ -7,6 +7,7 @@ defmodule DranWeb.DashboardLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
+  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
   @nav_groups [
@@ -35,42 +36,6 @@ defmodule DranWeb.DashboardLive do
       ]
     }
   ]
-
-  @type_labels %{
-    "note" => "Notes",
-    "concept" => "Concepts",
-    "entity" => "Entities",
-    "reference" => "References",
-    "goal" => "Goals",
-    "plan" => "Plans",
-    "todo" => "Todos",
-    "artifact" => "Artifacts",
-    "comparison" => "Comparisons"
-  }
-
-  @type_icons %{
-    "note" => "hero-document-text",
-    "concept" => "hero-light-bulb",
-    "entity" => "hero-user-group",
-    "reference" => "hero-bookmark",
-    "goal" => "hero-flag",
-    "plan" => "hero-clipboard-document-list",
-    "todo" => "hero-check-circle",
-    "artifact" => "hero-cube",
-    "comparison" => "hero-scale"
-  }
-
-  @type_paths %{
-    "note" => "notes",
-    "concept" => "concepts",
-    "entity" => "entities",
-    "reference" => "references",
-    "goal" => "goals",
-    "plan" => "plans",
-    "todo" => "todos",
-    "artifact" => "artifacts",
-    "comparison" => "comparisons"
-  }
 
   @kanban_columns [
     {"backlog", "Backlog", "bg-gray-100 text-gray-600"},
@@ -197,13 +162,13 @@ defmodule DranWeb.DashboardLive do
                       class="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition cursor-pointer"
                     >
                       <.icon
-                        name={@type_icons[page.page_type] || "hero-document"}
+                        name={PageTypes.icon(page.page_type)}
                         class="size-5 text-base-content/50 shrink-0"
                       />
                       <div class="min-w-0 flex-1">
                         <div class="font-medium text-sm truncate">{page.title}</div>
                         <div class="text-xs text-base-content/40">
-                          {@type_labels[page.page_type] || page.page_type} · {format_date(
+                          {PageTypes.plural(page.page_type)} · {format_date(
                             page.updated_at
                           )}
                         </div>
@@ -266,8 +231,6 @@ defmodule DranWeb.DashboardLive do
        context: context,
        stats: stats,
        kanban_columns: @kanban_columns,
-       type_icons: @type_icons,
-       type_labels: @type_labels,
        nav_groups: @nav_groups,
        page_title: "Dashboard"
      )}
@@ -308,10 +271,10 @@ defmodule DranWeb.DashboardLive do
     ~H"""
     <div class="flex items-center gap-3">
       <.link
-        navigate={"/#{dash_type_path(@type)}"}
+        navigate={"/#{PageTypes.path(@type)}"}
         class="text-sm font-medium hover:text-primary transition shrink-0 w-24"
       >
-        {dash_type_label(@type)}
+        {PageTypes.plural(@type)}
       </.link>
       <div class="flex-1 h-2 rounded-full bg-base-200 overflow-hidden">
         <div
@@ -350,11 +313,8 @@ defmodule DranWeb.DashboardLive do
   defp pct(count, total) when total > 0, do: trunc(count / total * 100)
   defp pct(_count, _total), do: 0
 
-  defp dash_type_path(type), do: @type_paths[type] || "notes"
-  defp dash_type_label(type), do: @type_labels[type] || type
-
   defp page_path(%Dran.Brain.Page{} = page) do
-    "/#{dash_type_path(page.page_type)}/#{page.slug}"
+    "/#{PageTypes.path(page.page_type)}/#{page.slug}"
   end
 
   defp page_path(_), do: "#"
