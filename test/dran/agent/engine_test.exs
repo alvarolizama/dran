@@ -87,6 +87,13 @@ defmodule Dran.Agent.EngineTest do
     end
   end
 
+  describe "cancel/1" do
+    test "returns {:error, :not_found} for non-existent session_id" do
+      fake_id = Ecto.UUID.generate()
+      assert {:error, :not_found} = Engine.cancel(fake_id)
+    end
+  end
+
   defp eventually(fun, attempts \\ 50)
   defp eventually(_fun, 0), do: false
 

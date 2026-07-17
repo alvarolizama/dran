@@ -8,6 +8,17 @@ defmodule Dran.Rerank do
 
   When reranking is disabled, inference is not configured, or the reranker
   call fails, the original order is preserved.
+
+  ## Configuration
+
+  Reranking is **opt-in** via config. It is only active when both
+  `Dran.Inference.Config.enabled?/0` and `Dran.Inference.Config.use_rerank?/0`
+  return `true`. The `use_rerank` flag defaults to `false` in
+  `Dran.Inference.Config` (though the env var
+  `DRAN_INFERENCE_USE_RERANK` defaults to `"true"` when present).
+
+  Callers can also override the config per-call by passing `rerank: true`
+  in the options keyword list.
   """
 
   alias Dran.Inference

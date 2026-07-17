@@ -6,7 +6,7 @@ defmodule Dran.Agent.Ingest.Utils do
   creating pages from URLs or binaries.
   """
 
-  alias Dran.{Brain, Uploads}
+  alias Dran.{Brain, Slug, Uploads}
   alias Dran.Ingest.Converter
   alias Dran.Inference.{ASR, Config, MarkItDown, Vision}
 
@@ -141,7 +141,7 @@ defmodule Dran.Agent.Ingest.Utils do
   @spec ingest_url(Brain.Context.t(), String.t(), String.t(), map()) ::
           {:ok, Brain.Page.t()} | {:error, String.t()}
   def ingest_url(context, url, title, params) do
-    slug = params["slug"] || slugify(title || title_from_url(url))
+    slug = params["slug"] || Slug.slugify(title || title_from_url(url))
 
     page_attrs = %{
       context_id: context.id,
@@ -177,7 +177,7 @@ defmodule Dran.Agent.Ingest.Utils do
           {:ok, Brain.Page.t()} | {:error, String.t()}
   def ingest_file(context, url, binary, filename, content_type, params) do
     stored = Uploads.store(context.id, binary, filename, content_type)
-    slug = params["slug"] || slugify(filename)
+    slug = params["slug"] || Slug.slugify(filename)
     body = build_file_body(url, stored, filename, content_type, binary)
 
     page_attrs = %{
@@ -299,7 +299,7 @@ defmodule Dran.Agent.Ingest.Utils do
         else
           stored = Uploads.store(context.id, binary, filename, content_type)
           title = Converter.title(filename)
-          slug = slugify(title)
+          slug = Slug.slugify(title)
 
           case Converter.convert(filename, content_type, binary) do
             {:ok, %{body: markdown}} ->
@@ -373,10 +373,6 @@ defmodule Dran.Agent.Ingest.Utils do
     name = path |> String.split("/") |> List.last() |> String.replace(~r/\.\w+$/, "")
     name = String.replace(name, ~r/[-_]+/, " ") |> String.trim()
     if name == "", do: uri.host || "untitled", else: name
-  end
-
-  def slugify(text) do
-    Dran.Slug.slugify(text)
   end
 
   defp summarize_text(markdown) do
