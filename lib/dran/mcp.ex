@@ -2,33 +2,33 @@ defmodule Dran.MCP do
   @moduledoc """
   MCP (Model Context Protocol) server for Dran — Streamable HTTP transport.
 
-  Served from Phoenix at `/mcp`. Supports POST, GET, and DELETE per
+  Served from Phoenix at `/api/mcp`. Supports POST, GET, and DELETE per
   MCP spec 2025-03-26 Streamable HTTP transport.
 
   ## Endpoints
-  - `POST /mcp` — send JSON-RPC request → JSON or SSE response
-  - `GET /mcp` — open SSE stream for server-initiated messages
-  - `DELETE /mcp` — terminate session
+  - `POST /api/mcp` — send JSON-RPC request → JSON or SSE response
+  - `GET /api/mcp` — open SSE stream for server-initiated messages
+  - `DELETE /api/mcp` — terminate session
 
   ## Tools (19)
-  - `search` — unified full-text, fuzzy, semantic or hybrid search across pages
-  - `semantic_search` — deprecated alias for `search` with `strategy=semantic`
-  - `create_page` — create a new page (title/slug optional, derived from body)
-  - `update_page` — update title, body, tags, or meta; version auto-increments on body change
-  - `get_page` — get a page by slug (returns markdown)
-  - `delete_page` — delete a page by slug (cascades to relations + versions)
-  - `create_todo` — create a todo item
-  - `update_todo` — update a todo's kanban status, priority, or due date (merges meta)
+  - `search` — use FIRST to find anything; strategy=auto picks best available
+  - `semantic_search` — **deprecated**; use `search` with strategy=semantic instead
+  - `create_page` — create notes, concepts, entities, references, goals, plans, artifacts, comparisons
+  - `update_page` — update page fields; REPLACES meta entirely (not a merge)
+  - `get_page` — read full page body by slug; use after search/list_pages, not before
+  - `delete_page` — delete a page by slug; **irreversible** (cascades to relations + versions)
+  - `create_todo` — create a todo item; NOT for notes (use create_page for those)
+  - `update_todo` — update todo fields; MERGES meta (pass only what changes)
   - `create_relation` — create a typed relation between two pages
-  - `delete_relation` — delete a relation between two pages (by slug pair + optional type)
-  - `get_links` — get inbound + outbound relations for a page
-  - `list_pages` — list pages with filters (type, tag, status, owner, created_by, limit)
-  - `stats` — aggregate statistics for a context
-  - `lint` — run lint report for a context (orphans, stale pages, contested knowledge)
-  - `rename_slug` — rename a page's slug and rewrite all `![[old-slug]]` embeds in the same context
-  - `reaugment_page` — re-run augmentation (summary/tags/embedding/relations) for a page
-  - `ingest_url` — save a URL or download a file as a reference page
-  - `start_agent` — start an autonomous agent (`research` or `ingest`)
+  - `delete_relation` — delete a relation between two pages; **irreversible**
+  - `get_links` — graph exploration: inbound + outbound relations of a page
+  - `list_pages` — lightweight listing with filters; prefer wiki:// resource for full index
+  - `stats` — context dashboard numbers: totals, by-type, todos by status, orphans
+  - `lint` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
+  - `rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
+  - `reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
+  - `ingest_url` — save external content (URL/file) as a reference page
+  - `start_agent` — start an autonomous agent (research, ingest, ask, curator, link_gardener, weekly_review)
   - `get_agent_session` — poll an agent session for status and steps
 
   ## Embeds
@@ -56,7 +56,7 @@ defmodule Dran.MCP do
     %{
       "name" => "search",
       "description" =>
-        "Search pages in a context. Returns matching pages with title, slug, type, excerpt, relevance distance, and search source (fts/fuzzy/semantic/hybrid). Use `strategy: \"auto\"` for best results; use `type` to narrow to a page type. Semantic/hybrid strategies require the inference API — they degrade to fts if inference is not configured, which you can detect from the returned `source` field. Example: strategy=hybrid query=\"distributed consensus\" type=note will search note-type pages using keyword+vector matching.",
+        "Use this FIRST whenever you need to find anything in the brain — a concept, note, entity, or any page. Returns matching pages with title, slug, type, excerpt, relevance distance, and search source (fts/fuzzy/semantic/hybrid). Strategy defaults to 'auto', which picks the best available method automatically — you rarely need to set it explicitly. Use `type` to narrow results to a page type. Semantic/hybrid strategies require the inference API; they degrade to fts if inference is not configured, which you can detect from the returned `source` field. Do NOT use `semantic_search` — it is deprecated; this tool with strategy=semantic is the replacement.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -99,7 +99,7 @@ defmodule Dran.MCP do
     %{
       "name" => "semantic_search",
       "description" =>
-        "Deprecated alias for `search` with `strategy=semantic`. Kept for backward compatibility — prefer calling `search` with `strategy` explicitly. The `hybrid` boolean here maps to strategy=hybrid when true, otherwise strategy=semantic. Both require the inference API and fall back to fts if it is not configured.",
+        "**Deprecated** — use `search` with strategy=semantic instead. Kept only for backward compatibility. If you call this, it internally delegates to `search` with the appropriate strategy. The `hybrid` boolean here maps to strategy=hybrid when true, otherwise strategy=semantic. Both require the inference API and fall back to fts if it is not configured.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -140,7 +140,7 @@ defmodule Dran.MCP do
     %{
       "name" => "create_page",
       "description" => """
-      Create a new page in the second brain. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `update_page` or `rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
+      Use for notes, concepts, entities, references, goals, plans, artifacts, comparisons. For todos use create_todo instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `update_page` or `rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
 
       Page types and subtypes (set `meta.kind`):
       - note: thought, journal, idea, meeting, question, quote
@@ -223,7 +223,7 @@ defmodule Dran.MCP do
     %{
       "name" => "update_page",
       "description" =>
-        "Update an existing page by slug. Pass only the fields you want to change (title, body, tags, meta, summary). Changing `body` auto-increments the page version and re-resolves `![[slug]]` embeds into relations. Returns the new title and version number. Returns an error if the page slug is not found in the context.",
+        "Update an existing page by slug. Pass only the fields you want to change (title, body, tags, meta, summary). **Note: `meta` is REPLACED entirely, not merged** — include all existing keys you want to keep. For todos, prefer `update_todo` which merges meta. Changing `body` auto-increments the page version and re-resolves `![[slug]]` embeds into relations. Returns the new title and version number. Returns an error if the page slug is not found in the context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -269,7 +269,7 @@ defmodule Dran.MCP do
     %{
       "name" => "get_page",
       "description" =>
-        "Read a single page by slug. Returns the full Markdown body plus a metadata footer (type, tags, version). Use this to fetch content for reading or analysis; use `list_pages` for lightweight metadata-only listings. Returns an error if the slug is not found in the context.",
+        "Read the full body of a page by slug. Use after `search` or `list_pages` to actually read content, not before — those tools give you the slug you need. Returns the full Markdown body plus a metadata footer (type, tags, version). For a lightweight metadata-only listing, use `list_pages` instead. Returns an error if the slug is not found in the context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -288,7 +288,7 @@ defmodule Dran.MCP do
     %{
       "name" => "create_todo",
       "description" =>
-        "Create a todo item (page_type=todo). Todos carry `kanban_status` (backlog → this_week → today → in_progress → done | cancelled) and `priority` (low, medium, high, urgent). Optionally link to a goal via `goal_slug`. Example: kanban_status=\"today\" priority=\"high\" goal_slug=\"ship-v1\". Creation fails if the slug already exists in the context. Returns the created todo's slug and status.",
+        "Create a todo item (page_type=todo). NOT for notes — use `create_page` with page_type=note for those. Todos carry `kanban_status` (backlog → this_week → today → in_progress → done | cancelled) and `priority` (low, medium, high, urgent). Optionally link to a goal via `goal_slug`. Example: kanban_status=\"today\" priority=\"high\" goal_slug=\"ship-v1\". Creation fails if the slug already exists in the context. Returns the created todo's slug and status.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -344,7 +344,7 @@ defmodule Dran.MCP do
     %{
       "name" => "lint",
       "description" =>
-        "Run a quality lint report for a context. Returns three categories: orphan pages (no inbound links, likely disconnected), stale pages (not updated in 90+ days, possibly outdated), and contested pages (conflicting knowledge flagged by the system). Use this during maintenance or cleanup to find pages needing attention.",
+        "Brain hygiene audit (read-only). Returns three categories: orphan pages (no inbound links, likely disconnected), stale pages (not updated in 90+ days, possibly outdated), and contested pages (conflicting knowledge flagged by the system). Use this during maintenance or cleanup to find pages needing attention. Does not modify anything.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -359,7 +359,7 @@ defmodule Dran.MCP do
     %{
       "name" => "ingest_url",
       "description" =>
-        "Save a URL into the second brain as a reference page. For HTML pages, stores the URL so content can be read later. For files (PDF, documents, images), downloads and stores the file with a download link. **This tool does NOT extract or parse content** — it only bookmarks/stores the source; use `get_page` or the URL directly to read content afterward. Returns the created reference page's slug and type.",
+        "Save external content (a URL or file) as a reference page. For HTML pages, stores the URL so content can be read later. For files (PDF, documents, images), downloads and stores the file with a download link. **This tool does NOT extract or parse content** — it only bookmarks/stores the source; use `get_page` or the URL directly to read content afterward. For bulk web research on a topic, use `start_agent` with agent_type=research instead. Returns the created reference page's slug and type.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -389,7 +389,7 @@ defmodule Dran.MCP do
     %{
       "name" => "delete_page",
       "description" =>
-        "Delete a page by slug. **This is irreversible** — cascading deletes remove all relations to/from the page and all page version history. Always confirm with the user before calling. Returns a confirmation with the deleted page's title and slug, or an error if not found.",
+        "Delete a page by slug. **This is irreversible** — cascading deletes remove all relations to/from the page and all page version history. There is no undo. Always confirm with the user before calling. Returns a confirmation with the deleted page's title and slug, or an error if not found.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -438,7 +438,7 @@ defmodule Dran.MCP do
     %{
       "name" => "get_links",
       "description" =>
-        "Get all inbound and outbound relations for a page. Returns two lists: outbound (pages this page links to, with relation type and target title/slug) and inbound (pages linking to this page, with source title/slug and relation type). Use this to understand a page's connections before editing or deleting. Returns an error if the slug is not found.",
+        "Graph exploration: get all inbound and outbound relations for a page. Returns two lists: outbound (pages this page links to, with relation type and target title/slug) and inbound (pages linking to this page, with source title/slug and relation type). Use this to understand a page's connections before editing or deleting. Returns an error if the slug is not found.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -457,7 +457,7 @@ defmodule Dran.MCP do
     %{
       "name" => "list_pages",
       "description" =>
-        "List pages in a context with optional filters. Returns lightweight metadata only (title, slug, type) — no body content. Use `type` to list a specific page type (e.g. all todos or goals), `tag` to filter by tag, and `status` to filter todos by kanban status. Use this for overviews and discovery; use `get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
+        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type, `tag` to filter by tag, and `status` to filter todos by kanban status. For a full index overview, prefer the `wiki://{context}/index` resource instead. Use `get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -512,7 +512,7 @@ defmodule Dran.MCP do
     %{
       "name" => "update_todo",
       "description" =>
-        "Update a todo's kanban status, priority, due date, goal, title, body, or tags. Meta fields are merged — pass only what you want to change; existing meta keys (kanban_status, priority, due_date, goal_slug) are preserved. Note that `tags` replaces the existing tag list entirely. Returns the updated todo's title, slug, and current kanban status.",
+        "Update a todo's kanban status, priority, due date, goal, title, body, or tags. **Meta is MERGED, not replaced** — pass only the fields you want to change; existing meta keys (kanban_status, priority, due_date, goal_slug) are preserved. This is the key difference from `update_page`, which replaces the entire meta object. Note that `tags` replaces the existing tag list entirely. Returns the updated todo's title, slug, and current kanban status.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -564,7 +564,7 @@ defmodule Dran.MCP do
     %{
       "name" => "delete_relation",
       "description" =>
-        "Delete relations between two pages. If `relation_type` is provided, only relations of that type are deleted; if omitted, ALL relations between the two pages (both directions) are deleted. Use `get_links` first to inspect existing relations before deleting. Returns the count of deleted relations.",
+        "Delete relations between two pages. **This is irreversible.** If `relation_type` is provided, only relations of that type are deleted; if omitted, ALL relations between the two pages (both directions) are deleted. Use `get_links` first to inspect existing relations before deleting. Returns the count of deleted relations.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -593,7 +593,7 @@ defmodule Dran.MCP do
     %{
       "name" => "stats",
       "description" =>
-        "Get aggregate statistics for a context. Returns total page count, pages broken down by type, todos broken down by kanban status, orphan count, total relations, and broken-link count. Use this for dashboard overviews, weekly reviews, or to check the overall health of a context.",
+        "Context dashboard numbers: total page count, pages by type, todos by kanban status, orphan count, total relations, and broken-link count. Use this for dashboard overviews, weekly reviews, or to check the overall health of a context. Read-only.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -608,7 +608,7 @@ defmodule Dran.MCP do
     %{
       "name" => "rename_slug",
       "description" =>
-        "Rename a page's slug. Updates the page's slug in place; version history and relations are preserved. **Fails if `new_slug` already exists** in the context, and returns an error if `old_slug == new_slug`. All `![[old-slug]]` embeds in other pages of the same context are rewritten automatically. Use this to fix a wrongly named page without deleting and recreating it.",
+        "Rename a page slug; auto-rewrites all `![[old-slug]]` embeds in other pages of the same context. Updates the page's slug in place; version history and relations are preserved. **Fails if `new_slug` already exists** in the context. Use this to fix a wrongly named page without deleting and recreating it.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -632,7 +632,7 @@ defmodule Dran.MCP do
     %{
       "name" => "reaugment_page",
       "description" =>
-        "Re-run the augmentation pipeline for a page: regenerate summary/tags/embedding and refresh semantic relations. Use when inference was unavailable or the page body changed significantly. Clears the stored `embedding_hash` so the pipeline treats the page as stale, then schedules async augmentation.",
+        "Re-run the augmentation pipeline (summary/tags/embedding/relations) for a page. Use after major edits or if augmentation previously failed. Clears the stored `embedding_hash` so the pipeline treats the page as stale, then schedules async augmentation.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -651,15 +651,15 @@ defmodule Dran.MCP do
     %{
       "name" => "start_agent",
       "description" =>
-        "Start an autonomous agent session and return immediately. `research` agents explore a topic and create pages; `ingest` agents fetch a URL and save its content. Returns a session_id and track_url — poll `get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background.",
+        "Start an autonomous agent session and return immediately. Returns a session_id and track_url — poll `get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background. Choose the agent_type that matches your goal: 'research' explores a topic and creates pages from findings; 'ingest' fetches a single URL and saves its content as a reference page; 'ask' answers a question using ONLY knowledge already in the brain (persists as a query page); 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages; 'weekly_review' writes a weekly journal in Spanish.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
           "agent_type" => %{
             "type" => "string",
-            "enum" => ["research", "ingest"],
+            "enum" => ["research", "ingest", "ask", "curator", "link_gardener", "weekly_review"],
             "description" =>
-              "'research' = explore a topic and create pages from findings. 'ingest' = fetch a URL and save its content as a reference page."
+              "Type of agent to run. 'research' = explore a topic and create pages from findings. 'ingest' = download a URL and save it as a reference page. 'ask' = answer using ONLY knowledge already in the brain (persisted as a query page). 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'weekly_review' = write a weekly journal in Spanish."
           },
           "context" => %{
             "type" => "string",
@@ -668,7 +668,7 @@ defmodule Dran.MCP do
           "input" => %{
             "type" => "string",
             "description" =>
-              "For research: a topic or question to explore. For ingest: a URL to fetch and save."
+              "Agent input. For research: a topic or question to explore. For ingest: a URL to fetch and save. For ask: a question to answer from brain knowledge. For curator/link_gardener/weekly_review: typically the context focus or instructions."
           },
           "opts" => %{
             "type" => "object",
@@ -682,7 +682,7 @@ defmodule Dran.MCP do
     %{
       "name" => "get_agent_session",
       "description" =>
-        "Poll an autonomous agent session for status, summary, and step-by-step progress. Returns the session's type, input, status (pending/running/completed/failed), summary, pages_created count, and an ordered list of steps with tool name and result status. Poll periodically until status is 'completed' or 'failed'. Returns an error if the session_id is invalid or not found.",
+        "Poll an autonomous agent session for status, summary, and step-by-step progress. Returns the session's type, input, status (pending/running/done/failed), summary, pages_created count, and an ordered list of steps with tool name and result status. Poll periodically until status is 'done' or 'failed'. Returns an error if the session_id is invalid or not found.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
