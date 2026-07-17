@@ -95,7 +95,11 @@ defmodule DranWeb.SearchLive do
         </form>
 
         <div class="mb-6">
-          <div role="group" aria-label="Search strategy" class="inline-flex rounded-lg border border-base-300 overflow-hidden">
+          <div
+            role="group"
+            aria-label="Search strategy"
+            class="inline-flex rounded-lg border border-base-300 overflow-hidden"
+          >
             <button
               type="button"
               phx-click="set_mode"

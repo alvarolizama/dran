@@ -168,9 +168,7 @@ defmodule DranWeb.DashboardLive do
                       <div class="min-w-0 flex-1">
                         <div class="font-medium text-sm truncate">{page.title}</div>
                         <div class="text-xs text-base-content/40">
-                          {PageTypes.plural(page.page_type)} · {format_date(
-                            page.updated_at
-                          )}
+                          {PageTypes.plural(page.page_type)} · {format_date(page.updated_at)}
                         </div>
                       </div>
                       <span

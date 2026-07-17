@@ -8,15 +8,40 @@ defmodule DranWeb.PageTypes do
 
   @types %{
     "note" => %{path: "notes", label: "Note", icon: "hero-document-text", plural: "Notes"},
-    "concept" => %{path: "concepts", label: "Concept", icon: "hero-light-bulb", plural: "Concepts"},
+    "concept" => %{
+      path: "concepts",
+      label: "Concept",
+      icon: "hero-light-bulb",
+      plural: "Concepts"
+    },
     "entity" => %{path: "entities", label: "Entity", icon: "hero-user", plural: "Entities"},
-    "reference" => %{path: "references", label: "Reference", icon: "hero-bookmark", plural: "References"},
+    "reference" => %{
+      path: "references",
+      label: "Reference",
+      icon: "hero-bookmark",
+      plural: "References"
+    },
     "goal" => %{path: "goals", label: "Goal", icon: "hero-flag", plural: "Goals"},
     "plan" => %{path: "plans", label: "Plan", icon: "hero-calendar-days", plural: "Plans"},
     "todo" => %{path: "todos", label: "Todo", icon: "hero-check-circle", plural: "Todos"},
-    "artifact" => %{path: "artifacts", label: "Artifact", icon: "hero-paper-clip", plural: "Artifacts"},
-    "comparison" => %{path: "comparisons", label: "Comparison", icon: "hero-scale", plural: "Comparisons"},
-    "query" => %{path: "queries", label: "Query", icon: "hero-question-mark-circle", plural: "Queries"}
+    "artifact" => %{
+      path: "artifacts",
+      label: "Artifact",
+      icon: "hero-paper-clip",
+      plural: "Artifacts"
+    },
+    "comparison" => %{
+      path: "comparisons",
+      label: "Comparison",
+      icon: "hero-scale",
+      plural: "Comparisons"
+    },
+    "query" => %{
+      path: "queries",
+      label: "Query",
+      icon: "hero-question-mark-circle",
+      plural: "Queries"
+    }
   }
 
   @doc "Returns the full types map."

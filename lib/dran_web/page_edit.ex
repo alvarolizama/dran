@@ -25,6 +25,7 @@ defmodule DranWeb.PageEdit do
   """
 
   use Phoenix.LiveView
+
   use Phoenix.VerifiedRoutes,
     endpoint: DranWeb.Endpoint,
     router: DranWeb.Router,

@@ -98,5 +98,4 @@ defmodule Dran.Exporter do
       updated_at: page.updated_at
     }
   end
-
 end

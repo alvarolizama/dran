@@ -173,7 +173,10 @@ defmodule DranWeb.PageComponents do
               <div :if={length(@relations.outbound) > 0}>
                 <div class="text-xs text-base-content/40 mb-1">Outbound</div>
                 <div :for={rel <- @relations.outbound} class="text-sm">
-                  <.link navigate={PageTypes.page_show_path(rel.target)} class="text-primary hover:underline">
+                  <.link
+                    navigate={PageTypes.page_show_path(rel.target)}
+                    class="text-primary hover:underline"
+                  >
                     {rel.target.title}
                   </.link>
                   <span class="text-base-content/40 text-xs ml-1">{rel.relation_type}</span>
@@ -183,7 +186,10 @@ defmodule DranWeb.PageComponents do
               <div :if={length(@relations.inbound) > 0}>
                 <div class="text-xs text-base-content/40 mb-1">Inbound</div>
                 <div :for={rel <- @relations.inbound} class="text-sm">
-                  <.link navigate={PageTypes.page_show_path(rel.source)} class="text-primary hover:underline">
+                  <.link
+                    navigate={PageTypes.page_show_path(rel.source)}
+                    class="text-primary hover:underline"
+                  >
                     {rel.source.title}
                   </.link>
                   <span class="text-base-content/40 text-xs ml-1">{rel.relation_type}</span>
