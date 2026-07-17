@@ -92,14 +92,19 @@ defmodule Dran.SmartCollection do
     |> Enum.reduce(%{}, fn key, acc ->
       value =
         params[key] ||
-        params[String.to_atom(key)]
+          params[String.to_atom(key)]
 
       case value do
-        nil -> acc
-        "" -> acc
+        nil ->
+          acc
+
+        "" ->
+          acc
+
         v when is_binary(v) ->
           trimmed = String.trim(v)
           if trimmed == "", do: acc, else: Map.put(acc, key, trimmed)
+
         v ->
           Map.put(acc, key, v)
       end

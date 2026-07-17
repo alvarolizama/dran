@@ -56,7 +56,8 @@ defmodule Dran.MCP do
         "properties" => %{
           "query" => %{
             "type" => "string",
-            "description" => "Natural-language search query. Keywords or a full sentence both work; fuzzy/semantic strategies handle typos and paraphrase."
+            "description" =>
+              "Natural-language search query. Keywords or a full sentence both work; fuzzy/semantic strategies handle typos and paraphrase."
           },
           "context" => %{
             "type" => "string",
@@ -156,15 +157,18 @@ defmodule Dran.MCP do
           },
           "title" => %{
             "type" => "string",
-            "description" => "Human-readable page title. If omitted, derived from the body's first line."
+            "description" =>
+              "Human-readable page title. If omitted, derived from the body's first line."
           },
           "slug" => %{
             "type" => "string",
-            "description" => "URL-friendly kebab-case slug, unique per context. If omitted, derived from the title. Creation fails if this slug already exists in the context — use update_page or rename_slug instead."
+            "description" =>
+              "URL-friendly kebab-case slug, unique per context. If omitted, derived from the title. Creation fails if this slug already exists in the context — use update_page or rename_slug instead."
           },
           "body" => %{
             "type" => "string",
-            "description" => "Page content in Markdown. Use `![[other-slug]]` to embed another page; embeds are auto-resolved into `embeds` relations."
+            "description" =>
+              "Page content in Markdown. Use `![[other-slug]]` to embed another page; embeds are auto-resolved into `embeds` relations."
           },
           "page_type" => %{
             "type" => "string",
@@ -203,7 +207,8 @@ defmodule Dran.MCP do
           },
           "created_by" => %{
             "type" => "string",
-            "description" => "Who created this page, recorded for provenance (defaults to 'agent')."
+            "description" =>
+              "Who created this page, recorded for provenance (defaults to 'agent')."
           }
         },
         "required" => ["context", "page_type"]
@@ -230,7 +235,8 @@ defmodule Dran.MCP do
           },
           "body" => %{
             "type" => "string",
-            "description" => "New Markdown body (optional). Changing this increments the version and re-resolves `![[slug]]` embeds."
+            "description" =>
+              "New Markdown body (optional). Changing this increments the version and re-resolves `![[slug]]` embeds."
           },
           "tags" => %{
             "type" => "array",
@@ -239,7 +245,8 @@ defmodule Dran.MCP do
           },
           "meta" => %{
             "type" => "object",
-            "description" => "Updated metadata map (optional). Replaces the entire `meta` object, so include existing keys you want to keep."
+            "description" =>
+              "Updated metadata map (optional). Replaces the entire `meta` object, so include existing keys you want to keep."
           },
           "summary" => %{
             "type" => "string",
@@ -289,11 +296,13 @@ defmodule Dran.MCP do
           },
           "slug" => %{
             "type" => "string",
-            "description" => "URL-friendly kebab-case slug, unique per context. Creation fails if it already exists."
+            "description" =>
+              "URL-friendly kebab-case slug, unique per context. Creation fails if it already exists."
           },
           "goal_slug" => %{
             "type" => "string",
-            "description" => "Slug of the goal this todo belongs to (optional). Set this to group todos under a goal."
+            "description" =>
+              "Slug of the goal this todo belongs to (optional). Set this to group todos under a goal."
           },
           "body" => %{
             "type" => "string",
@@ -354,11 +363,13 @@ defmodule Dran.MCP do
           },
           "url" => %{
             "type" => "string",
-            "description" => "URL to ingest — an HTML article, web page, or a direct file URL (PDF, image, document)."
+            "description" =>
+              "URL to ingest — an HTML article, web page, or a direct file URL (PDF, image, document)."
           },
           "slug" => %{
             "type" => "string",
-            "description" => "Custom slug for the reference page (auto-derived from the page title if omitted)."
+            "description" =>
+              "Custom slug for the reference page (auto-derived from the page title if omitted)."
           },
           "tags" => %{
             "type" => "array",
@@ -382,7 +393,8 @@ defmodule Dran.MCP do
           },
           "slug" => %{
             "type" => "string",
-            "description" => "Slug of the page to delete. All relations and version history for this page will be removed."
+            "description" =>
+              "Slug of the page to delete. All relations and version history for this page will be removed."
           }
         },
         "required" => ["context", "slug"]
@@ -514,7 +526,8 @@ defmodule Dran.MCP do
           },
           "goal_slug" => %{
             "type" => "string",
-            "description" => "Slug of a goal to link this todo to (optional). Replaces the existing goal_slug."
+            "description" =>
+              "Slug of a goal to link this todo to (optional). Replaces the existing goal_slug."
           },
           "title" => %{
             "type" => "string",
@@ -594,7 +607,8 @@ defmodule Dran.MCP do
           },
           "new_slug" => %{
             "type" => "string",
-            "description" => "New kebab-case slug. Must not already exist in the context, and must differ from old_slug."
+            "description" =>
+              "New kebab-case slug. Must not already exist in the context, and must differ from old_slug."
           }
         },
         "required" => ["context", "old_slug", "new_slug"]
@@ -610,7 +624,8 @@ defmodule Dran.MCP do
           "agent_type" => %{
             "type" => "string",
             "enum" => ["research", "ingest"],
-            "description" => "'research' = explore a topic and create pages from findings. 'ingest' = fetch a URL and save its content as a reference page."
+            "description" =>
+              "'research' = explore a topic and create pages from findings. 'ingest' = fetch a URL and save its content as a reference page."
           },
           "context" => %{
             "type" => "string",
@@ -618,11 +633,13 @@ defmodule Dran.MCP do
           },
           "input" => %{
             "type" => "string",
-            "description" => "For research: a topic or question to explore. For ingest: a URL to fetch and save."
+            "description" =>
+              "For research: a topic or question to explore. For ingest: a URL to fetch and save."
           },
           "opts" => %{
             "type" => "object",
-            "description" => "Optional agent configuration options (e.g. max pages, tags). Passed through to the agent."
+            "description" =>
+              "Optional agent configuration options (e.g. max pages, tags). Passed through to the agent."
           }
         },
         "required" => ["agent_type", "context", "input"]
