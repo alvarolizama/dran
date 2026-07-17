@@ -1,0 +1,83 @@
+## This file is a PO Template file.
+##
+## "msgid"s here are often extracted from source code.
+## Add new messages manually only if they're dynamic
+## messages that can't be statically extracted.
+##
+## Run "mix gettext.extract" to bring this file up to
+## date. Leave "msgstr"s empty as changing them here has no
+## effect: edit them in PO (.po) files instead.
+#
+msgid ""
+msgstr ""
+
+#: lib/dran_web/components/core_components.ex:379
+#, elixir-autogen, elixir-format
+msgid "Actions"
+msgstr ""
+
+#: lib/dran_web/components/layouts.ex:243
+#: lib/dran_web/components/layouts.ex:258
+#, elixir-autogen, elixir-format
+msgid "Attempting to reconnect"
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:109
+#, elixir-autogen, elixir-format
+msgid "Auto"
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:160
+#, elixir-autogen, elixir-format
+msgid "Enter a query above to search across all pages."
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:117
+#, elixir-autogen, elixir-format
+msgid "FTS"
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:133
+#, elixir-autogen, elixir-format
+msgid "Hybrid"
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:156
+#, elixir-autogen, elixir-format
+msgid "No results found for \"%{query}\"."
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:85
+#, elixir-autogen, elixir-format
+msgid "Search"
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:93
+#, elixir-autogen, elixir-format
+msgid "Search pages..."
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:100
+#, elixir-autogen, elixir-format
+msgid "Search strategy"
+msgstr ""
+
+#: lib/dran_web/live/search_live.ex:125
+#, elixir-autogen, elixir-format
+msgid "Semantic"
+msgstr ""
+
+#: lib/dran_web/components/layouts.ex:250
+#, elixir-autogen, elixir-format
+msgid "Something went wrong!"
+msgstr ""
+
+#: lib/dran_web/components/layouts.ex:235
+#, elixir-autogen, elixir-format
+msgid "We can't find the internet"
+msgstr ""
+
+#: lib/dran_web/components/core_components.ex:81
+#, elixir-autogen, elixir-format
+msgid "close"
+msgstr ""

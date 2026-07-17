@@ -4,6 +4,7 @@ defmodule DranWeb.PageComponents do
   """
 
   use Phoenix.Component
+  use Gettext, backend: DranWeb.Gettext
   import Phoenix.HTML, only: [raw: 1]
   import DranWeb.CoreComponents, only: [icon: 1]
 
@@ -88,19 +89,19 @@ defmodule DranWeb.PageComponents do
               {render_slot(@actions)}
               <button
                 phx-click="delete_page"
-                data-confirm="Are you sure? This cannot be undone."
+                data-confirm={gettext("Are you sure? This cannot be undone.")}
                 class="btn btn-ghost btn-sm text-error"
               >
-                <.icon name="hero-trash" class="size-4" /> Delete
+                <.icon name="hero-trash" class="size-4" /> {gettext("Delete")}
               </button>
               <button
                 :if={Dran.Firecrawl.enabled?()}
                 phx-click="enrich_page"
                 phx-value-slug={@page.slug}
                 class="btn btn-ghost btn-sm"
-                title="Search the web and enrich this page with new content"
+                title={gettext("Search the web and enrich this page with new content")}
               >
-                <.icon name="hero-sparkles" class="w-4 h-4" /> Enrich
+                <.icon name="hero-sparkles" class="w-4 h-4" /> {gettext("Enrich")}
               </button>
             </div>
           </div>
@@ -112,14 +113,17 @@ defmodule DranWeb.PageComponents do
           </div>
 
           <div :if={@tabs == []} class="border-t border-base-300 pt-4">
-            <h3 class="text-sm font-semibold text-base-content/60 mb-2">Changelog</h3>
+            <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
             <div class="space-y-1">
               <div :for={version <- @versions} class="text-sm text-base-content/60">
-                v{version.version} — {format_date(version.inserted_at)} by {version.changed_by ||
-                  "system"}
+                {gettext("v%{version} — %{date} by %{author}",
+                  version: version.version,
+                  date: format_date(version.inserted_at),
+                  author: version.changed_by || gettext("system")
+                )}
               </div>
               <p :if={@versions == []} class="text-sm text-base-content/40">
-                No version history yet.
+                {gettext("No version history yet.")}
               </p>
             </div>
           </div>
@@ -137,35 +141,35 @@ defmodule DranWeb.PageComponents do
         <div class="p-4 space-y-4">
           <div>
             <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
-              Metadata
+              {gettext("Metadata")}
             </h3>
             <div class="space-y-1 text-sm">
               <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">Type</span>
+                <span class="text-base-content/60">{gettext("Type")}</span>
                 <span>{@page.page_type}</span>
               </div>
               <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">Version</span>
+                <span class="text-base-content/60">{gettext("Version")}</span>
                 <span>v{@page.version}</span>
               </div>
               <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">Owner</span>
+                <span class="text-base-content/60">{gettext("Owner")}</span>
                 <span>{@page.owner}</span>
               </div>
               <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">Created by</span>
+                <span class="text-base-content/60">{gettext("Created by")}</span>
                 <span>{@page.created_by}</span>
               </div>
               <div :if={@page.updated_by} class="flex justify-between gap-2">
-                <span class="text-base-content/60">Updated by</span>
+                <span class="text-base-content/60">{gettext("Updated by")}</span>
                 <span>{@page.updated_by}</span>
               </div>
               <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">Created</span>
+                <span class="text-base-content/60">{gettext("Created")}</span>
                 <span>{format_date(@page.inserted_at)}</span>
               </div>
               <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">Updated</span>
+                <span class="text-base-content/60">{gettext("Updated")}</span>
                 <span>{format_date(@page.updated_at)}</span>
               </div>
             </div>
@@ -186,11 +190,11 @@ defmodule DranWeb.PageComponents do
 
           <div>
             <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
-              Relations
+              {gettext("Relations")}
             </h3>
             <div class="space-y-2">
               <div :if={length(@relations.outbound) > 0}>
-                <div class="text-xs text-base-content/40 mb-1">Outbound</div>
+                <div class="text-xs text-base-content/40 mb-1">{gettext("Outbound")}</div>
                 <div :for={rel <- @relations.outbound} class="text-sm">
                   <.link
                     navigate={PageTypes.page_show_path(rel.target)}
@@ -203,7 +207,7 @@ defmodule DranWeb.PageComponents do
               </div>
 
               <div :if={length(@relations.inbound) > 0}>
-                <div class="text-xs text-base-content/40 mb-1">Inbound</div>
+                <div class="text-xs text-base-content/40 mb-1">{gettext("Inbound")}</div>
                 <div :for={rel <- @relations.inbound} class="text-sm">
                   <.link
                     navigate={PageTypes.page_show_path(rel.source)}
@@ -219,43 +223,43 @@ defmodule DranWeb.PageComponents do
                 :if={@relations.outbound == [] and @relations.inbound == []}
                 class="text-sm text-base-content/40"
               >
-                No relations
+                {gettext("No relations")}
               </p>
             </div>
           </div>
 
           <div>
             <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
-              Versions
+              {gettext("Versions")}
             </h3>
             <div class="space-y-1">
               <div :for={version <- @versions} class="flex items-center justify-between gap-2">
                 <span class="text-sm text-base-content/60">
-                  v{version.version} — {format_date(version.inserted_at)}
+                  {gettext("v%{version} — %{date}", version: version.version, date: format_date(version.inserted_at))}
                 </span>
                 <button
                   phx-click="compare_version"
                   phx-value-version={version.version}
                   class="btn btn-ghost btn-xs"
                 >
-                  Compare
+                  {gettext("Compare")}
                 </button>
               </div>
               <p :if={@versions == []} class="text-sm text-base-content/40">
-                No version history yet.
+                {gettext("No version history yet.")}
               </p>
             </div>
           </div>
 
           <div>
             <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
-              Activity
+              {gettext("Activity")}
             </h3>
             <div class="space-y-1">
               <div :for={log <- @logs} class="text-xs text-base-content/60">
                 <span class="font-mono">{log.action}</span> — {format_date(log.inserted_at)}
               </div>
-              <p :if={@logs == []} class="text-xs text-base-content/40">No activity recorded.</p>
+              <p :if={@logs == []} class="text-xs text-base-content/40">{gettext("No activity recorded.")}</p>
             </div>
           </div>
         </div>
@@ -352,7 +356,7 @@ defmodule DranWeb.PageComponents do
       </svg>
 
       <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
-        Scroll para zoom · Arrastra el fondo para moverte · Arrastra un nodo para reposicionar
+        {gettext("Scroll to zoom · Drag the background to pan · Drag a node to reposition")}
       </div>
     </div>
     """

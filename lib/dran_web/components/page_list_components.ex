@@ -4,6 +4,7 @@ defmodule DranWeb.PageListComponents do
   """
 
   use Phoenix.Component
+  use Gettext, backend: DranWeb.Gettext
   import DranWeb.CoreComponents, only: [icon: 1]
 
   alias DranWeb.PageTypes
@@ -17,19 +18,19 @@ defmodule DranWeb.PageListComponents do
     <div class="p-6">
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">
-          {if @page_type, do: PageTypes.plural(@page_type), else: "All Pages"}
+          {if @page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")}
         </h1>
         <div class="flex gap-2">
           <.link
             :if={@page_type}
-            navigate={"/collections/new?type=#{@page_type}&title=All #{PageTypes.plural(@page_type)}"}
+            navigate={"/collections/new?type=#{@page_type}&title=#{gettext("All")} #{PageTypes.plural(@page_type)}"}
             class="btn btn-ghost btn-sm"
-            title="Save as smart collection"
+            title={gettext("Save as smart collection")}
           >
-            <.icon name="hero-funnel" class="w-4 h-4" /> Save as Smart Collection
+            <.icon name="hero-funnel" class="w-4 h-4" /> {gettext("Save as Smart Collection")}
           </.link>
           <.link navigate={"/#{PageTypes.path(@page_type)}/new"} class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="w-4 h-4" /> New
+            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}
           </.link>
         </div>
       </div>
@@ -41,14 +42,14 @@ defmodule DranWeb.PageListComponents do
           </div>
         </div>
         <div class="space-y-1">
-          <h3 class="text-lg font-semibold text-base-content/60">No pages yet</h3>
-          <p class="text-sm text-base-content/40">Get started by creating your first page.</p>
+          <h3 class="text-lg font-semibold text-base-content/60">{gettext("No pages yet")}</h3>
+          <p class="text-sm text-base-content/40">{gettext("Get started by creating your first page.")}</p>
         </div>
         <.link
           navigate={"/#{PageTypes.path(@page_type)}/new"}
           class="btn btn-primary btn-sm transition-colors active:scale-95"
         >
-          <.icon name="hero-plus" class="w-4 h-4" /> Create Page
+          <.icon name="hero-plus" class="w-4 h-4" /> {gettext("Create Page")}
         </.link>
       </div>
 

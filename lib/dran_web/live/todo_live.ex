@@ -16,22 +16,22 @@ defmodule DranWeb.TodoLive do
   import DranWeb.TodoHelpers
 
   @page_type "todo"
-  @tabs [{"content", "Content"}, {"graph", "Graph"}]
+  @tabs [{"content", gettext("Content")}, {"graph", gettext("Graph")}]
 
   @kanban_columns [
-    {"backlog", "Backlog", "bg-base-300"},
-    {"this_week", "This Week", "bg-blue-500/20 text-blue-700"},
-    {"today", "Today", "bg-amber-500/20 text-amber-700"},
-    {"in_progress", "In Progress", "bg-purple-500/20 text-purple-700"},
-    {"done", "Done", "bg-green-500/20 text-green-700"},
-    {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
+    {"backlog", gettext("Backlog"), "bg-base-300"},
+    {"this_week", gettext("This Week"), "bg-blue-500/20 text-blue-700"},
+    {"today", gettext("Today"), "bg-amber-500/20 text-amber-700"},
+    {"in_progress", gettext("In Progress"), "bg-purple-500/20 text-purple-700"},
+    {"done", gettext("Done"), "bg-green-500/20 text-green-700"},
+    {"cancelled", gettext("Cancelled"), "bg-red-500/20 text-red-700"}
   ]
 
   @priorities [
-    {"low", "Low", "bg-gray-100 text-gray-600"},
-    {"medium", "Medium", "bg-blue-100 text-blue-700"},
-    {"high", "High", "bg-orange-100 text-orange-700"},
-    {"urgent", "Urgent", "bg-red-100 text-red-700"}
+    {"low", gettext("Low"), "bg-gray-100 text-gray-600"},
+    {"medium", gettext("Medium"), "bg-blue-100 text-blue-700"},
+    {"high", gettext("High"), "bg-orange-100 text-orange-700"},
+    {"urgent", gettext("Urgent"), "bg-red-100 text-red-700"}
   ]
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -49,9 +49,9 @@ defmodule DranWeb.TodoLive do
     >
       <div :if={@live_action == :index} id="kanban-board" phx-hook=".KanbanBoard" class="p-6">
         <div class="flex items-center justify-between mb-4">
-          <h1 class="text-2xl font-bold">Todos</h1>
+          <h1 class="text-2xl font-bold">{gettext("Todos")}</h1>
           <button class="btn btn-primary btn-sm" phx-click="new_todo">
-            <.icon name="hero-plus" class="w-4 h-4" /> New Todo
+            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
           </button>
         </div>
 
@@ -64,16 +64,16 @@ defmodule DranWeb.TodoLive do
             <.input
               id="new-todo-title"
               name="title"
-              label="Title"
+              label={gettext("Title")}
               value={@form["title"]}
-              placeholder="What needs to be done?"
+              placeholder={gettext("What needs to be done?")}
               required
             />
             <.input
               id="new-todo-priority"
               name="priority"
               type="select"
-              label="Priority"
+              label={gettext("Priority")}
               value={@form["priority"]}
               options={@priority_options}
             />
@@ -81,7 +81,7 @@ defmodule DranWeb.TodoLive do
               id="new-todo-goal"
               name="goal_slug"
               type="select"
-              label="Goal"
+              label={gettext("Goal")}
               value={@form["goal_slug"]}
               options={@goal_options}
             />
@@ -89,13 +89,13 @@ defmodule DranWeb.TodoLive do
               id="new-todo-due"
               name="due_date"
               type="date"
-              label="Due date"
+              label={gettext("Due date")}
               value={@form["due_date"]}
             />
           </div>
           <div class="flex gap-2 mt-3">
-            <button type="submit" class="btn btn-primary btn-sm">Create</button>
-            <button type="button" class="btn btn-soft btn-sm" phx-click="new_todo">Cancel</button>
+            <button type="submit" class="btn btn-primary btn-sm">{gettext("Create")}</button>
+            <button type="button" class="btn btn-soft btn-sm" phx-click="new_todo">{gettext("Cancel")}</button>
           </div>
         </form>
 
@@ -159,6 +159,7 @@ defmodule DranWeb.TodoLive do
           compare_version={@compare_version}
           logs={@logs}
           context_slug={@context_slug}
+          rendered_body={@rendered_body}
         >
           <:actions>
             <.link navigate={~p"/todos"} class="btn btn-primary btn-sm">
@@ -193,10 +194,7 @@ defmodule DranWeb.TodoLive do
               </div>
 
               <div class="prose prose-base dark:prose-invert max-w-none">
-                {render_markdown(@page.body,
-                  context_id: @page.context_id,
-                  inline_links: Map.get(@page.meta || %{}, "inline_links", [])
-                )}
+                {@rendered_body}
               </div>
 
               <%= if @editing do %>
@@ -371,6 +369,12 @@ defmodule DranWeb.TodoLive do
           editing = Map.get(params, "edit") == "true"
           edit_form = if editing, do: Brain.change_page(page) |> to_form(as: :page), else: nil
 
+          rendered_body =
+            render_markdown(page.body,
+              context_id: page.context_id,
+              inline_links: Map.get(page.meta || %{}, "inline_links", [])
+            )
+
           {:noreply,
            assign(socket,
              page: page,
@@ -385,7 +389,8 @@ defmodule DranWeb.TodoLive do
              editing: editing,
              form: edit_form,
              context_id: context.id,
-             save_status: "idle"
+             save_status: "idle",
+             rendered_body: rendered_body
            )}
       end
     else

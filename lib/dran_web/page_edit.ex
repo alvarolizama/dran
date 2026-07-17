@@ -188,9 +188,15 @@ defmodule DranWeb.PageEdit do
     else
       case Brain.update_page(page, %{body: body}) do
         {:ok, updated_page} ->
+          rendered_body =
+            DranWeb.PageComponents.render_markdown(updated_page.body,
+              context_id: updated_page.context_id,
+              inline_links: Map.get(updated_page.meta || %{}, "inline_links", [])
+            )
+
           {:noreply,
            socket
-           |> assign(page: updated_page, save_status: "saved")}
+           |> assign(page: updated_page, save_status: "saved", rendered_body: rendered_body)}
 
         {:error, _changeset} ->
           {:noreply, assign(socket, save_status: "idle")}

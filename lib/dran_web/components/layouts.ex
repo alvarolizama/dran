@@ -57,7 +57,7 @@ defmodule DranWeb.Layouts do
             <input
               type="text"
               name="q"
-              placeholder="Search..."
+              placeholder={gettext("Search...")}
               class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </form>
@@ -95,78 +95,78 @@ defmodule DranWeb.Layouts do
       %{
         label: nil,
         items: [
-          %{key: "dashboard", label: "Dashboard", icon: "hero-home", path: ~p"/"},
-          %{key: "graph", label: "Graph", icon: "hero-share", path: ~p"/graph"}
+          %{key: "dashboard", label: gettext("Dashboard"), icon: "hero-home", path: ~p"/"},
+          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph"}
         ]
       },
       %{
-        label: "Knowledge",
+        label: gettext("Knowledge"),
         items: [
-          %{key: "notes", label: "Notes", icon: "hero-document-text", path: ~p"/notes"},
-          %{key: "concepts", label: "Concepts", icon: "hero-light-bulb", path: ~p"/concepts"},
-          %{key: "entities", label: "Entities", icon: "hero-user-group", path: ~p"/entities"},
-          %{key: "references", label: "References", icon: "hero-bookmark", path: ~p"/references"},
+          %{key: "notes", label: gettext("Notes"), icon: "hero-document-text", path: ~p"/notes"},
+          %{key: "concepts", label: gettext("Concepts"), icon: "hero-light-bulb", path: ~p"/concepts"},
+          %{key: "entities", label: gettext("Entities"), icon: "hero-user-group", path: ~p"/entities"},
+          %{key: "references", label: gettext("References"), icon: "hero-bookmark", path: ~p"/references"},
           %{
             key: "queries",
-            label: "Queries",
+            label: gettext("Queries"),
             icon: "hero-question-mark-circle",
             path: ~p"/queries"
           }
         ]
       },
       %{
-        label: "Planning",
+        label: gettext("Planning"),
         items: [
-          %{key: "goals", label: "Goals", icon: "hero-flag", path: ~p"/goals"},
+          %{key: "goals", label: gettext("Goals"), icon: "hero-flag", path: ~p"/goals"},
           %{
             key: "plans",
-            label: "Plans",
+            label: gettext("Plans"),
             icon: "hero-clipboard-document-list",
             path: ~p"/plans"
           },
-          %{key: "todos", label: "Todos", icon: "hero-check-circle", path: ~p"/todos"}
+          %{key: "todos", label: gettext("Todos"), icon: "hero-check-circle", path: ~p"/todos"}
         ]
       },
       %{
-        label: "Outputs",
+        label: gettext("Outputs"),
         items: [
-          %{key: "artifacts", label: "Artifacts", icon: "hero-cube", path: ~p"/artifacts"},
-          %{key: "comparisons", label: "Comparisons", icon: "hero-scale", path: ~p"/comparisons"}
+          %{key: "artifacts", label: gettext("Artifacts"), icon: "hero-cube", path: ~p"/artifacts"},
+          %{key: "comparisons", label: gettext("Comparisons"), icon: "hero-scale", path: ~p"/comparisons"}
         ]
       },
       %{
-        label: "Agents",
+        label: gettext("Agents"),
         items: [
           %{
             key: "research",
-            label: "Research",
+            label: gettext("Research"),
             icon: "hero-beaker",
             path: ~p"/agents/research"
           },
           %{
             key: "ingest",
-            label: "Files Ingest",
+            label: gettext("Files Ingest"),
             icon: "hero-arrow-down-tray",
             path: ~p"/agents/ingest"
           }
         ]
       },
       %{
-        label: "Configs",
+        label: gettext("Configs"),
         items: [
           %{
             key: "contexts",
-            label: "Contexts",
+            label: gettext("Contexts"),
             icon: "hero-rectangle-stack",
             path: ~p"/contexts"
           },
-          %{key: "settings", label: "Settings", icon: "hero-cog-6-tooth", path: ~p"/settings"}
+          %{key: "settings", label: gettext("Settings"), icon: "hero-cog-6-tooth", path: ~p"/settings"}
         ]
       },
       %{
-        label: "Docs",
+        label: gettext("Docs"),
         items: [
-          %{key: "docs", label: "Documentation", icon: "hero-book-open", path: ~p"/docs"}
+          %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/docs"}
         ]
       }
     ]
@@ -305,7 +305,7 @@ defmodule DranWeb.Layouts do
         onsubmit="this.method='delete'; this.submit(); return false;"
       >
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-        <button type="submit" class="btn btn-ghost btn-xs" title="Logout">
+        <button type="submit" class="btn btn-ghost btn-xs" title={gettext("Logout")}>
           <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
         </button>
       </form>

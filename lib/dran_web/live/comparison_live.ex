@@ -28,6 +28,7 @@ defmodule DranWeb.ComparisonLive do
           compare_version={@compare_version}
           logs={@logs}
           context_slug={@context_slug}
+          rendered_body={@rendered_body}
         >
           <:actions>
             <.link navigate={~p"/comparisons"} class="btn btn-primary btn-sm"><.icon
@@ -101,10 +102,7 @@ defmodule DranWeb.ComparisonLive do
                 </.form>
               <% else %>
                 <div class="prose prose-base dark:prose-invert max-w-none">
-                  {render_markdown(@page.body,
-                    context_id: @page.context_id,
-                    inline_links: Map.get(@page.meta || %{}, "inline_links", [])
-                  )}
+                  {@rendered_body}
                 </div>
                 <div class="border-t border-base-300 pt-4">
                   <h3 class="text-sm font-semibold text-base-content/60 mb-2">Changelog</h3>
@@ -174,6 +172,12 @@ defmodule DranWeb.ComparisonLive do
           editing = Map.get(params, "edit") == "true"
           form = if editing, do: Brain.change_page(page) |> to_form(as: :page), else: nil
 
+          rendered_body =
+            render_markdown(page.body,
+              context_id: page.context_id,
+              inline_links: Map.get(page.meta || %{}, "inline_links", [])
+            )
+
           {:noreply,
            assign(socket,
              page: page,
@@ -188,7 +192,8 @@ defmodule DranWeb.ComparisonLive do
              editing: editing,
              form: form,
              context_id: context.id,
-             save_status: "idle"
+             save_status: "idle",
+             rendered_body: rendered_body
            )}
       end
     else

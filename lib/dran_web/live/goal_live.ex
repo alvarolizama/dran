@@ -49,6 +49,7 @@ defmodule DranWeb.GoalLive do
           compare_version={@compare_version}
           logs={@logs}
           context_slug={@context_slug}
+          rendered_body={@rendered_body}
         >
           <:actions>
             <.link navigate={~p"/goals"} class="btn btn-primary btn-sm">
@@ -139,10 +140,7 @@ defmodule DranWeb.GoalLive do
                 </.form>
               <% else %>
                 <div class="prose prose-base dark:prose-invert max-w-none">
-                  {render_markdown(@page.body,
-                    context_id: @page.context_id,
-                    inline_links: Map.get(@page.meta || %{}, "inline_links", [])
-                  )}
+                  {@rendered_body}
                 </div>
               <% end %>
             </div>
@@ -500,6 +498,12 @@ defmodule DranWeb.GoalLive do
             )
             |> Enum.filter(fn p -> meta_get(p.meta, "goal_slug") == page.slug end)
 
+          rendered_body =
+            render_markdown(page.body,
+              context_id: page.context_id,
+              inline_links: Map.get(page.meta || %{}, "inline_links", [])
+            )
+
           {:noreply,
            assign(socket,
              page: page,
@@ -517,7 +521,8 @@ defmodule DranWeb.GoalLive do
              goal_artifacts: goal_artifacts,
              goal_references: goal_references,
              graph_nodes: graph_nodes,
-             graph_edges: graph_edges
+             graph_edges: graph_edges,
+             rendered_body: rendered_body
            )}
       end
     else

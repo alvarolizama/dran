@@ -28,6 +28,7 @@ defmodule DranWeb.NoteLive do
           compare_version={@compare_version}
           logs={@logs}
           context_slug={@context_slug}
+          rendered_body={@rendered_body}
         >
           <:actions>
             <.link navigate={~p"/notes"} class="btn btn-primary btn-sm">
@@ -124,10 +125,7 @@ defmodule DranWeb.NoteLive do
                 </.form>
               <% else %>
                 <div class="prose prose-base dark:prose-invert max-w-none">
-                  {render_markdown(@page.body,
-                    context_id: @page.context_id,
-                    inline_links: Map.get(@page.meta || %{}, "inline_links", [])
-                  )}
+                  {@rendered_body}
                 </div>
 
                 <div class="border-t border-base-300 pt-4">
@@ -208,6 +206,12 @@ defmodule DranWeb.NoteLive do
               nil
             end
 
+          rendered_body =
+            render_markdown(page.body,
+              context_id: page.context_id,
+              inline_links: Map.get(page.meta || %{}, "inline_links", [])
+            )
+
           {:noreply,
            assign(socket,
              page: page,
@@ -222,7 +226,8 @@ defmodule DranWeb.NoteLive do
              editing: editing,
              form: form,
              context_id: context.id,
-             save_status: "idle"
+             save_status: "idle",
+             rendered_body: rendered_body
            )}
       end
     else
