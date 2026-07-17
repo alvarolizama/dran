@@ -8,7 +8,6 @@ defmodule DranWeb.PageListComponents do
 
   alias DranWeb.PageTypes
 
-  attr :pages, :list, required: true
   attr :page_type, :string, default: nil
   attr :context_slug, :string, default: "personal"
 
@@ -24,13 +23,14 @@ defmodule DranWeb.PageListComponents do
         </.link>
       </div>
 
-      <div :if={@pages == []} class="text-center py-12 text-base-content/40">
-        No pages yet. Click "New" to create one.
-      </div>
-
-      <div class="space-y-2">
+      <div
+        id={"pages-#{@page_type || "all"}"}
+        phx-update="stream"
+        class="space-y-2"
+      >
         <div
-          :for={page <- @pages}
+          :for={{id, page} <- @streams.pages}
+          id={id}
           class="p-3 rounded-lg border border-base-300 hover:bg-base-200 cursor-pointer"
           phx-click="show_page"
           phx-value-slug={page.slug}
@@ -41,12 +41,13 @@ defmodule DranWeb.PageListComponents do
           </div>
           <p :if={page.summary} class="text-sm text-base-content/60 mt-1">{page.summary}</p>
           <div class="flex gap-1 mt-2">
-            <span
+            <.link
               :for={tag <- Enum.take(page.tags || [], 5)}
-              class="px-1.5 py-0.5 text-xs rounded bg-base-300"
+              navigate={"/tags/#{URI.encode_www_form(tag)}"}
+              class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-base-200 transition"
             >
               {tag}
-            </span>
+            </.link>
           </div>
         </div>
       </div>

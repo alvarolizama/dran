@@ -17,6 +17,7 @@ defmodule DranWeb.PageComponents do
   attr :logs, :list, default: []
   attr :compare_version, :map, default: nil
   attr :context_slug, :string, default: "personal"
+  attr :rendered_body, :any, default: nil
 
   slot :actions
   slot :tabs
@@ -34,7 +35,17 @@ defmodule DranWeb.PageComponents do
           []
       end
 
+    # Use pre-computed rendered_body if provided (avoids re-parsing markdown on every render).
+    # Otherwise, fall back to rendering inline (backward-compatible with callers that don't pass rendered_body).
+    rendered_body =
+      Map.get(assigns, :rendered_body) ||
+        render_markdown(assigns.page.body,
+          context_id: assigns.page.context_id,
+          inline_links: inline_links
+        )
+
     assigns = assign(assigns, :inline_links, inline_links)
+    assigns = assign(assigns, :rendered_body, rendered_body)
 
     tag_map =
       case assigns.page.tags do
@@ -61,7 +72,7 @@ defmodule DranWeb.PageComponents do
               <div class="flex flex-wrap gap-2 mt-2">
                 <.link
                   :for={tag <- @page.tags || []}
-                  navigate={tag_link_path(tag, @page.context_id, @tag_map)}
+                  navigate={"/tags/#{URI.encode_www_form(tag)}"}
                   class={[
                     "px-2 py-0.5 text-xs rounded transition",
                     "tag-link",
@@ -97,7 +108,7 @@ defmodule DranWeb.PageComponents do
           {render_slot(@tabs)}
 
           <div :if={@tabs == []} class="prose prose-base dark:prose-invert max-w-none">
-            {render_markdown(@page.body, context_id: @page.context_id, inline_links: @inline_links)}
+            {@rendered_body}
           </div>
 
           <div :if={@tabs == []} class="border-t border-base-300 pt-4">

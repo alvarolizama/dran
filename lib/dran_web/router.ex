@@ -149,6 +149,8 @@ defmodule DranWeb.Router do
 
     live "/search", SearchLive, :index
 
+    live "/tags/:tag", TagLive, :index
+
     live "/ingest", IngestLive, :index
 
     # Docs
