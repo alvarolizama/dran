@@ -38,6 +38,22 @@ defmodule Dran.Brain do
     Repo.all(from c in Context, order_by: [asc: c.name])
   end
 
+  @doc """
+  Returns a map of `context_id => page_count` for all contexts.
+
+  Lightweight single query (group_by) used by the context selector
+  to show page counts next to each context name. Called once per mount,
+  never per render.
+  """
+  def page_counts_by_context do
+    Repo.all(
+      from p in Page,
+        group_by: p.context_id,
+        select: {p.context_id, count(p.id)}
+    )
+    |> Map.new()
+  end
+
   @doc "Get a context by slug"
   def get_context_by_slug(slug) when is_binary(slug) do
     Repo.one(from c in Context, where: c.slug == ^slug)

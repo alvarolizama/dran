@@ -13,6 +13,7 @@ defmodule DranWeb.Router do
     plug :put_root_layout, html: {DranWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug DranWeb.Plugs.Auth, :fetch_context_cookie
   end
 
   pipeline :api do

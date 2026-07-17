@@ -24,6 +24,7 @@ defmodule DranWeb.Layouts do
   attr :current_user, :string, default: nil, doc: "the authenticated user"
   attr :context_slug, :string, default: nil, doc: "the active context slug"
   attr :contexts, :list, default: [], doc: "available contexts for the selector"
+  attr :page_counts, :map, default: %{}, doc: "map of context_id => page count"
 
   attr :active_nav, :string,
     default: nil,
@@ -32,6 +33,12 @@ defmodule DranWeb.Layouts do
   attr :fluid, :boolean,
     default: false,
     doc: "when true, the main content area skips internal padding/constraints"
+
+  # Optional page-context assigns forwarded to the ChatWidget so it can
+  # show contextual suggestions and scope the conversation.
+  attr :page_slug, :string, default: nil, doc: "slug of the page being viewed"
+  attr :page_type, :string, default: nil, doc: "type of the current page (goal, note, ...)"
+  attr :view_type, :string, default: nil, doc: "type of the current view (dashboard, ...)"
 
   slot :inner_block, required: true
 
@@ -48,7 +55,7 @@ defmodule DranWeb.Layouts do
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
-            <.context_selector context_slug={@context_slug} contexts={@contexts} />
+            <.context_selector context_slug={@context_slug} contexts={@contexts} page_counts={@page_counts} />
           </div>
         </div>
 
@@ -88,6 +95,16 @@ defmodule DranWeb.Layouts do
         module={DranWeb.CommandPalette}
         id="command-palette"
         context_slug={@context_slug}
+      />
+
+      <.live_component
+        module={DranWeb.ChatWidget}
+        id="chat-widget"
+        context_slug={@context_slug}
+        current_user={@current_user}
+        page_slug={@page_slug}
+        page_type={@page_type}
+        view_type={@view_type}
       />
 
       <.flash_group flash={@flash} />
@@ -374,9 +391,14 @@ defmodule DranWeb.Layouts do
 
   @doc """
   Context selector dropdown. Shown when multiple contexts are available.
+
+  Displays the page count next to each context name, e.g. "Personal (142)".
+  The `<select>` has `id="context-selector"` so the ⌘⇧C keyboard shortcut
+  in app.js can focus and open it.
   """
   attr :context_slug, :string, default: nil
   attr :contexts, :list, default: []
+  attr :page_counts, :map, default: %{}
 
   def context_selector(assigns) do
     ~H"""
@@ -384,12 +406,13 @@ defmodule DranWeb.Layouts do
       <form action={~p"/context"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <select
+          id="context-selector"
           name="context_slug"
           onchange="this.form.submit()"
           class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
         >
           <option :for={ctx <- @contexts} value={ctx.slug} selected={ctx.slug == @context_slug}>
-            {ctx.name}
+            {ctx.name} ({Map.get(@page_counts, ctx.id, 0)})
           </option>
         </select>
       </form>
