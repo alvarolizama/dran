@@ -11,20 +11,26 @@ defmodule Dran.Slug do
   @doc """
   Convert a string to a URL-safe slug.
 
-  Lowercases, replaces runs of non-alphanumeric characters with hyphens,
-  and trims leading/trailing hyphens. Returns an empty string for `nil`
-  or inputs that produce no usable characters.
+  Normalizes Unicode (NFD) to decompose accented characters, drops the
+  resulting combining marks (non-ASCII), lowercases, replaces runs of
+  non-alphanumeric characters with hyphens, and trims leading/trailing
+  hyphens. Inputs that produce no usable characters (empty, whitespace,
+  punctuation-only, `nil`, or non-binaries) fall back to `"untitled"`.
   """
-  @spec slugify(binary() | nil) :: binary()
-  def slugify(nil), do: ""
-  def slugify(""), do: ""
-
+  @spec slugify(binary() | term()) :: binary()
   def slugify(text) when is_binary(text) do
-    text
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "-")
-    |> String.replace(~r/^-+|-+$/, "")
+    slug =
+      text
+      |> String.normalize(:nfd)
+      |> String.replace(~r/[\x80-\xFF]/, "")
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "-")
+      |> String.replace(~r/^-+|-+$/, "")
+
+    if slug == "", do: "untitled", else: slug
   end
+
+  def slugify(_), do: "untitled"
 
   @doc """
   Generate a unique slug from a title within a context.

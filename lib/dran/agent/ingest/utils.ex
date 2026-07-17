@@ -292,14 +292,7 @@ defmodule Dran.Agent.Ingest.Utils do
   end
 
   def slugify(text) do
-    text
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "-")
-    |> String.replace(~r/^-+|-+$/, "")
-    |> case do
-      "" -> "untitled"
-      other -> other
-    end
+    Dran.Slug.slugify(text)
   end
 
   defp summarize_text(markdown) do

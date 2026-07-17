@@ -48,5 +48,6 @@ defmodule Dran.Agent.Session do
       :context_id
     ])
     |> validate_required([:agent_type, :input, :context_id])
+    |> validate_inclusion(:status, ~w(pending running done failed cancelled))
   end
 end

@@ -333,14 +333,7 @@ defmodule Dran.Brain do
   end
 
   defp slugify_title(title) do
-    title
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "-")
-    |> String.replace(~r/^-+|-+$/, "")
-    |> case do
-      "" -> "untitled"
-      slug -> slug
-    end
+    Dran.Slug.slugify(title)
   end
 
   defp default_owner_field(attrs, key, value) do
