@@ -38,7 +38,7 @@ defmodule DranWeb.DocsLive do
       contexts={@contexts}
       active_nav="docs"
     >
-      <div class="p-6 w-full overflow-y-auto h-full">
+      <div class="p-6 w-full">
         <h1 class="text-2xl font-bold mb-6">{gettext("Documentation")}</h1>
 
         <.tabs_bar tabs={translated_tabs()} active_tab={@active_tab} />

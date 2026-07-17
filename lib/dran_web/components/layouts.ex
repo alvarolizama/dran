@@ -112,7 +112,7 @@ defmodule DranWeb.Layouts do
         </div>
       </aside>
 
-      <div class="flex-1 overflow-hidden flex flex-col w-full">
+      <div class="flex-1 overflow-y-auto flex flex-col w-full">
         {render_slot(@inner_block)}
       </div>
 
