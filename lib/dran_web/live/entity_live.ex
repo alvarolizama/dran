@@ -129,7 +129,7 @@ defmodule DranWeb.EntityLive do
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
-        <.page_list pages={@streams.pages} page_type={@page_type} context_slug={@context_slug} />
+        <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
       </div>
     </Layouts.app>
     """
@@ -215,7 +215,7 @@ defmodule DranWeb.EntityLive do
         do: Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
         else: []
 
-    {:noreply, stream(socket, :pages, pages, reset: true) |> assign(page_title: "Entities")}
+    {:noreply, assign(socket, pages: pages, page_title: "Entities")}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}

@@ -131,7 +131,7 @@ defmodule DranWeb.QueryLive do
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
-        <.page_list pages={@streams.pages} page_type={@page_type} context_slug={@context_slug} />
+        <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
       </div>
     </Layouts.app>
     """
@@ -225,7 +225,7 @@ defmodule DranWeb.QueryLive do
         []
       end
 
-    {:noreply, stream(socket, :pages, pages, reset: true) |> assign(page_title: "Queries")}
+    {:noreply, assign(socket, pages: pages, page_title: "Queries")}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
