@@ -160,4 +160,50 @@ defmodule Dran.BrainTest do
       assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == art.id))
     end
   end
+
+  describe "graph_data/1" do
+    test "exposes weight on edges and summary/tags on nodes", %{context: ctx} do
+      {:ok, a} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Concept A",
+          slug: "concept-a",
+          page_type: "concept",
+          summary: "A short summary of concept A.",
+          tags: ["elixir", "otp"]
+        })
+
+      {:ok, b} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Concept B",
+          slug: "concept-b",
+          page_type: "concept",
+          summary: "B's summary.",
+          tags: ["phoenix"]
+        })
+
+      {:ok, _rel} =
+        Brain.create_relation(%{
+          source_id: a.id,
+          target_id: b.id,
+          relation_type: "related",
+          weight: 0.85
+        })
+
+      graph = Brain.graph_data(ctx.id)
+
+      # Nodes have summary and tags keys
+      node_a = Enum.find(graph.nodes, &(&1.id == a.id))
+      assert Map.has_key?(node_a, :summary)
+      assert Map.has_key?(node_a, :tags)
+      assert node_a.summary == "A short summary of concept A."
+      assert node_a.tags == ["elixir", "otp"]
+
+      # Edges expose weight
+      edge = Enum.find(graph.edges, &(&1.source == a.id and &1.target == b.id))
+      assert Map.has_key?(edge, :weight)
+      assert_in_delta edge.weight, 0.85, 0.001
+    end
+  end
 end

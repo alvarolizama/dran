@@ -22,7 +22,6 @@ defmodule Dran.Brain.PageAugmenter do
   alias Dran.Inference
   alias Dran.Summaries
 
-  @semantic_threshold 0.22
   @suggestion_limit 5
 
   @doc """
@@ -59,9 +58,11 @@ defmodule Dran.Brain.PageAugmenter do
     with {:ok, enrich} <- maybe_enrich_metadata(page),
          :ok <- ensure_embedding(enrich),
          {:ok, neighbors} <- find_semantic_neighbors(enrich) do
+      threshold = semantic_threshold(enrich)
+
       target_ids =
         neighbors
-        |> Enum.filter(fn %{distance: distance} -> distance <= @semantic_threshold end)
+        |> Enum.filter(fn %{distance: distance} -> distance <= threshold end)
         |> Enum.map(& &1.id)
 
       create_relations(enrich, target_ids)
@@ -162,40 +163,78 @@ defmodule Dran.Brain.PageAugmenter do
 
   # ── Relations ──
 
-  defp create_relations(page, neighbor_ids) do
-    neighbor_ids
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-    |> Enum.each(fn target_id ->
-      target = Repo.get(Page, target_id)
+  @doc """
+  Dynamic cosine-distance threshold for accepting a semantic neighbour.
 
-      if target && target.id != page.id do
-        maybe_create_relation(page, target, :medium)
-      end
-    end)
+  Short pages carry less signal, so we demand a tighter match; long pages
+  have richer embeddings and can be linked more liberally.
 
-    {:ok, :done}
+    * `body` <  500 chars  → 0.15
+    * `body` > 4000 chars  → 0.28
+    * otherwise           → 0.22
+  """
+  @spec semantic_threshold(Page.t()) :: float()
+  def semantic_threshold(%Page{body: body}) when is_binary(body) do
+    cond do
+      String.length(body) < 500 -> 0.15
+      String.length(body) > 4000 -> 0.28
+      true -> 0.22
+    end
   end
 
-  defp maybe_create_relation(page, target, confidence) do
-    existing =
-      Brain.list_relations_for_page(page.id)
-      |> Map.get(:outbound, [])
-      |> Enum.any?(&(&1.target_id == target.id))
+  def semantic_threshold(%Page{body: _}), do: 0.22
 
-    if existing do
-      :ok
+  defp create_relations(page, neighbor_ids) do
+    target_ids =
+      neighbor_ids
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.reject(&(&1 == page.id))
+
+    if target_ids == [] do
+      {:ok, :done}
     else
-      case Brain.create_relation(%{
-             source_id: page.id,
-             target_id: target.id,
-             relation_type: "semantic",
-             meta: %{"auto" => true, "confidence" => Atom.to_string(confidence)}
-           }) do
-        {:ok, _} -> :ok
-        {:error, _} -> :ok
-      end
+      # Load existing outbound semantic targets once (no N+1).
+      existing_targets =
+        Brain.list_relations_for_page(page.id)
+        |> Map.get(:outbound, [])
+        |> Enum.filter(&(&1.relation_type == "semantic"))
+        |> MapSet.new(& &1.target_id)
+
+      Enum.each(target_ids, fn target_id ->
+        create_semantic_edge(page, target_id, existing_targets)
+      end)
+
+      {:ok, :done}
     end
+  end
+
+  # Creates A→B and the inverse B→A when missing.
+  # `Brain.create_relation/1` uses `on_conflict: :nothing`, so attempting the
+  # insert is safe even if a row already exists. We still consult the
+  # `existing_targets` MapSet to avoid spurious inserts on the outbound side
+  # and to know whether we need to create the inverse edge.
+  defp create_semantic_edge(page, target_id, existing_targets) do
+    meta = %{"auto" => true, "confidence" => "medium"}
+
+    unless MapSet.member?(existing_targets, target_id) do
+      Brain.create_relation(%{
+        source_id: page.id,
+        target_id: target_id,
+        relation_type: "semantic",
+        meta: meta
+      })
+    end
+
+    # Inverse edge B→A — always attempt; on_conflict handles dedupe.
+    Brain.create_relation(%{
+      source_id: target_id,
+      target_id: page.id,
+      relation_type: "semantic",
+      meta: meta
+    })
+
+    :ok
   end
 
   defp serialize_inline_links(links) when is_list(links) do

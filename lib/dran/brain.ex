@@ -488,25 +488,45 @@ defmodule Dran.Brain do
     if err do
       {:error, err}
     else
+      threshold = Dran.Brain.PageAugmenter.semantic_threshold(page)
+
       existing_target_ids =
         list_relations_for_page(page.id)
         |> Map.get(:outbound, [])
+        |> Enum.filter(&(&1.relation_type == "semantic"))
         |> Enum.map(& &1.target_id)
         |> MapSet.new()
 
       created =
         results
         |> Enum.reject(&MapSet.member?(existing_target_ids, &1.id))
+        |> Enum.filter(fn target ->
+          distance = Map.get(target, :distance)
+          is_nil(distance) or distance <= threshold
+        end)
         |> Enum.reduce([], fn target, acc ->
+          distance = Map.get(target, :distance)
+
           attrs = %{
             source_id: page.id,
             target_id: target.id,
             relation_type: "semantic",
-            meta: %{"distance" => Map.get(target, :distance)}
+            weight: distance,
+            meta: %{"auto" => true, "distance" => distance}
           }
 
-          case create_relation(attrs) do
-            {:ok, rel} -> [rel | acc]
+          inverse_attrs = %{
+            source_id: target.id,
+            target_id: page.id,
+            relation_type: "semantic",
+            weight: distance,
+            meta: %{"auto" => true, "distance" => distance}
+          }
+
+          with {:ok, rel} <- create_relation(attrs),
+               {:ok, _} <- create_relation(inverse_attrs) do
+            [rel | acc]
+          else
             _ -> acc
           end
         end)
@@ -617,8 +637,8 @@ defmodule Dran.Brain do
   Build the full graph (nodes + edges) for a context.
 
   Returns `%{nodes: [...], edges: [...]}` where each node is
-  `%{id, title, slug, type}` and each edge is
-  `%{source, target, type}`. Used by the graph LiveView and the
+  `%{id, title, slug, type, summary, tags}` and each edge is
+  `%{source, target, type, weight}`. Used by the graph LiveView and the
   `/api/graph` endpoint.
   """
   def graph_data(context_id) do
@@ -626,7 +646,14 @@ defmodule Dran.Brain do
       Repo.all(
         from p in Page,
           where: p.context_id == ^context_id,
-          select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
+          select: %{
+            id: p.id,
+            title: p.title,
+            slug: p.slug,
+            type: p.page_type,
+            summary: p.summary,
+            tags: p.tags
+          }
       )
 
     node_ids = Enum.map(nodes, & &1.id)
@@ -638,7 +665,12 @@ defmodule Dran.Brain do
         Repo.all(
           from r in Relation,
             where: r.source_id in ^node_ids and r.target_id in ^node_ids,
-            select: %{source: r.source_id, target: r.target_id, type: r.relation_type}
+            select: %{
+              source: r.source_id,
+              target: r.target_id,
+              type: r.relation_type,
+              weight: r.weight
+            }
         )
       end
 
