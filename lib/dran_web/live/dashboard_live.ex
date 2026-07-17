@@ -60,16 +60,16 @@ defmodule DranWeb.DashboardLive do
           <%!-- Header --%>
           <div class="flex items-center justify-between">
             <div>
-              <h1 class="text-3xl font-bold">Dashboard</h1>
+              <h1 class="text-2xl font-bold">Dashboard</h1>
               <p class="text-sm text-base-content/50 mt-1">
                 {if @context, do: @context.name, else: "No context"} · {@stats[:total_pages] || 0} pages
               </p>
             </div>
             <div class="flex gap-2">
-              <.link navigate={~p"/graph"} class="btn btn-ghost btn-sm">
+              <.link navigate={~p"/graph"} class="btn btn-ghost btn-sm transition-colors active:scale-95">
                 <.icon name="hero-share" class="size-4" /> Graph
               </.link>
-              <.link navigate={~p"/search"} class="btn btn-ghost btn-sm">
+              <.link navigate={~p"/search"} class="btn btn-ghost btn-sm transition-colors active:scale-95">
                 <.icon name="hero-magnifying-glass" class="size-4" /> Search
               </.link>
             </div>
@@ -108,7 +108,7 @@ defmodule DranWeb.DashboardLive do
             <div class="lg:col-span-1 space-y-4">
               <div class="card bg-base-100 border border-base-300">
                 <div class="card-body p-5">
-                  <h2 class="card-title text-lg">Pages by Type</h2>
+                  <h2 class="card-title text-lg font-semibold">Pages by Type</h2>
                   <div class="space-y-2 mt-2">
                     <.type_row
                       :for={{type, count} <- sort_by_type(@stats[:by_type] || %{})}
@@ -126,7 +126,7 @@ defmodule DranWeb.DashboardLive do
                 class="card bg-base-100 border border-base-300"
               >
                 <div class="card-body p-5">
-                  <h2 class="card-title text-lg">Todos</h2>
+                  <h2 class="card-title text-lg font-semibold">Todos</h2>
                   <div class="space-y-1.5 mt-2">
                     <div
                       :for={{status, label, badge} <- @kanban_columns}
@@ -139,7 +139,7 @@ defmodule DranWeb.DashboardLive do
                     </div>
                   </div>
                   <div class="card-actions justify-end mt-3">
-                    <.link navigate={~p"/todos"} class="btn btn-ghost btn-sm">View board</.link>
+                    <.link navigate={~p"/todos"} class="btn btn-ghost btn-sm transition-colors active:scale-95">View board</.link>
                   </div>
                 </div>
               </div>
@@ -150,8 +150,8 @@ defmodule DranWeb.DashboardLive do
               <div class="card bg-base-100 border border-base-300">
                 <div class="card-body p-5">
                   <div class="flex items-center justify-between">
-                    <h2 class="card-title text-lg">Recently Updated</h2>
-                    <.link navigate={~p"/graph"} class="btn btn-ghost btn-xs">
+                    <h2 class="card-title text-lg font-semibold">Recently Updated</h2>
+                    <.link navigate={~p"/graph"} class="btn btn-ghost btn-xs transition-colors active:scale-95">
                       <.icon name="hero-share" class="size-3.5" /> Graph view
                     </.link>
                   </div>
@@ -159,7 +159,7 @@ defmodule DranWeb.DashboardLive do
                     <.link
                       :for={page <- @stats[:recent] || []}
                       navigate={page_path(page)}
-                      class="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition cursor-pointer"
+                      class="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
                     >
                       <.icon
                         name={PageTypes.icon(page.page_type)}
@@ -180,9 +180,14 @@ defmodule DranWeb.DashboardLive do
                     </.link>
                     <p
                       :if={(@stats[:recent] || []) == []}
-                      class="text-sm text-base-content/40 py-4 text-center"
+                      class="text-sm text-base-content/40 py-8 text-center"
                     >
-                      No pages yet. Create one to get started.
+                      <div class="flex flex-col items-center gap-3">
+                        <div class="size-12 rounded-full bg-base-200 flex items-center justify-center">
+                          <.icon name="hero-document" class="size-6 text-base-content/40" />
+                        </div>
+                        <span>No pages yet. Create one to get started.</span>
+                      </div>
                     </p>
                   </div>
                 </div>
@@ -191,7 +196,7 @@ defmodule DranWeb.DashboardLive do
               <%!-- Quick access grid --%>
               <div class="card bg-base-100 border border-base-300">
                 <div class="card-body p-5">
-                  <h2 class="card-title text-lg">Quick Access</h2>
+                  <h2 class="card-title text-lg font-semibold">Quick Access</h2>
                   <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
                     <%= for {_group_label, items} <- @nav_groups do %>
                       <%= for item <- items do %>
@@ -247,7 +252,7 @@ defmodule DranWeb.DashboardLive do
 
   defp metric_card(assigns) do
     ~H"""
-    <div class="card bg-base-100 border border-base-300 hover:border-primary/30 transition">
+    <div class="card bg-base-100 border border-base-300 hover:border-primary/30 transition-colors">
       <div class="card-body p-5 flex-row items-center gap-4">
         <div class={"shrink-0 #{@color}"}>
           <.icon name={@icon} class="size-8" />
@@ -270,7 +275,7 @@ defmodule DranWeb.DashboardLive do
     <div class="flex items-center gap-3">
       <.link
         navigate={"/#{PageTypes.path(@type)}"}
-        class="text-sm font-medium hover:text-primary transition shrink-0 w-24"
+        class="text-sm font-medium hover:text-primary transition-colors shrink-0 w-24"
       >
         {PageTypes.plural(@type)}
       </.link>
@@ -295,7 +300,7 @@ defmodule DranWeb.DashboardLive do
     ~H"""
     <.link
       navigate={@path}
-      class="card bg-base-200/50 border border-base-300 hover:border-primary/40 hover:bg-base-200 transition"
+      class="card bg-base-200/50 border border-base-300 hover:border-primary/40 hover:bg-base-200 transition-colors active:scale-95"
     >
       <div class="card-body p-4 items-center text-center gap-1">
         <.icon name={@icon} class="size-6 text-base-content/60" />
