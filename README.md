@@ -25,6 +25,86 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
   </tr>
 </table>
 
+## Use as MCP server
+
+Dran exposes an MCP (Model Context Protocol) endpoint at `POST /api/mcp` using
+the **Streamable HTTP** transport (MCP spec 2025-03-26). This lets any
+MCP-compatible client — Claude Desktop, Hermes Agent, custom scripts — use Dran
+as a knowledge tool with 19 tools, 3 resources, and 3 prompts.
+
+### Connection
+
+| Item | Value |
+| --- | --- |
+| Endpoint | `POST http://<host>/api/mcp` |
+| Auth | `Authorization: Bearer <DRAN_API_TOKEN>` |
+| Transport | Streamable HTTP, MCP spec 2025-03-26 |
+| Default context | `personal` |
+
+The server returns an `mcp-session-id` header on `initialize`. Include it in
+subsequent requests of the same session. Requests with an `id` field receive a
+JSON response; notifications (no `id`) return `202`. If the endpoint returns
+`401`, check your `DRAN_API_TOKEN`.
+
+### Hermes Agent config
+
+Add to `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  dran:
+    url: http://localhost:4000/api/mcp
+    headers:
+      Authorization: "Bearer dran-token"
+```
+
+### Claude Desktop config
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "dran": {
+      "url": "http://localhost:4000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer dran-token"
+      }
+    }
+  }
+}
+```
+
+### Quick test with curl
+
+```bash
+curl -X POST http://localhost:4000/api/mcp \
+  -H "Authorization: Bearer dran-token" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+```
+
+### Agent skill
+
+The repo includes **[SKILL.md](SKILL.md)** — a complete agent operating manual
+for the Dran MCP server. It covers connection details, all 19 tools grouped by
+workflow, resources, prompts, autonomous agents, page types with meta
+validation, step-by-step recipes, common mistakes, and a quick checklist.
+
+Copy it to `~/.hermes/skills/second-brain/SKILL.md` (or reference it in place)
+to give any MCP-compatible agent the operational context it needs.
+
+### Available tools (19)
+
+`search` · `semantic_search` (deprecated alias) · `get_page` · `list_pages` ·
+`get_links` · `create_page` · `update_page` · `delete_page` · `create_todo` ·
+`update_todo` · `create_relation` · `delete_relation` · `rename_slug` ·
+`ingest_url` · `reaugment_page` · `stats` · `lint` · `start_agent` ·
+`get_agent_session`
+
+For the full operational guide — tool-by-tool usage, recipes, pitfalls, and
+agent limits — see [**SKILL.md**](SKILL.md).
+
 ## Features
 
 - **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, artifact, goal, plan, todo, comparison, and query

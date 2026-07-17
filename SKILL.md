@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 19 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
-version: 3.0.0
+version: 4.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -14,150 +14,123 @@ metadata:
 
 ## 1. Overview
 
-### What is Dran
+Dran is a **personal second-brain / knowledge-graph server**. Every piece of
+knowledge is a typed **page** (note, concept, entity, reference, goal, plan,
+todo, artifact, comparison, query) connected by typed **relations**
+(`semantic`, `related`, `part_of`, `supersedes`, `contradicts`, `embeds`). All
+operations go through a single MCP endpoint — there is no need to use the REST
+API or web UI for agent-driven workflows.
 
-Dran is a personal second-brain application that stores knowledge as a
-**directed graph** inside a context (workspace). It is accessed through a
-**Model Context Protocol (MCP)** endpoint — every operation goes through MCP
-tools. There is no need to use the REST API or the web UI for agent-driven
-workflows.
+**Tech stack:** Phoenix LiveView + PostgreSQL with `pgvector` + Bandit, OpenAI-compatible inference API for embeddings/rerank/chat/vision/ASR.
 
-**Load this skill when:**
-
-- Álvaro mentions Dran, the "segundo cerebro", knowledge graph, notes,
-  goals/plans/todos, research, articles/URLs, comparisons, or agents.
-- You need to capture, update, relate, or query durable knowledge.
-
-**Do not use for:**
-
-- Ephemeral chat (use the `memory` tool).
-- Session-only state.
-- Duplicating content that already lives in another canonical system.
-
-### Architecture Summary
-
-Dran stores knowledge as:
-
-- **Pages** — typed knowledge nodes (`note`, `concept`, `entity`, `reference`,
-  `goal`, `plan`, `todo`, `artifact`, `comparison`, `query`).
-- **Relations** — directed links between pages (`semantic`, `related`, `part_of`,
-  `supersedes`, `contradicts`, `embeds`).
-- **Embeddings** — every page is embedded as a vector. After `create_page` /
-  `update_page`, the `PageAugmenter` asynchronously creates **`semantic`**
-  relations to the closest neighbours.
-
-### Tech Stack
-
-- **Language:** Elixir (~> 1.15) on OTP 26+
-- **Web framework:** Phoenix 1.8 with LiveView 1.2
-- **Database:** PostgreSQL 14+ with `pg_trgm`, `uuid-ossp`, and `pgvector`
-- **HTTP server:** Bandit
-- **Frontend:** Tailwind CSS v4, TipTap WYSIWYG editor, esbuild
-- **Vector storage:** pgvector
-- **HTTP client:** Req (not HTTPoison/Tesla/httpc)
-- **Markdown:** mdex
-- **AI integration:** OpenAI-compatible inference API (embeddings, rerank, chat,
-  vision, ASR, MarkItDown)
-- **Scheduler:** Quantum (cron-style jobs for curator and weekly review)
+- **Pages** are the atoms of the graph. Each page has a `page_type`, a markdown
+  `body`, and a JSONB `meta` whose valid fields depend on the type.
+- **Relations** are directed links between pages. `semantic` relations are
+  created automatically by `PageAugmenter` after every create/update; the rest
+  are created explicitly with `create_relation`.
+- **Embeddings** are generated for every page and stored in `pgvector`. After
+  `create_page` / `update_page`, the augmenter asynchronously creates
+  `semantic` relations to the closest neighbours and extracts title/summary/tags.
 
 ---
 
-## 2. Development
-
-### Project Structure
-
-```
-lib/
-  dran/            — Core domain (brain, embeddings, inference, ingest, agents, relations)
-  dran/agent/      — Autonomous agents (research, ingest, ask, curator, link_gardener, weekly_review)
-  dran/inference/  — LLM/embedding/rerank/vision/ASR/MarkItDown clients
-  dran_web/        — Web layer (controllers, LiveView, components, plugs, router)
-config/            — Phoenix config (dev, test, prod, runtime)
-test/              — ExUnit tests (mirrors lib/ structure)
-priv/repo/         — Migrations and seeds
-rel/               — Release overlays (migrate, server scripts)
-assets/            — JS/CSS bundles (esbuild + Tailwind)
-references/        — Supporting documentation
-```
-
-### Coding Conventions
-
-- Use `mix precommit` when done with all changes — it runs
-  `compile --warnings-as-errors`, `deps.unlock --unused`, `format`, and `test`.
-- Use the built-in `Req` library for HTTP requests — **never** `:httpoison`,
-  `:tesla`, or `:httpc`.
-- LiveView templates **must** begin with `<Layouts.app flash={@flash} ...>`.
-- Use the `<.icon>` component for icons — **never** `Heroicons` modules.
-- Use the imported `<.input>` component for form inputs.
-- Use Tailwind CSS classes and custom CSS rules (no `@apply` in raw CSS).
-- Never nest multiple modules in the same file.
-- Elixir lists use `Enum.at` for index access, not `mylist[i]`.
-- In `if`/`case`/`cond` blocks, bind the result to a variable outside the block.
-
-### Testing
-
-```bash
-mix test              # Create test DB, migrate, run all tests
-mix test test/dran/    # Run domain-layer tests only
-mix test test/dran_web/  # Run web-layer tests only
-```
-
-Tests auto-create and migrate the test database via the `test` alias.
-
----
-
-## 3. MCP API
-
-### Connection
+## 2. Connection
 
 | Item | Value |
 | --- | --- |
-| Transport | Streamable HTTP, MCP spec 2025-03-26 |
-| POST | `POST http://<dran-host>/api/mcp` |
-| Auth | `Authorization: Bearer ***` |
+| Transport | Streamable HTTP, MCP spec **2025-03-26** |
+| Endpoint | `POST http://<host>/api/mcp` |
+| Auth | `Authorization: Bearer <DRAN_API_TOKEN>` |
 | Default context | **`personal`** — do not ask, do not switch unless Álvaro says otherwise |
-| Config | `~/.hermes/config.yaml` → `mcp_servers.dran` |
+| Hermes config | `~/.hermes/config.yaml` → `mcp_servers.dran` |
 
-- Requests need an `id` to get a JSON response. Notifications (`method` with no
-  `id`) return `202` with an empty body.
-- The server returns an `mcp-session-id` header on `initialize`.
-- If the endpoint returns `401`, check the env var before assuming Dran is down.
+**Hermes config snippet (`~/.hermes/config.yaml`):**
 
-### Tools
+```yaml
+mcp_servers:
+  dran:
+    url: http://localhost:4000/api/mcp
+    headers:
+      Authorization: "Bearer dran-token"
+```
 
-| Tool | Purpose |
-| --- | --- |
-| `create_page` | Create any page type (except todos — use `create_todo`). |
-| `create_todo` | Create a todo with status/priority/goal linkage. |
-| `update_page` | Update title/body/tags/meta. **Replaces** `meta` entirely. |
-| `update_todo` | Update todo status/priority/date. **Merges** `meta`. |
-| `rename_slug` | Rename a page slug. Rewrites `![[old-slug]]` embeds across the context. |
-| `delete_page` | Delete a page (irreversible, cascades to relations/versions). |
-| `create_relation` | Create an explicit typed relation between pages. |
-| `delete_relation` | Delete relations between two pages (optionally by type). |
-| `search` | Unified search: auto picks FTS, fuzzy, semantic or hybrid. Use `type` filter when you can. |
-| `semantic_search` | Deprecated alias for `search` with `strategy=semantic`. Prefer `search`. |
-| `get_page` | Full markdown body of one page. Use this to actually read. |
-| `list_pages` | Filtered lightweight list (type, tag, status, limit). |
-| `get_links` | Inbound + outbound relations for a page. |
-| `ingest_url` | Save a URL as a `reference` page, or download a file. With inference enabled, extracts content (MarkItDown/Vision/ASR). |
-| `stats` | Dashboard: totals, pages by type, todos by status, orphans, relations. |
-| `lint` | Orphans, stale pages (>90d), contested knowledge. |
-| `reaugment_page` | Re-run the augmentation pipeline (summary/tags/embedding/relations) for a page. |
-| `start_agent` | Launch an autonomous agent (see Agents section below). |
-| `get_agent_session` | Poll an autonomous agent's progress and results. |
+**Notes:**
 
-### Resources (read-only)
+- The server returns an `mcp-session-id` header on `initialize`. Include it in
+  subsequent requests of the same session.
+- Requests with an `id` field receive a JSON response. Notifications (`method`
+  with no `id`) return `202` with an empty body.
+- If the endpoint returns `401`, check the `DRAN_API_TOKEN` / Bearer value
+  before assuming Dran is down.
+
+---
+
+## 3. Tools (19)
+
+Tools are grouped by **workflow pipeline**, not alphabetically. Follow the
+groups in order: capture → read/find → organize → maintain → automate.
+
+### Capture
+
+| Tool | Purpose | Use when / don't use when |
+| --- | --- | --- |
+| `create_page` | Create any page type. | Use for notes, concepts, entities, references, goals, plans, artifacts, comparisons, queries. **Don't use for todos** — use `create_todo`. |
+| `create_todo` | Create a todo with kanban status, priority, due date, goal linkage. | Use for action items. **Don't use `create_page` with `page_type=todo`** — it won't get the right meta shape. |
+| `ingest_url` | Save a URL as a `reference` page, or download a file. With inference enabled, extracts content (MarkItDown/Vision/ASR). | Use for web articles and file URLs. **Don't pass local/private IPs** — SSRF protection blocks them. |
+
+### Read & find
+
+| Tool | Purpose | Use when / don't use when |
+| --- | --- | --- |
+| `search` | Unified search: auto picks FTS, fuzzy, semantic, or hybrid. | **Use FIRST** whenever you're looking for something — before `create_page`, before answering a question. Use the `type` filter when you can. |
+| `get_page` | Full markdown body of one page. | Use to actually **read** a page after finding it via `search` / `list_pages`. **Don't call without searching first** unless Álvaro gave you the exact slug. |
+| `list_pages` | Filtered lightweight list (type, tag, status, limit). | Use for filtered overviews. **Don't loop it to build an index** — use the `wiki://{context}/index` resource instead. |
+| `get_links` | Inbound + outbound relations for a page. | Use to inspect the graph around a page before relating or deleting. |
+
+### Organize
+
+| Tool | Purpose | Use when / don't use when |
+| --- | --- | --- |
+| `update_page` | Update title/body/tags/meta. **Replaces** `meta` entirely. | Use for content edits. **Don't use for todo status** — `update_todo` merges meta; `update_page` replaces it. |
+| `update_todo` | Update todo status/priority/date. **Merges** `meta`. | Use for any todo status/priority change. This is the only safe way to change todo status. |
+| `rename_slug` | Rename a page slug. Rewrites `![[old-slug]]` embeds across the context. | Use when a slug is wrong. **Don't use lightly** — all embeds are rewritten. |
+| `create_relation` | Create an explicit typed relation between pages. | Use for `related`, `part_of`, `supersedes`, `contradicts`, `embeds`. **Never create `semantic` manually** — they are automatic. |
+| `delete_relation` | Delete relations between two pages (optionally by type). | Use to clean up wrong links. |
+| `delete_page` | Delete a page. **Irreversible**, cascades to relations + versions. | Use only after confirming with Álvaro. **Don't use without confirmation.** |
+
+### Maintain
+
+| Tool | Purpose | Use when / don't use when |
+| --- | --- | --- |
+| `stats` | Dashboard: totals, pages by type, todos by status, orphans, relations. | Use for context overviews, weekly reviews, dashboards. |
+| `lint` | Orphans, stale pages (>90d), contested knowledge. | Use after batches of changes. Surface results to Álvaro — **don't auto-fix**. |
+| `reaugment_page` | Re-run the augmentation pipeline (summary/tags/embedding/relations) for a page. | Use when augmentation failed or content changed significantly. |
+
+### Automate
+
+| Tool | Purpose | Use when / don't use when |
+| --- | --- | --- |
+| `start_agent` | Launch an autonomous agent (6 types — see §6). | Use for multi-step research, ingest, Q&A, or maintenance. **Don't use for simple search** — use `search` directly. |
+| `get_agent_session` | Poll an autonomous agent's progress and results. | Use to check status of a running agent session. |
+
+> **Deprecated:** `semantic_search` is a deprecated alias for `search` with
+> `strategy=semantic`. Prefer `search` — it auto-selects the best strategy.
+
+---
+
+## 4. Resources (read-only)
 
 Prefer these over looping `list_pages` when you need an overview:
 
-| URI | Returns |
-| --- | --- |
-| `page://{context}/{slug}` | Full page markdown |
-| `goal://{context}/{slug}` | Goal + linked todos/plans as JSON |
-| `wiki://{context}/index` | Full index of the context (slug + title + type) |
+| URI | Returns | Prefer over |
+| --- | --- | --- |
+| `page://{context}/{slug}` | Full page markdown | — |
+| `goal://{context}/{slug}` | Goal + linked todos/plans as JSON | Manual join of goal + todos |
+| `wiki://{context}/index` | Full index of the context (slug + title + type) | Loop of `list_pages` calls |
 
-### Prompts
+---
+
+## 5. Prompts
 
 | Prompt | Use |
 | --- | --- |
@@ -165,19 +138,28 @@ Prefer these over looping `list_pages` when you need an overview:
 | `brainstorm` | Generate 5-10 interlinked idea pages. |
 | `goal_review` | Review a goal, its todos and plans, suggest next actions. |
 
-### Autonomous Agents
+---
+
+## 6. Autonomous agents
 
 For multi-step research, ingest, Q&A, or maintenance tasks, delegate with
 `start_agent` and poll with `get_agent_session`:
 
 | Agent | Purpose | Key limits |
 | --- | --- | --- |
-| `research` | Searches/scrapes the web and creates `note`/`reference` pages. | max_sources=10, max_pages=10 (configurable via Settings); max 10 search queries. |
+| `research` | Searches/scrapes the web and creates `note`/`reference` pages. | max 10 sources, max 10 pages, max 10 search queries (configurable via Settings). |
 | `ingest` | Validates, inspects, downloads a URL and creates a `reference` page. | File download limit 100 MiB. |
 | `ask` | Answers a question using **only** knowledge already in the brain; persists the answer as a `query` page. | max 5 search queries; one query page per session. |
 | `curator` | Reviews pairs of pages with very similar embeddings, flags duplicates/contested content, writes a report note. | max 20 flags per session; duplicate threshold 0.05. |
 | `link_gardener` | Reads orphaned/under-linked pages, proposes typed relations with justifications. | max 10 proposals per session; `semantic` type forbidden. |
-| `weekly_review` | Gathers brain stats and writes a weekly review journal page (in Spanish). | Window: pages created in last 7 days. |
+| `weekly_review` | Gathers brain stats and writes a weekly review journal page. | Window: pages created in last 7 days. Output in **Spanish**. |
+
+**Lifecycle:** `start_agent` returns a `session_id` immediately. Poll
+`get_agent_session` with that `session_id` until `status` reaches a terminal
+state (`completed` / `failed`). Failed sessions (crashes, timeouts, max
+consecutive errors) are marked `failed` with a summary explaining the cause.
+Each session tracks `meta.tokens_used` (accumulated LLM token usage) and
+`meta.model` for cost/usage tracking.
 
 ```json
 {
@@ -187,110 +169,37 @@ For multi-step research, ingest, Q&A, or maintenance tasks, delegate with
 }
 ```
 
-**Session lifecycle:** agents run asynchronously. Poll `get_agent_session` with
-the `session_id` returned by `start_agent` until `status` is `done` or `failed`.
-Failed sessions (crashes, timeouts, max consecutive errors) are marked
-`failed` with a summary explaining the cause. Each session tracks
-`meta.tokens_used` (accumulated LLM token usage) and `meta.model` for
-cost/usage tracking.
-
-> **Note:** the `start_agent` tool's `agent_type` enum in the MCP schema
-> advertises `["research", "ingest"]`, but the server dispatches all six types
-> above. Pass the `agent_type` string directly; it will be routed correctly.
-
 There is no dedicated search agent; for search-only tasks use `search` directly.
 
 ---
 
-## 4. Configuration
+## 7. Working rules
 
-### Environment Variables
-
-Copy `.env.example` to `.env` and fill in values. Key variables:
-
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `PORT` | Phoenix runtime port | `4000` |
-| `PHX_HOST` | Public host for URL generation | `localhost` |
-| `SECRET_KEY_BASE` | Cookie/session signing key | Generate with `mix phx.gen.secret` |
-| `DATABASE_URL` | Ecto connection URL | `ecto://postgres:postgres@localhost/dran_dev` |
-| `POOL_SIZE` | DB connection pool size | `10` |
-| `DRAN_USERNAME` | Admin username (seeded on first run) | `admin` |
-| `DRAN_PASSWORD` | Admin password | `dran` |
-| `DRAN_API_TOKEN` | API token for HTTP API / MCP auth | `dran-token` |
-| `DRAN_CONTEXT_SLUG` | Default context slug | `personal` |
-| `DRAN_CONTEXT_NAME` | Default context name | `Personal` |
-| `UPLOADS_DIR` | File upload storage path | `priv/static/uploads` |
-| `UPLOADS_MAX_SIZE` | Max upload size in bytes | `104857600` (100 MiB) |
-| `DRAN_INFERENCE_API_URL` | OpenAI-compatible inference endpoint | — |
-| `DRAN_INFERENCE_API_KEY` | Inference API key | — |
-| `FIRECRAWL_API_KEY` | Firecrawl API key for web search/scrape | — |
-| `DNS_CLUSTER_QUERY` | Optional libcluster query for distributed Erlang | unset |
-
-Optional inference model overrides: `DRAN_INFERENCE_CHAT_MODEL`,
-`DRAN_INFERENCE_EMBEDDING_MODEL`, `DRAN_INFERENCE_RERANK_MODEL`,
-`DRAN_INFERENCE_MARKITDOWN_MODEL`, `DRAN_INFERENCE_ASR_MODEL`,
-`DRAN_INFERENCE_VISION_MODEL`.
-
-Optional agent tuning: `AGENT_MAX_STEPS` (default 150),
-`AGENT_PER_STEP_TIMEOUT` (default 120000 ms).
-
-### Settings (runtime, DB-backed)
-
-Beyond env vars, Dran stores tunable parameters in the `settings` table via
-`Dran.Settings`. These are editable at **`/settings`** (Brain tuning section)
-without a redeploy:
-
-| Key | Purpose | Default |
-| --- | --- | --- |
-| `semantic_threshold_short` | Embedding distance threshold for short pages | `0.15` |
-| `semantic_threshold_mid` | Threshold for mid-length pages | `0.22` |
-| `semantic_threshold_long` | Threshold for long pages | `0.28` |
-| `agent_max_pages` | Max pages a research agent may create per session | `10` |
-| `agent_max_sources` | Max sources a research agent may scrape per session | `10` |
-| `research_lang` | Language for research agent output (es/en) | `es` |
-| `daily_note_enabled` | Whether daily note auto-creation is enabled | `true` |
-
-Changes take effect immediately for new agent sessions and augmenter runs.
-
-### Database Setup
-
-PostgreSQL 14+ with extensions `pg_trgm`, `uuid-ossp`, and `pgvector`. The
-migration system handles extension creation automatically.
-
-### First-Time Setup
-
-```bash
-cp .env.example .env   # Copy and edit env values
-mix setup              # deps + DB + migrations + assets + seed
-```
-
-`mix setup` runs: `deps.get` → `ecto.create` → `ecto.migrate` →
-`assets.setup` → `assets.build` → `seed`.
-
-Useful aliases:
-
-- `mix ecto.reset` — drop, create, migrate, seed (full DB reset).
-- `mix assets.deploy` — minify and digest assets for production.
-- `mix precommit` — compile with warnings-as-errors, unlock unused deps,
-  format, and test.
+1. **Default context is `personal`.** Do not ask. Do not switch unless Álvaro
+   says otherwise.
+2. **Search before create.** Run 2-3 related `search` queries before every
+   `create_page`. If a relevant page exists, update it instead.
+3. **Read before answer.** When Álvaro asks "what do I know about X?", `search`,
+   then `get_page` the top 2-3 results. Do not answer from search excerpts.
+4. **Infer when obvious, ask when risky.** Infer page type, slug and tags from
+   context. Ask before deleting, renaming, or touching identity/finances.
+5. **Edit > duplicate.** Updating an existing page is almost always better than
+   creating a new one.
+6. **Use `search` first, `list_pages` only for filtered lists.** Never loop
+   `list_pages` to build an index — use the `wiki://personal/index` resource.
+7. **Use `get_page` to read.** Never answer from search excerpts alone.
+8. **Never create `semantic` relations manually.** They are automatic.
+9. **Plain `[[slug]]` wikilinks are not supported.** Use `![[slug]]` only to
+   embed artifacts (auto-creates `embeds` relations); use `create_relation`
+   for explicit typed relationships.
+10. **Surface lint results, don't auto-fix.** Run `lint` after batches of
+    changes and show orphans/stale pages to Álvaro.
+11. **Always confirm with Álvaro before deleting.** `delete_page` is
+    irreversible.
 
 ---
 
-## 5. User Guide
-
-### Working Rules
-
-1. **Search before create.** Run 2-3 related `search` queries before every
-   `create_page`. If a relevant page exists, update it.
-2. **Read before answer.** When Álvaro asks "what do I know about X?",
-   `search`, then `get_page` the top 2-3 results. Do not answer from excerpts.
-3. **Infer when obvious, ask when risky.** Infer page type, slug and tags from
-   context. Ask before deleting, renaming, or touching identity/finances.
-4. **Edit > duplicate.** Updating an existing page is almost always better than
-   creating a new one.
-
-### Page Types
+## 8. Page types
 
 | Type | Use it for | Subtypes (`meta.kind`) | Key `meta` fields |
 | --- | --- | --- | --- |
@@ -307,7 +216,7 @@ Useful aliases:
 
 Default to `note` when unsure. Promote later with `update_page`.
 
-### Meta Validation Reference
+### Meta validation reference (condensed)
 
 | `page_type` | Field | Valid values |
 | --- | --- | --- |
@@ -325,240 +234,174 @@ Default to `note` when unsure. Promote later with `update_page`.
 | `query` | `difficulty` | simple, intermediate, advanced |
 | `query` | `answer_status` | open, answered, verified |
 
-### Creating Pages
+`title` and `slug` are optional on `create_page`: if omitted, Dran derives them
+from the first non-empty line of `body`.
 
-Use `create_page` for everything except todos. `title` and `slug` are optional:
-if omitted, Dran derives them from the first non-empty line of `body`.
+After `create_page` / `update_page`, Dran automatically: (1) extracts/refines
+title, summary, tags and inline links via inference; (2) generates and stores
+an embedding; (3) creates `semantic` relations to similar pages; (4) resolves
+`![[slug]]` embeds into `embeds` relations (and cleans stale ones on update).
 
-```json
-{
-  "context": "personal",
-  "page_type": "note",
-  "body": "Today I learned that Elixir's `=` is actually a match operator, not an assignment.",
-  "meta": { "kind": "journal", "date": "2026-06-27" },
-  "tags": ["elixir", "programming"]
-}
-```
+---
 
-For todos, always use **`create_todo`** (not `create_page` with `page_type=todo`):
+## 9. Recipes
 
-```json
-{
-  "context": "personal",
-  "title": "Refactor MCP controller",
-  "slug": "refactor-mcp-controller",
-  "goal_slug": "dran-mvp",
-  "priority": "high",
-  "kanban_status": "this_week",
-  "due_date": "2026-06-28"
-}
-```
-
-After `create_page` / `update_page`, Dran automatically:
-
-1. Extracts/refines `title`, `summary`, `tags` and inline links via inference.
-2. Generates and stores an embedding.
-3. Creates **`semantic`** relations to similar pages.
-4. Resolves `![[slug]]` embeds into `embeds` relations (and cleans stale ones
-   on update).
-
-Plain `[[slug]]` wikilinks are **not supported**. Use `![[slug]]` only to embed
-artifacts (it auto-creates an `embeds` relation), and `create_relation` for
-explicit typed relationships.
-
-### Editing, Renaming & Deleting
-
-| Action | Tool | Notes |
-| --- | --- | --- |
-| Change title/body/tags/meta | `update_page` | **Replaces** `meta` entirely. Body change bumps `version`. |
-| Change todo status/priority/date | `update_todo` | **Merges** `meta`. This is the only way to change todo status safely. |
-| Change slug | `rename_slug` | Existing `![[old-slug]]` embeds in other pages are rewritten automatically. |
-| Re-run augmentation | `reaugment_page` | Clears `embedding_hash` and schedules a fresh augmenter pass (summary/tags/embedding/relations). |
-| Delete | `delete_page` | **Irreversible**, cascades to relations and versions. Always confirm with Álvaro. |
-
-Example `update_todo`:
-
-```json
-{
-  "context": "personal",
-  "slug": "refactor-mcp-controller",
-  "kanban_status": "done"
-}
-```
-
-### Relations & The Graph
-
-**Automatic:**
-
-- **`semantic`** relations are created by `PageAugmenter` based on embeddings.
-  Never create them manually.
-- **`embeds`** relations are created automatically when a page body contains
-  `![[artifact-slug]]`.
-
-**Manual** — use `create_relation` for explicit, directed links:
-
-| Type | Meaning | Example |
-| --- | --- | --- |
-| `related` | Generic manual link | `learning-elixir` → `elixir` |
-| `part_of` | A is part of B | `tummo` → `six-yogas-of-naropa` |
-| `supersedes` | A replaces B | `phoenix-1.8` → `phoenix-1.7` |
-| `contradicts` | A conflicts with B | `new-study` → `old-study` |
-| `embeds` | A embeds B (auto from `![[slug]]`) | — |
-
-Inspect relations with `get_links`. Remove relations with `delete_relation`.
-
-### Searching
-
-| Tool | Purpose |
-| --- | --- |
-| `search` | Unified search: auto picks FTS, fuzzy, semantic or hybrid. Use `type` filter when you can. |
-| `semantic_search` | Deprecated alias for `search` with `strategy=semantic`. Prefer `search`. |
-| `get_page` | Full markdown body of one page. Use this to actually read. |
-| `list_pages` | Filtered lightweight list (type, tag, status, limit). |
-| `get_links` | Inbound + outbound relations for a page. |
-| `stats` | Dashboard: totals, pages by type, todos by status, orphans, relations. |
-| `lint` | Orphans, stale pages (>90d), contested knowledge. |
-
-### Ingesting URLs & Files
-
-`ingest_url` saves a URL as a `reference` page, or downloads a file and stores it.
-
-```json
-{
-  "context": "personal",
-  "url": "https://example.com/article.html",
-  "slug": "example-article",
-  "tags": ["research"]
-}
-```
-
-- SSRF protection blocks `localhost`, private IPs and CGNAT ranges. Do not pass
-  local URLs.
-- For local files, upload them to a temporary host first, or paste the text into
-  an `artifact`/`note` page directly.
-
-#### Ingest with extraction
-
-When the inference API is configured, `ingest_url` (and the `ingest` agent)
-automatically extract content from downloaded files before creating the page.
-The extraction strategy is chosen by content type:
-
-| Content type | Strategy | What it does |
-| --- | --- | --- |
-| PDF, DOCX, PPTX, PPT, DOC, TXT | **MarkItDown** | Converts the file to Markdown via the MarkItDown model. |
-| Images (`image/*`) | **Vision** | Generates a detailed description (in Spanish) of the image. |
-| Audio (`audio/*`) | **ASR** | Transcribes the audio to text. |
-
-If inference is disabled or extraction fails, the page falls back to a plain
-download link — preserving the original behaviour. The page body always includes
-the source URL; extracted content (markdown / description / transcript) is
-appended below it.
-
-### Scheduled Agents
-
-Two agents run on a schedule via the Quantum cron scheduler
-(see `config/config.exs`). Both operate on the default context
-(`DRAN_CONTEXT_SLUG`):
-
-| Job | Schedule | Agent | What it does |
-| --- | --- | --- | --- |
-| `curator_daily` | `0 6 * * *` (daily, 06:00) | `curator` | Finds duplicate/contested page pairs and writes a curator report note. |
-| `weekly_review` | `0 8 * * 0` (Sundays, 08:00) | `weekly_review` | Gathers brain stats and writes a weekly review journal page. |
-
-Scheduled jobs are disabled in the `test` environment (`config/test.exs` sets
-`jobs: []`).
-
-### Recipes
-
-#### Capture a thought
+### Capture a thought
 
 ```
-1. search(body keywords, "personal")
-2. create_page({ context: "personal", page_type: "note", body: "...", meta: { kind: "thought" } })
+1. search({ context: "personal", query: "<keywords>" })   → check for existing page
+2. create_page({
+     context: "personal",
+     page_type: "note",
+     body: "Today I learned that Elixir's `=` is a match operator, not an assignment.",
+     meta: { kind: "thought" },
+     tags: ["elixir", "programming"]
+   })
 ```
 
-#### Capture meeting notes
-
-```json
-{
-  "context": "personal",
-  "page_type": "note",
-  "body": "... notes ...",
-  "meta": { "kind": "meeting", "date": "2026-06-27", "attendees": ["Álvaro", "Paty"] }
-}
-```
-
-#### Process a research article
+### Capture meeting notes
 
 ```
-1. ingest_url({ url, context: "personal", tags: ["research"] })
-2. Read the content with web_extract(url).
-3. If valuable, create_page({ page_type: "note", body: "Summary..." })
-4. create_relation({ source_slug: "<note>", target_slug: "<reference>", relation_type: "part_of" })
+1. search({ context: "personal", query: "<meeting topic>" })   → check for existing page
+2. create_page({
+     context: "personal",
+     page_type: "note",
+     body: "## Meeting notes\n- Topic: ...\n- Decisions: ...",
+     meta: { kind: "meeting", date: "2026-07-17", attendees: ["Álvaro", "Paty"] }
+   })
+3. create_relation({ source_slug: "<meeting-slug>", target_slug: "<person-entity>", relation_type: "related", context: "personal" })
+   → repeat for each attendee entity
 ```
 
-#### Add a todo to a goal
+### Process a research article
 
 ```
-1. search("<goal name>", "personal", type: "goal")
-2. create_todo({ title, slug, goal_slug: "<goal>", kanban_status: "this_week", priority: "high" })
+1. ingest_url({ url: "https://example.com/article", context: "personal", tags: ["research"] })
+   → creates a `reference` page
+2. get_page({ context: "personal", slug: "<reference-slug>" })
+   → read the extracted content
+3. create_page({ context: "personal", page_type: "note", body: "## Summary\n...", meta: { kind: "idea" } })
+   → capture your takeaways
+4. create_relation({ source_slug: "<note-slug>", target_slug: "<reference-slug>", relation_type: "part_of", context: "personal" })
+5. If augmentation failed (no semantic links appeared): reaugment_page({ context: "personal", slug: "<reference-slug>" })
 ```
 
-#### Mark a todo done
-
-```json
-{
-  "context": "personal",
-  "slug": "<todo-slug>",
-  "kanban_status": "done"
-}
-```
-
-Use `update_todo`, not `update_page`.
-
-#### Weekly review
+### Research a topic (delegated to agent)
 
 ```
-1. stats({ context: "personal" })
-2. list_pages({ context: "personal", type: "goal" })
-3. goal://personal/<goal-slug> for active goals
-4. list_pages({ context: "personal", type: "todo", status: "in_progress" })
-5. lint({ context: "personal" })
+1. start_agent({ agent_type: "research", context: "personal", input: "Yeshe Walmo" })
+   → returns { session_id: "..." }
+2. get_agent_session({ session_id: "..." })   → poll until status: "completed"
+3. get_page({ context: "personal", slug: "<created-page-slug>" })
+   → read each created note/reference page
+4. create_relation({ source_slug: "<new-slug>", target_slug: "<existing-slug>", relation_type: "related", context: "personal" })
+   → link to existing knowledge if the agent didn't
 ```
 
-#### Create a comparison
+### Add a todo to a goal
 
-```json
-{
-  "context": "personal",
-  "page_type": "comparison",
-  "title": "Phoenix vs Rails",
-  "body": "...",
-  "meta": { "entities": ["phoenix", "rails"], "criteria": ["performance", "concurrency", "ecosystem"], "verdict": "Phoenix for real-time; Rails for CRUD speed." }
-}
+```
+1. search({ context: "personal", query: "<goal name>", type: "goal" })
+   → find the goal slug
+2. create_todo({
+     context: "personal",
+     title: "Refactor MCP controller",
+     slug: "refactor-mcp-controller",
+     goal_slug: "<goal-slug>",
+     kanban_status: "this_week",
+     priority: "high",
+     due_date: "2026-07-20"
+   })
 ```
 
-### Common Mistakes
+### Mark a todo done
 
-- **Creating without searching.** Always search first.
-- **Using `create_page` for todos.** Use `create_todo`.
-- **Using `update_page` to change todo status.** Use `update_todo` so meta merges.
-- **Creating `semantic` relations manually.** They are automatic.
-- **Using `[[slug]]` wikilinks.** Not supported. Use embeddings + relations.
-- **Treating `ingest_url` as extraction-only.** It stores and (with inference) extracts.
-- **Passing `status` for `query` pages.** Correct field is `answer_status`.
-- **Deleting without confirmation.** Always ask Álvaro.
-- **Answering from search excerpts.** Read the page with `get_page`.
+```
+1. update_todo({ context: "personal", slug: "refactor-mcp-controller", kanban_status: "done" })
+```
 
-### Quick Checklist
+Use `update_todo`, not `update_page` — `update_todo` merges meta safely.
+
+### Weekly review (delegated to agent)
+
+```
+1. start_agent({ agent_type: "weekly_review", context: "personal", input: "weekly review" })
+   → returns { session_id: "..." }
+2. get_agent_session({ session_id: "..." })   → poll until status: "completed"
+3. get_page({ context: "personal", slug: "<review-page-slug>" })
+   → read the generated review (output is in Spanish)
+```
+
+### Create a comparison
+
+```
+1. search({ context: "personal", query: "Phoenix framework" })   → find existing entity pages
+2. search({ context: "personal", query: "Rails framework" })
+3. create_page({
+     context: "personal",
+     page_type: "comparison",
+     title: "Phoenix vs Rails",
+     body: "## Phoenix vs Rails\n![[phoenix]]\n![[rails]]\n...",
+     meta: {
+       entities: ["phoenix", "rails"],
+       criteria: ["performance", "concurrency", "ecosystem"],
+       verdict: "Phoenix for real-time; Rails for CRUD speed."
+     }
+   })
+   → embeds `![[phoenix]]` and `![[rails]]` auto-create `embeds` relations
+```
+
+### Brain hygiene
+
+```
+1. lint({ context: "personal" })
+   → surface orphans, stale pages, contested knowledge to Álvaro — do not auto-fix
+2. For orphans worth keeping: reaugment_page({ context: "personal", slug: "<orphan-slug>" })
+   → re-run augmentation to find semantic links
+3. For orphans to remove: delete_page({ context: "personal", slug: "<orphan-slug>" })   → after confirming with Álvaro
+4. start_agent({ agent_type: "link_gardener", context: "personal", input: "orphaned pages" })
+   → proposes typed relations for under-linked pages
+```
+
+---
+
+## 10. Common mistakes
+
+- **Creating without searching.** Always search first — run 2-3 variants.
+- **Calling `get_page` without searching first.** Find the slug via `search` or
+  `list_pages` before reading, unless Álvaro gave you the exact slug.
+- **Using `list_pages` in a loop instead of `wiki://index` resource.** The
+  resource returns the full index in one call.
+- **Using `create_page` for todos.** Use `create_todo` — it handles the todo
+  meta shape correctly.
+- **Using `update_page` to change todo status.** Use `update_todo` so meta
+  merges — `update_page` replaces meta entirely.
+- **Creating `semantic` relations manually.** They are automatic — use
+  `create_relation` only for `related`, `part_of`, `supersedes`,
+  `contradicts`, `embeds`.
+- **Using `[[slug]]` wikilinks.** Not supported. Use `![[slug]]` for embeds
+  and `create_relation` for explicit links.
+- **Treating `ingest_url` as extraction-only.** It stores the page and (with
+  inference) extracts content — it's a capture tool, not just a reader.
+- **Passing `status` for `query` pages.** The correct field is `answer_status`.
+- **Deleting without confirmation.** Always ask Álvaro — `delete_page` is
+  irreversible.
+- **Answering from search excerpts.** Read the page with `get_page` first.
+
+---
+
+## 11. Quick checklist
 
 Before `create_page`:
 - [ ] Searched 2-3 variants.
-- [ ] Right `page_type` and `meta.kind`/enums.
-- [ ] Slug is kebab-case and unique.
+- [ ] Right `page_type` and `meta.kind` / enum values (see §8).
+- [ ] Slug is kebab-case and unique (or omitted — Dran derives it).
 - [ ] Tags are kebab-case, 2-5 items.
 
 After changes:
-- [ ] Confirm tool response.
-- [ ] `lint` after batches; surface orphans/stale pages to Álvaro, do not auto-fix.
-- [ ] `stats` for dashboards/weekly reviews.
+- [ ] Confirm tool response (page created / updated / deleted).
+- [ ] Run `lint` after batches; surface orphans/stale pages to Álvaro — do not
+      auto-fix.
+- [ ] Use `stats` for dashboards / weekly reviews.
+- [ ] For todos: used `create_todo` / `update_todo`, never `create_page` /
+      `update_page`.
