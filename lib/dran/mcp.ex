@@ -50,22 +50,40 @@ defmodule Dran.MCP do
     %{
       "name" => "search",
       "description" =>
-        "Unified search across pages in a context. Automatically picks the best available strategy: full-text, fuzzy, semantic or hybrid. Requires the inference API for semantic/hybrid strategies; degrades gracefully to full-text if inference is unavailable.",
+        "Search pages in a context. Returns matching pages with title, slug, type, excerpt, relevance distance, and search source (fts/fuzzy/semantic/hybrid). Use `strategy: \"auto\"` for best results; use `type` to narrow to a page type. Semantic/hybrid strategies require the inference API — they degrade to fts if inference is not configured, which you can detect from the returned `source` field. Example: strategy=hybrid query=\"distributed consensus\" type=note will search note-type pages using keyword+vector matching.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "query" => %{"type" => "string", "description" => "Search query (natural language)"},
-          "context" => %{"type" => "string", "description" => "Context slug (e.g. 'personal')"},
+          "query" => %{
+            "type" => "string",
+            "description" => "Natural-language search query. Keywords or a full sentence both work; fuzzy/semantic strategies handle typos and paraphrase."
+          },
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug to search within, e.g. 'personal' or 'work'."
+          },
           "type" => %{
             "type" => "string",
             "description" =>
-              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)"
+              "Optional filter restricting results to a single page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison, or query.",
+            "enum" => [
+              "note",
+              "concept",
+              "entity",
+              "reference",
+              "goal",
+              "plan",
+              "todo",
+              "artifact",
+              "comparison",
+              "query"
+            ]
           },
           "strategy" => %{
             "type" => "string",
             "enum" => ["auto", "fts", "fuzzy", "semantic", "hybrid"],
             "description" =>
-              "Search strategy. 'auto' picks the best one. 'semantic' and 'hybrid' require inference API."
+              "Search strategy. 'auto' (default) picks the best available. 'fts' = PostgreSQL full-text (fast, keyword). 'fuzzy' = trigram similarity (typo-tolerant). 'semantic' = vector embedding similarity (requires inference API). 'hybrid' = fts + semantic combined (requires inference API). Semantic/hybrid fall back to fts if inference is unavailable — check the returned `source` to confirm which strategy ran."
           }
         },
         "required" => ["query", "context"]
@@ -74,20 +92,39 @@ defmodule Dran.MCP do
     %{
       "name" => "semantic_search",
       "description" =>
-        "Deprecated alias for search with strategy='semantic'. Use 'search' instead.",
+        "Deprecated alias for `search` with `strategy=semantic`. Kept for backward compatibility — prefer calling `search` with `strategy` explicitly. The `hybrid` boolean here maps to strategy=hybrid when true, otherwise strategy=semantic. Both require the inference API and fall back to fts if it is not configured.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "query" => %{"type" => "string", "description" => "Search query (natural language)"},
-          "context" => %{"type" => "string", "description" => "Context slug (e.g. 'personal')"},
+          "query" => %{
+            "type" => "string",
+            "description" => "Natural-language search query."
+          },
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug to search within."
+          },
           "type" => %{
             "type" => "string",
             "description" =>
-              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison (optional)"
+              "Optional filter restricting results to a single page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison, or query.",
+            "enum" => [
+              "note",
+              "concept",
+              "entity",
+              "reference",
+              "goal",
+              "plan",
+              "todo",
+              "artifact",
+              "comparison",
+              "query"
+            ]
           },
           "hybrid" => %{
             "type" => "boolean",
-            "description" => "Use hybrid strategy (default: false, i.e. semantic)"
+            "description" =>
+              "If true, run hybrid (keyword + vector) search; if false (default), run pure semantic (vector) search. Both require the inference API."
           }
         },
         "required" => ["query", "context"]
@@ -96,9 +133,9 @@ defmodule Dran.MCP do
     %{
       "name" => "create_page",
       "description" => """
-      Create a new page in the second brain. Each page has a type that determines its purpose and metadata.
+      Create a new page in the second brain. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `update_page` or `rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
 
-      Page types and their subtypes (use 'kind' in meta):
+      Page types and subtypes (set `meta.kind`):
       - note: thought, journal, idea, meeting, question, quote
       - concept: technique, pattern, discipline, theory
       - entity: person, company, product, tool, place, event
@@ -109,26 +146,30 @@ defmodule Dran.MCP do
       - todo: has kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
       - comparison: has entities, criteria, verdict
       - query: question+answer; has kind (factual/conceptual/how_to/opinion), difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
-
-      Use ![[slug]] to embed artifacts.
       """,
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "title" => %{"type" => "string", "description" => "Page title"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug where the page will be created."
+          },
+          "title" => %{
+            "type" => "string",
+            "description" => "Human-readable page title. If omitted, derived from the body's first line."
+          },
           "slug" => %{
             "type" => "string",
-            "description" => "URL-friendly slug (kebab-case, unique per context)"
+            "description" => "URL-friendly kebab-case slug, unique per context. If omitted, derived from the title. Creation fails if this slug already exists in the context — use update_page or rename_slug instead."
           },
           "body" => %{
             "type" => "string",
-            "description" => "Page content in Markdown. Use ![[slug]] for embeds."
+            "description" => "Page content in Markdown. Use `![[other-slug]]` to embed another page; embeds are auto-resolved into `embeds` relations."
           },
           "page_type" => %{
             "type" => "string",
             "description" =>
-              "Page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison, query",
+              "Page type determining purpose and accepted meta fields. See the description for the meta keys each type expects.",
             "enum" => [
               "note",
               "concept",
@@ -145,18 +186,24 @@ defmodule Dran.MCP do
           "tags" => %{
             "type" => "array",
             "items" => %{"type" => "string"},
-            "description" => "Tags (kebab-case)"
+            "description" => "Tags in kebab-case, e.g. [\"elixir\", \"testing\"]."
           },
           "meta" => %{
             "type" => "object",
             "description" =>
               "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kanban_status, priority, goal_slug, due_date}, goal→{health, target_date, start_date, team}, plan→{horizon, status}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, artifact→{kind, filename, mime_type, storage_path}, comparison→{entities, criteria, verdict}, query→{kind, difficulty, status, answered_by}."
           },
-          "summary" => %{"type" => "string", "description" => "One-line summary (optional)"},
-          "owner" => %{"type" => "string", "description" => "Owner identity (defaults to system)"},
+          "summary" => %{
+            "type" => "string",
+            "description" => "Optional one-line summary shown in listings."
+          },
+          "owner" => %{
+            "type" => "string",
+            "description" => "Owner identity for the page (defaults to 'agent')."
+          },
           "created_by" => %{
             "type" => "string",
-            "description" => "Who created this page (defaults to system)"
+            "description" => "Who created this page, recorded for provenance (defaults to 'agent')."
           }
         },
         "required" => ["context", "page_type"]
@@ -165,26 +212,42 @@ defmodule Dran.MCP do
     %{
       "name" => "update_page",
       "description" =>
-        "Update an existing page by slug. Can update title, body, tags, or meta. Version auto-increments on body change. Embeds (`![[slug]]`) in body are auto-resolved into embeds relations.",
+        "Update an existing page by slug. Pass only the fields you want to change (title, body, tags, meta, summary). Changing `body` auto-increments the page version and re-resolves `![[slug]]` embeds into relations. Returns the new title and version number. Returns an error if the page slug is not found in the context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "slug" => %{"type" => "string", "description" => "Page slug to update"},
-          "title" => %{"type" => "string", "description" => "New title (optional)"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing the page."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "Slug of the page to update."
+          },
+          "title" => %{
+            "type" => "string",
+            "description" => "New title (optional)."
+          },
           "body" => %{
             "type" => "string",
-            "description" => "New markdown body (optional). Use ![[slug]] for embeds."
+            "description" => "New Markdown body (optional). Changing this increments the version and re-resolves `![[slug]]` embeds."
           },
           "tags" => %{
             "type" => "array",
             "items" => %{"type" => "string"},
-            "description" => "New tags (optional)"
+            "description" => "New tags list (optional, replaces existing tags)."
           },
-          "meta" => %{"type" => "object", "description" => "Updated metadata (optional)"},
+          "meta" => %{
+            "type" => "object",
+            "description" => "Updated metadata map (optional). Replaces the entire `meta` object, so include existing keys you want to keep."
+          },
+          "summary" => %{
+            "type" => "string",
+            "description" => "New one-line summary (optional)."
+          },
           "updated_by" => %{
             "type" => "string",
-            "description" => "Who is updating (defaults to system)"
+            "description" => "Who is updating the page, for provenance (defaults to 'agent')."
           }
         },
         "required" => ["context", "slug"]
@@ -193,12 +256,18 @@ defmodule Dran.MCP do
     %{
       "name" => "get_page",
       "description" =>
-        "Get a page by slug. Returns full markdown content with metadata. Use this to read a single page's content.",
+        "Read a single page by slug. Returns the full Markdown body plus a metadata footer (type, tags, version). Use this to fetch content for reading or analysis; use `list_pages` for lightweight metadata-only listings. Returns an error if the slug is not found in the context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "slug" => %{"type" => "string", "description" => "Page slug"}
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing the page."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "Slug of the page to read."
+          }
         },
         "required" => ["context", "slug"]
       }
@@ -206,37 +275,52 @@ defmodule Dran.MCP do
     %{
       "name" => "create_todo",
       "description" =>
-        "Create a todo item linked to a goal. Todos have kanban_status (backlog/this_week/today/in_progress/done/cancelled) and priority (low/medium/high/urgent).",
+        "Create a todo item (page_type=todo). Todos carry `kanban_status` (backlog → this_week → today → in_progress → done | cancelled) and `priority` (low, medium, high, urgent). Optionally link to a goal via `goal_slug`. Example: kanban_status=\"today\" priority=\"high\" goal_slug=\"ship-v1\". Creation fails if the slug already exists in the context. Returns the created todo's slug and status.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "title" => %{"type" => "string", "description" => "Todo title"},
-          "slug" => %{"type" => "string", "description" => "Todo slug (kebab-case)"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug where the todo will be created."
+          },
+          "title" => %{
+            "type" => "string",
+            "description" => "Todo title (human-readable)."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "URL-friendly kebab-case slug, unique per context. Creation fails if it already exists."
+          },
           "goal_slug" => %{
             "type" => "string",
-            "description" => "Goal this todo belongs to (optional)"
+            "description" => "Slug of the goal this todo belongs to (optional). Set this to group todos under a goal."
           },
           "body" => %{
             "type" => "string",
-            "description" => "Todo description in markdown (optional)"
+            "description" => "Todo description in Markdown (optional)."
           },
           "priority" => %{
             "type" => "string",
-            "description" => "low, medium, high, urgent (default: medium)",
+            "description" => "Priority level: low, medium, high, or urgent (default: medium).",
             "enum" => ["low", "medium", "high", "urgent"]
           },
           "kanban_status" => %{
             "type" => "string",
             "description" =>
-              "backlog, this_week, today, in_progress, done, cancelled (default: backlog)",
+              "Kanban board column: backlog, this_week, today, in_progress, done, or cancelled (default: backlog). Typical progression: backlog → this_week → today → in_progress → done.",
             "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
           },
-          "due_date" => %{"type" => "string", "description" => "Due date YYYY-MM-DD (optional)"},
-          "owner" => %{"type" => "string", "description" => "Owner identity (defaults to system)"},
+          "due_date" => %{
+            "type" => "string",
+            "description" => "Due date in YYYY-MM-DD format (optional)."
+          },
+          "owner" => %{
+            "type" => "string",
+            "description" => "Owner identity for the todo (defaults to 'agent')."
+          },
           "created_by" => %{
             "type" => "string",
-            "description" => "Who created this todo (defaults to system)"
+            "description" => "Who created this todo, for provenance (defaults to 'agent')."
           }
         },
         "required" => ["context", "title", "slug"]
@@ -245,11 +329,14 @@ defmodule Dran.MCP do
     %{
       "name" => "lint",
       "description" =>
-        "Run a quality lint report for a context. Returns orphans (pages with no inbound links), stale pages (not updated in 90 days), and contested knowledge. Use this to identify maintenance tasks.",
+        "Run a quality lint report for a context. Returns three categories: orphan pages (no inbound links, likely disconnected), stale pages (not updated in 90+ days, possibly outdated), and contested pages (conflicting knowledge flagged by the system). Use this during maintenance or cleanup to find pages needing attention.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"}
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug to lint."
+          }
         },
         "required" => ["context"]
       }
@@ -257,20 +344,26 @@ defmodule Dran.MCP do
     %{
       "name" => "ingest_url",
       "description" =>
-        "Save a URL into the second brain. For web pages (HTML), saves the URL as a reference page — the agent can read the content later via the URL. For files (PDF, documents, images), downloads and stores the file, creating a reference with a download link. Does NOT extract or parse content — that's the agent's job.",
+        "Save a URL into the second brain as a reference page. For HTML pages, stores the URL so content can be read later. For files (PDF, documents, images), downloads and stores the file with a download link. **This tool does NOT extract or parse content** — it only bookmarks/stores the source; use `get_page` or the URL directly to read content afterward. Returns the created reference page's slug and type.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "url" => %{"type" => "string", "description" => "URL to ingest (HTML article or PDF)"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug where the reference page will be created."
+          },
+          "url" => %{
+            "type" => "string",
+            "description" => "URL to ingest — an HTML article, web page, or a direct file URL (PDF, image, document)."
+          },
           "slug" => %{
             "type" => "string",
-            "description" => "Custom slug (auto from title if omitted)"
+            "description" => "Custom slug for the reference page (auto-derived from the page title if omitted)."
           },
           "tags" => %{
             "type" => "array",
             "items" => %{"type" => "string"},
-            "description" => "Tags (optional)"
+            "description" => "Tags to attach to the reference page (optional)."
           }
         },
         "required" => ["context", "url"]
@@ -279,12 +372,18 @@ defmodule Dran.MCP do
     %{
       "name" => "delete_page",
       "description" =>
-        "Delete a page by slug. Cascades to relations and page versions. This is irreversible — confirm with the user before deleting. Logs the action to the audit log.",
+        "Delete a page by slug. **This is irreversible** — cascading deletes remove all relations to/from the page and all page version history. Always confirm with the user before calling. Returns a confirmation with the deleted page's title and slug, or an error if not found.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "slug" => %{"type" => "string", "description" => "Slug of the page to delete"}
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing the page."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "Slug of the page to delete. All relations and version history for this page will be removed."
+          }
         },
         "required" => ["context", "slug"]
       }
@@ -292,16 +391,26 @@ defmodule Dran.MCP do
     %{
       "name" => "create_relation",
       "description" =>
-        "Create a typed relation between two pages. Relation types: 'related' (generic connection), 'contradicts' (source contradicts target), 'supersedes' (source replaces target), 'part_of' (source is part of target), 'embeds' (source embeds target). Use this for explicit relationships.",
+        "Create a typed, directed relation from a source page to a target page. Relation types: `related` (generic link), `contradicts` (source disagrees with target), `supersedes` (source replaces/outdates target), `part_of` (source is a component of target), `embeds` (source embeds target — usually auto-created by `![[slug]]`). Returns an error if either slug is not found in the context. Duplicate relations on the same pair/type are idempotent.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "source_slug" => %{"type" => "string", "description" => "Slug of the source page"},
-          "target_slug" => %{"type" => "string", "description" => "Slug of the target page"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing both pages."
+          },
+          "source_slug" => %{
+            "type" => "string",
+            "description" => "Slug of the source page (the relation originates here)."
+          },
+          "target_slug" => %{
+            "type" => "string",
+            "description" => "Slug of the target page (the relation points here)."
+          },
           "relation_type" => %{
             "type" => "string",
-            "description" => "Type of relation",
+            "description" =>
+              "Type of directed relation: 'related' (generic), 'contradicts' (source contradicts target), 'supersedes' (source replaces target), 'part_of' (source is part of target), 'embeds' (source embeds target). Defaults to 'related'.",
             "enum" => ["related", "contradicts", "supersedes", "part_of", "embeds"]
           }
         },
@@ -311,12 +420,18 @@ defmodule Dran.MCP do
     %{
       "name" => "get_links",
       "description" =>
-        "Get all inbound and outbound relations for a page. Returns outbound (pages this page links to) and inbound (pages that link to this page), with relation types.",
+        "Get all inbound and outbound relations for a page. Returns two lists: outbound (pages this page links to, with relation type and target title/slug) and inbound (pages linking to this page, with source title/slug and relation type). Use this to understand a page's connections before editing or deleting. Returns an error if the slug is not found.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "slug" => %{"type" => "string", "description" => "Page slug"}
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing the page."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "Slug of the page whose relations to retrieve."
+          }
         },
         "required" => ["context", "slug"]
       }
@@ -324,15 +439,18 @@ defmodule Dran.MCP do
     %{
       "name" => "list_pages",
       "description" =>
-        "List pages in a context with optional filters. Returns lightweight metadata (no body) by default. Use type filter to list specific page types (e.g. todos, goals). Useful for getting an overview without fetching full content.",
+        "List pages in a context with optional filters. Returns lightweight metadata only (title, slug, type) — no body content. Use `type` to list a specific page type (e.g. all todos or goals), `tag` to filter by tag, and `status` to filter todos by kanban status. Use this for overviews and discovery; use `get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug to list pages from."
+          },
           "type" => %{
             "type" => "string",
             "description" =>
-              "Filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison, query (optional)",
+              "Optional filter by page type: note, concept, entity, reference, goal, plan, todo, artifact, comparison, or query.",
             "enum" => [
               "note",
               "concept",
@@ -346,13 +464,20 @@ defmodule Dran.MCP do
               "query"
             ]
           },
-          "tag" => %{"type" => "string", "description" => "Filter by tag (optional)"},
+          "tag" => %{
+            "type" => "string",
+            "description" => "Optional filter: only pages with this tag."
+          },
           "status" => %{
             "type" => "string",
             "description" =>
-              "Filter by kanban_status (for todos): backlog, this_week, today, in_progress, done, cancelled (optional)"
+              "Optional filter for todos by kanban_status: backlog, this_week, today, in_progress, done, or cancelled.",
+            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
           },
-          "limit" => %{"type" => "integer", "description" => "Max results (default 50, max 500)"}
+          "limit" => %{
+            "type" => "integer",
+            "description" => "Maximum number of results (default 50, hard max 500)."
+          }
         },
         "required" => ["context"]
       }
@@ -360,36 +485,49 @@ defmodule Dran.MCP do
     %{
       "name" => "update_todo",
       "description" =>
-        "Update a todo's kanban status, priority, due date, or goal. Merges meta — you only need to pass the fields you want to change, existing meta is preserved.",
+        "Update a todo's kanban status, priority, due date, goal, title, body, or tags. Meta fields are merged — pass only what you want to change; existing meta keys (kanban_status, priority, due_date, goal_slug) are preserved. Note that `tags` replaces the existing tag list entirely. Returns the updated todo's title, slug, and current kanban status.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "slug" => %{"type" => "string", "description" => "Todo slug to update"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing the todo."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "Slug of the todo page to update."
+          },
           "kanban_status" => %{
             "type" => "string",
-            "description" => "New kanban status (optional)",
+            "description" =>
+              "New kanban status: backlog, this_week, today, in_progress, done, or cancelled (optional). Typical progression: backlog → this_week → today → in_progress → done.",
             "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
           },
           "priority" => %{
             "type" => "string",
-            "description" => "New priority (optional)",
+            "description" => "New priority: low, medium, high, or urgent (optional).",
             "enum" => ["low", "medium", "high", "urgent"]
           },
           "due_date" => %{
             "type" => "string",
-            "description" => "New due date YYYY-MM-DD (optional)"
+            "description" => "New due date in YYYY-MM-DD format (optional)."
           },
           "goal_slug" => %{
             "type" => "string",
-            "description" => "New goal slug to link this todo to (optional)"
+            "description" => "Slug of a goal to link this todo to (optional). Replaces the existing goal_slug."
           },
-          "title" => %{"type" => "string", "description" => "New title (optional)"},
-          "body" => %{"type" => "string", "description" => "New body in markdown (optional)"},
+          "title" => %{
+            "type" => "string",
+            "description" => "New title (optional)."
+          },
+          "body" => %{
+            "type" => "string",
+            "description" => "New Markdown body (optional)."
+          },
           "tags" => %{
             "type" => "array",
             "items" => %{"type" => "string"},
-            "description" => "New tags (optional, replaces existing)"
+            "description" => "New tags list (optional). Replaces existing tags entirely."
           }
         },
         "required" => ["context", "slug"]
@@ -398,17 +536,26 @@ defmodule Dran.MCP do
     %{
       "name" => "delete_relation",
       "description" =>
-        "Delete a relation between two pages. If relation_type is provided, only deletes that type. Otherwise, deletes ALL relations between the two pages (both directions). Use get_links first to see what relations exist.",
+        "Delete relations between two pages. If `relation_type` is provided, only relations of that type are deleted; if omitted, ALL relations between the two pages (both directions) are deleted. Use `get_links` first to inspect existing relations before deleting. Returns the count of deleted relations.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "source_slug" => %{"type" => "string", "description" => "Slug of the source page"},
-          "target_slug" => %{"type" => "string", "description" => "Slug of the target page"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing both pages."
+          },
+          "source_slug" => %{
+            "type" => "string",
+            "description" => "Slug of the source page of the relation."
+          },
+          "target_slug" => %{
+            "type" => "string",
+            "description" => "Slug of the target page of the relation."
+          },
           "relation_type" => %{
             "type" => "string",
             "description" =>
-              "Only delete relations of this type (optional, deletes all if omitted)",
+              "If provided, only delete relations of this type. If omitted, all relations between the two pages are deleted in both directions.",
             "enum" => ["related", "contradicts", "supersedes", "part_of", "embeds"]
           }
         },
@@ -418,11 +565,14 @@ defmodule Dran.MCP do
     %{
       "name" => "stats",
       "description" =>
-        "Get aggregate statistics for a context. Returns total pages, pages by type, todos by kanban status, orphan count, broken link count, and total relations. Use this for dashboard-style overviews and weekly reviews.",
+        "Get aggregate statistics for a context. Returns total page count, pages broken down by type, todos broken down by kanban status, orphan count, total relations, and broken-link count. Use this for dashboard overviews, weekly reviews, or to check the overall health of a context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"}
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug to get statistics for."
+          }
         },
         "required" => ["context"]
       }
@@ -430,13 +580,22 @@ defmodule Dran.MCP do
     %{
       "name" => "rename_slug",
       "description" =>
-        "Rename a page's slug. The page itself is updated. Use this when a page was created with a wrong slug.",
+        "Rename a page's slug. Updates the page's slug in place; version history and relations are preserved. **Fails if `new_slug` already exists** in the context, and returns an error if `old_slug == new_slug`. Use this to fix a wrongly named page without deleting and recreating it.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "old_slug" => %{"type" => "string", "description" => "Current slug to rename"},
-          "new_slug" => %{"type" => "string", "description" => "New slug (kebab-case)"}
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug containing the page."
+          },
+          "old_slug" => %{
+            "type" => "string",
+            "description" => "Current slug of the page to rename."
+          },
+          "new_slug" => %{
+            "type" => "string",
+            "description" => "New kebab-case slug. Must not already exist in the context, and must differ from old_slug."
+          }
         },
         "required" => ["context", "old_slug", "new_slug"]
       }
@@ -444,20 +603,26 @@ defmodule Dran.MCP do
     %{
       "name" => "start_agent",
       "description" =>
-        "Start an autonomous agent session. Returns immediately; poll get_agent_session for progress.",
+        "Start an autonomous agent session and return immediately. `research` agents explore a topic and create pages; `ingest` agents fetch a URL and save its content. Returns a session_id and track_url — poll `get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
           "agent_type" => %{
             "type" => "string",
             "enum" => ["research", "ingest"],
-            "description" => "Agent type"
+            "description" => "'research' = explore a topic and create pages from findings. 'ingest' = fetch a URL and save its content as a reference page."
           },
-          "context" => %{"type" => "string", "description" => "Context slug"},
-          "input" => %{"type" => "string", "description" => "Topic, URL, or query"},
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug where the agent will create pages."
+          },
+          "input" => %{
+            "type" => "string",
+            "description" => "For research: a topic or question to explore. For ingest: a URL to fetch and save."
+          },
           "opts" => %{
             "type" => "object",
-            "description" => "Optional agent options"
+            "description" => "Optional agent configuration options (e.g. max pages, tags). Passed through to the agent."
           }
         },
         "required" => ["agent_type", "context", "input"]
@@ -465,11 +630,15 @@ defmodule Dran.MCP do
     },
     %{
       "name" => "get_agent_session",
-      "description" => "Poll an agent session for status, summary, and steps.",
+      "description" =>
+        "Poll an autonomous agent session for status, summary, and step-by-step progress. Returns the session's type, input, status (pending/running/completed/failed), summary, pages_created count, and an ordered list of steps with tool name and result status. Poll periodically until status is 'completed' or 'failed'. Returns an error if the session_id is invalid or not found.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "session_id" => %{"type" => "string", "description" => "Agent session UUID"}
+          "session_id" => %{
+            "type" => "string",
+            "description" => "UUID of the agent session to poll (returned by start_agent)."
+          }
         },
         "required" => ["session_id"]
       }
