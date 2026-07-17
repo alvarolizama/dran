@@ -65,7 +65,7 @@ defmodule DranWeb.ActivityLive do
       active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full max-w-4xl mx-auto p-6 space-y-6">
+        <div class="w-full p-6 space-y-6">
           <.header_section context={@context} />
 
           <div class="surface-2 divide-y divide-base-300">

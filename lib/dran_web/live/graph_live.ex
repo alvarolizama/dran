@@ -285,12 +285,12 @@ defmodule DranWeb.GraphLive do
             </div>
           </div>
 
-          <div class="flex-1 bg-base-200 rounded-lg overflow-hidden relative">
+          <div class="flex-1 bg-base-200 rounded-lg overflow-hidden relative" style="min-height: calc(100vh - 180px);">
             <%= if @view_mode == "2d" do %>
               <svg
                 id="graph-svg"
                 width="100%"
-                height="600"
+                height="100%"
                 phx-hook="GraphPanZoom"
               >
                 <line
@@ -342,7 +342,7 @@ defmodule DranWeb.GraphLive do
                 id="graph-3d"
                 phx-hook="Graph3D"
                 data-graph={graph_json(assigns)}
-                style="width: 100%; height: 600px; background: #0f172a;"
+                style="width: 100%; height: 100%; min-height: calc(100vh - 180px); background: #0f172a;"
               >
               </div>
               <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
