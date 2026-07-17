@@ -286,6 +286,8 @@ defmodule Dran.Brain do
           created_by: page.created_by
         })
 
+        resolve_embeds(page)
+
         broadcast_page_change(page.context_id, :created, page)
         Dran.Embeddings.schedule(page)
         Dran.Brain.PageAugmenter.schedule(page)
@@ -371,6 +373,8 @@ defmodule Dran.Brain do
           version: updated_page.version
         })
 
+        reresolve_embeds(updated_page)
+
         broadcast_page_change(updated_page.context_id, :updated, updated_page)
         Dran.Embeddings.schedule(updated_page)
         Dran.Brain.PageAugmenter.schedule(updated_page)
@@ -415,11 +419,17 @@ defmodule Dran.Brain do
   # Relations
   # ──────────────────────────────────────────────────────────────────────────
 
-  @doc "Create a relation between two pages"
+  @doc """
+  Create a relation between two pages.
+
+  Uses `on_conflict: :nothing` so duplicate `(source, target, type)` tuples
+  are silently ignored at the SQL level — critical inside transactions,
+  where a unique-violation error would poison the whole transaction.
+  """
   def create_relation(attrs) do
     %Relation{}
     |> Relation.changeset(attrs)
-    |> Repo.insert()
+    |> Repo.insert(on_conflict: :nothing)
   end
 
   @doc """
@@ -1122,6 +1132,68 @@ defmodule Dran.Brain do
       end)
 
     {created, Enum.reverse(not_found)}
+  end
+
+  @doc """
+  Re-resolve a page's embeds after a body update.
+
+  Removes any `embeds` relations whose target slug is no longer referenced
+  in the body, then calls `resolve_embeds/1` to create relations for any
+  newly-referenced slugs. Idempotent: running it on an unchanged body is
+  a no-op (existing relations are kept, and `resolve_embeds/1` is itself
+  protected by a unique constraint on `[:source_id, :target_id, :relation_type]`).
+  """
+  def reresolve_embeds(%Page{} = page) do
+    current_slugs =
+      page.body
+      |> extract_embeds()
+      |> Enum.map(& &1.slug)
+      |> MapSet.new()
+
+    page.id
+    |> list_relations_for_page()
+    |> Map.get(:outbound, [])
+    |> Enum.filter(&(&1.relation_type == "embeds"))
+    |> Enum.each(fn rel ->
+      target_slug = rel.target && rel.target.slug
+
+      unless target_slug && MapSet.member?(current_slugs, target_slug) do
+        Repo.delete(rel)
+      end
+    end)
+
+    resolve_embeds(page)
+  end
+
+  @doc """
+  Rename a page's slug, propagating the change to every page in the same
+  context that embeds it via `![[old-slug]]`.
+
+  The rename and all body rewrites run inside a single transaction. Embeds
+  relations are kept consistent because `update_page/2` re-resolves them on
+  every body change.
+  """
+  def rename_slug(%Page{} = page, new_slug) do
+    context_id = page.context_id
+    old_slug = page.slug
+
+    Repo.transaction(fn ->
+      {:ok, updated} = update_page(page, %{"slug" => new_slug})
+
+      pages_with_embed =
+        Repo.all(
+          from p in Page,
+            where: p.context_id == ^context_id and p.id != ^page.id,
+            where: like(p.body, ^"%![[#{old_slug}%")
+        )
+
+      Enum.each(pages_with_embed, fn p ->
+        new_body = replace_slug_in_body(p.body, old_slug, new_slug)
+        {:ok, _} = update_page(p, %{"body" => new_body})
+      end)
+
+      updated
+    end)
   end
 
   @doc """

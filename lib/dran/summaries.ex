@@ -15,6 +15,9 @@ defmodule Dran.Summaries do
   alias Dran.Brain.Page
   alias Dran.Embeddings
   alias Dran.Inference
+  alias Dran.Repo
+
+  import Ecto.Query, warn: false
 
   @doc """
   Suggest a one-line summary, kebab-case tags, and entity names for `page`
@@ -80,11 +83,10 @@ defmodule Dran.Summaries do
 
   # ── Prompts ──
 
-  defp augment_prompt(%Page{context_id: context_id}) do
+  defp augment_prompt(%Page{context_id: context_id} = page) do
     pages =
       if context_id do
-        Brain.list_pages(context_id: context_id)
-        |> Enum.map(&%{slug: &1.slug, title: &1.title, summary: &1.summary || ""})
+        candidate_pages(page)
       else
         []
       end
@@ -113,6 +115,33 @@ defmodule Dran.Summaries do
 
     {"title": "...", "summary": "...", "tags": [...], "entities": [...], "inline_links": [{"text": "...", "slug": "..."}]}
     """
+  end
+
+  @doc """
+  Select up to 50 candidate pages for inline links, preferring semantic
+  closeness to `page` when an embedding is available.
+
+  Falls back to `Brain.list_pages/1` (recency-sorted) when `page` has no
+  embedding.
+  """
+  @spec candidate_pages(Page.t()) :: [map()]
+  def candidate_pages(%Page{} = page) do
+    if page.embedding do
+      vec = Pgvector.new(page.embedding)
+
+      Repo.all(
+        from p in Page,
+          where: p.context_id == ^page.context_id and p.id != ^page.id,
+          where: not is_nil(p.embedding),
+          order_by: fragment("? <=> ?", p.embedding, ^vec),
+          limit: 50,
+          select: %{slug: p.slug, title: p.title, summary: p.summary}
+      )
+    else
+      Brain.list_pages(context_id: page.context_id, limit: 50)
+      |> Enum.reject(&(&1.id == page.id))
+      |> Enum.map(&%{slug: &1.slug, title: &1.title, summary: &1.summary || ""})
+    end
   end
 
   # ── Inference ──
