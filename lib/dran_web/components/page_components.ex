@@ -60,16 +60,29 @@ defmodule DranWeb.PageComponents do
     ~H"""
     <div class="flex h-full">
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full mx-auto p-6 space-y-6">
+        <div class="max-w-5xl mx-auto p-6 space-y-6">
           <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <.icon name={PageTypes.icon(@page.page_type)} class="w-5 h-5 text-base-content/60" />
-                <span class="text-sm text-base-content/60 uppercase tracking-wider">
+            <div class="min-w-0 flex-1">
+              <%!-- Metadata bar: type badge · slug · dates — all in one row --%>
+              <div class="flex flex-wrap items-center gap-2 mb-2 text-caption">
+                <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  <.icon name={PageTypes.icon(@page.page_type)} class="size-3" />
                   {PageTypes.label(@page.page_type)}
                 </span>
+                <span class="text-base-content/30">·</span>
+                <code class="font-mono text-caption text-base-content/60">{@page.slug}</code>
+                <span class="text-base-content/30">·</span>
+                <span class="inline-flex items-center gap-1 text-caption text-base-content/50">
+                  <.icon name="hero-calendar" class="size-3" />
+                  {gettext("Created")} {format_date(@page.inserted_at)}
+                </span>
+                <span class="text-base-content/30">·</span>
+                <span class="inline-flex items-center gap-1 text-caption text-base-content/50">
+                  <.icon name="hero-clock" class="size-3" />
+                  {gettext("Updated")} {format_date(@page.updated_at)}
+                </span>
               </div>
-              <h1 class="text-3xl font-bold break-words">{@page.title}</h1>
+              <h1 class="text-title break-words">{@page.title}</h1>
               <div class="flex flex-wrap gap-2 mt-2">
                 <.link
                   :for={tag <- @page.tags || []}
@@ -101,34 +114,39 @@ defmodule DranWeb.PageComponents do
                 class="btn btn-ghost btn-sm"
                 title={gettext("Search the web and enrich this page with new content")}
               >
-                <.icon name="hero-sparkles" class="w-4 h-4" /> {gettext("Enrich")}
+                <.icon name="hero-sparkles" class="size-4" /> {gettext("Enrich")}
               </button>
             </div>
           </div>
 
           {render_slot(@tabs)}
 
-          <div :if={@tabs == []} class="prose prose-base dark:prose-invert max-w-none">
+          <div :if={@tabs == []} class="max-w-3xl mx-auto prose prose-base dark:prose-invert">
             {@rendered_body}
           </div>
 
-          <div :if={@tabs == []} class="border-t border-base-300 pt-4">
-            <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
+          <div :if={@tabs == []} class="max-w-3xl mx-auto border-t border-base-300 pt-4">
+            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
+              {gettext("Changelog")}
+            </h3>
             <div class="space-y-1">
-              <div :for={version <- @versions} class="text-sm text-base-content/60">
+              <div
+                :for={version <- @versions}
+                class="surface-2 px-3 py-2 text-sm text-base-content/60 transition hover:bg-base-200/50"
+              >
                 {gettext("v%{version} — %{date} by %{author}",
                   version: version.version,
                   date: format_date(version.inserted_at),
                   author: version.changed_by || gettext("system")
                 )}
               </div>
-              <p :if={@versions == []} class="text-sm text-base-content/40">
+              <p :if={@versions == []} class="text-caption text-base-content/40">
                 {gettext("No version history yet.")}
               </p>
             </div>
           </div>
 
-          <div :if={@compare_version} class="border-t border-base-300 pt-4">
+          <div :if={@compare_version} class="max-w-3xl mx-auto border-t border-base-300 pt-4">
             <DranWeb.VersionDiffComponent.diff
               old_version={@compare_version}
               new_version={@page}
@@ -140,7 +158,7 @@ defmodule DranWeb.PageComponents do
       <aside class="w-72 shrink-0 border-l border-base-300 bg-base-200/30 overflow-y-auto">
         <div class="p-4 space-y-4">
           <div>
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+            <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider mb-2">
               {gettext("Metadata")}
             </h3>
             <div class="space-y-1 text-sm">
@@ -150,7 +168,7 @@ defmodule DranWeb.PageComponents do
               </div>
               <div class="flex justify-between gap-2">
                 <span class="text-base-content/60">{gettext("Version")}</span>
-                <span>v{@page.version}</span>
+                <span class="font-mono">v{@page.version}</span>
               </div>
               <div class="flex justify-between gap-2">
                 <span class="text-base-content/60">{gettext("Owner")}</span>
@@ -163,14 +181,6 @@ defmodule DranWeb.PageComponents do
               <div :if={@page.updated_by} class="flex justify-between gap-2">
                 <span class="text-base-content/60">{gettext("Updated by")}</span>
                 <span>{@page.updated_by}</span>
-              </div>
-              <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">{gettext("Created")}</span>
-                <span>{format_date(@page.inserted_at)}</span>
-              </div>
-              <div class="flex justify-between gap-2">
-                <span class="text-base-content/60">{gettext("Updated")}</span>
-                <span>{format_date(@page.updated_at)}</span>
               </div>
             </div>
 
@@ -189,53 +199,64 @@ defmodule DranWeb.PageComponents do
           </div>
 
           <div>
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+            <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider mb-2">
               {gettext("Relations")}
             </h3>
             <div class="space-y-2">
-              <div :if={length(@relations.outbound) > 0}>
-                <div class="text-xs text-base-content/40 mb-1">{gettext("Outbound")}</div>
-                <div :for={rel <- @relations.outbound} class="text-sm">
+              <div :if={length(@relations.outbound) > 0} class="space-y-1">
+                <div class="text-caption text-base-content/40 mb-1 inline-flex items-center gap-1">
+                  <.icon name="hero-arrow-right" class="size-3" />
+                  {gettext("Outbound")}
+                </div>
+                <div :for={rel <- @relations.outbound} class="surface-2 px-3 py-2 transition">
                   <.link
                     navigate={PageTypes.page_show_path(rel.target)}
-                    class="text-primary hover:underline"
+                    class="text-sm hover:text-primary transition"
                   >
                     {rel.target.title}
                   </.link>
-                  <span class="text-base-content/40 text-xs ml-1">{rel.relation_type}</span>
+                  <div class="text-caption text-base-content/40 mt-0.5">{rel.relation_type}</div>
                 </div>
               </div>
 
-              <div :if={length(@relations.inbound) > 0}>
-                <div class="text-xs text-base-content/40 mb-1">{gettext("Inbound")}</div>
-                <div :for={rel <- @relations.inbound} class="text-sm">
+              <div :if={length(@relations.inbound) > 0} class="space-y-1">
+                <div class="text-caption text-base-content/40 mb-1 inline-flex items-center gap-1">
+                  <.icon name="hero-arrow-left" class="size-3" />
+                  {gettext("Inbound")}
+                </div>
+                <div :for={rel <- @relations.inbound} class="surface-2 px-3 py-2 transition">
                   <.link
                     navigate={PageTypes.page_show_path(rel.source)}
-                    class="text-primary hover:underline"
+                    class="text-sm hover:text-primary transition"
                   >
                     {rel.source.title}
                   </.link>
-                  <span class="text-base-content/40 text-xs ml-1">{rel.relation_type}</span>
+                  <div class="text-caption text-base-content/40 mt-0.5">{rel.relation_type}</div>
                 </div>
               </div>
 
               <p
                 :if={@relations.outbound == [] and @relations.inbound == []}
-                class="text-sm text-base-content/40"
+                class="text-caption text-base-content/40"
               >
-                {gettext("No relations")}
+                {gettext("No relations yet")}
               </p>
             </div>
           </div>
 
           <div>
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+            <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider mb-2">
               {gettext("Versions")}
             </h3>
             <div class="space-y-1">
-              <div :for={version <- @versions} class="flex items-center justify-between gap-2">
+              <div
+                :for={version <- @versions}
+                class="surface-2 px-3 py-2 flex items-center justify-between gap-2 transition hover:bg-base-200/50"
+              >
                 <span class="text-sm text-base-content/60">
-                  {gettext("v%{version} — %{date}", version: version.version, date: format_date(version.inserted_at))}
+                  <span class="font-mono">v{version.version}</span>
+                  <span class="text-base-content/30 mx-1">·</span>
+                  {format_date(version.inserted_at)}
                 </span>
                 <button
                   phx-click="compare_version"
@@ -245,21 +266,23 @@ defmodule DranWeb.PageComponents do
                   {gettext("Compare")}
                 </button>
               </div>
-              <p :if={@versions == []} class="text-sm text-base-content/40">
+              <p :if={@versions == []} class="text-caption text-base-content/40">
                 {gettext("No version history yet.")}
               </p>
             </div>
           </div>
 
           <div>
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+            <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider mb-2">
               {gettext("Activity")}
             </h3>
             <div class="space-y-1">
               <div :for={log <- @logs} class="text-xs text-base-content/60">
                 <span class="font-mono">{log.action}</span> — {format_date(log.inserted_at)}
               </div>
-              <p :if={@logs == []} class="text-xs text-base-content/40">{gettext("No activity recorded.")}</p>
+              <p :if={@logs == []} class="text-xs text-base-content/40">
+                {gettext("No activity recorded.")}
+              </p>
             </div>
           </div>
         </div>
@@ -277,16 +300,17 @@ defmodule DranWeb.PageComponents do
 
   def tabs_bar(assigns) do
     ~H"""
-    <div class="border-b border-base-300 mb-4">
-      <div class="flex gap-1">
+    <div class="mb-4">
+      <div class="inline-flex rounded-lg bg-base-200 p-1">
         <button
           :for={{tab, label} <- @tabs}
           phx-click="switch_tab"
           phx-value-tab={tab}
+          data-testid={"tab-#{tab}"}
           class={[
-            "px-3 py-2 text-sm font-medium border-b-2 transition",
-            @active_tab == tab && "border-primary text-primary",
-            @active_tab != tab && "border-transparent text-base-content/60 hover:text-base-content"
+            "px-3 py-1.5 rounded-md text-sm transition",
+            @active_tab == tab && "bg-base-100 shadow-sm font-medium",
+            @active_tab != tab && "text-base-content/60 hover:text-base-content"
           ]}
         >
           {label}

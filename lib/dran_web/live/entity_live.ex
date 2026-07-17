@@ -241,7 +241,6 @@ defmodule DranWeb.EntityLive do
   def handle_event("request_upload", p, s), do: PageEdit.handle_event("request_upload", p, s)
   def handle_event("upload_complete", p, s), do: PageEdit.handle_event("upload_complete", p, s)
 
-
   # ── Version comparison ──
 
   def handle_event("compare_version", params, socket),

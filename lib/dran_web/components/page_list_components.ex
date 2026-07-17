@@ -9,6 +9,68 @@ defmodule DranWeb.PageListComponents do
 
   alias DranWeb.PageTypes
 
+  # Returns the empty-state metadata (title, description, cta) for a page type.
+  # Falls back to the default "All Pages" state when `page_type` is `nil`.
+  # gettext() is called with literal strings so the extractor (pot) can find them.
+  defp empty_state(page_type) do
+    {title, description, cta} =
+      case page_type do
+        "note" ->
+          {gettext("No notes yet"), gettext("Capture your first thought, idea or journal entry."),
+           gettext("Create Note")}
+
+        "concept" ->
+          {gettext("No concepts yet"),
+           gettext("Define the ideas and techniques you keep coming back to."),
+           gettext("Create Concept")}
+
+        "entity" ->
+          {gettext("No entities yet"),
+           gettext("Track people, companies, tools and places that matter."),
+           gettext("Create Entity")}
+
+        "reference" ->
+          {gettext("No references yet"),
+           gettext("Save articles, papers, videos and books worth remembering."),
+           gettext("Add Reference")}
+
+        "artifact" ->
+          {gettext("No artifacts yet"),
+           gettext("Upload files and deliverables that live in your brain."),
+           gettext("Upload Artifact")}
+
+        "goal" ->
+          {gettext("No goals yet"),
+           gettext("Set objectives with target dates and track their health."),
+           gettext("Create Goal")}
+
+        "plan" ->
+          {gettext("No plans yet"), gettext("Lay out weekly, monthly or quarterly plans."),
+           gettext("Create Plan")}
+
+        "todo" ->
+          {gettext("No todos yet"),
+           gettext("Add actionable items and move them across the board."),
+           gettext("Create Todo")}
+
+        "comparison" ->
+          {gettext("No comparisons yet"),
+           gettext("Compare options side by side and record your verdict."),
+           gettext("Create Comparison")}
+
+        "query" ->
+          {gettext("No queries yet"), gettext("Save smart queries over your knowledge graph."),
+           gettext("Create Query")}
+
+        _ ->
+          {gettext("No pages yet"),
+           gettext("Your second brain is empty. Capture your first page."),
+           gettext("Create Page")}
+      end
+
+    %{title: title, description: description, cta: cta}
+  end
+
   attr :pages, :list, required: true
   attr :page_type, :string, default: nil
   attr :context_slug, :string, default: "personal"
@@ -17,7 +79,7 @@ defmodule DranWeb.PageListComponents do
     ~H"""
     <div class="p-6">
       <div class="flex items-center justify-between mb-4">
-        <h1 class="text-2xl font-bold">
+        <h1 class="text-title">
           {if @page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")}
         </h1>
         <div class="flex gap-2">
@@ -35,44 +97,64 @@ defmodule DranWeb.PageListComponents do
         </div>
       </div>
 
-      <div :if={@pages == []} class="text-center py-16 space-y-4">
+      <div
+        :if={@pages == []}
+        data-testid="empty-state"
+        class="max-w-sm mx-auto py-20 text-center space-y-4"
+      >
         <div class="flex justify-center">
-          <div class="size-16 rounded-full bg-base-200 flex items-center justify-center">
-            <.icon name="hero-document-plus" class="size-8 text-base-content/40" />
+          <div class="size-20 rounded-full bg-base-200 flex items-center justify-center">
+            <.icon
+              name={if @page_type, do: PageTypes.icon(@page_type), else: "hero-sparkles"}
+              class="size-10 text-base-content/40"
+            />
           </div>
         </div>
         <div class="space-y-1">
-          <h3 class="text-lg font-semibold text-base-content/60">{gettext("No pages yet")}</h3>
-          <p class="text-sm text-base-content/40">{gettext("Get started by creating your first page.")}</p>
+          <h3 class="text-lg font-semibold">{empty_state(@page_type).title}</h3>
+          <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
         </div>
         <.link
           navigate={"/#{PageTypes.path(@page_type)}/new"}
-          class="btn btn-primary btn-sm transition-colors active:scale-95"
+          class="btn btn-primary btn-sm transition active:scale-95"
         >
-          <.icon name="hero-plus" class="w-4 h-4" /> {gettext("Create Page")}
+          <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
         </.link>
       </div>
 
       <div class="space-y-2">
         <div
           :for={page <- @pages}
-          class="p-3 rounded-lg border border-base-300 hover:bg-base-200 cursor-pointer"
+          class="surface-2 lift cursor-pointer p-4 rounded-xl"
           phx-click="show_page"
           phx-value-slug={page.slug}
+          data-testid={"page-card-" <> page.slug}
         >
-          <div class="flex items-center gap-2">
-            <.icon name={PageTypes.icon(page.page_type)} class="w-4 h-4 text-base-content/40" />
-            <span class="font-medium">{page.title}</span>
+          <div class="flex items-center gap-3">
+            <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
+              <.icon name={PageTypes.icon(page.page_type)} class="size-4 text-primary" />
+            </span>
+            <span class="font-medium leading-snug flex-1">{page.title}</span>
+            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
+              {PageTypes.label(page.page_type)}
+            </span>
           </div>
-          <p :if={page.summary} class="text-sm text-base-content/60 mt-1">{page.summary}</p>
-          <div class="flex gap-1 mt-2">
-            <.link
-              :for={tag <- Enum.take(page.tags || [], 5)}
-              navigate={"/tags/#{URI.encode_www_form(tag)}"}
-              class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-base-200 transition"
-            >
-              {tag}
-            </.link>
+          <p :if={page.summary} class="text-sm text-base-content/60 line-clamp-2 mt-2">
+            {page.summary}
+          </p>
+          <div class="flex items-center justify-between mt-2">
+            <div class="flex gap-1">
+              <.link
+                :for={tag <- Enum.take(page.tags || [], 5)}
+                navigate={"/tags/#{URI.encode_www_form(tag)}"}
+                class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
+              >
+                {tag}
+              </.link>
+            </div>
+            <span :if={page.updated_at} class="text-caption">
+              {Calendar.strftime(page.updated_at, "%b %d")}
+            </span>
           </div>
         </div>
       </div>

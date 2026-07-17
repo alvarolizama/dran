@@ -17,14 +17,24 @@ defmodule DranWeb.DashboardLive do
         %{key: "note", label: gettext("Notes"), icon: "hero-document-text", path: "/notes"},
         %{key: "concept", label: gettext("Concepts"), icon: "hero-light-bulb", path: "/concepts"},
         %{key: "entity", label: gettext("Entities"), icon: "hero-user-group", path: "/entities"},
-        %{key: "reference", label: gettext("References"), icon: "hero-bookmark", path: "/references"}
+        %{
+          key: "reference",
+          label: gettext("References"),
+          icon: "hero-bookmark",
+          path: "/references"
+        }
       ]
     },
     %{
       label: gettext("Planning"),
       items: [
         %{key: "goal", label: gettext("Goals"), icon: "hero-flag", path: "/goals"},
-        %{key: "plan", label: gettext("Plans"), icon: "hero-clipboard-document-list", path: "/plans"},
+        %{
+          key: "plan",
+          label: gettext("Plans"),
+          icon: "hero-clipboard-document-list",
+          path: "/plans"
+        },
         %{key: "todo", label: gettext("Todos"), icon: "hero-check-circle", path: "/todos"}
       ]
     },
@@ -32,18 +42,23 @@ defmodule DranWeb.DashboardLive do
       label: gettext("Outputs"),
       items: [
         %{key: "artifact", label: gettext("Artifacts"), icon: "hero-cube", path: "/artifacts"},
-        %{key: "comparison", label: gettext("Comparisons"), icon: "hero-scale", path: "/comparisons"}
+        %{
+          key: "comparison",
+          label: gettext("Comparisons"),
+          icon: "hero-scale",
+          path: "/comparisons"
+        }
       ]
     }
   ]
 
   @kanban_columns [
-    {"backlog", gettext("Backlog"), "bg-gray-100 text-gray-600"},
-    {"this_week", gettext("This Week"), "bg-blue-100 text-blue-700"},
-    {"today", gettext("Today"), "bg-amber-100 text-amber-700"},
-    {"in_progress", gettext("In Progress"), "bg-purple-100 text-purple-700"},
-    {"done", gettext("Done"), "bg-green-100 text-green-700"},
-    {"cancelled", gettext("Cancelled"), "bg-red-100 text-red-700"}
+    {"backlog", gettext("Backlog"), "bg-base-300 text-base-content/70"},
+    {"this_week", gettext("This Week"), "bg-info/15 text-info"},
+    {"today", gettext("Today"), "bg-warning/15 text-warning"},
+    {"in_progress", gettext("In Progress"), "bg-accent/15 text-accent"},
+    {"done", gettext("Done"), "bg-success/15 text-success"},
+    {"cancelled", gettext("Cancelled"), "bg-error/15 text-error"}
   ]
 
   def render(assigns) do
@@ -60,16 +75,23 @@ defmodule DranWeb.DashboardLive do
           <%!-- Header --%>
           <div class="flex items-center justify-between">
             <div>
-              <h1 class="text-2xl font-bold">{gettext("Dashboard")}</h1>
-              <p class="text-sm text-base-content/50 mt-1">
-                {if @context, do: @context.name, else: gettext("No context")} · {@stats[:total_pages] || 0} {gettext("pages")}
+              <h1 class="text-title">{gettext("Dashboard")}</h1>
+              <p class="text-caption mt-1">
+                {if @context, do: @context.name, else: gettext("No context")} · {@stats[:total_pages] ||
+                  0} {gettext("pages")}
               </p>
             </div>
             <div class="flex gap-2">
-              <.link navigate={~p"/graph"} class="btn btn-ghost btn-sm transition-colors active:scale-95">
+              <.link
+                navigate={~p"/graph"}
+                class="btn btn-ghost btn-sm transition-colors active:scale-95"
+              >
                 <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
               </.link>
-              <.link navigate={~p"/search"} class="btn btn-ghost btn-sm transition-colors active:scale-95">
+              <.link
+                navigate={~p"/search"}
+                class="btn btn-ghost btn-sm transition-colors active:scale-95"
+              >
                 <.icon name="hero-magnifying-glass" class="size-4" /> {gettext("Search")}
               </.link>
             </div>
@@ -105,110 +127,111 @@ defmodule DranWeb.DashboardLive do
 
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <%!-- Pages by type --%>
-            <div class="lg:col-span-1 space-y-4">
-              <div class="card bg-base-100 border border-base-300">
-                <div class="card-body p-5">
-                  <h2 class="card-title text-lg font-semibold">{gettext("Pages by Type")}</h2>
-                  <div class="space-y-2 mt-2">
-                    <.type_row
-                      :for={{type, count} <- sort_by_type(@stats[:by_type] || %{})}
-                      type={type}
-                      count={count}
-                      total={@stats[:total_pages] || 1}
-                    />
-                  </div>
+            <div class="lg:col-span-1 space-y-8">
+              <div class="surface-2 p-5">
+                <div class="flex items-center justify-between">
+                  <h2 class="text-heading">{gettext("Pages by Type")}</h2>
+                  <.link navigate={~p"/search"} class="text-sm text-primary hover:underline">
+                    {gettext("View all")}
+                  </.link>
+                </div>
+                <div class="space-y-2 mt-4">
+                  <.type_row
+                    :for={{type, count} <- sort_by_type(@stats[:by_type] || %{})}
+                    type={type}
+                    count={count}
+                    total={@stats[:total_pages] || 1}
+                  />
                 </div>
               </div>
 
               <%!-- Todo board summary --%>
               <div
                 :if={(@stats[:todos_by_status] || %{}) != %{}}
-                class="card bg-base-100 border border-base-300"
+                class="surface-2 p-5"
               >
-                <div class="card-body p-5">
-                  <h2 class="card-title text-lg font-semibold">{gettext("Todos")}</h2>
-                  <div class="space-y-1.5 mt-2">
-                    <div
-                      :for={{status, label, badge} <- @kanban_columns}
-                      class="flex items-center justify-between"
-                    >
-                      <span class={"px-2 py-0.5 text-xs rounded-full #{badge}"}>{label}</span>
-                      <span class="text-sm font-semibold">
-                        {(@stats[:todos_by_status] || %{})[status] || 0}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="card-actions justify-end mt-3">
-                    <.link navigate={~p"/todos"} class="btn btn-ghost btn-sm transition-colors active:scale-95">{gettext("View board")}</.link>
+                <div class="flex items-center justify-between">
+                  <h2 class="text-heading">{gettext("Todos")}</h2>
+                  <.link navigate={~p"/todos"} class="text-sm text-primary hover:underline">
+                    {gettext("View all")}
+                  </.link>
+                </div>
+                <div class="space-y-1.5 mt-4">
+                  <div
+                    :for={{status, label, badge} <- @kanban_columns}
+                    class="flex items-center justify-between"
+                  >
+                    <span class={"px-2.5 py-1 text-xs rounded-lg #{badge}"}>{label}</span>
+                    <span class="text-sm font-semibold tabular-nums">
+                      {(@stats[:todos_by_status] || %{})[status] || 0}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
 
             <%!-- Recently updated --%>
-            <div class="lg:col-span-2 space-y-4">
-              <div class="card bg-base-100 border border-base-300">
-                <div class="card-body p-5">
-                  <div class="flex items-center justify-between">
-                    <h2 class="card-title text-lg font-semibold">{gettext("Recently Updated")}</h2>
-                    <.link navigate={~p"/graph"} class="btn btn-ghost btn-xs transition-colors active:scale-95">
-                      <.icon name="hero-share" class="size-3.5" /> {gettext("Graph view")}
-                    </.link>
-                  </div>
-                  <div class="space-y-2 mt-2">
-                    <.link
-                      :for={page <- @stats[:recent] || []}
-                      navigate={page_path(page)}
-                      class="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
-                    >
-                      <.icon
-                        name={PageTypes.icon(page.page_type)}
-                        class="size-5 text-base-content/50 shrink-0"
-                      />
-                      <div class="min-w-0 flex-1">
-                        <div class="font-medium text-sm truncate">{page.title}</div>
-                        <div class="text-xs text-base-content/40">
-                          {PageTypes.plural(page.page_type)} · {format_date(page.updated_at)}
-                        </div>
+            <div class="lg:col-span-2 space-y-8">
+              <div class="surface-2 p-5">
+                <div class="flex items-center justify-between">
+                  <h2 class="text-heading">{gettext("Recently Updated")}</h2>
+                  <.link navigate={~p"/graph"} class="text-sm text-primary hover:underline">
+                    {gettext("View all")}
+                  </.link>
+                </div>
+                <div class="space-y-2 mt-4">
+                  <.link
+                    :for={page <- @stats[:recent] || []}
+                    navigate={page_path(page)}
+                    class="flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition cursor-pointer"
+                  >
+                    <.icon
+                      name={PageTypes.icon(page.page_type)}
+                      class="size-5 text-base-content/50 shrink-0"
+                    />
+                    <div class="min-w-0 flex-1">
+                      <div class="font-medium text-sm truncate">{page.title}</div>
+                      <div class="text-caption">
+                        {PageTypes.plural(page.page_type)} · {format_date(page.updated_at)}
                       </div>
-                      <span
-                        :if={page.summary}
-                        class="text-xs text-base-content/40 truncate hidden md:block max-w-[200px]"
-                      >
-                        {page.summary}
-                      </span>
-                    </.link>
-                    <p
-                      :if={(@stats[:recent] || []) == []}
-                      class="text-sm text-base-content/40 py-8 text-center"
+                    </div>
+                    <span
+                      :if={page.summary}
+                      class="text-caption truncate hidden md:block max-w-[200px]"
                     >
-                      <div class="flex flex-col items-center gap-3">
-                        <div class="size-12 rounded-full bg-base-200 flex items-center justify-center">
-                          <.icon name="hero-document" class="size-6 text-base-content/40" />
-                        </div>
-                        <span>{gettext("No pages yet. Create one to get started.")}</span>
+                      {page.summary}
+                    </span>
+                  </.link>
+                  <p
+                    :if={(@stats[:recent] || []) == []}
+                    class="text-caption py-8 text-center"
+                  >
+                    <div class="flex flex-col items-center gap-3">
+                      <div class="size-12 rounded-full bg-base-200 flex items-center justify-center">
+                        <.icon name="hero-document" class="size-6 text-base-content/40" />
                       </div>
-                    </p>
-                  </div>
+                      <span>{gettext("No pages yet. Create one to get started.")}</span>
+                    </div>
+                  </p>
                 </div>
               </div>
 
               <%!-- Quick access grid --%>
-              <div class="card bg-base-100 border border-base-300">
-                <div class="card-body p-5">
-                  <h2 class="card-title text-lg font-semibold">{gettext("Quick Access")}</h2>
-                  <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
-                    <%= for {_group_label, items} <- @nav_groups do %>
-                      <%= for item <- items do %>
-                        <.quick_card
-                          label={item.label}
-                          icon={item.icon}
-                          path={item.path}
-                          count={(@stats[:by_type] || %{})[item.key] || 0}
-                        />
-                      <% end %>
+              <div class="surface-2 p-5">
+                <div class="flex items-center justify-between">
+                  <h2 class="text-heading">{gettext("Quick Access")}</h2>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+                  <%= for {_group_label, items} <- @nav_groups do %>
+                    <%= for item <- items do %>
+                      <.quick_card
+                        label={item.label}
+                        icon={item.icon}
+                        path={item.path}
+                        count={(@stats[:by_type] || %{})[item.key] || 0}
+                      />
                     <% end %>
-                  </div>
+                  <% end %>
                 </div>
               </div>
             </div>
@@ -252,19 +275,29 @@ defmodule DranWeb.DashboardLive do
 
   defp metric_card(assigns) do
     ~H"""
-    <div class="card bg-base-100 border border-base-300 hover:border-primary/30 transition-colors">
-      <div class="card-body p-5 flex-row items-center gap-4">
-        <div class={"shrink-0 #{@color}"}>
-          <.icon name={@icon} class="size-8" />
-        </div>
-        <div class="min-w-0">
-          <div class="text-2xl font-bold">{@value}</div>
-          <div class="text-xs text-base-content/50 uppercase tracking-wider">{@label}</div>
-        </div>
+    <div class="surface-2 lift p-5 flex items-center gap-3">
+      <div class={[
+        "shrink-0 size-10 rounded-lg flex items-center justify-center",
+        bg_for_color(@color)
+      ]}>
+        <.icon name={@icon} class={["size-5", @color]} />
+      </div>
+      <div class="min-w-0">
+        <div class="text-2xl font-bold tabular-nums">{@value}</div>
+        <div class="text-caption">{@label}</div>
       </div>
     </div>
     """
   end
+
+  defp bg_for_color("text-primary"), do: "bg-primary/10"
+  defp bg_for_color("text-secondary"), do: "bg-secondary/10"
+  defp bg_for_color("text-accent"), do: "bg-accent/10"
+  defp bg_for_color("text-info"), do: "bg-info/10"
+  defp bg_for_color("text-success"), do: "bg-success/10"
+  defp bg_for_color("text-warning"), do: "bg-warning/10"
+  defp bg_for_color("text-error"), do: "bg-error/10"
+  defp bg_for_color(_), do: "bg-base-content/10"
 
   attr :type, :string, required: true
   attr :count, :integer, required: true
@@ -300,13 +333,11 @@ defmodule DranWeb.DashboardLive do
     ~H"""
     <.link
       navigate={@path}
-      class="card bg-base-200/50 border border-base-300 hover:border-primary/40 hover:bg-base-200 transition-colors active:scale-95"
+      class="surface-2 lift p-4 flex flex-col items-center text-center gap-1 active:scale-95"
     >
-      <div class="card-body p-4 items-center text-center gap-1">
-        <.icon name={@icon} class="size-6 text-base-content/60" />
-        <div class="text-sm font-medium">{@label}</div>
-        <div class="text-xs text-base-content/40">{gettext("%{count} pages", count: @count)}</div>
-      </div>
+      <.icon name={@icon} class="size-6 text-base-content/60" />
+      <div class="text-sm font-medium">{@label}</div>
+      <div class="text-caption">{gettext("%{count} pages", count: @count)}</div>
     </.link>
     """
   end

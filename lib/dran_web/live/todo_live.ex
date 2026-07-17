@@ -47,9 +47,20 @@ defmodule DranWeb.TodoLive do
       context_slug={@context_slug}
       contexts={@contexts}
     >
-      <div :if={@live_action == :index} id="kanban-board" phx-hook=".KanbanBoard" class="p-6">
+      <div
+        :if={@live_action == :index}
+        id="kanban-board"
+        data-testid="todo-board"
+        phx-hook=".KanbanBoard"
+        class="p-6"
+      >
         <div class="flex items-center justify-between mb-4">
-          <h1 class="text-2xl font-bold">{gettext("Todos")}</h1>
+          <div>
+            <h1 class="text-title">{gettext("Todos")}</h1>
+            <p class="text-caption mt-0.5">
+              {gettext("%{count} items", count: length(@items))}
+            </p>
+          </div>
           <button class="btn btn-primary btn-sm" phx-click="new_todo">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
           </button>
@@ -58,7 +69,7 @@ defmodule DranWeb.TodoLive do
         <form
           :if={@show_form}
           phx-submit="create_todo"
-          class="mb-4 p-4 rounded-lg border border-base-300 bg-base-200/50"
+          class="mb-4 p-4 surface-1"
         >
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <.input
@@ -103,11 +114,14 @@ defmodule DranWeb.TodoLive do
           <div
             :for={{status, label, badge_class} <- @kanban_columns}
             data-kanban-status={status}
-            class="w-72 shrink-0 flex flex-col rounded-lg bg-base-200/40 border border-base-300"
+            class="w-72 shrink-0 flex flex-col surface-1 transition-all"
           >
             <div class="flex items-center justify-between px-3 py-2 border-b border-base-300">
-              <span class="text-sm font-semibold">{label}</span>
-              <span class={"px-2 py-0.5 text-xs rounded-full " <> badge_class}>
+              <span class="text-heading">{label}</span>
+              <span
+                :if={column_count(@items, status) > 0}
+                class="text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60"
+              >
                 {column_count(@items, status)}
               </span>
             </div>
@@ -118,11 +132,11 @@ defmodule DranWeb.TodoLive do
                 draggable="true"
                 phx-click="show_page"
                 phx-value-slug={item.slug}
-                class="p-3 rounded-lg bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary/40 active:cursor-grabbing transition"
+                class="surface-2 lift p-3 cursor-grab hover:border-primary/40 active:cursor-grabbing"
               >
-                <div class="font-medium text-sm break-words">{item.title}</div>
+                <div class="font-medium leading-snug text-sm break-words">{item.title}</div>
                 <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span class={"px-1.5 py-0.5 text-[11px] rounded " <> priority_class(item)}>
+                  <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded " <> priority_badge_class(item)}>
                     {priority_label(item)}
                   </span>
                   <span
@@ -134,16 +148,27 @@ defmodule DranWeb.TodoLive do
                 </div>
                 <div
                   :if={due_date(item)}
-                  class={due_date_class(overdue?(item))}
+                  class={due_date_display_class(overdue?(item))}
                 >
-                  <.icon name="hero-calendar-days" class="size-3.5" /> {format_due(due_date(item))}
+                  <.icon name="hero-calendar" class="size-3.5" /> {format_due(due_date(item))}
+                </div>
+                <div
+                  :if={item.tags != []}
+                  class="flex flex-wrap gap-1 mt-1.5"
+                >
+                  <span
+                    :for={tag <- Enum.take(item.tags, 4)}
+                    class="px-1.5 py-0.5 text-[11px] rounded bg-base-200 text-base-content/60"
+                  >
+                    #{tag}
+                  </span>
                 </div>
               </div>
               <p
                 :if={column_items(@items, status) == []}
-                class="text-xs text-base-content/30 text-center py-4"
+                class="text-caption text-center py-8"
               >
-                {gettext("Drop here")}
+                {gettext("No todos")}
               </p>
             </div>
           </div>
@@ -181,7 +206,7 @@ defmodule DranWeb.TodoLive do
 
             <div :if={@active_tab == "content"} class="space-y-4">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs text-base-content/50 mr-1">{gettext("Status:")}</span>
+                <span class="text-caption mr-1">{gettext("Status:")}</span>
                 <button
                   :for={{status, label, badge_class} <- @kanban_columns}
                   phx-click="change_status"
@@ -244,7 +269,9 @@ defmodule DranWeb.TodoLive do
                       save_status={@save_status}
                     />
                     <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext("Cancel")}</button>
+                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext(
+                        "Cancel"
+                      )}</button>
                       <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
                     </div>
                   </div>
@@ -252,7 +279,9 @@ defmodule DranWeb.TodoLive do
               <% end %>
 
               <div class="border-t border-base-300 pt-4">
-                <h3 class="text-sm font-semibold text-base-content/60 mb-2">{gettext("Changelog")}</h3>
+                <h3 class="text-sm font-semibold text-base-content/60 mb-2">
+                  {gettext("Changelog")}
+                </h3>
                 <div class="space-y-1">
                   <div :for={version <- @versions} class="text-sm text-base-content/60">
                     {gettext("v%{version} — %{date} by %{author}",
@@ -280,12 +309,20 @@ defmodule DranWeb.TodoLive do
           mounted() {
             this.draggedSlug = null;
             const board = this.el;
+            const dropClasses = ["ring-2", "ring-primary/30", "border-dashed"];
 
             board.addEventListener("dragstart", (e) => {
               const card = e.target.closest("[data-kanban-slug]");
               if (card) {
                 this.draggedSlug = card.dataset.kanbanSlug;
                 e.dataTransfer.effectAllowed = "move";
+              }
+            });
+
+            board.addEventListener("dragenter", (e) => {
+              const col = e.target.closest("[data-kanban-status]");
+              if (col) {
+                col.classList.add(...dropClasses);
               }
             });
 
@@ -296,8 +333,18 @@ defmodule DranWeb.TodoLive do
               }
             });
 
+            board.addEventListener("dragleave", (e) => {
+              const col = e.target.closest("[data-kanban-status]");
+              if (col && !col.contains(e.relatedTarget)) {
+                col.classList.remove(...dropClasses);
+              }
+            });
+
             board.addEventListener("drop", (e) => {
               const col = e.target.closest("[data-kanban-status]");
+              if (col) {
+                col.classList.remove(...dropClasses);
+              }
               if (col !== null && this.draggedSlug !== null) {
                 e.preventDefault();
                 this.pushEvent("move_todo", {
@@ -310,6 +357,9 @@ defmodule DranWeb.TodoLive do
 
             board.addEventListener("dragend", () => {
               this.draggedSlug = null;
+              board.querySelectorAll("[data-kanban-status]").forEach((col) => {
+                col.classList.remove(...dropClasses);
+              });
             });
           }
         }
@@ -409,10 +459,20 @@ defmodule DranWeb.TodoLive do
       goal_options = [{gettext("No goal"), ""} | Enum.map(goals, &{&1.title, &1.slug})]
 
       {:noreply,
-       assign(socket, items: items, goals: goals, goal_options: goal_options, page_title: gettext("Todos"))}
+       assign(socket,
+         items: items,
+         goals: goals,
+         goal_options: goal_options,
+         page_title: gettext("Todos")
+       )}
     else
       {:noreply,
-       assign(socket, items: [], goals: [], goal_options: [{gettext("No goal"), ""}], page_title: gettext("Todos"))}
+       assign(socket,
+         items: [],
+         goals: [],
+         goal_options: [{gettext("No goal"), ""}],
+         page_title: gettext("Todos")
+       )}
     end
   end
 
@@ -476,8 +536,8 @@ defmodule DranWeb.TodoLive do
              |> assign(items: Brain.list_todos(context.id), show_form: false)
              |> put_flash(:info, gettext("Todo created."))}
 
-            {:error, _changeset} ->
-              {:noreply, put_flash(socket, :error, gettext("Could not create todo."))}
+          {:error, _changeset} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not create todo."))}
         end
     end
   end
@@ -514,7 +574,6 @@ defmodule DranWeb.TodoLive do
   def handle_event("field_change", p, s), do: PageEdit.handle_event("field_change", p, s)
   def handle_event("request_upload", p, s), do: PageEdit.handle_event("request_upload", p, s)
   def handle_event("upload_complete", p, s), do: PageEdit.handle_event("upload_complete", p, s)
-
 
   # ── Version comparison ──
 
@@ -588,6 +647,26 @@ defmodule DranWeb.TodoLive do
     |> String.replace(~r/[^a-z0-9]+/, "-")
     |> String.replace(~r/^-+|-+$/, "")
   end
+
+  # ── Local display helpers (design-system colors) ──
+  # These shadow the imported TodoHelpers versions to use semantic
+  # color tokens (error/warning/info) instead of raw Tailwind palettes.
+
+  defp priority_badge_class(page) do
+    case priority(page) do
+      "urgent" -> "bg-error/15 text-error"
+      "high" -> "bg-warning/15 text-warning"
+      "medium" -> "bg-info/15 text-info"
+      "low" -> "bg-base-300 text-base-content/60"
+      _ -> "bg-base-300 text-base-content/60"
+    end
+  end
+
+  defp due_date_display_class(true),
+    do: "flex items-center gap-1 mt-1.5 text-xs font-medium text-error"
+
+  defp due_date_display_class(false),
+    do: "flex items-center gap-1 mt-1.5 text-caption"
 
   # ── Meta accessors and formatting live in DranWeb.TodoHelpers ──
 end

@@ -298,7 +298,6 @@ defmodule DranWeb.NoteLive do
 
   # ── Upload progress ──
 
-
   # ── Version comparison ──
 
   def handle_event("compare_version", params, socket),

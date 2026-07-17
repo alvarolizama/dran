@@ -6,11 +6,20 @@ defmodule DranWeb.SearchLive do
   this page with the query. The in-page form uses `phx-submit` for live
   updates without a full page reload.
   """
+
   use DranWeb, :live_view
 
   alias Dran.Brain
   alias DranWeb.HTMLSanitizer
+  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
+
+  @search_modes [
+    {"auto", gettext("Auto")},
+    {"fts", gettext("FTS")},
+    {"semantic", gettext("Semantic")},
+    {"hybrid", gettext("Hybrid")}
+  ]
 
   @impl true
   def mount(_params, session, socket) do
@@ -22,7 +31,8 @@ defmodule DranWeb.SearchLive do
        active_nav: "search",
        query: "",
        results: [],
-       search_mode: "auto"
+       search_mode: "auto",
+       search_modes: @search_modes
      )}
   end
 
@@ -82,83 +92,92 @@ defmodule DranWeb.SearchLive do
       active_nav={@active_nav}
     >
       <div class="p-6 overflow-y-auto w-full">
-        <h1 class="text-2xl font-bold mb-4">{gettext("Search")}</h1>
+        <h1 class="text-title mb-4">{gettext("Search")}</h1>
 
-        <form phx-submit="search" class="mb-6">
-          <.input
-            id="search-q"
-            type="text"
-            name="q"
-            value={@query}
-            placeholder={gettext("Search pages...")}
-          />
+        <form phx-submit="search" class="mb-4">
+          <div class="relative">
+            <.icon
+              name="hero-magnifying-glass"
+              class="size-5 text-base-content/40 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+            />
+            <.input
+              id="search-q"
+              type="text"
+              name="q"
+              value={@query}
+              placeholder={gettext("Search pages...")}
+              class="focus-ring w-full py-3 pl-12 pr-4 text-base"
+            />
+          </div>
         </form>
 
         <div class="mb-6">
           <div
             role="group"
             aria-label={gettext("Search strategy")}
-            class="inline-flex rounded-lg border border-base-300 overflow-hidden"
+            class="inline-flex rounded-lg bg-base-200 p-1"
           >
             <button
+              :for={{mode, label} <- @search_modes}
               type="button"
               phx-click="set_mode"
-              phx-value-mode="auto"
-              class={"px-3 py-1.5 text-sm transition-colors #{if @search_mode == "auto", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
+              phx-value-mode={mode}
+              class={[
+                "px-3 py-1.5 text-sm transition-colors rounded-md",
+                if @search_mode == mode do
+                  "bg-base-100 shadow-sm font-medium"
+                else
+                  "text-base-content/60 hover:text-base-content"
+                end
+              ]}
             >
-              {gettext("Auto")}
-            </button>
-            <button
-              type="button"
-              phx-click="set_mode"
-              phx-value-mode="fts"
-              class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "fts", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
-            >
-              {gettext("FTS")}
-            </button>
-            <button
-              type="button"
-              phx-click="set_mode"
-              phx-value-mode="semantic"
-              class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "semantic", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
-            >
-              {gettext("Semantic")}
-            </button>
-            <button
-              type="button"
-              phx-click="set_mode"
-              phx-value-mode="hybrid"
-              class={"px-3 py-1.5 text-sm transition-colors border-l border-base-300 #{if @search_mode == "hybrid", do: "bg-primary text-primary-content", else: "bg-base-100 hover:bg-base-200"}"}
-            >
-              {gettext("Hybrid")}
+              {label}
             </button>
           </div>
         </div>
 
-        <div class="space-y-2">
-          <div
-            :for={result <- @results}
-            class="p-3 rounded-lg border border-base-300"
-          >
-            <div class="flex items-center justify-between">
-              <span class="font-medium">{result.title}</span>
-              <span class="text-xs text-base-content/50">{result.page_type}</span>
-            </div>
-            <div
-              :if={result.excerpt && result.excerpt != ""}
-              class="mt-1 text-sm text-base-content/70"
-            >
-              {raw(HTMLSanitizer.sanitize_to_string(result.excerpt))}
-            </div>
+        <div data-testid="search-results" class="space-y-2">
+          <div :if={@query == ""} class="text-center py-16">
+            <.icon name="hero-command-line" class="size-10 mx-auto text-base-content/30" />
+            <p class="text-caption mt-3">
+              {gettext("Try: 'elixir', 'meeting', tag:programming")}
+            </p>
           </div>
 
-          <p :if={@query != "" && @results == []} class="text-base-content/60">
-            {gettext("No results found for \"%{query}\".", query: @query)}
-          </p>
+          <div :if={@query != "" && @results == []} class="text-center py-16">
+            <.icon name="hero-face-frown" class="size-10 mx-auto text-base-content/30" />
+            <p class="text-caption mt-3">
+              {gettext("No results for '%{query}'", query: @query)}
+            </p>
+            <p class="text-caption mt-1 text-base-content/40">
+              {gettext("Check the spelling or try a different strategy above.")}
+            </p>
+          </div>
 
-          <p :if={@query == ""} class="text-base-content/60">
-            {gettext("Enter a query above to search across all pages.")}
-          </p>
+          <div
+            :for={result <- @results}
+            class="surface-2 lift p-3"
+          >
+            <div class="flex items-start gap-3">
+              <div class="shrink-0 size-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <.icon name={PageTypes.icon(result.page_type)} class="size-4 text-primary" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm break-words">{result.title}</div>
+                <div
+                  :if={result.excerpt && result.excerpt != ""}
+                  class="mt-1 text-sm text-base-content/60 line-clamp-2"
+                >
+                  {raw(HTMLSanitizer.sanitize_to_string(result.excerpt))}
+                </div>
+                <div class="flex items-center gap-2 mt-1.5">
+                  <span class="text-caption">
+                    {PageTypes.label(result.page_type)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </Layouts.app>

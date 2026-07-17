@@ -261,14 +261,22 @@ defmodule DranWeb.GraphLive do
             <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">View Mode</h3>
             <div class="join">
               <button
-                class={["btn btn-xs join-item", @view_mode == "2d" && "btn-primary", @view_mode != "2d" && "btn-ghost"]}
+                class={[
+                  "btn btn-xs join-item",
+                  @view_mode == "2d" && "btn-primary",
+                  @view_mode != "2d" && "btn-ghost"
+                ]}
                 phx-click="toggle_view_mode"
                 phx-value-mode="2d"
               >
                 2D
               </button>
               <button
-                class={["btn btn-xs join-item", @view_mode == "3d" && "btn-primary", @view_mode != "3d" && "btn-ghost"]}
+                class={[
+                  "btn btn-xs join-item",
+                  @view_mode == "3d" && "btn-primary",
+                  @view_mode != "3d" && "btn-ghost"
+                ]}
                 phx-click="toggle_view_mode"
                 phx-value-mode="3d"
               >

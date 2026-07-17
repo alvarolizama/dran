@@ -41,11 +41,15 @@ defmodule DranWeb.MarkdownEditorComponents do
         id={@id}
         phx-hook="MarkdownEditor"
         phx-update="ignore"
-        class="md-editor-mount flex-1 min-h-[300px] bg-base-100"
+        class="md-editor-mount flex-1 min-h-[300px] bg-base-100 overflow-y-auto"
         data-body={@body}
         data-context-id={@context_id}
       >
-        <div class="tiptap-content prose prose-base dark:prose-invert max-w-none p-4"></div>
+        <div
+          class="tiptap-content prose prose-base dark:prose-invert max-w-none"
+          data-placeholder="Escribe algo… o usa / para comandos"
+        >
+        </div>
       </div>
     </div>
     """
@@ -77,26 +81,29 @@ defmodule DranWeb.MarkdownEditorComponents do
 
   defp editor_toolbar(assigns) do
     ~H"""
-    <div class="editor-toolbar flex flex-wrap items-center gap-1 p-2 border-b border-base-300 bg-base-200/60">
-      <.tb_btn id={@id} cmd="bold" icon="hero-bold" label="B" />
-      <.tb_btn id={@id} cmd="italic" icon="hero-italic" label="I" />
+    <div
+      class="editor-toolbar flex flex-wrap items-center gap-1 p-2"
+      data-testid="editor-toolbar"
+    >
+      <.tb_btn id={@id} cmd="bold" icon="hero-bold" label="B" testid="tb-bold" />
+      <.tb_btn id={@id} cmd="italic" icon="hero-italic" label="I" testid="tb-italic" />
       <.tb_btn id={@id} cmd="strike" icon="hero-strikethrough" label="S" />
       <.tb_btn id={@id} cmd="code" icon="hero-code-bracket" label="<>" />
-      <div class="w-px h-5 bg-base-300 mx-1"></div>
+      <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="h1" icon="hero-hashtag" label="H1" />
       <.tb_btn id={@id} cmd="h2" icon="hero-hashtag" label="H2" />
       <.tb_btn id={@id} cmd="h3" icon="hero-hashtag" label="H3" />
-      <div class="w-px h-5 bg-base-300 mx-1"></div>
+      <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="bulletList" icon="hero-list-bullet" label="" />
       <.tb_btn id={@id} cmd="orderedList" icon="hero-list-bullet" label="1." />
       <.tb_btn id={@id} cmd="blockquote" icon="hero-chat-bubble-left" label="" />
       <.tb_btn id={@id} cmd="codeBlock" icon="hero-code-bracket-square" label="" />
-      <div class="w-px h-5 bg-base-300 mx-1"></div>
-      <.tb_btn id={@id} cmd="link" icon="hero-link" label="" />
+      <div class="tb-separator" aria-hidden="true"></div>
+      <.tb_btn id={@id} cmd="link" icon="hero-link" label="" testid="tb-link" />
       <.tb_btn id={@id} cmd="wikilink" icon="hero-link" label="[[]]" />
       <.tb_btn id={@id} cmd="embed" icon="hero-photo" label="![]" />
       <.tb_btn id={@id} cmd="table" icon="hero-table" label="" />
-      <div class="w-px h-5 bg-base-300 mx-1"></div>
+      <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="undo" icon="hero-arrow-uturn-left" label="" />
       <.tb_btn id={@id} cmd="redo" icon="hero-arrow-uturn-right" label="" />
     </div>
@@ -107,6 +114,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   attr :cmd, :string, required: true
   attr :icon, :string, default: nil
   attr :label, :string, default: ""
+  attr :testid, :string, default: nil
 
   defp tb_btn(assigns) do
     ~H"""
@@ -115,6 +123,7 @@ defmodule DranWeb.MarkdownEditorComponents do
       class="tb-btn inline-flex items-center justify-center min-w-7 h-7 px-1.5 rounded text-sm text-base-content/70 hover:bg-base-300 hover:text-base-content transition"
       data-editor={@id}
       data-cmd={@cmd}
+      data-testid={@testid}
       title={@cmd}
     >
       <%= if @icon && @icon != "" do %>

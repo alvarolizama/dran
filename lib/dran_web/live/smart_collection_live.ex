@@ -137,8 +137,7 @@ defmodule DranWeb.SmartCollectionLive do
             {@result_count} {if @result_count == 1, do: "page", else: "pages"}
           </span>
           <span class="text-xs text-base-content/40 flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full bg-success animate-pulse"></span>
-            Live
+            <span class="inline-block w-2 h-2 rounded-full bg-success animate-pulse"></span> Live
           </span>
         </div>
 
@@ -152,7 +151,10 @@ defmodule DranWeb.SmartCollectionLive do
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2 min-w-0">
-                <.icon name={DranWeb.PageTypes.icon(page.page_type)} class="w-4 h-4 text-base-content/40 shrink-0" />
+                <.icon
+                  name={DranWeb.PageTypes.icon(page.page_type)}
+                  class="w-4 h-4 text-base-content/40 shrink-0"
+                />
                 <span class="font-medium truncate">{page.title}</span>
               </div>
               <span class="text-xs text-base-content/50 shrink-0 ml-2">
@@ -434,7 +436,8 @@ defmodule DranWeb.SmartCollectionLive do
              |> push_navigate(to: ~p"/collections/#{page.slug}")}
 
           {:error, _changeset} ->
-            {:noreply, put_flash(socket, :error, "Could not create collection. Slug may already exist.")}
+            {:noreply,
+             put_flash(socket, :error, "Could not create collection. Slug may already exist.")}
         end
     end
   end
