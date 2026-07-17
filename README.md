@@ -2,29 +2,46 @@
 
 A personal second-brain application built with Phoenix LiveView. It stores your knowledge as typed pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons) and links them with relations, forming a queryable knowledge graph.
 
-Includes a full markdown editor (TipTap WYSIWYG), an MCP endpoint for AI agent integration, and a REST API.
+Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP endpoint for AI agent integration, a floating copilot chat, and a REST API.
 
-> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 18 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 19 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
 ## Features
 
 - **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, artifact, goal, plan, todo, comparison, and query
 - **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, and artifact embeds `![[slug]]`
+- **Autonomous agents (6)** — background ReAct agents that plan, act, and log every step:
+  - `research` — searches the web, scrapes sources, creates note/reference pages
+  - `ingest` — validates, inspects, downloads, and creates reference pages from URLs
+  - `ask` — Q&A agent that answers questions from your knowledge graph, citing sources
+  - `curator` — runs daily (Quantum-scheduled), finds duplicates, flags contested knowledge, cleans stale pages
+  - `link_gardener` — proposes semantic relations between orphaned and weakly-linked pages
+  - `weekly_review` — runs weekly (Quantum-scheduled), gathers stats and creates a review page
+- **Content extraction on ingest** — when files are ingested, Dran converts them to markdown automatically:
+  - PDF/DOCX/PPTX → markdown via **MarkItDown**
+  - Images → text descriptions via **Vision** (image content part)
+  - Audio → transcripts via **ASR** (`/v1/audio/transcriptions`)
+- **Auto-resolved embeds** — `![[slug]]` in the editor resolves to the latest version of the target artifact; stale `embeds` relations are cleaned up when embeds are removed
+- **Bidirectional semantic relations with dynamic thresholds** — `PageAugmenter` creates `semantic` links after every capture; the cosine-distance threshold adapts to page length (short/mid/long bands) and is tunable at runtime via settings
+- **Version history with diff** — every page edit saves the previous body to `page_versions`; view and diff any prior version
+- **Activity feed** — real-time log of all brain actions (creates, updates, deletes, relations) in a dedicated LiveView
+- **Daily notes** — one journal note per day, created on demand or auto-prompted from the dashboard; toggleable via settings
+- **Full context export** — export an entire context (pages, relations, versions, uploads) as a JSON backup for restore or migration
+- **Runtime settings** — tune the brain without a redeploy: semantic thresholds, agent limits, research language, daily-note toggle — all editable in the UI and persisted to the DB
+- **Floating brain copilot chat** — a context-aware chat widget on every page that answers questions about the current page/context, cites its sources, and can create pages from the conversation
 - **Knowledge graph** — visual graph with pan/zoom, built from explicit and semantic relations
 - **Inline editing** — edit any page in-place with autosave
 - **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
-- **Dashboard** — metrics, recent pages, quick access, todo board summary
+- **Dashboard** — metrics, recent pages, quick access, todo board summary, daily-note status
 - **Kanban board** — drag & drop todos with 6 statuses
 - **Goal kanban** — per-goal todo board with drag & drop
-- **MCP server** — 18 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph
-- **REST API** — full CRUD for pages, contexts, relations, search, ingest, and maintenance
+- **MCP server** — 19 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph (see [SKILL.md](SKILL.md))
+- **REST API** — full CRUD for pages, contexts, relations, search, ingest, export, and maintenance
 - **Relations** — see inbound and outbound relations for any page
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
 - **Quality lint** — find orphan pages, stale pages, and contested knowledge
 - **Slug rename** — rename a page slug
 - **Hybrid search** — unified `search` tool picks full-text, fuzzy, semantic, or hybrid
-- **Automatic relations** — `PageAugmenter` creates `semantic` links via embeddings after every capture
-- **Autonomous agents** — research and ingest agents that run asynchronously, log every step, and create pages automatically
 
 ## Quick start (local dev)
 
@@ -99,6 +116,9 @@ DRAN_API_TOKEN=$(openssl rand -hex 32)
 | `DATABASE_URL`    | yes      | Postgres connection string                                     |
 | `DRAN_PASSWORD`   | yes      | Admin login password                                           |
 | `DRAN_API_TOKEN`  | yes      | Bearer token for API / MCP                                     |
+| `DRAN_USERNAME`   | no       | Admin username (default: `admin`, seeded on first run)         |
+| `DRAN_CONTEXT_SLUG` | no     | Default context slug (default: `personal`)                     |
+| `DRAN_CONTEXT_NAME` | no     | Default context name (default: `Personal`)                     |
 | `PHX_HOST`        | yes      | Public hostname (e.g. `localhost`, `dran.example.com`)         |
 | `PHX_PORT`        | no       | External port for generated URLs (default: `443`)              |
 | `PHX_SCHEME`      | no       | `https` or `http` (default: `https`)                           |
@@ -390,7 +410,7 @@ curl -fsSL https://dran.example.com/api/mcp \
 
 ### MCP (Model Context Protocol)
 
-Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transport.
+Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transport. For the full agent operating manual — connection details, tool schemas, resources, prompts, recipes, and pitfalls — see [**SKILL.md**](SKILL.md).
 
 **Client configuration (e.g. Claude Desktop):**
 
@@ -407,7 +427,7 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 }
 ```
 
-**Available tools:**
+**Available tools (19):**
 
 | Tool               | Description                                                            |
 | ------------------ | ---------------------------------------------------------------------- |
@@ -426,8 +446,9 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `stats`            | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
 | `lint`             | Quality report: orphans, stale pages, and contested knowledge          |
 | `rename_slug`      | Rename a page's slug                                                   |
-| `ingest_url`       | Save a URL (HTML to save link; files to download and store)           |
-| `start_agent`      | Start an autonomous agent (`research` or `ingest`)                       |
+| `ingest_url`       | Save a URL (HTML to save link; files to download and store)            |
+| `reaugment_page`   | Re-run `PageAugmenter` on a page to refresh its semantic relations      |
+| `start_agent`      | Start an autonomous agent (`research`, `ingest`, `ask`, `curator`, `link_gardener`, `weekly_review`) |
 | `get_agent_session`| Poll an agent session for status, summary, and steps                  |
 
 **Resources:**
@@ -462,17 +483,21 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 ### Autonomous agents
 
-Dran can delegate longer tasks to autonomous ReAct agents:
+Dran can delegate longer tasks to autonomous ReAct agents. There are six agent types:
 
-- **`start_agent` / `get_agent_session`** — start a research or ingest session and poll for progress.
-- **Research agent** — searches the web, scrapes sources, checks existing pages, and creates 1-5 new pages.
-- **Ingest agent** — validates, inspects, downloads, and creates reference pages from URLs.
+| Agent           | Trigger                    | What it does                                                                 |
+| --------------- | -------------------------- | ---------------------------------------------------------------------------- |
+| `research`      | Manual (`start_agent`)     | Searches the web, scrapes sources, creates note/reference pages             |
+| `ingest`         | Manual (`start_agent`)     | Validates, inspects, downloads, and creates reference pages from URLs       |
+| `ask`           | Manual / copilot           | Q&A — answers questions from the knowledge graph, citing sources            |
+| `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes         |
+| `link_gardener` | Manual (`start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages        |
+| `weekly_review` | Quantum cron (weekly Sun 08:00) | Gathers stats and creates a review page                                 |
 
-> A search-only agent is on the roadmap; today `search` / `semantic_search` tools return results directly without creating pages.
-
-Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and to PubSub topics (`agents:<session_id>` and `agents:all`).
-
-Agents are also exposed as LiveView pages at `/agents/:type` and individual sessions at `/agents/:type/:id`. From the CLI, run an agent with `mix dran.agent --type research --context personal --input "topic"`.
+- **`start_agent` / `get_agent_session`** — start a session and poll for progress.
+- Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and PubSub topics (`agents:<session_id>` and `agents:all`).
+- The `curator` and `weekly_review` agents are scheduled automatically by the **Quantum** scheduler (see `config/config.exs`).
+- Agents are exposed as LiveView pages at `/agents/:type` and individual sessions at `/agents/:type/:id`. From the CLI, run an agent with `mix dran.agent --type research --context personal --input "topic"`.
 
 ### Example: create a note
 
@@ -545,7 +570,22 @@ mix dran.agent --type ingest  --context personal --input "https://example.com/ar
 - **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
 - **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
 - **MCP** (Model Context Protocol) for AI agent integration
+- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily) and `weekly_review` (weekly) agents
 - **Tailwind CSS v4** + daisyUI for styling
+
+## Screenshots
+
+![Dashboard with brain health metrics](docs/screenshots/dashboard.png)
+
+![Knowledge graph](docs/screenshots/graph.png)
+
+![Floating brain copilot chat](docs/screenshots/chat.png)
+
+![Page detail with backlinks and relations](docs/screenshots/note-detail.png)
+
+![Activity feed](docs/screenshots/activity.png)
+
+![Settings — brain tuning](docs/screenshots/settings.png)
 
 ## License
 
