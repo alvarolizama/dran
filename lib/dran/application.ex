@@ -12,9 +12,11 @@ defmodule Dran.Application do
      query: Application.compile_env(:dran, :dns_cluster_query, %{}) |> Map.get(:query) || :ignore},
     {Phoenix.PubSub, name: Dran.PubSub},
     {Registry, keys: :unique, name: Dran.Agent.SessionRegistry},
+    {Registry, keys: :unique, name: Dran.ChatRegistry},
     Dran.Inference.QueueSupervisor,
     Dran.Embeddings.Supervisor,
     Dran.Relations.Supervisor,
+    Dran.Chat.Supervisor,
     Dran.Scheduler,
     DranWeb.Endpoint
   ]
