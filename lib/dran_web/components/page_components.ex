@@ -125,6 +125,10 @@ defmodule DranWeb.PageComponents do
             {@rendered_body}
           </div>
 
+          <div class="max-w-3xl mx-auto border-t border-base-300 pt-4">
+            <.backlinks_section relations={@relations} />
+          </div>
+
           <div :if={@tabs == []} class="max-w-3xl mx-auto border-t border-base-300 pt-4">
             <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
               {gettext("Changelog")}
@@ -215,7 +219,11 @@ defmodule DranWeb.PageComponents do
                   >
                     {rel.target.title}
                   </.link>
-                  <div class="text-caption text-base-content/40 mt-0.5">{rel.relation_type}</div>
+                  <div class="mt-0.5">
+                    <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded-full #{relation_type_badge_class(rel.relation_type)}"}>
+                      {rel.relation_type}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -231,7 +239,11 @@ defmodule DranWeb.PageComponents do
                   >
                     {rel.source.title}
                   </.link>
-                  <div class="text-caption text-base-content/40 mt-0.5">{rel.relation_type}</div>
+                  <div class="mt-0.5">
+                    <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded-full #{relation_type_badge_class(rel.relation_type)}"}>
+                      {rel.relation_type}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -290,6 +302,112 @@ defmodule DranWeb.PageComponents do
     </div>
     """
   end
+
+  @doc """
+  Collapsible "Linked from (N)" section showing inbound backlinks.
+
+  Renders in the main content area below the page body. Each backlink shows
+  the source page title (as a link) and a small relation-type badge.
+  Includes an empty state when there are no backlinks.
+  """
+  attr :relations, :map, default: %{outbound: [], inbound: []}
+
+  def backlinks_section(assigns) do
+    inbound = Map.get(assigns.relations, :inbound, [])
+    outbound = Map.get(assigns.relations, :outbound, [])
+    inbound_count = length(inbound)
+    outbound_count = length(outbound)
+
+    assigns =
+      assigns
+      |> assign(:inbound, inbound)
+      |> assign(:outbound, outbound)
+      |> assign(:inbound_count, inbound_count)
+      |> assign(:outbound_count, outbound_count)
+
+    ~H"""
+    <details class="group" open={@inbound_count > 0}>
+      <summary class="flex items-center gap-2 cursor-pointer select-none mb-3">
+        <.icon
+          name="hero-chevron-right"
+          class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+        />
+        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+          {gettext("Linked from")}
+          <span class="ml-1 text-base-content/40">({@inbound_count})</span>
+        </h3>
+      </summary>
+
+      <div :if={@inbound_count > 0} class="space-y-2 ml-6">
+        <div
+          :for={rel <- @inbound}
+          class="surface-2 px-3 py-2 flex items-center justify-between gap-2 transition"
+        >
+          <.link
+            navigate={PageTypes.page_show_path(rel.source)}
+            class="text-sm hover:text-primary transition min-w-0 truncate"
+          >
+            {rel.source.title}
+          </.link>
+          <span class={"shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded-full #{relation_type_badge_class(rel.relation_type)}"}>
+            {rel.relation_type}
+          </span>
+        </div>
+      </div>
+
+      <p :if={@inbound_count == 0} class="text-caption text-base-content/40 ml-6">
+        {gettext("No backlinks yet")}
+      </p>
+    </details>
+
+    <details :if={@outbound_count > 0} class="group mt-4">
+      <summary class="flex items-center gap-2 cursor-pointer select-none mb-3">
+        <.icon
+          name="hero-chevron-right"
+          class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+        />
+        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+          {gettext("Links to")}
+          <span class="ml-1 text-base-content/40">({@outbound_count})</span>
+        </h3>
+      </summary>
+
+      <div class="space-y-2 ml-6">
+        <div
+          :for={rel <- @outbound}
+          class="surface-2 px-3 py-2 flex items-center justify-between gap-2 transition"
+        >
+          <.link
+            navigate={PageTypes.page_show_path(rel.target)}
+            class="text-sm hover:text-primary transition min-w-0 truncate"
+          >
+            {rel.target.title}
+          </.link>
+          <span class={"shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded-full #{relation_type_badge_class(rel.relation_type)}"}>
+            {rel.relation_type}
+          </span>
+        </div>
+      </div>
+    </details>
+    """
+  end
+
+  @doc """
+  Returns a Tailwind badge class for a relation type.
+  """
+  def relation_type_badge_class(type) when is_binary(type) do
+    case type do
+      "semantic" -> "bg-primary/10 text-primary"
+      "embeds" -> "bg-accent/10 text-accent"
+      "related" -> "bg-base-content/10 text-base-content/60"
+      "part_of" -> "bg-success/10 text-success"
+      "supersedes" -> "bg-warning/10 text-warning"
+      "contradicts" -> "bg-error/10 text-error"
+      _ -> "bg-base-content/10 text-base-content/60"
+    end
+  end
+
+  def relation_type_badge_class(_), do: "bg-base-content/10 text-base-content/60"
 
   @doc """
   Renders a standard tab bar with Content + Graph tabs (plus any extras).

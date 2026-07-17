@@ -807,3 +807,18 @@ msgstr "Tu segundo cerebro está vacío. Captura tu primera página."
 #, elixir-autogen, elixir-format
 msgid "No relations yet"
 msgstr "Aún no hay relaciones"
+
+#: lib/dran_web/components/page_components.ex:305
+#, elixir-autogen, elixir-format
+msgid "Linked from"
+msgstr "Enlazado desde"
+
+#: lib/dran_web/components/page_components.ex:342
+#, elixir-autogen, elixir-format
+msgid "Links to"
+msgstr "Enlaza a"
+
+#: lib/dran_web/components/page_components.ex:327
+#, elixir-autogen, elixir-format
+msgid "No backlinks yet"
+msgstr "Aún no hay enlaces entrantes"
