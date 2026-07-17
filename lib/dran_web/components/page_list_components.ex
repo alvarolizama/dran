@@ -9,7 +9,6 @@ defmodule DranWeb.PageListComponents do
 
   alias DranWeb.PageTypes
 
-  attr :pages, :list, required: true
   attr :page_type, :string, default: nil
   attr :context_slug, :string, default: "personal"
 
@@ -35,7 +34,7 @@ defmodule DranWeb.PageListComponents do
         </div>
       </div>
 
-      <div :if={@pages == []} class="text-center py-16 space-y-4">
+      <div :if={@streams.pages == []} class="text-center py-16 space-y-4">
         <div class="flex justify-center">
           <div class="size-16 rounded-full bg-base-200 flex items-center justify-center">
             <.icon name="hero-document-plus" class="size-8 text-base-content/40" />
@@ -53,9 +52,10 @@ defmodule DranWeb.PageListComponents do
         </.link>
       </div>
 
-      <div class="space-y-2">
+      <div id="pages-list" phx-update="stream" class="space-y-2">
         <div
-          :for={page <- @pages}
+          :for={{id, page} <- @streams.pages}
+          id={id}
           class="p-3 rounded-lg border border-base-300 hover:bg-base-200 cursor-pointer"
           phx-click="show_page"
           phx-value-slug={page.slug}

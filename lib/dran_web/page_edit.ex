@@ -31,7 +31,7 @@ defmodule DranWeb.PageEdit do
     router: DranWeb.Router,
     statics: DranWeb.static_paths()
 
-  import Phoenix.LiveView, only: [put_flash: 3, push_navigate: 2, push_patch: 2, push_event: 3]
+  import Phoenix.LiveView, only: [put_flash: 3, push_navigate: 2, push_patch: 2, push_event: 3, stream_insert: 3, stream_delete: 3]
   import Phoenix.Component, only: [to_form: 2, assign: 2]
   alias Phoenix.LiveView.Upload, as: Upload
 
@@ -213,6 +213,7 @@ defmodule DranWeb.PageEdit do
       {:ok, _} ->
         {:noreply,
          socket
+         |> stream_delete(:pages, page)
          |> put_flash(:info, "Page deleted.")
          |> push_navigate(to: ~p"/")}
 
@@ -275,6 +276,7 @@ defmodule DranWeb.PageEdit do
 
         {:noreply,
          socket
+         |> stream_insert(:pages, page)
          |> put_flash(:info, "Page created.")
          |> push_navigate(to: page_path(type, page.slug) <> "?edit=true")}
 

@@ -345,7 +345,7 @@ defmodule DranWeb.GoalLive do
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
-        <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
+        <.page_list pages={@streams.pages} page_type={@page_type} context_slug={@context_slug} />
       </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".GoalKanban">
@@ -538,7 +538,7 @@ defmodule DranWeb.GoalLive do
         []
       end
 
-    {:noreply, assign(socket, pages: pages, page_title: "Goals")}
+    {:noreply, stream(socket, :pages, pages, reset: true) |> assign(page_title: "Goals")}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
