@@ -1,7 +1,7 @@
 ---
 name: second-brain
-description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 18 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
-version: 2.3.0
+description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 19 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
+version: 3.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -56,7 +56,9 @@ Dran stores knowledge as:
 - **Vector storage:** pgvector
 - **HTTP client:** Req (not HTTPoison/Tesla/httpc)
 - **Markdown:** mdex
-- **AI integration:** OpenAI-compatible inference API (embeddings, rerank, chat)
+- **AI integration:** OpenAI-compatible inference API (embeddings, rerank, chat,
+  vision, ASR, MarkItDown)
+- **Scheduler:** Quantum (cron-style jobs for curator and weekly review)
 
 ---
 
@@ -67,6 +69,8 @@ Dran stores knowledge as:
 ```
 lib/
   dran/            — Core domain (brain, embeddings, inference, ingest, agents, relations)
+  dran/agent/      — Autonomous agents (research, ingest, ask, curator, link_gardener, weekly_review)
+  dran/inference/  — LLM/embedding/rerank/vision/ASR/MarkItDown clients
   dran_web/        — Web layer (controllers, LiveView, components, plugs, router)
 config/            — Phoenix config (dev, test, prod, runtime)
 test/              — ExUnit tests (mirrors lib/ structure)
@@ -110,7 +114,7 @@ Tests auto-create and migrate the test database via the `test` alias.
 | --- | --- |
 | Transport | Streamable HTTP, MCP spec 2025-03-26 |
 | POST | `POST http://<dran-host>/api/mcp` |
-| Auth | `Authorization: Bearer ${MCP_...EY}` |
+| Auth | `Authorization: Bearer ***` |
 | Default context | **`personal`** — do not ask, do not switch unless Álvaro says otherwise |
 | Config | `~/.hermes/config.yaml` → `mcp_servers.dran` |
 
@@ -127,18 +131,20 @@ Tests auto-create and migrate the test database via the `test` alias.
 | `create_todo` | Create a todo with status/priority/goal linkage. |
 | `update_page` | Update title/body/tags/meta. **Replaces** `meta` entirely. |
 | `update_todo` | Update todo status/priority/date. **Merges** `meta`. |
-| `rename_slug` | Rename a page slug. |
+| `rename_slug` | Rename a page slug. Rewrites `![[old-slug]]` embeds across the context. |
 | `delete_page` | Delete a page (irreversible, cascades to relations/versions). |
 | `create_relation` | Create an explicit typed relation between pages. |
+| `delete_relation` | Delete relations between two pages (optionally by type). |
 | `search` | Unified search: auto picks FTS, fuzzy, semantic or hybrid. Use `type` filter when you can. |
 | `semantic_search` | Deprecated alias for `search` with `strategy=semantic`. Prefer `search`. |
 | `get_page` | Full markdown body of one page. Use this to actually read. |
 | `list_pages` | Filtered lightweight list (type, tag, status, limit). |
 | `get_links` | Inbound + outbound relations for a page. |
-| `ingest_url` | Save a URL as a `reference` page, or download a file. Does not extract content. |
+| `ingest_url` | Save a URL as a `reference` page, or download a file. With inference enabled, extracts content (MarkItDown/Vision/ASR). |
 | `stats` | Dashboard: totals, pages by type, todos by status, orphans, relations. |
 | `lint` | Orphans, stale pages (>90d), contested knowledge. |
-| `start_agent` | Launch an autonomous agent (research or ingest). |
+| `reaugment_page` | Re-run the augmentation pipeline (summary/tags/embedding/relations) for a page. |
+| `start_agent` | Launch an autonomous agent (see Agents section below). |
 | `get_agent_session` | Poll an autonomous agent's progress and results. |
 
 ### Resources (read-only)
@@ -161,12 +167,17 @@ Prefer these over looping `list_pages` when you need an overview:
 
 ### Autonomous Agents
 
-For multi-step research or ingest tasks, delegate with `start_agent` and poll
-with `get_agent_session`:
+For multi-step research, ingest, Q&A, or maintenance tasks, delegate with
+`start_agent` and poll with `get_agent_session`:
 
-- **`research`** — searches/scrapes the web and creates `note`/`reference` pages.
-- **`ingest`** — validates/inspects/downloads a URL and creates a `reference`
-  page.
+| Agent | Purpose | Key limits |
+| --- | --- | --- |
+| `research` | Searches/scrapes the web and creates `note`/`reference` pages. | max_sources=10, max_pages=10 (configurable via Settings); max 10 search queries. |
+| `ingest` | Validates, inspects, downloads a URL and creates a `reference` page. | File download limit 100 MiB. |
+| `ask` | Answers a question using **only** knowledge already in the brain; persists the answer as a `query` page. | max 5 search queries; one query page per session. |
+| `curator` | Reviews pairs of pages with very similar embeddings, flags duplicates/contested content, writes a report note. | max 20 flags per session; duplicate threshold 0.05. |
+| `link_gardener` | Reads orphaned/under-linked pages, proposes typed relations with justifications. | max 10 proposals per session; `semantic` type forbidden. |
+| `weekly_review` | Gathers brain stats and writes a weekly review journal page (in Spanish). | Window: pages created in last 7 days. |
 
 ```json
 {
@@ -176,8 +187,18 @@ with `get_agent_session`:
 }
 ```
 
-There is no dedicated search agent yet; for search-only tasks use `search`
-directly.
+**Session lifecycle:** agents run asynchronously. Poll `get_agent_session` with
+the `session_id` returned by `start_agent` until `status` is `done` or `failed`.
+Failed sessions (crashes, timeouts, max consecutive errors) are marked
+`failed` with a summary explaining the cause. Each session tracks
+`meta.tokens_used` (accumulated LLM token usage) and `meta.model` for
+cost/usage tracking.
+
+> **Note:** the `start_agent` tool's `agent_type` enum in the MCP schema
+> advertises `["research", "ingest"]`, but the server dispatches all six types
+> above. Pass the `agent_type` string directly; it will be routed correctly.
+
+There is no dedicated search agent; for search-only tasks use `search` directly.
 
 ---
 
@@ -210,6 +231,27 @@ Optional inference model overrides: `DRAN_INFERENCE_CHAT_MODEL`,
 `DRAN_INFERENCE_EMBEDDING_MODEL`, `DRAN_INFERENCE_RERANK_MODEL`,
 `DRAN_INFERENCE_MARKITDOWN_MODEL`, `DRAN_INFERENCE_ASR_MODEL`,
 `DRAN_INFERENCE_VISION_MODEL`.
+
+Optional agent tuning: `AGENT_MAX_STEPS` (default 150),
+`AGENT_PER_STEP_TIMEOUT` (default 120000 ms).
+
+### Settings (runtime, DB-backed)
+
+Beyond env vars, Dran stores tunable parameters in the `settings` table via
+`Dran.Settings`. These are editable at **`/settings`** (Brain tuning section)
+without a redeploy:
+
+| Key | Purpose | Default |
+| --- | --- | --- |
+| `semantic_threshold_short` | Embedding distance threshold for short pages | `0.15` |
+| `semantic_threshold_mid` | Threshold for mid-length pages | `0.22` |
+| `semantic_threshold_long` | Threshold for long pages | `0.28` |
+| `agent_max_pages` | Max pages a research agent may create per session | `10` |
+| `agent_max_sources` | Max sources a research agent may scrape per session | `10` |
+| `research_lang` | Language for research agent output (es/en) | `es` |
+| `daily_note_enabled` | Whether daily note auto-creation is enabled | `true` |
+
+Changes take effect immediately for new agent sessions and augmenter runs.
 
 ### Database Setup
 
@@ -317,6 +359,8 @@ After `create_page` / `update_page`, Dran automatically:
 1. Extracts/refines `title`, `summary`, `tags` and inline links via inference.
 2. Generates and stores an embedding.
 3. Creates **`semantic`** relations to similar pages.
+4. Resolves `![[slug]]` embeds into `embeds` relations (and cleans stale ones
+   on update).
 
 Plain `[[slug]]` wikilinks are **not supported**. Use `![[slug]]` only to embed
 artifacts (it auto-creates an `embeds` relation), and `create_relation` for
@@ -328,7 +372,8 @@ explicit typed relationships.
 | --- | --- | --- |
 | Change title/body/tags/meta | `update_page` | **Replaces** `meta` entirely. Body change bumps `version`. |
 | Change todo status/priority/date | `update_todo` | **Merges** `meta`. This is the only way to change todo status safely. |
-| Change slug | `rename_slug` | Existing `![[old-slug]]` embeds are not updated automatically. |
+| Change slug | `rename_slug` | Existing `![[old-slug]]` embeds in other pages are rewritten automatically. |
+| Re-run augmentation | `reaugment_page` | Clears `embedding_hash` and schedules a fresh augmenter pass (summary/tags/embedding/relations). |
 | Delete | `delete_page` | **Irreversible**, cascades to relations and versions. Always confirm with Álvaro. |
 
 Example `update_todo`:
@@ -360,7 +405,7 @@ Example `update_todo`:
 | `contradicts` | A conflicts with B | `new-study` → `old-study` |
 | `embeds` | A embeds B (auto from `![[slug]]`) | — |
 
-Inspect relations with `get_links`.
+Inspect relations with `get_links`. Remove relations with `delete_relation`.
 
 ### Searching
 
@@ -377,8 +422,6 @@ Inspect relations with `get_links`.
 ### Ingesting URLs & Files
 
 `ingest_url` saves a URL as a `reference` page, or downloads a file and stores it.
-**It does not extract or parse content** — that is your job afterwards with
-`web_extract` or by reading the stored file.
 
 ```json
 {
@@ -393,6 +436,37 @@ Inspect relations with `get_links`.
   local URLs.
 - For local files, upload them to a temporary host first, or paste the text into
   an `artifact`/`note` page directly.
+
+#### Ingest with extraction
+
+When the inference API is configured, `ingest_url` (and the `ingest` agent)
+automatically extract content from downloaded files before creating the page.
+The extraction strategy is chosen by content type:
+
+| Content type | Strategy | What it does |
+| --- | --- | --- |
+| PDF, DOCX, PPTX, PPT, DOC, TXT | **MarkItDown** | Converts the file to Markdown via the MarkItDown model. |
+| Images (`image/*`) | **Vision** | Generates a detailed description (in Spanish) of the image. |
+| Audio (`audio/*`) | **ASR** | Transcribes the audio to text. |
+
+If inference is disabled or extraction fails, the page falls back to a plain
+download link — preserving the original behaviour. The page body always includes
+the source URL; extracted content (markdown / description / transcript) is
+appended below it.
+
+### Scheduled Agents
+
+Two agents run on a schedule via the Quantum cron scheduler
+(see `config/config.exs`). Both operate on the default context
+(`DRAN_CONTEXT_SLUG`):
+
+| Job | Schedule | Agent | What it does |
+| --- | --- | --- | --- |
+| `curator_daily` | `0 6 * * *` (daily, 06:00) | `curator` | Finds duplicate/contested page pairs and writes a curator report note. |
+| `weekly_review` | `0 8 * * 0` (Sundays, 08:00) | `weekly_review` | Gathers brain stats and writes a weekly review journal page. |
+
+Scheduled jobs are disabled in the `test` environment (`config/test.exs` sets
+`jobs: []`).
 
 ### Recipes
 
@@ -471,7 +545,7 @@ Use `update_todo`, not `update_page`.
 - **Using `update_page` to change todo status.** Use `update_todo` so meta merges.
 - **Creating `semantic` relations manually.** They are automatic.
 - **Using `[[slug]]` wikilinks.** Not supported. Use embeddings + relations.
-- **Treating `ingest_url` as extraction.** It saves/downloads only; you read later.
+- **Treating `ingest_url` as extraction-only.** It stores and (with inference) extracts.
 - **Passing `status` for `query` pages.** Correct field is `answer_status`.
 - **Deleting without confirmation.** Always ask Álvaro.
 - **Answering from search excerpts.** Read the page with `get_page`.
