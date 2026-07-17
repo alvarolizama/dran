@@ -22,34 +22,34 @@ import json, sys
 d = json.load(open('/tmp/mcp_tools.json'))
 tools = {t['name']: t for t in d['result']['tools']}
 print(f"tool count: {len(tools)}")
-expected = ["search","semantic_search","create_page","update_page","get_page","delete_page",
-            "create_todo","update_todo","create_relation","delete_relation","get_links",
-            "list_pages","stats","lint","rename_slug","reaugment_page","ingest_url",
-            "start_agent","get_agent_session"]
+expected = ["dran_search","dran_create_page","dran_update_page","dran_get_page","dran_delete_page",
+            "dran_create_todo","dran_update_todo","dran_create_relation","dran_delete_relation",
+            "dran_get_links","dran_list_pages","dran_get_stats","dran_lint_brain",
+            "dran_rename_slug","dran_reaugment_page","dran_ingest_url",
+            "dran_start_agent","dran_get_agent_session"]
 missing = [t for t in expected if t not in tools]
 extra = [t for t in tools if t not in expected]
 if missing: print("MISSING:", missing); sys.exit(1)
-if extra: print("EXTRA:", extra)
+if extra: print("EXTRA:", extra); sys.exit(1)
+
+# All tools must carry the dran_ prefix
+unprefixed = [t for t in tools if not t.startswith("dran_")]
+if unprefixed:
+    print("FAIL: tools without dran_ prefix:", unprefixed); sys.exit(1)
 
 # Check start_agent enum has all 6 agent types
-enum = tools['start_agent']['inputSchema']['properties']['agent_type'].get('enum', [])
-print("start_agent enum:", enum)
+enum = tools['dran_start_agent']['inputSchema']['properties']['agent_type'].get('enum', [])
+print("dran_start_agent enum:", enum)
 want = {"research","ingest","ask","curator","link_gardener","weekly_review"}
 if set(enum) != want:
     print("FAIL: enum mismatch, want", sorted(want)); sys.exit(1)
 
-# Check semantic_search is marked deprecated in description
-desc = tools['semantic_search']['description'].lower()
-if 'deprecat' not in desc:
-    print("FAIL: semantic_search not marked deprecated"); sys.exit(1)
-print("semantic_search deprecation: OK")
-
 # Spot-check intent-oriented descriptions
 checks = {
-    'search': 'first',
-    'get_page': 'after search',
-    'update_page': 'replac',
-    'update_todo': 'merg',
+    'dran_search': 'first',
+    'dran_get_page': 'dran_search` or `dran_list_pages',
+    'dran_update_page': 'replac',
+    'dran_update_todo': 'merg',
 }
 for name, needle in checks.items():
     if needle not in tools[name]['description'].lower():

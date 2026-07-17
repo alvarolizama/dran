@@ -378,7 +378,7 @@ defmodule DranWeb.DocsLive do
         Plans link to goals via <code>meta.goal_slug</code>, and todos link to plans via <code>meta.plan_slug</code>
         (the goal is derived from the plan). Todos and plans can be orphans — i.e. not linked to any
         parent. The <code>part_of</code> relation is materialized automatically when these links exist.
-        Use <code>list_pages</code> with <code>goal_slug</code> or <code>plan_slug</code> filters
+        Use <code>dran_list_pages</code> with <code>goal_slug</code> or <code>plan_slug</code> filters
         (value <code>"none"</code> returns orphans).
       </p>
       <.code_block
@@ -429,13 +429,13 @@ defmodule DranWeb.DocsLive do
         </li>
       </ul>
       <p>
-        All agents can also be triggered manually via MCP with <code>start_agent</code>.
+        All agents can also be triggered manually via MCP with <code>dran_start_agent</code>.
       </p>
       <.callout variant={:info}>
         <p>
           <strong>Agent dispatch:</strong>
-          Agents are dispatched asynchronously. Use <code>start_agent</code> to launch and
-          <code>get_agent_session</code> to poll for progress, summary, and steps.
+          Agents are dispatched asynchronously. Use <code>dran_start_agent</code> to launch and
+          <code>dran_get_agent_session</code> to poll for progress, summary, and steps.
         </p>
       </.callout>
 
@@ -755,70 +755,70 @@ defmodule DranWeb.DocsLive do
       <ol>
         <li>
           <strong>Search</strong>
-          — use <code>search</code>
+          — use <code>dran_search</code>
           to find existing pages before creating new ones.
         </li>
         <li>
           <strong>Read</strong>
-          — use <code>get_page</code>
-          to read full content, or <code>list_pages</code>
+          — use <code>dran_get_page</code>
+          to read full content, or <code>dran_list_pages</code>
           for a filtered overview.
         </li>
         <li>
           <strong>Create</strong>
-          — use <code>create_page</code>
+          — use <code>dran_create_page</code>
           with the appropriate <code>page_type</code>
-          and <code>meta</code>. Use <code>create_todo</code>
+          and <code>meta</code>. Use <code>dran_create_todo</code>
           for action items.
         </li>
         <li>
           <strong>Update</strong>
-          — use <code>update_page</code>
-          to refine content. Use <code>update_todo</code>
+          — use <code>dran_update_page</code>
+          to refine content. Use <code>dran_update_todo</code>
           to change a todo's status (merges meta).
         </li>
         <li>
           <strong>Delete</strong>
-          — use <code>delete_page</code>
+          — use <code>dran_delete_page</code>
           to remove a page (cascades to relations + versions).
         </li>
         <li>
           <strong>Relate</strong>
-          — use <code>create_relation</code>
-          for typed relationships. Use <code>delete_relation</code>
+          — use <code>dran_create_relation</code>
+          for typed relationships. Use <code>dran_delete_relation</code>
           to remove. Embeds (<code>![[slug]]</code>) auto-create <code>embeds</code>
           relations.
         </li>
         <li>
           <strong>Inspect</strong>
-          — use <code>get_links</code>
+          — use <code>dran_get_links</code>
           to see inbound + outbound relations for a page.
         </li>
         <li>
           <strong>Stats</strong>
-          — use <code>stats</code>
+          — use <code>dran_get_stats</code>
           for a context overview (page counts, todos by status, orphans).
         </li>
         <li>
           <strong>Rename</strong>
-          — use <code>rename_slug</code>
+          — use <code>dran_rename_slug</code>
           to rename a page slug. Update existing <code>![[slug]]</code>
           embeds manually if needed.
         </li>
         <li>
           <strong>Agents</strong>
-          — use <code>start_agent</code>
+          — use <code>dran_start_agent</code>
           to delegate tasks to autonomous agents (research, ingest, ask, curator, link_gardener, weekly_review).
-          Poll <code>get_agent_session</code>
+          Poll <code>dran_get_agent_session</code>
           for progress and results.
         </li>
         <li>
           <strong>Files Ingest</strong>
-          — use <code>ingest_url</code>
+          — use <code>dran_ingest_url</code>
           to save web pages or download files as references.
         </li>
         <li>
-          <strong>Lint</strong> — use <code>lint</code> to find orphans and stale pages.
+          <strong>Lint</strong> — use <code>dran_lint_brain</code> to find orphans and stale pages.
         </li>
       </ol>
 
@@ -916,7 +916,7 @@ defmodule DranWeb.DocsLive do
         are auto-resolved into <code>embeds</code>
         relations. Plain <code>[[slug]]</code>
         wikilinks are no longer supported — relations are
-        created automatically via embeddings or explicitly via <code>create_relation</code>.
+        created automatically via embeddings or explicitly via <code>dran_create_relation</code>.
       </p>
 
       <.h2_heading id="available-tools" icon="hero-wrench-screwdriver" label="Available tools" />
@@ -926,7 +926,7 @@ defmodule DranWeb.DocsLive do
 
       <div class="not-prose space-y-3">
         <.mcp_tool
-          name="search"
+          name="dran_search"
           desc="Unified search across pages. Auto picks full-text, fuzzy, semantic or hybrid."
         >
           <:param name="query" type="string" required="yes" desc="Search query (natural language)" />
@@ -941,22 +941,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="semantic_search"
-          desc="Deprecated alias for search with strategy=semantic. Use search instead."
-        >
-          <:param name="query" type="string" required="yes" desc="Search query (natural language)" />
-          <:param name="context" type="string" required="yes" desc="Context slug" />
-          <:param name="type" type="string" required="no" desc="Filter by page type" />
-          <:param
-            name="hybrid"
-            type="boolean"
-            required="no"
-            desc="Use hybrid strategy instead of semantic"
-          />
-        </.mcp_tool>
-
-        <.mcp_tool
-          name="get_page"
+          name="dran_get_page"
           desc="Get a page by slug. Returns full markdown content + metadata."
         >
           <:param name="slug" type="string" required="yes" desc="Page slug" />
@@ -964,7 +949,25 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="create_page"
+          name="dran_list_pages"
+          desc="List pages with optional filters. Returns lightweight metadata (no body)."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param
+            name="type"
+            type="string"
+            required="no"
+            desc="note, concept, entity, reference, goal, plan, todo, artifact, comparison, query"
+          />
+          <:param name="tag" type="string" required="no" desc="Filter by tag" />
+          <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
+          <:param name="goal_slug" type="string" required="no" desc="Filter by goal slug ('none' for orphans)" />
+          <:param name="plan_slug" type="string" required="no" desc="Filter by plan slug ('none' for orphans)" />
+          <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="dran_create_page"
           desc="Create a new page. See Page Types table above for type-specific meta fields."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -993,7 +996,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="update_page"
+          name="dran_update_page"
           desc="Update an existing page. Version auto-increments on body change."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1005,7 +1008,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="delete_page"
+          name="dran_delete_page"
           desc="Delete a page by slug. Cascades to relations and page versions. Irreversible."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1013,7 +1016,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="create_todo"
+          name="dran_create_todo"
           desc="Create a todo with kanban status and priority, optionally linked to a goal and/or plan."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1033,7 +1036,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="update_todo"
+          name="dran_update_todo"
           desc="Update a todo's status, priority, due date, goal, or plan. Merges meta — only pass changed fields."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1049,7 +1052,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="create_relation"
+          name="dran_create_relation"
           desc="Create a typed relation between two pages. Use for contradicts, supersedes, part_of, embeds."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1064,7 +1067,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="delete_relation"
+          name="dran_delete_relation"
           desc="Delete a relation between two pages. Without relation_type, deletes ALL relations between them."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1079,7 +1082,7 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="get_links"
+          name="dran_get_links"
           desc="Get all inbound + outbound relations for a page. Shows inbound and outbound graph connections."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1087,32 +1090,21 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="list_pages"
-          desc="List pages with optional filters. Returns lightweight metadata (no body)."
-        >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
-          <:param
-            name="type"
-            type="string"
-            required="no"
-            desc="note, concept, entity, reference, goal, plan, todo, artifact, comparison, query"
-          />
-          <:param name="tag" type="string" required="no" desc="Filter by tag" />
-          <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
-          <:param name="goal_slug" type="string" required="no" desc="Filter by goal slug ('none' for orphans)" />
-          <:param name="plan_slug" type="string" required="no" desc="Filter by plan slug ('none' for orphans)" />
-          <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
-        </.mcp_tool>
-
-        <.mcp_tool
-          name="stats"
+          name="dran_get_stats"
           desc="Aggregate statistics for a context. Returns page counts, todos by status, orphans, and total relations."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
 
         <.mcp_tool
-          name="rename_slug"
+          name="dran_lint_brain"
+          desc="Quality report: orphans, stale pages, and contested knowledge."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+        </.mcp_tool>
+
+        <.mcp_tool
+          name="dran_rename_slug"
           desc="Rename a page's slug. Existing ![[slug]] embeds are not updated automatically."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1121,14 +1113,15 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="lint"
-          desc="Quality report: orphans, stale pages, and contested knowledge."
+          name="dran_reaugment_page"
+          desc="Re-run the augmentation pipeline (summary/tags/embedding/relations) for a page. Use after major edits."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="slug" type="string" required="yes" desc="Slug of the page to reaugment" />
         </.mcp_tool>
 
         <.mcp_tool
-          name="ingest_url"
+          name="dran_ingest_url"
           desc="Save a URL as a reference page. HTML → saves URL (agent reads later). Files → downloads & stores with download link."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
@@ -1143,8 +1136,8 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="start_agent"
-          desc="Start an autonomous agent session. Returns immediately; poll get_agent_session for progress."
+          name="dran_start_agent"
+          desc="Start an autonomous agent session. Returns immediately; poll dran_get_agent_session for progress."
         >
           <:param
             name="agent_type"
@@ -1158,35 +1151,12 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="get_agent_session"
+          name="dran_get_agent_session"
           desc="Poll an agent session for status, summary, and steps."
         >
           <:param name="session_id" type="string" required="yes" desc="Agent session UUID" />
         </.mcp_tool>
-
-        <.mcp_tool
-          name="get_settings"
-          desc="Get all runtime brain settings (similarity threshold, augmenter on/off, etc)."
-        >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
-        </.mcp_tool>
-
-        <.mcp_tool
-          name="update_setting"
-          desc="Update a runtime brain setting. Persisted in DB, takes effect immediately."
-        >
-          <:param name="key" type="string" required="yes" desc="Setting key" />
-          <:param name="value" type="string" required="yes" desc="New value" />
-        </.mcp_tool>
       </div>
-
-      <.callout variant={:warning}>
-        <p>
-          <strong>Deprecated:</strong>
-          <code>semantic_search</code> is deprecated — use <code>search</code> with
-          <code>strategy: "semantic"</code> instead.
-        </p>
-      </.callout>
 
       <.h2_heading id="resources" icon="hero-archive-box" label="Resources" />
       <p>
@@ -1204,10 +1174,6 @@ defmodule DranWeb.DocsLive do
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">wiki://&#123;context&#125;/index</code>
           <span class="text-sm text-base-content/60 ml-2">All pages in a context (slug + title + type)</span>
-        </div>
-        <div class="rounded-lg border border-base-300 p-3">
-          <code class="font-mono text-primary">settings://current</code>
-          <span class="text-sm text-base-content/60 ml-2">Current runtime brain settings (JSON)</span>
         </div>
       </div>
 
@@ -1244,7 +1210,7 @@ defmodule DranWeb.DocsLive do
       </p>
       <.code_block
         id="mcp-example-call"
-        code={"{\"jsonrpc\": \"2.0\", \"id\": 2, \"method\": \"tools/call\",\n \"params\": {\"name\": \"search\",\n            \"arguments\": {\"query\": \"elixir\", \"context\": \"personal\"}}}"}
+        code={"{\"jsonrpc\": \"2.0\", \"id\": 2, \"method\": \"tools/call\",\\n \"params\": {\"name\": \"dran_search\",\\n            \"arguments\": {\"query\": \"elixir\", \"context\": \"personal\"}}}"}
       />
 
       <h3 id="mcp-client-configuration" class="scroll-mt-20">Client configuration</h3>

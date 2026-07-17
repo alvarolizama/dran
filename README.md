@@ -87,26 +87,26 @@ curl -X POST http://localhost:4000/api/mcp \
 ### Agent skill
 
 The repo includes **[SKILL.md](SKILL.md)** — a complete agent operating manual
-for the Dran MCP server. It covers connection details, all 19 tools grouped by
+for the Dran MCP server. It covers connection details, all 18 tools grouped by
 workflow, resources, prompts, autonomous agents, page types with meta
 validation, step-by-step recipes, common mistakes, and a quick checklist.
 
 Copy it to `~/.hermes/skills/second-brain/SKILL.md` (or reference it in place)
 to give any MCP-compatible agent the operational context it needs.
 
-### Available tools (19)
+### Available tools (18)
 
-`search` · `semantic_search` (deprecated alias) · `get_page` · `list_pages` ·
-`get_links` · `create_page` · `update_page` · `delete_page` · `create_todo` ·
-`update_todo` · `create_relation` · `delete_relation` · `rename_slug` ·
-`ingest_url` · `reaugment_page` · `stats` · `lint` · `start_agent` ·
-`get_agent_session`
+`dran_search` · `dran_get_page` · `dran_list_pages` · `dran_get_links` ·
+`dran_create_page` · `dran_update_page` · `dran_delete_page` · `dran_create_todo` ·
+`dran_update_todo` · `dran_create_relation` · `dran_delete_relation` · `dran_rename_slug` ·
+`dran_ingest_url` · `dran_reaugment_page` · `dran_get_stats` · `dran_lint_brain` · `dran_start_agent` ·
+`dran_get_agent_session`
 
 For the full operational guide — tool-by-tool usage, recipes, pitfalls, and
 agent limits — see [**SKILL.md**](SKILL.md).
 
 > **Schema verification:** run `scripts/mcp_smoke.sh` to verify the live MCP
-> endpoint returns all 19 tools with up-to-date schemas.
+> endpoint returns all 18 tools with up-to-date schemas.
 
 ## Features
 
@@ -145,7 +145,7 @@ agent limits — see [**SKILL.md**](SKILL.md).
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
 - **Quality lint** — find orphan pages, stale pages, and contested knowledge
 - **Slug rename** — rename a page slug
-- **Hybrid search** — unified `search` tool picks full-text, fuzzy, semantic, or hybrid
+- **Hybrid search** — unified `dran_search` tool picks full-text, fuzzy, semantic, or hybrid
 
 ## Quick start (local dev)
 
@@ -379,20 +379,20 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 - `![[slug]]` — embed an artifact (renders as image/video/audio/PDF)
 - `![[slug|Alt Text]]` — embed with alt text
 
-Embeds auto-create `embeds` relations. Plain `[[slug]]` wikilinks are no longer supported — link pages explicitly with `create_relation` or let the `PageAugmenter` create `semantic` relations automatically.
+Embeds auto-create `embeds` relations. Plain `[[slug]]` wikilinks are no longer supported — link pages explicitly with `dran_create_relation` or let the `PageAugmenter` create `semantic` relations automatically.
 
 ### Relations
 
 Relations are **directed** (source → target) and typed:
 
-- `related` — generic connection (create manually via `create_relation`)
+- `related` — generic connection (create manually via `dran_create_relation`)
 - `part_of` — hierarchy (A is part of B)
 - `supersedes` — replacement (A replaces/obsoletes B)
 - `contradicts` — conflict (A contradicts B)
 - `embeds` — source embeds target (auto-created from `![[slug]]`)
 - `semantic` — auto-created by `PageAugmenter` when pages are semantically similar
 
-For explicit typed relations (`contradicts`, `supersedes`, `part_of`), use the MCP `create_relation`
+For explicit typed relations (`contradicts`, `supersedes`, `part_of`), use the MCP `dran_create_relation`
 tool or the `POST /api/relations` REST endpoint.
 
 ## Production deployment
@@ -531,29 +531,28 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 }
 ```
 
-**Available tools (19):**
+**Available tools (18):**
 
 | Tool               | Description                                                            |
 | ------------------ | ---------------------------------------------------------------------- |
-| `search`           | Unified search: auto picks full-text, fuzzy, semantic or hybrid         |
-| `semantic_search`  | Deprecated alias for `search` with `strategy=semantic`                   |
-| `get_page`         | Get a page by slug (returns full markdown content)                     |
-| `create_page`      | Create a new page with type-specific meta                              |
-| `update_page`      | Update an existing page (title, body, tags, meta)                      |
-| `delete_page`      | Delete a page by slug (cascades to relations + versions)               |
-| `create_todo`      | Create a todo with kanban status, priority, due date                   |
-| `update_todo`      | Update a todo's status/priority/due date (merges meta, no full replace)|
-| `create_relation`  | Create a typed relation between two pages                              |
-| `delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
-| `get_links`        | Get inbound + outbound relations for a page                            |
-| `list_pages`       | List pages with filters (type, tag, status, `goal_slug`, `plan_slug`, limit); pass `goal_slug="none"` / `plan_slug="none"` for orphans |
-| `stats`            | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
-| `lint`             | Quality report: orphans, stale pages, and contested knowledge          |
-| `rename_slug`      | Rename a page's slug                                                   |
-| `ingest_url`       | Save a URL (HTML to save link; files to download and store)            |
-| `reaugment_page`   | Re-run `PageAugmenter` on a page to refresh its semantic relations      |
-| `start_agent`      | Start an autonomous agent (`research`, `ingest`, `ask`, `curator`, `link_gardener`, `weekly_review`) |
-| `get_agent_session`| Poll an agent session for status, summary, and steps                  |
+| `dran_search`           | Unified search: auto picks full-text, fuzzy, semantic or hybrid         |
+| `dran_get_page`         | Get a page by slug (returns full markdown content)                     |
+| `dran_list_pages`       | List pages with filters (type, tag, status, `goal_slug`, `plan_slug`, limit); pass `goal_slug="none"` / `plan_slug="none"` for orphans |
+| `dran_get_links`        | Get inbound + outbound relations for a page                            |
+| `dran_create_page`      | Create a new page with type-specific meta                              |
+| `dran_update_page`      | Update an existing page (title, body, tags, meta)                      |
+| `dran_delete_page`      | Delete a page by slug (cascades to relations + versions)               |
+| `dran_create_todo`      | Create a todo with kanban status, priority, due date                   |
+| `dran_update_todo`      | Update a todo's status/priority/due date (merges meta, no full replace)|
+| `dran_create_relation`  | Create a typed relation between two pages                              |
+| `dran_delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
+| `dran_rename_slug`      | Rename a page's slug                                                   |
+| `dran_ingest_url`       | Save a URL (HTML to save link; files to download and store)            |
+| `dran_reaugment_page`   | Re-run `PageAugmenter` on a page to refresh its semantic relations      |
+| `dran_get_stats`        | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
+| `dran_lint_brain`       | Quality report: orphans, stale pages, and contested knowledge          |
+| `dran_start_agent`      | Start an autonomous agent (`research`, `ingest`, `ask`, `curator`, `link_gardener`, `weekly_review`) |
+| `dran_get_agent_session`| Poll an agent session for status, summary, and steps                  |
 
 **Resources:**
 
@@ -573,17 +572,17 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 ### Agent workflow
 
-1. **Search** — use `search` to find existing pages before creating new ones
-2. **Read** — use `get_page` to read full content, or `list_pages` for a filtered overview
-3. **Create** — use `create_page` with the appropriate `page_type` and `meta`. Use `create_todo` for action items
-4. **Update** — use `update_page` to refine content. Use `update_todo` to change a todo's status/priority (merges meta)
-5. **Delete** — use `delete_page` to remove a page (cascades to relations + versions)
-6. **Relate** — use `create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Use `delete_relation` to remove. Embeds (`![[slug]]`) auto-create `embeds` relations
-7. **Inspect** — use `get_links` to see inbound + outbound relations for a page
-8. **Stats** — use `stats` for a context overview (page counts, todos by status, orphans, total relations)
-9. **Rename** — use `rename_slug` to rename a page slug
-10. **Ingest** — use `ingest_url` to save web pages or download files as references
-11. **Lint** — use `lint` to find orphans, stale pages, and contested knowledge
+1. **Search** — use `dran_search` to find existing pages before creating new ones
+2. **Read** — use `dran_get_page` to read full content, or `dran_list_pages` for a filtered overview
+3. **Create** — use `dran_create_page` with the appropriate `page_type` and `meta`. Use `dran_create_todo` for action items
+4. **Update** — use `dran_update_page` to refine content. Use `dran_update_todo` to change a todo's status/priority (merges meta)
+5. **Delete** — use `dran_delete_page` to remove a page (cascades to relations + versions)
+6. **Relate** — use `dran_create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Use `dran_delete_relation` to remove. Embeds (`![[slug]]`) auto-create `embeds` relations
+7. **Inspect** — use `dran_get_links` to see inbound + outbound relations for a page
+8. **Stats** — use `dran_get_stats` for a context overview (page counts, todos by status, orphans, total relations)
+9. **Rename** — use `dran_rename_slug` to rename a page slug
+10. **Ingest** — use `dran_ingest_url` to save web pages or download files as references
+11. **Lint** — use `dran_lint_brain` to find orphans, stale pages, and contested knowledge
 
 ### Autonomous agents
 
@@ -591,14 +590,14 @@ Dran can delegate longer tasks to autonomous ReAct agents. There are six agent t
 
 | Agent           | Trigger                    | What it does                                                                 |
 | --------------- | -------------------------- | ---------------------------------------------------------------------------- |
-| `research`      | Manual (`start_agent`)     | Searches the web, scrapes sources, creates note/reference pages             |
-| `ingest`         | Manual (`start_agent`)     | Validates, inspects, downloads, and creates reference pages from URLs       |
+| `research`      | Manual (`dran_start_agent`)     | Searches the web, scrapes sources, creates note/reference pages             |
+| `ingest`         | Manual (`dran_start_agent`)     | Validates, inspects, downloads, and creates reference pages from URLs       |
 | `ask`           | Manual / copilot           | Q&A — answers questions from the knowledge graph, citing sources            |
 | `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes         |
-| `link_gardener` | Manual (`start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages        |
+| `link_gardener` | Manual (`dran_start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages        |
 | `weekly_review` | Quantum cron (weekly Sun 08:00) | Gathers stats and creates a review page                                 |
 
-- **`start_agent` / `get_agent_session`** — start a session and poll for progress.
+- **`dran_start_agent` / `dran_get_agent_session`** — start a session and poll for progress.
 - Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and PubSub topics (`agents:<session_id>` and `agents:all`).
 - The `curator` and `weekly_review` agents are scheduled automatically by the **Quantum** scheduler (see `config/config.exs`).
 - Agents are exposed as LiveView pages at `/agents/:type` and individual sessions at `/agents/:type/:id`. From the CLI, run an agent with `mix dran.agent --type research --context personal --input "topic"`.
