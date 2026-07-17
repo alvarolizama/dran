@@ -4,7 +4,7 @@ defmodule Dran.MCPTest do
   alias Dran.{Brain, MCP, Repo}
   alias Dran.Brain.Page
 
-  # Same setup as brain_test.exs: disable inference so create_page doesn't
+  # Same setup as brain_test.exs: disable inference so dran_create_page doesn't
   # call external APIs, and ensure the "personal" context exists.
   setup do
     original = Application.get_env(:dran, :inference)
@@ -48,7 +48,7 @@ defmodule Dran.MCPTest do
     text
   end
 
-  describe "rename_slug (4.1)" do
+  describe "dran_rename_slug (4.1)" do
     test "renames the page and rewrites ![[old]] embeds in other pages", %{context: ctx} do
       # Target page that will be renamed.
       {:ok, art} =
@@ -70,7 +70,7 @@ defmodule Dran.MCPTest do
         })
 
       result =
-        call_tool("rename_slug", %{
+        call_tool("dran_rename_slug", %{
           "context" => "personal",
           "old_slug" => "old-art",
           "new_slug" => "new-art"
@@ -90,7 +90,7 @@ defmodule Dran.MCPTest do
 
     test "errors when old_slug is not found", %{context: _ctx} do
       result =
-        call_tool("rename_slug", %{
+        call_tool("dran_rename_slug", %{
           "context" => "personal",
           "old_slug" => "nope",
           "new_slug" => "still-nope"
@@ -107,7 +107,7 @@ defmodule Dran.MCPTest do
         Brain.create_page(%{context_id: ctx.id, title: "B", slug: "exists-b", page_type: "note"})
 
       result =
-        call_tool("rename_slug", %{
+        call_tool("dran_rename_slug", %{
           "context" => "personal",
           "old_slug" => "exists-b",
           "new_slug" => "exists-a"
@@ -119,7 +119,7 @@ defmodule Dran.MCPTest do
     end
   end
 
-  describe "reaugment_page (4.2)" do
+  describe "dran_reaugment_page (4.2)" do
     test "clears embedding_hash and schedules reaugmentation", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
@@ -133,7 +133,7 @@ defmodule Dran.MCPTest do
       # Seed a non-nil embedding_hash to simulate a previously augmented page.
       Ecto.Changeset.change(page, embedding_hash: "some-old-hash") |> Repo.update!()
 
-      result = call_tool("reaugment_page", %{"context" => "personal", "slug" => "stale-page"})
+      result = call_tool("dran_reaugment_page", %{"context" => "personal", "slug" => "stale-page"})
 
       assert result =~ "Reaugmentation scheduled for 'stale-page'"
 
@@ -142,20 +142,20 @@ defmodule Dran.MCPTest do
     end
 
     test "errors when page is not found", %{context: _ctx} do
-      result = call_tool("reaugment_page", %{"context" => "personal", "slug" => "missing"})
+      result = call_tool("dran_reaugment_page", %{"context" => "personal", "slug" => "missing"})
 
       assert result =~ "Error: page 'missing' not found"
     end
 
     test "errors when context is not found" do
       result =
-        call_tool("reaugment_page", %{"context" => "no-such-context", "slug" => "whatever"})
+        call_tool("dran_reaugment_page", %{"context" => "no-such-context", "slug" => "whatever"})
 
       assert result =~ "Error: context 'no-such-context' not found"
     end
   end
 
-  describe "list_pages with owner/created_by filters (4.3)" do
+  describe "dran_list_pages with owner/created_by filters (4.3)" do
     test "filters by created_by", %{context: ctx} do
       {:ok, _alice} =
         Brain.create_page(%{
@@ -175,7 +175,7 @@ defmodule Dran.MCPTest do
           created_by: "bob"
         })
 
-      result = call_tool("list_pages", %{"context" => "personal", "created_by" => "alice"})
+      result = call_tool("dran_list_pages", %{"context" => "personal", "created_by" => "alice"})
 
       assert result =~ "Found 1 pages"
       assert result =~ "alice-note"
@@ -201,7 +201,7 @@ defmodule Dran.MCPTest do
           owner: "agent"
         })
 
-      result = call_tool("list_pages", %{"context" => "personal", "owner" => "team"})
+      result = call_tool("dran_list_pages", %{"context" => "personal", "owner" => "team"})
 
       assert result =~ "Found 1 pages"
       assert result =~ "team-owned"
