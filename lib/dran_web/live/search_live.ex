@@ -9,6 +9,7 @@ defmodule DranWeb.SearchLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
+  alias DranWeb.HTMLSanitizer
   alias DranWeb.Plugs.Auth
 
   @impl true
@@ -90,7 +91,7 @@ defmodule DranWeb.SearchLive do
               :if={result.excerpt && result.excerpt != ""}
               class="mt-1 text-sm text-base-content/70"
             >
-              {raw(result.excerpt)}
+              {raw(HTMLSanitizer.sanitize_to_string(result.excerpt))}
             </div>
           </div>
 
