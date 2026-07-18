@@ -418,33 +418,48 @@ defmodule DranWeb.DocsLive do
       ]} />
 
       <.h2_heading id="autonomous-agents" icon="hero-cpu-chip" label="Autonomous agents" />
-      <p>Beyond the interactive Research and Ingest agents, Dran runs scheduled batch agents:</p>
-      <ul>
-        <li>
-          <strong>QA</strong> — audits pages for missing frontmatter, broken links, empty content
-        </li>
-        <li>
-          <strong>Curator</strong>
-          — consolidates duplicates, generates summaries, cleans the graph (daily)
-        </li>
-        <li>
-          <strong>Link Gardener</strong>
-          — resolves broken <code>[[links]]</code>, suggests backlinks via embeddings
-        </li>
-        <li>
-          <strong>Weekly Review</strong>
-          — auto-generates a weekly summary note with activity, goals progress, and stats (Mondays)
-        </li>
-      </ul>
       <p>
-        All agents can also be triggered manually via MCP with <code>dran_start_agent</code>.
+        Dran runs six autonomous ReAct agents that plan, act, and log every step. Some are
+        triggered on demand; others run on a fixed schedule.
       </p>
+      <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
+        <%= for agent <- agents_data() do %>
+          <div class="surface-1 lift rounded-lg p-4 border border-base-300/60 transition">
+            <div class="flex items-start justify-between gap-3 mb-2">
+              <div class="flex items-center gap-2.5">
+                <.icon name={agent.icon} class={["w-7 h-7", agent.color]} />
+                <h3 class="font-semibold text-base-content">{agent.label}</h3>
+              </div>
+              <%= if agent.trigger == :manual do %>
+                <span class="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-0.5 border border-primary/20">
+                  <.icon name="hero-hand-raised" class="w-3 h-3" />Manual
+                </span>
+              <% else %>
+                <span class="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium px-2.5 py-0.5 border border-emerald-500/20">
+                  <.icon name="hero-clock" class="w-3 h-3" />{agent.schedule}
+                </span>
+              <% end %>
+            </div>
+            <p class="text-sm text-base-content/70 leading-relaxed mb-3">
+              {agent.description}
+            </p>
+            <p class="text-xs text-base-content/50 flex items-center gap-1.5">
+              <.icon name="hero-adjustments-horizontal" class="w-3.5 h-3.5" />
+              {agent.limits}
+            </p>
+          </div>
+        <% end %>
+      </div>
       <.callout variant={:info}>
         <p>
-          <strong>Agent dispatch:</strong>
-          Agents are dispatched asynchronously. Use <code>dran_start_agent</code>
+          <strong>Dispatch &amp; tracking:</strong>
+          Agents run asynchronously under a <code>DynamicSupervisor</code>, persist every step
+          to <code>agent_sessions</code>
+          / <code>agent_steps</code>, and broadcast live updates
+          via PubSub (<code>agents:&lt;session_id&gt;</code>). Use <code>dran_start_agent</code>
           to launch and <code>dran_get_agent_session</code>
-          to poll for progress, summary, and steps.
+          to poll
+          for status, summary, and step-by-step progress.
         </p>
       </.callout>
 
@@ -677,6 +692,71 @@ defmodule DranWeb.DocsLive do
       </div>
     </div>
     """
+  end
+
+  defp agents_data do
+    [
+      %{
+        label: "Research",
+        icon: "hero-magnifying-glass-circle",
+        color: "text-blue-500 dark:text-blue-400",
+        trigger: :manual,
+        schedule: nil,
+        description:
+          "Explores a topic: searches the web, scrapes sources, and creates note/reference pages with citations.",
+        limits: "Max 10 sources, 10 pages, 10 searches (configurable via Settings)."
+      },
+      %{
+        label: "Ingest",
+        icon: "hero-arrow-down-on-square",
+        color: "text-cyan-500 dark:text-cyan-400",
+        trigger: :manual,
+        schedule: nil,
+        description:
+          "Validates, inspects, and downloads a single URL to create a reference page.",
+        limits: "File download limit 100 MiB."
+      },
+      %{
+        label: "Ask (Q&A)",
+        icon: "hero-chat-bubble-left-right",
+        color: "text-violet-500 dark:text-violet-400",
+        trigger: :manual,
+        schedule: nil,
+        description:
+          "Answers a question using ONLY knowledge already in the brain. Persists the answer as a query page citing sources.",
+        limits: "Max 5 searches; one query page per session."
+      },
+      %{
+        label: "Curator",
+        icon: "hero-shield-check",
+        color: "text-amber-500 dark:text-amber-400",
+        trigger: :scheduled,
+        schedule: "Daily 06:00",
+        description:
+          "Reviews page pairs with very similar embeddings, flags duplicates and contested knowledge, writes a cleanup report.",
+        limits: "Max 20 flags per session; duplicate threshold 0.05."
+      },
+      %{
+        label: "Link Gardener",
+        icon: "hero-link",
+        color: "text-emerald-500 dark:text-emerald-400",
+        trigger: :manual,
+        schedule: nil,
+        description:
+          "Reads orphaned and under-linked pages, proposes typed relations with justifications.",
+        limits: "Max 10 proposals per session; semantic type forbidden."
+      },
+      %{
+        label: "Weekly Review",
+        icon: "hero-calendar-days",
+        color: "text-rose-500 dark:text-rose-400",
+        trigger: :scheduled,
+        schedule: "Sun 08:00",
+        description:
+          "Gathers brain stats and writes a weekly review journal page with activity, goals progress, and highlights.",
+        limits: "Window: pages created in last 7 days. Output in Spanish."
+      }
+    ]
   end
 
   defp api_endpoints do
