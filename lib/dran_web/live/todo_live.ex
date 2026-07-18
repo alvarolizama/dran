@@ -60,13 +60,77 @@ defmodule DranWeb.TodoLive do
           <div>
             <h1 class="text-title">{gettext("Todos")}</h1>
             <p class="text-caption mt-0.5">
-              {gettext("%{count} items", count: length(@items))}
+              {gettext("%{count} items", count: length(@filtered_items))}
             </p>
           </div>
           <button class="btn btn-primary btn-sm" phx-click="new_todo">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
           </button>
         </div>
+
+        <form
+          id="kanban-filters"
+          phx-change="filter"
+          class="flex flex-wrap items-end gap-2 mb-3 shrink-0"
+        >
+          <div class="fieldset mb-0">
+            <label for="filter-goal" class="block text-xs font-medium text-base-content/60 mb-1">
+              {gettext("Goal")}
+            </label>
+            <select
+              id="filter-goal"
+              name="filter_goal"
+              class="select select-sm select-bordered"
+            >
+              <option value="">{gettext("All goals")}</option>
+              <option value="none" selected={@filter_goal == "none"}>{gettext("No goal")}</option>
+              <option :for={goal <- @goals} value={goal.slug} selected={@filter_goal == goal.slug}>
+                {goal.title}
+              </option>
+            </select>
+          </div>
+
+          <div class="fieldset mb-0">
+            <label for="filter-plan" class="block text-xs font-medium text-base-content/60 mb-1">
+              {gettext("Plan")}
+            </label>
+            <select
+              id="filter-plan"
+              name="filter_plan"
+              class="select select-sm select-bordered"
+            >
+              <option value="">{gettext("All plans")}</option>
+              <option value="none" selected={@filter_plan == "none"}>{gettext("No plan")}</option>
+              <option :for={plan <- @plans} value={plan.slug} selected={@filter_plan == plan.slug}>
+                {plan.title}
+              </option>
+            </select>
+          </div>
+
+          <div class="fieldset mb-0 flex-1 min-w-40">
+            <label for="filter-query" class="block text-xs font-medium text-base-content/60 mb-1">
+              {gettext("Search")}
+            </label>
+            <input
+              id="filter-query"
+              name="filter_query"
+              type="search"
+              value={@filter_query}
+              placeholder={gettext("Filter by title...")}
+              class="input input-sm input-bordered w-full"
+              phx-debounce="300"
+            />
+          </div>
+
+          <button
+            :if={@filter_goal != "" or @filter_plan != "" or @filter_query != ""}
+            type="button"
+            class="btn btn-ghost btn-sm"
+            phx-click="clear_filters"
+          >
+            <.icon name="hero-x-mark" class="w-4 h-4" /> {gettext("Clear filters")}
+          </button>
+        </form>
 
         <form
           :if={@show_form}
@@ -121,15 +185,15 @@ defmodule DranWeb.TodoLive do
             <div class="flex items-center justify-between px-3 py-2 border-b border-base-300 shrink-0">
               <span class="text-heading">{label}</span>
               <span
-                :if={column_count(@items, status) > 0}
+                :if={column_count(@filtered_items, status) > 0}
                 class="text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60"
               >
-                {column_count(@items, status)}
+                {column_count(@filtered_items, status)}
               </span>
             </div>
             <div class="p-2 space-y-2 flex-1 overflow-y-auto min-h-0">
               <div
-                :for={item <- column_items(@items, status)}
+                :for={item <- column_items(@filtered_items, status)}
                 data-kanban-slug={item.slug}
                 draggable="true"
                 phx-click="show_page"
@@ -167,7 +231,7 @@ defmodule DranWeb.TodoLive do
                 </div>
               </div>
               <p
-                :if={column_items(@items, status) == []}
+                :if={column_items(@filtered_items, status) == []}
                 class="text-caption text-center py-8"
               >
                 {gettext("No todos")}
@@ -406,6 +470,13 @@ defmodule DranWeb.TodoLive do
        kanban_columns: @kanban_columns,
        priority_options: Enum.map(@priorities, fn {value, label, _class} -> {label, value} end),
        goal_options: [{gettext("No goal"), ""}],
+       plan_options: [],
+       goals: [],
+       plans: [],
+       filter_goal: "",
+       filter_plan: "",
+       filter_query: "",
+       filtered_items: [],
        show_form: false,
        form: %{"title" => "", "priority" => "medium", "goal_slug" => "", "due_date" => ""},
        editing: false,
@@ -461,26 +532,35 @@ defmodule DranWeb.TodoLive do
 
   def handle_params(_params, _url, socket) do
     if socket.assigns.context do
-      items = Brain.list_todos(socket.assigns.context.id)
-      goals = Brain.list_goals(socket.assigns.context.id)
+      context_id = socket.assigns.context.id
+      items = Brain.list_todos(context_id)
+      goals = Brain.list_goals(context_id)
+      plans = Brain.list_pages(context_id: context_id, type: "plan")
 
       goal_options = [{gettext("No goal"), ""} | Enum.map(goals, &{&1.title, &1.slug})]
+      plan_options = [{gettext("No plan"), ""} | Enum.map(plans, &{&1.title, &1.slug})]
 
       {:noreply,
        assign(socket,
          items: items,
          goals: goals,
+         plans: plans,
          goal_options: goal_options,
+         plan_options: plan_options,
          page_title: gettext("Todos")
-       )}
+       )
+       |> assign_filtered_items()}
     else
       {:noreply,
        assign(socket,
          items: [],
          goals: [],
+         plans: [],
          goal_options: [{gettext("No goal"), ""}],
+         plan_options: [{gettext("No plan"), ""}],
          page_title: gettext("Todos")
-       )}
+       )
+       |> assign_filtered_items()}
     end
   end
 
@@ -493,7 +573,10 @@ defmodule DranWeb.TodoLive do
     # A page changed (agent, MCP, another tab) — reload the board if we're on
     # the index so moved/created/deleted todos appear in real time.
     if socket.assigns.live_action == :index and socket.assigns.context do
-      {:noreply, assign(socket, items: Brain.list_todos(socket.assigns.context.id))}
+      {:noreply,
+       socket
+       |> assign(items: Brain.list_todos(socket.assigns.context.id))
+       |> assign_filtered_items()}
     else
       {:noreply, socket}
     end
@@ -520,6 +603,23 @@ defmodule DranWeb.TodoLive do
 
   def handle_event("new_todo", _params, socket) do
     {:noreply, assign(socket, show_form: !socket.assigns.show_form)}
+  end
+
+  @impl true
+  def handle_event("filter", params, socket) do
+    {:noreply,
+     assign(socket,
+       filter_goal: params["filter_goal"] || "",
+       filter_plan: params["filter_plan"] || "",
+       filter_query: params["filter_query"] || ""
+     )
+     |> assign_filtered_items()}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply,
+     assign(socket, filter_goal: "", filter_plan: "", filter_query: "")
+     |> assign_filtered_items()}
   end
 
   def handle_event("create_todo", params, socket) do
@@ -556,6 +656,7 @@ defmodule DranWeb.TodoLive do
             {:noreply,
              socket
              |> assign(items: Brain.list_todos(context.id), show_form: false)
+             |> assign_filtered_items()
              |> put_flash(:info, gettext("Todo created."))}
 
           {:error, _changeset} ->
@@ -567,7 +668,10 @@ defmodule DranWeb.TodoLive do
   def handle_event("move_todo", %{"slug" => slug, "target_status" => status}, socket) do
     case update_meta(socket, slug, &Map.put(&1, "kanban_status", status)) do
       {:ok, socket} ->
-        {:noreply, assign(socket, items: Brain.list_todos(socket.assigns.context.id))}
+        {:noreply,
+         socket
+         |> assign(items: Brain.list_todos(socket.assigns.context.id))
+         |> assign_filtered_items()}
 
       {:error, socket} ->
         {:noreply, socket}
@@ -640,6 +744,62 @@ defmodule DranWeb.TodoLive do
 
   defp maybe_put(meta, _key, ""), do: meta
   defp maybe_put(meta, key, value), do: Map.put(meta, key, value)
+
+  # ── Filtering ──
+
+  defp assign_filtered_items(socket) do
+    assign(socket, filtered_items: filtered_items(socket.assigns))
+  end
+
+  defp filtered_items(assigns) do
+    assigns.items
+    |> filter_by_goal(assigns.filter_goal)
+    |> filter_by_plan(assigns.filter_plan)
+    |> filter_by_query(assigns.filter_query)
+  end
+
+  defp filter_by_goal(items, ""), do: items
+
+  defp filter_by_goal(items, "none") do
+    Enum.filter(items, fn item ->
+      slug = (item.meta || %{})["goal_slug"]
+      slug in [nil, ""]
+    end)
+  end
+
+  defp filter_by_goal(items, goal_slug) do
+    Enum.filter(items, fn item ->
+      (item.meta || %{})["goal_slug"] == goal_slug
+    end)
+  end
+
+  defp filter_by_plan(items, ""), do: items
+
+  defp filter_by_plan(items, "none") do
+    Enum.filter(items, fn item ->
+      slug = (item.meta || %{})["plan_slug"]
+      slug in [nil, ""]
+    end)
+  end
+
+  defp filter_by_plan(items, plan_slug) do
+    Enum.filter(items, fn item ->
+      (item.meta || %{})["plan_slug"] == plan_slug
+    end)
+  end
+
+  defp filter_by_query(items, ""), do: items
+
+  defp filter_by_query(items, query) do
+    q = query |> String.downcase() |> String.trim()
+
+    if q == "",
+      do: items,
+      else:
+        Enum.filter(items, fn item ->
+          String.downcase(item.title || "") =~ q
+        end)
+  end
 
   defp unique_slug(title, context_id) do
     base = slugify(title)

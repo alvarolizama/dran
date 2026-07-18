@@ -11,6 +11,7 @@ defmodule DranWeb.PlanLive do
   @page_type "plan"
   @tabs [{"content", gettext("Content")}, {"graph", gettext("Graph")}]
 
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -130,13 +131,88 @@ defmodule DranWeb.PlanLive do
             </div>
           </:tabs>
         </.page_detail>
-      </div><div :if={@live_action != :show}>
-        <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
+      </div>
+      <div :if={@live_action != :show}>
+        <div class="p-6 pb-0">
+          <form id="plan-filters" phx-change="filter" class="flex flex-wrap items-end gap-2 mb-4">
+            <div class="fieldset mb-0">
+              <label
+                for="plan-filter-goal"
+                class="block text-xs font-medium text-base-content/60 mb-1"
+              >
+                {gettext("Goal")}
+              </label>
+              <select
+                id="plan-filter-goal"
+                name="filter_goal"
+                class="select select-sm select-bordered"
+              >
+                <option value="">{gettext("All goals")}</option>
+                <option value="none" selected={@filter_goal == "none"}>{gettext("No goal")}</option>
+                <option :for={goal <- @goals} value={goal.slug} selected={@filter_goal == goal.slug}>
+                  {goal.title}
+                </option>
+              </select>
+            </div>
+
+            <div class="fieldset mb-0">
+              <label
+                for="plan-filter-status"
+                class="block text-xs font-medium text-base-content/60 mb-1"
+              >
+                {gettext("Status")}
+              </label>
+              <select
+                id="plan-filter-status"
+                name="filter_status"
+                class="select select-sm select-bordered"
+              >
+                <option value="">{gettext("All statuses")}</option>
+                <option
+                  :for={{label, value} <- @status_options}
+                  value={value}
+                  selected={@filter_status == value}
+                >
+                  {label}
+                </option>
+              </select>
+            </div>
+
+            <div class="fieldset mb-0 flex-1 min-w-40">
+              <label
+                for="plan-filter-query"
+                class="block text-xs font-medium text-base-content/60 mb-1"
+              >
+                {gettext("Search")}
+              </label>
+              <input
+                id="plan-filter-query"
+                name="filter_query"
+                type="search"
+                value={@filter_query}
+                placeholder={gettext("Filter by title...")}
+                class="input input-sm input-bordered w-full"
+                phx-debounce="300"
+              />
+            </div>
+
+            <button
+              :if={@filter_goal != "" or @filter_status != "" or @filter_query != ""}
+              type="button"
+              class="btn btn-ghost btn-sm"
+              phx-click="clear_filters"
+            >
+              <.icon name="hero-x-mark" class="w-4 h-4" /> {gettext("Clear filters")}
+            </button>
+          </form>
+        </div>
+        <.page_list pages={@filtered_pages} page_type={@page_type} context_slug={@context_slug} />
       </div>
     </Layouts.app>
     """
   end
 
+  @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
@@ -159,10 +235,21 @@ defmodule DranWeb.PlanLive do
        tabs: @tabs,
        active_tab: "content",
        editing: false,
-       save_status: "idle"
+       save_status: "idle",
+       goals: [],
+       status_options: plan_status_options(),
+       filter_goal: "",
+       filter_status: "",
+       filter_query: "",
+       filtered_pages: []
      )}
   end
 
+  defp plan_status_options do
+    Enum.map(Dran.Brain.PageMeta.plan_statuses(), &{String.capitalize(&1), &1})
+  end
+
+  @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
     context = socket.assigns.context
 
@@ -209,12 +296,27 @@ defmodule DranWeb.PlanLive do
   end
 
   def handle_params(_params, _url, socket) do
-    pages =
-      if socket.assigns.context,
-        do: Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
-        else: []
+    if socket.assigns.context do
+      context_id = socket.assigns.context.id
+      pages = Brain.list_pages(context_id: context_id, type: @page_type)
+      goals = Brain.list_goals(context_id)
 
-    {:noreply, assign(socket, pages: pages, page_title: gettext("Plans"))}
+      {:noreply,
+       assign(socket,
+         pages: pages,
+         goals: goals,
+         page_title: gettext("Plans")
+       )
+       |> assign_filtered_pages()}
+    else
+      {:noreply,
+       assign(socket,
+         pages: [],
+         goals: [],
+         page_title: gettext("Plans")
+       )
+       |> assign_filtered_pages()}
+    end
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}
@@ -227,6 +329,23 @@ defmodule DranWeb.PlanLive do
 
   def handle_event("show_page", %{"slug" => slug}, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/plans/#{slug}")}
+
+  @impl true
+  def handle_event("filter", params, socket) do
+    {:noreply,
+     assign(socket,
+       filter_goal: params["filter_goal"] || "",
+       filter_status: params["filter_status"] || "",
+       filter_query: params["filter_query"] || ""
+     )
+     |> assign_filtered_pages()}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply,
+     assign(socket, filter_goal: "", filter_status: "", filter_query: "")
+     |> assign_filtered_pages()}
+  end
 
   def handle_event("new_page", _params, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/plans/new")}
@@ -249,4 +368,53 @@ defmodule DranWeb.PlanLive do
     do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
 
   defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
+
+  # ── Filtering ──
+
+  defp assign_filtered_pages(socket) do
+    assign(socket, filtered_pages: filtered_pages(socket.assigns))
+  end
+
+  defp filtered_pages(assigns) do
+    assigns.pages
+    |> filter_pages_by_goal(assigns.filter_goal)
+    |> filter_pages_by_status(assigns.filter_status)
+    |> filter_pages_by_query(assigns.filter_query)
+  end
+
+  defp filter_pages_by_goal(pages, ""), do: pages
+
+  defp filter_pages_by_goal(pages, "none") do
+    Enum.filter(pages, fn page ->
+      slug = (page.meta || %{})["goal_slug"]
+      slug in [nil, ""]
+    end)
+  end
+
+  defp filter_pages_by_goal(pages, goal_slug) do
+    Enum.filter(pages, fn page ->
+      (page.meta || %{})["goal_slug"] == goal_slug
+    end)
+  end
+
+  defp filter_pages_by_status(pages, ""), do: pages
+
+  defp filter_pages_by_status(pages, status) do
+    Enum.filter(pages, fn page ->
+      (page.meta || %{})["status"] == status
+    end)
+  end
+
+  defp filter_pages_by_query(pages, ""), do: pages
+
+  defp filter_pages_by_query(pages, query) do
+    q = query |> String.downcase() |> String.trim()
+
+    if q == "",
+      do: pages,
+      else:
+        Enum.filter(pages, fn page ->
+          String.downcase(page.title || "") =~ q
+        end)
+  end
 end

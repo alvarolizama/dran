@@ -133,7 +133,8 @@ defmodule Dran.MCPTest do
       # Seed a non-nil embedding_hash to simulate a previously augmented page.
       Ecto.Changeset.change(page, embedding_hash: "some-old-hash") |> Repo.update!()
 
-      result = call_tool("dran_reaugment_page", %{"context" => "personal", "slug" => "stale-page"})
+      result =
+        call_tool("dran_reaugment_page", %{"context" => "personal", "slug" => "stale-page"})
 
       assert result =~ "Reaugmentation scheduled for 'stale-page'"
 

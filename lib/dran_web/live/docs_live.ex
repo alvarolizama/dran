@@ -148,12 +148,10 @@ defmodule DranWeb.DocsLive do
 
   defp callout(assigns) do
     ~H"""
-    <div
-      class={[
-        "not-prose flex gap-3 rounded-lg border-l-4 p-4 my-4",
-        callout_classes(@variant)
-      ]}
-    >
+    <div class={[
+      "not-prose flex gap-3 rounded-lg border-l-4 p-4 my-4",
+      callout_classes(@variant)
+    ]}>
       <.icon name={callout_icon(@variant)} class="w-5 h-5 shrink-0 mt-0.5" />
       <div class="text-sm">
         {render_slot(@inner_block)}
@@ -166,9 +164,14 @@ defmodule DranWeb.DocsLive do
   defp callout_icon(:warning), do: "hero-exclamation-triangle"
   defp callout_icon(:tip), do: "hero-light-bulb"
 
-  defp callout_classes(:info), do: "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-  defp callout_classes(:warning), do: "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-  defp callout_classes(:tip), do: "border-green-500 bg-green-500/10 text-green-700 dark:text-green-300"
+  defp callout_classes(:info),
+    do: "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+
+  defp callout_classes(:warning),
+    do: "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+
+  defp callout_classes(:tip),
+    do: "border-green-500 bg-green-500/10 text-green-700 dark:text-green-300"
 
   attr :id, :string, required: true
   attr :code, :string, required: true
@@ -354,7 +357,8 @@ defmodule DranWeb.DocsLive do
       <p>
         Pages and relations form a directed graph. The <code>/graph</code>
         view renders the full
-        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong> tab
+        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong>
+        tab
         showing the page as the center with its direct neighbors. Relations carry a
         <code>weight</code>
         that reflects semantic similarity strength.
@@ -372,14 +376,26 @@ defmodule DranWeb.DocsLive do
         as pages change, giving you live views like "All todos from this week" or "Concepts tagged AI".
       </p>
 
-      <.h2_heading id="planning-hierarchy" icon="hero-clipboard-document-check" label="Planning hierarchy" />
+      <.h2_heading
+        id="planning-hierarchy"
+        icon="hero-clipboard-document-check"
+        label="Planning hierarchy"
+      />
       <p>
-        Dran organizes planning into a three-level hierarchy: <strong>goals</strong> → <strong>plans</strong> → <strong>todos</strong>.
-        Plans link to goals via <code>meta.goal_slug</code>, and todos link to plans via <code>meta.plan_slug</code>
+        Dran organizes planning into a three-level hierarchy: <strong>goals</strong>
+        → <strong>plans</strong>
+        → <strong>todos</strong>.
+        Plans link to goals via <code>meta.goal_slug</code>, and todos link to plans via
+        <code>meta.plan_slug</code>
         (the goal is derived from the plan). Todos and plans can be orphans — i.e. not linked to any
-        parent. The <code>part_of</code> relation is materialized automatically when these links exist.
-        Use <code>dran_list_pages</code> with <code>goal_slug</code> or <code>plan_slug</code> filters
-        (value <code>"none"</code> returns orphans).
+        parent. The <code>part_of</code>
+        relation is materialized automatically when these links exist.
+        Use <code>dran_list_pages</code>
+        with <code>goal_slug</code>
+        or <code>plan_slug</code>
+        filters
+        (value <code>"none"</code>
+        returns orphans).
       </p>
       <.code_block
         id="planning-hierarchy-diagram"
@@ -434,8 +450,9 @@ defmodule DranWeb.DocsLive do
       <.callout variant={:info}>
         <p>
           <strong>Agent dispatch:</strong>
-          Agents are dispatched asynchronously. Use <code>dran_start_agent</code> to launch and
-          <code>dran_get_agent_session</code> to poll for progress, summary, and steps.
+          Agents are dispatched asynchronously. Use <code>dran_start_agent</code>
+          to launch and <code>dran_get_agent_session</code>
+          to poll for progress, summary, and steps.
         </p>
       </.callout>
 
@@ -448,7 +465,11 @@ defmodule DranWeb.DocsLive do
         connected clients via PubSub.
       </p>
 
-      <.h2_heading id="using-dran-from-agents" icon="hero-command-line" label="Using Dran from agents" />
+      <.h2_heading
+        id="using-dran-from-agents"
+        icon="hero-command-line"
+        label="Using Dran from agents"
+      />
       <p>
         AI agents can connect to Dran via the MCP endpoint at <code>/api/mcp</code> using the
         Streamable HTTP transport. The repository includes a <code>SKILL.md</code> file with the
@@ -578,7 +599,7 @@ defmodule DranWeb.DocsLive do
       </p>
       <.code_block
         id="auth-mcp-headers"
-        code={"POST /api/mcp\nAuthorization: Bearer ***\nContent-Type: application/json"}
+        code="POST /api/mcp\nAuthorization: Bearer ***\nContent-Type: application/json"
       />
 
       <h3 id="configuring-mcp-client" class="scroll-mt-20">Configuring an MCP client</h3>
@@ -671,39 +692,159 @@ defmodule DranWeb.DocsLive do
     [
       %{group: "Contexts", method: "GET", path: "/api/contexts", desc: "List all contexts"},
       %{group: "Contexts", method: "POST", path: "/api/contexts", desc: "Create a context"},
-      %{group: "Contexts", method: "GET", path: "/api/contexts/:slug", desc: "Get a context by slug"},
+      %{
+        group: "Contexts",
+        method: "GET",
+        path: "/api/contexts/:slug",
+        desc: "Get a context by slug"
+      },
       %{group: "Contexts", method: "PUT", path: "/api/contexts/:slug", desc: "Update a context"},
-      %{group: "Contexts", method: "DELETE", path: "/api/contexts/:slug", desc: "Delete a context"},
-      %{group: "Pages", method: "GET", path: "/api/pages", desc: "List pages (filters: context, type, tag, status, owner, limit)"},
+      %{
+        group: "Contexts",
+        method: "DELETE",
+        path: "/api/contexts/:slug",
+        desc: "Delete a context"
+      },
+      %{
+        group: "Pages",
+        method: "GET",
+        path: "/api/pages",
+        desc: "List pages (filters: context, type, tag, status, owner, limit)"
+      },
       %{group: "Pages", method: "POST", path: "/api/pages", desc: "Create a page"},
       %{group: "Pages", method: "GET", path: "/api/pages/:slug", desc: "Get a page"},
       %{group: "Pages", method: "PUT", path: "/api/pages/:slug", desc: "Update a page"},
       %{group: "Pages", method: "DELETE", path: "/api/pages/:slug", desc: "Delete a page"},
-      %{group: "Pages", method: "GET", path: "/api/pages/:slug/links", desc: "Inbound + outbound relations"},
-      %{group: "Pages", method: "GET", path: "/api/pages/:slug/graph", desc: "Subgraph centered on a page"},
-      %{group: "Pages", method: "GET", path: "/api/pages/:slug/backlinks", desc: "Pages that reference this page, grouped by relation type"},
-      %{group: "Pages", method: "GET", path: "/api/pages/:slug/diff?v1=N&v2=M", desc: "Version diff between two versions"},
-      %{group: "Relations", method: "POST", path: "/api/relations", desc: "Create a relation (source, target, relation_type)"},
-      %{group: "Relations", method: "DELETE", path: "/api/relations/:id", desc: "Delete a relation"},
-      %{group: "Search", method: "GET", path: "/api/search?q=...&context=...&type=...", desc: "Full-text search"},
-      %{group: "Search", method: "GET", path: "/api/search/fuzzy?q=...&context=...", desc: "Fuzzy search"},
+      %{
+        group: "Pages",
+        method: "GET",
+        path: "/api/pages/:slug/links",
+        desc: "Inbound + outbound relations"
+      },
+      %{
+        group: "Pages",
+        method: "GET",
+        path: "/api/pages/:slug/graph",
+        desc: "Subgraph centered on a page"
+      },
+      %{
+        group: "Pages",
+        method: "GET",
+        path: "/api/pages/:slug/backlinks",
+        desc: "Pages that reference this page, grouped by relation type"
+      },
+      %{
+        group: "Pages",
+        method: "GET",
+        path: "/api/pages/:slug/diff?v1=N&v2=M",
+        desc: "Version diff between two versions"
+      },
+      %{
+        group: "Relations",
+        method: "POST",
+        path: "/api/relations",
+        desc: "Create a relation (source, target, relation_type)"
+      },
+      %{
+        group: "Relations",
+        method: "DELETE",
+        path: "/api/relations/:id",
+        desc: "Delete a relation"
+      },
+      %{
+        group: "Search",
+        method: "GET",
+        path: "/api/search?q=...&context=...&type=...",
+        desc: "Full-text search"
+      },
+      %{
+        group: "Search",
+        method: "GET",
+        path: "/api/search/fuzzy?q=...&context=...",
+        desc: "Fuzzy search"
+      },
       %{group: "Goals", method: "GET", path: "/api/goals?context=...", desc: "List goals"},
-      %{group: "Goals", method: "GET", path: "/api/goals/:slug?context=...", desc: "Goal detail with todos and plans"},
-      %{group: "Todos", method: "GET", path: "/api/todos?context=...&status=...", desc: "List todos (filterable by kanban status)"},
+      %{
+        group: "Goals",
+        method: "GET",
+        path: "/api/goals/:slug?context=...",
+        desc: "Goal detail with todos and plans"
+      },
+      %{
+        group: "Todos",
+        method: "GET",
+        path: "/api/todos?context=...&status=...",
+        desc: "List todos (filterable by kanban status)"
+      },
       %{group: "Todos", method: "POST", path: "/api/todos", desc: "Create a todo"},
-      %{group: "Todos", method: "PUT", path: "/api/todos/:id", desc: "Update a todo (e.g. change status)"},
+      %{
+        group: "Todos",
+        method: "PUT",
+        path: "/api/todos/:id",
+        desc: "Update a todo (e.g. change status)"
+      },
       %{group: "Ingest", method: "POST", path: "/api/ingest", desc: "Ingest a URL as a raw page"},
-      %{group: "Maintenance", method: "GET", path: "/api/lint?context=...", desc: "Lint pages for quality issues"},
-      %{group: "Maintenance", method: "GET", path: "/api/log?context=...&action=...&limit=...", desc: "Activity log"},
-      %{group: "Wiki", method: "GET", path: "/api/index?context=...", desc: "Wiki index (all page slugs + titles)"},
-      %{group: "Wiki", method: "GET", path: "/api/graph?context=...", desc: "Full graph (nodes + edges)"},
-      %{group: "Wiki", method: "GET", path: "/api/graph/3d?context=...", desc: "3D graph data (nodes with x,y,z coords)"},
-      %{group: "Export", method: "GET", path: "/api/export/:context/full", desc: "Full brain export (all pages + relations + metadata as JSON)"},
-      %{group: "Settings", method: "GET", path: "/api/settings", desc: "List all runtime settings"},
-      %{group: "Settings", method: "PUT", path: "/api/settings/:key", desc: "Update a setting value"},
+      %{
+        group: "Maintenance",
+        method: "GET",
+        path: "/api/lint?context=...",
+        desc: "Lint pages for quality issues"
+      },
+      %{
+        group: "Maintenance",
+        method: "GET",
+        path: "/api/log?context=...&action=...&limit=...",
+        desc: "Activity log"
+      },
+      %{
+        group: "Wiki",
+        method: "GET",
+        path: "/api/index?context=...",
+        desc: "Wiki index (all page slugs + titles)"
+      },
+      %{
+        group: "Wiki",
+        method: "GET",
+        path: "/api/graph?context=...",
+        desc: "Full graph (nodes + edges)"
+      },
+      %{
+        group: "Wiki",
+        method: "GET",
+        path: "/api/graph/3d?context=...",
+        desc: "3D graph data (nodes with x,y,z coords)"
+      },
+      %{
+        group: "Export",
+        method: "GET",
+        path: "/api/export/:context/full",
+        desc: "Full brain export (all pages + relations + metadata as JSON)"
+      },
+      %{
+        group: "Settings",
+        method: "GET",
+        path: "/api/settings",
+        desc: "List all runtime settings"
+      },
+      %{
+        group: "Settings",
+        method: "PUT",
+        path: "/api/settings/:key",
+        desc: "Update a setting value"
+      },
       %{group: "Chat", method: "POST", path: "/api/chat/sessions", desc: "Create a chat session"},
-      %{group: "Chat", method: "GET", path: "/api/chat/sessions/:id", desc: "Get session + messages"},
-      %{group: "Chat", method: "POST", path: "/api/chat/sessions/:id/messages", desc: "Send a message"}
+      %{
+        group: "Chat",
+        method: "GET",
+        path: "/api/chat/sessions/:id",
+        desc: "Get session + messages"
+      },
+      %{
+        group: "Chat",
+        method: "POST",
+        path: "/api/chat/sessions/:id/messages",
+        desc: "Send a message"
+      }
     ]
   end
 
@@ -739,7 +880,7 @@ defmodule DranWeb.DocsLive do
       <h3 id="mcp-endpoint-methods">Endpoint</h3>
       <.code_block
         id="mcp-endpoint-list"
-        code={"POST /api/mcp   - send JSON-RPC message\nGET /api/mcp    - open SSE stream (optional, returns 405 if unsupported)\nDELETE /api/mcp - terminate session"}
+        code="POST /api/mcp   - send JSON-RPC message\nGET /api/mcp    - open SSE stream (optional, returns 405 if unsupported)\nDELETE /api/mcp - terminate session"
       />
 
       <h3 id="session-management" class="scroll-mt-20">Session management</h3>
@@ -875,13 +1016,17 @@ defmodule DranWeb.DocsLive do
               <td class="px-4 py-2 font-mono text-primary">goal</td>
               <td class="px-4 py-2">Objectives with target dates and health</td>
               <td class="px-4 py-2 text-xs text-base-content/40">—</td>
-              <td class="px-4 py-2 text-xs">health (green/yellow/red), target_date, start_date, team</td>
+              <td class="px-4 py-2 text-xs">
+                health (green/yellow/red), target_date, start_date, team
+              </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">plan</td>
               <td class="px-4 py-2">Time-horizoned plans</td>
               <td class="px-4 py-2 text-xs text-base-content/40">—</td>
-              <td class="px-4 py-2 text-xs">horizon (weekly/monthly/quarterly/yearly), status, period, goal_slug</td>
+              <td class="px-4 py-2 text-xs">
+                horizon (weekly/monthly/quarterly/yearly), status, period, goal_slug
+              </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">todo</td>
@@ -961,8 +1106,18 @@ defmodule DranWeb.DocsLive do
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
-          <:param name="goal_slug" type="string" required="no" desc="Filter by goal slug ('none' for orphans)" />
-          <:param name="plan_slug" type="string" required="no" desc="Filter by plan slug ('none' for orphans)" />
+          <:param
+            name="goal_slug"
+            type="string"
+            required="no"
+            desc="Filter by goal slug ('none' for orphans)"
+          />
+          <:param
+            name="plan_slug"
+            type="string"
+            required="no"
+            desc="Filter by plan slug ('none' for orphans)"
+          />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
         </.mcp_tool>
 
@@ -1023,7 +1178,12 @@ defmodule DranWeb.DocsLive do
           <:param name="title" type="string" required="yes" desc="Todo title" />
           <:param name="slug" type="string" required="yes" desc="Todo slug" />
           <:param name="goal_slug" type="string" required="no" desc="Goal this todo belongs to" />
-          <:param name="plan_slug" type="string" required="no" desc="Plan this todo belongs to (goal derived from plan)" />
+          <:param
+            name="plan_slug"
+            type="string"
+            required="no"
+            desc="Plan this todo belongs to (goal derived from plan)"
+          />
           <:param
             name="kanban_status"
             type="string"
@@ -1200,7 +1360,11 @@ defmodule DranWeb.DocsLive do
         </div>
       </div>
 
-      <.h2_heading id="example-initialize" icon="hero-code-bracket" label="Example: initialize session" />
+      <.h2_heading
+        id="example-initialize"
+        icon="hero-code-bracket"
+        label="Example: initialize session"
+      />
       <.code_block
         id="mcp-example-init"
         code={"{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"initialize\",\n \"params\": {\"protocolVersion\": \"2025-03-26\", \"capabilities\": {},\n            \"clientInfo\": {\"name\": \"my-agent\", \"version\": \"1.0\"}}}"}

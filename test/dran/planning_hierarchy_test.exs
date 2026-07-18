@@ -50,7 +50,10 @@ defmodule Dran.PlanningHierarchyTest do
   end
 
   defp create_plan(ctx, slug, goal_slug) do
-    meta = if goal_slug, do: %{"goal_slug" => goal_slug, "status" => "draft", "horizon" => "weekly"}, else: %{"status" => "draft", "horizon" => "weekly"}
+    meta =
+      if goal_slug,
+        do: %{"goal_slug" => goal_slug, "status" => "draft", "horizon" => "weekly"},
+        else: %{"status" => "draft", "horizon" => "weekly"}
 
     {:ok, plan} =
       Brain.create_page(%{

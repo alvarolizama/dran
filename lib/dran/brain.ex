@@ -869,6 +869,7 @@ defmodule Dran.Brain do
   end
 
   defp meta_string(nil, _key), do: nil
+
   defp meta_string(meta, key) when is_map(meta) do
     case Map.get(meta, key) do
       val when is_binary(val) -> val
