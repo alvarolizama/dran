@@ -590,7 +590,7 @@ Dran can delegate longer tasks to autonomous ReAct agents. There are six agent t
 | --------------- | -------------------------- | ---------------------------------------------------------------------------- |
 | `research`      | Manual (`dran_start_agent`)     | Searches the web, scrapes sources, creates note/reference pages             |
 | `ingest`         | Manual (`dran_start_agent`)     | Validates, inspects, downloads, and creates reference pages from URLs       |
-| `ask`           | Manual / copilot           | Q&A — answers questions from the knowledge graph, citing sources            |
+| `ask`           | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph, citing sources            |
 | `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes         |
 | `link_gardener` | Manual (`dran_start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages        |
 | `weekly_review` | Quantum cron (weekly Sun 08:00) | Gathers stats and creates a review page                                 |
