@@ -200,7 +200,7 @@ msgstr ""
 #: lib/dran_web/live/concept_live.ex:235
 #: lib/dran_web/live/dashboard_live.ex:19
 #: lib/dran_web/live/docs_live.ex:20
-#: lib/dran_web/live/docs_live.ex:254
+#: lib/dran_web/live/docs_live.ex:257
 #, elixir-autogen, elixir-format
 msgid "Concepts"
 msgstr ""
@@ -693,8 +693,8 @@ msgid "Total Pages"
 msgstr ""
 
 #: lib/dran_web/components/page_components.ex:170
-#: lib/dran_web/live/docs_live.ex:837
-#: lib/dran_web/live/docs_live.ex:1250
+#: lib/dran_web/live/docs_live.ex:978
+#: lib/dran_web/live/docs_live.ex:1414
 #, elixir-autogen, elixir-format
 msgid "Type"
 msgstr ""
@@ -1134,39 +1134,14 @@ msgstr ""
 msgid "%{n} tokens"
 msgstr ""
 
-#: lib/dran_web/components/chat_widget.ex:160
-#, elixir-autogen, elixir-format
-msgid "Ask me anything about your second brain."
-msgstr ""
-
 #: lib/dran_web/live/dashboard_live.ex:199
 #, elixir-autogen, elixir-format
 msgid "Below 90%"
 msgstr ""
 
-#: lib/dran_web/components/chat_widget.ex:117
-#, elixir-autogen, elixir-format
-msgid "Brain Copilot"
-msgstr ""
-
 #: lib/dran_web/live/dashboard_live.ex:132
 #, elixir-autogen, elixir-format
 msgid "Brain health"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:149
-#, elixir-autogen, elixir-format
-msgid "Chatting about"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:129
-#, elixir-autogen, elixir-format
-msgid "Clear conversation"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:138
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Close"
 msgstr ""
 
 #: lib/dran_web/live/smart_collection_live.ex:69
@@ -1196,11 +1171,6 @@ msgstr ""
 msgid "Enter the question…"
 msgstr ""
 
-#: lib/dran_web/components/chat_widget.ex:336
-#, elixir-autogen, elixir-format
-msgid "List all todos"
-msgstr ""
-
 #: lib/dran_web/live/context_live.ex:167
 #, elixir-autogen, elixir-format
 msgid "No contexts yet. Create one above."
@@ -1226,11 +1196,6 @@ msgstr ""
 msgid "No smart collections yet."
 msgstr ""
 
-#: lib/dran_web/components/chat_widget.ex:102
-#, elixir-autogen, elixir-format
-msgid "Open Brain Copilot"
-msgstr ""
-
 #: lib/dran_web/live/dashboard_live.ex:258
 #: lib/dran_web/live/dashboard_live.ex:273
 #, elixir-autogen, elixir-format
@@ -1248,11 +1213,6 @@ msgstr ""
 msgid "Question"
 msgstr ""
 
-#: lib/dran_web/components/chat_widget.ex:339
-#, elixir-autogen, elixir-format
-msgid "Relate to other pages"
-msgstr ""
-
 #: lib/dran_web/live/smart_collection_live.ex:289
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Save Collection"
@@ -1261,26 +1221,6 @@ msgstr ""
 #: lib/dran_web/live/smart_collection_live.ex:65
 #, elixir-autogen, elixir-format
 msgid "Save a set of filters from search or any page list to create one."
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:360
-#, elixir-autogen, elixir-format
-msgid "Source"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:184
-#, elixir-autogen, elixir-format
-msgid "Sources"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:345
-#, elixir-autogen, elixir-format
-msgid "Summarize recent activity"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:339
-#, elixir-autogen, elixir-format
-msgid "Summarize this note"
 msgstr ""
 
 #: lib/dran_web/live/artifact_live.ex:80
@@ -1313,31 +1253,6 @@ msgstr ""
 #: lib/dran_web/live/dashboard_live.ex:267
 #, elixir-autogen, elixir-format
 msgid "Today's daily note is ready."
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:218
-#, elixir-autogen, elixir-format
-msgid "Type a message..."
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:345
-#, elixir-autogen, elixir-format
-msgid "What can you help me with?"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:342
-#, elixir-autogen, elixir-format
-msgid "What did I do this week?"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:336
-#, elixir-autogen, elixir-format
-msgid "What's the status?"
-msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:342
-#, elixir-autogen, elixir-format
-msgid "Which goals are red?"
 msgstr ""
 
 #: lib/dran_web/live/dashboard_live.ex:219
@@ -1437,13 +1352,13 @@ msgstr ""
 msgid "Current configuration. Values are read from environment variables at startup."
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:503
+#: lib/dran_web/live/docs_live.ex:524
 #, elixir-autogen, elixir-format
 msgid "Default"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:647
-#: lib/dran_web/live/docs_live.ex:1252
+#: lib/dran_web/live/docs_live.ex:668
+#: lib/dran_web/live/docs_live.ex:1416
 #, elixir-autogen, elixir-format
 msgid "Description"
 msgstr ""
@@ -1544,7 +1459,7 @@ msgstr ""
 msgid "Input and context are required"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:840
+#: lib/dran_web/live/docs_live.ex:981
 #, elixir-autogen, elixir-format
 msgid "Key meta fields"
 msgstr ""
@@ -1566,7 +1481,7 @@ msgid "Language"
 msgstr ""
 
 #: lib/dran_web/live/docs_live.ex:23
-#: lib/dran_web/live/docs_live.ex:278
+#: lib/dran_web/live/docs_live.ex:281
 #, elixir-autogen, elixir-format
 msgid "MCP"
 msgstr ""
@@ -1601,7 +1516,7 @@ msgstr ""
 msgid "Output language"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:1249
+#: lib/dran_web/live/docs_live.ex:1413
 #, elixir-autogen, elixir-format
 msgid "Parameter"
 msgstr ""
@@ -1616,8 +1531,8 @@ msgstr ""
 msgid "Preparing next step after %{action}…"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:504
-#: lib/dran_web/live/docs_live.ex:838
+#: lib/dran_web/live/docs_live.ex:525
+#: lib/dran_web/live/docs_live.ex:979
 #, elixir-autogen, elixir-format
 msgid "Purpose"
 msgstr ""
@@ -1632,7 +1547,7 @@ msgstr ""
 msgid "Request timeout"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:1251
+#: lib/dran_web/live/docs_live.ex:1415
 #, elixir-autogen, elixir-format
 msgid "Required"
 msgstr ""
@@ -1714,7 +1629,7 @@ msgstr ""
 msgid "Stop this agent session?"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:839
+#: lib/dran_web/live/docs_live.ex:980
 #, elixir-autogen, elixir-format
 msgid "Subtypes (meta.kind)"
 msgstr ""
@@ -1744,7 +1659,7 @@ msgstr ""
 msgid "Uploads"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:502
+#: lib/dran_web/live/docs_live.ex:523
 #, elixir-autogen, elixir-format
 msgid "Variable"
 msgstr ""
@@ -1830,12 +1745,12 @@ msgstr ""
 msgid "web search for \"%{q}\""
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:184
+#: lib/dran_web/live/docs_live.ex:187
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:646
+#: lib/dran_web/live/docs_live.ex:667
 #, elixir-autogen, elixir-format
 msgid "Endpoint"
 msgstr ""
@@ -1846,7 +1761,7 @@ msgid "Getting started"
 msgstr ""
 
 #: lib/dran_web/live/docs_live.ex:21
-#: lib/dran_web/live/docs_live.ex:266
+#: lib/dran_web/live/docs_live.ex:269
 #, elixir-autogen, elixir-format
 msgid "Guides"
 msgstr ""
@@ -1856,7 +1771,7 @@ msgstr ""
 msgid "Max pages"
 msgstr ""
 
-#: lib/dran_web/live/docs_live.ex:645
+#: lib/dran_web/live/docs_live.ex:666
 #, elixir-autogen, elixir-format
 msgid "Method"
 msgstr ""

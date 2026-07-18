@@ -411,19 +411,11 @@ defmodule DranWeb.DocsLive do
     ~H"""
     <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
       <.toc items={[
-        {"ai-chat", "AI Chat"},
         {"autonomous-agents", "Autonomous agents"},
         {"kanban-board", "Kanban board"},
         {"using-dran-from-agents", "Using Dran from agents"},
         {"settings", "Settings"}
       ]} />
-
-      <.h2_heading id="ai-chat" icon="hero-chat-bubble-left-right" label="AI Chat" />
-      <p>
-        Dran includes a built-in AI chat assistant (bottom-right FAB on every page). The chat
-        has full context of your brain — it can search pages, create content, answer questions
-        with citations, and suggest related actions. Chat sessions are persisted per context.
-      </p>
 
       <.h2_heading id="autonomous-agents" icon="hero-cpu-chip" label="Autonomous agents" />
       <p>Beyond the interactive Research and Ingest agents, Dran runs scheduled batch agents:</p>
@@ -649,8 +641,7 @@ defmodule DranWeb.DocsLive do
         {"maintenance-api", "Maintenance"},
         {"wiki-api", "Wiki"},
         {"export-api", "Export"},
-        {"settings-api", "Settings"},
-        {"chat-api", "Chat"}
+        {"settings-api", "Settings"}
       ]} />
 
       <.h2_heading id="rest-api" icon="hero-command-line" label="REST API" />
@@ -831,19 +822,6 @@ defmodule DranWeb.DocsLive do
         method: "PUT",
         path: "/api/settings/:key",
         desc: "Update a setting value"
-      },
-      %{group: "Chat", method: "POST", path: "/api/chat/sessions", desc: "Create a chat session"},
-      %{
-        group: "Chat",
-        method: "GET",
-        path: "/api/chat/sessions/:id",
-        desc: "Get session + messages"
-      },
-      %{
-        group: "Chat",
-        method: "POST",
-        path: "/api/chat/sessions/:id/messages",
-        desc: "Send a message"
       }
     ]
   end

@@ -34,12 +34,6 @@ defmodule DranWeb.Layouts do
     default: false,
     doc: "when true, the main content area skips internal padding/constraints"
 
-  # Optional page-context assigns forwarded to the ChatWidget so it can
-  # show contextual suggestions and scope the conversation.
-  attr :page_slug, :string, default: nil, doc: "slug of the page being viewed"
-  attr :page_type, :string, default: nil, doc: "type of the current page (goal, note, ...)"
-  attr :view_type, :string, default: nil, doc: "type of the current view (dashboard, ...)"
-
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -120,16 +114,6 @@ defmodule DranWeb.Layouts do
         module={DranWeb.CommandPalette}
         id="command-palette"
         context_slug={@context_slug}
-      />
-
-      <.live_component
-        module={DranWeb.ChatWidget}
-        id="chat-widget"
-        context_slug={@context_slug}
-        current_user={@current_user}
-        page_slug={@page_slug}
-        page_type={@page_type}
-        view_type={@view_type}
       />
 
       <.flash_group flash={@flash} />

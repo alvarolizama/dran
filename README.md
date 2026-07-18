@@ -4,7 +4,7 @@
 
 A personal second-brain application built with Phoenix LiveView. It stores your knowledge as typed pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons) and links them with relations, forming a queryable knowledge graph.
 
-Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP endpoint for AI agent integration, a floating copilot chat, and a REST API.
+Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP endpoint for AI agent integration, and a REST API.
 
 > **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 19 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
@@ -19,7 +19,6 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
   </tr>
   <tr>
     <td align="center"><b>Page detail — relations & versions</b><br><img src="docs/screenshots/note-detail.png" alt="Page detail with backlinks and relations" width="100%"></td>
-    <td align="center"><b>Floating brain copilot</b><br><img src="docs/screenshots/chat.png" alt="Floating brain copilot chat" width="100%"></td>
     <td align="center"><b>Activity feed — real-time log</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
     <td align="center"><b>Settings — brain tuning</b><br><img src="docs/screenshots/settings.png" alt="Settings — brain tuning" width="100%"></td>
   </tr>
@@ -130,7 +129,6 @@ agent limits — see [**SKILL.md**](SKILL.md).
 - **Daily notes** — one journal note per day, created on demand or auto-prompted from the dashboard; toggleable via settings
 - **Full context export** — export an entire context (pages, relations, versions, uploads) as a JSON backup for restore or migration
 - **Runtime settings** — tune the brain without a redeploy: semantic thresholds, agent limits, research language, daily-note toggle — all editable in the UI and persisted to the DB
-- **Floating brain copilot chat** — a context-aware chat widget on every page that answers questions about the current page/context, cites its sources, and can create pages from the conversation
 - **Knowledge graph** — visual graph with pan/zoom, built from explicit and semantic relations
 - **Inline editing** — edit any page in-place with autosave
 - **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
