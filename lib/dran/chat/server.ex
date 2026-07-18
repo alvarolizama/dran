@@ -6,6 +6,20 @@ defmodule Dran.Chat.Server do
   `Dran.Chat.Session`. The server keeps the last 20 messages in memory
   and persists the same 20 to the database on every turn.
 
+  ## Copilot agent + fallback
+
+  When a message arrives, the server first tries the full agent loop
+  (`Dran.Agent.Copilot`) which uses the `Agent.Engine` ReAct loop with
+  all 18 MCP tools via native tool-calling. The engine runs asynchronously
+  — `run/3` returns `{:ok, session}` immediately while the loop runs in
+  a `Task.Supervisor` task. The server polls the session in the database
+  until it reaches a terminal status (`done` / `failed` / `cancelled`)
+  or a timeout fires.
+
+  If the agent loop fails for any reason (exception, timeout, failed or
+  cancelled status), the server falls back to `Dran.Chat.Brain.answer/4`
+  (simple RAG) so the user always gets a reply.
+
   ## Lifecycle
 
   Started via `Dran.Chat.Supervisor.find_or_start/2` (DynamicSupervisor +
@@ -16,15 +30,23 @@ defmodule Dran.Chat.Server do
 
   - `send_message(pid, text)` → `{:ok, reply, sources}`
   - `history(pid)` → list of message maps
-  - `clear(pid)` → `:ok`
+  - `clear(pid)` → `:ok
   """
 
   use GenServer, restart: :temporary
 
+  alias Dran.Agent.Copilot
+  alias Dran.Agent.Session, as: AgentSession
   alias Dran.Chat.{Brain, Session}
   alias Dran.Repo
 
+  require Logger
+
   @max_messages 20
+  # Poll interval for waiting on the async agent session.
+  @agent_poll_interval_ms 200
+  # How long to wait for the agent loop to finish before falling back.
+  @agent_timeout_ms 120_000
 
   def child_spec(opts) do
     %{
@@ -110,24 +132,34 @@ defmodule Dran.Chat.Server do
       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
-    case Brain.answer(state.context_id, text, state.messages, current_page: state.page_slug) do
-      {:ok, reply, sources} ->
-        assistant_msg = %{
-          "role" => "assistant",
-          "content" => reply,
-          "sources" => sources,
-          "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
-        }
+    {reply, sources} =
+      case run_copilot(state, text) do
+        {:ok, summary, agent_sources} ->
+          {summary, agent_sources}
 
-        new_messages =
-          (state.messages ++ [user_msg, assistant_msg])
-          |> Enum.take(-@max_messages)
+        {:error, reason} ->
+          Logger.warning(
+            "Chat.Server: copilot agent failed (#{inspect(reason)}), falling back to Chat.Brain"
+          )
 
-        new_state = %{state | messages: new_messages}
-        persist!(new_state)
+          brain_fallback(state, text)
+      end
 
-        {:reply, {:ok, reply, sources}, new_state}
-    end
+    assistant_msg = %{
+      "role" => "assistant",
+      "content" => reply,
+      "sources" => sources,
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601()
+    }
+
+    new_messages =
+      (state.messages ++ [user_msg, assistant_msg])
+      |> Enum.take(-@max_messages)
+
+    new_state = %{state | messages: new_messages}
+    persist!(new_state)
+
+    {:reply, {:ok, reply, sources}, new_state}
   end
 
   @impl true
@@ -141,6 +173,111 @@ defmodule Dran.Chat.Server do
     persist!(new_state)
     {:reply, :ok, new_state}
   end
+
+  # ── Copilot agent path ───────────────────────────────────────────────────
+
+  defp run_copilot(state, text) do
+    context_slug = fetch_context_slug(state.context_id)
+
+    meta = %{
+      "context_slug" => context_slug,
+      "page_slug" => state.page_slug,
+      "history" => Enum.take(state.messages, -10)
+    }
+
+    {:ok, agent_session} = Copilot.run(text, state.context_id, meta: meta)
+
+    case wait_for_session(agent_session.id, @agent_timeout_ms) do
+      {:ok, summary, agent_sources} ->
+        sources = normalize_sources(agent_sources, context_slug)
+        {:ok, summary, sources}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  rescue
+    reason ->
+      Logger.warning(
+        "Chat.Server: copilot agent raised #{Exception.format(:error, reason, __STACKTRACE__)}"
+      )
+
+      {:error, reason}
+  end
+
+  defp wait_for_session(session_id, timeout) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    poll_session(session_id, deadline)
+  end
+
+  defp poll_session(session_id, deadline) do
+    case Repo.get(AgentSession, session_id) do
+      %{status: "done", summary: summary, meta: meta} ->
+        # The Engine marks sessions as "done" even when a step fails
+        # (it passes the error message as summary). Detect error summaries
+        # and treat them as failures so the server falls back to Brain.
+        if error_summary?(summary) do
+          {:error, {:agent_failed, summary}}
+        else
+          sources = get_in(meta || %{}, ["sources"]) || []
+          {:ok, summary || "Agent completed", sources}
+        end
+
+      %{status: "failed", summary: summary} ->
+        {:error, {:agent_failed, summary}}
+
+      %{status: "cancelled"} ->
+        {:error, :cancelled}
+
+      _other ->
+        if System.monotonic_time(:millisecond) > deadline do
+          {:error, :timeout}
+        else
+          Process.sleep(@agent_poll_interval_ms)
+          poll_session(session_id, deadline)
+        end
+    end
+  end
+
+  # The Engine finishes sessions with status "done" even when a step fails,
+  # embedding the error in the summary string. Detect these so we can fall back.
+  defp error_summary?(nil), do: false
+
+  defp error_summary?(summary) when is_binary(summary) do
+    summary =~ "Agent step failed" or
+      summary =~ "Agent reached max steps" or
+      summary =~ "Agent step timed out" or
+      summary =~ "Agent crashed"
+  end
+
+  # ── Brain fallback ───────────────────────────────────────────────────────
+
+  defp brain_fallback(state, text) do
+    case Brain.answer(state.context_id, text, state.messages, current_page: state.page_slug) do
+      {:ok, reply, sources} -> {reply, sources}
+    end
+  end
+
+  # ── Helpers ───────────────────────────────────────────────────────────────
+
+  defp fetch_context_slug(context_id) do
+    case Repo.get(Dran.Brain.Context, context_id) do
+      %{slug: slug} -> slug
+      nil -> "personal"
+    end
+  end
+
+  # Agent sessions store sources as a list of slug strings (from the
+  # copilot's `extract_sources`). Normalize them into the map shape the
+  # chat API expects: `%{"slug" => slug, "title" => slug}`.
+  defp normalize_sources(agent_sources, _context_slug) when is_list(agent_sources) do
+    Enum.map(agent_sources, fn
+      %{"slug" => _slug, "title" => _title} = source -> source
+      slug when is_binary(slug) -> %{"slug" => slug, "title" => slug}
+      other -> other
+    end)
+  end
+
+  defp normalize_sources(_, _), do: []
 
   # ── Persistence ──────────────────────────────────────────────────────────
 

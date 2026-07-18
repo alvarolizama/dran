@@ -5,6 +5,14 @@ defmodule DranWeb.ChatWidget do
   Rendered in the app layout alongside the CommandPalette. A floating action
   button (FAB) toggles a chat panel for conversing with the Brain.
 
+  ## Image / audio uploads
+
+  Users can attach images and audio files via a paperclip button. A colocated
+  JS hook (`.ChatUpload`) reads the file client-side with `FileReader`, sends
+  the base64 data to the server via `pushEventTo`, and the server processes
+  images with `Dran.Inference.Vision` and audio with `Dran.Inference.ASR`.
+  The resulting description/transcript is injected into the message text.
+
   ## Optional assigns
 
     * `page_slug` — slug of the page being viewed (enables page-scoped context)
@@ -37,7 +45,10 @@ defmodule DranWeb.ChatWidget do
      |> assign(:page_type, nil)
      |> assign(:view_type, nil)
      |> assign(:context_slug, nil)
-     |> assign(:current_user, nil)}
+     |> assign(:current_user, nil)
+     |> assign(:attachments, [])
+     |> assign(:processing_upload, false)
+     |> assign(:current_step, nil)}
   end
 
   @impl true
@@ -76,6 +87,10 @@ defmodule DranWeb.ChatWidget do
       try do
         pid = Dran.Chat.Supervisor.find_or_start(context_slug, user)
         history = Dran.Chat.Server.history(pid)
+
+        # Subscribe to agent session broadcasts for real-time tool step feedback
+        Phoenix.PubSub.subscribe(Dran.PubSub, "agents:all")
+
         assign(socket, chat_pid: pid, messages: history)
       rescue
         _ -> socket
@@ -115,6 +130,14 @@ defmodule DranWeb.ChatWidget do
             <div class="flex items-center gap-2 min-w-0">
               <.icon name="hero-sparkles" class="size-4 text-primary shrink-0" />
               <span class="font-semibold text-sm truncate">{gettext("Brain Copilot")}</span>
+              <span
+                :if={@loading}
+                class="inline-flex items-center gap-1 text-xs text-primary animate-pulse"
+                role="status"
+              >
+                <.icon name="hero-sparkles" class="size-3.5" />
+                {gettext("Thinking...")}
+              </span>
               <span :if={@context_slug} class="badge badge-sm badge-ghost truncate">
                 {@context_slug}
               </span>
@@ -194,10 +217,59 @@ defmodule DranWeb.ChatWidget do
               </div>
             </div>
 
-            <div :if={@loading} class="flex justify-start">
+            <div
+              :if={@loading}
+              class="flex justify-start"
+              role="status"
+              aria-live="polite"
+            >
               <div class="bg-base-200 rounded-lg px-4 py-3 text-sm">
-                <span class="loading loading-dots loading-sm"></span>
+                <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-base-content/50 animate-bounce [animation-delay:0ms]"></span>
+                    <span class="w-2 h-2 rounded-full bg-base-content/50 animate-bounce [animation-delay:150ms]"></span>
+                    <span class="w-2 h-2 rounded-full bg-base-content/50 animate-bounce [animation-delay:300ms]"></span>
+                  </div>
+                  <span class="text-xs text-base-content/60">
+                    {if @current_step, do: @current_step, else: gettext("Thinking...")}
+                  </span>
+                </div>
               </div>
+            </div>
+          </div>
+
+          <%!-- Attachment preview area --%>
+          <div
+            :if={@attachments != [] or @processing_upload}
+            class="flex flex-wrap gap-2 px-3 pt-2 border-t border-base-300"
+          >
+            <div
+              :if={@processing_upload}
+              class="flex items-center gap-1.5 badge badge-outline badge-sm animate-pulse"
+            >
+              <.icon name="hero-arrow-path" class="size-3" />
+              <span class="text-xs">{gettext("Processing...")}</span>
+            </div>
+            <div
+              :for={{ref, attachment} <- @attachments}
+              class="flex items-center gap-1.5 badge badge-outline badge-sm"
+              id={"#{@id}-attachment-#{ref}"}
+            >
+              <.icon
+                name={if attachment.kind == :image, do: "hero-photo", else: "hero-musical-note"}
+                class="size-3"
+              />
+              <span class="text-xs truncate max-w-32">{attachment.filename}</span>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs px-0.5"
+                phx-click="remove-attachment"
+                phx-value-ref={ref}
+                phx-target={@myself}
+                title={gettext("Remove")}
+              >
+                <.icon name="hero-x-mark" class="size-3" />
+              </button>
             </div>
           </div>
 
@@ -208,6 +280,29 @@ defmodule DranWeb.ChatWidget do
             phx-target={@myself}
             class="flex items-center gap-2 p-3 border-t border-base-300"
           >
+            <div
+              id={"#{@id}-upload"}
+              phx-hook=".ChatUpload"
+              class="contents"
+            >
+              <input
+                type="file"
+                id={"#{@id}-file-input"}
+                class="hidden"
+                accept="image/*,audio/*"
+                data-chat-upload-target={@myself}
+                phx-update="ignore"
+              />
+              <button
+                type="button"
+                class="btn btn-sm btn-ghost btn-circle"
+                onclick={"document.getElementById('#{@id}-file-input').click(); return false;"}
+                disabled={@loading or @processing_upload}
+                title={gettext("Attach image or audio")}
+              >
+                <.icon name="hero-paper-clip" class="size-4" />
+              </button>
+            </div>
             <input
               type="text"
               name="text"
@@ -215,9 +310,17 @@ defmodule DranWeb.ChatWidget do
               phx-change="input_change"
               phx-debounce="200"
               phx-target={@myself}
-              placeholder={gettext("Type a message...")}
-              class="input input-sm input-bordered flex-1 focus:ring-1 focus:ring-primary"
+              placeholder={
+                if @loading,
+                  do: gettext("Waiting for response..."),
+                  else: gettext("Type a message...")
+              }
+              class={[
+                "input input-sm input-bordered flex-1 focus:ring-1 focus:ring-primary",
+                @loading && "opacity-60"
+              ]}
               autocomplete="off"
+              disabled={@loading}
             />
             <button type="submit" class="btn btn-sm btn-primary" disabled={@loading}>
               <.icon name="hero-paper-airplane" class="size-4" />
@@ -225,6 +328,41 @@ defmodule DranWeb.ChatWidget do
           </form>
         </div>
       </div>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ChatUpload">
+        export default {
+          mounted() {
+            const input = this.el.querySelector('input[type="file"]');
+            if (!input) return;
+
+            input.addEventListener("change", (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                // ev.target.result is "data:<mime>;base64,<data>"
+                const result = ev.target.result;
+                const base64 = result.split(",")[1] || "";
+                const target = input.getAttribute("data-chat-upload-target");
+
+                this.pushEventTo(target, "upload_attachment", {
+                  filename: file.name,
+                  mime_type: file.type,
+                  data: base64
+                });
+              };
+              reader.onerror = () => {
+                // Silently reset on read error
+              };
+              reader.readAsDataURL(file);
+
+              // Reset so the same file can be selected again
+              e.target.value = "";
+            });
+          }
+        }
+      </script>
     </div>
     """
   end
@@ -260,13 +398,56 @@ defmodule DranWeb.ChatWidget do
     {:noreply, assign(socket, :input, text)}
   end
 
+  def handle_event(
+        "upload_attachment",
+        %{"filename" => filename, "mime_type" => mime, "data" => data},
+        socket
+      ) do
+    socket = assign(socket, :processing_upload, true)
+
+    # Process synchronously — in tests the fallback is instant, and in prod
+    # the Vision/ASR calls are external HTTP requests that benefit from the
+    # user seeing immediate feedback (processing indicator) before the result.
+    result = process_attachment(filename, mime, data)
+
+    socket =
+      case result do
+        {:ok, ref, attachment} ->
+          socket
+          |> assign(:attachments, socket.assigns.attachments ++ [{ref, attachment}])
+          |> assign(:processing_upload, false)
+
+        {:error, _reason} ->
+          assign(socket, :processing_upload, false)
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("remove-attachment", %{"ref" => ref}, socket) do
+    attachments = Enum.reject(socket.assigns.attachments, fn {r, _} -> r == ref end)
+    {:noreply, assign(socket, :attachments, attachments)}
+  end
+
   def handle_event("send", %{"text" => text}, socket) do
     text = String.trim(text)
+    attachments = socket.assigns.attachments
 
-    if text == "" do
+    if text == "" and attachments == [] do
       {:noreply, socket}
     else
-      user_msg = %{"role" => "user", "content" => text, "sources" => []}
+      # Inject attachment descriptions into the message text
+      attachment_texts =
+        attachments
+        |> Enum.map(fn {_ref, att} -> att.text end)
+        |> Enum.filter(&(&1 != ""))
+
+      full_text =
+        [text | attachment_texts]
+        |> Enum.filter(&(&1 != ""))
+        |> Enum.join("\n\n")
+
+      user_msg = %{"role" => "user", "content" => full_text, "sources" => []}
       messages = socket.assigns.messages ++ [user_msg]
       pid = socket.assigns[:chat_pid]
       page_slug = socket.assigns[:page_slug]
@@ -276,7 +457,7 @@ defmodule DranWeb.ChatWidget do
 
       if has_pid and Code.ensure_loaded?(Dran.Chat.Server) do
         Task.start(fn ->
-          case call_server(pid, text, page_slug) do
+          case call_server(pid, full_text, page_slug) do
             {:ok, reply, sources} ->
               send_update(myself, %{chat_reply: reply, sources: sources || []})
 
@@ -293,12 +474,35 @@ defmodule DranWeb.ChatWidget do
        socket
        |> assign(:messages, messages)
        |> assign(:input, "")
+       |> assign(:attachments, [])
        |> assign(:loading, has_pid)}
     end
   end
 
   def handle_event("suggestion", %{"text" => text}, socket) do
     handle_event("send", %{"text" => text}, socket)
+  end
+
+  # ---------------------------------------------------------------------------
+  # PubSub (agent session broadcasts)
+  # ---------------------------------------------------------------------------
+
+  def handle_info({:agent, _session_id, {:step_started, step}}, socket) do
+    tool = Map.get(step, :tool_name, "unknown")
+    msg = gettext("Using tool: %{tool}", tool: tool)
+    {:noreply, assign(socket, :current_step, msg)}
+  end
+
+  def handle_info({:agent, _session_id, {:step_completed, _step, _result}}, socket) do
+    {:noreply, assign(socket, :current_step, nil)}
+  end
+
+  def handle_info({:agent, _session_id, {:session_done, _summary, _count}}, socket) do
+    {:noreply, assign(socket, :current_step, nil)}
+  end
+
+  def handle_info(_other, socket) do
+    {:noreply, socket}
   end
 
   # ---------------------------------------------------------------------------
@@ -318,6 +522,71 @@ defmodule DranWeb.ChatWidget do
       true ->
         Dran.Chat.Server.send_message(pid, text)
     end
+  end
+
+  # Process an uploaded attachment (base64 data) and return a result tuple
+  # suitable for send_update/2 via the `attachment_processed` update clause.
+  #
+  # Images are described via `Dran.Inference.Vision.describe/2`.
+  # Audio files are transcribed via `Dran.Inference.ASR.transcribe/2`.
+  # When inference is not configured, a fallback placeholder is used so the
+  # attachment still appears in the message.
+  defp process_attachment(filename, mime, base64_data) do
+    ref = :crypto.strong_rand_bytes(8) |> Base.url_encode64(padding: false)
+
+    case Base.decode64(base64_data) do
+      {:ok, bytes} ->
+        {kind, text} = process_bytes(filename, mime, bytes)
+        {:ok, ref, %{filename: filename, kind: kind, text: text}}
+
+      :error ->
+        {:error, :invalid_base64}
+    end
+  end
+
+  defp process_bytes(filename, mime, bytes) do
+    cond do
+      String.starts_with?(mime, "image/") ->
+        description = describe_image(bytes)
+        {:image, "[Imagen: #{description}]"}
+
+      String.starts_with?(mime, "audio/") ->
+        transcript = transcribe_audio(bytes, filename)
+        {:audio, "[Audio: #{transcript}]"}
+
+      true ->
+        {:other, "[Archivo: #{filename}]"}
+    end
+  end
+
+  defp describe_image(bytes) do
+    if Code.ensure_loaded?(Dran.Inference.Vision) and Dran.Inference.enabled?() do
+      case Dran.Inference.Vision.describe(bytes) do
+        {:ok, description} -> description
+        {:error, _reason} -> "no se pudo procesar"
+      end
+    else
+      "descripción no disponible"
+    end
+  rescue
+    _ -> "no se pudo procesar"
+  catch
+    _, _ -> "no se pudo procesar"
+  end
+
+  defp transcribe_audio(bytes, filename) do
+    if Code.ensure_loaded?(Dran.Inference.ASR) and Dran.Inference.enabled?() do
+      case Dran.Inference.ASR.transcribe(bytes, filename) do
+        {:ok, transcript} -> transcript
+        {:error, _reason} -> "no se pudo transcribir"
+      end
+    else
+      "transcripción no disponible"
+    end
+  rescue
+    _ -> "no se pudo transcribir"
+  catch
+    _, _ -> "no se pudo transcribir"
   end
 
   defp message_classes(%{"role" => "user"}) do
