@@ -66,6 +66,15 @@ defmodule DranWeb.AgentLive do
               />
               <div class="flex items-end gap-3">
                 <%= if @type == "research" do %>
+                  <div class="w-28 shrink-0">
+                    <.input
+                      field={@form[:max_pages]}
+                      type="number"
+                      min="1"
+                      max="50"
+                      label={gettext("Max pages")}
+                    />
+                  </div>
                   <div class="flex-1">
                     <span class="label mb-1 block text-sm font-medium text-base-content/70">
                       {gettext("Output language")}
@@ -413,7 +422,11 @@ defmodule DranWeb.AgentLive do
        session: nil,
        steps: [],
        recent_sessions: [],
-       form: to_form(%{"input" => ""}, as: :agent)
+       form:
+         to_form(
+           %{"input" => "", "max_pages" => Dran.Settings.get("agent_max_pages") || 10},
+           as: :agent
+         )
      )}
   end
 
@@ -483,8 +496,18 @@ defmodule DranWeb.AgentLive do
     input = agent_params["input"]
     lang = if type == "research", do: agent_params["lang"] || "es", else: nil
 
+    max_pages =
+      case Integer.parse(to_string(agent_params["max_pages"] || "")) do
+        {n, _} when n > 0 -> n
+        _ -> nil
+      end
+
+    opts =
+      [lang: lang]
+      |> then(fn o -> if max_pages, do: Keyword.put(o, :max_pages, max_pages), else: o end)
+
     if context && String.trim(input) != "" do
-      case start_agent(type, input, context.id, lang: lang) do
+      case start_agent(type, input, context.id, opts) do
         {:ok, session} ->
           Phoenix.PubSub.subscribe(Dran.PubSub, "agents:#{session.id}")
 

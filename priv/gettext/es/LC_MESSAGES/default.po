@@ -333,7 +333,7 @@ msgid "Entities"
 msgstr "Entidades"
 
 #: lib/dran_web/components/layouts.ex:317
-#: lib/dran_web/live/agent_live.ex:453
+#: lib/dran_web/live/agent_live.ex:466
 #, elixir-autogen, elixir-format
 msgid "Files Ingest"
 msgstr "Importar archivos"
@@ -1132,7 +1132,7 @@ msgstr "%{count} en disputta"
 msgid "%{n} tokens"
 msgstr "%{n} tokens"
 
-#: lib/dran_web/components/chat_widget.ex:168
+#: lib/dran_web/components/chat_widget.ex:160
 #, elixir-autogen, elixir-format
 msgid "Ask me anything about your second brain."
 msgstr "Pregúntame cualquier cosa sobre tu segundo cerebro."
@@ -1152,17 +1152,17 @@ msgstr "Copiloto del cerebro"
 msgid "Brain health"
 msgstr "Salud del cerebro"
 
-#: lib/dran_web/components/chat_widget.ex:157
+#: lib/dran_web/components/chat_widget.ex:149
 #, elixir-autogen, elixir-format
 msgid "Chatting about"
 msgstr "Conversando sobre"
 
-#: lib/dran_web/components/chat_widget.ex:137
+#: lib/dran_web/components/chat_widget.ex:129
 #, elixir-autogen, elixir-format
 msgid "Clear conversation"
 msgstr "Limpiar conversación"
 
-#: lib/dran_web/components/chat_widget.ex:146
+#: lib/dran_web/components/chat_widget.ex:138
 #, elixir-autogen, elixir-format
 msgid "Close"
 msgstr "Cerrar"
@@ -1194,7 +1194,7 @@ msgstr "Enriquecimiento fallido: %{reason}"
 msgid "Enter the question…"
 msgstr "Escribe la pregunta…"
 
-#: lib/dran_web/components/chat_widget.ex:357
+#: lib/dran_web/components/chat_widget.ex:336
 #, elixir-autogen, elixir-format
 msgid "List all todos"
 msgstr "Listar todas las tareas"
@@ -1246,7 +1246,7 @@ msgstr "Página enriquecida con contenido web."
 msgid "Question"
 msgstr "Pregunta"
 
-#: lib/dran_web/components/chat_widget.ex:360
+#: lib/dran_web/components/chat_widget.ex:339
 #, elixir-autogen, elixir-format
 msgid "Relate to other pages"
 msgstr "Relacionar con otras páginas"
@@ -1261,22 +1261,22 @@ msgstr "Guardar colección"
 msgid "Save a set of filters from search or any page list to create one."
 msgstr "Guarda un conjunto de filtros desde la búsqueda o cualquier lista de páginas para crear una."
 
-#: lib/dran_web/components/chat_widget.ex:381
+#: lib/dran_web/components/chat_widget.ex:360
 #, elixir-autogen, elixir-format
 msgid "Source"
 msgstr "Fuente"
 
-#: lib/dran_web/components/chat_widget.ex:192
+#: lib/dran_web/components/chat_widget.ex:184
 #, elixir-autogen, elixir-format
 msgid "Sources"
 msgstr "Fuentes"
 
-#: lib/dran_web/components/chat_widget.ex:366
+#: lib/dran_web/components/chat_widget.ex:345
 #, elixir-autogen, elixir-format
 msgid "Summarize recent activity"
 msgstr "Resumir actividad reciente"
 
-#: lib/dran_web/components/chat_widget.ex:360
+#: lib/dran_web/components/chat_widget.ex:339
 #, elixir-autogen, elixir-format
 msgid "Summarize this note"
 msgstr "Resumir esta nota"
@@ -1313,27 +1313,27 @@ msgstr "Esta semana"
 msgid "Today's daily note is ready."
 msgstr "La nota diaria de hoy está lista."
 
-#: lib/dran_web/components/chat_widget.ex:238
+#: lib/dran_web/components/chat_widget.ex:218
 #, elixir-autogen, elixir-format
 msgid "Type a message..."
 msgstr "Escribe un mensaje..."
 
-#: lib/dran_web/components/chat_widget.ex:366
+#: lib/dran_web/components/chat_widget.ex:345
 #, elixir-autogen, elixir-format
 msgid "What can you help me with?"
 msgstr "¿En qué puedes ayudarme?"
 
-#: lib/dran_web/components/chat_widget.ex:363
+#: lib/dran_web/components/chat_widget.ex:342
 #, elixir-autogen, elixir-format
 msgid "What did I do this week?"
 msgstr "¿Qué hice esta semana?"
 
-#: lib/dran_web/components/chat_widget.ex:357
+#: lib/dran_web/components/chat_widget.ex:336
 #, elixir-autogen, elixir-format
 msgid "What's the status?"
 msgstr "¿Cuál es el estado?"
 
-#: lib/dran_web/components/chat_widget.ex:363
+#: lib/dran_web/components/chat_widget.ex:342
 #, elixir-autogen, elixir-format
 msgid "Which goals are red?"
 msgstr "¿Qué metas están en rojo?"
@@ -1359,22 +1359,22 @@ msgstr "semánticas: %{n}"
 msgid "Suggest"
 msgstr "Sugerir"
 
-#: lib/dran_web/live/agent_live.ex:163
+#: lib/dran_web/live/agent_live.ex:172
 #, elixir-autogen, elixir-format
 msgid "%{n} completed"
 msgstr "%{n} completados"
 
-#: lib/dran_web/live/agent_live.ex:163
+#: lib/dran_web/live/agent_live.ex:172
 #, elixir-autogen, elixir-format
 msgid "%{n} failed"
 msgstr "%{n} fallidos"
 
-#: lib/dran_web/live/agent_live.ex:269
+#: lib/dran_web/live/agent_live.ex:278
 #, elixir-autogen, elixir-format
 msgid "%{n} pages"
 msgstr "%{n} páginas"
 
-#: lib/dran_web/live/agent_live.ex:267
+#: lib/dran_web/live/agent_live.ex:276
 #, elixir-autogen, elixir-format
 msgid "%{n} steps"
 msgstr "%{n} pasos"
@@ -1405,7 +1405,7 @@ msgstr "Modelo ASR"
 msgid "Agent"
 msgstr "Agente"
 
-#: lib/dran_web/live/agent_live.ex:513
+#: lib/dran_web/live/agent_live.ex:536
 #, elixir-autogen, elixir-format
 msgid "Agent stopped"
 msgstr "Agente detenido"
@@ -1491,17 +1491,17 @@ msgstr "Modelo de embedding"
 msgid "Enabled"
 msgstr "Activado"
 
-#: lib/dran_web/live/agent_live.ex:373
+#: lib/dran_web/live/agent_live.ex:382
 #, elixir-autogen, elixir-format
 msgid "Executing…"
 msgstr "Ejecutando…"
 
-#: lib/dran_web/live/agent_live.ex:441
+#: lib/dran_web/live/agent_live.ex:454
 #, elixir-autogen, elixir-format
 msgid "Explore a topic on the web and create pages."
 msgstr "Explora un tema en la web y crea páginas."
 
-#: lib/dran_web/live/agent_live.ex:501
+#: lib/dran_web/live/agent_live.ex:524
 #, elixir-autogen, elixir-format
 msgid "Failed to start agent: %{reason}"
 msgstr "No se pudo iniciar el agente: %{reason}"
@@ -1527,17 +1527,17 @@ msgstr "Grafo: %{title}"
 msgid "Inference API"
 msgstr "API de inferencia"
 
-#: lib/dran_web/live/agent_live.ex:452
+#: lib/dran_web/live/agent_live.ex:465
 #, elixir-autogen, elixir-format
 msgid "Ingest files or URLs and optionally enrich the resulting page."
 msgstr "Importa archivos o URLs y opcionalmente enriquece la página resultante."
 
-#: lib/dran_web/live/agent_live.ex:110
+#: lib/dran_web/live/agent_live.ex:119
 #, elixir-autogen, elixir-format
 msgid "Input"
 msgstr "Entrada"
 
-#: lib/dran_web/live/agent_live.ex:505
+#: lib/dran_web/live/agent_live.ex:528
 #, elixir-autogen, elixir-format
 msgid "Input and context are required"
 msgstr "Se requiere entrada y contexto"
@@ -1558,7 +1558,7 @@ msgstr "Grafo de conocimiento"
 msgid "LLM, embeddings, and reranking"
 msgstr "LLM, embeddings y reranking"
 
-#: lib/dran_web/live/agent_live.ex:113
+#: lib/dran_web/live/agent_live.ex:122
 #, elixir-autogen, elixir-format
 msgid "Language"
 msgstr "Idioma"
@@ -1584,7 +1584,7 @@ msgstr "Tamaño máximo de archivo"
 msgid "Max steps"
 msgstr "Pasos máximos"
 
-#: lib/dran_web/live/agent_live.ex:342
+#: lib/dran_web/live/agent_live.ex:351
 #, elixir-autogen, elixir-format
 msgid "No steps yet."
 msgstr "Aún no hay pasos."
@@ -1594,7 +1594,7 @@ msgstr "Aún no hay pasos."
 msgid "Nodes"
 msgstr "Nodos"
 
-#: lib/dran_web/live/agent_live.ex:71
+#: lib/dran_web/live/agent_live.ex:80
 #, elixir-autogen, elixir-format
 msgid "Output language"
 msgstr "Idioma de salida"
@@ -1609,7 +1609,7 @@ msgstr "Parámetro"
 msgid "Per-step timeout"
 msgstr "Tiempo límite por paso"
 
-#: lib/dran_web/live/agent_live.ex:181
+#: lib/dran_web/live/agent_live.ex:190
 #, elixir-autogen, elixir-format
 msgid "Preparing next step after %{action}…"
 msgstr "Preparando el siguiente paso tras %{action}…"
@@ -1620,7 +1620,7 @@ msgstr "Preparando el siguiente paso tras %{action}…"
 msgid "Purpose"
 msgstr "Propósito"
 
-#: lib/dran_web/live/agent_live.ex:256
+#: lib/dran_web/live/agent_live.ex:265
 #, elixir-autogen, elixir-format
 msgid "Recent sessions"
 msgstr "Sesiones recientes"
@@ -1645,22 +1645,22 @@ msgstr "Rerank activado"
 msgid "Rerank model"
 msgstr "Modelo de rerank"
 
-#: lib/dran_web/live/agent_live.ex:442
+#: lib/dran_web/live/agent_live.ex:455
 #, elixir-autogen, elixir-format
 msgid "Research Agent"
 msgstr "Agente de investigación"
 
-#: lib/dran_web/live/agent_live.ex:439
+#: lib/dran_web/live/agent_live.ex:452
 #, elixir-autogen, elixir-format
 msgid "Research topic"
 msgstr "Tema de investigación"
 
-#: lib/dran_web/live/agent_live.ex:281
+#: lib/dran_web/live/agent_live.ex:290
 #, elixir-autogen, elixir-format
 msgid "Resume"
 msgstr "Reanudar"
 
-#: lib/dran_web/live/agent_live.ex:178
+#: lib/dran_web/live/agent_live.ex:187
 #, elixir-autogen, elixir-format
 msgid "Running %{action}…"
 msgstr "Ejecutando %{action}…"
@@ -1670,44 +1670,44 @@ msgstr "Ejecutando %{action}…"
 msgid "Saving…"
 msgstr "Guardando…"
 
-#: lib/dran_web/live/agent_live.ex:93
+#: lib/dran_web/live/agent_live.ex:102
 #, elixir-autogen, elixir-format
 msgid "Start"
 msgstr "Iniciar"
 
-#: lib/dran_web/live/agent_live.ex:173
+#: lib/dran_web/live/agent_live.ex:182
 #, elixir-autogen, elixir-format
 msgid "Starting agent…"
 msgstr "Iniciando agente…"
 
-#: lib/dran_web/live/agent_live.ex:91
+#: lib/dran_web/live/agent_live.ex:100
 #, elixir-autogen, elixir-format
 msgid "Starting…"
 msgstr "Iniciando…"
 
-#: lib/dran_web/live/agent_live.ex:118
+#: lib/dran_web/live/agent_live.ex:127
 #: lib/dran_web/live/settings_live.ex:116
 #: lib/dran_web/live/settings_live.ex:190
 #, elixir-autogen, elixir-format
 msgid "Status"
 msgstr "Estado"
 
-#: lib/dran_web/live/agent_live.ex:159
+#: lib/dran_web/live/agent_live.ex:168
 #, elixir-autogen, elixir-format
 msgid "Step %{n}"
 msgstr "Paso %{n}"
 
-#: lib/dran_web/live/agent_live.ex:339
+#: lib/dran_web/live/agent_live.ex:348
 #, elixir-autogen, elixir-format
 msgid "Steps"
 msgstr "Pasos"
 
-#: lib/dran_web/live/agent_live.ex:128
+#: lib/dran_web/live/agent_live.ex:137
 #, elixir-autogen, elixir-format
 msgid "Stop"
 msgstr "Detener"
 
-#: lib/dran_web/live/agent_live.ex:125
+#: lib/dran_web/live/agent_live.ex:134
 #, elixir-autogen, elixir-format
 msgid "Stop this agent session?"
 msgstr "¿Detener esta sesión del agente?"
@@ -1732,7 +1732,7 @@ msgstr "Totales"
 msgid "Types"
 msgstr "Tipos"
 
-#: lib/dran_web/live/agent_live.ex:450
+#: lib/dran_web/live/agent_live.ex:463
 #, elixir-autogen, elixir-format
 msgid "URL to ingest"
 msgstr "URL a importar"
@@ -1762,17 +1762,17 @@ msgstr "Modelo de visión"
 msgid "Web search and scraping"
 msgstr "Búsqueda web y scraping"
 
-#: lib/dran_web/live/agent_live.ex:184
+#: lib/dran_web/live/agent_live.ex:193
 #, elixir-autogen, elixir-format
 msgid "Working…"
 msgstr "Trabajando…"
 
-#: lib/dran_web/live/agent_live.ex:209
+#: lib/dran_web/live/agent_live.ex:218
 #, elixir-autogen, elixir-format
 msgid "brain search"
 msgstr "búsqueda cerebral"
 
-#: lib/dran_web/live/agent_live.ex:208
+#: lib/dran_web/live/agent_live.ex:217
 #, elixir-autogen, elixir-format
 msgid "brain search for \"%{q}\""
 msgstr ""
@@ -1782,12 +1782,12 @@ msgstr ""
 msgid "chars"
 msgstr "caracteres"
 
-#: lib/dran_web/live/agent_live.ex:216
+#: lib/dran_web/live/agent_live.ex:225
 #, elixir-autogen, elixir-format
 msgid "creating page \"%{title}\""
 msgstr ""
 
-#: lib/dran_web/live/agent_live.ex:220
+#: lib/dran_web/live/agent_live.ex:229
 #, elixir-autogen, elixir-format
 msgid "finishing up"
 msgstr "finalizando"
@@ -1798,32 +1798,32 @@ msgstr "finalizando"
 msgid "ms"
 msgstr "ms"
 
-#: lib/dran_web/live/agent_live.ex:161
+#: lib/dran_web/live/agent_live.ex:170
 #, elixir-autogen, elixir-format
 msgid "of up to %{n}"
 msgstr "de hasta %{n}"
 
-#: lib/dran_web/live/agent_live.ex:217
+#: lib/dran_web/live/agent_live.ex:226
 #, elixir-autogen, elixir-format
 msgid "page creation"
 msgstr "creación de página"
 
-#: lib/dran_web/live/agent_live.ex:201
+#: lib/dran_web/live/agent_live.ex:210
 #, elixir-autogen, elixir-format
 msgid "page scrape"
 msgstr "scrapeo de página"
 
-#: lib/dran_web/live/agent_live.ex:200
+#: lib/dran_web/live/agent_live.ex:209
 #, elixir-autogen, elixir-format
 msgid "scraping %{url}"
 msgstr "scrapeando %{url}"
 
-#: lib/dran_web/live/agent_live.ex:193
+#: lib/dran_web/live/agent_live.ex:202
 #, elixir-autogen, elixir-format
 msgid "web search"
 msgstr "búsqueda web"
 
-#: lib/dran_web/live/agent_live.ex:192
+#: lib/dran_web/live/agent_live.ex:201
 #, elixir-autogen, elixir-format
 msgid "web search for \"%{q}\""
 msgstr ""
@@ -1849,6 +1849,11 @@ msgstr "Ajustes guardados"
 msgid "Guides"
 msgstr ""
 
+#: lib/dran_web/live/agent_live.ex:75
+#, elixir-autogen, elixir-format
+msgid "Max pages"
+msgstr "Máximo de páginas"
+
 #: lib/dran_web/live/docs_live.ex:645
 #, elixir-autogen, elixir-format
 msgid "Method"
@@ -1858,14 +1863,3 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "On this page"
 msgstr ""
-
-#: lib/dran_web/components/chat_widget.ex:124
-#: lib/dran_web/components/chat_widget.ex:218
-#, elixir-autogen, elixir-format
-msgid "Thinking..."
-msgstr "Pensando..."
-
-#: lib/dran_web/components/chat_widget.ex:238
-#, elixir-autogen, elixir-format
-msgid "Waiting for response..."
-msgstr "Esperando respuesta..."
