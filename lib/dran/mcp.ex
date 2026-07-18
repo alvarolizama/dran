@@ -823,6 +823,9 @@ defmodule Dran.MCP do
   @doc "Get protocol version"
   def protocol_version, do: @protocol_version
 
+  @doc "Returns the MCP tool schemas list (for conversion to OpenAI format)."
+  def tool_schemas, do: @tools
+
   # ── Initialize ──────────────────────────────────────────────────────────────
 
   defp initialize_response(id) do
@@ -1131,8 +1134,13 @@ defmodule Dran.MCP do
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
       opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts
-      opts = if args["goal_slug"], do: Keyword.put(opts, :goal_slug, args["goal_slug"]), else: opts
-      opts = if args["plan_slug"], do: Keyword.put(opts, :plan_slug, args["plan_slug"]), else: opts
+
+      opts =
+        if args["goal_slug"], do: Keyword.put(opts, :goal_slug, args["goal_slug"]), else: opts
+
+      opts =
+        if args["plan_slug"], do: Keyword.put(opts, :plan_slug, args["plan_slug"]), else: opts
+
       opts = if args["owner"], do: Keyword.put(opts, :owner, args["owner"]), else: opts
 
       opts =
