@@ -89,7 +89,9 @@ defmodule Dran.Chat.Server do
   @doc "Send a message and get a reply with sources"
   @spec send_message(pid(), String.t()) :: {:ok, String.t(), [map()]} | {:error, term()}
   def send_message(pid, text) do
-    GenServer.call(pid, {:send_message, text}, 60_000)
+    # The copilot agent may take up to @agent_timeout_ms (120s) plus
+    # processing overhead, so we give the GenServer.call a generous timeout.
+    GenServer.call(pid, {:send_message, text}, 180_000)
   end
 
   @doc "Get the current message history"
