@@ -62,12 +62,6 @@ defmodule Dran.Inference do
   def chat_model, do: Config.chat_model()
 
   @doc """
-  Returns the configured agent model name (for tool-calling agents).
-  """
-  @spec agent_model() :: String.t()
-  def agent_model, do: Config.agent_model()
-
-  @doc """
   Check that the inference server is reachable and that the configured models
   are advertised by `/v1/models`.
   """

@@ -106,7 +106,7 @@ defmodule Dran.Agent.Engine do
         context_id: context_id,
         status: "running",
         started_at: DateTime.utc_now() |> DateTime.truncate(:second),
-        meta: %{model: Inference.agent_model(), opts: opts_to_map(opts)}
+        meta: %{model: Inference.chat_model(), opts: opts_to_map(opts)}
       })
       |> Repo.insert()
 
@@ -287,7 +287,7 @@ defmodule Dran.Agent.Engine do
 
   defp call_llm(state, attempt \\ 0) do
     payload = %{
-      "model" => Inference.agent_model(),
+      "model" => Inference.chat_model(),
       "messages" => state.messages,
       "tools" => state.module.tools(),
       "tool_choice" => "auto",
@@ -345,7 +345,7 @@ defmodule Dran.Agent.Engine do
 
       _ ->
         content = Map.get(message, "content", "")
-        parse_response(content, message)
+        parse_response(content)
     end
   end
 
@@ -353,25 +353,12 @@ defmodule Dran.Agent.Engine do
     Map.get(message, "content", "") |> String.trim()
   end
 
-  defp parse_response(text, message) do
+  defp parse_response(text) do
     text = String.trim(text)
 
     case extract_json(text) do
       nil ->
-        # If the model returned plain text content (not empty), treat it as
-        # a final answer — this is how conversational agents like the copilot
-        # signal they are done when they don't use the `done` tool explicitly.
-        if text != "" and map_size(message) > 0 do
-          {:ok,
-           %{
-             reasoning: reasoning_from_message(message),
-             tool: "done",
-             args: %{"summary" => text},
-             assistant_message: message
-           }}
-        else
-          {:error, :no_json}
-        end
+        {:error, :no_json}
 
       json_str ->
         case Jason.decode(json_str) do
@@ -461,9 +448,6 @@ defmodule Dran.Agent.Engine do
 
   defp default_summarize_result({:ok, data}) when is_map(data),
     do: %{status: "ok", data: data}
-
-  defp default_summarize_result({:ok, data}) when is_binary(data),
-    do: %{status: "ok", data: data, length: String.length(data)}
 
   defp default_summarize_result({:ok, :done}), do: %{status: "done"}
   defp default_summarize_result({:error, reason}), do: %{status: "error", error: inspect(reason)}
@@ -573,9 +557,6 @@ defmodule Dran.Agent.Engine do
 
       %{data: data} when is_map(data) ->
         Jason.encode!(data) |> smart_truncate(@max_tool_result_chars)
-
-      %{data: data} when is_binary(data) ->
-        smart_truncate(data, @max_tool_result_chars)
 
       %{status: "error", error: error} when is_binary(error) ->
         "ERROR: #{error}"

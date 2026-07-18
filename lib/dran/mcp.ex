@@ -823,9 +823,6 @@ defmodule Dran.MCP do
   @doc "Get protocol version"
   def protocol_version, do: @protocol_version
 
-  @doc "Returns the MCP tool schemas list (for conversion to OpenAI format)."
-  def tool_schemas, do: @tools
-
   # ── Initialize ──────────────────────────────────────────────────────────────
 
   defp initialize_response(id) do

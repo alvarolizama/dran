@@ -47,9 +47,6 @@ defmodule Dran.Inference.Config do
   @spec chat_model :: String.t()
   def chat_model, do: get(:chat_model)
 
-  @spec agent_model :: String.t()
-  def agent_model, do: get(:agent_model) || chat_model()
-
   @spec asr_model :: String.t()
   def asr_model, do: get(:asr_model) || @default_models.asr
 
@@ -95,7 +92,6 @@ defmodule Dran.Inference.Config do
           markitdown_model:
             System.get_env("DRAN_INFERENCE_MARKITDOWN_MODEL", @default_models.markitdown),
           chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL", @default_models.chat),
-          agent_model: System.get_env("DRAN_INFERENCE_AGENT_MODEL", @default_models.chat),
           asr_model: System.get_env("DRAN_INFERENCE_ASR_MODEL", @default_models.asr),
           vision_model: System.get_env("DRAN_INFERENCE_VISION_MODEL", @default_models.vision),
           timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
