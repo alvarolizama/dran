@@ -306,8 +306,46 @@ defmodule Dran.Brain.PageMeta do
   defp score_to_health(2), do: "yellow"
   defp score_to_health(_), do: "red"
 
-  @doc "Returns the metadata fields and their select options for a given page type."
-  def meta_fields_for("note") do
+  @doc """
+  Returns the metadata fields and their select options for a given page type.
+
+  ## Modes
+
+    * `:edit` (default) — the full field list used when editing an existing
+      page. This is what the `<.meta_fields>` component renders today.
+    * `:new` — a reduced field list for the creation form. Only `("goal",
+      :new)` is filtered today: health and current_value/progress are
+      excluded (they are derived/progress-tracking fields, not capture
+      fields). All other types return their full `:edit` list in `:new`
+      mode.
+
+  The arity-1 form `meta_fields_for(type)` delegates to
+  `meta_fields_for(type, :edit)` so existing callers (notably the
+  `<.meta_fields>` component in `markdown_editor_components.ex`) keep
+  working unchanged. The `:new` filtering for goals activates once that
+  component gains a `:mode` attr in a later wave.
+  """
+  def meta_fields_for(type, mode \\ :edit)
+
+  def meta_fields_for(type, :edit), do: meta_fields_edit(type)
+
+  def meta_fields_for("goal", :new) do
+    # Capture-only fields for goal creation: health, current_value and
+    # progress are derived/tracking fields, so they are hidden on the
+    # new-goal form.
+    [
+      {:text, "metric", "Metric", placeholder: "e.g. MRR, users, uptime"},
+      {:number, "target_value", "Target value", step: "0.01"},
+      {:text, "unit", "Unit", placeholder: "e.g. %, USD, users"},
+      {:date, "start_date", "Start date"},
+      {:date, "target_date", "Target date"},
+      {:slug_select, "project_slug", "Project", type: "project"}
+    ]
+  end
+
+  def meta_fields_for(type, :new), do: meta_fields_edit(type)
+
+  defp meta_fields_edit("note") do
     [
       {:select, "kind", "Kind", Enum.map(@note_kinds, &{String.capitalize(&1), &1})},
       {:date, "date", "Date"},
@@ -316,7 +354,7 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  def meta_fields_for("concept") do
+  defp meta_fields_edit("concept") do
     [
       {:select, "kind", "Kind", Enum.map(@concept_kinds, &{String.capitalize(&1), &1})},
       {:text, "domain", "Domain"},
@@ -324,7 +362,7 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  def meta_fields_for("entity") do
+  defp meta_fields_edit("entity") do
     [
       {:select, "kind", "Kind", Enum.map(@entity_kinds, &{String.capitalize(&1), &1})},
       {:text, "location", "Location"},
@@ -332,7 +370,7 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  def meta_fields_for("reference") do
+  defp meta_fields_edit("reference") do
     [
       {:select, "kind", "Kind", Enum.map(@reference_kinds, &{String.capitalize(&1), &1})},
       {:text, "source_url", "Source URL"},
@@ -340,29 +378,30 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  def meta_fields_for("artifact") do
+  defp meta_fields_edit("artifact") do
     [
       {:select, "kind", "Kind", Enum.map(@artifact_kinds, &{String.capitalize(&1), &1})}
     ]
   end
 
-  def meta_fields_for("plan") do
+  defp meta_fields_edit("plan") do
     [
       {:select, "horizon", "Horizon", Enum.map(@horizons, &{String.capitalize(&1), &1})},
       {:select, "status", "Status", Enum.map(@plan_statuses, &{String.capitalize(&1), &1})},
       {:text, "period", "Period"},
       {:date, "due_date", "Due date"},
-      {:text, "goal_slug", "Goal slug"},
-      {:text, "project_slug", "Project slug"}
+      {:slug_select, "goal_slug", "Goal", type: "goal"},
+      {:slug_select, "project_slug", "Project", type: "project"}
     ]
   end
 
-  def meta_fields_for("project") do
+  defp meta_fields_edit("project") do
+    # NOTE: health_source is intentionally omitted — it is an internal
+    # detail defaulting to "derived" everywhere. Health itself stays
+    # editable as a manual override.
     [
       {:select, "status", "Status", Enum.map(@project_statuses, &{String.capitalize(&1), &1})},
       {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
-      {:select, "health_source", "Health source",
-       [{"Manual (override)", "manual"}, {"Derived from goals", "derived"}]},
       {:select, "priority", "Priority",
        [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
       {:date, "start_date", "Start date"},
@@ -370,7 +409,7 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  def meta_fields_for("goal") do
+  defp meta_fields_edit("goal") do
     [
       {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
       {:text, "metric", "Metric", placeholder: "e.g. MRR, users, uptime"},
@@ -380,11 +419,11 @@ defmodule Dran.Brain.PageMeta do
       {:number, "progress", "Progress (0.0-1.0)", step: "0.01", min: "0", max: "1"},
       {:date, "start_date", "Start date"},
       {:date, "target_date", "Target date"},
-      {:text, "project_slug", "Project slug"}
+      {:slug_select, "project_slug", "Project", type: "project"}
     ]
   end
 
-  def meta_fields_for("todo") do
+  defp meta_fields_edit("todo") do
     [
       {:select, "kanban_status", "Status",
        [
@@ -398,17 +437,15 @@ defmodule Dran.Brain.PageMeta do
       {:select, "priority", "Priority",
        [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
       {:date, "due_date", "Due date"},
-      {:text, "project_slug", "Project slug"},
-      {:text, "goal_slug", "Goal slug"},
-      {:text, "plan_slug", "Plan slug"}
+      {:slug_select, "project_slug", "Project", type: "project"},
+      {:slug_select, "goal_slug", "Goal", type: "goal"},
+      {:slug_select, "plan_slug", "Plan", type: "plan"}
     ]
   end
 
-  def meta_fields_for("comparison") do
-    []
-  end
+  defp meta_fields_edit("comparison"), do: []
 
-  def meta_fields_for("query") do
+  defp meta_fields_edit("query") do
     [
       {:select, "kind", "Kind", Enum.map(@query_kinds, &{String.capitalize(&1), &1})},
       {:select, "difficulty", "Difficulty",
@@ -419,5 +456,5 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  def meta_fields_for(_), do: []
+  defp meta_fields_edit(_), do: []
 end

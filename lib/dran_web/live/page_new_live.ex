@@ -25,10 +25,10 @@ defmodule DranWeb.PageNewLive do
       <div class="w-full mx-auto p-6">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold">
-            New {PageTypes.label(@page_type)}
+            {gettext("New")} {PageTypes.label(@page_type)}
           </h1>
           <.link navigate={@back_path} class="btn btn-ghost btn-sm">
-            <.icon name="hero-arrow-left" class="size-4" /> Back
+            <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
           </.link>
         </div>
 
@@ -37,40 +37,23 @@ defmodule DranWeb.PageNewLive do
             <.input
               field={@form[:title]}
               type="text"
-              label="Title"
-              placeholder="Enter a title…"
+              label={gettext("Title")}
+              placeholder={gettext("Enter a title…")}
               class="text-lg font-medium"
             />
-
-            <div class="grid grid-cols-2 gap-4">
-              <.input
-                field={@form[:slug]}
-                type="text"
-                label="Slug"
-                placeholder="auto from title"
-                class="font-mono text-sm"
-              />
-              <.input
-                field={@form[:summary]}
-                type="text"
-                label="Summary"
-                placeholder="One-line description"
-                class="text-sm"
-              />
-            </div>
 
             <.input
               field={@form[:tags]}
               type="text"
-              label="Tags"
-              placeholder="comma, separated, tags"
+              label={gettext("Tags")}
+              placeholder={gettext("comma, separated, tags")}
               class="text-sm"
             />
 
-            <.meta_fields page_type={@page_type} meta={%{}} />
-
             <div>
-              <span class="label mb-1 block text-sm font-medium text-base-content/70">Content</span>
+              <span class="label mb-1 block text-sm font-medium text-base-content/70">
+                {gettext("Content")}
+              </span>
               <.markdown_editor
                 id="page-new-editor"
                 body={@body}
@@ -79,10 +62,34 @@ defmodule DranWeb.PageNewLive do
               />
             </div>
 
+            <details class="group">
+              <summary class="flex items-center gap-2 cursor-pointer select-none mb-3">
+                <.icon
+                  name="hero-chevron-right"
+                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+                />
+                <span class="text-sm font-semibold text-base-content/60 uppercase tracking-wider">
+                  {gettext("Más opciones")}
+                </span>
+              </summary>
+
+              <div class="space-y-4 ml-6">
+                <.input
+                  field={@form[:summary]}
+                  type="text"
+                  label={gettext("Summary")}
+                  placeholder={gettext("One-line description")}
+                  class="text-sm"
+                />
+
+                <.meta_fields page_type={@page_type} meta={@meta} context_id={@context_id} />
+              </div>
+            </details>
+
             <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
-              <.link navigate={@back_path} class="btn btn-ghost btn-sm">Cancel</.link>
+              <.link navigate={@back_path} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
               <button type="submit" class="btn btn-primary btn-sm">
-                <.icon name="hero-plus" class="size-4" /> Create
+                <.icon name="hero-plus" class="size-4" /> {gettext("Create")}
               </button>
             </div>
           </div>
@@ -117,9 +124,9 @@ defmodule DranWeb.PageNewLive do
        back_path: "/notes",
        form: nil,
        body: "",
+       meta: %{},
        context_id: if(context, do: context.id),
-       save_status: "idle",
-       slug_touched: false
+       save_status: "idle"
      )}
   end
 
@@ -131,6 +138,8 @@ defmodule DranWeb.PageNewLive do
 
     context = socket.assigns[:context]
     context_id = if context, do: context.id
+
+    meta = default_meta_for(page_type)
 
     changeset =
       Brain.change_page(%Brain.Page{}, %{
@@ -145,29 +154,19 @@ defmodule DranWeb.PageNewLive do
        page_type: page_type,
        back_path: back_path,
        form: to_form(changeset, as: :page),
-       page_title: "New #{PageTypes.label(page_type)}",
-       slug_touched: false
+       meta: meta,
+       page_title: gettext("New %{type}", type: PageTypes.label(page_type))
      )}
   end
 
-  def handle_event("validate_page", %{"page" => page_params} = event, socket) do
+  def handle_event("validate_page", %{"page" => page_params} = _event, socket) do
     context_id = if socket.assigns[:context], do: socket.assigns.context.id
-    slug_touched = socket.assigns[:slug_touched] || false
 
-    target = Map.get(event, "_target", [])
-
-    # If user edited the slug field directly, stop auto-generating
-    slug_touched =
-      if target == ["page", "slug"], do: true, else: slug_touched
-
-    # Auto-generate slug from title unless user has manually edited it
-    page_params =
-      if slug_touched do
-        page_params
-      else
-        title = Map.get(page_params, "title", "")
-        Map.put(page_params, "slug", slugify(title))
-      end
+    # Carry smart-default meta through live validation so the meta_fields
+    # component keeps showing the prefilled values until the user changes
+    # them. Once the form submits a meta map, that takes precedence.
+    base_meta = socket.assigns[:meta] || %{}
+    meta = Map.merge(base_meta, meta_from_params(page_params))
 
     changeset =
       Brain.change_page(
@@ -181,7 +180,7 @@ defmodule DranWeb.PageNewLive do
 
     {:noreply,
      socket
-     |> assign(form: to_form(changeset, as: :page), body: body, slug_touched: slug_touched)}
+     |> assign(form: to_form(changeset, as: :page), body: body, meta: meta)}
   end
 
   def handle_event("validate_page", params, socket) do
@@ -209,7 +208,7 @@ defmodule DranWeb.PageNewLive do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Page created.")
+         |> put_flash(:info, gettext("Page created."))
          |> push_navigate(to: "/#{type_path}/#{page.slug}?edit=true")}
 
       {:error, changeset} ->
@@ -255,42 +254,46 @@ defmodule DranWeb.PageNewLive do
   defp type_to_page("queries"), do: "query"
   defp type_to_page(_), do: "note"
 
-  defp ensure_slug(%{"slug" => slug} = params, _context_id) when is_binary(slug) and slug != "",
-    do: params
+  # Smart defaults per page type for the :new form. These prefill the meta
+  # map so the user does not have to pick the common starting state. The
+  # slug is NOT set here — Brain.ensure_title_and_slug/1 derives it from
+  # the title on save.
+  defp default_meta_for("note") do
+    %{"kind" => "thought", "date" => Date.utc_today() |> Date.to_string()}
+  end
+
+  defp default_meta_for("todo") do
+    %{"kanban_status" => "backlog", "priority" => "medium"}
+  end
+
+  defp default_meta_for(type) when type in ["project", "plan"] do
+    %{"status" => "draft"}
+  end
+
+  defp default_meta_for("goal") do
+    %{"health_source" => "derived"}
+  end
+
+  defp default_meta_for(_), do: %{}
+
+  # Merge any meta values submitted in the form params on top of the
+  # smart defaults, so user edits win over defaults.
+  defp meta_from_params(%{"meta" => form_meta}) when is_map(form_meta) do
+    form_meta
+    |> Enum.reject(fn {_k, v} -> v in ["", nil] end)
+    |> Map.new()
+  end
+
+  defp meta_from_params(_), do: %{}
+
+  defp ensure_slug(%{"slug" => slug} = params, _context_id)
+       when is_binary(slug) and slug != "",
+       do: params
 
   defp ensure_slug(params, context_id) do
     title = Map.get(params, "title", "")
-    slug = unique_slug(title, context_id, Map.get(params, "page_type", "page"))
+    slug = Dran.Slug.generate(title, context_id, Map.get(params, "page_type", "page"))
     Map.put(params, "slug", slug)
-  end
-
-  defp unique_slug(title, context_id, fallback_type) do
-    base = slugify(title)
-    base = if base == "", do: fallback_type, else: base
-    ensure_unique_slug(base, context_id, 0)
-  end
-
-  defp ensure_unique_slug(base, context_id, attempt) do
-    slug =
-      if attempt == 0 do
-        base
-      else
-        suffix = :crypto.strong_rand_bytes(3) |> Base.encode16(case: :lower)
-        "#{base}-#{suffix}"
-      end
-
-    if Brain.get_page_by_slug(slug, context_id) do
-      ensure_unique_slug(base, context_id, attempt + 1)
-    else
-      slug
-    end
-  end
-
-  defp slugify(text) do
-    text
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "-")
-    |> String.replace(~r/^-+|-+$/, "")
   end
 
   defp handle_progress(:file, _entry, socket) do

@@ -8,7 +8,8 @@ defmodule DranWeb.MarkdownEditorComponents do
   """
 
   use Phoenix.Component
-  import DranWeb.CoreComponents, only: [icon: 1]
+  use Gettext, backend: DranWeb.Gettext
+  import DranWeb.CoreComponents, only: [icon: 1, input: 1]
 
   @doc """
   Renders the markdown editor with a toolbar and a TipTap mount point.
@@ -166,64 +167,122 @@ defmodule DranWeb.MarkdownEditorComponents do
   attr :page_type, :string, required: true
   attr :meta, :map, default: %{}
   attr :form, :any, default: nil
+  attr :context_id, :any, required: true
 
   def meta_fields(assigns) do
     raw_fields = Dran.Brain.PageMeta.meta_fields_for(assigns.page_type)
     fields = Enum.map(raw_fields, &normalise_meta_field/1)
+    {link_fields, plain_fields} = Enum.split_with(fields, fn {type, _, _, _} -> type == :slug_select end)
 
-    assigns = assign(assigns, :fields, fields)
+    assigns =
+      assigns
+      |> assign(:fields, plain_fields)
+      |> assign(:link_fields, link_fields)
 
     ~H"""
-    <div :if={@fields != []} class="space-y-4">
-      <div class="text-sm font-semibold text-base-content/70">Metadata</div>
+    <div :if={@fields != [] or @link_fields != []} class="space-y-4">
+      <div :if={@fields != []} class="text-sm font-semibold text-base-content/70">
+        {gettext("Metadata")}
+      </div>
+      <div :if={@link_fields != []} class="space-y-2">
+        <div class="flex items-center gap-1.5 text-sm font-semibold text-base-content/70">
+          <.icon name="hero-link" class="size-4 text-base-content/40" />
+          {gettext("Vincular a…")}
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <%= for {type, key, label, opts} <- @link_fields do %>
+            <% value = meta_value(@meta, @form, key) %>
+            <.meta_field_input
+              type={type}
+              key={key}
+              label={label}
+              opts={opts}
+              value={value}
+              context_id={@context_id}
+            />
+          <% end %>
+        </div>
+      </div>
       <div class="grid grid-cols-2 gap-4">
         <%= for {type, key, label, opts} <- @fields do %>
           <% value = meta_value(@meta, @form, key) %>
           <% visible? =
             is_nil(Keyword.get(opts, :condition)) or condition_met?(opts[:condition], @meta, @form) %>
           <%= if visible? do %>
-            <% placeholder = Keyword.get(opts, :placeholder) %>
-            <%= case type do %>
-              <% :select -> %>
-                <% options = Keyword.get(opts, :options, []) %>
-                <div>
-                  <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
-                  <select
-                    name={"page[meta][#{key}]"}
-                    class="select select-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
-                  >
-                    <option value=""></option>
-                    <%= for {opt_label, opt_val} <- options do %>
-                      <option value={opt_val} selected={value == opt_val}>{opt_label}</option>
-                    <% end %>
-                  </select>
-                </div>
-              <% :date -> %>
-                <div>
-                  <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
-                  <input
-                    type="date"
-                    name={"page[meta][#{key}]"}
-                    value={value}
-                    class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
-                  />
-                </div>
-              <% :text -> %>
-                <div>
-                  <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
-                  <input
-                    type="text"
-                    name={"page[meta][#{key}]"}
-                    value={value}
-                    placeholder={placeholder || label}
-                    class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
-                  />
-                </div>
-            <% end %>
+            <.meta_field_input
+              type={type}
+              key={key}
+              label={label}
+              opts={opts}
+              value={value}
+              context_id={@context_id}
+            />
           <% end %>
         <% end %>
       </div>
     </div>
+    """
+  end
+
+  attr :type, :atom, required: true
+  attr :key, :string, required: true
+  attr :label, :string, required: true
+  attr :opts, :list, default: []
+  attr :value, :any, default: nil
+  attr :context_id, :any, default: nil
+
+  defp meta_field_input(assigns) do
+    ~H"""
+    <%= case @type do %>
+      <% :select -> %>
+        <% options = Keyword.get(@opts, :options, []) %>
+        <.input
+          type="select"
+          name={"page[meta][#{@key}]"}
+          value={@value}
+          options={options}
+          prompt={gettext("None")}
+          label={@label}
+        />
+      <% :slug_select -> %>
+        <% slug_type = Keyword.get(@opts, :type) %>
+        <% pages =
+          if @context_id do
+            Dran.Brain.list_pages(context_id: @context_id, type: slug_type)
+          else
+            []
+          end %>
+        <% options = Enum.map(pages, fn p -> {p.title, p.slug} end) %>
+        <.input
+          type="select"
+          name={"page[meta][#{@key}]"}
+          value={@value}
+          options={options}
+          prompt={gettext("None")}
+          label={@label}
+        />
+      <% :date -> %>
+        <.input type="date" name={"page[meta][#{@key}]"} value={@value} label={@label} />
+      <% :number -> %>
+        <.input
+          type="number"
+          name={"page[meta][#{@key}]"}
+          value={@value}
+          label={@label}
+          step={@opts[:step]}
+          min={@opts[:min]}
+          max={@opts[:max]}
+        />
+      <% :text -> %>
+        <% placeholder = Keyword.get(@opts, :placeholder) %>
+        <.input
+          type="text"
+          name={"page[meta][#{@key}]"}
+          value={@value}
+          placeholder={placeholder || @label}
+          label={@label}
+        />
+    <% end %>
     """
   end
 

@@ -133,7 +133,7 @@ defmodule DranWeb.ProjectLive do
                       placeholder="comma, separated, tags"
                       class="w-full text-sm"
                     />
-                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
                     <.markdown_editor
                       id="project-editor"
                       body={@page.body}

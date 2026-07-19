@@ -288,7 +288,7 @@ defmodule DranWeb.TodoLive do
                       placeholder={gettext("comma, separated, tags")}
                       class="text-sm"
                     />
-                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
                     <.markdown_editor
                       id="todo-editor"
                       body={@page.body}
@@ -580,7 +580,7 @@ defmodule DranWeb.TodoLive do
         attrs = %{
           "context_id" => context.id,
           "title" => title,
-          "slug" => unique_slug(title, context.id),
+          "slug" => Dran.Slug.generate(title, context.id, "todo"),
           "page_type" => "todo",
           "meta" => meta
         }
@@ -676,35 +676,6 @@ defmodule DranWeb.TodoLive do
 
   defp maybe_put(meta, _key, ""), do: meta
   defp maybe_put(meta, key, value), do: Map.put(meta, key, value)
-
-  defp unique_slug(title, context_id) do
-    base = slugify(title)
-    base = if base == "", do: "todo", else: base
-    ensure_unique_slug(base, context_id, 0)
-  end
-
-  defp ensure_unique_slug(base, context_id, attempt) do
-    slug =
-      if attempt == 0 do
-        base
-      else
-        suffix = :crypto.strong_rand_bytes(3) |> Base.encode16(case: :lower)
-        "#{base}-#{suffix}"
-      end
-
-    if Brain.get_page_by_slug(slug, context_id) do
-      ensure_unique_slug(base, context_id, attempt + 1)
-    else
-      slug
-    end
-  end
-
-  defp slugify(text) do
-    text
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "-")
-    |> String.replace(~r/^-+|-+$/, "")
-  end
 
   # ── Local display helpers (design-system colors) ──
   # These shadow the imported TodoHelpers versions to use semantic

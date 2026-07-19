@@ -105,7 +105,7 @@ defmodule DranWeb.NoteLive do
                       class="text-sm"
                     />
 
-                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
 
                     <div>
                       <span class="label mb-1 block text-sm font-medium text-base-content/70">{gettext(

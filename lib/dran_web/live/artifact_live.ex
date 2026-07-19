@@ -97,7 +97,7 @@ defmodule DranWeb.ArtifactLive do
                     <button type="button" phx-click="suggest_tags" class="btn btn-ghost btn-xs mt-1">
                       <.icon name="hero-sparkles" class="size-3" /> {gettext("Suggest")}
                     </button>
-                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} />
+                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
                     <.markdown_editor
                       id="artifact-editor"
                       body={@page.body}
