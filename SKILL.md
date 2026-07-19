@@ -204,6 +204,14 @@ There is no dedicated dran_search agent; for dran_search-only tasks use `dran_se
 13. **Todos without links go to the global kanban inbox.** Álvaro triages todos
     in the `/kanban` UI. A new todo with no `project_slug`/`goal_slug`/`plan_slug`
     is a legitimate GTD inbox item — don't force a link if none is obvious.
+14. **Prefer archiving over deleting for stale content.** Pages have an
+    `archived` flag: archived pages disappear from lists, stats, search,
+    orphan detection and kanban boards, but stay accessible by slug and keep
+    their relations. Archive/unarchive via `dran_update_page` with
+    `archived: true/false`. In the web UI, every list view has a collapsible
+    **Archived** section at the bottom (filterable by page type) and the
+    detail view shows Archive/Unarchive actions. Reserve `dran_delete_page`
+    for true junk — archiving is reversible, deletion is not.
 
 ---
 

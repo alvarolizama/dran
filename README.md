@@ -142,6 +142,7 @@ agent limits — see [**SKILL.md**](SKILL.md).
 - **Relations** — see inbound and outbound relations for any page
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
 - **Quality lint** — find orphan pages, stale pages, and contested knowledge
+- **Page archiving** — hide stale pages without deleting them: an `archived` flag removes pages from lists, stats, search and kanban boards while keeping them accessible by slug. Every list view has a collapsible **Archived** section (filterable by page type), the detail view offers Archive/Unarchive actions, and agents can archive via `dran_update_page` (`archived: true`)
 - **Slug rename** — rename a page slug
 - **Hybrid search** — unified `dran_search` tool picks full-text, fuzzy, semantic, or hybrid, with RRF fusion and an optional **PageRank authority boost** (multiplicative, controlled by the `pagerank_boost` runtime setting, default `0.15`)
 

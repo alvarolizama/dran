@@ -224,6 +224,11 @@ defmodule Dran.MCP do
           "updated_by" => %{
             "type" => "string",
             "description" => "Who is updating the page, for provenance (defaults to 'agent')."
+          },
+          "archived" => %{
+            "type" => "boolean",
+            "description" =>
+              "Archive (true) or unarchive (false) the page. Archived pages are hidden from lists, stats, search and kanban boards but remain accessible by slug. Prefer archiving over deletion for stale content — it's reversible."
           }
         },
         "required" => ["context", "slug"]
@@ -944,7 +949,7 @@ defmodule Dran.MCP do
 
         page ->
           attrs =
-            Map.take(args, ["title", "body", "tags", "meta", "summary"])
+            Map.take(args, ["title", "body", "tags", "meta", "summary", "archived"])
             |> Map.put("updated_by", Map.get(args, "updated_by", "agent"))
 
           case Brain.update_page(page, attrs) do
