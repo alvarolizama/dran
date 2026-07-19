@@ -200,20 +200,32 @@ defmodule DranWeb.Layouts do
             icon: "hero-rocket-launch",
             path: "/projects",
             badge: counts[:projects]
+          }
+        ]
+      },
+      %{
+        label: gettext("Planning"),
+        items: [
+          %{
+            key: "goals",
+            label: gettext("Goals"),
+            icon: "hero-flag",
+            path: ~p"/goals",
+            badge: counts[:goals]
           },
           %{
-            key: "graph",
-            label: gettext("Graph"),
-            icon: "hero-share",
-            path: ~p"/graph",
-            badge: counts[:graph]
+            key: "plans",
+            label: gettext("Plans"),
+            icon: "hero-clipboard-document-list",
+            path: ~p"/plans",
+            badge: counts[:plans]
           },
           %{
-            key: "activity",
-            label: gettext("Activity"),
-            icon: "hero-clock",
-            path: ~p"/activity",
-            badge: counts[:activity]
+            key: "todos",
+            label: gettext("Todos"),
+            icon: "hero-check-circle",
+            path: ~p"/todos",
+            badge: counts[:todos]
           }
         ]
       },
@@ -242,25 +254,17 @@ defmodule DranWeb.Layouts do
             badge: counts[:entities]
           },
           %{
-            key: "goals",
-            label: gettext("Goals"),
-            icon: "hero-flag",
-            path: ~p"/goals",
-            badge: counts[:goals]
-          },
-          %{
-            key: "plans",
-            label: gettext("Plans"),
-            icon: "hero-clipboard-document-list",
-            path: ~p"/plans",
-            badge: counts[:plans]
-          },
-          %{
             key: "references",
             label: gettext("References"),
             icon: "hero-bookmark",
             path: ~p"/references",
             badge: counts[:references]
+          },
+          %{
+            key: "collections",
+            label: gettext("Collections"),
+            icon: "hero-funnel",
+            path: ~p"/collections"
           }
         ]
       },
@@ -280,6 +284,25 @@ defmodule DranWeb.Layouts do
             icon: "hero-scale",
             path: ~p"/comparisons",
             badge: counts[:comparisons]
+          }
+        ]
+      },
+      %{
+        label: gettext("Explore"),
+        items: [
+          %{
+            key: "graph",
+            label: gettext("Graph"),
+            icon: "hero-share",
+            path: ~p"/graph",
+            badge: counts[:graph]
+          },
+          %{
+            key: "activity",
+            label: gettext("Activity"),
+            icon: "hero-clock",
+            path: ~p"/activity",
+            badge: counts[:activity]
           }
         ]
       },
@@ -314,14 +337,8 @@ defmodule DranWeb.Layouts do
             key: "settings",
             label: gettext("Settings"),
             icon: "hero-cog-6-tooth",
-            path: ~p"/settings",
-            badge: counts[:settings]
-          }
-        ]
-      },
-      %{
-        label: gettext("Docs"),
-        items: [
+            path: ~p"/settings"
+          },
           %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/docs"}
         ]
       }

@@ -21,6 +21,7 @@ defmodule DranWeb.PageNewLive do
       current_user={@current_user}
       context_slug={@context_slug}
       contexts={@contexts}
+      active_nav={@active_nav}
     >
       <div class="w-full mx-auto p-6">
         <div class="flex items-center justify-between mb-6">
@@ -126,7 +127,8 @@ defmodule DranWeb.PageNewLive do
        body: "",
        meta: %{},
        context_id: if(context, do: context.id),
-       save_status: "idle"
+       save_status: "idle",
+       active_nav: "notes"
      )}
   end
 
@@ -155,7 +157,8 @@ defmodule DranWeb.PageNewLive do
        back_path: back_path,
        form: to_form(changeset, as: :page),
        meta: meta,
-       page_title: gettext("New %{type}", type: PageTypes.label(page_type))
+       page_title: gettext("New %{type}", type: PageTypes.label(page_type)),
+       active_nav: PageTypes.path(page_type)
      )}
   end
 

@@ -6,17 +6,11 @@ defmodule DranWeb.TodoLiveTest do
   alias Dran.Brain
 
   setup %{conn: conn} do
-    # Disable inference scheduling so create_page doesn't try external APIs
     original = Application.get_env(:dran, :inference)
 
     Application.put_env(:dran, :inference,
-      base_url: nil,
-      api_key: nil,
-      embedding_model: nil,
-      rerank_model: nil,
-      markitdown_model: nil,
-      timeout: 100,
-      schedule_async: false
+      api_url: "http://localhost:99999",
+      api_key: "test-key"
     )
 
     on_exit(fn ->
@@ -33,7 +27,7 @@ defmodule DranWeb.TodoLiveTest do
       Brain.create_page(%{
         context_id: context.id,
         title: "Kanban Realtime Test Todo",
-        body: "A todo for the kanban realtime test",
+        body: "A todo for the list realtime test",
         page_type: "todo",
         meta: %{"kanban_status" => "backlog"}
       })
@@ -47,80 +41,61 @@ defmodule DranWeb.TodoLiveTest do
     {:ok, conn: conn, todo: todo, context: context}
   end
 
-  test "kanban board renders full-viewport layout with all columns", %{conn: conn} do
+  test "todo list renders rows with status buttons", %{conn: conn, todo: todo} do
     {:ok, view, _html} = live(conn, ~p"/todos")
 
-    # Board container exists and carries the full-height class
-    assert has_element?(view, "#kanban-board")
-    board_class = view |> element("#kanban-board") |> render() |> then(& &1)
-    assert board_class =~ "h-[calc(100vh-4rem)]"
+    assert has_element?(view, ~s([data-testid="todo-list"]))
+    assert has_element?(view, ~s([data-testid="todo-row-#{todo.slug}"]))
 
-    # All six kanban columns are present
+    # Status quick-change buttons exist for each kanban column
     for status <- ~w(backlog this_week today in_progress done cancelled) do
-      assert has_element?(view, ~s([data-kanban-status="#{status}"]))
+      assert has_element?(view, ~s(button[phx-value-status="#{status}"]))
     end
   end
 
-  test "kanban board updates in real time when a page changes via PubSub", %{
+  test "todo list updates in real time when a page changes via PubSub", %{
     conn: conn,
-    todo: todo,
-    context: _context
+    todo: todo
   } do
     {:ok, view, html} = live(conn, ~p"/todos")
 
-    # The todo starts in the backlog column
-    backlog_column =
-      html
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query(~s([data-kanban-status="backlog"]))
+    assert html =~ "Kanban Realtime Test Todo"
+    assert has_element?(view, ~s([data-testid="todo-row-#{todo.slug}"]))
 
-    assert LazyHTML.text(backlog_column) =~ "Kanban Realtime Test Todo"
+    # Archive it externally — the list should drop it on re-render
+    {:ok, _updated} = Brain.update_page(todo, %{archived: true})
 
-    # Simulate an agent moving the todo to done (e.g. via MCP update_todo) —
-    # Brain.update_page broadcasts the change over PubSub.
-    {:ok, _updated} =
-      Brain.update_page(todo, %{meta: Map.merge(todo.meta || %{}, %{"kanban_status" => "done"})})
-
-    # The LiveView should have received {:page_changed, ...} and reloaded items
     html = render(view)
-
-    done_column =
-      html
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query(~s([data-kanban-status="done"]))
-
-    assert LazyHTML.text(done_column) =~ "Kanban Realtime Test Todo"
-
-    backlog_column =
-      html
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query(~s([data-kanban-status="backlog"]))
-
-    refute LazyHTML.text(backlog_column) =~ "Kanban Realtime Test Todo"
+    refute has_element?(view, ~s([data-testid="todo-row-#{todo.slug}"]))
+    # And the archived toggle now reports one archived item
+    assert html =~ "(1)"
   end
 
-  test "kanban board picks up todos created by an agent in real time", %{
+  test "todo list picks up todos created by an agent in real time", %{
     conn: conn,
     context: context
   } do
     {:ok, view, _html} = live(conn, ~p"/todos")
 
-    {:ok, _agent_todo} =
+    {:ok, agent_todo} =
       Brain.create_page(%{
         context_id: context.id,
         title: "Agent Created Todo Live",
-        body: "Created while the board was open",
+        body: "Created while the list was open",
         page_type: "todo",
         meta: %{"kanban_status" => "today"}
       })
 
-    html = render(view)
+    assert has_element?(view, ~s([data-testid="todo-row-#{agent_todo.slug}"]))
+  end
 
-    today_column =
-      html
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query(~s([data-kanban-status="today"]))
+  test "change_status button updates the todo's kanban status", %{conn: conn, todo: todo} do
+    {:ok, view, _html} = live(conn, ~p"/todos")
 
-    assert LazyHTML.text(today_column) =~ "Agent Created Todo Live"
+    view
+    |> element(~s(button[phx-value-slug="#{todo.slug}"][phx-value-status="today"]))
+    |> render_click()
+
+    assert Brain.get_page_by_slug(todo.slug, todo.context_id).meta["kanban_status"] == "today"
   end
 end

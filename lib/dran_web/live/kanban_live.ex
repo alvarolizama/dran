@@ -17,6 +17,22 @@ defmodule DranWeb.KanbanLive do
     {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
   ]
 
+  # Columnas donde el usuario puede crear un todo vía quick-add (excluye
+  # estados terminales done/cancelled — esos se alcanzan por drag-drop).
+  @quick_add_statuses [
+    {"backlog", gettext("Backlog")},
+    {"this_week", gettext("This Week")},
+    {"today", gettext("Today")},
+    {"in_progress", gettext("In Progress")}
+  ]
+
+  @priorities [
+    {"low", gettext("Low")},
+    {"medium", gettext("Medium")},
+    {"high", gettext("High")},
+    {"urgent", gettext("Urgent")}
+  ]
+
   # Badges por tipo de vínculo (Tailwind puro, como en el plan §4.2).
   @badge_styles %{
     "project" => "bg-blue-100 text-blue-700 hover:bg-blue-200",
@@ -36,11 +52,101 @@ defmodule DranWeb.KanbanLive do
     >
       <div class="flex h-screen flex-col overflow-hidden">
         <div class="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
-          <h1 class="text-xl font-semibold">Kanban</h1>
-          <.link navigate={~p"/todos/new"} class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="size-4" /> New Todo
-          </.link>
+          <h1 class="text-xl font-semibold">{gettext("Kanban")}</h1>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              phx-click="toggle_form"
+              class="btn btn-primary btn-sm"
+              aria-expanded={@show_form}
+            >
+              <.icon name="hero-plus" class="size-4" /> {gettext("Nueva tarea")}
+            </button>
+            <.link navigate={~p"/todos/new"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-arrow-top-right-on-square" class="size-4" /> {gettext("New Todo")}
+            </.link>
+          </div>
         </div>
+
+        <%!-- Quick-add inline form (§3.1) --%>
+        <form
+          :if={@show_form}
+          id="kanban-quick-add"
+          phx-submit="create_todo"
+          class="mx-4 mb-3 p-3 surface-2 rounded-xl shrink-0"
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            <div class="lg:col-span-1">
+              <label for="qa-title" class="block text-caption mb-1">{gettext("Title")}</label>
+              <input
+                id="qa-title"
+                type="text"
+                name="title"
+                required
+                placeholder={gettext("What needs to be done?")}
+                phx-mounted={JS.focus()}
+                class="input w-full rounded-lg border-base-300 bg-base-100 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none"
+              />
+            </div>
+
+            <div>
+              <label for="qa-priority" class="block text-caption mb-1">{gettext("Priority")}</label>
+              <select
+                id="qa-priority"
+                name="priority"
+                class="select w-full rounded-lg border-base-300 bg-base-100"
+              >
+                <%= for {value, label} <- @priority_options do %>
+                  <option value={value} selected={value == @form["priority"]}>{label}</option>
+                <% end %>
+              </select>
+            </div>
+
+            <div>
+              <label for="qa-due" class="block text-caption mb-1">{gettext("Due date")}</label>
+              <input
+                id="qa-due"
+                type="date"
+                name="due_date"
+                value={@form["due_date"]}
+                class="input w-full rounded-lg border-base-300 bg-base-100"
+              />
+            </div>
+
+            <div>
+              <label for="qa-goal" class="block text-caption mb-1">{gettext("Goal")}</label>
+              <select
+                id="qa-goal"
+                name="goal_slug"
+                class="select w-full rounded-lg border-base-300 bg-base-100"
+              >
+                <%= for {label, value} <- @goal_options do %>
+                  <option value={value} selected={value == @form["goal_slug"]}>{label}</option>
+                <% end %>
+              </select>
+            </div>
+
+            <div>
+              <label for="qa-status" class="block text-caption mb-1">{gettext("Status")}</label>
+              <select
+                id="qa-status"
+                name="kanban_status"
+                class="select w-full rounded-lg border-base-300 bg-base-100"
+              >
+                <%= for {value, label} <- @status_options do %>
+                  <option value={value} selected={value == @form["kanban_status"]}>{label}</option>
+                <% end %>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary btn-sm">{gettext("Create")}</button>
+            <button type="button" phx-click="toggle_form" class="btn btn-ghost btn-sm">
+              {gettext("Cancel")}
+            </button>
+          </div>
+        </form>
 
         <%!-- Filtros combinables --%>
         <div class="flex flex-wrap gap-3 mx-4 mb-3 p-3 rounded-lg bg-base-200/50 border border-base-300 shrink-0">
@@ -208,7 +314,18 @@ defmodule DranWeb.KanbanLive do
         filter_plan_options: [],
         all_todos: [],
         filtered_todos: [],
-        filtered_count: 0
+        filtered_count: 0,
+        show_form: false,
+        priority_options: @priorities,
+        status_options: @quick_add_statuses,
+        goal_options: [{gettext("No goal"), ""}],
+        form: %{
+          "title" => "",
+          "priority" => "medium",
+          "due_date" => "",
+          "goal_slug" => "",
+          "kanban_status" => "backlog"
+        }
       )
 
     {:ok, socket}
@@ -232,16 +349,33 @@ defmodule DranWeb.KanbanLive do
       goal_slugs = Brain.list_pages(context_id: context.id, type: "goal", limit: 200)
       plan_slugs = Brain.list_pages(context_id: context.id, type: "plan", limit: 200)
 
+      filter_project = Map.get(params, "project", "all")
+      filter_goal = Map.get(params, "goal", "all")
+      filter_plan = Map.get(params, "plan", "all")
+
+      # Goal options for the quick-add form (todo_live.ex:118-125 pattern):
+      # first option "No goal" (empty slug), then goal titles → slugs.
+      goal_options =
+        [{gettext("No goal"), ""} | Enum.map(goal_slugs, fn p -> {p.title, p.slug} end)]
+
+      # When a single real goal slug is filtered, default the quick-add form
+      # to that goal so newly created todos carry the link automatically.
+      form =
+        socket.assigns.form
+        |> maybe_set_form_filter("goal_slug", filter_goal)
+
       socket =
         socket
         |> assign(
           all_todos: all_todos,
-          filter_project: Map.get(params, "project", "all"),
-          filter_goal: Map.get(params, "goal", "all"),
-          filter_plan: Map.get(params, "plan", "all"),
+          filter_project: filter_project,
+          filter_goal: filter_goal,
+          filter_plan: filter_plan,
           filter_project_options: build_filter_options(project_slugs),
           filter_goal_options: build_filter_options(goal_slugs),
-          filter_plan_options: build_filter_options(plan_slugs)
+          filter_plan_options: build_filter_options(plan_slugs),
+          goal_options: goal_options,
+          form: form
         )
         |> recompute_filtered_todos()
 
@@ -250,6 +384,15 @@ defmodule DranWeb.KanbanLive do
       {:noreply, socket}
     end
   end
+
+  # If the filter is a real slug (not "all"/"none"), pre-set the matching
+  # form field so quick-add carries the link. Otherwise clear it so the user
+  # can pick freely.
+  defp maybe_set_form_filter(form, key, filter) when filter in ["all", "none"] do
+    Map.put(form, key, "")
+  end
+
+  defp maybe_set_form_filter(form, key, filter), do: Map.put(form, key, filter)
 
   # ── Filtros ──
 
@@ -285,6 +428,66 @@ defmodule DranWeb.KanbanLive do
       |> recompute_filtered_todos()
 
     {:noreply, socket}
+  end
+
+  # ── Quick-add (§3.1) ──
+
+  def handle_event("toggle_form", _params, socket) do
+    {:noreply, assign(socket, show_form: !socket.assigns.show_form)}
+  end
+
+  def handle_event("create_todo", params, socket) do
+    context = socket.assigns.context
+    title = String.trim(params["title"] || "")
+
+    cond do
+      context == nil ->
+        {:noreply, put_flash(socket, :error, gettext("No context available."))}
+
+      title == "" ->
+        {:noreply, put_flash(socket, :error, gettext("Title is required."))}
+
+      true ->
+        priority = params["priority"] || "medium"
+        goal_slug = params["goal_slug"] || ""
+        due_date = params["due_date"] || ""
+        kanban_status = params["kanban_status"] || "backlog"
+
+        meta =
+          %{"kanban_status" => kanban_status, "priority" => priority}
+          |> maybe_put("goal_slug", goal_slug)
+          |> maybe_put("due_date", due_date)
+
+        attrs = %{
+          "context_id" => context.id,
+          "title" => title,
+          "slug" => Dran.Slug.generate(title, context.id, "todo"),
+          "page_type" => "todo",
+          "meta" => meta
+        }
+
+        case Brain.create_page(attrs) do
+          {:ok, _page} ->
+            all_todos =
+              Brain.list_pages(
+                context_id: context.id,
+                type: "todo",
+                include_body: false,
+                limit: 1000
+              )
+
+            socket =
+              socket
+              |> assign(all_todos: all_todos, show_form: false)
+              |> recompute_filtered_todos()
+              |> put_flash(:info, gettext("Todo created."))
+
+            {:noreply, socket}
+
+          {:error, _changeset} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not create todo."))}
+        end
+    end
   end
 
   # ── Drag-drop ──
@@ -355,6 +558,10 @@ defmodule DranWeb.KanbanLive do
 
   defp meta_get(meta, key) when is_map(meta), do: Map.get(meta, key)
   defp meta_get(nil, _key), do: nil
+
+  # Only put a meta key when the value is non-empty (mirrors todo_live.ex).
+  defp maybe_put(meta, _key, ""), do: meta
+  defp maybe_put(meta, key, value), do: Map.put(meta, key, value)
 
   defp kanban_status(page) do
     case meta_get(page.meta, "kanban_status") do

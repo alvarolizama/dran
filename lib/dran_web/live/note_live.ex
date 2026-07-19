@@ -19,6 +19,7 @@ defmodule DranWeb.NoteLive do
       current_user={@current_user}
       context_slug={@context_slug}
       contexts={@contexts}
+      active_nav={@active_nav}
     >
       <div :if={@live_action == :show}>
         <.page_detail
@@ -195,7 +196,8 @@ defmodule DranWeb.NoteLive do
        tabs: @tabs,
        active_tab: "content",
        editing: false,
-       save_status: "idle"
+       save_status: "idle",
+       active_nav: "notes"
      )}
   end
 

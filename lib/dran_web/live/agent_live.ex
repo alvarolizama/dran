@@ -418,7 +418,6 @@ defmodule DranWeb.AgentLive do
     {:ok,
      assign(socket,
        context: context,
-       active_nav: "agents",
        session: nil,
        steps: [],
        recent_sessions: [],

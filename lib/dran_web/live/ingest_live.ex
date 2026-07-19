@@ -25,6 +25,7 @@ defmodule DranWeb.IngestLive do
       current_user={@current_user}
       context_slug={@context_slug}
       contexts={@contexts}
+      active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
         <div class="w-full p-6 space-y-6">
@@ -194,7 +195,8 @@ defmodule DranWeb.IngestLive do
        result: nil,
        result_path: nil,
        error: nil,
-       page_title: "Ingest"
+       page_title: "Ingest",
+       active_nav: "ingest"
      )}
   end
 

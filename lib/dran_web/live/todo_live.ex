@@ -27,13 +27,6 @@ defmodule DranWeb.TodoLive do
     {"cancelled", gettext("Cancelled"), "bg-red-500/20 text-red-700"}
   ]
 
-  @priorities [
-    {"low", gettext("Low"), "bg-gray-100 text-gray-600"},
-    {"medium", gettext("Medium"), "bg-blue-100 text-blue-700"},
-    {"high", gettext("High"), "bg-orange-100 text-orange-700"},
-    {"urgent", gettext("Urgent"), "bg-red-100 text-red-700"}
-  ]
-
   # ──────────────────────────────────────────────────────────────────────────
   # Render
   # ──────────────────────────────────────────────────────────────────────────
@@ -47,28 +40,79 @@ defmodule DranWeb.TodoLive do
       current_user={@current_user}
       context_slug={@context_slug}
       contexts={@contexts}
-      fluid={@live_action == :index}
     >
       <div
         :if={@live_action == :index}
-        id="kanban-board"
-        data-testid="todo-board"
-        phx-hook=".KanbanBoard"
-        class="flex flex-col h-[calc(100vh-4rem)] p-4"
+        id="todo-list"
+        data-testid="todo-list"
+        class="p-6"
       >
-        <div class="flex items-center justify-between mb-3 shrink-0">
+        <div class="flex items-center justify-between mb-4">
           <div>
             <h1 class="text-title">{gettext("Todos")}</h1>
             <p class="text-caption mt-0.5">
               {gettext("%{count} items", count: length(@items))}
             </p>
           </div>
-          <button class="btn btn-primary btn-sm" phx-click="new_todo">
-            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
-          </button>
+          <div class="flex items-center gap-2">
+            <.link navigate={~p"/kanban"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-view-columns" class="w-4 h-4" /> {gettext("Board")}
+            </.link>
+            <.link navigate={~p"/todos/new"} class="btn btn-primary btn-sm">
+              <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
+            </.link>
+          </div>
         </div>
 
-        <div :if={@archived_items != []} class="mb-2 shrink-0">
+        <div :if={@items == []} class="surface-2 p-12 text-center">
+          <.icon name="hero-check-circle" class="size-7 mx-auto text-base-content/30" />
+          <p class="text-caption mt-3">{gettext("No todos yet.")}</p>
+        </div>
+
+        <div :if={@items != []} class="space-y-2">
+          <div
+            :for={item <- @items}
+            data-testid={"todo-row-" <> item.slug}
+            class="surface-2 lift p-3 flex flex-wrap items-center gap-3 cursor-pointer"
+            phx-click="show_page"
+            phx-value-slug={item.slug}
+          >
+            <div class="flex-1 min-w-48">
+              <div class="font-medium text-sm leading-snug break-words">{item.title}</div>
+              <div :if={item.tags != []} class="flex flex-wrap gap-1 mt-1">
+                <span
+                  :for={tag <- Enum.take(item.tags, 4)}
+                  class="px-1.5 py-0.5 text-[11px] rounded bg-base-200 text-base-content/60"
+                >
+                  #{tag}
+                </span>
+              </div>
+            </div>
+            <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 " <> priority_badge_class(item)}>
+              {priority_label(item)}
+            </span>
+            <span
+              :if={due_date(item)}
+              class={"shrink-0 " <> due_date_display_class(overdue?(item))}
+            >
+              <.icon name="hero-calendar" class="size-3.5" /> {format_due(due_date(item))}
+            </span>
+            <div class="flex items-center gap-1 shrink-0" phx-click-away="">
+              <button
+                :for={{status, label, badge_class} <- @kanban_columns}
+                phx-click="change_status"
+                phx-value-slug={item.slug}
+                phx-value-status={status}
+                title={label}
+                class={status_button_class(kanban_status(item), status, badge_class)}
+              >
+                {label}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div :if={@archived_items != []} class="mt-4">
           <button
             phx-click="toggle_archived"
             class="flex items-center gap-1.5 text-xs font-medium text-base-content/50 hover:text-base-content transition-colors"
@@ -89,114 +133,6 @@ defmodule DranWeb.TodoLive do
               class="px-3 py-1.5 rounded-lg border border-base-300 text-xs text-base-content/60 cursor-pointer hover:border-primary/40 hover:text-base-content transition-colors opacity-70 hover:opacity-100"
             >
               {item.title}
-            </div>
-          </div>
-        </div>
-
-        <form
-          :if={@show_form}
-          phx-submit="create_todo"
-          class="mb-3 p-4 surface-1 shrink-0"
-        >
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-            <.input
-              id="new-todo-title"
-              name="title"
-              label={gettext("Title")}
-              value={@form["title"]}
-              placeholder={gettext("What needs to be done?")}
-              required
-            />
-            <.input
-              id="new-todo-priority"
-              name="priority"
-              type="select"
-              label={gettext("Priority")}
-              value={@form["priority"]}
-              options={@priority_options}
-            />
-            <.input
-              id="new-todo-goal"
-              name="goal_slug"
-              type="select"
-              label={gettext("Goal")}
-              value={@form["goal_slug"]}
-              options={@goal_options}
-            />
-            <.input
-              id="new-todo-due"
-              name="due_date"
-              type="date"
-              label={gettext("Due date")}
-              value={@form["due_date"]}
-            />
-          </div>
-          <div class="flex gap-2 mt-3">
-            <button type="submit" class="btn btn-primary btn-sm">{gettext("Create")}</button>
-            <button type="button" class="btn btn-soft btn-sm" phx-click="new_todo">{gettext("Cancel")}</button>
-          </div>
-        </form>
-
-        <div class="flex gap-3 overflow-x-auto pb-2 flex-1 min-h-0">
-          <div
-            :for={{status, label, badge_class} <- @kanban_columns}
-            data-kanban-status={status}
-            class="flex-1 min-w-56 flex flex-col surface-1 transition-all min-h-0"
-          >
-            <div class="flex items-center justify-between px-3 py-2 border-b border-base-300 shrink-0">
-              <span class="text-heading">{label}</span>
-              <span
-                :if={column_count(@items, status) > 0}
-                class="text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60"
-              >
-                {column_count(@items, status)}
-              </span>
-            </div>
-            <div class="p-2 space-y-2 flex-1 overflow-y-auto min-h-0">
-              <div
-                :for={item <- column_items(@items, status)}
-                data-kanban-slug={item.slug}
-                draggable="true"
-                phx-click="show_page"
-                phx-value-slug={item.slug}
-                class="surface-2 lift p-3 cursor-grab hover:border-primary/40 active:cursor-grabbing"
-              >
-                <div class="font-medium leading-snug text-sm break-words">{item.title}</div>
-                <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded " <> priority_badge_class(item)}>
-                    {priority_label(item)}
-                  </span>
-                  <span
-                    :if={goal_slug(item)}
-                    class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/70"
-                  >
-                    #{goal_slug(item)}
-                  </span>
-                </div>
-                <div
-                  :if={due_date(item)}
-                  class={due_date_display_class(overdue?(item))}
-                >
-                  <.icon name="hero-calendar" class="size-3.5" /> {format_due(due_date(item))}
-                </div>
-                <div
-                  :if={item.tags != []}
-                  class="flex flex-wrap gap-1 mt-1.5"
-                >
-                  <span
-                    :for={tag <- Enum.take(item.tags, 4)}
-                    class="px-1.5 py-0.5 text-[11px] rounded bg-base-200 text-base-content/60"
-                  >
-                    #{tag}
-                  </span>
-                </div>
-              </div>
-              <p
-                :if={column_items(@items, status) == []}
-                class="text-caption text-center py-8"
-              >
-                {gettext("No todos")}
-              </p>
             </div>
           </div>
         </div>
@@ -264,23 +200,13 @@ defmodule DranWeb.TodoLive do
                       placeholder={gettext("Enter a title…")}
                       class="text-lg font-medium"
                     />
-                    <div class="grid grid-cols-2 gap-4">
-                      <.input
-                        field={@form[:slug]}
-                        type="text"
-                        label={gettext("Slug")}
-                        placeholder={gettext("slug")}
-                        class="font-mono text-sm"
-                        phx-blur="field_change"
-                      />
-                      <.input
-                        field={@form[:summary]}
-                        type="text"
-                        label={gettext("Summary")}
-                        placeholder={gettext("One-line description")}
-                        class="text-sm"
-                      />
-                    </div>
+                    <.input
+                      field={@form[:summary]}
+                      type="text"
+                      label={gettext("Summary")}
+                      placeholder={gettext("One-line description")}
+                      class="text-sm"
+                    />
                     <.input
                       field={@form[:tags]}
                       type="text"
@@ -330,67 +256,6 @@ defmodule DranWeb.TodoLive do
           </:tabs>
         </.page_detail>
       </div>
-
-      <script :type={Phoenix.LiveView.ColocatedHook} name=".KanbanBoard">
-        export default {
-          mounted() {
-            this.draggedSlug = null;
-            const board = this.el;
-            const dropClasses = ["ring-2", "ring-primary/30", "border-dashed"];
-
-            board.addEventListener("dragstart", (e) => {
-              const card = e.target.closest("[data-kanban-slug]");
-              if (card) {
-                this.draggedSlug = card.dataset.kanbanSlug;
-                e.dataTransfer.effectAllowed = "move";
-              }
-            });
-
-            board.addEventListener("dragenter", (e) => {
-              const col = e.target.closest("[data-kanban-status]");
-              if (col) {
-                col.classList.add(...dropClasses);
-              }
-            });
-
-            board.addEventListener("dragover", (e) => {
-              if (e.target.closest("[data-kanban-status]")) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-              }
-            });
-
-            board.addEventListener("dragleave", (e) => {
-              const col = e.target.closest("[data-kanban-status]");
-              if (col && !col.contains(e.relatedTarget)) {
-                col.classList.remove(...dropClasses);
-              }
-            });
-
-            board.addEventListener("drop", (e) => {
-              const col = e.target.closest("[data-kanban-status]");
-              if (col) {
-                col.classList.remove(...dropClasses);
-              }
-              if (col !== null && this.draggedSlug !== null) {
-                e.preventDefault();
-                this.pushEvent("move_todo", {
-                  slug: this.draggedSlug,
-                  target_status: col.dataset.kanbanStatus
-                });
-              }
-              this.draggedSlug = null;
-            });
-
-            board.addEventListener("dragend", () => {
-              this.draggedSlug = null;
-              board.querySelectorAll("[data-kanban-status]").forEach((col) => {
-                col.classList.remove(...dropClasses);
-              });
-            });
-          }
-        }
-      </script>
     </Layouts.app>
     """
   end
@@ -429,12 +294,9 @@ defmodule DranWeb.TodoLive do
        tabs: @tabs,
        active_tab: "content",
        kanban_columns: @kanban_columns,
-       priority_options: Enum.map(@priorities, fn {value, label, _class} -> {label, value} end),
-       goal_options: [{gettext("No goal"), ""}],
-       show_form: false,
-       form: %{"title" => "", "priority" => "medium", "goal_slug" => "", "due_date" => ""},
        editing: false,
-       save_status: "idle"
+       save_status: "idle",
+       active_nav: "todos"
      )}
   end
 
@@ -488,17 +350,12 @@ defmodule DranWeb.TodoLive do
     if socket.assigns.context do
       items = Brain.list_todos(socket.assigns.context.id)
       archived_items = Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
-      goals = Brain.list_goals(socket.assigns.context.id)
-
-      goal_options = [{gettext("No goal"), ""} | Enum.map(goals, &{&1.title, &1.slug})]
 
       {:noreply,
        assign(socket,
          items: items,
          archived_items: archived_items,
          show_archived: false,
-         goals: goals,
-         goal_options: goal_options,
          page_title: gettext("Todos")
        )}
     else
@@ -507,8 +364,6 @@ defmodule DranWeb.TodoLive do
          items: [],
          archived_items: [],
          show_archived: false,
-         goals: [],
-         goal_options: [{gettext("No goal"), ""}],
          page_title: gettext("Todos")
        )}
     end
@@ -520,10 +375,15 @@ defmodule DranWeb.TodoLive do
 
   @impl true
   def handle_info({:page_changed, _action, _page}, socket) do
-    # A page changed (agent, MCP, another tab) — reload the board if we're on
-    # the index so moved/created/deleted todos appear in real time.
+    # A page changed (agent, MCP, another tab) — reload the list if we're on
+    # the index so moved/created/archived todos appear in real time.
     if socket.assigns.live_action == :index and socket.assigns.context do
-      {:noreply, assign(socket, items: Brain.list_todos(socket.assigns.context.id))}
+      {:noreply,
+       assign(socket,
+         items: Brain.list_todos(socket.assigns.context.id),
+         archived_items:
+           Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
+       )}
     else
       {:noreply, socket}
     end
@@ -550,62 +410,6 @@ defmodule DranWeb.TodoLive do
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
-  end
-
-  def handle_event("new_todo", _params, socket) do
-    {:noreply, assign(socket, show_form: !socket.assigns.show_form)}
-  end
-
-  def handle_event("create_todo", params, socket) do
-    context = socket.assigns.context
-    title = String.trim(params["title"] || "")
-
-    cond do
-      context == nil ->
-        {:noreply, put_flash(socket, :error, gettext("No context available."))}
-
-      title == "" ->
-        {:noreply, put_flash(socket, :error, gettext("Title is required."))}
-
-      true ->
-        priority = params["priority"] || "medium"
-        goal_slug = params["goal_slug"] || ""
-        due_date = params["due_date"] || ""
-
-        meta =
-          %{"kanban_status" => "backlog", "priority" => priority}
-          |> maybe_put("goal_slug", goal_slug)
-          |> maybe_put("due_date", due_date)
-
-        attrs = %{
-          "context_id" => context.id,
-          "title" => title,
-          "slug" => Dran.Slug.generate(title, context.id, "todo"),
-          "page_type" => "todo",
-          "meta" => meta
-        }
-
-        case Brain.create_page(attrs) do
-          {:ok, _page} ->
-            {:noreply,
-             socket
-             |> assign(items: Brain.list_todos(context.id), show_form: false)
-             |> put_flash(:info, gettext("Todo created."))}
-
-          {:error, _changeset} ->
-            {:noreply, put_flash(socket, :error, gettext("Could not create todo."))}
-        end
-    end
-  end
-
-  def handle_event("move_todo", %{"slug" => slug, "target_status" => status}, socket) do
-    case update_meta(socket, slug, &Map.put(&1, "kanban_status", status)) do
-      {:ok, socket} ->
-        {:noreply, assign(socket, items: Brain.list_todos(socket.assigns.context.id))}
-
-      {:error, socket} ->
-        {:noreply, socket}
-    end
   end
 
   def handle_event("change_status", %{"slug" => slug, "status" => status}, socket) do
@@ -673,9 +477,6 @@ defmodule DranWeb.TodoLive do
       {:error, socket}
     end
   end
-
-  defp maybe_put(meta, _key, ""), do: meta
-  defp maybe_put(meta, key, value), do: Map.put(meta, key, value)
 
   # ── Local display helpers (design-system colors) ──
   # These shadow the imported TodoHelpers versions to use semantic

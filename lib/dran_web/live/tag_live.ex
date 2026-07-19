@@ -15,8 +15,7 @@ defmodule DranWeb.TagLive do
 
     {:ok,
      assign(socket,
-       context: context,
-       active_nav: "tags"
+       context: context
      )}
   end
 
@@ -58,7 +57,6 @@ defmodule DranWeb.TagLive do
       current_user={@current_user}
       context_slug={@context_slug}
       contexts={@contexts}
-      active_nav={@active_nav}
     >
       <div class="p-6">
         <div class="flex items-center gap-2 mb-1">
