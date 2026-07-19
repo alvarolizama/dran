@@ -105,7 +105,7 @@ defmodule DranWeb.PageListComponents do
       <div
         :if={@pages == []}
         data-testid="empty-state"
-        class="max-w-sm mx-auto py-20 text-center space-y-4"
+        class="py-20 text-center space-y-4"
       >
         <div class="flex justify-center">
           <div class="size-20 rounded-full bg-base-200 flex items-center justify-center">

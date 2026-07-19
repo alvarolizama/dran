@@ -79,7 +79,7 @@ defmodule DranWeb.DashboardLive do
       contexts={@contexts}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full mx-auto p-6 space-y-8">
+        <div class="w-full p-6 space-y-8">
           <%!-- Header --%>
           <div class="flex items-center justify-between">
             <div>

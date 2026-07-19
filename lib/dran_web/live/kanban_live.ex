@@ -34,8 +34,8 @@ defmodule DranWeb.KanbanLive do
       contexts={@contexts}
       active_nav="kanban"
     >
-      <div class="px-4 py-3">
-        <div class="flex items-center justify-between mb-4">
+      <div class="flex h-screen flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
           <h1 class="text-xl font-semibold">Kanban</h1>
           <.link navigate={~p"/todos/new"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="size-4" /> New Todo
@@ -43,7 +43,7 @@ defmodule DranWeb.KanbanLive do
         </div>
 
         <%!-- Filtros combinables --%>
-        <div class="flex flex-wrap gap-3 mb-4 p-3 rounded-lg bg-base-200/50 border border-base-300">
+        <div class="flex flex-wrap gap-3 mx-4 mb-3 p-3 rounded-lg bg-base-200/50 border border-base-300 shrink-0">
           <.filter_select
             label="Project"
             id="filter-project"
@@ -77,24 +77,26 @@ defmodule DranWeb.KanbanLive do
           </div>
         </div>
 
-        <%!-- Board --%>
+        <%!-- Board: flex-1 para llenar el alto restante, min-h-0 para que
+             overflow-y-auto de las columnas internas funcione contra el
+             contenedor y no haga scrollear al wrapper del layout. --%>
         <div
-          class="flex gap-4 overflow-x-auto pb-4"
+          class="flex gap-4 overflow-x-auto px-4 pb-4 flex-1 min-h-0"
           phx-hook="KanbanDragDrop"
           id="kanban-board"
         >
           <div
             :for={{status, label, badge_class} <- @kanban_columns}
             data-kanban-status={status}
-            class="w-72 shrink-0 flex flex-col rounded-lg bg-base-200/40 border border-base-300"
+            class="w-72 shrink-0 flex flex-col min-h-0 h-full rounded-lg bg-base-200/40 border border-base-300"
           >
-            <div class="flex items-center justify-between px-3 py-2 border-b border-base-300">
+            <div class="flex items-center justify-between px-3 py-2 border-b border-base-300 shrink-0">
               <span class="text-sm font-semibold">{label}</span>
               <span class={"px-2 py-0.5 text-xs rounded-full " <> badge_class}>
                 {column_count(@filtered_todos, status)}
               </span>
             </div>
-            <div class="p-2 space-y-2 min-h-[200px] flex-1 overflow-y-auto">
+            <div class="p-2 space-y-2 min-h-0 flex-1 overflow-y-auto">
               <div
                 :for={todo <- column_items(@filtered_todos, status)}
                 data-kanban-slug={todo.slug}
