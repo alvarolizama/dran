@@ -67,7 +67,7 @@ defmodule Dran.Brain.Page do
              :updated_at
            ]}
 
-  @page_types ~w(note comparison plan todo goal entity concept reference artifact query)
+  @page_types ~w(note comparison plan todo goal entity concept reference artifact query project)
   @confidence_levels ~w(low medium high verified)
 
   schema "pages" do

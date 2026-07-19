@@ -138,14 +138,39 @@ defmodule DranWeb.MarkdownEditorComponents do
 
   @doc """
   Renders type-specific metadata fields (selects, date pickers, text inputs)
-  based on the page type. Reads from `@form[:meta_kind]`, `@form[:meta_horizon]`,
-  etc. — the LiveView must expose these as form fields.
+  based on the page type.
+
+  ## Assigns
+
+  - `:page_type` (required) — the page type slug (e.g. "note", "todo").
+  - `:meta` (optional, default `%{}`) — the current meta map (persisted values).
+  - `:form` (optional) — a `Phoenix.HTML.Form` from the parent `<.form>`. When
+    present, conditional fields react in real time to `phx-change` re-renders:
+    the renderer reads the "live" value of a field from the form params before
+    falling back to `@meta`.
+
+  ## Tuple shapes
+
+  `Dran.Brain.PageMeta.meta_fields_for/1` returns tuples of variable arity:
+
+      {:date, "due_date", "Due date"}
+      {:select, "kind", "Kind", [{"Thought", "thought"}, ...]}
+      {:date, "due_date", "Due date", condition: {:kind, "reminder"}}
+      {:select, "kind", "Kind", options, placeholder: "…", condition: {:kind, "reminder"}}
+
+  The renderer normalises all of these to `{type, key, label, opts}` where
+  `opts` is always a keyword list. The only special key is `:condition`, a
+  `{field, expected_value}` tuple that hides the field unless `meta[field]`
+  (or the live form value) equals `expected_value`.
   """
   attr :page_type, :string, required: true
   attr :meta, :map, default: %{}
+  attr :form, :any, default: nil
 
   def meta_fields(assigns) do
-    fields = Dran.Brain.PageMeta.meta_fields_for(assigns.page_type)
+    raw_fields = Dran.Brain.PageMeta.meta_fields_for(assigns.page_type)
+    fields = Enum.map(raw_fields, &normalise_meta_field/1)
+
     assigns = assign(assigns, :fields, fields)
 
     ~H"""
@@ -153,46 +178,162 @@ defmodule DranWeb.MarkdownEditorComponents do
       <div class="text-sm font-semibold text-base-content/70">Metadata</div>
       <div class="grid grid-cols-2 gap-4">
         <%= for {type, key, label, opts} <- @fields do %>
-          <% value = Map.get(@meta, key) || Map.get(@meta, to_string(key)) || "" %>
-          <%= case type do %>
-            <% :select -> %>
-              <div>
-                <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
-                <select
-                  name={"page[meta][#{key}]"}
-                  class="select select-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
-                >
-                  <option value=""></option>
-                  <%= for {opt_label, opt_val} <- opts do %>
-                    <option value={opt_val} selected={value == opt_val}>{opt_label}</option>
-                  <% end %>
-                </select>
-              </div>
-            <% :date -> %>
-              <div>
-                <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
-                <input
-                  type="date"
-                  name={"page[meta][#{key}]"}
-                  value={value}
-                  class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
-                />
-              </div>
-            <% :text -> %>
-              <div>
-                <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
-                <input
-                  type="text"
-                  name={"page[meta][#{key}]"}
-                  value={value}
-                  placeholder={label}
-                  class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
-                />
-              </div>
+          <% value = meta_value(@meta, @form, key) %>
+          <% visible? = is_nil(Keyword.get(opts, :condition)) or condition_met?(opts[:condition], @meta, @form) %>
+          <%= if visible? do %>
+            <% placeholder = Keyword.get(opts, :placeholder) %>
+            <%= case type do %>
+              <% :select -> %>
+                <% options = Keyword.get(opts, :options, []) %>
+                <div>
+                  <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
+                  <select
+                    name={"page[meta][#{key}]"}
+                    class="select select-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
+                  >
+                    <option value=""></option>
+                    <%= for {opt_label, opt_val} <- options do %>
+                      <option value={opt_val} selected={value == opt_val}>{opt_label}</option>
+                    <% end %>
+                  </select>
+                </div>
+              <% :date -> %>
+                <div>
+                  <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
+                  <input
+                    type="date"
+                    name={"page[meta][#{key}]"}
+                    value={value}
+                    class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
+                  />
+                </div>
+              <% :text -> %>
+                <div>
+                  <span class="block text-sm font-medium text-base-content/70 mb-1.5">{label}</span>
+                  <input
+                    type="text"
+                    name={"page[meta][#{key}]"}
+                    value={value}
+                    placeholder={placeholder || label}
+                    class="input input-bordered w-full text-sm rounded-lg border-base-300 bg-base-100"
+                  />
+                </div>
+            <% end %>
           <% end %>
         <% end %>
       </div>
     </div>
     """
   end
+
+  # ── Tuple normalisation ───────────────────────────────────────────────────
+  #
+  # `meta_fields_for/1` returns tuples of variable arity. We normalise every
+  # shape to a canonical `{type, key, label, opts}` where `opts` is always a
+  # keyword list (possibly empty). The supported shapes are:
+  #
+  #   * `{:type, key, label}`                                → opts = []
+  #   * `{:type, key, label, keyword_opts}`                  → opts as-is
+  #   * `{:type, key, label, options_list}`                  → opts = [options: options_list]
+  #   * `{:type, key, label, options_list, keyword_opts}`    → opts merged
+  #
+  # The `:select` type historically carries its option list as the 4th element;
+  # we preserve that under `opts[:options]` so the renderer has a single place
+  # to look. Unknown opts (placeholder, step, min, max, condition, …) are
+  # passed through untouched — only `:condition` is treated specially below.
+  defp normalise_meta_field({type, key, label})
+       when is_atom(type) and is_binary(key) and is_binary(label) do
+    {type, key, label, []}
+  end
+
+  defp normalise_meta_field({type, key, label, opts})
+       when is_atom(type) and is_binary(key) and is_binary(label) and is_list(opts) do
+    # The 4th element is a list. It may be a keyword list of opts (e.g.
+    # `condition: {:kind, "reminder"}`) or a select options list (list of
+    # `{String, String}` tuples). Disambiguate by inspecting the first element.
+    if keyword_list?(opts) do
+      {type, key, label, opts}
+    else
+      {type, key, label, [options: opts]}
+    end
+  end
+
+  defp normalise_meta_field({type, key, label, options, extra_opts})
+       when is_atom(type) and is_binary(key) and is_binary(label) and
+              is_list(options) and is_list(extra_opts) do
+    # 5-arity: options list + trailing keyword opts.
+    merged = Keyword.merge([options: options], extra_opts)
+    {type, key, label, merged}
+  end
+
+  # A keyword list is a list of 2-tuples whose first element is an atom.
+  # A select options list is a list of 2-tuples whose first element is a
+  # binary. This distinction is what lets us tell the two apart without
+  # relying on field count alone.
+  defp keyword_list?([]), do: true
+
+  defp keyword_list?([{k, _} | _]) when is_atom(k), do: true
+
+  defp keyword_list?(_), do: false
+
+  # ── Condition evaluation ──────────────────────────────────────────────────
+  #
+  # A field with `condition: {field, expected}` is only rendered when the
+  # current value of `field` equals `expected`. The value is resolved in this
+  # order:
+  #
+  #   1. Live form params — when the parent `<.form phx-change="…">` re-renders
+  #      the component, the form carries the latest user input under
+  #      `page[meta][field]`. This gives real-time reactivity: changing the
+  #      `kind` select immediately shows/hides conditional fields without a
+  #      save round-trip.
+  #   2. Persisted `@meta` map — fallback for the initial render before any
+  #      change event has fired, or when no `:form` assign is passed.
+  #
+  # `@meta` may use either atom or string keys; we check both. Malformed
+  # conditions (anything that isn't a 2-tuple) fail open — the field stays
+  # visible — so a bad condition never silently hides user data.
+  defp condition_met?({field, expected}, meta, form) do
+    meta_value(meta, form, field) == expected
+  end
+
+  defp condition_met?(_, _meta, _form), do: true
+
+  # ── Value resolution ──────────────────────────────────────────────────────
+  #
+  # Resolve the current value of a meta field, preferring the live form value
+  # over the persisted meta. `@meta` may carry atom or string keys.
+  defp meta_value(meta, form, key) when is_atom(key) do
+    live = live_form_value(form, key)
+
+    if live != nil and live != "" do
+      live
+    else
+      Map.get(meta, key) || Map.get(meta, to_string(key)) || ""
+    end
+  end
+
+  defp meta_value(meta, form, key) when is_binary(key) do
+    live = live_form_value(form, key)
+
+    if live != nil and live != "" do
+      live
+    else
+      Map.get(meta, key) || Map.get(meta, String.to_existing_atom(key)) || ""
+    end
+  end
+
+  # Extract the live value of a meta field from a `Phoenix.HTML.Form`'s params.
+  # Meta fields are submitted under `page[meta][key]`, so the form params (when
+  # built from a changeset via `to_form/2`) will carry them under a nested
+  # "meta" map. We coerce the key to its string form for lookup.
+  defp live_form_value(nil, _key), do: nil
+
+  defp live_form_value(%Phoenix.HTML.Form{params: params}, key) when is_map(params) do
+    meta_params = Map.get(params, "meta") || Map.get(params, :meta) || %{}
+    str_key = to_string(key)
+    Map.get(meta_params, str_key) || Map.get(meta_params, key)
+  end
+
+  defp live_form_value(_form, _key), do: nil
 end

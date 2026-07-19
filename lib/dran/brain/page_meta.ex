@@ -20,6 +20,7 @@ defmodule Dran.Brain.PageMeta do
   embedded_schema do
     # Common
     field :kind, :string
+    field :project_slug, :string
     field :goal_slug, :string
     field :plan_slug, :string
 
@@ -55,6 +56,14 @@ defmodule Dran.Brain.PageMeta do
     field :target_date, :date
     field :team, {:array, :string}
     field :health, :string
+    field :metric, :string
+    field :target_value, :float
+    field :current_value, :float
+    field :unit, :string
+    field :progress, :float
+
+    # project
+    field :health_source, :string
 
     # entity
     field :aliases, {:array, :string}
@@ -85,7 +94,7 @@ defmodule Dran.Brain.PageMeta do
     field :answered_by, :string
   end
 
-  @note_kinds ~w(thought journal idea meeting question quote)
+  @note_kinds ~w(thought journal idea meeting question quote reminder)
   @entity_kinds ~w(person company product tool place event)
   @concept_kinds ~w(technique pattern discipline theory)
   @reference_kinds ~w(article paper video podcast book)
@@ -97,6 +106,10 @@ defmodule Dran.Brain.PageMeta do
   @horizons ~w(weekly monthly quarterly yearly)
   @query_difficulties ~w(simple intermediate advanced)
   @query_statuses ~w(open answered verified)
+  @project_statuses ~w(draft active on_hold done archived)
+  @plan_statuses ~w(draft active done archived)
+  @health_sources ~w(manual derived)
+  @health_scores %{"green" => 3, "yellow" => 2, "red" => 1}
 
   def changeset(meta, attrs, page_type) do
     meta
@@ -108,6 +121,7 @@ defmodule Dran.Brain.PageMeta do
   defp all_fields do
     [
       :kind,
+      :project_slug,
       :goal_slug,
       :plan_slug,
       :date,
@@ -134,6 +148,12 @@ defmodule Dran.Brain.PageMeta do
       :target_date,
       :team,
       :health,
+      :health_source,
+      :metric,
+      :target_value,
+      :current_value,
+      :unit,
+      :progress,
       :aliases,
       :external_url,
       :location,
@@ -181,11 +201,19 @@ defmodule Dran.Brain.PageMeta do
     |> validate_inclusion(:priority, @priorities)
   end
 
-  defp validate_meta_for_type(cs, "goal") do
-    validate_inclusion(cs, :health, @healths)
+  defp validate_meta_for_type(cs, "project") do
+    cs
+    |> validate_inclusion(:status, @project_statuses)
+    |> validate_inclusion(:priority, @priorities)
+    |> validate_inclusion(:health, @healths)
+    |> validate_inclusion(:health_source, @health_sources)
   end
 
-  @plan_statuses ~w(draft active on_hold completed archived)
+  defp validate_meta_for_type(cs, "goal") do
+    cs
+    |> validate_inclusion(:health, @healths)
+    |> validate_progress_range()
+  end
 
   defp validate_meta_for_type(cs, "plan") do
     cs
@@ -201,6 +229,14 @@ defmodule Dran.Brain.PageMeta do
 
   defp validate_meta_for_type(cs, _type), do: cs
 
+  defp validate_progress_range(cs) do
+    case get_change(cs, :progress) do
+      nil -> cs
+      val when is_number(val) and val >= 0.0 and val <= 1.0 -> cs
+      _ -> add_error(cs, :progress, "must be between 0.0 and 1.0")
+    end
+  end
+
   def note_kinds, do: @note_kinds
   def entity_kinds, do: @entity_kinds
   def concept_kinds, do: @concept_kinds
@@ -212,15 +248,61 @@ defmodule Dran.Brain.PageMeta do
   def healths, do: @healths
   def horizons, do: @horizons
   def plan_statuses, do: @plan_statuses
+  def project_statuses, do: @project_statuses
+  def health_sources, do: @health_sources
   def query_difficulties, do: @query_difficulties
   def query_statuses, do: @query_statuses
+
+  @doc """
+  Deriva el health de un project a partir del health de sus goals.
+  Regla: promedio de scores (green=3, yellow=2, red=1) con floor.
+  Devuelve nil si no hay goals (no se recalcula).
+  """
+  def derive_project_health([]), do: nil
+
+  def derive_project_health(goal_healths) when is_list(goal_healths) do
+    scores =
+      goal_healths
+      |> Enum.map(&Map.get(@health_scores, &1))
+      |> Enum.reject(&is_nil/1)
+
+    case scores do
+      [] -> nil
+      list ->
+        avg = Enum.sum(list) / length(list)
+        score_to_health(floor(avg))
+    end
+  end
+
+  @doc """
+  Calcula el progreso de un goal a partir de sus todos vinculados.
+  Regla: (todos done) / (todos totales no cancelados).
+  Devuelve nil si no hay todos (o si todos están cancelados).
+  """
+  def derive_goal_progress([]), do: nil
+
+  def derive_goal_progress(todo_statuses) when is_list(todo_statuses) do
+    relevant = Enum.reject(todo_statuses, &(&1 == "cancelled"))
+
+    case relevant do
+      [] -> nil
+      list ->
+        done = Enum.count(list, &(&1 == "done"))
+        done / length(list)
+    end
+  end
+
+  defp score_to_health(3), do: "green"
+  defp score_to_health(2), do: "yellow"
+  defp score_to_health(_), do: "red"
 
   @doc "Returns the metadata fields and their select options for a given page type."
   def meta_fields_for("note") do
     [
       {:select, "kind", "Kind", Enum.map(@note_kinds, &{String.capitalize(&1), &1})},
       {:date, "date", "Date"},
-      {:text, "author", "Author"}
+      {:text, "author", "Author"},
+      {:date, "due_date", "Due date", condition: {:kind, "reminder"}}
     ]
   end
 
@@ -259,15 +341,39 @@ defmodule Dran.Brain.PageMeta do
       {:select, "horizon", "Horizon", Enum.map(@horizons, &{String.capitalize(&1), &1})},
       {:select, "status", "Status", Enum.map(@plan_statuses, &{String.capitalize(&1), &1})},
       {:text, "period", "Period"},
-      {:text, "goal_slug", "Goal slug"}
+      {:date, "due_date", "Due date"},
+      {:text, "goal_slug", "Goal slug"},
+      {:text, "project_slug", "Project slug"}
+    ]
+  end
+
+  def meta_fields_for("project") do
+    [
+      {:select, "status", "Status",
+       Enum.map(@project_statuses, &{String.capitalize(&1), &1})},
+      {:select, "health", "Health",
+       [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
+      {:select, "health_source", "Health source",
+       [{"Manual (override)", "manual"}, {"Derived from goals", "derived"}]},
+      {:select, "priority", "Priority",
+       [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
+      {:date, "start_date", "Start date"},
+      {:date, "target_date", "Target date"}
     ]
   end
 
   def meta_fields_for("goal") do
     [
-      {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
+      {:select, "health", "Health",
+       [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
+      {:text, "metric", "Metric", placeholder: "e.g. MRR, users, uptime"},
+      {:number, "target_value", "Target value", step: "0.01"},
+      {:number, "current_value", "Current value", step: "0.01"},
+      {:text, "unit", "Unit", placeholder: "e.g. %, USD, users"},
+      {:number, "progress", "Progress (0.0-1.0)", step: "0.01", min: "0", max: "1"},
       {:date, "start_date", "Start date"},
-      {:date, "target_date", "Target date"}
+      {:date, "target_date", "Target date"},
+      {:text, "project_slug", "Project slug"}
     ]
   end
 
@@ -285,6 +391,7 @@ defmodule Dran.Brain.PageMeta do
       {:select, "priority", "Priority",
        [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
       {:date, "due_date", "Due date"},
+      {:text, "project_slug", "Project slug"},
       {:text, "goal_slug", "Goal slug"},
       {:text, "plan_slug", "Plan slug"}
     ]
