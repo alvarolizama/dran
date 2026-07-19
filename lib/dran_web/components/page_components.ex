@@ -24,6 +24,7 @@ defmodule DranWeb.PageComponents do
 
   slot :actions
   slot :tabs
+  slot :graph, doc: "rendered inside the first-row 'graph' detail tab panel"
 
   def page_detail(assigns) do
     inline_links =
@@ -361,6 +362,15 @@ defmodule DranWeb.PageComponents do
             </p>
           </div>
         </div>
+
+        <%!-- ── Tab: Graph ───────────────────────────────────────────────── --%>
+        <div
+          id="detail-panel-graph"
+          data-detail-panel
+          class="hidden"
+        >
+          {render_slot(@graph)}
+        </div>
       </div>
     </div>
     """
@@ -378,7 +388,8 @@ defmodule DranWeb.PageComponents do
       {"metadata", gettext("Metadata")},
       {"relations", gettext("Relations")},
       {"versions", gettext("Versions")},
-      {"activity", gettext("Activity")}
+      {"activity", gettext("Activity")},
+      {"graph", gettext("Graph")}
     ]
 
     assigns = assign(assigns, :tabs, tabs)

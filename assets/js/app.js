@@ -35,6 +35,15 @@ const GraphPanZoom = {
     this.lastNodeCount = null
     this.init()
     this.attachNodeDrag()
+    // The graph may mount inside a hidden tab panel (display:none) — its
+    // bounding rect is 0 so the initial fit is wrong. Re-fit as soon as the
+    // element becomes visible.
+    this._visibilityObserver = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) requestAnimationFrame(() => this.fitToContent())
+      })
+    })
+    this._visibilityObserver.observe(this.el)
   },
   updated() {
     const svg = this.el
@@ -46,6 +55,10 @@ const GraphPanZoom = {
     }
   },
   destroyed() {
+    if (this._visibilityObserver) {
+      this._visibilityObserver.disconnect()
+      this._visibilityObserver = null
+    }
     if (this.el && this.el._panZoom) {
       this.el._panZoom.destroy()
       this.el._panZoom = null

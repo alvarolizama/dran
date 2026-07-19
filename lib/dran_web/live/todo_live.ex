@@ -16,7 +16,7 @@ defmodule DranWeb.TodoLive do
   import DranWeb.TodoHelpers
 
   @page_type "todo"
-  @tabs [{"graph", gettext("Graph")}, {"content", gettext("Content")}]
+  @tabs [{"content", gettext("Content")}]
 
   @kanban_columns [
     {"backlog", gettext("Backlog"), "bg-base-300"},
@@ -189,6 +189,10 @@ defmodule DranWeb.TodoLive do
             </button>
           </:actions>
 
+          <:graph>
+            <.page_graph id="todo-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
+          </:graph>
+
           <:tabs>
             <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
 
@@ -239,10 +243,6 @@ defmodule DranWeb.TodoLive do
                 </div>
               </div>
             </div>
-
-            <div :if={@active_tab == "graph"}>
-              <.page_graph id="todo-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
-            </div>
           </:tabs>
         </.page_detail>
       </div>
@@ -282,7 +282,7 @@ defmodule DranWeb.TodoLive do
        context: context,
        page_type: @page_type,
        tabs: @tabs,
-       active_tab: "graph",
+       active_tab: "content",
        kanban_columns: @kanban_columns,
        editing: false,
        save_status: "idle",
@@ -321,7 +321,7 @@ defmodule DranWeb.TodoLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "graph",
+             active_tab: "content",
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
              editing: editing,

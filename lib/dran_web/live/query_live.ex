@@ -9,7 +9,7 @@ defmodule DranWeb.QueryLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "query"
-  @tabs [{"graph", gettext("Graph")}, {"content", gettext("Content")}]
+  @tabs [{"content", gettext("Content")}]
 
   def render(assigns) do
     ~H"""
@@ -48,6 +48,10 @@ defmodule DranWeb.QueryLive do
             </button>
           </:actions>
 
+          <:graph>
+            <.page_graph id="query-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
+          </:graph>
+
           <:tabs>
             <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
 
@@ -84,10 +88,6 @@ defmodule DranWeb.QueryLive do
                   </div>
                 </div>
               <% end %>
-            </div>
-
-            <div :if={@active_tab == "graph"}>
-              <.page_graph id="query-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
             </div>
           </:tabs>
         </.page_detail>
@@ -127,7 +127,7 @@ defmodule DranWeb.QueryLive do
        context: context,
        page_type: @page_type,
        tabs: @tabs,
-       active_tab: "graph",
+       active_tab: "content",
        editing: false,
        save_status: "idle"
      )}
@@ -169,7 +169,7 @@ defmodule DranWeb.QueryLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "graph",
+             active_tab: "content",
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
              editing: editing,

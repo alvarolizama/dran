@@ -190,7 +190,7 @@ defmodule DranWeb.SettingsLive do
       active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full p-6 space-y-8 max-w-5xl mx-auto">
+        <div class="w-full p-6 space-y-8">
           <%!-- Page header --%>
           <div>
             <h1 class="text-title">{gettext("Settings")}</h1>

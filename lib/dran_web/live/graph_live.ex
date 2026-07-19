@@ -35,7 +35,7 @@ defmodule DranWeb.GraphLive do
        type_counts: %{},
        node_count: 0,
        edge_count: 0,
-       view_mode: "2d"
+       view_mode: "3d"
      )}
   end
 

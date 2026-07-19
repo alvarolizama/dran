@@ -12,7 +12,6 @@ defmodule DranWeb.GoalLive do
   @page_type "goal"
 
   @goal_tabs [
-    {"graph", "Graph"},
     {"overview", "Overview"},
     {"notes", "Notes"},
     {"concepts", "Concepts"},
@@ -57,6 +56,10 @@ defmodule DranWeb.GoalLive do
               <.icon name="hero-x-mark" class="size-4" /> Cancel
             </button>
           </:actions>
+
+          <:graph>
+            <.page_graph id="goal-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
+          </:graph>
 
           <:tabs>
             <div class="border-b border-base-300 mb-4">
@@ -289,10 +292,6 @@ defmodule DranWeb.GoalLive do
                 No references linked to this goal.
               </p>
             </div>
-
-            <div :if={@active_tab == "graph"}>
-              <.page_graph id="goal-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
-            </div>
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
@@ -331,7 +330,7 @@ defmodule DranWeb.GoalLive do
        context: context,
        page_type: @page_type,
        goal_tabs: @goal_tabs,
-       active_tab: "graph",
+       active_tab: "overview",
        editing: false,
        save_status: "idle",
        active_nav: "goals"
@@ -429,7 +428,7 @@ defmodule DranWeb.GoalLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "graph",
+             active_tab: "overview",
              goal_todos: goal_todos,
              goal_notes: goal_notes,
              goal_concepts: goal_concepts,

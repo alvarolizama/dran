@@ -11,7 +11,6 @@ defmodule DranWeb.PlanLive do
 
   @page_type "plan"
   @tabs [
-    {"graph", gettext("Graph")},
     {"content", gettext("Content")},
     {"todos", gettext("Todos")}
   ]
@@ -54,6 +53,10 @@ defmodule DranWeb.PlanLive do
               class="size-4"
             /> {gettext("Cancel")}</button>
           </:actions>
+          <:graph>
+            <.page_graph id="plan-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
+          </:graph>
+
           <:tabs>
             <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
             <div :if={@active_tab == "content"} class="space-y-6">
@@ -129,11 +132,7 @@ defmodule DranWeb.PlanLive do
               <p :if={@plan_todos == []} class="text-sm text-base-content/40">
                 {gettext("No todos linked to this plan.")}
               </p>
-            </div>
-            <div :if={@active_tab == "graph"}>
-              <.page_graph id="plan-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
-            </div>
-          </:tabs>
+            </div>          </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
         <.page_list
@@ -168,7 +167,7 @@ defmodule DranWeb.PlanLive do
        context: context,
        page_type: @page_type,
        tabs: @tabs,
-       active_tab: "graph",
+       active_tab: "content",
        editing: false,
        save_status: "idle",
        active_nav: "plans"
@@ -217,7 +216,7 @@ defmodule DranWeb.PlanLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "graph",
+             active_tab: "content",
              plan_todos: plan_todos,
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
