@@ -74,7 +74,15 @@ defmodule Dran.Agent.LinkGardenerTest do
         |> Enum.map(&get_in(&1, ["function", "name"]))
         |> Enum.sort()
 
-      assert names == ["done", "get_page", "list_orphans", "propose_relation", "search"]
+      assert names ==
+               [
+                 "done",
+                 "get_page",
+                 "list_orphans",
+                 "propose_relation",
+                 "search",
+                 "transitive_candidates"
+               ]
     end
 
     test "propose_relation enum excludes semantic" do
@@ -295,6 +303,103 @@ defmodule Dran.Agent.LinkGardenerTest do
 
       {{:error, msg}, _} = LinkGardener.execute_tool("get_page", %{"slug" => "nope"}, state)
       assert msg =~ "not found"
+    end
+  end
+
+  describe "transitive_candidates" do
+    test "returns transitive part_of candidates with via_slug evidence" do
+      ctx = create_context!()
+
+      a = create_page!(ctx, %{title: "Alpha", slug: "alpha-t"})
+      b = create_page!(ctx, %{title: "Beta", slug: "beta-t"})
+      c = create_page!(ctx, %{title: "Gamma", slug: "gamma-t"})
+
+      # A part_of B, B part_of C  →  candidate: A part_of C (via B)
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: a.id,
+          target_id: b.id,
+          relation_type: "part_of"
+        })
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: b.id,
+          target_id: c.id,
+          relation_type: "part_of"
+        })
+
+      state = build_state(session: build_session(context_id: ctx.id))
+
+      {{:ok, candidates}, _new_state} =
+        LinkGardener.execute_tool("transitive_candidates", %{}, state)
+
+      assert is_list(candidates)
+
+      expected = %{source_slug: "alpha-t", target_slug: "gamma-t", via_slug: "beta-t"}
+
+      assert expected in candidates,
+             "expected transitive candidate #{inspect(expected)} in #{inspect(candidates)}"
+    end
+
+    test "does not return a candidate when the direct edge already exists" do
+      ctx = create_context!()
+
+      a = create_page!(ctx, %{title: "A", slug: "a-direct"})
+      b = create_page!(ctx, %{title: "B", slug: "b-direct"})
+      c = create_page!(ctx, %{title: "C", slug: "c-direct"})
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: a.id,
+          target_id: b.id,
+          relation_type: "part_of"
+        })
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: b.id,
+          target_id: c.id,
+          relation_type: "part_of"
+        })
+
+      # Direct edge A→C already exists, so (A, C, via B) must NOT be a candidate.
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: a.id,
+          target_id: c.id,
+          relation_type: "part_of"
+        })
+
+      state = build_state(session: build_session(context_id: ctx.id))
+
+      {{:ok, candidates}, _new_state} =
+        LinkGardener.execute_tool("transitive_candidates", %{}, state)
+
+      refute %{source_slug: "a-direct", target_slug: "c-direct", via_slug: "b-direct"} in candidates,
+             "direct edge already exists; should not be a candidate: #{inspect(candidates)}"
+    end
+
+    test "returns empty list when context has no part_of chains" do
+      ctx = create_context!()
+
+      # Only a related edge — not part_of.
+      p1 = create_page!(ctx, %{title: "X", slug: "x"})
+      p2 = create_page!(ctx, %{title: "Y", slug: "y"})
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: p1.id,
+          target_id: p2.id,
+          relation_type: "related"
+        })
+
+      state = build_state(session: build_session(context_id: ctx.id))
+
+      {{:ok, candidates}, _new_state} =
+        LinkGardener.execute_tool("transitive_candidates", %{}, state)
+
+      assert candidates == []
     end
   end
 

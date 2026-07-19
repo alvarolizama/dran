@@ -113,6 +113,26 @@ defmodule Dran.Agent.LinkGardener do
       %{
         "type" => "function",
         "function" => %{
+          "name" => "transitive_candidates",
+          "description" =>
+            "List candidate `part_of` relations inferred transitively: " <>
+              "pairs (A, C) where A is already part_of B and B is part_of C, " <>
+              "but the direct A part_of C relation does NOT yet exist. " <>
+              "Each candidate includes the intermediate page `via_slug` as " <>
+              "evidence. Use this as a starting point — ALWAYS verify with " <>
+              "`get_page` before proposing the relation, and cite the " <>
+              "intermediate page in the justification (e.g. \"A ya es parte " <>
+              "de B, y B es parte de C\").",
+          "parameters" => %{
+            "type" => "object",
+            "properties" => %{},
+            "required" => []
+          }
+        }
+      },
+      %{
+        "type" => "function",
+        "function" => %{
           "name" => "propose_relation",
           "description" =>
             "Propose a typed relation between two pages with a one-line justification. " <>
@@ -174,15 +194,23 @@ defmodule Dran.Agent.LinkGardener do
     orphaned or under-linked.
 
     Workflow:
+    0. (Optional but recommended) Call `transitive_candidates` first to
+       fetch structurally-evidenced `part_of` proposals: pairs (A, C)
+       where A is already part_of B and B is part_of C, but the direct
+       A part_of C relation does not yet exist. Each candidate includes
+       the intermediate page `via_slug` as evidence.
     1. Call `list_orphans` to find pages with no inbound relations.
     2. For each orphan (or page with few relations), use `get_page` to read
        its content, then `search` for candidate pages it might relate to.
     3. Read the candidate pages with `get_page` to confirm the relation makes
-       sense.
+       sense. ALWAYS verify a candidate with `get_page` before proposing it
+       — never propose a relation based solely on the candidate list.
     4. Call `propose_relation` with:
        - source_slug, target_slug
        - relation_type: one of part_of, supersedes, contradicts, related
-       - justification: a single concise line explaining WHY the relation holds
+       - justification: a single concise line explaining WHY the relation holds.
+         For transitive candidates, cite the intermediate page as evidence,
+         e.g. "A ya es parte de B, y B es parte de C" (where B is the via_slug).
     5. Repeat for other orphans. Call `done` when finished.
 
     RULES — critical:
@@ -223,6 +251,12 @@ defmodule Dran.Agent.LinkGardener do
   end
 
   # ── Tool execution ────────────────────────────────────────────────────────
+
+  @impl true
+  def execute_tool("transitive_candidates", _args, %State{} = state) do
+    candidates = Brain.transitive_part_of_candidates(state.session.context_id)
+    {{:ok, candidates}, state}
+  end
 
   @impl true
   def execute_tool("list_orphans", _args, %State{} = state) do

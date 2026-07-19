@@ -183,7 +183,92 @@ defmodule Dran.Agent.QATest do
     end
   end
 
-  # ── E2E: full agent flow with stubbed LLM ──────────────────────────────────
+  # ── Unit tests for expand_neighbors tool ──────────────────────────────────
+
+  describe "expand_neighbors tool" do
+    setup do
+      original = no_inference_env()
+      context = seed_context()
+
+      on_exit(fn -> restore_env(original) end)
+
+      {:ok, context: context}
+    end
+
+    test "returns error for unknown slug", %{context: ctx} do
+      state = build_state(session: build_session(context_id: ctx.id))
+
+      {{:error, msg}, _new_state} =
+        QA.execute_tool("expand_neighbors", %{"slug" => "does-not-exist"}, state)
+
+      assert msg =~ "does-not-exist"
+      assert msg =~ "not found"
+    end
+
+    test "returns error for empty slug", %{context: ctx} do
+      state = build_state(session: build_session(context_id: ctx.id))
+
+      {{:error, msg}, _new_state} =
+        QA.execute_tool("expand_neighbors", %{"slug" => ""}, state)
+
+      assert msg =~ "empty slug"
+    end
+
+    test "returns neighbors with relation_type and direction for a valid slug",
+         %{context: ctx} do
+      # Seed: A part_of B; the expand_neighbors(A) tool should return B as
+      # an outbound neighbor.
+      {:ok, page_a} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Page A",
+          slug: "page-a-neighbors",
+          body: "content A",
+          page_type: "concept"
+        })
+
+      {:ok, page_b} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Page B",
+          slug: "page-b-neighbors",
+          body: "content B",
+          page_type: "concept"
+        })
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: page_a.id,
+          target_id: page_b.id,
+          relation_type: "part_of"
+        })
+
+      state = build_state(session: build_session(context_id: ctx.id))
+
+      {{:ok, neighbors}, _new_state} =
+        QA.execute_tool("expand_neighbors", %{"slug" => "page-a-neighbors"}, state)
+
+      assert is_list(neighbors)
+
+      neighbor_b = Enum.find(neighbors, &(&1.slug == "page-b-neighbors"))
+      assert neighbor_b != nil, "expected page-b-neighbors in neighbors, got: #{inspect(neighbors)}"
+      assert neighbor_b.relation_type == "part_of"
+      assert neighbor_b.direction == "outbound"
+      assert neighbor_b.title == "Page B"
+      # summary key present (may be nil if no summary generated)
+      assert Map.has_key?(neighbor_b, :summary)
+    end
+
+    test "tools/0 exposes the expand_neighbors tool" do
+      names =
+        QA.tools()
+        |> Enum.map(&get_in(&1, ["function", "name"]))
+
+      assert "expand_neighbors" in names
+    end
+  end
+
+  # ── E2E: full agent run with stubbed LLM ──────────────────────────────────
 
   describe "full agent run with stubbed LLM" do
     setup do

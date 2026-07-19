@@ -91,6 +91,30 @@ defmodule Dran.Agent.QA do
       %{
         "type" => "function",
         "function" => %{
+          "name" => "expand_neighbors",
+          "description" =>
+            "Devuelve las páginas conectadas a una página por relaciones " <>
+              "tipadas (part_of, embeds, supersedes, related). Úsalo tras un " <>
+              "search para ampliar el contexto alrededor de las páginas " <>
+              "semilla y descubrir páginas relacionadas que el search por " <>
+              "texto no haya devuelto. Excluye relaciones semánticas " <>
+              "automáticas. Devuelve hasta 10 vecinos con slug, título, " <>
+              "relation_type, direction (inbound/outbound) y summary.",
+          "parameters" => %{
+            "type" => "object",
+            "properties" => %{
+              "slug" => %{
+                "type" => "string",
+                "description" => "Slug de la página semilla cuyos vecinos expandir"
+              }
+            },
+            "required" => ["slug"]
+          }
+        }
+      },
+      %{
+        "type" => "function",
+        "function" => %{
           "name" => "create_query_page",
           "description" =>
             "Crea la página de respuesta (page_type \"query\"). El body DEBE " <>
@@ -184,6 +208,17 @@ defmodule Dran.Agent.QA do
        El body debe contener la respuesta en markdown citando [slug].
        Máximo UNA página query por sesión.
     5. Llama a `done` con un resumen breve.
+
+    Expansion por grafos (GraphRAG):
+    - TRAS el primer `search`, si quieres ampliar el contexto alrededor
+      de una página semilla, llama a `expand_neighbors` con su slug.
+      Eso devuelve hasta 10 páginas conectadas por relaciones tipadas
+      (part_of, embeds, supersedes, related), con direction y summary.
+    - Útil cuando `search` por texto no cubrió todos los ángulos de la
+      pregunta y sospechas que hay páginas relacionadas estructuralmente.
+    - Flujo típico: search → expand_neighbors sobre la mejor semilla →
+      get_page de los vecinos más relevantes → sintetizar.
+    - No abuses: 1-2 llamadas a expand_neighbors por sesión suelen bastar.
 
     Reglas estrictas:
     - Si tras buscar NO encuentras páginas relevantes, crea la página query
@@ -342,6 +377,39 @@ defmodule Dran.Agent.QA do
 
         {:error, cs} ->
           {{:error, format_changeset_errors(cs)}, state}
+      end
+    end
+  end
+
+  # ── Tool: expand_neighbors ──────────────────────────────────────────────
+
+  @impl true
+  def execute_tool("expand_neighbors", args, %State{} = state) do
+    slug = String.trim(args["slug"] || "")
+
+    if slug == "" do
+      {{:error, "empty slug"}, state}
+    else
+      case Brain.get_page_by_slug(slug, state.session.context_id) do
+        nil ->
+          {{:error, "page '#{slug}' not found in context"}, state}
+
+        page ->
+          neighbors =
+            page.id
+            |> Brain.expand_neighbors()
+            |> Enum.take(10)
+            |> Enum.map(fn n ->
+              %{
+                slug: n.slug,
+                title: n.title,
+                relation_type: n.relation_type,
+                direction: n.direction,
+                summary: Map.get(n, :summary)
+              }
+            end)
+
+          {{:ok, neighbors}, state}
       end
     end
   end
