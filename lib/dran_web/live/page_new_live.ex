@@ -64,12 +64,12 @@ defmodule DranWeb.PageNewLive do
                 {gettext("Atributos")}
               </h2>
 
-              <.input
-                field={@form[:tags]}
-                type="text"
+              <.tag_input
+                id="page-new-tags"
+                name="page[tags]"
+                value={Phoenix.HTML.Form.input_value(@form, :tags)}
                 label={gettext("Tags")}
-                placeholder={gettext("comma, separated, tags")}
-                class="text-sm"
+                suggestions={@tag_suggestions}
               />
 
               <.input
@@ -123,6 +123,7 @@ defmodule DranWeb.PageNewLive do
        body: "",
        meta: %{},
        context_id: if(context, do: context.id),
+       tag_suggestions: if(context, do: Brain.list_tags(context.id), else: []),
        save_status: "idle",
        active_nav: "notes"
      )}

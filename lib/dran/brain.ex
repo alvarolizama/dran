@@ -337,6 +337,21 @@ defmodule Dran.Brain do
   defp maybe_put_opt(opts, _key, nil), do: opts
   defp maybe_put_opt(opts, key, value), do: Keyword.put(opts, key, value)
 
+  @doc """
+  All distinct tags used in a context, sorted alphabetically. Used for
+  tag-input autocomplete suggestions.
+  """
+  def list_tags(context_id) when is_binary(context_id) do
+    from(p in Page,
+      where: p.context_id == ^context_id and p.archived == false,
+      select: p.tags
+    )
+    |> Repo.all()
+    |> List.flatten()
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
   @doc "Get a page by slug within a context"
   def get_page_by_slug(slug, context_id) when is_binary(slug) and is_binary(context_id) do
     Repo.one(from p in Page, where: p.slug == ^slug and p.context_id == ^context_id)

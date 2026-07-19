@@ -405,4 +405,139 @@ defmodule DranWeb.MarkdownEditorComponents do
   end
 
   defp live_form_value(_form, _key), do: nil
+
+  @doc """
+  Tag input with badge chips. Typing + Enter/comma adds a chip; Backspace on
+  an empty input removes the last chip; the × button removes a chip. A hidden
+  input keeps the canonical comma-separated value so plain form submits work
+  unchanged (the server keeps receiving `"uno,dos"` in the `:name` param).
+
+  Purely client-side via a colocated hook — no server round-trips.
+
+  ## Assigns
+
+  - `:id` (required) — unique DOM id prefix.
+  - `:name` (required) — form field name carried by the hidden input.
+  - `:value` — comma-separated string or list of current tags.
+  - `:label` — field label.
+  - `:placeholder` — input placeholder.
+  - `:suggestions` — list of existing tags for datalist autocomplete.
+  """
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :value, :any, default: ""
+  attr :label, :string, default: nil
+  attr :placeholder, :string, default: nil
+  attr :suggestions, :list, default: []
+
+  def tag_input(assigns) do
+    tags =
+      case assigns.value do
+        list when is_list(list) -> list
+        str when is_binary(str) -> String.split(str, ",", trim: true) |> Enum.map(&String.trim/1)
+        _ -> []
+      end
+
+    assigns =
+      assigns
+      |> assign(:tags, tags)
+      |> assign(:placeholder, assigns.placeholder || gettext("Add tag…"))
+      |> assign(:label, assigns.label || gettext("Tags"))
+
+    ~H"""
+    <div id={@id} phx-hook=".TagInput" data-tag-input>
+      <label for={"#{@id}-input"} class="label mb-1 block text-sm font-medium text-base-content/70">
+        {@label}
+      </label>
+      <div class="flex flex-wrap items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-2.5 py-2 transition-colors focus-within:ring-1 focus-within:ring-primary">
+        <span
+          :for={tag <- @tags}
+          data-tag-chip={tag}
+          class="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1"
+        >
+          {tag}
+          <button
+            type="button"
+            data-tag-remove={tag}
+            aria-label={gettext("Remove tag %{tag}", tag: tag)}
+            class="hover:text-primary/60 transition-colors"
+          >
+            ×
+          </button>
+        </span>
+        <input
+          id={"#{@id}-input"}
+          type="text"
+          data-tag-field
+          list={"#{@id}-suggestions"}
+          placeholder={if @tags == [], do: @placeholder, else: ""}
+          autocomplete="off"
+          class="flex-1 min-w-24 bg-transparent text-sm focus:outline-none placeholder:text-base-content/40"
+        />
+      </div>
+      <datalist id={"#{@id}-suggestions"}>
+        <option :for={s <- @suggestions} value={s} />
+      </datalist>
+      <input type="hidden" name={@name} value={Enum.join(@tags, ",")} data-tag-value />
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".TagInput">
+        export default {
+          mounted() {
+            const root = this.el;
+            const field = root.querySelector("[data-tag-field]");
+            const hidden = root.querySelector("[data-tag-value]");
+
+            const tags = () =>
+              hidden.value.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
+
+            const chip = (tag) => {
+              const span = document.createElement("span");
+              span.dataset.tagChip = tag;
+              span.className =
+                "inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1";
+              span.textContent = tag;
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.dataset.tagRemove = tag;
+              btn.className = "hover:text-primary/60 transition-colors";
+              btn.textContent = "×";
+              span.appendChild(document.createTextNode(" "));
+              span.appendChild(btn);
+              return span;
+            };
+
+            const sync = (next) => {
+              hidden.value = next.join(",");
+              root.querySelectorAll("[data-tag-chip]").forEach((el) => el.remove());
+              next.forEach((tag) => field.before(chip(tag)));
+              field.placeholder = next.length === 0 ? field.dataset.placeholder || "" : "";
+            };
+
+            field.dataset.placeholder = field.placeholder;
+
+            field.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                const tag = field.value.trim().replace(/,+$/, "");
+                if (tag.length > 0 && !tags().includes(tag)) {
+                  sync([...tags(), tag]);
+                }
+                field.value = "";
+              } else if (e.key === "Backspace" && field.value === "") {
+                const current = tags();
+                if (current.length > 0) sync(current.slice(0, -1));
+              }
+            });
+
+            root.addEventListener("click", (e) => {
+              const btn = e.target.closest("[data-tag-remove]");
+              if (btn) {
+                sync(tags().filter((t) => t !== btn.dataset.tagRemove));
+              }
+            });
+          }
+        };
+      </script>
+    </div>
+    """
+  end
 end

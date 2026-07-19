@@ -50,6 +50,8 @@ defmodule DranWeb.PageEdit do
     editing = Map.get(socket.assigns, :editing, false)
     path = page_path(type, page.slug)
 
+    socket = ensure_tag_suggestions(socket)
+
     if editing do
       {:noreply, push_patch(socket, to: path)}
     else
@@ -513,4 +515,17 @@ defmodule DranWeb.PageEdit do
 
   defp format_error(reason) when is_binary(reason), do: reason
   defp format_error(reason), do: inspect(reason)
+
+  defp ensure_tag_suggestions(socket) do
+    case socket.assigns[:tag_suggestions] do
+      nil ->
+        case context_id(socket) do
+          nil -> assign(socket, tag_suggestions: [])
+          id -> assign(socket, tag_suggestions: Brain.list_tags(id))
+        end
+
+      _ ->
+        socket
+    end
+  end
 end

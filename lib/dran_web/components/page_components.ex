@@ -7,7 +7,7 @@ defmodule DranWeb.PageComponents do
   use Gettext, backend: DranWeb.Gettext
   import Phoenix.HTML, only: [raw: 1]
   import DranWeb.CoreComponents, only: [icon: 1, input: 1]
-  import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1, meta_fields: 1]
+  import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
 
   alias Dran.Brain
   alias Dran.Brain.Page
@@ -948,8 +948,25 @@ defmodule DranWeb.PageComponents do
   attr :context_id, :any, required: true
   attr :save_status, :string, default: "idle"
   attr :editor_id, :string, required: true
+  attr :tag_suggestions, :list, default: nil
 
   def page_edit_form(assigns) do
+    # Lazy fallback — when the LiveView doesn't pass suggestions (e.g. direct
+    # ?edit=true entry), load them here so the component always works.
+    suggestions =
+      case assigns.tag_suggestions do
+        nil ->
+          case assigns.context_id do
+            nil -> []
+            id -> Dran.Brain.list_tags(id)
+          end
+
+        list ->
+          list
+      end
+
+    assigns = assign(assigns, :tag_suggestions, suggestions)
+
     ~H"""
     <.form for={@form} id="page-edit-form" phx-change="validate_page" phx-submit="save_page">
       <div class="flex gap-6 items-start mt-4">
@@ -990,12 +1007,12 @@ defmodule DranWeb.PageComponents do
             class="text-sm"
           />
 
-          <.input
-            field={@form[:tags]}
-            type="text"
+          <.tag_input
+            id={"#{@editor_id}-tags"}
+            name="page[tags]"
+            value={Phoenix.HTML.Form.input_value(@form, :tags)}
             label={gettext("Tags")}
-            placeholder={gettext("comma, separated, tags")}
-            class="text-sm"
+            suggestions={@tag_suggestions}
           />
 
           <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
