@@ -92,8 +92,6 @@ defmodule DranWeb.SearchLive do
       active_nav={@active_nav}
     >
       <div class="p-6 overflow-y-auto w-full">
-        <h1 class="text-title mb-4">{gettext("Search")}</h1>
-
         <form phx-submit="search" class="mb-4">
           <div class="relative">
             <.icon
@@ -136,51 +134,241 @@ defmodule DranWeb.SearchLive do
           </div>
         </div>
 
-        <div data-testid="search-results" class="space-y-2">
-          <div :if={@query == ""} class="text-center py-16">
-            <.icon name="hero-command-line" class="size-10 mx-auto text-base-content/30" />
-            <p class="text-caption mt-3">
-              {gettext("Try: 'elixir', 'meeting', tag:programming")}
-            </p>
-          </div>
+        <div data-testid="search-results" class="space-y-4">
+          <.empty_hero :if={@query == ""} />
 
-          <div :if={@query != "" && @results == []} class="text-center py-16">
-            <.icon name="hero-face-frown" class="size-10 mx-auto text-base-content/30" />
-            <p class="text-caption mt-3">
-              {gettext("No results for '%{query}'", query: @query)}
-            </p>
-            <p class="text-caption mt-1 text-base-content/40">
-              {gettext("Check the spelling or try a different strategy above.")}
-            </p>
-          </div>
+          <.no_results
+            :if={@query != "" && @results == []}
+            query={@query}
+          />
 
-          <div
-            :for={result <- @results}
-            class="surface-2 lift p-3"
-          >
-            <div class="flex items-start gap-3">
-              <div class="shrink-0 size-8 rounded-md bg-primary/10 flex items-center justify-center">
-                <.icon name={PageTypes.icon(result.page_type)} class="size-4 text-primary" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="font-medium text-sm break-words">{result.title}</div>
-                <div
-                  :if={result.excerpt && result.excerpt != ""}
-                  class="mt-1 text-sm text-base-content/60 line-clamp-2"
-                >
-                  {raw(HTMLSanitizer.sanitize_to_string(result.excerpt))}
-                </div>
-                <div class="flex items-center gap-2 mt-1.5">
-                  <span class="text-caption">
-                    {PageTypes.label(result.page_type)}
-                  </span>
-                </div>
-              </div>
+          <div :if={@query != "" && @results != []}>
+            <.results_header query={@query} count={length(@results)} />
+
+            <div class="space-y-2">
+              <.result_card :for={result <- @results} result={result} />
             </div>
           </div>
         </div>
       </div>
     </Layouts.app>
     """
+  end
+
+  # ── Render-only components ─────────────────────────────────────────────────
+
+  attr :query, :string, required: true
+  attr :count, :integer, required: true
+
+  defp results_header(assigns) do
+    ~H"""
+    <div class="flex items-baseline justify-between border-b border-base-300 pb-2">
+      <h1 class="text-title">
+        {gettext("Search")}
+      </h1>
+      <p class="text-caption">
+        {gettext("%{count} results for '%{query}'", count: @count, query: @query)}
+      </p>
+    </div>
+    """
+  end
+
+  defp empty_hero(assigns) do
+    ~H"""
+    <div class="flex flex-col items-center justify-center text-center py-20">
+      <div class="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <.icon name="hero-magnifying-glass" class="size-8 text-primary" />
+      </div>
+      <h1 class="text-title mt-5">{gettext("Search your second brain")}</h1>
+      <p class="text-caption mt-2 max-w-sm">
+        {gettext("Find pages, concepts, and notes by content, tags, or meaning.")}
+      </p>
+
+      <p class="text-caption mt-6 flex items-center gap-1.5">
+        <.icon name="hero-key" class="size-3.5" />
+        {gettext("Press")}
+        <kbd class="border border-base-300 rounded px-1.5 py-0.5 text-[10px] font-mono text-base-content/60 bg-base-200">
+          ⌘K
+        </kbd>
+        {gettext("from anywhere to open the command palette.")}
+      </p>
+
+      <div class="mt-8 flex flex-col items-center gap-2">
+        <p class="text-caption text-base-content/50">{gettext("Try one of these:")}</p>
+        <div class="flex flex-wrap justify-center gap-2 max-w-lg">
+          <.example_chip :for={{label, query} <- example_queries()} label={label} query={query} />
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :label, :string, required: true
+  attr :query, :string, required: true
+
+  defp example_chip(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="search"
+      phx-value-q={@query}
+      class="px-3 py-1.5 text-sm rounded-full border border-base-300 bg-base-100 hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-colors lift"
+    >
+      <span class="text-base-content/40 mr-1.5 font-mono text-xs">↵</span>
+      {@label}
+    </button>
+    """
+  end
+
+  attr :query, :string, required: true
+
+  defp no_results(assigns) do
+    ~H"""
+    <div class="flex flex-col items-center justify-center text-center py-20">
+      <div class="size-14 rounded-2xl bg-base-200 flex items-center justify-center">
+        <.icon name="hero-magnifying-glass" class="size-7 text-base-content/30" />
+      </div>
+      <p class="text-heading mt-4">{gettext("No results for '%{query}'", query: @query)}</p>
+      <p class="text-caption mt-1 max-w-sm text-base-content/50">
+        {gettext("Check the spelling or try a different strategy above.")}
+      </p>
+
+      <div class="mt-6 flex flex-wrap justify-center gap-2 max-w-lg">
+        <.example_chip :for={{label, query} <- suggestion_queries()} label={label} query={query} />
+      </div>
+    </div>
+    """
+  end
+
+  attr :result, :map, required: true
+
+  defp result_card(assigns) do
+    ~H"""
+    <div class="surface-2 lift p-4 relative hover:border-primary/40">
+      <div class="flex items-start gap-3">
+        <div class={[
+          "shrink-0 size-9 rounded-lg flex items-center justify-center",
+          type_chip_bg(@result.page_type)
+        ]}>
+          <.icon
+            name={PageTypes.icon(@result.page_type)}
+            class={["size-4", type_icon_color(@result.page_type)]}
+          />
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-3">
+            <h3 class="font-medium text-sm break-words text-heading">
+              <.link
+                navigate={page_path_for(@result)}
+                class="after:absolute after:inset-0 after:content-[''] hover:text-primary transition-colors"
+              >
+                {@result.title}
+              </.link>
+            </h3>
+            <span class={[
+              "shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full",
+              type_badge(@result.page_type)
+            ]}>
+              {PageTypes.label(@result.page_type)}
+            </span>
+          </div>
+
+          <div
+            :if={@result.excerpt && @result.excerpt != ""}
+            class="mt-1.5 text-sm text-base-content/60 line-clamp-2 [&_b]:font-semibold [&_b]:text-base-content [&_mark]:bg-warning/20 [&_mark]:px-0.5 [&_mark]:rounded"
+          >
+            {raw(HTMLSanitizer.sanitize_to_string(@result.excerpt))}
+          </div>
+
+          <div :if={tags_for(@result) != []} class="relative z-10 flex flex-wrap gap-1.5 mt-2.5">
+            <.link
+              :for={tag <- Enum.take(tags_for(@result), 5)}
+              navigate={"/tags/#{URI.encode_www_form(tag)}"}
+              class="px-1.5 py-0.5 text-[11px] rounded bg-base-200 text-base-content/60 hover:bg-primary/10 hover:text-primary transition-colors"
+            >
+              #{tag}
+            </.link>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ── Render-only helpers ────────────────────────────────────────────────────
+
+  defp page_path_for(%{page_type: type, slug: slug})
+       when is_binary(type) and is_binary(slug),
+       do: "/#{PageTypes.path(type)}/#{slug}"
+
+  defp page_path_for(_), do: "#"
+
+  defp tags_for(%{tags: tags}) when is_list(tags), do: tags
+  defp tags_for(_), do: []
+
+  # Per-type icon chip background and icon color, for the result card leading
+  # icon. Uses semantic surface tints so the chip reads as "this kind of page"
+  # at a glance without resorting to flat primary-everywhere.
+  defp type_chip_bg("note"), do: "bg-info/10"
+  defp type_chip_bg("concept"), do: "bg-warning/10"
+  defp type_chip_bg("entity"), do: "bg-accent/10"
+  defp type_chip_bg("project"), do: "bg-primary/10"
+  defp type_chip_bg("reference"), do: "bg-success/10"
+  defp type_chip_bg("goal"), do: "bg-error/10"
+  defp type_chip_bg("plan"), do: "bg-secondary/10"
+  defp type_chip_bg("todo"), do: "bg-success/10"
+  defp type_chip_bg("artifact"), do: "bg-accent/10"
+  defp type_chip_bg("comparison"), do: "bg-info/10"
+  defp type_chip_bg("query"), do: "bg-warning/10"
+  defp type_chip_bg(_), do: "bg-base-content/10"
+
+  defp type_icon_color("note"), do: "text-info"
+  defp type_icon_color("concept"), do: "text-warning"
+  defp type_icon_color("entity"), do: "text-accent"
+  defp type_icon_color("project"), do: "text-primary"
+  defp type_icon_color("reference"), do: "text-success"
+  defp type_icon_color("goal"), do: "text-error"
+  defp type_icon_color("plan"), do: "text-secondary"
+  defp type_icon_color("todo"), do: "text-success"
+  defp type_icon_color("artifact"), do: "text-accent"
+  defp type_icon_color("comparison"), do: "text-info"
+  defp type_icon_color("query"), do: "text-warning"
+  defp type_icon_color(_), do: "text-base-content/60"
+
+  # Colored type badge shown on the right side of each card title.
+  defp type_badge("note"), do: "bg-info/15 text-info"
+  defp type_badge("concept"), do: "bg-warning/15 text-warning"
+  defp type_badge("entity"), do: "bg-accent/15 text-accent"
+  defp type_badge("project"), do: "bg-primary/15 text-primary"
+  defp type_badge("reference"), do: "bg-success/15 text-success"
+  defp type_badge("goal"), do: "bg-error/15 text-error"
+  defp type_badge("plan"), do: "bg-secondary/15 text-secondary"
+  defp type_badge("todo"), do: "bg-success/15 text-success"
+  defp type_badge("artifact"), do: "bg-accent/15 text-accent"
+  defp type_badge("comparison"), do: "bg-info/15 text-info"
+  defp type_badge("query"), do: "bg-warning/15 text-warning"
+  defp type_badge(_), do: "bg-base-200 text-base-content/60"
+
+  # Example queries shown as clickable chips in the empty hero. Each tuple is
+  # {display_label, query_string}. The query_string is what gets submitted
+  # when the chip is clicked (phx-value-q).
+  defp example_queries do
+    [
+      {gettext("Notes about elixir"), "elixir"},
+      {gettext("Meeting notes"), "meeting"},
+      {gettext("Tagged programming"), "tag:programming"},
+      {gettext("Concepts about AI"), "inteligencia artificial"}
+    ]
+  end
+
+  # Suggestions shown in the no-results state. Shorter, more generic than
+  # example_queries so they read as recovery hints rather than tutorials.
+  defp suggestion_queries do
+    [
+      {gettext("Notes about elixir"), "elixir"},
+      {gettext("Meeting notes"), "meeting"},
+      {gettext("Tagged programming"), "tag:programming"}
+    ]
   end
 end

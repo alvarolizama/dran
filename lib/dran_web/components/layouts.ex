@@ -180,43 +180,143 @@ defmodule DranWeb.Layouts do
       %{
         label: nil,
         items: [
-          %{key: "dashboard", label: gettext("Dashboard"), icon: "hero-home", path: ~p"/", badge: counts[:dashboard]},
-          %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: ~p"/kanban", badge: counts[:todos]},
-          %{key: "projects", label: gettext("Projects"), icon: "hero-rocket-launch", path: "/projects", badge: counts[:projects]},
-          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: ~p"/graph", badge: counts[:graph]},
-          %{key: "activity", label: gettext("Activity"), icon: "hero-clock", path: ~p"/activity", badge: counts[:activity]}
+          %{
+            key: "dashboard",
+            label: gettext("Dashboard"),
+            icon: "hero-home",
+            path: ~p"/",
+            badge: counts[:dashboard]
+          },
+          %{
+            key: "kanban",
+            label: gettext("Kanban"),
+            icon: "hero-view-columns",
+            path: ~p"/kanban",
+            badge: counts[:todos]
+          },
+          %{
+            key: "projects",
+            label: gettext("Projects"),
+            icon: "hero-rocket-launch",
+            path: "/projects",
+            badge: counts[:projects]
+          },
+          %{
+            key: "graph",
+            label: gettext("Graph"),
+            icon: "hero-share",
+            path: ~p"/graph",
+            badge: counts[:graph]
+          },
+          %{
+            key: "activity",
+            label: gettext("Activity"),
+            icon: "hero-clock",
+            path: ~p"/activity",
+            badge: counts[:activity]
+          }
         ]
       },
       %{
         label: gettext("Knowledge"),
         items: [
-          %{key: "notes", label: gettext("Notes"), icon: "hero-document-text", path: ~p"/notes", badge: counts[:notes]},
-          %{key: "concepts", label: gettext("Concepts"), icon: "hero-light-bulb", path: ~p"/concepts", badge: counts[:concepts]},
-          %{key: "entities", label: gettext("Entities"), icon: "hero-user-group", path: ~p"/entities", badge: counts[:entities]},
-          %{key: "goals", label: gettext("Goals"), icon: "hero-flag", path: ~p"/goals", badge: counts[:goals]},
-          %{key: "plans", label: gettext("Plans"), icon: "hero-clipboard-document-list", path: ~p"/plans", badge: counts[:plans]},
-          %{key: "references", label: gettext("References"), icon: "hero-bookmark", path: ~p"/references", badge: counts[:references]}
+          %{
+            key: "notes",
+            label: gettext("Notes"),
+            icon: "hero-document-text",
+            path: ~p"/notes",
+            badge: counts[:notes]
+          },
+          %{
+            key: "concepts",
+            label: gettext("Concepts"),
+            icon: "hero-light-bulb",
+            path: ~p"/concepts",
+            badge: counts[:concepts]
+          },
+          %{
+            key: "entities",
+            label: gettext("Entities"),
+            icon: "hero-user-group",
+            path: ~p"/entities",
+            badge: counts[:entities]
+          },
+          %{
+            key: "goals",
+            label: gettext("Goals"),
+            icon: "hero-flag",
+            path: ~p"/goals",
+            badge: counts[:goals]
+          },
+          %{
+            key: "plans",
+            label: gettext("Plans"),
+            icon: "hero-clipboard-document-list",
+            path: ~p"/plans",
+            badge: counts[:plans]
+          },
+          %{
+            key: "references",
+            label: gettext("References"),
+            icon: "hero-bookmark",
+            path: ~p"/references",
+            badge: counts[:references]
+          }
         ]
       },
       %{
         label: gettext("Outputs"),
         items: [
-          %{key: "artifacts", label: gettext("Artifacts"), icon: "hero-cube", path: ~p"/artifacts", badge: counts[:artifacts]},
-          %{key: "comparisons", label: gettext("Comparisons"), icon: "hero-scale", path: ~p"/comparisons", badge: counts[:comparisons]}
+          %{
+            key: "artifacts",
+            label: gettext("Artifacts"),
+            icon: "hero-cube",
+            path: ~p"/artifacts",
+            badge: counts[:artifacts]
+          },
+          %{
+            key: "comparisons",
+            label: gettext("Comparisons"),
+            icon: "hero-scale",
+            path: ~p"/comparisons",
+            badge: counts[:comparisons]
+          }
         ]
       },
       %{
         label: gettext("Agents"),
         items: [
-          %{key: "research", label: gettext("Research"), icon: "hero-beaker", path: ~p"/agents/research"},
-          %{key: "ingest", label: gettext("Files Ingest"), icon: "hero-arrow-down-tray", path: ~p"/agents/ingest"}
+          %{
+            key: "research",
+            label: gettext("Research"),
+            icon: "hero-beaker",
+            path: ~p"/agents/research"
+          },
+          %{
+            key: "ingest",
+            label: gettext("Files Ingest"),
+            icon: "hero-arrow-down-tray",
+            path: ~p"/agents/ingest"
+          }
         ]
       },
       %{
         label: gettext("Configs"),
         items: [
-          %{key: "contexts", label: gettext("Contexts"), icon: "hero-rectangle-stack", path: ~p"/contexts", badge: counts[:contexts]},
-          %{key: "settings", label: gettext("Settings"), icon: "hero-cog-6-tooth", path: ~p"/settings", badge: counts[:settings]}
+          %{
+            key: "contexts",
+            label: gettext("Contexts"),
+            icon: "hero-rectangle-stack",
+            path: ~p"/contexts",
+            badge: counts[:contexts]
+          },
+          %{
+            key: "settings",
+            label: gettext("Settings"),
+            icon: "hero-cog-6-tooth",
+            path: ~p"/settings",
+            badge: counts[:settings]
+          }
         ]
       },
       %{
@@ -275,7 +375,7 @@ defmodule DranWeb.Layouts do
     <a
       href={@path}
       class={[
-        "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
         @active && "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
         !@active && "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
       ]}
@@ -380,8 +480,10 @@ defmodule DranWeb.Layouts do
   def user_footer(assigns) do
     ~H"""
     <div :if={@current_user} class="flex items-center justify-between">
-      <span class="flex items-center gap-2 text-sm text-base-content/60">
-        <.icon name="hero-user" class="size-4" />
+      <span class="flex items-center gap-2 text-sm text-base-content/70 min-w-0">
+        <span class="size-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold uppercase shrink-0">
+          {String.first(@current_user)}
+        </span>
         {@current_user}
       </span>
       <form

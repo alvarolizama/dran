@@ -98,18 +98,21 @@ defmodule DranWeb.SettingsLive do
       contexts={@contexts}
       active_nav={@active_nav}
     >
-      <div class="p-6 overflow-y-auto w-full">
-        <div class="w-full space-y-6">
+      <div class="flex-1 overflow-y-auto">
+        <div class="w-full p-6 space-y-8 max-w-5xl mx-auto">
+          <%!-- Page header --%>
           <div>
-            <h1 class="text-2xl font-bold">{gettext("Settings")}</h1>
-            <p class="text-sm text-base-content/50 mt-1">
+            <h1 class="text-title">{gettext("Settings")}</h1>
+            <p class="text-caption mt-1">
               {gettext(
                 "Current configuration. Values are read from environment variables at startup."
               )}
             </p>
           </div>
 
+          <%!-- Read-only configuration sections --%>
           <.config_section
+            icon="hero-cpu-chip"
             title={gettext("Inference API")}
             subtitle={gettext("LLM, embeddings, and reranking")}
           >
@@ -169,6 +172,7 @@ defmodule DranWeb.SettingsLive do
           </.config_section>
 
           <.config_section
+            icon="hero-bolt"
             title={gettext("Agents")}
             subtitle={gettext("Autonomous research and ingest agents")}
           >
@@ -184,9 +188,14 @@ defmodule DranWeb.SettingsLive do
             </.config_row>
           </.config_section>
 
+          <%!-- Editable brain tuning form --%>
           <.brain_tuning_section form={@brain_form} />
 
-          <.config_section title={gettext("Firecrawl")} subtitle={gettext("Web search and scraping")}>
+          <.config_section
+            icon="hero-globe-alt"
+            title={gettext("Firecrawl")}
+            subtitle={gettext("Web search and scraping")}
+          >
             <.config_row label={gettext("Status")} env="FIRECRAWL_API_KEY">
               <.status_badge active={Dran.Firecrawl.enabled?()} />
             </.config_row>
@@ -200,7 +209,11 @@ defmodule DranWeb.SettingsLive do
             </.config_row>
           </.config_section>
 
-          <.config_section title={gettext("Uploads")} subtitle={gettext("File attachment storage")}>
+          <.config_section
+            icon="hero-paper-clip"
+            title={gettext("Uploads")}
+            subtitle={gettext("File attachment storage")}
+          >
             <.config_row label={gettext("Directory")} env="UPLOADS_DIR">
               <code class="text-sm font-mono text-primary">
                 {Application.get_env(:dran, :uploads, []) |> Keyword.get(:dir, "priv/static/uploads")}
@@ -215,8 +228,10 @@ defmodule DranWeb.SettingsLive do
             </.config_row>
           </.config_section>
 
-          <div class="text-xs text-base-content/40 pt-4 border-t border-base-300">
-            <p>
+          <%!-- Footnote / how to change env vars --%>
+          <div class="surface-1 p-4 flex items-start gap-3">
+            <.icon name="hero-information-circle" class="size-5 text-base-content/40 shrink-0 mt-0.5" />
+            <p class="text-caption">
               {gettext(
                 "To change these settings, set the corresponding environment variables and restart the application."
               )}
@@ -228,21 +243,32 @@ defmodule DranWeb.SettingsLive do
     """
   end
 
+  # -- View components --------------------------------------------------------
+
+  attr :icon, :string, default: nil
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
   slot :inner_block, required: true
 
   defp config_section(assigns) do
     ~H"""
-    <div class="rounded-lg border border-base-300 overflow-hidden">
-      <div class="px-4 py-3 bg-base-200/50 border-b border-base-300">
-        <h2 class="text-sm font-semibold">{@title}</h2>
-        <p class="text-xs text-base-content/50 mt-0.5">{@subtitle}</p>
-      </div>
-      <div class="divide-y divide-base-300">
+    <section class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div
+          :if={@icon}
+          class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10"
+        >
+          <.icon name={@icon} class="size-4 text-primary" />
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-heading">{@title}</h2>
+          <p :if={@subtitle} class="text-caption mt-0.5">{@subtitle}</p>
+        </div>
+      </header>
+      <div class="divide-y divide-base-content/10">
         {render_slot(@inner_block)}
       </div>
-    </div>
+    </section>
     """
   end
 
@@ -252,7 +278,7 @@ defmodule DranWeb.SettingsLive do
 
   defp config_row(assigns) do
     ~H"""
-    <div class="flex items-center justify-between px-4 py-2.5 gap-4">
+    <div class="flex items-center justify-between px-5 py-3 gap-4">
       <div class="flex items-baseline gap-2 min-w-0">
         <span class="text-sm text-base-content/70 shrink-0">{@label}</span>
         <code :if={@env} class="text-xs font-mono text-base-content/40 truncate">
@@ -270,87 +296,130 @@ defmodule DranWeb.SettingsLive do
 
   defp brain_tuning_section(assigns) do
     ~H"""
-    <div class="rounded-lg border border-base-300 overflow-hidden">
-      <div class="px-4 py-3 bg-base-200/50 border-b border-base-300 flex items-center justify-between">
-        <div>
-          <h2 class="text-sm font-semibold">{gettext("Brain tuning")}</h2>
-          <p class="text-xs text-base-content/50 mt-0.5">
+    <section class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-accent/10">
+          <.icon name="hero-adjustments-horizontal" class="size-4 text-accent" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-heading">{gettext("Brain tuning")}</h2>
+          <p class="text-caption mt-0.5">
             {gettext("Semantic thresholds, agent limits, and research preferences")}
           </p>
         </div>
-      </div>
+      </header>
 
       <.form
         for={@form}
         id="brain-tuning-form"
         phx-submit="save"
-        class="px-4 py-4 space-y-4"
+        class="px-5 py-5 space-y-5"
       >
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <.input
-            field={@form[:semantic_threshold_short]}
-            type="number"
-            step="0.01"
-            label={gettext("Semantic threshold (short)")}
-          />
-          <.input
-            field={@form[:semantic_threshold_mid]}
-            type="number"
-            step="0.01"
-            label={gettext("Semantic threshold (mid)")}
-          />
-          <.input
-            field={@form[:semantic_threshold_long]}
-            type="number"
-            step="0.01"
-            label={gettext("Semantic threshold (long)")}
-          />
+        <%!-- Thresholds group --%>
+        <div class="space-y-2">
+          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+            {gettext("Semantic thresholds")}
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <.input
+              field={@form[:semantic_threshold_short]}
+              type="number"
+              step="0.01"
+              label={gettext("Short")}
+            />
+            <.input
+              field={@form[:semantic_threshold_mid]}
+              type="number"
+              step="0.01"
+              label={gettext("Mid")}
+            />
+            <.input
+              field={@form[:semantic_threshold_long]}
+              type="number"
+              step="0.01"
+              label={gettext("Long")}
+            />
+          </div>
+          <p class="text-caption">
+            {gettext("Minimum similarity (0.0–1.0) for a relation to be considered semantic.")}
+          </p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <.input
-            field={@form[:agent_max_pages]}
-            type="number"
-            label={gettext("Agent max pages")}
-          />
-          <.input
-            field={@form[:agent_max_sources]}
-            type="number"
-            label={gettext("Agent max sources")}
-          />
+        <%!-- Agent limits --%>
+        <div class="space-y-2">
+          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+            {gettext("Agent limits")}
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <.input
+              field={@form[:agent_max_pages]}
+              type="number"
+              label={gettext("Max pages per run")}
+            />
+            <.input
+              field={@form[:agent_max_sources]}
+              type="number"
+              label={gettext("Max sources per run")}
+            />
+          </div>
+          <p class="text-caption">
+            {gettext("Upper bounds for autonomous research and ingest agents.")}
+          </p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-          <.input
-            field={@form[:research_lang]}
-            type="select"
-            label={gettext("Research language")}
-            options={[{"Español", "es"}, {"English", "en"}]}
-          />
-          <.input
-            field={@form[:daily_note_enabled]}
-            type="checkbox"
-            label={gettext("Daily note enabled")}
-          />
+        <%!-- Research preferences --%>
+        <div class="space-y-2">
+          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+            {gettext("Research preferences")}
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+            <.input
+              field={@form[:research_lang]}
+              type="select"
+              label={gettext("Research language")}
+              options={[{"Español", "es"}, {"English", "en"}]}
+            />
+            <.input
+              field={@form[:daily_note_enabled]}
+              type="checkbox"
+              label={gettext("Daily note enabled")}
+            />
+          </div>
+          <p class="text-caption">
+            {gettext("Language for agent-generated content and daily-note automation.")}
+          </p>
         </div>
 
-        <div class="flex justify-end pt-2">
-          <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Saving…")}>
+        <%!-- Save row --%>
+        <div class="flex justify-end pt-3 border-t border-base-content/10">
+          <button
+            type="submit"
+            class="btn btn-primary btn-sm transition-colors active:scale-95"
+            phx-disable-with={gettext("Saving…")}
+          >
+            <.icon name="hero-check" class="size-4" />
             {gettext("Save")}
           </button>
         </div>
       </.form>
-    </div>
+    </section>
     """
   end
+
+  attr :active, :boolean, required: true
 
   defp status_badge(assigns) do
     ~H"""
     <span class={[
-      "badge badge-sm",
-      @active && "badge-success",
-      !@active && "badge-ghost"
+      "inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full",
+      @active && "bg-success/15 text-success",
+      !@active && "bg-base-200 text-base-content/50"
     ]}>
+      <span class={[
+        "size-1.5 rounded-full",
+        @active && "bg-success",
+        !@active && "bg-base-content/30"
+      ]} />
       {if @active, do: gettext("Enabled"), else: gettext("Disabled")}
     </span>
     """

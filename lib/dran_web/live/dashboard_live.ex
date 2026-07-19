@@ -16,7 +16,12 @@ defmodule DranWeb.DashboardLive do
       label: gettext("Top"),
       items: [
         %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: "/kanban"},
-        %{key: "project", label: gettext("Projects"), icon: "hero-rocket-launch", path: "/projects"}
+        %{
+          key: "project",
+          label: gettext("Projects"),
+          icon: "hero-rocket-launch",
+          path: "/projects"
+        }
       ]
     },
     %{
@@ -62,11 +67,12 @@ defmodule DranWeb.DashboardLive do
 
   @kanban_columns [
     {"backlog", gettext("Backlog"), "bg-base-300 text-base-content/70"},
-    {"this_week", gettext("This Week"), "bg-info/15 text-info"},
-    {"today", gettext("Today"), "bg-warning/15 text-warning"},
-    {"in_progress", gettext("In Progress"), "bg-accent/15 text-accent"},
-    {"done", gettext("Done"), "bg-success/15 text-success"},
-    {"cancelled", gettext("Cancelled"), "bg-error/15 text-error"}
+    {"this_week", gettext("This Week"), "bg-blue-500/15 text-blue-600 dark:text-blue-400"},
+    {"today", gettext("Today"), "bg-amber-500/15 text-amber-600 dark:text-amber-400"},
+    {"in_progress", gettext("In Progress"),
+     "bg-purple-500/15 text-purple-600 dark:text-purple-400"},
+    {"done", gettext("Done"), "bg-green-500/15 text-green-600 dark:text-green-400"},
+    {"cancelled", gettext("Cancelled"), "bg-red-500/15 text-red-600 dark:text-red-400"}
   ]
 
   def render(assigns) do
@@ -82,10 +88,12 @@ defmodule DranWeb.DashboardLive do
         <div class="w-full p-6 space-y-8">
           <%!-- Header --%>
           <div class="flex items-center justify-between">
-            <div>
-              <h1 class="text-title">{gettext("Dashboard")}</h1>
-              <p class="text-caption mt-1">
-                {if @context, do: @context.name, else: gettext("No context")} · {@stats[:total_pages] ||
+            <div class="space-y-1">
+              <h1 class="text-title">{greeting()}</h1>
+              <p class="text-caption">
+                {format_today()} · {if @context, do: @context.name, else: gettext("No context")} · {@stats[
+                  :total_pages
+                ] ||
                   0} {gettext("pages")}
               </p>
             </div>
@@ -134,7 +142,7 @@ defmodule DranWeb.DashboardLive do
           </div>
 
           <%!-- Brain health --%>
-          <div class="surface-2 p-5 space-y-4">
+          <div class="surface-2 p-5 space-y-5 rounded-2xl">
             <div class="flex items-center justify-between">
               <h2 class="text-heading">{gettext("Brain health")}</h2>
               <span :if={@brain_metrics[:contested_count] > 0} class="text-xs text-warning">
@@ -142,14 +150,14 @@ defmodule DranWeb.DashboardLive do
               </span>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
               <%!-- This week --%>
               <div class="flex items-center gap-3">
                 <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-info/10">
                   <.icon name="hero-calendar-days" class="size-5 text-info" />
                 </div>
                 <div class="min-w-0">
-                  <div class="text-2xl font-bold tabular-nums">
+                  <div class="text-xl font-bold tabular-nums leading-tight">
                     {@brain_metrics[:pages_this_week] || 0}
                   </div>
                   <div class="text-caption">{gettext("This week")}</div>
@@ -159,7 +167,7 @@ defmodule DranWeb.DashboardLive do
                         (@brain_metrics[:pages_last_week] || 0)
                     }
                     class={[
-                      "text-xs font-medium",
+                      "text-xs font-medium mt-0.5",
                       if(
                         (@brain_metrics[:pages_this_week] || 0) >
                           (@brain_metrics[:pages_last_week] || 0),
@@ -182,11 +190,11 @@ defmodule DranWeb.DashboardLive do
                   <.icon name="hero-cpu-chip" class="size-5 text-accent" />
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="text-2xl font-bold tabular-nums">
+                  <div class="text-xl font-bold tabular-nums leading-tight">
                     {trunc((@brain_metrics[:embedding_coverage] || 0.0) * 100)}%
                   </div>
                   <div class="text-caption">{gettext("Embedding coverage")}</div>
-                  <div class="h-1.5 rounded-full bg-base-200 overflow-hidden mt-1">
+                  <div class="h-1 rounded-full bg-base-200 overflow-hidden mt-1.5">
                     <div
                       class={[
                         "h-full rounded-full transition-all",
@@ -214,7 +222,7 @@ defmodule DranWeb.DashboardLive do
                   <.icon name="hero-share" class="size-5 text-secondary" />
                 </div>
                 <div class="min-w-0">
-                  <div class="text-2xl font-bold tabular-nums">
+                  <div class="text-xl font-bold tabular-nums leading-tight">
                     {relations_total(@brain_metrics[:relations_by_type])}
                   </div>
                   <div class="text-caption">{gettext("Relations")}</div>
@@ -236,7 +244,7 @@ defmodule DranWeb.DashboardLive do
                   <.icon name="hero-user-group" class="size-5 text-primary" />
                 </div>
                 <div class="min-w-0">
-                  <div class="text-2xl font-bold tabular-nums">
+                  <div class="text-xl font-bold tabular-nums leading-tight">
                     {(@brain_metrics[:agents] || %{})[:sessions_this_week] || 0}
                   </div>
                   <div class="text-caption">{gettext("Agents")}</div>
@@ -252,7 +260,7 @@ defmodule DranWeb.DashboardLive do
             <%!-- Daily note CTA --%>
             <div
               :if={@daily_note_status in [:missing, :empty]}
-              class="flex items-center justify-between p-3 rounded-lg bg-base-200"
+              class="flex items-center justify-between p-3 rounded-xl bg-base-200"
             >
               <div class="flex items-center gap-2">
                 <.icon name="hero-pencil-square" class="size-5 text-primary" />
@@ -267,7 +275,7 @@ defmodule DranWeb.DashboardLive do
             </div>
             <div
               :if={@daily_note_status == :exists}
-              class="flex items-center justify-between p-3 rounded-lg bg-base-200"
+              class="flex items-center justify-between p-3 rounded-xl bg-base-200"
             >
               <div class="flex items-center gap-2">
                 <.icon name="hero-check-circle" class="size-5 text-success" />
@@ -285,7 +293,7 @@ defmodule DranWeb.DashboardLive do
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <%!-- Pages by type --%>
             <div class="lg:col-span-1 space-y-8">
-              <div class="surface-2 p-5">
+              <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Pages by Type")}</h2>
                   <.link navigate={~p"/search"} class="text-sm text-primary hover:underline">
@@ -305,7 +313,7 @@ defmodule DranWeb.DashboardLive do
               <%!-- Todo board summary --%>
               <div
                 :if={(@stats[:todos_by_status] || %{}) != %{}}
-                class="surface-2 p-5"
+                class="surface-2 p-5 rounded-2xl"
               >
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Todos")}</h2>
@@ -329,23 +337,25 @@ defmodule DranWeb.DashboardLive do
 
             <%!-- Recently updated --%>
             <div class="lg:col-span-2 space-y-8">
-              <div class="surface-2 p-5">
+              <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Recently Updated")}</h2>
                   <.link navigate={~p"/graph"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
-                <div class="space-y-2 mt-4">
+                <div class="space-y-1 mt-4">
                   <.link
                     :for={page <- @stats[:recent] || []}
                     navigate={page_path(page)}
-                    class="flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition cursor-pointer"
+                    class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-base-200 transition cursor-pointer"
                   >
-                    <.icon
-                      name={PageTypes.icon(page.page_type)}
-                      class="size-5 text-base-content/50 shrink-0"
-                    />
+                    <div class="shrink-0 size-9 rounded-lg flex items-center justify-center bg-primary/10">
+                      <.icon
+                        name={PageTypes.icon(page.page_type)}
+                        class="size-4 text-primary"
+                      />
+                    </div>
                     <div class="min-w-0 flex-1">
                       <div class="font-medium text-sm truncate">{page.title}</div>
                       <div class="text-caption">
@@ -374,11 +384,11 @@ defmodule DranWeb.DashboardLive do
               </div>
 
               <%!-- Quick access grid --%>
-              <div class="surface-2 p-5">
+              <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Quick Access")}</h2>
                 </div>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
                   <%= for {_group_label, items} <- @nav_groups do %>
                     <%= for item <- items do %>
                       <.quick_card
@@ -462,16 +472,16 @@ defmodule DranWeb.DashboardLive do
 
   defp metric_card(assigns) do
     ~H"""
-    <div class="surface-2 lift p-5 flex items-center gap-3">
+    <div class="surface-2 lift p-5 flex items-center gap-4 rounded-2xl">
       <div class={[
-        "shrink-0 size-10 rounded-lg flex items-center justify-center",
+        "shrink-0 size-11 rounded-xl flex items-center justify-center",
         bg_for_color(@color)
       ]}>
         <.icon name={@icon} class={["size-5", @color]} />
       </div>
       <div class="min-w-0">
-        <div class="text-2xl font-bold tabular-nums">{@value}</div>
-        <div class="text-caption">{@label}</div>
+        <div class="text-2xl font-bold tabular-nums leading-tight">{@value}</div>
+        <div class="text-caption mt-0.5">{@label}</div>
       </div>
     </div>
     """
@@ -499,14 +509,14 @@ defmodule DranWeb.DashboardLive do
       >
         {PageTypes.plural(@type)}
       </.link>
-      <div class="flex-1 h-2 rounded-full bg-base-200 overflow-hidden">
+      <div class="flex-1 h-1 rounded-full bg-base-200 overflow-hidden">
         <div
           class="h-full rounded-full bg-primary transition-all"
           style={"width: #{pct(@count, @total)}%"}
         >
         </div>
       </div>
-      <span class="text-sm font-semibold text-base-content/70 w-8 text-right">{@count}</span>
+      <span class="text-sm font-semibold text-base-content/70 w-8 text-right tabular-nums">{@count}</span>
     </div>
     """
   end
@@ -520,16 +530,40 @@ defmodule DranWeb.DashboardLive do
     ~H"""
     <.link
       navigate={@path}
-      class="surface-2 lift p-4 flex flex-col items-center text-center gap-1 active:scale-95"
+      class={[
+        "surface-2 lift p-4 flex items-center gap-3 rounded-2xl",
+        "border border-base-content/10 hover:border-primary/50",
+        "transition-colors active:scale-95"
+      ]}
     >
-      <.icon name={@icon} class="size-6 text-base-content/60" />
-      <div class="text-sm font-medium">{@label}</div>
-      <div class="text-caption">{gettext("%{count} pages", count: @count)}</div>
+      <div class="shrink-0 size-10 rounded-xl flex items-center justify-center bg-primary/10">
+        <.icon name={@icon} class="size-5 text-primary" />
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-medium truncate">{@label}</div>
+        <div class="text-caption">{gettext("%{count} pages", count: @count)}</div>
+      </div>
+      <.icon name="hero-chevron-right" class="size-4 text-base-content/30 shrink-0" />
     </.link>
     """
   end
 
   # ── Helpers ──
+
+  defp greeting do
+    hour = DateTime.utc_now().hour
+
+    cond do
+      hour < 6 -> gettext("Good night")
+      hour < 12 -> gettext("Good morning")
+      hour < 20 -> gettext("Good afternoon")
+      true -> gettext("Good evening")
+    end
+  end
+
+  defp format_today do
+    Calendar.strftime(Date.utc_today(), "%A, %B %d, %Y")
+  end
 
   defp pct(count, total) when total > 0, do: trunc(count / total * 100)
   defp pct(_count, _total), do: 0

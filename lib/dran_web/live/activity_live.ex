@@ -68,25 +68,18 @@ defmodule DranWeb.ActivityLive do
         <div class="w-full p-6 space-y-6">
           <.header_section context={@context} />
 
-          <div class="surface-2 divide-y divide-base-300">
-            <.activity_entry :for={entry <- @entries} entry={entry} />
+          <.action_legend :if={legend_actions(@entries) != []} actions={legend_actions(@entries)} />
 
-            <div :if={@entries == []} class="p-12 text-center">
-              <div class="flex flex-col items-center gap-3">
-                <div class="size-12 rounded-full bg-base-200 flex items-center justify-center">
-                  <.icon name="hero-clock" class="size-6 text-base-content/40" />
-                </div>
-                <span class="text-caption">
-                  {gettext("No activity yet. Create or edit a page to see it here.")}
-                </span>
-              </div>
-            </div>
-          </div>
+          <.timeline :if={@entries != []} entries={@entries} />
+
+          <.empty_state :if={@entries == []} />
         </div>
       </div>
     </Layouts.app>
     """
   end
+
+  # ── Render-only components ─────────────────────────────────────────────────
 
   attr :context, :any, default: nil
 
@@ -107,45 +100,112 @@ defmodule DranWeb.ActivityLive do
     """
   end
 
+  attr :actions, :list, required: true
+
+  defp action_legend(assigns) do
+    ~H"""
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-caption text-base-content/50 mr-1">{gettext("Types:")}</span>
+      <span
+        :for={{action, count} <- @actions}
+        class="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-full bg-base-200/60 border border-base-300"
+      >
+        <.icon
+          name={action_icon(action)}
+          class={["size-3.5", icon_color(action)]}
+        />
+        <span class="text-base-content/70">{action_label(action)}</span>
+        <span class="text-base-content/40 font-mono">{count}</span>
+      </span>
+    </div>
+    """
+  end
+
+  attr :entries, :list, required: true
+
+  defp timeline(assigns) do
+    ~H"""
+    <ol class="relative" role="list" aria-label={gettext("Activity timeline")}>
+      <span
+        aria-hidden="true"
+        class="absolute left-[15px] top-2 bottom-2 w-px bg-gradient-to-b from-base-300 via-base-300 to-transparent"
+      />
+      <.timeline_entry :for={entry <- @entries} entry={entry} />
+    </ol>
+    """
+  end
+
   attr :entry, Dran.Brain.Log, required: true
 
-  defp activity_entry(assigns) do
+  defp timeline_entry(assigns) do
     ~H"""
-    <div class="flex items-start gap-3 p-4">
-      <div class={[
-        "shrink-0 size-8 rounded-lg flex items-center justify-center",
-        icon_bg(@entry.action)
-      ]}>
-        <.icon name={action_icon(@entry.action)} class={["size-4", icon_color(@entry.action)]} />
+    <li class="relative flex items-start gap-4 pl-0 pb-5 last:pb-0">
+      <div class="relative z-10 shrink-0">
+        <div class={[
+          "size-8 rounded-full flex items-center justify-center ring-4 ring-base-100",
+          icon_bg(@entry.action)
+        ]}>
+          <.icon
+            name={action_icon(@entry.action)}
+            class={["size-4", icon_color(@entry.action)]}
+          />
+        </div>
       </div>
 
-      <div class="min-w-0 flex-1">
-        <div class="flex items-baseline gap-2 flex-wrap">
-          <span class="text-sm font-medium">
-            {action_label(@entry.action)}
-          </span>
+      <div class="min-w-0 flex-1 pt-0.5">
+        <div class="flex items-baseline justify-between gap-3 flex-wrap">
+          <div class="flex items-baseline gap-2 flex-wrap min-w-0">
+            <span class="text-sm font-medium">
+              {action_label(@entry.action)}
+            </span>
 
-          <.link
-            :if={@entry.subject && page_path_for(@entry)}
-            navigate={page_path_for(@entry)}
-            class="text-sm text-primary hover:underline truncate"
-          >
-            {@entry.subject}
-          </.link>
+            <.link
+              :if={@entry.subject && page_path_for(@entry)}
+              navigate={page_path_for(@entry)}
+              class="text-sm text-primary/80 hover:text-primary hover:underline underline-offset-2 decoration-primary/40 truncate transition-colors"
+            >
+              {@entry.subject}
+            </.link>
+
+            <span
+              :if={@entry.subject && !page_path_for(@entry)}
+              class="text-sm text-base-content/70 truncate font-mono"
+            >
+              {@entry.subject}
+            </span>
+          </div>
 
           <span
-            :if={@entry.subject && !page_path_for(@entry)}
-            class="text-sm text-base-content/80 truncate"
+            class="shrink-0 text-caption text-base-content/50 flex items-center gap-1"
+            title={absolute_timestamp(@entry.inserted_at)}
           >
-            {@entry.subject}
+            <.icon name="hero-clock" class="size-3" />
+            {relative_time(@entry.inserted_at)}
           </span>
         </div>
 
-        <div class="text-caption mt-0.5">
-          {relative_time(@entry.inserted_at)}
-          <span :if={detail_badge(@entry)}>
-            · {detail_badge(@entry)}
+        <div :if={detail_badge(@entry)} class="mt-1">
+          <span class="inline-flex items-center text-[11px] font-medium px-1.5 py-0.5 rounded bg-base-200 text-base-content/60">
+            {detail_badge(@entry)}
           </span>
+        </div>
+      </div>
+    </li>
+    """
+  end
+
+  defp empty_state(assigns) do
+    ~H"""
+    <div class="surface-2 p-12">
+      <div class="flex flex-col items-center gap-3 text-center">
+        <div class="size-14 rounded-2xl bg-base-200 flex items-center justify-center">
+          <.icon name="hero-clock" class="size-6 text-base-content/40" />
+        </div>
+        <div>
+          <p class="text-heading">{gettext("No activity yet")}</p>
+          <p class="text-caption mt-1 text-base-content/50">
+            {gettext("Create or edit a page to see it here.")}
+          </p>
         </div>
       </div>
     </div>
@@ -158,23 +218,39 @@ defmodule DranWeb.ActivityLive do
   defp context_name(_), do: gettext("this context")
 
   defp action_icon("page.create"), do: "hero-plus-circle"
-  defp action_icon("page.update"), do: "hero-pencil-square"
+  defp action_icon("page.update"), do: "hero-pencil"
   defp action_icon("page.delete"), do: "hero-trash"
-  defp action_icon(_), do: "hero-clipboard-document-list"
+  defp action_icon("page.archive"), do: "hero-archive-box"
+  defp action_icon("page.unarchive"), do: "hero-arrow-up-on-square"
+  defp action_icon("agent"), do: "hero-cpu-chip"
+  defp action_icon("agent." <> _), do: "hero-cpu-chip"
+  defp action_icon(_), do: "hero-bolt"
 
-  defp icon_bg("page.create"), do: "bg-success/10"
-  defp icon_bg("page.update"), do: "bg-warning/10"
-  defp icon_bg("page.delete"), do: "bg-error/10"
+  defp icon_bg("page.create"), do: "bg-success/15"
+  defp icon_bg("page.update"), do: "bg-info/15"
+  defp icon_bg("page.delete"), do: "bg-error/15"
+  defp icon_bg("page.archive"), do: "bg-warning/15"
+  defp icon_bg("page.unarchive"), do: "bg-success/15"
+  defp icon_bg("agent"), do: "bg-accent/15"
+  defp icon_bg("agent." <> _), do: "bg-accent/15"
   defp icon_bg(_), do: "bg-base-content/10"
 
   defp icon_color("page.create"), do: "text-success"
-  defp icon_color("page.update"), do: "text-warning"
+  defp icon_color("page.update"), do: "text-info"
   defp icon_color("page.delete"), do: "text-error"
+  defp icon_color("page.archive"), do: "text-warning"
+  defp icon_color("page.unarchive"), do: "text-success"
+  defp icon_color("agent"), do: "text-accent"
+  defp icon_color("agent." <> _), do: "text-accent"
   defp icon_color(_), do: "text-base-content/60"
 
   defp action_label("page.create"), do: gettext("Created")
   defp action_label("page.update"), do: gettext("Updated")
   defp action_label("page.delete"), do: gettext("Deleted")
+  defp action_label("page.archive"), do: gettext("Archived")
+  defp action_label("page.unarchive"), do: gettext("Unarchived")
+  defp action_label("agent"), do: gettext("Agent")
+  defp action_label("agent." <> _rest), do: gettext("Agent")
   defp action_label(other), do: humanize_action(other)
 
   defp humanize_action(action) when is_binary(action) do
@@ -195,6 +271,7 @@ defmodule DranWeb.ActivityLive do
   end
 
   defp page_path_for(%Dran.Brain.Log{action: "page.delete"}), do: nil
+  defp page_path_for(%Dran.Brain.Log{action: "page.archive"}), do: nil
 
   defp page_path_for(%Dran.Brain.Log{action: "page." <> _rest, subject: slug})
        when is_binary(slug) do
@@ -213,6 +290,33 @@ defmodule DranWeb.ActivityLive do
   end
 
   defp detail_badge(_), do: nil
+
+  # Derive the distinct action types present in the entries, paired with their
+  # counts. Used to render the legend row above the timeline. Returns a list
+  # ordered by first appearance (entries are newest-first, so types appear
+  # in the order they were first seen).
+  defp legend_actions(entries) do
+    {order, counts} =
+      Enum.reduce(entries, {[], %{}}, fn entry, {order, counts} ->
+        action = normalize_action_for_legend(entry.action)
+        new_counts = Map.update(counts, action, 1, &(&1 + 1))
+        new_order = if action in order, do: order, else: order ++ [action]
+        {new_order, new_counts}
+      end)
+
+    Enum.map(order, fn action -> {action, Map.get(counts, action, 0)} end)
+  end
+
+  # Group agent.* actions under a single "agent" legend entry so the legend
+  # stays compact even if many distinct agent sub-actions appear.
+  defp normalize_action_for_legend("agent." <> _), do: "agent"
+  defp normalize_action_for_legend(other), do: other
+
+  # Absolute ISO-8601 timestamp used for the `title` tooltip on relative times.
+  # Works for both DateTime (has timezone) and NaiveDateTime (no timezone).
+  defp absolute_timestamp(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp absolute_timestamp(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt)
+  defp absolute_timestamp(_), do: ""
 
   defp relative_time(%DateTime{} = dt) do
     now = DateTime.utc_now()

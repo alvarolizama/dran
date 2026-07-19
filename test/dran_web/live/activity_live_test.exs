@@ -85,7 +85,8 @@ defmodule DranWeb.ActivityLiveTest do
 
     {:ok, _view, html} = live(conn, ~p"/activity")
 
-    assert html =~ t("No activity yet. Create or edit a page to see it here.")
+    assert html =~ t("No activity yet")
+    assert html =~ t("Create or edit a page to see it here.")
   end
 
   test "updates live when a new page is created (handle_info)", %{conn: conn} do

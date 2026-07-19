@@ -103,121 +103,212 @@ defmodule DranWeb.ContextLive do
       contexts={@contexts}
       active_nav={@active_nav}
     >
-      <div class="p-6 overflow-y-auto w-full">
-        <div class="w-full space-y-6">
+      <div class="flex-1 overflow-y-auto">
+        <div class="w-full p-6 space-y-8 max-w-5xl mx-auto">
+          <%!-- Page header --%>
           <div>
-            <h1 class="text-2xl font-bold">Contexts</h1>
-            <p class="text-sm text-base-content/50 mt-1">
-              Manage the contexts of your second brain.
+            <h1 class="text-title">{gettext("Contexts")}</h1>
+            <p class="text-caption mt-1">
+              {gettext("Manage the contexts of your second brain.")}
             </p>
           </div>
 
-          <div class="p-4 rounded-lg border border-base-300 bg-base-200/30">
-            <h2 class="text-sm font-semibold text-base-content/60 mb-3">
-              New context
-            </h2>
+          <%!-- Create form card --%>
+          <section class="surface-2 rounded-2xl overflow-hidden">
+            <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+              <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+                <.icon name="hero-plus" class="size-4 text-primary" />
+              </div>
+              <div class="min-w-0">
+                <h2 class="text-heading">{gettext("New context")}</h2>
+                <p class="text-caption mt-0.5">
+                  {gettext("Create an isolated silo for your knowledge.")}
+                </p>
+              </div>
+            </header>
+
             <.form
               for={@form}
               id="context-form"
               phx-change="validate"
               phx-submit="save"
-              class="space-y-3"
+              class="px-5 py-5 space-y-4"
             >
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div phx-change="update_slug">
                   <.input
                     field={@form[:name]}
                     type="text"
-                    label="Name"
-                    placeholder="e.g. Personal"
+                    label={gettext("Name")}
+                    placeholder={gettext("e.g. Personal")}
                     class="w-full"
                   />
                 </div>
                 <.input
                   field={@form[:slug]}
                   type="text"
-                  label="Slug"
-                  placeholder="e.g. personal"
+                  label={gettext("Slug")}
+                  placeholder={gettext("e.g. personal")}
                   class="w-full font-mono text-sm"
                 />
               </div>
-              <div class="flex justify-end">
+              <p class="text-caption">
+                {gettext("The slug auto-derives from the name unless you edit it directly.")}
+              </p>
+
+              <div class="flex justify-end pt-1">
                 <button
                   type="submit"
-                  class="btn btn-primary btn-sm"
+                  class="btn btn-primary btn-sm transition-colors active:scale-95"
                   phx-disable-with={gettext("Creating…")}
                 >
-                  <.icon name="hero-plus" class="size-4" /> {gettext("Create")}
+                  <.icon name="hero-plus" class="size-4" />
+                  {gettext("Create")}
                 </button>
               </div>
             </.form>
-          </div>
+          </section>
 
-          <div class="space-y-2">
-            <h2 class="text-sm font-semibold text-base-content/60">
-              Existing contexts ({length(@contexts)})
-            </h2>
-
-            <div :if={@contexts == []} class="text-center py-12">
-              <.icon
-                name="hero-square-3-stack-3d"
-                class="w-12 h-12 mx-auto mb-3 text-base-content/30"
-              />
-              <p class="text-sm text-base-content/50">
-                {gettext("No contexts yet. Create one above.")}
-              </p>
+          <%!-- Existing contexts --%>
+          <section class="space-y-3">
+            <div class="flex items-baseline justify-between">
+              <h2 class="text-heading">
+                {gettext("Existing contexts")}
+              </h2>
+              <span class="text-caption">
+                {gettext("%{count} total", count: length(@contexts))}
+              </span>
             </div>
 
-            <div
-              :for={ctx <- @contexts}
-              id={"context-#{ctx.id}"}
-              class={[
-                "flex items-center justify-between p-3 rounded-lg border",
-                @confirm_delete_id == ctx.id && "border-error/50 bg-error/5",
-                @confirm_delete_id != ctx.id && "border-base-300"
-              ]}
-            >
-              <div class="min-w-0">
-                <div class="font-medium">{ctx.name}</div>
-                <div class="text-xs text-base-content/50 font-mono">{ctx.slug}</div>
-              </div>
-              <div class="flex items-center gap-2">
-                <%= if @confirm_delete_id == ctx.id do %>
-                  <button
-                    type="button"
-                    phx-click="delete"
-                    phx-value-id={ctx.id}
-                    class="btn btn-error btn-xs"
-                  >
-                    <.icon name="hero-check" class="size-3.5" /> Confirm
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="cancel_delete"
-                    class="btn btn-ghost btn-xs"
-                  >
-                    Cancel
-                  </button>
-                <% else %>
-                  <.link href={~p"/?context=#{ctx.slug}"} class="btn btn-ghost btn-xs">
-                    Switch
-                  </.link>
-                  <button
-                    type="button"
-                    phx-click="ask_delete"
-                    phx-value-id={ctx.id}
-                    class="btn btn-ghost btn-xs text-error hover:bg-error/10"
-                    title="Delete context"
-                  >
-                    <.icon name="hero-trash" class="size-3.5" />
-                  </button>
-                <% end %>
+            <%!-- Empty state with CTA --%>
+            <div :if={@contexts == []} class="surface-2 rounded-2xl p-12 text-center">
+              <div class="flex flex-col items-center gap-4">
+                <div class="size-14 rounded-full bg-base-200 flex items-center justify-center">
+                  <.icon name="hero-square-3-stack-3d" class="size-7 text-base-content/40" />
+                </div>
+                <div class="space-y-1">
+                  <p class="text-sm font-medium text-base-content/70">
+                    {gettext("No contexts yet")}
+                  </p>
+                  <p class="text-caption">
+                    {gettext("Create your first context above to start organizing your second brain.")}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+
+            <%!-- Context cards --%>
+            <.context_card
+              :for={{ctx, count} <- contexts_with_counts(@contexts)}
+              ctx={ctx}
+              page_count={count}
+              confirm_delete_id={@confirm_delete_id}
+              context_slug={@context_slug}
+            />
+          </section>
         </div>
       </div>
     </Layouts.app>
     """
+  end
+
+  # -- View components --------------------------------------------------------
+
+  attr :ctx, :any, required: true
+  attr :page_count, :integer, default: 0
+  attr :confirm_delete_id, :any, default: nil
+  attr :context_slug, :string, default: nil
+
+  defp context_card(assigns) do
+    ~H"""
+    <div
+      id={"context-#{@ctx.id}"}
+      class={[
+        "surface-2 lift rounded-2xl p-4 transition-all",
+        @confirm_delete_id == @ctx.id && "ring-2 ring-error/60 bg-error/5"
+      ]}
+    >
+      <div class="flex items-start justify-between gap-4">
+        <%!-- Identity / metadata --%>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-sm font-semibold text-base-content truncate">
+              {@ctx.name}
+            </span>
+            <span :if={@context_slug == @ctx.slug} class="text-caption text-primary">
+              · {gettext("current")}
+            </span>
+          </div>
+          <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+            <code class="inline-flex items-center px-2 py-0.5 text-xs font-mono rounded-md bg-base-200 text-base-content/70">
+              {@ctx.slug}
+            </code>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary/10 text-primary">
+              <.icon name="hero-document" class="size-3" />
+              {gettext("%{count} pages", count: @page_count)}
+            </span>
+            <span class="inline-flex items-center gap-1 text-caption">
+              <.icon name="hero-calendar" class="size-3" />
+              {format_date(@ctx.inserted_at)}
+            </span>
+          </div>
+        </div>
+
+        <%!-- Actions --%>
+        <div class="flex items-center gap-2 shrink-0">
+          <%= if @confirm_delete_id == @ctx.id do %>
+            <span class="text-caption text-error mr-1 hidden sm:inline">
+              {gettext("Delete?")}
+            </span>
+            <button
+              type="button"
+              phx-click="delete"
+              phx-value-id={@ctx.id}
+              class="btn btn-error btn-xs transition-colors active:scale-95"
+            >
+              <.icon name="hero-check" class="size-3.5" />
+              {gettext("Confirm")}
+            </button>
+            <button
+              type="button"
+              phx-click="cancel_delete"
+              class="btn btn-ghost btn-xs transition-colors active:scale-95"
+            >
+              {gettext("Cancel")}
+            </button>
+          <% else %>
+            <.link
+              href={~p"/?context=#{@ctx.slug}"}
+              class="btn btn-ghost btn-xs transition-colors active:scale-95"
+            >
+              {gettext("Switch")}
+            </.link>
+            <button
+              type="button"
+              phx-click="ask_delete"
+              phx-value-id={@ctx.id}
+              class="btn btn-ghost btn-xs text-error hover:bg-error/10 transition-colors active:scale-95"
+              title={gettext("Delete context")}
+              aria-label={gettext("Delete context")}
+            >
+              <.icon name="hero-trash" class="size-3.5" />
+            </button>
+          <% end %>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # One grouped query per render — Brain.page_counts_by_context/0 returns
+  # a map of context_id => page_count. Kept out of assigns per the
+  # "handlers/assigns identical" contract; called here as a pure render-time
+  # lookup and zipped with the contexts list already present in assigns.
+  defp contexts_with_counts(contexts) do
+    counts = Brain.page_counts_by_context()
+
+    Enum.map(contexts, fn ctx ->
+      {ctx, Map.get(counts, ctx.id, 0)}
+    end)
   end
 end
