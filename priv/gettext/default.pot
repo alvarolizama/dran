@@ -3034,3 +3034,183 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "When enabled, the daily-note agent generates a summary page each day with what changed in the brain (via the Quantum scheduler). Turn off to disable automatic daily notes."
 msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:598
+#, elixir-autogen, elixir-format
+msgid "Modelos"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:601
+#, elixir-autogen, elixir-format
+msgid "Override the model used for each purpose. Leave as “Por defecto (env)” to use the environment default."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:614
+#, elixir-autogen, elixir-format
+msgid "API no disponible — los modelos no pueden listarse. Aún puedes escribir un override manual, o revisa DRAN_INFERENCE_API_URL."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:629
+#, elixir-autogen, elixir-format
+msgid "Por defecto (env)"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:21
+#, elixir-autogen, elixir-format
+msgid "Chat / agentes"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:22
+#, elixir-autogen, elixir-format
+msgid "Model used for chat completions, agent reasoning, and title generation."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:24
+#, elixir-autogen, elixir-format
+msgid "Embeddings"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:25
+#, elixir-autogen, elixir-format
+msgid "Model used to vectorize page bodies for semantic search and relations."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:27
+#, elixir-autogen, elixir-format
+msgid "Re-ranking"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:28
+#, elixir-autogen, elixir-format
+msgid "Model used to re-rank semantic search results by relevance to the query."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:30
+#, elixir-autogen, elixir-format
+msgid "Extracción de documentos"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:31
+#, elixir-autogen, elixir-format
+msgid "Model used to convert attached files (PDF, Office) into markdown for ingestion."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:33
+#, elixir-autogen, elixir-format
+msgid "Transcripción de audio"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:34
+#, elixir-autogen, elixir-format
+msgid "Model used to transcribe audio attachments into text."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:36
+#, elixir-autogen, elixir-format
+msgid "Visión"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:37
+#, elixir-autogen, elixir-format
+msgid "Model used to describe images attached to pages (multimodal vision)."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:226
+#, elixir-autogen, elixir-format
+msgid "Whether the inference API is configured. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:233
+#, elixir-autogen, elixir-format
+msgid "Base URL of the OpenAI-compatible inference server. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:242
+#, elixir-autogen, elixir-format
+msgid "Bearer token sent to the inference API. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:251
+#, elixir-autogen, elixir-format
+msgid "Effective model for chat and agents (web override or env default). See “Modelos” above to override."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:260
+#, elixir-autogen, elixir-format
+msgid "Effective model for embeddings (web override or env default). See “Modelos” above to override."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:268
+#, elixir-autogen, elixir-format
+msgid "Vector dimensionality returned by the embedding model. Read-only — fixed at 1024."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:275
+#, elixir-autogen, elixir-format
+msgid "Maximum text length (in characters) sent to the embedding API per call. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:284
+#, elixir-autogen, elixir-format
+msgid "Effective model for re-ranking search results (web override or env default). See “Modelos” above to override."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:293
+#, elixir-autogen, elixir-format
+msgid "Whether semantic search results are re-ranked by relevance. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:300
+#, elixir-autogen, elixir-format
+msgid "Effective model for image description (web override or env default). See “Modelos” above to override."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:307
+#, elixir-autogen, elixir-format
+msgid "Effective model for audio transcription (web override or env default). See “Modelos” above to override."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:314
+#, elixir-autogen, elixir-format
+msgid "Effective model for document-to-markdown conversion (web override or env default). See “Modelos” above to override."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:323
+#, elixir-autogen, elixir-format
+msgid "HTTP timeout for inference API requests, in milliseconds. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:337
+#, elixir-autogen, elixir-format
+msgid "Maximum number of steps an autonomous agent can take in a single run. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:346
+#, elixir-autogen, elixir-format
+msgid "Maximum wall-clock time per agent step, in milliseconds. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:362
+#, elixir-autogen, elixir-format
+msgid "Whether Firecrawl web search and scraping is configured. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:369
+#, elixir-autogen, elixir-format
+msgid "Firecrawl API key. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:377
+#, elixir-autogen, elixir-format
+msgid "Firecrawl API base URL. Read-only — hardcoded to the official Firecrawl endpoint."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:391
+#, elixir-autogen, elixir-format
+msgid "Filesystem directory where uploaded attachments are stored. Read-only — set via environment variable."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:400
+#, elixir-autogen, elixir-format
+msgid "Maximum allowed size for a single uploaded file. Read-only — set via environment variable."
+msgstr ""
