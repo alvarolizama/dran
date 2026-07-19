@@ -2,7 +2,7 @@ defmodule DranWeb.PageTypes do
   @moduledoc """
   Centralized page type mappings.
 
-  A single source of truth for the 10 page types, each with its
+  A single source of truth for the 11 page types, each with its
   URL path segment, display label, icon, and plural label.
   """
 
@@ -15,6 +15,12 @@ defmodule DranWeb.PageTypes do
       plural: "Concepts"
     },
     "entity" => %{path: "entities", label: "Entity", icon: "hero-user", plural: "Entities"},
+    "project" => %{
+      path: "projects",
+      label: "Project",
+      icon: "hero-rocket-launch",
+      plural: "Projects"
+    },
     "reference" => %{
       path: "references",
       label: "Reference",

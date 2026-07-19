@@ -13,6 +13,13 @@ defmodule DranWeb.DashboardLive do
 
   @nav_groups [
     %{
+      label: gettext("Top"),
+      items: [
+        %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: "/kanban"},
+        %{key: "project", label: gettext("Projects"), icon: "hero-rocket-launch", path: "/projects"}
+      ]
+    },
+    %{
       label: gettext("Knowledge"),
       items: [
         %{key: "note", label: gettext("Notes"), icon: "hero-document-text", path: "/notes"},

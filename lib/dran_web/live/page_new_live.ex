@@ -247,6 +247,7 @@ defmodule DranWeb.PageNewLive do
   defp type_to_page("entities"), do: "entity"
   defp type_to_page("references"), do: "reference"
   defp type_to_page("goals"), do: "goal"
+  defp type_to_page("projects"), do: "project"
   defp type_to_page("plans"), do: "plan"
   defp type_to_page("todos"), do: "todo"
   defp type_to_page("artifacts"), do: "artifact"

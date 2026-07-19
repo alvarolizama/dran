@@ -29,6 +29,11 @@ defmodule DranWeb.PageListComponents do
            gettext("Track people, companies, tools and places that matter."),
            gettext("Create Entity")}
 
+        "project" ->
+          {gettext("No projects yet"),
+           gettext("Group goals, plans and todos under a shared initiative."),
+           gettext("Create Project")}
+
         "reference" ->
           {gettext("No references yet"),
            gettext("Save articles, papers, videos and books worth remembering."),

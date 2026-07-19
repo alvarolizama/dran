@@ -15,6 +15,8 @@ defmodule DranWeb.CommandPalette do
   @quick_actions [
     %{label: "New Note", icon: "hero-plus", path: "/notes/new"},
     %{label: "New Todo", icon: "hero-check-circle", path: "/todos/new"},
+    %{label: "New Project", icon: "hero-rocket-launch", path: "/projects/new"},
+    %{label: "Go to Kanban", icon: "hero-view-columns", path: "/kanban"},
     %{label: "Go to Graph", icon: "hero-share", path: "/graph"},
     %{label: "Go to Todos", icon: "hero-list-bullet", path: "/todos"},
     %{label: "Go to Dashboard", icon: "hero-home", path: "/"}

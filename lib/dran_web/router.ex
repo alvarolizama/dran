@@ -124,6 +124,12 @@ defmodule DranWeb.Router do
     live "/goals/new", PageNewLive, :new
     live "/goals/:slug", GoalLive, :show
 
+    live "/kanban", KanbanLive, :index
+
+    live "/projects", ProjectLive, :index
+    live "/projects/new", PageNewLive, :new
+    live "/projects/:slug", ProjectLive, :show
+
     live "/plans", PlanLive, :index
     live "/plans/new", PageNewLive, :new
     live "/plans/:slug", PlanLive, :show

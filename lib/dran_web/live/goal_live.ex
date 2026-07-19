@@ -11,15 +11,6 @@ defmodule DranWeb.GoalLive do
 
   @page_type "goal"
 
-  @kanban_columns [
-    {"backlog", "Backlog", "bg-base-300"},
-    {"this_week", "This Week", "bg-blue-500/20 text-blue-700"},
-    {"today", "Today", "bg-amber-500/20 text-amber-700"},
-    {"in_progress", "In Progress", "bg-purple-500/20 text-purple-700"},
-    {"done", "Done", "bg-green-500/20 text-green-700"},
-    {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
-  ]
-
   @goal_tabs [
     {"overview", "Overview"},
     {"notes", "Notes"},
@@ -139,6 +130,30 @@ defmodule DranWeb.GoalLive do
                   </div>
                 </.form>
               <% else %>
+                <%!-- Panel de metricas del goal --%>
+                <div class="grid grid-cols-3 gap-4 mb-4 p-4 rounded-lg bg-base-200/50 border border-base-300">
+                  <div>
+                    <div class="text-xs text-base-content/60 uppercase">Metric</div>
+                    <div class="font-medium">{meta_get(@page.meta, "metric") || "—"}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-base-content/60 uppercase">Current / Target</div>
+                    <div class="font-medium">
+                      {format_value(meta_get(@page.meta, "current_value"))}
+                      / {format_value(meta_get(@page.meta, "target_value"))}
+                      <span class="text-xs text-base-content/60">{meta_get(@page.meta, "unit")}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-base-content/60 uppercase">Progress</div>
+                    <div class="flex items-center gap-2">
+                      <div class="flex-1 bg-base-300 rounded-full h-2 overflow-hidden">
+                        <div class="bg-primary h-full" style={"width: #{progress_percent(@page)}%"}></div>
+                      </div>
+                      <span class="text-sm font-medium">{progress_percent(@page)}%</span>
+                    </div>
+                  </div>
+                </div>
                 <div class="prose prose-base dark:prose-invert max-w-none">
                   {@rendered_body}
                 </div>
@@ -202,54 +217,26 @@ defmodule DranWeb.GoalLive do
               </p>
             </div>
 
+            <%!-- Todos: lista simple con link a kanban global --%>
             <div :if={@active_tab == "todos"}>
-              <div
-                class="flex gap-4 overflow-x-auto pb-4"
-                phx-hook=".GoalKanban"
-                id={"goal-kanban-#{@page.slug}"}
-              >
-                <div
-                  :for={{status, label, badge_class} <- @kanban_columns}
-                  data-kanban-status={status}
-                  class="w-64 shrink-0 flex flex-col rounded-lg bg-base-200/40 border border-base-300"
-                >
-                  <div class="flex items-center justify-between px-3 py-2 border-b border-base-300">
-                    <span class="text-sm font-semibold">{label}</span>
-                    <span class={"px-2 py-0.5 text-xs rounded-full " <> badge_class}>
-                      {goal_column_count(@goal_todos, status)}
-                    </span>
-                  </div>
-                  <div class="p-2 space-y-2 min-h-[120px] flex-1 overflow-y-auto">
-                    <div
-                      :for={todo <- goal_column_items(@goal_todos, status)}
-                      data-kanban-slug={todo.slug}
-                      draggable="true"
-                      phx-click="show_page"
-                      phx-value-slug={todo.slug}
-                      class="p-3 rounded-lg bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary/40 active:cursor-grabbing transition"
-                    >
-                      <div class="font-medium text-sm break-words">{todo.title}</div>
-                      <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                        <span class={"px-1.5 py-0.5 text-[11px] rounded " <> goal_priority_class(todo)}>
-                          {goal_priority_label(todo)}
-                        </span>
-                      </div>
-                      <div :if={goal_due_date(todo)} class={goal_due_date_class(goal_overdue?(todo))}>
-                        <.icon name="hero-calendar-days" class="size-3.5" /> {goal_format_due(
-                          goal_due_date(todo)
-                        )}
-                      </div>
-                    </div>
-                    <p
-                      :if={goal_column_items(@goal_todos, status) == []}
-                      class="text-xs text-base-content/30 text-center py-4"
-                    >
-                      Empty
-                    </p>
-                  </div>
-                </div>
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-sm text-base-content/60">{length(@goal_todos)} todos linked</span>
+                <.link navigate={~p"/kanban?goal=#{@page.slug}"} class="btn btn-ghost btn-xs">
+                  Open in Kanban →
+                </.link>
               </div>
-              <p :if={@goal_todos == []} class="text-sm text-base-content/40 mt-4">
+              <div :for={todo <- @goal_todos} class="p-3 rounded-lg border border-base-300 mb-2">
+                <div class="flex items-center justify-between">
+                  <.link navigate={PageTypes.page_show_path(todo)} class="font-medium text-primary hover:underline">
+                    {todo.title}
+                  </.link>
+                  <span class={"px-2 py-0.5 text-xs rounded " <> kanban_status_class(todo)}>
+                    {String.capitalize(kanban_status(todo))}
+                  </span>
+                </div>
+                <div :if={todo.summary} class="text-xs text-base-content/60 mt-1">{todo.summary}</div>
+              </div>
+              <p :if={@goal_todos == []} class="text-sm text-base-content/40">
                 No todos linked to this goal.
               </p>
             </div>
@@ -347,46 +334,6 @@ defmodule DranWeb.GoalLive do
       </div><div :if={@live_action != :show}>
         <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
       </div>
-
-      <script :type={Phoenix.LiveView.ColocatedHook} name=".GoalKanban">
-        export default {
-          mounted() {
-            this.draggedSlug = null;
-            const board = this.el;
-
-            board.addEventListener("dragstart", (e) => {
-              const card = e.target.closest("[data-kanban-slug]");
-              if (card) {
-                this.draggedSlug = card.dataset.kanbanSlug;
-                e.dataTransfer.effectAllowed = "move";
-              }
-            });
-
-            board.addEventListener("dragover", (e) => {
-              if (e.target.closest("[data-kanban-status]")) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-              }
-            });
-
-            board.addEventListener("drop", (e) => {
-              const col = e.target.closest("[data-kanban-status]");
-              if (col !== null && this.draggedSlug !== null) {
-                e.preventDefault();
-                this.pushEvent("move_todo", {
-                  slug: this.draggedSlug,
-                  target_status: col.dataset.kanbanStatus
-                });
-              }
-              this.draggedSlug = null;
-            });
-
-            board.addEventListener("dragend", () => {
-              this.draggedSlug = null;
-            });
-          }
-        }
-      </script>
     </Layouts.app>
     """
   end
@@ -414,7 +361,6 @@ defmodule DranWeb.GoalLive do
        context: context,
        page_type: @page_type,
        goal_tabs: @goal_tabs,
-       kanban_columns: @kanban_columns,
        active_tab: "overview",
        editing: false,
        save_status: "idle"
@@ -557,41 +503,6 @@ defmodule DranWeb.GoalLive do
     {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
   end
 
-  def handle_event("move_todo", %{"slug" => slug, "target_status" => status}, socket) do
-    context = socket.assigns.context
-
-    if context do
-      case Brain.get_page_by_slug(slug, context.id) do
-        nil ->
-          {:noreply, put_flash(socket, :error, "Todo not found.")}
-
-        todo ->
-          new_meta = Map.put(todo.meta || %{}, "kanban_status", status)
-
-          case Brain.update_page(todo, %{"meta" => new_meta}) do
-            {:ok, _updated} ->
-              goal_slug = socket.assigns.page.slug
-
-              goal_todos =
-                Brain.list_pages(
-                  context_id: context.id,
-                  type: "todo",
-                  limit: 500,
-                  include_body: false
-                )
-                |> Enum.filter(fn p -> meta_get(p.meta, "goal_slug") == goal_slug end)
-
-              {:noreply, assign(socket, goal_todos: goal_todos)}
-
-            {:error, _} ->
-              {:noreply, put_flash(socket, :error, "Could not update todo status.")}
-          end
-      end
-    else
-      {:noreply, socket}
-    end
-  end
-
   def handle_event("new_page", _params, socket) do
     {:noreply, push_navigate(socket, to: ~p"/goals/new")}
   end
@@ -620,78 +531,57 @@ defmodule DranWeb.GoalLive do
   # nil-safe access into a page's `meta` map (string keys, as persisted in JSONB).
   defp meta_get(meta, key), do: get_in(meta, [key])
 
-  # ── Kanban helpers ──
+  # ── Goal metric helpers (§6.3) ──
 
-  defp goal_kanban_status(page) do
+  defp progress_percent(page) do
+    case meta_get(page.meta, "progress") do
+      nil ->
+        # Derive from current/target if no explicit progress.
+        case {meta_get(page.meta, "current_value"), meta_get(page.meta, "target_value")} do
+          {nil, _} -> 0
+          {_, nil} -> 0
+          {cur, tgt} when is_number(cur) and is_number(tgt) and tgt != 0 ->
+            round(cur / tgt * 100) |> max(0) |> min(100)
+          _ -> 0
+        end
+
+      v when is_number(v) ->
+        # Treat as percentage if > 1, else as fraction in [0, 1].
+        if v > 1, do: round(v) |> max(0) |> min(100), else: round(v * 100) |> max(0) |> min(100)
+
+      v when is_binary(v) ->
+        case Float.parse(v) do
+          {f, _} when f > 1 -> round(f) |> max(0) |> min(100)
+          {f, _} -> round(f * 100) |> max(0) |> min(100)
+          :error -> 0
+        end
+
+      _ ->
+        0
+    end
+  end
+
+  defp format_value(nil), do: "—"
+  defp format_value(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 2)
+  defp format_value(v), do: to_string(v)
+
+  # ── Kanban status helpers (for the simple Todos list) ──
+
+  defp kanban_status(page) do
     case meta_get(page.meta, "kanban_status") do
       s when is_binary(s) and s != "" -> s
       _ -> "backlog"
     end
   end
 
-  defp goal_column_items(todos, status) do
-    Enum.filter(todos, fn t -> goal_kanban_status(t) == status end)
-  end
-
-  defp goal_column_count(todos, status) do
-    Enum.count(todos, fn t -> goal_kanban_status(t) == status end)
-  end
-
-  defp goal_priority(page) do
-    case meta_get(page.meta, "priority") do
-      s when is_binary(s) and s != "" -> s
-      _ -> "medium"
+  defp kanban_status_class(page) do
+    case kanban_status(page) do
+      "this_week" -> "bg-blue-100 text-blue-700"
+      "today" -> "bg-amber-100 text-amber-700"
+      "in_progress" -> "bg-purple-100 text-purple-700"
+      "done" -> "bg-green-100 text-green-700"
+      "cancelled" -> "bg-red-100 text-red-700"
+      _ -> "bg-base-300 text-base-content/70"
     end
   end
-
-  defp goal_priority_label(page) do
-    case goal_priority(page) do
-      "urgent" -> "Urgent"
-      "high" -> "High"
-      "medium" -> "Medium"
-      "low" -> "Low"
-      other -> other |> to_string() |> String.capitalize()
-    end
-  end
-
-  defp goal_priority_class(page) do
-    case goal_priority(page) do
-      "urgent" -> "bg-red-100 text-red-700"
-      "high" -> "bg-orange-100 text-orange-700"
-      "medium" -> "bg-blue-100 text-blue-700"
-      "low" -> "bg-gray-100 text-gray-600"
-      _ -> "bg-gray-100 text-gray-600"
-    end
-  end
-
-  defp goal_due_date(page), do: meta_get(page.meta, "due_date")
-
-  defp goal_overdue?(page) do
-    case goal_due_date(page) do
-      s when is_binary(s) and s != "" ->
-        case Date.from_iso8601(s) do
-          {:ok, d} -> Date.compare(d, Date.utc_today()) == :lt
-          _ -> false
-        end
-
-      _ ->
-        false
-    end
-  end
-
-  defp goal_format_due(nil), do: ""
-  defp goal_format_due(""), do: ""
-
-  defp goal_format_due(s) when is_binary(s) do
-    case Date.from_iso8601(s) do
-      {:ok, d} -> Calendar.strftime(d, "%b %d")
-      _ -> s
-    end
-  end
-
-  defp goal_due_date_class(true),
-    do: "flex items-center gap-1 mt-1.5 text-[11px] text-red-600 font-medium"
-
-  defp goal_due_date_class(false),
-    do: "flex items-center gap-1 mt-1.5 text-[11px] text-base-content/60"
 end

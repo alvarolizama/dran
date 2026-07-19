@@ -6,10 +6,15 @@ defmodule DranWeb.PlanLive do
   alias Dran.Brain
   alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
+  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
   @page_type "plan"
-  @tabs [{"content", gettext("Content")}, {"graph", gettext("Graph")}]
+  @tabs [
+    {"content", gettext("Content")},
+    {"todos", gettext("Todos")},
+    {"graph", gettext("Graph")}
+  ]
 
   def render(assigns) do
     ~H"""
@@ -103,6 +108,19 @@ defmodule DranWeb.PlanLive do
                   </div>
                 </.form>
               <% else %>
+                <%!-- Status + horizon + period + due_date panel (§7.4) --%>
+                <div class="flex items-center gap-3 mb-4 text-sm">
+                  <span class={"px-2 py-0.5 rounded " <> plan_status_class(@page)}>
+                    {String.capitalize(meta_get(@page.meta, "status") || "draft")}
+                  </span>
+                  <span class="text-base-content/60">
+                    {String.capitalize(meta_get(@page.meta, "horizon") || "")}
+                    <span :if={meta_get(@page.meta, "period")}>· {meta_get(@page.meta, "period")}</span>
+                  </span>
+                  <span :if={meta_get(@page.meta, "due_date")} class="text-base-content/60">
+                    {gettext("Due")}: {meta_get(@page.meta, "due_date")}
+                  </span>
+                </div>
                 <div class="prose prose-base dark:prose-invert max-w-none">
                   {@rendered_body}
                 </div>
@@ -124,6 +142,29 @@ defmodule DranWeb.PlanLive do
                   </div>
                 </div>
               <% end %>
+            </div>
+            <%!-- Todos: lista simple con link a kanban global (§7.3) --%>
+            <div :if={@active_tab == "todos"}>
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-sm text-base-content/60">{length(@plan_todos)} {gettext("todos linked")}</span>
+                <.link navigate={~p"/kanban?plan=#{@page.slug}"} class="btn btn-ghost btn-xs">
+                  {gettext("Open in Kanban")} →
+                </.link>
+              </div>
+              <div :for={todo <- @plan_todos} class="p-3 rounded-lg border border-base-300 mb-2">
+                <div class="flex items-center justify-between">
+                  <.link navigate={PageTypes.page_show_path(todo)} class="font-medium text-primary hover:underline">
+                    {todo.title}
+                  </.link>
+                  <span class={"px-2 py-0.5 text-xs rounded " <> kanban_status_class(todo)}>
+                    {String.capitalize(kanban_status(todo))}
+                  </span>
+                </div>
+                <div :if={todo.summary} class="text-xs text-base-content/60 mt-1">{todo.summary}</div>
+              </div>
+              <p :if={@plan_todos == []} class="text-sm text-base-content/40">
+                {gettext("No todos linked to this plan.")}
+              </p>
             </div>
             <div :if={@active_tab == "graph"}>
               <.page_graph id="plan-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
@@ -179,6 +220,18 @@ defmodule DranWeb.PlanLive do
           editing = Map.get(params, "edit") == "true"
           form = if editing, do: Brain.change_page(page) |> to_form(as: :page), else: nil
 
+          # §7.2 — load todos linked to this plan via meta.plan_slug.
+          # Brain.list_pages already supports a :plan_slug filter (Phase 2),
+          # so we use it directly here instead of filtering in memory.
+          plan_todos =
+            Brain.list_pages(
+              context_id: context.id,
+              type: "todo",
+              plan_slug: page.slug,
+              include_body: false,
+              limit: 500
+            )
+
           rendered_body =
             render_markdown(page.body,
               context_id: page.context_id,
@@ -194,6 +247,7 @@ defmodule DranWeb.PlanLive do
              logs: logs,
              page_title: page.title,
              active_tab: "content",
+             plan_todos: plan_todos,
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
              editing: editing,
@@ -249,4 +303,40 @@ defmodule DranWeb.PlanLive do
     do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
 
   defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
+
+  # ── Helpers ──
+
+  # nil-safe access into a page's `meta` map (string keys, as persisted in JSONB).
+  defp meta_get(meta, key) when is_map(meta), do: Map.get(meta, key)
+  defp meta_get(nil, _key), do: nil
+
+  # §7.4 — Tailwind class for the plan status badge.
+  defp plan_status_class(page) do
+    case meta_get(page.meta, "status") do
+      "active" -> "bg-green-100 text-green-700"
+      "done" -> "bg-blue-100 text-blue-700"
+      "archived" -> "bg-base-300 text-base-content/60"
+      _ -> "bg-amber-100 text-amber-700"
+    end
+  end
+
+  # ── Kanban status helpers (for the simple Todos list) ──
+
+  defp kanban_status(page) do
+    case meta_get(page.meta, "kanban_status") do
+      s when is_binary(s) and s != "" -> s
+      _ -> "backlog"
+    end
+  end
+
+  defp kanban_status_class(page) do
+    case kanban_status(page) do
+      "this_week" -> "bg-blue-100 text-blue-700"
+      "today" -> "bg-amber-100 text-amber-700"
+      "in_progress" -> "bg-purple-100 text-purple-700"
+      "done" -> "bg-green-100 text-green-700"
+      "cancelled" -> "bg-red-100 text-red-700"
+      _ -> "bg-base-300 text-base-content/70"
+    end
+  end
 end
