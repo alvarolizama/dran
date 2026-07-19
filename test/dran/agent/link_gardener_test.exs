@@ -424,10 +424,15 @@ defmodule Dran.Agent.LinkGardenerTest do
     @describetag :e2e
 
     test "list_orphans → get_page → propose_relation → done creates a relation" do
+      # Disable inference while creating pages so PageAugmenter.schedule
+      # returns :ignored (no async task spawned that would consume stub
+      # responses or lose sandbox ownership). The test shell may have
+      # inference enabled via env vars (runtime.exs loads it in all envs).
+      original = Application.get_env(:dran, :inference)
+      Application.delete_env(:dran, :inference)
+
       ctx = create_context!()
 
-      # Create pages BEFORE enabling inference, so PageAugmenter.schedule
-      # returns :ignored (no async task spawned that would lose sandbox ownership).
       p1 = create_page!(ctx, %{title: "Alpha", slug: "alpha", body: "alpha content"})
       p2 = create_page!(ctx, %{title: "Beta", slug: "beta", body: "beta content"})
 
@@ -439,7 +444,6 @@ defmodule Dran.Agent.LinkGardenerTest do
         })
 
       # Now enable inference with a Req.Test stub for the chat endpoint.
-      original = Application.get_env(:dran, :inference)
 
       Application.put_env(:dran, :inference,
         base_url: "http://localhost:8000/v1",
