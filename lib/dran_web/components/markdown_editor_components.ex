@@ -179,7 +179,8 @@ defmodule DranWeb.MarkdownEditorComponents do
       <div class="grid grid-cols-2 gap-4">
         <%= for {type, key, label, opts} <- @fields do %>
           <% value = meta_value(@meta, @form, key) %>
-          <% visible? = is_nil(Keyword.get(opts, :condition)) or condition_met?(opts[:condition], @meta, @form) %>
+          <% visible? =
+            is_nil(Keyword.get(opts, :condition)) or condition_met?(opts[:condition], @meta, @form) %>
           <%= if visible? do %>
             <% placeholder = Keyword.get(opts, :placeholder) %>
             <%= case type do %>

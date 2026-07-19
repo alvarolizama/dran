@@ -150,7 +150,9 @@ defmodule Dran.Agent.CuratorTest do
       assert new_state.duplicate_pairs == []
     end
 
-    test "enriches pairs with same_community flag when both pages share a community_id", %{context: ctx} do
+    test "enriches pairs with same_community flag when both pages share a community_id", %{
+      context: ctx
+    } do
       # Two pages with close embeddings AND the same community_id in meta.
       _page_a =
         insert_page!(ctx.id,

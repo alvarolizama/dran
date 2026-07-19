@@ -68,11 +68,13 @@ defmodule Dran.GraphTest do
   end
 
   defp relate(source, target, type) do
-    {:ok, _} = Brain.create_relation(%{
-      source_id: source.id,
-      target_id: target.id,
-      relation_type: type
-    })
+    {:ok, _} =
+      Brain.create_relation(%{
+        source_id: source.id,
+        target_id: target.id,
+        relation_type: type
+      })
+
     :ok
   end
 

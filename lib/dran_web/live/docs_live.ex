@@ -411,12 +411,14 @@ defmodule DranWeb.DocsLive do
       <p>
         Dran runs three pure-Elixir structural algorithms over the relations
         table (<code>Dran.Graph</code>) — weighted <strong>PageRank</strong>,
-        <strong>Label Propagation</strong> communities, and the
-        <strong>GraphRAG</strong> <code>expand_neighbors</code> tool used by the
-        QA agent — plus transitive <code>part_of</code> inference used by the
-        Link Gardener. Results are persisted into each page's
-        <code>meta</code> and refreshed nightly by the
-        <code>pagerank_nightly</code> Quantum job (03:00 daily).
+        <strong>Label Propagation</strong>
+        communities, and the <strong>GraphRAG</strong> <code>expand_neighbors</code>
+        tool used by the
+        QA agent — plus transitive <code>part_of</code>
+        inference used by the
+        Link Gardener. Results are persisted into each page's <code>meta</code>
+        and refreshed nightly by the <code>pagerank_nightly</code>
+        Quantum job (03:00 daily).
       </p>
       <.code_block
         id="graph-intelligence-doc"

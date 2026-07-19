@@ -2,7 +2,7 @@ defmodule DranWeb.DocsContent do
   @moduledoc """
   Static code samples used by the in-app documentation (DocsLive).
 
-  Kept in a plain module (module attributes) because HEEx `~H"""` templates
+  Kept in a plain module (module attributes) because HEEx `~H\"""` templates
   cannot contain nested triple-quoted heredocs.
 
   ## Planning model (v6)

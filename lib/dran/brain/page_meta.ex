@@ -273,7 +273,9 @@ defmodule Dran.Brain.PageMeta do
       |> Enum.reject(&is_nil/1)
 
     case scores do
-      [] -> nil
+      [] ->
+        nil
+
       list ->
         avg = Enum.sum(list) / length(list)
         score_to_health(floor(avg))
@@ -291,7 +293,9 @@ defmodule Dran.Brain.PageMeta do
     relevant = Enum.reject(todo_statuses, &(&1 == "cancelled"))
 
     case relevant do
-      [] -> nil
+      [] ->
+        nil
+
       list ->
         done = Enum.count(list, &(&1 == "done"))
         done / length(list)
@@ -355,10 +359,8 @@ defmodule Dran.Brain.PageMeta do
 
   def meta_fields_for("project") do
     [
-      {:select, "status", "Status",
-       Enum.map(@project_statuses, &{String.capitalize(&1), &1})},
-      {:select, "health", "Health",
-       [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
+      {:select, "status", "Status", Enum.map(@project_statuses, &{String.capitalize(&1), &1})},
+      {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
       {:select, "health_source", "Health source",
        [{"Manual (override)", "manual"}, {"Derived from goals", "derived"}]},
       {:select, "priority", "Priority",
@@ -370,8 +372,7 @@ defmodule Dran.Brain.PageMeta do
 
   def meta_fields_for("goal") do
     [
-      {:select, "health", "Health",
-       [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
+      {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
       {:text, "metric", "Metric", placeholder: "e.g. MRR, users, uptime"},
       {:number, "target_value", "Target value", step: "0.01"},
       {:number, "current_value", "Current value", step: "0.01"},

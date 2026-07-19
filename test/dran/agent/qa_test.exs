@@ -251,7 +251,10 @@ defmodule Dran.Agent.QATest do
       assert is_list(neighbors)
 
       neighbor_b = Enum.find(neighbors, &(&1.slug == "page-b-neighbors"))
-      assert neighbor_b != nil, "expected page-b-neighbors in neighbors, got: #{inspect(neighbors)}"
+
+      assert neighbor_b != nil,
+             "expected page-b-neighbors in neighbors, got: #{inspect(neighbors)}"
+
       assert neighbor_b.relation_type == "part_of"
       assert neighbor_b.direction == "outbound"
       assert neighbor_b.title == "Page B"

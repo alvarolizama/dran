@@ -262,7 +262,10 @@ defmodule Dran.GraphExpansionTest do
     test "does not propose across contexts", %{context: ctx} do
       # Create a second context with its own part_of chain.
       {:ok, other_ctx} =
-        Brain.create_context(%{name: "Other", slug: "other-context-#{:erlang.unique_integer([:positive])}"})
+        Brain.create_context(%{
+          name: "Other",
+          slug: "other-context-#{:erlang.unique_integer([:positive])}"
+        })
 
       a = create_note(ctx, "a")
       b = create_note(ctx, "b")
@@ -278,7 +281,7 @@ defmodule Dran.GraphExpansionTest do
       relate!(y, z, "part_of")
 
       candidates = Brain.transitive_part_of_candidates(ctx.id)
-      slugs = Enum.flat_map(candidates, & [&1.source_slug, &1.target_slug, &1.via_slug])
+      slugs = Enum.flat_map(candidates, &[&1.source_slug, &1.target_slug, &1.via_slug])
 
       assert "a" in slugs
       refute "x" in slugs, "must not propose candidates from other contexts"

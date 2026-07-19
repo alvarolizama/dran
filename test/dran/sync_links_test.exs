@@ -187,7 +187,9 @@ defmodule Dran.SyncLinksTest do
       create_project(ctx, "proj-b")
       create_goal(ctx, "goal-b")
       create_plan(ctx, "plan-b")
-      todo = create_todo(ctx, "t3", project_slug: "proj-b", goal_slug: "goal-b", plan_slug: "plan-b")
+
+      todo =
+        create_todo(ctx, "t3", project_slug: "proj-b", goal_slug: "goal-b", plan_slug: "plan-b")
 
       targets = part_of_targets(todo)
       assert Enum.sort(targets) == ["goal-b", "plan-b", "proj-b"]
