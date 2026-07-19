@@ -27,7 +27,7 @@ defmodule Dran.Brain do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.Brain.{Context, Page, Relation, PageVersion, Log}
+  alias Dran.Brain.{Context, Page, Relation, PageVersion, Log, PageMeta}
 
   # ──────────────────────────────────────────────────────────────────────────
   # Contexts
@@ -101,6 +101,8 @@ defmodule Dran.Brain do
   - `:plan_slug` — filter by `meta.plan_slug`. The special value `"none"`
     matches pages with no/empty plan_slug. Mainly meaningful with
     `type: "todo"`.
+  - `:project_slug` — filter by `meta.project_slug`. The special value
+    `"none"` matches pages with no/empty project_slug (orphans).
   - `:limit` — limit results (default 50)
   - `:include_body` — include full body (default false, lightweight listing)
 
@@ -115,6 +117,7 @@ defmodule Dran.Brain do
     created_by = Keyword.get(opts, :created_by)
     goal_slug = Keyword.get(opts, :goal_slug)
     plan_slug = Keyword.get(opts, :plan_slug)
+    project_slug = Keyword.get(opts, :project_slug)
     limit = Keyword.get(opts, :limit, 50)
     include_body = Keyword.get(opts, :include_body, false)
 
@@ -157,6 +160,7 @@ defmodule Dran.Brain do
       |> maybe_filter_created_by(created_by)
       |> maybe_filter_plan_slug(plan_slug)
       |> maybe_filter_goal_slug(goal_slug)
+      |> maybe_filter_project_slug(project_slug)
       |> maybe_distinct_for_planning(goal_slug)
       |> order_by([p], desc: p.updated_at)
       |> limit(^limit)
@@ -254,6 +258,23 @@ defmodule Dran.Brain do
       fragment("?->>'goal_slug'", p.meta) == ^goal_slug or
         fragment("?->>'goal_slug'", plan.meta) == ^goal_slug
     )
+  end
+
+  # project_slug: nil → no filter; "none" → empty/null project_slug (orphans);
+  # value → exact match on meta.project_slug.
+  defp maybe_filter_project_slug(query, nil), do: query
+
+  defp maybe_filter_project_slug(query, "none") do
+    where(
+      query,
+      [p],
+      is_nil(fragment("?->>'project_slug'", p.meta)) or
+        fragment("?->>'project_slug'", p.meta) == ""
+    )
+  end
+
+  defp maybe_filter_project_slug(query, project_slug) do
+    where(query, [p], fragment("?->>'project_slug'", p.meta) == ^project_slug)
   end
 
   # The goal_slug join can duplicate rows when a todo matches both via its own
@@ -380,7 +401,7 @@ defmodule Dran.Brain do
         })
 
         resolve_embeds(page)
-        sync_planning_relations(page)
+        sync_todo_links(page)
 
         broadcast_page_change(page.context_id, :created, page)
         Dran.Embeddings.schedule(page)
@@ -464,7 +485,7 @@ defmodule Dran.Brain do
         })
 
         reresolve_embeds(updated_page)
-        sync_planning_relations(updated_page, page)
+        sync_todo_links(updated_page, page)
 
         broadcast_page_change(updated_page.context_id, :updated, updated_page)
         Dran.Embeddings.schedule(updated_page)
@@ -780,93 +801,214 @@ defmodule Dran.Brain do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Planning hierarchy materialization (part_of relations)
+  # Page links materialization (part_of relations) + derived health/progress
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  Synchronize `part_of` relations to match the page's current `meta`.
+  Sincroniza los vínculos `part_of` de una página con sus slugs en meta.
+  Sin precedencia: project_slug, goal_slug y plan_slug son independientes.
+  Cada uno materializa su propia relación part_of si está seteado, y se borra
+  si se quita. Si la página objetivo no existe, no se crea la relación (el lint
+  lo reportará).
 
-  Given a page of type `plan` or `todo`, this ensures the page's `part_of`
-  relation to its goal/plan matches its current `meta.goal_slug` /
-  `meta.plan_slug`. Stale relations pointing to a *previous* goal/plan slug
-  are removed; the new one is created (idempotently).
-
-  `prior_page` is the page as it was *before* the update (used to know which
-  old slugs to clean up). Pass `nil` (or omit) for freshly-created pages.
-
-  ## Rules
-
-  - **plan** with `goal_slug` → ensures `part_of` plan→goal.
-  - **todo** with `plan_slug` → ensures `part_of` todo→plan.
-  - **todo** with `goal_slug` (and no `plan_slug`) → ensures `part_of` todo→goal.
-  - If the slug changed or was removed, the old `part_of` to that previous
-    target is deleted. We only ever delete the `part_of` whose target slug
-    equals the *prior* meta value — manually-created `part_of` relations to
-    other targets are never touched.
-  - If the target page (goal/plan) doesn't exist yet, no relation is created
-    (the lint report will flag the broken ref). Never raises.
+  Invocada desde create_page/1 y update_page/2.
   """
-  def sync_planning_relations(page, prior_page \\ nil)
+  def sync_todo_links(page, prior_page \\ nil)
 
-  def sync_planning_relations(%Page{page_type: type} = page, prior_page)
-      when type in ~w(plan todo) do
+  def sync_todo_links(%Page{} = page, prior_page) do
     context_id = page.context_id
-    new_goal = meta_string(page.meta, "goal_slug")
-    new_plan = meta_string(page.meta, "plan_slug")
-    prior_goal = if prior_page, do: meta_string(prior_page.meta, "goal_slug"), else: nil
-    prior_plan = if prior_page, do: meta_string(prior_page.meta, "plan_slug"), else: nil
 
-    case type do
-      "plan" ->
-        # Clean up a prior goal link if it differs from the current one.
-        maybe_drop_planning_part_of(page.slug, prior_goal, new_goal, context_id)
-        ensure_part_of(page.slug, new_goal, context_id)
+    sync_one_link(page.slug, "project_slug", page.meta, prior_page && prior_page.meta, context_id)
+    sync_one_link(page.slug, "goal_slug", page.meta, prior_page && prior_page.meta, context_id)
+    sync_one_link(page.slug, "plan_slug", page.meta, prior_page && prior_page.meta, context_id)
 
-      "todo" ->
-        # plan_slug takes precedence; when present, the todo hangs off the plan
-        # and its own goal_slug is ignored for materialization.
-        maybe_drop_planning_part_of(page.slug, prior_plan, new_plan, context_id)
-        ensure_part_of(page.slug, new_plan, context_id)
+    # Recalcular health de project padre si la página es un goal con project_slug
+    maybe_recompute_parent_project(page, prior_page, context_id)
 
-        if blank?(new_plan) do
-          # No plan: manage the direct todo→goal link instead.
-          maybe_drop_planning_part_of(page.slug, prior_goal, new_goal, context_id)
-          ensure_part_of(page.slug, new_goal, context_id)
-        else
-          # A plan is set now: drop any stale direct todo→goal part_of left
-          # over from when the todo hung directly off the goal.
-          maybe_drop_planning_part_of(page.slug, prior_goal, nil, context_id)
+    # Recalcular progress de goal padre si la página es un todo con goal_slug
+    maybe_recompute_parent_goal_progress(page, prior_page, context_id)
+
+    :ok
+  end
+
+  # Sincroniza un único vínculo (project_slug, goal_slug o plan_slug).
+  # Compara el valor actual con el previo; si cambiaron, borra la relación vieja
+  # y crea la nueva. Si ambos son nil o iguales, no hace nada.
+  defp sync_one_link(source_slug, key, current_meta, prior_meta, context_id) do
+    current = meta_string(current_meta, key)
+    prior = if prior_meta, do: meta_string(prior_meta, key), else: nil
+
+    cond do
+      current == prior ->
+        :ok
+
+      is_nil(current) or current == "" ->
+        # El vínculo se quitó: borrar la relación previa (si la había).
+        if not blank?(prior) do
+          delete_relation_by_slugs(source_slug, prior, "part_of", context_id)
         end
+
+        :ok
+
+      true ->
+        # El vínculo cambió o se creó: borrar el previo (si lo había), crear el nuevo.
+        if not blank?(prior) do
+          delete_relation_by_slugs(source_slug, prior, "part_of", context_id)
+        end
+
+        create_relation_by_slugs(source_slug, current, "part_of", context_id)
+        :ok
     end
+  end
 
+  # ── Recálculo de health de project (cuando un goal cambia) ────────────────
+
+  defp maybe_recompute_parent_project(page, prior_page, context_id) do
+    # Solo recalcular si la página es un goal (su health alimenta el project)
+    if page.page_type != "goal" do
+      :ok
+    else
+      project_slug = meta_string(page.meta, "project_slug")
+
+      if blank?(project_slug) do
+        :ok
+      else
+        health_changed? =
+          prior_page &&
+            meta_string(page.meta, "health") != meta_string(prior_page.meta, "health")
+
+        project_changed? =
+          prior_page &&
+            meta_string(page.meta, "project_slug") != meta_string(prior_page.meta, "project_slug")
+
+        if is_nil(prior_page) or health_changed? or project_changed? do
+          case get_page_by_slug(project_slug, context_id) do
+            nil -> :ok
+            project_page -> recompute_project_health(project_page, context_id)
+          end
+        else
+          :ok
+        end
+      end
+    end
+  end
+
+  @doc """
+  Recomputa el `health` derivado de un project a partir del health de sus goals.
+
+  Si el project tiene `health_source: "manual"`, se respeta y no se recalcula.
+  Si no hay goals con health, no se sobreescribe (se mantiene el valor actual).
+  """
+  def recompute_project_health(project_page, _context_id) do
+    if meta_get(project_page.meta, "health_source") == "manual" do
+      :ok
+    else
+      goal_healths = list_goal_healths_for_project(project_page.slug, project_page.context_id)
+
+      case PageMeta.derive_project_health(goal_healths) do
+        nil ->
+          :ok
+
+        derived ->
+          update_page_meta_field(project_page, "health", derived)
+          update_page_meta_field(project_page, "health_source", "derived")
+      end
+    end
+  end
+
+  defp list_goal_healths_for_project(project_slug, context_id) do
+    from(p in Page,
+      where:
+        p.context_id == ^context_id and
+          p.page_type == "goal" and
+          fragment("?->>'project_slug'", p.meta) == ^project_slug,
+      select: fragment("?->>'health'", p.meta)
+    )
+    |> Repo.all()
+    |> Enum.reject(&is_nil/1)
+  end
+
+  # ── Recálculo de progress de goal (cuando un todo cambia) ──────────────────
+
+  defp maybe_recompute_parent_goal_progress(page, prior_page, context_id) do
+    # Solo recalcular si la página es un todo (su kanban_status alimenta el progress del goal)
+    if page.page_type != "todo" do
+      :ok
+    else
+      goal_slug = meta_string(page.meta, "goal_slug")
+
+      if blank?(goal_slug) do
+        :ok
+      else
+        status_changed? =
+          prior_page &&
+            meta_string(page.meta, "kanban_status") != meta_string(prior_page.meta, "kanban_status")
+
+        goal_changed? =
+          prior_page &&
+            meta_string(page.meta, "goal_slug") != meta_string(prior_page.meta, "goal_slug")
+
+        if is_nil(prior_page) or status_changed? or goal_changed? do
+          case get_page_by_slug(goal_slug, context_id) do
+            nil -> :ok
+            goal_page -> recompute_goal_progress(goal_page, context_id)
+          end
+        else
+          :ok
+        end
+      end
+    end
+  end
+
+  @doc """
+  Recomputa el `progress` derivado de un goal a partir del kanban_status de sus todos.
+
+  Si el goal tiene el flag `progress_manual: true` en el meta, se respeta el
+  valor manual y no se recalcula. Si no hay todos con status, no se sobreescribe.
+  """
+  def recompute_goal_progress(goal_page, _context_id) do
+    if Map.get(goal_page.meta || %{}, "progress_manual") == true do
+      :ok
+    else
+      todo_statuses = list_todo_statuses_for_goal(goal_page.slug, goal_page.context_id)
+
+      case PageMeta.derive_goal_progress(todo_statuses) do
+        nil -> :ok
+        derived -> update_page_meta_field(goal_page, "progress", Float.round(derived, 2))
+      end
+    end
+  end
+
+  defp list_todo_statuses_for_goal(goal_slug, context_id) do
+    from(p in Page,
+      where:
+        p.context_id == ^context_id and
+          p.page_type == "todo" and
+          fragment("?->>'goal_slug'", p.meta) == ^goal_slug,
+      select: fragment("?->>'kanban_status'", p.meta)
+    )
+    |> Repo.all()
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp update_page_meta_field(page, key, value) do
+    new_meta = Map.put(page.meta || %{}, key, value)
+    update_page(page, %{"meta" => new_meta})
     :ok
   end
 
-  def sync_planning_relations(_page, _prior_page), do: :ok
+  # Helper local para leer meta con fallback atom/string (PageMeta.meta_get/2
+  # no existe aún — este helper lo sustituye).
+  defp meta_get(nil, _key), do: nil
 
-  # Create a part_of source→target (by slug) if the target exists. Idempotent.
-  defp ensure_part_of(_source_slug, nil, _context_id), do: :ok
-  defp ensure_part_of(_source_slug, "", _context_id), do: :ok
-
-  defp ensure_part_of(source_slug, target_slug, context_id) do
-    create_relation_by_slugs(source_slug, target_slug, "part_of", context_id)
-    :ok
+  defp meta_get(meta, key) when is_map(meta) do
+    case Map.get(meta, key) do
+      nil -> Map.get(meta, to_string(key))
+      val -> val
+    end
   end
 
-  # Delete the part_of source→prior_target_slug ONLY when that slug is no
-  # longer the current one. This is what keeps manual part_of relations to
-  # unrelated targets intact: we only ever touch the exact prior slug.
-  defp maybe_drop_planning_part_of(_source_slug, nil, _new_slug, _context_id), do: :ok
-
-  defp maybe_drop_planning_part_of(_source_slug, "", _new_slug, _context_id), do: :ok
-
-  defp maybe_drop_planning_part_of(_source_slug, prior_slug, prior_slug, _context_id),
-    do: :ok
-
-  defp maybe_drop_planning_part_of(source_slug, prior_slug, _new_slug, context_id) do
-    delete_relation_by_slugs(source_slug, prior_slug, "part_of", context_id)
-    :ok
-  end
+  defp meta_get(_meta, _key), do: nil
 
   defp meta_string(nil, _key), do: nil
 
