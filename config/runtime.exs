@@ -21,7 +21,11 @@ import Config
 # will pick it up automatically. Leaving this on `true` makes the release
 # work the same whether started via `bin/server`, `bin/dran start`, or any
 # other entrypoint (Coolify, Railpack, Nixpacks, bare metal).
-config :dran, DranWeb.Endpoint, server: true
+# Guard: in :test this would fight the Endpoint's `server: false` and try to
+# bind the port during `mix test` / `mix precommit` (eaddrinuse).
+if config_env() != :test do
+  config :dran, DranWeb.Endpoint, server: true
+end
 
 config :dran, DranWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
