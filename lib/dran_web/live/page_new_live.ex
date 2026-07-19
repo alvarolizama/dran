@@ -34,65 +34,61 @@ defmodule DranWeb.PageNewLive do
         </div>
 
         <.form for={@form} id="page-new-form" phx-change="validate_page" phx-submit="save_page">
-          <div class="space-y-5">
-            <.input
-              field={@form[:title]}
-              type="text"
-              label={gettext("Title")}
-              placeholder={gettext("Enter a title…")}
-              class="text-lg font-medium"
-            />
-
-            <.input
-              field={@form[:tags]}
-              type="text"
-              label={gettext("Tags")}
-              placeholder={gettext("comma, separated, tags")}
-              class="text-sm"
-            />
-
-            <div>
-              <span class="label mb-1 block text-sm font-medium text-base-content/70">
-                {gettext("Content")}
-              </span>
-              <.markdown_editor
-                id="page-new-editor"
-                body={@body}
-                context_id={@context_id}
-                save_status={@save_status}
+          <div class="flex gap-6 items-start">
+            <%!-- Left: title + editor --%>
+            <div class="flex-1 min-w-0 space-y-5">
+              <.input
+                field={@form[:title]}
+                type="text"
+                label={gettext("Title")}
+                placeholder={gettext("Enter a title…")}
+                class="text-lg font-medium"
               />
-            </div>
 
-            <details class="group">
-              <summary class="flex items-center gap-2 cursor-pointer select-none mb-3">
-                <.icon
-                  name="hero-chevron-right"
-                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-                />
-                <span class="text-sm font-semibold text-base-content/60 uppercase tracking-wider">
-                  {gettext("Más opciones")}
+              <div>
+                <span class="label mb-1 block text-sm font-medium text-base-content/70">
+                  {gettext("Content")}
                 </span>
-              </summary>
-
-              <div class="space-y-4 ml-6">
-                <.input
-                  field={@form[:summary]}
-                  type="text"
-                  label={gettext("Summary")}
-                  placeholder={gettext("One-line description")}
-                  class="text-sm"
+                <.markdown_editor
+                  id="page-new-editor"
+                  body={@body}
+                  context_id={@context_id}
+                  save_status={@save_status}
                 />
-
-                <.meta_fields page_type={@page_type} meta={@meta} context_id={@context_id} />
               </div>
-            </details>
-
-            <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
-              <.link navigate={@back_path} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
-              <button type="submit" class="btn btn-primary btn-sm">
-                <.icon name="hero-plus" class="size-4" /> {gettext("Create")}
-              </button>
             </div>
+
+            <%!-- Right: attributes sidebar --%>
+            <aside class="w-80 shrink-0 space-y-4 surface-2 rounded-2xl p-5 sticky top-6">
+              <h2 class="text-sm font-semibold text-base-content/70 uppercase tracking-wider">
+                {gettext("Atributos")}
+              </h2>
+
+              <.input
+                field={@form[:tags]}
+                type="text"
+                label={gettext("Tags")}
+                placeholder={gettext("comma, separated, tags")}
+                class="text-sm"
+              />
+
+              <.input
+                field={@form[:summary]}
+                type="text"
+                label={gettext("Summary")}
+                placeholder={gettext("One-line description")}
+                class="text-sm"
+              />
+
+              <.meta_fields page_type={@page_type} meta={@meta} context_id={@context_id} />
+            </aside>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-4 mt-4 border-t border-base-300">
+            <.link navigate={@back_path} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
+            <button type="submit" class="btn btn-primary btn-sm">
+              <.icon name="hero-plus" class="size-4" /> {gettext("Create")}
+            </button>
           </div>
         </.form>
       </div>

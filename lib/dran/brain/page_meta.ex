@@ -13,6 +13,7 @@ defmodule Dran.Brain.PageMeta do
   """
 
   use Ecto.Schema
+  use Gettext, backend: DranWeb.Gettext
   import Ecto.Changeset
 
   @primary_key false
@@ -334,12 +335,12 @@ defmodule Dran.Brain.PageMeta do
     # progress are derived/tracking fields, so they are hidden on the
     # new-goal form.
     [
-      {:text, "metric", "Metric", placeholder: "e.g. MRR, users, uptime"},
-      {:number, "target_value", "Target value", step: "0.01"},
-      {:text, "unit", "Unit", placeholder: "e.g. %, USD, users"},
-      {:date, "start_date", "Start date"},
-      {:date, "target_date", "Target date"},
-      {:slug_select, "project_slug", "Project", type: "project"}
+      {:text, "metric", gettext("Metric"), placeholder: "e.g. MRR, users, uptime"},
+      {:number, "target_value", gettext("Target value"), step: "0.01"},
+      {:text, "unit", gettext("Unit"), placeholder: "e.g. %, USD, users"},
+      {:date, "start_date", gettext("Start date")},
+      {:date, "target_date", gettext("Target date")},
+      {:slug_select, "project_slug", gettext("Project"), type: "project"}
     ]
   end
 
@@ -347,51 +348,58 @@ defmodule Dran.Brain.PageMeta do
 
   defp meta_fields_edit("note") do
     [
-      {:select, "kind", "Kind", Enum.map(@note_kinds, &{String.capitalize(&1), &1})},
-      {:date, "date", "Date"},
-      {:text, "author", "Author"},
-      {:date, "due_date", "Due date", condition: {:kind, "reminder"}}
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@note_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:date, "date", gettext("Date")},
+      {:text, "author", gettext("Author")},
+      {:date, "due_date", gettext("Due date"), condition: {:kind, "reminder"}}
     ]
   end
 
   defp meta_fields_edit("concept") do
     [
-      {:select, "kind", "Kind", Enum.map(@concept_kinds, &{String.capitalize(&1), &1})},
-      {:text, "domain", "Domain"},
-      {:text, "parent_concept", "Parent concept"}
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@concept_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:text, "domain", gettext("Domain")},
+      {:text, "parent_concept", gettext("Parent concept")}
     ]
   end
 
   defp meta_fields_edit("entity") do
     [
-      {:select, "kind", "Kind", Enum.map(@entity_kinds, &{String.capitalize(&1), &1})},
-      {:text, "location", "Location"},
-      {:text, "external_url", "External URL"}
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@entity_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:text, "location", gettext("Location")},
+      {:text, "external_url", gettext("External URL")}
     ]
   end
 
   defp meta_fields_edit("reference") do
     [
-      {:select, "kind", "Kind", Enum.map(@reference_kinds, &{String.capitalize(&1), &1})},
-      {:text, "source_url", "Source URL"},
-      {:date, "published_at", "Published at"}
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@reference_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:text, "source_url", gettext("Source URL")},
+      {:date, "published_at", gettext("Published at")}
     ]
   end
 
   defp meta_fields_edit("artifact") do
     [
-      {:select, "kind", "Kind", Enum.map(@artifact_kinds, &{String.capitalize(&1), &1})}
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@artifact_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})}
     ]
   end
 
   defp meta_fields_edit("plan") do
     [
-      {:select, "horizon", "Horizon", Enum.map(@horizons, &{String.capitalize(&1), &1})},
-      {:select, "status", "Status", Enum.map(@plan_statuses, &{String.capitalize(&1), &1})},
-      {:text, "period", "Period"},
-      {:date, "due_date", "Due date"},
-      {:slug_select, "goal_slug", "Goal", type: "goal"},
-      {:slug_select, "project_slug", "Project", type: "project"}
+      {:select, "horizon", gettext("Horizon"),
+       Enum.map(@horizons, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:select, "status", gettext("Status"),
+       Enum.map(@plan_statuses, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:text, "period", gettext("Period")},
+      {:date, "due_date", gettext("Due date")},
+      {:slug_select, "goal_slug", gettext("Goal"), type: "goal"},
+      {:slug_select, "project_slug", gettext("Project"), type: "project"}
     ]
   end
 
@@ -400,46 +408,51 @@ defmodule Dran.Brain.PageMeta do
     # detail defaulting to "derived" everywhere. Health itself stays
     # editable as a manual override.
     [
-      {:select, "status", "Status", Enum.map(@project_statuses, &{String.capitalize(&1), &1})},
-      {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
-      {:select, "priority", "Priority",
-       [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
-      {:date, "start_date", "Start date"},
-      {:date, "target_date", "Target date"}
+      {:select, "status", gettext("Status"),
+       Enum.map(@project_statuses, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:select, "health", gettext("Health"),
+       [{gettext("Green"), "green"}, {gettext("Yellow"), "yellow"}, {gettext("Red"), "red"}]},
+      {:select, "priority", gettext("Priority"),
+       [{gettext("Low"), "low"}, {gettext("Medium"), "medium"}, {gettext("High"), "high"},
+        {gettext("Urgent"), "urgent"}]},
+      {:date, "start_date", gettext("Start date")},
+      {:date, "target_date", gettext("Target date")}
     ]
   end
 
   defp meta_fields_edit("goal") do
     [
-      {:select, "health", "Health", [{"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]},
-      {:text, "metric", "Metric", placeholder: "e.g. MRR, users, uptime"},
-      {:number, "target_value", "Target value", step: "0.01"},
-      {:number, "current_value", "Current value", step: "0.01"},
-      {:text, "unit", "Unit", placeholder: "e.g. %, USD, users"},
-      {:number, "progress", "Progress (0.0-1.0)", step: "0.01", min: "0", max: "1"},
-      {:date, "start_date", "Start date"},
-      {:date, "target_date", "Target date"},
-      {:slug_select, "project_slug", "Project", type: "project"}
+      {:select, "health", gettext("Health"),
+       [{gettext("Green"), "green"}, {gettext("Yellow"), "yellow"}, {gettext("Red"), "red"}]},
+      {:text, "metric", gettext("Metric"), placeholder: "e.g. MRR, users, uptime"},
+      {:number, "target_value", gettext("Target value"), step: "0.01"},
+      {:number, "current_value", gettext("Current value"), step: "0.01"},
+      {:text, "unit", gettext("Unit"), placeholder: "e.g. %, USD, users"},
+      {:number, "progress", gettext("Progress (0.0-1.0)"), step: "0.01", min: "0", max: "1"},
+      {:date, "start_date", gettext("Start date")},
+      {:date, "target_date", gettext("Target date")},
+      {:slug_select, "project_slug", gettext("Project"), type: "project"}
     ]
   end
 
   defp meta_fields_edit("todo") do
     [
-      {:select, "kanban_status", "Status",
+      {:select, "kanban_status", gettext("Status"),
        [
-         {"Backlog", "backlog"},
-         {"This Week", "this_week"},
-         {"Today", "today"},
-         {"In Progress", "in_progress"},
-         {"Done", "done"},
-         {"Cancelled", "cancelled"}
+         {gettext("Backlog"), "backlog"},
+         {gettext("This Week"), "this_week"},
+         {gettext("Today"), "today"},
+         {gettext("In Progress"), "in_progress"},
+         {gettext("Done"), "done"},
+         {gettext("Cancelled"), "cancelled"}
        ]},
-      {:select, "priority", "Priority",
-       [{"Low", "low"}, {"Medium", "medium"}, {"High", "high"}, {"Urgent", "urgent"}]},
-      {:date, "due_date", "Due date"},
-      {:slug_select, "project_slug", "Project", type: "project"},
-      {:slug_select, "goal_slug", "Goal", type: "goal"},
-      {:slug_select, "plan_slug", "Plan", type: "plan"}
+      {:select, "priority", gettext("Priority"),
+       [{gettext("Low"), "low"}, {gettext("Medium"), "medium"}, {gettext("High"), "high"},
+        {gettext("Urgent"), "urgent"}]},
+      {:date, "due_date", gettext("Due date")},
+      {:slug_select, "project_slug", gettext("Project"), type: "project"},
+      {:slug_select, "goal_slug", gettext("Goal"), type: "goal"},
+      {:slug_select, "plan_slug", gettext("Plan"), type: "plan"}
     ]
   end
 
@@ -447,14 +460,102 @@ defmodule Dran.Brain.PageMeta do
 
   defp meta_fields_edit("query") do
     [
-      {:select, "kind", "Kind", Enum.map(@query_kinds, &{String.capitalize(&1), &1})},
-      {:select, "difficulty", "Difficulty",
-       Enum.map(@query_difficulties, &{String.capitalize(&1), &1})},
-      {:select, "answer_status", "Status",
-       Enum.map(@query_statuses, &{String.capitalize(&1), &1})},
-      {:text, "answered_by", "Answered by"}
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@query_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:select, "difficulty", gettext("Difficulty"),
+       Enum.map(@query_difficulties, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:select, "answer_status", gettext("Status"),
+       Enum.map(@query_statuses, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:text, "answered_by", gettext("Answered by")}
     ]
   end
 
   defp meta_fields_edit(_), do: []
+
+  # Humanize a kind/status/horizon slug for display. We keep this logic out of
+  # the tuples above so the gettext extractor sees the *display* string (the
+  # result of `humanize_kind/1` is not a literal, so `gettext/1` cannot be
+  # applied to it inside a comprehension at compile time). Instead we list the
+  # human-readable labels below and look them up by slug — that way every label
+  # is a literal `gettext("...")` call the extractor can see.
+  #
+  # NOTE: The label lists in `kind_labels/0` below are the single source of
+  # truth for display names. Slugs (`thought`, `backlog`, `low`, …) are NEVER
+  # translated — they are DB values.
+  defp humanize_kind(slug) when is_binary(slug) do
+    Map.fetch!(kind_labels(), slug)
+  end
+
+  # Slugs → gettext'd display labels. Keep alphabetised by slug within each
+  # group for easy scanning. Only the *display label* is translated; the slug
+  # (DB value) stays as the second tuple element in the field definitions
+  # above and is never passed to gettext.
+  defp kind_labels do
+    %{
+      # ── note kinds ──────────────────────────────────────────────────────
+      "thought" => gettext("Thought"),
+      "journal" => gettext("Journal"),
+      "idea" => gettext("Idea"),
+      "meeting" => gettext("Meeting"),
+      "question" => gettext("Question"),
+      "quote" => gettext("Quote"),
+      "reminder" => gettext("Reminder"),
+      # ── entity kinds ───────────────────────────────────────────────────
+      "person" => gettext("Person"),
+      "company" => gettext("Company"),
+      "product" => gettext("Product"),
+      "tool" => gettext("Tool"),
+      "place" => gettext("Place"),
+      "event" => gettext("Event"),
+      # ── concept kinds ──────────────────────────────────────────────────
+      "technique" => gettext("Technique"),
+      "pattern" => gettext("Pattern"),
+      "discipline" => gettext("Discipline"),
+      "theory" => gettext("Theory"),
+      # ── reference kinds ────────────────────────────────────────────────
+      "article" => gettext("Article"),
+      "paper" => gettext("Paper"),
+      "video" => gettext("Video"),
+      "podcast" => gettext("Podcast"),
+      "book" => gettext("Book"),
+      # ── artifact kinds ─────────────────────────────────────────────────
+      "document" => gettext("Document"),
+      "code" => gettext("Code"),
+      "design" => gettext("Design"),
+      "deliverable" => gettext("Deliverable"),
+      "file" => gettext("File"),
+      # ── query kinds ─────────────────────────────────────────────────────
+      "factual" => gettext("Factual"),
+      "conceptual" => gettext("Conceptual"),
+      "how_to" => gettext("How to"),
+      "opinion" => gettext("Opinion"),
+      # ── query difficulties ─────────────────────────────────────────────
+      "simple" => gettext("Simple"),
+      "intermediate" => gettext("Intermediate"),
+      "advanced" => gettext("Advanced"),
+      # ── query statuses ──────────────────────────────────────────────────
+      "open" => gettext("Open"),
+      "answered" => gettext("Answered"),
+      "verified" => gettext("Verified"),
+      # ── project statuses ────────────────────────────────────────────────
+      "draft" => gettext("Draft"),
+      "active" => gettext("Active"),
+      "on_hold" => gettext("On hold"),
+      "archived" => gettext("Archived"),
+      # ── plan statuses (subset of project) ───────────────────────────────
+      # 'done' is shared with kanban_statuses — defined there to avoid dupes.
+      # ── kanban statuses ─────────────────────────────────────────────────
+      "backlog" => gettext("Backlog"),
+      "this_week" => gettext("This Week"),
+      "today" => gettext("Today"),
+      "in_progress" => gettext("In Progress"),
+      "done" => gettext("Done"),
+      "cancelled" => gettext("Cancelled"),
+      # ── horizons ────────────────────────────────────────────────────────
+      "weekly" => gettext("Weekly"),
+      "monthly" => gettext("Monthly"),
+      "quarterly" => gettext("Quarterly"),
+      "yearly" => gettext("Yearly")
+    }
+  end
 end

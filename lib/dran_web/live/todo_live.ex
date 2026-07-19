@@ -64,6 +64,31 @@ defmodule DranWeb.TodoLive do
           </div>
         </div>
 
+        <form phx-submit="quick_add_todo" class="mb-4 flex flex-wrap items-end gap-3">
+          <div class="flex-1 min-w-56">
+            <input
+              type="text"
+              name="title"
+              required
+              placeholder={gettext("What needs to be done?")}
+              class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <select
+              name="goal_slug"
+              aria-label={gettext("Goal")}
+              class="px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">{gettext("Sin objetivo")}</option>
+              <option :for={g <- @goals} value={g.slug}>{g.title}</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("Agregar")}
+          </button>
+        </form>
+
         <div :if={@items == []} class="surface-2 p-12 text-center">
           <.icon name="hero-check-circle" class="size-7 mx-auto text-base-content/30" />
           <p class="text-caption mt-3">{gettext("No todos yet.")}</p>
@@ -186,53 +211,14 @@ defmodule DranWeb.TodoLive do
               </div>
 
               <%= if @editing do %>
-                <.form
-                  for={@form}
-                  id="page-edit-form"
-                  phx-change="validate_page"
-                  phx-submit="save_page"
-                >
-                  <div class="space-y-5 mt-4">
-                    <.input
-                      field={@form[:title]}
-                      type="text"
-                      label={gettext("Title")}
-                      placeholder={gettext("Enter a title…")}
-                      class="text-lg font-medium"
-                    />
-                    <.input
-                      field={@form[:summary]}
-                      type="text"
-                      label={gettext("Summary")}
-                      placeholder={gettext("One-line description")}
-                      class="text-sm"
-                    />
-                    <.input
-                      field={@form[:tags]}
-                      type="text"
-                      label={gettext("Tags")}
-                      placeholder={gettext("comma, separated, tags")}
-                      class="text-sm"
-                    />
-                    <.meta_fields
-                      page_type={@page_type}
-                      meta={@page.meta || %{}}
-                      context_id={@context_id}
-                    />
-                    <.markdown_editor
-                      id="todo-editor"
-                      body={@page.body}
-                      context_id={@context_id}
-                      save_status={@save_status}
-                    />
-                    <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext(
-                        "Cancel"
-                      )}</button>
-                      <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
-                    </div>
-                  </div>
-                </.form>
+                <.page_edit_form
+                  form={@form}
+                  page={@page}
+                  page_type={@page_type}
+                  context_id={@context_id}
+                  save_status={@save_status}
+                  editor_id="todo-editor"
+                />
               <% end %>
 
               <div class="border-t border-base-300 pt-4">
@@ -360,6 +346,7 @@ defmodule DranWeb.TodoLive do
          items: items,
          archived_items: archived_items,
          show_archived: false,
+         goals: Brain.list_goals(socket.assigns.context.id),
          page_title: gettext("Todos")
        )}
     else
@@ -368,6 +355,7 @@ defmodule DranWeb.TodoLive do
          items: [],
          archived_items: [],
          show_archived: false,
+         goals: [],
          page_title: gettext("Todos")
        )}
     end
@@ -413,6 +401,46 @@ defmodule DranWeb.TodoLive do
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
+  end
+
+  def handle_event("quick_add_todo", params, socket) do
+    context = socket.assigns.context
+    title = String.trim(params["title"] || "")
+
+    cond do
+      context == nil ->
+        {:noreply, put_flash(socket, :error, gettext("No context available."))}
+
+      title == "" ->
+        {:noreply, put_flash(socket, :error, gettext("Title is required."))}
+
+      true ->
+        meta = %{"kanban_status" => "backlog", "priority" => "medium"}
+        meta = case params["goal_slug"] do
+          nil -> meta
+          "" -> meta
+          goal -> Map.put(meta, "goal_slug", goal)
+        end
+
+        attrs = %{
+          "context_id" => context.id,
+          "title" => title,
+          "slug" => Dran.Slug.generate(title, context.id, "todo"),
+          "page_type" => "todo",
+          "meta" => meta
+        }
+
+        case Brain.create_page(attrs) do
+          {:ok, _page} ->
+            {:noreply,
+             socket
+             |> assign(items: Brain.list_todos(context.id))
+             |> put_flash(:info, gettext("Todo created."))}
+
+          {:error, _changeset} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not create todo."))}
+        end
+    end
   end
 
   def handle_event("change_status", %{"slug" => slug, "status" => status}, socket) do

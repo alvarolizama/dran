@@ -50,27 +50,27 @@ defmodule DranWeb.PageNewLiveTest do
     end
   end
 
-  describe "progressive disclosure — 'Más opciones' details (Task 2.2)" do
-    test "the new form wraps summary + meta behind a <details> 'Más opciones'", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/notes/new")
-
-      # The collapsible section exists and is collapsed by default (no `open`
-      # attribute on the details element that wraps the advanced options).
-      assert html =~ ~s(<details)
-      assert html =~ t("Más opciones")
-
-      # The summary field lives inside the details section, not at the top
-      # level of the form.
-      assert html =~ ~s(name="page[summary]")
-    end
-
-    test "the primary fields (Title, Tags, Content) are visible outside the details", %{
+  describe "attributes sidebar (Task 3)" do
+    test "the new form renders a right-hand attributes sidebar with tags + summary + meta", %{
       conn: conn
     } do
       {:ok, _view, html} = live(conn, "/notes/new")
 
-      assert html =~ ~s(name="page[title]")
+      # The sidebar aside exists with the Atributos heading
+      assert html =~ "<aside"
+      assert html =~ "Atributos"
+
+      # Summary + tags + meta live in the sidebar, no more collapsible details
+      assert html =~ ~s(name="page[summary]")
       assert html =~ ~s(name="page[tags]")
+      refute html =~ t("Más opciones")
+    end
+
+    test "the primary fields (Title, Content) are in the main column", %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/notes/new")
+
+      assert html =~ ~s(name="page[title]")
+      assert html =~ "markdown_editor" or html =~ "ProseMirror" or html =~ "page-new-editor"
     end
   end
 

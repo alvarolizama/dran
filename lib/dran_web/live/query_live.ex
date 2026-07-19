@@ -53,64 +53,14 @@ defmodule DranWeb.QueryLive do
 
             <div :if={@active_tab == "content"} class="space-y-6">
               <%= if @editing do %>
-                <.form
-                  for={@form}
-                  id="page-edit-form"
-                  phx-change="validate_page"
-                  phx-submit="save_page"
-                >
-                  <div class="space-y-5">
-                    <.input
-                      field={@form[:title]}
-                      type="text"
-                      label={gettext("Question")}
-                      placeholder={gettext("Enter the question…")}
-                      class="text-lg font-medium"
-                    />
-
-                    <div class="grid grid-cols-2 gap-4">
-                      <.input
-                        field={@form[:slug]}
-                        type="text"
-                        placeholder={gettext("slug")}
-                        class="w-full"
-                        phx-blur="field_change"
-                      />
-                      <.input
-                        field={@form[:summary]}
-                        type="text"
-                        placeholder={gettext("Summary (optional)")}
-                        class="w-full"
-                      />
-                    </div>
-
-                    <.input
-                      field={@form[:tags]}
-                      type="text"
-                      placeholder={gettext("Tags (comma separated)")}
-                      class="w-full"
-                    />
-
-                    <.meta_fields
-                      page_type={@page_type}
-                      meta={@page.meta || %{}}
-                      context_id={@context_id}
-                    />
-                    <.markdown_editor
-                      id="query-editor"
-                      body={@page.body}
-                      context_id={@context_id}
-                      save_status={@save_status}
-                    />
-
-                    <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext(
-                        "Cancel"
-                      )}</button>
-                      <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
-                    </div>
-                  </div>
-                </.form>
+                <.page_edit_form
+                  form={@form}
+                  page={@page}
+                  page_type={@page_type}
+                  context_id={@context_id}
+                  save_status={@save_status}
+                  editor_id="query-editor"
+                />
               <% else %>
                 <div class="prose prose-base dark:prose-invert max-w-none">
                   {@rendered_body}

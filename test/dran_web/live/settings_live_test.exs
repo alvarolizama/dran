@@ -72,4 +72,41 @@ defmodule DranWeb.SettingsLiveTest do
     assert Settings.get("semantic_threshold_short") == 0.10
     assert Settings.get("daily_note_enabled") == true
   end
+
+  test "brain tuning section appears before the read-only environment sections", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings")
+
+    # The "Brain tuning" heading must appear before the "Inference API"
+    # heading in the rendered HTML.
+    brain_tuning_idx =
+      case :binary.match(html, t("Brain tuning")) do
+        {idx, _} -> idx
+        :nomatch -> nil
+      end
+
+    inference_api_idx =
+      case :binary.match(html, t("Inference API")) do
+        {idx, _} -> idx
+        :nomatch -> nil
+      end
+
+    assert brain_tuning_idx != nil, "expected to find \"#{t("Brain tuning")}\" in HTML"
+    assert inference_api_idx != nil, "expected to find \"#{t("Inference API")}\" in HTML"
+    assert brain_tuning_idx < inference_api_idx,
+           "expected Brain tuning to appear before Inference API"
+  end
+
+  test "the brain tuning form still renders the agent_max_pages input", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings")
+
+    assert html =~ "agent_max_pages"
+    assert html =~ t("Max pages per run")
+  end
+
+  test "the Entorno header exists with its read-only caption", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings")
+
+    assert html =~ t("Entorno")
+    assert html =~ t("Read-only — loaded from environment variables at startup.")
+  end
 end

@@ -66,72 +66,14 @@ defmodule DranWeb.NoteLive do
 
             <div :if={@active_tab == "content"} class="space-y-6">
               <%= if @editing do %>
-                <.form
-                  for={@form}
-                  id="page-edit-form"
-                  phx-change="validate_page"
-                  phx-submit="save_page"
-                >
-                  <div class="space-y-5">
-                    <.input
-                      field={@form[:title]}
-                      type="text"
-                      label={gettext("Title")}
-                      placeholder={gettext("Enter a title…")}
-                      class="text-lg font-medium"
-                    />
-
-                    <div class="grid grid-cols-2 gap-4">
-                      <.input
-                        field={@form[:slug]}
-                        type="text"
-                        label={gettext("Slug")}
-                        placeholder={gettext("slug")}
-                        class="font-mono text-sm"
-                      />
-                      <.input
-                        field={@form[:summary]}
-                        type="text"
-                        label={gettext("Summary")}
-                        placeholder={gettext("One-line description")}
-                        class="text-sm"
-                      />
-                    </div>
-
-                    <.input
-                      field={@form[:tags]}
-                      type="text"
-                      label={gettext("Tags")}
-                      placeholder={gettext("comma, separated, tags")}
-                      class="text-sm"
-                    />
-
-                    <.meta_fields
-                      page_type={@page_type}
-                      meta={@page.meta || %{}}
-                      context_id={@context_id}
-                    />
-
-                    <div>
-                      <span class="label mb-1 block text-sm font-medium text-base-content/70">{gettext(
-                        "Content"
-                      )}</span>
-                      <.markdown_editor
-                        id="note-editor"
-                        body={@page.body}
-                        context_id={@context_id}
-                        save_status={@save_status}
-                      />
-                    </div>
-
-                    <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">{gettext(
-                        "Cancel"
-                      )}</button>
-                      <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
-                    </div>
-                  </div>
-                </.form>
+                <.page_edit_form
+                  form={@form}
+                  page={@page}
+                  page_type={@page_type}
+                  context_id={@context_id}
+                  save_status={@save_status}
+                  editor_id="note-editor"
+                />
               <% else %>
                 <div class="prose prose-base dark:prose-invert max-w-none">
                   {@rendered_body}

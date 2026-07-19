@@ -6,7 +6,8 @@ defmodule DranWeb.PageComponents do
   use Phoenix.Component
   use Gettext, backend: DranWeb.Gettext
   import Phoenix.HTML, only: [raw: 1]
-  import DranWeb.CoreComponents, only: [icon: 1]
+  import DranWeb.CoreComponents, only: [icon: 1, input: 1]
+  import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1, meta_fields: 1]
 
   alias Dran.Brain
   alias Dran.Brain.Page
@@ -933,5 +934,81 @@ defmodule DranWeb.PageComponents do
     |> String.replace(">", "&gt;")
     |> String.replace("\"", "&quot;")
     |> String.replace("'", "&#39;")
+  end
+
+  @doc """
+  Shared inline edit form for page detail views — two-column layout with the
+  title + markdown editor on the left and an attributes sidebar on the right
+  (summary, tags, meta fields). Replaces the per-LiveView copy-pasted form
+  blocks (which also carried a manual slug input now removed).
+  """
+  attr :form, :any, required: true
+  attr :page, :map, required: true
+  attr :page_type, :string, required: true
+  attr :context_id, :any, required: true
+  attr :save_status, :string, default: "idle"
+  attr :editor_id, :string, required: true
+
+  def page_edit_form(assigns) do
+    ~H"""
+    <.form for={@form} id="page-edit-form" phx-change="validate_page" phx-submit="save_page">
+      <div class="flex gap-6 items-start mt-4">
+        <%!-- Left: title + editor --%>
+        <div class="flex-1 min-w-0 space-y-5">
+          <.input
+            field={@form[:title]}
+            type="text"
+            label={gettext("Title")}
+            placeholder={gettext("Enter a title…")}
+            class="text-lg font-medium"
+          />
+
+          <div>
+            <span class="label mb-1 block text-sm font-medium text-base-content/70">
+              {gettext("Content")}
+            </span>
+            <.markdown_editor
+              id={@editor_id}
+              body={@page.body}
+              context_id={@context_id}
+              save_status={@save_status}
+            />
+          </div>
+        </div>
+
+        <%!-- Right: attributes sidebar --%>
+        <aside class="w-80 shrink-0 space-y-4 surface-2 rounded-2xl p-5 sticky top-6">
+          <h2 class="text-sm font-semibold text-base-content/70 uppercase tracking-wider">
+            {gettext("Atributos")}
+          </h2>
+
+          <.input
+            field={@form[:summary]}
+            type="text"
+            label={gettext("Summary")}
+            placeholder={gettext("One-line description")}
+            class="text-sm"
+          />
+
+          <.input
+            field={@form[:tags]}
+            type="text"
+            label={gettext("Tags")}
+            placeholder={gettext("comma, separated, tags")}
+            class="text-sm"
+          />
+
+          <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
+        </aside>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-4 mt-4 border-t border-base-300">
+        <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">
+          {gettext("Cancel")}
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
+      </div>
+    </.form>
+    """
   end
 end

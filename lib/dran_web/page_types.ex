@@ -6,6 +6,8 @@ defmodule DranWeb.PageTypes do
   URL path segment, display label, icon, and plural label.
   """
 
+  use Gettext, backend: DranWeb.Gettext
+
   @types %{
     "note" => %{path: "notes", label: "Note", icon: "hero-document-text", plural: "Notes"},
     "concept" => %{
@@ -112,4 +114,32 @@ defmodule DranWeb.PageTypes do
   end
 
   def page_show_path(_), do: "#"
+
+  # Extraction markers — these msgids are looked up dynamically in label/1 and
+  # plural/1 via Gettext.gettext/2, so the extractor never sees them. Listing
+  # them here keeps them in the .pot/.po so translations survive re-extraction.
+  if false do
+    gettext("Note")
+    gettext("Concept")
+    gettext("Entity")
+    gettext("Project")
+    gettext("Reference")
+    gettext("Goal")
+    gettext("Plan")
+    gettext("Todo")
+    gettext("Artifact")
+    gettext("Comparison")
+    gettext("Query")
+    gettext("Notes")
+    gettext("Concepts")
+    gettext("Entities")
+    gettext("Projects")
+    gettext("References")
+    gettext("Goals")
+    gettext("Plans")
+    gettext("Todos")
+    gettext("Artifacts")
+    gettext("Comparisons")
+    gettext("Queries")
+  end
 end

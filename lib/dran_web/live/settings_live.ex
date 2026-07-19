@@ -1,8 +1,8 @@
 defmodule DranWeb.SettingsLive do
   @moduledoc """
-  Settings page showing the current configuration of models,
-  agents, inference API, Firecrawl, and uploads — plus an editable
-  "Brain tuning" section backed by `Dran.Settings`.
+  Settings page showing an editable "Brain tuning" section backed by
+  `Dran.Settings`, followed by read-only environment configuration
+  (models, agents, inference API, Firecrawl, and uploads).
   """
 
   use DranWeb, :live_view
@@ -103,137 +103,136 @@ defmodule DranWeb.SettingsLive do
             <h1 class="text-title">{gettext("Settings")}</h1>
             <p class="text-caption mt-1">
               {gettext(
-                "Current configuration. Values are read from environment variables at startup."
+                "Personalize your brain and review the environment configuration."
               )}
             </p>
           </div>
 
-          <%!-- Read-only configuration sections --%>
-          <.config_section
-            icon="hero-cpu-chip"
-            title={gettext("Inference API")}
-            subtitle={gettext("LLM, embeddings, and reranking")}
-          >
-            <.config_row label={gettext("Status")} env="DRAN_INFERENCE_API_URL">
-              <.status_badge active={Config.enabled?()} />
-            </.config_row>
-            <.config_row label={gettext("API URL")} env="DRAN_INFERENCE_API_URL">
-              <code class="text-sm font-mono text-primary">
-                {Config.base_url() || "—"}
-              </code>
-            </.config_row>
-            <.config_row label={gettext("API Key")} env="DRAN_INFERENCE_API_KEY">
-              <span class="text-sm text-base-content/60">
-                {if Config.api_key(), do: "••••••••", else: "—"}
-              </span>
-            </.config_row>
-            <.config_row label={gettext("Chat model")} env="DRAN_INFERENCE_CHAT_MODEL">
-              <code class="text-sm font-mono text-primary">
-                {Config.chat_model() || "—"}
-              </code>
-            </.config_row>
-            <.config_row label={gettext("Embedding model")} env="DRAN_INFERENCE_EMBEDDING_MODEL">
-              <code class="text-sm font-mono text-primary">
-                {Config.embedding_model() || "—"}
-              </code>
-            </.config_row>
-            <.config_row label={gettext("Embedding dimensions")}>
-              <span class="text-sm text-base-content/60">{Config.embedding_dimensions()}</span>
-            </.config_row>
-            <.config_row label={gettext("Embedding body limit")} env="DRAN_EMBEDDING_BODY_LIMIT">
-              <span class="text-sm text-base-content/60">
-                {Config.embedding_body_limit()} {gettext("chars")}
-              </span>
-            </.config_row>
-            <.config_row label={gettext("Rerank model")} env="DRAN_INFERENCE_RERANK_MODEL">
-              <code class="text-sm font-mono text-primary">
-                {Config.rerank_model() || "—"}
-              </code>
-            </.config_row>
-            <.config_row label={gettext("Rerank enabled")} env="DRAN_INFERENCE_USE_RERANK">
-              <.status_badge active={Config.use_rerank?()} />
-            </.config_row>
-            <.config_row label={gettext("Vision model")} env="DRAN_INFERENCE_VISION_MODEL">
-              <code class="text-sm font-mono text-primary">{Config.vision_model()}</code>
-            </.config_row>
-            <.config_row label={gettext("ASR model")} env="DRAN_INFERENCE_ASR_MODEL">
-              <code class="text-sm font-mono text-primary">{Config.asr_model()}</code>
-            </.config_row>
-            <.config_row label={gettext("MarkItDown model")} env="DRAN_INFERENCE_MARKITDOWN_MODEL">
-              <code class="text-sm font-mono text-primary">
-                {Config.markitdown_model() || "—"}
-              </code>
-            </.config_row>
-            <.config_row label={gettext("Request timeout")} env="DRAN_INFERENCE_TIMEOUT">
-              <span class="text-sm text-base-content/60">{Config.timeout()} {gettext("ms")}</span>
-            </.config_row>
-          </.config_section>
-
-          <.config_section
-            icon="hero-bolt"
-            title={gettext("Agents")}
-            subtitle={gettext("Autonomous research and ingest agents")}
-          >
-            <.config_row label={gettext("Max steps")} env="AGENT_MAX_STEPS">
-              <span class="text-sm text-base-content/60">
-                {Application.get_env(:dran, :agent_max_steps, 150)}
-              </span>
-            </.config_row>
-            <.config_row label={gettext("Per-step timeout")} env="AGENT_PER_STEP_TIMEOUT">
-              <span class="text-sm text-base-content/60">
-                {Application.get_env(:dran, :agent_per_step_timeout, 120_000)} {gettext("ms")}
-              </span>
-            </.config_row>
-          </.config_section>
-
-          <%!-- Editable brain tuning form --%>
+          <%!-- Editable brain tuning form (FIRST) --%>
           <.brain_tuning_section form={@brain_form} />
 
-          <.config_section
-            icon="hero-globe-alt"
-            title={gettext("Firecrawl")}
-            subtitle={gettext("Web search and scraping")}
-          >
-            <.config_row label={gettext("Status")} env="FIRECRAWL_API_KEY">
-              <.status_badge active={Dran.Firecrawl.enabled?()} />
-            </.config_row>
-            <.config_row label={gettext("API Key")} env="FIRECRAWL_API_KEY">
-              <span class="text-sm text-base-content/60">
-                {if Dran.Firecrawl.enabled?(), do: "••••••••", else: "—"}
-              </span>
-            </.config_row>
-            <.config_row label={gettext("Base URL")}>
-              <code class="text-sm font-mono text-primary">https://api.firecrawl.dev/v1</code>
-            </.config_row>
-          </.config_section>
+          <%!-- Read-only environment sections --%>
+          <div class="space-y-6">
+            <div>
+              <h2 class="text-heading">{gettext("Entorno")}</h2>
+              <p class="text-caption mt-0.5">
+                {gettext("Read-only — loaded from environment variables at startup.")}
+              </p>
+            </div>
 
-          <.config_section
-            icon="hero-paper-clip"
-            title={gettext("Uploads")}
-            subtitle={gettext("File attachment storage")}
-          >
-            <.config_row label={gettext("Directory")} env="UPLOADS_DIR">
-              <code class="text-sm font-mono text-primary">
-                {Application.get_env(:dran, :uploads, []) |> Keyword.get(:dir, "priv/static/uploads")}
-              </code>
-            </.config_row>
-            <.config_row label={gettext("Max file size")} env="UPLOADS_MAX_SIZE">
-              <span class="text-sm text-base-content/60">
-                {Application.get_env(:dran, :uploads, [])
-                |> Keyword.get(:max_size, 104_857_600)
-                |> format_bytes()}
-              </span>
-            </.config_row>
-          </.config_section>
+            <.config_section
+              icon="hero-cpu-chip"
+              title={gettext("Inference API")}
+              subtitle={gettext("LLM, embeddings, and reranking")}
+            >
+              <.config_row label={gettext("Status")} env="DRAN_INFERENCE_API_URL">
+                <.status_badge active={Config.enabled?()} />
+              </.config_row>
+              <.config_row label={gettext("API URL")} env="DRAN_INFERENCE_API_URL">
+                <code class="text-sm font-mono text-primary">
+                  {Config.base_url() || "—"}
+                </code>
+              </.config_row>
+              <.config_row label={gettext("API Key")} env="DRAN_INFERENCE_API_KEY">
+                <span class="text-sm text-base-content/60">
+                  {if Config.api_key(), do: "••••••••", else: "—"}
+                </span>
+              </.config_row>
+              <.config_row label={gettext("Chat model")} env="DRAN_INFERENCE_CHAT_MODEL">
+                <code class="text-sm font-mono text-primary">
+                  {Config.chat_model() || "—"}
+                </code>
+              </.config_row>
+              <.config_row label={gettext("Embedding model")} env="DRAN_INFERENCE_EMBEDDING_MODEL">
+                <code class="text-sm font-mono text-primary">
+                  {Config.embedding_model() || "—"}
+                </code>
+              </.config_row>
+              <.config_row label={gettext("Embedding dimensions")}>
+                <span class="text-sm text-base-content/60">{Config.embedding_dimensions()}</span>
+              </.config_row>
+              <.config_row label={gettext("Embedding body limit")} env="DRAN_EMBEDDING_BODY_LIMIT">
+                <span class="text-sm text-base-content/60">
+                  {Config.embedding_body_limit()} {gettext("chars")}
+                </span>
+              </.config_row>
+              <.config_row label={gettext("Rerank model")} env="DRAN_INFERENCE_RERANK_MODEL">
+                <code class="text-sm font-mono text-primary">
+                  {Config.rerank_model() || "—"}
+                </code>
+              </.config_row>
+              <.config_row label={gettext("Rerank enabled")} env="DRAN_INFERENCE_USE_RERANK">
+                <.status_badge active={Config.use_rerank?()} />
+              </.config_row>
+              <.config_row label={gettext("Vision model")} env="DRAN_INFERENCE_VISION_MODEL">
+                <code class="text-sm font-mono text-primary">{Config.vision_model()}</code>
+              </.config_row>
+              <.config_row label={gettext("ASR model")} env="DRAN_INFERENCE_ASR_MODEL">
+                <code class="text-sm font-mono text-primary">{Config.asr_model()}</code>
+              </.config_row>
+              <.config_row label={gettext("MarkItDown model")} env="DRAN_INFERENCE_MARKITDOWN_MODEL">
+                <code class="text-sm font-mono text-primary">
+                  {Config.markitdown_model() || "—"}
+                </code>
+              </.config_row>
+              <.config_row label={gettext("Request timeout")} env="DRAN_INFERENCE_TIMEOUT">
+                <span class="text-sm text-base-content/60">{Config.timeout()} {gettext("ms")}</span>
+              </.config_row>
+            </.config_section>
 
-          <%!-- Footnote / how to change env vars --%>
-          <div class="surface-1 p-4 flex items-start gap-3">
-            <.icon name="hero-information-circle" class="size-5 text-base-content/40 shrink-0 mt-0.5" />
-            <p class="text-caption">
-              {gettext(
-                "To change these settings, set the corresponding environment variables and restart the application."
-              )}
-            </p>
+            <.config_section
+              icon="hero-bolt"
+              title={gettext("Agents")}
+              subtitle={gettext("Autonomous research and ingest agents")}
+            >
+              <.config_row label={gettext("Max steps")} env="AGENT_MAX_STEPS">
+                <span class="text-sm text-base-content/60">
+                  {Application.get_env(:dran, :agent_max_steps, 150)}
+                </span>
+              </.config_row>
+              <.config_row label={gettext("Per-step timeout")} env="AGENT_PER_STEP_TIMEOUT">
+                <span class="text-sm text-base-content/60">
+                  {Application.get_env(:dran, :agent_per_step_timeout, 120_000)} {gettext("ms")}
+                </span>
+              </.config_row>
+            </.config_section>
+
+            <.config_section
+              icon="hero-globe-alt"
+              title={gettext("Firecrawl")}
+              subtitle={gettext("Web search and scraping")}
+            >
+              <.config_row label={gettext("Status")} env="FIRECRAWL_API_KEY">
+                <.status_badge active={Dran.Firecrawl.enabled?()} />
+              </.config_row>
+              <.config_row label={gettext("API Key")} env="FIRECRAWL_API_KEY">
+                <span class="text-sm text-base-content/60">
+                  {if Dran.Firecrawl.enabled?(), do: "••••••••", else: "—"}
+                </span>
+              </.config_row>
+              <.config_row label={gettext("Base URL")}>
+                <code class="text-sm font-mono text-primary">https://api.firecrawl.dev/v1</code>
+              </.config_row>
+            </.config_section>
+
+            <.config_section
+              icon="hero-paper-clip"
+              title={gettext("Uploads")}
+              subtitle={gettext("File attachment storage")}
+            >
+              <.config_row label={gettext("Directory")} env="UPLOADS_DIR">
+                <code class="text-sm font-mono text-primary">
+                  {Application.get_env(:dran, :uploads, []) |> Keyword.get(:dir, "priv/static/uploads")}
+                </code>
+              </.config_row>
+              <.config_row label={gettext("Max file size")} env="UPLOADS_MAX_SIZE">
+                <span class="text-sm text-base-content/60">
+                  {Application.get_env(:dran, :uploads, [])
+                  |> Keyword.get(:max_size, 104_857_600)
+                  |> format_bytes()}
+                </span>
+              </.config_row>
+            </.config_section>
           </div>
         </div>
       </div>
@@ -318,21 +317,32 @@ defmodule DranWeb.SettingsLive do
           <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
             {gettext("Agent limits")}
           </h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-            <.input
-              field={@form[:agent_max_pages]}
-              type="number"
-              label={gettext("Max pages per run")}
-            />
-            <.input
-              field={@form[:daily_note_enabled]}
-              type="checkbox"
-              label={gettext("Daily note enabled")}
-            />
+          <div class="space-y-4">
+            <div>
+              <.input
+                field={@form[:agent_max_pages]}
+                type="number"
+                label={gettext("Max pages per run")}
+              />
+              <p class="text-caption mt-1.5">
+                {gettext(
+                  "Maximum number of pages the autonomous research and ingest agents will create in a single run. Higher values mean longer runs and more content per run. Default: 10."
+                )}
+              </p>
+            </div>
+            <div>
+              <.input
+                field={@form[:daily_note_enabled]}
+                type="checkbox"
+                label={gettext("Daily note enabled")}
+              />
+              <p class="text-caption mt-1.5">
+                {gettext(
+                  "When enabled, the daily-note agent generates a summary page each day with what changed in the brain (via the Quantum scheduler). Turn off to disable automatic daily notes."
+                )}
+              </p>
+            </div>
           </div>
-          <p class="text-caption">
-            {gettext("Upper bound for autonomous research and ingest agents.")}
-          </p>
         </div>
 
         <%!-- Advanced: semantic thresholds --%>
@@ -372,7 +382,9 @@ defmodule DranWeb.SettingsLive do
               />
             </div>
             <p class="text-caption">
-              {gettext("Minimum similarity (0.0–1.0) for a relation to be considered semantic.")}
+              {gettext(
+                "Minimum cosine similarity (0.0–1.0) required for a semantic relation between pages to be created or kept. Higher values produce fewer, stronger relations. Applied by text length bucket (short/mid/long body)."
+              )}
             </p>
           </div>
         </details>

@@ -80,60 +80,14 @@ defmodule DranWeb.GoalLive do
 
             <div :if={@active_tab == "overview"}>
               <%= if @editing do %>
-                <.form
-                  for={@form}
-                  id="page-edit-form"
-                  phx-change="validate_page"
-                  phx-submit="save_page"
-                >
-                  <div class="space-y-5">
-                    <.input
-                      field={@form[:title]}
-                      type="text"
-                      label="Title"
-                      placeholder="Enter a title…"
-                      class="text-lg font-medium"
-                    />
-                    <div class="grid grid-cols-2 gap-4">
-                      <.input
-                        field={@form[:slug]}
-                        type="text"
-                        label="Slug"
-                        placeholder="slug"
-                        class="w-full font-mono text-sm"
-                      />
-                      <.input
-                        field={@form[:summary]}
-                        type="text"
-                        label="Summary"
-                        placeholder="One-line description"
-                        class="w-full text-sm"
-                      />
-                    </div>
-                    <.input
-                      field={@form[:tags]}
-                      type="text"
-                      label="Tags"
-                      placeholder="comma, separated, tags"
-                      class="w-full text-sm"
-                    />
-                    <.meta_fields
-                      page_type={@page_type}
-                      meta={@page.meta || %{}}
-                      context_id={@context_id}
-                    />
-                    <.markdown_editor
-                      id="goal-editor"
-                      body={@page.body}
-                      context_id={@context_id}
-                      save_status={@save_status}
-                    />
-                    <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
-                      <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">Cancel</button>
-                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                    </div>
-                  </div>
-                </.form>
+                <.page_edit_form
+                  form={@form}
+                  page={@page}
+                  page_type={@page_type}
+                  context_id={@context_id}
+                  save_status={@save_status}
+                  editor_id="goal-editor"
+                />
               <% else %>
                 <%!-- Panel de metricas del goal --%>
                 <div class="grid grid-cols-3 gap-4 mb-4 p-4 rounded-lg bg-base-200/50 border border-base-300">
