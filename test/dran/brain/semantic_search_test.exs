@@ -138,6 +138,107 @@ defmodule Dran.Brain.SemanticSearchTest do
     end
   end
 
+  describe "hybrid_search/2 with pagerank boost" do
+    setup do
+      Req.Test.stub(Dran.Inference.Client, fn conn ->
+        assert conn.request_path == "/v1/embeddings"
+
+        Req.Test.json(conn, %{
+          "object" => "list",
+          "data" => [
+            %{
+              "object" => "embedding",
+              "index" => 0,
+              "embedding" => test_vector()
+            }
+          ]
+        })
+      end)
+
+      :ok
+    end
+
+    test "boosts pages with higher pagerank meta to the top" do
+      context = Brain.get_context_by_slug("personal")
+
+      # Two pages with identical body so FTS ts_rank ties. Both get the same
+      # embedding (same mocked vector) so semantic distance ties. The only
+      # differentiator is meta["pagerank"].
+      shared_body = "elixir deployment guide release hot code reload"
+
+      _low =
+        %Dran.Brain.Page{
+          context_id: context.id,
+          title: "Low rank",
+          slug: "low-rank",
+          body: shared_body,
+          page_type: "note",
+          embedding_hash: "xyz",
+          embedding: Pgvector.new(test_vector()),
+          meta: %{"pagerank" => 0.001}
+        }
+        |> Dran.Repo.insert!()
+
+      _high =
+        %Dran.Brain.Page{
+          context_id: context.id,
+          title: "High rank",
+          slug: "high-rank",
+          body: shared_body,
+          page_type: "note",
+          embedding_hash: "xyz",
+          embedding: Pgvector.new(test_vector()),
+          meta: %{"pagerank" => 0.9}
+        }
+        |> Dran.Repo.insert!()
+
+      {:ok, results} = Brain.hybrid_search("elixir deployment guide", context_id: context.id)
+
+      assert length(results) >= 2
+      assert hd(results).slug == "high-rank"
+    end
+
+    test "pages without pagerank meta are unaffected (boost factor = 1.0)" do
+      context = Brain.get_context_by_slug("personal")
+
+      shared_body = "rust ownership borrow checker move semantics"
+
+      _no_pr =
+        %Dran.Brain.Page{
+          context_id: context.id,
+          title: "No pagerank",
+          slug: "no-pagerank",
+          body: shared_body,
+          page_type: "note",
+          embedding_hash: "xyz",
+          embedding: Pgvector.new(test_vector()),
+          meta: %{}
+        }
+        |> Dran.Repo.insert!()
+
+      _with_pr =
+        %Dran.Brain.Page{
+          context_id: context.id,
+          title: "With pagerank",
+          slug: "with-pagerank",
+          body: shared_body,
+          page_type: "note",
+          embedding_hash: "xyz",
+          embedding: Pgvector.new(test_vector()),
+          meta: %{"pagerank" => 0.5}
+        }
+        |> Dran.Repo.insert!()
+
+      {:ok, results} = Brain.hybrid_search("rust ownership borrow", context_id: context.id)
+
+      # The page WITH pagerank must rank strictly above the page without it,
+      # because boost * 0.0 = 0 (no change) for the empty-meta page but
+      # boost * 0.5 > 0 for the other.
+      assert length(results) >= 2
+      assert hd(results).slug == "with-pagerank"
+    end
+  end
+
   describe "page creation triggers embedding generation" do
     test "creates a page and stores its embedding synchronously" do
       Req.Test.stub(Dran.Inference.Client, fn conn ->

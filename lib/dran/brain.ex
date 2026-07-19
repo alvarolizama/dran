@@ -1236,6 +1236,7 @@ defmodule Dran.Brain do
               slug: p.slug,
               page_type: p.page_type,
               tags: p.tags,
+              meta: p.meta,
               distance: fragment("? <=> ?", p.embedding, ^vec)
             }
 
@@ -1276,6 +1277,7 @@ defmodule Dran.Brain do
             slug: page.slug,
             page_type: page.page_type,
             tags: page.tags,
+            meta: page.meta,
             excerpt: excerpt
           }
         end)
@@ -1284,6 +1286,7 @@ defmodule Dran.Brain do
         %{}
         |> fuse_rank(fts, k, :excerpt)
         |> fuse_rank(semantic, k, :semantic_distance)
+        |> apply_pagerank_boost()
 
       results =
         scored
@@ -1309,6 +1312,7 @@ defmodule Dran.Brain do
           slug: page.slug,
           page_type: page.page_type,
           tags: page.tags,
+          meta: Map.get(page, :meta) || %{},
           excerpt: excerpt,
           score: 0.0
         })
@@ -1317,6 +1321,8 @@ defmodule Dran.Brain do
         existing
         |> Map.put(:score, existing.score + score)
         |> Map.put_new(extra_field, Map.get(page, extra_field))
+        # Ensure meta is carried through once both sources have had a chance.
+        |> Map.put_new(:meta, Map.get(page, :meta) || %{})
 
       Map.put(acc, page.id, merged)
     end)
@@ -1324,6 +1330,33 @@ defmodule Dran.Brain do
 
   defp normalize_fuse_item({%Dran.Brain.Page{} = page, excerpt}), do: {page, excerpt}
   defp normalize_fuse_item(%{} = map), do: {map, Map.get(map, :excerpt)}
+
+  # ── PageRank authority boost ──
+  #
+  # After RRF fusion, multiply each result's score by `(1.0 + boost * pagerank)`.
+  # Pages with no `pagerank` in meta get exactly 1.0 (boost * 0.0 = 0), so they
+  # behave identically to before this feature was introduced.
+  defp apply_pagerank_boost(scored) do
+    boost = Dran.Settings.get("pagerank_boost")
+
+    if boost > 0.0 do
+      Enum.map(scored, fn {id, result} ->
+        pagerank =
+          result
+          |> Map.get(:meta, %{})
+          |> get_in(["pagerank"])
+          |> case do
+            n when is_number(n) -> n * 1.0
+            _ -> 0.0
+          end
+
+        boosted = result.score * (1.0 + boost * pagerank)
+        {id, Map.put(result, :score, boosted)}
+      end)
+    else
+      scored
+    end
+  end
 
   # ── Unified search internals ──
 

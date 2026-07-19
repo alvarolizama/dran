@@ -134,4 +134,29 @@ defmodule Dran.Brain.PageMetaTest do
       assert changeset.valid?
     end
   end
+
+  # ── Graph signals — pagerank / community_id ────────────────────────────────
+
+  describe "graph fields (pagerank, community_id)" do
+    test "accepts pagerank and community_id in meta" do
+      attrs = %{"pagerank" => 0.42, "community_id" => 3}
+      changeset = PageMeta.changeset(%PageMeta{}, attrs, "note")
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :pagerank) == 0.42
+      assert Ecto.Changeset.get_change(changeset, :community_id) == 3
+    end
+
+    test "accepts pagerank alone" do
+      changeset = cs("note", %{"pagerank" => 0.123})
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :pagerank) == 0.123
+    end
+
+    test "accepts community_id alone" do
+      changeset = cs("note", %{"community_id" => 7})
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :community_id) == 7
+    end
+  end
 end

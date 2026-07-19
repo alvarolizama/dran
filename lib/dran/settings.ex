@@ -10,7 +10,8 @@ defmodule Dran.Settings do
     "agent_max_pages" => 10,
     "agent_max_sources" => 10,
     "research_lang" => "es",
-    "daily_note_enabled" => true
+    "daily_note_enabled" => true,
+    "pagerank_boost" => 0.15
   }
 
   def defaults, do: @defaults

@@ -24,6 +24,10 @@ defmodule Dran.Brain.PageMeta do
     field :goal_slug, :string
     field :plan_slug, :string
 
+    # graph signals (computed by Dran.Graph)
+    field :pagerank, :float
+    field :community_id, :integer
+
     # note sub-types
     field :date, :date
     field :feasibility, :string
@@ -124,6 +128,8 @@ defmodule Dran.Brain.PageMeta do
       :project_slug,
       :goal_slug,
       :plan_slug,
+      :pagerank,
+      :community_id,
       :date,
       :feasibility,
       :impact,

@@ -82,6 +82,10 @@ if config_env() != :test do
       weekly_review: [
         schedule: "0 8 * * 0",
         task: {Dran.Agent.WeeklyReview, :run_scheduled, []}
+      ],
+      pagerank_nightly: [
+        schedule: "0 3 * * *",
+        task: {Dran.Graph, :refresh_all_scheduled, []}
       ]
     ]
 end
