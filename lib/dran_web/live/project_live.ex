@@ -422,6 +422,10 @@ defmodule DranWeb.ProjectLive do
     {:noreply, assign(socket, active_tab: tab)}
   end
 
+  def handle_event("show_page", %{"slug" => slug}, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/projects/#{slug}")}
+  end
+
   def handle_event("node_click", %{"slug" => slug}, socket) do
     {:noreply, node_click(socket, slug)}
   end
