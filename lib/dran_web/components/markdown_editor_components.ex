@@ -191,7 +191,7 @@ defmodule DranWeb.MarkdownEditorComponents do
           <.icon name="hero-link" class="size-4 text-base-content/40" />
           {gettext("Vincular a…")}
         </div>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-4">
           <%= for {type, key, label, opts} <- @link_fields do %>
             <% value = meta_value(@meta, @form, key) %>
             <.meta_field_input
@@ -205,7 +205,7 @@ defmodule DranWeb.MarkdownEditorComponents do
           <% end %>
         </div>
       </div>
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 gap-4">
         <%= for {type, key, label, opts} <- @fields do %>
           <% value = meta_value(@meta, @form, key) %>
           <% visible? =

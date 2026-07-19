@@ -122,7 +122,7 @@ defmodule DranWeb.TodoLive do
             >
               <.icon name="hero-calendar" class="size-3.5" /> {format_due(due_date(item))}
             </span>
-            <div class="flex items-center gap-1 shrink-0" phx-click-away="">
+            <div class="flex items-center gap-1 shrink-0">
               <button
                 :for={{status, label, badge_class} <- @kanban_columns}
                 phx-click="change_status"
