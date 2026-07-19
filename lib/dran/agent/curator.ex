@@ -173,8 +173,16 @@ defmodule Dran.Agent.Curator do
 
     Workflow:
     1. Call `find_duplicates` to get pairs of pages with very similar embeddings.
+       Each pair includes a `same_community` boolean: when true, the graph
+       community-detection algorithm also placed both pages in the same
+       community (dense shared neighborhood). This is additional evidence
+       that the pages are about the same topic — weigh it alongside the
+       embedding distance, but do not treat it as conclusive on its own.
+       When `same_community` is false, the pages are embedding-close but
+       structurally in different communities (weaker duplicate signal).
     2. For each pair, decide whether they are:
        - True duplicates: same content, should be merged or one deleted.
+         Strongest when `same_community` is true AND distance is very small.
        - Contested: different takes on the same topic, or conflicting information.
        - Distinct: similar embeddings but genuinely different content.
     3. Call `flag_contested` with the slugs of pages that are duplicates or
@@ -236,16 +244,33 @@ defmodule Dran.Agent.Curator do
             a: %{
               id: p1.id,
               slug: p1.slug,
-              title: p1.title
+              title: p1.title,
+              meta: p1.meta
             },
             b: %{
               id: p2.id,
               slug: p2.slug,
-              title: p2.title
+              title: p2.title,
+              meta: p2.meta
             },
             distance: fragment("? <=> ?", p1.embedding, p2.embedding)
           }
       )
+      |> Enum.map(fn pair ->
+        cid1 = get_in(pair.a, [:meta, "community_id"])
+        cid2 = get_in(pair.b, [:meta, "community_id"])
+
+        # same_community is additional duplicate evidence: two pages that
+        # the graph algorithm placed in the same community are structurally
+        # close (dense shared neighborhood) on top of being embedding-close.
+        # nil on either side means communities haven't been refreshed yet.
+        same_community = cid1 != nil and cid1 == cid2
+
+        pair
+        |> put_in([:a], Map.delete(pair.a, :meta))
+        |> put_in([:b], Map.delete(pair.b, :meta))
+        |> Map.put(:same_community, same_community)
+      end)
 
     {{:ok, pairs}, %{state | duplicate_pairs: pairs}}
   end

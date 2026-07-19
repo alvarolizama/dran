@@ -285,4 +285,81 @@ defmodule Dran.GraphExpansionTest do
       refute "z" in slugs
     end
   end
+
+  # ── community_pages/2 (Task 4.3) ───────────────────────────────────────────
+
+  describe "community_pages/2" do
+    test "returns only pages belonging to the given community", %{context: ctx} do
+      # Cluster 1: a-b-c triangle (will share one community_id).
+      a = create_note(ctx, "cp-a")
+      b = create_note(ctx, "cp-b")
+      c = create_note(ctx, "cp-c")
+      relate!(a, b, "related")
+      relate!(b, c, "related")
+      relate!(a, c, "related")
+
+      # Cluster 2: x-y single edge (different community_id).
+      x = create_note(ctx, "cp-x")
+      y = create_note(ctx, "cp-y")
+      relate!(x, y, "related")
+
+      # Persist community ids into meta.
+      :ok = Dran.Graph.refresh_communities(ctx.id)
+
+      # Read the community_id assigned to cluster 1.
+      a_reloaded = Brain.get_page!(a.id)
+      cid_a = a_reloaded.meta["community_id"]
+      assert is_integer(cid_a)
+
+      # community_pages/2 must return exactly {a, b, c} for cid_a.
+      pages = Brain.community_pages(ctx.id, cid_a)
+      slugs = Enum.map(pages, & &1.slug) |> Enum.sort()
+
+      assert slugs == ["cp-a", "cp-b", "cp-c"]
+
+      # Each result carries the lightweight select fields.
+      a_entry = Enum.find(pages, &(&1.slug == "cp-a"))
+      assert a_entry.id == a.id
+      assert a_entry.title == "cp-a"
+      assert a_entry.page_type == "note"
+    end
+
+    test "returns empty list for a community_id that does not exist", %{context: ctx} do
+      a = create_note(ctx, "cp-none-a")
+      b = create_note(ctx, "cp-none-b")
+      relate!(a, b, "related")
+      :ok = Dran.Graph.refresh_communities(ctx.id)
+
+      # 99999 is (almost certainly) not a real community_id.
+      assert Brain.community_pages(ctx.id, 999_999) == []
+    end
+
+    test "does not leak pages from other contexts", %{context: ctx} do
+      # Cluster in the shared `ctx`.
+      a = create_note(ctx, "cp-cross-a")
+      b = create_note(ctx, "cp-cross-b")
+      relate!(a, b, "related")
+      :ok = Dran.Graph.refresh_communities(ctx.id)
+
+      cid = Brain.get_page!(a.id).meta["community_id"]
+
+      # Same community_id value, but in a different context — must return [].
+      {:ok, other_ctx} =
+        Brain.create_context(%{
+          name: "Other CP",
+          slug: "cp-other-#{:erlang.unique_integer([:positive])}"
+        })
+
+      # Manually stamp the same community_id on a page in the other context
+      # to verify the context_id filter works.
+      other_page = create_note(other_ctx, "cp-cross-other")
+      {:ok, _} = Brain.update_page(other_page, %{meta: %{"community_id" => cid}})
+
+      pages = Brain.community_pages(ctx.id, cid)
+      slugs = Enum.map(pages, & &1.slug)
+
+      assert "cp-cross-a" in slugs
+      refute "cp-cross-other" in slugs, "must not leak pages from other contexts"
+    end
+  end
 end

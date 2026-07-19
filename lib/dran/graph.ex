@@ -25,6 +25,8 @@ defmodule Dran.Graph do
 
   @damping 0.85
   @iterations 20
+  @lp_iterations 30
+  @lp_min_iter 3
 
   @doc "Authority-flow weight for a relation type. Unknown types default to 0.5."
   @spec edge_weight(String.t() | atom()) :: float()
@@ -163,19 +165,153 @@ defmodule Dran.Graph do
   end
 
   @doc """
+  Detect communities via Label Propagation over typed edges.
+
+  Treats edges as undirected for community purposes: each edge contributes
+  its weight in both directions. Returns `%{page_id => community_label}`
+  where labels are integers in `1..k` (k = number of detected communities).
+
+  ## Algorithm
+
+    1. Filter edges to community types (`community_edge?/1` excludes
+       `semantic` and `contradicts`).
+    2. Build undirected weighted adjacency: `adj[node][neighbor] = weight`,
+       accumulating weight when multiple edges connect the same pair.
+    3. Initialize each node's label to its own id.
+    4. For up to `@lp_iterations` (30) iterations, each node adopts the
+       label with the highest aggregate weight among its neighbors (ties
+       broken by the label value via `Enum.max_by`).
+    5. Early-stop: if labels stop changing after iteration `@lp_min_iter` (3),
+       convergence is declared and the loop exits.
+    6. Compress the final labels to consecutive integers `1..k` so the
+       output is stable and small regardless of the raw label ids.
+
+  Isolated nodes (no community edges) are not present in the adjacency
+  map and therefore keep their initial self-label — each forms its own
+  singleton community.
+
+  ## Options
+
+    * `:seed` — when provided, `:rand.seed(:exsss, seed)` is called before
+      the iteration loop to make the shuffle deterministic. Useful for
+      tests; production leaves it unset.
+
+  ## Notes
+
+  Label Propagation is non-deterministic across runs because the node
+  update order is shuffled each iteration. Community *ids* are therefore
+  unstable between refreshes — consumers must treat `community_id` as an
+  opaque grouping key, never as a stable identity.
+  """
+  @spec communities(binary(), keyword()) :: %{binary() => integer()}
+  def communities(context_id, opts \\ []) do
+    if seed = Keyword.get(opts, :seed), do: :rand.seed(:exsss, seed)
+
+    edges =
+      context_id
+      |> load_edges()
+      |> Enum.filter(&community_edge?(&1.type))
+
+    nodes = edges |> Enum.flat_map(&[&1.source, &1.target]) |> Enum.uniq()
+
+    # Undirected weighted adjacency: adj[node][neighbor] = accumulated weight.
+    # Each edge contributes its weight in both directions.
+    adj =
+      Enum.reduce(edges, %{}, fn e, acc ->
+        acc
+        |> update_in([Access.key(e.source, %{}), Access.key(e.target, 0.0)], &(&1 + e.weight))
+        |> update_in([Access.key(e.target, %{}), Access.key(e.source, 0.0)], &(&1 + e.weight))
+      end)
+
+    # Initial labels: each node is its own community.
+    labels = Map.new(nodes, &{&1, &1})
+
+    final =
+      Enum.reduce_while(1..@lp_iterations, labels, fn iter, acc ->
+        new_labels =
+          Enum.reduce(Enum.shuffle(nodes), acc, fn node, labels_acc ->
+            neighbors = Map.get(adj, node, %{})
+
+            if map_size(neighbors) == 0 do
+              labels_acc
+            else
+              # Aggregate weight per neighbor-label, then pick the max.
+              best =
+                neighbors
+                |> Enum.group_by(fn {n, _w} -> Map.get(labels_acc, n, n) end)
+                |> Enum.map(fn {label, group} ->
+                  {label, group |> Enum.map(&elem(&1, 1)) |> Enum.sum()}
+                end)
+                |> Enum.max_by(fn {_l, w} -> w end)
+                |> elem(0)
+
+              Map.put(labels_acc, node, best)
+            end
+          end)
+
+        cond do
+          # Early-stop: converged after the minimum iteration threshold.
+          new_labels == acc and iter > @lp_min_iter -> {:halt, acc}
+          true -> {:cont, new_labels}
+        end
+      end)
+
+    # Compress raw labels to consecutive integers 1..k for stable output.
+    unique_labels = final |> Map.values() |> Enum.uniq() |> Enum.sort()
+    label_map = unique_labels |> Enum.with_index(1) |> Map.new()
+
+    Map.new(final, fn {node, label} -> {node, Map.fetch!(label_map, label)} end)
+  end
+
+  @doc """
+  Recompute communities for a context and persist `community_id` into each
+  page's meta.
+
+  Mirrors `refresh_pagerank/1`: uses `Repo.update_all` with a jsonb merge
+  (`COALESCE(meta, '{}'::jsonb) || ?::jsonb`) to avoid triggering the
+  augmenter, embeddings, broadcasts, and other update side effects.
+  """
+  @spec refresh_communities(binary()) :: :ok
+  def refresh_communities(context_id) do
+    context_id
+    |> communities()
+    |> Enum.each(fn {page_id, cid} ->
+      new_meta = %{"community_id" => cid}
+
+      query =
+        from(p in Dran.Brain.Page,
+          where: p.id == ^page_id,
+          update: [set: [meta: fragment("COALESCE(meta, '{}'::jsonb) || ?::jsonb", ^new_meta)]]
+        )
+
+      Repo.update_all(query, [])
+    end)
+
+    :ok
+  end
+
+  @doc """
   Refresh PageRank for the default context (Quantum entrypoint).
 
   Resolves the default context slug via `Dran.Auth.default_context_slug/0`,
-  looks it up with `Brain.get_context_by_slug/1`, and runs
-  `refresh_pagerank/1`. Same pattern as `Dran.Agent.Curator.run_scheduled/0`.
+  looks it up with `Brain.get_context_by_slug/1`, and runs both
+  `refresh_pagerank/1` and `refresh_communities/1` on the same context.
+  PageRank runs first so community detection can reuse any future
+  cross-signal logic; both share the same edge load. Same pattern as
+  `Dran.Agent.Curator.run_scheduled/0`.
   """
   @spec refresh_all_scheduled() :: :ok | {:error, :context_not_found}
   def refresh_all_scheduled do
     slug = Dran.Auth.default_context_slug()
 
     case Dran.Brain.get_context_by_slug(slug) do
-      nil -> {:error, :context_not_found}
-      ctx -> refresh_pagerank(ctx.id)
+      nil ->
+        {:error, :context_not_found}
+
+      ctx ->
+        :ok = refresh_pagerank(ctx.id)
+        :ok = refresh_communities(ctx.id)
+        :ok
     end
   end
 end

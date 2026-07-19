@@ -303,5 +303,227 @@ defmodule Dran.GraphTest do
       assert is_float(pr)
       assert pr > 0
     end
+
+    test "refreshes both pagerank and community_id for the default context" do
+      ctx =
+        Brain.get_context_by_slug("personal") ||
+          elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+
+      uniq = System.unique_integer([:positive])
+      a = create_page(ctx, "g-sched2-a-#{uniq}")
+      b = create_page(ctx, "g-sched2-b-#{uniq}")
+      relate(a, b, "part_of")
+
+      assert :ok = Graph.refresh_all_scheduled()
+
+      # Both signals must be present after the scheduled refresh.
+      a_reloaded = Brain.get_page!(a.id)
+      b_reloaded = Brain.get_page!(b.id)
+
+      assert is_float(a_reloaded.meta["pagerank"])
+      assert is_float(b_reloaded.meta["pagerank"])
+
+      # Two pages linked by a single community edge share a community_id.
+      assert is_integer(a_reloaded.meta["community_id"])
+      assert is_integer(b_reloaded.meta["community_id"])
+      assert a_reloaded.meta["community_id"] == b_reloaded.meta["community_id"]
+    end
+  end
+
+  # ── Task 4.1: communities/2 ──────────────────────────────────────────────────
+
+  describe "communities/2" do
+    test "returns empty map for context with no relations" do
+      ctx = fresh_context("lp-empty")
+      assert Graph.communities(ctx.id) == %{}
+    end
+
+    test "clusters densely connected pages into the same community" do
+      ctx = fresh_context("lp-cluster")
+
+      # Cluster 1: a-b-c fully linked (triangle).
+      # Cluster 2: x-y linked (single edge).
+      # No cross-cluster edges.
+      a = create_page(ctx, "g-lp-a")
+      b = create_page(ctx, "g-lp-b")
+      c = create_page(ctx, "g-lp-c")
+      x = create_page(ctx, "g-lp-x")
+      y = create_page(ctx, "g-lp-y")
+
+      relate(a, b, "related")
+      relate(b, c, "related")
+      relate(a, c, "related")
+      relate(x, y, "related")
+
+      comms = Graph.communities(ctx.id, seed: {1, 2, 3})
+
+      # Cluster 1: a, b, c share the same label.
+      assert comms[a.id] == comms[b.id]
+      assert comms[b.id] == comms[c.id]
+
+      # Cluster 2: x, y share the same label.
+      assert comms[x.id] == comms[y.id]
+
+      # The two clusters have different labels.
+      assert comms[a.id] != comms[x.id]
+    end
+
+    test "labels are compressed to consecutive integers 1..k" do
+      ctx = fresh_context("lp-int")
+
+      a = create_page(ctx, "g-lp-int-a")
+      b = create_page(ctx, "g-lp-int-b")
+      x = create_page(ctx, "g-lp-int-x")
+      y = create_page(ctx, "g-lp-int-y")
+
+      relate(a, b, "related")
+      relate(x, y, "related")
+
+      comms = Graph.communities(ctx.id, seed: {42, 7, 99})
+
+      labels = comms |> Map.values() |> Enum.uniq() |> Enum.sort()
+
+      # Exactly two communities, labeled 1 and 2.
+      assert labels == [1, 2]
+    end
+
+    test "excludes semantic and contradicts edges from community detection" do
+      ctx = fresh_context("lp-filter")
+
+      # a and b connected only via semantic — must NOT be clustered together
+      # (no community edge between them). Since the only edge is filtered out,
+      # neither node appears in the community graph at all.
+      a = create_page(ctx, "g-lp-f-a")
+      b = create_page(ctx, "g-lp-f-b")
+
+      relate(a, b, "semantic")
+
+      comms = Graph.communities(ctx.id, seed: {5, 5, 5})
+
+      # With no community edges, the result is empty — neither node gets a label.
+      refute Map.has_key?(comms, a.id)
+      refute Map.has_key?(comms, b.id)
+    end
+
+    test "isolated nodes each form their own community" do
+      ctx = fresh_context("lp-iso")
+
+      # Two connected nodes + one isolated node with no edges at all.
+      # The isolated node won't even appear in load_edges, so it's absent
+      # from the result (it has no community). The two connected nodes
+      # share a community.
+      a = create_page(ctx, "g-lp-iso-a")
+      b = create_page(ctx, "g-lp-iso-b")
+      isolated = create_page(ctx, "g-lp-iso-alone")
+
+      relate(a, b, "part_of")
+
+      comms = Graph.communities(ctx.id, seed: {1, 1, 1})
+
+      # a and b share a community.
+      assert comms[a.id] == comms[b.id]
+      # The isolated page is not in the result (no edges to propagate).
+      refute Map.has_key?(comms, isolated.id)
+    end
+
+    test "undirected: edge direction does not affect clustering" do
+      ctx = fresh_context("lp-undir")
+
+      a = create_page(ctx, "g-lp-u-a")
+      b = create_page(ctx, "g-lp-u-b")
+      c = create_page(ctx, "g-lp-u-c")
+
+      # Mix of directions within the same triangle.
+      relate(a, b, "part_of")
+      relate(c, b, "part_of")
+      relate(a, c, "part_of")
+
+      comms = Graph.communities(ctx.id, seed: {9, 9, 9})
+
+      assert comms[a.id] == comms[b.id]
+      assert comms[b.id] == comms[c.id]
+    end
+  end
+
+  # ── Task 4.2: refresh_communities/1 ─────────────────────────────────────────
+
+  describe "refresh_communities/1" do
+    test "persists community_id into Page.meta as an integer" do
+      ctx = fresh_context("rc")
+      a = create_page(ctx, "g-rc-a")
+      b = create_page(ctx, "g-rc-b")
+      relate(a, b, "part_of")
+
+      assert :ok = Graph.refresh_communities(ctx.id)
+
+      a_reloaded = Brain.get_page!(a.id)
+      b_reloaded = Brain.get_page!(b.id)
+
+      cid_a = a_reloaded.meta["community_id"]
+      cid_b = b_reloaded.meta["community_id"]
+
+      assert is_integer(cid_a)
+      assert is_integer(cid_b)
+      assert cid_a == cid_b
+    end
+
+    test "two pages in the same cluster share an integer community_id" do
+      ctx = fresh_context("rc-cluster")
+
+      # Cluster 1: a-b-c triangle.
+      a = create_page(ctx, "g-rc-c-a")
+      b = create_page(ctx, "g-rc-c-b")
+      c = create_page(ctx, "g-rc-c-c")
+      relate(a, b, "related")
+      relate(b, c, "related")
+      relate(a, c, "related")
+
+      # Cluster 2: x-y single edge.
+      x = create_page(ctx, "g-rc-c-x")
+      y = create_page(ctx, "g-rc-c-y")
+      relate(x, y, "related")
+
+      :ok = Graph.refresh_communities(ctx.id)
+
+      reload = fn page -> Brain.get_page!(page.id).meta["community_id"] end
+
+      cid_a = reload.(a)
+      cid_b = reload.(b)
+      cid_c = reload.(c)
+      cid_x = reload.(x)
+      cid_y = reload.(y)
+
+      # All cluster-1 pages share the same integer community_id.
+      assert is_integer(cid_a)
+      assert cid_a == cid_b
+      assert cid_b == cid_c
+
+      # Cluster-2 pages share a different integer community_id.
+      assert is_integer(cid_x)
+      assert cid_x == cid_y
+      assert cid_a != cid_x
+    end
+
+    test "preserves existing meta keys when writing community_id" do
+      ctx = fresh_context("rc-preserve")
+      a = create_page(ctx, "g-rc-p-a")
+      b = create_page(ctx, "g-rc-p-b")
+      relate(a, b, "part_of")
+
+      {:ok, _} = Brain.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
+
+      :ok = Graph.refresh_communities(ctx.id)
+
+      b_reloaded = Brain.get_page!(b.id)
+
+      assert b_reloaded.meta["author"] == "tester"
+      assert b_reloaded.meta["kind"] == "thought"
+      assert is_integer(b_reloaded.meta["community_id"])
+    end
+
+    test "returns :ok on empty context" do
+      ctx = fresh_context("rc-empty")
+      assert :ok = Graph.refresh_communities(ctx.id)
+    end
   end
 end

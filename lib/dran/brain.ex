@@ -966,6 +966,27 @@ defmodule Dran.Brain do
     end
   end
 
+  @doc """
+  List pages belonging to a detected community.
+
+  Queries pages by the `community_id` value stored in their `meta` JSONB
+  (written by `Dran.Graph.refresh_communities/1`). Returns lightweight
+  maps `%{id, slug, title, page_type}` — no body, no embeddings.
+
+  The filter uses `(meta->>'community_id')::int = ?` so it works against
+  the text representation of the JSONB value cast to an integer, matching
+  how `refresh_communities/1` writes the value.
+  """
+  @spec community_pages(binary(), integer()) :: [map()]
+  def community_pages(context_id, community_id) do
+    Repo.all(
+      from p in Page,
+        where: p.context_id == ^context_id,
+        where: fragment("(meta->>'community_id')::int = ?", ^community_id),
+        select: %{id: p.id, slug: p.slug, title: p.title, page_type: p.page_type}
+    )
+  end
+
   # ──────────────────────────────────────────────────────────────────────────
   # Page links materialization (part_of relations) + derived health/progress
   # ──────────────────────────────────────────────────────────────────────────

@@ -47,7 +47,8 @@ defmodule Dran.Agent.CuratorTest do
       body: attrs[:body] || "test body",
       page_type: attrs[:page_type] || "note",
       embedding_hash: attrs[:embedding_hash] || "hash-#{:rand.uniform(999_999)}",
-      embedding: attrs[:embedding]
+      embedding: attrs[:embedding],
+      meta: attrs[:meta] || %{}
     }
     |> Repo.insert!()
   end
@@ -147,6 +148,87 @@ defmodule Dran.Agent.CuratorTest do
 
       assert pairs == []
       assert new_state.duplicate_pairs == []
+    end
+
+    test "enriches pairs with same_community flag when both pages share a community_id", %{context: ctx} do
+      # Two pages with close embeddings AND the same community_id in meta.
+      _page_a =
+        insert_page!(ctx.id,
+          title: "Page A",
+          slug: "comm-a",
+          embedding: Pgvector.new(close_vector_a()),
+          meta: %{"community_id" => 7}
+        )
+
+      _page_b =
+        insert_page!(ctx.id,
+          title: "Page B",
+          slug: "comm-b",
+          embedding: Pgvector.new(close_vector_b()),
+          meta: %{"community_id" => 7}
+        )
+
+      state = build_state(ctx.id)
+      {{:ok, pairs}, _new_state} = Curator.execute_tool("find_duplicates", %{}, state)
+
+      assert length(pairs) == 1
+      pair = hd(pairs)
+
+      # The pair must carry the same_community flag set to true.
+      assert pair.same_community == true
+      # And the meta must NOT be leaked into the pair payload.
+      refute Map.has_key?(pair.a, :meta)
+      refute Map.has_key?(pair.b, :meta)
+    end
+
+    test "sets same_community to false when pages are in different communities", %{context: ctx} do
+      _page_a =
+        insert_page!(ctx.id,
+          title: "Page A",
+          slug: "diff-comm-a",
+          embedding: Pgvector.new(close_vector_a()),
+          meta: %{"community_id" => 1}
+        )
+
+      _page_b =
+        insert_page!(ctx.id,
+          title: "Page B",
+          slug: "diff-comm-b",
+          embedding: Pgvector.new(close_vector_b()),
+          meta: %{"community_id" => 2}
+        )
+
+      state = build_state(ctx.id)
+      {{:ok, pairs}, _new_state} = Curator.execute_tool("find_duplicates", %{}, state)
+
+      assert length(pairs) == 1
+      pair = hd(pairs)
+      assert pair.same_community == false
+    end
+
+    test "sets same_community to false when community_id is missing", %{context: ctx} do
+      # Pages with close embeddings but no community_id in meta (communities
+      # not yet refreshed). same_community must be false, not crash.
+      _page_a =
+        insert_page!(ctx.id,
+          title: "Page A",
+          slug: "no-comm-a",
+          embedding: Pgvector.new(close_vector_a())
+        )
+
+      _page_b =
+        insert_page!(ctx.id,
+          title: "Page B",
+          slug: "no-comm-b",
+          embedding: Pgvector.new(close_vector_b())
+        )
+
+      state = build_state(ctx.id)
+      {{:ok, pairs}, _new_state} = Curator.execute_tool("find_duplicates", %{}, state)
+
+      assert length(pairs) == 1
+      pair = hd(pairs)
+      assert pair.same_community == false
     end
   end
 
