@@ -12,6 +12,13 @@ defmodule DranWeb.DocsContent do
   `meta` — there is no precedence between them. Each one materializes its own
   `part_of` relation. See `planning_hierarchy_diagram/0` and
   `planning_model_overview/0` for the canonical description.
+
+  ## Graph intelligence
+
+  PageRank (weighted by relation type), Label Propagation communities, the
+  `expand_neighbors` GraphRAG tool, and transitive `part_of` candidates are
+  documented in `graph_intelligence_doc/0`. These algorithms are implemented
+  in `Dran.Graph` and refreshed nightly by the `pagerank_nightly` Quantum job.
   """
 
   @agent_connect_example """
@@ -302,6 +309,159 @@ defmodule DranWeb.DocsContent do
     project_slug optional independent link (no precedence)
   """
 
+  @graph_intelligence_doc """
+  Graph intelligence
+  ===================
+
+  Dran runs three pure-Elixir structural algorithms over the relations
+  table, implemented in `Dran.Graph`. They run in-memory over edges
+  loaded via Ecto (no external graph database) and persist their results
+  into each page's `meta` JSONB column. A Quantum job recomputes them
+  nightly on the default context.
+
+  ─────────────────────────────────────────────────────────────────────
+  1. PageRank (weighted, type-aware)
+  ─────────────────────────────────────────────────────────────────────
+
+  Classic PageRank with damping 0.85 and 20 iterations, but edges are
+  weighted by relation type so authority flows more strongly along
+  "structural" links than along noisy or auto-generated ones:
+
+    part_of     1.0   (strongest — hierarchy)
+    embeds      0.8
+    supersedes  0.7
+    related     0.5
+    contradicts 0.2
+    semantic    0.1   (weakest — auto-created, high-volume)
+
+  Unknown relation types default to 0.5. Each node distributes its
+  score across its outbound edges proportional to their typed weight;
+  dangling nodes (no outbound edges) redistribute their score
+  uniformly to avoid leaking rank out of the graph. Final scores are
+  normalized to sum to 1.
+
+  Persistence:
+    `Dran.Graph.refresh_pagerank/1` writes each page's score into
+    `meta.pagerank`, rounded to 6 decimals, using a jsonb merge
+    (`COALESCE(meta, '{}'::jsonb) || ?::jsonb`) so it does NOT trigger
+    the augmenter, embeddings, broadcasts, or other update side effects.
+
+  Search boost (the consumer):
+    After hybrid search fuses FTS + semantic candidates with Reciprocal
+    Rank Fusion (RRF), each result's score is multiplied by:
+
+      (1.0 + pagerank_boost * meta.pagerank)
+
+    Pages with no `pagerank` in meta get exactly 1.0 (no change). The
+    boost is MULTIPLICATIVE on top of the fused relevance score, so
+    high-authority pages are nudged up without overriding the relevance
+    signal. The `pagerank_boost` runtime setting (default 0.15,
+    editable at `/settings`) controls the strength; set it to 0.0 to
+    disable the boost entirely.
+
+  ─────────────────────────────────────────────────────────────────────
+  2. Communities (Label Propagation)
+  ─────────────────────────────────────────────────────────────────────
+
+  Community detection via Label Propagation over typed edges, up to 30
+  iterations with early-stop after iteration 3 if labels converge.
+  Edges are treated as undirected for community purposes (each edge
+  contributes its weight in both directions).
+
+  IMPORTANT — which edges participate:
+    Only `part_of`, `embeds`, `supersedes`, and `related` edges are
+    used. `semantic` and `contradicts` edges are EXCLUDED:
+      - `semantic` is high-volume auto-generated noise that would smear
+        communities together.
+      - `contradicts` links pages that disagree, which is the opposite
+        of "belongs to the same cluster".
+    So two pages that only share a `semantic` or `contradicts` edge
+    will NOT end up in the same community.
+
+  Persistence:
+    `Dran.Graph.refresh_communities/1` writes the detected community id
+    into `meta.community_id` (an integer 1..k) using the same jsonb
+    merge as PageRank.
+
+  community_id is OPAQUE and NOT STABLE between refreshes:
+    Label Propagation is non-deterministic — the node update order is
+    shuffled each iteration, so a page's `community_id` integer can
+    change between nightly runs even if the graph itself didn't.
+    Consumers MUST treat `community_id` as an opaque grouping key
+    (use it to check "are A and B in the same community?"), NEVER as
+    a stable identity. Do not display it to users or link to it.
+
+  Reading a community's pages:
+    `Brain.community_pages(context_id, community_id)` returns the
+    lightweight list `%{id, slug, title, page_type}` of pages in a
+    given community — no body, no embeddings. The Curator agent uses
+    this to gather evidence when evaluating duplicate candidates.
+
+  ─────────────────────────────────────────────────────────────────────
+  3. GraphRAG (QA agent — expand_neighbors)
+  ─────────────────────────────────────────────────────────────────────
+
+  The `ask` (QA) agent has a tool `expand_neighbors` that does
+  retrieval-augmented generation over the graph structure, not just
+  over text. Given a seed page slug, it returns the page's typed
+  neighbors (inbound + outbound) with their slug, title, page_type,
+  relation_type, direction, and summary.
+
+  Workflow (GraphRAG):
+    1. search   — `dran_search` finds seed pages by text/semantic match.
+    2. expand   — `expand_neighbors` on the best seed traverses
+                  `part_of`, `embeds`, `supersedes`, and `related`
+                  edges to pull in pages the text search missed.
+                  `semantic` edges are deliberately excluded (they
+                  duplicate what the semantic search already returned).
+                  Up to 10 neighbors, deduped by id.
+    3. read     — `dran_get_page` reads the chosen pages.
+    4. answer   — the agent answers citing sources, optionally
+                  persisting the answer as a `query` page.
+
+  Typical usage is 1–2 calls to `expand_neighbors` per session. The
+  tool is backed by `Brain.expand_neighbors/2`.
+
+  ─────────────────────────────────────────────────────────────────────
+  4. Transitive part_of (Link Gardener — transitive_candidates)
+  ─────────────────────────────────────────────────────────────────────
+
+  The `link_gardener` agent has a tool `transitive_candidates` that
+  finds inferred `part_of` relations via an intermediate page:
+
+    If  A part_of B  and  B part_of C  exist,
+    but the direct edge  A part_of C  does NOT exist,
+    then  (A, C)  is a candidate, with `via_slug = B` as evidence.
+
+  Implementation:
+    `Brain.transitive_part_of_candidates/1` runs a recursive CTE
+    (depth capped at 2, cycle-guarded with a `visited` array) against
+    the relations table, limited to 50 candidates per context.
+
+  Workflow:
+    1. The agent calls `transitive_candidates` to get the list.
+    2. For each candidate, it MUST call `get_page` on A and C to
+       verify the inference makes sense before proposing the relation.
+    3. It proposes the direct `A part_of C` relation citing the
+       intermediate page B in the justification (e.g. "A ya es parte
+       de B, y B es parte de C").
+
+  The gardener never auto-creates these — it only proposes them with
+  evidence. A human (or the agent's own verification step) decides.
+
+  ─────────────────────────────────────────────────────────────────────
+  Nightly refresh (Quantum)
+  ─────────────────────────────────────────────────────────────────────
+
+  `Dran.Graph.refresh_all_scheduled/0` is the Quantum entrypoint. It
+  resolves the default context, then runs:
+    1. refresh_pagerank/1   (writes meta.pagerank)
+    2. refresh_communities/1 (writes meta.community_id)
+
+  Configured in `config/config.exs` as the `pagerank_nightly` job at
+  `0 3 * * *` (03:00 daily). Disabled in `config/test.exs`.
+  """
+
   def agent_connect_example, do: @agent_connect_example
   def auth_api_curl, do: @auth_api_curl
   def planning_hierarchy_diagram, do: @planning_hierarchy_diagram
@@ -314,4 +474,5 @@ defmodule DranWeb.DocsContent do
   def reminder_note_kind_doc, do: @reminder_note_kind_doc
   def plan_statuses_doc, do: @plan_statuses_doc
   def goal_metrics_doc, do: @goal_metrics_doc
+  def graph_intelligence_doc, do: @graph_intelligence_doc
 end

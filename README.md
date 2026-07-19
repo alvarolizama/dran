@@ -19,6 +19,7 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
   </tr>
   <tr>
     <td align="center"><b>Page detail — relations & versions</b><br><img src="docs/screenshots/note-detail.png" alt="Page detail with backlinks and relations" width="100%"></td>
+    <td align="center"><b>Project detail — health, tabs, graph signals</b><br><img src="docs/screenshots/project-detail.png" alt="Project dashboard with derived health, 6 tabs, PageRank and community metadata" width="100%"></td>
     <td align="center"><b>Activity feed — real-time log</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
     <td align="center"><b>Settings — brain tuning</b><br><img src="docs/screenshots/settings.png" alt="Settings — brain tuning" width="100%"></td>
   </tr>
@@ -109,14 +110,14 @@ agent limits — see [**SKILL.md**](SKILL.md).
 
 ## Features
 
-- **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, artifact, goal, plan, todo, comparison, and query
+- **11 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, artifact, goal, plan, todo, comparison, query, and **project** (executive dashboard with derived health)
 - **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, and artifact embeds `![[slug]]`
 - **Autonomous agents (6)** — background ReAct agents that plan, act, and log every step:
   - `research` — searches the web, scrapes sources, creates note/reference pages
   - `ingest` — validates, inspects, downloads, and creates reference pages from URLs
-  - `ask` — Q&A agent that answers questions from your knowledge graph, citing sources
-  - `curator` — runs daily (Quantum-scheduled), finds duplicates, flags contested knowledge, cleans stale pages
-  - `link_gardener` — proposes semantic relations between orphaned and weakly-linked pages
+  - `ask` — Q&A agent using **GraphRAG**: searches seeds, then `expand_neighbors` traverses typed relations to pull in adjacent context before answering
+  - `curator` — runs daily (Quantum-scheduled), finds duplicates and flags contested knowledge using `same_community` (graph community overlap) as extra duplicate evidence
+  - `link_gardener` — proposes typed relations between orphaned and weakly-linked pages, including transitive `part_of` candidates (`A → B → C` infers `A → C` with `via` evidence)
   - `weekly_review` — runs weekly (Quantum-scheduled), gathers stats and creates a review page
 - **Content extraction on ingest** — when files are ingested, Dran converts them to markdown automatically:
   - PDF/DOCX/PPTX → markdown via **MarkItDown**
@@ -133,17 +134,16 @@ agent limits — see [**SKILL.md**](SKILL.md).
 - **Inline editing** — edit any page in-place with autosave
 - **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
 - **Dashboard** — metrics, recent pages, quick access, todo board summary, daily-note status
-- **Kanban board** — full-viewport 6-column board with drag & drop, updates in real time via PubSub when agents create or move todos
-- **Planning hierarchy** — goals → plans → todos with auto-materialized `part_of` relations, orphan filters (`goal_slug="none"` / `plan_slug="none"`), and lint checks
+- **Kanban board** — full-viewport 6-column board with drag & drop, updates in real time via PubSub when agents create or move todos. The global board at `/kanban` shows every todo in the context with combinable filters (project / goal / plan, each offering All / None / &lt;slug&gt;); per-goal and per-project boards are replaced by filter links into the single board
+- **Planning model (v6)** — independent links, no precedence: `meta.project_slug`, `meta.goal_slug`, and `meta.plan_slug` are three independent, optional slugs. Each one materializes its own `part_of` relation when set, so a todo (or any page) may carry 0, 1, 2, or all 3 simultaneously. There is no rigid hierarchy — every page is an orphan by default, and the three link dimensions are orthogonal
 - **In-app documentation** at `/docs` with tabbed guides, MCP reference, and copy-ready code examples
-- **Goal kanban** — per-goal todo board with drag & drop
 - **MCP server** — 19 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph (see [SKILL.md](SKILL.md))
 - **REST API** — full CRUD for pages, contexts, relations, search, ingest, export, and maintenance
 - **Relations** — see inbound and outbound relations for any page
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
 - **Quality lint** — find orphan pages, stale pages, and contested knowledge
 - **Slug rename** — rename a page slug
-- **Hybrid search** — unified `dran_search` tool picks full-text, fuzzy, semantic, or hybrid
+- **Hybrid search** — unified `dran_search` tool picks full-text, fuzzy, semantic, or hybrid, with RRF fusion and an optional **PageRank authority boost** (multiplicative, controlled by the `pagerank_boost` runtime setting, default `0.15`)
 
 ## Quick start (local dev)
 
@@ -362,14 +362,15 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 
 | Type         | Purpose                       | Subtypes (meta.kind)                                  | Key meta fields                                    |
 | ------------ | ----------------------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| `note`       | Thoughts, journal, ideas      | thought, journal, idea, meeting, question, quote      | kind, date, author, attendees                      |
+| `note`       | Thoughts, journal, ideas      | thought, journal, idea, meeting, question, quote, reminder | kind, date, author, attendees, due_date (reminders) |
 | `concept`    | Abstract ideas, techniques    | technique, pattern, discipline, theory                | kind, domain, parent_concept                       |
 | `entity`     | People, companies, tools      | person, company, product, tool, place, event          | kind, location, external_url, aliases              |
 | `reference`  | External sources              | article, paper, video, podcast, book                  | kind, source_url, published_at                     |
 | `artifact`   | Files and deliverables        | document, code, design, deliverable, file             | kind, filename, mime_type, storage_path, sha256     |
-| `goal`       | Objectives with target dates  | —                                                     | health (green/yellow/red), target_date, start_date, team |
-| `plan`       | Time-horizoned plans          | —                                                     | horizon (weekly/monthly/quarterly/yearly), status (draft/active/on_hold/completed/archived), period |
-| `todo`       | Actionable items              | —                                                     | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, due_date |
+| `project`    | Executive dashboards          | —                                                     | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
+| `goal`       | Objectives with target dates  | —                                                     | health (green/yellow/red), target_date, start_date, team, metric, target_value, current_value, unit, progress |
+| `plan`       | Time-horizoned plans          | —                                                     | horizon (weekly/monthly/quarterly/yearly), status (draft/active/done/archived), period, due_date, project_slug, goal_slug |
+| `todo`       | Actionable items              | —                                                     | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), project_slug, goal_slug, plan_slug, due_date |
 | `comparison` | Side-by-side analyses         | —                                                     | entities, criteria, verdict                        |
 
 ### Embeds
@@ -590,14 +591,14 @@ Dran can delegate longer tasks to autonomous ReAct agents. There are six agent t
 | --------------- | -------------------------- | ---------------------------------------------------------------------------- |
 | `research`      | Manual (`dran_start_agent`)     | Searches the web, scrapes sources, creates note/reference pages             |
 | `ingest`         | Manual (`dran_start_agent`)     | Validates, inspects, downloads, and creates reference pages from URLs       |
-| `ask`           | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph, citing sources            |
-| `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes         |
-| `link_gardener` | Manual (`dran_start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages        |
+| `ask`           | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph using **GraphRAG**: `dran_search` finds seed pages, then the `expand_neighbors` tool traverses typed relations (part_of, embeds, supersedes, related) to pull in context the text search missed, then `dran_get_page` reads the chosen pages. Cites sources |
+| `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes. Uses **`same_community`** (both pages placed in the same graph community by Label Propagation) as extra duplicate evidence on top of embedding distance |
+| `link_gardener` | Manual (`dran_start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages. Calls **`transitive_candidates`** to find inferred `A → C` relations via an intermediate `B` (depth-2 recursive CTE) and verifies each one with `get_page` before proposing, citing `via_slug` as evidence |
 | `weekly_review` | Quantum cron (weekly Sun 08:00) | Gathers stats and creates a review page                                 |
 
 - **`dran_start_agent` / `dran_get_agent_session`** — start a session and poll for progress.
 - Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and PubSub topics (`agents:<session_id>` and `agents:all`).
-- The `curator` and `weekly_review` agents are scheduled automatically by the **Quantum** scheduler (see `config/config.exs`).
+- The `curator` and `weekly_review` agents are scheduled automatically by the **Quantum** scheduler (see `config/config.exs`), as is `pagerank_nightly` — a **03:00 daily** job that runs `Dran.Graph.refresh_all_scheduled/0` to recompute weighted **PageRank** (persisted to `meta.pagerank`) and detect **communities** via Label Propagation (persisted to `meta.community_id`) on the default context.
 - Agents are exposed as LiveView pages at `/agents/:type` and individual sessions at `/agents/:type/:id`. From the CLI, run an agent with `mix dran.agent --type research --context personal --input "topic"`.
 
 ### Example: create a note
@@ -671,7 +672,7 @@ mix dran.agent --type ingest  --context personal --input "https://example.com/ar
 - **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
 - **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
 - **MCP** (Model Context Protocol) for AI agent integration
-- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily) and `weekly_review` (weekly) agents
+- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily), `weekly_review` (weekly), and `pagerank_nightly` (03:00 daily) jobs
 - **Tailwind CSS v4** + daisyUI for styling
 
 ## License

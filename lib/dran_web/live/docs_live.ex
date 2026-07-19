@@ -300,7 +300,8 @@ defmodule DranWeb.DocsLive do
         {"knowledge-graph", "Knowledge graph"},
         {"backlinks", "Backlinks"},
         {"smart-collections", "Smart Collections"},
-        {"planning-hierarchy", "Planning hierarchy"}
+        {"planning-hierarchy", "Planning hierarchy"},
+        {"graph-intelligence", "Graph intelligence"}
       ]} />
 
       <.h2_heading id="contexts" icon="hero-squares-2x2" label="Contexts" />
@@ -400,6 +401,26 @@ defmodule DranWeb.DocsLive do
       <.code_block
         id="planning-hierarchy-diagram"
         code={DranWeb.DocsContent.planning_hierarchy_diagram()}
+      />
+
+      <.h2_heading
+        id="graph-intelligence"
+        icon="hero-chart-bar-square"
+        label="Graph intelligence"
+      />
+      <p>
+        Dran runs three pure-Elixir structural algorithms over the relations
+        table (<code>Dran.Graph</code>) — weighted <strong>PageRank</strong>,
+        <strong>Label Propagation</strong> communities, and the
+        <strong>GraphRAG</strong> <code>expand_neighbors</code> tool used by the
+        QA agent — plus transitive <code>part_of</code> inference used by the
+        Link Gardener. Results are persisted into each page's
+        <code>meta</code> and refreshed nightly by the
+        <code>pagerank_nightly</code> Quantum job (03:00 daily).
+      </p>
+      <.code_block
+        id="graph-intelligence-doc"
+        code={DranWeb.DocsContent.graph_intelligence_doc()}
       />
     </div>
     """
