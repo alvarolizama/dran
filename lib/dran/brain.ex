@@ -801,6 +801,172 @@ defmodule Dran.Brain do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Graph expansion (Tasks 2.1 + 3.1 from the Graph Algorithms plan)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Return graph neighbors of a page for RAG expansion.
+
+  Excludes `semantic` edges by default (too dense for retrieval expansion).
+  Default types: `part_of`, `embeds`, `supersedes`, `related`.
+
+  Each result is a map:
+
+      %{id, slug, title, page_type, summary, relation_type, direction}
+
+  where `direction` is `\"inbound\"` (page is the target of the edge) or
+  `\"outbound\"` (page is the source). Results are deduplicated by neighbor
+  page id (if the same neighbor appears as both inbound and outbound, the
+  outbound occurrence wins).
+
+  ## Options
+
+    * `:types` — list of relation types to include (default:
+      `[\"part_of\", \"embeds\", \"supersedes\", \"related\"]`).
+
+  ## Notes on `list_relations_for_page/1` shape
+
+  `list_relations_for_page/1` returns `%{inbound: [...], outbound: [...]}`
+  where each item is a `Dran.Brain.Relation` struct with only one side
+  preloaded — `r.source` for inbound items, `r.target` for outbound items
+  — and that side is a `Dran.Brain.Page` struct carrying only
+  `%{id, title, slug, page_type}` (no body, no summary). Summaries are
+  fetched in a single batch query.
+  """
+  def expand_neighbors(page_id, opts \\ []) do
+    types = Keyword.get(opts, :types, ~w(part_of embeds supersedes related))
+
+    %{inbound: inbound, outbound: outbound} = list_relations_for_page(page_id)
+
+    inbound_items =
+      inbound
+      |> Enum.filter(&(&1.relation_type in types))
+      |> Enum.map(fn r ->
+        page = r.source
+
+        %{
+          id: page.id,
+          slug: page.slug,
+          title: page.title,
+          page_type: page.page_type,
+          relation_type: r.relation_type,
+          direction: "inbound"
+        }
+      end)
+
+    outbound_items =
+      outbound
+      |> Enum.filter(&(&1.relation_type in types))
+      |> Enum.map(fn r ->
+        page = r.target
+
+        %{
+          id: page.id,
+          slug: page.slug,
+          title: page.title,
+          page_type: page.page_type,
+          relation_type: r.relation_type,
+          direction: "outbound"
+        }
+      end)
+
+    # Dedup by id; outbound wins when the same neighbor appears on both
+    # sides (inbound items are processed first, then overwritten by the
+    # outbound occurrence for the same id).
+    merged =
+      (inbound_items ++ outbound_items)
+      |> Enum.reduce(%{}, fn item, acc ->
+        case Map.get(acc, item.id) do
+          nil -> Map.put(acc, item.id, item)
+          %{direction: "outbound"} -> acc
+          _ -> Map.put(acc, item.id, item)
+        end
+      end)
+
+    neighbors = Map.values(merged)
+
+    # list_relations_for_page does not load :summary on the preloaded
+    # pages; batch-fetch summaries for all neighbor ids in one query so
+    # the caller gets a complete payload.
+    neighbor_ids = Enum.map(neighbors, & &1.id)
+
+    summaries =
+      if neighbor_ids == [] do
+        %{}
+      else
+        Repo.all(
+          from p in Page,
+            where: p.id in ^neighbor_ids,
+            select: {p.id, p.summary}
+        )
+        |> Map.new()
+      end
+
+    Enum.map(neighbors, fn n ->
+      Map.put(n, :summary, Map.get(summaries, n.id))
+    end)
+  end
+
+  @doc """
+  Find candidate transitive `part_of` relations via a recursive CTE.
+
+  Given a chain `A part_of B part_of C`, returns the pair `(A, C)` if the
+  direct edge `A part_of C` does not already exist. Each result carries
+  the intermediate page `B` as evidence:
+
+      %{source_slug, target_slug, via_slug}
+
+  Depth is capped at 2 (A→B→C). Cycles are guarded with a `visited` array
+  so a self-referencing chain (e.g. A→B→A) cannot recurse infinitely.
+  Limited to 50 candidates per context.
+
+  Implemented as raw SQL via `Ecto.Adapters.SQL.query/3` because the
+  recursive CTE with cycle guard (`NOT source_id = ANY(visited)`) and the
+  `NOT EXISTS` anti-join are simpler to express in SQL than in Ecto's DSL.
+  """
+  def transitive_part_of_candidates(context_id) do
+    sql = """
+    WITH RECURSIVE chain AS (
+      SELECT r.source_id, r.target_id, r.target_id AS via_id, 1 AS depth,
+             ARRAY[r.source_id] AS visited
+      FROM relations r
+      JOIN pages p ON p.id = r.source_id
+      WHERE r.relation_type = 'part_of' AND p.context_id = $1::uuid
+
+      UNION
+
+      SELECT c.source_id, r.target_id, c.target_id, c.depth + 1, c.visited || r.source_id
+      FROM chain c
+      JOIN relations r ON r.source_id = c.target_id AND r.relation_type = 'part_of'
+      WHERE c.depth < 2 AND NOT (r.source_id = ANY(c.visited))
+    )
+    SELECT DISTINCT ps.slug AS source_slug, pt.slug AS target_slug, pv.slug AS via_slug
+    FROM chain c
+    JOIN pages ps ON ps.id = c.source_id
+    JOIN pages pt ON pt.id = c.target_id
+    JOIN pages pv ON pv.id = c.via_id
+    WHERE c.depth = 2
+      AND c.source_id != c.target_id
+      AND NOT EXISTS (
+        SELECT 1 FROM relations r2
+        WHERE r2.source_id = c.source_id AND r2.target_id = c.target_id
+          AND r2.relation_type = 'part_of'
+      )
+    LIMIT 50
+    """
+
+    case Ecto.Adapters.SQL.query(Repo, sql, [Ecto.UUID.dump!(context_id)]) do
+      {:ok, %{rows: rows}} ->
+        Enum.map(rows, fn [s, t, v] ->
+          %{source_slug: s, target_slug: t, via_slug: v}
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Page links materialization (part_of relations) + derived health/progress
   # ──────────────────────────────────────────────────────────────────────────
 
