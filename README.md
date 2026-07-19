@@ -6,7 +6,7 @@ A personal second-brain application built with Phoenix LiveView. It stores your 
 
 Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP endpoint for AI agent integration, and a REST API.
 
-> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 19 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 18 tools, agent rules, 11 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
 ## Screenshots
 
@@ -34,7 +34,7 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
 Dran exposes an MCP (Model Context Protocol) endpoint at `POST /api/mcp` using
 the **Streamable HTTP** transport (MCP spec 2025-03-26). This lets any
 MCP-compatible client — Claude Desktop, Hermes Agent, custom scripts — use Dran
-as a knowledge tool with 19 tools, 3 resources, and 3 prompts.
+as a knowledge tool with 18 tools, 3 resources, and 3 prompts.
 
 ### Connection
 
@@ -133,15 +133,18 @@ agent limits — see [**SKILL.md**](SKILL.md).
 - **Activity feed** — real-time log of all brain actions (creates, updates, deletes, relations) in a dedicated LiveView
 - **Daily notes** — one journal note per day, created on demand or auto-prompted from the dashboard; toggleable via settings
 - **Full context export** — export an entire context (pages, relations, versions, uploads) as a JSON backup for restore or migration
-- **Runtime settings** — tune the brain without a redeploy: semantic thresholds, agent limits, research language, daily-note toggle — all editable in the UI and persisted to the DB
-- **Knowledge graph** — visual graph with pan/zoom, built from explicit and semantic relations
+- **Runtime settings** — tune the brain without a redeploy: the `/settings` page is organized in three full-width sections — **Brain tuning** (semantic thresholds, agent limits, daily-note toggle), **Modelos** (6 per-purpose inference models selectable from the API server, each editable via dropdown with env defaults marked `(env)`), and **Entorno** (read-only environment configuration). The `/contexts` page is also full-width
+- **Knowledge graph** — visual graph at `/graph` with pan/zoom, defaulting to a **3D view** (toggle 2D/3D); built from explicit and semantic relations. Each page detail view also surfaces a per-page subgraph
 - **Inline editing** — edit any page in-place with autosave
 - **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
 - **Dashboard** — metrics, recent pages, quick access, todo board summary, daily-note status
 - **Kanban board** — full-viewport 6-column board with drag & drop, updates in real time via PubSub when agents create or move todos. The global board at `/kanban` shows every todo in the context with combinable filters (project / goal / plan, each offering All / None / &lt;slug&gt;); per-goal and per-project boards are replaced by filter links into the single board
 - **Planning model (v6)** — independent links, no precedence: `meta.project_slug`, `meta.goal_slug`, and `meta.plan_slug` are three independent, optional slugs. Each one materializes its own `part_of` relation when set, so a todo (or any page) may carry 0, 1, 2, or all 3 simultaneously. There is no rigid hierarchy — every page is an orphan by default, and the three link dimensions are orthogonal
 - **In-app documentation** at `/docs` with tabbed guides, MCP reference, and copy-ready code examples
-- **MCP server** — 19 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph (see [SKILL.md](SKILL.md))
+- **Page detail tabs** — the first tab row on every page detail view is **Contenido / Metadatos / Relaciones / Versiones / Actividad / Grafo** (the graph is a first-class tab backed by the `<:graph>` slot in `page_components`, not a secondary panel). Inside Contenido, per-type sub-tabs surface type-specific metadata (e.g. note kinds, project health, goal metrics). All 11 page types share a single `page_edit_form` component for create/edit
+- **Tag input** — create/edit forms use badge-chip tag input shared across all 11 page types: press Enter or comma to add a tag, Backspace or the × chip to remove one
+- **Quick-add todo** — `/todos` includes inline quick-add for capturing action items without leaving the list
+- **MCP server** — 18 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph (see [SKILL.md](SKILL.md))
 - **REST API** — full CRUD for pages, contexts, relations, search, ingest, export, and maintenance
 - **Relations** — see inbound and outbound relations for any page
 - **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
@@ -314,6 +317,8 @@ The current local/VPN server exposes these models (verify at runtime with `GET /
 | `Qwen3.5-9B` | chat / text generation / vision | `POST /v1/chat/completions` |
 | `Qwen3-ASR` | audio transcription | `POST /v1/audio/transcriptions` |
 
+> **Web-selectable:** The `/settings` → **Modelos** section exposes 6 per-purpose model dropdowns (chat/agents, embeddings, re-ranking, document extraction, audio transcription, vision) populated live from the API server's `GET /v1/models`. Each purpose defaults to the env-configured model (marked `(env)`) and can be overridden per-context in the DB without a redeploy.
+
 ### How Dran can use it
 
 1. **Unified search** — `Brain.search/2` picks full-text, fuzzy, semantic or hybrid automatically based on the query and inference availability.
@@ -377,6 +382,7 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 | `plan`       | Time-horizoned plans          | —                                                     | horizon (weekly/monthly/quarterly/yearly), status (draft/active/done/archived), period, due_date, project_slug, goal_slug |
 | `todo`       | Actionable items              | —                                                     | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), project_slug, goal_slug, plan_slug, due_date |
 | `comparison` | Side-by-side analyses         | —                                                     | entities, criteria, verdict                        |
+| `query`      | Questions to answer           | factual, conceptual, how_to, opinion                  | kind, difficulty (simple/intermediate/advanced), answer_status (open/answered/verified), answered_by |
 
 ### Embeds
 
