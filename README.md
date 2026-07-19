@@ -20,8 +20,12 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
   <tr>
     <td align="center"><b>Page detail — relations & versions</b><br><img src="docs/screenshots/note-detail.png" alt="Page detail with backlinks and relations" width="100%"></td>
     <td align="center"><b>Project detail — health, tabs, graph signals</b><br><img src="docs/screenshots/project-detail.png" alt="Project dashboard with derived health, 6 tabs, PageRank and community metadata" width="100%"></td>
-    <td align="center"><b>Activity feed — real-time log</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
+    <td align="center"><b>Activity feed — real-time timeline</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
     <td align="center"><b>Settings — brain tuning</b><br><img src="docs/screenshots/settings.png" alt="Settings — brain tuning" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Archived section — filterable by type</b><br><img src="docs/screenshots/notes-archived.png" alt="Notes list with archived section" width="100%"></td>
+    <td align="center"><b>Search — hero with suggestions</b><br><img src="docs/screenshots/search.png" alt="Search hero" width="100%"></td>
   </tr>
 </table>
 
