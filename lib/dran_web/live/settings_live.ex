@@ -30,13 +30,13 @@ defmodule DranWeb.SettingsLive do
 
   # -- Brain tuning form ------------------------------------------------------
 
-  @brain_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long
-                 agent_max_pages agent_max_sources research_lang daily_note_enabled)
+  @brain_keys ~w(agent_max_pages daily_note_enabled)
+  @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
   defp assign_brain_form(socket) do
     values =
       Settings.all()
-      |> Map.take(@brain_keys)
+      |> Map.take(@brain_keys ++ @advanced_keys)
 
     assign(socket, brain_form: to_form(values, as: :settings))
   end
@@ -48,12 +48,10 @@ defmodule DranWeb.SettingsLive do
       "semantic_threshold_mid" => &cast_float/1,
       "semantic_threshold_long" => &cast_float/1,
       "agent_max_pages" => &cast_int/1,
-      "agent_max_sources" => &cast_int/1,
-      "research_lang" => &to_string/1,
       "daily_note_enabled" => &cast_bool/1
     }
 
-    for key <- @brain_keys do
+    for key <- @brain_keys ++ @advanced_keys do
       raw = Map.get(params, key, "")
       cast = Map.fetch!(casts, key)
       Settings.put(key, cast.(raw))
@@ -315,69 +313,16 @@ defmodule DranWeb.SettingsLive do
         phx-submit="save"
         class="px-5 py-5 space-y-5"
       >
-        <%!-- Thresholds group --%>
-        <div class="space-y-2">
-          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-            {gettext("Semantic thresholds")}
-          </h3>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <.input
-              field={@form[:semantic_threshold_short]}
-              type="number"
-              step="0.01"
-              label={gettext("Short")}
-            />
-            <.input
-              field={@form[:semantic_threshold_mid]}
-              type="number"
-              step="0.01"
-              label={gettext("Mid")}
-            />
-            <.input
-              field={@form[:semantic_threshold_long]}
-              type="number"
-              step="0.01"
-              label={gettext("Long")}
-            />
-          </div>
-          <p class="text-caption">
-            {gettext("Minimum similarity (0.0–1.0) for a relation to be considered semantic.")}
-          </p>
-        </div>
-
         <%!-- Agent limits --%>
         <div class="space-y-2">
           <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
             {gettext("Agent limits")}
           </h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
             <.input
               field={@form[:agent_max_pages]}
               type="number"
               label={gettext("Max pages per run")}
-            />
-            <.input
-              field={@form[:agent_max_sources]}
-              type="number"
-              label={gettext("Max sources per run")}
-            />
-          </div>
-          <p class="text-caption">
-            {gettext("Upper bounds for autonomous research and ingest agents.")}
-          </p>
-        </div>
-
-        <%!-- Research preferences --%>
-        <div class="space-y-2">
-          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-            {gettext("Research preferences")}
-          </h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-            <.input
-              field={@form[:research_lang]}
-              type="select"
-              label={gettext("Research language")}
-              options={[{"Español", "es"}, {"English", "en"}]}
             />
             <.input
               field={@form[:daily_note_enabled]}
@@ -386,9 +331,51 @@ defmodule DranWeb.SettingsLive do
             />
           </div>
           <p class="text-caption">
-            {gettext("Language for agent-generated content and daily-note automation.")}
+            {gettext("Upper bound for autonomous research and ingest agents.")}
           </p>
         </div>
+
+        <%!-- Advanced: semantic thresholds --%>
+        <details class="group rounded-xl border border-base-content/10 px-4 py-3">
+          <summary class="flex items-center gap-2 cursor-pointer select-none">
+            <.icon
+              name="hero-chevron-right"
+              class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+            />
+            <.icon name="hero-adjustments-horizontal" class="size-4 text-base-content/40" />
+            <span class="text-sm font-semibold text-base-content/70">
+              {gettext("Avanzado")}
+            </span>
+          </summary>
+          <div class="mt-4 space-y-2">
+            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+              {gettext("Semantic thresholds")}
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <.input
+                field={@form[:semantic_threshold_short]}
+                type="number"
+                step="0.01"
+                label={gettext("Short")}
+              />
+              <.input
+                field={@form[:semantic_threshold_mid]}
+                type="number"
+                step="0.01"
+                label={gettext("Mid")}
+              />
+              <.input
+                field={@form[:semantic_threshold_long]}
+                type="number"
+                step="0.01"
+                label={gettext("Long")}
+              />
+            </div>
+            <p class="text-caption">
+              {gettext("Minimum similarity (0.0–1.0) for a relation to be considered semantic.")}
+            </p>
+          </div>
+        </details>
 
         <%!-- Save row --%>
         <div class="flex justify-end pt-3 border-t border-base-content/10">

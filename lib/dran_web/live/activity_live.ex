@@ -72,7 +72,13 @@ defmodule DranWeb.ActivityLive do
 
           <.timeline :if={@entries != []} entries={@entries} />
 
-          <.empty_state :if={@entries == []} />
+          <.empty_state
+            :if={@entries == []}
+            icon="hero-clock"
+            title={gettext("No activity yet")}
+            caption={gettext("Create or edit a page to see it here.")}
+            class="surface-2 rounded-2xl"
+          />
         </div>
       </div>
     </Layouts.app>
@@ -191,24 +197,6 @@ defmodule DranWeb.ActivityLive do
         </div>
       </div>
     </li>
-    """
-  end
-
-  defp empty_state(assigns) do
-    ~H"""
-    <div class="surface-2 p-12">
-      <div class="flex flex-col items-center gap-3 text-center">
-        <div class="size-14 rounded-2xl bg-base-200 flex items-center justify-center">
-          <.icon name="hero-clock" class="size-6 text-base-content/40" />
-        </div>
-        <div>
-          <p class="text-heading">{gettext("No activity yet")}</p>
-          <p class="text-caption mt-1 text-base-content/50">
-            {gettext("Create or edit a page to see it here.")}
-          </p>
-        </div>
-      </div>
-    </div>
     """
   end
 

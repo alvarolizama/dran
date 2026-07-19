@@ -181,21 +181,13 @@ defmodule DranWeb.ContextLive do
             </div>
 
             <%!-- Empty state with CTA --%>
-            <div :if={@contexts == []} class="surface-2 rounded-2xl p-12 text-center">
-              <div class="flex flex-col items-center gap-4">
-                <div class="size-14 rounded-full bg-base-200 flex items-center justify-center">
-                  <.icon name="hero-square-3-stack-3d" class="size-7 text-base-content/40" />
-                </div>
-                <div class="space-y-1">
-                  <p class="text-sm font-medium text-base-content/70">
-                    {gettext("No contexts yet")}
-                  </p>
-                  <p class="text-caption">
-                    {gettext("Create your first context above to start organizing your second brain.")}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <.empty_state
+              :if={@contexts == []}
+              icon="hero-square-3-stack-3d"
+              title={gettext("No contexts yet")}
+              caption={gettext("Create your first context above to start organizing your second brain.")}
+              class="surface-2 rounded-2xl"
+            />
 
             <%!-- Context cards --%>
             <.context_card

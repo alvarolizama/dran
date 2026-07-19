@@ -572,6 +572,48 @@ defmodule DranWeb.PageComponents do
   end
 
   @doc """
+  Shared empty-state component: icon in a tinted rounded square, heading,
+  caption, and an optional CTA slot.
+
+  Modeled on `search_live.ex`'s `empty_hero`. Use this anywhere a list/view
+  has no content to show so the empty state is consistent across the app.
+
+  ## Example
+
+      <.empty_state
+        icon="hero-folder-plus"
+        title={gettext("No smart collections yet.")}
+        caption={gettext("Save a set of filters from search or any page list to create one.")}
+      >
+        <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm mt-4">
+          <.icon name="hero-plus" class="w-4 h-4" />
+          {gettext("Create your first collection")}
+        </.link>
+      </.empty_state>
+  """
+  attr :icon, :string, required: true, doc: "hero icon name, e.g. \"hero-folder-plus\""
+  attr :title, :string, required: true
+  attr :caption, :string, default: nil
+  attr :class, :string, default: nil, doc: "extra classes for the outer wrapper"
+
+  slot :inner_block, doc: "optional CTA / action block rendered below the caption"
+
+  def empty_state(assigns) do
+    ~H"""
+    <div class={["flex flex-col items-center justify-center text-center py-16", @class]}>
+      <div class="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <.icon name={@icon} class="size-8 text-primary" />
+      </div>
+      <h2 class="text-title mt-5">{@title}</h2>
+      <p :if={@caption} class="text-caption mt-2 max-w-sm">
+        {@caption}
+      </p>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
   Renders the inline subgraph SVG centered on the current page.
 
   Uses the GraphPanZoom hook for zoom/pan and node dragging.

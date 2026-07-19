@@ -30,9 +30,11 @@ defmodule DranWeb.IngestLive do
       <div class="flex-1 overflow-y-auto">
         <div class="w-full p-6 space-y-6">
           <div>
-            <h1 class="text-2xl font-bold">Ingest</h1>
+            <h1 class="text-2xl font-bold">{gettext("Ingest")}</h1>
             <p class="text-sm text-base-content/50 mt-1">
-              Save a URL or upload a PDF / Office document / text file as a searchable note.
+              {gettext(
+                "Save a URL or upload a PDF / Office document / text file as a searchable note."
+              )}
             </p>
           </div>
 
@@ -53,7 +55,7 @@ defmodule DranWeb.IngestLive do
                   @mode == "url" && "tab-active"
                 ]}
               >
-                URL
+                {gettext("URL")}
               </button>
               <button
                 type="button"
@@ -64,7 +66,7 @@ defmodule DranWeb.IngestLive do
                   @mode == "file" && "tab-active"
                 ]}
               >
-                File
+                {gettext("File")}
               </button>
             </div>
 
@@ -72,7 +74,7 @@ defmodule DranWeb.IngestLive do
               <.input
                 field={@form[:url]}
                 type="url"
-                label="URL"
+                label={gettext("URL")}
                 placeholder="https://example.com/article or https://example.com/doc.pdf"
                 class="w-full"
                 autofocus
@@ -82,7 +84,7 @@ defmodule DranWeb.IngestLive do
             <div :if={@mode == "file"} class="space-y-4">
               <label class="block">
                 <span class="block text-sm font-medium text-base-content/70 mb-1.5">
-                  File (PDF, DOCX, PPTX, TXT)
+                  {gettext("File (PDF, DOCX, PPTX, TXT)")}
                 </span>
                 <.live_file_input upload={@uploads.file} class="file-input w-full" />
               </label>
@@ -110,19 +112,35 @@ defmodule DranWeb.IngestLive do
             </div>
 
             <.input
+              field={@form[:title]}
+              type="text"
+              label={gettext("Title (optional)")}
+              placeholder={gettext("Leave blank to derive from filename")}
+              class="w-full text-sm"
+            />
+
+            <.input
+              field={@form[:page_type]}
+              type="select"
+              label={gettext("Page type")}
+              options={@page_type_options}
+              class="w-full text-sm"
+            />
+
+            <.input
               field={@form[:tags]}
               type="text"
-              label="Tags (optional)"
-              placeholder="comma, separated"
+              label={gettext("Tags (optional)")}
+              placeholder={gettext("comma, separated")}
               class="w-full text-sm"
             />
 
             <div class="flex justify-end gap-2 pt-2">
               <button type="submit" class="btn btn-primary btn-sm" disabled={@ingesting}>
                 <%= if @ingesting do %>
-                  <span class="loading loading-spinner loading-xs"></span> Ingesting…
+                  <span class="loading loading-spinner loading-xs"></span> {gettext("Ingesting…")}
                 <% else %>
-                  <.icon name="hero-arrow-down-tray" class="size-4" /> Ingest
+                  <.icon name="hero-arrow-down-tray" class="size-4" /> {gettext("Ingest")}
                 <% end %>
               </button>
             </div>
@@ -132,7 +150,7 @@ defmodule DranWeb.IngestLive do
             <div class="alert alert-success">
               <.icon name="hero-check-circle" class="size-5" />
               <div>
-                <p class="font-medium">Ingested successfully</p>
+                <p class="font-medium">{gettext("Ingested successfully")}</p>
                 <p class="text-sm">
                   <.link navigate={@result_path} class="text-primary hover:underline">
                     {@result.title} ({@result.slug})
@@ -146,22 +164,28 @@ defmodule DranWeb.IngestLive do
             <div class="alert alert-error">
               <.icon name="hero-exclamation-circle" class="size-5" />
               <div>
-                <p class="font-medium">Ingest failed</p>
+                <p class="font-medium">{gettext("Ingest failed")}</p>
                 <p class="text-sm">{@error}</p>
               </div>
             </div>
           <% end %>
 
           <div class="border-t border-base-300 pt-4">
-            <h2 class="text-sm font-semibold text-base-content/60 mb-2">How it works</h2>
+            <h2 class="text-sm font-semibold text-base-content/60 mb-2">
+              {gettext("How it works")}
+            </h2>
             <ul class="text-sm text-base-content/50 space-y-1">
               <li>
-                • <strong>Web pages</strong>: saves the URL as a reference. The agent reads the content later.
+                {gettext("•")} <strong>{gettext("Web pages")}</strong>: {gettext(
+                  "saves the URL as a reference. The agent reads the content later."
+                )}
               </li>
               <li>
-                • <strong>Files (PDF, DOCX, PPTX, TXT)</strong>: stores the file and creates a searchable markdown note.
+                {gettext("•")} <strong>{gettext("Files (PDF, DOCX, PPTX, TXT)")}</strong>: {gettext(
+                  "stores the file and creates a searchable markdown note."
+                )}
               </li>
-              <li>• The source URL / file path is preserved in the page metadata.</li>
+              <li>{gettext("• The source URL / file path is preserved in the page metadata.")}</li>
             </ul>
           </div>
         </div>
@@ -185,17 +209,30 @@ defmodule DranWeb.IngestLive do
         socket
       end
 
+    # Use gettext/1 with literal strings so mix gettext.extract can
+    # find them. The macro requires compile-time string literals.
+    page_type_options = [
+      {gettext("Note"), "note"},
+      {gettext("Reference"), "reference"},
+      {gettext("Artifact"), "artifact"}
+    ]
+
     {:ok,
      assign(socket,
        context: context,
        mode: "url",
-       form: to_form(%{"url" => "", "tags" => ""}, as: :ingest),
+       page_type_options: page_type_options,
+       form:
+         to_form(
+           %{"url" => "", "tags" => "", "title" => "", "page_type" => "note"},
+           as: :ingest
+         ),
        ingesting: false,
        upload_error: nil,
        result: nil,
        result_path: nil,
        error: nil,
-       page_title: "Ingest",
+       page_title: gettext("Ingest"),
        active_nav: "ingest"
      )}
   end
@@ -225,15 +262,15 @@ defmodule DranWeb.IngestLive do
              result: page,
              result_path: "/#{type_path}/#{page.slug}"
            )
-           |> put_flash(:info, "Ingested '#{page.title}'")}
+           |> put_flash(:info, gettext("Ingested '%{title}'", title: page.title))}
 
         {:error, reason} ->
           {:noreply,
            assign(socket, ingesting: false, error: to_error_string(reason))
-           |> put_flash(:error, "Ingest failed")}
+           |> put_flash(:error, gettext("Ingest failed"))}
       end
     else
-      {:noreply, put_flash(socket, :error, "No context selected")}
+      {:noreply, put_flash(socket, :error, gettext("No context selected"))}
     end
   end
 
@@ -243,12 +280,13 @@ defmodule DranWeb.IngestLive do
 
   defp ingest_for_mode(socket, "file", params) do
     context = socket.assigns.context
+    page_type = Map.get(params, "page_type", "note") || "note"
 
     case Phoenix.LiveView.Upload.consume_uploaded_entries(socket, :file, fn meta, entry ->
-           consume_file_upload(socket, context, meta, entry)
+           consume_file_upload(socket, context, meta, entry, page_type, params)
          end) do
       [] ->
-        {:error, "no file selected"}
+        {:error, gettext("no file selected")}
 
       [result | _] ->
         case result do
@@ -261,7 +299,7 @@ defmodule DranWeb.IngestLive do
     end
   end
 
-  defp consume_file_upload(socket, context, _meta, entry) do
+  defp consume_file_upload(socket, context, _meta, entry, page_type, params) do
     binary =
       Phoenix.LiveView.Upload.consume_uploaded_entry(socket, entry, fn %{path: path} ->
         File.read!(path)
@@ -270,10 +308,22 @@ defmodule DranWeb.IngestLive do
     max_size = Uploads.max_size()
 
     if byte_size(binary) > max_size do
-      {:error, "file too large (max #{max_size} bytes)"}
+      {:error, gettext("file too large (max %{max} bytes)", max: max_size)}
     else
       stored = Uploads.store(context.id, binary, entry.client_name, entry.client_type)
-      title = Converter.title(entry.client_name)
+      filename_title = Converter.title(entry.client_name)
+
+      # Allow the user to override the title; fall back to deriving it
+      # from the filename when the field is left blank.
+      title =
+        params
+        |> Map.get("title", "")
+        |> String.trim()
+        |> case do
+          "" -> filename_title
+          custom -> custom
+        end
+
       slug = slugify(title)
 
       case Converter.convert(entry.client_name, entry.client_type, binary) do
@@ -283,10 +333,13 @@ defmodule DranWeb.IngestLive do
             title: title,
             slug: slug,
             body: markdown,
-            page_type: "note",
+            page_type: page_type,
             tags: [],
+            # Bug fix: previously set `kind: "file"` here, but "file" is
+            # not a valid meta.kind for note/reference pages. Build the
+            # meta WITHOUT a kind key — the user can pick one later via
+            # the meta_fields component on the edit page.
             meta: %{
-              "kind" => "file",
               "source_url" => stored.storage_path,
               "filename" => stored.filename,
               "mime_type" => stored.mime_type,
@@ -352,15 +405,19 @@ defmodule DranWeb.IngestLive do
     end
   end
 
-  defp format_bytes(nil), do: "0 B"
+  defp format_bytes(nil), do: gettext("0 B")
 
-  defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
-  defp format_bytes(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  defp format_bytes(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+  defp format_bytes(bytes) when bytes < 1024, do: gettext("%{count} B", count: bytes)
 
-  defp error_to_string(:too_large), do: "File too large"
-  defp error_to_string(:too_many_files), do: "Too many files"
-  defp error_to_string(:not_accepted), do: "File type not accepted"
+  defp format_bytes(bytes) when bytes < 1_048_576,
+    do: gettext("%{count} KB", count: Float.round(bytes / 1024, 1))
+
+  defp format_bytes(bytes),
+    do: gettext("%{count} MB", count: Float.round(bytes / 1_048_576, 1))
+
+  defp error_to_string(:too_large), do: gettext("File too large")
+  defp error_to_string(:too_many_files), do: gettext("Too many files")
+  defp error_to_string(:not_accepted), do: gettext("File type not accepted")
   defp error_to_string(err), do: to_string(err)
 
   defp format_changeset_errors(changeset) do

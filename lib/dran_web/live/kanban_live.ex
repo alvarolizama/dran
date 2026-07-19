@@ -85,7 +85,7 @@ defmodule DranWeb.KanbanLive do
                 required
                 placeholder={gettext("What needs to be done?")}
                 phx-mounted={JS.focus()}
-                class="input w-full rounded-lg border-base-300 bg-base-100 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none"
+                class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
 
@@ -94,7 +94,7 @@ defmodule DranWeb.KanbanLive do
               <select
                 id="qa-priority"
                 name="priority"
-                class="select w-full rounded-lg border-base-300 bg-base-100"
+                class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <%= for {value, label} <- @priority_options do %>
                   <option value={value} selected={value == @form["priority"]}>{label}</option>
@@ -109,7 +109,7 @@ defmodule DranWeb.KanbanLive do
                 type="date"
                 name="due_date"
                 value={@form["due_date"]}
-                class="input w-full rounded-lg border-base-300 bg-base-100"
+                class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
 
@@ -118,7 +118,7 @@ defmodule DranWeb.KanbanLive do
               <select
                 id="qa-goal"
                 name="goal_slug"
-                class="select w-full rounded-lg border-base-300 bg-base-100"
+                class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <%= for {label, value} <- @goal_options do %>
                   <option value={value} selected={value == @form["goal_slug"]}>{label}</option>
@@ -131,7 +131,7 @@ defmodule DranWeb.KanbanLive do
               <select
                 id="qa-status"
                 name="kanban_status"
-                class="select w-full rounded-lg border-base-300 bg-base-100"
+                class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <%= for {value, label} <- @status_options do %>
                   <option value={value} selected={value == @form["kanban_status"]}>{label}</option>

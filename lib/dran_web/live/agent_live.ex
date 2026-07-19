@@ -27,8 +27,8 @@ defmodule DranWeb.AgentLive do
       <div class="flex-1 overflow-y-auto w-full">
         <div class="w-full p-6 space-y-6">
           <div>
-            <h1 class="text-2xl font-bold capitalize">{@type} {gettext("Agent")}</h1>
-            <p class="text-sm text-base-content/50 mt-1">{@description}</p>
+            <h1 class="text-title">{@title}</h1>
+            <p class="text-caption mt-1">{@description}</p>
           </div>
 
           <%= if @session do %>
@@ -448,10 +448,11 @@ defmodule DranWeb.AgentLive do
     %{
       type: "research",
       active_nav: "research",
+      title: gettext("Research"),
       input_label: gettext("Research topic"),
       input_placeholder: "Yeshe Walmo",
       description: gettext("Explore a topic on the web and create pages."),
-      page_title: gettext("Research Agent")
+      page_title: gettext("Research")
     }
   end
 
@@ -459,6 +460,7 @@ defmodule DranWeb.AgentLive do
     %{
       type: "ingest",
       active_nav: "ingest",
+      title: gettext("Files Ingest"),
       input_label: gettext("URL to ingest"),
       input_placeholder: "https://example.com/article",
       description: gettext("Ingest files or URLs and optionally enrich the resulting page."),

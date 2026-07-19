@@ -46,9 +46,11 @@ const Graph3D = {
     const width = container.clientWidth || 800
     const height = container.clientHeight || 600
 
-    // Scene
+    // Scene — background reads the theme's --color-base-300 CSS variable so
+    // the 3D canvas matches the 2D view in both light and dark modes.
+    // Falls back to a dark slate if the variable can't be resolved.
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x0f172a) // slate-900
+    this.scene.background = new THREE.Color(this.readThemeColor("--color-base-300", "#0f172a"))
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 5000)
@@ -200,6 +202,34 @@ const Graph3D = {
       return new THREE.Color(hex || fallback)
     } catch {
       return new THREE.Color(fallback)
+    }
+  },
+
+  // Read a CSS custom property from :root and resolve it to a hex color
+  // string suitable for THREE.Color. Returns `fallback` if the variable is
+  // not set or the value can't be parsed. Handles oklch(), rgb(), hsl(),
+  // and #hex by round-tripping through a DOM element's computed style.
+  readThemeColor(varName, fallback) {
+    try {
+      const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue(varName)
+        .trim()
+      if (!raw) return fallback
+
+      // Use a throwaway element to let the browser parse any CSS color
+      // format (oklch, color-mix, named colors, etc.) and hand us back
+      // an rgb()/rgba() string we can feed to THREE.Color.
+      const probe = document.createElement("div")
+      probe.style.color = raw
+      probe.style.display = "none"
+      document.body.appendChild(probe)
+      const resolved = getComputedStyle(probe).color
+      document.body.removeChild(probe)
+
+      if (!resolved) return fallback
+      return new THREE.Color(resolved)
+    } catch {
+      return fallback
     }
   },
 

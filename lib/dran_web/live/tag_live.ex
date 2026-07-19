@@ -61,19 +61,20 @@ defmodule DranWeb.TagLive do
       <div class="p-6">
         <div class="flex items-center gap-2 mb-1">
           <.icon name="hero-hashtag" class="w-5 h-5 text-base-content/60" />
-          <span class="text-sm text-base-content/60 uppercase tracking-wider">Tag</span>
+          <span class="text-sm text-base-content/60 uppercase tracking-wider">
+            {gettext("Tag")}
+          </span>
         </div>
-        <h1 class="text-2xl font-bold mb-1">{@tag}</h1>
-        <p class="text-sm text-base-content/60 mb-6">
-          {length(@pages)} {if length(@pages) == 1, do: "page", else: "pages"} with this tag
+        <h1 class="text-title mb-1">{@tag}</h1>
+        <p class="text-caption mb-6">
+          {length(@pages)} {ngettext("page", "pages", length(@pages))} {gettext("with this tag")}
         </p>
 
-        <div :if={@pages == []} class="text-center py-12">
-          <.icon name="hero-tag" class="w-12 h-12 mx-auto mb-3 text-base-content/30" />
-          <p class="text-sm text-base-content/50">
-            {gettext("No pages found with this tag.")}
-          </p>
-        </div>
+        <.empty_state
+          :if={@pages == []}
+          icon="hero-tag"
+          title={gettext("No pages found with this tag.")}
+        />
 
         <div class="space-y-2">
           <div

@@ -46,29 +46,27 @@ defmodule DranWeb.SmartCollectionLive do
       <div :if={@live_action == :index} class="p-6 overflow-y-auto w-full">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h1 class="text-2xl font-bold">Smart Collections</h1>
-            <p class="text-sm text-base-content/50 mt-1">
-              Saved queries that auto-update as your brain changes
+            <h1 class="text-title">{gettext("Smart Collections")}</h1>
+            <p class="text-caption mt-1">
+              {gettext("Saved queries that auto-update as your brain changes")}
             </p>
           </div>
           <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="w-4 h-4" /> New Collection
+            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Collection")}
           </.link>
         </div>
 
-        <div :if={@collections == []} class="text-center py-16">
-          <.icon name="hero-folder-plus" class="w-16 h-16 mx-auto mb-4 text-base-content/30" />
-          <h2 class="text-lg font-semibold text-base-content/70">
-            {gettext("No smart collections yet.")}
-          </h2>
-          <p class="text-sm text-base-content/50 mt-1 max-w-sm mx-auto">
-            {gettext("Save a set of filters from search or any page list to create one.")}
-          </p>
+        <.empty_state
+          :if={@collections == []}
+          icon="hero-folder-plus"
+          title={gettext("No smart collections yet.")}
+          caption={gettext("Save a set of filters from search or any page list to create one.")}
+        >
           <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm mt-4">
             <.icon name="hero-plus" class="w-4 h-4" />
             {gettext("Create your first collection")}
           </.link>
-        </div>
+        </.empty_state>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <.link
@@ -92,7 +90,7 @@ defmodule DranWeb.SmartCollectionLive do
                   {key}: {value}
                 </span>
                 <span :if={format_query_tags(collection) == []} class="text-xs text-base-content/40">
-                  All pages
+                  {gettext("All pages")}
                 </span>
               </div>
             </div>
@@ -105,22 +103,22 @@ defmodule DranWeb.SmartCollectionLive do
           <div>
             <div class="flex items-center gap-2 mb-1">
               <.icon name="hero-funnel" class="w-6 h-6 text-primary/70" />
-              <h1 class="text-2xl font-bold">{@collection.title}</h1>
+              <h1 class="text-title">{@collection.title}</h1>
             </div>
-            <p :if={@collection.summary} class="text-sm text-base-content/50">
+            <p :if={@collection.summary} class="text-caption">
               {@collection.summary}
             </p>
           </div>
           <div class="flex gap-2">
             <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">
-              <.icon name="hero-arrow-left" class="w-4 h-4" /> Back
+              <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
             </.link>
             <button
               phx-click="delete_collection"
-              data-confirm="Delete this smart collection? The pages it references will not be affected."
+              data-confirm={gettext("Delete this smart collection? The pages it references will not be affected.")}
               class="btn btn-ghost btn-sm text-error"
             >
-              <.icon name="hero-trash" class="w-4 h-4" /> Delete
+              <.icon name="hero-trash" class="w-4 h-4" /> {gettext("Delete")}
             </button>
           </div>
         </div>
@@ -134,16 +132,16 @@ defmodule DranWeb.SmartCollectionLive do
             <span class="font-medium">{value}</span>
           </span>
           <span :if={@query_tags == []} class="text-sm text-base-content/40">
-            No filters — showing all pages in this context
+            {gettext("No filters — showing all pages in this context")}
           </span>
         </div>
 
         <div class="flex items-center justify-between mb-3">
           <span class="text-sm text-base-content/60">
-            {@result_count} {if @result_count == 1, do: "page", else: "pages"}
+            {@result_count} {ngettext("page", "pages", @result_count)}
           </span>
           <span class="text-xs text-base-content/40 flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full bg-success animate-pulse"></span> Live
+            <span class="inline-block w-2 h-2 rounded-full bg-success animate-pulse"></span> {gettext("Live")}
           </span>
         </div>
 
@@ -180,29 +178,30 @@ defmodule DranWeb.SmartCollectionLive do
             </div>
           </div>
 
-          <div :if={@results == []} class="text-center py-12">
-            <.icon
-              name="hero-document-magnifying-glass"
-              class="w-12 h-12 mx-auto mb-3 text-base-content/30"
-            />
-            <p class="text-sm text-base-content/50">
-              {gettext("No pages match this collection's filters.")}
-            </p>
-          </div>
+          <.empty_state
+            :if={@results == []}
+            icon="hero-document-magnifying-glass"
+            title={gettext("No pages match this collection's filters.")}
+          />
         </div>
       </div>
 
       <div :if={@live_action == :new} class="p-6 overflow-y-auto w-full max-w-2xl mx-auto">
-        <h1 class="text-2xl font-bold mb-6">New Smart Collection</h1>
+        <div class="mb-6">
+          <h1 class="text-title">{gettext("New Smart Collection")}</h1>
+          <p class="text-caption mt-1">
+            {gettext("Save a set of filters as a live-updating collection.")}
+          </p>
+        </div>
 
         <form phx-submit="create_collection" class="space-y-5">
           <.input
             id="collection-title"
             name="title"
             type="text"
-            label="Title"
+            label={gettext("Title")}
             value={@form["title"]}
-            placeholder="e.g. Urgent Todos This Week"
+            placeholder={gettext("e.g. Urgent Todos This Week")}
             required
           />
 
@@ -210,9 +209,9 @@ defmodule DranWeb.SmartCollectionLive do
             id="collection-slug"
             name="slug"
             type="text"
-            label="Slug"
+            label={gettext("Slug")}
             value={@form["slug"]}
-            placeholder="auto-generated from title if blank"
+            placeholder={gettext("auto-generated from title if blank")}
             class="font-mono text-sm"
           />
 
@@ -220,19 +219,19 @@ defmodule DranWeb.SmartCollectionLive do
             id="collection-summary"
             name="summary"
             type="text"
-            label="Summary"
+            label={gettext("Summary")}
             value={@form["summary"]}
-            placeholder="One-line description"
+            placeholder={gettext("One-line description")}
           />
 
           <div class="border-t border-base-300 pt-5">
-            <h3 class="text-sm font-semibold text-base-content/70 mb-3">Filters</h3>
+            <h3 class="text-sm font-semibold text-base-content/70 mb-3">{gettext("Filters")}</h3>
             <div class="grid grid-cols-2 gap-4">
               <.input
                 id="filter-type"
                 name="type"
                 type="select"
-                label="Page type"
+                label={gettext("Page type")}
                 value={@form["type"]}
                 options={@type_options}
               />
@@ -240,7 +239,7 @@ defmodule DranWeb.SmartCollectionLive do
                 id="filter-status"
                 name="status"
                 type="select"
-                label="Status (kanban)"
+                label={gettext("Status (kanban)")}
                 value={@form["status"]}
                 options={@status_options}
               />
@@ -248,30 +247,30 @@ defmodule DranWeb.SmartCollectionLive do
                 id="filter-tag"
                 name="tag"
                 type="text"
-                label="Tag"
+                label={gettext("Tag")}
                 value={@form["tag"]}
-                placeholder="any tag"
+                placeholder={gettext("any tag")}
               />
               <.input
                 id="filter-owner"
                 name="owner"
                 type="text"
-                label="Owner"
+                label={gettext("Owner")}
                 value={@form["owner"]}
-                placeholder="any owner"
+                placeholder={gettext("any owner")}
               />
               <.input
                 id="filter-due-after"
                 name="due_after"
                 type="date"
-                label="Due after"
+                label={gettext("Due after")}
                 value={@form["due_after"]}
               />
               <.input
                 id="filter-due-before"
                 name="due_before"
                 type="date"
-                label="Due before"
+                label={gettext("Due before")}
                 value={@form["due_before"]}
               />
             </div>
@@ -307,17 +306,17 @@ defmodule DranWeb.SmartCollectionLive do
     end
 
     type_options =
-      [{"All types", ""}] ++
+      [{gettext("All types"), ""}] ++
         Enum.map(Brain.page_types(), fn t -> {String.capitalize(t), t} end)
 
     status_options = [
-      {"Any status", ""},
-      {"Backlog", "backlog"},
-      {"This Week", "this_week"},
-      {"Today", "today"},
-      {"In Progress", "in_progress"},
-      {"Done", "done"},
-      {"Cancelled", "cancelled"}
+      {gettext("Any status"), ""},
+      {gettext("Backlog"), "backlog"},
+      {gettext("This Week"), "this_week"},
+      {gettext("Today"), "today"},
+      {gettext("In Progress"), "in_progress"},
+      {gettext("Done"), "done"},
+      {gettext("Cancelled"), "cancelled"}
     ]
 
     {:ok,
@@ -347,7 +346,7 @@ defmodule DranWeb.SmartCollectionLive do
         []
       end
 
-    assign(socket, collections: collections, page_title: "Smart Collections")
+    assign(socket, collections: collections, page_title: gettext("Smart Collections"))
   end
 
   defp apply_action(socket, :show, %{"slug" => slug}) do
@@ -390,7 +389,7 @@ defmodule DranWeb.SmartCollectionLive do
       "due_after" => params["due_after"] || ""
     }
 
-    assign(socket, form: form, page_title: "New Smart Collection")
+    assign(socket, form: form, page_title: gettext("New Smart Collection"))
   end
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -416,11 +415,11 @@ defmodule DranWeb.SmartCollectionLive do
         {:ok, _} ->
           {:noreply,
            socket
-           |> put_flash(:info, "Smart collection deleted.")
+           |> put_flash(:info, gettext("Smart collection deleted."))
            |> push_navigate(to: ~p"/collections")}
 
         {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Could not delete collection.")}
+          {:noreply, put_flash(socket, :error, gettext("Could not delete collection."))}
       end
     else
       {:noreply, socket}
@@ -432,10 +431,10 @@ defmodule DranWeb.SmartCollectionLive do
 
     cond do
       context == nil ->
-        {:noreply, put_flash(socket, :error, "No context available.")}
+        {:noreply, put_flash(socket, :error, gettext("No context available."))}
 
       String.trim(params["title"] || "") == "" ->
-        {:noreply, put_flash(socket, :error, "Title is required.")}
+        {:noreply, put_flash(socket, :error, gettext("Title is required."))}
 
       true ->
         attrs = %{
@@ -450,12 +449,12 @@ defmodule DranWeb.SmartCollectionLive do
           {:ok, page} ->
             {:noreply,
              socket
-             |> put_flash(:info, "Smart collection created.")
+             |> put_flash(:info, gettext("Smart collection created."))
              |> push_navigate(to: ~p"/collections/#{page.slug}")}
 
           {:error, _changeset} ->
             {:noreply,
-             put_flash(socket, :error, "Could not create collection. Slug may already exist.")}
+             put_flash(socket, :error, gettext("Could not create collection. Slug may already exist."))}
         end
     end
   end
@@ -497,11 +496,11 @@ defmodule DranWeb.SmartCollectionLive do
     end)
   end
 
-  defp format_label("due_before"), do: "due before"
-  defp format_label("due_after"), do: "due after"
-  defp format_label("created_by"), do: "created by"
+  defp format_label("due_before"), do: gettext("due before")
+  defp format_label("due_after"), do: gettext("due after")
+  defp format_label("created_by"), do: gettext("created by")
   defp format_label(key), do: String.replace(key, "_", " ")
 
-  defp format_value("<today>"), do: "today"
+  defp format_value("<today>"), do: gettext("today")
   defp format_value(value), do: to_string(value)
 end

@@ -58,7 +58,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("toggle_edit", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Cannot edit: no page loaded.")}
+    {:noreply, put_flash(socket, :error, gettext("Cannot edit: no page loaded."))}
   end
 
   def handle_event("cancel_edit", _params, %{assigns: %{page: page, page_type: type}} = socket) do
@@ -74,7 +74,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("suggest_summary", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Cannot suggest summary: no page loaded.")}
+    {:noreply, put_flash(socket, :error, gettext("Cannot suggest summary: no page loaded."))}
   end
 
   def handle_event("suggest_tags", _params, %{assigns: %{page: %Page{}}} = socket) do
@@ -82,7 +82,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("suggest_tags", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Cannot suggest tags: no page loaded.")}
+    {:noreply, put_flash(socket, :error, gettext("Cannot suggest tags: no page loaded."))}
   end
 
   def handle_event("validate_page", %{"page" => page_params}, socket) do
@@ -129,7 +129,7 @@ defmodule DranWeb.PageEdit do
     context_id = context_id(socket)
 
     if is_nil(context_id) do
-      {:noreply, put_flash(socket, :error, "No context available for slug rename.")}
+      {:noreply, put_flash(socket, :error, gettext("No context available for slug rename."))}
     else
       new_slug = String.trim(new_slug)
       old_slug = page.slug
@@ -215,16 +215,16 @@ defmodule DranWeb.PageEdit do
       {:ok, _} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Page deleted.")
+         |> put_flash(:info, gettext("Page deleted."))
          |> push_navigate(to: ~p"/")}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not delete page.")}
+        {:noreply, put_flash(socket, :error, gettext("Could not delete page."))}
     end
   end
 
   def handle_event("delete_page", _params, socket) do
-    {:noreply, put_flash(socket, :error, "Cannot delete: no page loaded.")}
+    {:noreply, put_flash(socket, :error, gettext("Cannot delete: no page loaded."))}
   end
 
   def handle_event("archive_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
@@ -268,7 +268,7 @@ defmodule DranWeb.PageEdit do
       # The client will open the file input; we just acknowledge.
       {:noreply, socket}
     else
-      {:noreply, put_flash(socket, :error, "Uploads are not configured.")}
+      {:noreply, put_flash(socket, :error, gettext("Uploads are not configured."))}
     end
   end
 
@@ -311,7 +311,7 @@ defmodule DranWeb.PageEdit do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Page created.")
+         |> put_flash(:info, gettext("Page created."))
          |> push_navigate(to: page_path(type, page.slug) <> "?edit=true")}
 
       {:error, changeset} ->
@@ -325,7 +325,7 @@ defmodule DranWeb.PageEdit do
         socket =
           socket
           |> assign(page: updated_page, save_status: "saved")
-          |> put_flash(:info, "Saved.")
+          |> put_flash(:info, gettext("Saved."))
 
         {:noreply,
          push_patch(socket,
@@ -445,7 +445,7 @@ defmodule DranWeb.PageEdit do
     max_size = Uploads.max_size()
 
     if byte_size(binary) > max_size do
-      put_flash(socket, :error, "File too large (max #{max_size} bytes).")
+      put_flash(socket, :error, gettext("File too large (max %{max} bytes).", max: max_size))
       nil
     else
       stored = Uploads.store(context_id, binary, filename, client_type)
@@ -488,10 +488,10 @@ defmodule DranWeb.PageEdit do
         handle_event("validate_page", %{"page" => params}, socket)
 
       {:error, :not_configured} ->
-        {:noreply, put_flash(socket, :error, "Inference is not configured.")}
+        {:noreply, put_flash(socket, :error, gettext("Inference is not configured."))}
 
       {:error, reason} ->
-        message = "Could not suggest #{field}: #{format_error(reason)}"
+        message = gettext("Could not suggest %{field}: %{reason}", field: field, reason: format_error(reason))
         {:noreply, put_flash(socket, :error, message)}
     end
   end

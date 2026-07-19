@@ -25,11 +25,21 @@ defmodule DranWeb.SettingsLiveTest do
     # Section heading (localized)
     assert html =~ t("Brain tuning")
 
-    # All seven fields present
-    for name <- ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long
-                   agent_max_pages agent_max_sources research_lang daily_note_enabled) do
+    # Primary fields visible
+    for name <- ~w(agent_max_pages daily_note_enabled) do
       assert html =~ name
     end
+
+    # Advanced thresholds tucked behind the details toggle
+    assert html =~ "Avanzado"
+
+    for name <- ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long) do
+      assert html =~ name
+    end
+
+    # Removed knobs are gone from the form
+    refute html =~ "agent_max_sources"
+    refute html =~ "research_lang"
 
     # Default values come from Dran.Settings.defaults/0
     defaults = Settings.defaults()
@@ -49,8 +59,6 @@ defmodule DranWeb.SettingsLiveTest do
           "semantic_threshold_mid" => "0.25",
           "semantic_threshold_long" => "0.30",
           "agent_max_pages" => "42",
-          "agent_max_sources" => "7",
-          "research_lang" => "en",
           "daily_note_enabled" => "true"
         }
       })
@@ -59,9 +67,8 @@ defmodule DranWeb.SettingsLiveTest do
     # Success flash (localized)
     assert html =~ t("Settings saved")
 
-    # The new value is persisted and readable via Settings.get/1
+    # The new values are persisted and readable via Settings.get/1
     assert Settings.get("agent_max_pages") == 42
-    assert Settings.get("research_lang") == "en"
     assert Settings.get("semantic_threshold_short") == 0.10
     assert Settings.get("daily_note_enabled") == true
   end
