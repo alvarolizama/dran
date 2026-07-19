@@ -11,9 +11,9 @@ defmodule DranWeb.PlanLive do
 
   @page_type "plan"
   @tabs [
+    {"graph", gettext("Graph")},
     {"content", gettext("Content")},
-    {"todos", gettext("Todos")},
-    {"graph", gettext("Graph")}
+    {"todos", gettext("Todos")}
   ]
 
   def render(assigns) do
@@ -168,7 +168,7 @@ defmodule DranWeb.PlanLive do
        context: context,
        page_type: @page_type,
        tabs: @tabs,
-       active_tab: "content",
+       active_tab: "graph",
        editing: false,
        save_status: "idle",
        active_nav: "plans"
@@ -217,7 +217,7 @@ defmodule DranWeb.PlanLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "content",
+             active_tab: "graph",
              plan_todos: plan_todos,
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,

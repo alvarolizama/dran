@@ -18,12 +18,12 @@ defmodule DranWeb.ProjectLive do
   @page_type "project"
 
   @project_tabs [
+    {"graph", "Graph"},
     {"overview", "Overview"},
     {"kanban", "Kanban"},
     {"todos", "Todos"},
     {"goals", "Goals"},
     {"plans", "Plans"},
-    {"graph", "Graph"},
     {"related", "Related"}
   ]
 
@@ -548,7 +548,7 @@ defmodule DranWeb.ProjectLive do
        page_type: @page_type,
        project_tabs: @project_tabs,
        kanban_columns: @kanban_columns,
-       active_tab: "overview",
+       active_tab: "graph",
        editing: false,
        save_status: "idle",
        active_nav: "projects"
@@ -619,7 +619,7 @@ defmodule DranWeb.ProjectLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "overview",
+             active_tab: "graph",
              context_id: context.id,
              project_todos: project_todos,
              project_goals: project_goals,

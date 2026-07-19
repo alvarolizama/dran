@@ -9,7 +9,7 @@ defmodule DranWeb.EntityLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "entity"
-  @tabs [{"content", gettext("Content")}, {"graph", gettext("Graph")}]
+  @tabs [{"graph", gettext("Graph")}, {"content", gettext("Content")}]
 
   def render(assigns) do
     ~H"""
@@ -128,7 +128,7 @@ defmodule DranWeb.EntityLive do
        context: context,
        page_type: @page_type,
        tabs: @tabs,
-       active_tab: "content",
+       active_tab: "graph",
        editing: false,
        save_status: "idle",
        active_nav: "entities"
@@ -165,7 +165,7 @@ defmodule DranWeb.EntityLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "content",
+             active_tab: "graph",
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
              editing: editing,

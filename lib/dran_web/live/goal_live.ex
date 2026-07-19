@@ -12,6 +12,7 @@ defmodule DranWeb.GoalLive do
   @page_type "goal"
 
   @goal_tabs [
+    {"graph", "Graph"},
     {"overview", "Overview"},
     {"notes", "Notes"},
     {"concepts", "Concepts"},
@@ -19,8 +20,7 @@ defmodule DranWeb.GoalLive do
     {"todos", "Todos"},
     {"plans", "Plans"},
     {"artifacts", "Artifacts"},
-    {"references", "References"},
-    {"graph", "Graph"}
+    {"references", "References"}
   ]
 
   def render(assigns) do
@@ -331,7 +331,7 @@ defmodule DranWeb.GoalLive do
        context: context,
        page_type: @page_type,
        goal_tabs: @goal_tabs,
-       active_tab: "overview",
+       active_tab: "graph",
        editing: false,
        save_status: "idle",
        active_nav: "goals"
@@ -429,7 +429,7 @@ defmodule DranWeb.GoalLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "overview",
+             active_tab: "graph",
              goal_todos: goal_todos,
              goal_notes: goal_notes,
              goal_concepts: goal_concepts,
