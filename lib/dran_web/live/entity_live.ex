@@ -90,7 +90,11 @@ defmodule DranWeb.EntityLive do
                       class="w-full"
                     />
 
-                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
+                    <.meta_fields
+                      page_type={@page_type}
+                      meta={@page.meta || %{}}
+                      context_id={@context_id}
+                    />
                     <.markdown_editor
                       id="entity-editor"
                       body={@page.body}

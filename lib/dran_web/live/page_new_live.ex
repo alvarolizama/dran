@@ -26,7 +26,7 @@ defmodule DranWeb.PageNewLive do
       <div class="w-full mx-auto p-6">
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold">
-            {gettext("New")} {PageTypes.label(@page_type)}
+            {new_label(@page_type)}
           </h1>
           <.link navigate={@back_path} class="btn btn-ghost btn-sm">
             <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
@@ -229,6 +229,24 @@ defmodule DranWeb.PageNewLive do
 
   def handle_event("upload_complete", _params, socket) do
     {:noreply, socket}
+  end
+
+  # Gender-aware "Nuevo/Nueva <tipo>" heading — several type labels are
+  # feminine in Spanish (Nota, Tarea, Referencia, Entidad, Comparación, Consulta).
+  defp new_label(page_type) do
+    label = PageTypes.label(page_type)
+
+    feminine =
+      Enum.map(
+        ["Note", "Todo", "Reference", "Entity", "Comparison", "Query"],
+        &Gettext.gettext(DranWeb.Gettext, &1)
+      )
+
+    if label in feminine do
+      gettext("Nueva %{type}", type: label)
+    else
+      gettext("Nuevo %{type}", type: label)
+    end
   end
 
   # ── Helpers ──

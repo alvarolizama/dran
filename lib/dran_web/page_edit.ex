@@ -491,7 +491,12 @@ defmodule DranWeb.PageEdit do
         {:noreply, put_flash(socket, :error, gettext("Inference is not configured."))}
 
       {:error, reason} ->
-        message = gettext("Could not suggest %{field}: %{reason}", field: field, reason: format_error(reason))
+        message =
+          gettext("Could not suggest %{field}: %{reason}",
+            field: field,
+            reason: format_error(reason)
+          )
+
         {:noreply, put_flash(socket, :error, message)}
     end
   end

@@ -172,7 +172,9 @@ defmodule DranWeb.MarkdownEditorComponents do
   def meta_fields(assigns) do
     raw_fields = Dran.Brain.PageMeta.meta_fields_for(assigns.page_type)
     fields = Enum.map(raw_fields, &normalise_meta_field/1)
-    {link_fields, plain_fields} = Enum.split_with(fields, fn {type, _, _, _} -> type == :slug_select end)
+
+    {link_fields, plain_fields} =
+      Enum.split_with(fields, fn {type, _, _, _} -> type == :slug_select end)
 
     assigns =
       assigns

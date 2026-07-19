@@ -115,7 +115,9 @@ defmodule DranWeb.SmartCollectionLive do
             </.link>
             <button
               phx-click="delete_collection"
-              data-confirm={gettext("Delete this smart collection? The pages it references will not be affected.")}
+              data-confirm={
+                gettext("Delete this smart collection? The pages it references will not be affected.")
+              }
               class="btn btn-ghost btn-sm text-error"
             >
               <.icon name="hero-trash" class="w-4 h-4" /> {gettext("Delete")}
@@ -141,7 +143,9 @@ defmodule DranWeb.SmartCollectionLive do
             {@result_count} {ngettext("page", "pages", @result_count)}
           </span>
           <span class="text-xs text-base-content/40 flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full bg-success animate-pulse"></span> {gettext("Live")}
+            <span class="inline-block w-2 h-2 rounded-full bg-success animate-pulse"></span> {gettext(
+              "Live"
+            )}
           </span>
         </div>
 
@@ -454,7 +458,11 @@ defmodule DranWeb.SmartCollectionLive do
 
           {:error, _changeset} ->
             {:noreply,
-             put_flash(socket, :error, gettext("Could not create collection. Slug may already exist."))}
+             put_flash(
+               socket,
+               :error,
+               gettext("Could not create collection. Slug may already exist.")
+             )}
         end
     end
   end

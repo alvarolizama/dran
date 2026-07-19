@@ -1044,12 +1044,12 @@ defmodule DranWeb.DocsLive do
         </li>
         <li>
           <strong>Archive</strong>
-          — stale pages can be <strong>archived</strong> instead of deleted: set
-          <code>archived: true</code> via <code>dran_update_page</code>
+          — stale pages can be <strong>archived</strong>
+          instead of deleted: set <code>archived: true</code>
+          via <code>dran_update_page</code>
           (or the Archive button in the page detail). Archived pages disappear
           from lists, stats, search and kanban boards but stay accessible by
-          slug. Every list view shows a collapsible
-          <strong>Archived</strong>
+          slug. Every list view shows a collapsible <strong>Archived</strong>
           section at the bottom, filterable by page type. Archiving is
           reversible; deletion is not.
         </li>

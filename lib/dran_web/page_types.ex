@@ -63,10 +63,10 @@ defmodule DranWeb.PageTypes do
 
   def path(_), do: "notes"
 
-  @doc "Returns the singular display label for a page type (e.g. `\"Note\"`)."
+  @doc "Returns the singular display label for a page type, localized (e.g. `\"Nota\"`)."
   def label(type) when is_binary(type) do
     case Map.get(@types, type) do
-      %{label: l} -> l
+      %{label: l} -> Gettext.gettext(DranWeb.Gettext, l)
       nil -> type |> to_string() |> String.capitalize()
     end
   end
@@ -83,10 +83,10 @@ defmodule DranWeb.PageTypes do
 
   def icon(_), do: "hero-document"
 
-  @doc "Returns the plural display label for a page type (e.g. `\"Notes\"`)."
+  @doc "Returns the plural display label for a page type, localized (e.g. `\"Notas\"`)."
   def plural(type) when is_binary(type) do
     case Map.get(@types, type) do
-      %{plural: p} -> p
+      %{plural: p} -> Gettext.gettext(DranWeb.Gettext, p)
       nil -> label(type) <> "s"
     end
   end

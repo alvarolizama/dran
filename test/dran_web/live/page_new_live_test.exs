@@ -64,7 +64,9 @@ defmodule DranWeb.PageNewLiveTest do
       assert html =~ ~s(name="page[summary]")
     end
 
-    test "the primary fields (Title, Tags, Content) are visible outside the details", %{conn: conn} do
+    test "the primary fields (Title, Tags, Content) are visible outside the details", %{
+      conn: conn
+    } do
       {:ok, _view, html} = live(conn, "/notes/new")
 
       assert html =~ ~s(name="page[title]")

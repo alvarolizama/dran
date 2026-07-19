@@ -185,7 +185,9 @@ defmodule DranWeb.ContextLive do
               :if={@contexts == []}
               icon="hero-square-3-stack-3d"
               title={gettext("No contexts yet")}
-              caption={gettext("Create your first context above to start organizing your second brain.")}
+              caption={
+                gettext("Create your first context above to start organizing your second brain.")
+              }
               class="surface-2 rounded-2xl"
             />
 

@@ -214,7 +214,11 @@ defmodule DranWeb.TodoLive do
                       placeholder={gettext("comma, separated, tags")}
                       class="text-sm"
                     />
-                    <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
+                    <.meta_fields
+                      page_type={@page_type}
+                      meta={@page.meta || %{}}
+                      context_id={@context_id}
+                    />
                     <.markdown_editor
                       id="todo-editor"
                       body={@page.body}
@@ -381,8 +385,7 @@ defmodule DranWeb.TodoLive do
       {:noreply,
        assign(socket,
          items: Brain.list_todos(socket.assigns.context.id),
-         archived_items:
-           Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
+         archived_items: Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
        )}
     else
       {:noreply, socket}

@@ -9,12 +9,12 @@ defmodule DranWeb.KanbanLive do
   alias DranWeb.Plugs.Auth
 
   @kanban_columns [
-    {"backlog", "Backlog", "bg-base-300"},
-    {"this_week", "This Week", "bg-blue-500/20 text-blue-700"},
-    {"today", "Today", "bg-amber-500/20 text-amber-700"},
-    {"in_progress", "In Progress", "bg-purple-500/20 text-purple-700"},
-    {"done", "Done", "bg-green-500/20 text-green-700"},
-    {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
+    {"backlog", gettext("Backlog"), "bg-base-300"},
+    {"this_week", gettext("This Week"), "bg-blue-500/20 text-blue-700"},
+    {"today", gettext("Today"), "bg-amber-500/20 text-amber-700"},
+    {"in_progress", gettext("In Progress"), "bg-purple-500/20 text-purple-700"},
+    {"done", gettext("Done"), "bg-green-500/20 text-green-700"},
+    {"cancelled", gettext("Cancelled"), "bg-red-500/20 text-red-700"}
   ]
 
   # Columnas donde el usuario puede crear un todo vía quick-add (excluye
@@ -62,9 +62,6 @@ defmodule DranWeb.KanbanLive do
             >
               <.icon name="hero-plus" class="size-4" /> {gettext("Nueva tarea")}
             </button>
-            <.link navigate={~p"/todos/new"} class="btn btn-ghost btn-sm">
-              <.icon name="hero-arrow-top-right-on-square" class="size-4" /> {gettext("New Todo")}
-            </.link>
           </div>
         </div>
 
@@ -151,21 +148,21 @@ defmodule DranWeb.KanbanLive do
         <%!-- Filtros combinables --%>
         <div class="flex flex-wrap gap-3 mx-4 mb-3 p-3 rounded-lg bg-base-200/50 border border-base-300 shrink-0">
           <.filter_select
-            label="Project"
+            label={gettext("Project")}
             id="filter-project"
             value={@filter_project}
             options={@filter_project_options}
             phx_change="filter_project"
           />
           <.filter_select
-            label="Goal"
+            label={gettext("Goal")}
             id="filter-goal"
             value={@filter_goal}
             options={@filter_goal_options}
             phx_change="filter_goal"
           />
           <.filter_select
-            label="Plan"
+            label={gettext("Plan")}
             id="filter-plan"
             value={@filter_plan}
             options={@filter_plan_options}
@@ -248,7 +245,7 @@ defmodule DranWeb.KanbanLive do
                 :if={column_items(@filtered_todos, status) == []}
                 class="text-xs text-base-content/30 text-center py-4"
               >
-                Empty
+                {gettext("Empty")}
               </p>
             </div>
           </div>
@@ -550,7 +547,7 @@ defmodule DranWeb.KanbanLive do
   end
 
   defp build_filter_options(pages) do
-    [{"All", "all"}, {"None (orphan)", "none"}] ++
+    [{gettext("All"), "all"}, {gettext("None (orphan)"), "none"}] ++
       Enum.map(pages, fn p -> {p.title, p.slug} end)
   end
 
