@@ -194,10 +194,15 @@ defmodule DranWeb.ProjectLive do
                     </div>
                   </div>
                   <div class="surface-2 rounded-xl p-4">
-                    <div class="text-2xl font-semibold">{count_kanban(@project_todos, "in_progress")}</div>
+                    <div class="text-2xl font-semibold">
+                      {count_kanban(@project_todos, "in_progress")}
+                    </div>
                     <div class="text-xs text-base-content/60 mt-1">In progress</div>
                     <div class="text-xs text-base-content/40 mt-1">
-                      {count_kanban(@project_todos, "today")} today · {count_kanban(@project_todos, "this_week")} this week
+                      {count_kanban(@project_todos, "today")} today · {count_kanban(
+                        @project_todos,
+                        "this_week"
+                      )} this week
                     </div>
                   </div>
                   <div class="surface-2 rounded-xl p-4">
@@ -313,7 +318,10 @@ defmodule DranWeb.ProjectLive do
                         {n.title}
                       </.link>
                     </div>
-                    <p :if={@project_notes == [] and @project_references == []} class="text-sm text-base-content/40">
+                    <p
+                      :if={@project_notes == [] and @project_references == []}
+                      class="text-sm text-base-content/40"
+                    >
                       No notes or references linked.
                     </p>
                   </div>
@@ -322,39 +330,42 @@ defmodule DranWeb.ProjectLive do
             </div>
 
             <%!-- Kanban: board de columnas solo con los todos del project --%>
-            <div :if={@active_tab == "kanban"}>
-              <div class="flex items-center justify-between mb-3">
+            <div :if={@active_tab == "kanban"} class="flex flex-col h-[calc(100vh-16rem)] min-h-0">
+              <div class="flex items-center justify-between mb-3 shrink-0">
                 <span class="text-sm text-base-content/60">
-                  {length(@project_todos)} todos in this project
+                  {length(@project_todos)} {gettext("todos in this project")}
                 </span>
                 <.link navigate={~p"/todos/new"} class="btn btn-primary btn-xs">
-                  <.icon name="hero-plus" class="size-3.5" /> New Todo
+                  <.icon name="hero-plus" class="size-3.5" /> {gettext("New Todo")}
                 </.link>
               </div>
               <div
-                class="flex gap-4 overflow-x-auto pb-4"
+                class="flex gap-4 overflow-x-auto pb-4 flex-1 min-h-0"
                 phx-hook="KanbanDragDrop"
                 id="project-kanban-board"
               >
                 <div
                   :for={{status, label, badge_class} <- @kanban_columns}
                   data-kanban-status={status}
-                  class="w-72 shrink-0 flex flex-col rounded-lg bg-base-200/40 border border-base-300"
+                  class="w-72 shrink-0 flex-1 max-w-sm flex flex-col min-h-0 h-full rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
                 >
-                  <div class="flex items-center justify-between px-3 py-2 border-b border-base-300 shrink-0">
-                    <span class="text-sm font-semibold">{label}</span>
+                  <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300 shrink-0">
+                    <div class="flex items-center gap-2">
+                      <span class={"size-2 rounded-full shrink-0 " <> kanban_accent_dot(status)}></span>
+                      <span class="text-sm font-semibold">{label}</span>
+                    </div>
                     <span class={"px-2 py-0.5 text-xs rounded-full " <> badge_class}>
                       {count_kanban(@project_todos, status)}
                     </span>
                   </div>
-                  <div class="p-2 space-y-2 min-h-[120px] flex-1 overflow-y-auto">
+                  <div class="p-2 space-y-2 min-h-0 flex-1 overflow-y-auto">
                     <div
                       :for={todo <- kanban_items(@project_todos, status)}
                       data-kanban-slug={todo.slug}
                       draggable="true"
                       phx-click="show_page"
                       phx-value-slug={todo.slug}
-                      class="p-3 rounded-lg bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary/40 active:cursor-grabbing transition"
+                      class="p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary transition active:cursor-grabbing"
                     >
                       <div class="font-medium text-sm break-words">{todo.title}</div>
                       <div :if={todo.summary} class="text-xs text-base-content/60 mt-1 line-clamp-2">
@@ -365,7 +376,7 @@ defmodule DranWeb.ProjectLive do
                       :if={kanban_items(@project_todos, status) == []}
                       class="text-xs text-base-content/30 text-center py-4"
                     >
-                      Empty
+                      {gettext("Empty")}
                     </p>
                   </div>
                 </div>
@@ -542,7 +553,13 @@ defmodule DranWeb.ProjectLive do
       </div>
 
       <div :if={@live_action != :show}>
-        <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
+        <.page_list
+          pages={@pages}
+          archived_pages={@archived_pages}
+          archived_filter={@archived_filter}
+          page_type={@page_type}
+          context_slug={@context_slug}
+        />
       </div>
     </Layouts.app>
     """
@@ -662,14 +679,30 @@ defmodule DranWeb.ProjectLive do
   end
 
   def handle_params(_params, _url, socket) do
-    pages =
+    {pages, archived_pages} =
       if socket.assigns.context do
-        Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type)
+        {Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
+         Brain.list_pages(
+           context_id: socket.assigns.context.id,
+           type: @page_type,
+           archived: true,
+           limit: 200
+         )}
       else
-        []
+        {[], []}
       end
 
-    {:noreply, assign(socket, pages: pages, page_title: "Projects")}
+    {:noreply,
+     assign(socket,
+       pages: pages,
+       archived_pages: archived_pages,
+       archived_filter: "all",
+       page_title: "Projects"
+     )}
+  end
+
+  def handle_event("filter_archived", %{"type" => type}, socket) do
+    {:noreply, assign(socket, archived_filter: type)}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
@@ -721,6 +754,8 @@ defmodule DranWeb.ProjectLive do
     {:noreply, push_navigate(socket, to: ~p"/projects/new")}
   end
 
+  def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
+  def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
   def handle_event("toggle_edit", p, s), do: PageEdit.handle_event("toggle_edit", p, s)
   def handle_event("cancel_edit", p, s), do: PageEdit.handle_event("cancel_edit", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
@@ -763,6 +798,19 @@ defmodule DranWeb.ProjectLive do
 
   defp kanban_items(todos, status), do: Enum.filter(todos, fn t -> kanban_status(t) == status end)
   defp count_kanban(todos, status), do: Enum.count(todos, fn t -> kanban_status(t) == status end)
+
+  # Colored accent dot per kanban column status (matches global kanban vibe).
+  defp kanban_accent_dot(status) do
+    case status do
+      "backlog" -> "bg-base-300"
+      "this_week" -> "bg-blue-500"
+      "today" -> "bg-amber-500"
+      "in_progress" -> "bg-purple-500"
+      "done" -> "bg-green-500"
+      "cancelled" -> "bg-red-500"
+      _ -> "bg-base-300"
+    end
+  end
 
   defp progress_pct(todos) do
     active = Enum.reject(todos, fn t -> kanban_status(t) == "cancelled" end)

@@ -59,6 +59,7 @@ defmodule Dran.Brain.Page do
              :kb_contested,
              :body_hash,
              :version,
+             :archived,
              :owner,
              :created_by,
              :updated_by,
@@ -83,6 +84,7 @@ defmodule Dran.Brain.Page do
     field :kb_contested, :boolean, default: false
     field :body_hash, :string
     field :version, :integer, default: 1
+    field :archived, :boolean, default: false
 
     # Embeddings
     field :embedding_hash, :string
@@ -120,7 +122,8 @@ defmodule Dran.Brain.Page do
       :owner,
       :created_by,
       :updated_by,
-      :on_behalf_of
+      :on_behalf_of,
+      :archived
     ])
     |> validate_required([:context_id, :title, :slug, :page_type])
     |> validate_length(:title, max: 500)

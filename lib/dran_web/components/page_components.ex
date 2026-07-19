@@ -60,6 +60,16 @@ defmodule DranWeb.PageComponents do
 
     ~H"""
     <div class="h-full overflow-y-auto">
+      <div
+        :if={@page.archived}
+        class="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/30 text-amber-700 dark:text-amber-400 text-sm"
+      >
+        <.icon name="hero-archive-box" class="size-4 shrink-0" />
+        <span class="font-medium">{gettext("Archived")}</span>
+        <span class="text-amber-700/70 dark:text-amber-400/70">
+          — {gettext("this page is hidden from lists and boards.")}
+        </span>
+      </div>
       <div class="p-6 space-y-6">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0 flex-1">
@@ -100,6 +110,23 @@ defmodule DranWeb.PageComponents do
           </div>
           <div class="flex gap-2 shrink-0">
             {render_slot(@actions)}
+            <button
+              :if={@page.archived}
+              phx-click="unarchive_page"
+              class="btn btn-ghost btn-sm"
+              title={gettext("Restore this page from the archive")}
+            >
+              <.icon name="hero-arrow-uturn-up" class="size-4" /> {gettext("Unarchive")}
+            </button>
+            <button
+              :if={not @page.archived}
+              phx-click="archive_page"
+              data-confirm={gettext("Archive this page? It will be hidden from lists.")}
+              class="btn btn-ghost btn-sm"
+              title={gettext("Hide this page from lists without deleting it")}
+            >
+              <.icon name="hero-archive-box" class="size-4" /> {gettext("Archive")}
+            </button>
             <button
               phx-click="delete_page"
               data-confirm={gettext("Are you sure? This cannot be undone.")}
@@ -194,7 +221,10 @@ defmodule DranWeb.PageComponents do
                 <span>{@page.updated_by}</span>
               </div>
               <div
-                :for={{key, value} <- Enum.reject(@page.meta || %{}, fn {k, _v} -> k == "inline_links" end)}
+                :for={
+                  {key, value} <-
+                    Enum.reject(@page.meta || %{}, fn {k, _v} -> k == "inline_links" end)
+                }
                 class="flex justify-between gap-2 px-4 py-2.5 text-sm break-words"
               >
                 <span class="text-base-content/60">{format_meta_key(key)}</span>
@@ -367,7 +397,8 @@ defmodule DranWeb.PageComponents do
           class={[
             "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
             tab == "content" && "border-primary text-primary",
-            tab != "content" && "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
+            tab != "content" &&
+              "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
           ]}
         >
           {label}

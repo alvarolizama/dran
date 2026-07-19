@@ -136,7 +136,13 @@ defmodule DranWeb.EntityLive do
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
-        <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
+        <.page_list
+          pages={@pages}
+          archived_pages={@archived_pages}
+          archived_filter={@archived_filter}
+          page_type={@page_type}
+          context_slug={@context_slug}
+        />
       </div>
     </Layouts.app>
     """
@@ -217,12 +223,30 @@ defmodule DranWeb.EntityLive do
   end
 
   def handle_params(_params, _url, socket) do
-    pages =
-      if socket.assigns.context,
-        do: Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
-        else: []
+    {pages, archived_pages} =
+      if socket.assigns.context do
+        {Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
+         Brain.list_pages(
+           context_id: socket.assigns.context.id,
+           type: @page_type,
+           archived: true,
+           limit: 200
+         )}
+      else
+        {[], []}
+      end
 
-    {:noreply, assign(socket, pages: pages, page_title: gettext("Entities"))}
+    {:noreply,
+     assign(socket,
+       pages: pages,
+       archived_pages: archived_pages,
+       archived_filter: "all",
+       page_title: gettext("Entities")
+     )}
+  end
+
+  def handle_event("filter_archived", %{"type" => type}, socket) do
+    {:noreply, assign(socket, archived_filter: type)}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}
@@ -239,6 +263,8 @@ defmodule DranWeb.EntityLive do
   def handle_event("new_page", _params, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/entities/new")}
 
+  def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
+  def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
   def handle_event("toggle_edit", p, s), do: PageEdit.handle_event("toggle_edit", p, s)
   def handle_event("cancel_edit", p, s), do: PageEdit.handle_event("cancel_edit", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)

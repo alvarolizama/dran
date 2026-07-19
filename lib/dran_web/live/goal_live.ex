@@ -139,8 +139,9 @@ defmodule DranWeb.GoalLive do
                   <div>
                     <div class="text-xs text-base-content/60 uppercase">Current / Target</div>
                     <div class="font-medium">
-                      {format_value(meta_get(@page.meta, "current_value"))}
-                      / {format_value(meta_get(@page.meta, "target_value"))}
+                      {format_value(meta_get(@page.meta, "current_value"))} / {format_value(
+                        meta_get(@page.meta, "target_value")
+                      )}
                       <span class="text-xs text-base-content/60">{meta_get(@page.meta, "unit")}</span>
                     </div>
                   </div>
@@ -148,7 +149,8 @@ defmodule DranWeb.GoalLive do
                     <div class="text-xs text-base-content/60 uppercase">Progress</div>
                     <div class="flex items-center gap-2">
                       <div class="flex-1 bg-base-300 rounded-full h-2 overflow-hidden">
-                        <div class="bg-primary h-full" style={"width: #{progress_percent(@page)}%"}></div>
+                        <div class="bg-primary h-full" style={"width: #{progress_percent(@page)}%"}>
+                        </div>
                       </div>
                       <span class="text-sm font-medium">{progress_percent(@page)}%</span>
                     </div>
@@ -227,7 +229,10 @@ defmodule DranWeb.GoalLive do
               </div>
               <div :for={todo <- @goal_todos} class="p-3 rounded-lg border border-base-300 mb-2">
                 <div class="flex items-center justify-between">
-                  <.link navigate={PageTypes.page_show_path(todo)} class="font-medium text-primary hover:underline">
+                  <.link
+                    navigate={PageTypes.page_show_path(todo)}
+                    class="font-medium text-primary hover:underline"
+                  >
                     {todo.title}
                   </.link>
                   <span class={"px-2 py-0.5 text-xs rounded " <> kanban_status_class(todo)}>
@@ -332,7 +337,13 @@ defmodule DranWeb.GoalLive do
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
-        <.page_list pages={@pages} page_type={@page_type} context_slug={@context_slug} />
+        <.page_list
+          pages={@pages}
+          archived_pages={@archived_pages}
+          archived_filter={@archived_filter}
+          page_type={@page_type}
+          context_slug={@context_slug}
+        />
       </div>
     </Layouts.app>
     """
@@ -477,14 +488,30 @@ defmodule DranWeb.GoalLive do
   end
 
   def handle_params(_params, _url, socket) do
-    pages =
+    {pages, archived_pages} =
       if socket.assigns.context do
-        Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type)
+        {Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
+         Brain.list_pages(
+           context_id: socket.assigns.context.id,
+           type: @page_type,
+           archived: true,
+           limit: 200
+         )}
       else
-        []
+        {[], []}
       end
 
-    {:noreply, assign(socket, pages: pages, page_title: "Goals")}
+    {:noreply,
+     assign(socket,
+       pages: pages,
+       archived_pages: archived_pages,
+       archived_filter: "all",
+       page_title: "Goals"
+     )}
+  end
+
+  def handle_event("filter_archived", %{"type" => type}, socket) do
+    {:noreply, assign(socket, archived_filter: type)}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
@@ -507,6 +534,8 @@ defmodule DranWeb.GoalLive do
     {:noreply, push_navigate(socket, to: ~p"/goals/new")}
   end
 
+  def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
+  def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
   def handle_event("toggle_edit", p, s), do: PageEdit.handle_event("toggle_edit", p, s)
   def handle_event("cancel_edit", p, s), do: PageEdit.handle_event("cancel_edit", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
@@ -538,11 +567,17 @@ defmodule DranWeb.GoalLive do
       nil ->
         # Derive from current/target if no explicit progress.
         case {meta_get(page.meta, "current_value"), meta_get(page.meta, "target_value")} do
-          {nil, _} -> 0
-          {_, nil} -> 0
+          {nil, _} ->
+            0
+
+          {_, nil} ->
+            0
+
           {cur, tgt} when is_number(cur) and is_number(tgt) and tgt != 0 ->
             round(cur / tgt * 100) |> max(0) |> min(100)
-          _ -> 0
+
+          _ ->
+            0
         end
 
       v when is_number(v) ->

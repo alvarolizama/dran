@@ -26,6 +26,8 @@ defmodule DranWeb.PageEdit do
 
   use Phoenix.LiveView
 
+  use Gettext, backend: DranWeb.Gettext
+
   use Phoenix.VerifiedRoutes,
     endpoint: DranWeb.Endpoint,
     router: DranWeb.Router,
@@ -223,6 +225,40 @@ defmodule DranWeb.PageEdit do
 
   def handle_event("delete_page", _params, socket) do
     {:noreply, put_flash(socket, :error, "Cannot delete: no page loaded.")}
+  end
+
+  def handle_event("archive_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
+    case Brain.archive_page(page) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(page: updated)
+         |> put_flash(:info, gettext("Page archived."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not archive page."))}
+    end
+  end
+
+  def handle_event("archive_page", _params, socket) do
+    {:noreply, put_flash(socket, :error, gettext("Cannot archive: no page loaded."))}
+  end
+
+  def handle_event("unarchive_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
+    case Brain.unarchive_page(page) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(page: updated)
+         |> put_flash(:info, gettext("Page restored from archive."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not unarchive page."))}
+    end
+  end
+
+  def handle_event("unarchive_page", _params, socket) do
+    {:noreply, put_flash(socket, :error, gettext("Cannot unarchive: no page loaded."))}
   end
 
   def handle_event("request_upload", _params, socket) do

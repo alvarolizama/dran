@@ -48,6 +48,7 @@ defmodule Dran.Brain do
   def page_counts_by_context do
     Repo.all(
       from p in Page,
+        where: p.archived == false,
         group_by: p.context_id,
         select: {p.context_id, count(p.id)}
     )
@@ -103,6 +104,8 @@ defmodule Dran.Brain do
     `type: "todo"`.
   - `:project_slug` — filter by `meta.project_slug`. The special value
     `"none"` matches pages with no/empty project_slug (orphans).
+  - `:archived` — `true` returns only archived pages, `false` or omitted
+    returns only non-archived pages
   - `:limit` — limit results (default 50)
   - `:include_body` — include full body (default false, lightweight listing)
 
@@ -118,6 +121,7 @@ defmodule Dran.Brain do
     goal_slug = Keyword.get(opts, :goal_slug)
     plan_slug = Keyword.get(opts, :plan_slug)
     project_slug = Keyword.get(opts, :project_slug)
+    archived = Keyword.get(opts, :archived, false)
     limit = Keyword.get(opts, :limit, 50)
     include_body = Keyword.get(opts, :include_body, false)
 
@@ -145,6 +149,7 @@ defmodule Dran.Brain do
             created_by: p.created_by,
             updated_by: p.updated_by,
             on_behalf_of: p.on_behalf_of,
+            archived: p.archived,
             inserted_at: p.inserted_at,
             updated_at: p.updated_at
           }
@@ -161,6 +166,7 @@ defmodule Dran.Brain do
       |> maybe_filter_plan_slug(plan_slug)
       |> maybe_filter_goal_slug(goal_slug)
       |> maybe_filter_project_slug(project_slug)
+      |> where([p], p.archived == ^archived)
       |> maybe_distinct_for_planning(goal_slug)
       |> order_by([p], desc: p.updated_at)
       |> limit(^limit)
@@ -302,9 +308,10 @@ defmodule Dran.Brain do
     context_id = Keyword.get(opts, :context_id)
     status = Keyword.get(opts, :status)
     limit = Keyword.get(opts, :limit, 200)
+    archived = Keyword.get(opts, :archived, false)
 
     opts =
-      [type: "todo", include_body: false, limit: limit]
+      [type: "todo", include_body: false, limit: limit, archived: archived]
       |> maybe_put_opt(:context_id, context_id)
       |> maybe_put_opt(:status, status)
 
@@ -491,6 +498,44 @@ defmodule Dran.Brain do
         Dran.Embeddings.schedule(updated_page)
         Dran.Brain.PageAugmenter.schedule(updated_page)
         {:ok, updated_page}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Archive a page. Archived pages are hidden from lists, stats, orphan
+  detection and kanban boards, but remain accessible by direct URL.
+  Logs the action and broadcasts a PubSub change event.
+  """
+  def archive_page(%Page{} = page) do
+    log_action(page.context_id, "page.archive", page.slug, %{page_id: page.id})
+
+    page
+    |> Ecto.Changeset.change(archived: true)
+    |> Repo.update()
+    |> case do
+      {:ok, updated} ->
+        broadcast_page_change(updated.context_id, :updated, updated)
+        {:ok, updated}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc "Unarchive a page, restoring it to lists, stats and boards."
+  def unarchive_page(%Page{} = page) do
+    log_action(page.context_id, "page.unarchive", page.slug, %{page_id: page.id})
+
+    page
+    |> Ecto.Changeset.change(archived: false)
+    |> Repo.update()
+    |> case do
+      {:ok, updated} ->
+        broadcast_page_change(updated.context_id, :updated, updated)
+        {:ok, updated}
 
       {:error, changeset} ->
         {:error, changeset}
@@ -1129,7 +1174,8 @@ defmodule Dran.Brain do
       else
         status_changed? =
           prior_page &&
-            meta_string(page.meta, "kanban_status") != meta_string(prior_page.meta, "kanban_status")
+            meta_string(page.meta, "kanban_status") !=
+              meta_string(prior_page.meta, "kanban_status")
 
         goal_changed? =
           prior_page &&
@@ -1327,6 +1373,7 @@ defmodule Dran.Brain do
     base =
       from p in Page,
         where: fragment("search_vector @@ plainto_tsquery('spanish', ?)", ^tsquery),
+        where: p.archived == false,
         order_by:
           fragment("ts_rank(search_vector, plainto_tsquery('spanish', ?)) DESC", ^tsquery),
         limit: ^limit
@@ -1371,6 +1418,7 @@ defmodule Dran.Brain do
     query =
       from p in Page,
         where: fragment("immutable_unaccent(title) % ?", ^query_string),
+        where: p.archived == false,
         order_by: fragment("similarity(immutable_unaccent(title), ?) DESC", ^query_string),
         limit: ^limit,
         select: %{
@@ -1415,6 +1463,7 @@ defmodule Dran.Brain do
         query =
           from p in Page,
             where: not is_nil(p.embedding),
+            where: p.archived == false,
             order_by: fragment("? <=> ?", p.embedding, ^vec),
             limit: ^limit,
             select: %{
@@ -1943,7 +1992,7 @@ defmodule Dran.Brain do
       from p in Page,
         left_join: r in Relation,
         on: r.target_id == p.id,
-        where: p.context_id == ^context_id and is_nil(r.id),
+        where: p.context_id == ^context_id and is_nil(r.id) and p.archived == false,
         order_by: [asc: p.title],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
@@ -1955,7 +2004,7 @@ defmodule Dran.Brain do
 
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id and p.updated_at < ^cutoff,
+        where: p.context_id == ^context_id and p.updated_at < ^cutoff and p.archived == false,
         order_by: [asc: p.updated_at],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
@@ -1965,7 +2014,7 @@ defmodule Dran.Brain do
   def contested_pages(context_id) do
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id and p.kb_contested == true,
+        where: p.context_id == ^context_id and p.kb_contested == true and p.archived == false,
         order_by: [asc: p.title],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type}
     )
@@ -2074,7 +2123,7 @@ defmodule Dran.Brain do
     by_type =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context_id,
+          where: p.context_id == ^context_id and p.archived == false,
           group_by: p.page_type,
           select: {p.page_type, count(p.id)}
       )
@@ -2084,7 +2133,7 @@ defmodule Dran.Brain do
     todos_by_status =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context_id and p.page_type == "todo",
+          where: p.context_id == ^context_id and p.page_type == "todo" and p.archived == false,
           group_by: fragment("coalesce(meta->>'kanban_status', 'backlog')"),
           select: {fragment("coalesce(meta->>'kanban_status', 'backlog')"), count(p.id)}
       )
@@ -2094,7 +2143,7 @@ defmodule Dran.Brain do
     recent =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context_id,
+          where: p.context_id == ^context_id and p.archived == false,
           order_by: [desc: p.updated_at],
           limit: 5,
           select: %Page{
@@ -2122,7 +2171,10 @@ defmodule Dran.Brain do
       )
 
     total_pages =
-      Repo.aggregate(from(p in Page, where: p.context_id == ^context_id), :count)
+      Repo.aggregate(
+        from(p in Page, where: p.context_id == ^context_id and p.archived == false),
+        :count
+      )
 
     total_relations =
       Repo.aggregate(

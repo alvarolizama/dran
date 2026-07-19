@@ -76,7 +76,25 @@ defmodule DranWeb.PageListComponents do
     %{title: title, description: description, cta: cta}
   end
 
+  defp archived_types(archived_pages) do
+    types =
+      archived_pages
+      |> Enum.map(& &1.page_type)
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    ["all" | types]
+  end
+
+  defp filtered_archived(archived_pages, "all"), do: archived_pages
+
+  defp filtered_archived(archived_pages, type) do
+    Enum.filter(archived_pages, &(&1.page_type == type))
+  end
+
   attr :pages, :list, required: true
+  attr :archived_pages, :list, default: []
+  attr :archived_filter, :string, default: "all"
   attr :page_type, :string, default: nil
   attr :context_slug, :string, default: "personal"
 
@@ -163,6 +181,65 @@ defmodule DranWeb.PageListComponents do
           </div>
         </div>
       </div>
+
+      <%!-- Archived section: collapsible, at the bottom of every list view --%>
+      <details
+        :if={@archived_pages != []}
+        class="group mt-10 rounded-xl border border-base-300 bg-base-200/30"
+        data-testid="archived-section"
+      >
+        <summary class="flex items-center gap-2 px-4 py-3 cursor-pointer select-none text-sm font-semibold text-base-content/60 hover:text-base-content transition-colors">
+          <.icon
+            name="hero-chevron-right"
+            class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+          />
+          <.icon name="hero-archive-box" class="size-4" />
+          {gettext("Archived")}
+          <span class="px-1.5 py-0.5 text-xs rounded-md bg-base-300 text-base-content/60">
+            {length(@archived_pages)}
+          </span>
+        </summary>
+        <div
+          :if={length(archived_types(@archived_pages)) > 1}
+          class="px-4 pb-2 flex flex-wrap gap-1.5"
+        >
+          <button
+            :for={type <- archived_types(@archived_pages)}
+            phx-click="filter_archived"
+            phx-value-type={type}
+            class={[
+              "px-2 py-1 text-xs rounded-full border transition-colors",
+              @archived_filter == type &&
+                "border-primary bg-primary/10 text-primary font-medium",
+              @archived_filter != type &&
+                "border-base-300 text-base-content/60 hover:border-primary/40 hover:text-base-content"
+            ]}
+          >
+            {if type == "all", do: gettext("All"), else: PageTypes.plural(type)}
+          </button>
+        </div>
+        <div class="px-4 pb-4 space-y-1">
+          <div
+            :for={page <- filtered_archived(@archived_pages, @archived_filter)}
+            class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-200 cursor-pointer transition-colors opacity-70 hover:opacity-100"
+            phx-click="show_page"
+            phx-value-slug={page.slug}
+            data-testid={"archived-page-" <> page.slug}
+          >
+            <.icon
+              name={PageTypes.icon(page.page_type)}
+              class="size-4 text-base-content/40 shrink-0"
+            />
+            <span class="text-sm flex-1 truncate">{page.title}</span>
+            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/50">
+              {PageTypes.label(page.page_type)}
+            </span>
+            <span :if={page.updated_at} class="text-caption shrink-0">
+              {Calendar.strftime(page.updated_at, "%b %d")}
+            </span>
+          </div>
+        </div>
+      </details>
     </div>
     """
   end

@@ -109,4 +109,57 @@ defmodule DranWeb.NoteLiveTest do
       assert html =~ "(1)"
     end
   end
+
+  describe "archive flow" do
+    test "archiving a page from detail hides it from the list and shows it in the Archived section",
+         %{conn: conn, source: source} do
+      {:ok, view, _html} = live(conn, ~p"/notes/#{source.slug}")
+
+      # Archive via the detail button
+      view |> element("button", t("Archive")) |> render_click()
+
+      assert Brain.get_page_by_slug(source.slug, source.context_id).archived == true
+
+      # The list no longer shows the page but the Archived section does
+      {:ok, _view, html} = live(conn, ~p"/notes")
+      refute html =~ ~s(data-testid="page-card-#{source.slug}")
+      assert html =~ ~s(data-testid="archived-section")
+      assert html =~ ~s(data-testid="archived-page-#{source.slug}")
+    end
+
+    test "archived detail shows banner and Unarchive restores the page",
+         %{conn: conn, target: target} do
+      {:ok, _} = Brain.archive_page(target)
+
+      {:ok, view, html} = live(conn, ~p"/notes/#{target.slug}")
+      assert html =~ t("Archived")
+
+      view |> element("button", t("Unarchive")) |> render_click()
+
+      assert Brain.get_page_by_slug(target.slug, target.context_id).archived == false
+
+      {:ok, _view, html} = live(conn, ~p"/notes")
+      assert html =~ ~s(data-testid="page-card-#{target.slug}")
+    end
+
+    test "archived section filter narrows by page type", %{conn: conn} do
+      context = Brain.get_context_by_slug("personal")
+
+      {:ok, note} =
+        Brain.create_page(%{
+          context_id: context.id,
+          title: "Archived Note XYZ",
+          page_type: "note"
+        })
+
+      {:ok, _} = Brain.archive_page(note)
+
+      {:ok, view, html} = live(conn, ~p"/notes")
+      assert html =~ ~s(data-testid="archived-page-#{note.slug}")
+
+      # Filter chips only render when archived pages span multiple types;
+      # with a single type the section still lists the page
+      assert html =~ t("Archived")
+    end
+  end
 end

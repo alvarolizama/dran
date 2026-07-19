@@ -68,6 +68,31 @@ defmodule DranWeb.TodoLive do
           </button>
         </div>
 
+        <div :if={@archived_items != []} class="mb-2 shrink-0">
+          <button
+            phx-click="toggle_archived"
+            class="flex items-center gap-1.5 text-xs font-medium text-base-content/50 hover:text-base-content transition-colors"
+          >
+            <.icon
+              name="hero-chevron-right"
+              class={"size-3 transition-transform duration-150 " <> if(@show_archived, do: "rotate-90", else: "")}
+            />
+            <.icon name="hero-archive-box" class="size-3.5" />
+            {gettext("Archived")} ({length(@archived_items)})
+          </button>
+          <div :if={@show_archived} class="mt-2 flex flex-wrap gap-2">
+            <div
+              :for={item <- @archived_items}
+              phx-click="show_page"
+              phx-value-slug={item.slug}
+              data-testid={"archived-todo-" <> item.slug}
+              class="px-3 py-1.5 rounded-lg border border-base-300 text-xs text-base-content/60 cursor-pointer hover:border-primary/40 hover:text-base-content transition-colors opacity-70 hover:opacity-100"
+            >
+              {item.title}
+            </div>
+          </div>
+        </div>
+
         <form
           :if={@show_form}
           phx-submit="create_todo"
@@ -462,6 +487,7 @@ defmodule DranWeb.TodoLive do
   def handle_params(_params, _url, socket) do
     if socket.assigns.context do
       items = Brain.list_todos(socket.assigns.context.id)
+      archived_items = Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
       goals = Brain.list_goals(socket.assigns.context.id)
 
       goal_options = [{gettext("No goal"), ""} | Enum.map(goals, &{&1.title, &1.slug})]
@@ -469,6 +495,8 @@ defmodule DranWeb.TodoLive do
       {:noreply,
        assign(socket,
          items: items,
+         archived_items: archived_items,
+         show_archived: false,
          goals: goals,
          goal_options: goal_options,
          page_title: gettext("Todos")
@@ -477,6 +505,8 @@ defmodule DranWeb.TodoLive do
       {:noreply,
        assign(socket,
          items: [],
+         archived_items: [],
+         show_archived: false,
          goals: [],
          goal_options: [{gettext("No goal"), ""}],
          page_title: gettext("Todos")
@@ -512,6 +542,10 @@ defmodule DranWeb.TodoLive do
 
   def handle_event("node_drag", %{"id" => id, "x" => x, "y" => y}, socket) do
     {:noreply, node_drag(socket, id, x, y)}
+  end
+
+  def handle_event("toggle_archived", _params, socket) do
+    {:noreply, assign(socket, show_archived: not socket.assigns.show_archived)}
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
@@ -588,6 +622,8 @@ defmodule DranWeb.TodoLive do
     {:noreply, push_navigate(socket, to: ~p"/todos/new")}
   end
 
+  def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
+  def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
   def handle_event("toggle_edit", p, s), do: PageEdit.handle_event("toggle_edit", p, s)
   def handle_event("cancel_edit", p, s), do: PageEdit.handle_event("cancel_edit", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
