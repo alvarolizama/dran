@@ -88,10 +88,13 @@ defmodule DranWeb.KanbanLive do
           <div
             :for={{status, label, badge_class} <- @kanban_columns}
             data-kanban-status={status}
-            class="w-72 shrink-0 flex flex-col min-h-0 h-full rounded-lg bg-base-200/40 border border-base-300"
+            class="w-72 flex-1 max-w-md shrink-0 flex flex-col min-h-0 h-full rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
           >
-            <div class="flex items-center justify-between px-3 py-2 border-b border-base-300 shrink-0">
-              <span class="text-sm font-semibold">{label}</span>
+            <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300 shrink-0">
+              <div class="flex items-center gap-2">
+                <span class={"size-2 rounded-full shrink-0 " <> accent_dot(status)}></span>
+                <span class="text-sm font-semibold">{label}</span>
+              </div>
               <span class={"px-2 py-0.5 text-xs rounded-full " <> badge_class}>
                 {column_count(@filtered_todos, status)}
               </span>
@@ -103,7 +106,7 @@ defmodule DranWeb.KanbanLive do
                 draggable="true"
                 phx-click="show_page"
                 phx-value-slug={todo.slug}
-                class="p-3 rounded-lg bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary/40 active:cursor-grabbing transition"
+                class="p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary active:cursor-grabbing transition"
               >
                 <div class="font-medium text-sm break-words">{todo.title}</div>
 
@@ -368,6 +371,15 @@ defmodule DranWeb.KanbanLive do
     Enum.count(todos, fn t -> kanban_status(t) == status end)
   end
 
+  # Status accent dot colors (matches project kanban + dashboard palette)
+  defp accent_dot("backlog"), do: "bg-base-content/30"
+  defp accent_dot("this_week"), do: "bg-blue-500"
+  defp accent_dot("today"), do: "bg-amber-500"
+  defp accent_dot("in_progress"), do: "bg-purple-500"
+  defp accent_dot("done"), do: "bg-green-500"
+  defp accent_dot("cancelled"), do: "bg-red-500"
+  defp accent_dot(_), do: "bg-base-content/30"
+
   # Construye la lista de badges de un todo. Máximo 2 visibles, resto en +N.
   defp visible_badges(todo) do
     todo
@@ -385,6 +397,7 @@ defmodule DranWeb.KanbanLive do
 
   defp maybe_add_badge(list, _type, nil), do: list
   defp maybe_add_badge(list, _type, ""), do: list
+
   defp maybe_add_badge(list, type, slug) do
     label = String.slice(slug, 0, 12)
     [%{type: type, slug: slug, label: label} | list]
