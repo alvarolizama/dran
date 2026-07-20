@@ -18,7 +18,7 @@ FROM ${ELIXIR_IMAGE} AS build
 # shell out to node).
 RUN apt-get update -y \
   && apt-get install -y build-essential git curl ca-certificates \
-  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y nodejs \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -48,7 +48,7 @@ COPY rel rel
 # JS deps for the TipTap/three.js editor (assets/package.json). The tailwind
 # and esbuild hex wrappers fetch their own platform binaries on first run,
 # so they don't need a node_modules install.
-RUN cd assets && npm ci
+RUN cd assets && npm install
 
 RUN mix compile
 RUN mix assets.deploy
