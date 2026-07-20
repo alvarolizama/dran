@@ -96,6 +96,23 @@ if config_env() == :prod do
 
   config :dran, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  # force_ssl: only enabled when PHX_SCHEME is "https" (default) AND
+  # DISABLE_FORCE_SSL is not "1". Serving over plain HTTP (e.g. behind a
+  # NetBird / Wireguard tunnel without a TLS terminator) sets PHX_SCHEME=http
+  # or DISABLE_FORCE_SSL=1, which disables the HTTPS redirect.
+  force_ssl_opts =
+    cond do
+      System.get_env("DISABLE_FORCE_SSL") == "1" -> []
+      scheme == "http" -> []
+      true ->
+        [
+          force_ssl: [
+            rewrite_on: [:x_forwarded_proto],
+            exclude: [hosts: ["localhost", "127.0.0.1"]]
+          ]
+        ]
+    end
+
   config :dran, DranWeb.Endpoint,
     url: [host: host, port: url_port, scheme: scheme],
     http: [
@@ -106,6 +123,8 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
     secret_key_base: secret_key_base
+
+  if force_ssl_opts != [], do: config(:dran, DranWeb.Endpoint, force_ssl_opts)
 
   # ## SSL Support
   #
