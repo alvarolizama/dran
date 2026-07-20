@@ -494,20 +494,31 @@ ssh user@server 'cd /opt/dran && bin/dran daemon'
 
 For a systemd unit, point `ExecStart` at `/opt/dran/bin/server`.
 
-#### Option B — Container (Coolify / Railpack / Nixpacks)
+#### Option B — Container with the repo Dockerfile (Coolify / Docker)
 
-The simplest path is letting the build pack auto-detect the Elixir app and produce a container. Set these in the resource config:
+The repo ships a multi-stage `Dockerfile` that builds a production Elixir release and runs it as a non-root user on a slim Debian runtime. An entrypoint (`docker/entrypoint.sh`) runs pending migrations before starting the release, so the app never serves against an un-migrated schema. A failed migration aborts boot (and triggers a Coolify rollback) instead of shipping broken code.
+
+**Coolify setup:**
+
+1. Point the Coolify resource at your Git repo (it auto-detects the `Dockerfile`).
+2. Set the port to `4000`.
+3. Set the required environment variables in the Coolify resource config (see the table below).
+4. (Optional) For the first deploy, set `SKIP_MIGRATIONS=1` and run `bin/setup` as a pre-deploy command if you prefer explicit control over DB creation/seeding. Otherwise the entrypoint handles migrations automatically on every deploy.
+
+The entrypoint runs `bin/dran eval Dran.Release.migrate` then `exec bin/dran start`. Set `SKIP_MIGRATIONS=1` to bypass (e.g. one-off task containers).
+
+**Build-time vs runtime variables:** all variables in the Dockerfile are runtime-only (no `ARG` for secrets). The `DISABLE_FORCE_SSL` flag is read at build time in `config/prod.exs`, so if you need plain HTTP (e.g. behind a NetBird / Wireguard tunnel without TLS), set `DISABLE_FORCE_SSL=1` in the Coolify build args before building.
+
+#### Option C — Railpack / Nixpacks (auto-detect)
+
+If you prefer a build pack over the Dockerfile, let Coolify auto-detect the Elixir app. Set these in the resource config:
 
 - **Build pack:** Nixpacks or Railpack (auto-detects `mix.exs`)
 - **Start command:** `bin/server`
 - **Pre-deploy command:** `bin/setup` (creates DB → migrates → seeds, all idempotent)
-- **Port:** `4000` (or whatever your reverse proxy expects)
+- **Port:** `4000`
 
 > `bin/setup` is safe to run on every deploy. On a fresh database it creates the schema and seeds the default context. On subsequent deploys it short-circuits (the DB already exists) and only runs pending migrations + the idempotent seed.
-
-#### Option C — Custom `docker run`
-
-If you build a custom image (e.g. with `mix phx.gen.release --docker`), the final `CMD` should be `["bin/server"]` and you should run `bin/setup` as a one-off init container or via an entrypoint wrapper.
 
 ### Step 5 — Verify
 
