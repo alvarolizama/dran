@@ -102,9 +102,13 @@ defmodule Dran.Release do
   defp ensure_db_created(repo) do
     load_config()
 
-    case repo.__adapter__.storage_up(repo.config) do
+    case repo.__adapter__().storage_up(repo.config()) do
       :ok ->
         Logger.info("[release] created database for #{inspect(repo)}")
+        :ok
+
+      {:error, :already_up} ->
+        Logger.info("[release] database already exists for #{inspect(repo)}, skipping create")
         :ok
 
       {:error, {:already_up, _}} ->
