@@ -215,6 +215,7 @@ defmodule DranWeb.ArtifactLive do
   def handle_event("new_page", _params, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/artifacts/new")}
 
+  def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
   def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
   def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
   def handle_event("toggle_edit", p, s), do: PageEdit.handle_event("toggle_edit", p, s)

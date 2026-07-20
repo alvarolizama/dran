@@ -112,6 +112,38 @@ defmodule DranWeb.SettingsLive do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("reset_context", %{"confirmation" => confirmation}, socket) do
+    expected = socket.assigns.context_slug || ""
+
+    if confirmation == expected do
+      context = Dran.Brain.get_context_by_slug(socket.assigns.context_slug)
+
+      case Dran.Brain.reset_context(context.id) do
+        {:ok, counts} ->
+          socket =
+            socket
+            |> put_flash(
+              :info,
+              gettext("Brain reset: deleted %{pages} pages, %{relations} relations, %{versions} versions, %{logs} logs.",
+                pages: counts.pages,
+                relations: counts.relations,
+                versions: counts.versions,
+                logs: counts.logs
+              )
+            )
+            |> push_navigate(to: ~p"/")
+
+          {:noreply, socket}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, gettext("Could not reset brain. Check the logs."))}
+      end
+    else
+      {:noreply, put_flash(socket, :error, gettext("Confirmation text does not match the context slug."))}
+    end
+  end
+
   defp cast_float(str) when is_binary(str) do
     case Float.parse(str) do
       {f, _} -> f
@@ -411,6 +443,9 @@ defmodule DranWeb.SettingsLive do
               </.config_row>
             </.config_section>
           </div>
+
+          <%!-- Danger zone — destructive operations --%>
+          <.danger_zone_section context_slug={@context_slug} />
         </div>
       </div>
     </Layouts.app>
@@ -716,4 +751,63 @@ defmodule DranWeb.SettingsLive do
   end
 
   defp format_bytes(_), do: "—"
+
+  attr :context_slug, :string, required: true
+
+  defp danger_zone_section(assigns) do
+    ~H"""
+    <section class="surface-2 rounded-2xl overflow-hidden border border-error/20">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-error/20">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-error/10">
+          <.icon name="hero-exclamation-triangle" class="size-4 text-error" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-heading text-error">{gettext("Zona de peligro")}</h2>
+          <p class="text-caption mt-0.5">
+            {gettext("Operaciones destructivas e irreversibles.")}
+          </p>
+        </div>
+      </header>
+
+      <div class="px-5 py-5 space-y-4">
+        <div>
+          <h3 class="text-sm font-semibold text-base-content/80">
+            {gettext("Borrar todo el contenido")}
+          </h3>
+          <p class="text-xs text-base-content/60 mt-1">
+            {gettext("Elimina todas las páginas, relaciones, versiones y registros de actividad del contexto actual. El contexto en sí se conserva. Esta acción no se puede deshacer.")}
+          </p>
+        </div>
+
+        <.form
+          for={to_form(%{}, as: :danger)}
+          id="reset-context-form"
+          phx-submit="reset_context"
+          class="space-y-3"
+        >
+          <div>
+            <label class="text-xs text-base-content/60 mb-1 block">
+              {gettext("Para confirmar, escribe el slug del contexto:")}
+              <code class="ml-1 font-mono text-error">{@context_slug}</code>
+            </label>
+            <.input
+              field={to_form(%{}, as: :danger)[:confirmation]}
+              type="text"
+              placeholder={@context_slug}
+              class="w-full"
+            />
+          </div>
+          <button
+            type="submit"
+            data-confirm={gettext("¿Estás seguro? Esto borrará TODO el contenido del contexto. No se puede deshacer.")}
+            class="btn btn-error btn-sm"
+          >
+            <.icon name="hero-trash" class="size-4" />
+            {gettext("Borrar todo el contenido")}
+          </button>
+        </.form>
+      </div>
+    </section>
+    """
+  end
 end

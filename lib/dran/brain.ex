@@ -576,6 +576,50 @@ defmodule Dran.Brain do
   end
 
   @doc """
+  Delete ALL content in a context: pages, relations, page_versions, and logs.
+
+  The context itself is preserved (its slug, name, and settings). This is a
+  destructive, irreversible operation intended for resetting a brain to a
+  clean state. Returns `{:ok, counts}` where counts is a map of table →
+  number of deleted rows.
+
+  ## Example
+
+      {:ok, %{pages: 42, relations: 18, versions: 35, logs: 50}} =
+        Dran.Brain.reset_context(context_id)
+  """
+  def reset_context(context_id) do
+    import Ecto.Query, warn: false
+
+    page_ids_sub = page_ids(context_id)
+
+    Repo.transaction(fn ->
+      # Delete in dependency order: versions → relations → logs → pages
+      versions_count =
+        from(v in PageVersion, where: v.page_id in subquery(page_ids_sub))
+        |> Repo.delete_all()
+
+      relations_count =
+        from(r in Relation, where: r.source_id in subquery(page_ids_sub) or r.target_id in subquery(page_ids_sub))
+        |> Repo.delete_all()
+
+      logs_count =
+        from(l in Log, where: l.context_id == ^context_id)
+        |> Repo.delete_all()
+
+      pages_count =
+        from(p in Page, where: p.context_id == ^context_id)
+        |> Repo.delete_all()
+
+      %{pages: pages_count, relations: relations_count, versions: versions_count, logs: logs_count}
+    end)
+  end
+
+  defp page_ids(context_id) do
+    from(p in Page, where: p.context_id == ^context_id, select: p.id)
+  end
+
+  @doc """
   Broadcast a page change event over Phoenix.PubSub so live views
   (e.g. the graph) can refresh in real time.
 

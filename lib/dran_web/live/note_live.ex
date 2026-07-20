@@ -251,6 +251,9 @@ defmodule DranWeb.NoteLive do
 
   # ── Editing (delegated to PageEdit) ──
 
+  def handle_event("delete_page", params, socket),
+    do: PageEdit.handle_event("delete_page", params, socket)
+
   def handle_event("archive_page", params, socket),
     do: PageEdit.handle_event("archive_page", params, socket)
 
