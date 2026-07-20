@@ -350,11 +350,11 @@ defmodule Dran.Agent.Engine do
   end
 
   defp reasoning_from_message(message) do
-    Map.get(message, "content", "") |> String.trim()
+    (Map.get(message, "content") || "") |> String.trim()
   end
 
   defp parse_response(text) do
-    text = String.trim(text)
+    text = (text || "") |> String.trim()
 
     case extract_json(text) do
       nil ->
