@@ -113,7 +113,7 @@ defmodule DranWeb.SettingsLive do
   end
 
   @impl true
-  def handle_event("reset_context", %{"confirmation" => confirmation}, socket) do
+  def handle_event("reset_context", %{"danger" => %{"confirmation" => confirmation}}, socket) do
     expected = socket.assigns.context_slug || ""
 
     if confirmation == expected do
