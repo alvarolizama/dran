@@ -594,20 +594,21 @@ defmodule Dran.Brain do
     page_ids_sub = page_ids(context_id)
 
     Repo.transaction(fn ->
-      # Delete in dependency order: versions → relations → logs → pages
-      versions_count =
+      # Delete in dependency order: versions → relations → logs → pages.
+      # Repo.delete_all/1 returns {count, nil} — extract the count.
+      {versions_count, _} =
         from(v in PageVersion, where: v.page_id in subquery(page_ids_sub))
         |> Repo.delete_all()
 
-      relations_count =
+      {relations_count, _} =
         from(r in Relation, where: r.source_id in subquery(page_ids_sub) or r.target_id in subquery(page_ids_sub))
         |> Repo.delete_all()
 
-      logs_count =
+      {logs_count, _} =
         from(l in Log, where: l.context_id == ^context_id)
         |> Repo.delete_all()
 
-      pages_count =
+      {pages_count, _} =
         from(p in Page, where: p.context_id == ^context_id)
         |> Repo.delete_all()
 
