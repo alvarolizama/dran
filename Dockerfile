@@ -7,8 +7,8 @@
 # on OTP 27 + Debian bookworm. Verify the tag exists at
 # https://hub.docker.com/r/hexpm/elixir/tags and keep the runtime image's
 # bookworm date (below) matching to avoid glibc drift.
-ARG ELIXIR_IMAGE=hexpm/elixir:1.18.3-erlang-27.2-debian-bookworm-20250203-slim
-ARG DEBIAN_RUNTIME=debian:bookworm-20250203-slim
+ARG ELIXIR_IMAGE=hexpm/elixir:1.18.4-erlang-27.2.4-debian-bookworm-20260713-slim
+ARG DEBIAN_RUNTIME=debian:bookworm-20260713-slim
 
 FROM ${ELIXIR_IMAGE} AS build
 
