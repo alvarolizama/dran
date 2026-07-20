@@ -46,6 +46,11 @@ defmodule Dran.Brain.PageAugmenter do
         run(page)
         :ok
     end
+  rescue
+    # TaskSupervisor may not be running during release tasks (bin/dran eval,
+    # seeds) where only the repo is started. Augmentation is a background
+    # enhancement, not a data-integrity concern — safe to skip.
+    _ -> :ignored
   end
 
   @doc """
