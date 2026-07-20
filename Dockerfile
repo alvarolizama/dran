@@ -3,11 +3,12 @@
 # ---------------------------------------------------------------------------
 # Build stage — prebuilt Elixir/OTP image (no mise, no kerl, no source builds)
 # ---------------------------------------------------------------------------
-# Dran targets Elixir ~> 1.15 (mix.exs). Pin a known-good hexpm/elixir image
-# on OTP 27 + Debian bookworm. Verify the tag exists at
+# Dran targets Elixir ~> 1.15 (mix.exs) but is developed on 1.20.x / OTP 29
+# (see mise.toml). Pin the closest published hexpm/elixir image to the local
+# toolchain so the container matches what devs actually run. Verify the tag at
 # https://hub.docker.com/r/hexpm/elixir/tags and keep the runtime image's
 # bookworm date (below) matching to avoid glibc drift.
-ARG ELIXIR_IMAGE=hexpm/elixir:1.18.4-erlang-27.2.4-debian-bookworm-20260713-slim
+ARG ELIXIR_IMAGE=hexpm/elixir:1.20.2-erlang-29.0.3-debian-bookworm-20260713-slim
 ARG DEBIAN_RUNTIME=debian:bookworm-20260713-slim
 
 FROM ${ELIXIR_IMAGE} AS build
