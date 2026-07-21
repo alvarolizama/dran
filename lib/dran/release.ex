@@ -5,10 +5,11 @@ defmodule Dran.Release do
 
   All public functions are safe to call from a release container:
 
-    * `setup/0`   — create DB (if missing) → migrate → seed. Idempotent.
-    * `migrate/0` — run pending migrations.
-    * `seed/0`    — run priv/repo/seeds.exs (the seeds script itself is idempotent).
-    * `rollback/2` — roll a single repo back to a given version.
+    * `setup/0`         — create DB (if missing) → migrate → seed context. Idempotent.
+    * `migrate/0`       — run pending migrations.
+    * `seed/0`          — run priv/repo/seeds.exs (full demo content). Dev/test only.
+    * `seed_context/0`  — create the default context only. Safe for prod.
+    * `rollback/2`      — roll a single repo back to a given version.
 
   All commands start only the dependencies they need (the Ecto repo and its
   adapter); they intentionally do NOT start the full application supervision
@@ -22,10 +23,10 @@ defmodule Dran.Release do
 
   @doc """
   Idempotent first-run setup: create the database if it does not exist,
-  run any pending migrations, and run seeds.
+  run any pending migrations, and seed the default context.
 
   Safe to invoke on every deploy — it short-circuits when the database
-  already exists, and migrations/seeds are themselves idempotent.
+  already exists, and migrations are themselves idempotent.
 
   ## Example
 
@@ -34,7 +35,7 @@ defmodule Dran.Release do
   def setup do
     create()
     migrate()
-    seed()
+    seed_context()
     :ok
   end
 
@@ -79,6 +80,10 @@ defmodule Dran.Release do
   @doc """
   Run priv/repo/seeds.exs inside an active repo connection.
 
+  This seeds the **full demo content** (goals, todos, notes, concepts,
+  relations) on top of the default context. Intended for dev/test only —
+  production should use `seed_context/0` instead.
+
   The seeds file is expected to use `alias Dran.Repo` and call functions on
   it directly. We use `Ecto.Migrator.with_repo/2` so the repo (and only the
   repo) is started for the duration of the seed run.
@@ -92,6 +97,42 @@ defmodule Dran.Release do
         Ecto.Migrator.with_repo(
           repo,
           fn _repo -> Code.eval_file(seeds_file) end,
+          timeout: @start_timeout
+        )
+    end
+  end
+
+  @doc """
+  Create only the default context if it does not exist.
+
+  Safe for production: does not create demo pages, todos, or relations.
+  Used by `setup/0` so a fresh prod deploy gets a working context without
+  polluting the brain with seed content.
+  """
+  def seed_context do
+    load_config()
+
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(
+          repo,
+          fn _repo ->
+            alias Dran.Repo
+            alias Dran.Brain
+            alias Dran.Brain.Context
+
+            slug = Dran.Auth.default_context_slug()
+            name = Dran.Auth.default_context_name()
+
+            case Repo.get_by(Context, slug: slug) do
+              nil ->
+                {:ok, ctx} = Brain.create_context(%{name: name, slug: slug})
+                Logger.info("[release] created context: #{ctx.name} (#{ctx.slug})")
+
+              existing ->
+                Logger.info("[release] context already exists: #{existing.name} (#{existing.slug})")
+            end
+          end,
           timeout: @start_timeout
         )
     end

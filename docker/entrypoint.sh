@@ -1,12 +1,12 @@
 #!/bin/sh
 # Dran container entrypoint.
 #
-# Runs Dran.Release.setup/0 (create DB if missing → migrate → seed, all
-# idempotent) before starting the Phoenix release. On a fresh database it
-# creates the schema and seeds the default context. On subsequent deploys it
-# short-circuits (DB already exists) and only runs pending migrations + the
-# idempotent seed. A failed setup aborts boot (Coolify rolls back) instead
-# of serving against an un-migrated schema.
+# Runs Dran.Release.setup/0 (create DB if missing → migrate → seed default
+# context) before starting the Phoenix release. On a fresh database it
+# creates the schema and the default context. On subsequent deploys it
+# short-circuits (DB already exists) and only runs pending migrations.
+# Demo content (goals, todos, notes) is NOT seeded in prod — use
+# `bin/dran eval Dran.Release.seed` manually for that.
 #
 # Set SKIP_MIGRATIONS=1 to bypass (one-off task containers).
 set -e
