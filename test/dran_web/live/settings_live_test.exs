@@ -110,4 +110,21 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ t("Entorno")
     assert html =~ t("Read-only — loaded from environment variables at startup.")
   end
+
+  test "inference test button is present in the Inference API section", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings")
+
+    assert html =~ "phx-click=\"test_inference\""
+    assert html =~ t("Probar conexión")
+  end
+
+  test "clicking the test button shows the testing state", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/settings")
+
+    html = render_click(view, "test_inference")
+    # The button immediately switches to "Probando..." state
+    assert html =~ t("Probando...")
+    # The button is disabled while testing
+    assert html =~ "disabled"
+  end
 end

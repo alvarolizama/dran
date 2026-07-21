@@ -14,6 +14,35 @@ defmodule Dran.Inference.Client do
   def enabled?, do: Config.enabled?()
 
   @doc """
+  Health-check the inference server by hitting `GET /models`.
+
+  Returns `{:ok, %{latency_ms: n, models: count}}` on success, or
+  `{:error, reason}` when the server is unreachable, misconfigured, or
+  the API key is invalid. Used by the Settings UI "Probar conexión" button.
+  """
+  @spec ping() ::
+          {:ok, %{latency_ms: non_neg_integer(), models: non_neg_integer()}} | {:error, term()}
+  def ping do
+    case Config.enabled?() do
+      false ->
+        {:error, :not_configured}
+
+      true ->
+        start = System.monotonic_time(:millisecond)
+
+        case request(:get, "/models") do
+          {:ok, body} ->
+            latency = System.monotonic_time(:millisecond) - start
+            count = length(body["data"] || [])
+            {:ok, %{latency_ms: latency, models: count}}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
+  @doc """
   List available models from the inference server.
   """
   @spec models() :: result(list(map()))

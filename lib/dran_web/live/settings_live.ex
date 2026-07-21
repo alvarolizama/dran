@@ -51,6 +51,7 @@ defmodule DranWeb.SettingsLive do
     socket =
       socket
       |> assign(active_nav: "settings", page_title: gettext("Settings"))
+      |> assign(inference_test: nil)
       |> assign_brain_form()
       |> assign_models()
 
@@ -61,6 +62,8 @@ defmodule DranWeb.SettingsLive do
   def handle_params(_params, _url, socket) do
     {:noreply, socket}
   end
+
+  # -- Inference connection test ---------------------------------------------
 
   # -- Brain tuning form ------------------------------------------------------
 
@@ -147,6 +150,25 @@ defmodule DranWeb.SettingsLive do
       {:noreply,
        put_flash(socket, :error, gettext("Confirmation text does not match the context slug."))}
     end
+  end
+
+  # -- Inference connection test ---------------------------------------------
+
+  @impl true
+  def handle_event("test_inference", _params, socket) do
+    pid = self()
+
+    Task.start(fn ->
+      result = Client.ping()
+      send(pid, {:inference_test_result, result})
+    end)
+
+    {:noreply, assign(socket, inference_test: :testing)}
+  end
+
+  @impl true
+  def handle_info({:inference_test_result, result}, socket) do
+    {:noreply, assign(socket, inference_test: result)}
   end
 
   defp cast_float(str) when is_binary(str) do
@@ -268,7 +290,29 @@ defmodule DranWeb.SettingsLive do
                   )
                 }
               >
-                <.status_badge active={Config.enabled?()} />
+                <div class="flex items-center gap-3 flex-wrap">
+                  <.inference_status_badge
+                    test={@inference_test}
+                    configured={Config.enabled?()}
+                  />
+                  <button
+                    phx-click="test_inference"
+                    disabled={@inference_test == :testing}
+                    class={[
+                      "btn btn-xs gap-2 transition-all duration-150",
+                      @inference_test == :testing && "btn-ghost opacity-60",
+                      @inference_test != :testing && "btn-ghost hover:bg-primary/10"
+                    ]}
+                  >
+                    <.icon
+                      name={if @inference_test == :testing, do: "hero-arrow-path", else: "hero-bolt"}
+                      class={"size-4 #{if @inference_test == :testing, do: "animate-spin", else: ""}"}
+                    />
+                    {if @inference_test == :testing,
+                      do: gettext("Probando..."),
+                      else: gettext("Probar conexión")}
+                  </button>
+                </div>
               </.config_row>
               <.config_row
                 label={gettext("API URL")}
@@ -823,6 +867,66 @@ defmodule DranWeb.SettingsLive do
     </span>
     """
   end
+
+  attr :test, :any, default: nil
+  attr :configured, :boolean, default: false
+
+  defp inference_status_badge(assigns) do
+    ~H"""
+    <div class="flex items-center gap-2 flex-wrap">
+      <%= cond do %>
+        <% @test == :testing -> %>
+          <span class="loading loading-dots loading-xs text-info"></span>
+          <span class="text-info text-xs font-medium">{gettext("Probando...")}</span>
+        <% match?({:ok, _}, @test) -> %>
+          <% {:ok, r} = @test %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-success/15 text-success">
+            <.icon name="hero-check-circle" class="size-3" />
+            {gettext("Responde")}
+          </span>
+          <span class="text-xs text-base-content/50">
+            {r.latency_ms}ms · {r.models} {gettext("modelos")}
+          </span>
+        <% match?({:error, _}, @test) -> %>
+          <% {:error, reason} = @test %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-error/15 text-error">
+            <.icon name="hero-x-circle" class="size-3" />
+            {gettext("Sin conexión")}
+          </span>
+          <span class="text-xs text-error/70">
+            {format_inference_error(reason)}
+          </span>
+        <% @configured -> %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-info/15 text-info">
+            <.icon name="hero-server" class="size-3" />
+            {gettext("Configurada")}
+          </span>
+        <% true -> %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-base-200 text-base-content/50">
+            <.icon name="hero-x-mark" class="size-3" />
+            {gettext("No configurada")}
+          </span>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp format_inference_error(:not_configured), do: gettext("API no configurada")
+
+  defp format_inference_error(%Req.TransportError{reason: reason}) do
+    case reason do
+      :econnrefused -> gettext("Connection refused — el servidor no responde")
+      :timeout -> gettext("Timeout — el servidor tardó demasiado")
+      :nxdomain -> gettext("Dominio no resuelto")
+      _ -> "TransportError: #{inspect(reason)}"
+    end
+  end
+
+  defp format_inference_error({:http_error, status, _body}) do
+    gettext("HTTP %{status}", status: status)
+  end
+
+  defp format_inference_error(reason), do: inspect(reason)
 
   defp format_bytes(bytes) when is_integer(bytes) do
     cond do

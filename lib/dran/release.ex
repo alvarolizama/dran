@@ -130,7 +130,9 @@ defmodule Dran.Release do
                 Logger.info("[release] created context: #{ctx.name} (#{ctx.slug})")
 
               existing ->
-                Logger.info("[release] context already exists: #{existing.name} (#{existing.slug})")
+                Logger.info(
+                  "[release] context already exists: #{existing.name} (#{existing.slug})"
+                )
             end
           end,
           timeout: @start_timeout
