@@ -1427,13 +1427,16 @@ defmodule Dran.Brain do
       }
   """
   def search(query_string, opts \\ []) do
-    strategy = resolve_strategy(Keyword.get(opts, :strategy, :auto), query_string)
+    requested_strategy = Keyword.get(opts, :strategy, :auto)
+    strategy = resolve_strategy(requested_strategy, query_string)
 
     case do_search(query_string, opts, strategy) do
-      {:error, :not_configured} when strategy != :auto ->
+      {:error, :not_configured} when requested_strategy != :auto ->
         {:error, :not_configured}
 
-      {:error, :not_configured} ->
+      # Auto strategy should never hard-fail — not_configured, host down,
+      # timeout, etc. all fall back to fts so search always works.
+      {:error, _reason} when requested_strategy == :auto ->
         do_search(query_string, opts, :fts) |> normalize_results(:fts)
 
       result ->
