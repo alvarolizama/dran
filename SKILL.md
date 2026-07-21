@@ -225,8 +225,8 @@ There is no dedicated dran_search agent; for dran_search-only tasks use `dran_se
 | `reference` | External sources | article, paper, video, podcast, book | kind, source_url, published_at |
 | `artifact` | Files, code snippets, designs, deliverables | document, code, design, deliverable, file | kind, filename, mime_type, storage_path, sha256 |
 | `project` | Larger initiatives that group goals/plans/todos | — | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
-| `goal` | Objectives with a measurable target | — | health (green/yellow/red), metric, target_value, current_value, unit, progress, progress_manual, start_date, target_date, team |
-| `plan` | Time-horizoned plans | — | horizon, status (draft/active/done/archived), period, project_slug, goal_slug |
+| `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other | kind, health (green/yellow/red), metric, target_value, current_value, unit, progress, progress_manual, start_date, target_date, team |
+| `plan` | Time-horizoned plans | personal, coding, business, learning, health, finance, other | kind, horizon, status (draft/active/done/archived), period, project_slug, goal_slug |
 | `todo` | Actionable items | — | kanban_status, priority, due_date, project_slug, goal_slug, plan_slug, assignee |
 | `comparison` | Side-by-side analyses | — | entities, criteria, verdict |
 | `query` | Questions with answers | factual, conceptual, how_to, opinion | kind, difficulty, answer_status, answered_by |
@@ -287,8 +287,10 @@ Each slug is set independently in meta; each materializes its own part_of relati
 | `project` | `priority` | low, medium, high, urgent |
 | `project` | `health` | green, yellow, red |
 | `project` | `health_source` | manual, derived |
+| `goal` | `kind` | personal, coding, business, learning, health, finance, other |
 | `goal` | `health` | green, yellow, red |
 | `goal` | `progress_manual` | true, false (absent → false) |
+| `plan` | `kind` | personal, coding, business, learning, health, finance, other |
 | `plan` | `horizon` | weekly, monthly, quarterly, yearly |
 | `plan` | `status` | draft, active, done, archived |
 | `query` | `kind` | factual, conceptual, how_to, opinion |

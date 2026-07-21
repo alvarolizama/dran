@@ -119,7 +119,7 @@ msgstr "¿Estás seguro? No se puede deshacer."
 msgid "Artifacts"
 msgstr "Artefactos"
 
-#: lib/dran/brain/page_meta.ex:466
+#: lib/dran/brain/page_meta.ex:472
 #, elixir-autogen, elixir-format
 msgid "Assignee"
 msgstr "Responsable"
@@ -139,8 +139,8 @@ msgstr "Responsable"
 msgid "Back"
 msgstr "Volver"
 
-#: lib/dran/brain/page_meta.ex:451
-#: lib/dran/brain/page_meta.ex:562
+#: lib/dran/brain/page_meta.ex:457
+#: lib/dran/brain/page_meta.ex:568
 #: lib/dran_web/live/dashboard_live.ex:69
 #: lib/dran_web/live/kanban_live.ex:12
 #: lib/dran_web/live/kanban_live.ex:23
@@ -173,8 +173,8 @@ msgstr "Enlaces rotos"
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: lib/dran/brain/page_meta.ex:456
-#: lib/dran/brain/page_meta.ex:567
+#: lib/dran/brain/page_meta.ex:462
+#: lib/dran/brain/page_meta.ex:573
 #: lib/dran_web/live/dashboard_live.ex:75
 #: lib/dran_web/live/kanban_live.ex:17
 #: lib/dran_web/live/smart_collection_live.ex:323
@@ -189,7 +189,7 @@ msgstr "Cancelado"
 #: lib/dran_web/live/concept_live.ex:76
 #: lib/dran_web/live/entity_live.ex:76
 #: lib/dran_web/live/note_live.ex:88
-#: lib/dran_web/live/plan_live.ex:94
+#: lib/dran_web/live/plan_live.ex:97
 #: lib/dran_web/live/query_live.ex:75
 #: lib/dran_web/live/reference_live.ex:74
 #: lib/dran_web/live/todo_live.ex:230
@@ -304,8 +304,8 @@ msgstr "Documentación"
 msgid "Documentation"
 msgstr "Documentación"
 
-#: lib/dran/brain/page_meta.ex:455
-#: lib/dran/brain/page_meta.ex:566
+#: lib/dran/brain/page_meta.ex:461
+#: lib/dran/brain/page_meta.ex:572
 #: lib/dran_web/live/agent_live.ex:47
 #: lib/dran_web/live/dashboard_live.ex:74
 #: lib/dran_web/live/kanban_live.ex:16
@@ -315,9 +315,9 @@ msgstr "Documentación"
 msgid "Done"
 msgstr "Hecho"
 
-#: lib/dran/brain/page_meta.ex:358
-#: lib/dran/brain/page_meta.ex:405
-#: lib/dran/brain/page_meta.ex:465
+#: lib/dran/brain/page_meta.ex:362
+#: lib/dran/brain/page_meta.ex:409
+#: lib/dran/brain/page_meta.ex:471
 #: lib/dran_web/live/kanban_live.ex:103
 #, elixir-autogen, elixir-format
 msgid "Due date"
@@ -362,8 +362,8 @@ msgstr "Entidades"
 msgid "Files Ingest"
 msgstr "Importar archivos"
 
-#: lib/dran/brain/page_meta.ex:406
-#: lib/dran/brain/page_meta.ex:468
+#: lib/dran/brain/page_meta.ex:410
+#: lib/dran/brain/page_meta.ex:474
 #: lib/dran_web/live/kanban_live.ex:114
 #: lib/dran_web/live/kanban_live.ex:158
 #: lib/dran_web/live/todo_live.ex:80
@@ -387,15 +387,15 @@ msgstr "Objetivos"
 msgid "Graph"
 msgstr "Grafo"
 
-#: lib/dran/brain/page_meta.ex:424
-#: lib/dran/brain/page_meta.ex:462
+#: lib/dran/brain/page_meta.ex:428
+#: lib/dran/brain/page_meta.ex:468
 #: lib/dran_web/live/kanban_live.ex:32
 #, elixir-autogen, elixir-format
 msgid "High"
 msgstr "Alta"
 
-#: lib/dran/brain/page_meta.ex:454
-#: lib/dran/brain/page_meta.ex:565
+#: lib/dran/brain/page_meta.ex:460
+#: lib/dran/brain/page_meta.ex:571
 #: lib/dran_web/live/dashboard_live.ex:72
 #: lib/dran_web/live/kanban_live.ex:15
 #: lib/dran_web/live/kanban_live.ex:26
@@ -421,15 +421,15 @@ msgstr "Conocimiento"
 msgid "Logout"
 msgstr "Cerrar sesión"
 
-#: lib/dran/brain/page_meta.ex:422
-#: lib/dran/brain/page_meta.ex:460
+#: lib/dran/brain/page_meta.ex:426
+#: lib/dran/brain/page_meta.ex:466
 #: lib/dran_web/live/kanban_live.ex:30
 #, elixir-autogen, elixir-format
 msgid "Low"
 msgstr "Baja"
 
-#: lib/dran/brain/page_meta.ex:423
-#: lib/dran/brain/page_meta.ex:461
+#: lib/dran/brain/page_meta.ex:427
+#: lib/dran/brain/page_meta.ex:467
 #: lib/dran_web/live/kanban_live.ex:31
 #, elixir-autogen, elixir-format
 msgid "Medium"
@@ -493,7 +493,7 @@ msgstr "Aún no hay páginas. Crea una para empezar."
 #: lib/dran_web/live/concept_live.ex:87
 #: lib/dran_web/live/entity_live.ex:87
 #: lib/dran_web/live/note_live.ex:99
-#: lib/dran_web/live/plan_live.ex:105
+#: lib/dran_web/live/plan_live.ex:108
 #: lib/dran_web/live/query_live.ex:86
 #: lib/dran_web/live/reference_live.ex:85
 #: lib/dran_web/live/todo_live.ex:241
@@ -551,14 +551,14 @@ msgstr "Planificación"
 
 #: lib/dran_web/components/layouts.ex:218
 #: lib/dran_web/live/dashboard_live.ex:47
-#: lib/dran_web/live/plan_live.ex:258
+#: lib/dran_web/live/plan_live.ex:261
 #: lib/dran_web/page_types.ex:139
 #, elixir-autogen, elixir-format
 msgid "Plans"
 msgstr "Planes"
 
-#: lib/dran/brain/page_meta.ex:420
-#: lib/dran/brain/page_meta.ex:458
+#: lib/dran/brain/page_meta.ex:424
+#: lib/dran/brain/page_meta.ex:464
 #: lib/dran_web/live/kanban_live.ex:90
 #, elixir-autogen, elixir-format
 msgid "Priority"
@@ -677,8 +677,8 @@ msgstr "Resumen"
 msgid "Tags"
 msgstr "Etiquetas"
 
-#: lib/dran/brain/page_meta.ex:452
-#: lib/dran/brain/page_meta.ex:563
+#: lib/dran/brain/page_meta.ex:458
+#: lib/dran/brain/page_meta.ex:569
 #: lib/dran_web/live/dashboard_live.ex:70
 #: lib/dran_web/live/kanban_live.ex:13
 #: lib/dran_web/live/kanban_live.ex:24
@@ -703,8 +703,8 @@ msgstr "Título"
 msgid "Title is required."
 msgstr "El título es obligatorio."
 
-#: lib/dran/brain/page_meta.ex:453
-#: lib/dran/brain/page_meta.ex:564
+#: lib/dran/brain/page_meta.ex:459
+#: lib/dran/brain/page_meta.ex:570
 #: lib/dran_web/live/dashboard_live.ex:71
 #: lib/dran_web/live/kanban_live.ex:14
 #: lib/dran_web/live/kanban_live.ex:25
@@ -744,7 +744,7 @@ msgstr "Páginas totales"
 
 #: lib/dran_web/components/page_components.ex:208
 #: lib/dran_web/live/docs_live.ex:1070
-#: lib/dran_web/live/docs_live.ex:1524
+#: lib/dran_web/live/docs_live.ex:1528
 #, elixir-autogen, elixir-format
 msgid "Type"
 msgstr "Tipo"
@@ -760,8 +760,8 @@ msgstr "Actualizado"
 msgid "Updated by"
 msgstr "Actualizado por"
 
-#: lib/dran/brain/page_meta.ex:425
-#: lib/dran/brain/page_meta.ex:463
+#: lib/dran/brain/page_meta.ex:429
+#: lib/dran/brain/page_meta.ex:469
 #: lib/dran_web/live/kanban_live.ex:33
 #, elixir-autogen, elixir-format
 msgid "Urgent"
@@ -795,7 +795,7 @@ msgstr "páginas"
 #: lib/dran_web/live/concept_live.ex:83
 #: lib/dran_web/live/entity_live.ex:83
 #: lib/dran_web/live/note_live.ex:95
-#: lib/dran_web/live/plan_live.ex:101
+#: lib/dran_web/live/plan_live.ex:104
 #: lib/dran_web/live/query_live.ex:82
 #: lib/dran_web/live/reference_live.ex:81
 #: lib/dran_web/live/todo_live.ex:237
@@ -809,7 +809,7 @@ msgstr "sistema"
 #: lib/dran_web/live/concept_live.ex:80
 #: lib/dran_web/live/entity_live.ex:80
 #: lib/dran_web/live/note_live.ex:92
-#: lib/dran_web/live/plan_live.ex:98
+#: lib/dran_web/live/plan_live.ex:101
 #: lib/dran_web/live/query_live.ex:79
 #: lib/dran_web/live/reference_live.ex:78
 #: lib/dran_web/live/todo_live.ex:234
@@ -1190,7 +1190,7 @@ msgstr "Abrir la nota de hoy"
 msgid "Page enriched with web content."
 msgstr "Página enriquecida con contenido web."
 
-#: lib/dran/brain/page_meta.ex:514
+#: lib/dran/brain/page_meta.ex:520
 #, elixir-autogen, elixir-format
 msgid "Question"
 msgstr "Pregunta"
@@ -1308,7 +1308,7 @@ msgid "Default"
 msgstr "Predeterminado"
 
 #: lib/dran_web/live/docs_live.ex:697
-#: lib/dran_web/live/docs_live.ex:1526
+#: lib/dran_web/live/docs_live.ex:1530
 #, elixir-autogen, elixir-format
 msgid "Description"
 msgstr "Descripción"
@@ -1466,7 +1466,7 @@ msgstr "Nodos"
 msgid "Output language"
 msgstr "Idioma de salida"
 
-#: lib/dran_web/live/docs_live.ex:1523
+#: lib/dran_web/live/docs_live.ex:1527
 #, elixir-autogen, elixir-format
 msgid "Parameter"
 msgstr "Parámetro"
@@ -1497,7 +1497,7 @@ msgstr "Sesiones recientes"
 msgid "Request timeout"
 msgstr "Tiempo límite de petición"
 
-#: lib/dran_web/live/docs_live.ex:1525
+#: lib/dran_web/live/docs_live.ex:1529
 #, elixir-autogen, elixir-format
 msgid "Required"
 msgstr "Requerido"
@@ -1548,10 +1548,10 @@ msgstr "Iniciando agente…"
 msgid "Starting…"
 msgstr "Iniciando…"
 
-#: lib/dran/brain/page_meta.ex:402
-#: lib/dran/brain/page_meta.ex:416
-#: lib/dran/brain/page_meta.ex:449
-#: lib/dran/brain/page_meta.ex:481
+#: lib/dran/brain/page_meta.ex:406
+#: lib/dran/brain/page_meta.ex:420
+#: lib/dran/brain/page_meta.ex:455
+#: lib/dran/brain/page_meta.ex:487
 #: lib/dran_web/live/agent_live.ex:127
 #: lib/dran_web/live/kanban_live.ex:127
 #: lib/dran_web/live/settings_live.ex:285
@@ -1732,7 +1732,7 @@ msgstr "En esta página"
 msgid "Create Project"
 msgstr "Crear nota"
 
-#: lib/dran_web/live/plan_live.ex:86
+#: lib/dran_web/live/plan_live.ex:89
 #, elixir-autogen, elixir-format
 msgid "Due"
 msgstr "Vence"
@@ -1754,12 +1754,12 @@ msgstr "Kanban"
 msgid "No projects yet"
 msgstr "Aún no hay conceptos"
 
-#: lib/dran_web/live/plan_live.ex:136
+#: lib/dran_web/live/plan_live.ex:139
 #, elixir-autogen, elixir-format
 msgid "No todos linked to this plan."
 msgstr "No hay tareas vinculadas a este plan."
 
-#: lib/dran_web/live/plan_live.ex:118
+#: lib/dran_web/live/plan_live.ex:121
 #, elixir-autogen, elixir-format
 msgid "Open in Kanban"
 msgstr "Abrir en Kanban"
@@ -1776,7 +1776,7 @@ msgstr "Proyectos"
 msgid "Top"
 msgstr "Inicio"
 
-#: lib/dran_web/live/plan_live.ex:114
+#: lib/dran_web/live/plan_live.ex:117
 #, elixir-autogen, elixir-format
 msgid "todos linked"
 msgstr "tareas vinculadas"
@@ -1811,7 +1811,7 @@ msgstr "Archivar"
 msgid "Archive this page? It will be hidden from lists."
 msgstr "¿Archivar esta página? Se ocultará de las listas."
 
-#: lib/dran/brain/page_meta.ex:558
+#: lib/dran/brain/page_meta.ex:564
 #: lib/dran_web/components/page_components.ex:72
 #: lib/dran_web/components/page_list_components.ex:197
 #: lib/dran_web/live/activity_live.ex:238
@@ -2232,7 +2232,7 @@ msgstr "Vence antes del"
 msgid "Explore"
 msgstr "Explorar"
 
-#: lib/dran/brain/page_meta.ex:540
+#: lib/dran/brain/page_meta.ex:546
 #: lib/dran_web/live/ingest_live.ex:69
 #, elixir-autogen, elixir-format
 msgid "File"
@@ -2562,17 +2562,17 @@ msgstr "• La URL de origen / ruta del archivo se conserva en los metadatos de 
 msgid "None (orphan)"
 msgstr "Ninguno (huérfano)"
 
-#: lib/dran/brain/page_meta.ex:469
+#: lib/dran/brain/page_meta.ex:475
 #: lib/dran_web/live/kanban_live.ex:165
 #: lib/dran_web/page_types.ex:128
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Plan"
 msgstr "Plan"
 
-#: lib/dran/brain/page_meta.ex:346
-#: lib/dran/brain/page_meta.ex:407
-#: lib/dran/brain/page_meta.ex:443
-#: lib/dran/brain/page_meta.ex:467
+#: lib/dran/brain/page_meta.ex:350
+#: lib/dran/brain/page_meta.ex:411
+#: lib/dran/brain/page_meta.ex:449
+#: lib/dran/brain/page_meta.ex:473
 #: lib/dran_web/live/kanban_live.ex:151
 #: lib/dran_web/page_types.ex:125
 #, elixir-autogen, elixir-format, fuzzy
@@ -2620,182 +2620,183 @@ msgstr "Tarea"
 msgid "Atributos"
 msgstr "Atributos"
 
-#: lib/dran/brain/page_meta.ex:556
+#: lib/dran/brain/page_meta.ex:562
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Active"
 msgstr "Archivar"
 
-#: lib/dran/brain/page_meta.ex:549
+#: lib/dran/brain/page_meta.ex:555
 #, elixir-autogen, elixir-format
 msgid "Advanced"
 msgstr "Avanzado"
 
-#: lib/dran/brain/page_meta.ex:552
+#: lib/dran/brain/page_meta.ex:558
 #, elixir-autogen, elixir-format
 msgid "Answered"
 msgstr "Respondida"
 
-#: lib/dran/brain/page_meta.ex:483
+#: lib/dran/brain/page_meta.ex:489
 #, elixir-autogen, elixir-format
 msgid "Answered by"
 msgstr "Respondida por"
 
-#: lib/dran/brain/page_meta.ex:530
+#: lib/dran/brain/page_meta.ex:536
 #, elixir-autogen, elixir-format
 msgid "Article"
 msgstr "Artículo"
 
-#: lib/dran/brain/page_meta.ex:357
+#: lib/dran/brain/page_meta.ex:361
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Author"
 msgstr "Autenticación"
 
-#: lib/dran/brain/page_meta.ex:534
+#: lib/dran/brain/page_meta.ex:540
 #, elixir-autogen, elixir-format
 msgid "Book"
 msgstr "Libro"
 
-#: lib/dran/brain/page_meta.ex:537
+#: lib/dran/brain/page_meta.ex:543
 #, elixir-autogen, elixir-format
 msgid "Code"
 msgstr "Código"
 
-#: lib/dran/brain/page_meta.ex:519
+#: lib/dran/brain/page_meta.ex:525
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Company"
 msgstr "Comparación"
 
-#: lib/dran/brain/page_meta.ex:543
+#: lib/dran/brain/page_meta.ex:549
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Conceptual"
 msgstr "Concepto"
 
-#: lib/dran/brain/page_meta.ex:438
+#: lib/dran/brain/page_meta.ex:444
 #, elixir-autogen, elixir-format
 msgid "Current value"
 msgstr "Valor actual"
 
-#: lib/dran/brain/page_meta.ex:356
+#: lib/dran/brain/page_meta.ex:360
 #, elixir-autogen, elixir-format
 msgid "Date"
 msgstr "Fecha"
 
-#: lib/dran/brain/page_meta.ex:539
+#: lib/dran/brain/page_meta.ex:545
 #, elixir-autogen, elixir-format
 msgid "Deliverable"
 msgstr "Entregable"
 
-#: lib/dran/brain/page_meta.ex:538
+#: lib/dran/brain/page_meta.ex:544
 #, elixir-autogen, elixir-format
 msgid "Design"
 msgstr "Diseño"
 
-#: lib/dran/brain/page_meta.ex:479
+#: lib/dran/brain/page_meta.ex:485
 #, elixir-autogen, elixir-format
 msgid "Difficulty"
 msgstr "Dificultad"
 
-#: lib/dran/brain/page_meta.ex:527
+#: lib/dran/brain/page_meta.ex:533
 #, elixir-autogen, elixir-format
 msgid "Discipline"
 msgstr "Disciplina"
 
-#: lib/dran/brain/page_meta.ex:536
+#: lib/dran/brain/page_meta.ex:542
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Document"
 msgstr "Documentación"
 
-#: lib/dran/brain/page_meta.ex:366
+#: lib/dran/brain/page_meta.ex:370
 #, elixir-autogen, elixir-format
 msgid "Domain"
 msgstr "Dominio"
 
-#: lib/dran/brain/page_meta.ex:555
+#: lib/dran/brain/page_meta.ex:561
 #, elixir-autogen, elixir-format
 msgid "Draft"
 msgstr "Borrador"
 
-#: lib/dran/brain/page_meta.ex:523
+#: lib/dran/brain/page_meta.ex:529
 #, elixir-autogen, elixir-format
 msgid "Event"
 msgstr "Evento"
 
-#: lib/dran/brain/page_meta.ex:376
+#: lib/dran/brain/page_meta.ex:380
 #, elixir-autogen, elixir-format
 msgid "External URL"
 msgstr "URL externa"
 
-#: lib/dran/brain/page_meta.ex:542
+#: lib/dran/brain/page_meta.ex:548
 #, elixir-autogen, elixir-format
 msgid "Factual"
 msgstr "Fáctico"
 
-#: lib/dran/brain/page_meta.ex:419
-#: lib/dran/brain/page_meta.ex:435
+#: lib/dran/brain/page_meta.ex:423
+#: lib/dran/brain/page_meta.ex:441
 #, elixir-autogen, elixir-format
 msgid "Green"
 msgstr "Verde"
 
-#: lib/dran/brain/page_meta.ex:418
-#: lib/dran/brain/page_meta.ex:434
-#: lib/dran/brain/page_meta.ex:578
+#: lib/dran/brain/page_meta.ex:422
+#: lib/dran/brain/page_meta.ex:440
+#: lib/dran/brain/page_meta.ex:584
 #, elixir-autogen, elixir-format
 msgid "Health"
 msgstr "Salud"
 
-#: lib/dran/brain/page_meta.ex:400
+#: lib/dran/brain/page_meta.ex:404
 #, elixir-autogen, elixir-format
 msgid "Horizon"
 msgstr "Horizonte"
 
-#: lib/dran/brain/page_meta.ex:544
+#: lib/dran/brain/page_meta.ex:550
 #, elixir-autogen, elixir-format, fuzzy
 msgid "How to"
 msgstr "Cómo funciona"
 
-#: lib/dran/brain/page_meta.ex:512
+#: lib/dran/brain/page_meta.ex:518
 #, elixir-autogen, elixir-format
 msgid "Idea"
 msgstr "Idea"
 
-#: lib/dran/brain/page_meta.ex:548
+#: lib/dran/brain/page_meta.ex:554
 #, elixir-autogen, elixir-format
 msgid "Intermediate"
 msgstr "Intermedio"
 
-#: lib/dran/brain/page_meta.ex:511
+#: lib/dran/brain/page_meta.ex:517
 #, elixir-autogen, elixir-format
 msgid "Journal"
 msgstr "Diario"
 
-#: lib/dran/brain/page_meta.ex:354
-#: lib/dran/brain/page_meta.ex:364
-#: lib/dran/brain/page_meta.ex:373
-#: lib/dran/brain/page_meta.ex:382
-#: lib/dran/brain/page_meta.ex:391
-#: lib/dran/brain/page_meta.ex:398
-#: lib/dran/brain/page_meta.ex:477
+#: lib/dran/brain/page_meta.ex:358
+#: lib/dran/brain/page_meta.ex:368
+#: lib/dran/brain/page_meta.ex:377
+#: lib/dran/brain/page_meta.ex:386
+#: lib/dran/brain/page_meta.ex:395
+#: lib/dran/brain/page_meta.ex:402
+#: lib/dran/brain/page_meta.ex:438
+#: lib/dran/brain/page_meta.ex:483
 #, elixir-autogen, elixir-format
 msgid "Kind"
 msgstr "Tipo"
 
-#: lib/dran/brain/page_meta.ex:375
+#: lib/dran/brain/page_meta.ex:379
 #, elixir-autogen, elixir-format
 msgid "Location"
 msgstr "Ubicación"
 
-#: lib/dran/brain/page_meta.ex:513
+#: lib/dran/brain/page_meta.ex:519
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Meeting"
 msgstr "Notas de reunión"
 
-#: lib/dran/brain/page_meta.ex:341
-#: lib/dran/brain/page_meta.ex:436
+#: lib/dran/brain/page_meta.ex:345
+#: lib/dran/brain/page_meta.ex:442
 #, elixir-autogen, elixir-format
 msgid "Metric"
 msgstr "Métrica"
 
-#: lib/dran/brain/page_meta.ex:570
+#: lib/dran/brain/page_meta.ex:576
 #, elixir-autogen, elixir-format
 msgid "Monthly"
 msgstr "Mensual"
@@ -2806,93 +2807,93 @@ msgstr "Mensual"
 msgid "Ninguno"
 msgstr "Ninguno"
 
-#: lib/dran/brain/page_meta.ex:557
+#: lib/dran/brain/page_meta.ex:563
 #, elixir-autogen, elixir-format
 msgid "On hold"
 msgstr "En pausa"
 
-#: lib/dran/brain/page_meta.ex:551
+#: lib/dran/brain/page_meta.ex:557
 #, elixir-autogen, elixir-format
 msgid "Open"
 msgstr "Abierto"
 
-#: lib/dran/brain/page_meta.ex:545
+#: lib/dran/brain/page_meta.ex:551
 #, elixir-autogen, elixir-format
 msgid "Opinion"
 msgstr "Opinión"
 
-#: lib/dran/brain/page_meta.ex:531
+#: lib/dran/brain/page_meta.ex:537
 #, elixir-autogen, elixir-format
 msgid "Paper"
 msgstr "Paper"
 
-#: lib/dran/brain/page_meta.ex:367
+#: lib/dran/brain/page_meta.ex:371
 #, elixir-autogen, elixir-format
 msgid "Parent concept"
 msgstr "Concepto padre"
 
-#: lib/dran/brain/page_meta.ex:526
+#: lib/dran/brain/page_meta.ex:532
 #, elixir-autogen, elixir-format
 msgid "Pattern"
 msgstr "Patrón"
 
-#: lib/dran/brain/page_meta.ex:404
+#: lib/dran/brain/page_meta.ex:408
 #, elixir-autogen, elixir-format
 msgid "Period"
 msgstr "Periodo"
 
-#: lib/dran/brain/page_meta.ex:518
+#: lib/dran/brain/page_meta.ex:524
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Person"
 msgstr "Versión"
 
-#: lib/dran/brain/page_meta.ex:522
+#: lib/dran/brain/page_meta.ex:528
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr "Lugar"
 
-#: lib/dran/brain/page_meta.ex:533
+#: lib/dran/brain/page_meta.ex:539
 #, elixir-autogen, elixir-format
 msgid "Podcast"
 msgstr "Podcast"
 
-#: lib/dran/brain/page_meta.ex:520
+#: lib/dran/brain/page_meta.ex:526
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Product"
 msgstr "Proyecto"
 
-#: lib/dran/brain/page_meta.ex:440
+#: lib/dran/brain/page_meta.ex:446
 #, elixir-autogen, elixir-format
 msgid "Progress (0.0-1.0)"
 msgstr "Progreso (0.0-1.0)"
 
-#: lib/dran/brain/page_meta.ex:385
+#: lib/dran/brain/page_meta.ex:389
 #, elixir-autogen, elixir-format
 msgid "Published at"
 msgstr "Publicado el"
 
-#: lib/dran/brain/page_meta.ex:571
+#: lib/dran/brain/page_meta.ex:577
 #, elixir-autogen, elixir-format
 msgid "Quarterly"
 msgstr "Trimestral"
 
-#: lib/dran/brain/page_meta.ex:515
+#: lib/dran/brain/page_meta.ex:521
 #, elixir-autogen, elixir-format
 msgid "Quote"
 msgstr "Cita"
 
-#: lib/dran/brain/page_meta.ex:419
-#: lib/dran/brain/page_meta.ex:435
+#: lib/dran/brain/page_meta.ex:423
+#: lib/dran/brain/page_meta.ex:441
 #, elixir-autogen, elixir-format
 msgid "Red"
 msgstr "Rojo"
 
-#: lib/dran/brain/page_meta.ex:516
+#: lib/dran/brain/page_meta.ex:522
 #, elixir-autogen, elixir-format
 msgid "Reminder"
 msgstr "Recordatorio"
 
-#: lib/dran/brain/page_meta.ex:547
+#: lib/dran/brain/page_meta.ex:553
 #, elixir-autogen, elixir-format
 msgid "Simple"
 msgstr "Simple"
@@ -2913,79 +2914,79 @@ msgstr "Sin plan"
 msgid "Sin proyecto"
 msgstr "Sin proyecto"
 
-#: lib/dran/brain/page_meta.ex:384
+#: lib/dran/brain/page_meta.ex:388
 #, elixir-autogen, elixir-format
 msgid "Source URL"
 msgstr "URL de origen"
 
-#: lib/dran/brain/page_meta.ex:344
-#: lib/dran/brain/page_meta.ex:427
-#: lib/dran/brain/page_meta.ex:441
+#: lib/dran/brain/page_meta.ex:348
+#: lib/dran/brain/page_meta.ex:431
+#: lib/dran/brain/page_meta.ex:447
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Start date"
 msgstr "Iniciar"
 
-#: lib/dran/brain/page_meta.ex:345
-#: lib/dran/brain/page_meta.ex:428
-#: lib/dran/brain/page_meta.ex:442
+#: lib/dran/brain/page_meta.ex:349
+#: lib/dran/brain/page_meta.ex:432
+#: lib/dran/brain/page_meta.ex:448
 #, elixir-autogen, elixir-format
 msgid "Target date"
 msgstr "Fecha objetivo"
 
-#: lib/dran/brain/page_meta.ex:342
-#: lib/dran/brain/page_meta.ex:437
+#: lib/dran/brain/page_meta.ex:346
+#: lib/dran/brain/page_meta.ex:443
 #, elixir-autogen, elixir-format
 msgid "Target value"
 msgstr "Valor objetivo"
 
-#: lib/dran/brain/page_meta.ex:525
+#: lib/dran/brain/page_meta.ex:531
 #, elixir-autogen, elixir-format
 msgid "Technique"
 msgstr "Técnica"
 
-#: lib/dran/brain/page_meta.ex:528
+#: lib/dran/brain/page_meta.ex:534
 #, elixir-autogen, elixir-format
 msgid "Theory"
 msgstr "Teoría"
 
-#: lib/dran/brain/page_meta.ex:510
+#: lib/dran/brain/page_meta.ex:516
 #, elixir-autogen, elixir-format
 msgid "Thought"
 msgstr "Pensamiento"
 
-#: lib/dran/brain/page_meta.ex:521
+#: lib/dran/brain/page_meta.ex:527
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Tool"
 msgstr "Tarea"
 
-#: lib/dran/brain/page_meta.ex:343
-#: lib/dran/brain/page_meta.ex:439
+#: lib/dran/brain/page_meta.ex:347
+#: lib/dran/brain/page_meta.ex:445
 #, elixir-autogen, elixir-format
 msgid "Unit"
 msgstr "Unidad"
 
-#: lib/dran/brain/page_meta.ex:553
+#: lib/dran/brain/page_meta.ex:559
 #, elixir-autogen, elixir-format
 msgid "Verified"
 msgstr "Verificado"
 
-#: lib/dran/brain/page_meta.ex:532
+#: lib/dran/brain/page_meta.ex:538
 #, elixir-autogen, elixir-format
 msgid "Video"
 msgstr "Video"
 
-#: lib/dran/brain/page_meta.ex:569
+#: lib/dran/brain/page_meta.ex:575
 #, elixir-autogen, elixir-format
 msgid "Weekly"
 msgstr "Semanal"
 
-#: lib/dran/brain/page_meta.ex:572
+#: lib/dran/brain/page_meta.ex:578
 #, elixir-autogen, elixir-format
 msgid "Yearly"
 msgstr "Anual"
 
-#: lib/dran/brain/page_meta.ex:419
-#: lib/dran/brain/page_meta.ex:435
+#: lib/dran/brain/page_meta.ex:423
+#: lib/dran/brain/page_meta.ex:441
 #, elixir-autogen, elixir-format
 msgid "Yellow"
 msgstr "Amarillo"
@@ -3231,12 +3232,12 @@ msgstr ""
 msgid "Brain reset: deleted %{pages} pages, %{relations} relations, %{versions} versions, %{logs} logs."
 msgstr ""
 
-#: lib/dran/brain/page_meta.ex:576
+#: lib/dran/brain/page_meta.ex:582
 #, elixir-autogen, elixir-format
 msgid "Business"
 msgstr "Negocios"
 
-#: lib/dran/brain/page_meta.ex:575
+#: lib/dran/brain/page_meta.ex:581
 #, elixir-autogen, elixir-format
 msgid "Coding"
 msgstr "Código"
@@ -3271,7 +3272,7 @@ msgstr ""
 msgid "Elimina todas las páginas, relaciones, versiones y registros de actividad del contexto actual. El contexto en sí se conserva. Esta acción no se puede deshacer."
 msgstr ""
 
-#: lib/dran/brain/page_meta.ex:579
+#: lib/dran/brain/page_meta.ex:585
 #, elixir-autogen, elixir-format
 msgid "Finance"
 msgstr "Finanzas"
@@ -3281,7 +3282,7 @@ msgstr "Finanzas"
 msgid "HTTP %{status}"
 msgstr ""
 
-#: lib/dran/brain/page_meta.ex:577
+#: lib/dran/brain/page_meta.ex:583
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Learning"
 msgstr "Re-ranking"
@@ -3296,7 +3297,7 @@ msgstr ""
 msgid "Operaciones destructivas e irreversibles."
 msgstr ""
 
-#: lib/dran/brain/page_meta.ex:580
+#: lib/dran/brain/page_meta.ex:586
 #, elixir-autogen, elixir-format
 msgid "Other"
 msgstr "Otro"
@@ -3306,7 +3307,7 @@ msgstr "Otro"
 msgid "Para confirmar, escribe el slug del contexto:"
 msgstr ""
 
-#: lib/dran/brain/page_meta.ex:574
+#: lib/dran/brain/page_meta.ex:580
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Personal"
 msgstr "Versión"

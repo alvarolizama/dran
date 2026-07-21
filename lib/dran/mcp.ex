@@ -107,7 +107,7 @@ defmodule Dran.MCP do
       - entity: person, company, product, tool, place, event
       - reference: article, paper, video, podcast, book
       - artifact: document, code, design, deliverable, file
-      - goal: has health (green/yellow/red), metric/target_value/current_value/unit/progress, start_date, target_date
+      - goal: has kind (personal/coding/business/learning/health/finance/other), health (green/yellow/red), metric/target_value/current_value/unit/progress, start_date, target_date
       - plan: has kind (personal/coding/business/learning/health/finance/other), horizon (weekly/monthly/quarterly/yearly), period, status (draft/active/done/archived), due_date
       - project: has status (draft/active/on_hold/done/archived), priority, health, health_source (manual/derived), start_date, target_date
       - todo: has kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
@@ -164,7 +164,7 @@ defmodule Dran.MCP do
           "meta" => %{
             "type" => "object",
             "description" =>
-              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, artifact→{kind, filename, mime_type, storage_path}, comparison→{entities, criteria, verdict}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links."
+              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{kind, health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, artifact→{kind, filename, mime_type, storage_path}, comparison→{entities, criteria, verdict}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links."
           },
           "summary" => %{
             "type" => "string",

@@ -92,6 +92,12 @@ defmodule DranWeb.GoalLive do
                   editor_id="goal-editor"
                 />
               <% else %>
+                <%!-- Kind badge --%>
+                <div :if={meta_get(@page.meta, "kind")} class="mb-4">
+                  <span class="px-2 py-0.5 rounded bg-primary/15 text-primary text-xs font-medium">
+                    {String.capitalize(meta_get(@page.meta, "kind"))}
+                  </span>
+                </div>
                 <%!-- Panel de metricas del goal --%>
                 <div class="grid grid-cols-3 gap-4 mb-4 p-4 rounded-lg bg-base-200/50 border border-base-300">
                   <div>

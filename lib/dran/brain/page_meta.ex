@@ -106,6 +106,7 @@ defmodule Dran.Brain.PageMeta do
   @artifact_kinds ~w(document code design deliverable file)
   @query_kinds ~w(factual conceptual how_to opinion)
   @plan_kinds ~w(personal coding business learning health finance other)
+  @goal_kinds ~w(personal coding business learning health finance other)
   @kanban_statuses ~w(backlog this_week today in_progress done cancelled)
   @priorities ~w(low medium high urgent)
   @healths ~w(green yellow red)
@@ -184,7 +185,7 @@ defmodule Dran.Brain.PageMeta do
   end
 
   defp validate_kind(cs, type)
-       when type in ~w(note entity concept reference artifact query plan) do
+       when type in ~w(note entity concept reference artifact query plan goal) do
     kinds = kinds_for(type)
 
     if kinds do
@@ -203,6 +204,7 @@ defmodule Dran.Brain.PageMeta do
   defp kinds_for("artifact"), do: @artifact_kinds
   defp kinds_for("query"), do: @query_kinds
   defp kinds_for("plan"), do: @plan_kinds
+  defp kinds_for("goal"), do: @goal_kinds
   defp kinds_for(_), do: nil
 
   defp validate_meta_for_type(cs, "todo") do
@@ -254,6 +256,7 @@ defmodule Dran.Brain.PageMeta do
   def artifact_kinds, do: @artifact_kinds
   def query_kinds, do: @query_kinds
   def plan_kinds, do: @plan_kinds
+  def goal_kinds, do: @goal_kinds
   def kanban_statuses, do: @kanban_statuses
   def priorities, do: @priorities
   def healths, do: @healths
@@ -432,6 +435,8 @@ defmodule Dran.Brain.PageMeta do
 
   defp meta_fields_edit("goal") do
     [
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@goal_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:select, "health", gettext("Health"),
        [{gettext("Green"), "green"}, {gettext("Yellow"), "yellow"}, {gettext("Red"), "red"}]},
       {:text, "metric", gettext("Metric"), placeholder: "e.g. MRR, users, uptime"},

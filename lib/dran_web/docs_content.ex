@@ -78,7 +78,7 @@ defmodule DranWeb.DocsContent do
 
   Page types:
     project — executive dashboard (status/priority/health), health derived from goals
-    goal    — knowledge page with metrics (metric/target_value/current_value/progress)
+    goal    — knowledge page with kind + metrics (metric/target_value/current_value/progress)
     plan    — strategic doc with kind/horizon/period/status/due_date
     todo    — actionable item with kanban_status and assignee (lives in /kanban)
 
