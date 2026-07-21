@@ -40,7 +40,13 @@ defmodule DranWeb.TagInputTest do
   end
 
   test "datalist renders suggestions for autocomplete" do
-    html = render_tag_input(id: "t5", name: "page[tags]", value: "", suggestions: ["elixir", "phoenix"])
+    html =
+      render_tag_input(
+        id: "t5",
+        name: "page[tags]",
+        value: "",
+        suggestions: ["elixir", "phoenix"]
+      )
 
     assert html =~ ~s(<datalist id="t5-suggestions">)
     assert html =~ ~s(<option value="elixir">)

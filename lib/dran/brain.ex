@@ -121,6 +121,7 @@ defmodule Dran.Brain do
     goal_slug = Keyword.get(opts, :goal_slug)
     plan_slug = Keyword.get(opts, :plan_slug)
     project_slug = Keyword.get(opts, :project_slug)
+    assignee = Keyword.get(opts, :assignee)
     archived = Keyword.get(opts, :archived, false)
     limit = Keyword.get(opts, :limit, 50)
     include_body = Keyword.get(opts, :include_body, false)
@@ -163,6 +164,7 @@ defmodule Dran.Brain do
       |> maybe_filter_status(status)
       |> maybe_filter_owner(owner)
       |> maybe_filter_created_by(created_by)
+      |> maybe_filter_assignee(assignee)
       |> maybe_filter_plan_slug(plan_slug)
       |> maybe_filter_goal_slug(goal_slug)
       |> maybe_filter_project_slug(project_slug)
@@ -208,6 +210,21 @@ defmodule Dran.Brain do
 
   defp maybe_filter_created_by(query, created_by) do
     where(query, [p], p.created_by == ^created_by)
+  end
+
+  # assignee: nil → no filter; "none" → no assignee set; value → exact match.
+  defp maybe_filter_assignee(query, nil), do: query
+
+  defp maybe_filter_assignee(query, "none") do
+    where(
+      query,
+      [p],
+      is_nil(fragment("?->>'assignee'", p.meta)) or fragment("?->>'assignee'", p.meta) == ""
+    )
+  end
+
+  defp maybe_filter_assignee(query, assignee) do
+    where(query, [p], fragment("?->>'assignee'", p.meta) == ^assignee)
   end
 
   # ── Planning hierarchy filters (goal_slug / plan_slug) ─────────────────────

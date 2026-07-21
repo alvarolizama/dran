@@ -416,11 +416,13 @@ defmodule DranWeb.TodoLive do
 
       true ->
         meta = %{"kanban_status" => "backlog", "priority" => "medium"}
-        meta = case params["goal_slug"] do
-          nil -> meta
-          "" -> meta
-          goal -> Map.put(meta, "goal_slug", goal)
-        end
+
+        meta =
+          case params["goal_slug"] do
+            nil -> meta
+            "" -> meta
+            goal -> Map.put(meta, "goal_slug", goal)
+          end
 
         attrs = %{
           "context_id" => context.id,

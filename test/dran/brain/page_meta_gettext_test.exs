@@ -41,19 +41,19 @@ defmodule Dran.Brain.PageMetaGettextTest do
   # We cache it in a module attribute since the file doesn't change during
   # the test run.
   @pot_msgids (
-    pot_path = Path.join([File.cwd!(), "priv", "gettext", "default.pot"])
+                pot_path = Path.join([File.cwd!(), "priv", "gettext", "default.pot"])
 
-    pot_path
-    |> File.read!()
-    |> String.split(~r/\n\n+/)
-    |> Enum.flat_map(fn block ->
-      case Regex.run(~r/^msgid "(.*?)"$/m, block) do
-        [_, msgid] -> [msgid]
-        _ -> []
-      end
-    end)
-    |> MapSet.new()
-  )
+                pot_path
+                |> File.read!()
+                |> String.split(~r/\n\n+/)
+                |> Enum.flat_map(fn block ->
+                  case Regex.run(~r/^msgid "(.*?)"$/m, block) do
+                    [_, msgid] -> [msgid]
+                    _ -> []
+                  end
+                end)
+                |> MapSet.new()
+              )
 
   defp pot_has?(msgid) when is_binary(msgid), do: MapSet.member?(@pot_msgids, msgid)
 
@@ -110,7 +110,18 @@ defmodule Dran.Brain.PageMetaGettextTest do
     test "todo: every option label is the expected msgid" do
       labels = Enum.map(select_pairs("todo"), &elem(&1, 0))
 
-      for expected <- ["Backlog", "This Week", "Today", "In Progress", "Done", "Cancelled", "Low", "Medium", "High", "Urgent"] do
+      for expected <- [
+            "Backlog",
+            "This Week",
+            "Today",
+            "In Progress",
+            "Done",
+            "Cancelled",
+            "Low",
+            "Medium",
+            "High",
+            "Urgent"
+          ] do
         assert expected in labels,
                "expected #{inspect(expected)} among todo option labels, got: #{inspect(labels)}"
       end
@@ -185,20 +196,25 @@ defmodule Dran.Brain.PageMetaGettextTest do
   describe "select option VALUES (DB slugs) are never translated" do
     test "todo: kanban_status values are raw slugs" do
       values = Enum.map(select_pairs("todo"), &elem(&1, 1))
-      for expected <- ~w(backlog this_week today in_progress done cancelled low medium high urgent) do
+
+      for expected <-
+            ~w(backlog this_week today in_progress done cancelled low medium high urgent) do
         assert expected in values
       end
     end
 
     test "project: health, priority, status values are raw slugs" do
       values = Enum.map(select_pairs("project"), &elem(&1, 1))
-      for expected <- ~w(green yellow red low medium high urgent draft active on_hold done archived) do
+
+      for expected <-
+            ~w(green yellow red low medium high urgent draft active on_hold done archived) do
         assert expected in values
       end
     end
 
     test "goal: health values are raw slugs" do
       values = Enum.map(select_pairs("goal"), &elem(&1, 1))
+
       for expected <- ~w(green yellow red) do
         assert expected in values
       end
@@ -206,6 +222,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
     test "plan: horizon and status values are raw slugs" do
       values = Enum.map(select_pairs("plan"), &elem(&1, 1))
+
       for expected <- ~w(weekly monthly quarterly yearly draft active done archived) do
         assert expected in values
       end
@@ -213,6 +230,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
     test "note: kind values are raw slugs (lowercase)" do
       values = Enum.map(select_pairs("note"), &elem(&1, 1))
+
       for expected <- ~w(thought journal idea meeting question quote reminder) do
         assert expected in values
       end
@@ -220,6 +238,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
     test "concept: kind values are raw slugs" do
       values = Enum.map(select_pairs("concept"), &elem(&1, 1))
+
       for expected <- ~w(technique pattern discipline theory) do
         assert expected in values
       end
@@ -227,6 +246,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
     test "entity: kind values are raw slugs" do
       values = Enum.map(select_pairs("entity"), &elem(&1, 1))
+
       for expected <- ~w(person company product tool place event) do
         assert expected in values
       end
@@ -234,6 +254,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
     test "reference: kind values are raw slugs" do
       values = Enum.map(select_pairs("reference"), &elem(&1, 1))
+
       for expected <- ~w(article paper video podcast book) do
         assert expected in values
       end
@@ -241,6 +262,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
     test "artifact: kind values are raw slugs" do
       values = Enum.map(select_pairs("artifact"), &elem(&1, 1))
+
       for expected <- ~w(document code design deliverable file) do
         assert expected in values
       end
@@ -248,7 +270,9 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
     test "query: kind, difficulty, answer_status values are raw slugs" do
       values = Enum.map(select_pairs("query"), &elem(&1, 1))
-      for expected <- ~w(factual conceptual how_to opinion simple intermediate advanced open answered verified) do
+
+      for expected <-
+            ~w(factual conceptual how_to opinion simple intermediate advanced open answered verified) do
         assert expected in values
       end
     end

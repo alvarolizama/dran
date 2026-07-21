@@ -250,7 +250,10 @@ defmodule DranWeb.CoreComponents do
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select truncate", @errors != [] && (@error_class || "select-error")]}
+          class={[
+            @class || "w-full select truncate",
+            @errors != [] && (@error_class || "select-error")
+          ]}
           multiple={@multiple}
           {@rest}
         >

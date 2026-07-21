@@ -140,6 +140,7 @@ agent limits — see [**SKILL.md**](SKILL.md).
 - **Dashboard** — metrics, recent pages, quick access, todo board summary, daily-note status
 - **Kanban board** — full-viewport 6-column board with drag & drop, updates in real time via PubSub when agents create or move todos. The global board at `/kanban` shows every todo in the context with combinable filters (project / goal / plan, each offering All / None / &lt;slug&gt;); per-goal and per-project boards are replaced by filter links into the single board
 - **Planning model (v6)** — independent links, no precedence: `meta.project_slug`, `meta.goal_slug`, and `meta.plan_slug` are three independent, optional slugs. Each one materializes its own `part_of` relation when set, so a todo (or any page) may carry 0, 1, 2, or all 3 simultaneously. There is no rigid hierarchy — every page is an orphan by default, and the three link dimensions are orthogonal
+- **Todo assignment** — todos carry an `assignee` field (free-form string) identifying who executes the task: `alvaro` (human), `hermes` (agent), `claude-code` (coding agent), etc. Combined with `created_by` (provenance), this enables delegation flows between humans and AI agents. Filter in the kanban or via `dran_list_pages` with `assignee` param (`"none"` for unassigned)
 - **In-app documentation** at `/docs` with tabbed guides, MCP reference, and copy-ready code examples
 - **Page detail tabs** — the first tab row on every page detail view is **Contenido / Metadatos / Relaciones / Versiones / Actividad / Grafo** (the graph is a first-class tab backed by the `<:graph>` slot in `page_components`, not a secondary panel). Inside Contenido, per-type sub-tabs surface type-specific metadata (e.g. note kinds, project health, goal metrics). All 11 page types share a single `page_edit_form` component for create/edit
 - **Tag input** — create/edit forms use badge-chip tag input shared across all 11 page types: press Enter or comma to add a tag, Backspace or the × chip to remove one
@@ -380,7 +381,7 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 | `project`    | Executive dashboards          | —                                                     | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
 | `goal`       | Objectives with target dates  | —                                                     | health (green/yellow/red), target_date, start_date, team, metric, target_value, current_value, unit, progress |
 | `plan`       | Time-horizoned plans          | —                                                     | horizon (weekly/monthly/quarterly/yearly), status (draft/active/done/archived), period, due_date, project_slug, goal_slug |
-| `todo`       | Actionable items              | —                                                     | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), project_slug, goal_slug, plan_slug, due_date |
+| `todo`       | Actionable items              | —                                                     | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), assignee, project_slug, goal_slug, plan_slug, due_date |
 | `comparison` | Side-by-side analyses         | —                                                     | entities, criteria, verdict                        |
 | `query`      | Questions to answer           | factual, conceptual, how_to, opinion                  | kind, difficulty (simple/intermediate/advanced), answer_status (open/answered/verified), answered_by |
 
@@ -563,8 +564,8 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `dran_create_page`      | Create a new page with type-specific meta                              |
 | `dran_update_page`      | Update an existing page (title, body, tags, meta)                      |
 | `dran_delete_page`      | Delete a page by slug (cascades to relations + versions)               |
-| `dran_create_todo`      | Create a todo with kanban status, priority, due date                   |
-| `dran_update_todo`      | Update a todo's status/priority/due date (merges meta, no full replace)|
+| `dran_create_todo`      | Create a todo with kanban status, priority, due date, assignee          |
+| `dran_update_todo`      | Update a todo's status/priority/due date/assignee (merges meta)         |
 | `dran_create_relation`  | Create a typed relation between two pages                              |
 | `dran_delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
 | `dran_rename_slug`      | Rename a page's slug                                                   |

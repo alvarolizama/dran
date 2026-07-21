@@ -80,7 +80,7 @@ defmodule DranWeb.DocsContent do
     project — executive dashboard (status/priority/health), health derived from goals
     goal    — knowledge page with metrics (metric/target_value/current_value/progress)
     plan    — strategic doc with horizon/period/status/due_date
-    todo    — actionable item with kanban_status (lives in /kanban)
+    todo    — actionable item with kanban_status and assignee (lives in /kanban)
 
   Sidebar:
     Dashboard, Kanban (top); Knowledge (Notes, Concepts, Entities,

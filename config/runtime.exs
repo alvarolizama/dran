@@ -102,8 +102,12 @@ if config_env() == :prod do
   # or DISABLE_FORCE_SSL=1, which disables the HTTPS redirect.
   force_ssl_opts =
     cond do
-      System.get_env("DISABLE_FORCE_SSL") == "1" -> []
-      scheme == "http" -> []
+      System.get_env("DISABLE_FORCE_SSL") == "1" ->
+        []
+
+      scheme == "http" ->
+        []
+
       true ->
         [
           force_ssl: [

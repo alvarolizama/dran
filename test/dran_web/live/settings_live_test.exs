@@ -92,6 +92,7 @@ defmodule DranWeb.SettingsLiveTest do
 
     assert brain_tuning_idx != nil, "expected to find \"#{t("Brain tuning")}\" in HTML"
     assert inference_api_idx != nil, "expected to find \"#{t("Inference API")}\" in HTML"
+
     assert brain_tuning_idx < inference_api_idx,
            "expected Brain tuning to appear before Inference API"
   end

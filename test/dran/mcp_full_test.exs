@@ -519,6 +519,31 @@ defmodule Dran.MCPFullTest do
       assert todo.meta["priority"] == "high"
     end
 
+    test "sets assignee in meta", %{context: ctx} do
+      result =
+        call_tool("dran_create_todo", %{
+          "context" => "personal",
+          "title" => "Assigned Todo",
+          "slug" => "assigned-todo-test",
+          "assignee" => "hermes"
+        })
+
+      assert result =~ "Created todo"
+      todo = Brain.get_page_by_slug("assigned-todo-test", ctx.id)
+      assert todo.meta["assignee"] == "hermes"
+    end
+
+    test "without assignee leaves it absent", %{context: ctx} do
+      call_tool("dran_create_todo", %{
+        "context" => "personal",
+        "title" => "Unassigned Todo",
+        "slug" => "unassigned-todo-test"
+      })
+
+      todo = Brain.get_page_by_slug("unassigned-todo-test", ctx.id)
+      refute Map.has_key?(todo.meta, "assignee")
+    end
+
     test "defaults to backlog status", %{context: ctx} do
       call_tool("dran_create_todo", %{
         "context" => "personal",
@@ -610,6 +635,30 @@ defmodule Dran.MCPFullTest do
       assert refreshed.meta["kanban_status"] == "today"
       assert refreshed.meta["priority"] == "low"
       assert refreshed.meta["due_date"] == "2026-01-01"
+    end
+
+    test "updates assignee via merge", %{context: ctx} do
+      {:ok, todo} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Assign Todo",
+          slug: "assign-update-test",
+          page_type: "todo",
+          meta: %{"kanban_status" => "backlog", "assignee" => "alvaro"}
+        })
+
+      result =
+        call_tool("dran_update_todo", %{
+          "context" => "personal",
+          "slug" => "assign-update-test",
+          "assignee" => "hermes"
+        })
+
+      assert result =~ "Updated todo"
+      refreshed = Brain.get_page!(todo.id)
+      assert refreshed.meta["assignee"] == "hermes"
+      # kanban_status preserved by merge
+      assert refreshed.meta["kanban_status"] == "backlog"
     end
 
     test "updates links independently", %{context: ctx} do
@@ -876,6 +925,64 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~ "creator-filter-test"
+    end
+
+    test "filters by assignee", %{context: ctx} do
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Assigned to Hermes",
+          slug: "assignee-filter-hermes",
+          page_type: "todo",
+          meta: %{"kanban_status" => "backlog", "assignee" => "hermes"}
+        })
+
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Assigned to Alvaro",
+          slug: "assignee-filter-alvaro",
+          page_type: "todo",
+          meta: %{"kanban_status" => "backlog", "assignee" => "alvaro"}
+        })
+
+      result =
+        call_tool("dran_list_pages", %{
+          "context" => "personal",
+          "assignee" => "hermes"
+        })
+
+      assert result =~ "assignee-filter-hermes"
+      refute result =~ "assignee-filter-alvaro"
+    end
+
+    test "filters unassigned todos with 'none'", %{context: ctx} do
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Unassigned Todo",
+          slug: "assignee-filter-none",
+          page_type: "todo",
+          meta: %{"kanban_status" => "backlog"}
+        })
+
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Assigned Todo",
+          slug: "assignee-filter-set",
+          page_type: "todo",
+          meta: %{"kanban_status" => "backlog", "assignee" => "hermes"}
+        })
+
+      result =
+        call_tool("dran_list_pages", %{
+          "context" => "personal",
+          "assignee" => "none"
+        })
+
+      assert result =~ "assignee-filter-none"
+      refute result =~ "assignee-filter-set"
     end
 
     test "respects limit" do

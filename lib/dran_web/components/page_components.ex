@@ -7,7 +7,9 @@ defmodule DranWeb.PageComponents do
   use Gettext, backend: DranWeb.Gettext
   import Phoenix.HTML, only: [raw: 1]
   import DranWeb.CoreComponents, only: [icon: 1, input: 1]
-  import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
+
+  import DranWeb.MarkdownEditorComponents,
+    only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
 
   alias Dran.Brain
   alias Dran.Brain.Page

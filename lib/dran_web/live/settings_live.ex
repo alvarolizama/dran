@@ -20,23 +20,26 @@ defmodule DranWeb.SettingsLive do
   # attribute) because it contains anonymous fns which cannot be escaped.
   defp model_purposes do
     [
-      {"model_chat", &Config.env_chat_model/0,
-       fn -> gettext("Chat / agentes") end,
-       fn -> gettext("Model used for chat completions, agent reasoning, and title generation.") end},
-      {"model_embedding", &Config.env_embedding_model/0,
-       fn -> gettext("Embeddings") end,
+      {"model_chat", &Config.env_chat_model/0, fn -> gettext("Chat / agentes") end,
+       fn ->
+         gettext("Model used for chat completions, agent reasoning, and title generation.")
+       end},
+      {"model_embedding", &Config.env_embedding_model/0, fn -> gettext("Embeddings") end,
        fn -> gettext("Model used to vectorize page bodies for semantic search and relations.") end},
-      {"model_rerank", &Config.env_rerank_model/0,
-       fn -> gettext("Re-ranking") end,
-       fn -> gettext("Model used to re-rank semantic search results by relevance to the query.") end},
+      {"model_rerank", &Config.env_rerank_model/0, fn -> gettext("Re-ranking") end,
+       fn ->
+         gettext("Model used to re-rank semantic search results by relevance to the query.")
+       end},
       {"model_markitdown", &Config.env_markitdown_model/0,
        fn -> gettext("Extracción de documentos") end,
-       fn -> gettext("Model used to convert attached files (PDF, Office) into markdown for ingestion.") end},
-      {"model_asr", &Config.env_asr_model/0,
-       fn -> gettext("Transcripción de audio") end,
+       fn ->
+         gettext(
+           "Model used to convert attached files (PDF, Office) into markdown for ingestion."
+         )
+       end},
+      {"model_asr", &Config.env_asr_model/0, fn -> gettext("Transcripción de audio") end,
        fn -> gettext("Model used to transcribe audio attachments into text.") end},
-      {"model_vision", &Config.env_vision_model/0,
-       fn -> gettext("Visión") end,
+      {"model_vision", &Config.env_vision_model/0, fn -> gettext("Visión") end,
        fn -> gettext("Model used to describe images attached to pages (multimodal vision).") end}
     ]
   end
@@ -125,7 +128,8 @@ defmodule DranWeb.SettingsLive do
             socket
             |> put_flash(
               :info,
-              gettext("Brain reset: deleted %{pages} pages, %{relations} relations, %{versions} versions, %{logs} logs.",
+              gettext(
+                "Brain reset: deleted %{pages} pages, %{relations} relations, %{versions} versions, %{logs} logs.",
                 pages: counts.pages,
                 relations: counts.relations,
                 versions: counts.versions,
@@ -140,7 +144,8 @@ defmodule DranWeb.SettingsLive do
           {:noreply, put_flash(socket, :error, gettext("Could not reset brain. Check the logs."))}
       end
     else
-      {:noreply, put_flash(socket, :error, gettext("Confirmation text does not match the context slug."))}
+      {:noreply,
+       put_flash(socket, :error, gettext("Confirmation text does not match the context slug."))}
     end
   end
 
@@ -227,9 +232,7 @@ defmodule DranWeb.SettingsLive do
           <div>
             <h1 class="text-title">{gettext("Settings")}</h1>
             <p class="text-caption mt-1">
-              {gettext(
-                "Personalize your brain and review the environment configuration."
-              )}
+              {gettext("Personalize your brain and review the environment configuration.")}
             </p>
           </div>
 
@@ -259,14 +262,22 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Status")}
                 env="DRAN_INFERENCE_API_URL"
-                description={gettext("Whether the inference API is configured. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Whether the inference API is configured. Read-only — set via environment variable."
+                  )
+                }
               >
                 <.status_badge active={Config.enabled?()} />
               </.config_row>
               <.config_row
                 label={gettext("API URL")}
                 env="DRAN_INFERENCE_API_URL"
-                description={gettext("Base URL of the OpenAI-compatible inference server. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Base URL of the OpenAI-compatible inference server. Read-only — set via environment variable."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">
                   {Config.base_url() || "—"}
@@ -275,7 +286,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("API Key")}
                 env="DRAN_INFERENCE_API_KEY"
-                description={gettext("Bearer token sent to the inference API. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Bearer token sent to the inference API. Read-only — set via environment variable."
+                  )
+                }
               >
                 <span class="text-sm text-base-content/60">
                   {if Config.api_key(), do: "••••••••", else: "—"}
@@ -284,7 +299,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Chat model")}
                 env="DRAN_INFERENCE_CHAT_MODEL"
-                description={gettext("Effective model for chat and agents (web override or env default). See “Modelos” above to override.")}
+                description={
+                  gettext(
+                    "Effective model for chat and agents (web override or env default). See “Modelos” above to override."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">
                   {Config.chat_model() || "—"}
@@ -293,7 +312,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Embedding model")}
                 env="DRAN_INFERENCE_EMBEDDING_MODEL"
-                description={gettext("Effective model for embeddings (web override or env default). See “Modelos” above to override.")}
+                description={
+                  gettext(
+                    "Effective model for embeddings (web override or env default). See “Modelos” above to override."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">
                   {Config.embedding_model() || "—"}
@@ -301,14 +324,22 @@ defmodule DranWeb.SettingsLive do
               </.config_row>
               <.config_row
                 label={gettext("Embedding dimensions")}
-                description={gettext("Vector dimensionality returned by the embedding model. Read-only — fixed at 1024.")}
+                description={
+                  gettext(
+                    "Vector dimensionality returned by the embedding model. Read-only — fixed at 1024."
+                  )
+                }
               >
                 <span class="text-sm text-base-content/60">{Config.embedding_dimensions()}</span>
               </.config_row>
               <.config_row
                 label={gettext("Embedding body limit")}
                 env="DRAN_EMBEDDING_BODY_LIMIT"
-                description={gettext("Maximum text length (in characters) sent to the embedding API per call. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Maximum text length (in characters) sent to the embedding API per call. Read-only — set via environment variable."
+                  )
+                }
               >
                 <span class="text-sm text-base-content/60">
                   {Config.embedding_body_limit()} {gettext("chars")}
@@ -317,7 +348,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Rerank model")}
                 env="DRAN_INFERENCE_RERANK_MODEL"
-                description={gettext("Effective model for re-ranking search results (web override or env default). See “Modelos” above to override.")}
+                description={
+                  gettext(
+                    "Effective model for re-ranking search results (web override or env default). See “Modelos” above to override."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">
                   {Config.rerank_model() || "—"}
@@ -326,28 +361,44 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Rerank enabled")}
                 env="DRAN_INFERENCE_USE_RERANK"
-                description={gettext("Whether semantic search results are re-ranked by relevance. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Whether semantic search results are re-ranked by relevance. Read-only — set via environment variable."
+                  )
+                }
               >
                 <.status_badge active={Config.use_rerank?()} />
               </.config_row>
               <.config_row
                 label={gettext("Vision model")}
                 env="DRAN_INFERENCE_VISION_MODEL"
-                description={gettext("Effective model for image description (web override or env default). See “Modelos” above to override.")}
+                description={
+                  gettext(
+                    "Effective model for image description (web override or env default). See “Modelos” above to override."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">{Config.vision_model()}</code>
               </.config_row>
               <.config_row
                 label={gettext("ASR model")}
                 env="DRAN_INFERENCE_ASR_MODEL"
-                description={gettext("Effective model for audio transcription (web override or env default). See “Modelos” above to override.")}
+                description={
+                  gettext(
+                    "Effective model for audio transcription (web override or env default). See “Modelos” above to override."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">{Config.asr_model()}</code>
               </.config_row>
               <.config_row
                 label={gettext("MarkItDown model")}
                 env="DRAN_INFERENCE_MARKITDOWN_MODEL"
-                description={gettext("Effective model for document-to-markdown conversion (web override or env default). See “Modelos” above to override.")}
+                description={
+                  gettext(
+                    "Effective model for document-to-markdown conversion (web override or env default). See “Modelos” above to override."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">
                   {Config.markitdown_model() || "—"}
@@ -356,7 +407,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Request timeout")}
                 env="DRAN_INFERENCE_TIMEOUT"
-                description={gettext("HTTP timeout for inference API requests, in milliseconds. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "HTTP timeout for inference API requests, in milliseconds. Read-only — set via environment variable."
+                  )
+                }
               >
                 <span class="text-sm text-base-content/60">{Config.timeout()} {gettext("ms")}</span>
               </.config_row>
@@ -370,7 +425,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Max steps")}
                 env="AGENT_MAX_STEPS"
-                description={gettext("Maximum number of steps an autonomous agent can take in a single run. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Maximum number of steps an autonomous agent can take in a single run. Read-only — set via environment variable."
+                  )
+                }
               >
                 <span class="text-sm text-base-content/60">
                   {Application.get_env(:dran, :agent_max_steps, 150)}
@@ -379,7 +438,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Per-step timeout")}
                 env="AGENT_PER_STEP_TIMEOUT"
-                description={gettext("Maximum wall-clock time per agent step, in milliseconds. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Maximum wall-clock time per agent step, in milliseconds. Read-only — set via environment variable."
+                  )
+                }
               >
                 <span class="text-sm text-base-content/60">
                   {Application.get_env(:dran, :agent_per_step_timeout, 120_000)} {gettext("ms")}
@@ -395,7 +458,11 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Status")}
                 env="FIRECRAWL_API_KEY"
-                description={gettext("Whether Firecrawl web search and scraping is configured. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Whether Firecrawl web search and scraping is configured. Read-only — set via environment variable."
+                  )
+                }
               >
                 <.status_badge active={Dran.Firecrawl.enabled?()} />
               </.config_row>
@@ -410,7 +477,11 @@ defmodule DranWeb.SettingsLive do
               </.config_row>
               <.config_row
                 label={gettext("Base URL")}
-                description={gettext("Firecrawl API base URL. Read-only — hardcoded to the official Firecrawl endpoint.")}
+                description={
+                  gettext(
+                    "Firecrawl API base URL. Read-only — hardcoded to the official Firecrawl endpoint."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">https://api.firecrawl.dev/v1</code>
               </.config_row>
@@ -424,16 +495,25 @@ defmodule DranWeb.SettingsLive do
               <.config_row
                 label={gettext("Directory")}
                 env="UPLOADS_DIR"
-                description={gettext("Filesystem directory where uploaded attachments are stored. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Filesystem directory where uploaded attachments are stored. Read-only — set via environment variable."
+                  )
+                }
               >
                 <code class="text-sm font-mono text-primary">
-                  {Application.get_env(:dran, :uploads, []) |> Keyword.get(:dir, "priv/static/uploads")}
+                  {Application.get_env(:dran, :uploads, [])
+                  |> Keyword.get(:dir, "priv/static/uploads")}
                 </code>
               </.config_row>
               <.config_row
                 label={gettext("Max file size")}
                 env="UPLOADS_MAX_SIZE"
-                description={gettext("Maximum allowed size for a single uploaded file. Read-only — set via environment variable.")}
+                description={
+                  gettext(
+                    "Maximum allowed size for a single uploaded file. Read-only — set via environment variable."
+                  )
+                }
               >
                 <span class="text-sm text-base-content/60">
                   {Application.get_env(:dran, :uploads, [])
@@ -650,7 +730,9 @@ defmodule DranWeb.SettingsLive do
         class="px-5 py-5 space-y-5"
       >
         <p :if={match?({:error, _}, @models_result)} class="text-xs text-base-content/60">
-          {gettext("API no disponible — los modelos no pueden listarse. Aún puedes escribir un override manual, o revisa DRAN_INFERENCE_API_URL.")}
+          {gettext(
+            "API no disponible — los modelos no pueden listarse. Aún puedes escribir un override manual, o revisa DRAN_INFERENCE_API_URL."
+          )}
         </p>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -718,6 +800,7 @@ defmodule DranWeb.SettingsLive do
 
   defp maybe_prepend(list, nil), do: list
   defp maybe_prepend(list, ""), do: list
+
   defp maybe_prepend(list, value) do
     if value in list, do: list, else: [value | list]
   end
@@ -775,7 +858,9 @@ defmodule DranWeb.SettingsLive do
             {gettext("Borrar todo el contenido")}
           </h3>
           <p class="text-xs text-base-content/60 mt-1">
-            {gettext("Elimina todas las páginas, relaciones, versiones y registros de actividad del contexto actual. El contexto en sí se conserva. Esta acción no se puede deshacer.")}
+            {gettext(
+              "Elimina todas las páginas, relaciones, versiones y registros de actividad del contexto actual. El contexto en sí se conserva. Esta acción no se puede deshacer."
+            )}
           </p>
         </div>
 
@@ -799,7 +884,11 @@ defmodule DranWeb.SettingsLive do
           </div>
           <button
             type="submit"
-            data-confirm={gettext("¿Estás seguro? Esto borrará TODO el contenido del contexto. No se puede deshacer.")}
+            data-confirm={
+              gettext(
+                "¿Estás seguro? Esto borrará TODO el contenido del contexto. No se puede deshacer."
+              )
+            }
             class="btn btn-error btn-sm"
           >
             <.icon name="hero-trash" class="size-4" />

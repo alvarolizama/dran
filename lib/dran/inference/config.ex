@@ -51,7 +51,8 @@ defmodule Dran.Inference.Config do
   def asr_model, do: model_or_env("asr", fn -> get(:asr_model) || @default_models.asr end)
 
   @spec vision_model :: String.t()
-  def vision_model, do: model_or_env("vision", fn -> get(:vision_model) || @default_models.vision end)
+  def vision_model,
+    do: model_or_env("vision", fn -> get(:vision_model) || @default_models.vision end)
 
   # Env-only model getters (bypass DB overrides). Used by the settings UI to
   # label which option is the env default and to compute the effective model

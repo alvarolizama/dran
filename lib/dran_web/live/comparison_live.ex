@@ -87,7 +87,8 @@ defmodule DranWeb.ComparisonLive do
                   </div>
                 </div>
               <% end %>
-            </div>          </:tabs>
+            </div>
+          </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
         <.page_list

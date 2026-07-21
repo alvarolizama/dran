@@ -307,6 +307,11 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" => "Due date in YYYY-MM-DD format (optional)."
           },
+          "assignee" => %{
+            "type" => "string",
+            "description" =>
+              "Who will execute this todo (optional). Free-form string identifying the actor — e.g. 'alvaro' (human), 'hermes' (agent), 'claude-code' (coding agent). Omit for unassigned inbox items."
+          },
           "owner" => %{
             "type" => "string",
             "description" => "Owner identity for the todo (defaults to 'agent')."
@@ -498,6 +503,11 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" =>
               "Optional filter: only pages whose `created_by` (provenance) matches this value."
+          },
+          "assignee" => %{
+            "type" => "string",
+            "description" =>
+              "Optional filter for todos: only todos whose meta.assignee matches this value. Use the literal value 'none' to list unassigned todos (no assignee)."
           }
         },
         "required" => ["context"]
@@ -532,6 +542,11 @@ defmodule Dran.MCP do
           "due_date" => %{
             "type" => "string",
             "description" => "New due date in YYYY-MM-DD format (optional)."
+          },
+          "assignee" => %{
+            "type" => "string",
+            "description" =>
+              "Reassign the todo to a different actor (optional). Free-form string — e.g. 'alvaro', 'hermes', 'claude-code'."
           },
           "project_slug" => %{
             "type" => "string",
@@ -996,6 +1011,7 @@ defmodule Dran.MCP do
         |> maybe_put_meta("plan_slug", args["plan_slug"])
         |> maybe_put_meta("priority", args["priority"])
         |> maybe_put_meta("due_date", args["due_date"])
+        |> maybe_put_meta("assignee", args["assignee"])
 
       attrs = %{
         context_id: context.id,
@@ -1175,6 +1191,11 @@ defmodule Dran.MCP do
           do: Keyword.put(opts, :created_by, args["created_by"]),
           else: opts
 
+      opts =
+        if args["assignee"],
+          do: Keyword.put(opts, :assignee, args["assignee"]),
+          else: opts
+
       pages = Brain.list_pages(opts)
 
       lines =
@@ -1208,6 +1229,7 @@ defmodule Dran.MCP do
             |> maybe_put_meta("project_slug", args["project_slug"])
             |> maybe_put_meta("goal_slug", args["goal_slug"])
             |> maybe_put_meta("plan_slug", args["plan_slug"])
+            |> maybe_put_meta("assignee", args["assignee"])
 
           attrs = %{"meta" => new_meta}
           attrs = Map.put(attrs, "updated_by", "agent")

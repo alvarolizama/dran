@@ -413,8 +413,12 @@ defmodule Dran.Brain.PageMeta do
       {:select, "health", gettext("Health"),
        [{gettext("Green"), "green"}, {gettext("Yellow"), "yellow"}, {gettext("Red"), "red"}]},
       {:select, "priority", gettext("Priority"),
-       [{gettext("Low"), "low"}, {gettext("Medium"), "medium"}, {gettext("High"), "high"},
-        {gettext("Urgent"), "urgent"}]},
+       [
+         {gettext("Low"), "low"},
+         {gettext("Medium"), "medium"},
+         {gettext("High"), "high"},
+         {gettext("Urgent"), "urgent"}
+       ]},
       {:date, "start_date", gettext("Start date")},
       {:date, "target_date", gettext("Target date")}
     ]
@@ -447,9 +451,14 @@ defmodule Dran.Brain.PageMeta do
          {gettext("Cancelled"), "cancelled"}
        ]},
       {:select, "priority", gettext("Priority"),
-       [{gettext("Low"), "low"}, {gettext("Medium"), "medium"}, {gettext("High"), "high"},
-        {gettext("Urgent"), "urgent"}]},
+       [
+         {gettext("Low"), "low"},
+         {gettext("Medium"), "medium"},
+         {gettext("High"), "high"},
+         {gettext("Urgent"), "urgent"}
+       ]},
       {:date, "due_date", gettext("Due date")},
+      {:text, "assignee", gettext("Assignee"), placeholder: "alvaro, hermes, claude-code..."},
       {:slug_select, "project_slug", gettext("Project"), type: "project"},
       {:slug_select, "goal_slug", gettext("Goal"), type: "goal"},
       {:slug_select, "plan_slug", gettext("Plan"), type: "plan"}

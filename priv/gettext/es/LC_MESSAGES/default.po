@@ -119,6 +119,11 @@ msgstr "¿Estás seguro? No se puede deshacer."
 msgid "Artifacts"
 msgstr "Artefactos"
 
+#: lib/dran/brain/page_meta.ex:461
+#, elixir-autogen, elixir-format
+msgid "Assignee"
+msgstr "Responsable"
+
 #: lib/dran_web/live/artifact_live.ex:38
 #: lib/dran_web/live/comparison_live.ex:38
 #: lib/dran_web/live/concept_live.ex:36

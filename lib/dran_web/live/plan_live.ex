@@ -132,7 +132,8 @@ defmodule DranWeb.PlanLive do
               <p :if={@plan_todos == []} class="text-sm text-base-content/40">
                 {gettext("No todos linked to this plan.")}
               </p>
-            </div>          </:tabs>
+            </div>
+          </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
         <.page_list

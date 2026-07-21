@@ -1125,7 +1125,7 @@ defmodule DranWeb.DocsLive do
               <td class="px-4 py-2">Actionable items with kanban status</td>
               <td class="px-4 py-2 text-xs text-base-content/40">—</td>
               <td class="px-4 py-2 text-xs">
-                kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), goal_slug, plan_slug, due_date
+                kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), assignee, goal_slug, plan_slug, due_date
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
@@ -1210,6 +1210,12 @@ defmodule DranWeb.DocsLive do
             required="no"
             desc="Filter by plan slug ('none' for orphans)"
           />
+          <:param
+            name="assignee"
+            type="string"
+            required="no"
+            desc="Filter todos by assignee ('none' for unassigned)"
+          />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
         </.mcp_tool>
 
@@ -1284,18 +1290,30 @@ defmodule DranWeb.DocsLive do
           />
           <:param name="priority" type="string" required="no" desc="low, medium, high, urgent" />
           <:param name="due_date" type="string" required="no" desc="YYYY-MM-DD" />
+          <:param
+            name="assignee"
+            type="string"
+            required="no"
+            desc="Who executes this todo (alvaro, hermes, claude-code...)"
+          />
           <:param name="body" type="string" required="no" desc="Todo description (markdown)" />
         </.mcp_tool>
 
         <.mcp_tool
           name="dran_update_todo"
-          desc="Update a todo's status, priority, due date, goal, or plan. Merges meta — only pass changed fields."
+          desc="Update a todo's status, priority, due date, assignee, goal, or plan. Merges meta — only pass changed fields."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Todo slug to update" />
           <:param name="kanban_status" type="string" required="no" desc="New kanban status" />
           <:param name="priority" type="string" required="no" desc="New priority" />
           <:param name="due_date" type="string" required="no" desc="New due date YYYY-MM-DD" />
+          <:param
+            name="assignee"
+            type="string"
+            required="no"
+            desc="Reassign todo (alvaro, hermes, claude-code...)"
+          />
           <:param name="goal_slug" type="string" required="no" desc="New goal slug" />
           <:param name="plan_slug" type="string" required="no" desc="New plan slug" />
           <:param name="title" type="string" required="no" desc="New title" />
