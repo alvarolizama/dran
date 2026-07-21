@@ -197,6 +197,11 @@ defmodule DranWeb.TodoLive do
             <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
 
             <div :if={@active_tab == "content"} class="space-y-4">
+              <div :if={meta_get(@page.meta, "kind")} class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-primary/15 text-primary text-xs font-medium">
+                  {String.capitalize(meta_get(@page.meta, "kind"))}
+                </span>
+              </div>
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-caption mr-1">{gettext("Status:")}</span>
                 <button
@@ -515,6 +520,9 @@ defmodule DranWeb.TodoLive do
   # ── Local display helpers (design-system colors) ──
   # These shadow the imported TodoHelpers versions to use semantic
   # color tokens (error/warning/info) instead of raw Tailwind palettes.
+
+  defp meta_get(meta, key) when is_map(meta), do: Map.get(meta, key)
+  defp meta_get(nil, _key), do: nil
 
   defp priority_badge_class(page) do
     case priority(page) do

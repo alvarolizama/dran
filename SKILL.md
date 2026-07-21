@@ -227,7 +227,7 @@ There is no dedicated dran_search agent; for dran_search-only tasks use `dran_se
 | `project` | Larger initiatives that group goals/plans/todos | — | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
 | `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other | kind, health (green/yellow/red), metric, target_value, current_value, unit, progress, progress_manual, start_date, target_date, team |
 | `plan` | Time-horizoned plans | personal, coding, business, learning, health, finance, other | kind, horizon, status (draft/active/done/archived), period, project_slug, goal_slug |
-| `todo` | Actionable items | — | kanban_status, priority, due_date, project_slug, goal_slug, plan_slug, assignee |
+| `todo` | Actionable items | personal, coding, business, learning, health, finance, other | kind, kanban_status, priority, due_date, project_slug, goal_slug, plan_slug, assignee |
 | `comparison` | Side-by-side analyses | — | entities, criteria, verdict |
 | `query` | Questions with answers | factual, conceptual, how_to, opinion | kind, difficulty, answer_status, answered_by |
 
@@ -281,6 +281,7 @@ Each slug is set independently in meta; each materializes its own part_of relati
 | `entity` | `kind` | person, company, product, tool, place, event |
 | `reference` | `kind` | article, paper, video, podcast, book |
 | `artifact` | `kind` | document, code, design, deliverable, file |
+| `todo` | `kind` | personal, coding, business, learning, health, finance, other |
 | `todo` | `kanban_status` | backlog, this_week, today, in_progress, done, cancelled |
 | `todo` | `priority` | low, medium, high, urgent |
 | `project` | `status` | draft, active, on_hold, done, archived |

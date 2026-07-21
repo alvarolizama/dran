@@ -1127,7 +1127,9 @@ defmodule DranWeb.DocsLive do
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">todo</td>
               <td class="px-4 py-2">Actionable items with kanban status</td>
-              <td class="px-4 py-2 text-xs text-base-content/40">—</td>
+              <td class="px-4 py-2 text-xs">
+                personal, coding, business, learning, health, finance, other
+              </td>
               <td class="px-4 py-2 text-xs">
                 kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), assignee, goal_slug, plan_slug, due_date
               </td>
