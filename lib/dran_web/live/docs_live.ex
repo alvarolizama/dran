@@ -1117,7 +1117,7 @@ defmodule DranWeb.DocsLive do
               <td class="px-4 py-2">Time-horizoned plans</td>
               <td class="px-4 py-2 text-xs text-base-content/40">—</td>
               <td class="px-4 py-2 text-xs">
-                horizon (weekly/monthly/quarterly/yearly), status, period, goal_slug
+                kind (personal/coding/business/learning/health/finance/other), horizon (weekly/monthly/quarterly/yearly), status, period, goal_slug
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">

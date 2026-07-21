@@ -105,6 +105,7 @@ defmodule Dran.Brain.PageMeta do
   @reference_kinds ~w(article paper video podcast book)
   @artifact_kinds ~w(document code design deliverable file)
   @query_kinds ~w(factual conceptual how_to opinion)
+  @plan_kinds ~w(personal coding business learning health finance other)
   @kanban_statuses ~w(backlog this_week today in_progress done cancelled)
   @priorities ~w(low medium high urgent)
   @healths ~w(green yellow red)
@@ -182,7 +183,8 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  defp validate_kind(cs, type) when type in ~w(note entity concept reference artifact query) do
+  defp validate_kind(cs, type)
+       when type in ~w(note entity concept reference artifact query plan) do
     kinds = kinds_for(type)
 
     if kinds do
@@ -200,6 +202,7 @@ defmodule Dran.Brain.PageMeta do
   defp kinds_for("reference"), do: @reference_kinds
   defp kinds_for("artifact"), do: @artifact_kinds
   defp kinds_for("query"), do: @query_kinds
+  defp kinds_for("plan"), do: @plan_kinds
   defp kinds_for(_), do: nil
 
   defp validate_meta_for_type(cs, "todo") do
@@ -250,6 +253,7 @@ defmodule Dran.Brain.PageMeta do
   def reference_kinds, do: @reference_kinds
   def artifact_kinds, do: @artifact_kinds
   def query_kinds, do: @query_kinds
+  def plan_kinds, do: @plan_kinds
   def kanban_statuses, do: @kanban_statuses
   def priorities, do: @priorities
   def healths, do: @healths
@@ -392,6 +396,8 @@ defmodule Dran.Brain.PageMeta do
 
   defp meta_fields_edit("plan") do
     [
+      {:select, "kind", gettext("Kind"),
+       Enum.map(@plan_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:select, "horizon", gettext("Horizon"),
        Enum.map(@horizons, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:select, "status", gettext("Status"),
@@ -564,7 +570,15 @@ defmodule Dran.Brain.PageMeta do
       "weekly" => gettext("Weekly"),
       "monthly" => gettext("Monthly"),
       "quarterly" => gettext("Quarterly"),
-      "yearly" => gettext("Yearly")
+      "yearly" => gettext("Yearly"),
+      # ── plan kinds ──────────────────────────────────────────────────────
+      "personal" => gettext("Personal"),
+      "coding" => gettext("Coding"),
+      "business" => gettext("Business"),
+      "learning" => gettext("Learning"),
+      "health" => gettext("Health"),
+      "finance" => gettext("Finance"),
+      "other" => gettext("Other")
     }
   end
 end

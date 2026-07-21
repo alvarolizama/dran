@@ -70,8 +70,14 @@ defmodule DranWeb.PlanLive do
                   editor_id="plan-editor"
                 />
               <% else %>
-                <%!-- Status + horizon + period + due_date panel (§7.4) --%>
-                <div class="flex items-center gap-3 mb-4 text-sm">
+                <%!-- Status + kind + horizon + period + due_date panel (§7.4) --%>
+                <div class="flex items-center gap-3 mb-4 text-sm flex-wrap">
+                  <span
+                    :if={meta_get(@page.meta, "kind")}
+                    class="px-2 py-0.5 rounded bg-primary/15 text-primary text-xs font-medium"
+                  >
+                    {String.capitalize(meta_get(@page.meta, "kind"))}
+                  </span>
                   <span class={"px-2 py-0.5 rounded " <> plan_status_class(@page)}>
                     {String.capitalize(meta_get(@page.meta, "status") || "draft")}
                   </span>
