@@ -55,6 +55,75 @@ defmodule Dran.BrainTest do
 
       assert page.slug == "que-onda-con-la-tantrica"
     end
+
+    test "auto-deduplicates slug on collision with hex suffix", %{context: ctx} do
+      {:ok, first} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Reunión semanal",
+          page_type: "note",
+          body: "x"
+        })
+
+      {:ok, second} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Reunión semanal",
+          page_type: "note",
+          body: "y"
+        })
+
+      assert first.slug == "reunion-semanal"
+      # Second page should get a hex suffix, not a collision error
+      assert second.slug =~ ~r/^reunion-semanal-[a-f0-9]{6}$/
+      refute second.slug == first.slug
+    end
+
+    test "auto-deduplicates untitled pages", %{context: ctx} do
+      {:ok, first} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "你好世界",
+          page_type: "note",
+          body: "x"
+        })
+
+      {:ok, second} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "你好世界",
+          page_type: "note",
+          body: "y"
+        })
+
+      # Non-ASCII titles slugify to "untitled" — both should still succeed
+      # with dedup, not fail with a unique constraint error.
+      assert first.slug == "untitled"
+      assert second.slug =~ ~r/^untitled-[a-f0-9]{6}$/
+    end
+
+    test "respects explicit slug even if duplicate (returns error)", %{context: ctx} do
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "A",
+          slug: "explicit-dup-test",
+          page_type: "note"
+        })
+
+      {:error, changeset} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "B",
+          slug: "explicit-dup-test",
+          page_type: "note"
+        })
+
+      # When the user explicitly passes a slug, we don't auto-dedup —
+      # we surface the unique constraint error so they can choose a different one.
+      errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)
+      assert errors[:slug] || errors[:context_id]
+    end
   end
 
   describe "embeds auto-resolution" do

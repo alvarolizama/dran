@@ -1240,6 +1240,12 @@ defmodule Dran.MCP do
       relation_type = Map.get(args, "relation_type")
 
       case Brain.delete_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
+        {:error, :source_not_found} ->
+          "Error: source page '#{source_slug}' not found"
+
+        {:error, :target_not_found} ->
+          "Error: target page '#{target_slug}' not found"
+
         {count, []} ->
           "Deleted #{count} relation(s) between '#{source_slug}' and '#{target_slug}'"
 

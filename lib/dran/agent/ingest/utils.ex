@@ -141,7 +141,7 @@ defmodule Dran.Agent.Ingest.Utils do
   @spec ingest_url(Brain.Context.t(), String.t(), String.t(), map()) ::
           {:ok, Brain.Page.t()} | {:error, String.t()}
   def ingest_url(context, url, title, params) do
-    slug = params["slug"] || Slug.slugify(title || title_from_url(url))
+    slug = params["slug"] || Slug.generate(title || title_from_url(url), context.id, "reference")
 
     page_attrs = %{
       context_id: context.id,
@@ -177,7 +177,7 @@ defmodule Dran.Agent.Ingest.Utils do
           {:ok, Brain.Page.t()} | {:error, String.t()}
   def ingest_file(context, url, binary, filename, content_type, params) do
     stored = Uploads.store(context.id, binary, filename, content_type)
-    slug = params["slug"] || Slug.slugify(filename)
+    slug = params["slug"] || Slug.generate(filename, context.id, "reference")
     body = build_file_body(url, stored, filename, content_type, binary)
 
     page_attrs = %{
@@ -299,14 +299,12 @@ defmodule Dran.Agent.Ingest.Utils do
         else
           stored = Uploads.store(context.id, binary, filename, content_type)
           title = Converter.title(filename)
-          slug = Slug.slugify(title)
 
           case Converter.convert(filename, content_type, binary) do
             {:ok, %{body: markdown}} ->
               page_attrs = %{
                 context_id: context.id,
                 title: title,
-                slug: slug,
                 body: markdown,
                 page_type: "note",
                 tags: tags,

@@ -451,7 +451,7 @@ defmodule Dran.Brain do
       if is_binary(slug) and String.trim(slug) != "" do
         slug
       else
-        Dran.Slug.slugify(title)
+        Dran.Slug.generate(title, attrs["context_id"], attrs["page_type"])
       end
 
     attrs
@@ -601,7 +601,9 @@ defmodule Dran.Brain do
         |> Repo.delete_all()
 
       {relations_count, _} =
-        from(r in Relation, where: r.source_id in subquery(page_ids_sub) or r.target_id in subquery(page_ids_sub))
+        from(r in Relation,
+          where: r.source_id in subquery(page_ids_sub) or r.target_id in subquery(page_ids_sub)
+        )
         |> Repo.delete_all()
 
       {logs_count, _} =
@@ -612,7 +614,12 @@ defmodule Dran.Brain do
         from(p in Page, where: p.context_id == ^context_id)
         |> Repo.delete_all()
 
-      %{pages: pages_count, relations: relations_count, versions: versions_count, logs: logs_count}
+      %{
+        pages: pages_count,
+        relations: relations_count,
+        versions: versions_count,
+        logs: logs_count
+      }
     end)
   end
 
