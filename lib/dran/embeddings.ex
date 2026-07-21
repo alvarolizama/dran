@@ -98,6 +98,10 @@ defmodule Dran.Embeddings do
     # seeds) where only the repo is started. Embeddings are a background
     # enhancement, not a data-integrity concern — safe to skip.
     _ -> :ignored
+  catch
+    # GenServer.call on a dead supervisor exits with {:noproc, _} — rescue
+    # does not catch exits, so we need this clause to swallow it.
+    :exit, _ -> :ignored
   end
 
   @doc """
