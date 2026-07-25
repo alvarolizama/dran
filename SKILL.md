@@ -85,9 +85,9 @@ groups in order: capture → read/find → organize → maintain → automate.
 
 | Tool | Purpose | Use when / don't use when |
 | --- | --- | --- |
-| `dran_search` | Unified search: auto picks FTS, fuzzy, semantic, or hybrid. PageRank-boosted. | **Use FIRST** whenever you're looking for something — before `dran_create_page`, before answering a question. Use the `type` filter when you can. Results are ranked by RRF fusion + PageRank authority — well-linked pages surface higher. |
+| `dran_search` | Unified search: auto picks FTS, fuzzy, semantic, or hybrid. PageRank-boosted. Supports `limit` (default 20, max 100) and `offset` for pagination. | **Use FIRST** whenever you're looking for something — before `dran_create_page`, before answering a question. Use the `type` filter when you can. Results are ranked by RRF fusion + PageRank authority — well-linked pages surface higher. For large result sets, use `limit` + `offset` to paginate. |
 | `dran_get_page` | Full markdown body of one page. | Use to actually **read** a page after finding it via `dran_search` / `dran_list_pages`. **Don't call without searching first** unless Álvaro gave you the exact slug. |
-| `dran_list_pages` | Filtered lightweight list (type, tag, status, project_slug, goal_slug, plan_slug, limit). | Use for filtered overviews and link-graph exploration — `project_slug`/`goal_slug`/`plan_slug` filter INDEPENDENTLY by each link; pass `'none'` for orphans of that link type (e.g. todos with no plan, plans with no project). **Don't loop it to build an index** — use the `wiki://{context}/index` resource instead. |
+| `dran_list_pages` | Filtered lightweight list (type, tag, status, project_slug, goal_slug, plan_slug, limit, offset). | Use for filtered overviews and link-graph exploration — `project_slug`/`goal_slug`/`plan_slug` filter INDEPENDENTLY by each link; pass `'none'` for orphans of that link type (e.g. todos with no plan, plans with no project). Supports `limit` (default 50, max 500) and `offset` (default 0) for pagination. **Don't loop it to build an index** — use the `wiki://{context}/index` resource instead. |
 | `dran_get_links` | Inbound + outbound relations for a page. | Use to inspect the graph around a page before relating or deleting. |
 
 ### Organize
@@ -182,14 +182,31 @@ There is no dedicated dran_search agent; for dran_search-only tasks use `dran_se
    context. Ask before deleting, renaming, or touching identity/finances.
 5. **Edit > duplicate.** Updating an existing page is almost always better than
    creating a new one.
-6. **Use `dran_search` first, `dran_list_pages` only for filtered lists.** Never loop
+6. **Choose the correct `page_type` and `meta.kind` when creating.** This is critical —
+   the wrong type/kind breaks filtering, kanban, dashboards, and search. Before
+   `dran_create_page` or `dran_create_todo`, verify:
+   - Is this an action item? → `todo` (NOT `note`). Use `dran_create_todo`, not
+     `dran_create_page` with `page_type=todo`.
+   - Is this a thought, journal entry, meeting note, idea, question, quote, or
+     reminder? → `note` with the matching `meta.kind`.
+   - Is this an external source (article, paper, video, podcast, book)? → `reference`.
+   - Is this a person, company, product, tool, place, or event? → `entity`.
+   - Is this an abstract idea, technique, pattern, discipline, or theory? → `concept`.
+   - Is this an objective with a measurable target? → `goal`.
+   - Is this a time-horizoned plan (weekly/monthly/quarterly/yearly)? → `plan`.
+   - Is this an initiative with status/health/priority? → `project`.
+   - Is this a side-by-side comparison? → `comparison`.
+   - Is this a question with an answer? → `query`.
+   When in doubt, default to `note` with `meta.kind: "thought"`. You can always
+   promote later with `dran_update_page`.
+7. **Use `dran_search` first, `dran_list_pages` only for filtered lists.** Never loop
    `dran_list_pages` to build an index — use the `wiki://personal/index` resource.
-7. **Use `dran_get_page` to read.** Never answer from dran_search excerpts alone.
-8. **Never create `semantic` relations manually.** They are automatic.
-9. **Plain `[[slug]]` wikilinks are not supported.** Use `![[slug]]` only to
+8. **Use `dran_get_page` to read.** Never answer from dran_search excerpts alone.
+9. **Never create `semantic` relations manually.** They are automatic.
+10. **Plain `[[slug]]` wikilinks are not supported.** Use `![[slug]]` only to
    embed files (auto-creates `embeds` relations); use `dran_create_relation`
    for explicit typed relationships.
-10. **Link your pages well.** Search ranking has a PageRank authority boost —
+11. **Link your pages well.** Search ranking has a PageRank authority boost —
     pages with more typed relations (`part_of`, `related`, `embeds`) rank higher.
     Setting `project_slug`/`goal_slug`/`plan_slug` also materializes `part_of`
     edges, which helps discoverability.
@@ -525,6 +542,13 @@ Use `dran_update_todo`, not `dran_update_page` — `dran_update_todo` merges met
 ## 10. Common mistakes
 
 - **Creating without searching.** Always dran_search first — run 2-3 variants.
+- **Wrong `page_type` or `meta.kind`.** Choosing the wrong type breaks filtering, kanban,
+  dashboards, and search. Always verify the type/kind decision tree in §7 rule 6 before
+  creating. The most common mistake is creating a `note` when it should be a `todo` —
+  if it's an action item, use `dran_create_todo`, not `dran_create_page`.
+- **Omitting `meta.kind`.** Every typed page should have a `meta.kind` when the type
+  supports it (note, concept, entity, reference, goal, plan, todo, query). Without it,
+  the page can't be filtered by subtype in the UI or via `dran_list_pages`.
 - **Calling `dran_get_page` without searching first.** Find the slug via `dran_search` or
   `dran_list_pages` before reading, unless Álvaro gave you the exact slug.
 - **Using `dran_list_pages` in a loop instead of `wiki://index` resource.** The
@@ -561,9 +585,12 @@ Use `dran_update_todo`, not `dran_update_page` — `dran_update_todo` merges met
 
 Before `dran_create_page`:
 - [ ] Searched 2-3 variants.
+- [ ] Verified the type/kind decision tree (§7 rule 6) — is this really a `note` and not a `todo`/`reference`/`entity`?
 - [ ] Right `page_type` and `meta.kind` / enum values (see §8).
+- [ ] `meta.kind` is set if the page type supports it (note, concept, entity, reference, goal, plan, todo, query).
 - [ ] Slug is kebab-case and unique (or omitted — Dran derives it).
 - [ ] Tags are kebab-case, 2-5 items.
+- [ ] For action items: used `dran_create_todo`, NOT `dran_create_page`.
 
 After changes:
 - [ ] Confirm tool response (page created / updated / deleted).

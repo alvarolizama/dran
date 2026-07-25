@@ -1150,6 +1150,8 @@ defmodule DranWeb.DocsLive do
             required="no"
             desc="auto, fts, fuzzy, semantic, hybrid"
           />
+          <:param name="limit" type="integer" required="no" desc="Max results (default 20, max 100)" />
+          <:param name="offset" type="integer" required="no" desc="Skip N results for pagination (default 0)" />
         </.mcp_tool>
 
         <.mcp_tool
@@ -1192,6 +1194,7 @@ defmodule DranWeb.DocsLive do
             desc="Filter todos by assignee ('none' for unassigned)"
           />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
+          <:param name="offset" type="integer" required="no" desc="Skip N results for pagination (default 0)" />
         </.mcp_tool>
 
         <.mcp_tool

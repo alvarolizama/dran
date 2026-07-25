@@ -530,9 +530,9 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 | Tool               | Description                                                            |
 | ------------------ | ---------------------------------------------------------------------- |
-| `dran_search`           | Unified search: auto picks full-text, fuzzy, semantic or hybrid         |
+| `dran_search`           | Unified search with pagination: auto picks full-text, fuzzy, semantic or hybrid. Supports `limit` (default 20, max 100) and `offset` for pagination         |
 | `dran_get_page`         | Get a page by slug (returns full markdown content)                     |
-| `dran_list_pages`       | List pages with filters (type, tag, status, `goal_slug`, `plan_slug`, limit); pass `goal_slug="none"` / `plan_slug="none"` for orphans |
+| `dran_list_pages`       | List pages with filters (type, tag, status, `goal_slug`, `plan_slug`, `limit`, `offset`); pass `goal_slug="none"` / `plan_slug="none"` for orphans |
 | `dran_get_links`        | Get inbound + outbound relations for a page                            |
 | `dran_create_page`      | Create a new page with type-specific meta                              |
 | `dran_update_page`      | Update an existing page (title, body, tags, meta)                      |
