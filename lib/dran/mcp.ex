@@ -173,6 +173,10 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" =>
               "Who created this page, recorded for provenance (defaults to 'agent')."
+          },
+          "on_behalf_of" => %{
+            "type" => "string",
+            "description" => "Who an agent is acting on behalf of (optional)."
           }
         },
         "required" => ["context", "page_type"]
@@ -181,7 +185,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_update_page",
       "description" =>
-        "Update an existing page by slug. Pass only the fields you want to change (title, body, tags, meta, summary). **Note: `meta` is REPLACED entirely, not merged** — include all existing keys you want to keep. For todos, prefer `dran_update_todo` which merges meta. Changing `body` auto-increments the page version and re-resolves `![[slug]]` embeds into relations. Returns the new title and version number. Returns an error if the page slug is not found in the context.",
+        "Update an existing page by slug. Pass only the fields you want to change (title, body, tags, meta, summary, owner, created_by, on_behalf_of, kb_confidence, kb_source_url, kb_contested, archived). **Note: `meta` is REPLACED entirely, not merged** — include all existing keys you want to keep. For todos, prefer `dran_update_todo` which merges meta. Changing `body` auto-increments the page version and re-resolves `![[slug]]` embeds into relations. Returns the new title and version number. Returns an error if the page slug is not found in the context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -216,14 +220,38 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" => "New one-line summary (optional)."
           },
+          "owner" => %{
+            "type" => "string",
+            "description" => "New owner identity for the page (optional)."
+          },
+          "created_by" => %{
+            "type" => "string",
+            "description" => "Override who created this page (optional, for provenance corrections)."
+          },
+          "on_behalf_of" => %{
+            "type" => "string",
+            "description" => "Set or clear who an agent is acting on behalf of (optional)."
+          },
           "updated_by" => %{
             "type" => "string",
             "description" => "Who is updating the page, for provenance (defaults to 'agent')."
           },
           "archived" => %{
             "type" => "boolean",
-            "description" =>
-              "Archive (true) or unarchive (false) the page. Archived pages are hidden from lists, stats, search and kanban boards but remain accessible by slug. Prefer archiving over deletion for stale content — it's reversible."
+            "description" => "Archive (true) or unarchive (false) the page (optional). Archived pages disappear from lists, stats, search, and kanban but stay accessible by slug."
+          },
+          "kb_confidence" => %{
+            "type" => "string",
+            "description" => "Knowledge-base confidence level (optional): low, medium, high, or verified.",
+            "enum" => ["low", "medium", "high", "verified"]
+          },
+          "kb_source_url" => %{
+            "type" => "string",
+            "description" => "Source URL for the page's knowledge-base entry (optional)."
+          },
+          "kb_contested" => %{
+            "type" => "boolean",
+            "description" => "Mark the page's knowledge as contested/uncertain (optional)."
           }
         },
         "required" => ["context", "slug"]
@@ -314,6 +342,10 @@ defmodule Dran.MCP do
           "created_by" => %{
             "type" => "string",
             "description" => "Who created this todo, for provenance (defaults to 'agent')."
+          },
+          "on_behalf_of" => %{
+            "type" => "string",
+            "description" => "Who an agent is acting on behalf of (optional)."
           }
         },
         "required" => ["context", "title", "slug"]
@@ -539,6 +571,22 @@ defmodule Dran.MCP do
             "type" => "array",
             "items" => %{"type" => "string"},
             "description" => "New tags list (optional). Replaces existing tags entirely."
+          },
+          "owner" => %{
+            "type" => "string",
+            "description" => "New owner identity for the todo (optional)."
+          },
+          "created_by" => %{
+            "type" => "string",
+            "description" => "Override who created this todo (optional, for provenance corrections)."
+          },
+          "on_behalf_of" => %{
+            "type" => "string",
+            "description" => "Set or clear who an agent is acting on behalf of (optional)."
+          },
+          "updated_by" => %{
+            "type" => "string",
+            "description" => "Who is updating the todo, for provenance (defaults to 'agent')."
           }
         },
         "required" => ["context", "slug"]
@@ -920,7 +968,20 @@ defmodule Dran.MCP do
 
         page ->
           attrs =
-            Map.take(args, ["title", "body", "tags", "meta", "summary", "archived"])
+            Map.take(args, [
+              "title",
+              "body",
+              "tags",
+              "meta",
+              "summary",
+              "archived",
+              "owner",
+              "created_by",
+              "on_behalf_of",
+              "kb_confidence",
+              "kb_source_url",
+              "kb_contested"
+            ])
             |> Map.put("updated_by", Map.get(args, "updated_by", "agent"))
 
           case Brain.update_page(page, attrs) do
@@ -979,6 +1040,7 @@ defmodule Dran.MCP do
         created_by: Map.get(args, "created_by", "agent"),
         owner: Map.get(args, "owner", "agent")
       }
+      |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
       case Brain.create_page(attrs) do
         {:ok, todo} ->
@@ -1172,10 +1234,11 @@ defmodule Dran.MCP do
             |> maybe_put_meta("assignee", args["assignee"])
 
           attrs = %{"meta" => new_meta}
-          attrs = Map.put(attrs, "updated_by", "agent")
+          attrs = Map.put(attrs, "updated_by", Map.get(args, "updated_by", "agent"))
           attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
           attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
           attrs = if args["tags"], do: Map.put(attrs, "tags", args["tags"]), else: attrs
+          attrs = attrs |> maybe_put("owner", args["owner"]) |> maybe_put("created_by", args["created_by"]) |> maybe_put("on_behalf_of", args["on_behalf_of"])
 
           case Brain.update_page(todo, attrs) do
             {:ok, updated} ->
