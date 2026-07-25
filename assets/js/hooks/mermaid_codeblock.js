@@ -1,9 +1,12 @@
 // Mermaid preview NodeView for TipTap CodeBlock.
 //
-// Replaces the default CodeBlock NodeView. For `language: "mermaid"` blocks,
-// it renders the code editor on top and a live SVG preview below (like
-// Notion/Obsidian). For all other languages, it renders the standard
-// `<pre><code>` structure that ProseMirror manages natively.
+// For `language: "mermaid"` blocks, renders ONLY a read-only SVG preview —
+// no editable code inside the WYSIWYG editor. To edit the mermaid source,
+// switch to markdown mode via the toolbar toggle. This avoids content-editing
+// conflicts between ProseMirror's contentDOM and the preview DOM.
+//
+// For non-mermaid code blocks, falls through to the default <pre><code>
+// rendering that ProseMirror manages natively.
 //
 // The mermaid library is loaded lazily from CDN (same as the read-mode hook).
 // Preview is debounced (400ms) and re-renders on content changes.
@@ -49,37 +52,36 @@ function debounce(fn, ms) {
 /**
  * NodeView factory for CodeBlock.
  *
- * For mermaid blocks: renders code editor + live SVG preview.
- * For other blocks: returns a simple <pre><code> that ProseMirror manages.
+ * For mermaid blocks: renders a read-only SVG preview (no editable code in
+ * WYSIWYG mode). Use the markdown toggle to edit the source.
+ * For other blocks: renders the standard <pre><code> structure.
  */
 export function mermaidNodeView(editor) {
   return ({ node, getPos, HTMLAttributes, extension }) => {
     const isMermaid = node.attrs.language === "mermaid"
 
-    // ── Mermaid code block with preview ──
+    // ── Mermaid code block — preview only ──
     if (isMermaid) {
       const wrapper = document.createElement("div")
       wrapper.className = "mermaid-codeblock"
-
-      const pre = document.createElement("pre")
-      pre.className = "mermaid-code-input"
-
-      const code = document.createElement("code")
-      code.className = "language-mermaid"
-      pre.appendChild(code)
+      wrapper.setAttribute("data-mermaid", "true")
 
       const preview = document.createElement("div")
       preview.className = "mermaid-preview"
-
-      wrapper.appendChild(pre)
       wrapper.appendChild(preview)
+
+      // Hint: switch to markdown mode to edit
+      const hint = document.createElement("div")
+      hint.className = "mermaid-edit-hint"
+      hint.textContent = "Edit via markdown mode ↕"
+      wrapper.appendChild(hint)
 
       // ── Mermaid rendering ──
       let renderCounter = 0
 
       async function renderMermaid(source) {
         if (!source || !source.trim()) {
-          preview.innerHTML = '<span class="mermaid-preview-empty">La preview aparecerá aquí…</span>'
+          preview.innerHTML = '<span class="mermaid-preview-empty">Diagrama vacío — edita en modo markdown</span>'
           preview.classList.remove("mermaid-preview-error")
           return
         }
@@ -107,36 +109,35 @@ export function mermaidNodeView(editor) {
       // Initial render
       renderMermaid(node.textContent)
 
-      // Re-render on content changes (ProseMirror updates contentDOM)
-      const observer = new MutationObserver(() => {
-        debouncedRender(code.textContent)
-      })
-      observer.observe(code, { childList: true, characterData: true, subtree: true })
-
+      // Re-render when the node's content changes (e.g. undo/redo, external
+      // edits via markdown toggle). We poll textContent since we have no
+      // contentDOM for ProseMirror to notify us.
       return {
         dom: wrapper,
-        contentDOM: code,
+        contentDOM: null,
         ignoreMutation(record) {
-          // Ignore mutations on the preview div
-          if (preview.contains(record.target)) return true
-          return false
+          // Ignore all mutations — this is a read-only preview
+          return true
         },
         update(updatedNode) {
           if (updatedNode.type !== node.type) return false
           if (updatedNode.attrs.language !== "mermaid") return false
-          node = updatedNode
+          const newText = updatedNode.textContent
+          if (newText !== node.textContent) {
+            node = updatedNode
+            debouncedRender(newText)
+          } else {
+            node = updatedNode
+          }
           return true
         },
         destroy() {
           renderCounter++
-          observer.disconnect()
         },
       }
     }
 
     // ── Default code block (non-mermaid) ──
-    // Render the standard <pre><code> structure. ProseMirror manages the
-    // content via contentDOM.
     const pre = document.createElement("pre")
     Object.entries(HTMLAttributes).forEach(([key, val]) => {
       if (key === "class") return
@@ -144,7 +145,6 @@ export function mermaidNodeView(editor) {
     })
 
     const code = document.createElement("code")
-    // Apply language class if present
     if (node.attrs.language) {
       code.className = `language-${node.attrs.language}`
     }
