@@ -12,7 +12,16 @@ defmodule DranWeb.API.IndexController do
 
       index =
         Enum.map(pages, fn page ->
-          %{slug: page.slug, title: page.title, type: page.page_type, tags: page.tags}
+          %{
+            slug: page.slug,
+            title: page.title,
+            type: page.page_type,
+            tags: page.tags,
+            status: page.meta["status"],
+            kanban_status: page.meta["kanban_status"],
+            progress: page.meta["progress"],
+            archived: page.archived
+          }
         end)
 
       json(conn, %{data: index})

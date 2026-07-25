@@ -923,6 +923,7 @@ defmodule DranWeb.DocsLive do
         {"agent-quick-start", "Agent Quick Start"},
         {"page-types", "Page Types & Subtypes"},
         {"embeds", "Embeds"},
+        {"context-query", "Context via URL"},
         {"available-tools", "Available tools"},
         {"resources", "Resources"},
         {"prompts", "Prompts"},
@@ -1129,6 +1130,20 @@ defmodule DranWeb.DocsLive do
         relations. Plain <code>[[slug]]</code>
         wikilinks are no longer supported — relations are
         created automatically via embeddings or explicitly via <code>dran_create_relation</code>.
+      </p>
+
+      <.h2_heading id="context-query" icon="hero-link" label="Context via URL" />
+      <p>
+        Page URLs accept a <code>?context=slug</code> query parameter to open a
+        page in a specific context, regardless of the session's active context.
+        This is useful for deep links from external tools (agents, bookmarks,
+        shared links).
+      </p>
+      <div class="not-prose rounded-lg border border-base-300 bg-base-200/50 p-3">
+        <pre class="text-sm font-mono text-primary overflow-x-auto"><code phx-no-curly-interpolation>{"\n/notes/my-note?context=work\n/goals/mrr-100k?context=business\n/todos/fix-bug?context=coding\n/projects/tokengate?context=personal"}</code></pre>
+      </div>
+      <p class="text-sm text-base-content/60 mt-2">
+        If the context slug doesn't exist, the session's current context is used as fallback.
       </p>
 
       <.h2_heading id="available-tools" icon="hero-wrench-screwdriver" label="Available tools" />

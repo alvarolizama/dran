@@ -149,4 +149,46 @@ defmodule DranWeb.Plugs.Auth do
       end
     end
   end
+
+  # ── URL-based context resolution ──
+
+  @doc """
+  Resolves the context from query params, falling back to the socket's
+  current context.
+
+  If `params["context"]` is present and matches a known context slug,
+  returns that context and updates the socket assigns. Otherwise returns
+  the socket's existing context.
+
+  ## Usage in LiveView handle_params
+
+      def handle_params(%{"slug" => slug} = params, _url, socket) do
+        {socket, context} = Auth.resolve_context(socket, params)
+        page = Brain.get_page_by_slug(slug, context.id)
+        ...
+      end
+
+  This enables URLs like `/notes/my-slug?context=work` to open a page
+  in a specific context regardless of the session's active context.
+  """
+  def resolve_context(socket, params) do
+    case params["context"] do
+      slug when is_binary(slug) and slug != "" ->
+        case Dran.Brain.get_context_by_slug(slug) do
+          nil ->
+            {socket, socket.assigns[:context]}
+
+          context ->
+            socket =
+              socket
+              |> Phoenix.Component.assign(:context, context)
+              |> Phoenix.Component.assign(:context_slug, slug)
+
+            {socket, context}
+        end
+
+      _ ->
+        {socket, socket.assigns[:context]}
+    end
+  end
 end

@@ -150,8 +150,8 @@ defmodule DranWeb.PlanLive do
      )}
   end
 
-  def handle_params(%{"slug" => slug} = _params, _url, socket) do
-    context = socket.assigns.context
+  def handle_params(%{"slug" => slug} = params, _url, socket) do
+    {socket, context} = Auth.resolve_context(socket, params)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
