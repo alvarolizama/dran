@@ -1224,18 +1224,29 @@ defmodule DranWeb.DocsLive do
           />
           <:param name="tags" type="array" required="no" desc="Tags (kebab-case)" />
           <:param name="summary" type="string" required="no" desc="One-line summary" />
+          <:param name="owner" type="string" required="no" desc="Owner identity (defaults to 'agent')" />
+          <:param name="created_by" type="string" required="no" desc="Who created this page (defaults to 'agent')" />
+          <:param name="on_behalf_of" type="string" required="no" desc="Who an agent is acting on behalf of" />
         </.mcp_tool>
 
         <.mcp_tool
           name="dran_update_page"
-          desc="Update an existing page. Version auto-increments on body change."
+          desc="Update any page field. Version auto-increments on body change. Meta is replaced (not merged) — use dran_update_todo for todos."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Page slug to update" />
           <:param name="title" type="string" required="no" desc="New title" />
           <:param name="body" type="string" required="no" desc="New markdown body" />
           <:param name="tags" type="array" required="no" desc="New tags" />
-          <:param name="meta" type="object" required="no" desc="Updated metadata" />
+          <:param name="meta" type="object" required="no" desc="Updated metadata (replaces existing)" />
+          <:param name="summary" type="string" required="no" desc="New summary" />
+          <:param name="owner" type="string" required="no" desc="New owner identity" />
+          <:param name="created_by" type="string" required="no" desc="Override who created this page" />
+          <:param name="on_behalf_of" type="string" required="no" desc="Set or clear on-behalf-of" />
+          <:param name="archived" type="boolean" required="no" desc="Archive or unarchive the page" />
+          <:param name="kb_confidence" type="string" required="no" desc="Knowledge-base confidence: low/medium/high/verified" />
+          <:param name="kb_source_url" type="string" required="no" desc="Source URL for KB entry" />
+          <:param name="kb_contested" type="boolean" required="no" desc="Mark knowledge as contested" />
         </.mcp_tool>
 
         <.mcp_tool
@@ -1248,7 +1259,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="dran_create_todo"
-          desc="Create a todo with kanban status and priority, optionally linked to a goal and/or plan."
+          desc="Create a todo with kanban status and priority, optionally linked to a project, goal, and/or plan (independent links)."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="title" type="string" required="yes" desc="Todo title" />
@@ -1258,7 +1269,7 @@ defmodule DranWeb.DocsLive do
             name="plan_slug"
             type="string"
             required="no"
-            desc="Plan this todo belongs to (goal derived from plan)"
+            desc="Plan this todo belongs to (independent link, no precedence)"
           />
           <:param
             name="kanban_status"
@@ -1275,6 +1286,9 @@ defmodule DranWeb.DocsLive do
             desc="Who executes this todo (alvaro, hermes, claude-code...)"
           />
           <:param name="body" type="string" required="no" desc="Todo description (markdown)" />
+          <:param name="owner" type="string" required="no" desc="Owner identity (defaults to 'agent')" />
+          <:param name="created_by" type="string" required="no" desc="Who created this todo (defaults to 'agent')" />
+          <:param name="on_behalf_of" type="string" required="no" desc="Who an agent is acting on behalf of" />
         </.mcp_tool>
 
         <.mcp_tool
@@ -1297,6 +1311,11 @@ defmodule DranWeb.DocsLive do
           <:param name="title" type="string" required="no" desc="New title" />
           <:param name="body" type="string" required="no" desc="New body (markdown)" />
           <:param name="tags" type="array" required="no" desc="New tags (replaces existing)" />
+          <:param name="project_slug" type="string" required="no" desc="New project slug" />
+          <:param name="owner" type="string" required="no" desc="New owner identity" />
+          <:param name="created_by" type="string" required="no" desc="Override who created this todo" />
+          <:param name="on_behalf_of" type="string" required="no" desc="Set or clear on-behalf-of" />
+          <:param name="updated_by" type="string" required="no" desc="Who is updating (defaults to 'agent')" />
         </.mcp_tool>
 
         <.mcp_tool

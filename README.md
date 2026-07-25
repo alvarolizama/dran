@@ -366,6 +366,19 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 
 Embeds auto-create `embeds` relations. Plain `[[slug]]` wikilinks are no longer supported — link pages explicitly with `dran_create_relation` or let the `PageAugmenter` create `semantic` relations automatically.
 
+### Type-specific field inference
+
+When creating pages via MCP, some types have fields that materially affect behavior (kanban, dashboards, health, progress). If the agent can't infer these from context, it should ask before creating:
+
+- **`goal`** — `kind`, `metric`, `target_value`, `unit`, `start_date`, `target_date`
+- **`plan`** — `kind`, `horizon`, `period`, `status`
+- **`project`** — `status`, `priority`, `health`
+- **`todo`** — `assignee` (always), `priority`, `kanban_status`, `due_date`
+- **`comparison`** — `entities`, `criteria`
+- **`query`** — `kind`, `difficulty`
+
+For `note`, `concept`, `entity`, `reference` — infer from context.
+
 ### Relations
 
 Relations are **directed** (source → target) and typed:
@@ -534,8 +547,8 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `dran_get_page`         | Get a page by slug (returns full markdown content)                     |
 | `dran_list_pages`       | List pages with filters (type, tag, status, `goal_slug`, `plan_slug`, `limit`, `offset`); pass `goal_slug="none"` / `plan_slug="none"` for orphans |
 | `dran_get_links`        | Get inbound + outbound relations for a page                            |
-| `dran_create_page`      | Create a new page with type-specific meta                              |
-| `dran_update_page`      | Update an existing page (title, body, tags, meta)                      |
+| `dran_create_page`      | Create a new page with type-specific meta, owner, created_by, on_behalf_of |
+| `dran_update_page`      | Update any page field: title, body, tags, meta, summary, owner, created_by, on_behalf_of, archived, kb_confidence, kb_source_url, kb_contested |
 | `dran_delete_page`      | Delete a page by slug (cascades to relations + versions)               |
 | `dran_create_todo`      | Create a todo with kanban status, priority, due date, assignee          |
 | `dran_update_todo`      | Update a todo's status/priority/due date/assignee (merges meta)         |
