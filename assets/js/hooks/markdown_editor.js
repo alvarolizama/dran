@@ -10,10 +10,12 @@
 
 import { Editor, Node, mergeAttributes } from "@tiptap/core"
 import StarterKit from "@tiptap/starter-kit"
+import CodeBlock from "@tiptap/extension-code-block"
 import { Markdown } from "@tiptap/markdown"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
 import { Table, TableRow, TableCell, TableHeader } from "@tiptap/extension-table"
+import { mermaidNodeView } from "./mermaid_codeblock.js"
 
 const WIKILINK_RE = /^\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/
 const EMBED_RE = /^!\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/
@@ -217,7 +219,15 @@ const MarkdownEditor = {
     this.editor = new Editor({
       element: contentEl,
       extensions: [
-        StarterKit,
+        StarterKit.configure({
+          codeBlock: false,
+        }),
+        // Custom CodeBlock with mermaid preview NodeView
+        CodeBlock.extend({
+          addNodeView() {
+            return mermaidNodeView(this.editor)
+          },
+        }),
         Link.configure({ openOnClick: false }),
         Image,
         Table,
