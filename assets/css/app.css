@@ -333,6 +333,30 @@
   position: relative;
 }
 
+.mermaid-codeblock .mermaid-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.25rem 0.5rem;
+  background: oklch(from var(--color-base-300) l c h / 40%);
+  border-bottom: 1px solid var(--color-base-300);
+}
+
+.mermaid-codeblock .mermaid-edit-btn {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 0.25rem;
+  background: oklch(from var(--color-base-200) l c h / 80%);
+  color: var(--color-primary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mermaid-codeblock .mermaid-edit-btn:hover {
+  background: var(--color-base-200);
+  border-color: var(--color-primary);
+}
+
 .mermaid-codeblock .mermaid-preview {
   padding: 1rem;
   background: oklch(from var(--color-base-200) l c h / 50%);
@@ -359,13 +383,19 @@
   font-style: italic;
 }
 
-.mermaid-codeblock .mermaid-edit-hint {
-  font-size: 0.7rem;
-  color: oklch(from var(--color-base-content) l c h / 30%);
-  text-align: center;
-  padding: 0.25rem;
-  background: oklch(from var(--color-base-300) l c h / 40%);
-  font-style: italic;
+.mermaid-codeblock .mermaid-code-editor {
+  width: 100%;
+  min-height: 6rem;
+  padding: 0.75rem 1rem;
+  background: oklch(20% 0.02 250);
+  color: oklch(95% 0.01 250);
+  border: none;
+  border-radius: 0;
+  font-size: 0.875rem;
+  font-family: ui-monospace, monospace;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
 }
 
 /* ── Rendered markdown (read view) ── */

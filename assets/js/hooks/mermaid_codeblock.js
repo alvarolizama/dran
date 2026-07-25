@@ -1,15 +1,12 @@
 // Mermaid preview NodeView for TipTap CodeBlock.
 //
-// For `language: "mermaid"` blocks, renders ONLY a read-only SVG preview —
-// no editable code inside the WYSIWYG editor. To edit the mermaid source,
-// switch to markdown mode via the toolbar toggle. This avoids content-editing
-// conflicts between ProseMirror's contentDOM and the preview DOM.
+// For `language: "mermaid"` blocks, renders a read-only SVG preview with an
+// "Edit" button. Clicking the button opens an inline textarea with the raw
+// mermaid source — editing it updates the ProseMirror node directly and
+// re-renders the preview in real time.
 //
 // For non-mermaid code blocks, falls through to the default <pre><code>
 // rendering that ProseMirror manages natively.
-//
-// The mermaid library is loaded lazily from CDN (same as the read-mode hook).
-// Preview is debounced (400ms) and re-renders on content changes.
 
 const MERMAID_CDN = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"
 
@@ -52,36 +49,105 @@ function debounce(fn, ms) {
 /**
  * NodeView factory for CodeBlock.
  *
- * For mermaid blocks: renders a read-only SVG preview (no editable code in
- * WYSIWYG mode). Use the markdown toggle to edit the source.
+ * For mermaid blocks: renders a read-only SVG preview with an edit button.
  * For other blocks: renders the standard <pre><code> structure.
  */
 export function mermaidNodeView(editor) {
   return ({ node, getPos, HTMLAttributes, extension }) => {
     const isMermaid = node.attrs.language === "mermaid"
 
-    // ── Mermaid code block — preview only ──
+    // ── Mermaid code block — preview + inline edit ──
     if (isMermaid) {
       const wrapper = document.createElement("div")
       wrapper.className = "mermaid-codeblock"
       wrapper.setAttribute("data-mermaid", "true")
 
+      // ── Toolbar with edit button ──
+      const toolbar = document.createElement("div")
+      toolbar.className = "mermaid-toolbar"
+
+      const editBtn = document.createElement("button")
+      editBtn.className = "mermaid-edit-btn"
+      editBtn.type = "button"
+      editBtn.textContent = "✎ Editar"
+      toolbar.appendChild(editBtn)
+
+      wrapper.appendChild(toolbar)
+
+      // ── Preview container ──
       const preview = document.createElement("div")
       preview.className = "mermaid-preview"
       wrapper.appendChild(preview)
 
-      // Hint: switch to markdown mode to edit
-      const hint = document.createElement("div")
-      hint.className = "mermaid-edit-hint"
-      hint.textContent = "Edit via markdown mode ↕"
-      wrapper.appendChild(hint)
+      // ── Code editor (hidden by default) ──
+      const codeArea = document.createElement("textarea")
+      codeArea.className = "mermaid-code-editor"
+      codeArea.spellcheck = false
+      codeArea.style.display = "none"
+      wrapper.appendChild(codeArea)
+
+      let isEditing = false
+
+      function toggleEdit(force) {
+        isEditing = typeof force === "boolean" ? force : !isEditing
+        if (isEditing) {
+          codeArea.value = node.textContent
+          codeArea.style.display = "block"
+          preview.style.display = "none"
+          editBtn.textContent = "✓ Vista previa"
+          codeArea.focus()
+        } else {
+          codeArea.style.display = "none"
+          preview.style.display = "flex"
+          editBtn.textContent = "✎ Editar"
+          // Save changes to ProseMirror
+          const newText = codeArea.value
+          if (newText !== node.textContent) {
+            saveToEditor(newText)
+          }
+          renderMermaid(newText)
+        }
+      }
+
+      function saveToEditor(newText) {
+        const pos = getPos()
+        if (pos == null) return
+        // Replace the node's content by inserting a new text node
+        // and removing the old one via a transaction
+        const tr = editor.state.tr
+        const $pos = editor.state.doc.resolve(pos + 1)
+        if ($pos.parent === node) {
+          // Replace the content inside the codeBlock
+          tr.insertText(newText, pos + 1, pos + 1 + node.content.size)
+        }
+        editor.view.dispatch(tr)
+      }
+
+      // ── Event handlers ──
+      editBtn.addEventListener("click", (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        toggleEdit()
+      })
+
+      codeArea.addEventListener("input", () => {
+        debouncedRender(codeArea.value)
+      })
+
+      codeArea.addEventListener("keydown", (e) => {
+        // Escape to close edit mode
+        if (e.key === "Escape") {
+          e.preventDefault()
+          toggleEdit(false)
+        }
+      })
 
       // ── Mermaid rendering ──
       let renderCounter = 0
 
       async function renderMermaid(source) {
         if (!source || !source.trim()) {
-          preview.innerHTML = '<span class="mermaid-preview-empty">Diagrama vacío — edita en modo markdown</span>'
+          preview.innerHTML = '<span class="mermaid-preview-empty">Diagrama vacío — escribe algo</span>'
           preview.classList.remove("mermaid-preview-error")
           return
         }
@@ -109,9 +175,6 @@ export function mermaidNodeView(editor) {
       // Initial render
       renderMermaid(node.textContent)
 
-      // Re-render when the node's content changes (e.g. undo/redo, external
-      // edits via markdown toggle). We poll textContent since we have no
-      // contentDOM for ProseMirror to notify us.
       return {
         dom: wrapper,
         contentDOM: null,
@@ -119,11 +182,15 @@ export function mermaidNodeView(editor) {
           // Ignore all mutations — this is a read-only preview
           return true
         },
+        stopEvent(event) {
+          // Don't let ProseMirror handle events inside our wrapper
+          return true
+        },
         update(updatedNode) {
           if (updatedNode.type !== node.type) return false
           if (updatedNode.attrs.language !== "mermaid") return false
           const newText = updatedNode.textContent
-          if (newText !== node.textContent) {
+          if (newText !== node.textContent && !isEditing) {
             node = updatedNode
             debouncedRender(newText)
           } else {
@@ -133,6 +200,7 @@ export function mermaidNodeView(editor) {
         },
         destroy() {
           renderCounter++
+          editBtn.removeEventListener("click", toggleEdit)
         },
       }
     }
