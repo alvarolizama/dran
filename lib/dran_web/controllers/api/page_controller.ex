@@ -5,9 +5,12 @@ defmodule DranWeb.API.PageController do
 
   @doc "GET /api/pages — list pages with filters"
   def index(conn, params) do
+    # Resolve context slug to context_id (like TodoController does)
+    params = resolve_context_id(conn, params)
+
     opts =
       []
-      |> maybe_put(:context_id, params["context"])
+      |> maybe_put(:context_id, params["context_id"])
       |> maybe_put(:type, params["type"])
       |> maybe_put(:tag, params["tag"])
       |> maybe_put(:status, params["status"])
