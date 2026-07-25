@@ -199,25 +199,46 @@ There is no dedicated dran_search agent; for dran_search-only tasks use `dran_se
    - Is this a question with an answer? → `query`.
    When in doubt, default to `note` with `meta.kind: "thought"`. You can always
    promote later with `dran_update_page`.
-7. **Use `dran_search` first, `dran_list_pages` only for filtered lists.** Never loop
+7. **Ask with `clarify` when you can't infer required fields.** Each page type has
+   fields that materially affect how the page behaves in the app (kanban, dashboards,
+   health calculation, progress tracking). If Álvaro's request doesn't give you
+   enough to confidently set these, **ask with `clarify` before creating** — do not
+   guess and create with wrong/empty values. Type-specific fields that warrant asking:
+   - **`goal`** — `kind` (personal/coding/business/learning/health/finance/other),
+     `metric` (what's being measured), `target_value`, `unit`, `start_date`,
+     `target_date`. At minimum ask for `kind` and `metric`+`target_value` — a goal
+     without a metric is just a wish.
+   - **`plan`** — `kind`, `horizon` (weekly/monthly/quarterly/yearly), `period`
+     (e.g. "2026-Q3"), `status` (draft/active). Ask for `horizon` and `period` if
+     not obvious from context.
+   - **`project`** — `status` (draft/active), `priority` (low/medium/high/urgent),
+     `health` (green/yellow/red). Ask for `status` and `priority` at minimum.
+   - **`todo`** — `assignee` (ALWAYS ask: `alvaro` or `agent`), `priority`,
+     `kanban_status`, `due_date`. See rule 8 for the assignee question.
+   - **`comparison`** — `entities` (list of slugs to compare), `criteria` (what
+     dimensions to compare on). Ask for both if not stated.
+   - **`query`** — `kind` (factual/conceptual/how_to/opinion), `difficulty`
+     (simple/intermediate/advanced). Ask for `kind` if not obvious.
+   For `note`, `concept`, `entity`, `reference` — infer from context, don't ask.
+8. **Use `dran_search` first, `dran_list_pages` only for filtered lists.** Never loop
    `dran_list_pages` to build an index — use the `wiki://personal/index` resource.
-8. **Use `dran_get_page` to read.** Never answer from dran_search excerpts alone.
-9. **Never create `semantic` relations manually.** They are automatic.
-10. **Plain `[[slug]]` wikilinks are not supported.** Use `![[slug]]` only to
+9. **Use `dran_get_page` to read.** Never answer from dran_search excerpts alone.
+10. **Never create `semantic` relations manually.** They are automatic.
+11. **Plain `[[slug]]` wikilinks are not supported.** Use `![[slug]]` only to
    embed files (auto-creates `embeds` relations); use `dran_create_relation`
    for explicit typed relationships.
-11. **Link your pages well.** Search ranking has a PageRank authority boost —
+12. **Link your pages well.** Search ranking has a PageRank authority boost —
     pages with more typed relations (`part_of`, `related`, `embeds`) rank higher.
     Setting `project_slug`/`goal_slug`/`plan_slug` also materializes `part_of`
     edges, which helps discoverability.
-11. **Surface dran_lint results, don't auto-fix.** Run `dran_lint_brain` after batches of
+13. **Surface dran_lint results, don't auto-fix.** Run `dran_lint_brain` after batches of
     changes and show orphans/stale pages to Álvaro.
-12. **Always confirm with Álvaro before deleting.** `dran_delete_page` is
+14. **Always confirm with Álvaro before deleting.** `dran_delete_page` is
     irreversible.
-13. **Todos without links go to the global kanban inbox.** Álvaro triages todos
+15. **Todos without links go to the global kanban inbox.** Álvaro triages todos
     in the `/kanban` UI. A new todo with no `project_slug`/`goal_slug`/`plan_slug`
     is a legitimate GTD inbox item — don't force a link if none is obvious.
-14. **Prefer archiving over deleting for stale content.** Pages have an
+16. **Prefer archiving over deleting for stale content.** Pages have an
     `archived` flag: archived pages disappear from lists, stats, search,
     orphan detection and kanban boards, but stay accessible by slug and keep
     their relations. Archive/unarchive via `dran_update_page` with
