@@ -186,12 +186,11 @@ defmodule Dran.InferenceTest do
       :ok
     end
 
-    test "reports missing MarkItDown model" do
+    test "reports missing models correctly" do
       assert {:ok, {present, missing}} = Inference.health_check()
 
       assert "Qwen3-Embedding" in present
       assert "Qwen3-Reranker" in present
-      assert "MarkItDown" in missing
     end
   end
 

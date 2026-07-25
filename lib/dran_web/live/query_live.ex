@@ -27,8 +27,8 @@ defmodule DranWeb.QueryLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-        
-          editing={@editing}>
+          editing={@editing}
+        >
           <:actions>
             <.link navigate={~p"/queries"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
@@ -50,14 +50,14 @@ defmodule DranWeb.QueryLive do
           </:graph>
 
           <:tabs>
-                          <.page_edit_form
-                  form={@form}
-                  page={@page}
-                  page_type={@page_type}
-                  context_id={@context_id}
-                  save_status={@save_status}
-                  editor_id="query-editor"
-                />
+            <.page_edit_form
+              form={@form}
+              page={@page}
+              page_type={@page_type}
+              context_id={@context_id}
+              save_status={@save_status}
+              editor_id="query-editor"
+            />
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>

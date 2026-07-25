@@ -2,12 +2,11 @@ defmodule Dran.Inference do
   @moduledoc """
   Public API for the OpenAI-compatible inference server.
 
-  Works with four capabilities provided by the OpenAI-compatible inference server:
+  Works with three capabilities provided by the OpenAI-compatible inference server:
 
   - embeddings (`Qwen3-Embedding`)
   - reranking (`Qwen3-Reranker`)
-  - document-to-markdown (`MarkItDown`)
-  - chat helpers (`Ornith-1.0-9B`)
+  - chat helpers (`Qwen3.6-35B-A3B`)
 
   When DRAN_INFERENCE_API_URL is not set, every function returns
   {:error, :not_configured} so the rest of the app can degrade gracefully.

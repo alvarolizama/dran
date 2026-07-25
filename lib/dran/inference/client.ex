@@ -3,7 +3,7 @@ defmodule Dran.Inference.Client do
   OpenAI-compatible inference client backed by `Req`.
 
   This is the low-level client. Higher-level helpers live in
-  `Dran.Inference` and `Dran.Inference.MarkItDown`.
+  `Dran.Inference`.
   """
 
   alias Dran.Inference.Config

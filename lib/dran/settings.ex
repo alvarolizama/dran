@@ -9,7 +9,7 @@ defmodule Dran.Settings do
     "semantic_threshold_long" => 0.28,
     "agent_max_pages" => 10,
     "agent_max_sources" => 10,
-        "daily_note_enabled" => true,
+    "daily_note_enabled" => true,
     "pagerank_boost" => 0.15
   }
 

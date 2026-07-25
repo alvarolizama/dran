@@ -28,7 +28,8 @@ defmodule DranWeb.NoteLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-          editing={@editing}>
+          editing={@editing}
+        >
           <:actions>
             <.link navigate={~p"/notes"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}

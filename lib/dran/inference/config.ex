@@ -94,7 +94,7 @@ defmodule Dran.Inference.Config do
             System.get_env("DRAN_INFERENCE_EMBEDDING_MODEL", @default_models.embedding),
           rerank_model: System.get_env("DRAN_INFERENCE_RERANK_MODEL", @default_models.rerank),
           chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL", @default_models.chat),
-                              timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
+          timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
           use_rerank: parse_boolean(System.get_env("DRAN_INFERENCE_USE_RERANK", "true")),
           embedding_dimensions: 1024,
           embedding_body_limit:

@@ -96,14 +96,14 @@ defmodule DranWeb.MarkdownEditorComponents do
       <.tb_btn id={@id} cmd="h3" icon="hero-hashtag" label="H3" />
       <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="bulletList" icon="hero-list-bullet" label="" />
-      <.tb_btn id={@id} cmd="orderedList" icon="hero-list-bullet" label="1." />
+      <.tb_btn id={@id} cmd="orderedList" icon="hero-numbered-list" label="" />
       <.tb_btn id={@id} cmd="blockquote" icon="hero-chat-bubble-left" label="" />
       <.tb_btn id={@id} cmd="codeBlock" icon="hero-code-bracket-square" label="" />
       <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="link" icon="hero-link" label="" testid="tb-link" />
       <.tb_btn id={@id} cmd="wikilink" icon="hero-link" label="[[]]" />
       <.tb_btn id={@id} cmd="embed" icon="hero-photo" label="![]" />
-      <.tb_btn id={@id} cmd="table" icon="hero-table" label="" />
+      <.tb_btn id={@id} cmd="table" icon="hero-table-cells" label="" />
       <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="mermaid" icon="hero-chart-bar-square" label="" />
       <div class="tb-separator" aria-hidden="true"></div>

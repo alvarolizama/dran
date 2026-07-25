@@ -24,9 +24,16 @@ defmodule DranWeb.PageComponents do
   attr :context_slug, :string, default: "personal"
   attr :rendered_body, :any, default: nil
   attr :editing, :boolean, default: false
-  attr :content_hidden, :boolean, default: false, doc: "hide the content panel when a server-side tab is active"
+
+  attr :content_hidden, :boolean,
+    default: false,
+    doc: "hide the content panel when a server-side tab is active"
+
   attr :graph_active, :boolean, default: false, doc: "graph tab is active (server-side tabs)"
-  attr :content_tab_value, :string, default: "overview", doc: "switch_tab value for the Content tab"
+
+  attr :content_tab_value, :string,
+    default: "overview",
+    doc: "switch_tab value for the Content tab"
 
   slot :actions
   slot :tabs
@@ -146,7 +153,8 @@ defmodule DranWeb.PageComponents do
               class={[
                 "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
                 not @content_hidden && "border-primary text-primary",
-                @content_hidden && "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
+                @content_hidden &&
+                  "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
               ]}
             >
               {gettext("Content")}
@@ -162,7 +170,8 @@ defmodule DranWeb.PageComponents do
               class={[
                 "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
                 @graph_active && "border-primary text-primary",
-                not @graph_active && "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
+                not @graph_active &&
+                  "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
               ]}
             >
               {gettext("Graph")}
@@ -174,10 +183,18 @@ defmodule DranWeb.PageComponents do
         <div class="flex flex-col lg:flex-row gap-6">
           <%!-- Main column: tabs content ────────────────────────────────── --%>
           <div class="flex-1 min-w-0 space-y-6">
-            <div id="detail-panel-content" data-detail-panel class={["space-y-6", @content_hidden && "hidden"]} phx-hook="Mermaid">
+            <div
+              id="detail-panel-content"
+              data-detail-panel
+              class={["space-y-6", @content_hidden && "hidden"]}
+              phx-hook="Mermaid"
+            >
               {render_slot(@tabs)}
 
-              <div :if={@tabs == [] and not @content_hidden} class="prose prose-base dark:prose-invert">
+              <div
+                :if={@tabs == [] and not @content_hidden}
+                class="prose prose-base dark:prose-invert"
+              >
                 {@rendered_body}
               </div>
 
@@ -893,7 +910,9 @@ defmodule DranWeb.PageComponents do
             nil -> []
             id -> Dran.Brain.list_tags(id)
           end
-        list -> list
+
+        list ->
+          list
       end
 
     assigns = assign(assigns, :tag_suggestions, suggestions)

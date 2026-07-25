@@ -592,9 +592,10 @@ defmodule DranWeb.DashboardLive do
   defp page_path(_), do: "#"
 
   defp sort_by_type(by_type) do
-    type_order = ~w(note concept entity reference goal plan todo comparison)
+    type_order = ~w(note concept entity reference goal plan todo comparison query project)
 
     by_type
+    |> Enum.filter(fn {type, _count} -> Map.has_key?(PageTypes.all(), type) end)
     |> Enum.sort_by(fn {type, _count} ->
       idx = Enum.find_index(type_order, &(&1 == type))
       idx || 99

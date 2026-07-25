@@ -395,16 +395,23 @@ const MarkdownEditor = {
       const textarea = wrapper.querySelector(".md-raw-textarea")
       if (textarea && this.editor) {
         const md = textarea.value
-        // Re-create editor with new content
-        this.editor.commands.setContent(this.parseMarkdown(md))
+        // TipTap v3: editor.markdown.parse() returns JSON, pass to setContent
+        const json = this.editor.markdown?.parse(md)
+        if (json) {
+          this.editor.commands.setContent(json, { emitUpdate: false })
+        } else {
+          this.editor.commands.setContent(md)
+        }
         mountEl.dataset.mdMode = "false"
         wrapper.classList.remove("md-raw-mode")
         textarea.remove()
+        mountEl.style.display = ""
       }
     } else {
       // Switch to raw markdown: get current content as markdown, show textarea
       if (this.editor) {
-        const md = this.editor.storage.markdown?.getMarkdown() || this.editor.getHTML()
+        // TipTap v3: editor.getMarkdown() is the public API
+        const md = this.editor.getMarkdown() || ""
         mountEl.dataset.mdMode = "true"
         wrapper.classList.add("md-raw-mode")
 
@@ -416,11 +423,16 @@ const MarkdownEditor = {
         // Save changes back to editor on blur
         textarea.addEventListener("blur", () => {
           if (this.editor) {
-            this.editor.commands.setContent(this.parseMarkdown(textarea.value))
+            const mdVal = textarea.value
+            const json = this.editor.markdown?.parse(mdVal)
+            if (json) {
+              this.editor.commands.setContent(json, { emitUpdate: false })
+            } else {
+              this.editor.commands.setContent(mdVal)
+            }
             mountEl.dataset.mdMode = "false"
             wrapper.classList.remove("md-raw-mode")
             textarea.remove()
-            // Show the mount point again
             mountEl.style.display = ""
           }
         })
@@ -431,14 +443,6 @@ const MarkdownEditor = {
         textarea.focus()
       }
     }
-  },
-
-  parseMarkdown(md) {
-    // Use TipTap's markdown parser if available, otherwise fallback to plain text
-    if (this.editor?.storage?.markdown?.parser) {
-      return this.editor.storage.markdown.parser.parse(md)
-    }
-    return md
   },
 }
 

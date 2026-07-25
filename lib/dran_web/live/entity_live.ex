@@ -28,8 +28,8 @@ defmodule DranWeb.EntityLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-        
-          editing={@editing}>
+          editing={@editing}
+        >
           <:actions>
             <.link navigate={~p"/entities"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
@@ -51,14 +51,14 @@ defmodule DranWeb.EntityLive do
           </:graph>
 
           <:tabs>
-                          <.page_edit_form
-                  form={@form}
-                  page={@page}
-                  page_type={@page_type}
-                  context_id={@context_id}
-                  save_status={@save_status}
-                  editor_id="entity-editor"
-                />
+            <.page_edit_form
+              form={@form}
+              page={@page}
+              page_type={@page_type}
+              context_id={@context_id}
+              save_status={@save_status}
+              editor_id="entity-editor"
+            />
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>

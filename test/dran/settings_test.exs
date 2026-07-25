@@ -20,7 +20,6 @@ defmodule Dran.SettingsTest do
 
   describe "put/2" do
     test "persists value and get reads it back" do
-
     end
 
     test "put twice updates the same row (upsert)" do

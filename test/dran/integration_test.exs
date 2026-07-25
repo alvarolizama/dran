@@ -157,7 +157,6 @@ defmodule Dran.IntegrationTest do
 
       assert stats.total_pages == 2
       assert stats.by_type["note"] == 2
-      assert stats.by_type["note"] == 1
       assert stats.total_relations >= 1
       assert stats.orphan_count >= 0
     end

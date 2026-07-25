@@ -4,9 +4,9 @@
 
 A personal second-brain application built with Phoenix LiveView. It stores your knowledge as typed pages (notes, concepts, entities, references, goals, plans, todos, comparisons) and links them with relations, forming a queryable knowledge graph.
 
-Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP endpoint for AI agent integration, and a REST API.
+Includes a full markdown editor (TipTap WYSIWYG), four autonomous agents, an MCP endpoint for AI agent integration, and a REST API.
 
-> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 18 tools, agent rules, 11 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 17 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
 ## Screenshots
 
@@ -15,11 +15,11 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
     <td align="center"><b>Dashboard — brain health metrics</b><br><img src="docs/screenshots/dashboard.png" alt="Dashboard with brain health metrics" width="100%"></td>
     <td align="center"><b>Kanban board — full-viewport, real-time</b><br><img src="docs/screenshots/kanban.png" alt="Kanban board with drag & drop todos" width="100%"></td>
     <td align="center"><b>In-app documentation — tabbed guides</b><br><img src="docs/screenshots/docs.png" alt="In-app documentation with TOC and tabs" width="100%"></td>
-    <td align="center"><b>Knowledge graph — 2D/3D</b><br><img src="docs/screenshots/graph.png" alt="Knowledge graph" width="100%"></td>
+    <td align="center"><b>Knowledge graph — 3D</b><br><img src="docs/screenshots/graph.png" alt="Knowledge graph" width="100%"></td>
   </tr>
   <tr>
     <td align="center"><b>Page detail — relations & versions</b><br><img src="docs/screenshots/note-detail.png" alt="Page detail with backlinks and relations" width="100%"></td>
-    <td align="center"><b>Project detail — health, tabs, graph signals</b><br><img src="docs/screenshots/project-detail.png" alt="Project dashboard with derived health, 6 tabs, PageRank and community metadata" width="100%"></td>
+    <td align="center"><b>Project detail — health, tabs, graph signals</b><br><img src="docs/screenshots/project-detail.png" alt="Project dashboard with derived health, tabs, PageRank and community metadata" width="100%"></td>
     <td align="center"><b>Activity feed — real-time timeline</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
     <td align="center"><b>Settings — brain tuning</b><br><img src="docs/screenshots/settings.png" alt="Settings — brain tuning" width="100%"></td>
   </tr>
@@ -34,14 +34,14 @@ Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP 
 Dran exposes an MCP (Model Context Protocol) endpoint at `POST /api/mcp` using
 the **Streamable HTTP** transport (MCP spec 2025-03-26). This lets any
 MCP-compatible client — Claude Desktop, Hermes Agent, custom scripts — use Dran
-as a knowledge tool with 18 tools, 3 resources, and 3 prompts.
+as a knowledge tool with 17 tools, 3 resources, and 2 prompts.
 
 ### Connection
 
 | Item | Value |
 | --- | --- |
 | Endpoint | `POST http://<host>/api/mcp` |
-| Auth | `Authorization: Bearer <DRAN_API_TOKEN>` |
+| Auth | `Authorization: Bearer <token>` |
 | Transport | Streamable HTTP, MCP spec 2025-03-26 |
 | Default context | `personal` |
 
@@ -83,7 +83,7 @@ Add to your `claude_desktop_config.json`:
 
 ```bash
 curl -X POST http://localhost:4000/api/mcp \
-  -H "Authorization: Bearer dran-token" \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 ```
@@ -91,64 +91,54 @@ curl -X POST http://localhost:4000/api/mcp \
 ### Agent skill
 
 The repo includes **[SKILL.md](SKILL.md)** — a complete agent operating manual
-for the Dran MCP server. It covers connection details, all 18 tools grouped by
+for the Dran MCP server. It covers connection details, all 17 tools grouped by
 workflow, resources, prompts, autonomous agents, page types with meta
 validation, step-by-step recipes, common mistakes, and a quick checklist.
 
 Copy it to `~/.hermes/skills/second-brain/SKILL.md` (or reference it in place)
 to give any MCP-compatible agent the operational context it needs.
 
-### Available tools (18)
+### Available tools (17)
 
 `dran_search` · `dran_get_page` · `dran_list_pages` · `dran_get_links` ·
 `dran_create_page` · `dran_update_page` · `dran_delete_page` · `dran_create_todo` ·
 `dran_update_todo` · `dran_create_relation` · `dran_delete_relation` · `dran_rename_slug` ·
-`dran_ingest_url` · `dran_reaugment_page` · `dran_get_stats` · `dran_lint_brain` · `dran_start_agent` ·
+`dran_reaugment_page` · `dran_get_stats` · `dran_lint_brain` · `dran_start_agent` ·
 `dran_get_agent_session`
 
 For the full operational guide — tool-by-tool usage, recipes, pitfalls, and
 agent limits — see [**SKILL.md**](SKILL.md).
 
-> **Schema verification:** run `scripts/mcp_smoke.sh` to verify the live MCP
-> endpoint returns all 18 tools with up-to-date schemas.
-
 ## Features
 
 - **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, goal, plan, todo, comparison, query, and **project** (executive dashboard with derived health)
-- **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, and file embeds `![[slug]]`
-- **Autonomous agents (6)** — background ReAct agents that plan, act, and log every step:
-  - `research` — searches the web, scrapes sources, creates note/reference pages
-  - `ingest` — validates, inspects, downloads, and creates reference pages from URLs
+- **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, mermaid diagrams, and file embeds `![[slug]]`
+- **Autonomous agents (4)** — background ReAct agents that plan, act, and log every step:
   - `ask` — Q&A agent using **GraphRAG**: searches seeds, then `expand_neighbors` traverses typed relations to pull in adjacent context before answering
   - `curator` — runs daily (Quantum-scheduled), finds duplicates and flags contested knowledge using `same_community` (graph community overlap) as extra duplicate evidence
   - `link_gardener` — proposes typed relations between orphaned and weakly-linked pages, including transitive `part_of` candidates (`A → B → C` infers `A → C` with `via` evidence)
   - `weekly_review` — runs weekly (Quantum-scheduled), gathers stats and creates a review page
-- **Content extraction on ingest** — when files are ingested, Dran converts them to markdown automatically:
-  - PDF/DOCX/PPTX → markdown via **MarkItDown**
-  - Images → text descriptions via **Vision** (image content part)
-  - Audio → transcripts via **ASR** (`/v1/audio/transcriptions`)
 - **Auto-resolved embeds** — `![[slug]]` in the editor resolves to the latest version of the target page; stale `embeds` relations are cleaned up when embeds are removed
 - **Bidirectional semantic relations with dynamic thresholds** — `PageAugmenter` creates `semantic` links after every capture; the cosine-distance threshold adapts to page length (short/mid/long bands) and is tunable at runtime via settings
 - **Version history with diff** — every page edit saves the previous body to `page_versions`; view and diff any prior version
 - **Activity feed** — real-time log of all brain actions (creates, updates, deletes, relations) in a dedicated LiveView
 - **Daily notes** — one journal note per day, created on demand or auto-prompted from the dashboard; toggleable via settings
 - **Full context export** — export an entire context (pages, relations, versions, uploads) as a JSON backup for restore or migration
-- **Runtime settings** — tune the brain without a redeploy: the `/settings` page is organized in three full-width sections — **Brain tuning** (semantic thresholds, agent limits, daily-note toggle), **Modelos** (6 per-purpose inference models selectable from the API server, each editable via dropdown with env defaults marked `(env)`), and **Entorno** (read-only environment configuration). The `/contexts` page is also full-width
-- **Knowledge graph** — visual graph at `/graph` with pan/zoom, defaulting to a **3D view** (toggle 2D/3D); built from explicit and semantic relations. Each page detail view also surfaces a per-page subgraph
+- **Runtime settings** — tune the brain without a redeploy: the `/settings` page is organized in three full-width sections — **Brain tuning** (semantic thresholds, agent limits, daily-note toggle), **Modelos** (3 per-purpose inference models selectable from the API server, each editable via dropdown with env defaults marked `(env)`), and **Entorno** (read-only environment configuration). The `/contexts` page is also full-width
+- **Knowledge graph** — visual graph at `/graph` with pan/zoom, 3D view; built from explicit and semantic relations. Each page detail view also surfaces a per-page subgraph
 - **Inline editing** — edit any page in-place with autosave
-- **File uploads** — upload images, videos, PDFs via the editor toolbar or URL ingest
+- **File uploads** — upload images, videos, PDFs via the editor toolbar
 - **Dashboard** — metrics, recent pages, quick access, todo board summary, daily-note status
 - **Kanban board** — full-viewport 6-column board with drag & drop, updates in real time via PubSub when agents create or move todos. The global board at `/kanban` shows every todo in the context with combinable filters (project / goal / plan, each offering All / None / &lt;slug&gt;); per-goal and per-project boards are replaced by filter links into the single board
 - **Planning model (v6)** — independent links, no precedence: `meta.project_slug`, `meta.goal_slug`, and `meta.plan_slug` are three independent, optional slugs. Each one materializes its own `part_of` relation when set, so a todo (or any page) may carry 0, 1, 2, or all 3 simultaneously. There is no rigid hierarchy — every page is an orphan by default, and the three link dimensions are orthogonal
 - **Todo assignment** — todos carry an `assignee` field (free-form string) identifying who executes the task: `alvaro` (human), `hermes` (agent), `claude-code` (coding agent), etc. Combined with `created_by` (provenance), this enables delegation flows between humans and AI agents. Filter in the kanban or via `dran_list_pages` with `assignee` param (`"none"` for unassigned)
 - **In-app documentation** at `/docs` with tabbed guides, MCP reference, and copy-ready code examples
-- **Page detail tabs** — the first tab row on every page detail view is **Contenido / Metadatos / Relaciones / Versiones / Actividad / Grafo** (the graph is a first-class tab backed by the `<:graph>` slot in `page_components`, not a secondary panel). Inside Contenido, per-type sub-tabs surface type-specific metadata (e.g. note kinds, project health, goal metrics). All 11 page types share a single `page_edit_form` component for create/edit
-- **Tag input** — create/edit forms use badge-chip tag input shared across all 11 page types: press Enter or comma to add a tag, Backspace or the × chip to remove one
+- **Page detail tabs** — the first tab row on every page detail view is **Contenido / Metadatos / Relaciones / Versiones / Actividad / Grafo** (the graph is a first-class tab backed by the `<:graph>` slot in `page_components`, not a secondary panel). Inside Contenido, per-type sub-tabs surface type-specific metadata (e.g. note kinds, project health, goal metrics). All 10 page types share a single `page_edit_form` component for create/edit
+- **Tag input** — create/edit forms use badge-chip tag input shared across all 10 page types: press Enter or comma to add a tag, Backspace or the × chip to remove one
 - **Quick-add todo** — `/todos` includes inline quick-add for capturing action items without leaving the list
-- **MCP server** — 18 tools for AI agents to search, read, create, update, delete, relate, lint, ingest, and manage the knowledge graph (see [SKILL.md](SKILL.md))
-- **REST API** — full CRUD for pages, contexts, relations, search, ingest, export, and maintenance
+- **MCP server** — 17 tools for AI agents to search, read, create, update, delete, relate, lint, and manage the knowledge graph (see [SKILL.md](SKILL.md))
+- **REST API** — full CRUD for pages, contexts, relations, search, export, and maintenance
 - **Relations** — see inbound and outbound relations for any page
-- **URL ingest** — save web pages (URL only) or download files (PDFs, docs) as references
 - **Quality lint** — find orphan pages, stale pages, and contested knowledge
 - **Page archiving** — hide stale pages without deleting them: an `archived` flag removes pages from lists, stats, search and kanban boards while keeping them accessible by slug. Every list view has a collapsible **Archived** section (filterable by page type), the detail view offers Archive/Unarchive actions, and agents can archive via `dran_update_page` (`archived: true`)
 - **Slug rename** — rename a page slug
@@ -246,9 +236,6 @@ DRAN_API_TOKEN=$(openssl rand -hex 32)
 | `DRAN_INFERENCE_CHAT_MODEL`     | no       | Chat/text model (default: `Ornith-1.0-9B`)               |
 | `DRAN_INFERENCE_EMBEDDING_MODEL`| no       | Embeddings model (default: `Qwen3-Embedding`)            |
 | `DRAN_INFERENCE_RERANK_MODEL`   | no       | Rerank model (default: `Qwen3-Reranker`)                 |
-| `DRAN_INFERENCE_MARKITDOWN_MODEL`| no      | Document-to-markdown model (default: `MarkItDown`)       |
-| `DRAN_INFERENCE_ASR_MODEL`      | no       | Audio transcription model (default: `Qwen3-ASR`)         |
-| `DRAN_INFERENCE_VISION_MODEL`   | no       | Vision/chat model for images (default: `Ornith-1.0-9B`)  |
 
 > `DRAN_INFERENCE_API_KEY` is required whenever `DRAN_INFERENCE_API_URL` is set.
 
@@ -258,12 +245,6 @@ DRAN_API_TOKEN=$(openssl rand -hex 32)
 | ------------------------- | -------- | ------------------------------------------ |
 | `AGENT_MAX_STEPS`         | no       | Max steps per agent run (default: `150`)   |
 | `AGENT_PER_STEP_TIMEOUT`  | no       | Per-step timeout in ms (default: `120000`)|
-
-#### Firecrawl (optional)
-
-| Variable           | Required | Notes                              |
-| ------------------ | -------- | ---------------------------------- |
-| `FIRECRAWL_API_KEY`| no       | API key for web search + scrape    |
 
 #### Production-only
 
@@ -286,16 +267,13 @@ This runs `compile --warnings-as-errors`, `deps.unlock --unused`, `format`, and 
 
 ## Inference API
 
-Dran can talk to an OpenAI-compatible inference server to add embeddings, reranking, and document-to-markdown conversion to the second brain.
+Dran can talk to an OpenAI-compatible inference server to add embeddings, reranking, and chat to the second brain.
 
 Supported capabilities:
 
 - **Embeddings** — `POST /v1/embeddings`
 - **Reranking** — `POST /v1/rerank`
-- **Document-to-markdown** — `POST /v1/chat/completions` with a file content part
 - **Chat / text generation** — `POST /v1/chat/completions`
-- **Audio transcription** — `POST /v1/audio/transcriptions`
-- **Image descriptions** — `POST /v1/chat/completions` with image content part
 
 The server is configured via environment variables:
 
@@ -314,21 +292,18 @@ The current local/VPN server exposes these models (verify at runtime with `GET /
 | ----- | ---------- | -------- |
 | `Qwen3-Embedding` | text embeddings | `POST /v1/embeddings` |
 | `Qwen3-Reranker` | rerank search results | `POST /v1/rerank` |
-| `MarkItDown` | PDF/DOCX/PPTX/TXT → markdown | `POST /v1/chat/completions` |
-| `Qwen3.5-9B` | chat / text generation / vision | `POST /v1/chat/completions` |
-| `Qwen3-ASR` | audio transcription | `POST /v1/audio/transcriptions` |
+| `Qwen3.6-35B-A3B` | chat / text generation | `POST /v1/chat/completions` |
 
-> **Web-selectable:** The `/settings` → **Modelos** section exposes 6 per-purpose model dropdowns (chat/agents, embeddings, re-ranking, document extraction, audio transcription, vision) populated live from the API server's `GET /v1/models`. Each purpose defaults to the env-configured model (marked `(env)`) and can be overridden per-context in the DB without a redeploy.
+> **Web-selectable:** The `/settings` → **Modelos** section exposes 3 per-purpose model dropdowns (chat/agents, embeddings, re-ranking) populated live from the API server's `GET /v1/models`. Each purpose defaults to the env-configured model (marked `(env)`) and can be overridden per-context in the DB without a redeploy.
 
 ### How Dran can use it
 
 1. **Unified search** — `Brain.search/2` picks full-text, fuzzy, semantic or hybrid automatically based on the query and inference availability.
 2. **Semantic search** — generate embeddings for page title/body, store them in the `pgvector` column, and add vector search over the knowledge graph.
 3. **Better search ranking** — use the reranker to reorder FTS/vector candidates before returning them.
-4. **Rich file ingest** — convert uploaded PDFs, Word docs and PowerPoints to Markdown with `MarkItDown`, then index them as pages.
-5. **Automatic relations** — after a page is created/updated, `Dran.Brain.PageAugmenter` asynchronously finds semantically similar pages and creates `related` relations when confidence is high.
+4. **Automatic relations** — after a page is created/updated, `Dran.Brain.PageAugmenter` asynchronously finds semantically similar pages and creates `related` relations when confidence is high.
 
-For endpoint request/response examples and integration patterns, see [`references/inference-api.md`](references/inference-api.md). For the implementation roadmap, see [`references/inference-implementation-plan.md`](references/inference-implementation-plan.md).
+For endpoint request/response examples and integration patterns, see [`references/inference-api.md`](references/inference-api.md).
 
 ### Migrations
 
@@ -470,7 +445,6 @@ The release reads all configuration from environment variables at startup. There
 | `DISABLE_FORCE_SSL` | no       | Set to `1` at **build time** to disable `force_ssl` redirect (plain HTTP deployments). |
 | `AGENT_MAX_STEPS`   | no       | Max steps per agent run (default: `150`)                                             |
 | `AGENT_PER_STEP_TIMEOUT` | no  | Per-step timeout in ms (default: `120000`)                                           |
-| `FIRECRAWL_API_KEY` | no       | API key for Firecrawl web search + scrape                                            |
 
 > **Never bake secrets into a Dockerfile.** Pass them as runtime env vars only. Coolify, Fly, and Kubernetes all support this natively.
 
@@ -528,7 +502,7 @@ curl -fsSL https://dran.example.com/health
 
 # MCP endpoint (requires bearer token)
 curl -fsSL https://dran.example.com/api/mcp \
-  -H "Authorization: Bearer your-token-here"
+  -H "Authorization: Bearer <token>"
 ```
 
 ## AI Agent Integration
@@ -552,7 +526,7 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 }
 ```
 
-**Available tools (18):**
+**Available tools (17):**
 
 | Tool               | Description                                                            |
 | ------------------ | ---------------------------------------------------------------------- |
@@ -568,11 +542,10 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `dran_create_relation`  | Create a typed relation between two pages                              |
 | `dran_delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
 | `dran_rename_slug`      | Rename a page's slug                                                   |
-| `dran_ingest_url`       | Save a URL (HTML to save link; files to download and store)            |
 | `dran_reaugment_page`   | Re-run `PageAugmenter` on a page to refresh its semantic relations      |
 | `dran_get_stats`        | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
 | `dran_lint_brain`       | Quality report: orphans, stale pages, and contested knowledge          |
-| `dran_start_agent`      | Start an autonomous agent (`research`, `ingest`, `ask`, `curator`, `link_gardener`, `weekly_review`) |
+| `dran_start_agent`      | Start an autonomous agent (`ask`, `curator`, `link_gardener`, `weekly_review`) |
 | `dran_get_agent_session`| Poll an agent session for status, summary, and steps                  |
 
 **Resources:**
@@ -587,7 +560,6 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 
 | Prompt           | Description                                                          |
 | ---------------- | -------------------------------------------------------------------- |
-| `research_topic` | Scaffold a research page with outline, sources, and questions        |
 | `brainstorm`     | Generate ideas around a topic (creates notes with kind: idea)        |
 | `goal_review`    | Review a goal's status, todos, and plans                             |
 
@@ -602,17 +574,14 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 7. **Inspect** — use `dran_get_links` to see inbound + outbound relations for a page
 8. **Stats** — use `dran_get_stats` for a context overview (page counts, todos by status, orphans, total relations)
 9. **Rename** — use `dran_rename_slug` to rename a page slug
-10. **Ingest** — use `dran_ingest_url` to save web pages or download files as references
-11. **Lint** — use `dran_lint_brain` to find orphans, stale pages, and contested knowledge
+10. **Lint** — use `dran_lint_brain` to find orphans, stale pages, and contested knowledge
 
 ### Autonomous agents
 
-Dran can delegate longer tasks to autonomous ReAct agents. There are six agent types:
+Dran can delegate longer tasks to autonomous ReAct agents. There are four agent types:
 
 | Agent           | Trigger                    | What it does                                                                 |
 | --------------- | -------------------------- | ---------------------------------------------------------------------------- |
-| `research`      | Manual (`dran_start_agent`)     | Searches the web, scrapes sources, creates note/reference pages             |
-| `ingest`         | Manual (`dran_start_agent`)     | Validates, inspects, downloads, and creates reference pages from URLs       |
 | `ask`           | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph using **GraphRAG**: `dran_search` finds seed pages, then the `expand_neighbors` tool traverses typed relations (part_of, embeds, supersedes, related) to pull in context the text search missed, then `dran_get_page` reads the chosen pages. Cites sources |
 | `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes. Uses **`same_community`** (both pages placed in the same graph community by Label Propagation) as extra duplicate evidence on top of embedding distance |
 | `link_gardener` | Manual (`dran_start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages. Calls **`transitive_candidates`** to find inferred `A → C` relations via an intermediate `B` (depth-2 recursive CTE) and verifies each one with `get_page` before proposing, citing `via_slug` as evidence |
@@ -621,7 +590,6 @@ Dran can delegate longer tasks to autonomous ReAct agents. There are six agent t
 - **`dran_start_agent` / `dran_get_agent_session`** — start a session and poll for progress.
 - Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and PubSub topics (`agents:<session_id>` and `agents:all`).
 - The `curator` and `weekly_review` agents are scheduled automatically by the **Quantum** scheduler (see `config/config.exs`), as is `pagerank_nightly` — a **03:00 daily** job that runs `Dran.Graph.refresh_all_scheduled/0` to recompute weighted **PageRank** (persisted to `meta.pagerank`) and detect **communities** via Label Propagation (persisted to `meta.community_id`) on the default context.
-- Agents are exposed as LiveView pages at `/agents/:type` and individual sessions at `/agents/:type/:id`. From the CLI, run an agent with `mix dran.agent --type research --context personal --input "topic"`.
 
 ### Example: create a note
 
@@ -647,7 +615,7 @@ Dran can delegate longer tasks to autonomous ReAct agents. There are six agent t
 
 ## REST API
 
-All API endpoints require a bearer token: `Authorization: Bearer <DRAN_...N>`.
+All API endpoints require a bearer token: `Authorization: Bearer <token>`
 
 | Method   | Path                                       | Description                                                  |
 | -------- | ------------------------------------------ | ------------------------------------------------------------ |
@@ -668,7 +636,6 @@ All API endpoints require a bearer token: `Authorization: Bearer <DRAN_...N>`.
 | `GET`    | `/api/todos?context=personal&status=...`   | List todos (filterable by kanban status)                     |
 | `POST`   | `/api/todos`                               | Create a todo                                                |
 | `PUT`    | `/api/todos/:id`                           | Update a todo (e.g. change status, merges meta)              |
-| `POST`   | `/api/ingest`                              | Ingest a URL (`{url, context, slug?, tags?}`)                 |
 | `GET`    | `/api/index?context=personal`              | Wiki index (all slugs + titles)                              |
 | `GET`    | `/api/graph?context=personal`              | Full knowledge graph                                         |
 | `GET`    | `/api/lint?context=personal`               | Quality lint report                                          |
@@ -679,15 +646,6 @@ All API endpoints require a bearer token: `Authorization: Bearer <DRAN_...N>`.
 | `PUT`    | `/api/contexts/:slug`                      | Update a context                                             |
 | `DELETE` | `/api/contexts/:slug`                      | Delete a context                                             |
 | `POST`   | `/api/mcp`                                 | MCP JSON-RPC endpoint                                        |
-
-### Agents CLI
-
-Run agents from the terminal:
-
-```bash
-mix dran.agent --type research --context personal --input "Yeshe Walmo"
-mix dran.agent --type ingest  --context personal --input "https://example.com/article"
-```
 
 ## Tech stack
 - **Phoenix 1.8** with LiveView

@@ -674,7 +674,7 @@ defmodule DranWeb.DocsLive do
         {"search-api", "Search"},
         {"goals-api", "Goals"},
         {"todos-api", "Todos"},
-                {"maintenance-api", "Maintenance"},
+        {"maintenance-api", "Maintenance"},
         {"wiki-api", "Wiki"},
         {"export-api", "Export"},
         {"settings-api", "Settings"}
@@ -855,7 +855,7 @@ defmodule DranWeb.DocsLive do
         path: "/api/todos/:id",
         desc: "Update a todo (e.g. change status)"
       },
-            %{
+      %{
         group: "Maintenance",
         method: "GET",
         path: "/api/lint?context=...",
@@ -1412,8 +1412,7 @@ defmodule DranWeb.DocsLive do
         Pre-built prompt templates for common agent workflows:
       </p>
       <div class="not-prose space-y-2">
-        <div class="rounded-lg border border-base-300 p-3">
-        </div>
+        <div class="rounded-lg border border-base-300 p-3"></div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">brainstorm</code>
           <span class="text-sm text-base-content/60 ml-2">Generate ideas around a topic. Args: topic, context.</span>

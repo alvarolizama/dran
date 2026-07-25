@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 17 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
-version: 5.1.0
+version: 6.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -21,7 +21,7 @@ project, todo, comparison, query) connected by typed **relations**
 operations go through a single MCP endpoint — there is no need to use the REST
 API or web UI for agent-driven workflows.
 
-**Tech stack:** Phoenix LiveView + PostgreSQL with `pgvector` + Bandit, OpenAI-compatible inference API for embeddings/rerank/chat/vision/ASR.
+**Tech stack:** Phoenix LiveView + PostgreSQL with `pgvector` + Bandit, OpenAI-compatible inference API for embeddings/rerank/chat.
 
 - **Pages** are the atoms of the graph. Each page has a `page_type`, a markdown
   `body`, and a JSONB `meta` whose valid fields depend on the type.
@@ -44,7 +44,7 @@ API or web UI for agent-driven workflows.
 | --- | --- |
 | Transport | Streamable HTTP, MCP spec **2025-03-26** |
 | Endpoint | `POST http://<host>/api/mcp` |
-| Auth | `Authorization: Bearer ***` |
+| Auth | `Authorization: Bearer <token>` |
 | Default context | **`personal`** — do not ask, do not switch unless Álvaro says otherwise |
 | Hermes config | `~/.hermes/config.yaml` → `mcp_servers.dran` |
 
@@ -69,7 +69,7 @@ mcp_servers:
 
 ---
 
-## 3. Tools (18)
+## 3. Tools (17)
 
 Tools are grouped by **workflow pipeline**, not alphabetically. Follow the
 groups in order: capture → read/find → organize → maintain → automate.
@@ -80,7 +80,6 @@ groups in order: capture → read/find → organize → maintain → automate.
 | --- | --- | --- |
 | `dran_create_page` | Create any page type. | Use for notes, concepts, entities, references, goals, plans, projects, comparisons, queries. **Don't use for todos** — use `dran_create_todo`. |
 | `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links. | Use for action items. Optional `project_slug`, `goal_slug`, `plan_slug` are **independent** — set any combination (0, 1, 2, or 3); each materializes its own `part_of`. **Don't use `dran_create_page` with `page_type=todo`** — it won't get the right meta shape. |
-| `dran_ingest_url` | Save a URL as a `reference` page, or download a file. With inference enabled, extracts content (MarkItDown/Vision/ASR). | Use for web articles and file URLs. **Don't pass local/private IPs** — SSRF protection blocks them. |
 
 ### Read & find
 
@@ -114,7 +113,7 @@ groups in order: capture → read/find → organize → maintain → automate.
 
 | Tool | Purpose | Use when / don't use when |
 | --- | --- | --- |
-| `dran_start_agent` | Launch an autonomous agent (6 types — see §6). | Use for multi-step research, ingest, Q&A, or maintenance. **Don't use for simple dran_search** — use `dran_search` directly. |
+| `dran_start_agent` | Launch an autonomous agent (4 types — see §6). | Use for multi-step Q&A, or maintenance. **Don't use for simple dran_search** — use `dran_search` directly. |
 | `dran_get_agent_session` | Poll an autonomous agent's progress and results. | Use to check status of a running agent session. |
 
 ---
@@ -135,7 +134,6 @@ Prefer these over looping `dran_list_pages` when you need an overview:
 
 | Prompt | Use |
 | --- | --- |
-| `research_topic` | Scaffold a research page (outline, sources, questions). |
 | `brainstorm` | Generate 5-10 interlinked idea pages. |
 | `goal_review` | Review a goal, its todos and plans, suggest next actions. |
 
@@ -143,13 +141,11 @@ Prefer these over looping `dran_list_pages` when you need an overview:
 
 ## 6. Autonomous agents
 
-For multi-step research, ingest, Q&A, or maintenance tasks, delegate with
+For multi-step Q&A or maintenance tasks, delegate with
 `dran_start_agent` and poll with `dran_get_agent_session`:
 
 | Agent | Purpose | Key limits / behaviour |
 | --- | --- | --- |
-| `research` | Searches/scrapes the web and creates `note`/`reference` pages. | max 10 sources, max 10 pages, max 10 dran_search queries (configurable via Settings). |
-| `ingest` | Validates, inspects, downloads a URL and creates a `reference` page. | File download limit 100 MiB. |
 | `ask` | Answers a question using **only** knowledge already in the brain; persists the answer as a `query` page. Tools: `search`, `get_page`, **`expand_neighbors`** (GraphRAG — expands typed neighbours of a seed page), `create_query_page`, `done`. | max 5 search queries; one query page per session. Typical flow: search → `expand_neighbors` on the best seed → `get_page` on the most relevant neighbours → synthesize. Don't overuse expand: 1–2 calls per session usually suffice. |
 | `curator` | Reviews pairs of pages with very similar embeddings, flags duplicates/contested content, writes a report note. Considers `community_id` (graph clustering) when comparing. | max 20 flags per session; duplicate threshold 0.05. |
 | `link_gardener` | Reads orphaned/under-linked pages, proposes typed relations with justifications. Includes a `transitive_candidates` tool that surfaces verified `part_of` transitives (A→C via B) — the agent must verify each against page contents before proposing. | max 10 proposals per session; `semantic` type forbidden. |
@@ -164,9 +160,9 @@ Each session tracks `meta.tokens_used` (accumulated LLM token usage) and
 
 ```json
 {
-  "agent_type": "research",
+  "agent_type": "ask",
   "context": "personal",
-  "input": "Yeshe Walmo"
+  "input": "How does Dran rank search results?"
 }
 ```
 
@@ -351,31 +347,6 @@ present in `meta`.
    → repeat for each attendee entity
 ```
 
-### Process a research article
-
-```
-1. dran_ingest_url({ url: "https://example.com/article", context: "personal", tags: ["research"] })
-   → creates a `reference` page
-2. dran_get_page({ context: "personal", slug: "<reference-slug>" })
-   → read the extracted content
-3. dran_create_page({ context: "personal", page_type: "note", body: "## Summary\n...", meta: { kind: "idea" } })
-   → capture your takeaways
-4. dran_create_relation({ source_slug: "<note-slug>", target_slug: "<reference-slug>", relation_type: "part_of", context: "personal" })
-5. If augmentation failed (no semantic links appeared): dran_reaugment_page({ context: "personal", slug: "<reference-slug>" })
-```
-
-### Research a topic (delegated to agent)
-
-```
-1. dran_start_agent({ agent_type: "research", context: "personal", input: "Yeshe Walmo" })
-   → returns { session_id: "..." }
-2. dran_get_agent_session({ session_id: "..." })   → poll until status: "completed"
-3. dran_get_page({ context: "personal", slug: "<created-page-slug>" })
-   → read each created note/reference page
-4. dran_create_relation({ source_slug: "<new-slug>", target_slug: "<existing-slug>", relation_type: "related", context: "personal" })
-   → link to existing knowledge if the agent didn't
-```
-
 ### Add a todo (with independent links)
 
 ```
@@ -471,7 +442,7 @@ Use `dran_update_todo`, not `dran_update_page` — `dran_update_todo` merges met
      meta: {
        health: "green",
        metric: "MCP tools documented",
-       target_value: 18,
+       target_value: 17,
        current_value: 14,
        unit: "tools",
        start_date: "2026-07-01",
@@ -567,8 +538,6 @@ Use `dran_update_todo`, not `dran_update_page` — `dran_update_todo` merges met
   `contradicts`, `embeds`.
 - **Using `[[slug]]` wikilinks.** Not supported. Use `![[slug]]` for embeds
   and `dran_create_relation` for explicit links.
-- **Treating `dran_ingest_url` as extraction-only.** It stores the page and (with
-  inference) extracts content — it's a capture tool, not just a reader.
 - **Assuming a goal is derived from a plan.** Links are **independent**. Setting
   `plan_slug` on a todo does NOT set its goal — set `goal_slug` explicitly when
   you want a direct goal link. You may set 0, 1, 2, or all 3 of

@@ -54,7 +54,8 @@ defmodule DranWeb.ProjectLive do
           rendered_body={@rendered_body}
           content_hidden={@active_tab not in ["overview", "graph"]}
           graph_active={@active_tab == "graph"}
-          editing={@editing}>
+          editing={@editing}
+        >
           <:actions>
             <.link navigate={~p"/projects"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> Back
@@ -82,7 +83,8 @@ defmodule DranWeb.ProjectLive do
               class={[
                 "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
                 @active_tab == tab && "border-primary text-primary",
-                @active_tab != tab && "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
+                @active_tab != tab &&
+                  "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
               ]}
             >
               {label}
@@ -93,13 +95,13 @@ defmodule DranWeb.ProjectLive do
             <%!-- Overview: dashboard del proyecto — status, stats, relacionados --%>
             <div :if={@active_tab == "overview"}>
               <.page_edit_form
-                  form={@form}
-                  page={@page}
-                  page_type={@page_type}
-                  context_id={@context_id}
-                  save_status={@save_status}
-                  editor_id="project-editor"
-                />
+                form={@form}
+                page={@page}
+                page_type={@page_type}
+                context_id={@context_id}
+                save_status={@save_status}
+                editor_id="project-editor"
+              />
             </div>
           </:tabs>
 

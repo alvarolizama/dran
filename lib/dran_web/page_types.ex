@@ -121,7 +121,7 @@ defmodule DranWeb.PageTypes do
     gettext("Goal")
     gettext("Plan")
     gettext("Todo")
-gettext("Comparison")
+    gettext("Comparison")
     gettext("Query")
     gettext("Notes")
     gettext("Concepts")
@@ -131,7 +131,7 @@ gettext("Comparison")
     gettext("Goals")
     gettext("Plans")
     gettext("Todos")
-gettext("Comparisons")
+    gettext("Comparisons")
     gettext("Queries")
   end
 end

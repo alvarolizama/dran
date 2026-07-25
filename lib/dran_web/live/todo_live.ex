@@ -171,8 +171,8 @@ defmodule DranWeb.TodoLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-        
-          editing={@editing}>
+          editing={@editing}
+        >
           <:actions>
             <.link navigate={~p"/todos"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
@@ -194,32 +194,32 @@ defmodule DranWeb.TodoLive do
           </:graph>
 
           <:tabs>
-                          <div :if={meta_get(@page.meta, "kind")} class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded bg-primary/15 text-primary text-xs font-medium">
-                  {String.capitalize(meta_get(@page.meta, "kind"))}
-                </span>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="text-caption mr-1">{gettext("Status:")}</span>
-                <button
-                  :for={{status, label, badge_class} <- @kanban_columns}
-                  phx-click="change_status"
-                  phx-value-slug={@page.slug}
-                  phx-value-status={status}
-                  class={status_button_class(kanban_status(@page), status, badge_class)}
-                >
-                  {label}
-                </button>
-              </div>
+            <div :if={meta_get(@page.meta, "kind")} class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded bg-primary/15 text-primary text-xs font-medium">
+                {String.capitalize(meta_get(@page.meta, "kind"))}
+              </span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-caption mr-1">{gettext("Status:")}</span>
+              <button
+                :for={{status, label, badge_class} <- @kanban_columns}
+                phx-click="change_status"
+                phx-value-slug={@page.slug}
+                phx-value-status={status}
+                class={status_button_class(kanban_status(@page), status, badge_class)}
+              >
+                {label}
+              </button>
+            </div>
 
-              <.page_edit_form
-                  form={@form}
-                  page={@page}
-                  page_type={@page_type}
-                  context_id={@context_id}
-                  save_status={@save_status}
-                  editor_id="todo-editor"
-                />
+            <.page_edit_form
+              form={@form}
+              page={@page}
+              page_type={@page_type}
+              context_id={@context_id}
+              save_status={@save_status}
+              editor_id="todo-editor"
+            />
           </:tabs>
         </.page_detail>
       </div>
