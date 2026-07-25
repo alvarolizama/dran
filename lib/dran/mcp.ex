@@ -88,6 +88,14 @@ defmodule Dran.MCP do
             "enum" => ["auto", "fts", "fuzzy", "semantic", "hybrid"],
             "description" =>
               "Search strategy. 'auto' (default) picks the best available. 'fts' = PostgreSQL full-text (fast, keyword). 'fuzzy' = trigram similarity (typo-tolerant). 'semantic' = vector embedding similarity (requires inference API). 'hybrid' = fts + semantic combined (requires inference API). Semantic/hybrid fall back to fts if inference is unavailable — check the returned `source` to confirm which strategy ran."
+          },
+          "limit" => %{
+            "type" => "integer",
+            "description" => "Maximum number of results (default 20, hard max 100)."
+          },
+          "offset" => %{
+            "type" => "integer",
+            "description" => "Number of results to skip for pagination (default 0). Use with limit to paginate large result sets."
           }
         },
         "required" => ["query", "context"]
@@ -490,6 +498,10 @@ defmodule Dran.MCP do
           "limit" => %{
             "type" => "integer",
             "description" => "Maximum number of results (default 50, hard max 500)."
+          },
+          "offset" => %{
+            "type" => "integer",
+            "description" => "Number of results to skip for pagination (default 0). Use with limit to paginate large lists."
           },
           "owner" => %{
             "type" => "string",
@@ -896,6 +908,8 @@ defmodule Dran.MCP do
       opts = [context_id: context.id]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["strategy"], do: Keyword.put(opts, :strategy, args["strategy"]), else: opts
+      opts = if args["limit"], do: Keyword.put(opts, :limit, min(args["limit"], 100)), else: opts
+      opts = if args["offset"], do: Keyword.put(opts, :offset, args["offset"]), else: opts
 
       case Brain.search(query, opts) do
         {:ok, results} ->
@@ -1169,8 +1183,9 @@ defmodule Dran.MCP do
 
     if context do
       limit = min(Map.get(args, "limit", 50), 500)
+      offset = Map.get(args, "offset", 0)
 
-      opts = [context_id: context.id, limit: limit]
+      opts = [context_id: context.id, limit: limit, offset: offset]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
       opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts

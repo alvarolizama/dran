@@ -124,6 +124,7 @@ defmodule Dran.Brain do
     assignee = Keyword.get(opts, :assignee)
     archived = Keyword.get(opts, :archived, false)
     limit = Keyword.get(opts, :limit, 50)
+    offset = Keyword.get(opts, :offset, 0)
     include_body = Keyword.get(opts, :include_body, false)
 
     base =
@@ -172,6 +173,7 @@ defmodule Dran.Brain do
       |> maybe_distinct_for_planning(goal_slug)
       |> order_by([p], desc: p.updated_at)
       |> limit(^limit)
+      |> offset(^offset)
 
     Repo.all(query)
   end
@@ -1459,6 +1461,7 @@ defmodule Dran.Brain do
     context_id = Keyword.get(opts, :context_id)
     type = Keyword.get(opts, :type)
     limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
 
     # Build tsquery with prefix matching
     tsquery = String.replace(query_string, ~r/\s+/, " & ")
@@ -1469,7 +1472,8 @@ defmodule Dran.Brain do
         where: p.archived == false,
         order_by:
           fragment("ts_rank(search_vector, plainto_tsquery('spanish', ?)) DESC", ^tsquery),
-        limit: ^limit
+        limit: ^limit,
+        offset: ^offset
 
     query =
       base
@@ -1507,6 +1511,7 @@ defmodule Dran.Brain do
   def fuzzy_search(query_string, opts \\ []) do
     context_id = Keyword.get(opts, :context_id)
     limit = Keyword.get(opts, :limit, 10)
+    offset = Keyword.get(opts, :offset, 0)
 
     query =
       from p in Page,
@@ -1514,6 +1519,7 @@ defmodule Dran.Brain do
         where: p.archived == false,
         order_by: fragment("similarity(immutable_unaccent(title), ?) DESC", ^query_string),
         limit: ^limit,
+        offset: ^offset,
         select: %{
           id: p.id,
           slug: p.slug,
@@ -1548,6 +1554,7 @@ defmodule Dran.Brain do
     context_id = Keyword.get(opts, :context_id)
     type = Keyword.get(opts, :type)
     limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
 
     case Dran.Inference.embed(query_string) do
       {:ok, vector} ->
@@ -1559,6 +1566,7 @@ defmodule Dran.Brain do
             where: p.archived == false,
             order_by: fragment("? <=> ?", p.embedding, ^vec),
             limit: ^limit,
+            offset: ^offset,
             select: %{
               id: p.id,
               title: p.title,
