@@ -6,7 +6,7 @@ defmodule Dran.Agent.SessionTest do
   test "rejects invalid status" do
     changeset =
       Session.changeset(%Session{}, %{
-        agent_type: "research",
+        agent_type: "ask",
         input: "x",
         context_id: Ecto.UUID.generate(),
         status: "bogus"
@@ -19,7 +19,7 @@ defmodule Dran.Agent.SessionTest do
     for status <- ~w(pending running done failed cancelled) do
       changeset =
         Session.changeset(%Session{}, %{
-          agent_type: "research",
+          agent_type: "ask",
           input: "x",
           context_id: Ecto.UUID.generate(),
           status: status

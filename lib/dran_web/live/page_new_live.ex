@@ -267,7 +267,6 @@ defmodule DranWeb.PageNewLive do
   defp type_to_page("projects"), do: "project"
   defp type_to_page("plans"), do: "plan"
   defp type_to_page("todos"), do: "todo"
-  defp type_to_page("artifacts"), do: "artifact"
   defp type_to_page("comparisons"), do: "comparison"
   defp type_to_page("queries"), do: "query"
   defp type_to_page(_), do: "note"

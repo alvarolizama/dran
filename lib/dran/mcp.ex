@@ -12,7 +12,7 @@ defmodule Dran.MCP do
 
   ## Tools (18)
   - `dran_search` — use FIRST to find anything; strategy=auto picks best available
-  - `dran_create_page` — create notes, concepts, entities, references, goals, plans, projects, artifacts, comparisons
+  - `dran_create_page` — create notes, concepts, entities, references, goals, plans, projects, comparisons
   - `dran_update_page` — update page fields; REPLACES meta entirely (not a merge)
   - `dran_get_page` — read full page body by slug; use after dran_search/dran_list_pages, not before
   - `dran_delete_page` — delete a page by slug; **irreversible** (cascades to relations + versions)
@@ -26,8 +26,7 @@ defmodule Dran.MCP do
   - `dran_lint_brain` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
-  - `dran_ingest_url` — save external content (URL/file) as a reference page
-  - `dran_start_agent` — start an autonomous agent (research, ingest, ask, curator, link_gardener, weekly_review)
+  - `dran_start_agent` — start an autonomous agent (ask, curator, link_gardener, weekly_review)
   - `dran_get_agent_session` — poll an agent session for status and steps
 
   ## Embeds
@@ -41,7 +40,6 @@ defmodule Dran.MCP do
   - `wiki://{context}/index` — wiki index (all slugs + titles)
 
   ## Prompts
-  - `research_topic` — scaffold a research page
   - `brainstorm` — generate ideas around a topic
   - `goal_review` — review a goal's status
   """
@@ -71,7 +69,7 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter restricting results to a single page type: note, concept, entity, reference, goal, plan, project, todo, artifact, comparison, or query.",
+              "Optional filter restricting results to a single page type: note, concept, entity, reference, goal, plan, project, todo, comparison, or query.",
             "enum" => [
               "note",
               "concept",
@@ -81,7 +79,6 @@ defmodule Dran.MCP do
               "plan",
               "project",
               "todo",
-              "artifact",
               "comparison",
               "query"
             ]
@@ -99,14 +96,13 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_page",
       "description" => """
-      Use for notes, concepts, entities, references, goals, plans, projects, artifacts, comparisons. For todos use dran_create_todo instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
+      Use for notes, concepts, entities, references, goals, plans, projects, comparisons. For todos use dran_create_todo instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
 
       Page types and subtypes (set `meta.kind`):
       - note: thought, journal, idea, meeting, question, quote, reminder
       - concept: technique, pattern, discipline, theory
       - entity: person, company, product, tool, place, event
       - reference: article, paper, video, podcast, book
-      - artifact: document, code, design, deliverable, file
       - goal: has kind (personal/coding/business/learning/health/finance/other), health (green/yellow/red), metric/target_value/current_value/unit/progress, start_date, target_date
       - plan: has kind (personal/coding/business/learning/health/finance/other), horizon (weekly/monthly/quarterly/yearly), period, status (draft/active/done/archived), due_date
       - project: has status (draft/active/on_hold/done/archived), priority, health, health_source (manual/derived), start_date, target_date
@@ -151,7 +147,6 @@ defmodule Dran.MCP do
               "plan",
               "project",
               "todo",
-              "artifact",
               "comparison",
               "query"
             ]
@@ -164,7 +159,7 @@ defmodule Dran.MCP do
           "meta" => %{
             "type" => "object",
             "description" =>
-              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kind, kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{kind, health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, artifact→{kind, filename, mime_type, storage_path}, comparison→{entities, criteria, verdict}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links."
+              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kind, kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{kind, health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, comparison→{entities, criteria, verdict}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links."
           },
           "summary" => %{
             "type" => "string",
@@ -340,36 +335,6 @@ defmodule Dran.MCP do
       }
     },
     %{
-      "name" => "dran_ingest_url",
-      "description" =>
-        "Save external content (a URL or file) as a reference page. For HTML pages, stores the URL so content can be read later. For files (PDF, documents, images), downloads and stores the file with a download link. **This tool does NOT extract or parse content** — it only bookmarks/stores the source; use `dran_get_page` or the URL directly to read content afterward. For bulk web research on a topic, use `dran_start_agent` with agent_type=research instead. Returns the created reference page's slug and type.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "context" => %{
-            "type" => "string",
-            "description" => "Context slug where the reference page will be created."
-          },
-          "url" => %{
-            "type" => "string",
-            "description" =>
-              "URL to ingest — an HTML article, web page, or a direct file URL (PDF, image, document)."
-          },
-          "slug" => %{
-            "type" => "string",
-            "description" =>
-              "Custom slug for the reference page (auto-derived from the page title if omitted)."
-          },
-          "tags" => %{
-            "type" => "array",
-            "items" => %{"type" => "string"},
-            "description" => "Tags to attach to the reference page (optional)."
-          }
-        },
-        "required" => ["context", "url"]
-      }
-    },
-    %{
       "name" => "dran_delete_page",
       "description" =>
         "Delete a page by slug. **This is irreversible** — cascading deletes remove all relations to/from the page and all page version history. There is no undo. Always confirm with the user before calling. Returns a confirmation with the deleted page's title and slug, or an error if not found.",
@@ -451,7 +416,7 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter by page type: note, concept, entity, reference, goal, plan, project, todo, artifact, comparison, or query.",
+              "Optional filter by page type: note, concept, entity, reference, goal, plan, project, todo, comparison, or query.",
             "enum" => [
               "note",
               "concept",
@@ -461,7 +426,6 @@ defmodule Dran.MCP do
               "plan",
               "project",
               "todo",
-              "artifact",
               "comparison",
               "query"
             ]
@@ -670,15 +634,15 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_start_agent",
       "description" =>
-        "Start an autonomous agent session and return immediately. Returns a session_id and track_url — poll `dran_get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background. Choose the agent_type that matches your goal: 'research' explores a topic and creates pages from findings; 'ingest' fetches a single URL and saves its content as a reference page; 'ask' answers a question using ONLY knowledge already in the brain (persists as a query page); 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages; 'weekly_review' writes a weekly journal in Spanish.",
+        "Start an autonomous agent session and return immediately. Returns a session_id and track_url — poll `dran_get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background. Choose the agent_type that matches your goal: 'ask' answers a question using ONLY knowledge already in the brain (persists as a query page); 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages; 'weekly_review' writes a weekly journal in Spanish.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
           "agent_type" => %{
             "type" => "string",
-            "enum" => ["research", "ingest", "ask", "curator", "link_gardener", "weekly_review"],
+            "enum" => ["ask", "curator", "link_gardener", "weekly_review"],
             "description" =>
-              "Type of agent to run. 'research' = explore a topic and create pages from findings. 'ingest' = download a URL and save it as a reference page. 'ask' = answer using ONLY knowledge already in the brain (persisted as a query page). 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'weekly_review' = write a weekly journal in Spanish."
+              "Type of agent to run. 'ask' = answer using ONLY knowledge already in the brain (persisted as a query page). 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'weekly_review' = write a weekly journal in Spanish."
           },
           "context" => %{
             "type" => "string",
@@ -687,7 +651,7 @@ defmodule Dran.MCP do
           "input" => %{
             "type" => "string",
             "description" =>
-              "Agent input. For research: a topic or question to explore. For ingest: a URL to fetch and save. For ask: a question to answer from brain knowledge. For curator/link_gardener/weekly_review: typically the context focus or instructions."
+              "Agent input. For ask: a question to answer from brain knowledge. For curator/link_gardener/weekly_review: typically the context focus or instructions."
           },
           "opts" => %{
             "type" => "object",
@@ -737,14 +701,6 @@ defmodule Dran.MCP do
   ]
 
   @prompts [
-    %{
-      "name" => "research_topic",
-      "description" => "Scaffold a research page with outline, sources, and questions.",
-      "arguments" => [
-        %{"name" => "topic", "description" => "The topic to research", "required" => true},
-        %{"name" => "context", "description" => "Context slug", "required" => true}
-      ]
-    },
     %{
       "name" => "brainstorm",
       "description" => "Generate ideas around a topic.",
@@ -1055,22 +1011,6 @@ defmodule Dran.MCP do
       ## Contested pages: #{length(report.contested)}
       #{format_page_list(report.contested)}
       """
-    else
-      "Error: context '#{context_slug}' not found"
-    end
-  end
-
-  defp execute_tool("dran_ingest_url", %{"context" => context_slug, "url" => url} = args) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
-      case Dran.Agent.Ingest.Utils.do_ingest(context, url, args) do
-        {:ok, page} ->
-          "Ingested '#{page.title}' as #{page.page_type} (#{page.slug}) from #{url}"
-
-        {:error, reason} ->
-          "Error: failed to ingest URL: #{reason}"
-      end
     else
       "Error: context '#{context_slug}' not found"
     end
@@ -1426,12 +1366,6 @@ defmodule Dran.MCP do
 
   # ── Agent helpers ─────────────────────────────────────────────────────────
 
-  defp start_agent_by_type("research", input, context_id, opts),
-    do: Agent.Research.run(input, context_id, opts)
-
-  defp start_agent_by_type("ingest", input, context_id, opts),
-    do: Agent.Ingest.run(input, context_id, opts)
-
   defp start_agent_by_type("ask", input, context_id, opts),
     do: Agent.QA.run(input, context_id, opts)
 
@@ -1557,27 +1491,6 @@ defmodule Dran.MCP do
   end
 
   # ── Prompts ─────────────────────────────────────────────────────────────────
-
-  defp get_prompt("research_topic", %{"topic" => topic, "context" => context}) do
-    [
-      %{
-        "role" => "user",
-        "content" => %{
-          "type" => "text",
-          "text" => """
-          Research the topic: #{topic}
-
-          1. Create an outline for a research page
-          2. List key sources to consult
-          3. Formulate 3-5 research questions
-          4. Suggest tags to related topics
-
-          Save the result as a page in context '#{context}' using the dran_create_page tool.
-          """
-        }
-      }
-    ]
-  end
 
   defp get_prompt("brainstorm", %{"topic" => topic, "context" => context}) do
     [

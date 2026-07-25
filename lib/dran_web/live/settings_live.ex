@@ -3,7 +3,7 @@ defmodule DranWeb.SettingsLive do
   Settings page showing an editable "Brain tuning" section backed by
   `Dran.Settings`, an editable "Modelos" section for per-purpose model
   overrides (also backed by `Dran.Settings`), followed by read-only
-  environment configuration (agents, inference API, Firecrawl, and uploads).
+  environment configuration (agents, inference API, and uploads).
   """
 
   use DranWeb, :live_view
@@ -29,18 +29,7 @@ defmodule DranWeb.SettingsLive do
       {"model_rerank", &Config.env_rerank_model/0, fn -> gettext("Re-ranking") end,
        fn ->
          gettext("Model used to re-rank semantic search results by relevance to the query.")
-       end},
-      {"model_markitdown", &Config.env_markitdown_model/0,
-       fn -> gettext("Extracción de documentos") end,
-       fn ->
-         gettext(
-           "Model used to convert attached files (PDF, Office) into markdown for ingestion."
-         )
-       end},
-      {"model_asr", &Config.env_asr_model/0, fn -> gettext("Transcripción de audio") end,
-       fn -> gettext("Model used to transcribe audio attachments into text.") end},
-      {"model_vision", &Config.env_vision_model/0, fn -> gettext("Visión") end,
-       fn -> gettext("Model used to describe images attached to pages (multimodal vision).") end}
+       end}
     ]
   end
 
@@ -414,41 +403,6 @@ defmodule DranWeb.SettingsLive do
                 <.status_badge active={Config.use_rerank?()} />
               </.config_row>
               <.config_row
-                label={gettext("Vision model")}
-                env="DRAN_INFERENCE_VISION_MODEL"
-                description={
-                  gettext(
-                    "Effective model for image description (web override or env default). See “Modelos” above to override."
-                  )
-                }
-              >
-                <code class="text-sm font-mono text-primary">{Config.vision_model()}</code>
-              </.config_row>
-              <.config_row
-                label={gettext("ASR model")}
-                env="DRAN_INFERENCE_ASR_MODEL"
-                description={
-                  gettext(
-                    "Effective model for audio transcription (web override or env default). See “Modelos” above to override."
-                  )
-                }
-              >
-                <code class="text-sm font-mono text-primary">{Config.asr_model()}</code>
-              </.config_row>
-              <.config_row
-                label={gettext("MarkItDown model")}
-                env="DRAN_INFERENCE_MARKITDOWN_MODEL"
-                description={
-                  gettext(
-                    "Effective model for document-to-markdown conversion (web override or env default). See “Modelos” above to override."
-                  )
-                }
-              >
-                <code class="text-sm font-mono text-primary">
-                  {Config.markitdown_model() || "—"}
-                </code>
-              </.config_row>
-              <.config_row
                 label={gettext("Request timeout")}
                 env="DRAN_INFERENCE_TIMEOUT"
                 description={
@@ -464,7 +418,7 @@ defmodule DranWeb.SettingsLive do
             <.config_section
               icon="hero-bolt"
               title={gettext("Agents")}
-              subtitle={gettext("Autonomous research and ingest agents")}
+              subtitle={gettext("Autonomous agents")}
             >
               <.config_row
                 label={gettext("Max steps")}
@@ -491,43 +445,6 @@ defmodule DranWeb.SettingsLive do
                 <span class="text-sm text-base-content/60">
                   {Application.get_env(:dran, :agent_per_step_timeout, 120_000)} {gettext("ms")}
                 </span>
-              </.config_row>
-            </.config_section>
-
-            <.config_section
-              icon="hero-globe-alt"
-              title={gettext("Firecrawl")}
-              subtitle={gettext("Web search and scraping")}
-            >
-              <.config_row
-                label={gettext("Status")}
-                env="FIRECRAWL_API_KEY"
-                description={
-                  gettext(
-                    "Whether Firecrawl web search and scraping is configured. Read-only — set via environment variable."
-                  )
-                }
-              >
-                <.status_badge active={Dran.Firecrawl.enabled?()} />
-              </.config_row>
-              <.config_row
-                label={gettext("API Key")}
-                env="FIRECRAWL_API_KEY"
-                description={gettext("Firecrawl API key. Read-only — set via environment variable.")}
-              >
-                <span class="text-sm text-base-content/60">
-                  {if Dran.Firecrawl.enabled?(), do: "••••••••", else: "—"}
-                </span>
-              </.config_row>
-              <.config_row
-                label={gettext("Base URL")}
-                description={
-                  gettext(
-                    "Firecrawl API base URL. Read-only — hardcoded to the official Firecrawl endpoint."
-                  )
-                }
-              >
-                <code class="text-sm font-mono text-primary">https://api.firecrawl.dev/v1</code>
               </.config_row>
             </.config_section>
 
@@ -643,7 +560,7 @@ defmodule DranWeb.SettingsLive do
         <div class="min-w-0 flex-1">
           <h2 class="text-heading">{gettext("Brain tuning")}</h2>
           <p class="text-caption mt-0.5">
-            {gettext("Semantic thresholds, agent limits, and research preferences")}
+            {gettext("Semantic thresholds and agent limits")}
           </p>
         </div>
       </header>
@@ -668,7 +585,7 @@ defmodule DranWeb.SettingsLive do
               />
               <p class="text-xs text-base-content/60 mt-1.5">
                 {gettext(
-                  "Maximum number of pages the autonomous research and ingest agents will create in a single run. Higher values mean longer runs and more content per run. Default: 10."
+                  "Maximum number of pages the autonomous agents will create in a single run. Higher values mean longer runs and more content per run. Default: 10."
                 )}
               </p>
             </div>

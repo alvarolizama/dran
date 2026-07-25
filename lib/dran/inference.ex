@@ -70,10 +70,7 @@ defmodule Dran.Inference do
     required = [
       Config.embedding_model(),
       Config.rerank_model(),
-      Config.markitdown_model(),
-      Config.chat_model(),
-      Config.asr_model(),
-      Config.vision_model()
+      Config.chat_model()
     ]
 
     with {:ok, models} <- models() do

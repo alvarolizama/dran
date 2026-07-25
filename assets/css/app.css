@@ -168,7 +168,6 @@
 /* TipTap content area */
 .tiptap {
   min-height: 300px;
-  max-width: 65ch;
   outline: none;
   line-height: 1.6;
   padding: 1.5rem 2rem;
@@ -284,6 +283,44 @@
 }
 .tiptap .embed-placeholder:hover {
   background: oklch(from var(--color-primary) l c h / 18%);
+}
+
+/* ── Mermaid diagrams (rendered in read view) ── */
+
+.mermaid-rendered {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  background: oklch(from var(--color-base-200) l c h / 50%);
+  border: 1px solid var(--color-base-300);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+
+.mermaid-rendered svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-error {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--color-error);
+  border-radius: 0.5rem;
+  background: oklch(from var(--color-error) l c h / 10%);
+  color: var(--color-error);
+  font-size: 0.875rem;
+}
+
+.mermaid-error pre {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: oklch(from var(--color-base-100) l c h / 80%);
+  border-radius: 0.375rem;
+  color: var(--color-base-content);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ── Rendered markdown (read view) ── */

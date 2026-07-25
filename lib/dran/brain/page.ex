@@ -12,7 +12,6 @@ defmodule Dran.Brain.Page do
   - `entity` — something concrete (person, company, product, tool, place, event)
   - `concept` — abstract idea, technique, pattern, discipline, theory
   - `reference` — immutable external source (article, paper, video, podcast, book)
-  - `artifact` — attached file (document, code, design, deliverable)
   - `query` — question with answer; semantic relations link it to concepts/entities
 
   ## Meta JSONB
@@ -68,7 +67,7 @@ defmodule Dran.Brain.Page do
              :updated_at
            ]}
 
-  @page_types ~w(note comparison plan todo goal entity concept reference artifact query project)
+  @page_types ~w(note comparison plan todo goal entity concept reference query project)
   @confidence_levels ~w(low medium high verified)
 
   schema "pages" do

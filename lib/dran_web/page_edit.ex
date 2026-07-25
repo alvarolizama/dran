@@ -287,7 +287,7 @@ defmodule DranWeb.PageEdit do
             File.read!(path)
           end)
 
-        store_file_and_create_artifact(socket, context_id, binary, filename, client_type)
+        store_file_and_create_page(socket, context_id, binary, filename, client_type)
       end)
       |> List.wrap()
       |> Enum.reject(&is_nil/1)
@@ -443,7 +443,7 @@ defmodule DranWeb.PageEdit do
     "/#{DranWeb.PageTypes.path(type)}/#{slug}"
   end
 
-  defp store_file_and_create_artifact(socket, context_id, binary, filename, client_type) do
+  defp store_file_and_create_page(socket, context_id, binary, filename, client_type) do
     max_size = Uploads.max_size()
 
     if byte_size(binary) > max_size do
@@ -452,13 +452,13 @@ defmodule DranWeb.PageEdit do
     else
       stored = Uploads.store(context_id, binary, filename, client_type)
 
-      slug = unique_slug(filename, context_id, "artifact")
+      slug = unique_slug(filename, context_id, "reference")
 
       attrs = %{
         context_id: context_id,
         title: filename,
         slug: slug,
-        page_type: "artifact",
+        page_type: "reference",
         body: "",
         tags: [],
         meta: %{

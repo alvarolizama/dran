@@ -13,7 +13,7 @@ defmodule Dran.InferenceQueueTest do
     )
 
     ensure_registry()
-    ensure_queue(:vision)
+    ensure_queue(:chat)
 
     on_exit(fn ->
       Application.put_env(:dran, :inference, original)
@@ -44,8 +44,8 @@ defmodule Dran.InferenceQueueTest do
       :done
     end
 
-    task1 = Task.async(fn -> Queue.run(:vision, work) end)
-    task2 = Task.async(fn -> Queue.run(:vision, work) end)
+    task1 = Task.async(fn -> Queue.run(:chat, work) end)
+    task2 = Task.async(fn -> Queue.run(:chat, work) end)
 
     assert :done = Task.await(task1)
     assert :done = Task.await(task2)

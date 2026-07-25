@@ -39,7 +39,6 @@ defmodule DranWeb.SettingsLiveTest do
 
     # Removed knobs are gone from the form
     refute html =~ "agent_max_sources"
-    refute html =~ "research_lang"
 
     # Default values come from Dran.Settings.defaults/0
     defaults = Settings.defaults()

@@ -1,6 +1,6 @@
 ---
 name: second-brain
-description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 18 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, artifacts, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
+description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 17 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
 version: 5.1.0
 author: Álvaro Lizama
 license: MIT
@@ -16,7 +16,7 @@ metadata:
 
 Dran is a **personal second-brain / knowledge-graph server**. Every piece of
 knowledge is a typed **page** (note, concept, entity, reference, goal, plan,
-project, todo, artifact, comparison, query) connected by typed **relations**
+project, todo, comparison, query) connected by typed **relations**
 (`semantic`, `related`, `part_of`, `supersedes`, `contradicts`, `embeds`). All
 operations go through a single MCP endpoint — there is no need to use the REST
 API or web UI for agent-driven workflows.
@@ -78,7 +78,7 @@ groups in order: capture → read/find → organize → maintain → automate.
 
 | Tool | Purpose | Use when / don't use when |
 | --- | --- | --- |
-| `dran_create_page` | Create any page type. | Use for notes, concepts, entities, references, goals, plans, projects, artifacts, comparisons, queries. **Don't use for todos** — use `dran_create_todo`. |
+| `dran_create_page` | Create any page type. | Use for notes, concepts, entities, references, goals, plans, projects, comparisons, queries. **Don't use for todos** — use `dran_create_todo`. |
 | `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links. | Use for action items. Optional `project_slug`, `goal_slug`, `plan_slug` are **independent** — set any combination (0, 1, 2, or 3); each materializes its own `part_of`. **Don't use `dran_create_page` with `page_type=todo`** — it won't get the right meta shape. |
 | `dran_ingest_url` | Save a URL as a `reference` page, or download a file. With inference enabled, extracts content (MarkItDown/Vision/ASR). | Use for web articles and file URLs. **Don't pass local/private IPs** — SSRF protection blocks them. |
 
@@ -191,7 +191,7 @@ There is no dedicated dran_search agent; for dran_search-only tasks use `dran_se
 7. **Use `dran_get_page` to read.** Never answer from dran_search excerpts alone.
 8. **Never create `semantic` relations manually.** They are automatic.
 9. **Plain `[[slug]]` wikilinks are not supported.** Use `![[slug]]` only to
-   embed artifacts (auto-creates `embeds` relations); use `dran_create_relation`
+   embed files (auto-creates `embeds` relations); use `dran_create_relation`
    for explicit typed relationships.
 10. **Link your pages well.** Search ranking has a PageRank authority boost —
     pages with more typed relations (`part_of`, `related`, `embeds`) rank higher.
@@ -223,7 +223,6 @@ There is no dedicated dran_search agent; for dran_search-only tasks use `dran_se
 | `concept` | Techniques, patterns, disciplines, theories | technique, pattern, discipline, theory | kind, domain, parent_concept |
 | `entity` | People, companies, products, tools, places, events | person, company, product, tool, place, event | kind, aliases, external_url, location |
 | `reference` | External sources | article, paper, video, podcast, book | kind, source_url, published_at |
-| `artifact` | Files, code snippets, designs, deliverables | document, code, design, deliverable, file | kind, filename, mime_type, storage_path, sha256 |
 | `project` | Larger initiatives that group goals/plans/todos | — | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
 | `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other | kind, health (green/yellow/red), metric, target_value, current_value, unit, progress, progress_manual, start_date, target_date, team |
 | `plan` | Time-horizoned plans | personal, coding, business, learning, health, finance, other | kind, horizon, status (draft/active/done/archived), period, project_slug, goal_slug |
@@ -280,7 +279,6 @@ Each slug is set independently in meta; each materializes its own part_of relati
 | `concept` | `kind` | technique, pattern, discipline, theory |
 | `entity` | `kind` | person, company, product, tool, place, event |
 | `reference` | `kind` | article, paper, video, podcast, book |
-| `artifact` | `kind` | document, code, design, deliverable, file |
 | `todo` | `kind` | personal, coding, business, learning, health, finance, other |
 | `todo` | `kanban_status` | backlog, this_week, today, in_progress, done, cancelled |
 | `todo` | `priority` | low, medium, high, urgent |

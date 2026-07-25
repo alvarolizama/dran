@@ -4,7 +4,7 @@
 #
 # Creates the default context and seeds it with realistic Spanish content:
 # goals with nested todos, notes with embeds, concepts with semantic relations,
-# an artifact, and a daily note. Idempotent — safe to run multiple times.
+# and a daily note. Idempotent — safe to run multiple times.
 
 import Ecto.Query
 alias Dran.Repo
@@ -532,47 +532,7 @@ concept_actores =
   })
 
 # ──────────────────────────────────────────────────────────────────────────
-# 5. Artifact (1) — a web link
-# ──────────────────────────────────────────────────────────────────────────
-
-IO.puts("\nArtifacts:")
-
-artifact_building_second_brain =
-  Seeder.page!(ctx_id, %{
-    "slug" => "artifact-building-second-brain-book",
-    "title" => "Building a Second Brain (Tiago Forte)",
-    "page_type" => "artifact",
-    "body" => """
-    # Building a Second Brain
-
-    Libro de Tiago Forte que define el método PARA y la filosofía del
-    segundo cerebro.
-
-    **URL**: https://www.buildingasecondbrain.com/book
-
-    ## Notas clave
-    - CODE: Capture, Organize, Distill, Express
-    - Progresivo: resúmenes cada vez más condensados
-    - Acción-orientado: el conocimiento debe servir para crear
-
-    Referenciado en ![[concepto-segundo-cerebro]] y ![[nota-metodo-para]].
-    """,
-    "summary" =>
-      "Libro fundacional de Tiago Forte sobre el método PARA y la filosofía del segundo cerebro.",
-    "tags" => ["libro", "referencia", "productividad"],
-    "meta" => %{
-      "kind" => "link",
-      "url" => "https://www.buildingasecondbrain.com/book",
-      "source_type" => "web"
-    },
-    "kb_source_url" => "https://www.buildingasecondbrain.com/book",
-    "kb_confidence" => "verified",
-    "owner" => "alvaro",
-    "created_by" => "alvaro"
-  })
-
-# ──────────────────────────────────────────────────────────────────────────
-# 6. Daily note (today) via Brain.ensure_daily_note
+# 5. Daily note (today) via Brain.ensure_daily_note
 # ──────────────────────────────────────────────────────────────────────────
 
 IO.puts("\nDaily note:")
@@ -670,10 +630,6 @@ Seeder.rel!(
 
 Seeder.rel!(ctx_id, "nota-patron-genserver-elixir", "goal-aprender-elixir-phoenix", "related")
 Seeder.rel!(ctx_id, "nota-reflexion-productividad-diaria", "goal-mejorar-salud-fisica", "related")
-
-# Related: artifact to concepts/notes
-Seeder.rel!(ctx_id, "artifact-building-second-brain-book", "concepto-segundo-cerebro", "related")
-Seeder.rel!(ctx_id, "artifact-building-second-brain-book", "nota-metodo-para", "related")
 
 IO.puts("  ✓ Relations created (related, semantic, part_of, embeds)")
 

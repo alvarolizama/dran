@@ -16,7 +16,6 @@ defmodule Dran.Brain.SemanticSearchTest do
       api_key: "test-key",
       embedding_model: "Qwen3-Embedding",
       rerank_model: "Qwen3-Reranker",
-      markitdown_model: "MarkItDown",
       timeout: 5_000,
       req_plug: {Req.Test, Dran.Inference.Client},
       schedule_async: false

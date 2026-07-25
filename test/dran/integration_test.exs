@@ -29,7 +29,6 @@ defmodule Dran.IntegrationTest do
       api_key: nil,
       embedding_model: nil,
       rerank_model: nil,
-      markitdown_model: nil,
       chat_model: nil,
       timeout: 50,
       schedule_async: false,
@@ -56,20 +55,20 @@ defmodule Dran.IntegrationTest do
 
   describe "full pipeline: create → embed → rename → search → export" do
     test "create pages, resolve embeds, rename, search, and export", %{context: ctx} do
-      # ── 1. Create an artifact page ──
-      {:ok, artifact} =
+      # ── 1. Create a note page ──
+      {:ok, note_page} =
         Brain.create_page(%{
           context_id: ctx.id,
           title: "Design Document",
           slug: "design-doc",
-          page_type: "artifact",
+          page_type: "note",
           body: "This is the content of the design document."
         })
 
-      assert artifact.slug == "design-doc"
-      assert artifact.page_type == "artifact"
+      assert note_page.slug == "design-doc"
+      assert note_page.page_type == "note"
 
-      # ── 2. Create a note that embeds the artifact via ![[design-doc]] ──
+      # ── 2. Create a note that embeds the page via ![[design-doc]] ──
       {:ok, note} =
         Brain.create_page(%{
           context_id: ctx.id,
@@ -85,25 +84,25 @@ defmodule Dran.IntegrationTest do
 
       assert length(embed_rels) == 1
       embed_rel = hd(embed_rels)
-      assert embed_rel.target_id == artifact.id
+      assert embed_rel.target_id == note_page.id
 
       # The preloaded target page should have slug but no body (lightweight select)
       assert embed_rel.target.slug == "design-doc"
-      assert embed_rel.target.page_type == "artifact"
+      assert embed_rel.target.page_type == "note"
       assert embed_rel.target.body == nil or embed_rel.target.body == ""
 
       # ── 4. Verify embeddings degrade gracefully ──
       # create_page calls Embeddings.schedule which runs synchronously (schedule_async: false).
       # With an invalid base_url + 50ms timeout, the embedding call fails,
       # and the page's embedding stays nil.
-      artifact_after = Brain.get_page!(artifact.id)
-      assert artifact_after.embedding == nil
+      page_after = Brain.get_page!(note_page.id)
+      assert page_after.embedding == nil
 
       note_after = Brain.get_page!(note.id)
       assert note_after.embedding == nil
 
-      # ── 5. Rename the artifact's slug ──
-      {:ok, renamed} = Brain.rename_slug(artifact, "design-spec")
+      # ── 5. Rename the page's slug ──
+      {:ok, renamed} = Brain.rename_slug(note_page, "design-spec")
 
       assert renamed.slug == "design-spec"
 
@@ -116,13 +115,13 @@ defmodule Dran.IntegrationTest do
       rels_after = Brain.list_relations_for_page(note.id)
       embed_rels_after = Enum.filter(rels_after.outbound, &(&1.relation_type == "embeds"))
       assert length(embed_rels_after) == 1
-      assert hd(embed_rels_after).target_id == artifact.id
+      assert hd(embed_rels_after).target_id == note_page.id
       assert hd(embed_rels_after).target.slug == "design-spec"
 
       # ── 6. Search for the renamed page by content (FTS, no embeddings needed) ──
       {:ok, results} = Brain.search("design document", context_id: ctx.id)
 
-      # The renamed artifact should be findable via full-text search
+      # The renamed page should be findable via full-text search
       found = Enum.find(results, &(&1.slug == "design-spec"))
       assert found != nil
       assert found.title == "Design Document"
@@ -157,7 +156,7 @@ defmodule Dran.IntegrationTest do
       stats = Brain.stats(ctx.id)
 
       assert stats.total_pages == 2
-      assert stats.by_type["artifact"] == 1
+      assert stats.by_type["note"] == 2
       assert stats.by_type["note"] == 1
       assert stats.total_relations >= 1
       assert stats.orphan_count >= 0

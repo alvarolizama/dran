@@ -14,7 +14,6 @@ defmodule Dran.MCPTest do
       api_key: nil,
       embedding_model: nil,
       rerank_model: nil,
-      markitdown_model: nil,
       timeout: 100,
       schedule_async: false
     )
@@ -54,9 +53,9 @@ defmodule Dran.MCPTest do
       {:ok, art} =
         Brain.create_page(%{
           context_id: ctx.id,
-          title: "Artifact",
+          title: "Art Page",
           slug: "old-art",
-          page_type: "artifact"
+          page_type: "note"
         })
 
       # Page that embeds it.

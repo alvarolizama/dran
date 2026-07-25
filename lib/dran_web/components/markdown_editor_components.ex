@@ -105,8 +105,21 @@ defmodule DranWeb.MarkdownEditorComponents do
       <.tb_btn id={@id} cmd="embed" icon="hero-photo" label="![]" />
       <.tb_btn id={@id} cmd="table" icon="hero-table" label="" />
       <div class="tb-separator" aria-hidden="true"></div>
+      <.tb_btn id={@id} cmd="mermaid" icon="hero-chart-bar-square" label="" />
+      <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="undo" icon="hero-arrow-uturn-left" label="" />
       <.tb_btn id={@id} cmd="redo" icon="hero-arrow-uturn-right" label="" />
+      <div class="tb-separator ml-auto" aria-hidden="true"></div>
+      <button
+        type="button"
+        class="tb-btn inline-flex items-center gap-1.5 min-w-7 h-7 px-2 rounded text-sm text-base-content/70 hover:bg-base-300 hover:text-base-content active:scale-95 transition"
+        data-editor={@id}
+        data-cmd="toggleMode"
+        title={gettext("Toggle WYSIWYG / Markdown")}
+      >
+        <.icon name="hero-code-bracket" class="w-4 h-4" />
+        <span class="text-xs font-mono">MD</span>
+      </button>
     </div>
     """
   end

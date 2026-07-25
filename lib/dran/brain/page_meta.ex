@@ -85,14 +85,6 @@ defmodule Dran.Brain.PageMeta do
     field :content_hash, :string
     field :fetched_at, :utc_datetime
 
-    # artifact
-    field :filename, :string
-    field :mime_type, :string
-    field :size, :integer
-    field :storage_path, :string
-    field :sha256, :string
-    field :version, :string
-
     # query
     field :difficulty, :string
     field :answer_status, :string
@@ -103,7 +95,6 @@ defmodule Dran.Brain.PageMeta do
   @entity_kinds ~w(person company product tool place event)
   @concept_kinds ~w(technique pattern discipline theory)
   @reference_kinds ~w(article paper video podcast book)
-  @artifact_kinds ~w(document code design deliverable file)
   @query_kinds ~w(factual conceptual how_to opinion)
   @plan_kinds ~w(personal coding business learning health finance other)
   @goal_kinds ~w(personal coding business learning health finance other)
@@ -173,12 +164,6 @@ defmodule Dran.Brain.PageMeta do
       :published_at,
       :content_hash,
       :fetched_at,
-      :filename,
-      :mime_type,
-      :size,
-      :storage_path,
-      :sha256,
-      :version,
       :difficulty,
       :answer_status,
       :answered_by
@@ -186,7 +171,7 @@ defmodule Dran.Brain.PageMeta do
   end
 
   defp validate_kind(cs, type)
-       when type in ~w(note entity concept reference artifact query plan goal todo) do
+       when type in ~w(note entity concept reference query plan goal todo) do
     kinds = kinds_for(type)
 
     if kinds do
@@ -202,7 +187,6 @@ defmodule Dran.Brain.PageMeta do
   defp kinds_for("entity"), do: @entity_kinds
   defp kinds_for("concept"), do: @concept_kinds
   defp kinds_for("reference"), do: @reference_kinds
-  defp kinds_for("artifact"), do: @artifact_kinds
   defp kinds_for("query"), do: @query_kinds
   defp kinds_for("plan"), do: @plan_kinds
   defp kinds_for("goal"), do: @goal_kinds
@@ -255,7 +239,6 @@ defmodule Dran.Brain.PageMeta do
   def entity_kinds, do: @entity_kinds
   def concept_kinds, do: @concept_kinds
   def reference_kinds, do: @reference_kinds
-  def artifact_kinds, do: @artifact_kinds
   def query_kinds, do: @query_kinds
   def plan_kinds, do: @plan_kinds
   def goal_kinds, do: @goal_kinds
@@ -390,13 +373,6 @@ defmodule Dran.Brain.PageMeta do
        Enum.map(@reference_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:text, "source_url", gettext("Source URL")},
       {:date, "published_at", gettext("Published at")}
-    ]
-  end
-
-  defp meta_fields_edit("artifact") do
-    [
-      {:select, "kind", gettext("Kind"),
-       Enum.map(@artifact_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})}
     ]
   end
 
@@ -543,7 +519,6 @@ defmodule Dran.Brain.PageMeta do
       "video" => gettext("Video"),
       "podcast" => gettext("Podcast"),
       "book" => gettext("Book"),
-      # ── artifact kinds ─────────────────────────────────────────────────
       "document" => gettext("Document"),
       "code" => gettext("Code"),
       "design" => gettext("Design"),

@@ -34,8 +34,7 @@ defmodule DranWeb.GraphLive do
        type_colors: Enum.to_list(GraphHelpers.type_colors()),
        type_counts: %{},
        node_count: 0,
-       edge_count: 0,
-       view_mode: "3d"
+       edge_count: 0
      )}
   end
 
@@ -71,12 +70,6 @@ defmodule DranWeb.GraphLive do
   @impl true
   def handle_event("node_click", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/graph/#{slug}")}
-  end
-
-  @impl true
-  def handle_event("toggle_view_mode", %{"mode" => mode}, socket)
-      when mode in ["2d", "3d"] do
-    {:noreply, assign(socket, view_mode: mode)}
   end
 
   @impl true
@@ -268,53 +261,11 @@ defmodule DranWeb.GraphLive do
               <span class="text-sm flex-1">{gettext("Edges")}</span>
               <span class="text-xs text-base-content/40 tabular-nums">{@edge_count}</span>
             </div>
-
-            <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">
-              {gettext("View Mode")}
-            </h3>
-            <div
-              role="group"
-              aria-label={gettext("View mode")}
-              class="inline-flex rounded-lg bg-base-200 p-1"
-            >
-              <button
-                type="button"
-                phx-click="toggle_view_mode"
-                phx-value-mode="2d"
-                aria-pressed={@view_mode == "2d"}
-                class={[
-                  "px-3 py-1.5 text-sm transition-colors rounded-md",
-                  if @view_mode == "2d" do
-                    "bg-base-100 shadow-sm font-medium"
-                  else
-                    "text-base-content/60 hover:text-base-content"
-                  end
-                ]}
-              >
-                {gettext("2D")}
-              </button>
-              <button
-                type="button"
-                phx-click="toggle_view_mode"
-                phx-value-mode="3d"
-                aria-pressed={@view_mode == "3d"}
-                class={[
-                  "px-3 py-1.5 text-sm transition-colors rounded-md",
-                  if @view_mode == "3d" do
-                    "bg-base-100 shadow-sm font-medium"
-                  else
-                    "text-base-content/60 hover:text-base-content"
-                  end
-                ]}
-              >
-                {gettext("3D")}
-              </button>
-            </div>
           </div>
 
           <div
-            class="flex-1 bg-base-200 rounded-lg overflow-hidden relative"
-            style="min-height: calc(100vh - 180px);"
+            class="flex-1 rounded-lg overflow-hidden relative"
+            style="min-height: calc(100vh - 180px); background: #0a0e27;"
           >
             <%= if @node_count == 0 do %>
               <.empty_state
@@ -324,69 +275,16 @@ defmodule DranWeb.GraphLive do
                 class="h-full"
               />
             <% else %>
-              <%= if @view_mode == "2d" do %>
-                <svg
-                  id="graph-svg"
-                  width="100%"
-                  height="100%"
-                  phx-hook="GraphPanZoom"
-                >
-                  <line
-                    :for={edge <- @edges}
-                    x1={edge.x1}
-                    y1={edge.y1}
-                    x2={edge.x2}
-                    y2={edge.y2}
-                    stroke={edge.color}
-                    stroke-width="1.5"
-                    opacity="0.6"
-                    data-source={edge.source_id}
-                    data-target={edge.target_id}
-                  />
-
-                  <g
-                    :for={node <- @nodes}
-                    class="cursor-pointer"
-                    phx-click="node_click"
-                    phx-value-slug={node.slug}
-                    data-node-id={node.id}
-                    data-node-x={node.x}
-                    data-node-y={node.y}
-                  >
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={node.radius}
-                      fill={node.color}
-                      stroke="white"
-                      stroke-width="2"
-                    />
-                    <text
-                      x={node.x}
-                      y={node.y + node.radius + 15}
-                      text-anchor="middle"
-                      class="text-xs fill-current"
-                    >
-                      {node.label}
-                    </text>
-                  </g>
-                </svg>
-
-                <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
-                  {gettext("Scroll to zoom · Drag the background to pan · Drag a node to reposition")}
-                </div>
-              <% else %>
-                <div
-                  id="graph-3d"
-                  phx-hook="Graph3D"
-                  data-graph={graph_json(assigns)}
-                  style="width: 100%; height: 100%; min-height: calc(100vh - 180px);"
-                >
-                </div>
-                <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
-                  {gettext("Drag to rotate · Scroll to zoom · Right-click to pan")}
-                </div>
-              <% end %>
+              <div
+                id="graph-3d"
+                phx-hook="Graph3D"
+                data-graph={graph_json(assigns)}
+                style="width: 100%; height: 100%; min-height: calc(100vh - 180px);"
+              >
+              </div>
+              <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
+                {gettext("Drag to rotate · Scroll to zoom · Right-click to pan")}
+              </div>
             <% end %>
           </div>
         </div>

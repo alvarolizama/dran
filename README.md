@@ -2,7 +2,7 @@
 
 # Dran
 
-A personal second-brain application built with Phoenix LiveView. It stores your knowledge as typed pages (notes, concepts, entities, references, goals, plans, todos, artifacts, comparisons) and links them with relations, forming a queryable knowledge graph.
+A personal second-brain application built with Phoenix LiveView. It stores your knowledge as typed pages (notes, concepts, entities, references, goals, plans, todos, comparisons) and links them with relations, forming a queryable knowledge graph.
 
 Includes a full markdown editor (TipTap WYSIWYG), six autonomous agents, an MCP endpoint for AI agent integration, and a REST API.
 
@@ -114,8 +114,8 @@ agent limits — see [**SKILL.md**](SKILL.md).
 
 ## Features
 
-- **11 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, artifact, goal, plan, todo, comparison, query, and **project** (executive dashboard with derived health)
-- **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, and artifact embeds `![[slug]]`
+- **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, goal, plan, todo, comparison, query, and **project** (executive dashboard with derived health)
+- **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, and file embeds `![[slug]]`
 - **Autonomous agents (6)** — background ReAct agents that plan, act, and log every step:
   - `research` — searches the web, scrapes sources, creates note/reference pages
   - `ingest` — validates, inspects, downloads, and creates reference pages from URLs
@@ -127,7 +127,7 @@ agent limits — see [**SKILL.md**](SKILL.md).
   - PDF/DOCX/PPTX → markdown via **MarkItDown**
   - Images → text descriptions via **Vision** (image content part)
   - Audio → transcripts via **ASR** (`/v1/audio/transcriptions`)
-- **Auto-resolved embeds** — `![[slug]]` in the editor resolves to the latest version of the target artifact; stale `embeds` relations are cleaned up when embeds are removed
+- **Auto-resolved embeds** — `![[slug]]` in the editor resolves to the latest version of the target page; stale `embeds` relations are cleaned up when embeds are removed
 - **Bidirectional semantic relations with dynamic thresholds** — `PageAugmenter` creates `semantic` links after every capture; the cosine-distance threshold adapts to page length (short/mid/long bands) and is tunable at runtime via settings
 - **Version history with diff** — every page edit saves the previous body to `page_versions`; view and diff any prior version
 - **Activity feed** — real-time log of all brain actions (creates, updates, deletes, relations) in a dedicated LiveView
@@ -377,7 +377,6 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 | `concept`    | Abstract ideas, techniques    | technique, pattern, discipline, theory                | kind, domain, parent_concept                       |
 | `entity`     | People, companies, tools      | person, company, product, tool, place, event          | kind, location, external_url, aliases              |
 | `reference`  | External sources              | article, paper, video, podcast, book                  | kind, source_url, published_at                     |
-| `artifact`   | Files and deliverables        | document, code, design, deliverable, file             | kind, filename, mime_type, storage_path, sha256     |
 | `project`    | Executive dashboards          | —                                                     | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
 | `goal`       | Objectives with target dates  | personal, coding, business, learning, health, finance, other | health (green/yellow/red), target_date, start_date, team, metric, target_value, current_value, unit, progress |
 | `plan`       | Time-horizoned plans          | personal, coding, business, learning, health, finance, other | horizon (weekly/monthly/quarterly/yearly), status (draft/active/done/archived), period, due_date, project_slug, goal_slug |
@@ -387,7 +386,7 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 
 ### Embeds
 
-- `![[slug]]` — embed an artifact (renders as image/video/audio/PDF)
+- `![[slug]]` — embed a file (renders as image/video/audio/PDF)
 - `![[slug|Alt Text]]` — embed with alt text
 
 Embeds auto-create `embeds` relations. Plain `[[slug]]` wikilinks are no longer supported — link pages explicitly with `dran_create_relation` or let the `PageAugmenter` create `semantic` relations automatically.

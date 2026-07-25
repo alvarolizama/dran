@@ -9,8 +9,6 @@ defmodule DranWeb.ComparisonLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "comparison"
-  @tabs [{"content", gettext("Content")}]
-
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -30,34 +28,30 @@ defmodule DranWeb.ComparisonLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-        >
+        
+          editing={@editing}>
           <:actions>
             <.link navigate={~p"/comparisons"} class="btn btn-primary btn-sm"><.icon
               name="hero-arrow-left"
               class="size-4"
             /> {gettext("Back")}</.link>
-            <button :if={not @editing} phx-click="toggle_edit" class="btn btn-primary btn-sm"><.icon
-              name="hero-pencil"
-              class="size-4"
-            /> {gettext("Edit")}</button>
-            <button :if={@editing} phx-click="save_page" class="btn btn-success btn-sm"><.icon
-              name="hero-check"
-              class="size-4"
-            /> {gettext("Save")}</button>
-            <button :if={@editing} phx-click="cancel_edit" class="btn btn-ghost btn-sm"><.icon
-              name="hero-x-mark"
-              class="size-4"
-            /> {gettext("Cancel")}</button>
           </:actions>
+          <:attributes>
+            <.page_attributes
+              form={@form}
+              page={@page}
+              page_type={@page_type}
+              context_id={@context_id}
+              editor_id="comparison-editor"
+            />
+          </:attributes>
+
           <:graph>
             <.page_graph id="comparison-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
           </:graph>
 
           <:tabs>
-            <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
-            <div :if={@active_tab == "content"} class="space-y-6">
-              <%= if @editing do %>
-                <.page_edit_form
+                          <.page_edit_form
                   form={@form}
                   page={@page}
                   page_type={@page_type}
@@ -65,29 +59,6 @@ defmodule DranWeb.ComparisonLive do
                   save_status={@save_status}
                   editor_id="comparison-editor"
                 />
-              <% else %>
-                <div class="prose prose-base dark:prose-invert max-w-none">
-                  {@rendered_body}
-                </div>
-                <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">
-                    {gettext("Changelog")}
-                  </h3>
-                  <div class="space-y-1">
-                    <div :for={version <- @versions} class="text-sm text-base-content/60">
-                      {gettext("v%{version} — %{date} by %{author}",
-                        version: version.version,
-                        date: format_date(version.inserted_at),
-                        author: version.changed_by || gettext("system")
-                      )}
-                    </div>
-                    <p :if={@versions == []} class="text-sm text-base-content/40">
-                      {gettext("No version history yet.")}
-                    </p>
-                  </div>
-                </div>
-              <% end %>
-            </div>
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
@@ -122,15 +93,14 @@ defmodule DranWeb.ComparisonLive do
      assign(socket,
        context: context,
        page_type: @page_type,
-       tabs: @tabs,
        active_tab: "content",
-       editing: false,
+       editing: true,
        save_status: "idle",
        active_nav: "comparisons"
      )}
   end
 
-  def handle_params(%{"slug" => slug} = params, _url, socket) do
+  def handle_params(%{"slug" => slug} = _params, _url, socket) do
     context = socket.assigns.context
 
     if context do
@@ -143,8 +113,7 @@ defmodule DranWeb.ComparisonLive do
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
           %{nodes: graph_nodes, edges: graph_edges} = GraphHelpers.build_page_subgraph(page)
-          editing = Map.get(params, "edit") == "true"
-          form = if editing, do: Brain.change_page(page) |> to_form(as: :page), else: nil
+          form = Brain.change_page(page) |> to_form(as: :page)
 
           rendered_body =
             render_markdown(page.body,
@@ -163,7 +132,7 @@ defmodule DranWeb.ComparisonLive do
              active_tab: "content",
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
-             editing: editing,
+             editing: true,
              form: form,
              context_id: context.id,
              save_status: "idle",
@@ -219,8 +188,6 @@ defmodule DranWeb.ComparisonLive do
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
   def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
   def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
-  def handle_event("toggle_edit", p, s), do: PageEdit.handle_event("toggle_edit", p, s)
-  def handle_event("cancel_edit", p, s), do: PageEdit.handle_event("cancel_edit", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
   def handle_event("save_page", p, s), do: PageEdit.handle_event("save_page", p, s)
   def handle_event("body_change", p, s), do: PageEdit.handle_event("body_change", p, s)

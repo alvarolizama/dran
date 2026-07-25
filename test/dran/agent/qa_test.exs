@@ -5,7 +5,7 @@ defmodule Dran.Agent.QATest do
   #   1. Unit test of create_query_page limit (inference disabled, no LLM).
   #   2. Full E2E test: the engine runs the real ReAct loop with the LLM
   #      mocked via Req.Test stubs (pattern copied from
-  #      test/dran/agent/ingest/utils_test.exs). The stub returns a
+  #      test). The stub returns a
   #      scripted sequence of tool_calls: search → get_page →
   #      create_query_page → done.
   use Dran.DataCase, async: false
@@ -48,7 +48,6 @@ defmodule Dran.Agent.QATest do
       chat_model: "test-chat-model",
       embedding_model: "test-embed-model",
       rerank_model: "test-rerank-model",
-      markitdown_model: "test-md-model",
       timeout: 5_000,
       req_plug: {Req.Test, Dran.Inference.Client},
       schedule_async: false

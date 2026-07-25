@@ -15,7 +15,6 @@ defmodule DranWeb.GraphHelpers do
     "entity" => "#FB7185",
     "concept" => "#FBBF24",
     "reference" => "#60A5FA",
-    "artifact" => "#94A3B8",
     "comparison" => "#F472B6"
   }
 

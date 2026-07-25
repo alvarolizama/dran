@@ -139,10 +139,6 @@ defmodule DranWeb.Router do
     live "/todos/:slug", TodoLive, :show
 
     # Outputs
-    live "/artifacts", ArtifactLive, :index
-    live "/artifacts/new", PageNewLive, :new
-    live "/artifacts/:slug", ArtifactLive, :show
-
     live "/comparisons", ComparisonLive, :index
     live "/comparisons/new", PageNewLive, :new
     live "/comparisons/:slug", ComparisonLive, :show
@@ -153,9 +149,6 @@ defmodule DranWeb.Router do
 
     live "/activity", ActivityLive, :index
 
-    live "/agents/:type", AgentLive, :index
-    live "/agents/:type/:id", AgentLive, :show
-
     live "/search", SearchLive, :index
 
     live "/tags/:tag", TagLive, :index
@@ -164,8 +157,6 @@ defmodule DranWeb.Router do
     live "/collections", SmartCollectionLive, :index
     live "/collections/new", SmartCollectionLive, :new
     live "/collections/:slug", SmartCollectionLive, :show
-
-    live "/ingest", IngestLive, :index
 
     # Docs
     live "/docs", DocsLive, :index
@@ -220,10 +211,6 @@ defmodule DranWeb.Router do
     get "/todos", TodoController, :index
     post "/todos", TodoController, :create
     put "/todos/:id", TodoController, :update
-
-    # Ingest
-    post "/ingest", IngestController, :ingest
-    post "/ingest/file", IngestController, :file
 
     # Quality / maintenance
     get "/lint", LintController, :lint

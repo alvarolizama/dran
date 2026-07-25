@@ -12,7 +12,6 @@ defmodule Dran.BrainTest do
       api_key: nil,
       embedding_model: nil,
       rerank_model: nil,
-      markitdown_model: nil,
       timeout: 100,
       schedule_async: false
     )
@@ -128,12 +127,12 @@ defmodule Dran.BrainTest do
 
   describe "embeds auto-resolution" do
     test "create_page resolves ![[embed]] into embeds relation", %{context: ctx} do
-      {:ok, artifact} =
+      {:ok, target_page} =
         Brain.create_page(%{
           context_id: ctx.id,
           title: "File",
           slug: "file-a",
-          page_type: "artifact"
+          page_type: "note"
         })
 
       {:ok, note} =
@@ -147,15 +146,15 @@ defmodule Dran.BrainTest do
 
       rels = Brain.list_relations_for_page(note.id).outbound
 
-      assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == artifact.id))
+      assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == target_page.id))
     end
 
     test "update_page removes stale embeds relations", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "a", page_type: "artifact"})
+        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "a", page_type: "note"})
 
       {:ok, b} =
-        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "b", page_type: "artifact"})
+        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "b", page_type: "note"})
 
       {:ok, note} =
         Brain.create_page(%{
@@ -185,7 +184,7 @@ defmodule Dran.BrainTest do
           context_id: ctx.id,
           title: "Art",
           slug: "old-art",
-          page_type: "artifact"
+          page_type: "note"
         })
 
       {:ok, note} =
@@ -210,7 +209,7 @@ defmodule Dran.BrainTest do
           context_id: ctx.id,
           title: "Art2",
           slug: "old-art2",
-          page_type: "artifact"
+          page_type: "note"
         })
 
       {:ok, note} =
@@ -423,7 +422,7 @@ defmodule Dran.BrainTest do
 
       Dran.Repo.insert!(%Dran.Agent.Session{
         context_id: ctx.id,
-        agent_type: "research",
+        agent_type: "ask",
         input: "test query",
         status: "done",
         started_at: now,
@@ -440,19 +439,19 @@ defmodule Dran.BrainTest do
 
   describe "edge cases — derive_title ignores embed lines" do
     test "create_page with body containing only ![[embed]] derives Untitled", %{context: ctx} do
-      {:ok, artifact} =
+      {:ok, target_page} =
         Brain.create_page(%{
           context_id: ctx.id,
-          title: "Artifact",
-          slug: "artifact-1",
-          page_type: "artifact"
+          title: "File Page",
+          slug: "file-page-1",
+          page_type: "note"
         })
 
       {:ok, page} =
         Brain.create_page(%{
           context_id: ctx.id,
           page_type: "note",
-          body: "![[artifact-1]]"
+          body: "![[file-page-1]]"
         })
 
       assert page.title == "Untitled"
@@ -460,7 +459,7 @@ defmodule Dran.BrainTest do
 
       # The embed itself is still resolved
       rels = Brain.list_relations_for_page(page.id).outbound
-      assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == artifact.id))
+      assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == target_page.id))
     end
 
     test "create_page with embed + text uses the text line as title", %{context: ctx} do
@@ -489,10 +488,10 @@ defmodule Dran.BrainTest do
   describe "edge cases — reresolve_embeds with empty body" do
     test "clears all embeds when body becomes empty", %{context: ctx} do
       {:ok, _a} =
-        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "ea", page_type: "artifact"})
+        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "ea", page_type: "note"})
 
       {:ok, _b} =
-        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "eb", page_type: "artifact"})
+        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "eb", page_type: "note"})
 
       {:ok, note} =
         Brain.create_page(%{
@@ -522,7 +521,7 @@ defmodule Dran.BrainTest do
 
     test "reresolve_embeds directly with empty body", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{context_id: ctx.id, title: "A2", slug: "ea2", page_type: "artifact"})
+        Brain.create_page(%{context_id: ctx.id, title: "A2", slug: "ea2", page_type: "note"})
 
       {:ok, note} =
         Brain.create_page(%{
@@ -644,12 +643,12 @@ defmodule Dran.BrainTest do
     end
 
     test "mixed existing and non-existent embeds", %{context: ctx} do
-      {:ok, artifact} =
+      {:ok, target_page} =
         Brain.create_page(%{
           context_id: ctx.id,
           title: "Art",
           slug: "art-exists",
-          page_type: "artifact"
+          page_type: "note"
         })
 
       {:ok, note} =
@@ -671,7 +670,7 @@ defmodule Dran.BrainTest do
         |> Enum.filter(&(&1.relation_type == "embeds"))
 
       assert length(embeds) == 1
-      assert hd(embeds).target_id == artifact.id
+      assert hd(embeds).target_id == target_page.id
     end
   end
 end

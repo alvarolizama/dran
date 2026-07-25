@@ -5,9 +5,6 @@ defmodule Dran.Inference.QueueSupervisor do
   Capabilities:
   - `:embed`
   - `:rerank`
-  - `:markdown`
-  - `:vision`
-  - `:audio`
   - `:chat`
   """
 
@@ -24,9 +21,6 @@ defmodule Dran.Inference.QueueSupervisor do
       {Registry, keys: :unique, name: Dran.Inference.QueueRegistry},
       {Dran.Inference.Queue, capability: :embed},
       {Dran.Inference.Queue, capability: :rerank},
-      {Dran.Inference.Queue, capability: :markdown},
-      {Dran.Inference.Queue, capability: :vision},
-      {Dran.Inference.Queue, capability: :audio},
       {Dran.Inference.Queue, capability: :chat}
     ]
 

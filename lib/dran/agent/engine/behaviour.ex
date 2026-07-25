@@ -3,7 +3,7 @@ defmodule Dran.Agent.Engine.Behaviour do
   Behaviour contract for agent modules that run on `Dran.Agent.Engine`.
   """
 
-  @doc "Returns the agent type string (e.g. \"research\")."
+  @doc "Returns the agent type string (e.g. \"ask\")."
   @callback agent_type() :: String.t()
 
   @doc "Returns a list of OpenAI-compatible function tool schemas."

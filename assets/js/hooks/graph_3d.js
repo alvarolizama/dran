@@ -46,11 +46,9 @@ const Graph3D = {
     const width = container.clientWidth || 800
     const height = container.clientHeight || 600
 
-    // Scene — background reads the theme's --color-base-300 CSS variable so
-    // the 3D canvas matches the 2D view in both light and dark modes.
-    // Falls back to a dark slate if the variable can't be resolved.
+    // Scene — dark navy background matching Dran's brand color
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(this.readThemeColor("--color-base-300", "#0f172a"))
+    this.scene.background = new THREE.Color("#0a0e27")
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 5000)

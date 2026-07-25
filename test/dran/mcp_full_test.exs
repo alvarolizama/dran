@@ -20,7 +20,6 @@ defmodule Dran.MCPFullTest do
       api_key: nil,
       embedding_model: nil,
       rerank_model: nil,
-      markitdown_model: nil,
       timeout: 100,
       schedule_async: false
     )
@@ -89,7 +88,7 @@ defmodule Dran.MCPFullTest do
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 18
+      assert length(tools) == 17
     end
 
     test "all tools carry the dran_ prefix" do
@@ -111,7 +110,7 @@ defmodule Dran.MCPFullTest do
       enum = start_agent["inputSchema"]["properties"]["agent_type"]["enum"]
 
       assert MapSet.new(enum) ==
-               MapSet.new(~w(research ingest ask curator link_gardener weekly_review))
+               MapSet.new(~w(ask curator link_gardener weekly_review))
     end
   end
 
@@ -215,27 +214,8 @@ defmodule Dran.MCPFullTest do
         send_message(%{"jsonrpc" => "2.0", "id" => 7, "method" => "prompts/list"})
 
       names = Enum.map(resp["result"]["prompts"], & &1["name"])
-      assert "research_topic" in names
       assert "brainstorm" in names
       assert "goal_review" in names
-    end
-
-    test "prompts/get research_topic returns a message" do
-      resp =
-        send_message(%{
-          "jsonrpc" => "2.0",
-          "id" => 8,
-          "method" => "prompts/get",
-          "params" => %{
-            "name" => "research_topic",
-            "arguments" => %{"topic" => "AI", "context" => "personal"}
-          }
-        })
-
-      messages = resp["result"]["messages"]
-      assert length(messages) == 1
-      assert hd(messages)["role"] == "user"
-      assert hd(messages)["content"]["text"] =~ "Research the topic"
     end
 
     test "prompts/get with unknown prompt returns error message" do
@@ -1085,40 +1065,6 @@ defmodule Dran.MCPFullTest do
     end
   end
 
-  # ── Tool: dran_ingest_url ───────────────────────────────────────────────────
-
-  describe "dran_ingest_url" do
-    test "errors on non-existent context" do
-      result =
-        call_tool("dran_ingest_url", %{
-          "context" => "no-such",
-          "url" => "https://example.com"
-        })
-
-      assert result =~ "Error: context"
-    end
-
-    test "errors on invalid URL" do
-      result =
-        call_tool("dran_ingest_url", %{
-          "context" => "personal",
-          "url" => "not-a-url"
-        })
-
-      assert result =~ "Error:"
-    end
-
-    test "blocks private IPs (SSRF protection)" do
-      result =
-        call_tool("dran_ingest_url", %{
-          "context" => "personal",
-          "url" => "http://127.0.0.1:4000/api/mcp"
-        })
-
-      assert result =~ "Error:"
-    end
-  end
-
   # ── Tool: dran_start_agent ──────────────────────────────────────────────────
 
   describe "dran_start_agent" do
@@ -1136,7 +1082,7 @@ defmodule Dran.MCPFullTest do
     test "errors on non-existent context" do
       result =
         call_tool("dran_start_agent", %{
-          "agent_type" => "research",
+          "agent_type" => "ask",
           "context" => "no-such",
           "input" => "test"
         })

@@ -9,8 +9,6 @@ defmodule DranWeb.ConceptLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "concept"
-  @tabs [{"content", gettext("Content")}]
-
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -30,35 +28,30 @@ defmodule DranWeb.ConceptLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-        >
+        
+          editing={@editing}>
           <:actions>
             <.link navigate={~p"/concepts"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
-
-            <button :if={not @editing} phx-click="toggle_edit" class="btn btn-primary btn-sm">
-              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
-            </button>
-
-            <button :if={@editing} phx-click="save_page" class="btn btn-success btn-sm">
-              <.icon name="hero-check" class="size-4" /> {gettext("Save")}
-            </button>
-
-            <button :if={@editing} phx-click="cancel_edit" class="btn btn-ghost btn-sm">
-              <.icon name="hero-x-mark" class="size-4" /> {gettext("Cancel")}
-            </button>
           </:actions>
+
+          <:attributes>
+            <.page_attributes
+              form={@form}
+              page={@page}
+              page_type={@page_type}
+              context_id={@context_id}
+              editor_id="concept-editor"
+            />
+          </:attributes>
 
           <:graph>
             <.page_graph id="concept-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
           </:graph>
 
           <:tabs>
-            <.tabs_bar tabs={@tabs} active_tab={@active_tab} />
-
-            <div :if={@active_tab == "content"} class="space-y-6">
-              <%= if @editing do %>
-                <.page_edit_form
+                          <.page_edit_form
                   form={@form}
                   page={@page}
                   page_type={@page_type}
@@ -66,30 +59,6 @@ defmodule DranWeb.ConceptLive do
                   save_status={@save_status}
                   editor_id="concept-editor"
                 />
-              <% else %>
-                <div class="prose prose-base dark:prose-invert max-w-none">
-                  {@rendered_body}
-                </div>
-
-                <div class="border-t border-base-300 pt-4">
-                  <h3 class="text-sm font-semibold text-base-content/60 mb-2">
-                    {gettext("Changelog")}
-                  </h3>
-                  <div class="space-y-1">
-                    <div :for={version <- @versions} class="text-sm text-base-content/60">
-                      {gettext("v%{version} — %{date} by %{author}",
-                        version: version.version,
-                        date: format_date(version.inserted_at),
-                        author: version.changed_by || gettext("system")
-                      )}
-                    </div>
-                    <p :if={@versions == []} class="text-sm text-base-content/40">
-                      {gettext("No version history yet.")}
-                    </p>
-                  </div>
-                </div>
-              <% end %>
-            </div>
           </:tabs>
         </.page_detail>
       </div><div :if={@live_action != :show}>
@@ -127,15 +96,14 @@ defmodule DranWeb.ConceptLive do
      assign(socket,
        context: context,
        page_type: @page_type,
-       tabs: @tabs,
        active_tab: "content",
-       editing: false,
+       editing: true,
        save_status: "idle",
        active_nav: "concepts"
      )}
   end
 
-  def handle_params(%{"slug" => slug} = params, _url, socket) do
+  def handle_params(%{"slug" => slug} = _params, _url, socket) do
     context = socket.assigns.context
 
     if context do
@@ -148,14 +116,7 @@ defmodule DranWeb.ConceptLive do
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
           %{nodes: graph_nodes, edges: graph_edges} = GraphHelpers.build_page_subgraph(page)
-          editing = Map.get(params, "edit") == "true"
-
-          form =
-            if editing do
-              Brain.change_page(page) |> to_form(as: :page)
-            else
-              nil
-            end
+          form = Brain.change_page(page) |> to_form(as: :page)
 
           rendered_body =
             render_markdown(page.body,
@@ -174,7 +135,7 @@ defmodule DranWeb.ConceptLive do
              active_tab: "content",
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
-             editing: editing,
+             editing: true,
              form: form,
              context_id: context.id,
              save_status: "idle",
@@ -242,12 +203,6 @@ defmodule DranWeb.ConceptLive do
   def handle_event("unarchive_page", params, socket),
     do: PageEdit.handle_event("unarchive_page", params, socket)
 
-  def handle_event("toggle_edit", params, socket),
-    do: PageEdit.handle_event("toggle_edit", params, socket)
-
-  def handle_event("cancel_edit", params, socket),
-    do: PageEdit.handle_event("cancel_edit", params, socket)
-
   def handle_event("validate_page", params, socket),
     do: PageEdit.handle_event("validate_page", params, socket)
 
@@ -266,9 +221,6 @@ defmodule DranWeb.ConceptLive do
   def handle_event("upload_complete", params, socket),
     do: PageEdit.handle_event("upload_complete", params, socket)
 
-  def handle_event("enrich_page", %{"slug" => slug}, socket),
-    do: DranWeb.EnrichHandler.handle_enrich(slug, socket)
-
   # ── Version comparison ──
 
   def handle_event("compare_version", params, socket),
@@ -276,18 +228,6 @@ defmodule DranWeb.ConceptLive do
 
   def handle_event("clear_compare", params, socket),
     do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
-
-  def handle_info({:enriched, slug}, socket) do
-    page = Dran.Brain.get_page_by_slug(slug, socket.assigns.context.id)
-
-    {:noreply,
-     assign(socket, page: page) |> put_flash(:info, gettext("Page enriched with web content."))}
-  end
-
-  def handle_info({:enrich_failed, _slug, reason}, socket) do
-    {:noreply,
-     put_flash(socket, :error, gettext("Enrichment failed: %{reason}", reason: inspect(reason)))}
-  end
 
   defp handle_progress(:file, _entry, socket) do
     {:noreply, socket}

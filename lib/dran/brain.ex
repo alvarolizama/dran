@@ -1916,7 +1916,7 @@ defmodule Dran.Brain do
   @doc """
   Extract ![[embeds]] from a markdown body.
 
-  Returns a list of `%{slug: "artifact-slug", display: "alt text"}` maps.
+  Returns a list of `%{slug: "page-slug", display: "alt text"}` maps.
   Display text defaults to the slug if not specified.
 
   ## Formats
@@ -2039,7 +2039,7 @@ defmodule Dran.Brain do
   end
 
   @doc """
-  Fetch embedded artifact pages referenced by `![[slug]]` in a body.
+  Fetch embedded pages referenced by `![[slug]]` in a body.
 
   Returns a map of `slug => %Page{}` for all embeds that resolve to a page
   in the given context. Useful for rendering embedded media in markdown.

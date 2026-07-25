@@ -54,7 +54,6 @@ defmodule DranWeb.DashboardLive do
     %{
       label: gettext("Outputs"),
       items: [
-        %{key: "artifact", label: gettext("Artifacts"), icon: "hero-cube", path: "/artifacts"},
         %{
           key: "comparison",
           label: gettext("Comparisons"),
@@ -593,7 +592,7 @@ defmodule DranWeb.DashboardLive do
   defp page_path(_), do: "#"
 
   defp sort_by_type(by_type) do
-    type_order = ~w(note concept entity reference goal plan todo artifact comparison)
+    type_order = ~w(note concept entity reference goal plan todo comparison)
 
     by_type
     |> Enum.sort_by(fn {type, _count} ->

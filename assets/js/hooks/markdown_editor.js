@@ -368,9 +368,77 @@ const MarkdownEditor = {
       case "table":
         chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
         break
+      case "mermaid": {
+        const stub = "graph TD\n    A[Start] --> B{Decision}\n    B -->|Yes| C[Action 1]\n    B -->|No| D[Action 2]\n    C --> E[End]\n    D --> E"
+        chain.insertContent({
+          type: "codeBlock",
+          attrs: { language: "mermaid" },
+          content: [{ type: "text", text: stub }],
+        }).run()
+        break
+      }
       case "undo": chain.undo().run(); break
       case "redo": chain.redo().run(); break
+      case "toggleMode": this.toggleMode(); break
     }
+  },
+
+  toggleMode() {
+    const wrapper = document.getElementById(`editor-wrapper-${this.el.id}`)
+    if (!wrapper) return
+
+    const mountEl = this.el
+    const isMdMode = mountEl.dataset.mdMode === "true"
+
+    if (isMdMode) {
+      // Switch back to WYSIWYG: parse textarea content into editor
+      const textarea = wrapper.querySelector(".md-raw-textarea")
+      if (textarea && this.editor) {
+        const md = textarea.value
+        // Re-create editor with new content
+        this.editor.commands.setContent(this.parseMarkdown(md))
+        mountEl.dataset.mdMode = "false"
+        wrapper.classList.remove("md-raw-mode")
+        textarea.remove()
+      }
+    } else {
+      // Switch to raw markdown: get current content as markdown, show textarea
+      if (this.editor) {
+        const md = this.editor.storage.markdown?.getMarkdown() || this.editor.getHTML()
+        mountEl.dataset.mdMode = "true"
+        wrapper.classList.add("md-raw-mode")
+
+        const textarea = document.createElement("textarea")
+        textarea.className = "md-raw-textarea w-full flex-1 min-h-[300px] p-4 font-mono text-sm bg-base-100 border-0 outline-none resize-none"
+        textarea.value = md
+        textarea.spellcheck = false
+
+        // Save changes back to editor on blur
+        textarea.addEventListener("blur", () => {
+          if (this.editor) {
+            this.editor.commands.setContent(this.parseMarkdown(textarea.value))
+            mountEl.dataset.mdMode = "false"
+            wrapper.classList.remove("md-raw-mode")
+            textarea.remove()
+            // Show the mount point again
+            mountEl.style.display = ""
+          }
+        })
+
+        // Hide the editor mount, show the textarea
+        mountEl.style.display = "none"
+        wrapper.appendChild(textarea)
+        textarea.focus()
+      }
+    }
+  },
+
+  parseMarkdown(md) {
+    // Use TipTap's markdown parser if available, otherwise fallback to plain text
+    if (this.editor?.storage?.markdown?.parser) {
+      return this.editor.storage.markdown.parser.parse(md)
+    }
+    return md
   },
 }
 

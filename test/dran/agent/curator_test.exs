@@ -313,7 +313,6 @@ defmodule Dran.Agent.CuratorTest do
         api_key: "test-key",
         chat_model: "test-chat-model",
         embedding_model: "Qwen3-Embedding",
-        markitdown_model: "MarkItDown",
         timeout: 5_000,
         req_plug: {Req.Test, Dran.Inference.Client},
         schedule_async: false

@@ -451,7 +451,6 @@ defmodule Dran.Agent.LinkGardenerTest do
         chat_model: "Ornith-1.0-9B",
         embedding_model: "Qwen3-Embedding",
         rerank_model: "Qwen3-Reranker",
-        markitdown_model: "MarkItDown",
         timeout: 5_000,
         schedule_async: false,
         req_plug: {Req.Test, Dran.Inference.Client}

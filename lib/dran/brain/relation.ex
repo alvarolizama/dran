@@ -8,7 +8,7 @@ defmodule Dran.Brain.Relation do
   - `contradicts` — source contradicts target
   - `supersedes` — source replaces/obsoletes target
   - `part_of` — source is part of target
-  - `embeds` — source embeds target (e.g. an artifact page in a note body)
+  - `embeds` — source embeds target (e.g. a file page in a note body)
   """
 
   use Ecto.Schema

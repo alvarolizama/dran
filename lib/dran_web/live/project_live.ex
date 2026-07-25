@@ -18,12 +18,10 @@ defmodule DranWeb.ProjectLive do
   @page_type "project"
 
   @project_tabs [
-    {"overview", "Overview"},
-    {"kanban", "Kanban"},
-    {"todos", "Todos"},
-    {"goals", "Goals"},
-    {"plans", "Plans"},
-    {"related", "Related"}
+    {"kanban", gettext("Kanban")},
+    {"todos", gettext("Tareas")},
+    {"goals", gettext("Objetivos")},
+    {"plans", gettext("Planes")}
   ]
 
   @kanban_columns [
@@ -54,7 +52,9 @@ defmodule DranWeb.ProjectLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-        >
+          content_hidden={@active_tab not in ["overview", "graph"]}
+          graph_active={@active_tab == "graph"}
+          editing={@editing}>
           <:actions>
             <.link navigate={~p"/projects"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> Back
@@ -62,45 +62,37 @@ defmodule DranWeb.ProjectLive do
             <.link navigate={~p"/kanban?project=#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-view-columns" class="size-4" /> View in Kanban
             </.link>
-            <button :if={not @editing} phx-click="toggle_edit" class="btn btn-primary btn-sm">
-              <.icon name="hero-pencil" class="size-4" /> Edit
-            </button>
-            <button :if={@editing} phx-click="save_page" class="btn btn-success btn-sm">
-              <.icon name="hero-check" class="size-4" /> Save
-            </button>
-            <button :if={@editing} phx-click="cancel_edit" class="btn btn-ghost btn-sm">
-              <.icon name="hero-x-mark" class="size-4" /> Cancel
-            </button>
           </:actions>
 
-          <:graph>
-            <.page_graph id="project-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
-          </:graph>
+          <:attributes>
+            <.page_attributes
+              form={@form}
+              page={@page}
+              page_type={@page_type}
+              context_id={@context_id}
+              editor_id="project-editor"
+            />
+          </:attributes>
+
+          <:extra_tabs>
+            <button
+              :for={{tab, label} <- @project_tabs}
+              phx-click="switch_tab"
+              phx-value-tab={tab}
+              class={[
+                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
+                @active_tab == tab && "border-primary text-primary",
+                @active_tab != tab && "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
+              ]}
+            >
+              {label}
+            </button>
+          </:extra_tabs>
 
           <:tabs>
-            <div class="border-b border-base-300 mb-4">
-              <div class="flex gap-1">
-                <button
-                  :for={{tab, label} <- @project_tabs}
-                  phx-click="switch_tab"
-                  phx-value-tab={tab}
-                  class={
-                    "px-3 py-2 text-sm font-medium border-b-2 " <>
-                      if @active_tab == tab,
-                        do: "border-primary text-primary",
-                        else:
-                          "border-transparent text-base-content/60 hover:text-base-content"
-                  }
-                >
-                  {label}
-                </button>
-              </div>
-            </div>
-
             <%!-- Overview: dashboard del proyecto — status, stats, relacionados --%>
             <div :if={@active_tab == "overview"}>
-              <%= if @editing do %>
-                <.page_edit_form
+              <.page_edit_form
                   form={@form}
                   page={@page}
                   page_type={@page_type}
@@ -108,189 +100,10 @@ defmodule DranWeb.ProjectLive do
                   save_status={@save_status}
                   editor_id="project-editor"
                 />
-              <% else %>
-                <%!-- ── Status header: health + status + priority + dates ── --%>
-                <div class="flex flex-wrap items-center gap-2 mb-6">
-                  <span class={"px-3 py-1 rounded-full text-sm font-medium " <> health_badge_class(@page)}>
-                    Health: {String.capitalize(meta_get(@page.meta, "health") || "—")}
-                  </span>
-                  <span class="text-xs text-base-content/50">
-                    {meta_get(@page.meta, "health_source") || "derived"}
-                  </span>
-                  <span
-                    :if={meta_get(@page.meta, "status")}
-                    class="px-3 py-1 rounded-full text-sm bg-base-200 text-base-content/80"
-                  >
-                    {String.capitalize(meta_get(@page.meta, "status"))}
-                  </span>
-                  <span
-                    :if={meta_get(@page.meta, "priority")}
-                    class="px-3 py-1 rounded-full text-sm bg-base-200 text-base-content/80"
-                  >
-                    {String.capitalize(meta_get(@page.meta, "priority"))}
-                  </span>
-                  <span
-                    :if={meta_get(@page.meta, "target_date")}
-                    class="px-3 py-1 rounded-full text-sm bg-base-200 text-base-content/60"
-                  >
-                    <.icon name="hero-calendar-days" class="size-3.5 inline -mt-0.5" />
-                    {meta_get(@page.meta, "target_date")}
-                  </span>
-                </div>
-
-                <%!-- ── Stat cards: todos por status + goals health + plans ── --%>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                  <div class="surface-2 rounded-xl p-4">
-                    <div class="text-2xl font-semibold">{length(@project_todos)}</div>
-                    <div class="text-xs text-base-content/60 mt-1">
-                      Todos · {count_kanban(@project_todos, "done")} done
-                    </div>
-                    <div
-                      :if={length(@project_todos) > 0}
-                      class="mt-2 h-1.5 rounded-full bg-base-300 overflow-hidden"
-                    >
-                      <div
-                        class="h-full bg-green-500 rounded-full transition-all"
-                        style={"width: #{progress_pct(@project_todos)}%"}
-                      />
-                    </div>
-                  </div>
-                  <div class="surface-2 rounded-xl p-4">
-                    <div class="text-2xl font-semibold">
-                      {count_kanban(@project_todos, "in_progress")}
-                    </div>
-                    <div class="text-xs text-base-content/60 mt-1">In progress</div>
-                    <div class="text-xs text-base-content/40 mt-1">
-                      {count_kanban(@project_todos, "today")} today · {count_kanban(
-                        @project_todos,
-                        "this_week"
-                      )} this week
-                    </div>
-                  </div>
-                  <div class="surface-2 rounded-xl p-4">
-                    <div class="text-2xl font-semibold">{length(@project_goals)}</div>
-                    <div class="text-xs text-base-content/60 mt-1">Goals</div>
-                    <div class="flex gap-1.5 mt-2">
-                      <span
-                        :for={{h, n} <- health_counts(@project_goals)}
-                        :if={n > 0}
-                        class={"px-1.5 py-0.5 text-[11px] rounded " <> health_dot_class(h)}
-                      >
-                        {n} {h}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="surface-2 rounded-xl p-4">
-                    <div class="text-2xl font-semibold">{length(@project_plans)}</div>
-                    <div class="text-xs text-base-content/60 mt-1">Plans</div>
-                    <div class="text-xs text-base-content/40 mt-1">
-                      {count_plan_status(@project_plans, "active")} active
-                    </div>
-                  </div>
-                </div>
-
-                <%!-- ── Body del project (si tiene) ── --%>
-                <div
-                  :if={@page.body not in [nil, ""]}
-                  class="prose prose-base dark:prose-invert max-w-none mb-6"
-                >
-                  {@rendered_body}
-                </div>
-
-                <%!-- ── Listas compactas: goals / plans / notes / todos activos ── --%>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
-                      Goals ({length(@project_goals)})
-                    </h3>
-                    <div
-                      :for={goal <- Enum.take(@project_goals, 5)}
-                      class="flex items-center justify-between py-1.5 text-sm"
-                    >
-                      <.link
-                        navigate={PageTypes.page_show_path(goal)}
-                        class="text-primary hover:underline truncate"
-                      >
-                        {goal.title}
-                      </.link>
-                      <span class={"ml-2 shrink-0 px-2 py-0.5 text-xs rounded " <> health_class(goal)}>
-                        {String.capitalize(meta_get(goal.meta, "health") || "—")}
-                      </span>
-                    </div>
-                    <p :if={@project_goals == []} class="text-sm text-base-content/40">
-                      No goals linked.
-                    </p>
-                  </div>
-                  <div>
-                    <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
-                      Plans ({length(@project_plans)})
-                    </h3>
-                    <div
-                      :for={plan <- Enum.take(@project_plans, 5)}
-                      class="flex items-center justify-between py-1.5 text-sm"
-                    >
-                      <.link
-                        navigate={PageTypes.page_show_path(plan)}
-                        class="text-primary hover:underline truncate"
-                      >
-                        {plan.title}
-                      </.link>
-                      <span class="ml-2 shrink-0 px-2 py-0.5 text-xs rounded bg-base-300 text-base-content/70">
-                        {String.capitalize(meta_get(plan.meta, "status") || "draft")}
-                      </span>
-                    </div>
-                    <p :if={@project_plans == []} class="text-sm text-base-content/40">
-                      No plans linked.
-                    </p>
-                  </div>
-                  <div>
-                    <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
-                      Active todos
-                    </h3>
-                    <div
-                      :for={todo <- active_todos(@project_todos)}
-                      class="flex items-center justify-between py-1.5 text-sm"
-                    >
-                      <.link
-                        navigate={PageTypes.page_show_path(todo)}
-                        class="text-primary hover:underline truncate"
-                      >
-                        {todo.title}
-                      </.link>
-                      <span class={"ml-2 shrink-0 px-2 py-0.5 text-xs rounded " <> kanban_status_class(todo)}>
-                        {String.capitalize(kanban_status(todo))}
-                      </span>
-                    </div>
-                    <p :if={active_todos(@project_todos) == []} class="text-sm text-base-content/40">
-                      Nothing in flight.
-                    </p>
-                  </div>
-                  <div>
-                    <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
-                      Notes & refs ({length(@project_notes) + length(@project_references)})
-                    </h3>
-                    <div
-                      :for={n <- Enum.take(@project_notes ++ @project_references, 6)}
-                      class="py-1 text-sm"
-                    >
-                      <.link
-                        navigate={PageTypes.page_show_path(n)}
-                        class="text-primary hover:underline"
-                      >
-                        {n.title}
-                      </.link>
-                    </div>
-                    <p
-                      :if={@project_notes == [] and @project_references == []}
-                      class="text-sm text-base-content/40"
-                    >
-                      No notes or references linked.
-                    </p>
-                  </div>
-                </div>
-              <% end %>
             </div>
+          </:tabs>
 
+          <:extra_content>
             <%!-- Kanban: board de columnas solo con los todos del project --%>
             <div :if={@active_tab == "kanban"} class="flex flex-col h-[calc(100vh-16rem)] min-h-0">
               <div class="flex items-center justify-between mb-3 shrink-0">
@@ -461,53 +274,10 @@ defmodule DranWeb.ProjectLive do
             </div>
 
             <%!-- Graph: subgrafo del proyecto --%>
-
-            <%!-- Related: grid 2col de notes/concepts/entities/references --%>
-            <div :if={@active_tab == "related"}>
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 class="text-xs font-semibold text-base-content/60 mb-2">
-                    NOTES ({length(@project_notes)})
-                  </h4>
-                  <div :for={n <- @project_notes} class="text-sm py-1">
-                    <.link navigate={PageTypes.page_show_path(n)} class="text-primary hover:underline">
-                      {n.title}
-                    </.link>
-                  </div>
-                </div>
-                <div>
-                  <h4 class="text-xs font-semibold text-base-content/60 mb-2">
-                    CONCEPTS ({length(@project_concepts)})
-                  </h4>
-                  <div :for={c <- @project_concepts} class="text-sm py-1">
-                    <.link navigate={PageTypes.page_show_path(c)} class="text-primary hover:underline">
-                      {c.title}
-                    </.link>
-                  </div>
-                </div>
-                <div>
-                  <h4 class="text-xs font-semibold text-base-content/60 mb-2">
-                    ENTITIES ({length(@project_entities)})
-                  </h4>
-                  <div :for={e <- @project_entities} class="text-sm py-1">
-                    <.link navigate={PageTypes.page_show_path(e)} class="text-primary hover:underline">
-                      {e.title}
-                    </.link>
-                  </div>
-                </div>
-                <div>
-                  <h4 class="text-xs font-semibold text-base-content/60 mb-2">
-                    REFERENCES ({length(@project_references)})
-                  </h4>
-                  <div :for={r <- @project_references} class="text-sm py-1">
-                    <.link navigate={PageTypes.page_show_path(r)} class="text-primary hover:underline">
-                      {r.title}
-                    </.link>
-                  </div>
-                </div>
-              </div>
+            <div :if={@active_tab == "graph"} class="space-y-4">
+              <.page_graph id="project-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
             </div>
-          </:tabs>
+          </:extra_content>
         </.page_detail>
       </div>
 
@@ -549,7 +319,7 @@ defmodule DranWeb.ProjectLive do
        project_tabs: @project_tabs,
        kanban_columns: @kanban_columns,
        active_tab: "overview",
-       editing: false,
+       editing: true,
        save_status: "idle",
        active_nav: "projects"
      )}
@@ -568,6 +338,10 @@ defmodule DranWeb.ProjectLive do
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
           %{nodes: graph_nodes, edges: graph_edges} = GraphHelpers.build_page_subgraph(page)
+          form = Brain.change_page(page) |> to_form(as: :page)
+
+          # Preserve active_tab across patch (e.g. when toggling edit mode)
+          active_tab = Map.get(socket.assigns, :active_tab, "overview")
 
           # Sub-páginas vinculadas por meta["project_slug"] == page.slug.
           # Para todos/goals/plans usamos el filter SQL nativo de Brain.list_pages.
@@ -619,7 +393,7 @@ defmodule DranWeb.ProjectLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "overview",
+             active_tab: active_tab,
              context_id: context.id,
              project_todos: project_todos,
              project_goals: project_goals,
@@ -630,7 +404,10 @@ defmodule DranWeb.ProjectLive do
              project_references: project_references,
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
-             rendered_body: rendered_body
+             rendered_body: rendered_body,
+             editing: true,
+             form: form,
+             save_status: "idle"
            )}
       end
     else
@@ -717,8 +494,6 @@ defmodule DranWeb.ProjectLive do
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
   def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
   def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
-  def handle_event("toggle_edit", p, s), do: PageEdit.handle_event("toggle_edit", p, s)
-  def handle_event("cancel_edit", p, s), do: PageEdit.handle_event("cancel_edit", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
   def handle_event("save_page", p, s), do: PageEdit.handle_event("save_page", p, s)
   def handle_event("body_change", p, s), do: PageEdit.handle_event("body_change", p, s)
@@ -773,36 +548,6 @@ defmodule DranWeb.ProjectLive do
     end
   end
 
-  defp progress_pct(todos) do
-    active = Enum.reject(todos, fn t -> kanban_status(t) == "cancelled" end)
-
-    case length(active) do
-      0 -> 0
-      n -> round(count_kanban(active, "done") / n * 100)
-    end
-  end
-
-  defp active_todos(todos) do
-    todos
-    |> Enum.filter(fn t -> kanban_status(t) in ["today", "in_progress", "this_week"] end)
-    |> Enum.take(6)
-  end
-
-  defp health_counts(goals) do
-    for h <- ~w(green yellow red) do
-      {h, Enum.count(goals, fn g -> meta_get(g.meta, "health") == h end)}
-    end
-  end
-
-  defp health_dot_class("green"), do: "bg-green-100 text-green-700"
-  defp health_dot_class("yellow"), do: "bg-yellow-100 text-yellow-700"
-  defp health_dot_class("red"), do: "bg-red-100 text-red-700"
-  defp health_dot_class(_), do: "bg-base-300 text-base-content/60"
-
-  defp count_plan_status(plans, status) do
-    Enum.count(plans, fn p -> (meta_get(p.meta, "status") || "draft") == status end)
-  end
-
   defp kanban_status_class(page) do
     case kanban_status(page) do
       "this_week" -> "bg-blue-100 text-blue-700"
@@ -814,22 +559,13 @@ defmodule DranWeb.ProjectLive do
     end
   end
 
-  # ── Health badge helpers (for Overview badge + Goals list) ──
+  # ── Health badge helpers (for Goals list) ──
 
   defp health_class(page) do
     case meta_get(page.meta, "health") do
       "green" -> "bg-green-100 text-green-700"
       "yellow" -> "bg-yellow-100 text-yellow-700"
       "red" -> "bg-red-100 text-red-700"
-      _ -> "bg-base-300 text-base-content/60"
-    end
-  end
-
-  defp health_badge_class(page) do
-    case meta_get(page.meta, "health") do
-      "green" -> "bg-green-500/20 text-green-700"
-      "yellow" -> "bg-yellow-500/20 text-yellow-700"
-      "red" -> "bg-red-500/20 text-red-700"
       _ -> "bg-base-300 text-base-content/60"
     end
   end

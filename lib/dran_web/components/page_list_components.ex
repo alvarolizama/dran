@@ -39,11 +39,6 @@ defmodule DranWeb.PageListComponents do
            gettext("Save articles, papers, videos and books worth remembering."),
            gettext("Add Reference")}
 
-        "artifact" ->
-          {gettext("No artifacts yet"),
-           gettext("Upload files and deliverables that live in your brain."),
-           gettext("Upload Artifact")}
-
         "goal" ->
           {gettext("No goals yet"),
            gettext("Set objectives with target dates and track their health."),

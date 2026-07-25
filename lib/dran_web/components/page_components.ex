@@ -23,10 +23,17 @@ defmodule DranWeb.PageComponents do
   attr :compare_version, :map, default: nil
   attr :context_slug, :string, default: "personal"
   attr :rendered_body, :any, default: nil
+  attr :editing, :boolean, default: false
+  attr :content_hidden, :boolean, default: false, doc: "hide the content panel when a server-side tab is active"
+  attr :graph_active, :boolean, default: false, doc: "graph tab is active (server-side tabs)"
+  attr :content_tab_value, :string, default: "overview", doc: "switch_tab value for the Content tab"
 
   slot :actions
   slot :tabs
+  slot :extra_tabs, doc: "extra server-side tabs rendered alongside Content + Graph"
+  slot :extra_content, doc: "server-side tab content rendered outside the content panel"
   slot :graph, doc: "rendered inside the first-row 'graph' detail tab panel"
+  slot :attributes, doc: "edit form attributes rendered at the top of the sidebar"
 
   def page_detail(assigns) do
     inline_links =
@@ -97,20 +104,6 @@ defmodule DranWeb.PageComponents do
               </span>
             </div>
             <h1 class="text-title break-words">{@page.title}</h1>
-            <div class="flex flex-wrap gap-2 mt-2">
-              <.link
-                :for={tag <- @page.tags || []}
-                navigate={"/tags/#{URI.encode_www_form(tag)}"}
-                class={[
-                  "px-2 py-0.5 text-xs rounded transition",
-                  "tag-link",
-                  Map.has_key?(@tag_map, tag) && "tag-link-exists",
-                  not Map.has_key?(@tag_map, tag) && "tag-link-missing"
-                ]}
-              >
-                {tag}
-              </.link>
-            </div>
           </div>
           <div class="flex gap-2 shrink-0">
             {render_slot(@actions)}
@@ -138,240 +131,188 @@ defmodule DranWeb.PageComponents do
             >
               <.icon name="hero-trash" class="size-4" /> {gettext("Delete")}
             </button>
+          </div>
+        </div>
+
+        <div class="border-b border-base-300">
+          <nav class="flex gap-1" role="tablist" aria-label={gettext("Page sections")}>
             <button
-              :if={Dran.Firecrawl.enabled?()}
-              phx-click="enrich_page"
-              phx-value-slug={@page.slug}
-              class="btn btn-ghost btn-sm"
-              title={gettext("Search the web and enrich this page with new content")}
+              id="detail-tab-content"
+              phx-click="switch_tab"
+              phx-value-tab={@content_tab_value}
+              role="tab"
+              aria-selected={not @content_hidden}
+              data-testid="detail-tab-content"
+              class={[
+                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
+                not @content_hidden && "border-primary text-primary",
+                @content_hidden && "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
+              ]}
             >
-              <.icon name="hero-sparkles" class="size-4" /> {gettext("Enrich")}
+              {gettext("Content")}
             </button>
-          </div>
-        </div>
-
-        <.detail_tabs_bar />
-
-        <%!-- ── Tab: Content (default visible) ─────────────────────────────── --%>
-        <div id="detail-panel-content" data-detail-panel class="space-y-6">
-          {render_slot(@tabs)}
-
-          <div :if={@tabs == []} class="prose prose-base dark:prose-invert">
-            {@rendered_body}
-          </div>
-
-          <div class="border-t border-base-300 pt-4">
-            <.backlinks_section relations={@relations} />
-          </div>
-
-          <div :if={@tabs == []} class="border-t border-base-300 pt-4">
-            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
-              {gettext("Changelog")}
-            </h3>
-            <div class="space-y-1">
-              <div
-                :for={version <- @versions}
-                class="surface-2 px-3 py-2 text-sm text-base-content/60 transition hover:bg-base-200/50"
-              >
-                {gettext("v%{version} — %{date} by %{author}",
-                  version: version.version,
-                  date: format_date(version.inserted_at),
-                  author: version.changed_by || gettext("system")
-                )}
-              </div>
-              <p :if={@versions == []} class="text-caption text-base-content/40">
-                {gettext("No version history yet.")}
-              </p>
-            </div>
-          </div>
-
-          <div :if={@compare_version} class="border-t border-base-300 pt-4">
-            <DranWeb.VersionDiffComponent.diff
-              old_version={@compare_version}
-              new_version={@page}
-            />
-          </div>
-        </div>
-
-        <%!-- ── Tab: Metadata ─────────────────────────────────────────────── --%>
-        <div
-          id="detail-panel-metadata"
-          data-detail-panel
-          class="hidden space-y-3"
-        >
-          <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider">
-            {gettext("Metadata")}
-          </h3>
-          <div class="surface-2 rounded-lg overflow-hidden">
-            <div class="divide-y divide-base-300/50">
-              <div class="flex justify-between gap-2 px-4 py-2.5 text-sm">
-                <span class="text-base-content/60">{gettext("Type")}</span>
-                <span class="font-medium">{@page.page_type}</span>
-              </div>
-              <div class="flex justify-between gap-2 px-4 py-2.5 text-sm">
-                <span class="text-base-content/60">{gettext("Version")}</span>
-                <span class="font-mono">v{@page.version}</span>
-              </div>
-              <div class="flex justify-between gap-2 px-4 py-2.5 text-sm">
-                <span class="text-base-content/60">{gettext("Owner")}</span>
-                <span>{@page.owner}</span>
-              </div>
-              <div class="flex justify-between gap-2 px-4 py-2.5 text-sm">
-                <span class="text-base-content/60">{gettext("Created by")}</span>
-                <span>{@page.created_by}</span>
-              </div>
-              <div :if={@page.updated_by} class="flex justify-between gap-2 px-4 py-2.5 text-sm">
-                <span class="text-base-content/60">{gettext("Updated by")}</span>
-                <span>{@page.updated_by}</span>
-              </div>
-              <div
-                :for={
-                  {key, value} <-
-                    Enum.reject(@page.meta || %{}, fn {k, _v} -> k == "inline_links" end)
-                }
-                class="flex justify-between gap-2 px-4 py-2.5 text-sm break-words"
-              >
-                <span class="text-base-content/60">{format_meta_key(key)}</span>
-                <span class="text-right">{format_meta_value(value)}</span>
-              </div>
-            </div>
-          </div>
-          <p :if={map_size(@page.meta || %{}) == 0} class="text-caption text-base-content/40">
-            {gettext("No additional metadata.")}
-          </p>
-        </div>
-
-        <%!-- ── Tab: Relations ────────────────────────────────────────────── --%>
-        <div
-          id="detail-panel-relations"
-          data-detail-panel
-          class="hidden space-y-4"
-        >
-          <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider">
-            {gettext("Relations")}
-          </h3>
-
-          <div :if={length(@relations.outbound) > 0} class="space-y-1">
-            <div class="text-caption text-base-content/40 mb-1 inline-flex items-center gap-1">
-              <.icon name="hero-arrow-right" class="size-3" />
-              {gettext("Outbound")} ({length(@relations.outbound)})
-            </div>
-            <div :for={rel <- @relations.outbound} class="surface-2 px-3 py-2 transition">
-              <.link
-                navigate={PageTypes.page_show_path(rel.target)}
-                class="text-sm hover:text-primary transition"
-              >
-                {rel.target.title}
-              </.link>
-              <div class="mt-0.5">
-                <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded-full #{relation_type_badge_class(rel.relation_type)}"}>
-                  {rel.relation_type}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div :if={length(@relations.inbound) > 0} class="space-y-1">
-            <div class="text-caption text-base-content/40 mb-1 inline-flex items-center gap-1">
-              <.icon name="hero-arrow-left" class="size-3" />
-              {gettext("Inbound")} ({length(@relations.inbound)})
-            </div>
-            <div :for={rel <- @relations.inbound} class="surface-2 px-3 py-2 transition">
-              <.link
-                navigate={PageTypes.page_show_path(rel.source)}
-                class="text-sm hover:text-primary transition"
-              >
-                {rel.source.title}
-              </.link>
-              <div class="mt-0.5">
-                <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded-full #{relation_type_badge_class(rel.relation_type)}"}>
-                  {rel.relation_type}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <p
-            :if={@relations.outbound == [] and @relations.inbound == []}
-            class="text-caption text-base-content/40"
-          >
-            {gettext("No relations yet")}
-          </p>
-        </div>
-
-        <%!-- ── Tab: Versions ─────────────────────────────────────────────── --%>
-        <div
-          id="detail-panel-versions"
-          data-detail-panel
-          class="hidden space-y-4"
-        >
-          <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider">
-            {gettext("Versions")}
-          </h3>
-          <div :if={@compare_version} class="surface-2 rounded-lg p-3 mb-2">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-sm text-base-content/60">
-                {gettext("Comparing v%{version} with current", version: @compare_version.version)}
-              </span>
-              <button phx-click="clear_compare" class="btn btn-ghost btn-xs">
-                <.icon name="hero-x-mark" class="size-3" /> {gettext("Clear")}
-              </button>
-            </div>
-            <DranWeb.VersionDiffComponent.diff
-              old_version={@compare_version}
-              new_version={@page}
-            />
-          </div>
-          <div class="space-y-1">
-            <div
-              :for={version <- @versions}
-              class="surface-2 px-3 py-2 flex items-center justify-between gap-2 transition hover:bg-base-200/50"
+            {render_slot(@extra_tabs)}
+            <button
+              id="detail-tab-graph"
+              phx-click="switch_tab"
+              phx-value-tab="graph"
+              role="tab"
+              aria-selected={@graph_active}
+              data-testid="detail-tab-graph"
+              class={[
+                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
+                @graph_active && "border-primary text-primary",
+                not @graph_active && "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
+              ]}
             >
-              <span class="text-sm text-base-content/60">
-                <span class="font-mono">v{version.version}</span>
-                <span class="text-base-content/30 mx-1">·</span>
-                {format_date(version.inserted_at)}
-              </span>
-              <button
-                phx-click="compare_version"
-                phx-value-version={version.version}
-                class="btn btn-ghost btn-xs"
-              >
-                {gettext("Compare")}
-              </button>
-            </div>
-            <p :if={@versions == []} class="text-caption text-base-content/40">
-              {gettext("No version history yet.")}
-            </p>
-          </div>
+              {gettext("Graph")}
+            </button>
+          </nav>
         </div>
 
-        <%!-- ── Tab: Activity ────────────────────────────────────────────── --%>
-        <div
-          id="detail-panel-activity"
-          data-detail-panel
-          class="hidden space-y-4"
-        >
-          <h3 class="text-caption font-semibold text-base-content/40 uppercase tracking-wider">
-            {gettext("Activity")}
-          </h3>
-          <div class="space-y-1">
-            <div :for={log <- @logs} class="text-xs text-base-content/60">
-              <span class="font-mono">{log.action}</span> — {format_date(log.inserted_at)}
-            </div>
-            <p :if={@logs == []} class="text-xs text-base-content/40">
-              {gettext("No activity recorded.")}
-            </p>
-          </div>
-        </div>
+        <%!-- ── Two-column layout: main content + sidebar ─────────────────── --%>
+        <div class="flex flex-col lg:flex-row gap-6">
+          <%!-- Main column: tabs content ────────────────────────────────── --%>
+          <div class="flex-1 min-w-0 space-y-6">
+            <div id="detail-panel-content" data-detail-panel class={["space-y-6", @content_hidden && "hidden"]} phx-hook="Mermaid">
+              {render_slot(@tabs)}
 
-        <%!-- ── Tab: Graph ───────────────────────────────────────────────── --%>
-        <div
-          id="detail-panel-graph"
-          data-detail-panel
-          class="hidden"
-        >
-          {render_slot(@graph)}
+              <div :if={@tabs == [] and not @content_hidden} class="prose prose-base dark:prose-invert">
+                {@rendered_body}
+              </div>
+
+              <div :if={@compare_version} class="border-t border-base-300 pt-4">
+                <DranWeb.VersionDiffComponent.diff
+                  old_version={@compare_version}
+                  new_version={@page}
+                />
+              </div>
+            </div>
+
+            {render_slot(@extra_content)}
+
+            <%!-- ── Tab: Graph ───────────────────────────────────────────────── --%>
+            <div
+              id="detail-panel-graph"
+              data-detail-panel
+              class={["hidden", @content_hidden && "hidden"]}
+            >
+              {render_slot(@graph)}
+            </div>
+          </div>
+
+          <%!-- Sidebar: attributes + metadata + backlinks + changelog + activity ──────── --%>
+          <aside class="lg:w-72 xl:w-80 shrink-0 space-y-4">
+            {render_slot(@attributes)}
+
+            <%!-- Metadata collapsible ─────────────────────────────────────── % --%>
+            <details class="group surface-2 rounded-lg p-4">
+              <summary class="flex items-center gap-2 cursor-pointer select-none">
+                <.icon
+                  name="hero-chevron-right"
+                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+                />
+                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+                  {gettext("Metadata")}
+                </h3>
+              </summary>
+              <div class="divide-y divide-base-300/50 mt-2">
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Type")}</span>
+                  <span class="font-medium">{@page.page_type}</span>
+                </div>
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Version")}</span>
+                  <span class="font-mono">v{@page.version}</span>
+                </div>
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Owner")}</span>
+                  <span>{@page.owner}</span>
+                </div>
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Created by")}</span>
+                  <span>{@page.created_by}</span>
+                </div>
+                <div :if={@page.updated_by} class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Updated by")}</span>
+                  <span>{@page.updated_by}</span>
+                </div>
+                <div
+                  :for={
+                    {key, value} <-
+                      Enum.reject(@page.meta || %{}, fn {k, _v} -> k == "inline_links" end)
+                  }
+                  class="flex justify-between gap-2 py-2 text-sm break-words"
+                >
+                  <span class="text-base-content/60">{format_meta_key(key)}</span>
+                  <span class="text-right">{format_meta_value(value)}</span>
+                </div>
+              </div>
+            </details>
+
+            <details class="group surface-2 rounded-lg p-4">
+              <summary class="flex items-center gap-2 cursor-pointer select-none">
+                <.icon
+                  name="hero-chevron-right"
+                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+                />
+                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+                  {gettext("Links")}
+                </h3>
+              </summary>
+              <div class="mt-2">
+                <.backlinks_section relations={@relations} />
+              </div>
+            </details>
+
+            <details class="group surface-2 rounded-lg p-4">
+              <summary class="flex items-center gap-2 cursor-pointer select-none">
+                <.icon
+                  name="hero-chevron-right"
+                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+                />
+                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+                  {gettext("Changelog")}
+                </h3>
+              </summary>
+              <div class="space-y-1 mt-2">
+                <div
+                  :for={version <- @versions}
+                  class="px-3 py-2 text-sm text-base-content/60 transition hover:bg-base-200/50 rounded"
+                >
+                  {gettext("v%{version} — %{date} by %{author}",
+                    version: version.version,
+                    date: format_date(version.inserted_at),
+                    author: version.changed_by || gettext("system")
+                  )}
+                </div>
+                <p :if={@versions == []} class="text-caption text-base-content/40">
+                  {gettext("No version history yet.")}
+                </p>
+              </div>
+            </details>
+
+            <%!-- Activity collapsible ──────────────────────────────────────── % --%>
+            <details class="group surface-2 rounded-lg p-4">
+              <summary class="flex items-center gap-2 cursor-pointer select-none">
+                <.icon
+                  name="hero-chevron-right"
+                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+                />
+                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+                  {gettext("Activity")}
+                </h3>
+              </summary>
+              <div class="space-y-1 mt-2">
+                <div :for={log <- @logs} class="text-xs text-base-content/60">
+                  <span class="font-mono">{log.action}</span> — {format_date(log.inserted_at)}
+                </div>
+                <p :if={@logs == []} class="text-xs text-base-content/40">
+                  {gettext("No activity recorded.")}
+                </p>
+              </div>
+            </details>
+          </aside>
         </div>
       </div>
     </div>
@@ -387,10 +328,6 @@ defmodule DranWeb.PageComponents do
   def detail_tabs_bar(assigns) do
     tabs = [
       {"content", gettext("Content")},
-      {"metadata", gettext("Metadata")},
-      {"relations", gettext("Relations")},
-      {"versions", gettext("Versions")},
-      {"activity", gettext("Activity")},
       {"graph", gettext("Graph")}
     ]
 
@@ -473,19 +410,13 @@ defmodule DranWeb.PageComponents do
       |> assign(:outbound_count, outbound_count)
 
     ~H"""
-    <details class="group" open={@inbound_count > 0}>
-      <summary class="flex items-center gap-2 cursor-pointer select-none mb-3">
-        <.icon
-          name="hero-chevron-right"
-          class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-        />
-        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-          {gettext("Linked from")}
-          <span class="ml-1 text-base-content/40">({@inbound_count})</span>
-        </h3>
-      </summary>
+    <div>
+      <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
+        {gettext("Linked from")}
+        <span class="ml-1 text-base-content/40">({@inbound_count})</span>
+      </h3>
 
-      <div :if={@inbound_count > 0} class="space-y-2 ml-6">
+      <div :if={@inbound_count > 0} class="space-y-2">
         <div
           :for={rel <- @inbound}
           class="surface-2 px-3 py-2 flex items-center justify-between gap-2 transition"
@@ -502,24 +433,18 @@ defmodule DranWeb.PageComponents do
         </div>
       </div>
 
-      <p :if={@inbound_count == 0} class="text-caption text-base-content/40 ml-6">
+      <p :if={@inbound_count == 0} class="text-caption text-base-content/40">
         {gettext("No backlinks yet")}
       </p>
-    </details>
+    </div>
 
-    <details :if={@outbound_count > 0} class="group mt-4">
-      <summary class="flex items-center gap-2 cursor-pointer select-none mb-3">
-        <.icon
-          name="hero-chevron-right"
-          class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-        />
-        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-          {gettext("Links to")}
-          <span class="ml-1 text-base-content/40">({@outbound_count})</span>
-        </h3>
-      </summary>
+    <div :if={@outbound_count > 0} class="mt-4">
+      <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-2">
+        {gettext("Links to")}
+        <span class="ml-1 text-base-content/40">({@outbound_count})</span>
+      </h3>
 
-      <div class="space-y-2 ml-6">
+      <div class="space-y-2">
         <div
           :for={rel <- @outbound}
           class="surface-2 px-3 py-2 flex items-center justify-between gap-2 transition"
@@ -535,7 +460,7 @@ defmodule DranWeb.PageComponents do
           </span>
         </div>
       </div>
-    </details>
+    </div>
     """
   end
 
@@ -802,7 +727,7 @@ defmodule DranWeb.PageComponents do
 
   Embeds `![[slug|display]]` are not native to MDEx; we post-process
   the HTML to replace the literal `![[...]]` text with `<img>` or
-  `<video>` tags when the slug resolves to an artifact page in the
+  `<video>` tags when the slug resolves to a file page in the
   given context.
 
   Pass `:context_id` to resolve embeds; otherwise embeds render as
@@ -950,6 +875,64 @@ defmodule DranWeb.PageComponents do
   end
 
   @doc """
+  Attributes panel rendered in the sidebar — summary, tags, and meta fields.
+  Used via the `<:attributes>` slot of `page_detail`.
+  """
+  attr :form, :any, required: true
+  attr :page, :map, required: true
+  attr :page_type, :string, required: true
+  attr :context_id, :any, required: true
+  attr :editor_id, :string, required: true
+  attr :tag_suggestions, :list, default: nil
+
+  def page_attributes(assigns) do
+    suggestions =
+      case assigns.tag_suggestions do
+        nil ->
+          case assigns.context_id do
+            nil -> []
+            id -> Dran.Brain.list_tags(id)
+          end
+        list -> list
+      end
+
+    assigns = assign(assigns, :tag_suggestions, suggestions)
+
+    ~H"""
+    <details class="group surface-2 rounded-lg p-4" open>
+      <summary class="flex items-center gap-2 cursor-pointer select-none">
+        <.icon
+          name="hero-chevron-right"
+          class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+        />
+        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+          {gettext("Attributes")}
+        </h3>
+      </summary>
+      <div class="space-y-3 mt-2">
+        <.input
+          field={@form[:summary]}
+          type="text"
+          label={gettext("Summary")}
+          placeholder={gettext("One-line description")}
+          class="text-sm"
+        />
+
+        <.tag_input
+          id={"#{@editor_id}-tags"}
+          name="page[tags]"
+          value={Phoenix.HTML.Form.input_value(@form, :tags)}
+          label={gettext("Tags")}
+          suggestions={@tag_suggestions}
+        />
+
+        <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
+      </div>
+    </details>
+    """
+  end
+
+  @doc """
   Shared inline edit form for page detail views — two-column layout with the
   title + markdown editor on the left and an attributes sidebar on the right
   (summary, tags, meta fields). Replaces the per-LiveView copy-pasted form
@@ -981,62 +964,27 @@ defmodule DranWeb.PageComponents do
     assigns = assign(assigns, :tag_suggestions, suggestions)
 
     ~H"""
-    <.form for={@form} id="page-edit-form" phx-change="validate_page" phx-submit="save_page">
-      <div class="flex gap-6 items-start mt-4">
-        <%!-- Left: title + editor --%>
-        <div class="flex-1 min-w-0 space-y-5">
-          <.input
-            field={@form[:title]}
-            type="text"
-            label={gettext("Title")}
-            placeholder={gettext("Enter a title…")}
-            class="text-lg font-medium"
-          />
+    <.form for={@form} id="page-edit-form" phx-change="validate_page">
+      <div class="flex-1 min-w-0 space-y-5">
+        <.input
+          field={@form[:title]}
+          type="text"
+          label={gettext("Title")}
+          placeholder={gettext("Enter a title…")}
+          class="text-lg font-medium"
+        />
 
-          <div>
-            <span class="label mb-1 block text-sm font-medium text-base-content/70">
-              {gettext("Content")}
-            </span>
-            <.markdown_editor
-              id={@editor_id}
-              body={@page.body}
-              context_id={@context_id}
-              save_status={@save_status}
-            />
-          </div>
+        <div>
+          <span class="label mb-1 block text-sm font-medium text-base-content/70">
+            {gettext("Content")}
+          </span>
+          <.markdown_editor
+            id={@editor_id}
+            body={@page.body}
+            context_id={@context_id}
+            save_status={@save_status}
+          />
         </div>
-
-        <%!-- Right: attributes sidebar --%>
-        <aside class="w-80 shrink-0 space-y-4 surface-2 rounded-2xl p-5 sticky top-6">
-          <h2 class="text-sm font-semibold text-base-content/70 uppercase tracking-wider">
-            {gettext("Atributos")}
-          </h2>
-
-          <.input
-            field={@form[:summary]}
-            type="text"
-            label={gettext("Summary")}
-            placeholder={gettext("One-line description")}
-            class="text-sm"
-          />
-
-          <.tag_input
-            id={"#{@editor_id}-tags"}
-            name="page[tags]"
-            value={Phoenix.HTML.Form.input_value(@form, :tags)}
-            label={gettext("Tags")}
-            suggestions={@tag_suggestions}
-          />
-
-          <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
-        </aside>
-      </div>
-
-      <div class="flex justify-end gap-2 pt-4 mt-4 border-t border-base-300">
-        <button type="button" phx-click="cancel_edit" class="btn btn-ghost btn-sm">
-          {gettext("Cancel")}
-        </button>
-        <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
       </div>
     </.form>
     """

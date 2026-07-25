@@ -323,7 +323,6 @@ defmodule DranWeb.DocsLive do
         <li><strong>goal</strong> — outcomes you want to achieve</li>
         <li><strong>plan</strong> — steps or roadmaps</li>
         <li><strong>todo</strong> — actionable items with kanban status</li>
-        <li><strong>artifact</strong> — deliverables or files</li>
         <li><strong>comparison</strong> — side-by-side analyses</li>
         <li>
           <strong>query</strong>
@@ -346,7 +345,7 @@ defmodule DranWeb.DocsLive do
         <li><strong>contradicts</strong> — conflict (A contradicts B)</li>
         <li>
           <strong>embeds</strong>
-          — source embeds target (e.g. a note embeds an artifact via <code>![[slug]]</code>)
+          — source embeds target (e.g. a note embeds a file via <code>![[slug]]</code>)
         </li>
         <li>
           <strong>semantic</strong>
@@ -675,8 +674,7 @@ defmodule DranWeb.DocsLive do
         {"search-api", "Search"},
         {"goals-api", "Goals"},
         {"todos-api", "Todos"},
-        {"ingest-api", "Ingest"},
-        {"maintenance-api", "Maintenance"},
+                {"maintenance-api", "Maintenance"},
         {"wiki-api", "Wiki"},
         {"export-api", "Export"},
         {"settings-api", "Settings"}
@@ -719,26 +717,6 @@ defmodule DranWeb.DocsLive do
 
   defp agents_data do
     [
-      %{
-        label: "Research",
-        icon: "hero-magnifying-glass-circle",
-        color: "text-blue-500 dark:text-blue-400",
-        trigger: :manual,
-        schedule: nil,
-        description:
-          "Explores a topic: searches the web, scrapes sources, and creates note/reference pages with citations.",
-        limits: "Max 10 sources, 10 pages, 10 searches (configurable via Settings)."
-      },
-      %{
-        label: "Ingest",
-        icon: "hero-arrow-down-on-square",
-        color: "text-cyan-500 dark:text-cyan-400",
-        trigger: :manual,
-        schedule: nil,
-        description:
-          "Validates, inspects, and downloads a single URL to create a reference page.",
-        limits: "File download limit 100 MiB."
-      },
       %{
         label: "Ask (Q&A)",
         icon: "hero-chat-bubble-left-right",
@@ -877,8 +855,7 @@ defmodule DranWeb.DocsLive do
         path: "/api/todos/:id",
         desc: "Update a todo (e.g. change status)"
       },
-      %{group: "Ingest", method: "POST", path: "/api/ingest", desc: "Ingest a URL as a raw page"},
-      %{
+            %{
         group: "Maintenance",
         method: "GET",
         path: "/api/lint?context=...",
@@ -1030,13 +1007,11 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Agents</strong>
           — use <code>dran_start_agent</code>
-          to delegate tasks to autonomous agents (research, ingest, ask, curator, link_gardener, weekly_review).
+          to delegate tasks to autonomous agents (ask, curator, link_gardener, weekly_review).
           Poll <code>dran_get_agent_session</code>
           for progress and results.
         </li>
         <li>
-          <strong>Files Ingest</strong>
-          — use <code>dran_ingest_url</code>
           to save web pages or download files as references.
         </li>
         <li>
@@ -1099,12 +1074,6 @@ defmodule DranWeb.DocsLive do
               <td class="px-4 py-2 text-xs">kind, source_url, published_at</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">artifact</td>
-              <td class="px-4 py-2">Files and deliverables (uploaded via UI)</td>
-              <td class="px-4 py-2 text-xs">document, code, design, deliverable, file</td>
-              <td class="px-4 py-2 text-xs">kind, filename, mime_type, storage_path, sha256</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">goal</td>
               <td class="px-4 py-2">Objectives with target dates and health</td>
               <td class="px-4 py-2 text-xs">
@@ -1155,7 +1124,7 @@ defmodule DranWeb.DocsLive do
       <.h2_heading id="embeds" icon="hero-paper-clip" label="Embeds" />
       <p>
         Use <code>![[slug]]</code>
-        in page bodies to embed an artifact (image, video, audio, PDF). Embeds
+        in page bodies to embed a file (image, video, audio, PDF). Embeds
         are auto-resolved into <code>embeds</code>
         relations. Plain <code>[[slug]]</code>
         wikilinks are no longer supported — relations are
@@ -1200,7 +1169,7 @@ defmodule DranWeb.DocsLive do
             name="type"
             type="string"
             required="no"
-            desc="note, concept, entity, reference, goal, plan, todo, artifact, comparison, query"
+            desc="note, concept, entity, reference, goal, plan, todo, comparison, query"
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
@@ -1236,13 +1205,13 @@ defmodule DranWeb.DocsLive do
             name="page_type"
             type="string"
             required="yes"
-            desc="note, concept, entity, reference, goal, plan, todo, artifact, comparison, query"
+            desc="note, concept, entity, reference, goal, plan, todo, comparison, query"
           />
           <:param
             name="body"
             type="string"
             required="no"
-            desc="Markdown body. Use ![[slug]] for artifact embeds."
+            desc="Markdown body. Use ![[slug]] for embeds."
           />
           <:param
             name="meta"
@@ -1397,21 +1366,6 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="dran_ingest_url"
-          desc="Save a URL as a reference page. HTML → saves URL (agent reads later). Files → downloads & stores with download link."
-        >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
-          <:param name="url" type="string" required="yes" desc="URL to ingest (HTML or PDF)" />
-          <:param
-            name="slug"
-            type="string"
-            required="no"
-            desc="Custom slug (auto from title if omitted)"
-          />
-          <:param name="tags" type="array" required="no" desc="Tags" />
-        </.mcp_tool>
-
-        <.mcp_tool
           name="dran_start_agent"
           desc="Start an autonomous agent session. Returns immediately; poll dran_get_agent_session for progress."
         >
@@ -1419,7 +1373,7 @@ defmodule DranWeb.DocsLive do
             name="agent_type"
             type="string"
             required="yes"
-            desc="research, ingest, ask, curator, link_gardener, weekly_review"
+            desc="ask, curator, link_gardener, weekly_review"
           />
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />
@@ -1459,8 +1413,6 @@ defmodule DranWeb.DocsLive do
       </p>
       <div class="not-prose space-y-2">
         <div class="rounded-lg border border-base-300 p-3">
-          <code class="font-mono text-primary">research_topic</code>
-          <span class="text-sm text-base-content/60 ml-2">Scaffold a research page with outline, sources, and questions. Args: topic, context.</span>
         </div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">brainstorm</code>

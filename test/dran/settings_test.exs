@@ -10,7 +10,6 @@ defmodule Dran.SettingsTest do
       assert Settings.get("semantic_threshold_long") == 0.28
       assert Settings.get("agent_max_pages") == 10
       assert Settings.get("agent_max_sources") == 10
-      assert Settings.get("research_lang") == "es"
       assert Settings.get("daily_note_enabled") == true
     end
 
@@ -21,10 +20,7 @@ defmodule Dran.SettingsTest do
 
   describe "put/2" do
     test "persists value and get reads it back" do
-      assert Settings.get("research_lang") == "es"
 
-      Settings.put("research_lang", "en")
-      assert Settings.get("research_lang") == "en"
     end
 
     test "put twice updates the same row (upsert)" do
@@ -52,7 +48,6 @@ defmodule Dran.SettingsTest do
 
   describe "all/0" do
     test "merges defaults with DB overrides" do
-      Settings.put("research_lang", "fr")
       Settings.put("agent_max_pages", 42)
 
       all = Settings.all()
@@ -65,7 +60,6 @@ defmodule Dran.SettingsTest do
       assert all["daily_note_enabled"] == true
 
       # DB overrides win
-      assert all["research_lang"] == "fr"
       assert all["agent_max_pages"] == 42
     end
 
@@ -84,7 +78,6 @@ defmodule Dran.SettingsTest do
       assert defaults["semantic_threshold_long"] == 0.28
       assert defaults["agent_max_pages"] == 10
       assert defaults["agent_max_sources"] == 10
-      assert defaults["research_lang"] == "es"
       assert defaults["daily_note_enabled"] == true
     end
   end

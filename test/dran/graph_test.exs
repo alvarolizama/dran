@@ -26,7 +26,6 @@ defmodule Dran.GraphTest do
       api_key: nil,
       embedding_model: nil,
       rerank_model: nil,
-      markitdown_model: nil,
       timeout: 100,
       schedule_async: false
     )

@@ -176,13 +176,6 @@ defmodule Dran.Brain.PageMetaGettextTest do
       end
     end
 
-    test "artifact: every kind option label is in default.pot" do
-      for {label, _value} <- select_pairs("artifact") do
-        assert pot_has?(label),
-               "artifact kind label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
     test "query: every option label is in default.pot" do
       for {label, _value} <- select_pairs("query") do
         assert pot_has?(label),
@@ -260,14 +253,6 @@ defmodule Dran.Brain.PageMetaGettextTest do
       end
     end
 
-    test "artifact: kind values are raw slugs" do
-      values = Enum.map(select_pairs("artifact"), &elem(&1, 1))
-
-      for expected <- ~w(document code design deliverable file) do
-        assert expected in values
-      end
-    end
-
     test "query: kind, difficulty, answer_status values are raw slugs" do
       values = Enum.map(select_pairs("query"), &elem(&1, 1))
 
@@ -282,7 +267,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
   describe "field labels (3rd tuple element) are routed through gettext" do
     test "every field label across all page types is in default.pot" do
-      for type <- ~w(note concept entity reference artifact plan project goal todo query),
+      for type <- ~w(note concept entity reference plan project goal todo query),
           label <- field_labels(type) do
         assert pot_has?(label),
                "field label #{inspect(label)} for type #{inspect(type)} not in default.pot — not gettext'd"
@@ -337,7 +322,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     # prompts are not part of meta_fields_for's return, but we keep a guard
     # that no field label is the English literal "None".
     test "no page type returns 'None' as a field label" do
-      for type <- ~w(note concept entity reference artifact plan project goal todo query) do
+      for type <- ~w(note concept entity reference plan project goal todo query) do
         refute "None" in field_labels(type),
                "page type #{inspect(type)} has a raw 'None' field label"
       end
@@ -350,7 +335,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     # Guards against typos introduced during the gettext wrapping
     # (e.g. a stray gettext call with wrong arity returning a non-string label).
     test "every entry is {atom, binary, binary, list} or {atom, binary, binary}" do
-      for type <- ~w(note concept entity reference artifact plan project goal todo query),
+      for type <- ~w(note concept entity reference plan project goal todo query),
           entry <- PageMeta.meta_fields_for(type) do
         case entry do
           {type, key, label}
@@ -368,7 +353,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     end
 
     test "every :select field has non-empty options" do
-      for type <- ~w(note concept entity reference artifact plan project goal todo query),
+      for type <- ~w(note concept entity reference plan project goal todo query),
           {:select, key, _label, opts} <- PageMeta.meta_fields_for(type) do
         # Options may be inline (list of {binary, binary}) or under :options.
         direct_opts =
