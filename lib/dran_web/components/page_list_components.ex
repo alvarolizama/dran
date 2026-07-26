@@ -161,18 +161,75 @@ defmodule DranWeb.PageListComponents do
             {page.summary}
           </p>
           <div class="flex items-center justify-between mt-2">
-            <div class="flex gap-1">
-              <.link
-                :for={tag <- Enum.take(page.tags || [], 5)}
-                navigate={"/tags/#{URI.encode_www_form(tag)}"}
-                class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
+            <div class="flex items-center gap-2">
+              <div class="flex gap-1">
+                <.link
+                  :for={tag <- Enum.take(page.tags || [], 5)}
+                  navigate={"/tags/#{URI.encode_www_form(tag)}"}
+                  class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  {tag}
+                </.link>
+              </div>
+
+              <%!-- Status select for project & plan pages --%>
+              <form
+                :if={@page_type in ["project", "plan"]}
+                phx-change="change_status"
+                phx-value-slug={page.slug}
+                id={"status-form-" <> page.slug}
+                class="shrink-0"
               >
-                {tag}
-              </.link>
+                <select
+                  name="status"
+                  class={status_select_class(status_value(page, @page_type))}
+                  data-testid={"status-select-" <> page.slug}
+                >
+                  <%= for status <- status_options(@page_type) do %>
+                    <option value={status} selected={status_value(page, @page_type) == status}>
+                      {String.capitalize(status)}
+                    </option>
+                  <% end %>
+                </select>
+              </form>
+
+              <%!-- Health dots for goal pages --%>
+              <div
+                :if={@page_type == "goal"}
+                phx-click="noop"
+                class="flex items-center gap-1 shrink-0"
+                data-testid={"health-dots-" <> page.slug}
+              >
+                <button
+                  :for={{color, label} <- health_options()}
+                  type="button"
+                  phx-click="change_health"
+                  phx-value-slug={page.slug}
+                  phx-value-health={color}
+                  title={label}
+                  class={[
+                    "size-3 rounded-full transition-all",
+                    health_dot_class(color, health_value(page))
+                  ]}
+                />
+              </div>
             </div>
-            <span :if={page.updated_at} class="text-caption">
-              {Calendar.strftime(page.updated_at, "%b %d")}
-            </span>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <span :if={page.updated_at} class="text-caption">
+                {Calendar.strftime(page.updated_at, "%b %d")}
+              </span>
+              <button
+                type="button"
+                phx-click="archive_page"
+                phx-value-slug={page.slug}
+                title={gettext("Archive")}
+                class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors"
+                data-testid={"archive-btn-" <> page.slug}
+              >
+                <.icon name="hero-archive-box" class="size-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -238,4 +295,52 @@ defmodule DranWeb.PageListComponents do
     </div>
     """
   end
+
+  # ── Status select helpers ──
+
+  defp status_options("project"), do: ["draft", "active", "on_hold", "done"]
+  defp status_options("plan"), do: ["draft", "active", "done"]
+  defp status_options(_), do: []
+
+  defp status_value(page, "project"), do: Map.get(page.meta || %{}, "status") || "draft"
+  defp status_value(page, "plan"), do: Map.get(page.meta || %{}, "status") || "draft"
+  defp status_value(_page, _), do: nil
+
+  defp status_select_class("done"),
+    do:
+      "text-xs rounded-md border border-base-300 px-2 py-1 bg-green-100 text-green-700 font-medium cursor-pointer"
+
+  defp status_select_class("active"),
+    do:
+      "text-xs rounded-md border border-base-300 px-2 py-1 bg-blue-100 text-blue-700 font-medium cursor-pointer"
+
+  defp status_select_class("on_hold"),
+    do:
+      "text-xs rounded-md border border-base-300 px-2 py-1 bg-yellow-100 text-yellow-700 font-medium cursor-pointer"
+
+  defp status_select_class("draft"),
+    do:
+      "text-xs rounded-md border border-base-300 px-2 py-1 bg-base-200 text-base-content/60 cursor-pointer"
+
+  defp status_select_class(_),
+    do:
+      "text-xs rounded-md border border-base-300 px-2 py-1 bg-base-200 text-base-content/60 cursor-pointer"
+
+  # ── Health dot helpers ──
+
+  defp health_options,
+    do: [{"green", gettext("Green")}, {"yellow", gettext("Yellow")}, {"red", gettext("Red")}]
+
+  defp health_value(page), do: Map.get(page.meta || %{}, "health") || "green"
+
+  defp health_dot_class(color, current) when color == current,
+    do: health_color(color) <> " ring-2 ring-offset-1 ring-base-300"
+
+  defp health_dot_class(color, _current),
+    do: health_color(color) <> " opacity-30 hover:opacity-70"
+
+  defp health_color("green"), do: "bg-green-500"
+  defp health_color("yellow"), do: "bg-yellow-500"
+  defp health_color("red"), do: "bg-red-500"
+  defp health_color(_), do: "bg-base-300"
 end

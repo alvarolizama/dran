@@ -245,11 +245,44 @@ defmodule DranWeb.PlanLive do
   def handle_event("show_page", %{"slug" => slug}, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/plans/#{slug}")}
 
+  def handle_event("change_status", %{"slug" => slug, "status" => status}, socket) do
+    case update_page_meta(socket, slug, &Map.put(&1, "status", status)) do
+      {:ok, socket} -> {:noreply, socket}
+      {:error, socket} -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("noop", _params, socket), do: {:noreply, socket}
+
+  # Override archive_page so the card disappears from the index list.
+  def handle_event("archive_page", %{"slug" => slug} = params, socket) do
+    if socket.assigns.live_action == :show do
+      PageEdit.handle_event("archive_page", params, socket)
+    else
+      context = socket.assigns.context
+
+      case context && Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          {:noreply, socket}
+
+        page ->
+          case Brain.archive_page(page) do
+            {:ok, _updated} ->
+              pages = Enum.reject(socket.assigns.pages, &(&1.slug == slug))
+              archived_pages = [page | socket.assigns[:archived_pages] || []]
+              {:noreply, assign(socket, pages: pages, archived_pages: archived_pages)}
+
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, gettext("Could not archive page."))}
+          end
+      end
+    end
+  end
+
   def handle_event("new_page", _params, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/plans/new")}
 
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
-  def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
   def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
   def handle_event("save_page", p, s), do: PageEdit.handle_event("save_page", p, s)
@@ -273,6 +306,36 @@ defmodule DranWeb.PlanLive do
   # nil-safe access into a page's `meta` map (string keys, as persisted in JSONB).
   defp meta_get(meta, key) when is_map(meta), do: Map.get(meta, key)
   defp meta_get(nil, _key), do: nil
+
+  # Updates a page's meta in the DB and replaces it in the `pages` assign list.
+  defp update_page_meta(socket, slug, updater) do
+    context = socket.assigns.context
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          {:error, put_flash(socket, :error, gettext("Page not found."))}
+
+        page ->
+          new_meta = updater.(page.meta || %{})
+
+          case Brain.update_page(page, %{"meta" => new_meta}) do
+            {:ok, updated} ->
+              pages =
+                Enum.map(socket.assigns.pages, fn p ->
+                  if p.slug == slug, do: updated, else: p
+                end)
+
+              {:ok, assign(socket, pages: pages)}
+
+            {:error, _} ->
+              {:error, put_flash(socket, :error, gettext("Could not update page."))}
+          end
+      end
+    else
+      {:error, socket}
+    end
+  end
 
   # ── Kanban status helpers (for the simple Todos list) ──
 
