@@ -220,6 +220,7 @@ defmodule DranWeb.API.PageController do
       version: page.version,
       owner: page.owner,
       created_by: page.created_by,
+      archived: page.archived,
       updated_at: page.updated_at
     }
   end
