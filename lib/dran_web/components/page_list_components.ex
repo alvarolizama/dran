@@ -87,6 +87,52 @@ defmodule DranWeb.PageListComponents do
     Enum.filter(archived_pages, &(&1.page_type == type))
   end
 
+  # ── Group config (mirrors hermes-dran plugin) ──
+
+  defp group_config("project") do
+    [
+      {"active", gettext("Active"), "bg-green-500"},
+      {"draft", gettext("Draft"), "bg-base-300"},
+      {"on_hold", gettext("On Hold"), "bg-yellow-500"},
+      {"done", gettext("Done"), "bg-green-400"}
+    ]
+  end
+
+  defp group_config("plan") do
+    [
+      {"active", gettext("Active"), "bg-green-500"},
+      {"draft", gettext("Draft"), "bg-base-300"},
+      {"done", gettext("Done"), "bg-green-400"}
+    ]
+  end
+
+  defp group_config("goal") do
+    [
+      {"red", gettext("At Risk"), "bg-red-500"},
+      {"yellow", gettext("Caution"), "bg-yellow-500"},
+      {"green", gettext("Healthy"), "bg-green-500"}
+    ]
+  end
+
+  defp group_config(_), do: nil
+
+  defp group_key(page, "goal"), do: Map.get(page.meta || %{}, "health") || "green"
+  defp group_key(page, _type), do: Map.get(page.meta || %{}, "status") || "draft"
+
+  defp grouped_pages(pages, page_type) do
+    case group_config(page_type) do
+      nil ->
+        nil
+
+      groups ->
+        grouped = Enum.group_by(pages, fn page -> group_key(page, page_type) end)
+
+        groups
+        |> Enum.filter(fn {key, _label, _color} -> Map.has_key?(grouped, key) end)
+        |> Enum.map(fn {key, label, color} -> {key, label, color, grouped[key]} end)
+    end
+  end
+
   attr :pages, :list, required: true
   attr :archived_pages, :list, default: []
   attr :archived_filter, :string, default: "all"
@@ -140,99 +186,27 @@ defmodule DranWeb.PageListComponents do
         </.link>
       </div>
 
-      <div class="space-y-2">
-        <div
-          :for={page <- @pages}
-          class="surface-2 lift hover:border-primary/40 cursor-pointer p-4 rounded-xl"
-          phx-click="show_page"
-          phx-value-slug={page.slug}
-          data-testid={"page-card-" <> page.slug}
-        >
-          <div class="flex items-center gap-3">
-            <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
-              <.icon name={PageTypes.icon(page.page_type)} class="size-4 text-primary" />
-            </span>
-            <span class="font-medium leading-snug flex-1">{page.title}</span>
-            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
-              {PageTypes.label(page.page_type)}
-            </span>
-          </div>
-          <p :if={page.summary} class="text-sm text-base-content/60 line-clamp-2 mt-2">
-            {page.summary}
-          </p>
-          <div class="flex items-center justify-between mt-2">
-            <div class="flex items-center gap-2">
-              <div class="flex gap-1">
-                <.link
-                  :for={tag <- Enum.take(page.tags || [], 5)}
-                  navigate={"/tags/#{URI.encode_www_form(tag)}"}
-                  class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
-                >
-                  {tag}
-                </.link>
+      <%= cond do %>
+        <% @page_type in ["project", "plan", "goal"] -> %>
+          <div class="space-y-6">
+            <div :for={{_gkey, glabel, gcolor, gitems} <- grouped_pages(@pages, @page_type)}>
+              <div class="flex items-center gap-2 px-1 py-1">
+                <span class={"size-2 rounded-full shrink-0 " <> gcolor}></span>
+                <span class="text-sm font-medium text-base-content/60">{glabel}</span>
+                <span class="text-xs text-base-content/40 tabular-nums">
+                  ({length(gitems)})
+                </span>
               </div>
-
-              <%!-- Status select for project & plan pages --%>
-              <form
-                :if={@page_type in ["project", "plan"]}
-                phx-change="change_status"
-                phx-value-slug={page.slug}
-                id={"status-form-" <> page.slug}
-                class="shrink-0"
-              >
-                <select
-                  name="status"
-                  class={status_select_class(status_value(page, @page_type))}
-                  data-testid={"status-select-" <> page.slug}
-                >
-                  <%= for status <- status_options(@page_type) do %>
-                    <option value={status} selected={status_value(page, @page_type) == status}>
-                      {String.capitalize(status)}
-                    </option>
-                  <% end %>
-                </select>
-              </form>
-
-              <%!-- Health dots for goal pages --%>
-              <div
-                :if={@page_type == "goal"}
-                phx-click="noop"
-                class="flex items-center gap-1 shrink-0"
-                data-testid={"health-dots-" <> page.slug}
-              >
-                <button
-                  :for={{color, label} <- health_options()}
-                  type="button"
-                  phx-click="change_health"
-                  phx-value-slug={page.slug}
-                  phx-value-health={color}
-                  title={label}
-                  class={[
-                    "size-3 rounded-full transition-all",
-                    health_dot_class(color, health_value(page))
-                  ]}
-                />
+              <div class="space-y-2">
+                <.page_card :for={page <- gitems} page={page} page_type={@page_type} />
               </div>
             </div>
-
-            <div class="flex items-center gap-2 shrink-0">
-              <span :if={page.updated_at} class="text-caption">
-                {Calendar.strftime(page.updated_at, "%b %d")}
-              </span>
-              <button
-                type="button"
-                phx-click="archive_page"
-                phx-value-slug={page.slug}
-                title={gettext("Archive")}
-                class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors"
-                data-testid={"archive-btn-" <> page.slug}
-              >
-                <.icon name="hero-archive-box" class="size-4" />
-              </button>
-            </div>
           </div>
-        </div>
-      </div>
+        <% true -> %>
+          <div class="space-y-2">
+            <.page_card :for={page <- @pages} page={page} page_type={@page_type} />
+          </div>
+      <% end %>
 
       <%!-- Archived section: collapsible, at the bottom of every list view --%>
       <details
@@ -273,16 +247,19 @@ defmodule DranWeb.PageListComponents do
         <div class="px-4 pb-4 space-y-1">
           <div
             :for={page <- filtered_archived(@archived_pages, @archived_filter)}
-            class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-200 cursor-pointer transition-colors opacity-70 hover:opacity-100"
-            phx-click="show_page"
-            phx-value-slug={page.slug}
+            class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-200 transition-colors opacity-70 hover:opacity-100"
             data-testid={"archived-page-" <> page.slug}
           >
             <.icon
               name={PageTypes.icon(page.page_type)}
               class="size-4 text-base-content/40 shrink-0"
             />
-            <span class="text-sm flex-1 truncate">{page.title}</span>
+            <.link
+              navigate={PageTypes.page_show_path(page)}
+              class="text-sm flex-1 truncate hover:text-primary transition-colors"
+            >
+              {page.title}
+            </.link>
             <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/50">
               {PageTypes.label(page.page_type)}
             </span>
@@ -292,6 +269,108 @@ defmodule DranWeb.PageListComponents do
           </div>
         </div>
       </details>
+    </div>
+    """
+  end
+
+  # ── Page card (extracted for reuse in grouped + flat layouts) ──
+
+  attr :page, :map, required: true
+  attr :page_type, :string, default: nil
+
+  defp page_card(assigns) do
+    ~H"""
+    <div
+      class="surface-2 lift hover:border-primary/40 p-4 rounded-xl"
+      data-testid={"page-card-" <> @page.slug}
+    >
+      <div class="flex items-center gap-3">
+        <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
+          <.icon name={PageTypes.icon(@page.page_type)} class="size-4 text-primary" />
+        </span>
+        <.link
+          navigate={PageTypes.page_show_path(@page)}
+          class="font-medium leading-snug flex-1 hover:text-primary transition-colors"
+        >
+          {@page.title}
+        </.link>
+        <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
+          {PageTypes.label(@page.page_type)}
+        </span>
+      </div>
+      <p :if={@page.summary} class="text-sm text-base-content/60 line-clamp-2 mt-2">
+        {@page.summary}
+      </p>
+      <div class="flex items-center justify-between mt-2">
+        <div class="flex items-center gap-2">
+          <div class="flex gap-1">
+            <.link
+              :for={tag <- Enum.take(@page.tags || [], 5)}
+              navigate={"/tags/#{URI.encode_www_form(tag)}"}
+              class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
+            >
+              {tag}
+            </.link>
+          </div>
+
+          <%!-- Status select for project & plan pages --%>
+          <form
+            :if={@page_type in ["project", "plan"]}
+            phx-change="change_status"
+            phx-value-slug={@page.slug}
+            id={"status-form-" <> @page.slug}
+            class="shrink-0"
+          >
+            <select
+              name="status"
+              class={status_select_class(status_value(@page, @page_type))}
+              data-testid={"status-select-" <> @page.slug}
+            >
+              <%= for status <- status_options(@page_type) do %>
+                <option value={status} selected={status_value(@page, @page_type) == status}>
+                  {String.capitalize(status)}
+                </option>
+              <% end %>
+            </select>
+          </form>
+
+          <%!-- Health dots for goal pages --%>
+          <div
+            :if={@page_type == "goal"}
+            class="flex items-center gap-1 shrink-0"
+            data-testid={"health-dots-" <> @page.slug}
+          >
+            <button
+              :for={{color, label} <- health_options()}
+              type="button"
+              phx-click="change_health"
+              phx-value-slug={@page.slug}
+              phx-value-health={color}
+              title={label}
+              class={[
+                "size-3 rounded-full transition-all",
+                health_dot_class(color, health_value(@page))
+              ]}
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <span :if={@page.updated_at} class="text-caption">
+            {Calendar.strftime(@page.updated_at, "%b %d")}
+          </span>
+          <button
+            type="button"
+            phx-click="archive_page"
+            phx-value-slug={@page.slug}
+            title={gettext("Archive")}
+            class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors"
+            data-testid={"archive-btn-" <> @page.slug}
+          >
+            <.icon name="hero-archive-box" class="size-4" />
+          </button>
+        </div>
+      </div>
     </div>
     """
   end
