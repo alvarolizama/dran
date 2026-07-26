@@ -95,7 +95,8 @@ defmodule Dran.MCP do
           },
           "offset" => %{
             "type" => "integer",
-            "description" => "Number of results to skip for pagination (default 0). Use with limit to paginate large result sets."
+            "description" =>
+              "Number of results to skip for pagination (default 0). Use with limit to paginate large result sets."
           }
         },
         "required" => ["query", "context"]
@@ -234,7 +235,8 @@ defmodule Dran.MCP do
           },
           "created_by" => %{
             "type" => "string",
-            "description" => "Override who created this page (optional, for provenance corrections)."
+            "description" =>
+              "Override who created this page (optional, for provenance corrections)."
           },
           "on_behalf_of" => %{
             "type" => "string",
@@ -246,11 +248,13 @@ defmodule Dran.MCP do
           },
           "archived" => %{
             "type" => "boolean",
-            "description" => "Archive (true) or unarchive (false) the page (optional). Archived pages disappear from lists, stats, search, and kanban but stay accessible by slug."
+            "description" =>
+              "Archive (true) or unarchive (false) the page (optional). Archived pages disappear from lists, stats, search, and kanban but stay accessible by slug."
           },
           "kb_confidence" => %{
             "type" => "string",
-            "description" => "Knowledge-base confidence level (optional): low, medium, high, or verified.",
+            "description" =>
+              "Knowledge-base confidence level (optional): low, medium, high, or verified.",
             "enum" => ["low", "medium", "high", "verified"]
           },
           "kb_source_url" => %{
@@ -501,7 +505,8 @@ defmodule Dran.MCP do
           },
           "offset" => %{
             "type" => "integer",
-            "description" => "Number of results to skip for pagination (default 0). Use with limit to paginate large lists."
+            "description" =>
+              "Number of results to skip for pagination (default 0). Use with limit to paginate large lists."
           },
           "owner" => %{
             "type" => "string",
@@ -590,7 +595,8 @@ defmodule Dran.MCP do
           },
           "created_by" => %{
             "type" => "string",
-            "description" => "Override who created this todo (optional, for provenance corrections)."
+            "description" =>
+              "Override who created this todo (optional, for provenance corrections)."
           },
           "on_behalf_of" => %{
             "type" => "string",
@@ -1044,17 +1050,18 @@ defmodule Dran.MCP do
         |> maybe_put_meta("due_date", args["due_date"])
         |> maybe_put_meta("assignee", args["assignee"])
 
-      attrs = %{
-        context_id: context.id,
-        title: title,
-        slug: slug,
-        page_type: "todo",
-        body: Map.get(args, "body", ""),
-        meta: meta,
-        created_by: Map.get(args, "created_by", "agent"),
-        owner: Map.get(args, "owner", "agent")
-      }
-      |> maybe_put(:on_behalf_of, args["on_behalf_of"])
+      attrs =
+        %{
+          context_id: context.id,
+          title: title,
+          slug: slug,
+          page_type: "todo",
+          body: Map.get(args, "body", ""),
+          meta: meta,
+          created_by: Map.get(args, "created_by", "agent"),
+          owner: Map.get(args, "owner", "agent")
+        }
+        |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
       case Brain.create_page(attrs) do
         {:ok, todo} ->
@@ -1253,7 +1260,12 @@ defmodule Dran.MCP do
           attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
           attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
           attrs = if args["tags"], do: Map.put(attrs, "tags", args["tags"]), else: attrs
-          attrs = attrs |> maybe_put("owner", args["owner"]) |> maybe_put("created_by", args["created_by"]) |> maybe_put("on_behalf_of", args["on_behalf_of"])
+
+          attrs =
+            attrs
+            |> maybe_put("owner", args["owner"])
+            |> maybe_put("created_by", args["created_by"])
+            |> maybe_put("on_behalf_of", args["on_behalf_of"])
 
           case Brain.update_page(todo, attrs) do
             {:ok, updated} ->

@@ -1166,7 +1166,12 @@ defmodule DranWeb.DocsLive do
             desc="auto, fts, fuzzy, semantic, hybrid"
           />
           <:param name="limit" type="integer" required="no" desc="Max results (default 20, max 100)" />
-          <:param name="offset" type="integer" required="no" desc="Skip N results for pagination (default 0)" />
+          <:param
+            name="offset"
+            type="integer"
+            required="no"
+            desc="Skip N results for pagination (default 0)"
+          />
         </.mcp_tool>
 
         <.mcp_tool
@@ -1209,7 +1214,12 @@ defmodule DranWeb.DocsLive do
             desc="Filter todos by assignee ('none' for unassigned)"
           />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
-          <:param name="offset" type="integer" required="no" desc="Skip N results for pagination (default 0)" />
+          <:param
+            name="offset"
+            type="integer"
+            required="no"
+            desc="Skip N results for pagination (default 0)"
+          />
         </.mcp_tool>
 
         <.mcp_tool
@@ -1239,9 +1249,24 @@ defmodule DranWeb.DocsLive do
           />
           <:param name="tags" type="array" required="no" desc="Tags (kebab-case)" />
           <:param name="summary" type="string" required="no" desc="One-line summary" />
-          <:param name="owner" type="string" required="no" desc="Owner identity (defaults to 'agent')" />
-          <:param name="created_by" type="string" required="no" desc="Who created this page (defaults to 'agent')" />
-          <:param name="on_behalf_of" type="string" required="no" desc="Who an agent is acting on behalf of" />
+          <:param
+            name="owner"
+            type="string"
+            required="no"
+            desc="Owner identity (defaults to 'agent')"
+          />
+          <:param
+            name="created_by"
+            type="string"
+            required="no"
+            desc="Who created this page (defaults to 'agent')"
+          />
+          <:param
+            name="on_behalf_of"
+            type="string"
+            required="no"
+            desc="Who an agent is acting on behalf of"
+          />
         </.mcp_tool>
 
         <.mcp_tool
@@ -1259,7 +1284,12 @@ defmodule DranWeb.DocsLive do
           <:param name="created_by" type="string" required="no" desc="Override who created this page" />
           <:param name="on_behalf_of" type="string" required="no" desc="Set or clear on-behalf-of" />
           <:param name="archived" type="boolean" required="no" desc="Archive or unarchive the page" />
-          <:param name="kb_confidence" type="string" required="no" desc="Knowledge-base confidence: low/medium/high/verified" />
+          <:param
+            name="kb_confidence"
+            type="string"
+            required="no"
+            desc="Knowledge-base confidence: low/medium/high/verified"
+          />
           <:param name="kb_source_url" type="string" required="no" desc="Source URL for KB entry" />
           <:param name="kb_contested" type="boolean" required="no" desc="Mark knowledge as contested" />
         </.mcp_tool>
@@ -1301,9 +1331,24 @@ defmodule DranWeb.DocsLive do
             desc="Who executes this todo (alvaro, hermes, claude-code...)"
           />
           <:param name="body" type="string" required="no" desc="Todo description (markdown)" />
-          <:param name="owner" type="string" required="no" desc="Owner identity (defaults to 'agent')" />
-          <:param name="created_by" type="string" required="no" desc="Who created this todo (defaults to 'agent')" />
-          <:param name="on_behalf_of" type="string" required="no" desc="Who an agent is acting on behalf of" />
+          <:param
+            name="owner"
+            type="string"
+            required="no"
+            desc="Owner identity (defaults to 'agent')"
+          />
+          <:param
+            name="created_by"
+            type="string"
+            required="no"
+            desc="Who created this todo (defaults to 'agent')"
+          />
+          <:param
+            name="on_behalf_of"
+            type="string"
+            required="no"
+            desc="Who an agent is acting on behalf of"
+          />
         </.mcp_tool>
 
         <.mcp_tool
@@ -1330,7 +1375,12 @@ defmodule DranWeb.DocsLive do
           <:param name="owner" type="string" required="no" desc="New owner identity" />
           <:param name="created_by" type="string" required="no" desc="Override who created this todo" />
           <:param name="on_behalf_of" type="string" required="no" desc="Set or clear on-behalf-of" />
-          <:param name="updated_by" type="string" required="no" desc="Who is updating (defaults to 'agent')" />
+          <:param
+            name="updated_by"
+            type="string"
+            required="no"
+            desc="Who is updating (defaults to 'agent')"
+          />
         </.mcp_tool>
 
         <.mcp_tool
