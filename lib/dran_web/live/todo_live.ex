@@ -172,6 +172,8 @@ defmodule DranWeb.TodoLive do
           context_slug={@context_slug}
           rendered_body={@rendered_body}
           editing={@editing}
+          content_tab_value="content"
+          graph_active={@active_tab == "graph"}
         >
           <:actions>
             <.link navigate={~p"/todos"} class="btn btn-primary btn-sm">
@@ -288,6 +290,8 @@ defmodule DranWeb.TodoLive do
               inline_links: Map.get(page.meta || %{}, "inline_links", [])
             )
 
+          active_tab = Map.get(socket.assigns, :active_tab, "content")
+
           {:noreply,
            assign(socket,
              page: page,
@@ -296,7 +300,7 @@ defmodule DranWeb.TodoLive do
              compare_version: nil,
              logs: logs,
              page_title: page.title,
-             active_tab: "content",
+             active_tab: active_tab,
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
              editing: true,

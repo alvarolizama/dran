@@ -186,7 +186,7 @@ defmodule DranWeb.PageComponents do
             <div
               id="detail-panel-content"
               data-detail-panel
-              class={["space-y-6", @content_hidden && "hidden"]}
+              class={["space-y-6", (@content_hidden or @graph_active) && "hidden"]}
               phx-hook="Mermaid"
             >
               {render_slot(@tabs)}
@@ -212,7 +212,7 @@ defmodule DranWeb.PageComponents do
             <div
               id="detail-panel-graph"
               data-detail-panel
-              class={["hidden", @content_hidden && "hidden"]}
+              class={[not @graph_active && "hidden"]}
             >
               {render_slot(@graph)}
             </div>
