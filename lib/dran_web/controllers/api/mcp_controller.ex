@@ -1,23 +1,84 @@
 defmodule DranWeb.API.MCPController do
   @moduledoc """
-  MCP Streamable HTTP transport endpoint.
-
-  Serves the MCP protocol at POST/GET/DELETE /api/mcp per spec 2025-03-26.
+  MCP Streamable HTTP transport endpoint with per-user context auth.
   """
 
   use DranWeb, :controller
 
-  alias Dran.MCP
+  alias Dran.{Accounts, MCP}
 
   @doc "POST /api/mcp — send JSON-RPC message"
   def handle_post(conn, _params) do
+    with {:ok, user} <- authenticate(conn),
+         :ok <- validate_context_access(conn, user) do
+      process_mcp_request(conn, user)
+    else
+      {:error, :unauthorized} ->
+        conn
+        |> put_resp_header("www-authenticate", "Bearer")
+        |> put_resp_content_type("application/json")
+        |> send_resp(401, Jason.encode!(%{errors: %{detail: "invalid token"}}))
+        |> halt()
+
+      {:error, :forbidden} ->
+        conn
+        |> put_resp_content_type("application/json")
+        |> send_resp(403, Jason.encode!(%{errors: %{detail: "access to context denied"}}))
+        |> halt()
+    end
+  end
+
+  defp authenticate(conn) do
+    case extract_token(conn) do
+      {:ok, token} ->
+        # Check legacy admin token first (backward compat)
+        if token == Dran.Auth.api_token() do
+          {:ok, %{is_admin: true, email: "admin", contexts: :all}}
+        else
+          case Accounts.valid_token?(token) do
+            {:ok, user} -> {:ok, user}
+            :error -> {:error, :unauthorized}
+          end
+        end
+
+      :error ->
+        {:error, :unauthorized}
+    end
+  end
+
+  defp validate_context_access(conn, user) do
+    requested_context = conn.params["context"] || get_default_context(user)
+
+    if user.is_admin or user_has_context_access?(user, requested_context) do
+      :ok
+    else
+      {:error, :forbidden}
+    end
+  end
+
+  defp get_default_context(user) do
+    case user.contexts do
+      :all -> Dran.Auth.default_context_slug()
+      [] -> Dran.Auth.default_context_slug()
+      [first | _] -> first.slug
+    end
+  end
+
+  defp user_has_context_access?(user, context_slug) do
+    case user.contexts do
+      :all -> true
+      contexts -> Enum.any?(contexts, &(&1.slug == context_slug))
+    end
+  end
+
+  defp process_mcp_request(conn, user) do
     # Validate Accept header
     accept = get_req_header(conn, "accept") |> Enum.join(",")
 
     if String.contains?(accept, "application/json") or
          String.contains?(accept, "text/event-stream") or
          String.contains?(accept, "*/*") do
-      handle_post_body(conn)
+      handle_post_body(conn, user)
     else
       conn
       |> put_status(:not_acceptable)
@@ -27,28 +88,22 @@ defmodule DranWeb.API.MCPController do
     end
   end
 
-  defp handle_post_body(conn) do
+  defp handle_post_body(conn, user) do
     case conn.body_params do
       %{} = msg when map_size(msg) > 0 ->
-        # Check if it's a notification (has method but no id)
-        is_notification =
-          Map.has_key?(msg, "method") and
-            not Map.has_key?(msg, "id")
+        is_notification = Map.has_key?(msg, "method") and not Map.has_key?(msg, "id")
 
         if is_notification do
-          # Process notification but return 202 with no body
-          MCP.process_message(msg)
+          MCP.process_message(msg, user: user)
           conn |> send_resp(:accepted, "")
         else
-          # Process and return JSON response
-          response = MCP.process_message(msg)
+          response = MCP.process_message(msg, user: user)
 
           case response do
             nil ->
               conn |> send_resp(:accepted, "")
 
             resp ->
-              # Check if this is an initialize — generate session ID
               conn =
                 if msg["method"] == "initialize" do
                   session_id = MCP.generate_session_id()
@@ -70,10 +125,8 @@ defmodule DranWeb.API.MCPController do
     end
   end
 
-  @doc "GET /api/mcp — open SSE stream (optional, returns 405 if not supported)"
+  @doc "GET /api/mcp — open SSE stream"
   def handle_get(conn, _params) do
-    # We don't support server-initiated SSE streams in v1
-    # Return 405 Method Not Allowed per spec
     conn
     |> put_resp_header("allow", "POST, DELETE")
     |> send_resp(:method_not_allowed, "")
@@ -81,7 +134,13 @@ defmodule DranWeb.API.MCPController do
 
   @doc "DELETE /api/mcp — terminate session"
   def handle_delete(conn, _params) do
-    # Session termination — just return 200
     conn |> send_resp(:ok, "")
+  end
+
+  defp extract_token(conn) do
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token] -> {:ok, String.trim(token)}
+      _ -> :error
+    end
   end
 end

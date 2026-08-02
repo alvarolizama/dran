@@ -788,7 +788,13 @@ defmodule Dran.MCP do
   # ── Public API for controller ──────────────────────────────────────────────
 
   @doc "Process a JSON-RPC message and return the response map"
-  def process_message(msg) do
+  def process_message(msg, opts \\ []) do
+    user = Keyword.get(opts, :user)
+
+    # Add user context to all tool calls so operations are scoped to the
+    # user's assigned/requested context.
+    msg = inject_user_context(msg, user)
+
     case msg do
       %{"jsonrpc" => "2.0", "method" => "initialize", "id" => id} ->
         initialize_response(id)
@@ -871,6 +877,35 @@ defmodule Dran.MCP do
         }
     end
   end
+
+  defp inject_user_context(msg, nil), do: msg
+
+  defp inject_user_context(
+         %{"jsonrpc" => "2.0", "method" => "tools/call", "params" => params} = msg,
+         user
+       )
+       when is_map(params) do
+    args = params["arguments"] || %{}
+
+    if Map.has_key?(args, "context") do
+      msg
+    else
+      case get_default_context_for_user(user) do
+        nil ->
+          msg
+
+        default_context ->
+          put_in(msg, ["params", "arguments", "context"], default_context)
+      end
+    end
+  end
+
+  defp inject_user_context(msg, _user), do: msg
+
+  defp get_default_context_for_user(%{is_admin: true}), do: nil
+  defp get_default_context_for_user(%{contexts: :all}), do: nil
+  defp get_default_context_for_user(%{contexts: [first | _]}), do: first.slug
+  defp get_default_context_for_user(_), do: nil
 
   @doc "Check if a message is a notification (has method but no id)"
   def notification?(%{"jsonrpc" => "2.0", "method" => _} = msg), do: not Map.has_key?(msg, "id")
