@@ -211,8 +211,7 @@ defmodule DranWeb.Layouts do
             key: "activity",
             label: gettext("Actividad"),
             icon: "hero-clock",
-            path: ~p"/activity",
-            badge: counts[:activity]
+            path: ~p"/activity"
           },
           %{
             key: "journey",
