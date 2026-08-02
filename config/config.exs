@@ -82,6 +82,10 @@ if config_env() != :test do
       pagerank_nightly: [
         schedule: "0 3 * * *",
         task: {Dran.Graph, :refresh_all_scheduled, []}
+      ],
+      community_summaries_nightly: [
+        schedule: "30 3 * * *",
+        task: {Dran.Graph.CommunitySummaries, :generate_all_scheduled, []}
       ]
     ]
 end

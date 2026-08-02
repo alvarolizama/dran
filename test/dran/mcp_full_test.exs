@@ -88,7 +88,7 @@ defmodule Dran.MCPFullTest do
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 17
+      assert length(tools) == 18
     end
 
     test "all tools carry the dran_ prefix" do
@@ -110,7 +110,7 @@ defmodule Dran.MCPFullTest do
       enum = start_agent["inputSchema"]["properties"]["agent_type"]["enum"]
 
       assert MapSet.new(enum) ==
-               MapSet.new(~w(curator link_gardener))
+               MapSet.new(~w(curator link_gardener graph_rag))
     end
   end
 

@@ -26,8 +26,9 @@ defmodule Dran.MCP do
   - `dran_lint_brain` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
-  - `dran_start_agent` — start an autonomous agent (curator, link_gardener)
+  - `dran_start_agent` — start an autonomous agent (curator, link_gardener, graph_rag)
   - `dran_get_agent_session` — poll an agent session for status and steps
+  - `dran_generate_community_summaries` — generate LLM summaries for all communities in a context
 
   ## Embeds
   Embeds are auto-resolved into embeds relations on create and update; stale ones
@@ -694,6 +695,21 @@ defmodule Dran.MCP do
       }
     },
     %{
+      "name" => "dran_generate_community_summaries",
+      "description" =>
+        "Generate or regenerate LLM-powered summaries for all knowledge communities detected via Label Propagation. Requires inference to be configured. Communities are clusters of related pages grouped by relation types (part_of, embeds, related, supersedes). Each community gets a 2-3 sentence summary that captures its main theme. Returns the count of summaries generated.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "context" => %{
+            "type" => "string",
+            "description" => "Context slug to generate community summaries for."
+          }
+        },
+        "required" => ["context"]
+      }
+    },
+    %{
       "name" => "dran_start_agent",
       "description" =>
         "Start an autonomous agent session and return immediately. Returns a session_id and track_url — poll `dran_get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background. Choose the agent_type that matches your goal: 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages.",
@@ -702,9 +718,9 @@ defmodule Dran.MCP do
         "properties" => %{
           "agent_type" => %{
             "type" => "string",
-            "enum" => ["curator", "link_gardener"],
+            "enum" => ["curator", "link_gardener", "graph_rag"],
             "description" =>
-              "Type of agent to run. 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages."
+              "Type of agent to run. 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'graph_rag' = answer questions using GraphRAG (local/global/drift search over the knowledge graph)."
           },
           "context" => %{
             "type" => "string",
@@ -713,7 +729,7 @@ defmodule Dran.MCP do
           "input" => %{
             "type" => "string",
             "description" =>
-              "Agent input. For curator/link_gardener: typically the context focus or instructions."
+              "Agent input. For curator/link_gardener: typically the context focus or instructions. For graph_rag: the question to answer."
           },
           "opts" => %{
             "type" => "object",
@@ -1491,6 +1507,23 @@ defmodule Dran.MCP do
     end
   end
 
+  defp execute_tool("dran_generate_community_summaries", %{"context" => context_slug}) do
+    context = Brain.get_context_by_slug(context_slug)
+
+    if context do
+      case Dran.Graph.CommunitySummaries.generate_all(context.id) do
+        :ok ->
+          summaries = Dran.Graph.CommunitySummaries.list_summaries(context.id)
+          "Generated #{length(summaries)} community summaries for context '#{context_slug}'"
+
+        {:error, reason} ->
+          "Error generating community summaries: #{inspect(reason)}"
+      end
+    else
+      "Error: context '#{context_slug}' not found"
+    end
+  end
+
   defp execute_tool(tool_name, _args) do
     "Error: unknown tool '#{tool_name}'"
   end
@@ -1502,6 +1535,9 @@ defmodule Dran.MCP do
 
   defp start_agent_by_type("curator", input, context_id, opts),
     do: Agent.Curator.run(input, context_id, opts)
+
+  defp start_agent_by_type("graph_rag", input, context_id, opts),
+    do: Agent.GraphRag.run(input, context_id, opts)
 
   defp start_agent_by_type(_type, _input, _context_id, _opts),
     do: {:error, :unknown_agent_type}

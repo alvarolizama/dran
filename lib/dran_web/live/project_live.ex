@@ -3,8 +3,7 @@ defmodule DranWeb.ProjectLive do
   LiveView for project pages: index list + detail view with sub-page tabs.
 
   Tabs: Overview (project dashboard — status, stat cards, linked items),
-  Kanban (column board of the project's todos with drag-drop), Goals,
-  Plans, Todos, Graph, Related.
+  Goals, Plans, Todos, Graph, Related.
   """
 
   use DranWeb, :live_view
@@ -19,19 +18,9 @@ defmodule DranWeb.ProjectLive do
   @page_type "project"
 
   @project_tabs [
-    {"kanban", gettext("Kanban")},
     {"goals", gettext("Objetivos")},
     {"plans", gettext("Planes")},
     {"todos", gettext("Tareas")}
-  ]
-
-  @kanban_columns [
-    {"backlog", "Backlog", "bg-base-300"},
-    {"this_week", "This Week", "bg-blue-500/20 text-blue-700"},
-    {"today", "Today", "bg-amber-500/20 text-amber-700"},
-    {"in_progress", "In Progress", "bg-purple-500/20 text-purple-700"},
-    {"done", "Done", "bg-green-500/20 text-green-700"},
-    {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
   ]
 
   def render(assigns) do
@@ -92,6 +81,26 @@ defmodule DranWeb.ProjectLive do
             </button>
           </:extra_tabs>
 
+          <:insights>
+            <div class="space-y-4">
+              <div :if={@community_summary} class="surface-2 rounded-lg p-4">
+                <h3 class="text-sm font-semibold mb-2">{gettext("Community Context")}</h3>
+                <p class="text-sm text-base-content/70">{@community_summary.summary}</p>
+                <p class="text-xs text-base-content/40 mt-1">
+                  {gettext("Community")} #{@community_summary.community_id} · {@community_summary.page_count} {gettext(
+                    "pages"
+                  )}
+                </p>
+              </div>
+              <div
+                :if={!@community_summary}
+                class="text-sm text-base-content/40 text-center py-8"
+              >
+                {gettext("No community data yet. Run community summaries first.")}
+              </div>
+            </div>
+          </:insights>
+
           <:tabs>
             <%!-- Overview: dashboard del proyecto — status, stats, relacionados --%>
             <div :if={@active_tab == "overview"}>
@@ -107,112 +116,18 @@ defmodule DranWeb.ProjectLive do
           </:tabs>
 
           <:extra_content>
-            <%!-- Kanban: board de columnas solo con los todos del project --%>
-            <div :if={@active_tab == "kanban"} class="flex flex-col h-[calc(100vh-16rem)] min-h-0">
-              <div class="flex items-center justify-between mb-3 shrink-0">
-                <span class="text-sm text-base-content/60">
-                  {length(@project_todos)} {gettext("todos in this project")}
-                </span>
-                <.link navigate={~p"/todos/new"} class="btn btn-primary btn-xs">
-                  <.icon name="hero-plus" class="size-3.5" /> {gettext("New Todo")}
-                </.link>
-              </div>
-              <div
-                class="flex gap-4 overflow-x-auto pb-4 flex-1 min-h-0"
-                phx-hook="KanbanDragDrop"
-                id="project-kanban-board"
-              >
-                <div
-                  :for={{status, label, badge_class} <- @kanban_columns}
-                  data-kanban-status={status}
-                  class="w-72 shrink-0 flex-1 max-w-sm flex flex-col min-h-0 h-full rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
-                >
-                  <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300 shrink-0">
-                    <div class="flex items-center gap-2">
-                      <span class={"size-2 rounded-full shrink-0 " <> kanban_accent_dot(status)}></span>
-                      <span class="text-sm font-semibold">{label}</span>
-                    </div>
-                    <span class={"px-2 py-0.5 text-xs rounded-full " <> badge_class}>
-                      {count_kanban(@project_todos, status)}
-                    </span>
-                  </div>
-                  <div class="p-2 space-y-2 min-h-0 flex-1 overflow-y-auto">
-                    <div
-                      :for={todo <- kanban_items(@project_todos, status)}
-                      data-kanban-slug={todo.slug}
-                      draggable="true"
-                      phx-click="show_page"
-                      phx-value-slug={todo.slug}
-                      class="p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary transition active:cursor-grabbing"
-                    >
-                      <div class="font-medium text-sm break-words">{todo.title}</div>
-                      <div :if={todo.summary} class="text-xs text-base-content/60 mt-1 line-clamp-2">
-                        {todo.summary}
-                      </div>
-                    </div>
-                    <p
-                      :if={kanban_items(@project_todos, status) == []}
-                      class="text-xs text-base-content/30 text-center py-4"
-                    >
-                      {gettext("Empty")}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <script :type={Phoenix.LiveView.ColocatedHook} name=".KanbanDragDrop">
-                export default {
-                  mounted() {
-                    this.draggedSlug = null;
-                    const board = this.el;
-                    board.addEventListener("dragstart", (e) => {
-                      const card = e.target.closest("[data-kanban-slug]");
-                      if (card) {
-                        this.draggedSlug = card.dataset.kanbanSlug;
-                        e.dataTransfer.effectAllowed = "move";
-                      }
-                    });
-                    board.addEventListener("dragover", (e) => {
-                      if (e.target.closest("[data-kanban-status]")) {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "move";
-                      }
-                    });
-                    board.addEventListener("drop", (e) => {
-                      const col = e.target.closest("[data-kanban-status]");
-                      if (col !== null && this.draggedSlug !== null) {
-                        e.preventDefault();
-                        this.pushEvent("move_todo", {
-                          slug: this.draggedSlug,
-                          target_status: col.dataset.kanbanStatus
-                        });
-                      }
-                      this.draggedSlug = null;
-                    });
-                    board.addEventListener("dragend", () => {
-                      this.draggedSlug = null;
-                    });
-                  }
-                }
-              </script>
-            </div>
-
             <%!-- Todos: lista plana de todos los todos del project --%>
             <div :if={@active_tab == "todos"}>
               <div class="text-sm text-base-content/60 mb-3">
                 {length(@project_todos)} todos linked
               </div>
               <div :for={todo <- @project_todos} class="p-3 rounded-lg border border-base-300 mb-2">
-                <div class="flex items-center justify-between">
-                  <.link
-                    navigate={PageTypes.page_show_path(todo)}
-                    class="font-medium text-primary hover:underline"
-                  >
-                    {todo.title}
-                  </.link>
-                  <span class={"px-2 py-0.5 text-xs rounded " <> kanban_status_class(todo)}>
-                    {String.capitalize(kanban_status(todo))}
-                  </span>
-                </div>
+                <.link
+                  navigate={PageTypes.page_show_path(todo)}
+                  class="font-medium text-primary hover:underline"
+                >
+                  {todo.title}
+                </.link>
                 <div :if={todo.summary} class="text-xs text-base-content/60 mt-1">
                   {todo.summary}
                 </div>
@@ -278,7 +193,13 @@ defmodule DranWeb.ProjectLive do
 
             <%!-- Graph: subgrafo del proyecto --%>
             <div :if={@active_tab == "graph"} class="space-y-4">
-              <.page_graph id="project-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
+              <.graph_3d
+                id="project-page-graph"
+                nodes={@graph_nodes}
+                edges={@graph_edges}
+                class="w-full"
+                style="height: calc(100vh - 200px);"
+              />
             </div>
           </:extra_content>
         </.page_detail>
@@ -325,10 +246,10 @@ defmodule DranWeb.ProjectLive do
        context: context,
        page_type: @page_type,
        project_tabs: @project_tabs,
-       kanban_columns: @kanban_columns,
        active_tab: "overview",
        editing: true,
        save_status: "idle",
+       community_summary: nil,
        active_nav: "projects"
      )}
   end
@@ -393,6 +314,16 @@ defmodule DranWeb.ProjectLive do
               inline_links: Map.get(page.meta || %{}, "inline_links", [])
             )
 
+          community_summary =
+            try do
+              case Dran.Graph.CommunitySummaries.get_summary_for_page(page.id) do
+                {:ok, summary} -> summary
+                _ -> nil
+              end
+            rescue
+              _ -> nil
+            end
+
           {:noreply,
            assign(socket,
              page: page,
@@ -403,6 +334,7 @@ defmodule DranWeb.ProjectLive do
              page_title: page.title,
              active_tab: active_tab,
              context_id: context.id,
+             community_summary: community_summary,
              project_todos: project_todos,
              project_goals: project_goals,
              project_plans: project_plans,
@@ -504,35 +436,6 @@ defmodule DranWeb.ProjectLive do
     end
   end
 
-  def handle_event("move_todo", %{"slug" => slug, "target_status" => status}, socket) do
-    context = socket.assigns.context
-
-    if context do
-      case Brain.get_page_by_slug(slug, context.id) do
-        nil ->
-          {:noreply, put_flash(socket, :error, "Todo not found.")}
-
-        todo ->
-          new_meta = Map.put(todo.meta || %{}, "kanban_status", status)
-
-          case Brain.update_page(todo, %{"meta" => new_meta}) do
-            {:ok, updated} ->
-              todos =
-                Enum.map(socket.assigns.project_todos, fn t ->
-                  if t.id == updated.id, do: updated, else: t
-                end)
-
-              {:noreply, assign(socket, project_todos: todos)}
-
-            {:error, _} ->
-              {:noreply, put_flash(socket, :error, "Could not update todo status.")}
-          end
-      end
-    else
-      {:noreply, socket}
-    end
-  end
-
   def handle_event("node_click", %{"slug" => slug}, socket) do
     {:noreply, node_click(socket, slug)}
   end
@@ -604,42 +507,6 @@ defmodule DranWeb.ProjectLive do
   defp filter_by_project_slug(context_id, type, project_slug) do
     Brain.list_pages(context_id: context_id, type: type, include_body: false, limit: 500)
     |> Enum.filter(fn p -> meta_get(p.meta, "project_slug") == project_slug end)
-  end
-
-  # ── Kanban status helpers (for the simple Todos list) ──
-
-  defp kanban_status(page) do
-    case meta_get(page.meta, "kanban_status") do
-      s when is_binary(s) and s != "" -> s
-      _ -> "backlog"
-    end
-  end
-
-  defp kanban_items(todos, status), do: Enum.filter(todos, fn t -> kanban_status(t) == status end)
-  defp count_kanban(todos, status), do: Enum.count(todos, fn t -> kanban_status(t) == status end)
-
-  # Colored accent dot per kanban column status (matches global kanban vibe).
-  defp kanban_accent_dot(status) do
-    case status do
-      "backlog" -> "bg-base-300"
-      "this_week" -> "bg-blue-500"
-      "today" -> "bg-amber-500"
-      "in_progress" -> "bg-purple-500"
-      "done" -> "bg-green-500"
-      "cancelled" -> "bg-red-500"
-      _ -> "bg-base-300"
-    end
-  end
-
-  defp kanban_status_class(page) do
-    case kanban_status(page) do
-      "this_week" -> "bg-blue-100 text-blue-700"
-      "today" -> "bg-amber-100 text-amber-700"
-      "in_progress" -> "bg-purple-100 text-purple-700"
-      "done" -> "bg-green-100 text-green-700"
-      "cancelled" -> "bg-red-100 text-red-700"
-      _ -> "bg-base-300 text-base-content/70"
-    end
   end
 
   # ── Health badge helpers (for Goals list) ──

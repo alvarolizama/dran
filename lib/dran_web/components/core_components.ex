@@ -512,4 +512,54 @@ defmodule DranWeb.CoreComponents do
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end
+
+  @doc "Skeleton loader for a page detail view."
+  attr :class, :string, default: ""
+
+  def skeleton_page(assigns) do
+    ~H"""
+    <div class={"animate-pulse space-y-6 #{@class}"}>
+      <div class="h-8 bg-base-300/50 rounded w-1/3"></div>
+      <div class="h-4 bg-base-300/30 rounded w-2/3"></div>
+      <div class="space-y-3 mt-8">
+        <div class="h-4 bg-base-300/30 rounded w-full"></div>
+        <div class="h-4 bg-base-300/30 rounded w-5/6"></div>
+        <div class="h-4 bg-base-300/30 rounded w-4/6"></div>
+        <div class="h-4 bg-base-300/30 rounded w-full"></div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc "Skeleton loader for a page card."
+  attr :class, :string, default: ""
+
+  def skeleton_card(assigns) do
+    ~H"""
+    <div class={"animate-pulse surface-2 rounded-xl p-4 #{@class}"}>
+      <div class="flex items-center gap-2 mb-3">
+        <div class="h-5 w-16 bg-base-300/50 rounded-full"></div>
+      </div>
+      <div class="h-4 bg-base-300/40 rounded w-3/4 mb-2"></div>
+      <div class="h-3 bg-base-300/30 rounded w-full mb-1"></div>
+      <div class="h-3 bg-base-300/30 rounded w-2/3"></div>
+    </div>
+    """
+  end
+
+  @doc "Skeleton loader for a 3D graph."
+  attr :class, :string, default: ""
+
+  def skeleton_graph(assigns) do
+    ~H"""
+    <div class={"animate-pulse rounded-lg overflow-hidden #{@class}"} style="background: #0a0e27;">
+      <div class="flex items-center justify-center h-full min-h-[300px]">
+        <div class="text-center">
+          <div class="w-16 h-16 mx-auto bg-base-300/20 rounded-full mb-3"></div>
+          <div class="h-4 bg-base-300/20 rounded w-32 mx-auto"></div>
+        </div>
+      </div>
+    </div>
+    """
+  end
 end

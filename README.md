@@ -4,7 +4,7 @@
 
 A personal second-brain application built with **Phoenix 1.8 + LiveView**. It stores your knowledge as **typed pages** (notes, concepts, entities, references, goals, plans, todos, queries, projects) and links them with **relations**, forming a queryable knowledge graph.
 
-Includes a full markdown editor (TipTap WYSIWYG), three autonomous agents, an MCP endpoint for AI agent integration (with per-user token auth and context scoping), and a REST API.
+Includes a full markdown editor (TipTap WYSIWYG), three autonomous agents — curator, link_gardener, and graph_rag, an MCP endpoint for AI agent integration (with per-user token auth and context scoping), and a REST API.
 
 > **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server: tools, agent rules, page types, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
@@ -25,7 +25,7 @@ Dran is a networked knowledge base for a single human. It captures notes and str
 - **Activity feed** — real-time log of all brain actions in a dedicated LiveView
 - **Hybrid search** — unified search picks full-text, fuzzy, semantic or hybrid with RRF fusion and an optional PageRank authority boost
 - **Runtime settings** — tune the brain without a redeploy via an admin-only `/settings` page organized in tabs
-- **MCP server** — 17 tools for AI agents to search, read, create, update, delete, relate, lint, and manage the graph (see [SKILL.md](SKILL.md))
+- **MCP server** — 18 tools for AI agents to search, read, create, update, delete, relate, lint, and manage the graph (see [SKILL.md](SKILL.md))
 - **Full context export** — export an entire context (pages, relations, versions, uploads) as a JSON backup
 
 ## Quick start (local dev)
@@ -198,17 +198,18 @@ For explicit typed relations, use the MCP `dran_create_relation` tool or `POST /
 
 ## Autonomous agents
 
-Dran can delegate longer tasks to autonomous ReAct agents. There are **two** agent types:
+Dran can delegate longer tasks to autonomous ReAct agents. There are **three** agent types:
 
 | Agent | Trigger | What it does |
 | --- | --- | --- |
 | `curator` | Quantum cron (daily 06:00) | Finds duplicates and flags contested knowledge via embedding distance + graph community overlap; creates a cleanup report |
 | `link_gardener` | Manual (`dran_start_agent`) | Proposes semantic relations between orphaned and weakly-linked pages, including transitive `part_of` candidates with `via` evidence |
+| `graph_rag` | Manual (`dran_start_agent`) | Answers questions using GraphRAG patterns — local search (fan-out to neighbors), global search (community summaries), or drift search (hybrid). Creates query pages with cited sources |
 
 - Start a session with `dran_start_agent` and poll with `dran_get_agent_session`.
 - Agents run asynchronously, persist every step, and broadcast live updates to the UI.
 
-**Quantum scheduled crons:** `curator_daily` (daily 06:00) runs the curator agent on the default context; `pagerank_nightly` (daily 03:00) recomputes weighted **PageRank** and detects **communities** via Label Propagation (persisted to `meta.pagerank` / `meta.community_id`).
+**Quantum scheduled crons:** `curator_daily` (daily 06:00) runs the curator agent on the default context; `pagerank_nightly` (daily 03:00) recomputes weighted **PageRank** and detects **communities** via Label Propagation (persisted to `meta.pagerank` / `meta.community_id`); `community_summaries_nightly` (daily 03:30) generates LLM summaries for each detected community.
 
 ## Use as MCP server
 
@@ -318,7 +319,7 @@ curl -fsSL https://dran.example.com/health
 - **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
 - **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
 - **MCP** (Model Context Protocol) for AI agent integration
-- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily) and `pagerank_nightly` (03:00) jobs
+- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily), `pagerank_nightly` (03:00), and `community_summaries_nightly` (03:30) jobs
 - **Tailwind CSS v4** + daisyUI for styling
 
 ## Pre-commit checks

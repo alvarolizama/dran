@@ -246,30 +246,6 @@ defmodule DranWeb.GraphLive do
 
   # ── Render ─────────────────────────────────────────────────────────────────
 
-  defp graph_json(assigns) do
-    nodes =
-      Enum.map(assigns.nodes, fn n ->
-        %{
-          id: n.id,
-          slug: n.slug,
-          label: n.label,
-          type: n.type,
-          color: n.color
-        }
-      end)
-
-    edges =
-      Enum.map(assigns.edges, fn e ->
-        %{
-          source_id: e.source_id,
-          target_id: e.target_id,
-          color: e.color
-        }
-      end)
-
-    Jason.encode!(%{nodes: nodes, edges: edges})
-  end
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -281,8 +257,8 @@ defmodule DranWeb.GraphLive do
       contexts={@contexts}
       active_nav={@active_nav}
     >
-      <div class="p-6 overflow-y-auto">
-        <div class="mb-4">
+      <div class="flex flex-col" class="flex flex-col min-h-full">
+        <div class="shrink-0 p-4 pb-0">
           <h1 class="text-title">
             <div :if={@live_action == :index}>{gettext("Knowledge Graph")}</div>
             <div :if={@live_action == :show and @page}>
@@ -295,7 +271,7 @@ defmodule DranWeb.GraphLive do
           </p>
         </div>
 
-        <div class="flex gap-4">
+        <div class="flex gap-4 flex-1 min-h-0">
           <div class="w-48 shrink-0">
             <h3 class="text-xs font-semibold text-base-content/40 uppercase mb-2">
               {gettext("Types")}
@@ -337,29 +313,16 @@ defmodule DranWeb.GraphLive do
             </div>
           </div>
 
-          <div
-            class="flex-1 rounded-lg overflow-hidden relative"
-            style="min-height: calc(100vh - 180px); background: #0a0e27;"
-          >
-            <%= if @node_count == 0 do %>
-              <.empty_state
-                icon="hero-circle-stack"
-                title={gettext("No pages to graph yet")}
-                caption={gettext("Create some pages and link them with relations to see them here.")}
-                class="h-full"
-              />
-            <% else %>
-              <div
-                id="graph-3d"
-                phx-hook="Graph3D"
-                data-graph={graph_json(assigns)}
-                style="width: 100%; height: 100%; min-height: calc(100vh - 180px);"
-              >
-              </div>
-              <div class="px-3 py-2 text-xs text-base-content/40 border-t border-base-300 bg-base-200/50">
-                {gettext("Drag to rotate · Scroll to zoom · Right-click to pan")}
-              </div>
-            <% end %>
+          <div class="flex-1 overflow-hidden relative">
+            <.graph_3d
+              id="graph-3d"
+              nodes={@nodes}
+              edges={@edges}
+              class="w-full h-full"
+            />
+            <div class="absolute bottom-0 left-0 right-0 px-3 py-2 text-xs text-base-content/40 bg-base-200/50 border-t border-base-300">
+              {gettext("Drag to rotate · Scroll to zoom · Click to navigate")}
+            </div>
           </div>
         </div>
       </div>

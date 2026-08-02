@@ -10,6 +10,7 @@ defmodule DranWeb.SearchLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
+  alias DranWeb.GraphHelpers
   alias DranWeb.HTMLSanitizer
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
@@ -18,7 +19,8 @@ defmodule DranWeb.SearchLive do
     {"auto", gettext("Auto")},
     {"fts", gettext("FTS")},
     {"semantic", gettext("Semantic")},
-    {"hybrid", gettext("Hybrid")}
+    {"hybrid", gettext("Hybrid")},
+    {"graph", gettext("Graph")}
   ]
 
   @impl true
@@ -31,6 +33,8 @@ defmodule DranWeb.SearchLive do
        active_nav: "search",
        query: "",
        results: [],
+       graph_nodes: [],
+       graph_edges: [],
        search_mode: "auto",
        search_modes: @search_modes
      )}
@@ -47,10 +51,18 @@ defmodule DranWeb.SearchLive do
             strategy: String.to_atom(socket.assigns.search_mode)
           )
 
-        {:noreply, assign(socket, query: q, results: results)}
+        %{nodes: graph_nodes, edges: graph_edges} = graph_data(socket, results)
+
+        {:noreply,
+         assign(socket,
+           query: q,
+           results: results,
+           graph_nodes: graph_nodes,
+           graph_edges: graph_edges
+         )}
 
       _ ->
-        {:noreply, assign(socket, query: "", results: [])}
+        {:noreply, assign(socket, query: "", results: [], graph_nodes: [], graph_edges: [])}
     end
   end
 
@@ -72,7 +84,15 @@ defmodule DranWeb.SearchLive do
           []
       end
 
-    {:noreply, assign(socket, query: q, results: results)}
+    %{nodes: graph_nodes, edges: graph_edges} = graph_data(socket, results)
+
+    {:noreply,
+     assign(socket,
+       query: q,
+       results: results,
+       graph_nodes: graph_nodes,
+       graph_edges: graph_edges
+     )}
   end
 
   @impl true
@@ -138,17 +158,46 @@ defmodule DranWeb.SearchLive do
           <.empty_hero :if={@query == ""} />
 
           <.no_results
-            :if={@query != "" && @results == []}
+            :if={@query != "" && @results == [] && @search_mode != "graph"}
             query={@query}
           />
 
-          <div :if={@query != "" && @results != []}>
+          <div :if={@query != "" && @results != [] && @search_mode != "graph"}>
             <.results_header query={@query} count={length(@results)} />
 
             <div class="space-y-2">
               <.result_card :for={result <- @results} result={result} />
             </div>
           </div>
+        </div>
+
+        <div
+          :if={@search_mode == "graph" && @query != ""}
+          data-testid="search-graph"
+          class="mt-6"
+        >
+          <div class="flex items-baseline justify-between mb-4">
+            <h1 class="text-title">{gettext("Graph")}</h1>
+            <p class="text-caption">
+              {gettext("%{count} results for '%{query}'", count: length(@results), query: @query)}
+            </p>
+          </div>
+
+          <p
+            :if={@results == []}
+            class="text-caption text-base-content/40 text-center py-10"
+          >
+            {gettext("No results to graph. Try a different query.")}
+          </p>
+
+          <.graph_3d
+            :if={@results != []}
+            id="search-graph-3d"
+            nodes={@graph_nodes}
+            edges={@graph_edges}
+            class="w-full rounded-2xl overflow-hidden surface-2"
+            style="height: 70vh;"
+          />
         </div>
       </div>
     </Layouts.app>
@@ -303,6 +352,50 @@ defmodule DranWeb.SearchLive do
        do: "/#{PageTypes.path(type)}/#{slug}"
 
   defp page_path_for(_), do: "#"
+
+  # Builds the merged graph data for "graph" search mode: a mini subgraph for
+  # each result, merged into one set of nodes/edges (deduped by id). Falls back
+  # to empty lists for all non-graph modes so the assigns are always present.
+  defp graph_data(socket, results) do
+    if socket.assigns.search_mode == "graph" do
+      results
+      |> Enum.reduce({[], []}, fn result, {nodes, edges} ->
+        %{nodes: sub_nodes, edges: sub_edges} = build_subgraph(result)
+        {merge_nodes(nodes, sub_nodes), merge_edges(edges, sub_edges)}
+      end)
+      |> then(fn {nodes, edges} -> %{nodes: nodes, edges: edges} end)
+    else
+      %{nodes: [], edges: []}
+    end
+  end
+
+  defp build_subgraph(result) do
+    GraphHelpers.build_page_subgraph(result)
+  rescue
+    _ -> %{nodes: [], edges: []}
+  catch
+    _, _ -> %{nodes: [], edges: []}
+  end
+
+  defp merge_nodes(acc, candidates) do
+    Enum.reduce(candidates, acc, fn node, current ->
+      if Enum.any?(current, &(&1.id == node.id)) do
+        current
+      else
+        [node | current]
+      end
+    end)
+  end
+
+  defp merge_edges(acc, candidates) do
+    Enum.reduce(candidates, acc, fn edge, current ->
+      if Enum.any?(current, &(&1.source_id == edge.source_id and &1.target_id == edge.target_id)) do
+        current
+      else
+        [edge | current]
+      end
+    end)
+  end
 
   defp tags_for(%{tags: tags}) when is_list(tags), do: tags
   defp tags_for(_), do: []

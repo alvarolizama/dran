@@ -50,8 +50,34 @@ defmodule DranWeb.ReferenceLive do
           </:attributes>
 
           <:graph>
-            <.page_graph id="reference-page-graph" nodes={@graph_nodes} edges={@graph_edges} />
+            <.graph_3d
+              id="reference-page-graph"
+              nodes={@graph_nodes}
+              edges={@graph_edges}
+              class="w-full"
+              style="height: calc(100vh - 200px);"
+            />
           </:graph>
+
+          <:insights>
+            <div class="space-y-4">
+              <div :if={@community_summary} class="surface-2 rounded-lg p-4">
+                <h3 class="text-sm font-semibold mb-2">{gettext("Community Context")}</h3>
+                <p class="text-sm text-base-content/70">{@community_summary.summary}</p>
+                <p class="text-xs text-base-content/40 mt-1">
+                  {gettext("Community")} #{@community_summary.community_id} · {@community_summary.page_count} {gettext(
+                    "pages"
+                  )}
+                </p>
+              </div>
+              <div
+                :if={!@community_summary}
+                class="text-sm text-base-content/40 text-center py-8"
+              >
+                {gettext("No community data yet. Run community summaries first.")}
+              </div>
+            </div>
+          </:insights>
 
           <:tabs>
             <.page_edit_form
@@ -104,7 +130,8 @@ defmodule DranWeb.ReferenceLive do
        active_tab: "content",
        editing: true,
        save_status: "idle",
-       active_nav: "references"
+       active_nav: "references",
+       community_summary: nil
      )}
   end
 
@@ -122,6 +149,16 @@ defmodule DranWeb.ReferenceLive do
           logs = Brain.list_log(context_id: context.id, limit: 10)
           %{nodes: graph_nodes, edges: graph_edges} = GraphHelpers.build_page_subgraph(page)
           form = Brain.change_page(page) |> to_form(as: :page)
+
+          community_summary =
+            try do
+              case Dran.Graph.CommunitySummaries.get_summary_for_page(page.id) do
+                {:ok, summary} -> summary
+                _ -> nil
+              end
+            rescue
+              _ -> nil
+            end
 
           rendered_body =
             render_markdown(page.body,
@@ -142,6 +179,7 @@ defmodule DranWeb.ReferenceLive do
              active_tab: active_tab,
              graph_nodes: graph_nodes,
              graph_edges: graph_edges,
+             community_summary: community_summary,
              editing: true,
              form: form,
              context_id: context.id,

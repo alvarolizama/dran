@@ -278,6 +278,27 @@ defmodule DranWeb.DashboardLive do
             </div>
           </div>
 
+          <%!-- Communities section --%>
+          <div :if={@community_summaries != []} class="mt-8">
+            <h2 class="text-title mb-4">{gettext("Knowledge Communities")}</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div
+                :for={summary <- @community_summaries}
+                class="surface-2 rounded-lg p-4"
+              >
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs font-mono text-primary">
+                    {gettext("Community %{id}", id: summary.community_id)}
+                  </span>
+                  <span class="text-xs text-base-content/40">
+                    {gettext("· %{count} pages", count: summary.page_count)}
+                  </span>
+                </div>
+                <p class="text-sm text-base-content/70 line-clamp-3">{summary.summary}</p>
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <%!-- Pages by type --%>
             <div class="lg:col-span-1 space-y-8">
@@ -400,7 +421,7 @@ defmodule DranWeb.DashboardLive do
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
-    {stats, brain_metrics, daily_note_status} =
+    {stats, brain_metrics, daily_note_status, community_summaries} =
       if context do
         metrics = Brain.metrics(context.id)
 
@@ -411,9 +432,18 @@ defmodule DranWeb.DashboardLive do
             :disabled
           end
 
-        {Brain.stats(context.id), metrics, daily_note_status}
+        community_summaries =
+          try do
+            Dran.Graph.CommunitySummaries.list_summaries(context.id)
+          rescue
+            _ -> []
+          catch
+            _, _ -> []
+          end
+
+        {Brain.stats(context.id), metrics, daily_note_status, community_summaries}
       else
-        {%{}, %{}, :disabled}
+        {%{}, %{}, :disabled, []}
       end
 
     {:ok,
@@ -422,6 +452,7 @@ defmodule DranWeb.DashboardLive do
        stats: stats,
        brain_metrics: brain_metrics,
        daily_note_status: daily_note_status,
+       community_summaries: community_summaries,
        kanban_columns: @kanban_columns,
        nav_groups: @nav_groups,
        page_title: gettext("Dashboard")
