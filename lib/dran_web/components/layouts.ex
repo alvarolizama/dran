@@ -206,16 +206,16 @@ defmodule DranWeb.Layouts do
             path: ~p"/graph"
           },
           %{
-            key: "activity",
-            label: gettext("Actividad"),
-            icon: "hero-clock",
-            path: ~p"/activity"
-          },
-          %{
             key: "journey",
             label: gettext("Trayectoria"),
             icon: "hero-map",
             path: ~p"/journey"
+          },
+          %{
+            key: "activity",
+            label: gettext("Actividad"),
+            icon: "hero-clock",
+            path: ~p"/activity"
           }
         ]
       },
