@@ -1,6 +1,7 @@
 defmodule DranWeb.SettingsLiveTest do
   use DranWeb.ConnCase, async: false
 
+  alias Dran.Accounts
   alias Dran.Settings
 
   # Gettext wrapper — the app default locale is "es", so assertions must
@@ -8,6 +9,17 @@ defmodule DranWeb.SettingsLiveTest do
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
   setup %{conn: conn} do
+    # Create (or fetch) an admin user whose email matches the session value the
+    # router's require_admin plug looks up. The /settings route is admin-only.
+    case Accounts.get_user_by_email("test_user") do
+      nil ->
+        {:ok, _user} =
+          Accounts.create_user(%{email: "test_user", name: "Test Admin", is_admin: true})
+
+      _ ->
+        :ok
+    end
+
     # Log in — init_test_session is needed because ConnCase doesn't pipe
     # through the browser pipeline that Auth expects.
     conn =

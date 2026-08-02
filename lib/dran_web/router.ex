@@ -45,6 +45,29 @@ defmodule DranWeb.Router do
     end
   end
 
+  # ── Admin auth plug ──
+
+  defp require_admin(conn, _opts) do
+    user_email = Plug.Conn.get_session(conn, "user")
+
+    if user_email do
+      user = Dran.Accounts.get_user_by_email(user_email)
+
+      if user && user.is_admin do
+        conn
+      else
+        conn
+        |> Phoenix.Controller.put_flash(:error, "Admin access required")
+        |> Phoenix.Controller.redirect(to: ~p"/")
+        |> Plug.Conn.halt()
+      end
+    else
+      conn
+      |> Phoenix.Controller.redirect(to: ~p"/login")
+      |> Plug.Conn.halt()
+    end
+  end
+
   # ── API token auth plug ──
 
   defp require_api_token(conn, _opts) do
@@ -173,10 +196,16 @@ defmodule DranWeb.Router do
 
     live "/contexts", ContextLive, :index
 
-    live "/settings", SettingsLive, :index
-
     # Context switching
     post "/context", SessionController, :switch_context
+  end
+
+  # ── Admin-only web UI ──
+
+  scope "/", DranWeb do
+    pipe_through [:browser, :auth, :admin]
+
+    live "/settings", SettingsLive, :index
   end
 
   # ── REST API (token-protected) ─────────────────────────────────────────────

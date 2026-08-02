@@ -13,6 +13,10 @@ defmodule DranWeb.SettingsLive do
   alias Dran.Settings
   alias DranWeb.Plugs.Auth
 
+  # Keys managed by the "Brain tuning" form.
+  @brain_keys ~w(agent_max_pages daily_note_enabled)
+  @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
+
   # Purposes shown in the "Modelos" card. Each entry is:
   #   {settings_key, env_getter, label_gettext_fn, description_gettext_fn}
   # `env_getter` returns the env-only default (bypassing DB overrides) so the
@@ -41,10 +45,29 @@ defmodule DranWeb.SettingsLive do
       socket
       |> assign(active_nav: "settings", page_title: gettext("Settings"))
       |> assign(inference_test: nil)
+      |> assign_users()
+      |> assign_contexts()
+      |> assign_new_user_form()
       |> assign_brain_form()
       |> assign_models()
 
     {:ok, socket}
+  end
+
+  # -- Admin: user & context management ---------------------------------------
+
+  defp assign_users(socket) do
+    users = Dran.Accounts.list_users()
+    assign(socket, users: users)
+  end
+
+  defp assign_contexts(socket) do
+    contexts = Dran.Brain.list_contexts()
+    assign(socket, all_contexts: contexts)
+  end
+
+  defp assign_new_user_form(socket) do
+    assign(socket, new_user_form: to_form(%{}, as: :user))
   end
 
   @impl true
@@ -52,19 +75,65 @@ defmodule DranWeb.SettingsLive do
     {:noreply, socket}
   end
 
-  # -- Inference connection test ---------------------------------------------
+  # -- Admin: user & context management ---------------------------------------
 
-  # -- Brain tuning form ------------------------------------------------------
+  @impl true
+  def handle_event("create_user", %{"user" => params}, socket) do
+    email = Map.get(params, "email", "")
+    name = Map.get(params, "name", "")
+    context_ids = Map.get(params, "context_ids", []) |> List.wrap()
 
-  @brain_keys ~w(agent_max_pages daily_note_enabled)
-  @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
+    case Dran.Accounts.create_user(%{email: email, name: name}) do
+      {:ok, user} ->
+        # Add to selected contexts
+        for context_id <- context_ids do
+          context = Dran.Brain.get_context!(context_id)
+          Dran.Accounts.add_user_to_context(user, context)
+        end
 
-  defp assign_brain_form(socket) do
-    values =
-      Settings.all()
-      |> Map.take(@brain_keys ++ @advanced_keys)
+        socket
+        |> assign_users()
+        |> assign_new_user_form()
+        |> put_flash(:info, "User created: #{email}")
 
-    assign(socket, brain_form: to_form(values, as: :settings))
+      {:error, changeset} ->
+        put_flash(socket, :error, "Could not create user: #{inspect(changeset.errors)}")
+    end
+    |> then(&{:noreply, &1})
+  end
+
+  @impl true
+  def handle_event("delete_user", %{"id" => id}, socket) do
+    user = Dran.Accounts.get_user!(id)
+
+    case Dran.Accounts.delete_user(user) do
+      {:ok, _} ->
+        socket
+        |> assign_users()
+        |> put_flash(:info, "User deleted")
+
+      {:error, _} ->
+        put_flash(socket, :error, "Could not delete user")
+    end
+    |> then(&{:noreply, &1})
+  end
+
+  @impl true
+  def handle_event(
+        "toggle_context_user",
+        %{"context_id" => context_id, "user_id" => user_id},
+        socket
+      ) do
+    user = Dran.Accounts.get_user!(user_id)
+    context = Dran.Brain.get_context!(context_id)
+
+    if Dran.Accounts.user_in_context?(user, context) do
+      Dran.Accounts.remove_user_from_context(user, context)
+    else
+      Dran.Accounts.add_user_to_context(user, context)
+    end
+
+    {:noreply, assign_users(socket)}
   end
 
   @impl true
@@ -160,6 +229,16 @@ defmodule DranWeb.SettingsLive do
     {:noreply, assign(socket, inference_test: result)}
   end
 
+  # -- Brain tuning form ------------------------------------------------------
+
+  defp assign_brain_form(socket) do
+    values =
+      Settings.all()
+      |> Map.take(@brain_keys ++ @advanced_keys)
+
+    assign(socket, brain_form: to_form(values, as: :settings))
+  end
+
   defp cast_float(str) when is_binary(str) do
     case Float.parse(str) do
       {f, _} -> f
@@ -247,7 +326,13 @@ defmodule DranWeb.SettingsLive do
             </p>
           </div>
 
-          <%!-- Editable brain tuning form (FIRST) --%>
+          <%!-- Admin-only user management (FIRST) --%>
+          <.users_section users={@users} all_contexts={@all_contexts} form={@new_user_form} />
+
+          <%!-- Contexts with user membership --%>
+          <.contexts_section contexts={@all_contexts} users={@users} />
+
+          <%!-- Editable brain tuning form --%>
           <.brain_tuning_section form={@brain_form} />
 
           <%!-- Editable model overrides (SECOND) --%>
@@ -918,6 +1003,139 @@ defmodule DranWeb.SettingsLive do
         </.form>
       </div>
     </section>
+    """
+  end
+
+  attr :users, :list, required: true
+  attr :all_contexts, :list, required: true
+  attr :form, :map, required: true
+
+  def users_section(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <div>
+        <h2 class="text-heading">{gettext("Users")}</h2>
+        <p class="text-caption mt-0.5">{gettext("Manage users and their context access.")}</p>
+      </div>
+
+      <%!-- Add new user form --%>
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <h3 class="text-lg font-semibold">{gettext("Add User")}</h3>
+          <.form for={@form} phx-submit="create_user" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <.input field={@form[:email]} label={gettext("Email")} type="email" required />
+              <.input field={@form[:name]} label={gettext("Name")} />
+            </div>
+
+            <div>
+              <label class="text-sm font-medium">{gettext("Contexts")}</label>
+              <div class="flex flex-wrap gap-2 mt-2">
+                <label :for={ctx <- @all_contexts} class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="user[context_ids][]"
+                    value={ctx.id}
+                    class="checkbox checkbox-sm"
+                  />
+                  <span class="text-sm">{ctx.name}</span>
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">{gettext("Create User")}</button>
+          </.form>
+        </div>
+      </div>
+
+      <%!-- Users list --%>
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <h3 class="text-lg font-semibold">{gettext("Existing Users")}</h3>
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>{gettext("Email")}</th>
+                  <th>{gettext("Name")}</th>
+                  <th>{gettext("Admin")}</th>
+                  <th>{gettext("Contexts")}</th>
+                  <th>{gettext("API Token")}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={user <- @users}>
+                  <td>{user.email}</td>
+                  <td>{user.name}</td>
+                  <td>
+                    <span :if={user.is_admin} class="badge badge-primary badge-sm">Admin</span>
+                  </td>
+                  <td>
+                    <div class="flex flex-wrap gap-1">
+                      <span :for={ctx <- user.contexts} class="badge badge-ghost badge-sm">
+                        {ctx.name}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <code class="text-xs">{String.slice(user.api_token, 0, 8)}...</code>
+                  </td>
+                  <td>
+                    <button
+                      phx-click="delete_user"
+                      phx-value-id={user.id}
+                      data-confirm={gettext("Delete this user?")}
+                      class="btn btn-ghost btn-xs text-error"
+                    >
+                      <.icon name="hero-trash" class="size-4" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :contexts, :list, required: true
+  attr :users, :list, required: true
+
+  def contexts_section(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <div>
+        <h2 class="text-heading">{gettext("Contexts")}</h2>
+        <p class="text-caption mt-0.5">{gettext("Manage context access per user.")}</p>
+      </div>
+
+      <div class="space-y-4">
+        <div :for={ctx <- @contexts} class="card bg-base-100 border border-base-300">
+          <div class="card-body">
+            <h3 class="text-lg font-semibold">
+              {ctx.name} <code class="text-sm text-base-content/60">({ctx.slug})</code>
+            </h3>
+
+            <div class="flex flex-wrap gap-2 mt-2">
+              <label :for={user <- @users} class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={Dran.Accounts.user_in_context?(user, ctx)}
+                  phx-click="toggle_context_user"
+                  phx-value-context_id={ctx.id}
+                  phx-value-user_id={user.id}
+                  class="checkbox checkbox-sm"
+                />
+                <span class="text-sm">{user.email}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     """
   end
 end
