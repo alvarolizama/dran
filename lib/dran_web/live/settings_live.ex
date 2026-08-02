@@ -51,7 +51,7 @@ defmodule DranWeb.SettingsLive do
       |> assign_contexts()
       |> assign_new_user_form()
       |> assign_new_context_form()
-      |> assign(confirm_delete_context_id: nil, slug_touched: false)
+      |> assign(confirm_delete_context_id: nil, slug_touched: false, managing_context_id: nil)
       |> assign_brain_form()
       |> assign_models()
 
@@ -153,6 +153,16 @@ defmodule DranWeb.SettingsLive do
   end
 
   # -- Admin: context CRUD (create / delete) -----------------------------------
+
+  @impl true
+  def handle_event("manage_context_users", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :managing_context_id, id)}
+  end
+
+  @impl true
+  def handle_event("close_context_users", _params, socket) do
+    {:noreply, assign(socket, :managing_context_id, nil)}
+  end
 
   @impl true
   def handle_event("validate_context", %{"context" => params, "_target" => target}, socket) do
@@ -432,6 +442,7 @@ defmodule DranWeb.SettingsLive do
               users={@users}
               form={@new_context_form}
               confirm_delete_context_id={@confirm_delete_context_id}
+              managing_context_id={@managing_context_id}
               context_slug={@context_slug}
             />
           </div>
@@ -1219,6 +1230,7 @@ defmodule DranWeb.SettingsLive do
   attr :users, :list, required: true
   attr :form, :map, required: true
   attr :confirm_delete_context_id, :any, default: nil
+  attr :managing_context_id, :any, default: nil
   attr :context_slug, :string, default: nil
 
   def contexts_section(assigns) do
@@ -1296,15 +1308,34 @@ defmodule DranWeb.SettingsLive do
         >
           <div class="card-body">
             <div class="flex items-start justify-between gap-4">
-              <h3 class="text-lg font-semibold">
-                {ctx.name}
-                <code class="text-sm text-base-content/60">({ctx.slug})</code>
-                <span :if={@context_slug == ctx.slug} class="text-caption text-primary">
-                  · {gettext("current")}
-                </span>
-              </h3>
+              <div>
+                <h3 class="text-lg font-semibold">
+                  {ctx.name}
+                  <code class="text-sm text-base-content/60">({ctx.slug})</code>
+                  <span :if={@context_slug == ctx.slug} class="text-caption text-primary">
+                    · {gettext("current")}
+                  </span>
+                </h3>
+                <p class="text-caption mt-1">
+                  {ngettext(
+                    "%{count} member",
+                    "%{count} members",
+                    Enum.count(@users, &Dran.Accounts.user_in_context?(&1, ctx))
+                  )}
+                </p>
+              </div>
 
               <div class="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  phx-click="manage_context_users"
+                  phx-value-id={ctx.id}
+                  class="btn btn-ghost btn-xs"
+                >
+                  <.icon name="hero-users" class="size-3.5" />
+                  {gettext("Manage users")}
+                </button>
+
                 <%= if @confirm_delete_context_id == ctx.id do %>
                   <span class="text-caption text-error mr-1 hidden sm:inline">
                     {gettext("Delete?")}
@@ -1338,19 +1369,62 @@ defmodule DranWeb.SettingsLive do
                 <% end %>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
 
-            <div class="flex flex-wrap gap-2 mt-2">
-              <label :for={user <- @users} class="flex items-center gap-2">
+      <%!-- Manage users modal --%>
+      <div
+        :if={@managing_context_id}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        phx-click="close_context_users"
+      >
+        <div
+          class="card bg-base-100 w-full max-w-md shadow-xl border border-base-300"
+          phx-click-away="close_context_users"
+        >
+          <div class="card-body">
+            <% managing_ctx = Enum.find(@contexts, &(&1.id == @managing_context_id)) %>
+            <div class="flex items-start justify-between">
+              <div>
+                <h3 class="text-lg font-semibold">
+                  {gettext("Manage users")}
+                </h3>
+                <p class="text-caption mt-0.5">
+                  {if managing_ctx, do: managing_ctx.name, else: ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                phx-click="close_context_users"
+                class="btn btn-ghost btn-xs"
+              >
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </div>
+
+            <div class="divide-y divide-base-300 mt-2">
+              <label
+                :for={user <- @users}
+                class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm font-medium truncate">{user.email}</p>
+                  <p :if={user.name} class="text-caption truncate">{user.name}</p>
+                </div>
                 <input
                   type="checkbox"
-                  checked={Dran.Accounts.user_in_context?(user, ctx)}
+                  checked={managing_ctx && Dran.Accounts.user_in_context?(user, managing_ctx)}
                   phx-click="toggle_context_user"
-                  phx-value-context_id={ctx.id}
+                  phx-value-context_id={@managing_context_id}
                   phx-value-user_id={user.id}
                   class="checkbox checkbox-sm"
                 />
-                <span class="text-sm">{user.email}</span>
               </label>
+
+              <p :if={@users == []} class="text-caption py-4 text-center">
+                {gettext("No users yet — create one in the Users tab.")}
+              </p>
             </div>
           </div>
         </div>

@@ -110,6 +110,33 @@ defmodule DranWeb.E2EAuthTest do
       # The contexts tab renders the create form and the existing contexts
       assert html =~ "context-form"
       assert html =~ ctx1.slug
+      # Manage users button per context
+      assert html =~ "manage_context_users"
+    end
+
+    test "manage users modal opens with user checkboxes", %{
+      conn: conn,
+      admin: admin,
+      user: user,
+      ctx1: ctx1
+    } do
+      conn =
+        conn
+        |> init_test_session(%{user: admin.email, context_slug: ctx1.slug})
+
+      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/settings/contexts")
+
+      # Open the modal for ctx1
+      html = Phoenix.LiveViewTest.render_click(view, "manage_context_users", %{"id" => ctx1.id})
+
+      # Modal shows users with checkboxes
+      assert html =~ "toggle_context_user"
+      assert html =~ user.email
+      assert html =~ "close_context_users"
+
+      # Close the modal
+      html = Phoenix.LiveViewTest.render_click(view, "close_context_users")
+      refute html =~ "toggle_context_user"
     end
 
     test "admin session sees the Settings link and all contexts", %{
