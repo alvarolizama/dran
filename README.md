@@ -2,146 +2,31 @@
 
 # Dran
 
-A personal second-brain application built with Phoenix LiveView. It stores your knowledge as typed pages (notes, concepts, entities, references, goals, plans, todos, comparisons) and links them with relations, forming a queryable knowledge graph.
+A personal second-brain application built with **Phoenix 1.8 + LiveView**. It stores your knowledge as **typed pages** (notes, concepts, entities, references, goals, plans, todos, comparisons, queries, projects) and links them with **relations**, forming a queryable knowledge graph.
 
-Includes a full markdown editor (TipTap WYSIWYG), four autonomous agents, an MCP endpoint for AI agent integration, and a REST API.
+Includes a full markdown editor (TipTap WYSIWYG), three autonomous agents, an MCP endpoint for AI agent integration (with per-user token auth and context scoping), and a REST API.
 
-> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server. 17 tools, agent rules, 10 page types with subtypes, troubleshooting, meta validation, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+> **[SKILL.md](SKILL.md)** — Agent operating manual for the Dran MCP server: tools, agent rules, page types, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
-## Screenshots
+## What is a second brain?
 
-<table>
-  <tr>
-    <td align="center"><b>Dashboard — brain health metrics</b><br><img src="docs/screenshots/dashboard.png" alt="Dashboard with brain health metrics" width="100%"></td>
-    <td align="center"><b>Kanban board — full-viewport, real-time</b><br><img src="docs/screenshots/kanban.png" alt="Kanban board with drag & drop todos" width="100%"></td>
-    <td align="center"><b>In-app documentation — tabbed guides</b><br><img src="docs/screenshots/docs.png" alt="In-app documentation with TOC and tabs" width="100%"></td>
-    <td align="center"><b>Knowledge graph — 3D</b><br><img src="docs/screenshots/graph.png" alt="Knowledge graph" width="100%"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Page detail — relations & versions</b><br><img src="docs/screenshots/note-detail.png" alt="Page detail with backlinks and relations" width="100%"></td>
-    <td align="center"><b>Project detail — health, tabs, graph signals</b><br><img src="docs/screenshots/project-detail.png" alt="Project dashboard with derived health, tabs, PageRank and community metadata" width="100%"></td>
-    <td align="center"><b>Activity feed — real-time timeline</b><br><img src="docs/screenshots/activity.png" alt="Activity feed" width="100%"></td>
-    <td align="center"><b>Settings — brain tuning</b><br><img src="docs/screenshots/settings.png" alt="Settings — brain tuning" width="100%"></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Archived section — filterable by type</b><br><img src="docs/screenshots/notes-archived.png" alt="Notes list with archived section" width="100%"></td>
-    <td align="center"><b>Search — hero with suggestions</b><br><img src="docs/screenshots/search.png" alt="Search hero" width="100%"></td>
-  </tr>
-</table>
+Dran is a networked knowledge base for a single human. It captures notes and structured knowledge, then connects them with semantic and explicit relations so you (and AI agents) can traverse, summarize, and answer questions against a live graph — not a pile of isolated files.
 
-## Use as MCP server
+## Key features
 
-Dran exposes an MCP (Model Context Protocol) endpoint at `POST /api/mcp` using
-the **Streamable HTTP** transport (MCP spec 2025-03-26). This lets any
-MCP-compatible client — Claude Desktop, Hermes Agent, custom scripts — use Dran
-as a knowledge tool with 17 tools, 3 resources, and 2 prompts.
-
-### Connection
-
-| Item | Value |
-| --- | --- |
-| Endpoint | `POST http://<host>/api/mcp` |
-| Auth | `Authorization: Bearer <token>` |
-| Transport | Streamable HTTP, MCP spec 2025-03-26 |
-| Default context | `personal` |
-
-The server returns an `mcp-session-id` header on `initialize`. Include it in
-subsequent requests of the same session. Requests with an `id` field receive a
-JSON response; notifications (no `id`) return `202`. If the endpoint returns
-`401`, check your `DRAN_API_TOKEN`.
-
-### Hermes Agent config
-
-Add to `~/.hermes/config.yaml`:
-
-```yaml
-mcp_servers:
-  dran:
-    url: http://localhost:4000/api/mcp
-    headers:
-      Authorization: "Bearer dran-token"
-```
-
-### Claude Desktop config
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "dran": {
-      "url": "http://localhost:4000/api/mcp",
-      "headers": {
-        "Authorization": "Bearer dran-token"
-      }
-    }
-  }
-}
-```
-
-### Quick test with curl
-
-```bash
-curl -X POST http://localhost:4000/api/mcp \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-```
-
-### Agent skill
-
-The repo includes **[SKILL.md](SKILL.md)** — a complete agent operating manual
-for the Dran MCP server. It covers connection details, all 17 tools grouped by
-workflow, resources, prompts, autonomous agents, page types with meta
-validation, step-by-step recipes, common mistakes, and a quick checklist.
-
-Copy it to `~/.hermes/skills/second-brain/SKILL.md` (or reference it in place)
-to give any MCP-compatible agent the operational context it needs.
-
-### Available tools (17)
-
-`dran_search` · `dran_get_page` · `dran_list_pages` · `dran_get_links` ·
-`dran_create_page` · `dran_update_page` · `dran_delete_page` · `dran_create_todo` ·
-`dran_update_todo` · `dran_create_relation` · `dran_delete_relation` · `dran_rename_slug` ·
-`dran_reaugment_page` · `dran_get_stats` · `dran_lint_brain` · `dran_start_agent` ·
-`dran_get_agent_session`
-
-For the full operational guide — tool-by-tool usage, recipes, pitfalls, and
-agent limits — see [**SKILL.md**](SKILL.md).
-
-## Features
-
-- **10 page types** with type-specific metadata (kinds, statuses, priorities, etc.): note, concept, entity, reference, goal, plan, todo, comparison, query, and **project** (executive dashboard with derived health)
+- **10 page types** with type-specific metadata — note, concept, entity, reference, project, goal, plan, todo, comparison, query
 - **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, mermaid diagrams, and file embeds `![[slug]]`
-- **Autonomous agents (4)** — background ReAct agents that plan, act, and log every step:
-  - `ask` — Q&A agent using **GraphRAG**: searches seeds, then `expand_neighbors` traverses typed relations to pull in adjacent context before answering
-  - `curator` — runs daily (Quantum-scheduled), finds duplicates and flags contested knowledge using `same_community` (graph community overlap) as extra duplicate evidence
-  - `link_gardener` — proposes typed relations between orphaned and weakly-linked pages, including transitive `part_of` candidates (`A → B → C` infers `A → C` with `via` evidence)
-- **Auto-resolved embeds** — `![[slug]]` in the editor resolves to the latest version of the target page; stale `embeds` relations are cleaned up when embeds are removed
-- **Bidirectional semantic relations with dynamic thresholds** — `PageAugmenter` creates `semantic` links after every capture; the cosine-distance threshold adapts to page length (short/mid/long bands) and is tunable at runtime via settings
-- **Version history with diff** — every page edit saves the previous body to `page_versions`; view and diff any prior version
-- **Activity feed** — real-time log of all brain actions (creates, updates, deletes, relations) in a dedicated LiveView
-- **Daily notes** — one journal note per day, created on demand or auto-prompted from the dashboard; toggleable via settings
-- **Full context export** — export an entire context (pages, relations, versions, uploads) as a JSON backup for restore or migration
-- **Runtime settings** — tune the brain without a redeploy: the `/settings` page is organized in three full-width sections — **Brain tuning** (semantic thresholds, agent limits, daily-note toggle), **Modelos** (3 per-purpose inference models selectable from the API server, each editable via dropdown with env defaults marked `(env)`), and **Entorno** (read-only environment configuration). The `/contexts` page is also full-width
-- **Knowledge graph** — visual graph at `/graph` with pan/zoom, 3D view; built from explicit and semantic relations. Each page detail view also surfaces a per-page subgraph
-- **Inline editing** — edit any page in-place with autosave
-- **File uploads** — upload images, videos, PDFs via the editor toolbar
-- **Dashboard** — metrics, recent pages, quick access, todo board summary, daily-note status
-- **Kanban board** — full-viewport 6-column board with drag & drop, updates in real time via PubSub when agents create or move todos. The global board at `/kanban` shows every todo in the context with combinable filters (project / goal / plan, each offering All / None / &lt;slug&gt;); per-goal and per-project boards are replaced by filter links into the single board
-- **Planning model (v6)** — independent links, no precedence: `meta.project_slug`, `meta.goal_slug`, and `meta.plan_slug` are three independent, optional slugs. Each one materializes its own `part_of` relation when set, so a todo (or any page) may carry 0, 1, 2, or all 3 simultaneously. There is no rigid hierarchy — every page is an orphan by default, and the three link dimensions are orthogonal
-- **Todo assignment** — todos carry an `assignee` field (free-form string) identifying who executes the task: `alvaro` (human), `hermes` (agent), `claude-code` (coding agent), etc. Combined with `created_by` (provenance), this enables delegation flows between humans and AI agents. Filter in the kanban or via `dran_list_pages` with `assignee` param (`"none"` for unassigned)
-- **In-app documentation** at `/docs` with tabbed guides, MCP reference, and copy-ready code examples
-- **Page detail tabs** — the first tab row on every page detail view is **Contenido / Metadatos / Relaciones / Versiones / Actividad / Grafo** (the graph is a first-class tab backed by the `<:graph>` slot in `page_components`, not a secondary panel). Inside Contenido, per-type sub-tabs surface type-specific metadata (e.g. note kinds, project health, goal metrics). All 10 page types share a single `page_edit_form` component for create/edit
-- **Tag input** — create/edit forms use badge-chip tag input shared across all 10 page types: press Enter or comma to add a tag, Backspace or the × chip to remove one
-- **Quick-add todo** — `/todos` includes inline quick-add for capturing action items without leaving the list
-- **MCP server** — 17 tools for AI agents to search, read, create, update, delete, relate, lint, and manage the knowledge graph (see [SKILL.md](SKILL.md))
-- **REST API** — full CRUD for pages, contexts, relations, search, export, and maintenance
-- **Relations** — see inbound and outbound relations for any page
-- **Quality lint** — find orphan pages, stale pages, and contested knowledge
-- **Page archiving** — hide stale pages without deleting them: an `archived` flag removes pages from lists, stats, search and kanban boards while keeping them accessible by slug. Every list view has a collapsible **Archived** section (filterable by page type), the detail view offers Archive/Unarchive actions, and agents can archive via `dran_update_page` (`archived: true`)
-- **Slug rename** — rename a page slug
-- **Hybrid search** — unified `dran_search` tool picks full-text, fuzzy, semantic, or hybrid, with RRF fusion and an optional **PageRank authority boost** (multiplicative, controlled by the `pagerank_boost` runtime setting, default `0.15`)
+- **Autonomous agents** — background ReAct agents (`ask`, `curator`, `link_gardener`) that plan, act, and log every step
+- **Knowledge graph** — visual graph at `/graph` with pan/zoom and 3D view, built from explicit and semantic relations; every page detail surfaces a per-page subgraph
+- **Bidirectional semantic relations** — `PageAugmenter` creates `semantic` links after every capture, with an adaptive cosine-distance threshold tunable in settings
+- **Multi-user auth with Google OAuth** — per-user accounts, per-user API tokens, and context membership control
+- **Per-context page type disabling** — restrict which page types are available in a given context
+- **Version history with diff** — every edit saves the previous body to `page_versions`
+- **Activity feed** — real-time log of all brain actions in a dedicated LiveView
+- **Hybrid search** — unified search picks full-text, fuzzy, semantic or hybrid with RRF fusion and an optional PageRank authority boost
+- **Runtime settings** — tune the brain without a redeploy via an admin-only `/settings` page organized in tabs
+- **MCP server** — 17 tools for AI agents to search, read, create, update, delete, relate, lint, and manage the graph (see [SKILL.md](SKILL.md))
+- **Full context export** — export an entire context (pages, relations, versions, uploads) as a JSON backup
 
 ## Quick start (local dev)
 
@@ -160,22 +45,15 @@ cd dran
 
 # 2. Copy the env template and edit values
 cp .env.example .env
-$EDITOR .env    # set SECRET_KEY_BASE, DRAN_PASSWORD, etc.
+$EDITOR .env    # set SECRET_KEY_BASE, admin credentials, etc.
 
 # 3. Install deps, create the DB, run migrations, build assets, and seed
 mix setup
 ```
 
-> **mise auto-loads `.env`:** If you use `mise`, the `.env` file is loaded automatically via `mise.toml` (`_.file = ".env"`). No need to `source .env` manually. If you don't use mise, use `direnv allow` or export the vars in your shell.
+> **mise auto-loads `.env`:** If you use `mise`, the `.env` file is loaded automatically via `mise.toml` (`_.file = ".env"`). No need to `source .env` manually. Otherwise use `direnv allow` or export the vars in your shell.
 
-`mix setup` runs (in order):
-
-1. `mix deps.get` — install Elixir dependencies
-2. `mix ecto.create` — create the database
-3. `mix ecto.migrate` — run migrations
-4. `mix assets.setup` — install Tailwind & esbuild
-5. `mix assets.build` — build CSS & JS bundles
-6. `mix seed` — create the default context (uses `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME`)
+`mix setup` runs: `mix deps.get` → `mix ecto.create` → `mix ecto.migrate` → `mix assets.setup` → `mix assets.build` → `mix seed` (creates the default context from `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME`).
 
 ### Running the dev server
 
@@ -185,76 +63,267 @@ mix phx.server
 
 Visit [localhost:4000](http://localhost:4000). You'll be redirected to login.
 
-### Default dev credentials
+## Authentication & multi-user
 
-| Setting      | Default       | Env var             |
-| ------------ | ------------- | ------------------- |
-| Username     | `admin`       | `DRAN_USERNAME`     |
-| Password     | `dran`        | `DRAN_PASSWORD`     |
-| API token    | `dran-token`  | `DRAN_API_TOKEN`    |
-| Context slug | `personal`    | `DRAN_CONTEXT_SLUG` |
-| Context name | `Personal`    | `DRAN_CONTEXT_NAME` |
+Dran supports two ways to log in: **Google OAuth** (recommended) and **legacy credentials**.
 
-> **Never use these defaults in production.** Set `DRAN_PASSWORD` and `DRAN_API_TOKEN` to strong random values before deploying.
+### Users
 
-### Environment variables
+Every user is a row in the `users` table with `email`, `name`, `google_id`, `avatar_url`, `is_admin`, and a single `api_token`. A user can access only the contexts assigned to them (via the `user_contexts` join table). Admins can access everything and are the only role that sees **Settings**.
 
-See [`.env.example`](.env.example) for the full list with comments. The most important ones for local dev:
+### Google OAuth
 
-```bash
-SECRET_KEY_BASE=$(mix phx.gen.secret)
-DATABASE_URL=ecto://brain:brain_dev_2026@localhost/dran_dev
-DRAN_PASSWORD=$(openssl rand -hex 32)
-DRAN_API_TOKEN=$(openssl rand -hex 32)
+Google login appears on the login page **only when** both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. On first login a user is auto-created; on every login the email in `DRAN_ADMIN_EMAIL` is auto-promoted to admin.
+
+### Legacy credentials
+
+For a single-admin setup without Google, set `DRAN_USERNAME` / `DRAN_PASSWORD`. The seed step creates an admin account from these. The legacy `DRAN_API_TOKEN` is treated as an **admin token** (full access) and continues to work for MCP/REST. All three preserve backward compatibility.
+
+### Per-user API tokens & context scoping
+
+Each user has one `api_token` (shown/managed in Settings → Users) used for the API and MCP. A token grants access **only** to the contexts assigned to that user:
+
+- MCP returns **`401`** for an invalid/missing token, and **`403`** when a user's token tries to access a context they're not assigned to.
+- Set `context` on a request to target a specific context; otherwise it falls back to the user's first assigned context.
+
+## Environment variables
+
+See [`.env.example`](.env.example) for the full annotated list. Key variables:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `SECRET_KEY_BASE` | yes | Output of `mix phx.gen.secret` |
+| `DATABASE_URL` | yes | Postgres connection string |
+| `PHX_HOST` | yes | Public hostname (e.g. `localhost`, `dran.example.com`) |
+| `DRAN_PASSWORD` | no* | Legacy admin login password |
+| `DRAN_API_TOKEN` | no* | Legacy admin Bearer token for API / MCP |
+| `DRAN_USERNAME` | no | Legacy admin username (default `admin`, seeded) |
+| `DRAN_ADMIN_EMAIL` | no | Google email auto-promoted to admin on login |
+| `GOOGLE_CLIENT_ID` | no | Enables Google OAuth when set |
+| `GOOGLE_CLIENT_SECRET` | no | Enables Google OAuth when set |
+| `DRAN_CONTEXT_SLUG` | no | Default context slug (default `personal`) |
+| `DRAN_CONTEXT_NAME` | no | Default context name (default `Personal`) |
+| `PORT` | no | HTTP listener port (default `4000`) |
+| `POOL_SIZE` | no | DB connection pool size (default `10`) |
+
+\* At least one of `DRAN_PASSWORD` (web login) or `DRAN_API_TOKEN` is needed unless you use Google OAuth. **Never use the dev defaults (`admin`/`dran`/`dran-token`) in production.**
+
+### Inference API (optional)
+
+Dran can talk to an OpenAI-compatible inference server to add embeddings, reranking, and chat to the second brain.
+
+| Variable | Notes |
+| --- | --- |
+| `DRAN_INFERENCE_API_URL` | Base URL (`…/v1`). Set to enable inference. |
+| `DRAN_INFERENCE_API_KEY` | API key (required when URL is set) |
+| `DRAN_INFERENCE_CHAT_MODEL` | Chat/text model (default `Ornith-1.0-9B`) |
+| `DRAN_INFERENCE_EMBEDDING_MODEL` | Embeddings model (default `Qwen3-Embedding`) |
+| `DRAN_INFERENCE_RERANK_MODEL` | Rerank model (default `Qwen3-Reranker`) |
+
+How it's used: **unified/semantic search** (embeddings in `pgvector`), **reranking** of candidates, and **automatic semantic relations** (`PageAugmenter`). The models are selectable per-purpose at runtime in Settings → Models. The current local server typically exposes `Qwen3-Embedding`, `Qwen3-Reranker`, and a chat model — verify at runtime with `GET /v1/models`.
+
+### Agents (optional)
+
+| Variable | Notes |
+| --- | --- |
+| `AGENT_MAX_STEPS` | Max steps per agent run (default `150`) |
+| `AGENT_PER_STEP_TIMEOUT` | Per-step timeout in ms (default `120000`) |
+
+## Settings
+
+Only admins see Settings (`/settings`, and `/settings/:tab`). It's organized in tabs:
+
+| Tab | Purpose |
+| --- | --- |
+| `users` | Create users, set API tokens, promote admins — and manage which contexts each user can access |
+| `contexts` | Create/delete contexts, edit a context's page types (see below) |
+| `brain` | Brain tuning — semantic thresholds, agent limits, daily-note toggle |
+| `models` | Per-purpose inference models (chat/agents, embeddings, reranking), selectable from the API server with env defaults marked `(env)` |
+| `system` | Read-only environment configuration |
+| `danger` | Destructive actions (e.g. reset context) |
+
+Context CRUD and user/context membership management all live in Settings now — there is no standalone `/contexts` page.
+
+## Per-context page type disabling
+
+Each context can disable any subset of page types via `contexts.disabled_page_types` (an array). Disabling a type:
+
+- **Hides** it from the web sidebar (no kanban/todos/projects/goals/plans/notes/concepts/entities/references/comparisons links for that type)
+- **Excludes** it from `list_pages` on the MCP server
+- **Rejects** creation via web or MCP with the error `page type 'X' is disabled in context 'Y'`
+
+Manage disabling in **Settings → Contexts → "Page types"** modal per context.
+
+## Page types
+
+Every piece of knowledge is a page with a `page_type`. Some types have a `kind` sub-type (in `meta.kind`):
+
+| Type | Purpose | Subtypes (meta.kind) |
+| --- | --- | --- |
+| `note` | Thoughts, journal, ideas | thought, journal, idea, meeting, question, quote, reminder |
+| `concept` | Abstract ideas, techniques | technique, pattern, discipline, theory |
+| `entity` | People, companies, tools | person, company, product, tool, place, event |
+| `reference` | External sources | article, paper, video, podcast, book |
+| `project` | Executive dashboards (derived health, status, priority) | — |
+| `goal` | Objectives with target dates and health | personal, coding, business, learning, health, finance, other |
+| `plan` | Time-horizoned plans | personal, coding, business, learning, health, finance, other |
+| `todo` | Actionable items (kanban) | personal, coding, business, learning, health, finance, other |
+| `comparison` | Side-by-side analyses | — |
+| `query` | Questions to answer | factual, conceptual, how_to, opinion |
+
+Page links use three independent, orthogonal `meta` slugs — `meta.project_slug`, `meta.goal_slug`, `meta.plan_slug` — each optionally materializing its own `part_of` relation. There is no rigid hierarchy; every page is an orphan by default.
+
+### Relative `created_by` / `assignee`
+
+Pages track who created and owns them; todos carry an `assignee` (free-form string, e.g. `alvaro` for a human, `hermes` for an agent) so you can delegate between humans and AI agents. Filter in the kanban or via `dran_list_pages` with `assignee` (`"none"` for unassigned).
+
+### Embeds
+
+- `![[slug]]` — embed a file (renders as image/video/audio/PDF)
+- `![[slug|Alt Text]]` — embed with alt text
+
+Embeds auto-create `embeds` relations. Plain `[[slug]]` wikilinks are no longer supported — link pages explicitly with `dran_create_relation` or let `PageAugmenter` create `semantic` relations.
+
+### Relations
+
+Relations are **directed** (source → target) and typed:
+
+- `related` — generic connection (create manually)
+- `part_of` — hierarchy (A is part of B)
+- `supersedes` — replacement (A replaces/obsoletes B)
+- `contradicts` — conflict (A contradicts B)
+- `embeds` — source embeds target (auto-created from `![[slug]]`)
+- `semantic` — auto-created by `PageAugmenter` when pages are semantically similar
+
+For explicit typed relations, use the MCP `dran_create_relation` tool or `POST /api/relations`.
+
+## Autonomous agents
+
+Dran can delegate longer tasks to autonomous ReAct agents. There are **three** agent types:
+
+| Agent | Trigger | What it does |
+| --- | --- | --- |
+| `ask` | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph using **GraphRAG**: searches seed pages, then traverses typed relations to pull in the context text search missed, and cites sources |
+| `curator` | Quantum cron (daily 06:00) | Finds duplicates and flags contested knowledge via embedding distance + graph community overlap; creates a cleanup report |
+| `link_gardener` | Manual (`dran_start_agent`) | Proposes semantic relations between orphaned and weakly-linked pages, including transitive `part_of` candidates with `via` evidence |
+
+- Start a session with `dran_start_agent` and poll with `dran_get_agent_session`.
+- Agents run asynchronously, persist every step, and broadcast live updates to the UI.
+
+**Quantum scheduled crons:** `curator_daily` (daily 06:00) runs the curator agent on the default context; `pagerank_nightly` (daily 03:00) recomputes weighted **PageRank** and detects **communities** via Label Propagation (persisted to `meta.pagerank` / `meta.community_id`).
+
+## Use as MCP server
+
+Dran exposes an MCP (Model Context Protocol) endpoint at `POST /api/mcp` using the **Streamable HTTP** transport (MCP spec 2025-03-26). This lets any MCP-compatible client — Claude Desktop, Hermes Agent, custom scripts — use Dran as a knowledge tool.
+
+| Item | Value |
+| --- | --- |
+| Endpoint | `POST http://<host>/api/mcp` |
+| Auth | `Authorization: Bearer <user-api-token>` |
+| Transport | Streamable HTTP, MCP spec 2025-03-26 |
+| Auth failures | `401` invalid token; `403` context not assigned |
+| Context scoping | token only reaches the user's assigned contexts |
+
+The server returns an `mcp-session-id` header on `initialize`; include it in subsequent requests of the same session.
+
+### Client config
+
+```json
+{
+  "mcpServers": {
+    "dran": {
+      "url": "http://localhost:4000/api/mcp",
+      "headers": { "Authorization": "Bearer <your-api-token>" }
+    }
+  }
+}
 ```
 
-#### Core
+### Quick test with curl
 
-| Variable          | Required | Notes                                                          |
-| ----------------- | -------- | -------------------------------------------------------------- |
-| `SECRET_KEY_BASE` | yes      | Output of `mix phx.gen.secret`                                 |
-| `DATABASE_URL`    | yes      | Postgres connection string                                     |
-| `DRAN_PASSWORD`   | yes      | Admin login password                                           |
-| `DRAN_API_TOKEN`  | yes      | Bearer token for API / MCP                                     |
-| `DRAN_USERNAME`   | no       | Admin username (default: `admin`, seeded on first run)         |
-| `DRAN_CONTEXT_SLUG` | no     | Default context slug (default: `personal`)                     |
-| `DRAN_CONTEXT_NAME` | no     | Default context name (default: `Personal`)                     |
-| `PHX_HOST`        | yes      | Public hostname (e.g. `localhost`, `dran.example.com`)         |
-| `PHX_PORT`        | no       | External port for generated URLs (default: `443`)              |
-| `PHX_SCHEME`      | no       | `https` or `http` (default: `https`)                           |
-| `PORT`            | no       | HTTP listener port (default: `4000`)                           |
-| `POOL_SIZE`       | no       | DB connection pool size (default: `10`)                        |
-| `ECTO_IPV6`       | no       | `true` or `1` to force IPv6 DB socket                          |
+```bash
+curl -X POST http://localhost:4000/api/mcp \
+  -H "Authorization: Bearer <your-api-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+```
 
-#### Inference API (optional)
+### Tools, resources, prompts
 
-| Variable                        | Required | Notes                                                    |
-| ------------------------------- | -------- | -------------------------------------------------------- |
-| `DRAN_INFERENCE_API_URL`        | no       | Base URL of OpenAI-compatible inference server (`…/v1`)  |
-| `DRAN_INFERENCE_API_KEY`        | no*      | API key (required if URL is set)                         |
-| `DRAN_INFERENCE_CHAT_MODEL`     | no       | Chat/text model (default: `Ornith-1.0-9B`)               |
-| `DRAN_INFERENCE_EMBEDDING_MODEL`| no       | Embeddings model (default: `Qwen3-Embedding`)            |
-| `DRAN_INFERENCE_RERANK_MODEL`   | no       | Rerank model (default: `Qwen3-Reranker`)                 |
+For the full operational guide — all tools, resources, prompts, recipes, and pitfalls — see [**SKILL.md**](SKILL.md). The available MCP tools are:
 
-> `DRAN_INFERENCE_API_KEY` is required whenever `DRAN_INFERENCE_API_URL` is set.
+`dran_search` · `dran_get_page` · `dran_list_pages` · `dran_get_links` · `dran_create_page` · `dran_update_page` · `dran_delete_page` · `dran_create_todo` · `dran_update_todo` · `dran_create_relation` · `dran_delete_relation` · `dran_rename_slug` · `dran_reaugment_page` · `dran_get_stats` · `dran_lint_brain` · `dran_start_agent` · `dran_get_agent_session`
 
-#### Agents (optional)
+## REST API
 
-| Variable                  | Required | Notes                                      |
-| ------------------------- | -------- | ------------------------------------------ |
-| `AGENT_MAX_STEPS`         | no       | Max steps per agent run (default: `150`)   |
-| `AGENT_PER_STEP_TIMEOUT`  | no       | Per-step timeout in ms (default: `120000`)|
+All API endpoints require a bearer token: `Authorization: Bearer <user-api-token>`. Scoped to the user's assigned contexts (pass `?context=<slug>`). Notable routes:
 
-#### Production-only
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/pages?context=personal` | List pages (`?include=body` for full) |
+| `POST` | `/api/pages` | Create a page |
+| `GET`/`PUT`/`DELETE` | `/api/pages/:slug?context=personal` | Get / update / delete a page |
+| `GET` | `/api/pages/:slug/links?context=personal` | Page relations (outbound + inbound) |
+| `GET` | `/api/pages/:slug/graph?context=personal` | Page subgraph |
+| `POST` | `/api/relations` | Create a relation |
+| `DELETE` | `/api/relations/:id` | Delete a relation |
+| `GET` | `/api/search?q=...&context=personal` | Unified search |
+| `GET` | `/api/todos`, `/api/goals` | List todos / goals |
+| `GET` | `/api/graph?context=personal` | Full knowledge graph |
+| `GET` | `/api/lint?context=personal` | Quality lint report |
+| `GET` | `/api/log?context=personal` | Audit log |
+| CRUD | `/api/contexts` | Context management |
+| `POST` | `/api/mcp` | MCP JSON-RPC endpoint |
 
-| Variable            | Required | Notes                                                        |
-| ------------------- | -------- | ------------------------------------------------------------ |
-| `DISABLE_FORCE_SSL` | no       | Set to `1` at **build time** to disable `force_ssl` redirect |
-| `DNS_CLUSTER_QUERY` | no       | libcluster query for multi-node setups                       |
-| `UPLOADS_DIR`       | no       | Upload storage path (default: `priv/static/uploads`)         |
-| `UPLOADS_MAX_SIZE`  | no       | Max upload bytes (default: `104857600` = 100 MiB)            |
+## Migrations / reset (development)
 
-### Pre-commit checks
+```bash
+mix ecto.create    # create the database
+mix ecto.migrate   # run migrations
+mix seed           # create the default context (idempotent)
+mix ecto.reset     # drop + create + migrate + seed (destructive)
+```
+
+## Production deployment
+
+Dran ships as a standard Elixir release with helpers in `rel/overlays/bin/`:
+
+| Script | What it does |
+| --- | --- |
+| `bin/server` | Starts the Phoenix server. Use as the **start command**. |
+| `bin/migrate` | Runs pending migrations only. Use for incremental deploys. |
+| `bin/setup` | Idempotent: creates DB (if missing) → migrates → seeds. Use for the **first deploy** or pre-deploy hooks. |
+
+Build with:
+
+```bash
+mix local.hex --force && mix local.rebar --force
+MIX_ENV=prod mix deps.get --only prod
+MIX_ENV=prod mix compile
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix release
+```
+
+The release lives in `_build/prod/rel/dran/` and is self-contained — copy it to the target machine or build a container image. The repo also ships a multi-stage **Dockerfile** (with an entrypoint that runs pending migrations before boot). Coolify/Railpack/Nixpacks auto-detect the Elixir app; set the env vars above (Runtime env vars only — never bake secrets into a Dockerfile) and start command `bin/server`.
+
+**Platform env vars:** `PHX_PORT` (default 443), `PHX_SCHEME` (`https`/`http`), `UPLOADS_DIR` (default `priv/static/uploads`), `UPLOADS_MAX_SIZE` (default 100 MiB), `ECTO_IPV6`, `DNS_CLUSTER_QUERY` (multi-node), `DISABLE_FORCE_SSL=1` (build-time, for plain-HTTP deployments behind a tunnel without TLS).
+
+### Health check
+
+```bash
+curl -fsSL https://dran.example.com/health
+```
+
+## Tech stack
+
+- **Phoenix 1.8** with LiveView
+- **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
+- **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
+- **MCP** (Model Context Protocol) for AI agent integration
+- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily) and `pagerank_nightly` (03:00) jobs
+- **Tailwind CSS v4** + daisyUI for styling
+
+## Pre-commit checks
 
 Before committing, always run:
 
@@ -263,408 +332,6 @@ mix precommit
 ```
 
 This runs `compile --warnings-as-errors`, `deps.unlock --unused`, `format`, and `test`. Fix any issues it reports before pushing.
-
-## Inference API
-
-Dran can talk to an OpenAI-compatible inference server to add embeddings, reranking, and chat to the second brain.
-
-Supported capabilities:
-
-- **Embeddings** — `POST /v1/embeddings`
-- **Reranking** — `POST /v1/rerank`
-- **Chat / text generation** — `POST /v1/chat/completions`
-
-The server is configured via environment variables:
-
-```bash
-DRAN_INFERENCE_API_URL=http://<inference-host>:8000/v1
-DRAN_INFERENCE_API_KEY=<your-key>
-```
-
-> Don't put real hostnames, VPN domains, or tokens in public repo files. Use `.env` for the real values.
-
-### Available models
-
-The current local/VPN server exposes these models (verify at runtime with `GET /v1/models`):
-
-| Model | Capability | Endpoint |
-| ----- | ---------- | -------- |
-| `Qwen3-Embedding` | text embeddings | `POST /v1/embeddings` |
-| `Qwen3-Reranker` | rerank search results | `POST /v1/rerank` |
-| `Qwen3.6-35B-A3B` | chat / text generation | `POST /v1/chat/completions` |
-
-> **Web-selectable:** The `/settings` → **Modelos** section exposes 3 per-purpose model dropdowns (chat/agents, embeddings, re-ranking) populated live from the API server's `GET /v1/models`. Each purpose defaults to the env-configured model (marked `(env)`) and can be overridden per-context in the DB without a redeploy.
-
-### How Dran can use it
-
-1. **Unified search** — `Brain.search/2` picks full-text, fuzzy, semantic or hybrid automatically based on the query and inference availability.
-2. **Semantic search** — generate embeddings for page title/body, store them in the `pgvector` column, and add vector search over the knowledge graph.
-3. **Better search ranking** — use the reranker to reorder FTS/vector candidates before returning them.
-4. **Automatic relations** — after a page is created/updated, `Dran.Brain.PageAugmenter` asynchronously finds semantically similar pages and creates `related` relations when confidence is high.
-
-For endpoint request/response examples and integration patterns, see [`references/inference-api.md`](references/inference-api.md).
-
-### Migrations
-
-Migrations create the schema automatically. They are pure DDL — no data is inserted.
-
-```bash
-mix ecto.create    # create the database
-mix ecto.migrate   # run migrations (no seeds)
-```
-
-The migrations create:
-
-- `contexts` — workspaces (personal, work, etc.)
-- `pages` — knowledge pages with JSONB `meta` field
-- `relations` — directed links between pages
-- `page_versions` — body snapshots for version history
-- `brain_log` — audit log of all actions
-
-### Seeds
-
-Seeds create **only the default context** (no test data). The seed script is idempotent — it checks if the context already exists before inserting.
-
-```bash
-# Dev
-mix seed
-
-# Production (release)
-bin/dran eval Dran.Release.seed
-```
-
-This is a separate step from migrations. `mix setup` includes `mix seed` at the end for convenience. In production, `bin/setup` runs create DB → migrate → seed (all idempotent).
-
-### Reset (destructive)
-
-```bash
-mix ecto.reset  # drop + create + migrate + seed
-```
-
-## Page types
-
-Every piece of knowledge is a page with a `page_type`. Some types have a `kind` sub-type (in `meta.kind`):
-
-| Type         | Purpose                       | Subtypes (meta.kind)                                  | Key meta fields                                    |
-| ------------ | ----------------------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| `note`       | Thoughts, journal, ideas      | thought, journal, idea, meeting, question, quote, reminder | kind, date, author, attendees, due_date (reminders) |
-| `concept`    | Abstract ideas, techniques    | technique, pattern, discipline, theory                | kind, domain, parent_concept                       |
-| `entity`     | People, companies, tools      | person, company, product, tool, place, event          | kind, location, external_url, aliases              |
-| `reference`  | External sources              | article, paper, video, podcast, book                  | kind, source_url, published_at                     |
-| `project`    | Executive dashboards          | —                                                     | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
-| `goal`       | Objectives with target dates  | personal, coding, business, learning, health, finance, other | health (green/yellow/red), target_date, start_date, team, metric, target_value, current_value, unit, progress |
-| `plan`       | Time-horizoned plans          | personal, coding, business, learning, health, finance, other | horizon (weekly/monthly/quarterly/yearly), status (draft/active/done/archived), period, due_date, project_slug, goal_slug |
-| `todo`       | Actionable items              | personal, coding, business, learning, health, finance, other | kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), assignee, project_slug, goal_slug, plan_slug, due_date |
-| `comparison` | Side-by-side analyses         | —                                                     | entities, criteria, verdict                        |
-| `query`      | Questions to answer           | factual, conceptual, how_to, opinion                  | kind, difficulty (simple/intermediate/advanced), answer_status (open/answered/verified), answered_by |
-
-### Embeds
-
-- `![[slug]]` — embed a file (renders as image/video/audio/PDF)
-- `![[slug|Alt Text]]` — embed with alt text
-
-Embeds auto-create `embeds` relations. Plain `[[slug]]` wikilinks are no longer supported — link pages explicitly with `dran_create_relation` or let the `PageAugmenter` create `semantic` relations automatically.
-
-### Type-specific field inference
-
-When creating pages via MCP, some types have fields that materially affect behavior (kanban, dashboards, health, progress). If the agent can't infer these from context, it should ask before creating:
-
-- **`goal`** — `kind`, `metric`, `target_value`, `unit`, `start_date`, `target_date`
-- **`plan`** — `kind`, `horizon`, `period`, `status`
-- **`project`** — `status`, `priority`, `health`
-- **`todo`** — `assignee` (always), `priority`, `kanban_status`, `due_date`
-- **`comparison`** — `entities`, `criteria`
-- **`query`** — `kind`, `difficulty`
-
-For `note`, `concept`, `entity`, `reference` — infer from context.
-
-### Relations
-
-Relations are **directed** (source → target) and typed:
-
-- `related` — generic connection (create manually via `dran_create_relation`)
-- `part_of` — hierarchy (A is part of B)
-- `supersedes` — replacement (A replaces/obsoletes B)
-- `contradicts` — conflict (A contradicts B)
-- `embeds` — source embeds target (auto-created from `![[slug]]`)
-- `semantic` — auto-created by `PageAugmenter` when pages are semantically similar
-
-For explicit typed relations (`contradicts`, `supersedes`, `part_of`), use the MCP `dran_create_relation`
-tool or the `POST /api/relations` REST endpoint.
-
-## Production deployment
-
-Dran ships as a standard Elixir release with three helper scripts in `rel/overlays/bin/`:
-
-| Script         | What it does                                                                                  |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `bin/server`   | Starts the Phoenix server (`PHX_SERVER=true bin/dran start`). Use this as the **start command**. |
-| `bin/migrate`  | Runs `Dran.Release.migrate/0` (pending migrations only). Use this for incremental deploys.    |
-| `bin/setup`    | Idempotent: creates the DB (if missing), then migrates, then seeds. Use this for the **first deploy** or as a pre-deploy hook. |
-
-All three are wrapped in `rel/overlays/bin/` and ship inside the release at `_build/prod/rel/dran/bin/`.
-
-### Step 1 — Build the release
-
-```bash
-# Install Hex/Rebar (first time only)
-mix local.hex --force
-mix local.rebar --force
-
-# Fetch prod-only deps
-MIX_ENV=prod mix deps.get --only prod
-
-# Compile and build production assets
-MIX_ENV=prod mix compile
-MIX_ENV=prod mix assets.deploy
-
-# Assemble the release
-MIX_ENV=prod mix release
-```
-
-The release ends up in `_build/prod/rel/dran/`. The whole directory is self-contained — copy it to the target machine, or build a container image from it.
-
-### Step 2 — Provision the database
-
-The release expects a Postgres database to exist. Create it once, manually, **before the first deploy**:
-
-```bash
-# From any host that can reach the DB:
-PGPASSWORD=ADMIN_PASSWORD createdb -h DB_HOST -U ADMIN_USER dran_prod
-```
-
-The app's DB user only needs `CONNECT`, `USAGE`, and DML/DDL on `dran_prod`. If you prefer, you can skip this step entirely and let `bin/setup` create the database on the first run — but the user in `DATABASE_URL` needs `CREATEDB` privilege for that.
-
-### Step 3 — Configure environment variables
-
-The release reads all configuration from environment variables at startup. There is no `.env` file inside the release. Set these in your platform's secret manager (Coolify env vars, Fly secrets, BWS, etc.):
-
-| Variable            | Required | Notes                                                                                |
-| ------------------- | -------- | ------------------------------------------------------------------------------------ |
-| `SECRET_KEY_BASE`   | yes      | Output of `mix phx.gen.secret`                                                       |
-| `DATABASE_URL`      | yes      | `postgres://user:***@host:5432/dran_prod`                                           |
-| `DRAN_PASSWORD`     | yes      | Strong password for the admin user                                                   |
-| `DRAN_API_TOKEN`    | yes      | Long random token for MCP / REST clients (`openssl rand -hex 32`)                    |
-| `PHX_HOST`          | yes      | Public domain (e.g. `dran.example.com`)                                              |
-| `PHX_PORT`          | no       | External port for generated URLs (default: `443`)                                    |
-| `PHX_SCHEME`        | no       | `https` or `http` (default: `https`)                                                 |
-| `PORT`              | no       | Defaults to `4000`. Most platforms inject it.                                        |
-| `POOL_SIZE`         | no       | Defaults to `10`. Bump under load.                                                   |
-| `UPLOADS_DIR`       | no       | Defaults to `priv/static/uploads`. Mount a persistent volume here.                   |
-| `UPLOADS_MAX_SIZE`  | no       | Defaults to `104857600` (100 MiB).                                                   |
-| `ECTO_IPV6`         | no       | `true` or `1` to force IPv6 DB socket.                                               |
-| `DNS_CLUSTER_QUERY` | no       | libcluster query, only for multi-node setups.                                        |
-| `DISABLE_FORCE_SSL` | no       | Set to `1` at **build time** to disable `force_ssl` redirect (plain HTTP deployments). |
-| `AGENT_MAX_STEPS`   | no       | Max steps per agent run (default: `150`)                                             |
-| `AGENT_PER_STEP_TIMEOUT` | no  | Per-step timeout in ms (default: `120000`)                                           |
-
-> **Never bake secrets into a Dockerfile.** Pass them as runtime env vars only. Coolify, Fly, and Kubernetes all support this natively.
-
-### Step 4 — Start the release
-
-#### Option A — Bare metal / VM
-
-```bash
-# 1. Copy release to the server
-rsync -avz _build/prod/rel/dran/ user@server:/opt/dran/
-
-# 2. First deploy: create DB, run migrations, seed
-ssh user@server 'cd /opt/dran && bin/setup'
-
-# 3. Start the server (foreground, for systemd)
-ssh user@server 'cd /opt/dran && bin/server'
-
-# Or run as a daemon
-ssh user@server 'cd /opt/dran && bin/dran daemon'
-```
-
-For a systemd unit, point `ExecStart` at `/opt/dran/bin/server`.
-
-#### Option B — Container with the repo Dockerfile (Coolify / Docker)
-
-The repo ships a multi-stage `Dockerfile` that builds a production Elixir release and runs it as a non-root user on a slim Debian runtime. An entrypoint (`docker/entrypoint.sh`) runs pending migrations before starting the release, so the app never serves against an un-migrated schema. A failed migration aborts boot (and triggers a Coolify rollback) instead of shipping broken code.
-
-**Coolify setup:**
-
-1. Point the Coolify resource at your Git repo (it auto-detects the `Dockerfile`).
-2. Set the port to `4000`.
-3. Set the required environment variables in the Coolify resource config (see the table below).
-4. (Optional) For the first deploy, set `SKIP_MIGRATIONS=1` and run `bin/setup` as a pre-deploy command if you prefer explicit control over DB creation/seeding. Otherwise the entrypoint handles migrations automatically on every deploy.
-
-The entrypoint runs `bin/dran eval Dran.Release.migrate` then `exec bin/dran start`. Set `SKIP_MIGRATIONS=1` to bypass (e.g. one-off task containers).
-
-**Build-time vs runtime variables:** all variables in the Dockerfile are runtime-only (no `ARG` for secrets). The `DISABLE_FORCE_SSL` flag is read at build time in `config/prod.exs`, so if you need plain HTTP (e.g. behind a NetBird / Wireguard tunnel without TLS), set `DISABLE_FORCE_SSL=1` in the Coolify build args before building.
-
-#### Option C — Railpack / Nixpacks (auto-detect)
-
-If you prefer a build pack over the Dockerfile, let Coolify auto-detect the Elixir app. Set these in the resource config:
-
-- **Build pack:** Nixpacks or Railpack (auto-detects `mix.exs`)
-- **Start command:** `bin/server`
-- **Pre-deploy command:** `bin/setup` (creates DB → migrates → seeds, all idempotent)
-- **Port:** `4000`
-
-> `bin/setup` is safe to run on every deploy. On a fresh database it creates the schema and seeds the default context. On subsequent deploys it short-circuits (the DB already exists) and only runs pending migrations + the idempotent seed.
-
-### Step 5 — Verify
-
-```bash
-# Health check (replace with your real domain)
-curl -fsSL https://dran.example.com/health
-
-# MCP endpoint (requires bearer token)
-curl -fsSL https://dran.example.com/api/mcp \
-  -H "Authorization: Bearer <token>"
-```
-
-## AI Agent Integration
-
-### MCP (Model Context Protocol)
-
-Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transport. For the full agent operating manual — connection details, tool schemas, resources, prompts, recipes, and pitfalls — see [**SKILL.md**](SKILL.md).
-
-**Client configuration (e.g. Claude Desktop):**
-
-```json
-{
-  "mcpServers": {
-    "dran": {
-      "url": "http://localhost:4000/api/mcp",
-      "headers": {
-        "Authorization": "Bearer dran-token"
-      }
-    }
-  }
-}
-```
-
-**Available tools (17):**
-
-| Tool               | Description                                                            |
-| ------------------ | ---------------------------------------------------------------------- |
-| `dran_search`           | Unified search with pagination: auto picks full-text, fuzzy, semantic or hybrid. Supports `limit` (default 20, max 100) and `offset` for pagination         |
-| `dran_get_page`         | Get a page by slug (returns full markdown content)                     |
-| `dran_list_pages`       | List pages with filters (type, tag, status, `goal_slug`, `plan_slug`, `limit`, `offset`); pass `goal_slug="none"` / `plan_slug="none"` for orphans |
-| `dran_get_links`        | Get inbound + outbound relations for a page                            |
-| `dran_create_page`      | Create a new page with type-specific meta, owner, created_by, on_behalf_of |
-| `dran_update_page`      | Update any page field: title, body, tags, meta, summary, owner, created_by, on_behalf_of, archived, kb_confidence, kb_source_url, kb_contested |
-| `dran_delete_page`      | Delete a page by slug (cascades to relations + versions)               |
-| `dran_create_todo`      | Create a todo with kanban status, priority, due date, assignee          |
-| `dran_update_todo`      | Update a todo's status/priority/due date/assignee (merges meta)         |
-| `dran_create_relation`  | Create a typed relation between two pages                              |
-| `dran_delete_relation`  | Delete a relation between two pages (by slug pair + optional type)      |
-| `dran_rename_slug`      | Rename a page's slug                                                   |
-| `dran_reaugment_page`   | Re-run `PageAugmenter` on a page to refresh its semantic relations      |
-| `dran_get_stats`        | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
-| `dran_lint_brain`       | Quality report: orphans, stale pages, and contested knowledge          |
-| `dran_start_agent`      | Start an autonomous agent (`ask`, `curator`, `link_gardener`) |
-| `dran_get_agent_session`| Poll an agent session for status, summary, and steps                  |
-
-**Resources:**
-
-| URI                       | Description                                       |
-| ------------------------- | ------------------------------------------------- |
-| `page://{context}/{slug}` | Full page content as markdown                     |
-| `goal://{context}/{slug}` | Goal detail with related todos and plans (JSON)   |
-| `wiki://{context}/index`  | All pages in a context (slug + title + type)      |
-
-**Prompts:**
-
-| Prompt           | Description                                                          |
-| ---------------- | -------------------------------------------------------------------- |
-| `brainstorm`     | Generate ideas around a topic (creates notes with kind: idea)        |
-| `goal_review`    | Review a goal's status, todos, and plans                             |
-
-### Agent workflow
-
-1. **Search** — use `dran_search` to find existing pages before creating new ones
-2. **Read** — use `dran_get_page` to read full content, or `dran_list_pages` for a filtered overview
-3. **Create** — use `dran_create_page` with the appropriate `page_type` and `meta`. Use `dran_create_todo` for action items
-4. **Update** — use `dran_update_page` to refine content. Use `dran_update_todo` to change a todo's status/priority (merges meta)
-5. **Delete** — use `dran_delete_page` to remove a page (cascades to relations + versions)
-6. **Relate** — use `dran_create_relation` for typed relationships (`contradicts`, `supersedes`, `part_of`, `embeds`). Use `dran_delete_relation` to remove. Embeds (`![[slug]]`) auto-create `embeds` relations
-7. **Inspect** — use `dran_get_links` to see inbound + outbound relations for a page
-8. **Stats** — use `dran_get_stats` for a context overview (page counts, todos by status, orphans, total relations)
-9. **Rename** — use `dran_rename_slug` to rename a page slug
-10. **Lint** — use `dran_lint_brain` to find orphans, stale pages, and contested knowledge
-
-### Autonomous agents
-
-Dran can delegate longer tasks to autonomous ReAct agents. There are four agent types:
-
-| Agent           | Trigger                    | What it does                                                                 |
-| --------------- | -------------------------- | ---------------------------------------------------------------------------- |
-| `ask`           | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph using **GraphRAG**: `dran_search` finds seed pages, then the `expand_neighbors` tool traverses typed relations (part_of, embeds, supersedes, related) to pull in context the text search missed, then `dran_get_page` reads the chosen pages. Cites sources |
-| `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes. Uses **`same_community`** (both pages placed in the same graph community by Label Propagation) as extra duplicate evidence on top of embedding distance |
-| `link_gardener` | Manual (`dran_start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages. Calls **`transitive_candidates`** to find inferred `A → C` relations via an intermediate `B` (depth-2 recursive CTE) and verifies each one with `get_page` before proposing, citing `via_slug` as evidence |
-
-- **`dran_start_agent` / `dran_get_agent_session`** — start a session and poll for progress.
-- Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and PubSub topics (`agents:<session_id>` and `agents:all`).
-- The `curator` agent is scheduled automatically by the **Quantum** scheduler (see `config/config.exs`), as is `pagerank_nightly` — a **03:00 daily** job that runs `Dran.Graph.refresh_all_scheduled/0` to recompute weighted **PageRank** (persisted to `meta.pagerank`) and detect **communities** via Label Propagation (persisted to `meta.community_id`) on the default context.
-
-### Example: create a note
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "create_page",
-    "arguments": {
-      "context": "personal",
-      "title": "Learning Elixir",
-      "slug": "learning-elixir",
-      "page_type": "note",
-      "body": "Today I learned about Elixir pattern matching and the `=` match operator.",
-      "meta": {"kind": "journal", "date": "2026-06-21"},
-      "tags": ["programming", "elixir"]
-    }
-  }
-}
-```
-
-## REST API
-
-All API endpoints require a bearer token: `Authorization: Bearer <token>`
-
-| Method   | Path                                       | Description                                                  |
-| -------- | ------------------------------------------ | ------------------------------------------------------------ |
-| `GET`    | `/api/pages?context=personal`              | List pages (no body by default, `?include=body` for full)   |
-| `POST`   | `/api/pages`                               | Create a page                                                |
-| `GET`    | `/api/pages/:slug?context=personal`        | Get a page (no body by default, `?include=body` for full)    |
-| `PUT`    | `/api/pages/:slug?context=personal`        | Update a page                                                |
-| `DELETE` | `/api/pages/:slug?context=personal`        | Delete a page                                                |
-| `GET`    | `/api/pages/:slug/links?context=personal`  | Get page relations (outbound + inbound)                      |
-| `GET`    | `/api/pages/:slug/graph?context=personal`  | Get page subgraph                                            |
-| `POST`   | `/api/relations`                           | Create a relation (`{source_slug, target_slug, relation_type, context}`) |
-| `DELETE` | `/api/relations/:id`                       | Delete a relation                                            |
-| `GET`    | `/api/search?q=...&context=personal`       | Unified search (auto, or `?strategy=fts\|fuzzy\|semantic\|hybrid`) |
-| `GET`    | `/api/search/fuzzy?q=...&context=personal` | Fuzzy search alias (`?strategy=fuzzy`)                            |
-| `GET`    | `/api/search/semantic?q=...&context=personal` | Semantic/hybrid alias (`?strategy=semantic\|hybrid`)           |
-| `GET`    | `/api/goals?context=personal`              | List goals                                                   |
-| `GET`    | `/api/goals/:slug?context=personal`        | Goal detail with related todos and plans                     |
-| `GET`    | `/api/todos?context=personal&status=...`   | List todos (filterable by kanban status)                     |
-| `POST`   | `/api/todos`                               | Create a todo                                                |
-| `PUT`    | `/api/todos/:id`                           | Update a todo (e.g. change status, merges meta)              |
-| `GET`    | `/api/index?context=personal`              | Wiki index (all slugs + titles)                              |
-| `GET`    | `/api/graph?context=personal`              | Full knowledge graph                                         |
-| `GET`    | `/api/lint?context=personal`               | Quality lint report                                          |
-| `GET`    | `/api/log?context=personal`                | Audit log                                                    |
-| `GET`    | `/api/contexts`                            | List contexts                                                |
-| `POST`   | `/api/contexts`                            | Create a context                                             |
-| `GET`    | `/api/contexts/:slug`                      | Get a context                                                |
-| `PUT`    | `/api/contexts/:slug`                      | Update a context                                             |
-| `DELETE` | `/api/contexts/:slug`                      | Delete a context                                             |
-| `POST`   | `/api/mcp`                                 | MCP JSON-RPC endpoint                                        |
-
-## Tech stack
-- **Phoenix 1.8** with LiveView
-- **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
-- **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
-- **MCP** (Model Context Protocol) for AI agent integration
-- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily) and `pagerank_nightly` (03:00 daily) jobs
-- **Tailwind CSS v4** + daisyUI for styling
 
 ## License
 
