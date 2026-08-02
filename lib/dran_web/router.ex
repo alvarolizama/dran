@@ -28,6 +28,10 @@ defmodule DranWeb.Router do
     plug :require_api_token
   end
 
+  pipeline :admin do
+    plug :require_admin
+  end
+
   # ── Browser auth plug ──
 
   defp require_login(conn, _opts) do
@@ -80,6 +84,10 @@ defmodule DranWeb.Router do
     post "/session", SessionController, :create
     delete "/session", SessionController, :delete
     live "/login", LoginLive, :index
+
+    # Google OAuth
+    get "/auth/google", OAuthController, :request
+    get "/auth/google/callback", OAuthController, :callback
   end
 
   # ── Public health check (no auth) ──

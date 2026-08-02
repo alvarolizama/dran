@@ -65,6 +65,13 @@ defmodule DranWeb.LoginLive do
               Sign in
             </button>
           </form>
+
+          <%= if DranWeb.OAuth.Google.configured?() do %>
+            <div class="divider my-4">OR</div>
+            <a href={~p"/auth/google"} class="btn btn-outline w-full gap-2">
+              <.icon name="hero-globe-alt" class="size-5" /> Sign in with Google
+            </a>
+          <% end %>
         </div>
       </div>
     </div>
