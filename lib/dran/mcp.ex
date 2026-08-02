@@ -1005,6 +1005,9 @@ defmodule Dran.MCP do
         {:ok, page} ->
           "Created page: #{page.title} (#{page.slug})"
 
+        {:error, :page_type_disabled} ->
+          "Error: page type '#{attrs[:page_type]}' is disabled in context '#{context_slug}'"
+
         {:error, changeset} ->
           "Error: #{format_changeset_errors(changeset)}"
       end
@@ -1102,6 +1105,9 @@ defmodule Dran.MCP do
         {:ok, todo} ->
           status = Map.get(meta, "kanban_status")
           "Created todo: #{todo.title} (#{todo.slug}) — status: #{status}"
+
+        {:error, :page_type_disabled} ->
+          "Error: page type 'todo' is disabled in context '#{context_slug}'"
 
         {:error, changeset} ->
           "Error: #{format_changeset_errors(changeset)}"
@@ -1258,9 +1264,13 @@ defmodule Dran.MCP do
       pages = Brain.list_pages(opts)
 
       lines =
-        Enum.map(pages, fn page ->
-          "- **#{page.title}** (`#{page.slug}`, type: #{page.page_type})"
-        end)
+        if args["type"] && not Brain.page_type_enabled?(context, args["type"]) do
+          ["Error: page type '#{args["type"]}' is disabled in context '#{context_slug}'"]
+        else
+          Enum.map(pages, fn page ->
+            "- **#{page.title}** (`#{page.slug}`, type: #{page.page_type})"
+          end)
+        end
 
       "Found #{length(pages)} pages:\n\n#{Enum.join(lines, "\n")}"
     else

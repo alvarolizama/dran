@@ -51,7 +51,12 @@ defmodule DranWeb.SettingsLive do
       |> assign_contexts()
       |> assign_new_user_form()
       |> assign_new_context_form()
-      |> assign(confirm_delete_context_id: nil, slug_touched: false, managing_context_id: nil)
+      |> assign(
+        confirm_delete_context_id: nil,
+        slug_touched: false,
+        managing_context_id: nil,
+        page_types_context_id: nil
+      )
       |> assign_brain_form()
       |> assign_models()
 
@@ -162,6 +167,38 @@ defmodule DranWeb.SettingsLive do
   @impl true
   def handle_event("close_context_users", _params, socket) do
     {:noreply, assign(socket, :managing_context_id, nil)}
+  end
+
+  @impl true
+  def handle_event("manage_page_types", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :page_types_context_id, id)}
+  end
+
+  @impl true
+  def handle_event("close_page_types", _params, socket) do
+    {:noreply, assign(socket, :page_types_context_id, nil)}
+  end
+
+  @impl true
+  def handle_event(
+        "toggle_page_type",
+        %{"context_id" => context_id, "page_type" => page_type},
+        socket
+      ) do
+    context = Dran.Brain.get_context!(context_id)
+    disabled = context.disabled_page_types || []
+
+    new_disabled =
+      if page_type in disabled do
+        List.delete(disabled, page_type)
+      else
+        disabled ++ [page_type]
+      end
+
+    case Dran.Brain.update_context_settings(context, %{disabled_page_types: new_disabled}) do
+      {:ok, _} -> {:noreply, assign_contexts(socket)}
+      {:error, _} -> {:noreply, put_flash(socket, :error, gettext("Could not update page types"))}
+    end
   end
 
   @impl true
@@ -443,6 +480,7 @@ defmodule DranWeb.SettingsLive do
               form={@new_context_form}
               confirm_delete_context_id={@confirm_delete_context_id}
               managing_context_id={@managing_context_id}
+              page_types_context_id={@page_types_context_id}
               context_slug={@context_slug}
             />
           </div>
@@ -1231,6 +1269,7 @@ defmodule DranWeb.SettingsLive do
   attr :form, :map, required: true
   attr :confirm_delete_context_id, :any, default: nil
   attr :managing_context_id, :any, default: nil
+  attr :page_types_context_id, :any, default: nil
   attr :context_slug, :string, default: nil
 
   def contexts_section(assigns) do
@@ -1326,6 +1365,16 @@ defmodule DranWeb.SettingsLive do
               </div>
 
               <div class="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  phx-click="manage_page_types"
+                  phx-value-id={ctx.id}
+                  class="btn btn-ghost btn-xs"
+                >
+                  <.icon name="hero-squares-2x2" class="size-3.5" />
+                  {gettext("Page types")}
+                </button>
+
                 <button
                   type="button"
                   phx-click="manage_context_users"
@@ -1425,6 +1474,70 @@ defmodule DranWeb.SettingsLive do
               <p :if={@users == []} class="text-caption py-4 text-center">
                 {gettext("No users yet — create one in the Users tab.")}
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <%!-- Page types modal --%>
+      <div
+        :if={@page_types_context_id}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        phx-click="close_page_types"
+      >
+        <div
+          class="card bg-base-100 w-full max-w-md shadow-xl border border-base-300"
+          phx-click-away="close_page_types"
+        >
+          <div class="card-body">
+            <% pt_ctx = Enum.find(@contexts, &(&1.id == @page_types_context_id)) %>
+            <div class="flex items-start justify-between">
+              <div>
+                <h3 class="text-lg font-semibold">
+                  {gettext("Page types")}
+                </h3>
+                <p class="text-caption mt-0.5">
+                  {if pt_ctx, do: pt_ctx.name, else: ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                phx-click="close_page_types"
+                class="btn btn-ghost btn-xs"
+              >
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </div>
+
+            <p class="text-caption mt-1">
+              {gettext(
+                "Disabled types are hidden in the web UI and rejected in the MCP API for this context."
+              )}
+            </p>
+
+            <div class="divide-y divide-base-300 mt-2">
+              <label
+                :for={page_type <- Dran.Brain.page_types()}
+                class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm font-medium">{String.capitalize(page_type)}</p>
+                  <p
+                    :if={pt_ctx && page_type in (pt_ctx.disabled_page_types || [])}
+                    class="text-xs text-error"
+                  >
+                    {gettext("Disabled")}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={pt_ctx && page_type not in (pt_ctx.disabled_page_types || [])}
+                  phx-click="toggle_page_type"
+                  phx-value-context_id={@page_types_context_id}
+                  phx-value-page_type={page_type}
+                  class="toggle toggle-sm toggle-primary"
+                />
+              </label>
             </div>
           </div>
         </div>

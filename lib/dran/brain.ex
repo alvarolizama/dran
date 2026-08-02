@@ -160,6 +160,7 @@ defmodule Dran.Brain do
     query =
       base
       |> maybe_filter_context(context_id)
+      |> maybe_exclude_disabled_types(context_id)
       |> maybe_filter_type(type)
       |> maybe_filter_tag(tag)
       |> maybe_filter_status(status)
@@ -176,6 +177,18 @@ defmodule Dran.Brain do
       |> offset(^offset)
 
     Repo.all(query)
+  end
+
+  defp maybe_exclude_disabled_types(query, nil), do: query
+
+  defp maybe_exclude_disabled_types(query, context_id) do
+    case Repo.get(Context, context_id) do
+      %Context{disabled_page_types: disabled} when is_list(disabled) and disabled != [] ->
+        where(query, [p], p.page_type not in ^disabled)
+
+      _ ->
+        query
+    end
   end
 
   defp maybe_filter_context(query, nil), do: query
@@ -417,6 +430,26 @@ defmodule Dran.Brain do
   def page_types, do: Page.all_types()
 
   @doc """
+  Page types enabled for a context — all types minus the context's
+  `disabled_page_types`.
+  """
+  def enabled_page_types(%Context{} = context) do
+    Page.all_types() -- (context.disabled_page_types || [])
+  end
+
+  @doc "True if the given page type is enabled in the context."
+  def page_type_enabled?(%Context{} = context, page_type) when is_binary(page_type) do
+    page_type not in (context.disabled_page_types || [])
+  end
+
+  @doc "Update a context's settings (e.g. disabled_page_types)."
+  def update_context_settings(%Context{} = context, attrs) do
+    context
+    |> Context.settings_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
   Create a new page. Automatically:
   - Computes body_hash (SHA256)
   - Logs the action to brain_log
@@ -430,27 +463,42 @@ defmodule Dran.Brain do
       |> default_owner_field("created_by", "system")
       |> ensure_title_and_slug()
 
-    changeset = Page.create_changeset(attrs)
+    with :ok <- check_page_type_enabled(attrs) do
+      changeset = Page.create_changeset(attrs)
 
-    case Repo.insert(changeset) do
-      {:ok, page} ->
-        log_action(page.context_id, "page.create", page.slug, %{
-          page_id: page.id,
-          page_type: page.page_type,
-          owner: page.owner,
-          created_by: page.created_by
-        })
+      case Repo.insert(changeset) do
+        {:ok, page} ->
+          log_action(page.context_id, "page.create", page.slug, %{
+            page_id: page.id,
+            page_type: page.page_type,
+            owner: page.owner,
+            created_by: page.created_by
+          })
 
-        resolve_embeds(page)
-        sync_todo_links(page)
+          resolve_embeds(page)
+          sync_todo_links(page)
 
-        broadcast_page_change(page.context_id, :created, page)
-        Dran.Embeddings.schedule(page)
-        Dran.Brain.PageAugmenter.schedule(page)
-        {:ok, page}
+          broadcast_page_change(page.context_id, :created, page)
+          Dran.Embeddings.schedule(page)
+          Dran.Brain.PageAugmenter.schedule(page)
+          {:ok, page}
 
-      {:error, changeset} ->
-        {:error, changeset}
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    end
+  end
+
+  defp check_page_type_enabled(attrs) do
+    context_id = attrs["context_id"]
+    page_type = attrs["page_type"]
+
+    with %Context{} = context when not is_nil(context_id) <-
+           context_id && Repo.get(Context, context_id),
+         false <- page_type_enabled?(context, page_type || "note") do
+      {:error, :page_type_disabled}
+    else
+      _ -> :ok
     end
   end
 

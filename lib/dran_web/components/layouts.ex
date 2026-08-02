@@ -111,7 +111,12 @@ defmodule DranWeb.Layouts do
         </div>
 
         <nav class="flex-1 overflow-y-auto p-2 space-y-4">
-          <.sidebar_nav active={@active_nav} counts={@counts} is_admin={@is_admin} />
+          <.sidebar_nav
+            active={@active_nav}
+            counts={@counts}
+            is_admin={@is_admin}
+            context_slug={@context_slug}
+          />
         </nav>
 
         <div class="p-3 border-t border-base-300 space-y-2">
@@ -185,14 +190,36 @@ defmodule DranWeb.Layouts do
   """
   attr :active, :string, default: nil
   attr :counts, :map, default: %{}
+  attr :context_slug, :string, default: nil
 
   attr :is_admin, :boolean,
     default: false,
     doc: "whether to show admin-only links (e.g. Settings)"
 
+  # Maps sidebar nav keys to page types. Items whose page type is disabled in
+  # the current context are hidden. Keys not in this map are always shown.
+  @nav_key_page_types %{
+    "kanban" => "todo",
+    "todos" => "todo",
+    "projects" => "project",
+    "goals" => "goal",
+    "plans" => "plan",
+    "notes" => "note",
+    "concepts" => "concept",
+    "entities" => "entity",
+    "references" => "reference",
+    "comparisons" => "comparison"
+  }
+
   def sidebar_nav(assigns) do
     counts = assigns[:counts] || %{}
     is_admin = assigns[:is_admin] || false
+
+    disabled_types =
+      case assigns[:context_slug] && Dran.Brain.get_context_by_slug(assigns[:context_slug]) do
+        %{disabled_page_types: disabled} when is_list(disabled) -> disabled
+        _ -> []
+      end
 
     config_items =
       if is_admin do
@@ -332,6 +359,21 @@ defmodule DranWeb.Layouts do
         items: config_items
       }
     ]
+
+    groups =
+      groups
+      |> Enum.map(fn group ->
+        filtered_items =
+          Enum.reject(group.items, fn item ->
+            case Map.get(@nav_key_page_types, item.key) do
+              nil -> false
+              page_type -> page_type in disabled_types
+            end
+          end)
+
+        %{group | items: filtered_items}
+      end)
+      |> Enum.reject(fn group -> group.label && group.items == [] end)
 
     assigns = assign(assigns, :groups, groups)
 

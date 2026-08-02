@@ -10,10 +10,11 @@ defmodule Dran.Brain.Context do
   @primary_key {:id, :binary_id, read_after_writes: true}
   @foreign_key_type :binary_id
 
-  @derive {Jason.Encoder, only: [:id, :name, :slug, :inserted_at]}
+  @derive {Jason.Encoder, only: [:id, :name, :slug, :disabled_page_types, :inserted_at]}
   schema "contexts" do
     field :name, :string
     field :slug, :string
+    field :disabled_page_types, {:array, :string}, default: []
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -27,5 +28,12 @@ defmodule Dran.Brain.Context do
     |> validate_length(:slug, max: 100)
     |> unique_constraint(:name)
     |> unique_constraint(:slug)
+  end
+
+  @doc "Changeset for updating settings like disabled page types"
+  def settings_changeset(context, attrs) do
+    context
+    |> cast(attrs, [:disabled_page_types])
+    |> validate_subset(:disabled_page_types, Dran.Brain.Page.all_types())
   end
 end

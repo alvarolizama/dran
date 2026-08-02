@@ -31,6 +31,83 @@ defmodule Dran.BrainTest do
     {:ok, context: context}
   end
 
+  describe "disabled page types" do
+    test "enabled_page_types/1 returns all types minus disabled", %{context: ctx} do
+      assert Brain.enabled_page_types(ctx) == Brain.page_types()
+
+      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["todo", "goal"]})
+
+      enabled = Brain.enabled_page_types(ctx)
+      refute "todo" in enabled
+      refute "goal" in enabled
+      assert "note" in enabled
+    end
+
+    test "page_type_enabled?/2 reflects disabled types", %{context: ctx} do
+      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["comparison"]})
+
+      refute Brain.page_type_enabled?(ctx, "comparison")
+      assert Brain.page_type_enabled?(ctx, "note")
+    end
+
+    test "update_context_settings/2 rejects invalid page types", %{context: ctx} do
+      assert {:error, changeset} =
+               Brain.update_context_settings(ctx, %{disabled_page_types: ["bogus_type"]})
+
+      assert %{disabled_page_types: [_]} = errors_on(changeset)
+    end
+
+    test "create_page/1 rejects disabled page types", %{context: ctx} do
+      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["query"]})
+
+      assert {:error, :page_type_disabled} =
+               Brain.create_page(%{
+                 "title" => "Disabled type page",
+                 "page_type" => "query",
+                 "context_id" => ctx.id,
+                 "body" => "should not be created"
+               })
+
+      # Enabled types still work
+      assert {:ok, _page} =
+               Brain.create_page(%{
+                 "title" => "Enabled type page",
+                 "page_type" => "note",
+                 "context_id" => ctx.id,
+                 "body" => "works fine"
+               })
+    end
+
+    test "list_pages/1 excludes disabled page types", %{context: ctx} do
+      {:ok, _todo} =
+        Brain.create_page(%{
+          "title" => "Hidden todo",
+          "page_type" => "todo",
+          "context_id" => ctx.id,
+          "body" => "a todo"
+        })
+
+      {:ok, _note} =
+        Brain.create_page(%{
+          "title" => "Visible note",
+          "page_type" => "note",
+          "context_id" => ctx.id,
+          "body" => "a note"
+        })
+
+      # Before disabling, todo appears
+      pages = Brain.list_pages(context_id: ctx.id)
+      assert Enum.any?(pages, &(&1.page_type == "todo"))
+
+      # After disabling, todo is hidden
+      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["todo"]})
+
+      pages = Brain.list_pages(context_id: ctx.id)
+      refute Enum.any?(pages, &(&1.page_type == "todo"))
+      assert Enum.any?(pages, &(&1.page_type == "note"))
+    end
+  end
+
   describe "create_page/1 slug derivation" do
     test "derives slug with accent normalization", %{context: ctx} do
       {:ok, page} =
