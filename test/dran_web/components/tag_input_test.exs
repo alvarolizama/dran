@@ -2,7 +2,6 @@ defmodule DranWeb.TagInputTest do
   use DranWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
-  import Phoenix.Component
 
   alias DranWeb.MarkdownEditorComponents
 

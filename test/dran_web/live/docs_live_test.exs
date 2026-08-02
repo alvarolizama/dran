@@ -3,14 +3,6 @@ defmodule DranWeb.DocsLiveTest do
 
   import Phoenix.LiveViewTest
 
-  # Gettext wrapper — the app default locale is "es", so assertions must
-  # match the translated strings, not the English msgids.
-  defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
-
-  # The 6 tabs the redesigned /docs page exposes. "overview" is gone;
-  # "getting-started" is the new default.
-  @tabs ~w(getting-started concepts guides api mcp auth)
-
   setup %{conn: conn} do
     # Disable inference scheduling so no external API calls happen during render.
     original = Application.get_env(:dran, :inference)

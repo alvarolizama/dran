@@ -22,6 +22,7 @@ defmodule DranWeb.Layouts do
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
   attr :current_user, :string, default: nil, doc: "the authenticated user"
+  attr :is_admin, :boolean, default: false, doc: "whether the current user is an admin"
   attr :context_slug, :string, default: nil, doc: "the active context slug"
   attr :contexts, :list, default: [], doc: "available contexts for the selector"
   attr :page_counts, :map, default: %{}, doc: "map of context_id => page count"
@@ -38,6 +39,19 @@ defmodule DranWeb.Layouts do
 
   def app(assigns) do
     counts = compute_counts(assigns[:context_slug])
+
+    # Resolve admin status for the sidebar's admin-only links. A session user
+    # with a row in users is admin iff users.is_admin; a legacy single-user
+    # session (DRAN_USERNAME, no DB row) is treated as a full admin.
+    is_admin =
+      if is_binary(assigns[:current_user]) do
+        case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
+          nil -> true
+          user -> user.is_admin == true
+        end
+      else
+        assigns[:is_admin] || false
+      end
 
     # If the caller didn't forward page_counts, compute them here so the
     # sidebar context selector never silently shows "Context (0)".
@@ -56,7 +70,7 @@ defmodule DranWeb.Layouts do
           end
       end
 
-    assigns = assign(assigns, counts: counts, page_counts: page_counts)
+    assigns = assign(assigns, counts: counts, page_counts: page_counts, is_admin: is_admin)
 
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
@@ -97,7 +111,7 @@ defmodule DranWeb.Layouts do
         </div>
 
         <nav class="flex-1 overflow-y-auto p-2 space-y-4">
-          <.sidebar_nav active={@active_nav} counts={@counts} />
+          <.sidebar_nav active={@active_nav} counts={@counts} is_admin={@is_admin} />
         </nav>
 
         <div class="p-3 border-t border-base-300 space-y-2">
@@ -172,8 +186,39 @@ defmodule DranWeb.Layouts do
   attr :active, :string, default: nil
   attr :counts, :map, default: %{}
 
+  attr :is_admin, :boolean,
+    default: false,
+    doc: "whether to show admin-only links (e.g. Settings)"
+
   def sidebar_nav(assigns) do
     counts = assigns[:counts] || %{}
+    is_admin = assigns[:is_admin] || false
+
+    config_items =
+      [
+        %{
+          key: "contexts",
+          label: gettext("Contexts"),
+          icon: "hero-rectangle-stack",
+          path: ~p"/contexts",
+          badge: counts[:contexts]
+        }
+      ] ++
+        if is_admin do
+          [
+            %{
+              key: "settings",
+              label: gettext("Settings"),
+              icon: "hero-cog-6-tooth",
+              path: ~p"/settings"
+            }
+          ]
+        else
+          []
+        end ++
+        [
+          %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/docs"}
+        ]
 
     groups = [
       %{
@@ -293,22 +338,7 @@ defmodule DranWeb.Layouts do
       },
       %{
         label: gettext("Configs"),
-        items: [
-          %{
-            key: "contexts",
-            label: gettext("Contexts"),
-            icon: "hero-rectangle-stack",
-            path: ~p"/contexts",
-            badge: counts[:contexts]
-          },
-          %{
-            key: "settings",
-            label: gettext("Settings"),
-            icon: "hero-cog-6-tooth",
-            path: ~p"/settings"
-          },
-          %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/docs"}
-        ]
+        items: config_items
       }
     ]
 

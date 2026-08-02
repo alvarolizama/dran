@@ -38,7 +38,7 @@ defmodule DranWeb.GraphLiveTest do
         page_type: "note"
       })
 
-    {:ok, concept} =
+    {:ok, _concept} =
       Brain.create_page(%{
         context_id: context.id,
         title: "Beta Concept",

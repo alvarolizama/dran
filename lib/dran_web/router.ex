@@ -258,8 +258,17 @@ defmodule DranWeb.Router do
     get "/index", IndexController, :index
     get "/graph", GraphController, :graph
     get "/log", LogController, :index
+  end
 
-    # MCP Streamable HTTP endpoint
+  # ── MCP Streamable HTTP endpoint (self-authenticating) ────────────────────
+  #
+  # The MCP controller performs its own dual auth — legacy DRAN_API_TOKEN
+  # (admin) OR each user's per-user api_token — and then enforces per-user
+  # context access. It must therefore NOT go through the :api_auth pipeline,
+  # which only validates the legacy admin token and would reject user tokens.
+  scope "/api", DranWeb.API do
+    pipe_through [:api]
+
     post "/mcp", MCPController, :handle_post
     get "/mcp", MCPController, :handle_get
     delete "/mcp", MCPController, :handle_delete

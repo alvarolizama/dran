@@ -104,11 +104,22 @@ defmodule DranWeb.Plugs.Auth do
     contexts = Dran.Brain.list_contexts()
     page_counts = Dran.Brain.page_counts_by_context()
 
+    # Per-user scoping: a DB user (created via Dran.Accounts) only sees their
+    # assigned contexts. A session user with no row in the users table is a
+    # legacy single-user login (DRAN_USERNAME) and is treated as a full admin.
+    {accessible_contexts, is_admin} =
+      case Dran.Accounts.get_user_by_email(current_user) do
+        nil -> {contexts, true}
+        %{is_admin: true} -> {contexts, true}
+        user -> {Dran.Accounts.list_user_contexts(user), false}
+      end
+
     socket =
       socket
       |> Phoenix.Component.assign(:current_user, current_user)
+      |> Phoenix.Component.assign(:is_admin, is_admin)
       |> Phoenix.Component.assign(:context_slug, context_slug)
-      |> Phoenix.Component.assign(:contexts, contexts)
+      |> Phoenix.Component.assign(:contexts, accessible_contexts)
       |> Phoenix.Component.assign(:page_counts, page_counts)
       |> Phoenix.Component.assign(:current_scope, current_user)
 
