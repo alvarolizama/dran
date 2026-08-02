@@ -108,7 +108,13 @@ defmodule Dran.Journey do
     %{
       buckets: [],
       total: 0,
-      stats: %{total_pages: 0, by_type: %{}, by_creator: %{}, busiest_period: nil, busiest_count: 0},
+      stats: %{
+        total_pages: 0,
+        by_type: %{},
+        by_creator: %{},
+        busiest_period: nil,
+        busiest_count: 0
+      },
       trajectory: [],
       axis: %{start: "", end: ""},
       range: %{min_ts: nil, max_ts: nil, granularity: nil}
@@ -139,7 +145,9 @@ defmodule Dran.Journey do
 
   # Convert utc_datetime to unix timestamp
   defp to_unix(%DateTime{} = dt), do: DateTime.to_unix(dt)
-  defp to_unix(%NaiveDateTime{} = ndt), do: ndt |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix()
+
+  defp to_unix(%NaiveDateTime{} = ndt),
+    do: ndt |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix()
 
   defp build_buckets(entries, granularity, min_ts, max_ts) do
     entries
@@ -186,9 +194,14 @@ defmodule Dran.Journey do
     period_key(dt, granularity)
   end
 
-  defp key_to_timestamp({y, m, d}, "day"), do: DateTime.new!(Date.new!(y, m, d), ~T[00:00:00]) |> DateTime.to_unix()
-  defp key_to_timestamp({y, m}, "month"), do: DateTime.new!(Date.new!(y, m, 1), ~T[00:00:00]) |> DateTime.to_unix()
-  defp key_to_timestamp({y}, "year"), do: DateTime.new!(Date.new!(y, 1, 1), ~T[00:00:00]) |> DateTime.to_unix()
+  defp key_to_timestamp({y, m, d}, "day"),
+    do: DateTime.new!(Date.new!(y, m, d), ~T[00:00:00]) |> DateTime.to_unix()
+
+  defp key_to_timestamp({y, m}, "month"),
+    do: DateTime.new!(Date.new!(y, m, 1), ~T[00:00:00]) |> DateTime.to_unix()
+
+  defp key_to_timestamp({y}, "year"),
+    do: DateTime.new!(Date.new!(y, 1, 1), ~T[00:00:00]) |> DateTime.to_unix()
 
   defp period_label(ts, "day") do
     dt = DateTime.from_unix!(ts)

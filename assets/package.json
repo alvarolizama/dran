@@ -5,15 +5,17 @@
   "type": "module",
   "dependencies": {
     "@tiptap/core": "^3.27.1",
-    "@tiptap/pm": "^3.27.1",
-    "@tiptap/starter-kit": "^3.27.1",
-    "@tiptap/markdown": "^3.27.1",
-    "@tiptap/extension-link": "^3.27.1",
     "@tiptap/extension-image": "^3.27.1",
+    "@tiptap/extension-link": "^3.27.1",
     "@tiptap/extension-table": "^3.27.1",
-    "@tiptap/extension-table-row": "^3.27.1",
     "@tiptap/extension-table-cell": "^3.27.1",
     "@tiptap/extension-table-header": "^3.27.1",
-    "three": "^0.185.1"
+    "@tiptap/extension-table-row": "^3.27.1",
+    "@tiptap/markdown": "^3.27.1",
+    "@tiptap/pm": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
+    "3d-force-graph": "^1.80.0",
+    "three": "^0.185.1",
+    "three-spritetext": "^1.10.0"
   }
 }

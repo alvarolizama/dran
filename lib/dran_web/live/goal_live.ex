@@ -244,7 +244,9 @@ defmodule DranWeb.GoalLive do
       </div><div :if={@live_action != :show}>
         <.page_list
           pages={Enum.take(@pages, @visible_count)}
-          archived_pages={if @show_archived, do: Enum.take(@archived_pages, @archived_visible_count), else: []}
+          archived_pages={
+            if @show_archived, do: Enum.take(@archived_pages, @archived_visible_count), else: []
+          }
           archived_filter={@archived_filter}
           page_type={@page_type}
           context_slug={@context_slug}
@@ -372,10 +374,9 @@ defmodule DranWeb.GoalLive do
        pages: pages,
        archived_pages: archived_pages,
        archived_filter: "all",
-      visible_count: 30,
-      show_archived: false,
-      archived_visible_count: 30,
-
+       visible_count: 30,
+       show_archived: false,
+       archived_visible_count: 30,
        page_title: "Goals"
      )}
   end
@@ -383,6 +384,7 @@ defmodule DranWeb.GoalLive do
   def handle_event("filter_archived", %{"type" => type}, socket) do
     {:noreply, assign(socket, archived_filter: type)}
   end
+
   def handle_event("load_more", _params, socket),
     do: {:noreply, ListPagination.handle_load_more(socket)}
 

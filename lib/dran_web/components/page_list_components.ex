@@ -174,9 +174,8 @@ defmodule DranWeb.PageListComponents do
               class="w-4 h-4"
             />
             {if @show_archived,
-              do: (if @page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")),
-              else: gettext("Archived")}
-            ({if @show_archived, do: @total_count, else: @total_archived})
+              do: if(@page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")),
+              else: gettext("Archived")} ({if @show_archived, do: @total_count, else: @total_archived})
           </button>
           <.link navigate={"/#{PageTypes.path(@page_type)}/new"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}

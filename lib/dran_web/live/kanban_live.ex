@@ -240,6 +240,21 @@ defmodule DranWeb.KanbanLive do
                   <.icon name="hero-calendar-days" class="size-3.5" />
                   {format_due(due_date(todo))}
                 </div>
+
+                <%!-- Archive button — bottom-right corner of the card, same as /todos --%>
+                <div class="flex justify-end mt-2">
+                  <button
+                    type="button"
+                    phx-click="archive_todo"
+                    phx-value-slug={todo.slug}
+                    onclick="event.stopPropagation();"
+                    title={gettext("Archive")}
+                    class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors shrink-0"
+                    data-testid={"archive-btn-" <> todo.slug}
+                  >
+                    <.icon name="hero-archive-box" class="size-4" />
+                  </button>
+                </div>
               </div>
               <p
                 :if={column_items(@filtered_todos, status) == []}
@@ -515,6 +530,40 @@ defmodule DranWeb.KanbanLive do
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
+  end
+
+  def handle_event("archive_todo", %{"slug" => slug}, socket) do
+    context = socket.assigns.context
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          {:noreply, put_flash(socket, :error, gettext("Todo not found."))}
+
+        todo ->
+          case Brain.archive_page(todo) do
+            {:ok, _updated} ->
+              all_todos =
+                Brain.list_pages(
+                  context_id: context.id,
+                  type: "todo",
+                  include_body: false,
+                  limit: 1000
+                )
+
+              {:noreply,
+               socket
+               |> assign(all_todos: all_todos)
+               |> recompute_filtered_todos()
+               |> put_flash(:info, gettext("Todo archived."))}
+
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, gettext("Could not archive todo."))}
+          end
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # ── Helpers de filtrado ──

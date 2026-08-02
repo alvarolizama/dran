@@ -54,7 +54,11 @@ defmodule DranWeb.JourneyLive do
             type_colors={@type_colors}
             axis={@journey.axis}
           />
-          <.type_legend :if={@journey.total > 0} by_type={@journey.stats.by_type} type_colors={@type_colors} />
+          <.type_legend
+            :if={@journey.total > 0}
+            by_type={@journey.stats.by_type}
+            type_colors={@type_colors}
+          />
           <.creator_legend :if={@journey.total > 0} by_creator={@journey.stats.by_creator} />
         </div>
       </div>
@@ -124,7 +128,11 @@ defmodule DranWeb.JourneyLive do
         <.icon name={@icon} class={["size-4", @color]} />
       </div>
       <div class="min-w-0">
-        <div class={["font-bold tabular-nums leading-tight truncate", @small && "text-base", !@small && "text-xl"]}>
+        <div class={[
+          "font-bold tabular-nums leading-tight truncate",
+          @small && "text-base",
+          !@small && "text-xl"
+        ]}>
           {@value}
         </div>
         <div class="text-caption">{@label}</div>
@@ -202,6 +210,7 @@ defmodule DranWeb.JourneyLive do
   defp bucket_width(total, max_total) when max_total > 0 do
     round(total / max_total * 100)
   end
+
   defp bucket_width(_, _), do: 0
 
   defp build_sparkline([]), do: ""
@@ -229,7 +238,9 @@ defmodule DranWeb.JourneyLive do
     sorted =
       assigns.by_type
       |> Enum.sort_by(fn {_, v} -> -v end)
-      |> Enum.map(fn {type, count} -> {type, count, Map.get(assigns.type_colors, type, "#666")} end)
+      |> Enum.map(fn {type, count} ->
+        {type, count, Map.get(assigns.type_colors, type, "#666")}
+      end)
 
     assigns = assign(assigns, sorted: sorted)
 
@@ -261,7 +272,10 @@ defmodule DranWeb.JourneyLive do
         :for={{creator, count} <- @sorted}
         class="inline-flex items-center gap-1.5 text-xs"
       >
-        <.icon name={if creator == "agent", do: "hero-cpu-chip", else: "hero-user"} class="size-3.5 text-base-content/50" />
+        <.icon
+          name={if creator == "agent", do: "hero-cpu-chip", else: "hero-user"}
+          class="size-3.5 text-base-content/50"
+        />
         <span class="text-base-content/70">{creator}</span>
         <span class="text-base-content/40 font-mono">{count}</span>
       </span>
@@ -277,7 +291,9 @@ defmodule DranWeb.JourneyLive do
       </div>
       <div>
         <h3 class="text-heading">{gettext("Sin páginas aún")}</h3>
-        <p class="text-caption mt-1">{gettext("Crea algunas páginas para ver la trayectoria de tu cerebro.")}</p>
+        <p class="text-caption mt-1">
+          {gettext("Crea algunas páginas para ver la trayectoria de tu cerebro.")}
+        </p>
       </div>
     </div>
     """

@@ -70,8 +70,9 @@ defmodule DranWeb.TodoLive do
                 name={if @show_archived, do: "hero-check-circle", else: "hero-archive-box"}
                 class="w-4 h-4"
               />
-              {if @show_archived, do: gettext("Todos"), else: gettext("Archived")}
-              ({if @show_archived, do: length(@items), else: length(@archived_items)})
+              {if @show_archived, do: gettext("Todos"), else: gettext("Archived")} ({if @show_archived,
+                do: length(@items),
+                else: length(@archived_items)})
             </button>
             <.link navigate={~p"/todos/new"} class="btn btn-primary btn-sm">
               <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
@@ -80,91 +81,91 @@ defmodule DranWeb.TodoLive do
         </div>
 
         <div :if={!@show_archived}>
-        <form phx-submit="quick_add_todo" class="mb-4 flex flex-wrap items-end gap-3">
-          <div class="flex-1 min-w-56">
-            <input
-              type="text"
-              name="title"
-              required
-              placeholder={gettext("What needs to be done?")}
-              class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <select
-              name="goal_slug"
-              aria-label={gettext("Goal")}
-              class="px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">{gettext("Sin objetivo")}</option>
-              <option :for={g <- @goals} value={g.slug}>{g.title}</option>
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("Agregar")}
-          </button>
-        </form>
-
-        <div :if={@items == []} class="surface-2 p-12 text-center">
-          <.icon name="hero-check-circle" class="size-7 mx-auto text-base-content/30" />
-          <p class="text-caption mt-3">{gettext("No todos yet.")}</p>
-        </div>
-
-        <div :if={@items != []} class="space-y-2">
-          <div
-            :for={item <- @items}
-            data-testid={"todo-row-" <> item.slug}
-            class="surface-2 lift p-3 flex flex-wrap items-center gap-3 cursor-pointer"
-            phx-click="show_page"
-            phx-value-slug={item.slug}
-          >
-            <div class="flex-1 min-w-48">
-              <div class="font-medium text-sm leading-snug break-words">{item.title}</div>
-              <div :if={item.tags != []} class="flex flex-wrap gap-1 mt-1">
-                <span
-                  :for={tag <- Enum.take(item.tags, 4)}
-                  class="px-1.5 py-0.5 text-[11px] rounded bg-base-200 text-base-content/60"
-                >
-                  #{tag}
-                </span>
-              </div>
+          <form phx-submit="quick_add_todo" class="mb-4 flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-56">
+              <input
+                type="text"
+                name="title"
+                required
+                placeholder={gettext("What needs to be done?")}
+                class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
             </div>
-            <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 " <> priority_badge_class(item)}>
-              {priority_label(item)}
-            </span>
-            <span
-              :if={due_date(item)}
-              class={"shrink-0 " <> due_date_display_class(overdue?(item))}
-            >
-              <.icon name="hero-calendar" class="size-3.5" /> {format_due(due_date(item))}
-            </span>
-            <div class="flex items-center gap-1 shrink-0">
-              <button
-                :for={{status, label, badge_class} <- @kanban_columns}
-                phx-click="change_status"
-                phx-value-slug={item.slug}
-                phx-value-status={status}
-                title={label}
-                class={status_button_class(kanban_status(item), status, badge_class)}
+            <div>
+              <select
+                name="goal_slug"
+                aria-label={gettext("Goal")}
+                class="px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                {label}
+                <option value="">{gettext("Sin objetivo")}</option>
+                <option :for={g <- @goals} value={g.slug}>{g.title}</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">
+              <.icon name="hero-plus" class="w-4 h-4" /> {gettext("Agregar")}
+            </button>
+          </form>
+
+          <div :if={@items == []} class="surface-2 p-12 text-center">
+            <.icon name="hero-check-circle" class="size-7 mx-auto text-base-content/30" />
+            <p class="text-caption mt-3">{gettext("No todos yet.")}</p>
+          </div>
+
+          <div :if={@items != []} class="space-y-2">
+            <div
+              :for={item <- @items}
+              data-testid={"todo-row-" <> item.slug}
+              class="surface-2 lift p-3 flex flex-wrap items-center gap-3 cursor-pointer"
+              phx-click="show_page"
+              phx-value-slug={item.slug}
+            >
+              <div class="flex-1 min-w-48">
+                <div class="font-medium text-sm leading-snug break-words">{item.title}</div>
+                <div :if={item.tags != []} class="flex flex-wrap gap-1 mt-1">
+                  <span
+                    :for={tag <- Enum.take(item.tags, 4)}
+                    class="px-1.5 py-0.5 text-[11px] rounded bg-base-200 text-base-content/60"
+                  >
+                    #{tag}
+                  </span>
+                </div>
+              </div>
+              <span class={"text-[11px] font-medium px-1.5 py-0.5 rounded shrink-0 " <> priority_badge_class(item)}>
+                {priority_label(item)}
+              </span>
+              <span
+                :if={due_date(item)}
+                class={"shrink-0 " <> due_date_display_class(overdue?(item))}
+              >
+                <.icon name="hero-calendar" class="size-3.5" /> {format_due(due_date(item))}
+              </span>
+              <div class="flex items-center gap-1 shrink-0">
+                <button
+                  :for={{status, label, badge_class} <- @kanban_columns}
+                  phx-click="change_status"
+                  phx-value-slug={item.slug}
+                  phx-value-status={status}
+                  title={label}
+                  class={status_button_class(kanban_status(item), status, badge_class)}
+                >
+                  {label}
+                </button>
+              </div>
+
+              <%!-- Archive button — bottom-right corner of the row, same as /plans --%>
+              <button
+                type="button"
+                phx-click="archive_todo"
+                phx-value-slug={item.slug}
+                phx-click-stop-propagation
+                title={gettext("Archive")}
+                class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors shrink-0"
+                data-testid={"archive-btn-" <> item.slug}
+              >
+                <.icon name="hero-archive-box" class="size-4" />
               </button>
             </div>
-
-            <%!-- Archive button — bottom-right corner of the row, same as /plans --%>
-            <button
-              type="button"
-              phx-click="archive_todo"
-              phx-value-slug={item.slug}
-              phx-click-stop-propagation
-              title={gettext("Archive")}
-              class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors shrink-0"
-              data-testid={"archive-btn-" <> item.slug}
-            >
-              <.icon name="hero-archive-box" class="size-4" />
-            </button>
           </div>
-        </div>
         </div>
 
         <div :if={@show_archived} class="rounded-xl border border-base-300 bg-base-200/30">

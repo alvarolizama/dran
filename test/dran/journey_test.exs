@@ -96,7 +96,12 @@ defmodule Dran.JourneyTest do
 
     test "computes cumulative trajectory points for sparkline", %{context: context} do
       for i <- 1..3 do
-        Brain.create_page(%{context_id: context.id, title: "P#{i}", slug: "p#{i}", page_type: "note"})
+        Brain.create_page(%{
+          context_id: context.id,
+          title: "P#{i}",
+          slug: "p#{i}",
+          page_type: "note"
+        })
       end
 
       result = Journey.timeline(context.id)
