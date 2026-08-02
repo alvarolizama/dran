@@ -110,7 +110,7 @@ defmodule Dran.MCPFullTest do
       enum = start_agent["inputSchema"]["properties"]["agent_type"]["enum"]
 
       assert MapSet.new(enum) ==
-               MapSet.new(~w(ask curator link_gardener weekly_review))
+               MapSet.new(~w(ask curator link_gardener))
     end
   end
 

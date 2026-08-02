@@ -117,7 +117,6 @@ agent limits — see [**SKILL.md**](SKILL.md).
   - `ask` — Q&A agent using **GraphRAG**: searches seeds, then `expand_neighbors` traverses typed relations to pull in adjacent context before answering
   - `curator` — runs daily (Quantum-scheduled), finds duplicates and flags contested knowledge using `same_community` (graph community overlap) as extra duplicate evidence
   - `link_gardener` — proposes typed relations between orphaned and weakly-linked pages, including transitive `part_of` candidates (`A → B → C` infers `A → C` with `via` evidence)
-  - `weekly_review` — runs weekly (Quantum-scheduled), gathers stats and creates a review page
 - **Auto-resolved embeds** — `![[slug]]` in the editor resolves to the latest version of the target page; stale `embeds` relations are cleaned up when embeds are removed
 - **Bidirectional semantic relations with dynamic thresholds** — `PageAugmenter` creates `semantic` links after every capture; the cosine-distance threshold adapts to page length (short/mid/long bands) and is tunable at runtime via settings
 - **Version history with diff** — every page edit saves the previous body to `page_versions`; view and diff any prior version
@@ -558,7 +557,7 @@ Dran exposes an MCP endpoint at `POST /api/mcp` using the Streamable HTTP transp
 | `dran_reaugment_page`   | Re-run `PageAugmenter` on a page to refresh its semantic relations      |
 | `dran_get_stats`        | Aggregate statistics for a context (page counts, todos by status, orphans, total relations) |
 | `dran_lint_brain`       | Quality report: orphans, stale pages, and contested knowledge          |
-| `dran_start_agent`      | Start an autonomous agent (`ask`, `curator`, `link_gardener`, `weekly_review`) |
+| `dran_start_agent`      | Start an autonomous agent (`ask`, `curator`, `link_gardener`) |
 | `dran_get_agent_session`| Poll an agent session for status, summary, and steps                  |
 
 **Resources:**
@@ -598,11 +597,10 @@ Dran can delegate longer tasks to autonomous ReAct agents. There are four agent 
 | `ask`           | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph using **GraphRAG**: `dran_search` finds seed pages, then the `expand_neighbors` tool traverses typed relations (part_of, embeds, supersedes, related) to pull in context the text search missed, then `dran_get_page` reads the chosen pages. Cites sources |
 | `curator`       | Quantum cron (daily 06:00) | Finds duplicates, flags contested knowledge, creates cleanup notes. Uses **`same_community`** (both pages placed in the same graph community by Label Propagation) as extra duplicate evidence on top of embedding distance |
 | `link_gardener` | Manual (`dran_start_agent`)     | Proposes semantic relations between orphaned and weakly-linked pages. Calls **`transitive_candidates`** to find inferred `A → C` relations via an intermediate `B` (depth-2 recursive CTE) and verifies each one with `get_page` before proposing, citing `via_slug` as evidence |
-| `weekly_review` | Quantum cron (weekly Sun 08:00) | Gathers stats and creates a review page                                 |
 
 - **`dran_start_agent` / `dran_get_agent_session`** — start a session and poll for progress.
 - Agents run asynchronously under `Dran.Relations.TaskSupervisor`, persist every step to `agent_sessions` / `agent_steps`, and broadcast live updates to the UI and PubSub topics (`agents:<session_id>` and `agents:all`).
-- The `curator` and `weekly_review` agents are scheduled automatically by the **Quantum** scheduler (see `config/config.exs`), as is `pagerank_nightly` — a **03:00 daily** job that runs `Dran.Graph.refresh_all_scheduled/0` to recompute weighted **PageRank** (persisted to `meta.pagerank`) and detect **communities** via Label Propagation (persisted to `meta.community_id`) on the default context.
+- The `curator` agent is scheduled automatically by the **Quantum** scheduler (see `config/config.exs`), as is `pagerank_nightly` — a **03:00 daily** job that runs `Dran.Graph.refresh_all_scheduled/0` to recompute weighted **PageRank** (persisted to `meta.pagerank`) and detect **communities** via Label Propagation (persisted to `meta.community_id`) on the default context.
 
 ### Example: create a note
 
@@ -665,7 +663,7 @@ All API endpoints require a bearer token: `Authorization: Bearer <token>`
 - **TipTap v3** markdown editor with `@tiptap/markdown` for bidirectional markdown
 - **MDEx** (comrak) for server-side markdown rendering with GFM + sanitization
 - **MCP** (Model Context Protocol) for AI agent integration
-- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily), `weekly_review` (weekly), and `pagerank_nightly` (03:00 daily) jobs
+- **Quantum** (`~> 3.5`) — cron scheduler for the `curator` (daily) and `pagerank_nightly` (03:00 daily) jobs
 - **Tailwind CSS v4** + daisyUI for styling
 
 ## License

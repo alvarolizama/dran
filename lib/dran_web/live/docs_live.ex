@@ -1008,7 +1008,7 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Agents</strong>
           — use <code>dran_start_agent</code>
-          to delegate tasks to autonomous agents (ask, curator, link_gardener, weekly_review).
+          to delegate tasks to autonomous agents (ask, curator, link_gardener).
           Poll <code>dran_get_agent_session</code>
           for progress and results.
         </li>
@@ -1460,7 +1460,7 @@ defmodule DranWeb.DocsLive do
             name="agent_type"
             type="string"
             required="yes"
-            desc="ask, curator, link_gardener, weekly_review"
+            desc="ask, curator, link_gardener"
           />
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />
@@ -1507,10 +1507,6 @@ defmodule DranWeb.DocsLive do
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">goal_review</code>
           <span class="text-sm text-base-content/60 ml-2">Review a goal's status, todos, and plans. Args: goal_slug, context.</span>
-        </div>
-        <div class="rounded-lg border border-base-300 p-3">
-          <code class="font-mono text-primary">weekly_review</code>
-          <span class="text-sm text-base-content/60 ml-2">Generate a weekly review summary. Args: context.</span>
         </div>
       </div>
 

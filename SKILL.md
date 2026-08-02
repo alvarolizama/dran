@@ -149,7 +149,6 @@ For multi-step Q&A or maintenance tasks, delegate with
 | `ask` | Answers a question using **only** knowledge already in the brain; persists the answer as a `query` page. Tools: `search`, `get_page`, **`expand_neighbors`** (GraphRAG — expands typed neighbours of a seed page), `create_query_page`, `done`. | max 5 search queries; one query page per session. Typical flow: search → `expand_neighbors` on the best seed → `get_page` on the most relevant neighbours → synthesize. Don't overuse expand: 1–2 calls per session usually suffice. |
 | `curator` | Reviews pairs of pages with very similar embeddings, flags duplicates/contested content, writes a report note. Considers `community_id` (graph clustering) when comparing. | max 20 flags per session; duplicate threshold 0.05. |
 | `link_gardener` | Reads orphaned/under-linked pages, proposes typed relations with justifications. Includes a `transitive_candidates` tool that surfaces verified `part_of` transitives (A→C via B) — the agent must verify each against page contents before proposing. | max 10 proposals per session; `semantic` type forbidden. |
-| `weekly_review` | Gathers brain dran_stats and writes a weekly review journal page. | Window: pages created in last 7 days. Output in **Spanish**. |
 
 **Lifecycle:** `dran_start_agent` returns a `session_id` immediately. Poll
 `dran_get_agent_session` with that `session_id` until `status` reaches a terminal
@@ -424,16 +423,6 @@ present in `meta`.
 ```
 
 Use `dran_update_todo`, not `dran_update_page` — `dran_update_todo` merges meta safely.
-
-### Weekly review (delegated to agent)
-
-```
-1. dran_start_agent({ agent_type: "weekly_review", context: "personal", input: "weekly review" })
-   → returns { session_id: "..." }
-2. dran_get_agent_session({ session_id: "..." })   → poll until status: "completed"
-3. dran_get_page({ context: "personal", slug: "<review-page-slug>" })
-   → read the generated review (output is in Spanish)
-```
 
 ### Create a comparison
 

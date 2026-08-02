@@ -37,10 +37,10 @@ unprefixed = [t for t in tools if not t.startswith("dran_")]
 if unprefixed:
     print("FAIL: tools without dran_ prefix:", unprefixed); sys.exit(1)
 
-# Check start_agent enum has all 6 agent types
+# Check start_agent enum has the expected agent types
 enum = tools['dran_start_agent']['inputSchema']['properties']['agent_type'].get('enum', [])
 print("dran_start_agent enum:", enum)
-want = {"research","ingest","ask","curator","link_gardener","weekly_review"}
+want = {"ask","curator","link_gardener"}
 if set(enum) != want:
     print("FAIL: enum mismatch, want", sorted(want)); sys.exit(1)
 

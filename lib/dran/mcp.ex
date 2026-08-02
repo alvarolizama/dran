@@ -26,7 +26,7 @@ defmodule Dran.MCP do
   - `dran_lint_brain` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
-  - `dran_start_agent` — start an autonomous agent (ask, curator, link_gardener, weekly_review)
+  - `dran_start_agent` — start an autonomous agent (ask, curator, link_gardener)
   - `dran_get_agent_session` — poll an agent session for status and steps
 
   ## Embeds
@@ -700,15 +700,15 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_start_agent",
       "description" =>
-        "Start an autonomous agent session and return immediately. Returns a session_id and track_url — poll `dran_get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background. Choose the agent_type that matches your goal: 'ask' answers a question using ONLY knowledge already in the brain (persists as a query page); 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages; 'weekly_review' writes a weekly journal in Spanish.",
+        "Start an autonomous agent session and return immediately. Returns a session_id and track_url — poll `dran_get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background. Choose the agent_type that matches your goal: 'ask' answers a question using ONLY knowledge already in the brain (persists as a query page); 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
           "agent_type" => %{
             "type" => "string",
-            "enum" => ["ask", "curator", "link_gardener", "weekly_review"],
+            "enum" => ["ask", "curator", "link_gardener"],
             "description" =>
-              "Type of agent to run. 'ask' = answer using ONLY knowledge already in the brain (persisted as a query page). 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'weekly_review' = write a weekly journal in Spanish."
+              "Type of agent to run. 'ask' = answer using ONLY knowledge already in the brain (persisted as a query page). 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages."
           },
           "context" => %{
             "type" => "string",
@@ -717,7 +717,7 @@ defmodule Dran.MCP do
           "input" => %{
             "type" => "string",
             "description" =>
-              "Agent input. For ask: a question to answer from brain knowledge. For curator/link_gardener/weekly_review: typically the context focus or instructions."
+              "Agent input. For ask: a question to answer from brain knowledge. For curator/link_gardener: typically the context focus or instructions."
           },
           "opts" => %{
             "type" => "object",
@@ -1499,9 +1499,6 @@ defmodule Dran.MCP do
 
   defp start_agent_by_type("curator", input, context_id, opts),
     do: Agent.Curator.run(input, context_id, opts)
-
-  defp start_agent_by_type("weekly_review", input, context_id, opts),
-    do: Agent.WeeklyReview.run(input, context_id, opts)
 
   defp start_agent_by_type(_type, _input, _context_id, _opts),
     do: {:error, :unknown_agent_type}
