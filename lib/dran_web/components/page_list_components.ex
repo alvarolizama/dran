@@ -237,6 +237,16 @@ defmodule DranWeb.PageListComponents do
               <span :if={page.updated_at} class="text-caption shrink-0">
                 {Calendar.strftime(page.updated_at, "%b %d")}
               </span>
+              <button
+                type="button"
+                phx-click="unarchive_page"
+                phx-value-slug={page.slug}
+                title={gettext("Unarchive")}
+                class="p-1 rounded-lg text-base-content/40 hover:text-success hover:bg-success/10 transition-colors"
+                data-testid={"unarchive-btn-" <> page.slug}
+              >
+                <.icon name="hero-arrow-up-on-square" class="size-4" />
+              </button>
             </div>
             <p
               :if={filtered_archived(@archived_pages, @archived_filter) == []}

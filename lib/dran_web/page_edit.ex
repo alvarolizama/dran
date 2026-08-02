@@ -275,6 +275,35 @@ defmodule DranWeb.PageEdit do
     {:noreply, put_flash(socket, :error, gettext("Cannot archive: no page loaded."))}
   end
 
+  def handle_event("unarchive_page", %{"slug" => slug}, socket) do
+    # List view — find page by slug and unarchive it
+    context_id = context_id(socket)
+
+    case Brain.get_page_by_slug(slug, context_id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Page not found."))}
+
+      page ->
+        case Brain.unarchive_page(page) do
+          {:ok, _updated} ->
+            # Update list state if we're in a list view
+            socket =
+              if socket.assigns[:archived_pages] do
+                archived_pages = Enum.reject(socket.assigns.archived_pages, &(&1.slug == slug))
+                pages = [page | socket.assigns[:pages] || []]
+                assign(socket, pages: pages, archived_pages: archived_pages)
+              else
+                socket
+              end
+
+            {:noreply, put_flash(socket, :info, gettext("Page restored from archive."))}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not unarchive page."))}
+        end
+    end
+  end
+
   def handle_event("unarchive_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
     case Brain.unarchive_page(page) do
       {:ok, updated} ->
