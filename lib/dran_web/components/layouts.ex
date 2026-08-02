@@ -183,8 +183,7 @@ defmodule DranWeb.Layouts do
             key: "dashboard",
             label: gettext("Dashboard"),
             icon: "hero-home",
-            path: ~p"/",
-            badge: counts[:dashboard]
+            path: ~p"/"
           },
           %{
             key: "kanban",
@@ -204,8 +203,7 @@ defmodule DranWeb.Layouts do
             key: "graph",
             label: gettext("Grafo"),
             icon: "hero-share",
-            path: ~p"/graph",
-            badge: counts[:graph]
+            path: ~p"/graph"
           },
           %{
             key: "activity",
