@@ -1,8 +1,8 @@
 defmodule Dran.GraphExpansionTest do
   use Dran.DataCase, async: false
 
-  # Tests for Brain.expand_neighbors/2 (Plan Task 2.1) and
-  # Brain.transitive_part_of_candidates/1 (Plan Task 3.1).
+  # Tests for Brain.transitive_part_of_candidates/1 (Plan Task 3.1) and
+  # Brain.community_pages/2 (Task 4.3).
   #
   # Fixture pattern mirrors sync_links_test.exs: inference is disabled so
   # create_page doesn't call external embedding/rerank APIs, and a
@@ -63,125 +63,6 @@ defmodule Dran.GraphExpansionTest do
 
     :ok
   end
-
-  defp find_by_slug(neighbors, slug) do
-    Enum.find(neighbors, &(&1.slug == slug))
-  end
-
-  # ── expand_neighbors/2 (Task 2.1) ─────────────────────────────────────────
-
-  describe "expand_neighbors/2" do
-    test "returns outbound part_of neighbor with correct type and direction", %{context: ctx} do
-      a = create_note(ctx, "a")
-      b = create_note(ctx, "b")
-      relate!(a, b, "part_of")
-
-      neighbors = Brain.expand_neighbors(a.id)
-
-      b_neighbor = find_by_slug(neighbors, "b")
-      assert b_neighbor != nil, "expected b in neighbors, got: #{inspect(neighbors)}"
-      assert b_neighbor.relation_type == "part_of"
-      assert b_neighbor.direction == "outbound"
-      assert b_neighbor.id == b.id
-      assert b_neighbor.page_type == "note"
-      assert b_neighbor.title == "b"
-    end
-
-    test "excludes semantic edges by default", %{context: ctx} do
-      a = create_note(ctx, "a")
-      b = create_note(ctx, "b")
-      s = create_note(ctx, "s")
-      relate!(a, b, "part_of")
-      relate!(a, s, "semantic")
-
-      neighbors = Brain.expand_neighbors(a.id)
-      slugs = Enum.map(neighbors, & &1.slug)
-
-      assert "b" in slugs
-      refute "s" in slugs, "semantic neighbor must be excluded by default, got: #{inspect(slugs)}"
-    end
-
-    test "inbound direction works (b sees a as inbound)", %{context: ctx} do
-      a = create_note(ctx, "a")
-      b = create_note(ctx, "b")
-      relate!(a, b, "part_of")
-
-      # b is the target of a→b, so from b's perspective a is an inbound neighbor.
-      neighbors = Brain.expand_neighbors(b.id)
-
-      a_neighbor = find_by_slug(neighbors, "a")
-      assert a_neighbor != nil, "expected a in b's neighbors, got: #{inspect(neighbors)}"
-      assert a_neighbor.direction == "inbound"
-      assert a_neighbor.relation_type == "part_of"
-    end
-
-    test "includes embeds/supersedes/related by default, excludes contradicts", %{context: ctx} do
-      a = create_note(ctx, "a")
-      e = create_note(ctx, "e")
-      su = create_note(ctx, "su")
-      r = create_note(ctx, "r")
-      c = create_note(ctx, "c")
-
-      relate!(a, e, "embeds")
-      relate!(a, su, "supersedes")
-      relate!(a, r, "related")
-      relate!(a, c, "contradicts")
-
-      neighbors = Brain.expand_neighbors(a.id)
-      slugs = Enum.map(neighbors, & &1.slug)
-
-      assert "e" in slugs
-      assert "su" in slugs
-      assert "r" in slugs
-      refute "c" in slugs, "contradicts must be excluded by default"
-    end
-
-    test "opts :types overrides default filter", %{context: ctx} do
-      a = create_note(ctx, "a")
-      b = create_note(ctx, "b")
-      r = create_note(ctx, "r")
-      relate!(a, b, "part_of")
-      relate!(a, r, "related")
-
-      neighbors = Brain.expand_neighbors(a.id, types: ["part_of"])
-      slugs = Enum.map(neighbors, & &1.slug)
-
-      assert "b" in slugs
-      refute "r" in slugs, "related must be excluded when types: [\"part_of\"]"
-    end
-
-    test "dedups by id when same neighbor appears inbound and outbound", %{context: ctx} do
-      a = create_note(ctx, "a")
-      b = create_note(ctx, "b")
-      # a→b part_of (outbound for a) and b→a part_of (inbound for a) —
-      # both reference the same neighbor set {a, b}; from a's view, b
-      # appears once outbound and a appears once inbound, but a is self
-      # so it's the only overlap test we can build cleanly. Instead we
-      # test the simpler invariant: a page with a single edge produces
-      # exactly one neighbor entry.
-      relate!(a, b, "part_of")
-
-      neighbors = Brain.expand_neighbors(a.id)
-      assert length(neighbors) == 1
-    end
-
-    test "populates summary when present", %{context: ctx} do
-      a = create_note(ctx, "a")
-      b = create_note(ctx, "b", summary: "summary for b")
-      relate!(a, b, "part_of")
-
-      neighbors = Brain.expand_neighbors(a.id)
-      b_neighbor = find_by_slug(neighbors, "b")
-      assert b_neighbor.summary == "summary for b"
-    end
-
-    test "returns empty list for a page with no relations", %{context: ctx} do
-      lonely = create_note(ctx, "lonely")
-      assert Brain.expand_neighbors(lonely.id) == []
-    end
-  end
-
-  # ── transitive_part_of_candidates/1 (Task 3.1) ─────────────────────────────
 
   describe "transitive_part_of_candidates/1" do
     test "finds transitive candidate a→c via b", %{context: ctx} do

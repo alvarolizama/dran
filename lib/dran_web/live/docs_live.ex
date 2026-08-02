@@ -408,12 +408,10 @@ defmodule DranWeb.DocsLive do
         label="Graph intelligence"
       />
       <p>
-        Dran runs three pure-Elixir structural algorithms over the relations
+        Dran runs pure-Elixir structural algorithms over the relations
         table (<code>Dran.Graph</code>) — weighted <strong>PageRank</strong>,
         <strong>Label Propagation</strong>
-        communities, and the <strong>GraphRAG</strong> <code>expand_neighbors</code>
-        tool used by the
-        QA agent — plus transitive <code>part_of</code>
+        communities, and transitive <code>part_of</code>
         inference used by the
         Link Gardener. Results are persisted into each page's <code>meta</code>
         and refreshed nightly by the <code>pagerank_nightly</code>
@@ -1008,7 +1006,7 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Agents</strong>
           — use <code>dran_start_agent</code>
-          to delegate tasks to autonomous agents (ask, curator, link_gardener).
+          to delegate tasks to autonomous agents (curator, link_gardener).
           Poll <code>dran_get_agent_session</code>
           for progress and results.
         </li>
@@ -1460,7 +1458,7 @@ defmodule DranWeb.DocsLive do
             name="agent_type"
             type="string"
             required="yes"
-            desc="ask, curator, link_gardener"
+            desc="curator, link_gardener"
           />
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />

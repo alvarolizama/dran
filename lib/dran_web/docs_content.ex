@@ -15,10 +15,10 @@ defmodule DranWeb.DocsContent do
 
   ## Graph intelligence
 
-  PageRank (weighted by relation type), Label Propagation communities, the
-  `expand_neighbors` GraphRAG tool, and transitive `part_of` candidates are
-  documented in `graph_intelligence_doc/0`. These algorithms are implemented
-  in `Dran.Graph` and refreshed nightly by the `pagerank_nightly` Quantum job.
+  PageRank (weighted by relation type), Label Propagation communities, and
+  transitive `part_of` candidates are documented in `graph_intelligence_doc/0`.
+  These algorithms are implemented in `Dran.Graph` and refreshed nightly by the
+  `pagerank_nightly` Quantum job.
   """
 
   @agent_connect_example """
@@ -398,32 +398,7 @@ defmodule DranWeb.DocsContent do
     this to gather evidence when evaluating duplicate candidates.
 
   ─────────────────────────────────────────────────────────────────────
-  3. GraphRAG (QA agent — expand_neighbors)
-  ─────────────────────────────────────────────────────────────────────
-
-  The `ask` (QA) agent has a tool `expand_neighbors` that does
-  retrieval-augmented generation over the graph structure, not just
-  over text. Given a seed page slug, it returns the page's typed
-  neighbors (inbound + outbound) with their slug, title, page_type,
-  relation_type, direction, and summary.
-
-  Workflow (GraphRAG):
-    1. search   — `dran_search` finds seed pages by text/semantic match.
-    2. expand   — `expand_neighbors` on the best seed traverses
-                  `part_of`, `embeds`, `supersedes`, and `related`
-                  edges to pull in pages the text search missed.
-                  `semantic` edges are deliberately excluded (they
-                  duplicate what the semantic search already returned).
-                  Up to 10 neighbors, deduped by id.
-    3. read     — `dran_get_page` reads the chosen pages.
-    4. answer   — the agent answers citing sources, optionally
-                  persisting the answer as a `query` page.
-
-  Typical usage is 1–2 calls to `expand_neighbors` per session. The
-  tool is backed by `Brain.expand_neighbors/2`.
-
-  ─────────────────────────────────────────────────────────────────────
-  4. Transitive part_of (Link Gardener — transitive_candidates)
+  3. Transitive part_of (Link Gardener — transitive_candidates)
   ─────────────────────────────────────────────────────────────────────
 
   The `link_gardener` agent has a tool `transitive_candidates` that

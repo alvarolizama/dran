@@ -40,7 +40,7 @@ if unprefixed:
 # Check start_agent enum has the expected agent types
 enum = tools['dran_start_agent']['inputSchema']['properties']['agent_type'].get('enum', [])
 print("dran_start_agent enum:", enum)
-want = {"ask","curator","link_gardener"}
+want = {"curator","link_gardener"}
 if set(enum) != want:
     print("FAIL: enum mismatch, want", sorted(want)); sys.exit(1)
 
