@@ -44,9 +44,9 @@ defmodule Dran.BrainTest do
     end
 
     test "page_type_enabled?/2 reflects disabled types", %{context: ctx} do
-      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["comparison"]})
+      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["reference"]})
 
-      refute Brain.page_type_enabled?(ctx, "comparison")
+      refute Brain.page_type_enabled?(ctx, "reference")
       assert Brain.page_type_enabled?(ctx, "note")
     end
 

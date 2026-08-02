@@ -12,7 +12,7 @@ defmodule Dran.MCP do
 
   ## Tools (18)
   - `dran_search` — use FIRST to find anything; strategy=auto picks best available
-  - `dran_create_page` — create notes, concepts, entities, references, goals, plans, projects, comparisons
+  - `dran_create_page` — create notes, concepts, entities, references, goals, plans, projects
   - `dran_update_page` — update page fields; REPLACES meta entirely (not a merge)
   - `dran_get_page` — read full page body by slug; use after dran_search/dran_list_pages, not before
   - `dran_delete_page` — delete a page by slug; **irreversible** (cascades to relations + versions)
@@ -69,7 +69,7 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter restricting results to a single page type: note, concept, entity, reference, goal, plan, project, todo, comparison, or query.",
+              "Optional filter restricting results to a single page type: note, concept, entity, reference, goal, plan, project, todo, or query.",
             "enum" => [
               "note",
               "concept",
@@ -79,7 +79,6 @@ defmodule Dran.MCP do
               "plan",
               "project",
               "todo",
-              "comparison",
               "query"
             ]
           },
@@ -105,7 +104,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_page",
       "description" => """
-      Use for notes, concepts, entities, references, goals, plans, projects, comparisons. For todos use dran_create_todo instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
+      Use for notes, concepts, entities, references, goals, plans, projects. For todos use dran_create_todo instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
 
       Page types and subtypes (set `meta.kind`):
       - note: thought, journal, idea, meeting, question, quote, reminder
@@ -116,7 +115,6 @@ defmodule Dran.MCP do
       - plan: has kind (personal/coding/business/learning/health/finance/other), horizon (weekly/monthly/quarterly/yearly), period, status (draft/active/done/archived), due_date
       - project: has status (draft/active/on_hold/done/archived), priority, health, health_source (manual/derived), start_date, target_date
       - todo: has kind (personal/coding/business/learning/health/finance/other), kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
-      - comparison: has entities, criteria, verdict
       - query: question+answer; has kind (factual/conceptual/how_to/opinion), difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
 
       Links are INDEPENDENT and OPTIONAL with NO precedence. Any page (including todos, notes, plans, goals, projects) may carry `meta.project_slug`, `meta.goal_slug`, and/or `meta.plan_slug` simultaneously — each one materializes its own `part_of` relation independently. A page may have 0, 1, 2, or all 3 links. Orphan pages (no links) are legitimate. There is NO goal-derived-from-plan precedence: set each link explicitly when you want it.
@@ -156,7 +154,6 @@ defmodule Dran.MCP do
               "plan",
               "project",
               "todo",
-              "comparison",
               "query"
             ]
           },
@@ -168,7 +165,7 @@ defmodule Dran.MCP do
           "meta" => %{
             "type" => "object",
             "description" =>
-              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kind, kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{kind, health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, comparison→{entities, criteria, verdict}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links."
+              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kind, kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{kind, health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links."
           },
           "summary" => %{
             "type" => "string",
@@ -460,7 +457,7 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter by page type: note, concept, entity, reference, goal, plan, project, todo, comparison, or query.",
+              "Optional filter by page type: note, concept, entity, reference, goal, plan, project, todo, or query.",
             "enum" => [
               "note",
               "concept",
@@ -470,7 +467,6 @@ defmodule Dran.MCP do
               "plan",
               "project",
               "todo",
-              "comparison",
               "query"
             ]
           },

@@ -32,12 +32,6 @@ defmodule DranWeb.PageTypes do
     "goal" => %{path: "goals", label: "Goal", icon: "hero-flag", plural: "Goals"},
     "plan" => %{path: "plans", label: "Plan", icon: "hero-calendar-days", plural: "Plans"},
     "todo" => %{path: "todos", label: "Todo", icon: "hero-check-circle", plural: "Todos"},
-    "comparison" => %{
-      path: "comparisons",
-      label: "Comparison",
-      icon: "hero-scale",
-      plural: "Comparisons"
-    },
     "query" => %{
       path: "queries",
       label: "Query",
@@ -121,7 +115,6 @@ defmodule DranWeb.PageTypes do
     gettext("Goal")
     gettext("Plan")
     gettext("Todo")
-    gettext("Comparison")
     gettext("Query")
     gettext("Notes")
     gettext("Concepts")
@@ -131,7 +124,6 @@ defmodule DranWeb.PageTypes do
     gettext("Goals")
     gettext("Plans")
     gettext("Todos")
-    gettext("Comparisons")
     gettext("Queries")
   end
 end

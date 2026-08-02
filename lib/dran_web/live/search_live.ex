@@ -318,7 +318,6 @@ defmodule DranWeb.SearchLive do
   defp type_chip_bg("goal"), do: "bg-error/10"
   defp type_chip_bg("plan"), do: "bg-secondary/10"
   defp type_chip_bg("todo"), do: "bg-success/10"
-  defp type_chip_bg("comparison"), do: "bg-info/10"
   defp type_chip_bg("query"), do: "bg-warning/10"
   defp type_chip_bg(_), do: "bg-base-content/10"
 
@@ -330,7 +329,6 @@ defmodule DranWeb.SearchLive do
   defp type_icon_color("goal"), do: "text-error"
   defp type_icon_color("plan"), do: "text-secondary"
   defp type_icon_color("todo"), do: "text-success"
-  defp type_icon_color("comparison"), do: "text-info"
   defp type_icon_color("query"), do: "text-warning"
   defp type_icon_color(_), do: "text-base-content/60"
 
@@ -343,7 +341,6 @@ defmodule DranWeb.SearchLive do
   defp type_badge("goal"), do: "bg-error/15 text-error"
   defp type_badge("plan"), do: "bg-secondary/15 text-secondary"
   defp type_badge("todo"), do: "bg-success/15 text-success"
-  defp type_badge("comparison"), do: "bg-info/15 text-info"
   defp type_badge("query"), do: "bg-warning/15 text-warning"
   defp type_badge(_), do: "bg-base-200 text-base-content/60"
 

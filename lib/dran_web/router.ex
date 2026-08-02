@@ -176,11 +176,6 @@ defmodule DranWeb.Router do
     live "/todos/new", PageNewLive, :new
     live "/todos/:slug", TodoLive, :show
 
-    # Outputs
-    live "/comparisons", ComparisonLive, :index
-    live "/comparisons/new", PageNewLive, :new
-    live "/comparisons/:slug", ComparisonLive, :show
-
     # Views
     live "/graph", GraphLive, :index
     live "/graph/:slug", GraphLive, :show

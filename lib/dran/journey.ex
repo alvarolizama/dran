@@ -138,7 +138,6 @@ defmodule Dran.Journey do
       "goal" => "#69D3C4",
       "plan" => "#6996D3",
       "todo" => "#7D69D3",
-      "comparison" => "#B969D3",
       "query" => "#D369A3"
     }
   end

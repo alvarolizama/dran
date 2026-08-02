@@ -5,7 +5,6 @@ defmodule Dran.Brain.Page do
   ## Page types
 
   - `note` — ephemeral thought, quick note, journal entry, meeting, idea
-  - `comparison` — compare two or more entities against criteria
   - `plan` — a plan with a horizon (weekly, monthly, quarterly, yearly)
   - `todo` — action with kanban status (backlog → done)
   - `goal` — a goal with target date, team, and health
@@ -67,7 +66,7 @@ defmodule Dran.Brain.Page do
              :updated_at
            ]}
 
-  @page_types ~w(note comparison plan todo goal entity concept reference query project)
+  @page_types ~w(note plan todo goal entity concept reference query project)
   @confidence_levels ~w(low medium high verified)
 
   schema "pages" do

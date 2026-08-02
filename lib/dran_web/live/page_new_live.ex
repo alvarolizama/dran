@@ -229,13 +229,13 @@ defmodule DranWeb.PageNewLive do
   end
 
   # Gender-aware "Nuevo/Nueva <tipo>" heading — several type labels are
-  # feminine in Spanish (Nota, Tarea, Referencia, Entidad, Comparación, Consulta).
+  # feminine in Spanish (Nota, Tarea, Referencia, Entidad, Consulta).
   defp new_label(page_type) do
     label = PageTypes.label(page_type)
 
     feminine =
       Enum.map(
-        ["Note", "Todo", "Reference", "Entity", "Comparison", "Query"],
+        ["Note", "Todo", "Reference", "Entity", "Query"],
         &Gettext.gettext(DranWeb.Gettext, &1)
       )
 
@@ -267,7 +267,6 @@ defmodule DranWeb.PageNewLive do
   defp type_to_page("projects"), do: "project"
   defp type_to_page("plans"), do: "plan"
   defp type_to_page("todos"), do: "todo"
-  defp type_to_page("comparisons"), do: "comparison"
   defp type_to_page("queries"), do: "query"
   defp type_to_page(_), do: "note"
 

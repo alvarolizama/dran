@@ -53,11 +53,6 @@ defmodule DranWeb.PageListComponents do
            gettext("Add actionable items and move them across the board."),
            gettext("Create Todo")}
 
-        "comparison" ->
-          {gettext("No comparisons yet"),
-           gettext("Compare options side by side and record your verdict."),
-           gettext("Create Comparison")}
-
         "query" ->
           {gettext("No queries yet"), gettext("Save smart queries over your knowledge graph."),
            gettext("Create Query")}

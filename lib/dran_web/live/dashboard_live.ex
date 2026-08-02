@@ -50,17 +50,6 @@ defmodule DranWeb.DashboardLive do
         },
         %{key: "todo", label: gettext("Todos"), icon: "hero-check-circle", path: "/todos"}
       ]
-    },
-    %{
-      label: gettext("Outputs"),
-      items: [
-        %{
-          key: "comparison",
-          label: gettext("Comparisons"),
-          icon: "hero-scale",
-          path: "/comparisons"
-        }
-      ]
     }
   ]
 
@@ -592,7 +581,7 @@ defmodule DranWeb.DashboardLive do
   defp page_path(_), do: "#"
 
   defp sort_by_type(by_type) do
-    type_order = ~w(note concept entity reference goal plan todo comparison query project)
+    type_order = ~w(note concept entity reference goal plan todo query project)
 
     by_type
     |> Enum.filter(fn {type, _count} -> Map.has_key?(PageTypes.all(), type) end)

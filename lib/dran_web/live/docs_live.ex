@@ -323,7 +323,6 @@ defmodule DranWeb.DocsLive do
         <li><strong>goal</strong> — outcomes you want to achieve</li>
         <li><strong>plan</strong> — steps or roadmaps</li>
         <li><strong>todo</strong> — actionable items with kanban status</li>
-        <li><strong>comparison</strong> — side-by-side analyses</li>
         <li>
           <strong>query</strong>
           — questions with answers, linked semantically to concepts and entities
@@ -1103,12 +1102,6 @@ defmodule DranWeb.DocsLive do
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">comparison</td>
-              <td class="px-4 py-2">Side-by-side comparison of entities</td>
-              <td class="px-4 py-2 text-xs text-base-content/40">—</td>
-              <td class="px-4 py-2 text-xs">entities, criteria, verdict</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">query</td>
               <td class="px-4 py-2">Question with answer (LLM wiki style)</td>
               <td class="px-4 py-2 text-xs">factual, conceptual, how_to, opinion</td>
@@ -1189,7 +1182,7 @@ defmodule DranWeb.DocsLive do
             name="type"
             type="string"
             required="no"
-            desc="note, concept, entity, reference, goal, plan, todo, comparison, query"
+            desc="note, concept, entity, reference, goal, plan, todo, query"
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
@@ -1231,7 +1224,7 @@ defmodule DranWeb.DocsLive do
             name="page_type"
             type="string"
             required="yes"
-            desc="note, concept, entity, reference, goal, plan, todo, comparison, query"
+            desc="note, concept, entity, reference, goal, plan, todo, query"
           />
           <:param
             name="body"

@@ -1,7 +1,7 @@
 ---
 name: second-brain
-description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 17 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, comparisons, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, comparisons, weekly reviews, or delegating longer tasks to agents."
-version: 6.0.0
+description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 17 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, or delegating longer tasks to agents."
+version: 7.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -12,31 +12,21 @@ metadata:
 
 # second-brain — Dran MCP Skill
 
-## 1. Overview
+## 1. What is Dran
 
 Dran is a **personal second-brain / knowledge-graph server**. Every piece of
-knowledge is a typed **page** (note, concept, entity, reference, goal, plan,
-project, todo, comparison, query) connected by typed **relations**
-(`semantic`, `related`, `part_of`, `supersedes`, `contradicts`, `embeds`). All
-operations go through a single MCP endpoint — there is no need to use the REST
-API or web UI for agent-driven workflows.
+knowledge is a typed **page** connected by typed **relations**, all operated
+through a single MCP endpoint.
 
-**Tech stack:** Phoenix LiveView + PostgreSQL with `pgvector` + Bandit, OpenAI-compatible inference API for embeddings/rerank/chat.
-
-- **Pages** are the atoms of the graph. Each page has a `page_type`, a markdown
-  `body`, and a JSONB `meta` whose valid fields depend on the type.
-- **Relations** are directed links between pages. `semantic` relations are
-  created automatically by `PageAugmenter` after every create/update; the rest
-  are created explicitly with `dran_create_relation`.
-- **Embeddings** are generated for every page and stored in `pgvector`. After
-  `dran_create_page` / `dran_update_page`, the augmenter asynchronously creates
-  `semantic` relations to the closest neighbours and extracts title/summary/tags.
-- **Search ranking** fuses FTS + semantic via reciprocal-rank fusion, then
-  applies a PageRank authority boost — pages that are more **linked** rank
-  higher. Linking your pages well (via `part_of`, `related`, `embeds`) directly
-  improves their discoverability in `dran_search`.
-
----
+- **Pages** are the atoms. Each has a `page_type`, a markdown `body`, and a
+  JSONB `meta` whose valid fields depend on the type.
+- **Relations** are directed links. `semantic` relations are created
+  automatically by the augmenter after every create/update; the rest
+  (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`) are explicit.
+- **Search** fuses FTS + semantic via reciprocal-rank fusion with a PageRank
+  authority boost — well-linked pages rank higher.
+- **Contexts** partition the brain (e.g. `personal`, `work`). Pages, relations
+  and search are always scoped to one context.
 
 ## 2. Connection
 
@@ -44,569 +34,217 @@ API or web UI for agent-driven workflows.
 | --- | --- |
 | Transport | Streamable HTTP, MCP spec **2025-03-26** |
 | Endpoint | `POST http://<host>/api/mcp` |
-| Auth | `Authorization: Bearer <token>` |
-| Default context | **`personal`** — do not ask, do not switch unless Álvaro says otherwise |
-| Hermes config | `~/.hermes/config.yaml` → `mcp_servers.dran` |
+| Auth | `Authorization: Bearer <token>` — per-user API token |
+| Default context | **`personal`** — do not ask, do not switch unless Álvaro says so |
 
-**Hermes config snippet (`~/.hermes/config.yaml`):**
+Auth is **per-user**: each user has one `api_token` for all their assigned
+contexts. Requests return `401` for invalid tokens and `403` for contexts the
+user isn't assigned to. The legacy `DRAN_API_TOKEN` env token is treated as
+admin with access to all contexts.
 
-```yaml
-mcp_servers:
-  dran:
-    url: http://localhost:4000/api/mcp
-    headers:
-      Authorization: "Bearer dran-token"
-```
+## 3. Page types (9)
 
-**Notes:**
+| Type | Use it for | Subtypes (`meta.kind`) |
+| --- | --- | --- |
+| `note` | Thoughts, journal, ideas, meetings, questions, quotes, reminders | thought, journal, idea, meeting, question, quote, reminder |
+| `concept` | Techniques, patterns, disciplines, theories | technique, pattern, discipline, theory |
+| `entity` | People, companies, products, tools, places, events | person, company, product, tool, place, event |
+| `reference` | External sources | article, paper, video, podcast, book |
+| `project` | Larger initiatives grouping goals/plans/todos | — |
+| `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other |
+| `plan` | Time-horizoned plans (weekly/monthly/quarterly/yearly) | personal, coding, business, learning, health, finance, other |
+| `todo` | Actionable items with kanban status | personal, coding, business, learning, health, finance, other |
+| `query` | Questions with answers | factual, conceptual, how_to, opinion |
 
-- The server returns an `mcp-session-id` header on `initialize`. Include it in
-  subsequent requests of the same session.
-- Requests with an `id` field receive a JSON response. Notifications (`method`
-  with no `id`) return `202` with an empty body.
-- If the endpoint returns `401`, check the `DRAN_API_TOKEN` / Bearer value
-  before assuming Dran is down.
+Default to `note` with `meta.kind: "thought"` when unsure — promote later.
 
----
+### Per-context page type disabling
 
-## 3. Tools (17)
+Each context can **disable page types** (`disabled_page_types`). A disabled
+type is hidden in the web UI and **rejected by the MCP API**: creating or
+listing it returns an error (`page type 'X' is disabled in context 'Y'`).
+Before creating a page of an unusual type in an unfamiliar context, expect the
+possibility that it's disabled.
 
-Tools are grouped by **workflow pipeline**, not alphabetically. Follow the
-groups in order: capture → read/find → organize → maintain → automate.
+### Link model — independent slugs
+
+Any page may carry any combination of `meta.project_slug`, `meta.goal_slug`
+and `meta.plan_slug` — **0, 1, 2, or all 3**. Each one materializes its own
+`part_of` relation automatically. No precedence, no derivation. Orphans (no
+links) are legitimate GTD-style inbox items. In `dran_list_pages`, the value
+`"none"` filters pages without that link.
+
+## 4. Tools (17)
+
+Grouped by workflow: capture → read/find → organize → maintain → automate.
 
 ### Capture
 
-| Tool | Purpose | Use when / don't use when |
-| --- | --- | --- |
-| `dran_create_page` | Create any page type. | Use for notes, concepts, entities, references, goals, plans, projects, comparisons, queries. **Don't use for todos** — use `dran_create_todo`. |
-| `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links. | Use for action items. Optional `project_slug`, `goal_slug`, `plan_slug` are **independent** — set any combination (0, 1, 2, or 3); each materializes its own `part_of`. **Don't use `dran_create_page` with `page_type=todo`** — it won't get the right meta shape. |
+| Tool | Purpose |
+| --- | --- |
+| `dran_create_page` | Create any page type **except todos** |
+| `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links |
 
 ### Read & find
 
-| Tool | Purpose | Use when / don't use when |
-| --- | --- | --- |
-| `dran_search` | Unified search: auto picks FTS, fuzzy, semantic, or hybrid. PageRank-boosted. Supports `limit` (default 20, max 100) and `offset` for pagination. | **Use FIRST** whenever you're looking for something — before `dran_create_page`, before answering a question. Use the `type` filter when you can. Results are ranked by RRF fusion + PageRank authority — well-linked pages surface higher. For large result sets, use `limit` + `offset` to paginate. |
-| `dran_get_page` | Full markdown body of one page. | Use to actually **read** a page after finding it via `dran_search` / `dran_list_pages`. **Don't call without searching first** unless Álvaro gave you the exact slug. |
-| `dran_list_pages` | Filtered lightweight list (type, tag, status, project_slug, goal_slug, plan_slug, limit, offset). | Use for filtered overviews and link-graph exploration — `project_slug`/`goal_slug`/`plan_slug` filter INDEPENDENTLY by each link; pass `'none'` for orphans of that link type (e.g. todos with no plan, plans with no project). Supports `limit` (default 50, max 500) and `offset` (default 0) for pagination. **Don't loop it to build an index** — use the `wiki://{context}/index` resource instead. |
-| `dran_get_links` | Inbound + outbound relations for a page. | Use to inspect the graph around a page before relating or deleting. |
+| Tool | Purpose |
+| --- | --- |
+| `dran_search` | **Use FIRST** — unified FTS/fuzzy/semantic/hybrid search, PageRank-boosted. Supports `limit`, `offset`, `type` filter |
+| `dran_get_page` | Full markdown body of one page — always read before answering |
+| `dran_list_pages` | Filtered list (type, tag, status, owner, assignee, project/goal/plan slug, `"none"` for orphans) |
+| `dran_get_links` | Inbound + outbound relations for a page |
 
 ### Organize
 
-| Tool | Purpose | Use when / don't use when |
-| --- | --- | --- |
-| `dran_update_page` | Update title/body/tags/meta. **Replaces** `meta` entirely. | Use for content edits. **Don't use for todo status** — `dran_update_todo` merges meta; `dran_update_page` replaces it. |
-| `dran_update_todo` | Update todo status/priority/date/links. **Merges** `meta`. | Use for any todo status/priority/link change. This is the only safe way to change todo status or move a todo between project/goal/plan. |
-| `dran_rename_slug` | Rename a page slug. Rewrites `![[old-slug]]` embeds across the context. | Use when a slug is wrong. **Don't use lightly** — all embeds are rewritten. |
-| `dran_create_relation` | Create an explicit typed relation between pages. | Use for `related`, `part_of`, `supersedes`, `contradicts`, `embeds`. **Never create `semantic` manually** — they are automatic. |
-| `dran_delete_relation` | Delete relations between two pages (optionally by type). | Use to clean up wrong links. |
-| `dran_delete_page` | Delete a page. **Irreversible**, cascades to relations + versions. | Use only after confirming with Álvaro. **Don't use without confirmation.** |
+| Tool | Purpose |
+| --- | --- |
+| `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely**. ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks |
+| `dran_update_todo` | Update todo status/priority/date/links — **merges `meta`** (the only safe way to change todo status) |
+| `dran_rename_slug` | Rename a slug; rewrites all `![[old-slug]]` embeds in the context |
+| `dran_create_relation` | Explicit typed relation: `related`, `part_of`, `supersedes`, `contradicts`, `embeds`. **Never `semantic`** (automatic) |
+| `dran_delete_relation` | Delete relations between two pages |
+| `dran_delete_page` | Delete a page — **irreversible**, confirm with Álvaro first |
 
 ### Maintain
 
-| Tool | Purpose | Use when / don't use when |
-| --- | --- | --- |
-| `dran_get_stats` | Dashboard: totals, pages by type, todos by status, orphans, relations. | Use for context overviews, weekly reviews, dashboards. |
-| `dran_lint_brain` | Orphans, stale pages (>90d), contested knowledge. | Use after batches of changes. Surface results to Álvaro — **don't auto-fix**. |
-| `dran_reaugment_page` | Re-run the augmentation pipeline (summary/tags/embedding/relations) for a page. | Use when augmentation failed or content changed significantly. |
+| Tool | Purpose |
+| --- | --- |
+| `dran_get_stats` | Totals, pages by type, todos by status, orphans, relations |
+| `dran_lint_brain` | Orphans, stale pages (>90d), contested knowledge. Surface results — don't auto-fix |
+| `dran_reaugment_page` | Re-run augmentation (summary/tags/embedding/relations) for a page |
 
 ### Automate
 
-| Tool | Purpose | Use when / don't use when |
-| --- | --- | --- |
-| `dran_start_agent` | Launch an autonomous agent (4 types — see §6). | Use for multi-step Q&A, or maintenance. **Don't use for simple dran_search** — use `dran_search` directly. |
-| `dran_get_agent_session` | Poll an autonomous agent's progress and results. | Use to check status of a running agent session. |
-
----
-
-## 4. Resources (read-only)
-
-Prefer these over looping `dran_list_pages` when you need an overview:
-
-| URI | Returns | Prefer over |
-| --- | --- | --- |
-| `page://{context}/{slug}` | Full page markdown | — |
-| `goal://{context}/{slug}` | Goal + linked todos/plans as JSON | Manual join of goal + todos |
-| `wiki://{context}/index` | Full index of the context (slug + title + type) | Loop of `dran_list_pages` calls |
-
----
-
-## 5. Prompts
-
-| Prompt | Use |
+| Tool | Purpose |
 | --- | --- |
-| `brainstorm` | Generate 5-10 interlinked idea pages. |
-| `goal_review` | Review a goal, its todos and plans, suggest next actions. |
+| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`) |
+| `dran_get_agent_session` | Poll an agent session for status, steps, summary |
 
----
+## 5. Resources & prompts
 
-## 6. Autonomous agents
+Resources (read-only, prefer over looping `dran_list_pages`):
+- `page://{context}/{slug}` — full page markdown
+- `goal://{context}/{slug}` — goal + linked todos/plans as JSON
+- `wiki://{context}/index` — full context index in one call
 
-For multi-step Q&A or maintenance tasks, delegate with
-`dran_start_agent` and poll with `dran_get_agent_session`:
+Prompts: `brainstorm` (generate interlinked idea pages), `goal_review`
+(review a goal with its todos/plans).
 
-| Agent | Purpose | Key limits / behaviour |
+## 6. Autonomous agents (2)
+
+| Agent | Purpose | Limits |
 | --- | --- | --- |
-| `ask` | Answers a question using **only** knowledge already in the brain; persists the answer as a `query` page. Tools: `search`, `get_page`, **`expand_neighbors`** (GraphRAG — expands typed neighbours of a seed page), `create_query_page`, `done`. | max 5 search queries; one query page per session. Typical flow: search → `expand_neighbors` on the best seed → `get_page` on the most relevant neighbours → synthesize. Don't overuse expand: 1–2 calls per session usually suffice. |
-| `curator` | Reviews pairs of pages with very similar embeddings, flags duplicates/contested content, writes a report note. Considers `community_id` (graph clustering) when comparing. | max 20 flags per session; duplicate threshold 0.05. |
-| `link_gardener` | Reads orphaned/under-linked pages, proposes typed relations with justifications. Includes a `transitive_candidates` tool that surfaces verified `part_of` transitives (A→C via B) — the agent must verify each against page contents before proposing. | max 10 proposals per session; `semantic` type forbidden. |
+| `curator` | Finds near-duplicate pages (embedding distance < 0.05), flags contested knowledge, writes a report note. Runs daily at 06:00 via Quantum | max 20 flags/session |
+| `link_gardener` | Proposes typed relations for orphaned/under-linked pages, including verified transitive `part_of` candidates (A→C via B) | max 10 proposals/session |
 
-**Lifecycle:** `dran_start_agent` returns a `session_id` immediately. Poll
-`dran_get_agent_session` with that `session_id` until `status` reaches a terminal
-state (`completed` / `failed`). Failed sessions (crashes, timeouts, max
-consecutive errors) are marked `failed` with a summary explaining the cause.
-Each session tracks `meta.tokens_used` (accumulated LLM token usage) and
-`meta.model` for cost/usage tracking.
-
-```json
-{
-  "agent_type": "ask",
-  "context": "personal",
-  "input": "How does Dran rank search results?"
-}
-```
-
-There is no dedicated dran_search agent; for dran_search-only tasks use `dran_search` directly.
-
----
+Lifecycle: `dran_start_agent` returns a `session_id` immediately → poll
+`dran_get_agent_session` until `completed`/`failed`. Sessions persist every
+step and track `meta.tokens_used` + `meta.model`.
 
 ## 7. Working rules
 
-1. **Default context is `personal`.** Do not ask. Do not switch unless Álvaro
-   says otherwise.
-2. **Search before create.** Run 2-3 related `dran_search` queries before every
-   `dran_create_page`. If a relevant page exists, update it instead.
-3. **Read before answer.** When Álvaro asks "what do I know about X?", `dran_search`,
-   then `dran_get_page` the top 2-3 results. Do not answer from dran_search excerpts.
-4. **Infer when obvious, ask when risky.** Infer page type, slug and tags from
-   context. Ask before deleting, renaming, or touching identity/finances.
-5. **Edit > duplicate.** Updating an existing page is almost always better than
-   creating a new one.
-6. **Choose the correct `page_type` and `meta.kind` when creating.** This is critical —
-   the wrong type/kind breaks filtering, kanban, dashboards, and search. Before
-   `dran_create_page` or `dran_create_todo`, verify:
-   - Is this an action item? → `todo` (NOT `note`). Use `dran_create_todo`, not
-     `dran_create_page` with `page_type=todo`.
-   - Is this a thought, journal entry, meeting note, idea, question, quote, or
-     reminder? → `note` with the matching `meta.kind`.
-   - Is this an external source (article, paper, video, podcast, book)? → `reference`.
-   - Is this a person, company, product, tool, place, or event? → `entity`.
-   - Is this an abstract idea, technique, pattern, discipline, or theory? → `concept`.
-   - Is this an objective with a measurable target? → `goal`.
-   - Is this a time-horizoned plan (weekly/monthly/quarterly/yearly)? → `plan`.
-   - Is this an initiative with status/health/priority? → `project`.
-   - Is this a side-by-side comparison? → `comparison`.
-   - Is this a question with an answer? → `query`.
-   When in doubt, default to `note` with `meta.kind: "thought"`. You can always
-   promote later with `dran_update_page`.
-7. **Ask with `clarify` when you can't infer required fields.** Each page type has
-   fields that materially affect how the page behaves in the app (kanban, dashboards,
-   health calculation, progress tracking). If Álvaro's request doesn't give you
-   enough to confidently set these, **ask with `clarify` before creating** — do not
-   guess and create with wrong/empty values. Type-specific fields that warrant asking:
-   - **`goal`** — `kind` (personal/coding/business/learning/health/finance/other),
-     `metric` (what's being measured), `target_value`, `unit`, `start_date`,
-     `target_date`. At minimum ask for `kind` and `metric`+`target_value` — a goal
-     without a metric is just a wish.
-   - **`plan`** — `kind`, `horizon` (weekly/monthly/quarterly/yearly), `period`
-     (e.g. "2026-Q3"), `status` (draft/active). Ask for `horizon` and `period` if
-     not obvious from context.
-   - **`project`** — `status` (draft/active), `priority` (low/medium/high/urgent),
-     `health` (green/yellow/red). Ask for `status` and `priority` at minimum.
-   - **`todo`** — `assignee` (ALWAYS ask: `alvaro` or `agent`), `priority`,
-     `kanban_status`, `due_date`. See rule 8 for the assignee question.
-   - **`comparison`** — `entities` (list of slugs to compare), `criteria` (what
-     dimensions to compare on). Ask for both if not stated.
-   - **`query`** — `kind` (factual/conceptual/how_to/opinion), `difficulty`
-     (simple/intermediate/advanced). Ask for `kind` if not obvious.
-   For `note`, `concept`, `entity`, `reference` — infer from context, don't ask.
-8. **Use `dran_search` first, `dran_list_pages` only for filtered lists.** Never loop
-   `dran_list_pages` to build an index — use the `wiki://personal/index` resource.
-9. **Use `dran_get_page` to read.** Never answer from dran_search excerpts alone.
-10. **Never create `semantic` relations manually.** They are automatic.
-11. **Plain `[[slug]]` wikilinks are not supported.** Use `![[slug]]` only to
-   embed files (auto-creates `embeds` relations); use `dran_create_relation`
-   for explicit typed relationships.
-12. **Link your pages well.** Search ranking has a PageRank authority boost —
-    pages with more typed relations (`part_of`, `related`, `embeds`) rank higher.
-    Setting `project_slug`/`goal_slug`/`plan_slug` also materializes `part_of`
-    edges, which helps discoverability.
-13. **Surface dran_lint results, don't auto-fix.** Run `dran_lint_brain` after batches of
-    changes and show orphans/stale pages to Álvaro.
-14. **Always confirm with Álvaro before deleting.** `dran_delete_page` is
-    irreversible.
-15. **Todos without links go to the global kanban inbox.** Álvaro triages todos
-    in the `/kanban` UI. A new todo with no `project_slug`/`goal_slug`/`plan_slug`
-    is a legitimate GTD inbox item — don't force a link if none is obvious.
-16. **Prefer archiving over deleting for stale content.** Pages have an
-    `archived` flag: archived pages disappear from lists, stats, search,
-    orphan detection and kanban boards, but stay accessible by slug and keep
-    their relations. Archive/unarchive via `dran_update_page` with
-    `archived: true/false`. In the web UI, every list view has a collapsible
-    **Archived** section at the bottom (filterable by page type) and the
-    detail view shows Archive/Unarchive actions. Reserve `dran_delete_page`
-    for true junk — archiving is reversible, deletion is not.
+1. **Default context `personal`.** Don't ask, don't switch.
+2. **Search before create.** 2-3 `dran_search` variants before every create.
+   If it exists, update it.
+3. **Read before answer.** Never answer from search excerpts — `dran_get_page`
+   the top 2-3 results first.
+4. **Edit > duplicate.** Updating beats creating a near-copy.
+5. **Right `page_type` + `meta.kind`.** Action item → `todo` via
+   `dran_create_todo`. External source → `reference`. Named thing in the world
+   → `entity`. Abstract knowledge/technique → `concept`. Loose thought → `note`.
+6. **Ownership defaults:** `owner: "alvaro"`, `created_by: "agent"` on
+   everything you create. For todos, ALWAYS `clarify` the `assignee`
+   (`alvaro` / `agent` / other) before creating.
+7. **Ask when risky, infer when obvious.** Ask before deleting, renaming, or
+   when goal/plan/project required fields (metric, horizon, priority) aren't
+   inferable.
+8. **Never create `semantic` relations manually.** They're automatic.
+9. **Link liberally.** `part_of`/`related`/`embeds` boost PageRank → better
+   search recall.
+10. **Archive over delete.** Pages have an `archived` flag (set via
+    `dran_update_page` with `archived: true`) — hidden from lists/search but
+    recoverable. Delete only true junk, after confirmation.
+11. **Todos without links are fine.** They land in the global kanban inbox —
+    don't force links.
+12. **`[[slug]]` wikilinks don't exist.** Use `![[slug]]` for embeds,
+    `dran_create_relation` for typed links.
 
----
+## 8. Status workflows
 
-## 8. Page types
-
-| Type | Use it for | Subtypes (`meta.kind`) | Key `meta` fields |
-| --- | --- | --- | --- |
-| `note` | Thoughts, journal, ideas, meetings, questions, quotes, reminders | thought, journal, idea, meeting, question, quote, reminder | kind, date, author, attendees, resolved, source_ref, due_date (reminders) |
-| `concept` | Techniques, patterns, disciplines, theories | technique, pattern, discipline, theory | kind, domain, parent_concept |
-| `entity` | People, companies, products, tools, places, events | person, company, product, tool, place, event | kind, aliases, external_url, location |
-| `reference` | External sources | article, paper, video, podcast, book | kind, source_url, published_at |
-| `project` | Larger initiatives that group goals/plans/todos | — | status (draft/active/on_hold/done/archived), priority, health (green/yellow/red), health_source (manual/derived), start_date, target_date |
-| `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other | kind, health (green/yellow/red), metric, target_value, current_value, unit, progress, progress_manual, start_date, target_date, team |
-| `plan` | Time-horizoned plans | personal, coding, business, learning, health, finance, other | kind, horizon, status (draft/active/done/archived), period, project_slug, goal_slug |
-| `todo` | Actionable items | personal, coding, business, learning, health, finance, other | kind, kanban_status, priority, due_date, project_slug, goal_slug, plan_slug, assignee |
-| `comparison` | Side-by-side analyses | — | entities, criteria, verdict |
-| `query` | Questions with answers | factual, conceptual, how_to, opinion | kind, difficulty, answer_status, answered_by |
-
-Default to `note` when unsure. Promote later with `dran_update_page`.
-
-### Link model (independent slugs)
-
-Dran uses **independent, optional links** — not a precedence hierarchy. Any
-page (todos, notes, plans, goals, projects) may carry any combination of
-`meta.project_slug`, `meta.goal_slug`, and `meta.plan_slug`:
-
-```
-project ◄─── part_of ──── (any page)
-goal    ◄─── part_of ──── (any page)
-plan    ◄─── part_of ──── (any page)
-
-Each slug is set independently in meta; each materializes its own part_of relation.
-```
-
-- A page may have **0, 1, 2, or all 3** of `project_slug` / `goal_slug` / `plan_slug`.
-- **There is NO precedence** between them. Setting `plan_slug` does NOT imply
-  a goal — set `goal_slug` explicitly when you want it. The old
-  "goal-derived-from-plan" rule is gone.
-- Each slug **materializes its own `part_of` relation** automatically — you do
-  not create these with `dran_create_relation`.
-- **Orphans are legitimate.** A page with no links is a valid GTD-style inbox
-  item. Todos with no links surface in the global `/kanban` inbox (filter `None`).
-- **Convention `"none"`** in `dran_list_pages` filters matches pages with no
-  link of that type (e.g. `plan_slug="none"` → todos/plans with no plan).
-
-### Notes on `project`, `goal`, `plan`
-
-- **`project.health`** is **derived from the health of its linked goals** unless
-  `health_source: "manual"` overrides it. Set `health_source` explicitly when
-  you want a manual health that won't be recomputed.
-- **`goal.progress`** is **auto-calculated** from its linked todos
-  (`done / total non-cancelled`) unless `progress_manual: true` is set, in which
-  case Dran respects the literal `progress` value stored in meta. Use the
-  manual flag for goals that aren't measured by todo completion.
-- **`plan.status`** uses 4 values: `draft`, `active`, `done`, `archived`.
-  (`on_hold` and `completed` from older versions are removed.)
-- A plan can link to **both** a `project_slug` and a `goal_slug` simultaneously
-  — they are independent.
-
-### Meta validation reference (condensed)
-
-| `page_type` | Field | Valid values |
-| --- | --- | --- |
-| `note` | `kind` | thought, journal, idea, meeting, question, quote, reminder |
-| `concept` | `kind` | technique, pattern, discipline, theory |
-| `entity` | `kind` | person, company, product, tool, place, event |
-| `reference` | `kind` | article, paper, video, podcast, book |
-| `todo` | `kind` | personal, coding, business, learning, health, finance, other |
-| `todo` | `kanban_status` | backlog, this_week, today, in_progress, done, cancelled |
-| `todo` | `priority` | low, medium, high, urgent |
-| `project` | `status` | draft, active, on_hold, done, archived |
-| `project` | `priority` | low, medium, high, urgent |
-| `project` | `health` | green, yellow, red |
-| `project` | `health_source` | manual, derived |
-| `goal` | `kind` | personal, coding, business, learning, health, finance, other |
-| `goal` | `health` | green, yellow, red |
-| `goal` | `progress_manual` | true, false (absent → false) |
-| `plan` | `kind` | personal, coding, business, learning, health, finance, other |
-| `plan` | `horizon` | weekly, monthly, quarterly, yearly |
-| `plan` | `status` | draft, active, done, archived |
-| `query` | `kind` | factual, conceptual, how_to, opinion |
-| `query` | `difficulty` | simple, intermediate, advanced |
-| `query` | `answer_status` | open, answered, verified |
-
-`title` and `slug` are optional on `dran_create_page`: if omitted, Dran derives them
-from the first non-empty line of `body`.
-
-After `dran_create_page` / `dran_update_page`, Dran automatically: (1) extracts/refines
-title, summary, tags and inline links via inference; (2) generates and stores
-an embedding; (3) creates `semantic` relations to similar pages; (4) resolves
-`![[slug]]` embeds into `embeds` relations (and cleans stale ones on update);
-(5) materializes `part_of` relations from any `project_slug`/`goal_slug`/`plan_slug`
-present in `meta`.
-
----
+- **todo** — create in `backlog`, move to `in_progress` immediately with
+  `dran_update_todo`, `done` only after verifying + committing. One
+  `in_progress` at a time.
+- **project** — create `draft`; auto-`active` when linked to a plan/todo/goal;
+  `done`/`on_hold`/`archived` manual.
+- **plan** — create `draft`; auto-`active` when a task executes; auto-`done`
+  when ALL linked todos are done/cancelled; `archived` manual.
+- **goal** — fully manual (`health`, `progress` only when Álvaro asks).
+- **goal.progress** — auto-calculated from linked todos unless
+  `progress_manual: true`.
+- **project.health** — derived from linked goals unless
+  `health_source: "manual"`.
 
 ## 9. Recipes
 
 ### Capture a thought
 
 ```
-1. dran_search({ context: "personal", query: "<keywords>" })   → check for existing page
+1. dran_search({ context: "personal", query: "<keywords>" })   → exists? update instead
 2. dran_create_page({
      context: "personal",
      page_type: "note",
-     body: "Today I learned that Elixir's `=` is a match operator, not an assignment.",
+     body: "Today I learned...",
      meta: { kind: "thought" },
-     tags: ["elixir", "programming"]
+     tags: ["elixir"],
+     owner: "alvaro",
+     created_by: "agent"
    })
 ```
 
-### Capture a reminder
+### Add a todo
 
 ```
-1. dran_search({ context: "personal", query: "<reminder topic>" })
-2. dran_create_page({
-     context: "personal",
-     page_type: "note",
-     body: "Renew domain before it expires.",
-     meta: { kind: "reminder", due_date: "2026-08-01" },
-     tags: ["admin"]
-   })
-   → note kind "reminder" expects a due_date; the kanban/UI treats it as a due reminder
-```
-
-### Capture meeting notes
-
-```
-1. dran_search({ context: "personal", query: "<meeting topic>" })   → check for existing page
-2. dran_create_page({
-     context: "personal",
-     page_type: "note",
-     body: "## Meeting notes\n- Topic: ...\n- Decisions: ...",
-     meta: { kind: "meeting", date: "2026-07-17", attendees: ["Álvaro", "Paty"] }
-   })
-3. dran_create_relation({ source_slug: "<meeting-slug>", target_slug: "<person-entity>", relation_type: "related", context: "personal" })
-   → repeat for each attendee entity
-```
-
-### Add a todo (with independent links)
-
-```
-1. dran_search({ context: "personal", query: "<goal name>", type: "goal" })
-   → find the goal slug (and/or a project slug, plan slug)
+1. clarify assignee → alvaro or agent
 2. dran_create_todo({
      context: "personal",
      title: "Refactor MCP controller",
-     slug: "refactor-mcp-controller",
-     project_slug: "<project-slug>",   → optional, independent
-     goal_slug: "<goal-slug>",          → optional, independent
-     plan_slug: "<plan-slug>",          → optional, independent
-     kanban_status: "this_week",
+     project_slug: "<project>",   → optional, independent
+     goal_slug: "<goal>",         → optional, independent
+     plan_slug: "<plan>",         → optional, independent
+     kanban_status: "backlog",
      priority: "high",
-     due_date: "2026-07-20"
+     assignee: "alvaro"
    })
-   → set 0, 1, 2, or all 3 slugs; each materializes its own part_of. No precedence.
+3. dran_update_todo({ slug: "<slug>", kanban_status: "in_progress" })   → auto-move
 ```
 
-### Capture an inbox todo (GTD style)
+### Plan a project
 
 ```
-1. dran_create_todo({
-     context: "personal",
-     title: "Call dentist",
-     slug: "call-dentist",
-     kanban_status: "backlog"
-   })
-   → no project_slug/goal_slug/plan_slug → appears in the /kanban inbox (None filter)
-2. Álvaro triages it later in /kanban; when ready, attach links via dran_update_todo
-```
-
-### Mark a todo done
-
-```
-1. dran_update_todo({ context: "personal", slug: "refactor-mcp-controller", kanban_status: "done" })
-```
-
-Use `dran_update_todo`, not `dran_update_page` — `dran_update_todo` merges meta safely.
-
-### Create a comparison
-
-```
-1. dran_search({ context: "personal", query: "Phoenix framework" })   → find existing entity pages
-2. dran_search({ context: "personal", query: "Rails framework" })
-3. dran_create_page({
-     context: "personal",
-     page_type: "comparison",
-     title: "Phoenix vs Rails",
-     body: "## Phoenix vs Rails\n![[phoenix]]\n![[rails]]\n...",
-     meta: {
-       entities: ["phoenix", "rails"],
-       criteria: ["performance", "concurrency", "ecosystem"],
-       verdict: "Phoenix for real-time; Rails for CRUD speed."
-     }
-   })
-   → embeds `![[phoenix]]` and `![[rails]]` auto-create `embeds` relations
-```
-
-### Plan a project with goals and plans
-
-```
-1. dran_search({ context: "personal", query: "<project name>", type: "project" })
-   → confirm the project doesn't already exist
-2. dran_create_page({
-     context: "personal",
-     page_type: "project",
-     title: "Ship Dran v2",
-     body: "## Ship Dran v2\n...",
-     meta: {
-       status: "active",
-       priority: "high",
-       health: "green",                  → derived from goals unless health_source: "manual"
-       start_date: "2026-07-01",
-       target_date: "2026-10-31"
-     }
-   })
-3. dran_create_page({
-     context: "personal",
-     page_type: "goal",
-     title: "MCP tool coverage 100%",
-     body: "## Goal\n...",
-     meta: {
-       health: "green",
-       metric: "MCP tools documented",
-       target_value: 17,
-       current_value: 14,
-       unit: "tools",
-       start_date: "2026-07-01",
-       target_date: "2026-09-30",
-       team: ["alvaro"]
-     }
-   })
-   → progress auto-calculates from linked todos; set progress_manual: true to override
-4. dran_create_page({
-     context: "personal",
-     page_type: "plan",
-     title: "Q3 2026 plan — Ship Dran v2",
-     body: "## Q3 plan\n...",
-     meta: {
-       horizon: "quarterly",
-       status: "active",
-       period: "2026-Q3",
-       project_slug: "ship-dran-v2",     → independent link
-       goal_slug: "mcp-tool-coverage-100" → independent link, no precedence
-     }
-   })
-5. dran_create_todo({
-     context: "personal",
-     title: "Document dran_create_relation",
-     slug: "document-dran-create-relation",
-     project_slug: "ship-dran-v2",
-     goal_slug: "mcp-tool-coverage-100",
-     plan_slug: "q3-2026-plan-ship-dran-v2",
-     kanban_status: "this_week",
-     priority: "high"
-   })
-   → 3 independent links; set whichever subset applies to each todo
-6. dran_list_pages({ context: "personal", type: "todo", project_slug: "ship-dran-v2" })
-   → all todos linked to the project (regardless of goal/plan)
-7. dran_list_pages({ context: "personal", type: "todo", plan_slug: "q3-2026-plan-ship-dran-v2" })
-   → todos under that plan
-8. dran_list_pages({ context: "personal", type: "plan", project_slug: "none" })
-   → orphan plans not linked to any project yet
-```
-
-### Triage the kanban inbox
-
-```
-1. dran_list_pages({ context: "personal", type: "todo", project_slug: "none", goal_slug: "none", plan_slug: "none" })
-   → todos with no links at all (the GTD inbox; same set Álvaro sees in /kanban → None filter)
-2. For each todo, decide where it belongs — set any combination of links:
-   dran_update_todo({ context: "personal", slug: "<todo-slug>", project_slug: "<project-slug>" })
-   and/or
-   dran_update_todo({ context: "personal", slug: "<todo-slug>", goal_slug: "<goal-slug>" })
-   and/or
-   dran_update_todo({ context: "personal", slug: "<todo-slug>", plan_slug: "<plan-slug>" })
-   → links are independent; you may set 1, 2, or all 3 in the same or separate calls
+1. dran_create_page({ page_type: "project", title: "...", meta: { status: "draft", priority: "high" } })
+2. dran_create_page({ page_type: "goal", title: "...", meta: { kind: "business", metric: "...", target_value: N } })
+3. dran_create_page({ page_type: "plan", meta: { horizon: "quarterly", period: "2026-Q3", project_slug: "...", goal_slug: "..." } })
+4. dran_create_todo({ ..., project_slug: "...", goal_slug: "...", plan_slug: "..." })   → set whichever subset applies
 ```
 
 ### Brain hygiene
 
 ```
-1. dran_lint_brain({ context: "personal" })
-   → surface orphans, stale pages, contested knowledge to Álvaro — do not auto-fix
-2. For orphans worth keeping: dran_reaugment_page({ context: "personal", slug: "<orphan-slug>" })
-   → re-run augmentation to find semantic links
-3. For orphans to remove: dran_delete_page({ context: "personal", slug: "<orphan-slug>" })   → after confirming with Álvaro
-4. dran_start_agent({ agent_type: "link_gardener", context: "personal", input: "orphaned pages" })
-   → proposes typed relations for under-linked pages, including verified transitive part_of (A→C via B)
+1. dran_lint_brain({ context: "personal" })   → surface orphans/stale to Álvaro, don't auto-fix
+2. dran_start_agent({ agent_type: "link_gardener", context: "personal", input: "orphaned pages" })
+3. dran_get_agent_session({ session_id: "..." })   → poll until completed
 ```
-
-### Answer a question using the ask agent (GraphRAG)
-
-```
-1. dran_start_agent({ agent_type: "ask", context: "personal", input: "How does Dran rank search results?" })
-   → returns { session_id: "..." }
-2. dran_get_agent_session({ session_id: "..." })   → poll until status: "completed"
-   → the agent runs: search → expand_neighbors on best seed → get_page on relevant neighbours → synthesize
-3. dran_get_page({ context: "personal", slug: "<query-page-slug>" })
-   → read the persisted answer (page_type: "query", with cited [slug]s)
-```
-
----
 
 ## 10. Common mistakes
 
-- **Creating without searching.** Always dran_search first — run 2-3 variants.
-- **Wrong `page_type` or `meta.kind`.** Choosing the wrong type breaks filtering, kanban,
-  dashboards, and search. Always verify the type/kind decision tree in §7 rule 6 before
-  creating. The most common mistake is creating a `note` when it should be a `todo` —
-  if it's an action item, use `dran_create_todo`, not `dran_create_page`.
-- **Omitting `meta.kind`.** Every typed page should have a `meta.kind` when the type
-  supports it (note, concept, entity, reference, goal, plan, todo, query). Without it,
-  the page can't be filtered by subtype in the UI or via `dran_list_pages`.
-- **Calling `dran_get_page` without searching first.** Find the slug via `dran_search` or
-  `dran_list_pages` before reading, unless Álvaro gave you the exact slug.
-- **Using `dran_list_pages` in a loop instead of `wiki://index` resource.** The
-  resource returns the full index in one call.
-- **Using `dran_create_page` for todos.** Use `dran_create_todo` — it handles the todo
-  meta shape correctly.
-- **Using `dran_update_page` to change todo status.** Use `dran_update_todo` so meta
-  merges — `dran_update_page` replaces meta entirely.
-- **Creating `semantic` relations manually.** They are automatic — use
-  `dran_create_relation` only for `related`, `part_of`, `supersedes`,
-  `contradicts`, `embeds`.
-- **Using `[[slug]]` wikilinks.** Not supported. Use `![[slug]]` for embeds
-  and `dran_create_relation` for explicit links.
-- **Assuming a goal is derived from a plan.** Links are **independent**. Setting
-  `plan_slug` on a todo does NOT set its goal — set `goal_slug` explicitly when
-  you want a direct goal link. You may set 0, 1, 2, or all 3 of
-  `project_slug`/`goal_slug`/`plan_slug` on any page.
-- **Using removed plan statuses.** Plan status is `draft` / `active` / `done` /
-  `archived` — `on_hold` and `completed` no longer exist.
-- **Forgetting `progress_manual` on manual-progress goals.** If a goal's
-  progress isn't measured by todo completion, set `progress_manual: true` or
-  Dran will keep overwriting `progress` from todo ratios.
-- **Passing `status` for `query` pages.** The correct field is `answer_status`.
-- **Deleting without confirmation.** Always ask Álvaro — `dran_delete_page` is
-  irreversible.
-- **Answering from dran_search excerpts.** Read the page with `dran_get_page` first.
-- **Under-linking pages.** Search uses a PageRank authority boost — pages with
-  few or no typed relations rank lower. Add `part_of`/`related`/`embeds` links
-  liberally; it directly improves search recall.
-
----
-
-## 11. Quick checklist
-
-Before `dran_create_page`:
-- [ ] Searched 2-3 variants.
-- [ ] Verified the type/kind decision tree (§7 rule 6) — is this really a `note` and not a `todo`/`reference`/`entity`?
-- [ ] Right `page_type` and `meta.kind` / enum values (see §8).
-- [ ] `meta.kind` is set if the page type supports it (note, concept, entity, reference, goal, plan, todo, query).
-- [ ] Slug is kebab-case and unique (or omitted — Dran derives it).
-- [ ] Tags are kebab-case, 2-5 items.
-- [ ] For action items: used `dran_create_todo`, NOT `dran_create_page`.
-
-After changes:
-- [ ] Confirm tool response (page created / updated / deleted).
-- [ ] Run `dran_lint_brain` after batches; surface orphans/stale pages to Álvaro — do not
-      auto-fix.
-- [ ] Use `dran_get_stats` for dashboards / weekly reviews.
-- [ ] For todos: used `dran_create_todo` / `dran_update_todo`, never `dran_create_page` /
-      `dran_update_page`.
-- [ ] Set independent links explicitly — don't assume derivation from another slug.
+- **Creating without searching** — always search 2-3 variants first.
+- **`dran_create_page` for todos** — use `dran_create_todo`.
+- **`dran_update_page` for todo status** — use `dran_update_todo` (merges meta).
+- **`meta` + `body` together on pages with mermaid** — strips the diagrams;
+  pass only `body`.
+- **Manually creating `semantic` relations** — automatic only.
+- **Assuming link precedence** — project/goal/plan slugs are independent.
+- **Passing `status` for `query` pages** — the field is `answer_status`.
+- **Forgetting `progress_manual: true`** on goals not measured by todos.
+- **Deleting without confirmation** — irreversible; prefer archive.
+- **Answering from search excerpts** — read the page first.

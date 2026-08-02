@@ -168,7 +168,6 @@ defmodule DranWeb.Layouts do
           goals: by_type["goal"] || 0,
           plans: by_type["plan"] || 0,
           todos: by_type["todo"] || 0,
-          comparisons: by_type["comparison"] || 0,
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
           activity: Dran.Brain.count_log(context.id)
@@ -207,8 +206,7 @@ defmodule DranWeb.Layouts do
     "notes" => "note",
     "concepts" => "concept",
     "entities" => "entity",
-    "references" => "reference",
-    "comparisons" => "comparison"
+    "references" => "reference"
   }
 
   def sidebar_nav(assigns) do
@@ -344,13 +342,6 @@ defmodule DranWeb.Layouts do
             label: gettext("Collections"),
             icon: "hero-funnel",
             path: ~p"/collections"
-          },
-          %{
-            key: "comparisons",
-            label: gettext("Comparisons"),
-            icon: "hero-scale",
-            path: ~p"/comparisons",
-            badge: counts[:comparisons]
           }
         ]
       },

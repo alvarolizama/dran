@@ -38,11 +38,6 @@ defmodule Dran.Brain.PageMeta do
     field :source_ref, :string
     field :author, :string
 
-    # comparison
-    field :entities, {:array, :string}
-    field :criteria, {:array, :string}
-    field :verdict, :string
-
     # plan
     field :horizon, :string
     field :period, :string
@@ -132,9 +127,6 @@ defmodule Dran.Brain.PageMeta do
       :resolved,
       :source_ref,
       :author,
-      :entities,
-      :criteria,
-      :verdict,
       :horizon,
       :period,
       :status,
@@ -456,8 +448,6 @@ defmodule Dran.Brain.PageMeta do
       {:slug_select, "plan_slug", gettext("Plan"), type: "plan"}
     ]
   end
-
-  defp meta_fields_edit("comparison"), do: []
 
   defp meta_fields_edit("query") do
     [

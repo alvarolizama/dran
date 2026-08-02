@@ -2,7 +2,7 @@
 
 # Dran
 
-A personal second-brain application built with **Phoenix 1.8 + LiveView**. It stores your knowledge as **typed pages** (notes, concepts, entities, references, goals, plans, todos, comparisons, queries, projects) and links them with **relations**, forming a queryable knowledge graph.
+A personal second-brain application built with **Phoenix 1.8 + LiveView**. It stores your knowledge as **typed pages** (notes, concepts, entities, references, goals, plans, todos, queries, projects) and links them with **relations**, forming a queryable knowledge graph.
 
 Includes a full markdown editor (TipTap WYSIWYG), three autonomous agents, an MCP endpoint for AI agent integration (with per-user token auth and context scoping), and a REST API.
 
@@ -14,7 +14,7 @@ Dran is a networked knowledge base for a single human. It captures notes and str
 
 ## Key features
 
-- **10 page types** with type-specific metadata — note, concept, entity, reference, project, goal, plan, todo, comparison, query
+- **9 page types** with type-specific metadata — note, concept, entity, reference, project, goal, plan, todo, query
 - **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, mermaid diagrams, and file embeds `![[slug]]`
 - **Autonomous agents** — background ReAct agents (`ask`, `curator`, `link_gardener`) that plan, act, and log every step
 - **Knowledge graph** — visual graph at `/graph` with pan/zoom and 3D view, built from explicit and semantic relations; every page detail surfaces a per-page subgraph
@@ -148,7 +148,7 @@ Context CRUD and user/context membership management all live in Settings now —
 
 Each context can disable any subset of page types via `contexts.disabled_page_types` (an array). Disabling a type:
 
-- **Hides** it from the web sidebar (no kanban/todos/projects/goals/plans/notes/concepts/entities/references/comparisons links for that type)
+- **Hides** it from the web sidebar (no kanban/todos/projects/goals/plans/notes/concepts/entities/references links for that type)
 - **Excludes** it from `list_pages` on the MCP server
 - **Rejects** creation via web or MCP with the error `page type 'X' is disabled in context 'Y'`
 
@@ -168,7 +168,6 @@ Every piece of knowledge is a page with a `page_type`. Some types have a `kind` 
 | `goal` | Objectives with target dates and health | personal, coding, business, learning, health, finance, other |
 | `plan` | Time-horizoned plans | personal, coding, business, learning, health, finance, other |
 | `todo` | Actionable items (kanban) | personal, coding, business, learning, health, finance, other |
-| `comparison` | Side-by-side analyses | — |
 | `query` | Questions to answer | factual, conceptual, how_to, opinion |
 
 Page links use three independent, orthogonal `meta` slugs — `meta.project_slug`, `meta.goal_slug`, `meta.plan_slug` — each optionally materializing its own `part_of` relation. There is no rigid hierarchy; every page is an orphan by default.
