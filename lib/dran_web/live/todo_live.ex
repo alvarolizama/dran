@@ -56,12 +56,30 @@ defmodule DranWeb.TodoLive do
             <.link navigate={~p"/kanban"} class="btn btn-ghost btn-sm">
               <.icon name="hero-view-columns" class="w-4 h-4" /> {gettext("Board")}
             </.link>
+            <button
+              :if={@archived_items != []}
+              type="button"
+              phx-click="toggle_archived"
+              class={[
+                "btn btn-ghost btn-sm",
+                @show_archived && "btn-active border-primary/40"
+              ]}
+              data-testid="toggle-archived"
+            >
+              <.icon
+                name={if @show_archived, do: "hero-check-circle", else: "hero-archive-box"}
+                class="w-4 h-4"
+              />
+              {if @show_archived, do: gettext("Todos"), else: gettext("Archived")}
+              ({if @show_archived, do: length(@items), else: length(@archived_items)})
+            </button>
             <.link navigate={~p"/todos/new"} class="btn btn-primary btn-sm">
               <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
             </.link>
           </div>
         </div>
 
+        <div :if={!@show_archived}>
         <form phx-submit="quick_add_todo" class="mb-4 flex flex-wrap items-end gap-3">
           <div class="flex-1 min-w-56">
             <input
@@ -147,29 +165,54 @@ defmodule DranWeb.TodoLive do
             </button>
           </div>
         </div>
+        </div>
 
-        <div :if={@archived_items != []} class="mt-4">
-          <button
-            phx-click="toggle_archived"
-            class="flex items-center gap-1.5 text-xs font-medium text-base-content/50 hover:text-base-content transition-colors"
-          >
-            <.icon
-              name="hero-chevron-right"
-              class={"size-3 transition-transform duration-150 " <> if(@show_archived, do: "rotate-90", else: "")}
-            />
-            <.icon name="hero-archive-box" class="size-3.5" />
-            {gettext("Archived")} ({length(@archived_items)})
-          </button>
-          <div :if={@show_archived} class="mt-2 flex flex-wrap gap-2">
+        <div :if={@show_archived} class="rounded-xl border border-base-300 bg-base-200/30">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-base-300">
+            <div class="flex items-center gap-2 text-sm font-semibold text-base-content/60">
+              <.icon name="hero-archive-box" class="size-4" />
+              {gettext("Archived")}
+              <span class="px-1.5 py-0.5 text-xs rounded-md bg-base-300 text-base-content/60">
+                {length(@archived_items)}
+              </span>
+            </div>
+          </div>
+          <div class="px-4 py-2 space-y-1">
             <div
               :for={item <- @archived_items}
-              phx-click="show_page"
-              phx-value-slug={item.slug}
+              class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-200 transition-colors opacity-70 hover:opacity-100"
               data-testid={"archived-todo-" <> item.slug}
-              class="px-3 py-1.5 rounded-lg border border-base-300 text-xs text-base-content/60 cursor-pointer hover:border-primary/40 hover:text-base-content transition-colors opacity-70 hover:opacity-100"
             >
-              {item.title}
+              <.icon name="hero-check-circle" class="size-4 text-base-content/40 shrink-0" />
+              <.link
+                navigate={~p"/todos/#{item.slug}"}
+                class="text-sm flex-1 truncate hover:text-primary transition-colors"
+              >
+                {item.title}
+              </.link>
+              <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/50">
+                {gettext("Todo")}
+              </span>
+              <span :if={item.updated_at} class="text-caption shrink-0">
+                {Calendar.strftime(item.updated_at, "%b %d")}
+              </span>
+              <button
+                type="button"
+                phx-click="unarchive_page"
+                phx-value-slug={item.slug}
+                title={gettext("Unarchive")}
+                class="p-1 rounded-lg text-base-content/40 hover:text-success hover:bg-success/10 transition-colors"
+                data-testid={"unarchive-btn-" <> item.slug}
+              >
+                <.icon name="hero-arrow-up-on-square" class="size-4" />
+              </button>
             </div>
+            <p
+              :if={@archived_items == []}
+              class="text-xs text-base-content/30 text-center py-2"
+            >
+              {gettext("No archived todos")}
+            </p>
           </div>
         </div>
       </div>
