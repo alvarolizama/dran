@@ -1,35 +1,44 @@
-// Graph3D — three.js 3D graph view hook.
+// Graph3D — 3d-force-graph 3D graph view hook.
 //
-// Renders the same graph data (nodes + edges) as the SVG 2D view but in 3D:
-//   • Spheres for nodes, colored by type (same palette as 2D)
-//   • Thin lines for edges, colored by edge type
-//   • OrbitControls for rotate / zoom / pan
-//   • Dark background
+// Renders graph data with 3d-force-graph (vanilla JS):
+//   • Force-directed 3D layout (d3-force-3d under the hood)
+//   • Nodes sized by connection count
+//   • Curved edges with animated particle flow
+//   • Hover highlight with 2-level BFS neighborhood dimming + label reveal
+//   • Labels hidden by default, shown only for the hovered neighborhood
+//   • Click to navigate (node_click)
+//   • Auto zoom-to-fit after layout stabilizes
+//   • Dark background matching Dran's brand color
 //
 // The hook reads graph data from `data-graph` attribute (JSON) on mount and on
-// every LiveView `updated()` callback (so toggling 2D↔3D re-syncs positions).
+// every LiveView `updated()` callback.
 
+import ForceGraph3D from "3d-force-graph"
+import SpriteText from "three-spritetext"
 import * as THREE from "three"
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+
+// Max BFS depth for label reveal on hover (2 = neighbors of neighbors)
+const LABEL_BFS_DEPTH = 2
 
 const Graph3D = {
   mounted() {
-    this.scene = null
-    this.renderer = null
-    this.camera = null
-    this.controls = null
-    this.animationId = null
-    this.nodeMeshes = []
+    this.graph = null
     this.resizeHandler = null
+    this.visibilityObserver = null
+    this.hoveredNode = null
+    this.highlightNodes = new Set()
+    this.highlightLinks = new Set()
+    this.nodeDepths = new Map()
+    this.labelRetryId = null
     this.init()
   },
 
   updated() {
-    // Re-sync data when LiveView pushes new assigns (e.g. graph refresh)
+    // Re-sync data when LiveView pushes new assigns
     const data = this.readGraphData()
-    if (data && this.scene) {
-      this.clearScene()
-      this.buildGraph(data)
+    if (data && this.graph) {
+      this.graph.graphData(this.transformData(data))
+      this.scheduleLabelRefresh()
     }
   },
 
@@ -46,143 +55,185 @@ const Graph3D = {
     const width = container.clientWidth || 800
     const height = container.clientHeight || 600
 
-    // Scene — dark navy background matching Dran's brand color
-    this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color("#0a0e27")
+    // Create the 3D force graph instance
+    this.graph = ForceGraph3D()(container)
+      .width(width)
+      .height(height)
+      .backgroundColor("#0a0e27")
+      .showNavInfo(false)
+      // Rich HTML tooltip for the hovered node (styled in app.css)
+      .nodeLabel(node => this.tooltipHtml(node))
+      // Node appearance — sphere + adaptive text label
+      .nodeThreeObject(node => this.buildNodeObject(node))
+      .nodeThreeObjectExtend(false)
+      // Edge appearance
+      .linkColor(link => this.linkDisplayColor(link))
+      .linkOpacity(0.35)
+      .linkWidth(link => this.highlightLinks.has(link) ? 3 : 1.5)
+      .linkCurvature(0.25)
+      .linkDirectionalParticles(link => this.highlightLinks.has(link) ? 4 : 2)
+      .linkDirectionalParticleWidth(1.5)
+      .linkDirectionalParticleSpeed(0.006)
+      .linkDirectionalParticleColor(link => link.color || "#94A3B8")
+      // Interaction
+      .onNodeClick(node => this.handleNodeClick(node))
+      .onNodeHover(node => this.handleNodeHover(node))
+      // Physics / layout
+      .warmupTicks(100)
+      .cooldownTime(2000)
+      .onEngineStop(() => this.handleEngineStop())
 
-    // Camera
-    this.camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 5000)
-    this.camera.position.set(0, 0, 600)
-
-    // Renderer
-    this.renderer = new THREE.WebGLRenderer({antialias: true, alpha: false})
-    this.renderer.setSize(width, height)
-    this.renderer.setPixelRatio(window.devicePixelRatio)
-    container.appendChild(this.renderer.domElement)
-
-    // Lights
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6)
-    this.scene.add(ambient)
-
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8)
-    dir.position.set(200, 300, 400)
-    this.scene.add(dir)
-
-    // Controls
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement)
-    this.controls.enableDamping = true
-    this.controls.dampingFactor = 0.08
-    this.controls.rotateSpeed = 0.8
-    this.controls.zoomSpeed = 1.2
-    this.controls.minDistance = 50
-    this.controls.maxDistance = 2000
-
-    // Build graph
+    // Load initial data
     const data = this.readGraphData()
-    if (data) this.buildGraph(data)
+    if (data) {
+      this.graph.graphData(this.transformData(data))
+      this.scheduleLabelRefresh()
+    }
 
     // Resize handling
     this.resizeHandler = () => this.handleResize()
     window.addEventListener("resize", this.resizeHandler)
 
-    // Start animation loop
-    this.animate()
+    // Handle hidden tab panels (display:none) — re-fit when visible
+    this.visibilityObserver = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          requestAnimationFrame(() => this.handleResize())
+        }
+      })
+    })
+    this.visibilityObserver.observe(container)
   },
 
-  // ── Graph building ────────────────────────────────────────────────────
+  // ── Node objects (sphere + label sprite) ─────────────────────────────
 
-  buildGraph(data) {
-    const nodes = data.nodes || []
-    const edges = data.edges || []
-    const count = nodes.length
-    if (count === 0) return
+  buildNodeObject(node) {
+    const group = new THREE.Group()
+    const color = new THREE.Color(node.color || "#94A3B8")
 
-    // Spherical layout: distribute nodes on a sphere using fibonacci spiral
-    const layoutRadius = Math.max(120, count * 12)
-    const nodePositions = {}
-
-    const goldenAngle = Math.PI * (3 - Math.sqrt(5))
-    nodes.forEach((node, i) => {
-      const y = 1 - (i / Math.max(count - 1, 1)) * 2 // 1 → -1
-      const r = Math.sqrt(1 - y * y)
-      const theta = goldenAngle * i
-      const x = Math.cos(theta) * r
-      const z = Math.sin(theta) * r
-
-      nodePositions[node.id] = {
-        x: x * layoutRadius,
-        y: y * layoutRadius,
-        z: z * layoutRadius
-      }
-    })
-
-    // Spheres for nodes
-    const sphereGeo = new THREE.SphereGeometry(14, 24, 24)
-    const labelGroup = new THREE.Group()
-
-    nodes.forEach((node) => {
-      const pos = nodePositions[node.id]
-      const color = this.parseColor(node.color, "#94A3B8")
-
-      const mat = new THREE.MeshPhongMaterial({
+    // Sphere — sized by connections
+    const radius = this.nodeRadius(node)
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 24, 24),
+      new THREE.MeshLambertMaterial({
         color: color,
         emissive: color,
-        emissiveIntensity: 0.25,
-        shininess: 60
-      })
-
-      const mesh = new THREE.Mesh(sphereGeo, mat)
-      mesh.position.set(pos.x, pos.y, pos.z)
-      mesh.userData = {nodeId: node.id, slug: node.slug, label: node.label}
-
-      // Click → navigate (same as 2D node_click)
-      mesh.callback = () => {
-        if (node.slug) {
-          this.pushEvent("node_click", {slug: node.slug})
-        }
-      }
-
-      this.scene.add(mesh)
-      this.nodeMeshes.push(mesh)
-
-      // Sprite label
-      const label = this.makeTextSprite(node.label || "", color)
-      label.position.set(pos.x, pos.y + 26, pos.z)
-      labelGroup.add(label)
-    })
-
-    this.scene.add(labelGroup)
-
-    // Edges as thin lines
-    edges.forEach((edge) => {
-      const src = nodePositions[edge.source_id]
-      const tgt = nodePositions[edge.target_id]
-      if (!src || !tgt) return
-
-      const points = [
-        new THREE.Vector3(src.x, src.y, src.z),
-        new THREE.Vector3(tgt.x, tgt.y, tgt.z)
-      ]
-
-      const geo = new THREE.BufferGeometry().setFromPoints(points)
-      const color = this.parseColor(edge.color, "#94A3B8")
-      const mat = new THREE.LineBasicMaterial({
-        color: color,
+        emissiveIntensity: 0.35,
         transparent: true,
-        opacity: 0.5
+        opacity: 0.95
       })
+    )
+    group.add(sphere)
+    node.__sphere = sphere
 
-      const line = new THREE.Line(geo, mat)
-      this.scene.add(line)
-    })
+    // Text label — SpriteText, shown only on hover (BFS neighborhood)
+    const label = new SpriteText(node.label || "")
+    label.color = "#cbd5e1"
+    label.textHeight = Math.max(6, radius * 1.1)
+    label.fontFace = "'Inter', 'Helvetica Neue', Arial, sans-serif"
+    label.fontWeight = "500"
+    label.center.y = 1.0
+    label.position.y = radius + label.textHeight * 0.35
+    label.backgroundColor = "rgba(10, 14, 39, 0.6)"
+    label.padding = 3
+    label.borderRadius = 3
+    label.borderWidth = 0
+    label.visible = false // toggled on hover only
+    group.add(label)
+    node.__label = label
 
-    // Center camera on graph
-    this.camera.position.set(0, 0, layoutRadius * 2.2)
-    this.controls.target.set(0, 0, 0)
-    this.controls.update()
+    return group
   },
 
-  // ── Helpers ───────────────────────────────────────────────────────────
+  nodeRadius(node) {
+    return 4 + Math.min(node.connections || 0, 12) * 0.8
+  },
+
+  // Rich HTML tooltip for the hovered node — escapes user content
+  tooltipHtml(node) {
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]))
+    const color = node.color || "#94A3B8"
+    return `
+      <div class="graph-tooltip">
+        <div class="graph-tooltip-title">${esc(node.label)}</div>
+        <div class="graph-tooltip-meta">
+          <span class="graph-tooltip-type" style="--type-color: ${esc(color)}">${esc(node.type)}</span>
+          <span class="graph-tooltip-conn">${node.connections || 0} links</span>
+        </div>
+      </div>`
+  },
+
+  // Show labels: only on hover — the node + its BFS neighborhood (2 levels).
+  // 3d-force-graph builds nodeThreeObject asynchronously, so we retry until
+  // every node has its __label attached (or give up after ~2s).
+  scheduleLabelRefresh(attempts = 0) {
+    if (this.labelRetryId) {
+      cancelAnimationFrame(this.labelRetryId)
+      this.labelRetryId = null
+    }
+    const tick = () => {
+      if (!this.graph) return
+      const { nodes } = this.graph.graphData()
+      const ready = nodes.every(n => n.__label)
+      this.refreshLabelVisibility()
+      if (!ready && attempts < 120) {
+        attempts++
+        this.labelRetryId = requestAnimationFrame(tick)
+      }
+    }
+    this.labelRetryId = requestAnimationFrame(tick)
+  },
+
+  // BFS from the hovered node up to LABEL_BFS_DEPTH levels, following links
+  // in both directions. Returns a Map of node id -> depth (0 = hovered) and
+  // the set of links traversed.
+  computeNeighborhood(startId, links) {
+    const linkId = l => (typeof l === "object" && l !== null ? String(l.id) : String(l))
+    const adjacency = new Map()
+    links.forEach(link => {
+      const s = linkId(link.source)
+      const t = linkId(link.target)
+      if (!adjacency.has(s)) adjacency.set(s, [])
+      if (!adjacency.has(t)) adjacency.set(t, [])
+      adjacency.get(s).push({ next: t, link })
+      adjacency.get(t).push({ next: s, link })
+    })
+
+    const depths = new Map([[startId, 0]])
+    const linksInPath = new Set()
+    let frontier = [startId]
+    for (let depth = 1; depth <= LABEL_BFS_DEPTH; depth++) {
+      const nextFrontier = []
+      for (const id of frontier) {
+        for (const { next, link } of adjacency.get(id) || []) {
+          linksInPath.add(link)
+          if (!depths.has(next)) {
+            depths.set(next, depth)
+            nextFrontier.push(next)
+          }
+        }
+      }
+      frontier = nextFrontier
+    }
+    return { depths, links: linksInPath }
+  },
+
+  // Text labels show only for the hovered node and its DIRECT neighbors
+  // (depth ≤ 1). The hovered node also gets the rich HTML tooltip.
+  refreshLabelVisibility() {
+    if (!this.graph) return
+    const { nodes } = this.graph.graphData()
+
+    nodes.forEach(node => {
+      if (!node.__label) return
+      const depth = this.nodeDepths.get(node.id)
+      node.__label.visible = depth !== undefined && depth <= 1
+    })
+  },
+
+  // ── Data transformation ───────────────────────────────────────────────
 
   readGraphData() {
     const raw = this.el.getAttribute("data-graph")
@@ -195,125 +246,154 @@ const Graph3D = {
     }
   },
 
-  parseColor(hex, fallback) {
-    try {
-      return new THREE.Color(hex || fallback)
-    } catch {
-      return new THREE.Color(fallback)
+  transformData(data) {
+    // Ids are normalized to strings: the JSON carries Ecto integer ids, and
+    // force-graph replaces link source/target with node object references.
+    // String ids keep Set/Map lookups consistent everywhere.
+    const nodes = (data.nodes || []).map(n => ({
+      id: String(n.id),
+      slug: n.slug,
+      label: n.label || "",
+      type: n.type,
+      color: n.color || "#94A3B8",
+      connections: 0
+    }))
+
+    const nodeById = new Map(nodes.map(n => [n.id, n]))
+
+    const links = (data.edges || []).map(e => ({
+      source: String(e.source_id),
+      target: String(e.target_id),
+      color: e.color || "#94A3B8"
+    }))
+
+    // Count connections per node (for sizing)
+    links.forEach(link => {
+      const src = nodeById.get(link.source)
+      const tgt = nodeById.get(link.target)
+      if (src) src.connections++
+      if (tgt) tgt.connections++
+    })
+
+    return { nodes, links }
+  },
+
+  // ── Interaction handlers ──────────────────────────────────────────────
+
+  handleNodeClick(node) {
+    if (node.slug) {
+      this.pushEvent("node_click", { slug: node.slug })
     }
   },
 
-  // Read a CSS custom property from :root and resolve it to a hex color
-  // string suitable for THREE.Color. Returns `fallback` if the variable is
-  // not set or the value can't be parsed. Handles oklch(), rgb(), hsl(),
-  // and #hex by round-tripping through a DOM element's computed style.
-  readThemeColor(varName, fallback) {
-    try {
-      const raw = getComputedStyle(document.documentElement)
-        .getPropertyValue(varName)
-        .trim()
-      if (!raw) return fallback
+  handleNodeHover(node) {
+    this.hoveredNode = node || null
+    this.highlightNodes = new Set()
+    this.highlightLinks = new Set()
+    this.nodeDepths = new Map()
 
-      // Use a throwaway element to let the browser parse any CSS color
-      // format (oklch, color-mix, named colors, etc.) and hand us back
-      // an rgb()/rgba() string we can feed to THREE.Color.
-      const probe = document.createElement("div")
-      probe.style.color = raw
-      probe.style.display = "none"
-      document.body.appendChild(probe)
-      const resolved = getComputedStyle(probe).color
-      document.body.removeChild(probe)
+    if (node) {
+      const { depths, links } = this.computeNeighborhood(
+        node.id,
+        this.graph.graphData().links
+      )
+      this.nodeDepths = depths
+      this.highlightNodes = new Set(depths.keys())
+      this.highlightLinks = links
+    }
 
-      if (!resolved) return fallback
-      return new THREE.Color(resolved)
-    } catch {
-      return fallback
+    // Restyle nodes: highlight the neighborhood, dim everything else.
+    // The hovered node pops (scale + strong glow), direct neighbors glow.
+    this.graph.graphData().nodes.forEach(n => {
+      if (!n.__sphere) return
+      const depth = this.nodeDepths.get(n.id)
+      const active = !node || depth !== undefined
+      const isHovered = node && n.id === node.id
+      n.__sphere.material.opacity = active ? 0.95 : 0.15
+      n.__sphere.material.emissiveIntensity = active ? (isHovered ? 1.2 : 0.55) : 0.05
+      const scale = isHovered ? 1.35 : (depth === 1 ? 1.15 : 1)
+      n.__sphere.scale.setScalar(scale)
+    })
+
+    // Labels follow highlight
+    this.refreshLabelVisibility()
+
+    // Trigger link restyle (linkColor / linkWidth / particles are accessor-based)
+    this.graph.refresh()
+  },
+
+  linkDisplayColor(link) {
+    if (!this.hoveredNode) return link.color || "#94A3B8"
+    return this.highlightLinks.has(link)
+      ? link.color || "#94A3B8"
+      : "rgba(148, 163, 184, 0.05)"
+  },
+
+  handleEngineStop() {
+    // Zoom to fit after layout stabilizes
+    if (this.graph && this.graph.graphData().nodes.length > 0) {
+      this.graph.zoomToFit(400, 40)
     }
   },
 
-  makeTextSprite(text, color) {
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-    const fontSize = 48
-    ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`
-    const metrics = ctx.measureText(text)
-    const w = Math.ceil(metrics.width) + 20
-    const h = fontSize + 16
-    canvas.width = w
-    canvas.height = h
-
-    ctx.font = `bold ${fontSize}px Inter, system-ui, sans-serif`
-    ctx.fillStyle = "#e2e8f0"
-    ctx.textBaseline = "middle"
-    ctx.fillText(text, 10, h / 2)
-
-    const texture = new THREE.CanvasTexture(canvas)
-    texture.minFilter = THREE.LinearFilter
-    const mat = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthWrite: false
-    })
-    const sprite = new THREE.Sprite(mat)
-    const scale = 0.35
-    sprite.scale.set(w * scale, h * scale, 1)
-    return sprite
-  },
-
-  clearScene() {
-    // Remove all meshes and lines, keep lights
-    const toRemove = []
-    this.scene.children.forEach((child) => {
-      if (child.type === "Mesh" || child.type === "Line" || child.type === "Group" || child.type === "Sprite") {
-        toRemove.push(child)
-      }
-    })
-    toRemove.forEach((obj) => {
-      this.scene.remove(obj)
-      if (obj.geometry) obj.geometry.dispose()
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach((m) => m.dispose())
-        } else {
-          obj.material.dispose()
-        }
-      }
-    })
-    this.nodeMeshes = []
-  },
+  // ── Resize ────────────────────────────────────────────────────────────
 
   handleResize() {
     const container = this.el
-    if (!container || !this.renderer) return
+    if (!container || !this.graph) return
     const width = container.clientWidth || 800
     const height = container.clientHeight || 600
-    this.camera.aspect = width / height
-    this.camera.updateProjectionMatrix()
-    this.renderer.setSize(width, height)
+    if (width > 0 && height > 0) {
+      this.graph.width(width).height(height)
+    }
   },
 
-  animate() {
-    this.animationId = requestAnimationFrame(() => this.animate())
-    this.controls.update()
-    this.renderer.render(this.scene, this.camera)
-  },
+  // ── Cleanup ───────────────────────────────────────────────────────────
 
   cleanup() {
-    if (this.animationId) cancelAnimationFrame(this.animationId)
-    if (this.resizeHandler) window.removeEventListener("resize", this.resizeHandler)
-    if (this.controls) this.controls.dispose()
-    if (this.renderer) {
-      this.renderer.dispose()
-      if (this.renderer.domElement && this.renderer.domElement.parentNode) {
-        this.renderer.domElement.parentNode.removeChild(this.renderer.domElement)
-      }
+    if (this.labelRetryId) {
+      cancelAnimationFrame(this.labelRetryId)
+      this.labelRetryId = null
     }
-    if (this.scene) this.clearScene()
-    this.scene = null
-    this.renderer = null
-    this.camera = null
-    this.controls = null
-    this.nodeMeshes = []
+    if (this.resizeHandler) {
+      window.removeEventListener("resize", this.resizeHandler)
+      this.resizeHandler = null
+    }
+    if (this.visibilityObserver) {
+      this.visibilityObserver.disconnect()
+      this.visibilityObserver = null
+    }
+    if (this.graph) {
+      // Dispose sprite textures and sphere geometries
+      this.graph.graphData().nodes.forEach(node => {
+        if (node.__label) {
+          if (node.__label.material && node.__label.material.map) {
+            node.__label.material.map.dispose()
+          }
+          if (node.__label.material) node.__label.material.dispose()
+          node.__label = null
+        }
+        if (node.__sphere) {
+          node.__sphere.geometry.dispose()
+          node.__sphere.material.dispose()
+          node.__sphere = null
+        }
+      })
+      // Clear graph data to free GPU buffers
+      this.graph.graphData({ nodes: [], links: [] })
+      // Remove canvas from DOM
+      const container = this.el
+      if (container) {
+        container.querySelectorAll("canvas").forEach(canvas => {
+          if (canvas.parentNode) canvas.parentNode.removeChild(canvas)
+        })
+      }
+      this.graph = null
+    }
+    this.hoveredNode = null
+    this.highlightNodes = new Set()
+    this.highlightLinks = new Set()
+    this.nodeDepths = new Map()
   }
 }
 
