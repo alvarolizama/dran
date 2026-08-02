@@ -229,6 +229,25 @@ defmodule DranWeb.PageEdit do
     {:noreply, put_flash(socket, :error, gettext("Cannot delete: no page loaded."))}
   end
 
+  def handle_event("archive_page", %{"slug" => slug}, socket) do
+    # List view — find page by slug and archive it
+    context_id = context_id(socket)
+
+    case Brain.get_page_by_slug(slug, context_id) do
+      {:ok, page} ->
+        case Brain.archive_page(page) do
+          {:ok, _updated} ->
+            {:noreply, put_flash(socket, :info, gettext("Page archived."))}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not archive page."))}
+        end
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Page not found."))}
+    end
+  end
+
   def handle_event("archive_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
     case Brain.archive_page(page) do
       {:ok, updated} ->
