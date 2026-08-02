@@ -200,6 +200,13 @@ defmodule DranWeb.Layouts do
             badge: counts[:projects]
           },
           %{
+            key: "goals",
+            label: gettext("Objetivos"),
+            icon: "hero-flag",
+            path: ~p"/goals",
+            badge: counts[:goals]
+          },
+          %{
             key: "graph",
             label: gettext("Grafo"),
             icon: "hero-share",
@@ -222,13 +229,6 @@ defmodule DranWeb.Layouts do
       %{
         label: gettext("Planning"),
         items: [
-          %{
-            key: "goals",
-            label: gettext("Objetivos"),
-            icon: "hero-flag",
-            path: ~p"/goals",
-            badge: counts[:goals]
-          },
           %{
             key: "plans",
             label: gettext("Planes"),
