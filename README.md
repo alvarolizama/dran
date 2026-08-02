@@ -16,7 +16,7 @@ Dran is a networked knowledge base for a single human. It captures notes and str
 
 - **9 page types** with type-specific metadata — note, concept, entity, reference, project, goal, plan, todo, query
 - **Markdown editor** — TipTap WYSIWYG with bidirectional markdown, tables, code blocks, mermaid diagrams, and file embeds `![[slug]]`
-- **Autonomous agents** — background ReAct agents (`ask`, `curator`, `link_gardener`) that plan, act, and log every step
+- **Autonomous agents** — background ReAct agents (`curator`, `link_gardener`) that plan, act, and log every step
 - **Knowledge graph** — visual graph at `/graph` with pan/zoom and 3D view, built from explicit and semantic relations; every page detail surfaces a per-page subgraph
 - **Bidirectional semantic relations** — `PageAugmenter` creates `semantic` links after every capture, with an adaptive cosine-distance threshold tunable in settings
 - **Multi-user auth with Google OAuth** — per-user accounts, per-user API tokens, and context membership control
@@ -198,11 +198,10 @@ For explicit typed relations, use the MCP `dran_create_relation` tool or `POST /
 
 ## Autonomous agents
 
-Dran can delegate longer tasks to autonomous ReAct agents. There are **three** agent types:
+Dran can delegate longer tasks to autonomous ReAct agents. There are **two** agent types:
 
 | Agent | Trigger | What it does |
 | --- | --- | --- |
-| `ask` | Manual (`dran_start_agent`) | Q&A — answers questions from the knowledge graph using **GraphRAG**: searches seed pages, then traverses typed relations to pull in the context text search missed, and cites sources |
 | `curator` | Quantum cron (daily 06:00) | Finds duplicates and flags contested knowledge via embedding distance + graph community overlap; creates a cleanup report |
 | `link_gardener` | Manual (`dran_start_agent`) | Proposes semantic relations between orphaned and weakly-linked pages, including transitive `part_of` candidates with `via` evidence |
 
