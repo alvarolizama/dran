@@ -234,7 +234,10 @@ defmodule DranWeb.PageEdit do
     context_id = context_id(socket)
 
     case Brain.get_page_by_slug(slug, context_id) do
-      {:ok, page} ->
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Page not found."))}
+
+      page ->
         case Brain.archive_page(page) do
           {:ok, _updated} ->
             {:noreply, put_flash(socket, :info, gettext("Page archived."))}
@@ -242,9 +245,6 @@ defmodule DranWeb.PageEdit do
           {:error, _} ->
             {:noreply, put_flash(socket, :error, gettext("Could not archive page."))}
         end
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Page not found."))}
     end
   end
 
