@@ -4,7 +4,8 @@ defmodule Dran.Accounts.UserContext do
 
   schema "user_contexts" do
     belongs_to :user, Dran.Accounts.User
-    belongs_to :context, Dran.Brain.Context
+    field :context_id, :binary_id
+    belongs_to :context, Dran.Brain.Context, define_field: false
 
     timestamps()
   end
