@@ -240,6 +240,16 @@ defmodule DranWeb.PageEdit do
       page ->
         case Brain.archive_page(page) do
           {:ok, _updated} ->
+            # Update list state if we're in a list view
+            socket =
+              if socket.assigns[:pages] do
+                pages = Enum.reject(socket.assigns.pages, &(&1.slug == slug))
+                archived_pages = [page | socket.assigns[:archived_pages] || []]
+                assign(socket, pages: pages, archived_pages: archived_pages)
+              else
+                socket
+              end
+
             {:noreply, put_flash(socket, :info, gettext("Page archived."))}
 
           {:error, _} ->
