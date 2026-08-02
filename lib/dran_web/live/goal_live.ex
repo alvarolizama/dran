@@ -7,13 +7,24 @@ defmodule DranWeb.GoalLive do
   alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
+  alias DranWeb.ListPagination
   alias DranWeb.Plugs.Auth
 
   @page_type "goal"
 
   @goal_tabs [
-    {"todos", gettext("Tareas")},
-    {"plans", gettext("Planes")}
+    {"kanban", gettext("Kanban")},
+    {"plans", gettext("Planes")},
+    {"todos", gettext("Tareas")}
+  ]
+
+  @kanban_columns [
+    {"backlog", "Backlog", "bg-base-300"},
+    {"this_week", "This Week", "bg-blue-500/20 text-blue-700"},
+    {"today", "Today", "bg-amber-500/20 text-amber-700"},
+    {"in_progress", "In Progress", "bg-purple-500/20 text-purple-700"},
+    {"done", "Done", "bg-green-500/20 text-green-700"},
+    {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
   ]
 
   def render(assigns) do
@@ -85,6 +96,95 @@ defmodule DranWeb.GoalLive do
           </:tabs>
 
           <:extra_content>
+            <%!-- Kanban: board de columnas solo con los todos del goal --%>
+            <div :if={@active_tab == "kanban"} class="flex flex-col h-[calc(100vh-16rem)] min-h-0">
+              <div class="flex items-center justify-between mb-3 shrink-0">
+                <span class="text-sm text-base-content/60">
+                  {length(@goal_todos)} {gettext("tareas")}
+                </span>
+                <.link navigate={~p"/todos/new"} class="btn btn-primary btn-xs">
+                  <.icon name="hero-plus" class="size-3.5" /> {gettext("New Todo")}
+                </.link>
+              </div>
+              <div
+                class="flex gap-4 overflow-x-auto pb-4 flex-1 min-h-0"
+                phx-hook="KanbanDragDrop"
+                id="goal-kanban-board"
+              >
+                <div
+                  :for={{status, label, badge_class} <- @kanban_columns}
+                  data-kanban-status={status}
+                  class="w-72 shrink-0 flex-1 max-w-sm flex flex-col min-h-0 h-full rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
+                >
+                  <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300 shrink-0">
+                    <div class="flex items-center gap-2">
+                      <span class={"size-2 rounded-full shrink-0 " <> kanban_accent_dot(status)}></span>
+                      <span class="text-sm font-semibold">{label}</span>
+                    </div>
+                    <span class={"px-2 py-0.5 text-xs rounded-full " <> badge_class}>
+                      {count_kanban(@goal_todos, status)}
+                    </span>
+                  </div>
+                  <div class="p-2 space-y-2 min-h-0 flex-1 overflow-y-auto">
+                    <div
+                      :for={todo <- kanban_items(@goal_todos, status)}
+                      data-kanban-slug={todo.slug}
+                      draggable="true"
+                      phx-click="show_todo"
+                      phx-value-slug={todo.slug}
+                      class="p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm cursor-grab hover:shadow-md hover:border-primary transition active:cursor-grabbing"
+                    >
+                      <div class="font-medium text-sm break-words">{todo.title}</div>
+                      <div :if={todo.summary} class="text-xs text-base-content/60 mt-1 line-clamp-2">
+                        {todo.summary}
+                      </div>
+                    </div>
+                    <p
+                      :if={kanban_items(@goal_todos, status) == []}
+                      class="text-xs text-base-content/30 text-center py-4"
+                    >
+                      {gettext("Empty")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <script :type={Phoenix.LiveView.ColocatedHook} name=".KanbanDragDrop">
+                export default {
+                  mounted() {
+                    this.draggedSlug = null;
+                    const board = this.el;
+                    board.addEventListener("dragstart", (e) => {
+                      const card = e.target.closest("[data-kanban-slug]");
+                      if (card) {
+                        this.draggedSlug = card.dataset.kanbanSlug;
+                        e.dataTransfer.effectAllowed = "move";
+                      }
+                    });
+                    board.addEventListener("dragover", (e) => {
+                      if (e.target.closest("[data-kanban-status]")) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                      }
+                    });
+                    board.addEventListener("drop", (e) => {
+                      const col = e.target.closest("[data-kanban-status]");
+                      if (col !== null && this.draggedSlug !== null) {
+                        e.preventDefault();
+                        this.pushEvent("move_todo", {
+                          slug: this.draggedSlug,
+                          target_status: col.dataset.kanbanStatus
+                        });
+                      }
+                      this.draggedSlug = null;
+                    });
+                    board.addEventListener("dragend", () => {
+                      this.draggedSlug = null;
+                    });
+                  }
+                }
+              </script>
+            </div>
+
             <%!-- Tareas: lista simple con link a kanban global --%>
             <div :if={@active_tab == "todos"}>
               <div class="flex items-center justify-between mb-3">
@@ -143,11 +243,14 @@ defmodule DranWeb.GoalLive do
         </.page_detail>
       </div><div :if={@live_action != :show}>
         <.page_list
-          pages={@pages}
-          archived_pages={@archived_pages}
+          pages={Enum.take(@pages, @visible_count)}
+          archived_pages={if @show_archived, do: Enum.take(@archived_pages, @archived_visible_count), else: []}
           archived_filter={@archived_filter}
           page_type={@page_type}
           context_slug={@context_slug}
+          show_archived={@show_archived}
+          total_count={length(@pages)}
+          total_archived={length(@archived_pages)}
         />
       </div>
     </Layouts.app>
@@ -177,6 +280,7 @@ defmodule DranWeb.GoalLive do
        context: context,
        page_type: @page_type,
        goal_tabs: @goal_tabs,
+       kanban_columns: @kanban_columns,
        active_tab: "overview",
        editing: true,
        save_status: "idle",
@@ -268,6 +372,10 @@ defmodule DranWeb.GoalLive do
        pages: pages,
        archived_pages: archived_pages,
        archived_filter: "all",
+      visible_count: 30,
+      show_archived: false,
+      archived_visible_count: 30,
+
        page_title: "Goals"
      )}
   end
@@ -275,6 +383,14 @@ defmodule DranWeb.GoalLive do
   def handle_event("filter_archived", %{"type" => type}, socket) do
     {:noreply, assign(socket, archived_filter: type)}
   end
+  def handle_event("load_more", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more(socket)}
+
+  def handle_event("toggle_archived", _params, socket),
+    do: {:noreply, ListPagination.handle_toggle_archived(socket)}
+
+  def handle_event("load_more_archived", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more_archived(socket)}
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, active_tab: tab)}
@@ -290,6 +406,40 @@ defmodule DranWeb.GoalLive do
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/goals/#{slug}")}
+  end
+
+  # Kanban cards point at their todo page, not the goal.
+  def handle_event("show_todo", %{"slug" => slug}, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
+  end
+
+  def handle_event("move_todo", %{"slug" => slug, "target_status" => status}, socket) do
+    context = socket.assigns.context
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "Todo not found.")}
+
+        todo ->
+          new_meta = Map.put(todo.meta || %{}, "kanban_status", status)
+
+          case Brain.update_page(todo, %{"meta" => new_meta}) do
+            {:ok, updated} ->
+              todos =
+                Enum.map(socket.assigns.goal_todos, fn t ->
+                  if t.id == updated.id, do: updated, else: t
+                end)
+
+              {:noreply, assign(socket, goal_todos: todos)}
+
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, "Could not update todo status.")}
+          end
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("change_health", %{"slug" => slug, "health" => health}, socket) do
@@ -390,6 +540,22 @@ defmodule DranWeb.GoalLive do
     case meta_get(page.meta, "kanban_status") do
       s when is_binary(s) and s != "" -> s
       _ -> "backlog"
+    end
+  end
+
+  defp kanban_items(todos, status), do: Enum.filter(todos, fn t -> kanban_status(t) == status end)
+  defp count_kanban(todos, status), do: Enum.count(todos, fn t -> kanban_status(t) == status end)
+
+  # Colored accent dot per kanban column status (matches global kanban vibe).
+  defp kanban_accent_dot(status) do
+    case status do
+      "backlog" -> "bg-base-300"
+      "this_week" -> "bg-blue-500"
+      "today" -> "bg-amber-500"
+      "in_progress" -> "bg-purple-500"
+      "done" -> "bg-green-500"
+      "cancelled" -> "bg-red-500"
+      _ -> "bg-base-300"
     end
   end
 

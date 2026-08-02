@@ -6,6 +6,7 @@ defmodule DranWeb.QueryLive do
   alias Dran.Brain
   alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
+  alias DranWeb.ListPagination
   alias DranWeb.Plugs.Auth
 
   @page_type "query"
@@ -64,11 +65,14 @@ defmodule DranWeb.QueryLive do
         </.page_detail>
       </div><div :if={@live_action != :show}>
         <.page_list
-          pages={@pages}
-          archived_pages={@archived_pages}
+          pages={Enum.take(@pages, @visible_count)}
+          archived_pages={if @show_archived, do: Enum.take(@archived_pages, @archived_visible_count), else: []}
           archived_filter={@archived_filter}
           page_type={@page_type}
           context_slug={@context_slug}
+          show_archived={@show_archived}
+          total_count={length(@pages)}
+          total_archived={length(@archived_pages)}
         />
       </div>
     </Layouts.app>
@@ -168,6 +172,10 @@ defmodule DranWeb.QueryLive do
        pages: pages,
        archived_pages: archived_pages,
        archived_filter: "all",
+      visible_count: 30,
+      show_archived: false,
+      archived_visible_count: 30,
+
        page_title: gettext("Queries")
      )}
   end
@@ -175,6 +183,14 @@ defmodule DranWeb.QueryLive do
   def handle_event("filter_archived", %{"type" => type}, socket) do
     {:noreply, assign(socket, archived_filter: type)}
   end
+  def handle_event("load_more", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more(socket)}
+
+  def handle_event("toggle_archived", _params, socket),
+    do: {:noreply, ListPagination.handle_toggle_archived(socket)}
+
+  def handle_event("load_more_archived", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more_archived(socket)}
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, switch_tab(socket, tab)}

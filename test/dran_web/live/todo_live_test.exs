@@ -98,4 +98,24 @@ defmodule DranWeb.TodoLiveTest do
 
     assert Brain.get_page_by_slug(todo.slug, todo.context_id).meta["kanban_status"] == "today"
   end
+
+  test "archive button on a row archives the todo and removes it from the list", %{
+    conn: conn,
+    todo: todo,
+    context: context
+  } do
+    {:ok, view, _html} = live(conn, ~p"/todos")
+
+    # The row renders with its archive button (bottom-right of the row)
+    assert has_element?(view, ~s(button[data-testid="archive-btn-#{todo.slug}"]))
+
+    view
+    |> element(~s(button[data-testid="archive-btn-#{todo.slug}"]))
+    |> render_click()
+
+    assert Brain.get_page_by_slug(todo.slug, context.id).archived == true
+
+    # The row disappears after re-render
+    refute has_element?(view, ~s(button[data-testid="archive-btn-#{todo.slug}"]))
+  end
 end

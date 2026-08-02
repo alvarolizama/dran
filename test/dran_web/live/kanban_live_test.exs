@@ -160,4 +160,33 @@ defmodule DranWeb.KanbanLiveTest do
       assert LazyHTML.text(backlog_column) =~ "Board Render Test Todo"
     end
   end
+
+  describe "card archive button" do
+    test "archives the todo from its card and removes it from the board", %{
+      conn: conn,
+      context: context
+    } do
+      {:ok, todo} =
+        Brain.create_page(%{
+          context_id: context.id,
+          title: "Todo To Archive",
+          page_type: "todo",
+          meta: %{"kanban_status" => "backlog"}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/kanban")
+
+      # The card renders with its archive button (bottom-right of the card)
+      assert has_element?(view, "button[phx-value-slug=\"#{todo.slug}\"]")
+
+      view
+      |> element("button[phx-value-slug=\"#{todo.slug}\"]")
+      |> render_click()
+
+      assert Brain.get_page_by_slug(todo.slug, context.id).archived == true
+
+      # The card disappears from the board after re-render
+      refute has_element?(view, "button[phx-value-slug=\"#{todo.slug}\"]")
+    end
+  end
 end

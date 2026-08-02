@@ -16,6 +16,14 @@ defmodule DranWeb.GraphLive do
   alias DranWeb.GraphHelpers
   alias DranWeb.Plugs.Auth
 
+  # Page types excluded from the global 3D graph entirely: the operational
+  # layer (todos, plans) whose ephemeral leaf nodes would flood the graph
+  # with work-in-progress noise. They are left out of the sidebar type list
+  # (no toggle to bring them back) AND the rendered graph. They remain
+  # visible in the per-page subgraph (graph tab + /graph/:slug), where local
+  # context matters.
+  @hidden_by_default ~w(todo plan)
+
   @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
@@ -31,7 +39,10 @@ defmodule DranWeb.GraphLive do
        page: nil,
        nodes: [],
        edges: [],
-       type_colors: Enum.to_list(GraphHelpers.type_colors()),
+       all_nodes: [],
+       all_edges: [],
+       visible_types: default_visible_types(),
+       type_colors: sidebar_type_colors(),
        type_counts: %{},
        node_count: 0,
        edge_count: 0
@@ -92,6 +103,18 @@ defmodule DranWeb.GraphLive do
   end
 
   @impl true
+  def handle_event("toggle_type", %{"type" => type}, socket) do
+    visible =
+      if MapSet.member?(socket.assigns.visible_types, type) do
+        MapSet.delete(socket.assigns.visible_types, type)
+      else
+        MapSet.put(socket.assigns.visible_types, type)
+      end
+
+    {:noreply, socket |> assign(visible_types: visible) |> filter_visible()}
+  end
+
+  @impl true
   def handle_info({:page_changed, _action, _page}, socket) do
     {:noreply, load_graph_data(socket)}
   end
@@ -114,11 +137,11 @@ defmodule DranWeb.GraphLive do
   defp load_index_graph(socket) do
     context = socket.assigns.context
 
-    {nodes, edges} =
+    {all_nodes, all_edges} =
       if context do
         %{nodes: raw_nodes, edges: raw_edges} = Brain.graph_data(context.id)
 
-        nodes =
+        all_nodes =
           raw_nodes
           |> Enum.map(fn n ->
             %{
@@ -132,9 +155,9 @@ defmodule DranWeb.GraphLive do
           end)
           |> GraphHelpers.circular_layout(400, 300, 250)
 
-        positions = Map.new(nodes, fn n -> {n.id, {n.x, n.y}} end)
+        positions = Map.new(all_nodes, fn n -> {n.id, {n.x, n.y}} end)
 
-        edges =
+        all_edges =
           Enum.flat_map(raw_edges, fn e ->
             with {x1, y1} <- Map.get(positions, e.source),
                  {x2, y2} <- Map.get(positions, e.target) do
@@ -154,18 +177,53 @@ defmodule DranWeb.GraphLive do
             end
           end)
 
-        {nodes, edges}
+        {all_nodes, all_edges}
       else
         {[], []}
       end
+
+    socket
+    |> assign(all_nodes: all_nodes, all_edges: all_edges, type_counts: count_types(all_nodes))
+    |> filter_visible()
+  end
+
+  # Restrict the rendered nodes/edges to the currently visible types. Edges
+  # whose endpoints are both hidden are dropped too, so the 3D view never
+  # draws a line pointing at a node that isn't there.
+  defp filter_visible(socket) do
+    visible = socket.assigns.visible_types
+
+    nodes = Enum.filter(socket.assigns.all_nodes, &MapSet.member?(visible, &1.type))
+    visible_ids = MapSet.new(nodes, & &1.id)
+
+    edges =
+      Enum.filter(socket.assigns.all_edges, fn e ->
+        MapSet.member?(visible_ids, e.source_id) and MapSet.member?(visible_ids, e.target_id)
+      end)
 
     assign(socket,
       nodes: nodes,
       edges: edges,
       node_count: length(nodes),
-      edge_count: length(edges),
-      type_counts: count_types(nodes)
+      edge_count: length(edges)
     )
+  end
+
+  # Everything except the operational layer. Declarative: add a type to
+  # @hidden_by_default and it stops cluttering the global graph.
+  defp default_visible_types do
+    GraphHelpers.type_colors()
+    |> Map.keys()
+    |> MapSet.new()
+    |> MapSet.difference(MapSet.new(@hidden_by_default))
+  end
+
+  # The sidebar lists only the types that can actually appear in the graph —
+  # the operational layer is left out entirely, so there's no toggle to
+  # bring todos/plans back into the global view.
+  defp sidebar_type_colors do
+    GraphHelpers.type_colors()
+    |> Enum.reject(fn {type, _color} -> type in @hidden_by_default end)
   end
 
   defp load_show_graph(socket, page) do
@@ -242,13 +300,29 @@ defmodule DranWeb.GraphLive do
             <h3 class="text-xs font-semibold text-base-content/40 uppercase mb-2">
               {gettext("Types")}
             </h3>
-            <div :for={{type, color} <- @type_colors} class="flex items-center gap-2 mb-1">
-              <div class="w-3 h-3 rounded-full" style={"background: #{color}"}></div>
+            <button
+              :for={{type, color} <- @type_colors}
+              type="button"
+              phx-click="toggle_type"
+              phx-value-type={type}
+              class={[
+                "flex w-full items-center gap-2 rounded px-1 py-0.5 text-left transition",
+                if(MapSet.member?(@visible_types, type),
+                  do: "hover:bg-base-200",
+                  else: "opacity-40 hover:opacity-70"
+                )
+              ]}
+            >
+              <div
+                class="w-3 h-3 shrink-0 rounded-full"
+                style={"background: #{if MapSet.member?(@visible_types, type), do: color, else: "#64748B"}"}
+              >
+              </div>
               <span class="text-sm capitalize flex-1">{type}</span>
               <span class="text-xs text-base-content/40 tabular-nums">
                 {@type_counts[type] || 0}
               </span>
-            </div>
+            </button>
 
             <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">
               {gettext("Totals")}

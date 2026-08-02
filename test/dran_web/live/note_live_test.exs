@@ -119,9 +119,15 @@ defmodule DranWeb.NoteLiveTest do
 
       assert Brain.get_page_by_slug(source.slug, source.context_id).archived == true
 
-      # The list no longer shows the page but the Archived section does
-      {:ok, _view, html} = live(conn, ~p"/notes")
+      # The list no longer shows the page; the Archived section is hidden
+      # until the header toggle is clicked
+      {:ok, view, html} = live(conn, ~p"/notes")
       refute html =~ ~s(data-testid="page-card-#{source.slug}")
+      refute html =~ ~s(data-testid="archived-section")
+
+      view |> element("[data-testid='toggle-archived']") |> render_click()
+
+      html = render(view)
       assert html =~ ~s(data-testid="archived-section")
       assert html =~ ~s(data-testid="archived-page-#{source.slug}")
     end
@@ -154,6 +160,13 @@ defmodule DranWeb.NoteLiveTest do
       {:ok, _} = Brain.archive_page(note)
 
       {:ok, view, html} = live(conn, ~p"/notes")
+      # Archived section hidden until toggled on
+      assert html =~ ~s(data-testid="toggle-archived")
+      refute html =~ ~s(data-testid="archived-page-#{note.slug}")
+
+      view |> element("[data-testid='toggle-archived']") |> render_click()
+
+      html = render(view)
       assert html =~ ~s(data-testid="archived-page-#{note.slug}")
 
       # Filter chips only render when archived pages span multiple types;

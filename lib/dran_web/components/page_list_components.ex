@@ -138,6 +138,10 @@ defmodule DranWeb.PageListComponents do
   attr :archived_filter, :string, default: "all"
   attr :page_type, :string, default: nil
   attr :context_slug, :string, default: "personal"
+  # Pagination state (driven by the parent LiveView).
+  attr :show_archived, :boolean, default: false
+  attr :total_count, :integer, default: 0
+  attr :total_archived, :integer, default: 0
 
   def page_list(assigns) do
     ~H"""
@@ -155,120 +159,161 @@ defmodule DranWeb.PageListComponents do
           >
             <.icon name="hero-funnel" class="w-4 h-4" /> {gettext("Save as Smart Collection")}
           </.link>
+          <button
+            :if={@total_archived > 0}
+            type="button"
+            phx-click="toggle_archived"
+            class={[
+              "btn btn-ghost btn-sm",
+              @show_archived && "btn-active border-primary/40"
+            ]}
+            data-testid="toggle-archived"
+          >
+            <.icon
+              name={if @show_archived, do: "hero-document-text", else: "hero-archive-box"}
+              class="w-4 h-4"
+            />
+            {if @show_archived,
+              do: (if @page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")),
+              else: gettext("Archived")}
+            ({if @show_archived, do: @total_count, else: @total_archived})
+          </button>
           <.link navigate={"/#{PageTypes.path(@page_type)}/new"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}
           </.link>
         </div>
       </div>
 
-      <div
-        :if={@pages == []}
-        data-testid="empty-state"
-        class="py-20 text-center space-y-4"
-      >
-        <div class="flex justify-center">
-          <div class="size-20 rounded-full bg-base-200 flex items-center justify-center">
-            <.icon
-              name={if @page_type, do: PageTypes.icon(@page_type), else: "hero-sparkles"}
-              class="size-10 text-base-content/40"
-            />
-          </div>
-        </div>
-        <div class="space-y-1">
-          <h3 class="text-lg font-semibold">{empty_state(@page_type).title}</h3>
-          <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
-        </div>
-        <.link
-          navigate={"/#{PageTypes.path(@page_type)}/new"}
-          class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
-        >
-          <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
-        </.link>
-      </div>
-
-      <%= cond do %>
-        <% @page_type in ["project", "plan", "goal"] -> %>
-          <div class="space-y-6">
-            <div :for={{_gkey, glabel, gcolor, gitems} <- grouped_pages(@pages, @page_type)}>
-              <div class="flex items-center gap-2 px-1 py-1">
-                <span class={"size-2 rounded-full shrink-0 " <> gcolor}></span>
-                <span class="text-sm font-medium text-base-content/60">{glabel}</span>
-                <span class="text-xs text-base-content/40 tabular-nums">
-                  ({length(gitems)})
-                </span>
-              </div>
-              <div class="space-y-2">
-                <.page_card :for={page <- gitems} page={page} page_type={@page_type} />
-              </div>
+      <%= if @show_archived do %>
+        <%!-- Switch ON: show only archived pages --%>
+        <div class="rounded-xl border border-base-300 bg-base-200/30" data-testid="archived-section">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-base-300">
+            <div class="flex items-center gap-2 text-sm font-semibold text-base-content/60">
+              <.icon name="hero-archive-box" class="size-4" />
+              {gettext("Archived")}
+              <span class="px-1.5 py-0.5 text-xs rounded-md bg-base-300 text-base-content/60">
+                {@total_archived}
+              </span>
             </div>
           </div>
-        <% true -> %>
-          <div class="space-y-2">
-            <.page_card :for={page <- @pages} page={page} page_type={@page_type} />
-          </div>
-      <% end %>
-
-      <%!-- Archived section: collapsible, at the bottom of every list view --%>
-      <details
-        :if={@archived_pages != []}
-        class="group mt-10 rounded-xl border border-base-300 bg-base-200/30"
-        data-testid="archived-section"
-      >
-        <summary class="flex items-center gap-2 px-4 py-3 cursor-pointer select-none text-sm font-semibold text-base-content/60 hover:text-base-content transition-colors">
-          <.icon
-            name="hero-chevron-right"
-            class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
-          />
-          <.icon name="hero-archive-box" class="size-4" />
-          {gettext("Archived")}
-          <span class="px-1.5 py-0.5 text-xs rounded-md bg-base-300 text-base-content/60">
-            {length(@archived_pages)}
-          </span>
-        </summary>
-        <div
-          :if={length(archived_types(@archived_pages)) > 1}
-          class="px-4 pb-2 flex flex-wrap gap-1.5"
-        >
-          <button
-            :for={type <- archived_types(@archived_pages)}
-            phx-click="filter_archived"
-            phx-value-type={type}
-            class={[
-              "px-2 py-1 text-xs rounded-full border transition-colors",
-              @archived_filter == type &&
-                "border-primary bg-primary/10 text-primary font-medium",
-              @archived_filter != type &&
-                "border-base-300 text-base-content/60 hover:border-primary/40 hover:text-base-content"
-            ]}
-          >
-            {if type == "all", do: gettext("All"), else: PageTypes.plural(type)}
-          </button>
-        </div>
-        <div class="px-4 pb-4 space-y-1">
           <div
-            :for={page <- filtered_archived(@archived_pages, @archived_filter)}
-            class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-200 transition-colors opacity-70 hover:opacity-100"
-            data-testid={"archived-page-" <> page.slug}
+            :if={length(archived_types(@archived_pages)) > 1}
+            class="px-4 py-2 flex flex-wrap gap-1.5"
           >
-            <.icon
-              name={PageTypes.icon(page.page_type)}
-              class="size-4 text-base-content/40 shrink-0"
-            />
-            <.link
-              navigate={PageTypes.page_show_path(page)}
-              class="text-sm flex-1 truncate hover:text-primary transition-colors"
+            <button
+              :for={type <- archived_types(@archived_pages)}
+              phx-click="filter_archived"
+              phx-value-type={type}
+              class={[
+                "px-2 py-1 text-xs rounded-full border transition-colors",
+                @archived_filter == type &&
+                  "border-primary bg-primary/10 text-primary font-medium",
+                @archived_filter != type &&
+                  "border-base-300 text-base-content/60 hover:border-primary/40 hover:text-base-content"
+              ]}
             >
-              {page.title}
-            </.link>
-            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/50">
-              {PageTypes.label(page.page_type)}
-            </span>
-            <span :if={page.updated_at} class="text-caption shrink-0">
-              {Calendar.strftime(page.updated_at, "%b %d")}
-            </span>
+              {if type == "all", do: gettext("All"), else: PageTypes.plural(type)}
+            </button>
+          </div>
+          <div class="px-4 py-2 space-y-1">
+            <div
+              :for={page <- filtered_archived(@archived_pages, @archived_filter)}
+              class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-200 transition-colors opacity-70 hover:opacity-100"
+              data-testid={"archived-page-" <> page.slug}
+            >
+              <.icon
+                name={PageTypes.icon(page.page_type)}
+                class="size-4 text-base-content/40 shrink-0"
+              />
+              <.link
+                navigate={PageTypes.page_show_path(page)}
+                class="text-sm flex-1 truncate hover:text-primary transition-colors"
+              >
+                {page.title}
+              </.link>
+              <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/50">
+                {PageTypes.label(page.page_type)}
+              </span>
+              <span :if={page.updated_at} class="text-caption shrink-0">
+                {Calendar.strftime(page.updated_at, "%b %d")}
+              </span>
+            </div>
+            <p
+              :if={filtered_archived(@archived_pages, @archived_filter) == []}
+              class="text-xs text-base-content/30 text-center py-2"
+            >
+              {gettext("No archived pages")}
+            </p>
+            <button
+              :if={length(@archived_pages) < @total_archived}
+              type="button"
+              phx-click="load_more_archived"
+              class="w-full mt-1 py-2 rounded-lg border border-dashed border-base-300 text-sm text-base-content/50 hover:text-primary hover:border-primary/40 transition-colors"
+              data-testid="load-more-archived"
+            >
+              {gettext("Load more")} ({@total_archived - length(@archived_pages)})
+            </button>
           </div>
         </div>
-      </details>
+      <% else %>
+        <%!-- Switch OFF: show only active pages --%>
+        <div
+          :if={@pages == []}
+          data-testid="empty-state"
+          class="py-20 text-center space-y-4"
+        >
+          <div class="flex justify-center">
+            <div class="size-20 rounded-full bg-base-200 flex items-center justify-center">
+              <.icon
+                name={if @page_type, do: PageTypes.icon(@page_type), else: "hero-sparkles"}
+                class="size-10 text-base-content/40"
+              />
+            </div>
+          </div>
+          <div class="space-y-1">
+            <h3 class="text-lg font-semibold">{empty_state(@page_type).title}</h3>
+            <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
+          </div>
+          <.link
+            navigate={"/#{PageTypes.path(@page_type)}/new"}
+            class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
+          >
+            <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
+          </.link>
+        </div>
+
+        <%= cond do %>
+          <% @page_type in ["project", "plan", "goal"] -> %>
+            <div class="space-y-6">
+              <div :for={{_gkey, glabel, gcolor, gitems} <- grouped_pages(@pages, @page_type)}>
+                <div class="flex items-center gap-2 px-1 py-1">
+                  <span class={"size-2 rounded-full shrink-0 " <> gcolor}></span>
+                  <span class="text-sm font-medium text-base-content/60">{glabel}</span>
+                  <span class="text-xs text-base-content/40 tabular-nums">
+                    ({length(gitems)})
+                  </span>
+                </div>
+                <div class="space-y-2">
+                  <.page_card :for={page <- gitems} page={page} page_type={@page_type} />
+                </div>
+              </div>
+            </div>
+          <% true -> %>
+            <div class="space-y-2">
+              <.page_card :for={page <- @pages} page={page} page_type={@page_type} />
+            </div>
+        <% end %>
+
+        <button
+          :if={length(@pages) < @total_count}
+          type="button"
+          phx-click="load_more"
+          class="w-full mt-4 py-2 rounded-lg border border-dashed border-base-300 text-sm text-base-content/50 hover:text-primary hover:border-primary/40 transition-colors"
+          data-testid="load-more"
+        >
+          {gettext("Load more")} ({@total_count - length(@pages)})
+        </button>
+      <% end %>
     </div>
     """
   end

@@ -3,8 +3,8 @@ defmodule DranWeb.ProjectLive do
   LiveView for project pages: index list + detail view with sub-page tabs.
 
   Tabs: Overview (project dashboard — status, stat cards, linked items),
-  Kanban (column board of the project's todos with drag-drop), Todos,
-  Goals, Plans, Graph, Related.
+  Kanban (column board of the project's todos with drag-drop), Goals,
+  Plans, Todos, Graph, Related.
   """
 
   use DranWeb, :live_view
@@ -13,15 +13,16 @@ defmodule DranWeb.ProjectLive do
   alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
+  alias DranWeb.ListPagination
   alias DranWeb.Plugs.Auth
 
   @page_type "project"
 
   @project_tabs [
     {"kanban", gettext("Kanban")},
-    {"todos", gettext("Tareas")},
     {"goals", gettext("Objetivos")},
-    {"plans", gettext("Planes")}
+    {"plans", gettext("Planes")},
+    {"todos", gettext("Tareas")}
   ]
 
   @kanban_columns [
@@ -285,11 +286,14 @@ defmodule DranWeb.ProjectLive do
 
       <div :if={@live_action != :show}>
         <.page_list
-          pages={@pages}
-          archived_pages={@archived_pages}
+          pages={Enum.take(@pages, @visible_count)}
+          archived_pages={if @show_archived, do: Enum.take(@archived_pages, @archived_visible_count), else: []}
           archived_filter={@archived_filter}
           page_type={@page_type}
           context_slug={@context_slug}
+          show_archived={@show_archived}
+          total_count={length(@pages)}
+          total_archived={length(@archived_pages)}
         />
       </div>
     </Layouts.app>
@@ -436,6 +440,10 @@ defmodule DranWeb.ProjectLive do
        pages: pages,
        archived_pages: archived_pages,
        archived_filter: "all",
+      visible_count: 30,
+      show_archived: false,
+      archived_visible_count: 30,
+
        page_title: "Projects"
      )}
   end
@@ -443,6 +451,14 @@ defmodule DranWeb.ProjectLive do
   def handle_event("filter_archived", %{"type" => type}, socket) do
     {:noreply, assign(socket, archived_filter: type)}
   end
+  def handle_event("load_more", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more(socket)}
+
+  def handle_event("toggle_archived", _params, socket),
+    do: {:noreply, ListPagination.handle_toggle_archived(socket)}
+
+  def handle_event("load_more_archived", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more_archived(socket)}
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, active_tab: tab)}

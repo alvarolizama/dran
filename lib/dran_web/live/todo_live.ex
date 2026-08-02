@@ -132,6 +132,19 @@ defmodule DranWeb.TodoLive do
                 {label}
               </button>
             </div>
+
+            <%!-- Archive button — bottom-right corner of the row, same as /plans --%>
+            <button
+              type="button"
+              phx-click="archive_todo"
+              phx-value-slug={item.slug}
+              phx-click-stop-propagation
+              title={gettext("Archive")}
+              class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors shrink-0"
+              data-testid={"archive-btn-" <> item.slug}
+            >
+              <.icon name="hero-archive-box" class="size-4" />
+            </button>
           </div>
         </div>
 
@@ -380,6 +393,34 @@ defmodule DranWeb.TodoLive do
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
+  end
+
+  def handle_event("archive_todo", %{"slug" => slug}, socket) do
+    context = socket.assigns.context
+
+    if context do
+      case Brain.get_page_by_slug(slug, context.id) do
+        nil ->
+          {:noreply, put_flash(socket, :error, gettext("Todo not found."))}
+
+        todo ->
+          case Brain.archive_page(todo) do
+            {:ok, _updated} ->
+              {:noreply,
+               socket
+               |> assign(
+                 items: Brain.list_todos(context.id),
+                 archived_items: Brain.list_todos(context_id: context.id, archived: true)
+               )
+               |> put_flash(:info, gettext("Todo archived."))}
+
+            {:error, _} ->
+              {:noreply, put_flash(socket, :error, gettext("Could not archive todo."))}
+          end
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("quick_add_todo", params, socket) do

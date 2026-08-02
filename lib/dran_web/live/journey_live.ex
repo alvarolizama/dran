@@ -217,7 +217,7 @@ defmodule DranWeb.JourneyLive do
     |> Enum.map(fn {val, i} ->
       x = if n > 1, do: i / (n - 1) * width, else: 0
       y = if max_val > 0, do: height - val / max_val * height, else: height
-      "#{Float.round(x, 1)},#{Float.round(y, 1)}"
+      "#{Float.round(x * 1.0, 1)},#{Float.round(y * 1.0, 1)}"
     end)
     |> Enum.join(" ")
   end
