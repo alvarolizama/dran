@@ -32,7 +32,7 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "renders the brain tuning form with default values", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings")
+    {:ok, _view, html} = live(conn, ~p"/settings/brain")
 
     # Section heading (localized)
     assert html =~ t("Brain tuning")
@@ -60,7 +60,7 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "saving the form persists values and shows a flash", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/settings")
+    {:ok, view, _html} = live(conn, ~p"/settings/brain")
 
     html =
       view
@@ -84,53 +84,45 @@ defmodule DranWeb.SettingsLiveTest do
     assert Settings.get("daily_note_enabled") == true
   end
 
-  test "brain tuning section appears before the read-only environment sections", %{conn: conn} do
+  test "settings page is organized by tabs with users as default", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/settings")
 
-    # The "Brain tuning" heading must appear before the "Inference API"
-    # heading in the rendered HTML.
-    brain_tuning_idx =
-      case :binary.match(html, t("Brain tuning")) do
-        {idx, _} -> idx
-        :nomatch -> nil
-      end
+    # Tab navigation present with all tabs
+    for tab_path <-
+          ~w(/settings/users /settings/contexts /settings/brain /settings/models /settings/system /settings/danger) do
+      assert html =~ tab_path
+    end
 
-    inference_api_idx =
-      case :binary.match(html, t("Inference API")) do
-        {idx, _} -> idx
-        :nomatch -> nil
-      end
+    # Default tab is users — shows user management
+    assert html =~ t("Add User")
 
-    assert brain_tuning_idx != nil, "expected to find \"#{t("Brain tuning")}\" in HTML"
-    assert inference_api_idx != nil, "expected to find \"#{t("Inference API")}\" in HTML"
-
-    assert brain_tuning_idx < inference_api_idx,
-           "expected Brain tuning to appear before Inference API"
+    # Brain tuning is NOT on the default tab (lives in /settings/brain)
+    refute html =~ "agent_max_pages"
   end
 
   test "the brain tuning form still renders the agent_max_pages input", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings")
+    {:ok, _view, html} = live(conn, ~p"/settings/brain")
 
     assert html =~ "agent_max_pages"
     assert html =~ t("Max pages per run")
   end
 
   test "the Entorno header exists with its read-only caption", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings")
+    {:ok, _view, html} = live(conn, ~p"/settings/system")
 
     assert html =~ t("Entorno")
     assert html =~ t("Read-only — loaded from environment variables at startup.")
   end
 
   test "inference test button is present in the Inference API section", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings")
+    {:ok, _view, html} = live(conn, ~p"/settings/system")
 
     assert html =~ "phx-click=\"test_inference\""
     assert html =~ t("Probar conexión")
   end
 
   test "clicking the test button shows the testing state", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/settings")
+    {:ok, view, _html} = live(conn, ~p"/settings/system")
 
     html = render_click(view, "test_inference")
     # The button immediately switches to "Probando..." state

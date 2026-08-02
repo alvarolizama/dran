@@ -195,27 +195,25 @@ defmodule DranWeb.Layouts do
     is_admin = assigns[:is_admin] || false
 
     config_items =
-      [
-        %{
-          key: "contexts",
-          label: gettext("Contexts"),
-          icon: "hero-rectangle-stack",
-          path: ~p"/contexts",
-          badge: counts[:contexts]
-        }
-      ] ++
-        if is_admin do
-          [
-            %{
-              key: "settings",
-              label: gettext("Settings"),
-              icon: "hero-cog-6-tooth",
-              path: ~p"/settings"
-            }
-          ]
-        else
-          []
-        end ++
+      if is_admin do
+        [
+          %{
+            key: "contexts",
+            label: gettext("Contexts"),
+            icon: "hero-rectangle-stack",
+            path: ~p"/contexts",
+            badge: counts[:contexts]
+          },
+          %{
+            key: "settings",
+            label: gettext("Settings"),
+            icon: "hero-cog-6-tooth",
+            path: ~p"/settings"
+          }
+        ]
+      else
+        []
+      end ++
         [
           %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/docs"}
         ]

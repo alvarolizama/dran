@@ -56,8 +56,12 @@ defmodule DranWeb.Router do
       # Legacy single-user session (DRAN_USERNAME, no DB row) is full admin.
       # A DB user is admin iff users.is_admin is true.
       cond do
-        is_nil(user) -> conn
-        user.is_admin -> conn
+        is_nil(user) ->
+          conn
+
+        user.is_admin ->
+          conn
+
         true ->
           conn
           |> Phoenix.Controller.put_flash(:error, "Admin access required")
@@ -197,8 +201,6 @@ defmodule DranWeb.Router do
     # Docs
     live "/docs", DocsLive, :index
 
-    live "/contexts", ContextLive, :index
-
     # Context switching
     post "/context", SessionController, :switch_context
   end
@@ -209,6 +211,8 @@ defmodule DranWeb.Router do
     pipe_through [:browser, :auth, :admin]
 
     live "/settings", SettingsLive, :index
+    live "/settings/:tab", SettingsLive, :index
+    live "/contexts", ContextLive, :index
   end
 
   # ── REST API (token-protected) ─────────────────────────────────────────────

@@ -70,9 +70,17 @@ defmodule DranWeb.SettingsLive do
     assign(socket, new_user_form: to_form(%{}, as: :user))
   end
 
+  @tabs ~w(users contexts brain models system danger)
+
   @impl true
-  def handle_params(_params, _url, socket) do
-    {:noreply, socket}
+  def handle_params(params, _url, socket) do
+    tab =
+      case params["tab"] do
+        t when t in @tabs -> t
+        _ -> "users"
+      end
+
+    {:noreply, assign(socket, active_tab: tab)}
   end
 
   # -- Admin: user & context management ---------------------------------------
@@ -326,23 +334,38 @@ defmodule DranWeb.SettingsLive do
             </p>
           </div>
 
-          <%!-- Admin-only user management (FIRST) --%>
-          <.users_section users={@users} all_contexts={@all_contexts} form={@new_user_form} />
+          <%!-- Tabs navigation --%>
+          <div class="tabs tabs-border">
+            <.link
+              :for={tab <- ~w(users contexts brain models system danger)}
+              patch={~p"/settings/#{tab}"}
+              class={["tab", @active_tab == tab && "tab-active"]}
+            >
+              {tab_label(tab)}
+            </.link>
+          </div>
 
-          <%!-- Contexts with user membership --%>
-          <.contexts_section contexts={@all_contexts} users={@users} />
+          <%!-- Tab content --%>
+          <div :if={@active_tab == "users"}>
+            <.users_section users={@users} all_contexts={@all_contexts} form={@new_user_form} />
+          </div>
 
-          <%!-- Editable brain tuning form --%>
-          <.brain_tuning_section form={@brain_form} />
+          <div :if={@active_tab == "contexts"}>
+            <.contexts_section contexts={@all_contexts} users={@users} />
+          </div>
 
-          <%!-- Editable model overrides (SECOND) --%>
-          <.models_section
-            models_result={@models_result}
-            model_values={@model_values}
-          />
+          <div :if={@active_tab == "brain"}>
+            <.brain_tuning_section form={@brain_form} />
+          </div>
 
-          <%!-- Read-only environment sections --%>
-          <div class="space-y-6">
+          <div :if={@active_tab == "models"}>
+            <.models_section
+              models_result={@models_result}
+              model_values={@model_values}
+            />
+          </div>
+
+          <div :if={@active_tab == "system"} class="space-y-6">
             <div>
               <h2 class="text-heading">{gettext("Entorno")}</h2>
               <p class="text-caption mt-0.5">
@@ -571,7 +594,9 @@ defmodule DranWeb.SettingsLive do
           </div>
 
           <%!-- Danger zone — destructive operations --%>
-          <.danger_zone_section context_slug={@context_slug} />
+          <div :if={@active_tab == "danger"}>
+            <.danger_zone_section context_slug={@context_slug} />
+          </div>
         </div>
       </div>
     </Layouts.app>
@@ -940,6 +965,13 @@ defmodule DranWeb.SettingsLive do
   end
 
   defp format_bytes(_), do: "—"
+
+  defp tab_label("users"), do: gettext("Users")
+  defp tab_label("contexts"), do: gettext("Contexts")
+  defp tab_label("brain"), do: gettext("Brain")
+  defp tab_label("models"), do: gettext("Models")
+  defp tab_label("system"), do: gettext("System")
+  defp tab_label("danger"), do: gettext("Danger zone")
 
   attr :context_slug, :string, required: true
 

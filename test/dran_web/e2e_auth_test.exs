@@ -96,6 +96,15 @@ defmodule DranWeb.E2EAuthTest do
   end
 
   describe "sidebar integration" do
+    test "/contexts is admin-only", %{conn: conn, user: user, ctx1: ctx1} do
+      conn =
+        conn
+        |> init_test_session(%{user: user.email, context_slug: ctx1.slug})
+
+      # Non-admin is redirected away from /contexts
+      assert {:error, {:redirect, %{to: "/"}}} = Phoenix.LiveViewTest.live(conn, ~p"/contexts")
+    end
+
     test "admin session sees the Settings link and all contexts", %{
       conn: conn,
       admin: admin,
