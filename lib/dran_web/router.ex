@@ -212,7 +212,6 @@ defmodule DranWeb.Router do
 
     live "/settings", SettingsLive, :index
     live "/settings/:tab", SettingsLive, :index
-    live "/contexts", ContextLive, :index
   end
 
   # ── REST API (token-protected) ─────────────────────────────────────────────

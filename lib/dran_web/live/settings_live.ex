@@ -8,9 +8,11 @@ defmodule DranWeb.SettingsLive do
 
   use DranWeb, :live_view
 
+  alias Dran.Brain.Context
   alias Dran.Inference.Client
   alias Dran.Inference.Config
   alias Dran.Settings
+  alias Dran.Slug
   alias DranWeb.Plugs.Auth
 
   # Keys managed by the "Brain tuning" form.
@@ -48,6 +50,8 @@ defmodule DranWeb.SettingsLive do
       |> assign_users()
       |> assign_contexts()
       |> assign_new_user_form()
+      |> assign_new_context_form()
+      |> assign(confirm_delete_context_id: nil, slug_touched: false)
       |> assign_brain_form()
       |> assign_models()
 
@@ -68,6 +72,10 @@ defmodule DranWeb.SettingsLive do
 
   defp assign_new_user_form(socket) do
     assign(socket, new_user_form: to_form(%{}, as: :user))
+  end
+
+  defp assign_new_context_form(socket) do
+    assign(socket, new_context_form: to_form(Context.changeset(%Context{}, %{}), as: :context))
   end
 
   @tabs ~w(users contexts brain models system danger)
@@ -142,6 +150,74 @@ defmodule DranWeb.SettingsLive do
     end
 
     {:noreply, assign_users(socket)}
+  end
+
+  # -- Admin: context CRUD (create / delete) -----------------------------------
+
+  @impl true
+  def handle_event("validate_context", %{"context" => params, "_target" => target}, socket) do
+    name = params["name"] || ""
+    slug_touched = socket.assigns[:slug_touched] || false
+
+    slug_touched =
+      if target == ["context", "slug"], do: true, else: slug_touched
+
+    params =
+      if slug_touched do
+        params
+      else
+        Map.put(params, "slug", Slug.slugify(name))
+      end
+
+    form = %Context{} |> Context.changeset(params) |> to_form(as: :context)
+    {:noreply, assign(socket, new_context_form: form, slug_touched: slug_touched)}
+  end
+
+  @impl true
+  def handle_event("create_context", %{"context" => params}, socket) do
+    case Dran.Brain.create_context(params) do
+      {:ok, _context} ->
+        {:noreply,
+         socket
+         |> assign_contexts()
+         |> assign_new_context_form()
+         |> assign(:slug_touched, false)
+         |> put_flash(:info, gettext("Context created"))}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, new_context_form: to_form(changeset, as: :context))}
+    end
+  end
+
+  @impl true
+  def handle_event("ask_delete_context", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :confirm_delete_context_id, id)}
+  end
+
+  @impl true
+  def handle_event("cancel_delete_context", _params, socket) do
+    {:noreply, assign(socket, :confirm_delete_context_id, nil)}
+  end
+
+  @impl true
+  def handle_event("delete_context", %{"id" => id}, socket) do
+    context = Enum.find(socket.assigns.all_contexts, &(&1.id == id))
+
+    if context do
+      case Dran.Brain.delete_context(context) do
+        {:ok, _} ->
+          {:noreply,
+           socket
+           |> assign_contexts()
+           |> assign(:confirm_delete_context_id, nil)
+           |> put_flash(:info, gettext("Context \"%{name}\" deleted", name: context.name))}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, gettext("Could not delete context"))}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -351,7 +427,13 @@ defmodule DranWeb.SettingsLive do
           </div>
 
           <div :if={@active_tab == "contexts"}>
-            <.contexts_section contexts={@all_contexts} users={@users} />
+            <.contexts_section
+              contexts={@all_contexts}
+              users={@users}
+              form={@new_context_form}
+              confirm_delete_context_id={@confirm_delete_context_id}
+              context_slug={@context_slug}
+            />
           </div>
 
           <div :if={@active_tab == "brain"}>
@@ -1135,21 +1217,127 @@ defmodule DranWeb.SettingsLive do
 
   attr :contexts, :list, required: true
   attr :users, :list, required: true
+  attr :form, :map, required: true
+  attr :confirm_delete_context_id, :any, default: nil
+  attr :context_slug, :string, default: nil
 
   def contexts_section(assigns) do
     ~H"""
     <div class="space-y-6">
       <div>
         <h2 class="text-heading">{gettext("Contexts")}</h2>
-        <p class="text-caption mt-0.5">{gettext("Manage context access per user.")}</p>
+        <p class="text-caption mt-0.5">
+          {gettext("Create contexts and manage context access per user.")}
+        </p>
       </div>
 
+      <%!-- Create context form --%>
+      <section class="surface-2 rounded-2xl overflow-hidden">
+        <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+          <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+            <.icon name="hero-plus" class="size-4 text-primary" />
+          </div>
+          <div class="min-w-0">
+            <h3 class="text-heading">{gettext("New context")}</h3>
+            <p class="text-caption mt-0.5">
+              {gettext("Create an isolated silo for your knowledge.")}
+            </p>
+          </div>
+        </header>
+
+        <.form
+          for={@form}
+          id="context-form"
+          phx-change="validate_context"
+          phx-submit="create_context"
+          class="px-5 py-5 space-y-4"
+        >
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <.input
+              field={@form[:name]}
+              type="text"
+              label={gettext("Name")}
+              placeholder={gettext("e.g. Personal")}
+              class="w-full"
+            />
+            <.input
+              field={@form[:slug]}
+              type="text"
+              label={gettext("Slug")}
+              placeholder={gettext("e.g. personal")}
+              class="w-full font-mono text-sm"
+            />
+          </div>
+          <p class="text-caption">
+            {gettext("The slug auto-derives from the name unless you edit it directly.")}
+          </p>
+
+          <div class="flex justify-end pt-1">
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm transition-colors active:scale-95"
+              phx-disable-with={gettext("Creating…")}
+            >
+              <.icon name="hero-plus" class="size-4" />
+              {gettext("Create")}
+            </button>
+          </div>
+        </.form>
+      </section>
+
+      <%!-- Context list with user membership --%>
       <div class="space-y-4">
-        <div :for={ctx <- @contexts} class="card bg-base-100 border border-base-300">
+        <div
+          :for={ctx <- @contexts}
+          class={[
+            "card bg-base-100 border border-base-300",
+            @confirm_delete_context_id == ctx.id && "ring-2 ring-error/60 bg-error/5"
+          ]}
+        >
           <div class="card-body">
-            <h3 class="text-lg font-semibold">
-              {ctx.name} <code class="text-sm text-base-content/60">({ctx.slug})</code>
-            </h3>
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="text-lg font-semibold">
+                {ctx.name}
+                <code class="text-sm text-base-content/60">({ctx.slug})</code>
+                <span :if={@context_slug == ctx.slug} class="text-caption text-primary">
+                  · {gettext("current")}
+                </span>
+              </h3>
+
+              <div class="flex items-center gap-2 shrink-0">
+                <%= if @confirm_delete_context_id == ctx.id do %>
+                  <span class="text-caption text-error mr-1 hidden sm:inline">
+                    {gettext("Delete?")}
+                  </span>
+                  <button
+                    type="button"
+                    phx-click="delete_context"
+                    phx-value-id={ctx.id}
+                    class="btn btn-error btn-xs"
+                  >
+                    <.icon name="hero-check" class="size-3.5" />
+                    {gettext("Confirm")}
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="cancel_delete_context"
+                    class="btn btn-ghost btn-xs"
+                  >
+                    {gettext("Cancel")}
+                  </button>
+                <% else %>
+                  <button
+                    type="button"
+                    phx-click="ask_delete_context"
+                    phx-value-id={ctx.id}
+                    class="btn btn-ghost btn-xs text-error hover:bg-error/10"
+                    title={gettext("Delete context")}
+                  >
+                    <.icon name="hero-trash" class="size-3.5" />
+                  </button>
+                <% end %>
+              </div>
+            </div>
 
             <div class="flex flex-wrap gap-2 mt-2">
               <label :for={user <- @users} class="flex items-center gap-2">

@@ -198,13 +198,6 @@ defmodule DranWeb.Layouts do
       if is_admin do
         [
           %{
-            key: "contexts",
-            label: gettext("Contexts"),
-            icon: "hero-rectangle-stack",
-            path: ~p"/contexts",
-            badge: counts[:contexts]
-          },
-          %{
             key: "settings",
             label: gettext("Settings"),
             icon: "hero-cog-6-tooth",
