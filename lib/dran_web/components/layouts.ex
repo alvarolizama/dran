@@ -501,11 +501,8 @@ defmodule DranWeb.Layouts do
         </span>
         {@current_user}
       </span>
-      <form
-        action={~p"/session"}
-        method="post"
-        onsubmit="this.method='delete'; this.submit(); return false;"
-      >
+      <form action={~p"/session"} method="post">
+        <input type="hidden" name="_method" value="delete" />
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <button
           type="submit"

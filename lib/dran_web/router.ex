@@ -53,13 +53,16 @@ defmodule DranWeb.Router do
     if user_email do
       user = Dran.Accounts.get_user_by_email(user_email)
 
-      if user && user.is_admin do
-        conn
-      else
-        conn
-        |> Phoenix.Controller.put_flash(:error, "Admin access required")
-        |> Phoenix.Controller.redirect(to: ~p"/")
-        |> Plug.Conn.halt()
+      # Legacy single-user session (DRAN_USERNAME, no DB row) is full admin.
+      # A DB user is admin iff users.is_admin is true.
+      cond do
+        is_nil(user) -> conn
+        user.is_admin -> conn
+        true ->
+          conn
+          |> Phoenix.Controller.put_flash(:error, "Admin access required")
+          |> Phoenix.Controller.redirect(to: ~p"/")
+          |> Plug.Conn.halt()
       end
     else
       conn
