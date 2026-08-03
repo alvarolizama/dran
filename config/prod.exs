@@ -8,8 +8,10 @@ import Config
 config :dran, DranWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
 # force_ssl is configured at runtime in config/runtime.exs so it can be
-# toggled via the DISABLE_FORCE_SSL env var without a rebuild. This file
-# only sets compile-time config.
+# toggled via the DISABLE_FORCE_SSL env var without a rebuild. We set a
+# compile-time default here to avoid the "different value at compile vs
+# runtime" validation error when the release boots.
+config :dran, DranWeb.Endpoint, force_ssl: [rewrite_on: [:x_forwarded_proto]]
 
 # Configure Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Req
