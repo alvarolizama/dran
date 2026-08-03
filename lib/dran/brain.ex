@@ -712,38 +712,6 @@ defmodule Dran.Brain do
       :ok
   end
 
-  @doc """
-  Ensure a daily journal note exists for the given date.
-
-  Idempotent: if a page with slug `daily-YYYY-MM-DD` already exists in
-  the context, it is returned as-is. Otherwise a new `note` page is
-  created with `meta = %{"kind" => "journal", "date" => iso}` and
-  `created_by = "system"`.
-
-  Returns `{:ok, %Page{}}` on success or `{:error, changeset}` on failure.
-  """
-  def ensure_daily_note(context_id, date \\ Date.utc_today())
-      when is_binary(context_id) do
-    slug = "daily-" <> Date.to_iso8601(date)
-    iso = Date.to_iso8601(date)
-
-    case get_page_by_slug(slug, context_id) do
-      %Page{} = page ->
-        {:ok, page}
-
-      nil ->
-        create_page(%{
-          context_id: context_id,
-          title: "Daily — #{iso}",
-          slug: slug,
-          page_type: "note",
-          body: "",
-          meta: %{"kind" => "journal", "date" => iso},
-          created_by: "system"
-        })
-    end
-  end
-
   # ──────────────────────────────────────────────────────────────────────────
   # Relations
   # ──────────────────────────────────────────────────────────────────────────

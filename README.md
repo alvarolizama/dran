@@ -165,7 +165,7 @@ Only admins see Settings (`/settings`, and `/settings/:tab`). It's organized in 
 | --- | --- |
 | `users` | Create users, set API tokens, promote admins — and manage which contexts each user can access |
 | `contexts` | Create/delete contexts, edit a context's page types (see below) |
-| `brain` | Brain tuning — semantic thresholds, agent limits, daily-note toggle |
+| `brain` | Brain tuning — semantic thresholds, agent limits |
 | `models` | Per-purpose inference models (chat/agents, embeddings, reranking), selectable from the API server with env defaults marked `(env)` |
 | `system` | Read-only environment configuration |
 | `danger` | Destructive actions (e.g. reset context) |

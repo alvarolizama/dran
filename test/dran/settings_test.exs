@@ -10,7 +10,6 @@ defmodule Dran.SettingsTest do
       assert Settings.get("semantic_threshold_long") == 0.28
       assert Settings.get("agent_max_pages") == 10
       assert Settings.get("agent_max_sources") == 10
-      assert Settings.get("daily_note_enabled") == true
     end
 
     test "returns nil for unknown key without default" do
@@ -56,7 +55,6 @@ defmodule Dran.SettingsTest do
       assert all["semantic_threshold_mid"] == 0.22
       assert all["semantic_threshold_long"] == 0.28
       assert all["agent_max_sources"] == 10
-      assert all["daily_note_enabled"] == true
 
       # DB overrides win
       assert all["agent_max_pages"] == 42
@@ -77,7 +75,6 @@ defmodule Dran.SettingsTest do
       assert defaults["semantic_threshold_long"] == 0.28
       assert defaults["agent_max_pages"] == 10
       assert defaults["agent_max_sources"] == 10
-      assert defaults["daily_note_enabled"] == true
     end
   end
 end

@@ -7,7 +7,6 @@ defmodule DranWeb.DashboardLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias Dran.Settings
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
@@ -277,38 +276,6 @@ defmodule DranWeb.DashboardLive do
                 </div>
               </div>
             </div>
-
-            <%!-- Daily note CTA --%>
-            <div
-              :if={@daily_note_status in [:missing, :empty]}
-              class="flex items-center justify-between p-3 rounded-xl bg-base-200"
-            >
-              <div class="flex items-center gap-2">
-                <.icon name="hero-pencil-square" class="size-5 text-primary" />
-                <span class="text-sm">{gettext("No daily note for today yet.")}</span>
-              </div>
-              <button
-                phx-click="open_daily_note"
-                class="btn btn-primary btn-sm transition-colors active:scale-95"
-              >
-                {gettext("Open today's note")}
-              </button>
-            </div>
-            <div
-              :if={@daily_note_status == :exists}
-              class="flex items-center justify-between p-3 rounded-xl bg-base-200"
-            >
-              <div class="flex items-center gap-2">
-                <.icon name="hero-check-circle" class="size-5 text-success" />
-                <span class="text-sm">{gettext("Today's daily note is ready.")}</span>
-              </div>
-              <.link
-                navigate={"/notes/daily-#{Date.to_iso8601(Date.utc_today())}"}
-                class="btn btn-ghost btn-sm transition-colors active:scale-95"
-              >
-                {gettext("Open today's note")}
-              </.link>
-            </div>
           </div>
 
           <%!-- Communities section --%>
@@ -482,16 +449,9 @@ defmodule DranWeb.DashboardLive do
     current_user = socket.assigns[:current_user]
     db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
 
-    {stats, brain_metrics, daily_note_status, community_summaries} =
+    {stats, brain_metrics, community_summaries} =
       if context do
         metrics = Brain.metrics(context.id)
-
-        daily_note_status =
-          if Settings.get("daily_note_enabled") do
-            compute_daily_note_status(context.id)
-          else
-            :disabled
-          end
 
         community_summaries =
           try do
@@ -502,9 +462,9 @@ defmodule DranWeb.DashboardLive do
             _, _ -> []
           end
 
-        {Brain.stats(context.id), metrics, daily_note_status, community_summaries}
+        {Brain.stats(context.id), metrics, community_summaries}
       else
-        {%{}, %{}, :disabled, []}
+        {%{}, %{}, []}
       end
 
     {:ok,
@@ -512,7 +472,6 @@ defmodule DranWeb.DashboardLive do
        context: context,
        stats: stats,
        brain_metrics: brain_metrics,
-       daily_note_status: daily_note_status,
        community_summaries: community_summaries,
        user_api_token: db_user && db_user.api_token,
        kanban_columns: @kanban_columns,
@@ -523,25 +482,6 @@ defmodule DranWeb.DashboardLive do
 
   def handle_params(_params, _url, socket) do
     {:noreply, socket}
-  end
-
-  def handle_event("open_daily_note", _params, socket) do
-    if socket.assigns.context do
-      {:ok, _page} = Brain.ensure_daily_note(socket.assigns.context.id)
-      slug = "daily-" <> Date.to_iso8601(Date.utc_today())
-      {:noreply, push_navigate(socket, to: "/notes/#{slug}")}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  defp compute_daily_note_status(context_id) do
-    slug = "daily-" <> Date.to_iso8601(Date.utc_today())
-
-    case Brain.get_page_by_slug(slug, context_id) do
-      nil -> :missing
-      %{body: body} -> if body == "", do: :empty, else: :exists
-    end
   end
 
   # ── Components ──

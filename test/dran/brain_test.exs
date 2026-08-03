@@ -397,22 +397,6 @@ defmodule Dran.BrainTest do
     end
   end
 
-  describe "ensure_daily_note/2" do
-    test "creates a daily note and is idempotent", %{context: ctx} do
-      date = ~D[2026-07-17]
-
-      {:ok, note1} = Brain.ensure_daily_note(ctx.id, date)
-      assert note1.slug == "daily-2026-07-17"
-      assert note1.page_type == "note"
-      assert note1.meta["kind"] == "journal"
-      assert note1.meta["date"] == "2026-07-17"
-      assert note1.created_by == "system"
-
-      {:ok, note2} = Brain.ensure_daily_note(ctx.id, date)
-      assert note2.id == note1.id
-    end
-  end
-
   describe "metrics/1" do
     test "returns extended brain-health metrics with all expected keys", %{context: ctx} do
       # Create some pages and relations so the metrics are non-trivial

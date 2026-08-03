@@ -3,8 +3,8 @@
 #     mix run priv/repo/seeds.exs
 #
 # Creates the default context and seeds it with realistic Spanish content:
-# goals with nested todos, notes with embeds, concepts with semantic relations,
-# and a daily note. Idempotent — safe to run multiple times.
+# goals with nested todos, notes with embeds, concepts with semantic relations.
+# Idempotent — safe to run multiple times.
 #
 # Admin users are NOT created here: the first-run /setup web flow handles
 # initial admin creation.
@@ -533,45 +533,6 @@ concept_actores =
     "owner" => "alvaro",
     "created_by" => "alvaro"
   })
-
-# ──────────────────────────────────────────────────────────────────────────
-# 5. Daily note (today) via Brain.ensure_daily_note
-# ──────────────────────────────────────────────────────────────────────────
-
-IO.puts("\nDaily note:")
-
-{:ok, daily_note} = Brain.ensure_daily_note(ctx_id)
-IO.puts("  ✓ Daily note: #{daily_note.slug}")
-
-# Add some content to the daily note if it's empty
-daily_note = Brain.get_page_by_slug(daily_note.slug, ctx_id)
-
-if daily_note.body == "" or is_nil(daily_note.body) do
-  Brain.update_page(daily_note, %{
-    "body" => """
-    # #{Date.utc_today() |> Date.to_iso8601()}
-
-    ## Prioridades de hoy
-    - [ ] Avanzar en el capítulo 2 del libro
-    - [ ] Revisar PRs del proyecto Dran
-    - [ ] Sesión de escritura (45 min)
-
-    ## Notas
-    Revisé ![[nota-metodo-zettelkasten]] y me dio una idea para estructurar
-    el capítulo de captura. La conexión entre ![[concepto-segundo-cerebro]]
-    y el método PARA es más clara ahora.
-
-    ## Reflexión
-    Buen día de enfoque. La rutina de ![[nota-rutina-escritura-manana]]
-    está funcionando.
-    """,
-    "tags" => ["diario", "journal"]
-  })
-
-  IO.puts("  ✓ Daily note content added")
-else
-  IO.puts("  · Daily note already has content")
-end
 
 # ──────────────────────────────────────────────────────────────────────────
 # 7. Explicit relations (semantic, related, part_of)

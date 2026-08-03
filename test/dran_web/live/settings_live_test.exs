@@ -38,7 +38,7 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ t("Brain tuning")
 
     # Primary fields visible
-    for name <- ~w(agent_max_pages daily_note_enabled) do
+    for name <- ~w(agent_max_pages) do
       assert html =~ name
     end
 
@@ -69,8 +69,7 @@ defmodule DranWeb.SettingsLiveTest do
           "semantic_threshold_short" => "0.10",
           "semantic_threshold_mid" => "0.25",
           "semantic_threshold_long" => "0.30",
-          "agent_max_pages" => "42",
-          "daily_note_enabled" => "true"
+          "agent_max_pages" => "42"
         }
       })
       |> render_submit()
@@ -81,7 +80,6 @@ defmodule DranWeb.SettingsLiveTest do
     # The new values are persisted and readable via Settings.get/1
     assert Settings.get("agent_max_pages") == 42
     assert Settings.get("semantic_threshold_short") == 0.10
-    assert Settings.get("daily_note_enabled") == true
   end
 
   test "settings page is organized by tabs with users as default", %{conn: conn} do

@@ -16,7 +16,7 @@ defmodule DranWeb.SettingsLive do
   alias DranWeb.Plugs.Auth
 
   # Keys managed by the "Brain tuning" form.
-  @brain_keys ~w(agent_max_pages daily_note_enabled)
+  @brain_keys ~w(agent_max_pages)
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
   # Purposes shown in the "Modelos" card. Each entry is:
@@ -274,8 +274,7 @@ defmodule DranWeb.SettingsLive do
       "semantic_threshold_short" => &cast_float/1,
       "semantic_threshold_mid" => &cast_float/1,
       "semantic_threshold_long" => &cast_float/1,
-      "agent_max_pages" => &cast_int/1,
-      "daily_note_enabled" => &cast_bool/1
+      "agent_max_pages" => &cast_int/1
     }
 
     for key <- @brain_keys ++ @advanced_keys do
@@ -409,12 +408,6 @@ defmodule DranWeb.SettingsLive do
       :error -> nil
     end
   end
-
-  # `value="true"` is sent for a checked checkbox; the hidden `value="false"`
-  # companion is sent when unchecked. Phoenix's checkbox input emits both
-  # (hidden first), so the boolean string is the final parsed value.
-  defp cast_bool("true"), do: true
-  defp cast_bool(_), do: false
 
   # -- Models section ----------------------------------------------------------
 
@@ -886,18 +879,6 @@ defmodule DranWeb.SettingsLive do
               <p class="text-xs text-base-content/60 mt-1.5">
                 {gettext(
                   "Maximum number of pages the autonomous agents will create in a single run. Higher values mean longer runs and more content per run. Default: 10."
-                )}
-              </p>
-            </div>
-            <div>
-              <.input
-                field={@form[:daily_note_enabled]}
-                type="checkbox"
-                label={gettext("Daily note enabled")}
-              />
-              <p class="text-xs text-base-content/60 mt-1.5">
-                {gettext(
-                  "When enabled, the daily-note agent generates a summary page each day with what changed in the brain (via the Quantum scheduler). Turn off to disable automatic daily notes."
                 )}
               </p>
             </div>

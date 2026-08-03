@@ -79,48 +79,5 @@ defmodule DranWeb.DashboardLiveTest do
       assert html =~ t("Relations")
       assert html =~ t("Agents")
     end
-
-    test "shows daily note CTA when today's note does not exist", %{conn: conn} do
-      # Ensure no daily note exists for today
-      slug = "daily-" <> Date.to_iso8601(Date.utc_today())
-      context = Brain.get_context_by_slug("personal")
-
-      if page = Brain.get_page_by_slug(slug, context.id) do
-        Brain.delete_page(page)
-      end
-
-      {:ok, _view, html} = live(conn, ~p"/")
-
-      # The CTA button is present (phx-click attribute)
-      assert html =~ "open_daily_note"
-      # The CTA text (localized, HTML-escaped)
-      assert html =~ html_escape(t("Open today's note"))
-      assert html =~ t("No daily note for today yet.")
-    end
-
-    test "shows ready state when today's note exists with content", %{conn: conn} do
-      context = Brain.get_context_by_slug("personal")
-      slug = "daily-" <> Date.to_iso8601(Date.utc_today())
-
-      # Clean up any existing daily note first
-      if page = Brain.get_page_by_slug(slug, context.id) do
-        Brain.delete_page(page)
-      end
-
-      # Create a daily note with content
-      {:ok, _note} =
-        Brain.create_page(%{
-          context_id: context.id,
-          title: "Daily — #{Date.to_iso8601(Date.utc_today())}",
-          slug: slug,
-          page_type: "note",
-          body: "Some content for today",
-          meta: %{"kind" => "journal", "date" => Date.to_iso8601(Date.utc_today())}
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/")
-
-      assert html =~ html_escape(t("Today's daily note is ready."))
-    end
   end
 end
