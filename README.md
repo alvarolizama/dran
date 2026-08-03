@@ -73,7 +73,7 @@ Every user is a row in the `users` table with `email`, `name`, `google_id`, `ava
 
 ### Google OAuth
 
-Google login appears on the login page **only when** both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. On first login a user is auto-created; on every login the email in `DRAN_ADMIN_EMAIL` is auto-promoted to admin.
+Google login appears on the login page **only when** `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` are set. On first login a user is auto-created only if their email domain is in `GOOGLE_OAUTH_ALLOWED_DOMAINS` (fail-closed); on every login the email in `DRAN_ADMIN_EMAIL` is auto-promoted to admin.
 
 ### Legacy credentials
 
@@ -99,14 +99,41 @@ See [`.env.example`](.env.example) for the full annotated list. Key variables:
 | `DRAN_API_TOKEN` | no* | Legacy admin Bearer token for API / MCP |
 | `DRAN_USERNAME` | no | Legacy admin username (default `admin`, seeded) |
 | `DRAN_ADMIN_EMAIL` | no | Google email auto-promoted to admin on login |
-| `GOOGLE_CLIENT_ID` | no | Enables Google OAuth when set |
-| `GOOGLE_CLIENT_SECRET` | no | Enables Google OAuth when set |
+| `GOOGLE_OAUTH_CLIENT_ID` | no | Enables Google OAuth when set |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | no | Enables Google OAuth when set |
+| `GOOGLE_OAUTH_REDIRECT_URI` | no | OAuth callback URI (default derived from PHX_HOST/PHX_SCHEME) |
+| `GOOGLE_OAUTH_ALLOWED_DOMAINS` | no | Email domains allowed to auto-register (comma-separated) |
 | `DRAN_CONTEXT_SLUG` | no | Default context slug (default `personal`) |
 | `DRAN_CONTEXT_NAME` | no | Default context name (default `Personal`) |
 | `PORT` | no | HTTP listener port (default `4000`) |
 | `POOL_SIZE` | no | DB connection pool size (default `10`) |
+| `ECTO_SSL` | no | `false` to disable DB SSL (default: enabled, no cert verification) |
+| `ECTO_SSL_VERIFY` | no | `true` for strict cert verification against system CA bundle |
+| `SESSION_SIGNING_SALT` | prod | Session cookie signing salt (`mix phx.gen.secret 32`) |
+| `SESSION_ENCRYPTION_SALT` | prod | Session cookie encryption salt (`mix phx.gen.secret 32`) |
+| `SESSION_COOKIE_SECURE` | no | `true` to force Secure flag on cookies (HTTPS-only) |
+| `SESSION_MAX_AGE_SECONDS` | no | Session cookie lifetime (default `28800` = 8h) |
+| `CHECK_ORIGINS` | no | CSRF origins for dual HTTP/HTTPS access (comma-separated) |
 
 \* At least one of `DRAN_PASSWORD` (web login) or `DRAN_API_TOKEN` is needed unless you use Google OAuth. **Never use the dev defaults (`admin`/`dran`/`dran-token`) in production.**
+
+### Deploy: SSL, VPN, and dual access
+
+Dran is designed to run in multiple network configurations simultaneously:
+
+| Scenario | Build | Runtime |
+|----------|-------|---------|
+| **HTTPS public** (443) | Default (no special args) | `PHX_SCHEME=https`, `PHX_HOST=dran.example.com` |
+| **HTTP over VPN** (no TLS) | `docker build --build-arg DISABLE_FORCE_SSL=1` | `PHX_SCHEME=http`, `PHX_HOST=<vpn-host>`, `PHX_PORT=<vpn-port>` |
+| **Dual access** (HTTPS public + HTTP VPN) | `docker build --build-arg DISABLE_FORCE_SSL=1` | `PHX_SCHEME=http`, `CHECK_ORIGINS=https://dran.example.com,http://<vpn-host>:<port>` |
+
+**Why BUILD-time for force_ssl?** Phoenix's `force_ssl` is compile-time (marked via `compile_env`). Runtime config cannot toggle it — it must be baked into the release. This is why the Dockerfile has `ARG DISABLE_FORCE_SSL` and `config/prod.exs` checks the env var at build time.
+
+**Database SSL:** Managed databases (AlloyDB, Cloud SQL) require SSL but use self-signed certificates. Dran defaults to `ssl: true` with `verify: :verify_none` (encrypted but not verified). Set `ECTO_SSL=false` for local dev or `ECTO_SSL_VERIFY=true` for strict verification against the system CA bundle.
+
+**Session cookies:** In production, `SESSION_SIGNING_SALT` and `SESSION_ENCRYPTION_SALT` are **required** — the app refuses to boot without them. Generate with `mix phx.gen.secret 32`. `SESSION_COOKIE_SECURE=true` forces HTTPS-only cookies.
+
+**Google OAuth + VPN:** When running over VPN without HTTPS, set `GOOGLE_OAUTH_REDIRECT_URI` explicitly to your public HTTPS URL. Google requires HTTPS redirect URIs (except localhost). Example: `GOOGLE_OAUTH_REDIRECT_URI=https://dran.example.com/auth/google/callback`.
 
 ### Inference API (optional)
 

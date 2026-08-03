@@ -3,13 +3,28 @@ defmodule DranWeb.Endpoint do
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
-  # Set :encryption_salt if you would also like to encrypt it.
+  # The session is stored in an encrypted cookie (contents can be neither
+  # read nor tampered with by the client). Salts and lifetime are
+  # runtime-configurable via env vars. SESSION_COOKIE_SECURE=true forces the
+  # Secure flag (HTTPS-only cookie); unset = Plug default (secure only when
+  # the request itself is HTTPS, so HTTP deploys keep working).
+  session_secure =
+    case System.get_env("SESSION_COOKIE_SECURE") do
+      v when v in ["true", "1"] -> [secure: true]
+      v when v in ["false", "0"] -> [secure: false]
+      _ -> []
+    end
+
   @session_options [
-    store: :cookie,
-    key: "_dran_key",
-    signing_salt: "ejg+AcWI",
-    same_site: "Lax"
-  ]
+                     store: :cookie,
+                     key: "_dran_key",
+                     signing_salt: System.get_env("SESSION_SIGNING_SALT", "ejg+AcWI"),
+                     encryption_salt: System.get_env("SESSION_ENCRYPTION_SALT", "ejg+AcWI"),
+                     same_site: "Lax",
+                     http_only: true,
+                     max_age:
+                       String.to_integer(System.get_env("SESSION_MAX_AGE_SECONDS", "28800"))
+                   ] ++ session_secure
 
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [connect_info: [session: @session_options]],
