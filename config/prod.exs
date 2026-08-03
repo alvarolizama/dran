@@ -7,11 +7,17 @@ import Config
 # before starting your production server.
 config :dran, DranWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
-# force_ssl is configured at runtime in config/runtime.exs so it can be
-# toggled via the DISABLE_FORCE_SSL env var without a rebuild. We set a
-# compile-time default here to avoid the "different value at compile vs
-# runtime" validation error when the release boots.
-config :dran, DranWeb.Endpoint, force_ssl: [rewrite_on: [:x_forwarded_proto]]
+# force_ssl is compile-time in Phoenix, so disabling it requires a BUILD-time
+# switch: build the image with DISABLE_FORCE_SSL=1 (Dockerfile build ARG) for
+# plain-HTTP deploys (e.g. VPN tunnel without a TLS terminator). At runtime,
+# set PHX_SCHEME=http as well so generated URLs use http.
+if System.get_env("DISABLE_FORCE_SSL") != "1" do
+  config :dran, DranWeb.Endpoint,
+    force_ssl: [
+      rewrite_on: [:x_forwarded_proto],
+      exclude: [hosts: ["localhost", "127.0.0.1"]]
+    ]
+end
 
 # Configure Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Req
