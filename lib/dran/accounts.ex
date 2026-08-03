@@ -137,4 +137,14 @@ defmodule Dran.Accounts do
       nil -> :error
     end
   end
+
+  @doc """
+  Generates and persists a new API token for a user, invalidating the old one.
+  Returns `{:ok, %User{}}` or `{:error, changeset}`.
+  """
+  def regenerate_api_token(%User{} = user) do
+    user
+    |> User.changeset(%{api_token: User.generate_api_token()})
+    |> Repo.update()
+  end
 end

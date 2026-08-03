@@ -62,6 +62,7 @@ defmodule DranWeb.DashboardLive do
     {"cancelled", gettext("Cancelled"), "bg-red-500/15 text-red-600 dark:text-red-400"}
   ]
 
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -108,6 +109,18 @@ defmodule DranWeb.DashboardLive do
                   <span data-check-icon class="hidden">
                     <.icon name="hero-clipboard-document-check" class="size-3.5 text-green-500" />
                   </span>
+                </button>
+                <button
+                  type="button"
+                  id="regenerate-dashboard-token-btn"
+                  phx-click="regenerate_api_token"
+                  data-confirm={
+                    gettext("Regenerate API token? The current token will stop working immediately.")
+                  }
+                  class="btn btn-ghost btn-xs gap-1 p-1.5 transition-colors active:scale-95 hover:text-warning"
+                  title={gettext("Regenerate API token")}
+                >
+                  <.icon name="hero-arrow-path" class="size-3.5" />
                 </button>
               </div>
             </div>
@@ -421,21 +434,21 @@ defmodule DranWeb.DashboardLive do
         mounted() {
           this.el.addEventListener("click", () => {
             const target = document.getElementById("dashboard-api-token");
-            if (target) {
-              const text = target.dataset.token || target.textContent.trim();
-              navigator.clipboard.writeText(text).then(() => {
-                const icon = this.el.querySelector("[data-copy-icon]");
-                const check = this.el.querySelector("[data-check-icon]");
-                if (icon && check) {
-                  icon.classList.add("hidden");
-                  check.classList.remove("hidden");
-                  setTimeout(() => {
-                    icon.classList.remove("hidden");
-                    check.classList.add("hidden");
-                  }, 1500);
-                }
-              });
-            }
+            if (!target) return;
+            const text = target.dataset.token;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+              const icon = this.el.querySelector("[data-copy-icon]");
+              const check = this.el.querySelector("[data-check-icon]");
+              if (icon && check) {
+                icon.classList.add("hidden");
+                check.classList.remove("hidden");
+                setTimeout(() => {
+                  icon.classList.remove("hidden");
+                  check.classList.add("hidden");
+                }, 1500);
+              }
+            });
           });
         }
       };
@@ -443,6 +456,7 @@ defmodule DranWeb.DashboardLive do
     """
   end
 
+  @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
@@ -480,8 +494,34 @@ defmodule DranWeb.DashboardLive do
      )}
   end
 
+  @impl true
   def handle_params(_params, _url, socket) do
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("regenerate_api_token", _params, socket) do
+    current_user = socket.assigns[:current_user]
+
+    case current_user && Dran.Accounts.get_user_by_email(current_user) do
+      %Dran.Accounts.User{} = db_user ->
+        case Dran.Accounts.regenerate_api_token(db_user) do
+          {:ok, %Dran.Accounts.User{api_token: new_token}} when is_binary(new_token) ->
+            {:noreply,
+             socket
+             |> assign(user_api_token: new_token)
+             |> put_flash(
+               :info,
+               gettext("API token regenerated. Update any client that uses the old token.")
+             )}
+
+          {:error, _changeset} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not regenerate API token."))}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("Could not regenerate API token."))}
+    end
   end
 
   # ── Components ──

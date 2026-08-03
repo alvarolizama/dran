@@ -59,6 +59,19 @@ defmodule Dran.AccountsTest do
       assert Accounts.get_user_by_api_token("bogus-token") == nil
     end
 
+    test "regenerate_api_token/1 replaces the token and invalidates the old one" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      old_token = user.api_token
+
+      assert {:ok, %User{api_token: new_token}} = Accounts.regenerate_api_token(user)
+      assert is_binary(new_token)
+      assert String.length(new_token) > 20
+      refute new_token == old_token
+
+      assert Accounts.get_user_by_api_token(old_token) == nil
+      assert Accounts.get_user_by_api_token(new_token).id == user.id
+    end
+
     test "get_user!/1 and get_user/1 fetch by id" do
       assert {:ok, user} = Accounts.create_user(@user_attrs)
       assert Accounts.get_user!(user.id).id == user.id
