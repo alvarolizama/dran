@@ -257,7 +257,7 @@ defmodule DranWeb.GraphLive do
       contexts={@contexts}
       active_nav={@active_nav}
     >
-      <div class="flex flex-col" class="flex flex-col min-h-full">
+      <div class="flex flex-col flex-1 min-h-0">
         <div class="shrink-0 p-4 pb-0">
           <h1 class="text-title">
             <div :if={@live_action == :index}>{gettext("Knowledge Graph")}</div>
