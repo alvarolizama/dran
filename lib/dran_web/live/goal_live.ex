@@ -36,8 +36,9 @@ defmodule DranWeb.GoalLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-          content_hidden={@active_tab not in ["overview", "graph"]}
+          content_hidden={@active_tab != "overview"}
           graph_active={@active_tab == "graph"}
+          active_tab={@active_tab}
           editing={@editing}
         >
           <:actions>

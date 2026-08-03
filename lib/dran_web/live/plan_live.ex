@@ -35,9 +35,10 @@ defmodule DranWeb.PlanLive do
           logs={@logs}
           context_slug={@context_slug}
           rendered_body={@rendered_body}
-          content_hidden={@active_tab not in ["content", "graph"]}
+          content_hidden={@active_tab != "content"}
           graph_active={@active_tab == "graph"}
           content_tab_value="content"
+          active_tab={@active_tab}
           editing={@editing}
         >
           <:actions>

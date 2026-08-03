@@ -109,6 +109,79 @@ defmodule DranWeb.NoteLiveTest do
     end
   end
 
+  describe "detail tabs" do
+    # Extract the class attribute of a detail tab button from rendered HTML
+    defp tab_class(html, id) do
+      [classes] =
+        Regex.run(~r/<button id="#{id}"[^>]*class="([^"]*)"/, html, capture: :all_but_first)
+
+      classes
+    end
+
+    # Extract the class attribute of a detail panel from rendered HTML
+    defp panel_classes(html, id) do
+      [classes] =
+        Regex.run(~r/id="#{id}"[^>]*class="([^"]*)"/, html, capture: :all_but_first)
+
+      classes
+    end
+
+    test "content tab is the only active tab on initial load", %{conn: conn, target: target} do
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
+
+      assert tab_class(html, "detail-tab-content") =~ "border-primary"
+      refute tab_class(html, "detail-tab-content") =~ "border-transparent"
+      refute tab_class(html, "detail-tab-graph") =~ "border-primary"
+      refute tab_class(html, "detail-tab-insights") =~ "border-primary"
+      # Content panel visible, graph + insights panels hidden
+      refute panel_classes(html, "detail-panel-content") =~ "hidden"
+      assert panel_classes(html, "detail-panel-graph") =~ "hidden"
+      assert panel_classes(html, "detail-panel-insights") =~ "hidden"
+    end
+
+    test "selecting graph deactivates the content tab and shows only the graph panel", %{
+      conn: conn,
+      target: target
+    } do
+      {:ok, view, _html} = live(conn, ~p"/notes/#{target.slug}")
+
+      view |> element("#detail-tab-graph") |> render_click()
+      html = render(view)
+
+      assert tab_class(html, "detail-tab-graph") =~ "border-primary"
+      # Content must NOT stay selected when graph is active (bug: both were active)
+      refute tab_class(html, "detail-tab-content") =~ "border-primary"
+      assert tab_class(html, "detail-tab-content") =~ "border-transparent"
+      refute tab_class(html, "detail-tab-insights") =~ "border-primary"
+
+      # Graph panel visible; content panel hidden
+      refute panel_classes(html, "detail-panel-graph") =~ "hidden"
+      assert panel_classes(html, "detail-panel-content") =~ "hidden"
+    end
+
+    test "selecting insights shows the insights panel and hides the content panel", %{
+      conn: conn,
+      target: target
+    } do
+      {:ok, view, _html} = live(conn, ~p"/notes/#{target.slug}")
+
+      view |> element("#detail-tab-insights") |> render_click()
+      html = render(view)
+
+      assert tab_class(html, "detail-tab-insights") =~ "border-primary"
+      refute tab_class(html, "detail-tab-content") =~ "border-primary"
+      refute tab_class(html, "detail-tab-graph") =~ "border-primary"
+
+      # Insights panel visible; content + graph panels hidden
+      refute panel_classes(html, "detail-panel-insights") =~ "hidden"
+      assert panel_classes(html, "detail-panel-content") =~ "hidden"
+      assert panel_classes(html, "detail-panel-graph") =~ "hidden"
+
+      # The insights slot renders something (empty state when no community summary)
+      assert html =~ t("No community data yet. Run community summaries first.")
+    end
+  end
+
   describe "archive flow" do
     test "archiving a page from detail hides it from the list and shows it in the Archived section",
          %{conn: conn, source: source} do

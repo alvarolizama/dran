@@ -31,7 +31,9 @@ defmodule DranWeb.ReferenceLive do
           rendered_body={@rendered_body}
           editing={@editing}
           content_tab_value="content"
+          content_hidden={@active_tab != "content"}
           graph_active={@active_tab == "graph"}
+          active_tab={@active_tab}
         >
           <:actions>
             <.link navigate={~p"/references"} class="btn btn-primary btn-sm"><.icon
