@@ -71,7 +71,15 @@ defmodule Dran.Accounts do
 
   # ── Google OAuth ──
 
-  def find_or_create_from_google(%{email: email, google_id: google_id} = attrs) do
+  @doc """
+  Finds a user for Google OAuth login without ever creating one.
+
+  Looks up by `google_id` first, then falls back to `email` (linking the
+  google_id onto an already-existing account). Unknown users are rejected
+  with `{:error, :unauthorized}` — accounts can only be created by an admin
+  via Settings (or the first-run `/setup` flow).
+  """
+  def find_or_link_from_google(%{email: email, google_id: google_id} = attrs) do
     case get_user_by_google_id(google_id) do
       %User{} = user ->
         {:ok, user}
@@ -86,12 +94,7 @@ defmodule Dran.Accounts do
             })
 
           nil ->
-            create_user(%{
-              email: email,
-              google_id: google_id,
-              name: attrs[:name],
-              avatar_url: attrs[:avatar_url]
-            })
+            {:error, :unauthorized}
         end
     end
   end

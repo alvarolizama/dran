@@ -104,20 +104,18 @@ defmodule Dran.AccountsTest do
     end
   end
 
-  describe "find_or_create_from_google/1" do
-    test "creates a new user when neither google_id nor email exists" do
-      assert {:ok, user} =
-               Accounts.find_or_create_from_google(%{
+  describe "find_or_link_from_google/1" do
+    test "rejects a user that does not exist and does not create one" do
+      assert {:error, :unauthorized} =
+               Accounts.find_or_link_from_google(%{
                  email: "new@example.com",
                  google_id: "g-new",
                  name: "Newbie",
                  avatar_url: "http://example.com/new.png"
                })
 
-      assert user.email == "new@example.com"
-      assert user.google_id == "g-new"
-      assert user.name == "Newbie"
-      assert is_binary(user.api_token)
+      assert Repo.aggregate(User, :count, :id) == 0
+      assert Accounts.get_user_by_email("new@example.com") == nil
     end
 
     test "returns existing user when google_id already matches" do
@@ -125,7 +123,7 @@ defmodule Dran.AccountsTest do
       assert {:ok, user} = Accounts.create_user(user_attrs)
 
       assert {:ok, found} =
-               Accounts.find_or_create_from_google(%{
+               Accounts.find_or_link_from_google(%{
                  email: "alice@example.com",
                  google_id: "g-dup",
                  name: "Renamed"
@@ -146,7 +144,7 @@ defmodule Dran.AccountsTest do
       assert user.google_id == nil
 
       assert {:ok, linked} =
-               Accounts.find_or_create_from_google(%{
+               Accounts.find_or_link_from_google(%{
                  email: "link@example.com",
                  google_id: "g-link",
                  name: "Now Linked",
@@ -166,7 +164,7 @@ defmodule Dran.AccountsTest do
       assert {:ok, _} = Accounts.create_user(%{email: "one@example.com"})
 
       assert {:ok, user} =
-               Accounts.find_or_create_from_google(%{email: "one@example.com", google_id: "g-1"})
+               Accounts.find_or_link_from_google(%{email: "one@example.com", google_id: "g-1"})
 
       assert Repo.aggregate(User, :count, :id) == 1
       assert user.email == "one@example.com"

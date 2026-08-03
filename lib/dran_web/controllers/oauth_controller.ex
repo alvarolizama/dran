@@ -57,7 +57,7 @@ defmodule DranWeb.OAuthController do
   end
 
   defp handle_google_user(conn, %{email: email} = google_user) do
-    case Accounts.find_or_create_from_google(google_user) do
+    case Accounts.find_or_link_from_google(google_user) do
       {:ok, user} ->
         return_to = get_session(conn, :return_to) || ~p"/"
 
@@ -66,9 +66,14 @@ defmodule DranWeb.OAuthController do
         |> delete_session(:return_to)
         |> redirect(to: return_to)
 
+      {:error, :unauthorized} ->
+        conn
+        |> put_flash(:error, "No account found for #{email} — ask an admin to create one")
+        |> redirect(to: ~p"/login")
+
       {:error, _} ->
         conn
-        |> put_flash(:error, "Could not create account for #{email}")
+        |> put_flash(:error, "Could not sign in with #{email}")
         |> redirect(to: ~p"/login")
     end
   end
