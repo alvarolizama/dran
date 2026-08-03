@@ -59,18 +59,7 @@ defmodule DranWeb.OAuthController do
   defp handle_google_user(conn, %{email: email} = google_user) do
     case Accounts.find_or_create_from_google(google_user) do
       {:ok, user} ->
-        # Promote the configured admin email to admin on every login.
-        is_admin = System.get_env("DRAN_ADMIN_EMAIL") == email
-
-        user =
-          if is_admin and not user.is_admin do
-            {:ok, updated} = Accounts.update_user(user, %{is_admin: true})
-            updated
-          else
-            user
-          end
-
-        return_to = get_session(conn, :return_to) || ~p"/notes"
+        return_to = get_session(conn, :return_to) || ~p"/"
 
         conn
         |> SessionAuth.login(user.email)

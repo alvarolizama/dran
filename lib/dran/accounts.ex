@@ -17,6 +17,9 @@ defmodule Dran.Accounts do
     Repo.all(User) |> Repo.preload(:contexts)
   end
 
+  @doc "True when at least one user exists (setup already completed)."
+  def any_users?, do: Repo.exists?(User)
+
   def get_user!(id), do: Repo.get!(User, id) |> Repo.preload(:contexts)
   def get_user(id), do: Repo.get(User, id) |> Repo.preload(:contexts)
 
@@ -39,6 +42,25 @@ defmodule Dran.Accounts do
     |> Repo.insert()
   end
 
+  def create_user_with_password(%{email: _email, password: _pass} = attrs) do
+    %User{}
+    |> User.registration_changeset(attrs)
+    |> Ecto.Changeset.put_change(:api_token, User.generate_api_token())
+    |> Repo.insert()
+  end
+
+  def authenticate_user(email, password) when is_binary(email) and is_binary(password) do
+    case get_user_by_email(email) do
+      %User{password_hash: hash} = user when is_binary(hash) ->
+        if Bcrypt.verify_pass(password, hash),
+          do: {:ok, %{user | contexts: []}},
+          else: {:error, :unauthorized}
+
+      _ ->
+        {:error, :unauthorized}
+    end
+  end
+
   def update_user(%User{} = user, attrs) do
     user
     |> User.changeset(attrs)
@@ -46,6 +68,12 @@ defmodule Dran.Accounts do
   end
 
   def delete_user(%User{} = user), do: Repo.delete(user)
+
+  def regenerate_user_api_token(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(api_token: User.generate_api_token())
+    |> Repo.update()
+  end
 
   # ── Google OAuth ──
 

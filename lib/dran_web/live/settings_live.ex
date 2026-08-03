@@ -55,7 +55,8 @@ defmodule DranWeb.SettingsLive do
         confirm_delete_context_id: nil,
         slug_touched: false,
         managing_context_id: nil,
-        page_types_context_id: nil
+        page_types_context_id: nil,
+        show_token: false
       )
       |> assign_brain_form()
       |> assign_models()
@@ -83,7 +84,7 @@ defmodule DranWeb.SettingsLive do
     assign(socket, new_context_form: to_form(Context.changeset(%Context{}, %{}), as: :context))
   end
 
-  @tabs ~w(users contexts brain models system danger)
+  @tabs ~w(users contexts brain models system api_keys danger)
 
   @impl true
   def handle_params(params, _url, socket) do
@@ -341,6 +342,31 @@ defmodule DranWeb.SettingsLive do
     end
   end
 
+  # -- API Keys ---------------------------------------------------------------
+
+  @impl true
+  def handle_event("toggle_token", _params, socket) do
+    {:noreply, assign(socket, show_token: not socket.assigns.show_token)}
+  end
+
+  @impl true
+  def handle_event("regenerate_api_token", _params, socket) do
+    user = socket.assigns.current_user
+
+    case Dran.Accounts.regenerate_user_api_token(user) do
+      {:ok, updated_user} ->
+        socket =
+          socket
+          |> assign(current_user: updated_user)
+          |> put_flash(:info, gettext("API token regenerated. Update your integrations."))
+
+        {:noreply, socket}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not regenerate token."))}
+    end
+  end
+
   # -- Inference connection test ---------------------------------------------
 
   @impl true
@@ -460,7 +486,7 @@ defmodule DranWeb.SettingsLive do
           <%!-- Tabs navigation --%>
           <div class="tabs tabs-border">
             <.link
-              :for={tab <- ~w(users contexts brain models system danger)}
+              :for={tab <- ~w(users contexts brain models system api_keys danger)}
               patch={~p"/settings/#{tab}"}
               class={["tab", @active_tab == tab && "tab-active"]}
             >
@@ -724,6 +750,14 @@ defmodule DranWeb.SettingsLive do
             </.config_section>
           </div>
 
+          <%!-- API Keys — personal token management --%>
+          <div :if={@active_tab == "api_keys"}>
+            <.api_keys_section
+              current_user={@current_user}
+              show_token={@show_token}
+            />
+          </div>
+
           <%!-- Danger zone — destructive operations --%>
           <div :if={@active_tab == "danger"}>
             <.danger_zone_section context_slug={@context_slug} />
@@ -731,6 +765,31 @@ defmodule DranWeb.SettingsLive do
         </div>
       </div>
     </Layouts.app>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyToken">
+      export default {
+        mounted() {
+          this.el.addEventListener("click", () => {
+            const target = document.getElementById("api-token-display");
+            if (target) {
+              const text = target.textContent.trim();
+              navigator.clipboard.writeText(text).then(() => {
+                const icon = this.el.querySelector("[data-copy-icon]");
+                const check = this.el.querySelector("[data-check-icon]");
+                if (icon && check) {
+                  icon.classList.add("hidden");
+                  check.classList.remove("hidden");
+                  setTimeout(() => {
+                    icon.classList.remove("hidden");
+                    check.classList.add("hidden");
+                  }, 1500);
+                }
+              });
+            }
+          });
+        }
+      };
+    </script>
     """
   end
 
@@ -1102,6 +1161,7 @@ defmodule DranWeb.SettingsLive do
   defp tab_label("brain"), do: gettext("Brain")
   defp tab_label("models"), do: gettext("Models")
   defp tab_label("system"), do: gettext("System")
+  defp tab_label("api_keys"), do: gettext("API Keys")
   defp tab_label("danger"), do: gettext("Danger zone")
 
   attr :context_slug, :string, required: true
@@ -1164,6 +1224,97 @@ defmodule DranWeb.SettingsLive do
             {gettext("Borrar todo el contenido")}
           </button>
         </.form>
+      </div>
+    </section>
+    """
+  end
+
+  attr :current_user, :map, required: true
+  attr :show_token, :boolean, required: true
+
+  defp api_keys_section(assigns) do
+    ~H"""
+    <section class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+          <.icon name="hero-key" class="size-4 text-primary" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-heading">{gettext("API Token")}</h2>
+          <p class="text-caption mt-0.5">
+            {gettext(
+              "Use this token to authenticate API and MCP requests. One token per user, shared across all your contexts."
+            )}
+          </p>
+        </div>
+      </header>
+
+      <div class="px-5 py-5 space-y-4">
+        <%!-- Token display --%>
+        <div class="bg-base-200/50 rounded-xl p-4">
+          <label class="text-xs text-base-content/60 mb-2 block">
+            {gettext("Your token")}
+          </label>
+          <div class="flex items-center gap-2">
+            <code
+              id="api-token-display"
+              class="flex-1 text-sm font-mono bg-base-100 rounded-lg px-3 py-2 border border-base-300 select-all"
+            >
+              <%= if @show_token do %>
+                {@current_user.api_token}
+              <% else %>
+                {String.slice(@current_user.api_token || "", 0, 8)}••••••••••••
+              <% end %>
+            </code>
+            <button
+              type="button"
+              phx-click="toggle_token"
+              class="btn btn-ghost btn-sm gap-1.5"
+              title={if @show_token, do: gettext("Hide"), else: gettext("Reveal")}
+            >
+              <.icon
+                name={if @show_token, do: "hero-eye-slash", else: "hero-eye"}
+                class="size-4"
+              />
+            </button>
+            <button
+              type="button"
+              id="copy-token-btn"
+              phx-hook=".CopyToken"
+              class="btn btn-ghost btn-sm gap-1.5"
+              title={gettext("Copy")}
+            >
+              <span data-copy-icon><.icon name="hero-clipboard-document" class="size-4" /></span>
+              <span data-check-icon class="hidden"><.icon
+                name="hero-clipboard-document-check"
+                class="size-4"
+              /></span>
+            </button>
+          </div>
+        </div>
+
+        <%!-- Regenerate --%>
+        <div class="flex items-start gap-3 p-4 rounded-xl border border-warning/20 bg-warning/5">
+          <.icon name="hero-exclamation-triangle" class="size-5 text-warning shrink-0 mt-0.5" />
+          <div class="flex-1">
+            <p class="text-sm text-base-content/80">
+              {gettext(
+                "Regenerating your token will invalidate the current one immediately. Update all your integrations (API clients, MCP configs) after regenerating."
+              )}
+            </p>
+            <button
+              type="button"
+              phx-click="regenerate_api_token"
+              data-confirm={
+                gettext("Are you sure? Your current token will stop working immediately.")
+              }
+              class="btn btn-warning btn-sm gap-1.5 mt-3"
+            >
+              <.icon name="hero-arrow-path" class="size-4" />
+              {gettext("Regenerate token")}
+            </button>
+          </div>
+        </div>
       </div>
     </section>
     """

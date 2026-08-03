@@ -84,8 +84,41 @@ defmodule DranWeb.DashboardLive do
                 ] ||
                   0} {gettext("pages")}
               </p>
+              <div
+                :if={@user_api_token}
+                class="flex items-center gap-2 pt-0.5"
+                title={gettext("Your API key")}
+              >
+                <code
+                  id="dashboard-api-token"
+                  data-token={@user_api_token}
+                  class="text-xs font-mono bg-base-100 rounded-md px-2 py-1 border border-base-300 select-all"
+                >
+                  {String.slice(@user_api_token, 0, 8)}••••••••••••
+                </code>
+                <button
+                  type="button"
+                  id="copy-dashboard-token-btn"
+                  phx-hook=".CopyApiToken"
+                  class="btn btn-ghost btn-xs gap-1 p-1.5 transition-colors active:scale-95"
+                  title={gettext("Copy")}
+                >
+                  <span data-copy-icon>
+                    <.icon name="hero-clipboard-document" class="size-3.5" />
+                  </span>
+                  <span data-check-icon class="hidden">
+                    <.icon name="hero-clipboard-document-check" class="size-3.5 text-green-500" />
+                  </span>
+                </button>
+              </div>
             </div>
             <div class="flex gap-2">
+              <.link
+                navigate={~p"/kanban"}
+                class="btn btn-ghost btn-sm transition-colors active:scale-95"
+              >
+                <.icon name="hero-view-columns" class="size-4" /> {gettext("Kanban")}
+              </.link>
               <.link
                 navigate={~p"/graph"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
@@ -415,11 +448,39 @@ defmodule DranWeb.DashboardLive do
         </div>
       </div>
     </Layouts.app>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyApiToken">
+      export default {
+        mounted() {
+          this.el.addEventListener("click", () => {
+            const target = document.getElementById("dashboard-api-token");
+            if (target) {
+              const text = target.dataset.token || target.textContent.trim();
+              navigator.clipboard.writeText(text).then(() => {
+                const icon = this.el.querySelector("[data-copy-icon]");
+                const check = this.el.querySelector("[data-check-icon]");
+                if (icon && check) {
+                  icon.classList.add("hidden");
+                  check.classList.remove("hidden");
+                  setTimeout(() => {
+                    icon.classList.remove("hidden");
+                    check.classList.add("hidden");
+                  }, 1500);
+                }
+              });
+            }
+          });
+        }
+      };
+    </script>
     """
   end
 
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
+
+    current_user = socket.assigns[:current_user]
+    db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
 
     {stats, brain_metrics, daily_note_status, community_summaries} =
       if context do
@@ -453,6 +514,7 @@ defmodule DranWeb.DashboardLive do
        brain_metrics: brain_metrics,
        daily_note_status: daily_note_status,
        community_summaries: community_summaries,
+       user_api_token: db_user && db_user.api_token,
        kanban_columns: @kanban_columns,
        nav_groups: @nav_groups,
        page_title: gettext("Dashboard")

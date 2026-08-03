@@ -41,8 +41,8 @@ defmodule DranWeb.Layouts do
     counts = compute_counts(assigns[:context_slug])
 
     # Resolve admin status for the sidebar's admin-only links. A session user
-    # with a row in users is admin iff users.is_admin; a legacy single-user
-    # session (DRAN_USERNAME, no DB row) is treated as a full admin.
+    # with a row in users is admin iff users.is_admin; a session user without
+    # a DB row (pre-multi-user sessions) is treated as a full admin.
     is_admin =
       if is_binary(assigns[:current_user]) do
         case Dran.Accounts.get_user_by_email(assigns[:current_user]) do

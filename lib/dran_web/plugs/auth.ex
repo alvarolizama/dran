@@ -105,8 +105,8 @@ defmodule DranWeb.Plugs.Auth do
     page_counts = Dran.Brain.page_counts_by_context()
 
     # Per-user scoping: a DB user (created via Dran.Accounts) only sees their
-    # assigned contexts. A session user with no row in the users table is a
-    # legacy single-user login (DRAN_USERNAME) and is treated as a full admin.
+    # assigned contexts. A session user with no row in the users table (e.g.
+    # created before multi-user auth) is treated as a full admin.
     {accessible_contexts, is_admin} =
       case Dran.Accounts.get_user_by_email(current_user) do
         nil -> {contexts, true}

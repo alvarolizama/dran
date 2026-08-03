@@ -553,16 +553,6 @@ defmodule DranWeb.DocsLive do
           </thead>
           <tbody class="divide-y divide-base-300">
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">DRAN_USERNAME</td>
-              <td class="px-4 py-2 font-mono text-base-content/60">admin</td>
-              <td class="px-4 py-2">Web login username</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">DRAN_PASSWORD</td>
-              <td class="px-4 py-2 font-mono text-base-content/60">dran</td>
-              <td class="px-4 py-2">Web login password</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_API_TOKEN</td>
               <td class="px-4 py-2 font-mono text-base-content/60">dran-token</td>
               <td class="px-4 py-2">Bearer token for API and MCP</td>

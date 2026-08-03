@@ -71,13 +71,17 @@ Dran supports two ways to log in: **Google OAuth** (recommended) and **legacy cr
 
 Every user is a row in the `users` table with `email`, `name`, `google_id`, `avatar_url`, `is_admin`, and a single `api_token`. A user can access only the contexts assigned to them (via the `user_contexts` join table). Admins can access everything and are the only role that sees **Settings**.
 
+### First-run setup
+
+On a fresh install (empty `users` table), any visit redirects to **`/setup`**, which asks for an email + password and creates the initial admin account. Once a user exists, `/setup` closes itself and normal login takes over. There are **no env-var web credentials** — users are managed in Settings → Users.
+
 ### Google OAuth
 
-Google login appears on the login page **only when** `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` are set. On first login a user is auto-created only if their email domain is in `GOOGLE_OAUTH_ALLOWED_DOMAINS` (fail-closed); on every login the email in `DRAN_ADMIN_EMAIL` is auto-promoted to admin.
+Google login appears on the login page **only when** `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` are set. On first login a user is auto-created only if their email domain is in `GOOGLE_OAUTH_ALLOWED_DOMAINS` (fail-closed). Admin promotion is manual (Settings → Users).
 
-### Legacy credentials
+### API token
 
-For a single-admin setup without Google, set `DRAN_USERNAME` / `DRAN_PASSWORD`. The seed step creates an admin account from these. The legacy `DRAN_API_TOKEN` is treated as an **admin token** (full access) and continues to work for MCP/REST. All three preserve backward compatibility.
+The legacy `DRAN_API_TOKEN` is treated as an **admin token** (full access) and continues to work for MCP/REST.
 
 ### Per-user API tokens & context scoping
 
@@ -95,10 +99,7 @@ See [`.env.example`](.env.example) for the full annotated list. Key variables:
 | `SECRET_KEY_BASE` | yes | Output of `mix phx.gen.secret` |
 | `DATABASE_URL` | yes | Postgres connection string |
 | `PHX_HOST` | yes | Public hostname (e.g. `localhost`, `dran.example.com`) |
-| `DRAN_PASSWORD` | no* | Legacy admin login password |
 | `DRAN_API_TOKEN` | no* | Legacy admin Bearer token for API / MCP |
-| `DRAN_USERNAME` | no | Legacy admin username (default `admin`, seeded) |
-| `DRAN_ADMIN_EMAIL` | no | Google email auto-promoted to admin on login |
 | `GOOGLE_OAUTH_CLIENT_ID` | no | Enables Google OAuth when set |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | no | Enables Google OAuth when set |
 | `GOOGLE_OAUTH_REDIRECT_URI` | no | OAuth callback URI (default derived from PHX_HOST/PHX_SCHEME) |
@@ -115,7 +116,7 @@ See [`.env.example`](.env.example) for the full annotated list. Key variables:
 | `SESSION_MAX_AGE_SECONDS` | no | Session cookie lifetime (default `28800` = 8h) |
 | `CHECK_ORIGINS` | no | CSRF origins for dual HTTP/HTTPS access (comma-separated) |
 
-\* At least one of `DRAN_PASSWORD` (web login) or `DRAN_API_TOKEN` is needed unless you use Google OAuth. **Never use the dev defaults (`admin`/`dran`/`dran-token`) in production.**
+\* Web login is created via the first-run `/setup` flow (no env credentials). `DRAN_API_TOKEN` is only needed for API/MCP access without per-user tokens. **Never use the dev default (`dran-token`) in production.**
 
 ### Deploy: SSL, VPN, and dual access
 

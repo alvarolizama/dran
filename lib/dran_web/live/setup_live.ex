@@ -1,24 +1,28 @@
-defmodule DranWeb.LoginLive do
+defmodule DranWeb.SetupLive do
   @moduledoc """
-  Login page for single-user authentication.
+  First-run setup: creates the initial admin user.
+
+  Only available while the users table is empty. Once any user exists,
+  this page redirects to /login so nobody can self-promote later.
   """
 
   use DranWeb, :live_view
 
   import Phoenix.Controller, only: [get_csrf_token: 0]
 
-  alias Dran.Auth
+  alias Dran.Accounts
 
   @impl true
-  def mount(_params, session, socket) do
-    context_slug = session["context_slug"] || Auth.default_context_slug()
-
-    {:ok,
-     assign(socket,
-       context_slug: context_slug,
-       error: nil,
-       page_title: "Login"
-     )}
+  def mount(_params, _session, socket) do
+    if Accounts.any_users?() do
+      {:ok, redirect(socket, to: ~p"/login")}
+    else
+      {:ok,
+       assign(socket,
+         error: nil,
+         page_title: "Setup"
+       )}
+    end
   end
 
   @impl true
@@ -29,19 +33,19 @@ defmodule DranWeb.LoginLive do
         <div class="card-body">
           <h1 class="text-2xl font-bold text-center mb-1">Dran</h1>
           <p class="text-sm text-base-content/60 text-center mb-6">
-            Sign in to your second brain
+            Create your admin account to get started
           </p>
 
-          <form action={~p"/session"} method="post" class="space-y-3">
+          <form action={~p"/setup"} method="post" class="space-y-3">
             <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
 
             <div>
               <label class="text-sm font-medium text-base-content/70 block mb-1">Email</label>
               <input
                 type="email"
-                name="login[username]"
+                name="setup[email]"
                 placeholder="you@example.com"
-                autocomplete="username"
+                autocomplete="email"
                 required
                 class="w-full px-3 py-2 rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -51,9 +55,25 @@ defmodule DranWeb.LoginLive do
               <label class="text-sm font-medium text-base-content/70 block mb-1">Password</label>
               <input
                 type="password"
-                name="login[password]"
-                placeholder="••••••"
-                autocomplete="current-password"
+                name="setup[password]"
+                placeholder="8+ characters"
+                autocomplete="new-password"
+                minlength="8"
+                required
+                class="w-full px-3 py-2 rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label class="text-sm font-medium text-base-content/70 block mb-1">
+                Confirm password
+              </label>
+              <input
+                type="password"
+                name="setup[password_confirmation]"
+                placeholder="••••••••"
+                autocomplete="new-password"
+                minlength="8"
                 required
                 class="w-full px-3 py-2 rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -62,16 +82,9 @@ defmodule DranWeb.LoginLive do
             <p :if={@error} class="text-sm text-red-600">{@error}</p>
 
             <button type="submit" class="btn btn-primary w-full mt-2">
-              Sign in
+              Create admin account
             </button>
           </form>
-
-          <%= if DranWeb.OAuth.Google.configured?() do %>
-            <div class="divider my-4">OR</div>
-            <a href={~p"/auth/google"} class="btn btn-outline w-full gap-2">
-              <.icon name="hero-globe-alt" class="size-5" /> Sign in with Google
-            </a>
-          <% end %>
         </div>
       </div>
     </div>

@@ -5,6 +5,9 @@
 # Creates the default context and seeds it with realistic Spanish content:
 # goals with nested todos, notes with embeds, concepts with semantic relations,
 # and a daily note. Idempotent — safe to run multiple times.
+#
+# Admin users are NOT created here: the first-run /setup web flow handles
+# initial admin creation.
 
 import Ecto.Query
 alias Dran.Repo

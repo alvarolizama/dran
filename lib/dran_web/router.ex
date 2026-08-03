@@ -35,13 +35,20 @@ defmodule DranWeb.Router do
   # ── Browser auth plug ──
 
   defp require_login(conn, _opts) do
-    if Plug.Conn.get_session(conn, "user") do
-      conn
-    else
-      conn
-      |> Plug.Conn.put_session(:return_to, conn.request_path)
-      |> Phoenix.Controller.redirect(to: ~p"/login")
-      |> Plug.Conn.halt()
+    cond do
+      Plug.Conn.get_session(conn, "user") ->
+        conn
+
+      not Dran.Accounts.any_users?() ->
+        conn
+        |> Phoenix.Controller.redirect(to: ~p"/setup")
+        |> Plug.Conn.halt()
+
+      true ->
+        conn
+        |> Plug.Conn.put_session(:return_to, conn.request_path)
+        |> Phoenix.Controller.redirect(to: ~p"/login")
+        |> Plug.Conn.halt()
     end
   end
 
@@ -53,8 +60,8 @@ defmodule DranWeb.Router do
     if user_email do
       user = Dran.Accounts.get_user_by_email(user_email)
 
-      # Legacy single-user session (DRAN_USERNAME, no DB row) is full admin.
-      # A DB user is admin iff users.is_admin is true.
+      # Session users without a DB row (e.g. created before multi-user auth)
+      # are treated as full admin. A DB user is admin iff users.is_admin.
       cond do
         is_nil(user) ->
           conn
@@ -113,7 +120,9 @@ defmodule DranWeb.Router do
 
     post "/session", SessionController, :create
     delete "/session", SessionController, :delete
+    post "/setup", SessionController, :setup
     live "/login", LoginLive, :index
+    live "/setup", SetupLive, :index
 
     # Google OAuth
     get "/auth/google", OAuthController, :request
