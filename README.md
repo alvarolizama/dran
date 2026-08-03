@@ -96,9 +96,9 @@ See [`.env.example`](.env.example) for the full annotated list. Key variables:
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `SECRET_KEY_BASE` | yes | Output of `mix phx.gen.secret` |
-| `DATABASE_URL` | yes | Postgres connection string |
-| `PHX_HOST` | yes | Public hostname (e.g. `localhost`, `dran.example.com`) |
+| `SECRET_KEY_BASE` | prod | Output of `mix phx.gen.secret` |
+| `DATABASE_URL` | prod | Postgres connection string |
+| `PHX_HOST` | prod | Public hostname (e.g. `localhost`, `dran.example.com`) |
 | `DRAN_API_TOKEN` | no* | Legacy admin Bearer token for API / MCP |
 | `GOOGLE_OAUTH_CLIENT_ID` | no | Enables Google OAuth when set |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | no | Enables Google OAuth when set |
@@ -115,6 +115,12 @@ See [`.env.example`](.env.example) for the full annotated list. Key variables:
 | `SESSION_COOKIE_SECURE` | no | `true` to force Secure flag on cookies (HTTPS-only) |
 | `SESSION_MAX_AGE_SECONDS` | no | Session cookie lifetime (default `28800` = 8h) |
 | `CHECK_ORIGINS` | no | CSRF origins for dual HTTP/HTTPS access (comma-separated) |
+| `DISABLE_FORCE_SSL` | build | `1` at build time to disable Plug.SSL (plain-HTTP deploys) |
+| `DNS_CLUSTER_QUERY` | no | libcluster query for multi-node distributed Erlang |
+| `UPLOADS_DIR` | no | Upload storage path (default `priv/static/uploads`) |
+| `UPLOADS_MAX_SIZE` | no | Max upload size in bytes (default `104857600` = 100 MiB) |
+| `AGENT_MAX_STEPS` | no | Max reasoning steps per agent run (default `150`) |
+| `AGENT_PER_STEP_TIMEOUT` | no | Per-step timeout in ms (default `120000`) |
 
 \* Web login is created via the first-run `/setup` flow (no env credentials). `DRAN_API_TOKEN` is only needed for API/MCP access without per-user tokens. **Never use the dev default (`dran-token`) in production.**
 
@@ -147,15 +153,11 @@ Dran can talk to an OpenAI-compatible inference server to add embeddings, rerank
 | `DRAN_INFERENCE_CHAT_MODEL` | Chat/text model (default `Ornith-1.0-9B`) |
 | `DRAN_INFERENCE_EMBEDDING_MODEL` | Embeddings model (default `Qwen3-Embedding`) |
 | `DRAN_INFERENCE_RERANK_MODEL` | Rerank model (default `Qwen3-Reranker`) |
+| `DRAN_INFERENCE_TIMEOUT` | Request timeout in ms (default `30000`) |
+| `DRAN_INFERENCE_USE_RERANK` | Enable reranking in hybrid search (default `true`) |
+| `DRAN_EMBEDDING_BODY_LIMIT` | Max chars sent to embedding endpoint (default `10000`) |
 
 How it's used: **unified/semantic search** (embeddings in `pgvector`), **reranking** of candidates, and **automatic semantic relations** (`PageAugmenter`). The models are selectable per-purpose at runtime in Settings → Models. The current local server typically exposes `Qwen3-Embedding`, `Qwen3-Reranker`, and a chat model — verify at runtime with `GET /v1/models`.
-
-### Agents (optional)
-
-| Variable | Notes |
-| --- | --- |
-| `AGENT_MAX_STEPS` | Max steps per agent run (default `150`) |
-| `AGENT_PER_STEP_TIMEOUT` | Per-step timeout in ms (default `120000`) |
 
 ## Settings
 
@@ -333,7 +335,7 @@ MIX_ENV=prod mix release
 
 The release lives in `_build/prod/rel/dran/` and is self-contained — copy it to the target machine or build a container image. The repo also ships a multi-stage **Dockerfile** (with an entrypoint that runs pending migrations before boot). Coolify/Railpack/Nixpacks auto-detect the Elixir app; set the env vars above (Runtime env vars only — never bake secrets into a Dockerfile) and start command `bin/server`.
 
-**Platform env vars:** `PHX_PORT` (default 443), `PHX_SCHEME` (`https`/`http`), `UPLOADS_DIR` (default `priv/static/uploads`), `UPLOADS_MAX_SIZE` (default 100 MiB), `ECTO_IPV6`, `DNS_CLUSTER_QUERY` (multi-node), `DISABLE_FORCE_SSL=1` (build-time, for plain-HTTP deployments behind a tunnel without TLS).
+**Platform env vars:** See the main env vars table above — `PHX_PORT`, `PHX_SCHEME`, `UPLOADS_DIR`, `UPLOADS_MAX_SIZE`, `ECTO_IPV6`, `DNS_CLUSTER_QUERY`, `DISABLE_FORCE_SSL` (build-time). Runtime env vars only — never bake secrets into a Dockerfile.
 
 ### Health check
 

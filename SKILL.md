@@ -1,7 +1,7 @@
 ---
 name: second-brain
-description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 17 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, or delegating longer tasks to agents."
-version: 7.0.0
+description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 18 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, or delegating longer tasks to agents."
+version: 7.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -74,7 +74,7 @@ and `meta.plan_slug` — **0, 1, 2, or all 3**. Each one materializes its own
 links) are legitimate GTD-style inbox items. In `dran_list_pages`, the value
 `"none"` filters pages without that link.
 
-## 4. Tools (17)
+## 4. Tools (18)
 
 Grouped by workflow: capture → read/find → organize → maintain → automate.
 
@@ -112,12 +112,13 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 | `dran_get_stats` | Totals, pages by type, todos by status, orphans, relations |
 | `dran_lint_brain` | Orphans, stale pages (>90d), contested knowledge. Surface results — don't auto-fix |
 | `dran_reaugment_page` | Re-run augmentation (summary/tags/embedding/relations) for a page |
+| `dran_generate_community_summaries` | Generate LLM summaries for all detected graph communities |
 
 ### Automate
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`) |
+| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) |
 | `dran_get_agent_session` | Poll an agent session for status, steps, summary |
 
 ## 5. Resources & prompts
@@ -130,12 +131,13 @@ Resources (read-only, prefer over looping `dran_list_pages`):
 Prompts: `brainstorm` (generate interlinked idea pages), `goal_review`
 (review a goal with its todos/plans).
 
-## 6. Autonomous agents (2)
+## 6. Autonomous agents (3)
 
 | Agent | Purpose | Limits |
 | --- | --- | --- |
 | `curator` | Finds near-duplicate pages (embedding distance < 0.05), flags contested knowledge, writes a report note. Runs daily at 06:00 via Quantum | max 20 flags/session |
 | `link_gardener` | Proposes typed relations for orphaned/under-linked pages, including verified transitive `part_of` candidates (A→C via B) | max 10 proposals/session |
+| `graph_rag` | Answers questions using GraphRAG patterns — local search (fan-out to neighbors), global search (community summaries), or drift search (hybrid). Creates query pages with cited sources | 10 searches, 5 expands, 3 community contexts, 1 query page/session |
 
 Lifecycle: `dran_start_agent` returns a `session_id` immediately → poll
 `dran_get_agent_session` until `completed`/`failed`. Sessions persist every
