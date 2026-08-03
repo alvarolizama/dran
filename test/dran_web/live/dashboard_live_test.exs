@@ -77,7 +77,7 @@ defmodule DranWeb.DashboardLiveTest do
       assert html =~ t("This week")
       assert html =~ t("Embedding coverage")
       assert html =~ t("Relations")
-      assert html =~ t("Agents")
+      assert html =~ t("Agent sessions")
     end
   end
 end

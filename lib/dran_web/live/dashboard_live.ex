@@ -267,9 +267,9 @@ defmodule DranWeb.DashboardLive do
                   <div class="text-xl font-bold tabular-nums leading-tight">
                     {(@brain_metrics[:agents] || %{})[:sessions_this_week] || 0}
                   </div>
-                  <div class="text-caption">{gettext("Agents")}</div>
+                  <div class="text-caption">{gettext("Agent sessions")}</div>
                   <div class="text-xs text-base-content/60 mt-0.5">
-                    {gettext("%{n} tokens",
+                    {gettext("%{n} tokens · this week",
                       n: (@brain_metrics[:agents] || %{})[:tokens_this_week] || 0
                     )}
                   </div>

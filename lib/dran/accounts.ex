@@ -69,12 +69,6 @@ defmodule Dran.Accounts do
 
   def delete_user(%User{} = user), do: Repo.delete(user)
 
-  def regenerate_user_api_token(%User{} = user) do
-    user
-    |> Ecto.Changeset.change(api_token: User.generate_api_token())
-    |> Repo.update()
-  end
-
   # ── Google OAuth ──
 
   def find_or_create_from_google(%{email: email, google_id: google_id} = attrs) do
