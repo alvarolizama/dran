@@ -75,7 +75,7 @@ defmodule DranWeb.DocsLive do
               const pre = this.el.parentElement.querySelector("pre");
               if (pre) {
                 const text = pre.textContent.trim();
-                navigator.clipboard.writeText(text).then(() => {
+                const copied = () => {
                   const icon = this.el.querySelector("[data-copy-icon]");
                   const check = this.el.querySelector("[data-check-icon]");
                   if (icon && check) {
@@ -86,9 +86,31 @@ defmodule DranWeb.DocsLive do
                       check.classList.add("hidden");
                     }, 1500);
                   }
-                });
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(text).then(copied);
+                } else {
+                  this.copyFallback(text);
+                  copied();
+                }
               }
             });
+          },
+          copyFallback(text) {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.setAttribute("readonly", "");
+            ta.style.position = "absolute";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            ta.setSelectionRange(0, text.length);
+            try {
+              document.execCommand("copy");
+            } catch (_e) {
+              // noop
+            }
+            document.body.removeChild(ta);
           }
         }
       </script>

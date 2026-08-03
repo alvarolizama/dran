@@ -92,10 +92,27 @@ defmodule DranWeb.DashboardLive do
                 <code
                   id="dashboard-api-token"
                   data-token={@user_api_token}
-                  class="text-xs font-mono bg-base-100 rounded-md px-2 py-1 border border-base-300 select-all"
+                  class="text-xs font-mono bg-base-100 rounded-md px-2 py-1 border border-base-300 select-all break-all max-w-[40ch]"
                 >
-                  {String.slice(@user_api_token, 0, 8)}••••••••••••
+                  {if @show_token do
+                    @user_api_token
+                  else
+                    String.slice(@user_api_token, 0, 8) <> "••••••••••••"
+                  end}
                 </code>
+                <button
+                  type="button"
+                  phx-click="toggle_api_token"
+                  class="btn btn-ghost btn-xs gap-1 p-1.5 transition-colors active:scale-95"
+                  title={
+                    if @show_token, do: gettext("Hide API token"), else: gettext("Show API token")
+                  }
+                >
+                  <.icon
+                    name={if @show_token, do: "hero-eye-slash", else: "hero-eye"}
+                    class="size-3.5"
+                  />
+                </button>
                 <button
                   type="button"
                   id="copy-dashboard-token-btn"
@@ -437,7 +454,7 @@ defmodule DranWeb.DashboardLive do
             if (!target) return;
             const text = target.dataset.token;
             if (!text) return;
-            navigator.clipboard.writeText(text).then(() => {
+            const copied = () => {
               const icon = this.el.querySelector("[data-copy-icon]");
               const check = this.el.querySelector("[data-check-icon]");
               if (icon && check) {
@@ -448,8 +465,30 @@ defmodule DranWeb.DashboardLive do
                   check.classList.add("hidden");
                 }, 1500);
               }
-            });
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(copied);
+            } else {
+              this.copyFallback(text);
+              copied();
+            }
           });
+        },
+        copyFallback(text) {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "absolute";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, text.length);
+          try {
+            document.execCommand("copy");
+          } catch (_e) {
+            // noop
+          }
+          document.body.removeChild(ta);
         }
       };
     </script>
@@ -488,6 +527,7 @@ defmodule DranWeb.DashboardLive do
        brain_metrics: brain_metrics,
        community_summaries: community_summaries,
        user_api_token: db_user && db_user.api_token,
+       show_token: false,
        kanban_columns: @kanban_columns,
        nav_groups: @nav_groups,
        page_title: gettext("Dashboard")
@@ -509,7 +549,7 @@ defmodule DranWeb.DashboardLive do
           {:ok, %Dran.Accounts.User{api_token: new_token}} when is_binary(new_token) ->
             {:noreply,
              socket
-             |> assign(user_api_token: new_token)
+             |> assign(user_api_token: new_token, show_token: false)
              |> put_flash(
                :info,
                gettext("API token regenerated. Update any client that uses the old token.")
@@ -522,6 +562,11 @@ defmodule DranWeb.DashboardLive do
       _ ->
         {:noreply, put_flash(socket, :error, gettext("Could not regenerate API token."))}
     end
+  end
+
+  @impl true
+  def handle_event("toggle_api_token", _params, socket) do
+    {:noreply, assign(socket, show_token: !socket.assigns.show_token)}
   end
 
   # ── Components ──
