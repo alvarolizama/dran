@@ -172,8 +172,14 @@ defmodule Dran.Graph.CommunitySummaries do
     }
 
     case Inference.chat(payload) do
-      {:ok, message} -> String.trim(Map.get(message, "content", ""))
-      {:error, _reason} -> fallback_summary(length(top), top_pages_from_pages(top))
+      {:ok, %{"content" => content}} when is_binary(content) and content != "" ->
+        String.trim(content)
+
+      {:ok, _} ->
+        fallback_summary(length(top), top_pages_from_pages(top))
+
+      {:error, _reason} ->
+        fallback_summary(length(top), top_pages_from_pages(top))
     end
   end
 

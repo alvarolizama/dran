@@ -41,7 +41,6 @@ defmodule Dran.Graph.CommunitySummariesTest do
 
   defp fresh_context(prefix) do
     slug = "comm-#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-
     {:ok, ctx} = Brain.create_context(%{name: "Comm Test #{slug}", slug: slug})
     ctx
   end
@@ -273,6 +272,20 @@ defmodule Dran.Graph.CommunitySummariesTest do
     test "returns :ok when there is nothing to delete" do
       ctx = fresh_context("da-empty")
       assert :ok = CommunitySummaries.delete_all(ctx.id)
+    end
+  end
+
+  # ── summarize_with_llm nil content guard ─────────────────────────────────
+
+  describe "LLM nil content degrades gracefully" do
+    test "uses fallback summary when inference is not configured (nil content path)" do
+      ctx = fresh_context("nilc")
+      create_page(ctx, "nilc-page1", 1, 0.8)
+
+      assert :ok = CommunitySummaries.generate_all(ctx.id)
+
+      {:ok, summary} = CommunitySummaries.get_summary(ctx.id, 1)
+      assert summary.summary =~ "Community of 1 pages including: nilc-page1"
     end
   end
 end
