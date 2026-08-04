@@ -75,6 +75,18 @@ defmodule DranWeb.SettingsLive do
     assign(socket, all_contexts: contexts)
   end
 
+  # Short human-readable hint shown next to each page type toggle in Settings.
+  defp page_type_impact("todo"), do: gettext("Kanban, tasks, todos list")
+  defp page_type_impact("goal"), do: gettext("Goals, goal filters, goal badges")
+  defp page_type_impact("plan"), do: gettext("Plans, plan filters, plan badges")
+  defp page_type_impact("project"), do: gettext("Projects, project filters, project badges")
+  defp page_type_impact("note"), do: gettext("Notes, notes list")
+  defp page_type_impact("concept"), do: gettext("Concepts, concepts list")
+  defp page_type_impact("entity"), do: gettext("Entities, entities list")
+  defp page_type_impact("reference"), do: gettext("References, references list")
+  defp page_type_impact("query"), do: gettext("Smart collections, queries")
+  defp page_type_impact(_), do: ""
+
   defp assign_new_user_form(socket) do
     assign(socket, new_user_form: to_form(%{}, as: :user))
   end
@@ -1508,6 +1520,9 @@ defmodule DranWeb.SettingsLive do
                     class="text-xs text-error"
                   >
                     {gettext("Disabled")}
+                  </p>
+                  <p class="text-xs text-base-content/40">
+                    {page_type_impact(page_type)}
                   </p>
                 </div>
                 <input

@@ -17,6 +17,8 @@ defmodule DranWeb.ProjectLive do
 
   @page_type "project"
 
+  alias DranWeb.DisabledTypes
+
   @project_tabs [
     {"goals", gettext("Objetivos")},
     {"plans", gettext("Planes")},
@@ -246,7 +248,7 @@ defmodule DranWeb.ProjectLive do
      assign(socket,
        context: context,
        page_type: @page_type,
-       project_tabs: @project_tabs,
+       project_tabs: DisabledTypes.visible_tabs(@project_tabs, context),
        active_tab: "overview",
        editing: true,
        save_status: "idle",

@@ -12,6 +12,8 @@ defmodule DranWeb.GoalLive do
 
   @page_type "goal"
 
+  alias DranWeb.DisabledTypes
+
   @goal_tabs [
     {"plans", gettext("Planes")},
     {"todos", gettext("Tareas")}
@@ -201,7 +203,7 @@ defmodule DranWeb.GoalLive do
      assign(socket,
        context: context,
        page_type: @page_type,
-       goal_tabs: @goal_tabs,
+       goal_tabs: DisabledTypes.visible_tabs(@goal_tabs, context),
        active_tab: "overview",
        editing: true,
        save_status: "idle",

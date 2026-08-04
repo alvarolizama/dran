@@ -110,7 +110,7 @@ defmodule DranWeb.KanbanLive do
               />
             </div>
 
-            <div>
+            <div :if={@goal_enabled}>
               <label for="qa-goal" class="block text-caption mb-1">{gettext("Goal")}</label>
               <select
                 id="qa-goal"
@@ -145,9 +145,10 @@ defmodule DranWeb.KanbanLive do
           </div>
         </form>
 
-        <%!-- Filtros combinables --%>
+        <%!-- Filtros combinables — oculta los de tipos deshabilitados --%>
         <div class="flex flex-wrap gap-3 mx-4 mb-3 p-3 rounded-lg bg-base-200/50 border border-base-300 shrink-0">
           <.filter_select
+            :if={@project_enabled}
             label={gettext("Project")}
             id="filter-project"
             value={@filter_project}
@@ -155,6 +156,7 @@ defmodule DranWeb.KanbanLive do
             phx_change="filter_project"
           />
           <.filter_select
+            :if={@goal_enabled}
             label={gettext("Goal")}
             id="filter-goal"
             value={@filter_goal}
@@ -162,6 +164,7 @@ defmodule DranWeb.KanbanLive do
             phx_change="filter_goal"
           />
           <.filter_select
+            :if={@plan_enabled}
             label={gettext("Plan")}
             id="filter-plan"
             value={@filter_plan}
@@ -169,7 +172,10 @@ defmodule DranWeb.KanbanLive do
             phx_change="filter_plan"
           />
           <button
-            :if={@filter_project != "all" or @filter_goal != "all" or @filter_plan != "all"}
+            :if={
+              (@project_enabled and @filter_project != "all") or
+                (@goal_enabled and @filter_goal != "all") or (@plan_enabled and @filter_plan != "all")
+            }
             phx-click="clear_filters"
             class="btn btn-ghost btn-sm"
           >
@@ -213,9 +219,9 @@ defmodule DranWeb.KanbanLive do
               >
                 <div class="font-medium text-sm break-words">{todo.title}</div>
 
-                <%!-- Badges de vínculos (maximo 2 visibles) --%>
+                <%!-- Badges de vínculos (maximo 2 visibles) — filtrados por disabled_page_types --%>
                 <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                  <%= for {badge, _idx} <- visible_badges(todo) do %>
+                  <%= for {badge, _idx} <- visible_badges(todo, @context) do %>
                     <span
                       class={"px-1.5 py-0.5 text-[11px] rounded cursor-pointer " <> Map.get(@badge_styles, badge.type, "bg-base-300")}
                       title={badge.slug}
@@ -228,11 +234,11 @@ defmodule DranWeb.KanbanLive do
                     </span>
                   <% end %>
                   <span
-                    :if={extra_badge_count(todo) > 0}
+                    :if={extra_badge_count(todo, @context) > 0}
                     class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/60"
-                    title={extra_badge_titles(todo)}
+                    title={extra_badge_titles(todo, @context)}
                   >
-                    +{extra_badge_count(todo)}
+                    +{extra_badge_count(todo, @context)}
                   </span>
                 </div>
 
@@ -331,6 +337,9 @@ defmodule DranWeb.KanbanLive do
         priority_options: @priorities,
         status_options: @quick_add_statuses,
         goal_options: [{gettext("No goal"), ""}],
+        project_enabled: Brain.page_type_enabled?(context, "project"),
+        goal_enabled: Brain.page_type_enabled?(context, "goal"),
+        plan_enabled: Brain.page_type_enabled?(context, "plan"),
         form: %{
           "title" => "",
           "priority" => "medium",
@@ -634,35 +643,42 @@ defmodule DranWeb.KanbanLive do
   defp accent_dot(_), do: "bg-base-content/30"
 
   # Construye la lista de badges de un todo. Máximo 2 visibles, resto en +N.
-  defp visible_badges(todo) do
+  # Filtra badges de tipos deshabilitados en el contexto.
+  defp visible_badges(todo, context) do
     todo
-    |> all_badges()
+    |> all_badges(context)
     |> Enum.take(2)
     |> Enum.with_index(fn badge, idx -> {badge, idx} end)
   end
 
-  defp all_badges(todo) do
+  defp all_badges(todo, context) do
+    disabled = (context && context.disabled_page_types) || []
+
     []
-    |> maybe_add_badge("project", meta_get(todo.meta, "project_slug"))
-    |> maybe_add_badge("goal", meta_get(todo.meta, "goal_slug"))
-    |> maybe_add_badge("plan", meta_get(todo.meta, "plan_slug"))
+    |> maybe_add_badge("project", meta_get(todo.meta, "project_slug"), disabled)
+    |> maybe_add_badge("goal", meta_get(todo.meta, "goal_slug"), disabled)
+    |> maybe_add_badge("plan", meta_get(todo.meta, "plan_slug"), disabled)
   end
 
-  defp maybe_add_badge(list, _type, nil), do: list
-  defp maybe_add_badge(list, _type, ""), do: list
+  defp maybe_add_badge(list, _type, nil, _disabled), do: list
+  defp maybe_add_badge(list, _type, "", _disabled), do: list
 
-  defp maybe_add_badge(list, type, slug) do
-    label = String.slice(slug, 0, 12)
-    [%{type: type, slug: slug, label: label} | list]
+  defp maybe_add_badge(list, type, slug, disabled) do
+    if type in disabled do
+      list
+    else
+      label = String.slice(slug, 0, 12)
+      [%{type: type, slug: slug, label: label} | list]
+    end
   end
 
-  defp extra_badge_count(todo) do
-    max(0, length(all_badges(todo)) - 2)
+  defp extra_badge_count(todo, context) do
+    max(0, length(all_badges(todo, context)) - 2)
   end
 
-  defp extra_badge_titles(todo) do
+  defp extra_badge_titles(todo, context) do
     todo
-    |> all_badges()
+    |> all_badges(context)
     |> Enum.drop(2)
     |> Enum.map(fn b -> "#{b.type}: #{b.slug}" end)
     |> Enum.join(", ")

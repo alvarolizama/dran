@@ -12,6 +12,8 @@ defmodule DranWeb.PlanLive do
 
   @page_type "plan"
 
+  alias DranWeb.DisabledTypes
+
   @plan_tabs [
     {"todos", gettext("Tareas")}
   ]
@@ -171,7 +173,7 @@ defmodule DranWeb.PlanLive do
      assign(socket,
        context: context,
        page_type: @page_type,
-       plan_tabs: @plan_tabs,
+       plan_tabs: DisabledTypes.visible_tabs(@plan_tabs, context),
        active_tab: "content",
        editing: true,
        save_status: "idle",
