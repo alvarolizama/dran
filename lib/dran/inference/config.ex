@@ -50,7 +50,19 @@ defmodule Dran.Inference.Config do
   @spec env_rerank_model :: String.t() | nil
   def env_rerank_model, do: get(:rerank_model)
 
-  defp model_or_env(_key, fallback) do
+  defp model_or_env(key, fallback) do
+    # Check DB override first (settings panel), then env var.
+    case Dran.Settings.get("model_#{key}") do
+      nil -> fallback_env(fallback)
+      "" -> fallback_env(fallback)
+      model -> model
+    end
+  rescue
+    # Settings table may not exist yet (test DB, first boot).
+    _ -> fallback_env(fallback)
+  end
+
+  defp fallback_env(fallback) do
     case fallback.() do
       nil -> nil
       model -> model
