@@ -10,48 +10,6 @@ defmodule DranWeb.DashboardLive do
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
-  @nav_groups [
-    %{
-      label: gettext("Top"),
-      items: [
-        %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: "/kanban"},
-        %{
-          key: "project",
-          label: gettext("Projects"),
-          icon: "hero-rocket-launch",
-          path: "/projects"
-        }
-      ]
-    },
-    %{
-      label: gettext("Knowledge"),
-      items: [
-        %{key: "note", label: gettext("Notes"), icon: "hero-document-text", path: "/notes"},
-        %{key: "concept", label: gettext("Concepts"), icon: "hero-light-bulb", path: "/concepts"},
-        %{key: "entity", label: gettext("Entities"), icon: "hero-user-group", path: "/entities"},
-        %{
-          key: "reference",
-          label: gettext("References"),
-          icon: "hero-bookmark",
-          path: "/references"
-        }
-      ]
-    },
-    %{
-      label: gettext("Planning"),
-      items: [
-        %{key: "goal", label: gettext("Goals"), icon: "hero-flag", path: "/goals"},
-        %{
-          key: "plan",
-          label: gettext("Plans"),
-          icon: "hero-clipboard-document-list",
-          path: "/plans"
-        },
-        %{key: "todo", label: gettext("Todos"), icon: "hero-check-circle", path: "/todos"}
-      ]
-    }
-  ]
-
   @kanban_columns [
     {"backlog", gettext("Backlog"), "bg-base-300 text-base-content/70"},
     {"this_week", gettext("This Week"), "bg-blue-500/15 text-blue-600 dark:text-blue-400"},
@@ -421,25 +379,6 @@ defmodule DranWeb.DashboardLive do
                   </p>
                 </div>
               </div>
-
-              <%!-- Quick access grid --%>
-              <div class="surface-2 p-5 rounded-2xl">
-                <div class="flex items-center justify-between">
-                  <h2 class="text-heading">{gettext("Quick Access")}</h2>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-                  <%= for {_group_label, items} <- @nav_groups do %>
-                    <%= for item <- items do %>
-                      <.quick_card
-                        label={item.label}
-                        icon={item.icon}
-                        path={item.path}
-                        count={(@stats[:by_type] || %{})[item.key] || 0}
-                      />
-                    <% end %>
-                  <% end %>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -529,7 +468,6 @@ defmodule DranWeb.DashboardLive do
        user_api_token: db_user && db_user.api_token,
        show_token: false,
        kanban_columns: @kanban_columns,
-       nav_groups: @nav_groups,
        page_title: gettext("Dashboard")
      )}
   end
@@ -624,33 +562,6 @@ defmodule DranWeb.DashboardLive do
       </div>
       <span class="text-sm font-semibold text-base-content/70 w-8 text-right tabular-nums">{@count}</span>
     </div>
-    """
-  end
-
-  attr :label, :string, required: true
-  attr :icon, :string, required: true
-  attr :path, :string, required: true
-  attr :count, :integer, default: 0
-
-  defp quick_card(assigns) do
-    ~H"""
-    <.link
-      navigate={@path}
-      class={[
-        "surface-2 lift p-4 flex items-center gap-3 rounded-2xl",
-        "border border-base-content/10 hover:border-primary/50",
-        "transition-colors active:scale-95"
-      ]}
-    >
-      <div class="shrink-0 size-10 rounded-xl flex items-center justify-center bg-primary/10">
-        <.icon name={@icon} class="size-5 text-primary" />
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="text-sm font-medium truncate">{@label}</div>
-        <div class="text-caption">{gettext("%{count} pages", count: @count)}</div>
-      </div>
-      <.icon name="hero-chevron-right" class="size-4 text-base-content/30 shrink-0" />
-    </.link>
     """
   end
 

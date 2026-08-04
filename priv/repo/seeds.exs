@@ -15,6 +15,17 @@ alias Dran.Brain
 alias Dran.Brain.{Context, Page, Relation}
 
 # ──────────────────────────────────────────────────────────────────────────
+# Seeds only run when the default context is explicitly configured via
+# DRAN_CONTEXT_SLUG / DRAN_CONTEXT_NAME — otherwise a deleted "personal"
+# context would keep coming back from the dead.
+# ──────────────────────────────────────────────────────────────────────────
+
+unless Dran.Auth.default_context_configured?() do
+  IO.puts("DRAN_CONTEXT_SLUG/DRAN_CONTEXT_NAME not set — skipping seeds.")
+  exit(:normal)
+end
+
+# ──────────────────────────────────────────────────────────────────────────
 # Ensure the default context exists
 # ──────────────────────────────────────────────────────────────────────────
 

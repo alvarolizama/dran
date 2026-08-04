@@ -21,12 +21,16 @@ defmodule DranWeb.MarkdownEditorComponents do
   - `:context_id` (required) — used to scope wikilink/embed resolution and uploads.
   - `:upload` (optional) — a `Phoenix.LiveView.UploadConfig` for file uploads.
   - `:save_status` (optional) — `"saving" | "saved" | "idle"` for the indicator.
+  - `:autosave` (optional, default `true`) — when `false`, the editor does not
+    emit debounced `body_change` autosave events and the status indicator is
+    hidden. Use `false` for new-page forms (nothing exists to autosave yet).
   - `class` (optional) — extra classes for the outer container.
   """
   attr :id, :string, required: true
   attr :body, :string, required: true
   attr :context_id, :string, required: true
   attr :save_status, :string, default: "idle"
+  attr :autosave, :boolean, default: true
   attr :class, :string, default: ""
 
   def markdown_editor(assigns) do
@@ -36,7 +40,7 @@ defmodule DranWeb.MarkdownEditorComponents do
       class={["md-editor flex flex-col rounded-lg border border-base-300 overflow-hidden", @class]}
     >
       <.editor_toolbar id={@id} />
-      <.editor_status status={@save_status} />
+      <.editor_status :if={@autosave} status={@save_status} />
 
       <div
         id={@id}
@@ -45,6 +49,7 @@ defmodule DranWeb.MarkdownEditorComponents do
         class="md-editor-mount flex-1 min-h-[300px] bg-base-100 overflow-y-auto"
         data-body={@body}
         data-context-id={@context_id}
+        data-autosave={@autosave}
       >
         <div
           class="tiptap-content prose prose-base dark:prose-invert max-w-none"

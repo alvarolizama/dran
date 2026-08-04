@@ -7,9 +7,6 @@ defmodule DranWeb.DashboardLiveTest do
   # match the translated strings, not the English msgids.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
-  # Phoenix HTML escapes apostrophes as &#39; in rendered output.
-  defp html_escape(text), do: String.replace(text, "'", "&#39;")
-
   setup %{conn: conn} do
     # Disable inference so create_page doesn't call external APIs
     original = Application.get_env(:dran, :inference)

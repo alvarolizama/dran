@@ -279,7 +279,9 @@ defmodule DranWeb.GoalLive do
              rendered_body: rendered_body,
              editing: true,
              form: form,
+             context: context,
              context_id: context.id,
+             goal_tabs: DisabledTypes.visible_tabs(@goal_tabs, context),
              save_status: "idle"
            )}
       end

@@ -215,6 +215,10 @@ const MarkdownEditor = {
     const contentEl = el.querySelector(".tiptap-content")
     const initialBody = el.dataset.body || ""
     const contextId = el.dataset.contextId || ""
+    // New-page forms mount the editor with autosave disabled: nothing exists
+    // in the DB yet, so a debounced save would be a lie. The body is synced
+    // into a hidden form field on submit instead (see submitHandler below).
+    this.autosave = el.dataset.autosave !== "false"
 
     this.editor = new Editor({
       element: contentEl,
@@ -253,9 +257,10 @@ const MarkdownEditor = {
       },
     })
 
-    // Debounced body change → autosave
+    // Debounced body change → autosave (only when the page already exists)
     this.saveTimer = null
     this.editor.on("update", () => {
+      if (!this.autosave) return
       this.pushSaveStatus("saving")
       if (this.saveTimer) clearTimeout(this.saveTimer)
       this.saveTimer = setTimeout(() => {

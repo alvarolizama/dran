@@ -240,7 +240,9 @@ defmodule DranWeb.PlanLive do
              graph_edges: graph_edges,
              editing: true,
              form: form,
+             context: context,
              context_id: context.id,
+             plan_tabs: DisabledTypes.visible_tabs(@plan_tabs, context),
              save_status: "idle",
              rendered_body: rendered_body
            )}

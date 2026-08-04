@@ -54,6 +54,7 @@ defmodule DranWeb.PageNewLive do
                   body={@body}
                   context_id={@context_id}
                   save_status={@save_status}
+                  autosave={false}
                 />
               </div>
             </div>
@@ -84,7 +85,8 @@ defmodule DranWeb.PageNewLive do
             </aside>
           </div>
 
-          <div class="flex justify-end gap-2 pt-4 mt-4 border-t border-base-300">
+          <%!-- Floating action bar — always visible while editing a new page --%>
+          <div class="fixed bottom-6 right-6 z-50 flex items-center gap-2 surface-2 rounded-2xl shadow-lg border border-base-300 px-3 py-2">
             <.link navigate={@back_path} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
             <button type="submit" class="btn btn-primary btn-sm">
               <.icon name="hero-plus" class="size-4" /> {gettext("Create")}

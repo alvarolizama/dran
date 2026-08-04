@@ -10,6 +10,9 @@ defmodule Dran.Auth do
     * `DRAN_API_TOKEN` — bearer token for API/MCP (default: `"dran-token"`)
     * `DRAN_CONTEXT_SLUG` — default context slug (default: `"personal"`)
     * `DRAN_CONTEXT_NAME` — default context display name (default: `"Personal"`)
+
+  The default context is only auto-created (release setup / seeds) when at
+  least one of `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME` is explicitly set.
   """
 
   @api_token System.get_env("DRAN_API_TOKEN", "dran-token")
@@ -24,6 +27,18 @@ defmodule Dran.Auth do
 
   @doc "The default context display name (startup config)."
   def default_context_name, do: @default_context_name
+
+  @doc """
+  True when the default context was explicitly configured via
+  `DRAN_CONTEXT_SLUG` and/or `DRAN_CONTEXT_NAME`. Only then should the
+  context be auto-created (seeds, release setup).
+
+  Read at runtime (not compile time) so release `eval` commands and tests
+  honour the environment they're actually running with.
+  """
+  def default_context_configured? do
+    System.get_env("DRAN_CONTEXT_SLUG") != nil or System.get_env("DRAN_CONTEXT_NAME") != nil
+  end
 
   @doc """
   Checks a bearer token against the configured legacy API token (admin).

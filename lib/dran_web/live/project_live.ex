@@ -350,6 +350,8 @@ defmodule DranWeb.ProjectLive do
              rendered_body: rendered_body,
              editing: true,
              form: form,
+             context: context,
+             project_tabs: DisabledTypes.visible_tabs(@project_tabs, context),
              save_status: "idle"
            )}
       end

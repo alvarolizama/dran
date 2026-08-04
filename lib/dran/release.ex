@@ -105,11 +105,27 @@ defmodule Dran.Release do
   @doc """
   Create only the default context if it does not exist.
 
+  Skipped unless `DRAN_CONTEXT_SLUG` (or `DRAN_CONTEXT_NAME`) is explicitly
+  set in the environment — a deleted context stays deleted across deploys
+  when no env var is present.
+
   Safe for production: does not create demo pages, todos, or relations.
   Used by `setup/0` so a fresh prod deploy gets a working context without
   polluting the brain with seed content.
   """
   def seed_context do
+    if Dran.Auth.default_context_configured?() do
+      do_seed_context()
+    else
+      Logger.info(
+        "[release] DRAN_CONTEXT_SLUG/DRAN_CONTEXT_NAME not set, skipping default context seed"
+      )
+
+      :ok
+    end
+  end
+
+  defp do_seed_context do
     load_config()
 
     for repo <- repos() do
