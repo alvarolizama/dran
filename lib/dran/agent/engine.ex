@@ -553,9 +553,11 @@ defmodule Dran.Agent.Engine do
     case summary do
       %{data: data} when is_list(data) ->
         data
-        |> Enum.take(5)
+        |> Enum.take(20)
         |> Enum.map_join("\n", fn item ->
-          text = "- #{item[:title] || item[:url] || item[:slug] || inspect(item)}"
+          slug = item[:slug] || item["slug"]
+          label = item[:title] || item[:url] || item[:excerpt] || inspect(item)
+          text = if slug, do: "- [#{slug}] #{label}", else: "- #{label}"
           String.slice(text, 0, 200)
         end)
 

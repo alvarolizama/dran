@@ -382,6 +382,11 @@ defmodule Dran.Agent.LinkGardener do
     %{status: "ok", count: length(pages), data: pages}
   end
 
+  # get_page result — preserve body so the LLM can read page content
+  def summarize_result({:ok, %{slug: _slug, title: _title, body: _body} = page}) do
+    %{status: "ok", data: Map.take(page, [:slug, :title, :body, :page_type, :tags])}
+  end
+
   def summarize_result({:ok, %{slug: slug, title: title}}) do
     %{status: "ok", slug: slug, title: title}
   end
