@@ -149,7 +149,8 @@ defmodule Dran.Inference.Client do
       url: base <> path,
       headers: [{"authorization", "Bearer #{key}"}],
       receive_timeout: Config.timeout(),
-      retry: :transient
+      # Retry is handled by Agent.Engine.call_llm/2 — no double-retry.
+      retry: false
     ]
 
     req_opts =
