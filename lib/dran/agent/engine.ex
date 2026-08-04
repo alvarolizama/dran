@@ -494,11 +494,15 @@ defmodule Dran.Agent.Engine do
     tool_result_str = format_tool_result(result, state.module)
     tool_call_id = get_tool_call_id(assistant_message)
 
-    assistant_entry =
-      Map.merge(assistant_message, %{
-        "role" => "assistant",
-        "content" => Map.get(assistant_message, "content", "")
-      })
+    # Build a clean assistant entry — only fields the OpenAI schema allows.
+    # The raw LLM response may contain extra keys like "model", "usage", or
+    # "system_fingerprint" that strict providers (e.g. Fireworks / deepseek)
+    # reject with 400 "Extra inputs not permitted".
+    assistant_entry = %{
+      "role" => "assistant",
+      "content" => Map.get(assistant_message, "content") || "",
+      "tool_calls" => Map.get(assistant_message, "tool_calls", [])
+    }
 
     tool_entry = %{
       "role" => "tool",
