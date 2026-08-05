@@ -5,6 +5,8 @@ defmodule DranWeb.Layouts do
   """
   use DranWeb, :html
 
+  import Ecto.Query
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -150,6 +152,20 @@ defmodule DranWeb.Layouts do
         stats = Dran.Brain.stats(context.id)
         by_type = stats[:by_type] || %{}
 
+        # Smart collections = query pages that carry meta.query (filters).
+        # GraphRag answer pages (also page_type: "query") do NOT have
+        # meta.query — they're static answers, not live collections.
+        collection_count =
+          Dran.Repo.aggregate(
+            from(p in Dran.Brain.Page,
+              where:
+                p.context_id == ^context.id and p.page_type == "query" and
+                  p.archived == false and fragment("meta \\? 'query'"),
+              select: p.id
+            ),
+            :count
+          )
+
         contexts_count =
           try do
             length(Dran.Brain.list_contexts())
@@ -164,6 +180,7 @@ defmodule DranWeb.Layouts do
           entities: by_type["entity"] || 0,
           references: by_type["reference"] || 0,
           queries: by_type["query"] || 0,
+          collections: collection_count || 0,
           projects: by_type["project"] || 0,
           goals: by_type["goal"] || 0,
           plans: by_type["plan"] || 0,
@@ -338,10 +355,18 @@ defmodule DranWeb.Layouts do
             badge: counts[:references]
           },
           %{
+            key: "queries",
+            label: gettext("Queries"),
+            icon: "hero-chat-bubble-bottom-center-text",
+            path: ~p"/queries",
+            badge: counts[:queries]
+          },
+          %{
             key: "collections",
             label: gettext("Collections"),
             icon: "hero-funnel",
-            path: ~p"/collections"
+            path: ~p"/collections",
+            badge: counts[:collections]
           }
         ]
       },
