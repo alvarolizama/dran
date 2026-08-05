@@ -37,6 +37,7 @@ defmodule Dran.Brain.PageMeta do
     field :resolved, :boolean
     field :source_ref, :string
     field :author, :string
+    field :language, :string
 
     # plan
     field :horizon, :string
@@ -86,14 +87,14 @@ defmodule Dran.Brain.PageMeta do
     field :answered_by, :string
   end
 
-  @note_kinds ~w(thought journal idea meeting question quote reminder)
-  @entity_kinds ~w(person company product tool place event)
-  @concept_kinds ~w(technique pattern discipline theory)
-  @reference_kinds ~w(article paper video podcast book)
-  @query_kinds ~w(factual conceptual how_to opinion)
-  @plan_kinds ~w(personal coding business learning health finance other)
-  @goal_kinds ~w(personal coding business learning health finance other)
-  @todo_kinds ~w(personal coding business learning health finance other)
+  @note_kinds ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm)
+  @entity_kinds ~w(person company product tool place event language framework service hardware protocol course community asset brand)
+  @concept_kinds ~w(technique pattern discipline theory principle framework method model law heuristic strategy convention)
+  @reference_kinds ~w(article paper video podcast book document code design deliverable file tweet docs course newsletter forum spec release website repo api guide interview talk)
+  @query_kinds ~w(factual conceptual how_to opinion exploration report status decision comparison)
+  @plan_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
+  @goal_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
+  @todo_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
   @kanban_statuses ~w(backlog this_week today in_progress done cancelled)
   @priorities ~w(low medium high urgent)
   @healths ~w(green yellow red)
@@ -127,6 +128,7 @@ defmodule Dran.Brain.PageMeta do
       :resolved,
       :source_ref,
       :author,
+      :language,
       :horizon,
       :period,
       :status,
@@ -335,6 +337,8 @@ defmodule Dran.Brain.PageMeta do
     [
       {:select, "kind", gettext("Kind"),
        Enum.map(@note_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
+      {:text, "language", gettext("Language"),
+       placeholder: "elixir, python, typescript…", condition: {:kind, "code"}},
       {:date, "date", gettext("Date")},
       {:text, "author", gettext("Author")},
       {:date, "due_date", gettext("Due date"), condition: {:kind, "reminder"}}
@@ -491,6 +495,22 @@ defmodule Dran.Brain.PageMeta do
       "question" => gettext("Question"),
       "quote" => gettext("Quote"),
       "reminder" => gettext("Reminder"),
+      "fleeting" => gettext("Fleeting"),
+      "permanent" => gettext("Permanent"),
+      "moc" => gettext("Map of Content"),
+      "comparison" => gettext("Comparison"),
+      "code" => gettext("Code"),
+      "snippet" => gettext("Snippet"),
+      "recipe" => gettext("Recipe"),
+      "debug" => gettext("Debug"),
+      "checklist" => gettext("Checklist"),
+      "outline" => gettext("Outline"),
+      "summary" => gettext("Summary"),
+      "decision" => gettext("Decision"),
+      "draft" => gettext("Draft"),
+      "template" => gettext("Template"),
+      "log" => gettext("Log"),
+      "brainstorm" => gettext("Brainstorm"),
       # ── entity kinds ───────────────────────────────────────────────────
       "person" => gettext("Person"),
       "company" => gettext("Company"),
@@ -498,11 +518,27 @@ defmodule Dran.Brain.PageMeta do
       "tool" => gettext("Tool"),
       "place" => gettext("Place"),
       "event" => gettext("Event"),
+      "language" => gettext("Language"),
+      "framework" => gettext("Framework"),
+      "service" => gettext("Service"),
+      "hardware" => gettext("Hardware"),
+      "protocol" => gettext("Protocol"),
+      "course" => gettext("Course"),
+      "community" => gettext("Community"),
+      "asset" => gettext("Asset"),
+      "brand" => gettext("Brand"),
       # ── concept kinds ──────────────────────────────────────────────────
       "technique" => gettext("Technique"),
       "pattern" => gettext("Pattern"),
       "discipline" => gettext("Discipline"),
       "theory" => gettext("Theory"),
+      "principle" => gettext("Principle"),
+      "method" => gettext("Method"),
+      "model" => gettext("Model"),
+      "law" => gettext("Law"),
+      "heuristic" => gettext("Heuristic"),
+      "strategy" => gettext("Strategy"),
+      "convention" => gettext("Convention"),
       # ── reference kinds ────────────────────────────────────────────────
       "article" => gettext("Article"),
       "paper" => gettext("Paper"),
@@ -510,15 +546,29 @@ defmodule Dran.Brain.PageMeta do
       "podcast" => gettext("Podcast"),
       "book" => gettext("Book"),
       "document" => gettext("Document"),
-      "code" => gettext("Code"),
       "design" => gettext("Design"),
       "deliverable" => gettext("Deliverable"),
       "file" => gettext("File"),
+      "tweet" => gettext("Tweet"),
+      "docs" => gettext("Docs"),
+      "newsletter" => gettext("Newsletter"),
+      "forum" => gettext("Forum"),
+      "spec" => gettext("Spec"),
+      "release" => gettext("Release"),
+      "website" => gettext("Website"),
+      "repo" => gettext("Repository"),
+      "api" => gettext("API"),
+      "guide" => gettext("Guide"),
+      "interview" => gettext("Interview"),
+      "talk" => gettext("Talk"),
       # ── query kinds ─────────────────────────────────────────────────────
       "factual" => gettext("Factual"),
       "conceptual" => gettext("Conceptual"),
       "how_to" => gettext("How to"),
       "opinion" => gettext("Opinion"),
+      "exploration" => gettext("Exploration"),
+      "report" => gettext("Report"),
+      "status" => gettext("Status"),
       # ── query difficulties ─────────────────────────────────────────────
       "simple" => gettext("Simple"),
       "intermediate" => gettext("Intermediate"),
@@ -528,12 +578,9 @@ defmodule Dran.Brain.PageMeta do
       "answered" => gettext("Answered"),
       "verified" => gettext("Verified"),
       # ── project statuses ────────────────────────────────────────────────
-      "draft" => gettext("Draft"),
       "active" => gettext("Active"),
       "on_hold" => gettext("On hold"),
       "archived" => gettext("Archived"),
-      # ── plan statuses (subset of project) ───────────────────────────────
-      # 'done' is shared with kanban_statuses — defined there to avoid dupes.
       # ── kanban statuses ─────────────────────────────────────────────────
       "backlog" => gettext("Backlog"),
       "this_week" => gettext("This Week"),
@@ -553,7 +600,13 @@ defmodule Dran.Brain.PageMeta do
       "learning" => gettext("Learning"),
       "health" => gettext("Health"),
       "finance" => gettext("Finance"),
-      "other" => gettext("Other")
+      "other" => gettext("Other"),
+      "investing" => gettext("Investing"),
+      "marketing" => gettext("Marketing"),
+      "writing" => gettext("Writing"),
+      "career" => gettext("Career"),
+      "relationship" => gettext("Relationship"),
+      "travel" => gettext("Travel")
     }
   end
 end
