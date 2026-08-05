@@ -20,7 +20,7 @@ defmodule Dran.Brain.Relation do
 
   @derive {Jason.Encoder,
            only: [:id, :source_id, :target_id, :relation_type, :weight, :inserted_at]}
-  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions)
+  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with)
 
   schema "relations" do
     field :relation_type, :string, default: "related"

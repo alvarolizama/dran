@@ -105,6 +105,7 @@ defmodule Dran.Brain.PageAugmenter do
                |> Ecto.Changeset.change(attrs)
                |> Repo.update() do
           link_entities(updated_page, Map.get(enrich, :entities, []))
+          materialize_props(updated_page)
           {:ok, updated_page}
         end
 
@@ -132,6 +133,24 @@ defmodule Dran.Brain.PageAugmenter do
   rescue
     e ->
       Logger.warning("EntityLinker crashed for #{page.slug}: #{Exception.message(e)}")
+      :ok
+  end
+
+  # Props materialization: turn meta.props custom properties into typed
+  # relations so PageRank/communities/GraphRAG can see them. Same
+  # best-effort pattern as link_entities — a crash never breaks the pipeline.
+  defp materialize_props(page) do
+    case Dran.PropsMaterializer.materialize(page) do
+      {:ok, 0} ->
+        :ok
+
+      {:ok, count} ->
+        Logger.debug("PropsMaterializer created #{count} relations for #{page.slug}")
+        :ok
+    end
+  rescue
+    e ->
+      Logger.warning("PropsMaterializer crashed for #{page.slug}: #{Exception.message(e)}")
       :ok
   end
 

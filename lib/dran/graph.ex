@@ -15,6 +15,11 @@ defmodule Dran.Graph do
     "part_of" => 1.0,
     "embeds" => 0.8,
     "supersedes" => 0.7,
+    "works_in" => 0.7,
+    "has_tier" => 0.7,
+    "based_in" => 0.7,
+    "written_in" => 0.7,
+    "built_with" => 0.7,
     "mentions" => 0.6,
     "related" => 0.5,
     "contradicts" => 0.2,
@@ -22,7 +27,7 @@ defmodule Dran.Graph do
   }
 
   # Edge types that participate in community detection.
-  @community_types ~w(part_of embeds supersedes related mentions)
+  @community_types ~w(part_of embeds supersedes related mentions works_in has_tier based_in written_in built_with)
 
   @damping 0.85
   @iterations 20
