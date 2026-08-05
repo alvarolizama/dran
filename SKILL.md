@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 18 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, or delegating longer tasks to agents."
-version: 7.1.0
+version: 7.3.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -11,6 +11,43 @@ metadata:
 ---
 
 # second-brain — Dran MCP Skill
+
+## Entry router
+
+¿Estás en el skill correcto? Sigue este diagrama:
+
+```mermaid
+flowchart TD
+  Q{¿Qué necesitas?} -->|Capturar, buscar, actualizar o mantener conocimiento| SELF[ESTE SKILL — tools + page types + recipes]
+  Q -->|Estructurar projects, goals, plans o todos| SW[second-brain-workflow — niveles + mermaid + subagentes]
+  Q -->|Notas fuera de Dran| OTHER[obsidian, notion o apple-notes]
+
+  style SELF fill:#d1fae5,stroke:#059669
+```
+
+Ejecuta SOLO la sección a la que llegaste (page types §3, tools §4, recipes §9).
+Si el diagrama te manda a otro skill, **paras aquí** y haces hand-off — no
+absorbes ese trabajo.
+
+## Parse contract
+
+### Qué CONSUME este skill
+- Pedido de Álvaro (thought, nota, research, URL, goal, plan, todo, pregunta)
+  o página Dran existente
+- Estado de la página: `page_type`, `meta`, `tags`, relations, contexto
+  (default **`personal`**)
+
+### Qué PRODUCE este skill
+- Páginas Dran vía `dran_create_page` (todo tipo **excepto todos**) o
+  `dran_create_todo`
+- `meta` válido según `page_type` (kinds en §3), relations tipadas (§4),
+  status según §8; todos con `kanban_status` + `priority` + `assignee`
+  (SIEMPRE clarify) y auto-move a `in_progress`
+- Actualizaciones: `dran_update_todo` (merge `meta`) para status de todos;
+  `dran_update_page` con **solo `body`** si la página tiene mermaid
+
+**Sin `page_type` + `meta.kind` correctos el output está mal formado** — la
+página se crea, pero búsqueda, kanban y relations la tratan mal.
 
 ## 1. What is Dran
 
@@ -34,29 +71,39 @@ through a single MCP endpoint.
 | --- | --- |
 | Transport | Streamable HTTP, MCP spec **2025-03-26** |
 | Endpoint | `POST http://<host>/api/mcp` |
-| Auth | `Authorization: Bearer <token>` — per-user API token |
+| Auth | `Authorization: Bearer <token>` — legacy admin, per-user, or context API key |
 | Default context | **`personal`** — do not ask, do not switch unless Álvaro says so |
 
-Auth is **per-user**: each user has one `api_token` for all their assigned
-contexts. Requests return `401` for invalid tokens and `403` for contexts the
-user isn't assigned to. The legacy `DRAN_API_TOKEN` env token is treated as
-admin with access to all contexts.
+Auth accepts three token kinds, checked in order:
+
+1. **Legacy admin** — the `DRAN_API_TOKEN` env token: access to all contexts.
+2. **Per-user token** — one `api_token` per user, covering their assigned
+   contexts.
+3. **Context API key** — scoped to a single context (managed in Settings →
+   API Keys; plaintext shown once at creation, revocable, restorable,
+   regenerable).
+
+Requests return `401` for invalid/revoked tokens and `403` for contexts the
+token isn't allowed to touch.
 
 ## 3. Page types (9)
 
 | Type | Use it for | Subtypes (`meta.kind`) |
 | --- | --- | --- |
-| `note` | Thoughts, journal, ideas, meetings, questions, quotes, reminders | thought, journal, idea, meeting, question, quote, reminder |
-| `concept` | Techniques, patterns, disciplines, theories | technique, pattern, discipline, theory |
-| `entity` | People, companies, products, tools, places, events | person, company, product, tool, place, event |
-| `reference` | External sources | article, paper, video, podcast, book |
+| `note` | Thoughts, journal, ideas, meetings, questions, quotes, reminders | thought, journal, idea, meeting, question, quote, reminder, fleeting, permanent, moc, comparison, code, snippet, recipe, debug, checklist, outline, summary, decision, draft, template, log, brainstorm |
+| `concept` | Techniques, patterns, disciplines, theories | technique, pattern, discipline, theory, principle, framework, method, model, law, heuristic, strategy, convention |
+| `entity` | People, companies, products, tools, places, events | person, company, product, tool, place, event, language, framework, service, hardware, protocol, course, community, asset, brand |
+| `reference` | External sources | article, paper, video, podcast, book, document, code, design, deliverable, file, tweet, docs, course, newsletter, forum, spec, release, website, repo, api, guide, interview, talk |
 | `project` | Larger initiatives grouping goals/plans/todos | — |
-| `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other |
-| `plan` | Time-horizoned plans (weekly/monthly/quarterly/yearly) | personal, coding, business, learning, health, finance, other |
-| `todo` | Actionable items with kanban status | personal, coding, business, learning, health, finance, other |
-| `query` | Questions with answers | factual, conceptual, how_to, opinion |
+| `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
+| `plan` | Time-horizoned plans (weekly/monthly/quarterly/yearly) | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
+| `todo` | Actionable items with kanban status | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
+| `query` | Questions with answers | factual, conceptual, how_to, opinion, exploration, report, status, decision, comparison |
 
 Default to `note` with `meta.kind: "thought"` when unsure — promote later.
+
+Notes with `meta.kind: "code"` may carry `meta.language` (e.g. `elixir`,
+`python`) to filter by programming language.
 
 ### Per-context page type disabling
 
