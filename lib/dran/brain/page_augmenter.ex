@@ -60,6 +60,10 @@ defmodule Dran.Brain.PageAugmenter do
   def run(%Page{} = page) do
     page = Repo.get(Page, page.id) || page
 
+    # Props materialization is inference-independent — run it first so props
+    # always become edges even when the LLM is not configured.
+    materialize_props(page)
+
     with {:ok, enrich} <- maybe_enrich_metadata(page),
          :ok <- ensure_embedding(enrich),
          {:ok, neighbors} <- find_semantic_neighbors(enrich) do
@@ -105,7 +109,6 @@ defmodule Dran.Brain.PageAugmenter do
                |> Ecto.Changeset.change(attrs)
                |> Repo.update() do
           link_entities(updated_page, Map.get(enrich, :entities, []))
-          materialize_props(updated_page)
           {:ok, updated_page}
         end
 

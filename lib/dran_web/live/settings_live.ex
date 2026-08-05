@@ -58,7 +58,8 @@ defmodule DranWeb.SettingsLive do
         page_types_context_id: nil,
         api_keys: Dran.Accounts.list_api_keys(),
         new_api_key_form: to_form(%{}, as: :api_key),
-        revealed_api_key: nil
+        revealed_api_key: nil,
+        props_backfill: :idle
       )
       |> assign_brain_form()
       |> assign_models()
@@ -459,6 +460,23 @@ defmodule DranWeb.SettingsLive do
   # -- Inference connection test ---------------------------------------------
 
   @impl true
+  def handle_event("run_props_backfill", _params, socket) do
+    if socket.assigns.props_backfill == :running do
+      {:noreply, socket}
+    else
+      socket = assign(socket, props_backfill: :running)
+      parent = self()
+
+      Task.start(fn ->
+        result = Dran.PropsBackfill.run()
+        send(parent, {:props_backfill_done, result})
+      end)
+
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("test_inference", _params, socket) do
     pid = self()
 
@@ -473,6 +491,32 @@ defmodule DranWeb.SettingsLive do
   @impl true
   def handle_info({:inference_test_result, result}, socket) do
     {:noreply, assign(socket, inference_test: result)}
+  end
+
+  @impl true
+  def handle_info({:props_backfill_done, {:ok, stats}}, socket) do
+    socket =
+      socket
+      |> assign(props_backfill: :idle)
+      |> put_flash(
+        :info,
+        gettext(
+          "Props backfill complete: %{pages} pages processed, %{edges} relations created.",
+          pages: stats.pages,
+          edges: stats.edges
+        )
+      )
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:props_backfill_done, {:error, reason}}, socket) do
+    socket =
+      socket
+      |> assign(props_backfill: :idle)
+      |> put_flash(:error, gettext("Props backfill failed: %{reason}", reason: inspect(reason)))
+
+    {:noreply, socket}
   end
 
   # -- Brain tuning form ------------------------------------------------------
@@ -604,7 +648,7 @@ defmodule DranWeb.SettingsLive do
           </div>
 
           <div :if={@active_tab == "brain"}>
-            <.brain_tuning_section form={@brain_form} />
+            <.brain_tuning_section form={@brain_form} props_backfill={@props_backfill} />
           </div>
 
           <div :if={@active_tab == "models"}>
@@ -908,6 +952,7 @@ defmodule DranWeb.SettingsLive do
   end
 
   attr :form, :any, required: true
+  attr :props_backfill, :atom, default: :idle
 
   defp brain_tuning_section(assigns) do
     ~H"""
@@ -1007,6 +1052,58 @@ defmodule DranWeb.SettingsLive do
           </button>
         </div>
       </.form>
+    </section>
+
+    <%!-- Props backfill --%>
+    <section class="surface-2 rounded-2xl overflow-hidden mt-6">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-secondary/10">
+          <.icon name="hero-arrow-path-rounded-square" class="size-4 text-secondary" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-heading">{gettext("Props materialization")}</h2>
+          <p class="text-caption mt-0.5">
+            {gettext(
+              "Turn meta.props custom properties into typed graph relations (works_in, has_tier, based_in, written_in, built_with)."
+            )}
+          </p>
+        </div>
+      </header>
+
+      <div class="px-5 py-5 space-y-4">
+        <p class="text-sm text-base-content/70">
+          {gettext(
+            "Pages created before props materialization (or with props added after their last augmentation) carry metadata the graph cannot see. Run this to backfill typed relations for every page with non-empty meta.props."
+          )}
+        </p>
+
+        <div class="flex items-center gap-3">
+          <button
+            phx-click="run_props_backfill"
+            disabled={@props_backfill == :running}
+            class={[
+              "btn btn-sm gap-2 transition-all duration-150",
+              @props_backfill == :running && "btn-ghost opacity-60",
+              @props_backfill != :running && "btn-secondary hover:brightness-110"
+            ]}
+          >
+            <.icon
+              name={
+                if @props_backfill == :running,
+                  do: "hero-arrow-path",
+                  else: "hero-bolt"
+              }
+              class={"size-4 #{if @props_backfill == :running, do: "animate-spin", else: ""}"}
+            />
+            {if @props_backfill == :running,
+              do: gettext("Running…"),
+              else: gettext("Run backfill")}
+          </button>
+          <span :if={@props_backfill == :running} class="text-xs text-base-content/50">
+            {gettext("Processing pages with props in the background…")}
+          </span>
+        </div>
+      </div>
     </section>
     """
   end
