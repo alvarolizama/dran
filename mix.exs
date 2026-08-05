@@ -69,8 +69,7 @@ defmodule Dran.MixProject do
       {:mdex, "~> 0.13.1"},
       {:bcrypt_elixir, "~> 3.0"},
       {:pgvector, "~> 0.3"},
-      {:quantum, "~> 3.5"},
-      {:extools, "~> 0.2.1", only: :dev}
+      {:quantum, "~> 3.5"}
     ]
   end
 

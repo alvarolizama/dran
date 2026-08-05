@@ -49,7 +49,6 @@ defmodule DranWeb.Endpoint do
     plug Phoenix.LiveReloader
     plug Phoenix.CodeReloader
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :dran
-    plug Extools
   end
 
   plug Phoenix.LiveDashboard.RequestLogger,
