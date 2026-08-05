@@ -95,6 +95,121 @@ defmodule DranWeb.E2EAuthTest do
     assert conn.resp_body =~ "tools"
   end
 
+  describe "context-scoped API keys" do
+    test "create_api_key returns plaintext token once, stores only hash + prefix", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+
+      assert is_binary(key.token)
+      assert String.length(key.token) > 30
+      assert key.token_prefix == String.slice(key.token, 0, 8)
+      assert key.token_hash == Accounts.ApiKey.hash_token(key.token)
+      refute key.token_hash == key.token
+    end
+
+    test "valid_api_key? accepts active keys and preloads the context", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+
+      assert {:ok, found} = Accounts.valid_api_key?(key.token)
+      assert found.id == key.id
+      assert found.context.slug == ctx1.slug
+    end
+
+    test "revoked keys fail validation, restored keys work again", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+
+      {:ok, revoked} = Accounts.revoke_api_key(key)
+      assert revoked.revoked_at
+      assert Accounts.valid_api_key?(key.token) == :error
+
+      {:ok, _} = Accounts.restore_api_key(revoked)
+      assert {:ok, _} = Accounts.valid_api_key?(key.token)
+    end
+
+    test "regenerate_api_key invalidates the old token and returns a new one", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      old_token = key.token
+
+      {:ok, regenerated} = Accounts.regenerate_api_key(key)
+      assert regenerated.token != old_token
+
+      assert Accounts.valid_api_key?(old_token) == :error
+      assert {:ok, _} = Accounts.valid_api_key?(regenerated.token)
+    end
+
+    test "regenerating a revoked key reactivates it", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, revoked} = Accounts.revoke_api_key(key)
+
+      {:ok, regenerated} = Accounts.regenerate_api_key(revoked)
+      assert is_nil(regenerated.revoked_at)
+      assert {:ok, _} = Accounts.valid_api_key?(regenerated.token)
+    end
+
+    test "MCP accepts a context API key for its own context", %{
+      conn: conn,
+      ctx1: ctx1
+    } do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      msg = %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => 1, "context" => ctx1.slug}
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", msg)
+
+      assert conn.status == 200
+    end
+
+    test "MCP rejects a context API key used against a DIFFERENT context", %{
+      conn: conn,
+      ctx1: ctx1,
+      ctx2: ctx2
+    } do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", %{"context" => ctx2.slug})
+
+      assert conn.status == 403
+    end
+
+    test "MCP rejects a revoked key", %{conn: conn, ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, _} = Accounts.revoke_api_key(key)
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", %{"context" => ctx1.slug})
+
+      assert conn.status == 401
+    end
+
+    test "deleting a context cascade-deletes its API keys", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+
+      {:ok, _} = Brain.delete_context(ctx1)
+
+      assert Accounts.valid_api_key?(key.token) == :error
+      refute Dran.Repo.get(Accounts.ApiKey, key.id)
+    end
+  end
+
+  describe "per-user default context" do
+    test "set_default_context persists the slug", %{user: user, ctx2: ctx2} do
+      {:ok, updated} = Accounts.set_default_context(user, ctx2.slug)
+      assert updated.default_context_slug == ctx2.slug
+
+      reloaded = Accounts.get_user!(user.id)
+      assert reloaded.default_context_slug == ctx2.slug
+    end
+  end
+
   describe "sidebar integration" do
     test "context CRUD lives inside the settings contexts tab", %{
       conn: conn,

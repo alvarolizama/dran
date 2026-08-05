@@ -150,4 +150,116 @@ defmodule Dran.Accounts do
     |> User.changeset(%{api_token: User.generate_api_token()})
     |> Repo.update()
   end
+
+  # ── Context-scoped API keys ──
+
+  alias Dran.Accounts.ApiKey
+
+  @doc """
+  List all API keys (active and revoked) with their context preloaded,
+  newest first.
+  """
+  def list_api_keys do
+    ApiKey
+    |> order_by([k], desc: k.inserted_at)
+    |> Repo.all()
+    |> Repo.preload(:context)
+  end
+
+  @doc """
+  Create a context-scoped API key.
+
+  Returns `{:ok, %ApiKey{token: plaintext}}` — the plaintext token is only
+  available in this return value and is never stored. Only its hash and an
+  8-char display prefix are persisted.
+  """
+  def create_api_key(%{name: _name, context_id: _context_id} = attrs) do
+    token = ApiKey.generate_token()
+
+    %ApiKey{}
+    |> ApiKey.changeset(%{
+      name: attrs.name,
+      context_id: attrs.context_id,
+      token_hash: ApiKey.hash_token(token),
+      token_prefix: ApiKey.prefix_of(token)
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, key} -> {:ok, %{key | token: token}}
+      error -> error
+    end
+  end
+
+  @doc """
+  Validate an API key token. Returns `{:ok, %ApiKey{}}` (with context
+  preloaded) only when the key exists AND is not revoked.
+  """
+  def valid_api_key?(token) when is_binary(token) do
+    case Repo.get_by(ApiKey, token_hash: ApiKey.hash_token(token)) do
+      %ApiKey{} = key ->
+        if ApiKey.active?(key), do: {:ok, Repo.preload(key, :context)}, else: :error
+
+      nil ->
+        :error
+    end
+  end
+
+  def valid_api_key?(_), do: :error
+
+  @doc """
+  Revoke an API key by setting `revoked_at`. The key stops working
+  immediately but remains listed for audit.
+  """
+  def revoke_api_key(%ApiKey{} = key) do
+    key
+    |> Ecto.Changeset.change(revoked_at: DateTime.utc_now() |> DateTime.truncate(:second))
+    |> Repo.update()
+  end
+
+  @doc """
+  Un-revoke an API key.
+  """
+  def restore_api_key(%ApiKey{} = key) do
+    key
+    |> Ecto.Changeset.change(revoked_at: nil)
+    |> Repo.update()
+  end
+
+  @doc """
+  Regenerate a key's token: new hash + prefix, clears revocation.
+  The old token stops working immediately. Returns `{:ok, %ApiKey{token: ...}}`
+  with the new plaintext token.
+  """
+  def regenerate_api_key(%ApiKey{} = key) do
+    token = ApiKey.generate_token()
+
+    key
+    |> Ecto.Changeset.change(
+      token_hash: ApiKey.hash_token(token),
+      token_prefix: ApiKey.prefix_of(token),
+      revoked_at: nil
+    )
+    |> Repo.update()
+    |> case do
+      {:ok, key} -> {:ok, %{key | token: token}}
+      error -> error
+    end
+  end
+
+  @doc """
+  Permanently delete an API key row.
+  """
+  def delete_api_key(%ApiKey{} = key), do: Repo.delete(key)
+
+  # ── Per-user default context ──
+
+  @doc """
+  Set a user's default context slug. Used as fallback when no context has
+  been explicitly chosen in the session/cookie yet.
+  """
+  def set_default_context(%User{} = user, slug) when is_binary(slug) do
+    user
+    |> Ecto.Changeset.change(default_context_slug: slug)
+    |> Repo.update()
+  end
 end

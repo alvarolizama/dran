@@ -55,7 +55,10 @@ defmodule DranWeb.SettingsLive do
         confirm_delete_context_id: nil,
         slug_touched: false,
         managing_context_id: nil,
-        page_types_context_id: nil
+        page_types_context_id: nil,
+        api_keys: Dran.Accounts.list_api_keys(),
+        new_api_key_form: to_form(%{}, as: :api_key),
+        revealed_api_key: nil
       )
       |> assign_brain_form()
       |> assign_models()
@@ -95,7 +98,7 @@ defmodule DranWeb.SettingsLive do
     assign(socket, new_context_form: to_form(Context.changeset(%Context{}, %{}), as: :context))
   end
 
-  @tabs ~w(users contexts brain models system danger)
+  @tabs ~w(users contexts api_keys brain models system danger)
 
   @impl true
   def handle_params(params, _url, socket) do
@@ -167,6 +170,107 @@ defmodule DranWeb.SettingsLive do
     end
 
     {:noreply, assign_users(socket)}
+  end
+
+  # -- Admin: context-scoped API keys ------------------------------------------
+
+  @impl true
+  def handle_event("create_api_key", %{"api_key" => params}, socket) do
+    name = Map.get(params, "name", "") |> String.trim()
+    context_id = Map.get(params, "context_id", "")
+
+    case Dran.Accounts.create_api_key(%{name: name, context_id: context_id}) do
+      {:ok, key} ->
+        socket =
+          socket
+          |> assign(
+            api_keys: Dran.Accounts.list_api_keys(),
+            new_api_key_form: to_form(%{}, as: :api_key),
+            revealed_api_key: %{id: key.id, token: key.token}
+          )
+          |> put_flash(:info, gettext("API key created — copy it now, it won't be shown again"))
+
+        {:noreply, socket}
+
+      {:error, changeset} ->
+        {:noreply,
+         socket
+         |> assign(new_api_key_form: to_form(changeset, as: :api_key))
+         |> put_flash(:error, gettext("Could not create the API key"))}
+    end
+  end
+
+  @impl true
+  def handle_event("dismiss_revealed_key", _params, socket) do
+    {:noreply, assign(socket, revealed_api_key: nil)}
+  end
+
+  @impl true
+  def handle_event("revoke_api_key", %{"id" => id}, socket) do
+    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
+    {:ok, _} = Dran.Accounts.revoke_api_key(key)
+
+    {:noreply,
+     socket
+     |> assign(api_keys: Dran.Accounts.list_api_keys())
+     |> put_flash(:info, gettext("API key revoked"))}
+  end
+
+  @impl true
+  def handle_event("restore_api_key", %{"id" => id}, socket) do
+    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
+    {:ok, _} = Dran.Accounts.restore_api_key(key)
+
+    {:noreply,
+     socket
+     |> assign(api_keys: Dran.Accounts.list_api_keys())
+     |> put_flash(:info, gettext("API key restored"))}
+  end
+
+  @impl true
+  def handle_event("regenerate_api_key", %{"id" => id}, socket) do
+    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
+
+    case Dran.Accounts.regenerate_api_key(key) do
+      {:ok, key} ->
+        {:noreply,
+         socket
+         |> assign(
+           api_keys: Dran.Accounts.list_api_keys(),
+           revealed_api_key: %{id: key.id, token: key.token}
+         )
+         |> put_flash(:info, gettext("API key regenerated — copy the new token now"))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not regenerate the key"))}
+    end
+  end
+
+  @impl true
+  def handle_event("delete_api_key", %{"id" => id}, socket) do
+    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
+    {:ok, _} = Dran.Accounts.delete_api_key(key)
+
+    {:noreply,
+     socket
+     |> assign(api_keys: Dran.Accounts.list_api_keys())
+     |> put_flash(:info, gettext("API key deleted"))}
+  end
+
+  @impl true
+  def handle_event("set_default_context", %{"user_id" => id, "slug" => slug}, socket) do
+    user = Dran.Accounts.get_user!(id)
+
+    case Dran.Accounts.set_default_context(user, slug) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign_users()
+         |> put_flash(:info, gettext("Default context updated"))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update default context"))}
+    end
   end
 
   # -- Admin: context CRUD (create / delete) -----------------------------------
@@ -465,7 +569,7 @@ defmodule DranWeb.SettingsLive do
           <%!-- Tabs navigation --%>
           <div class="tabs tabs-border">
             <.link
-              :for={tab <- ~w(users contexts brain models system danger)}
+              :for={tab <- ~w(users contexts api_keys brain models system danger)}
               patch={~p"/settings/#{tab}"}
               class={["tab", @active_tab == tab && "tab-active"]}
             >
@@ -487,6 +591,15 @@ defmodule DranWeb.SettingsLive do
               managing_context_id={@managing_context_id}
               page_types_context_id={@page_types_context_id}
               context_slug={@context_slug}
+            />
+          </div>
+
+          <div :if={@active_tab == "api_keys"}>
+            <.api_keys_section
+              api_keys={@api_keys}
+              all_contexts={@all_contexts}
+              form={@new_api_key_form}
+              revealed_api_key={@revealed_api_key}
             />
           </div>
 
@@ -1092,6 +1205,7 @@ defmodule DranWeb.SettingsLive do
 
   defp tab_label("users"), do: gettext("Users")
   defp tab_label("contexts"), do: gettext("Contexts")
+  defp tab_label("api_keys"), do: gettext("API Keys")
   defp tab_label("brain"), do: gettext("Brain")
   defp tab_label("models"), do: gettext("Models")
   defp tab_label("system"), do: gettext("System")
@@ -1162,6 +1276,247 @@ defmodule DranWeb.SettingsLive do
     """
   end
 
+  # ── API Keys section ──────────────────────────────────────────────────────
+
+  attr :api_keys, :list, required: true
+  attr :all_contexts, :list, required: true
+  attr :form, :map, required: true
+  attr :revealed_api_key, :map, default: nil
+
+  def api_keys_section(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <div>
+        <h2 class="text-heading">{gettext("API Keys")}</h2>
+        <p class="text-caption mt-0.5">
+          {gettext(
+            "Context-scoped keys for integrations and MCP clients. A key grants access to one context only — no user account needed."
+          )}
+        </p>
+      </div>
+
+      <%!-- Newly created / regenerated token — shown ONCE --%>
+      <div
+        :if={@revealed_api_key}
+        class="card bg-success/10 border border-success/40"
+        id="revealed-api-key-card"
+      >
+        <div class="card-body py-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-success flex items-center gap-2">
+              <.icon name="hero-key" class="size-5" />
+              {gettext("Copy your new API key now — it won't be shown again")}
+            </h3>
+            <button
+              type="button"
+              phx-click="dismiss_revealed_key"
+              class="btn btn-ghost btn-xs"
+              title={gettext("Dismiss")}
+            >
+              <.icon name="hero-x-mark" class="size-4" />
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <code
+              id="revealed-api-key-token"
+              data-token={@revealed_api_key.token}
+              class="flex-1 text-sm font-mono bg-base-100 rounded-md px-3 py-2 border border-success/40 select-all break-all"
+            >
+              {@revealed_api_key.token}
+            </code>
+            <button
+              type="button"
+              id="copy-revealed-key-btn"
+              phx-hook=".CopyApiToken"
+              class="btn btn-success btn-sm gap-1 transition-all active:scale-95"
+            >
+              <span data-copy-icon class="flex items-center gap-1">
+                <.icon name="hero-clipboard-document" class="size-4" />
+                {gettext("Copy")}
+              </span>
+              <span data-check-icon class="hidden items-center gap-1">
+                <.icon name="hero-clipboard-document-check" class="size-4" />
+                {gettext("Copied!")}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <%!-- Create new key form --%>
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <h3 class="text-lg font-semibold">{gettext("Create API Key")}</h3>
+          <.form for={@form} phx-submit="create_api_key" class="space-y-3" id="create-api-key-form">
+            <div class="grid grid-cols-2 gap-3">
+              <.input
+                field={@form[:name]}
+                label={gettext("Name")}
+                type="text"
+                placeholder={gettext("e.g. Hermes agent, backup script")}
+                required
+              />
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text">{gettext("Context")}</span>
+                </label>
+                <select name="api_key[context_id]" class="select select-bordered w-full" required>
+                  <option value="">{gettext("Select a context...")}</option>
+                  <option :for={ctx <- @all_contexts} value={ctx.id}>{ctx.name}</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">
+              {gettext("Create Key")}
+            </button>
+          </.form>
+        </div>
+      </div>
+
+      <%!-- Keys list --%>
+      <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+          <h3 class="text-lg font-semibold">{gettext("Existing Keys")}</h3>
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>{gettext("Name")}</th>
+                  <th>{gettext("Context")}</th>
+                  <th>{gettext("Token")}</th>
+                  <th>{gettext("Status")}</th>
+                  <th>{gettext("Created")}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={key <- @api_keys} id={"api-key-#{key.id}"}>
+                  <td class="font-medium">{key.name}</td>
+                  <td>
+                    <span class="badge badge-ghost badge-sm">
+                      {if key.context, do: key.context.name, else: "—"}
+                    </span>
+                  </td>
+                  <td>
+                    <code class="text-xs">{key.token_prefix}••••••••••••</code>
+                  </td>
+                  <td>
+                    <span :if={key.revoked_at} class="badge badge-error badge-sm">
+                      {gettext("Revoked")}
+                    </span>
+                    <span :if={!key.revoked_at} class="badge badge-success badge-sm">
+                      {gettext("Active")}
+                    </span>
+                  </td>
+                  <td class="text-xs text-base-content/60">
+                    {Calendar.strftime(key.inserted_at, "%Y-%m-%d")}
+                  </td>
+                  <td>
+                    <div class="flex items-center gap-1">
+                      <button
+                        :if={!key.revoked_at}
+                        type="button"
+                        phx-click="revoke_api_key"
+                        phx-value-id={key.id}
+                        data-confirm={gettext("Revoke this key? It will stop working immediately.")}
+                        class="btn btn-ghost btn-xs text-warning"
+                        title={gettext("Revoke")}
+                      >
+                        <.icon name="hero-no-symbol" class="size-4" />
+                      </button>
+                      <button
+                        :if={key.revoked_at}
+                        type="button"
+                        phx-click="restore_api_key"
+                        phx-value-id={key.id}
+                        class="btn btn-ghost btn-xs text-success"
+                        title={gettext("Restore")}
+                      >
+                        <.icon name="hero-arrow-uturn-left" class="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="regenerate_api_key"
+                        phx-value-id={key.id}
+                        data-confirm={
+                          gettext(
+                            "Regenerate this key? The current token stops working immediately and you'll get a new one."
+                          )
+                        }
+                        class="btn btn-ghost btn-xs"
+                        title={gettext("Regenerate")}
+                      >
+                        <.icon name="hero-arrow-path" class="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        phx-click="delete_api_key"
+                        phx-value-id={key.id}
+                        data-confirm={gettext("Delete this key permanently?")}
+                        class="btn btn-ghost btn-xs text-error"
+                        title={gettext("Delete")}
+                      >
+                        <.icon name="hero-trash" class="size-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr :if={@api_keys == []}>
+                  <td colspan="6" class="text-center text-base-content/50 py-6">
+                    {gettext("No API keys yet — create one above.")}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyApiToken">
+        export default {
+          mounted() {
+            this.el.addEventListener("click", () => {
+              const target = document.getElementById("revealed-api-key-token");
+              if (!target) return;
+              const text = target.dataset.token;
+              if (!text) return;
+              const copied = () => {
+                const icon = this.el.querySelector("[data-copy-icon]");
+                const check = this.el.querySelector("[data-check-icon]");
+                if (icon && check) {
+                  icon.classList.add("hidden");
+                  check.classList.remove("hidden");
+                  check.classList.add("flex");
+                  setTimeout(() => {
+                    icon.classList.remove("hidden");
+                    check.classList.add("hidden");
+                    check.classList.remove("flex");
+                  }, 1500);
+                }
+              };
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(copied);
+              } else {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.setAttribute("readonly", "");
+                ta.style.position = "absolute";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand("copy"); } catch (_e) { /* noop */ }
+                document.body.removeChild(ta);
+                copied();
+              }
+            });
+          }
+        }
+      </script>
+    </div>
+    """
+  end
+
   attr :users, :list, required: true
   attr :all_contexts, :list, required: true
   attr :form, :map, required: true
@@ -1216,6 +1571,7 @@ defmodule DranWeb.SettingsLive do
                   <th>{gettext("Name")}</th>
                   <th>{gettext("Admin")}</th>
                   <th>{gettext("Contexts")}</th>
+                  <th>{gettext("Default context")}</th>
                   <th>{gettext("API Token")}</th>
                   <th></th>
                 </tr>
@@ -1233,6 +1589,27 @@ defmodule DranWeb.SettingsLive do
                         {ctx.name}
                       </span>
                     </div>
+                  </td>
+                  <td>
+                    <form phx-change="set_default_context" id={"default-context-form-#{user.id}"}>
+                      <input type="hidden" name="user_id" value={user.id} />
+                      <select
+                        name="slug"
+                        class="select select-bordered select-xs w-full max-w-[12rem]"
+                        id={"default-context-select-#{user.id}"}
+                      >
+                        <option value="" selected={is_nil(user.default_context_slug)}>
+                          {gettext("— Global default —")}
+                        </option>
+                        <option
+                          :for={ctx <- @all_contexts}
+                          value={ctx.slug}
+                          selected={user.default_context_slug == ctx.slug}
+                        >
+                          {ctx.name}
+                        </option>
+                      </select>
+                    </form>
                   </td>
                   <td>
                     <code class="text-xs">{String.slice(user.api_token, 0, 8)}...</code>

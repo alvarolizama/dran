@@ -156,8 +156,27 @@ defmodule DranWeb.Plugs.Auth do
           put_session(conn, @context_key, slug)
 
         _ ->
-          conn
+          # No cookie either — fall back to the user's default context (if
+          # their account has one set) before the global default.
+          case user_default_context(conn) do
+            nil -> conn
+            slug -> put_session(conn, @context_key, slug)
+          end
       end
+    end
+  end
+
+  # The logged-in user's configured default context slug, or nil.
+  defp user_default_context(conn) do
+    case get_session(conn, @session_key) do
+      nil ->
+        nil
+
+      email ->
+        case Dran.Accounts.get_user_by_email(email) do
+          %{default_context_slug: slug} when is_binary(slug) and slug != "" -> slug
+          _ -> nil
+        end
     end
   end
 

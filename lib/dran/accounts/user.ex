@@ -10,6 +10,7 @@ defmodule Dran.Accounts.User do
     field :is_admin, :boolean, default: false
     field :api_token, :string
     field :password_hash, :string
+    field :default_context_slug, :string
 
     # Virtual — consumed by changeset, never persisted
     field :password, :string, virtual: true
@@ -22,7 +23,15 @@ defmodule Dran.Accounts.User do
 
   def changeset(user, attrs) do
     user
-    |> cast(attrs, [:email, :name, :google_id, :avatar_url, :is_admin, :api_token])
+    |> cast(attrs, [
+      :email,
+      :name,
+      :google_id,
+      :avatar_url,
+      :is_admin,
+      :api_token,
+      :default_context_slug
+    ])
     |> validate_required([:email])
     |> unique_constraint(:email)
     |> unique_constraint(:google_id)

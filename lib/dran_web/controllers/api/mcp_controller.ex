@@ -31,14 +31,24 @@ defmodule DranWeb.API.MCPController do
   defp authenticate(conn) do
     case extract_token(conn) do
       {:ok, token} ->
-        # Check legacy admin token first (backward compat)
-        if token == Dran.Auth.api_token() do
-          {:ok, %{is_admin: true, email: "admin", contexts: :all}}
-        else
-          case Accounts.valid_token?(token) do
-            {:ok, user} -> {:ok, user}
-            :error -> {:error, :unauthorized}
-          end
+        cond do
+          # 1. Legacy admin token (backward compat)
+          token == Dran.Auth.api_token() ->
+            {:ok, %{is_admin: true, email: "admin", contexts: :all}}
+
+          # 2. Per-user token
+          match?({:ok, _}, Accounts.valid_token?(token)) ->
+            {:ok, user} = Accounts.valid_token?(token)
+            {:ok, user}
+
+          # 3. Context-scoped API key — masquerades as a synthetic user whose
+          # only context is the key's. Access checks then work unchanged.
+          match?({:ok, _}, Accounts.valid_api_key?(token)) ->
+            {:ok, key} = Accounts.valid_api_key?(token)
+            {:ok, %{is_admin: false, email: "api-key:#{key.name}", contexts: [key.context]}}
+
+          true ->
+            {:error, :unauthorized}
         end
 
       :error ->

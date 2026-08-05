@@ -31,6 +31,57 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, conn: conn}
   end
 
+  test "the api keys tab renders the create form and empty list", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings/api_keys")
+
+    assert html =~ ~s(id="create-api-key-form")
+    assert html =~ t("Create API Key")
+    assert html =~ t("No API keys yet — create one above.")
+  end
+
+  test "creating an api key from the form reveals the token once", %{conn: conn} do
+    unique = System.unique_integer([:positive])
+    {:ok, ctx} = Dran.Brain.create_context(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+
+    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
+
+    html =
+      view
+      |> form("#create-api-key-form", api_key: %{name: "Hermes", context_id: ctx.id})
+      |> render_submit()
+
+    # The one-time reveal card shows the full token + copy button
+    assert html =~ ~s(id="revealed-api-key-card")
+    assert html =~ ~s(id="copy-revealed-key-btn")
+
+    # The key now appears in the list with masked prefix only
+    assert html =~ "Hermes"
+    assert html =~ "••••••••••••"
+  end
+
+  test "revoking a key from the list marks it revoked", %{conn: conn} do
+    unique = System.unique_integer([:positive])
+    {:ok, ctx} = Dran.Brain.create_context(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+    {:ok, key} = Accounts.create_api_key(%{name: "Revocable", context_id: ctx.id})
+
+    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
+
+    html =
+      view
+      |> element("#api-key-#{key.id} button[phx-click='revoke_api_key']")
+      |> render_click()
+
+    assert html =~ t("Revoked")
+    assert Accounts.valid_api_key?(key.token) == :error
+  end
+
+  test "users tab shows a default context selector per user", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings/users")
+
+    assert html =~ t("Default context")
+    assert html =~ "default-context-select-"
+  end
+
   test "renders the brain tuning form with default values", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/settings/brain")
 
