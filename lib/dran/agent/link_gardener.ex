@@ -48,6 +48,26 @@ defmodule Dran.Agent.LinkGardener do
     Dran.Agent.Engine.run(__MODULE__, topic, context_id, opts)
   end
 
+  @doc """
+  Run a scheduled link gardener pass on the default context.
+
+  Resolves the default context slug via `Dran.Auth.default_context_slug/0`,
+  looks it up, and starts the engine. Same pattern as
+  `Dran.Agent.Curator.run_scheduled/0`.
+  """
+  @spec run_scheduled() :: {:ok, Dran.Agent.Session.t()} | {:error, :context_not_found}
+  def run_scheduled do
+    slug = Dran.Auth.default_context_slug()
+
+    case Brain.get_context_by_slug(slug) do
+      nil ->
+        {:error, :context_not_found}
+
+      ctx ->
+        run("scheduled weekly run", ctx.id)
+    end
+  end
+
   @impl true
   def agent_type, do: @agent_type
 

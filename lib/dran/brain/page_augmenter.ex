@@ -87,7 +87,7 @@ defmodule Dran.Brain.PageAugmenter do
 
   defp maybe_enrich_metadata(%Page{} = page) do
     case Summaries.augment_page(page) do
-      {:ok, %{title: title, summary: summary, tags: tags, inline_links: inline_links}} ->
+      {:ok, %{title: title, summary: summary, tags: tags, inline_links: inline_links} = enrich} ->
         existing_meta = page.meta || %{}
 
         updated_meta =
@@ -100,9 +100,13 @@ defmodule Dran.Brain.PageAugmenter do
           meta: updated_meta
         }
 
-        page
-        |> Ecto.Changeset.change(attrs)
-        |> Repo.update()
+        with {:ok, updated_page} <-
+               page
+               |> Ecto.Changeset.change(attrs)
+               |> Repo.update() do
+          link_entities(updated_page, Map.get(enrich, :entities, []))
+          {:ok, updated_page}
+        end
 
       {:error, :not_configured} ->
         {:ok, page}
@@ -110,6 +114,25 @@ defmodule Dran.Brain.PageAugmenter do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  # Entity linking: consume the entities the LLM already extracted and turn
+  # them into entity pages + `mentions` relations. Zero extra inference cost.
+  # Failures here must not break the augmentation pipeline — linking is a
+  # best-effort enhancement.
+  defp link_entities(page, entities) do
+    case Dran.EntityLinker.link(page, entities) do
+      {:ok, 0} ->
+        :ok
+
+      {:ok, count} ->
+        Logger.debug("EntityLinker created #{count} mentions for #{page.slug}")
+        :ok
+    end
+  rescue
+    e ->
+      Logger.warning("EntityLinker crashed for #{page.slug}: #{Exception.message(e)}")
+      :ok
   end
 
   defp pick_title(existing, _suggested) when is_binary(existing) and existing != "",

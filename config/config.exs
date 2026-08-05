@@ -86,6 +86,14 @@ if config_env() != :test do
       community_summaries_nightly: [
         schedule: "30 3 * * *",
         task: {Dran.Graph.CommunitySummaries, :generate_all_scheduled, []}
+      ],
+      graph_maintenance_nightly: [
+        schedule: "45 3 * * *",
+        task: {Dran.Graph.Maintenance, :sweep_scheduled, []}
+      ],
+      link_gardener_weekly: [
+        schedule: "0 7 * * 0",
+        task: {Dran.Agent.LinkGardener, :run_scheduled, []}
       ]
     ]
 end

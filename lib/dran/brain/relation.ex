@@ -9,6 +9,7 @@ defmodule Dran.Brain.Relation do
   - `supersedes` — source replaces/obsoletes target
   - `part_of` — source is part of target
   - `embeds` — source embeds target (e.g. a file page in a note body)
+  - `mentions` — source mentions the target entity (entity linking)
   """
 
   use Ecto.Schema
@@ -19,7 +20,7 @@ defmodule Dran.Brain.Relation do
 
   @derive {Jason.Encoder,
            only: [:id, :source_id, :target_id, :relation_type, :weight, :inserted_at]}
-  @relation_types ~w(related contradicts supersedes part_of embeds semantic)
+  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions)
 
   schema "relations" do
     field :relation_type, :string, default: "related"
