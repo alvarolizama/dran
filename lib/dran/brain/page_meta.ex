@@ -85,6 +85,11 @@ defmodule Dran.Brain.PageMeta do
     field :difficulty, :string
     field :answer_status, :string
     field :answered_by, :string
+
+    # custom properties — namespaced free-form key-value bag for user metadata
+    # (e.g. %{"role" => "sales", "tier" => "vip"}). Kept under :props so it
+    # never collides with reserved top-level meta keys.
+    field :props, :map
   end
 
   @note_kinds ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm)
@@ -160,7 +165,8 @@ defmodule Dran.Brain.PageMeta do
       :fetched_at,
       :difficulty,
       :answer_status,
-      :answered_by
+      :answered_by,
+      :props
     ]
   end
 
@@ -341,7 +347,8 @@ defmodule Dran.Brain.PageMeta do
        placeholder: "elixir, python, typescript…", condition: {:kind, "code"}},
       {:date, "date", gettext("Date")},
       {:text, "author", gettext("Author")},
-      {:date, "due_date", gettext("Due date"), condition: {:kind, "reminder"}}
+      {:date, "due_date", gettext("Due date"), condition: {:kind, "reminder"}},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -350,7 +357,8 @@ defmodule Dran.Brain.PageMeta do
       {:select, "kind", gettext("Kind"),
        Enum.map(@concept_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:text, "domain", gettext("Domain")},
-      {:text, "parent_concept", gettext("Parent concept")}
+      {:text, "parent_concept", gettext("Parent concept")},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -359,7 +367,8 @@ defmodule Dran.Brain.PageMeta do
       {:select, "kind", gettext("Kind"),
        Enum.map(@entity_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:text, "location", gettext("Location")},
-      {:text, "external_url", gettext("External URL")}
+      {:text, "external_url", gettext("External URL")},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -368,7 +377,8 @@ defmodule Dran.Brain.PageMeta do
       {:select, "kind", gettext("Kind"),
        Enum.map(@reference_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:text, "source_url", gettext("Source URL")},
-      {:date, "published_at", gettext("Published at")}
+      {:date, "published_at", gettext("Published at")},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -383,7 +393,8 @@ defmodule Dran.Brain.PageMeta do
       {:text, "period", gettext("Period")},
       {:date, "due_date", gettext("Due date")},
       {:slug_select, "goal_slug", gettext("Goal"), type: "goal"},
-      {:slug_select, "project_slug", gettext("Project"), type: "project"}
+      {:slug_select, "project_slug", gettext("Project"), type: "project"},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -404,7 +415,8 @@ defmodule Dran.Brain.PageMeta do
          {gettext("Urgent"), "urgent"}
        ]},
       {:date, "start_date", gettext("Start date")},
-      {:date, "target_date", gettext("Target date")}
+      {:date, "target_date", gettext("Target date")},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -421,7 +433,8 @@ defmodule Dran.Brain.PageMeta do
       {:number, "progress", gettext("Progress (0.0-1.0)"), step: "0.01", min: "0", max: "1"},
       {:date, "start_date", gettext("Start date")},
       {:date, "target_date", gettext("Target date")},
-      {:slug_select, "project_slug", gettext("Project"), type: "project"}
+      {:slug_select, "project_slug", gettext("Project"), type: "project"},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -449,7 +462,8 @@ defmodule Dran.Brain.PageMeta do
       {:text, "assignee", gettext("Assignee"), placeholder: "alvaro, hermes, claude-code..."},
       {:slug_select, "project_slug", gettext("Project"), type: "project"},
       {:slug_select, "goal_slug", gettext("Goal"), type: "goal"},
-      {:slug_select, "plan_slug", gettext("Plan"), type: "plan"}
+      {:slug_select, "plan_slug", gettext("Plan"), type: "plan"},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 
@@ -461,7 +475,8 @@ defmodule Dran.Brain.PageMeta do
        Enum.map(@query_difficulties, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:select, "answer_status", gettext("Status"),
        Enum.map(@query_statuses, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:text, "answered_by", gettext("Answered by")}
+      {:text, "answered_by", gettext("Answered by")},
+      {:props, "props", gettext("Custom properties")}
     ]
   end
 

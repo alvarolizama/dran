@@ -309,6 +309,29 @@ defmodule DranWeb.MarkdownEditorComponents do
           placeholder={placeholder || @label}
           label={@label}
         />
+      <% :props -> %>
+        <% json_value =
+          case @value do
+            v when is_map(v) and map_size(v) > 0 -> Jason.encode!(v, pretty: true)
+            _ -> ""
+          end %>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{@label}</span>
+            <span class="label-text-alt text-base-content/50">JSON</span>
+          </label>
+          <textarea
+            name={"page[meta][#{@key}]"}
+            rows="3"
+            class="textarea textarea-bordered font-mono text-sm"
+            placeholder='{"role": "sales", "tier": "vip"}'
+          ><%= json_value %></textarea>
+          <label class="label">
+            <span class="label-text-alt text-base-content/50">
+              {gettext("Key-value custom metadata. Empty = none.")}
+            </span>
+          </label>
+        </div>
     <% end %>
     """
   end

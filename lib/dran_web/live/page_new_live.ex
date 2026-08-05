@@ -300,9 +300,23 @@ defmodule DranWeb.PageNewLive do
     form_meta
     |> Enum.reject(fn {_k, v} -> v in ["", nil] end)
     |> Map.new()
+    |> parse_props_json()
   end
 
   defp meta_from_params(_), do: %{}
+
+  # The :props field arrives as a JSON string from the textarea. Parse it into
+  # a map; invalid JSON is dropped silently (user sees it disappear on save).
+  # Empty string or nil props are left as-is (they get rejected by the
+  # Enum.reject above).
+  defp parse_props_json(%{"props" => props} = meta) when is_binary(props) do
+    case Jason.decode(props) do
+      {:ok, decoded} when is_map(decoded) -> Map.put(meta, "props", decoded)
+      _ -> Map.delete(meta, "props")
+    end
+  end
+
+  defp parse_props_json(meta), do: meta
 
   defp ensure_slug(%{"slug" => slug} = params, _context_id)
        when is_binary(slug) and slug != "",

@@ -166,7 +166,7 @@ defmodule Dran.MCP do
           "meta" => %{
             "type" => "object",
             "description" =>
-              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kind, kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{kind, health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links."
+              "Type-specific metadata. Key fields by type: note→{kind, date}, todo→{kind, kanban_status, priority, project_slug, goal_slug, plan_slug, due_date}, goal→{kind, health, metric, target_value, current_value, unit, progress, start_date, target_date}, plan→{kind, horizon, period, status, due_date, goal_slug, project_slug}, project→{status, priority, health, health_source, start_date, target_date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, query→{kind, difficulty, status, answered_by}. Any page may also carry project_slug/goal_slug/plan_slug as independent optional links. **Custom properties**: use `meta.props` as a namespaced key-value bag for free-form metadata (e.g. `props: %{\"role\" => \"sales\", \"tier\" => \"vip\"}`). Props survive round-trips and are indexed by the existing meta GIN index."
           },
           "summary" => %{
             "type" => "string",

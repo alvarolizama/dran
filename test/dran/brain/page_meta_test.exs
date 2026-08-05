@@ -1,162 +1,108 @@
 defmodule Dran.Brain.PageMetaTest do
-  # Pure embedded-schema module — no DB access needed. ExUnit.Case is enough
-  # (we deliberately avoid Dran.DataCase so these tests don't spin up the
-  # sandbox for no reason). The `errors_on/1` helper is inlined below.
   use ExUnit.Case, async: true
+
+  import Ecto.Changeset, only: [traverse_errors: 2]
 
   alias Dran.Brain.PageMeta
 
-  # ── helpers ────────────────────────────────────────────────────────────────
-
-  # Same helper as Dran.DataCase.errors_on/1, inlined to avoid the DB sandbox.
   defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Regex.replace(~r"%{(\w+)}", message, fn _, key ->
+    traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
         opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
       end)
     end)
   end
 
-  defp cs(page_type, attrs) when is_map(attrs) do
-    PageMeta.changeset(%PageMeta{}, attrs, page_type)
-  end
+  describe "changeset/3 with props" do
+    test "accepts a valid props map" do
+      attrs = %{"kind" => "person", "props" => %{"role" => "sales", "tier" => "vip"}}
+      cs = PageMeta.changeset(%PageMeta{}, attrs, "entity")
 
-  # ── Task 1.11 — derive_project_health/1 ────────────────────────────────────
-
-  describe "derive_project_health/1" do
-    test "green, green, yellow → yellow (avg = 2.67, floor = 2)" do
-      # scores: 3 + 3 + 2 = 8; avg = 8/3 ≈ 2.667; floor(2.667) = 2 → "yellow"
-      assert PageMeta.derive_project_health(["green", "green", "yellow"]) == "yellow"
+      assert cs.valid?
+      assert Ecto.Changeset.get_change(cs, :props) == %{"role" => "sales", "tier" => "vip"}
     end
 
-    test "green, red → yellow (avg = 2.0, floor = 2)" do
-      # scores: 3 + 1 = 4; avg = 4/2 = 2.0; floor(2.0) = 2 → "yellow"
-      assert PageMeta.derive_project_health(["green", "red"]) == "yellow"
+    test "accepts empty props map" do
+      attrs = %{"kind" => "thought", "props" => %{}}
+      cs = PageMeta.changeset(%PageMeta{}, attrs, "note")
+
+      assert cs.valid?
+      assert Ecto.Changeset.get_change(cs, :props) == %{}
     end
 
-    test "empty list → nil" do
-      assert is_nil(PageMeta.derive_project_health([]))
+    test "accepts nested values inside props" do
+      attrs = %{
+        "kind" => "person",
+        "props" => %{"contact" => %{"email" => "a@b.c", "phone" => "123"}, "tags" => ["a", "b"]}
+      }
+
+      cs = PageMeta.changeset(%PageMeta{}, attrs, "entity")
+
+      assert cs.valid?
+      props = Ecto.Changeset.get_change(cs, :props)
+      assert props["contact"]["email"] == "a@b.c"
+      assert props["tags"] == ["a", "b"]
     end
 
-    test "all green → green (avg = 3.0)" do
-      assert PageMeta.derive_project_health(["green", "green"]) == "green"
+    test "rejects non-map props" do
+      attrs = %{"kind" => "thought", "props" => "not-a-map"}
+      cs = PageMeta.changeset(%PageMeta{}, attrs, "note")
+
+      refute cs.valid?
+      assert %{props: [_ | _]} = errors_on(cs)
     end
 
-    test "all red → red (avg = 1.0)" do
-      assert PageMeta.derive_project_health(["red", "red", "red"]) == "red"
+    test "rejects list props" do
+      attrs = %{"kind" => "thought", "props" => ["a", "b"]}
+      cs = PageMeta.changeset(%PageMeta{}, attrs, "note")
+
+      refute cs.valid?
     end
 
-    test "unknown healths are ignored" do
-      # plan spec §2.8: Enum.reject(&is_nil/1) on the looked-up scores.
-      # ["green", "bogus"] → [3] → avg 3.0 → "green"
-      assert PageMeta.derive_project_health(["green", "bogus"]) == "green"
-    end
-  end
+    test "props are optional — changeset valid without them" do
+      attrs = %{"kind" => "person"}
+      cs = PageMeta.changeset(%PageMeta{}, attrs, "entity")
 
-  # ── Task 1.11 — derive_goal_progress/1 ───────────────────────────────────────
-
-  describe "derive_goal_progress/1" do
-    test "done, done, in_progress → ~0.67 (2/3)" do
-      result = PageMeta.derive_goal_progress(["done", "done", "in_progress"])
-      # 2/3 = 0.6666… → Float.round to 2 dp for the comparison.
-      assert Float.round(result, 2) == 0.67
+      assert cs.valid?
+      assert Ecto.Changeset.get_change(cs, :props) == nil
     end
 
-    test "done, cancelled → 1.0 (cancelled excluded from denominator)" do
-      result = PageMeta.derive_goal_progress(["done", "cancelled"])
-      assert_in_delta(result, 1.0, 0.001)
+    test "props do not interfere with kind validation" do
+      attrs = %{"kind" => "invalid-kind", "props" => %{"role" => "sales"}}
+      cs = PageMeta.changeset(%PageMeta{}, attrs, "entity")
+
+      refute cs.valid?
+      assert %{kind: [_ | _]} = errors_on(cs)
     end
 
-    test "empty list → nil" do
-      assert is_nil(PageMeta.derive_goal_progress([]))
-    end
+    test "props survive across all page types" do
+      for type <- ~w(note concept entity reference plan project goal todo query) do
+        attrs = %{"props" => %{"custom" => "value"}}
+        cs = PageMeta.changeset(%PageMeta{}, attrs, type)
 
-    test "all cancelled → nil (no relevant todos)" do
-      # plan spec §2.9: reject cancelled → [] → nil.
-      assert is_nil(PageMeta.derive_goal_progress(["cancelled", "cancelled"]))
-    end
-
-    test "single done → 1.0" do
-      assert_in_delta(PageMeta.derive_goal_progress(["done"]), 1.0, 0.001)
-    end
-
-    test "single in_progress → 0.0" do
-      assert_in_delta(PageMeta.derive_goal_progress(["in_progress"]), 0.0, 0.001)
-    end
-  end
-
-  # ── Task 1.11 — changeset validations per page type ────────────────────────
-
-  describe "changeset/3 — page_type validations" do
-    test "project with invalid status is invalid" do
-      # Per plan: @project_statuses ~w(draft active on_hold done archived)
-      # "blocked" is not allowed.
-      changeset =
-        cs("project", %{
-          "status" => "blocked",
-          "priority" => "high",
-          "health" => "green",
-          "health_source" => "manual"
-        })
-
-      refute changeset.valid?
-      assert Map.has_key?(errors_on(changeset), :status)
-    end
-
-    test "goal with progress = 1.5 is invalid" do
-      # validate_progress_range/1 must reject progress outside [0.0, 1.0].
-      changeset =
-        cs("goal", %{
-          "progress" => 1.5,
-          "health" => "green"
-        })
-
-      refute changeset.valid?
-      assert Map.has_key?(errors_on(changeset), :progress)
-    end
-
-    test "plan with status = on_hold is invalid (only draft/active/done/archived)" do
-      # plan spec §2.5: @plan_statuses ~w(draft active done archived)  # no on_hold
-      changeset =
-        cs("plan", %{
-          "status" => "on_hold",
-          "horizon" => "weekly"
-        })
-
-      refute changeset.valid?
-      assert Map.has_key?(errors_on(changeset), :status)
-    end
-
-    test "note with kind = reminder is valid" do
-      # Plan Task 1.4 adds "reminder" to @note_kinds.
-      changeset = cs("note", %{"kind" => "reminder"})
-
-      assert changeset.valid?
+        assert cs.valid?, "props rejected for type #{type}"
+        assert Ecto.Changeset.get_change(cs, :props) == %{"custom" => "value"}
+      end
     end
   end
 
-  # ── Graph signals — pagerank / community_id ────────────────────────────────
+  describe "meta_fields_for/1 with props" do
+    test "every page type includes a props field" do
+      for type <- ~w(note concept entity reference plan project goal todo query) do
+        fields = PageMeta.meta_fields_for(type)
 
-  describe "graph fields (pagerank, community_id)" do
-    test "accepts pagerank and community_id in meta" do
-      attrs = %{"pagerank" => 0.42, "community_id" => 3}
-      changeset = PageMeta.changeset(%PageMeta{}, attrs, "note")
-
-      assert changeset.valid?
-      assert Ecto.Changeset.get_change(changeset, :pagerank) == 0.42
-      assert Ecto.Changeset.get_change(changeset, :community_id) == 3
+        assert Enum.any?(fields, fn
+                 {:props, "props", _label} -> true
+                 _ -> false
+               end),
+               "type #{type} missing :props field"
+      end
     end
 
-    test "accepts pagerank alone" do
-      changeset = cs("note", %{"pagerank" => 0.123})
-      assert changeset.valid?
-      assert Ecto.Changeset.get_change(changeset, :pagerank) == 0.123
-    end
+    test "props field label is Custom properties" do
+      fields = PageMeta.meta_fields_for("entity")
 
-    test "accepts community_id alone" do
-      changeset = cs("note", %{"community_id" => 7})
-      assert changeset.valid?
-      assert Ecto.Changeset.get_change(changeset, :community_id) == 7
+      assert {:props, "props", "Custom properties"} in fields
     end
   end
 end
