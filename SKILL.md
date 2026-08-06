@@ -59,7 +59,9 @@ through a single MCP endpoint.
   JSONB `meta` whose valid fields depend on the type.
 - **Relations** are directed links. `semantic` relations are created
   automatically by the augmenter after every create/update; the rest
-  (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`) are explicit.
+  (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`,
+  `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`) are explicit
+  or materialized from `meta.props`.
 - **Search** fuses FTS + semantic via reciprocal-rank fusion with a PageRank
   authority boost — well-linked pages rank higher.
 - **Contexts** partition the brain (e.g. `personal`, `work`). Pages, relations
@@ -105,6 +107,31 @@ Default to `note` with `meta.kind: "thought"` when unsure — promote later.
 Notes with `meta.kind: "code"` may carry `meta.language` (e.g. `elixir`,
 `python`) to filter by programming language.
 
+### Custom properties — `meta.props`
+
+Every page may carry `meta.props`: a namespaced, free-form key-value bag for
+metadata that doesn't fit the typed fields (e.g.
+`props: {"role": "sales", "tier": "vip"}`). Props survive round-trips and are
+covered by the meta GIN index.
+
+**Props the graph can see (materialized into typed relations)** — these keys
+auto-create edges during augmentation (Dran.PropsMaterializer):
+
+| Prop key | Relation | Target page | Example |
+|---|---|---|---|
+| `role` | `works_in` | entity | `role: "sales"` → person works_in Sales |
+| `tier` | `has_tier` | concept | `tier: "vip"` → person has_tier VIP |
+| `location` | `based_in` | entity | `location: "cdmx"` |
+| `language` | `written_in` | entity | `language: "elixir"` |
+| `framework` | `built_with` | entity | `framework: "phoenix"` |
+
+Any other key is stored but generates no edge. Edge weight 0.7, joins
+community detection. Materialization runs on create/update (augmenter) and
+is inference-independent — works even with the LLM off.
+
+**Backfill**: Settings → Brain → "Run backfill" re-materializes props for
+every existing page with non-empty `meta.props` (Dran.PropsBackfill).
+
 ### Per-context page type disabling
 
 Each context can **disable page types** (`disabled_page_types`). A disabled
@@ -148,7 +175,7 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 | `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely**. ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks |
 | `dran_update_todo` | Update todo status/priority/date/links — **merges `meta`** (the only safe way to change todo status) |
 | `dran_rename_slug` | Rename a slug; rewrites all `![[old-slug]]` embeds in the context |
-| `dran_create_relation` | Explicit typed relation: `related`, `part_of`, `supersedes`, `contradicts`, `embeds`. **Never `semantic`** (automatic) |
+| `dran_create_relation` | Explicit typed relation: `related`, `part_of`, `supersedes`, `contradicts`, `embeds`, plus prop-materialized types `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`. **Never `semantic`** (automatic) |
 | `dran_delete_relation` | Delete relations between two pages |
 | `dran_delete_page` | Delete a page — **irreversible**, confirm with Álvaro first |
 
