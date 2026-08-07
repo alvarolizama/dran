@@ -512,6 +512,107 @@ defmodule Dran.BrainTest do
     end
   end
 
+  describe "props filtering" do
+    test "list_pages filters by meta.props with AND logic", %{context: ctx} do
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Sales VIP",
+          slug: "sales-vip",
+          page_type: "entity",
+          meta: %{"props" => %{"role" => "sales", "tier" => "vip"}}
+        })
+
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Sales Regular",
+          slug: "sales-reg",
+          page_type: "entity",
+          meta: %{"props" => %{"role" => "sales", "tier" => "regular"}}
+        })
+
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Marketing VIP",
+          slug: "mkt-vip",
+          page_type: "entity",
+          meta: %{"props" => %{"role" => "marketing", "tier" => "vip"}}
+        })
+
+      # Single prop filter (filter by the slugs we just created to avoid
+      # interference from other tests in the same context)
+      sales =
+        Brain.list_pages(context_id: ctx.id, props: %{"role" => "sales"})
+        |> Enum.filter(&(&1.slug in ["sales-vip", "sales-reg"]))
+
+      assert length(sales) == 2
+      assert Enum.all?(sales, &(&1.meta["props"]["role"] == "sales"))
+
+      # Multiple props (AND logic)
+      sales_vip =
+        Brain.list_pages(context_id: ctx.id, props: %{"role" => "sales", "tier" => "vip"})
+        |> Enum.filter(&(&1.slug in ["sales-vip", "sales-reg", "mkt-vip"]))
+
+      assert length(sales_vip) == 1
+      assert hd(sales_vip).slug == "sales-vip"
+
+      # No match
+      none = Brain.list_pages(context_id: ctx.id, props: %{"role" => "engineering"})
+      assert none == []
+    end
+
+    test "search filters by props post-query", %{context: ctx} do
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Elixir Phoenix Guide",
+          slug: "elixir-guide",
+          page_type: "reference",
+          body: "A comprehensive guide to Elixir and Phoenix framework",
+          meta: %{"props" => %{"language" => "elixir", "framework" => "phoenix"}}
+        })
+
+      {:ok, _} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Python Django Guide",
+          slug: "python-guide",
+          page_type: "reference",
+          body: "A comprehensive guide to Python and Django framework",
+          meta: %{"props" => %{"language" => "python", "framework" => "django"}}
+        })
+
+      # Search without props filter (baseline)
+      {:ok, all} = Brain.search("guide", context_id: ctx.id, strategy: :fts)
+      assert length(all) == 2
+
+      # Search with props filter
+      {:ok, elixir_only} =
+        Brain.search("guide",
+          context_id: ctx.id,
+          strategy: :fts,
+          props: %{"language" => "elixir"}
+        )
+
+      assert length(elixir_only) == 1
+      assert hd(elixir_only).slug == "elixir-guide"
+      assert hd(elixir_only).props["language"] == "elixir"
+
+      # Multiple props
+      {:ok, phoenix_only} =
+        Brain.search("guide",
+          context_id: ctx.id,
+          strategy: :fts,
+          props: %{"language" => "elixir", "framework" => "phoenix"}
+        )
+
+      assert length(phoenix_only) == 1
+      assert hd(phoenix_only).slug == "elixir-guide"
+    end
+  end
+
   describe "version_diff/2" do
     test "diffs v1 against current body with added/removed lines", %{context: ctx} do
       {:ok, page} =

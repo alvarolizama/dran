@@ -93,6 +93,11 @@ defmodule Dran.MCP do
             "type" => "integer",
             "description" => "Maximum number of results (default 20, hard max 100)."
           },
+          "props" => %{
+            "type" => "object",
+            "description" =>
+              "Filter by custom properties (meta.props). Matches pages where ALL given key-value pairs are present (AND logic). Example: {\"role\": \"sales\", \"tier\": \"vip\"}"
+          },
           "offset" => %{
             "type" => "integer",
             "description" =>
@@ -518,6 +523,11 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" =>
               "Optional filter for todos: only todos whose meta.assignee matches this value. Use the literal value 'none' to list unassigned todos (no assignee)."
+          },
+          "props" => %{
+            "type" => "object",
+            "description" =>
+              "Filter by custom properties (meta.props). Matches pages where ALL given key-value pairs are present (AND logic). Example: {\"role\": \"sales\", \"tier\": \"vip\"}"
           }
         },
         "required" => ["context"]
@@ -963,6 +973,7 @@ defmodule Dran.MCP do
       opts = if args["strategy"], do: Keyword.put(opts, :strategy, args["strategy"]), else: opts
       opts = if args["limit"], do: Keyword.put(opts, :limit, min(args["limit"], 100)), else: opts
       opts = if args["offset"], do: Keyword.put(opts, :offset, args["offset"]), else: opts
+      opts = if args["props"], do: Keyword.put(opts, :props, args["props"]), else: opts
 
       case Brain.search(query, opts) do
         {:ok, results} ->
@@ -1272,6 +1283,8 @@ defmodule Dran.MCP do
         if args["assignee"],
           do: Keyword.put(opts, :assignee, args["assignee"]),
           else: opts
+
+      opts = if args["props"], do: Keyword.put(opts, :props, args["props"]), else: opts
 
       pages = Brain.list_pages(opts)
 

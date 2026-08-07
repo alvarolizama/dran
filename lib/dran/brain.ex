@@ -122,6 +122,7 @@ defmodule Dran.Brain do
     plan_slug = Keyword.get(opts, :plan_slug)
     project_slug = Keyword.get(opts, :project_slug)
     assignee = Keyword.get(opts, :assignee)
+    props = Keyword.get(opts, :props)
     archived = Keyword.get(opts, :archived, false)
     limit = Keyword.get(opts, :limit, 50)
     offset = Keyword.get(opts, :offset, 0)
@@ -176,7 +177,17 @@ defmodule Dran.Brain do
       |> limit(^limit)
       |> offset(^offset)
 
-    Repo.all(query)
+    pages = Repo.all(query)
+
+    # Post-query props filter (meta is an Ecto :map field, not raw JSONB)
+    if is_map(props) and map_size(props) > 0 do
+      Enum.filter(pages, fn page ->
+        page_props = get_in(page.meta || %{}, ["props"]) || %{}
+        Enum.all?(props, fn {k, v} -> Map.get(page_props, k) == v end)
+      end)
+    else
+      pages
+    end
   end
 
   defp maybe_exclude_disabled_types(query, nil), do: query
@@ -1534,6 +1545,7 @@ defmodule Dran.Brain do
   def search(query_string, opts \\ []) do
     requested_strategy = Keyword.get(opts, :strategy, :auto)
     strategy = resolve_strategy(requested_strategy, query_string)
+    props = Keyword.get(opts, :props)
 
     case do_search(query_string, opts, strategy) do
       {:error, :not_configured} when requested_strategy != :auto ->
@@ -1542,12 +1554,31 @@ defmodule Dran.Brain do
       # Auto strategy should never hard-fail — not_configured, host down,
       # timeout, etc. all fall back to fts so search always works.
       {:error, _reason} when requested_strategy == :auto ->
-        do_search(query_string, opts, :fts) |> normalize_results(:fts)
+        do_search(query_string, opts, :fts)
+        |> normalize_results(:fts)
+        |> maybe_filter_results_by_props(props)
 
       result ->
         normalize_results(result, strategy)
+        |> maybe_filter_results_by_props(props)
     end
   end
+
+  # Post-query props filter for search results. Applied after normalize_results
+  # so it works uniformly across all strategies (fts/fuzzy/semantic/hybrid).
+  # Each result's `props` must contain ALL the given key-value pairs.
+  defp maybe_filter_results_by_props({:ok, results}, props)
+       when is_map(props) and map_size(props) > 0 do
+    filtered =
+      Enum.filter(results, fn result ->
+        result_props = Map.get(result, :props, %{})
+        Enum.all?(props, fn {k, v} -> Map.get(result_props, k) == v end)
+      end)
+
+    {:ok, filtered}
+  end
+
+  defp maybe_filter_results_by_props(result, _props), do: result
 
   @doc """
   Full-text search across pages within a context.
@@ -1871,6 +1902,7 @@ defmodule Dran.Brain do
       slug: page.slug,
       page_type: page.page_type,
       tags: page.tags || [],
+      props: get_in(page.meta || %{}, ["props"]) || %{},
       excerpt: excerpt || "",
       similarity: nil,
       distance: nil,
@@ -1886,6 +1918,7 @@ defmodule Dran.Brain do
       slug: Map.get(item, :slug) || Map.get(item, "slug"),
       page_type: Map.get(item, :page_type) || Map.get(item, "page_type"),
       tags: List.wrap(Map.get(item, :tags) || Map.get(item, "tags")),
+      props: Map.get(item, :props) || Map.get(item, "props") || %{},
       excerpt: Map.get(item, :excerpt) || Map.get(item, "excerpt") || "",
       similarity: Map.get(item, :similarity) || Map.get(item, "similarity"),
       distance: Map.get(item, :distance) || Map.get(item, "distance"),
