@@ -1260,25 +1260,68 @@ defmodule Dran.Brain do
   @doc """
   Build the full graph (nodes + edges) for a context.
 
-  Returns `%{nodes: [...], edges: [...]}` where each node is
-  `%{id, title, slug, type, summary, tags}` and each edge is
-  `%{source, target, type, weight}`. Used by the graph LiveView and the
+  Returns `%{nodes: [...], edges: [...], total_nodes: int, total_edges: int}`
+  where each node is `%{id, title, slug, type, summary, tags}` and each edge
+  is `%{source, target, type, weight}`. Used by the graph LiveView and the
   `/api/graph` endpoint.
+
+  ## Options
+
+  - `:exclude_types` — page types excluded from the graph entirely. Filtered
+    in SQL so the operational layer never leaves the database.
+  - `:max_nodes` — hard cap: when the context has more visible pages than
+    this, only the N most-connected pages (highest degree, counting inbound
+    + outbound relations) are returned, plus the edges between them. The
+    `total_nodes`/`total_edges` keys always report the real totals so the UI
+    can show "showing X of Y". Keeps the 3D view fluid on large brains.
   """
-  def graph_data(context_id) do
-    nodes =
-      Repo.all(
-        from p in Page,
-          where: p.context_id == ^context_id,
-          select: %{
-            id: p.id,
-            title: p.title,
-            slug: p.slug,
-            type: p.page_type,
-            summary: p.summary,
-            tags: p.tags
-          }
-      )
+  def graph_data(context_id, opts \\ []) do
+    exclude_types = Keyword.get(opts, :exclude_types, [])
+    max_nodes = Keyword.get(opts, :max_nodes)
+
+    {nodes, total_nodes} =
+      cond do
+        is_nil(max_nodes) ->
+          nodes =
+            Repo.all(
+              from p in graph_base(context_id, exclude_types),
+                select: %{
+                  id: p.id,
+                  title: p.title,
+                  slug: p.slug,
+                  type: p.page_type,
+                  summary: p.summary,
+                  tags: p.tags
+                }
+            )
+
+          {nodes, length(nodes)}
+
+        true ->
+          total = Repo.aggregate(graph_base(context_id, exclude_types), :count)
+
+          nodes =
+            if total <= max_nodes do
+              Repo.all(
+                from p in graph_base(context_id, exclude_types),
+                  select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
+              )
+            else
+              top_ids = top_connected_ids(context_id, exclude_types, max_nodes)
+
+              if top_ids == [] do
+                []
+              else
+                Repo.all(
+                  from p in graph_base(context_id, exclude_types),
+                    where: p.id in ^top_ids,
+                    select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
+                )
+              end
+            end
+
+          {nodes, total}
+      end
 
     node_ids = Enum.map(nodes, & &1.id)
 
@@ -1298,7 +1341,87 @@ defmodule Dran.Brain do
         )
       end
 
-    %{nodes: nodes, edges: edges}
+    total_edges =
+      if total_nodes <= length(nodes) do
+        length(edges)
+      else
+        q =
+          from r in Relation,
+            join: s in assoc(r, :source),
+            join: t in assoc(r, :target),
+            where: s.context_id == ^context_id and t.context_id == ^context_id
+
+        q =
+          if exclude_types == [] do
+            q
+          else
+            from [r, s, t] in q,
+              where: s.page_type not in ^exclude_types and t.page_type not in ^exclude_types
+          end
+
+        Repo.aggregate(q, :count)
+      end
+
+    %{nodes: nodes, edges: edges, total_nodes: total_nodes, total_edges: total_edges}
+  end
+
+  # Base page query for the graph, scoped to the context and optionally
+  # excluding page types (filtered in SQL so hidden types never load).
+  defp graph_base(context_id, exclude_types) do
+    if exclude_types == [] do
+      from p in Page, where: p.context_id == ^context_id
+    else
+      from p in Page,
+        where: p.context_id == ^context_id and p.page_type not in ^exclude_types
+    end
+  end
+
+  # The N most-connected page ids in the context, ranked by total degree
+  # (inbound + outbound relations), excluding the given types. Only
+  # relations whose BOTH endpoints are non-excluded count toward the degree,
+  # so the ranking matches what the graph actually renders. Isolated pages
+  # (degree 0) never make the cut — when a brain exceeds the graph cap, the
+  # connected structure is what the 3D view is for.
+  defp top_connected_ids(context_id, exclude_types, limit) do
+    pairs =
+      from r in Relation,
+        join: s in assoc(r, :source),
+        join: t in assoc(r, :target),
+        where: s.context_id == ^context_id and t.context_id == ^context_id,
+        select: {r.source_id, r.target_id}
+
+    pairs =
+      if exclude_types == [] do
+        pairs
+      else
+        from [r, s, t] in pairs,
+          where: s.page_type not in ^exclude_types and t.page_type not in ^exclude_types
+      end
+
+    # Degree ranking in Elixir: one lean id-pair scan (no body/summary
+    # columns), then a linear frequency count. Fast even on big brains
+    # without dragging page content into memory.
+    relations = Repo.all(pairs)
+
+    (Enum.map(relations, &elem(&1, 0)) ++ Enum.map(relations, &elem(&1, 1)))
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {_id, degree} -> degree end, :desc)
+    |> Enum.take(limit)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  @doc """
+  Real page counts per type for a context (archived included, matching the
+  global graph). Used by the graph sidebar so totals stay truthful even when
+  the rendered graph is capped.
+  """
+  def graph_type_counts(context_id, exclude_types \\ []) do
+    Repo.all(
+      from p in graph_base(context_id, exclude_types),
+        group_by: p.page_type,
+        select: {p.page_type, count(p.id)}
+    )
+    |> Map.new()
   end
 
   # ──────────────────────────────────────────────────────────────────────────

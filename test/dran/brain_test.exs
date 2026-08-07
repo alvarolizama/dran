@@ -350,6 +350,97 @@ defmodule Dran.BrainTest do
       assert Map.has_key?(edge, :weight)
       assert_in_delta edge.weight, 0.85, 0.001
     end
+
+    test "exclude_types filters the operational layer in SQL", %{context: ctx} do
+      {:ok, note} = Brain.create_page(%{context_id: ctx.id, title: "Note", page_type: "note"})
+      {:ok, todo} = Brain.create_page(%{context_id: ctx.id, title: "Todo", page_type: "todo"})
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: note.id,
+          target_id: todo.id,
+          relation_type: "related"
+        })
+
+      graph = Brain.graph_data(ctx.id, exclude_types: ~w(todo plan))
+
+      assert Enum.map(graph.nodes, & &1.type) == ["note"]
+      assert graph.edges == []
+      assert graph.total_nodes == 1
+      assert graph.total_edges == 0
+    end
+
+    test "max_nodes caps to the most-connected pages and reports real totals", %{context: ctx} do
+      # Hub page with 3 relations — always makes the cut
+      {:ok, hub} = Brain.create_page(%{context_id: ctx.id, title: "Hub", page_type: "note"})
+
+      # A todo that must never appear when the operational layer is excluded
+      {:ok, todo} = Brain.create_page(%{context_id: ctx.id, title: "Todo", page_type: "todo"})
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: hub.id,
+          target_id: todo.id,
+          relation_type: "related"
+        })
+
+      # Three leaves, each connected to the hub only (degree 1)
+      leaves =
+        for i <- 1..3 do
+          {:ok, leaf} =
+            Brain.create_page(%{
+              context_id: ctx.id,
+              title: "Leaf #{i}",
+              slug: "leaf-#{i}",
+              page_type: "note"
+            })
+
+          {:ok, _} =
+            Brain.create_relation(%{
+              source_id: hub.id,
+              target_id: leaf.id,
+              relation_type: "related"
+            })
+
+          leaf
+        end
+
+      graph = Brain.graph_data(ctx.id, exclude_types: ~w(todo plan), max_nodes: 2)
+
+      # Top 2 by degree among non-excluded types: hub (3) + one of the
+      # leaves (1). The other two leaves tie at degree 1, so only one of
+      # them is present. The todo never makes the cut.
+      assert length(graph.nodes) == 2
+      assert Enum.any?(graph.nodes, &(&1.id == hub.id))
+      assert Enum.count(graph.nodes, &(&1.id in Enum.map(leaves, fn l -> l.id end))) == 1
+
+      # Only edges between the returned nodes survive
+      assert length(graph.edges) == 1
+
+      # Real totals still exclude the operational layer
+      assert graph.total_nodes == 4
+      assert graph.total_edges == 3
+    end
+
+    test "max_nodes above the page count returns everything (no cap artifacts)", %{context: ctx} do
+      {:ok, _a} = Brain.create_page(%{context_id: ctx.id, title: "A", page_type: "note"})
+      {:ok, _b} = Brain.create_page(%{context_id: ctx.id, title: "B", page_type: "note"})
+
+      graph = Brain.graph_data(ctx.id, max_nodes: 100)
+
+      assert length(graph.nodes) == 2
+      assert graph.total_nodes == 2
+    end
+
+    test "graph_type_counts groups real totals per type", %{context: ctx} do
+      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "N1", page_type: "note"})
+      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "N2", page_type: "note"})
+      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "G1", page_type: "goal"})
+      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "T1", page_type: "todo"})
+
+      assert Brain.graph_type_counts(ctx.id) == %{"note" => 2, "goal" => 1, "todo" => 1}
+      assert Brain.graph_type_counts(ctx.id, ~w(todo plan)) == %{"note" => 2, "goal" => 1}
+    end
   end
 
   describe "version_diff/2" do

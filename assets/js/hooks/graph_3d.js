@@ -20,6 +20,19 @@ import * as THREE from "three"
 // Max BFS depth for label reveal on hover (2 = neighbors of neighbors)
 const LABEL_BFS_DEPTH = 2
 
+// Adaptive render quality: big graphs need cheap geometry, no particle
+// streams and a short force simulation to stay fluid. Small graphs keep the
+// full polish.
+function graphScale(nodeCount, edgeCount) {
+  if (nodeCount > 700 || edgeCount > 2500) {
+    return { sphereSegments: 8, particles: 0, warmup: 15, cooldown: 500, labelRetries: 40 }
+  }
+  if (nodeCount > 250 || edgeCount > 800) {
+    return { sphereSegments: 12, particles: 1, warmup: 40, cooldown: 1200, labelRetries: 80 }
+  }
+  return { sphereSegments: 24, particles: 2, warmup: 100, cooldown: 2000, labelRetries: 120 }
+}
+
 const Graph3D = {
   mounted() {
     this.graph = null
@@ -37,6 +50,9 @@ const Graph3D = {
     // Re-sync data when LiveView pushes new assigns
     const data = this.readGraphData()
     if (data && this.graph) {
+      // Re-evaluate quality for the new dataset (type toggles can shrink it)
+      this.scale = graphScale(data.nodes.length, data.edges.length)
+      this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
       this.graph.graphData(this.transformData(data))
       this.scheduleLabelRefresh()
     }
@@ -55,6 +71,10 @@ const Graph3D = {
     const width = container.clientWidth || 800
     const height = container.clientHeight || 600
 
+    // Pick render quality from the incoming graph size before wiring accessors
+    const initial = this.readGraphData()
+    this.scale = graphScale(initial ? initial.nodes.length : 0, initial ? initial.edges.length : 0)
+
     // Create the 3D force graph instance
     this.graph = ForceGraph3D()(container)
       .width(width)
@@ -71,22 +91,22 @@ const Graph3D = {
       .linkOpacity(0.35)
       .linkWidth(link => this.highlightLinks.has(link) ? 3 : 1.5)
       .linkCurvature(0.25)
-      .linkDirectionalParticles(link => this.highlightLinks.has(link) ? 4 : 2)
+      .linkDirectionalParticles(link => this.scale.particles === 0 ? 0 : (this.highlightLinks.has(link) ? this.scale.particles * 2 : this.scale.particles))
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleSpeed(0.006)
       .linkDirectionalParticleColor(link => link.color || "#94A3B8")
       // Interaction
       .onNodeClick(node => this.handleNodeClick(node))
       .onNodeHover(node => this.handleNodeHover(node))
-      // Physics / layout
-      .warmupTicks(100)
-      .cooldownTime(2000)
+      // Physics / layout — shorter warmup/cooldown on big graphs so the
+      // force simulation doesn't peg the CPU for seconds
+      .warmupTicks(this.scale.warmup)
+      .cooldownTime(this.scale.cooldown)
       .onEngineStop(() => this.handleEngineStop())
 
     // Load initial data
-    const data = this.readGraphData()
-    if (data) {
-      this.graph.graphData(this.transformData(data))
+    if (initial) {
+      this.graph.graphData(this.transformData(initial))
       this.scheduleLabelRefresh()
     }
 
@@ -111,10 +131,13 @@ const Graph3D = {
     const group = new THREE.Group()
     const color = new THREE.Color(node.color || "#94A3B8")
 
-    // Sphere — sized by connections
+    // Sphere — sized by connections. Segment count follows the adaptive
+    // quality scale: high-poly spheres on small graphs, low-poly on big ones
+    // (visually near-identical at this size, but far fewer vertices/GPU work).
     const radius = this.nodeRadius(node)
+    const segments = this.scale.sphereSegments
     const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(radius, 24, 24),
+      new THREE.SphereGeometry(radius, segments, segments),
       new THREE.MeshLambertMaterial({
         color: color,
         emissive: color,
@@ -178,7 +201,7 @@ const Graph3D = {
       const { nodes } = this.graph.graphData()
       const ready = nodes.every(n => n.__label)
       this.refreshLabelVisibility()
-      if (!ready && attempts < 120) {
+      if (!ready && attempts < this.scale.labelRetries) {
         attempts++
         this.labelRetryId = requestAnimationFrame(tick)
       }

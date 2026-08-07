@@ -24,6 +24,11 @@ defmodule DranWeb.GraphLive do
   # context matters.
   @hidden_by_default ~w(todo plan)
 
+  # Hard cap for the global graph: when a brain has more visible pages than
+  # this, only the most-connected pages are rendered (see Brain.graph_data/2)
+  # so the 3D view stays fluid on large datasets.
+  @max_graph_nodes 400
+
   @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
@@ -45,7 +50,9 @@ defmodule DranWeb.GraphLive do
        type_colors: sidebar_type_colors(),
        type_counts: %{},
        node_count: 0,
-       edge_count: 0
+       edge_count: 0,
+       total_node_count: 0,
+       total_edge_count: 0
      )}
   end
 
@@ -137,54 +144,48 @@ defmodule DranWeb.GraphLive do
   defp load_index_graph(socket) do
     context = socket.assigns.context
 
-    {all_nodes, all_edges} =
-      if context do
-        %{nodes: raw_nodes, edges: raw_edges} = Brain.graph_data(context.id)
+    if context do
+      hidden = @hidden_by_default
 
-        all_nodes =
-          raw_nodes
-          |> Enum.map(fn n ->
-            %{
-              id: n.id,
-              slug: n.slug,
-              label: n.title,
-              type: n.type,
-              color: Map.get(GraphHelpers.type_colors(), n.type, "#94A3B8"),
-              radius: 12
-            }
-          end)
-          |> GraphHelpers.circular_layout(400, 300, 250)
+      %{nodes: raw_nodes, edges: raw_edges, total_nodes: total_nodes, total_edges: total_edges} =
+        Brain.graph_data(context.id, exclude_types: hidden, max_nodes: @max_graph_nodes)
 
-        positions = Map.new(all_nodes, fn n -> {n.id, {n.x, n.y}} end)
+      # Lightweight payload for the 3D hook: the client runs its own force
+      # layout, so no server-side positioning is needed (the old circular
+      # layout was pure payload waste). No summary/tags — the hook only
+      # needs id, slug, label, type, color.
+      all_nodes =
+        Enum.map(raw_nodes, fn n ->
+          %{
+            id: n.id,
+            slug: n.slug,
+            label: n.title,
+            type: n.type,
+            color: Map.get(GraphHelpers.type_colors(), n.type, "#94A3B8")
+          }
+        end)
 
-        all_edges =
-          Enum.flat_map(raw_edges, fn e ->
-            with {x1, y1} <- Map.get(positions, e.source),
-                 {x2, y2} <- Map.get(positions, e.target) do
-              [
-                %{
-                  source_id: e.source,
-                  target_id: e.target,
-                  x1: x1,
-                  y1: y1,
-                  x2: x2,
-                  y2: y2,
-                  color: Map.get(GraphHelpers.edge_colors(), e.type, "#94A3B8")
-                }
-              ]
-            else
-              _ -> []
-            end
-          end)
+      all_edges =
+        Enum.map(raw_edges, fn e ->
+          %{
+            source_id: e.source,
+            target_id: e.target,
+            color: Map.get(GraphHelpers.edge_colors(), e.type, "#94A3B8")
+          }
+        end)
 
-        {all_nodes, all_edges}
-      else
-        {[], []}
-      end
-
-    socket
-    |> assign(all_nodes: all_nodes, all_edges: all_edges, type_counts: count_types(all_nodes))
-    |> filter_visible()
+      socket
+      |> assign(
+        all_nodes: all_nodes,
+        all_edges: all_edges,
+        type_counts: Brain.graph_type_counts(context.id, hidden),
+        total_node_count: total_nodes,
+        total_edge_count: total_edges
+      )
+      |> filter_visible()
+    else
+      socket
+    end
   end
 
   # Restrict the rendered nodes/edges to the currently visible types. Edges
@@ -314,6 +315,16 @@ defmodule DranWeb.GraphLive do
           </div>
 
           <div class="flex-1 overflow-hidden relative">
+            <div
+              :if={@live_action == :index and @total_node_count > @node_count}
+              class="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-[90%] rounded-lg bg-base-100/90 border border-base-300 px-3 py-1.5 text-xs text-base-content/70 shadow-sm backdrop-blur"
+            >
+              {gettext(
+                "Showing the %{shown} most-connected nodes of %{total} — search for a page to explore its subgraph.",
+                shown: @node_count,
+                total: @total_node_count
+              )}
+            </div>
             <.graph_3d
               id="graph-3d"
               nodes={@nodes}
