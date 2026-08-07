@@ -189,6 +189,9 @@ defmodule DranWeb.Router do
     live "/graph", GraphLive, :index
     live "/graph/:slug", GraphLive, :show
 
+    # JSON endpoint for progressive graph loading (session-authenticated)
+    get "/api/graph-json", GraphJSONController, :show
+
     live "/activity", ActivityLive, :index
 
     live "/journey", JourneyLive, :index

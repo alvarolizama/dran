@@ -903,6 +903,77 @@ defmodule Dran.Brain do
     }
   end
 
+  @doc """
+  Batch version of `list_relations_for_page/1` — loads relations for many
+  pages in two queries total (one outbound, one inbound) instead of 2×N.
+
+  Returns `%{page_id => %{outbound: [...], inbound: [...]}}`. Pages with no
+  relations are omitted from the map (callers use `Map.get(map, id, %{outbound: [], inbound: []})`).
+
+  Used by search graph mode to avoid the N+1 when building subgraphs for
+  each result.
+  """
+  def list_relations_for_pages(page_ids) when is_list(page_ids) do
+    # Outbound: relations where source is any of the pages
+    outbound =
+      from r in Relation,
+        where: r.source_id in ^page_ids,
+        left_join: t in assoc(r, :target),
+        select: %Relation{
+          id: r.id,
+          source_id: r.source_id,
+          target_id: r.target_id,
+          relation_type: r.relation_type,
+          weight: r.weight,
+          meta: r.meta,
+          inserted_at: r.inserted_at,
+          target: %Page{
+            id: t.id,
+            title: t.title,
+            slug: t.slug,
+            page_type: t.page_type
+          }
+        }
+
+    # Inbound: relations where target is any of the pages
+    inbound =
+      from r in Relation,
+        where: r.target_id in ^page_ids,
+        left_join: s in assoc(r, :source),
+        select: %Relation{
+          id: r.id,
+          source_id: r.source_id,
+          target_id: r.target_id,
+          relation_type: r.relation_type,
+          weight: r.weight,
+          meta: r.meta,
+          inserted_at: r.inserted_at,
+          source: %Page{
+            id: s.id,
+            title: s.title,
+            slug: s.slug,
+            page_type: s.page_type
+          }
+        }
+
+    outbound_list = Repo.all(outbound)
+    inbound_list = Repo.all(inbound)
+
+    # Group by the page they belong to
+    outbound_grouped = Enum.group_by(outbound_list, & &1.source_id)
+    inbound_grouped = Enum.group_by(inbound_list, & &1.target_id)
+
+    all_ids = (Map.keys(outbound_grouped) ++ Map.keys(inbound_grouped)) |> Enum.uniq()
+
+    Map.new(all_ids, fn id ->
+      {id,
+       %{
+         outbound: Map.get(outbound_grouped, id, []),
+         inbound: Map.get(inbound_grouped, id, [])
+       }}
+    end)
+  end
+
   @doc "Delete a relation"
   def delete_relation(%Relation{} = relation), do: Repo.delete(relation)
 

@@ -84,6 +84,8 @@ defmodule DranWeb.GraphLiveTest do
 
   # The 3D hook receives the graph as JSON inside the #graph-3d element's
   # data-graph attribute. Parse it back so tests assert on the real payload.
+  # In progressive mode (index), the data comes from the graph_loaded event,
+  # so we render after pushing it.
   defp graph_from_html(html) do
     [_, encoded] = Regex.run(~r/data-graph="([^"]*)"/, html)
 
@@ -92,6 +94,41 @@ defmodule DranWeb.GraphLiveTest do
     |> String.replace("&amp;", "&")
     |> String.replace("&#39;", "'")
     |> Jason.decode!()
+  end
+
+  # In progressive mode, simulate the hook fetching /api/graph-json and
+  # pushing the result back to the LiveView.
+  defp push_graph_loaded(view, context) do
+    %{nodes: nodes, edges: edges, total_nodes: total_nodes, total_edges: total_edges} =
+      Brain.graph_data(context.id, exclude_types: ~w(todo plan), max_nodes: 400)
+
+    type_counts = Brain.graph_type_counts(context.id, ~w(todo plan))
+
+    payload = %{
+      "nodes" =>
+        Enum.map(nodes, fn n ->
+          %{
+            "id" => n.id,
+            "slug" => n.slug,
+            "label" => n.title,
+            "type" => n.type,
+            "color" => "#60A5FA"
+          }
+        end),
+      "edges" =>
+        Enum.map(edges, fn e ->
+          %{
+            "source_id" => e.source,
+            "target_id" => e.target,
+            "color" => "#94A3B8"
+          }
+        end),
+      "total_nodes" => total_nodes,
+      "total_edges" => total_edges,
+      "type_counts" => type_counts
+    }
+
+    render_hook(view, "graph_loaded", payload)
   end
 
   defp graph_types(graph), do: graph["nodes"] |> Enum.map(& &1["type"]) |> Enum.uniq()
@@ -113,6 +150,10 @@ defmodule DranWeb.GraphLiveTest do
   describe "global graph type filter" do
     test "index excludes the operational layer (todo, plan) entirely", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/graph")
+
+      # Progressive: push the data the hook would fetch
+      context = Brain.get_context_by_slug("personal")
+      push_graph_loaded(view, context)
 
       graph = graph_from_view(view)
       types = graph_types(graph)
@@ -149,6 +190,9 @@ defmodule DranWeb.GraphLiveTest do
     test "toggle_type hides a visible type and drops its edges", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/graph")
 
+      context = Brain.get_context_by_slug("personal")
+      push_graph_loaded(view, context)
+
       assert "note" in graph_types(graph_from_view(view))
 
       view |> render_hook("toggle_type", %{"type" => "note"})
@@ -161,6 +205,9 @@ defmodule DranWeb.GraphLiveTest do
 
     test "toggling a visible type off and on restores the original state", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/graph")
+
+      context = Brain.get_context_by_slug("personal")
+      push_graph_loaded(view, context)
 
       view |> render_hook("toggle_type", %{"type" => "goal"})
       refute "goal" in graph_types(graph_from_view(view))

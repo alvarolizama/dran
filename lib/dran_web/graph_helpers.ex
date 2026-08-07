@@ -34,9 +34,23 @@ defmodule DranWeb.GraphHelpers do
   Builds the subgraph centered on `page` with its direct neighbors.
 
   Returns `%{nodes: [...], edges: [...]}`.
+
+  ## Options
+
+  - `:relations` — pre-loaded `%{outbound: [...], inbound: [...]}` from
+    `Brain.list_relations_for_page/1`. When provided, skips the duplicate
+    query (fixes the N+1 pattern where the LiveView already loaded them).
+  - `:max_neighbors` — cap on neighbor nodes (default 200). Pages with more
+    relations get their most-weighted neighbors only, keeping the 3D view
+    fluid. The center node always shows.
   """
-  def build_page_subgraph(page) do
-    %{outbound: outbound, inbound: inbound} = Brain.list_relations_for_page(page.id)
+  def build_page_subgraph(page, opts \\ []) do
+    relations =
+      Keyword.get(opts, :relations) || Brain.list_relations_for_page(page.id)
+
+    max_neighbors = Keyword.get(opts, :max_neighbors, 200)
+
+    %{outbound: outbound, inbound: inbound} = relations
 
     neighbors =
       (Enum.map(outbound, fn r ->
@@ -47,7 +61,8 @@ defmodule DranWeb.GraphHelpers do
            slug: t.slug,
            title: t.title,
            type: t.page_type,
-           relation_type: r.relation_type
+           relation_type: r.relation_type,
+           weight: r.weight
          }
        end) ++
          Enum.map(inbound, fn r ->
@@ -58,10 +73,18 @@ defmodule DranWeb.GraphHelpers do
              slug: s.slug,
              title: s.title,
              type: s.page_type,
-             relation_type: r.relation_type
+             relation_type: r.relation_type,
+             weight: r.weight
            }
          end))
       |> Enum.uniq_by(& &1.id)
+
+    # Cap by weight: the most strongly-connected neighbors win when a page
+    # has hundreds of relations. Keeps the subgraph fluid.
+    neighbors =
+      neighbors
+      |> Enum.sort_by(fn n -> n.weight || 0 end, :desc)
+      |> Enum.take(max_neighbors)
 
     center = %{
       id: page.id,

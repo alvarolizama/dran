@@ -152,7 +152,10 @@ defmodule DranWeb.EntityLive do
           relations = Brain.list_relations_for_page(page.id)
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
-          %{nodes: graph_nodes, edges: graph_edges} = GraphHelpers.build_page_subgraph(page)
+
+          %{nodes: graph_nodes, edges: graph_edges} =
+            GraphHelpers.build_page_subgraph(page, relations: relations)
+
           form = Brain.change_page(page) |> to_form(as: :page)
 
           community_summary =

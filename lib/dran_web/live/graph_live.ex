@@ -52,7 +52,10 @@ defmodule DranWeb.GraphLive do
        node_count: 0,
        edge_count: 0,
        total_node_count: 0,
-       total_edge_count: 0
+       total_edge_count: 0,
+       # Progressive loading: index mode fetches data via HTTP (see hook),
+       # show mode loads synchronously (small subgraph, fast query).
+       loading: false
      )}
   end
 
@@ -63,8 +66,10 @@ defmodule DranWeb.GraphLive do
 
   defp apply_action(socket, :index, _params) do
     socket
-    |> assign(page: nil, page_title: gettext("Knowledge Graph"))
-    |> load_index_graph()
+    |> assign(page: nil, page_title: gettext("Knowledge Graph"), loading: true)
+
+    # Progressive: no data load here — the Graph3D hook fetches /api/graph-json
+    # via HTTP after the shell renders, keeping initial page load instant.
   end
 
   defp apply_action(socket, :show, %{"slug" => slug}) do
@@ -119,6 +124,43 @@ defmodule DranWeb.GraphLive do
       end
 
     {:noreply, socket |> assign(visible_types: visible) |> filter_visible()}
+  end
+
+  @impl true
+  def handle_event("graph_loaded", %{"nodes" => nodes, "edges" => edges} = payload, socket) do
+    # Progressive load: the Graph3D hook fetched /api/graph-json and pushed
+    # the result here. Store as all_nodes/all_edges so type filtering works.
+    all_nodes =
+      Enum.map(nodes, fn n ->
+        %{
+          id: n["id"],
+          slug: n["slug"],
+          label: n["label"],
+          type: n["type"],
+          color: n["color"]
+        }
+      end)
+
+    all_edges =
+      Enum.map(edges, fn e ->
+        %{
+          source_id: e["source_id"],
+          target_id: e["target_id"],
+          color: e["color"]
+        }
+      end)
+
+    {:noreply,
+     socket
+     |> assign(
+       all_nodes: all_nodes,
+       all_edges: all_edges,
+       type_counts: payload["type_counts"] || %{},
+       total_node_count: payload["total_nodes"] || length(all_nodes),
+       total_edge_count: payload["total_edges"] || length(all_edges),
+       loading: false
+     )
+     |> filter_visible()}
   end
 
   @impl true
@@ -316,7 +358,16 @@ defmodule DranWeb.GraphLive do
 
           <div class="flex-1 overflow-hidden relative">
             <div
-              :if={@live_action == :index and @total_node_count > @node_count}
+              :if={@live_action == :index and @loading}
+              class="absolute inset-0 z-20 flex items-center justify-center bg-base-100/80 backdrop-blur-sm"
+            >
+              <div class="flex flex-col items-center gap-3">
+                <div class="loading loading-spinner loading-lg text-primary"></div>
+                <p class="text-sm text-base-content/60">{gettext("Loading graph...")}</p>
+              </div>
+            </div>
+            <div
+              :if={@live_action == :index and not @loading and @total_node_count > @node_count}
               class="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-[90%] rounded-lg bg-base-100/90 border border-base-300 px-3 py-1.5 text-xs text-base-content/70 shadow-sm backdrop-blur"
             >
               {gettext(

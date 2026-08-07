@@ -71,8 +71,13 @@ const Graph3D = {
     const width = container.clientWidth || 800
     const height = container.clientHeight || 600
 
-    // Pick render quality from the incoming graph size before wiring accessors
+    // Progressive loading: when data-graph is empty (index mode), fetch the
+    // graph JSON via HTTP after the shell renders. When it's pre-populated
+    // (show mode / search results), use it directly.
     const initial = this.readGraphData()
+    const needsFetch = !initial || initial.nodes.length === 0
+
+    // Pick render quality from the incoming graph size before wiring accessors
     this.scale = graphScale(initial ? initial.nodes.length : 0, initial ? initial.edges.length : 0)
 
     // Create the 3D force graph instance
@@ -104,8 +109,10 @@ const Graph3D = {
       .cooldownTime(this.scale.cooldown)
       .onEngineStop(() => this.handleEngineStop())
 
-    // Load initial data
-    if (initial) {
+    if (needsFetch) {
+      this.fetchGraphData()
+    } else {
+      // Load initial data (show mode, search results)
       this.graph.graphData(this.transformData(initial))
       this.scheduleLabelRefresh()
     }
@@ -123,6 +130,35 @@ const Graph3D = {
       })
     })
     this.visibilityObserver.observe(container)
+  },
+
+  // ── Progressive loading (index mode) ──────────────────────────────────
+
+  fetchGraphData() {
+    fetch("/api/graph-json")
+      .then(r => r.json())
+      .then(data => {
+        // Update render quality for the fetched size
+        this.scale = graphScale(data.nodes.length, data.edges.length)
+        this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
+
+        // Push to LiveView so sidebar counts and filtering work
+        this.pushEvent("graph_loaded", {
+          nodes: data.nodes,
+          edges: data.edges,
+          total_nodes: data.total_nodes,
+          total_edges: data.total_edges,
+          type_counts: data.type_counts
+        })
+
+        // Render in the 3D view immediately (don't wait for LV roundtrip)
+        this.graph.graphData(this.transformData(data))
+        this.scheduleLabelRefresh()
+      })
+      .catch(err => {
+        console.error("Graph3D: failed to fetch graph data", err)
+        this.pushEvent("graph_loaded", { nodes: [], edges: [], total_nodes: 0, total_edges: 0, type_counts: {} })
+      })
   },
 
   // ── Node objects (sphere + label sprite) ─────────────────────────────

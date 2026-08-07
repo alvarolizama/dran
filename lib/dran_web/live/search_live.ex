@@ -354,47 +354,44 @@ defmodule DranWeb.SearchLive do
   defp page_path_for(_), do: "#"
 
   # Builds the merged graph data for "graph" search mode: a mini subgraph for
-  # each result, merged into one set of nodes/edges (deduped by id). Falls back
-  # to empty lists for all non-graph modes so the assigns are always present.
+  # each result, merged into one set of nodes/edges (deduped by id). Uses a
+  # single batched query for all relations instead of N+1 per result, and
+  # Map-based dedup (O(n)) instead of Enum.any? scans (O(n²)).
   defp graph_data(socket, results) do
     if socket.assigns.search_mode == "graph" do
+      page_ids = Enum.map(results, & &1.id)
+
+      # One query for ALL relations touching any result page (inbound or
+      # outbound), with target/source pages pre-loaded. Replaces the old
+      # N+1: 20 results × 2 queries each = 40+ queries.
+      relations_map = Brain.list_relations_for_pages(page_ids)
+
       results
-      |> Enum.reduce({[], []}, fn result, {nodes, edges} ->
-        %{nodes: sub_nodes, edges: sub_edges} = build_subgraph(result)
-        {merge_nodes(nodes, sub_nodes), merge_edges(edges, sub_edges)}
+      |> Enum.reduce({%{}, %{}}, fn result, {nodes_acc, edges_acc} ->
+        relations = Map.get(relations_map, result.id, %{outbound: [], inbound: []})
+
+        %{nodes: sub_nodes, edges: sub_edges} =
+          GraphHelpers.build_page_subgraph(result, relations: relations, max_neighbors: 50)
+
+        nodes_acc =
+          Enum.reduce(sub_nodes, nodes_acc, fn node, acc ->
+            Map.put_new(acc, node.id, node)
+          end)
+
+        edges_acc =
+          Enum.reduce(sub_edges, edges_acc, fn edge, acc ->
+            key = {edge.source_id, edge.target_id}
+            Map.put_new(acc, key, edge)
+          end)
+
+        {nodes_acc, edges_acc}
       end)
-      |> then(fn {nodes, edges} -> %{nodes: nodes, edges: edges} end)
+      |> then(fn {nodes_map, edges_map} ->
+        %{nodes: Map.values(nodes_map), edges: Map.values(edges_map)}
+      end)
     else
       %{nodes: [], edges: []}
     end
-  end
-
-  defp build_subgraph(result) do
-    GraphHelpers.build_page_subgraph(result)
-  rescue
-    _ -> %{nodes: [], edges: []}
-  catch
-    _, _ -> %{nodes: [], edges: []}
-  end
-
-  defp merge_nodes(acc, candidates) do
-    Enum.reduce(candidates, acc, fn node, current ->
-      if Enum.any?(current, &(&1.id == node.id)) do
-        current
-      else
-        [node | current]
-      end
-    end)
-  end
-
-  defp merge_edges(acc, candidates) do
-    Enum.reduce(candidates, acc, fn edge, current ->
-      if Enum.any?(current, &(&1.source_id == edge.source_id and &1.target_id == edge.target_id)) do
-        current
-      else
-        [edge | current]
-      end
-    end)
   end
 
   defp tags_for(%{tags: tags}) when is_list(tags), do: tags

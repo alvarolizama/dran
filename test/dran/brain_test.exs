@@ -443,6 +443,75 @@ defmodule Dran.BrainTest do
     end
   end
 
+  describe "list_relations_for_pages/1" do
+    test "batches relations for multiple pages in two queries", %{context: ctx} do
+      {:ok, a} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Batch A",
+          slug: "batch-a",
+          page_type: "note"
+        })
+
+      {:ok, b} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Batch B",
+          slug: "batch-b",
+          page_type: "note"
+        })
+
+      {:ok, c} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Batch C",
+          slug: "batch-c",
+          page_type: "note"
+        })
+
+      {:ok, isolated} =
+        Brain.create_page(%{
+          context_id: ctx.id,
+          title: "Batch Iso",
+          slug: "batch-iso",
+          page_type: "note"
+        })
+
+      {:ok, _} =
+        Brain.create_relation(%{source_id: a.id, target_id: b.id, relation_type: "related"})
+
+      {:ok, _} =
+        Brain.create_relation(%{source_id: b.id, target_id: c.id, relation_type: "related"})
+
+      {:ok, _} =
+        Brain.create_relation(%{source_id: c.id, target_id: a.id, relation_type: "related"})
+
+      result = Brain.list_relations_for_pages([a.id, b.id, c.id, isolated.id])
+
+      # Pages with relations are present
+      assert %{outbound: [rel_a], inbound: [rel_a_in]} = result[a.id]
+      assert rel_a.target_id == b.id
+      assert rel_a_in.source_id == c.id
+
+      assert %{outbound: [rel_b], inbound: [rel_b_in]} = result[b.id]
+      assert rel_b.target_id == c.id
+      assert rel_b_in.source_id == a.id
+
+      # Isolated page is omitted (callers use Map.get with default)
+      refute Map.has_key?(result, isolated.id)
+
+      # Target/source pages are pre-loaded with lightweight fields
+      assert %{target: %{id: _, title: _, slug: _, page_type: _}} = result[a.id].outbound |> hd()
+    end
+
+    test "returns empty map when no pages have relations", %{context: ctx} do
+      {:ok, a} = Brain.create_page(%{context_id: ctx.id, title: "Lonely A", page_type: "note"})
+      {:ok, b} = Brain.create_page(%{context_id: ctx.id, title: "Lonely B", page_type: "note"})
+
+      assert Brain.list_relations_for_pages([a.id, b.id]) == %{}
+    end
+  end
+
   describe "version_diff/2" do
     test "diffs v1 against current body with added/removed lines", %{context: ctx} do
       {:ok, page} =
