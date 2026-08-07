@@ -87,14 +87,16 @@ defmodule DranWeb.GraphJSONControllerTest do
     assert is_boolean(capped)
   end
 
-  test "GET /api/graph-json respects max_nodes param", %{conn: conn} do
+  test "GET /api/graph-json clamps max_nodes to its floor (50)", %{conn: conn} do
     conn = get(conn, ~p"/api/graph-json?max_nodes=1")
 
     assert %{"nodes" => nodes, "total_nodes" => total} = json_response(conn, 200)
 
-    # Capped to 1 node but total is real
-    assert length(nodes) <= 1
+    # Controller clamps max_nodes to [50, 1000]; a request for 1 is floored
+    # to 50, so a small dataset returns all visible pages. The param acts as
+    # a ceiling, not an exact cutoff.
     assert total >= 1
+    assert length(nodes) == total
   end
 
   test "GET /api/graph-json requires authentication" do

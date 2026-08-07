@@ -1357,6 +1357,8 @@ defmodule Dran.Brain do
     `total_nodes`/`total_edges` keys always report the real totals so the UI
     can show "showing X of Y". Keeps the 3D view fluid on large brains.
   """
+  @max_graph_edges 2500
+
   def graph_data(context_id, opts \\ []) do
     exclude_types = Keyword.get(opts, :exclude_types, [])
     max_nodes = Keyword.get(opts, :max_nodes)
@@ -1414,6 +1416,8 @@ defmodule Dran.Brain do
         Repo.all(
           from r in Relation,
             where: r.source_id in ^node_ids and r.target_id in ^node_ids,
+            order_by: [desc: r.weight],
+            limit: @max_graph_edges,
             select: %{
               source: r.source_id,
               target: r.target_id,
@@ -1459,34 +1463,54 @@ defmodule Dran.Brain do
   end
 
   # The N most-connected page ids in the context, ranked by total degree
-  # (inbound + outbound relations), excluding the given types. Only
-  # relations whose BOTH endpoints are non-excluded count toward the degree,
-  # so the ranking matches what the graph actually renders. Isolated pages
-  # (degree 0) never make the cut — when a brain exceeds the graph cap, the
-  # connected structure is what the 3D view is for.
+  # (inbound + outbound relations), excluding the given types. Uses two
+  # SQL GROUP-BY queries instead of loading every (source,target) pair into
+  # RAM and counting in Elixir — scales linearly with page count, not edge
+  # count. Only relations whose BOTH endpoints are non-excluded count toward
+  # the degree, matching what the graph actually renders.
   defp top_connected_ids(context_id, exclude_types, limit) do
-    pairs =
+    out_base =
       from r in Relation,
         join: s in assoc(r, :source),
         join: t in assoc(r, :target),
-        where: s.context_id == ^context_id and t.context_id == ^context_id,
-        select: {r.source_id, r.target_id}
+        where: s.context_id == ^context_id and t.context_id == ^context_id
 
-    pairs =
+    out_base =
       if exclude_types == [] do
-        pairs
+        out_base
       else
-        from [r, s, t] in pairs,
+        from [r, s, t] in out_base,
           where: s.page_type not in ^exclude_types and t.page_type not in ^exclude_types
       end
 
-    # Degree ranking in Elixir: one lean id-pair scan (no body/summary
-    # columns), then a linear frequency count. Fast even on big brains
-    # without dragging page content into memory.
-    relations = Repo.all(pairs)
+    in_base =
+      from r in Relation,
+        join: s in assoc(r, :source),
+        join: t in assoc(r, :target),
+        where: s.context_id == ^context_id and t.context_id == ^context_id
 
-    (Enum.map(relations, &elem(&1, 0)) ++ Enum.map(relations, &elem(&1, 1)))
-    |> Enum.frequencies()
+    in_base =
+      if exclude_types == [] do
+        in_base
+      else
+        from [r, s, t] in in_base,
+          where: s.page_type not in ^exclude_types and t.page_type not in ^exclude_types
+      end
+
+    out_degree =
+      from [r, s, t] in out_base,
+        group_by: r.source_id,
+        select: {r.source_id, count(r.id)}
+
+    in_degree =
+      from [r, s, t] in in_base,
+        group_by: r.target_id,
+        select: {r.target_id, count(r.id)}
+
+    out = Map.new(Repo.all(out_degree))
+    in_ = Map.new(Repo.all(in_degree))
+
+    Map.merge(out, in_, fn _k, v1, v2 -> v1 + v2 end)
     |> Enum.sort_by(fn {_id, degree} -> degree end, :desc)
     |> Enum.take(limit)
     |> Enum.map(&elem(&1, 0))

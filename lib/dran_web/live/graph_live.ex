@@ -164,24 +164,23 @@ defmodule DranWeb.GraphLive do
   end
 
   @impl true
-  def handle_info({:page_changed, _action, _page}, socket) do
-    {:noreply, load_graph_data(socket)}
-  end
-
-  # ── Data loading ───────────────────────────────────────────────────────────
-
-  defp load_graph_data(socket) do
+  def handle_info({:page_changed, _action, changed_page}, socket) do
     case socket.assigns.live_action do
       :index ->
-        load_index_graph(socket)
+        {:noreply, load_index_graph(socket)}
 
       :show ->
-        case socket.assigns.page do
-          nil -> socket
-          page -> load_show_graph(socket, page)
+        page = socket.assigns.page
+
+        if page && page_changed_affects_subgraph?(page.id, changed_page, socket) do
+          {:noreply, load_show_graph(socket, page)}
+        else
+          {:noreply, socket}
         end
     end
   end
+
+  # ── Data loading ───────────────────────────────────────────────────────────
 
   defp load_index_graph(socket) do
     context = socket.assigns.context
@@ -285,6 +284,14 @@ defmodule DranWeb.GraphLive do
     nodes
     |> Enum.group_by(& &1.type)
     |> Map.new(fn {type, ns} -> {type, length(ns)} end)
+  end
+
+  # Only reload the subgraph when the changed page is the center or a direct
+  # neighbor of the current view — avoid wasteful 3-query reload on every
+  # PubSub broadcast for unrelated pages in the same context.
+  defp page_changed_affects_subgraph?(center_id, changed_page, socket) do
+    changed_page.id == center_id ||
+      Enum.any?(socket.assigns.nodes, &(&1.id == changed_page.id))
   end
 
   # ── Render ─────────────────────────────────────────────────────────────────
