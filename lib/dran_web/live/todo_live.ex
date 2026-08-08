@@ -11,6 +11,7 @@ defmodule DranWeb.TodoLive do
 
   alias Dran.Brain
   alias DranWeb.PageEdit
+  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
   import DranWeb.TodoHelpers
 
@@ -233,6 +234,16 @@ defmodule DranWeb.TodoLive do
           active_tab={@active_tab}
         >
           <:actions>
+            <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
+              <.icon name="hero-eye" class="size-4" /> {gettext("View")}
+            </.link>
+            <.link
+              :if={not @editing}
+              patch={PageTypes.page_show_path(@page) <> "?edit=true"}
+              class="btn btn-ghost btn-sm"
+            >
+              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+            </.link>
             <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
@@ -271,7 +282,7 @@ defmodule DranWeb.TodoLive do
             </div>
           </:insights>
 
-          <:tabs>
+          <:tabs :if={@editing}>
             <div :if={meta_get(@page.meta, "kind")} class="flex items-center gap-2">
               <span class="px-2 py-0.5 rounded bg-primary/15 text-primary text-xs font-medium">
                 {String.capitalize(meta_get(@page.meta, "kind"))}
@@ -338,7 +349,7 @@ defmodule DranWeb.TodoLive do
        page_type: @page_type,
        active_tab: "content",
        kanban_columns: @kanban_columns,
-       editing: true,
+       editing: false,
        save_status: "idle",
        active_nav: "todos",
        community_summary: nil
@@ -389,7 +400,7 @@ defmodule DranWeb.TodoLive do
              page_title: page.title,
              active_tab: active_tab,
              community_summary: community_summary,
-             editing: true,
+             editing: Map.get(params, "edit") == "true",
              form: form,
              context_id: context.id,
              save_status: "idle",

@@ -69,7 +69,7 @@ export function mermaidNodeView(editor) {
       const editBtn = document.createElement("button")
       editBtn.className = "mermaid-edit-btn"
       editBtn.type = "button"
-      editBtn.textContent = "✎ Editar"
+      editBtn.textContent = "✓ Vista previa"
       toolbar.appendChild(editBtn)
 
       wrapper.appendChild(toolbar)
@@ -79,14 +79,14 @@ export function mermaidNodeView(editor) {
       preview.className = "mermaid-preview"
       wrapper.appendChild(preview)
 
-      // ── Code editor (hidden by default) ──
+      // ── Code editor (visible by default — raw mermaid source for editing) ──
       const codeArea = document.createElement("textarea")
       codeArea.className = "mermaid-code-editor"
       codeArea.spellcheck = false
-      codeArea.style.display = "none"
+      codeArea.style.display = "block"
       wrapper.appendChild(codeArea)
 
-      let isEditing = false
+      let isEditing = true
 
       function toggleEdit(force) {
         isEditing = typeof force === "boolean" ? force : !isEditing
@@ -172,7 +172,9 @@ export function mermaidNodeView(editor) {
 
       const debouncedRender = debounce(renderMermaid, 400)
 
-      // Initial render
+      // Initial render — start in edit mode with raw source visible
+      codeArea.value = node.textContent
+      codeArea.focus()
       renderMermaid(node.textContent)
 
       return {

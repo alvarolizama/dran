@@ -42,6 +42,16 @@ defmodule DranWeb.GoalLive do
           editing={@editing}
         >
           <:actions>
+            <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
+              <.icon name="hero-eye" class="size-4" /> {gettext("View")}
+            </.link>
+            <.link
+              :if={not @editing}
+              patch={PageTypes.page_show_path(@page) <> "?edit=true"}
+              class="btn btn-ghost btn-sm"
+            >
+              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+            </.link>
             <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
@@ -96,7 +106,7 @@ defmodule DranWeb.GoalLive do
             </div>
           </:insights>
 
-          <:tabs>
+          <:tabs :if={@editing}>
             <div :if={@active_tab == "overview"}>
               <.page_edit_form
                 form={@form}
@@ -195,7 +205,7 @@ defmodule DranWeb.GoalLive do
        page_type: @page_type,
        goal_tabs: DisabledTypes.visible_tabs(@goal_tabs, context),
        active_tab: "overview",
-       editing: true,
+       editing: false,
        save_status: "idle",
        community_summary: nil,
        active_nav: "goals"
@@ -264,7 +274,7 @@ defmodule DranWeb.GoalLive do
              goal_todos: goal_todos,
              goal_plans: goal_plans,
              rendered_body: rendered_body,
-             editing: true,
+             editing: Map.get(params, "edit") == "true",
              form: form,
              context: context,
              context_id: context.id,

@@ -48,6 +48,16 @@ defmodule DranWeb.ProjectLive do
           editing={@editing}
         >
           <:actions>
+            <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
+              <.icon name="hero-eye" class="size-4" /> {gettext("View")}
+            </.link>
+            <.link
+              :if={not @editing}
+              patch={PageTypes.page_show_path(@page) <> "?edit=true"}
+              class="btn btn-ghost btn-sm"
+            >
+              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+            </.link>
             <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
@@ -105,7 +115,7 @@ defmodule DranWeb.ProjectLive do
             </div>
           </:insights>
 
-          <:tabs>
+          <:tabs :if={@editing}>
             <%!-- Overview: dashboard del proyecto — status, stats, relacionados --%>
             <div :if={@active_tab == "overview"}>
               <.page_edit_form
@@ -240,7 +250,7 @@ defmodule DranWeb.ProjectLive do
        page_type: @page_type,
        project_tabs: DisabledTypes.visible_tabs(@project_tabs, context),
        active_tab: "overview",
-       editing: true,
+       editing: false,
        save_status: "idle",
        community_summary: nil,
        active_nav: "projects"
@@ -336,7 +346,7 @@ defmodule DranWeb.ProjectLive do
              project_entities: project_entities,
              project_references: project_references,
              rendered_body: rendered_body,
-             editing: true,
+             editing: Map.get(params, "edit") == "true",
              form: form,
              context: context,
              project_tabs: DisabledTypes.visible_tabs(@project_tabs, context),

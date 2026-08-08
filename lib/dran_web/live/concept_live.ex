@@ -5,6 +5,7 @@ defmodule DranWeb.ConceptLive do
 
   alias Dran.Brain
   alias DranWeb.PageEdit
+  alias DranWeb.PageTypes
   alias DranWeb.ListPagination
   alias DranWeb.Plugs.Auth
 
@@ -34,6 +35,16 @@ defmodule DranWeb.ConceptLive do
           active_tab={@active_tab}
         >
           <:actions>
+            <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
+              <.icon name="hero-eye" class="size-4" /> {gettext("View")}
+            </.link>
+            <.link
+              :if={not @editing}
+              patch={PageTypes.page_show_path(@page) <> "?edit=true"}
+              class="btn btn-ghost btn-sm"
+            >
+              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+            </.link>
             <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
@@ -72,7 +83,7 @@ defmodule DranWeb.ConceptLive do
             </div>
           </:insights>
 
-          <:tabs>
+          <:tabs :if={@editing}>
             <.page_edit_form
               form={@form}
               page={@page}
@@ -124,7 +135,7 @@ defmodule DranWeb.ConceptLive do
        context: context,
        page_type: @page_type,
        active_tab: "content",
-       editing: true,
+       editing: false,
        save_status: "idle",
        active_nav: "concepts",
        community_summary: nil
@@ -174,7 +185,7 @@ defmodule DranWeb.ConceptLive do
              page_title: page.title,
              active_tab: active_tab,
              community_summary: community_summary,
-             editing: true,
+             editing: Map.get(params, "edit") == "true",
              form: form,
              context_id: context.id,
              save_status: "idle",

@@ -162,6 +162,28 @@ defmodule DranWeb.NoteLiveTest do
 
       assert html =~ ~s(href="/graph/#{target.slug}")
     end
+
+    test "edit button links to ?edit=true", %{conn: conn, target: target} do
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
+
+      assert html =~ "?edit=true"
+    end
+
+    test "content tab shows rendered markdown, not the editor, by default", %{
+      conn: conn,
+      target: target
+    } do
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
+
+      # The editor form should not be present in read-only mode
+      refute html =~ ~s(id="page-edit-form")
+    end
+
+    test "edit mode shows the editor form", %{conn: conn, target: target} do
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}?edit=true")
+
+      assert html =~ ~s(id="page-edit-form")
+    end
   end
 
   describe "archive flow" do
