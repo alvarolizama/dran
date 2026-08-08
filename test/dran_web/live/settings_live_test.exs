@@ -179,4 +179,114 @@ defmodule DranWeb.SettingsLiveTest do
     # The button is disabled while testing
     assert html =~ "disabled"
   end
+
+  describe "jobs panel (brain tab)" do
+    import Ecto.Query
+
+    alias Dran.Jobs
+
+    setup do
+      # The panel reads the global "disabled_jobs" setting and the run reports
+      # of the shared default context — start from a clean slate and leave none
+      # behind (mirrors Dran.JobsTest's defensive cleanup).
+      context =
+        Dran.Brain.get_context_by_slug("personal") ||
+          elem(Dran.Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+
+      clear_disabled_jobs!()
+
+      on_exit(fn ->
+        clear_disabled_jobs!()
+        delete_job_reports!(context.id)
+      end)
+
+      :ok
+    end
+
+    test "renders the 5 registered jobs with toggles and run buttons", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/settings/brain")
+
+      assert html =~ t("Jobs programados")
+      assert length(Jobs.list()) == 5
+
+      for job <- Jobs.list() do
+        assert html =~ ~s(id="job-row-#{job.key}")
+        assert html =~ job.label
+        assert html =~ ~s(id="job-toggle-#{job.key}")
+        assert html =~ ~s(id="job-run-#{job.key}")
+      end
+
+      # No runs yet — gray "Nunca" badge and an enabled "Correr ahora" per job
+      assert html =~ t("Nunca")
+      assert html =~ t("Correr ahora")
+    end
+
+    test "toggle_job persists the enabled state and re-renders it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+      assert Jobs.enabled?(:curator_daily)
+
+      _ = view |> element("#job-toggle-curator_daily") |> render_click()
+      refute Jobs.enabled?(:curator_daily)
+      refute has_element?(view, "#job-toggle-curator_daily[checked]")
+
+      _ = view |> element("#job-toggle-curator_daily") |> render_click()
+      assert Jobs.enabled?(:curator_daily)
+      assert has_element?(view, "#job-toggle-curator_daily[checked]")
+    end
+
+    test "run_job marks only that job as running, then flashes on completion", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+
+      html = view |> element("#job-run-pagerank_nightly") |> render_click()
+
+      # The Task's {:job_run_done, ...} message is handled after this reply, so
+      # the returned HTML deterministically shows the running state — and only
+      # for the clicked job.
+      assert html =~ t("Corriendo…")
+      assert html =~ ~r/<button(?=[^>]*\bdisabled\b)(?=[^>]*id="job-run-pagerank_nightly")[^>]*>/
+      refute html =~ ~r/<button(?=[^>]*\bdisabled\b)(?=[^>]*id="job-run-curator_daily")[^>]*>/
+
+      # Completion clears the running state, flashes and refreshes the list.
+      # (The Task → run report wiring for the real job is covered in Dran.JobsTest.)
+      send(view.pid, {:job_run_done, :pagerank_nightly, {:ok, %{}}})
+      html = render(view)
+      assert html =~ "Job completado: PageRank"
+      refute html =~ t("Corriendo…")
+    end
+
+    test "job_run_done with an error result flashes the failure", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+
+      send(view.pid, {:job_run_done, :curator_daily, {:error, :boom}})
+
+      assert render(view) =~ "Job falló: Curator"
+    end
+
+    test "shows the last run with badge, relative time, duration and report link", %{conn: conn} do
+      # Cheap real job (the same one Dran.JobsTest runs) — writes a run report.
+      {:ok, report} = Jobs.run_now(:pagerank_nightly)
+
+      {:ok, _view, html} = live(conn, ~p"/settings/brain")
+
+      # Green ok badge, relative time linking to the report, compact duration
+      assert html =~ "badge-success"
+      assert html =~ ~s(href="/reports/#{report.slug}")
+      assert html =~ t("just now")
+      assert html =~ ~r/\d+(\.\d+)? (ms|s)/
+    end
+
+    defp clear_disabled_jobs! do
+      Dran.Repo.delete_all(from s in "settings", where: s.key == "disabled_jobs")
+    end
+
+    defp delete_job_reports!(context_id) do
+      keys = Enum.map(Jobs.list_keys(), &Atom.to_string/1)
+
+      Dran.Repo.delete_all(
+        from p in Dran.Brain.Page,
+          where: p.context_id == ^context_id and p.page_type == "report",
+          where: fragment("?->>'job_key'", p.meta) in ^keys
+      )
+    end
+  end
 end
