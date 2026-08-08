@@ -2,6 +2,7 @@ defmodule DranWeb.QueryLive do
   @moduledoc "LiveView for query pages: question-answer knowledge with semantic relations."
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "query"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

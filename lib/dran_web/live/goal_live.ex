@@ -2,6 +2,7 @@ defmodule DranWeb.GoalLive do
   @moduledoc "LiveView for goal pages: index list + detail view with sub-page tabs."
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "goal"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

@@ -2,6 +2,7 @@ defmodule DranWeb.EntityLive do
   @moduledoc "LiveView for entity pages: index list + detail view with inline editing."
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "entity"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

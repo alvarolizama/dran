@@ -2,6 +2,7 @@ defmodule DranWeb.ConceptLive do
   @moduledoc "LiveView for concept pages: index list + detail view with inline editing."
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "concept"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

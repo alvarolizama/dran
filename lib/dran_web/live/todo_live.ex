@@ -8,6 +8,7 @@ defmodule DranWeb.TodoLive do
   """
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "todo"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

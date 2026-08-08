@@ -7,6 +7,7 @@ defmodule DranWeb.ProjectLive do
   """
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "project"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

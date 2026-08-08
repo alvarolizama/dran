@@ -2,6 +2,7 @@ defmodule DranWeb.PlanLive do
   @moduledoc "LiveView for plan pages: index list + detail view with inline editing."
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "plan"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

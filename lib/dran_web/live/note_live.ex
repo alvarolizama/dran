@@ -2,6 +2,7 @@ defmodule DranWeb.NoteLive do
   @moduledoc "LiveView for note pages: index list + detail view with inline editing."
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "note"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit

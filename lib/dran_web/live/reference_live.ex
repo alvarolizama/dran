@@ -2,6 +2,7 @@ defmodule DranWeb.ReferenceLive do
   @moduledoc "LiveView for reference pages: index list + detail view with inline editing."
 
   use DranWeb, :live_view
+  on_mount {DranWeb.DisabledTypes, "reference"}
 
   alias Dran.Brain
   alias DranWeb.PageEdit
