@@ -1,5 +1,7 @@
 defmodule DranWeb.ErrorJSONTest do
-  use DranWeb.ConnCase, async: true
+  # No DB access — ConnCase's sandbox checkout is unnecessary and raced
+  # with sync tests running in shared mode.
+  use ExUnit.Case, async: true
 
   test "renders 404" do
     assert DranWeb.ErrorJSON.render("404.json", %{}) == %{errors: %{detail: "Not Found"}}

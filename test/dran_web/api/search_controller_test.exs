@@ -39,7 +39,13 @@ defmodule DranWeb.API.SearchControllerTest do
         })
       end)
 
-      context = Brain.get_context_by_slug("personal")
+      # Fresh context: the shared "personal" context can carry pages with
+      # embeddings from other tests in the shared sandbox transaction. The
+      # stubbed zero-vector query embedding sorts as NaN in pgvector cosine
+      # distance (NaN sorts last in Postgres), so any residue could push the
+      # test's page past the result limit.
+      uniq = System.unique_integer([:positive])
+      {:ok, context} = Brain.create_context(%{name: "Semantic #{uniq}", slug: "semantic-#{uniq}"})
 
       {:ok, page} =
         Brain.create_page(%{
@@ -55,7 +61,7 @@ defmodule DranWeb.API.SearchControllerTest do
       conn =
         get(conn, ~p"/api/search/semantic", %{
           "q" => "test query",
-          "context" => "personal"
+          "context" => context.slug
         })
 
       assert json_response(conn, 200)

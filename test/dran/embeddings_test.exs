@@ -114,7 +114,11 @@ defmodule Dran.EmbeddingsTest do
         Req.Test.json(conn, embeddings_response(1))
       end)
 
-      context = Brain.get_context_by_slug("personal")
+      # Fresh context: the exact `count == 2` below must not see pages from
+      # the shared "personal" context (it can carry stale rows committed
+      # outside the sandbox).
+      uniq = System.unique_integer([:positive])
+      {:ok, context} = Brain.create_context(%{name: "Backfill #{uniq}", slug: "backfill-#{uniq}"})
 
       p1 =
         Dran.Brain.Page.create_changeset(%{

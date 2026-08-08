@@ -75,7 +75,8 @@ defmodule Dran.InferenceTest do
         embedding_model: "Qwen3-Embedding",
         rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
-        req_plug: {Req.Test, Dran.Inference.Client}
+        req_plug: {Req.Test, Dran.Inference.Client},
+        schedule_async: false
       )
 
       :ok
@@ -112,7 +113,8 @@ defmodule Dran.InferenceTest do
         embedding_model: "Qwen3-Embedding",
         rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
-        req_plug: {Req.Test, Dran.Inference.Client}
+        req_plug: {Req.Test, Dran.Inference.Client},
+        schedule_async: false
       )
 
       :ok
@@ -150,7 +152,8 @@ defmodule Dran.InferenceTest do
         embedding_model: "Qwen3-Embedding",
         rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
-        req_plug: {Req.Test, Dran.Inference.Client}
+        req_plug: {Req.Test, Dran.Inference.Client},
+        schedule_async: false
       )
 
       :ok
@@ -180,7 +183,8 @@ defmodule Dran.InferenceTest do
         embedding_model: "Qwen3-Embedding",
         rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
-        req_plug: {Req.Test, Dran.Inference.Client}
+        req_plug: {Req.Test, Dran.Inference.Client},
+        schedule_async: false
       )
 
       :ok

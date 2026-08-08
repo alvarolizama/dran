@@ -13,6 +13,7 @@ defmodule Dran.RerankTest do
       rerank_model: "Qwen3-Reranker",
       timeout: 5_000,
       req_plug: {Req.Test, Dran.Inference.Client},
+      schedule_async: false,
       use_rerank: true
     )
 

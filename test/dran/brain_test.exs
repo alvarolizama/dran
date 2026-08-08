@@ -307,6 +307,20 @@ defmodule Dran.BrainTest do
   end
 
   describe "graph_data/1" do
+    # These tests assert exact node/edge totals against the context. The
+    # shared "personal" context can carry stale rows committed outside the
+    # sandbox (e.g. ad-hoc `MIX_ENV=test mix run` debug sessions), which
+    # would skew every count — so each test gets a fresh, guaranteed-empty
+    # context instead.
+    setup do
+      uniq = System.unique_integer([:positive])
+
+      {:ok, ctx} =
+        Brain.create_context(%{name: "Graph #{uniq}", slug: "graph-#{uniq}"})
+
+      {:ok, context: ctx}
+    end
+
     test "exposes weight on edges and summary/tags on nodes", %{context: ctx} do
       {:ok, a} =
         Brain.create_page(%{

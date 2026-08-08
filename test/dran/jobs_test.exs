@@ -40,7 +40,10 @@ defmodule Dran.JobsTest do
     context = ensure_default_context!()
     clear_disabled_jobs!()
 
-    on_exit(fn -> clear_disabled_jobs!() end)
+    on_exit(fn ->
+      clear_disabled_jobs!()
+      delete_job_reports!(context.id)
+    end)
 
     {:ok, context: context}
   end
@@ -307,6 +310,21 @@ defmodule Dran.JobsTest do
 
   defp clear_disabled_jobs! do
     Repo.delete_all(from s in "settings", where: s.key == "disabled_jobs")
+  end
+
+  # Defensive: Jobs.execute/3 always writes run reports to the shared default
+  # context, and this suite inserts report fixtures there too. The sandbox
+  # rolls every test back, but if that ever changes (or a test run dies
+  # mid-transaction), these reports must not leak into other suites that
+  # assert exact page counts on the same context.
+  defp delete_job_reports!(context_id) do
+    keys = Enum.map(@expected_keys, &Atom.to_string/1)
+
+    Repo.delete_all(
+      from p in Page,
+        where: p.context_id == ^context_id and p.page_type == "report",
+        where: fragment("?->>'job_key'", p.meta) in ^keys
+    )
   end
 
   defp insert_reports!(context_id, job_key, count) do

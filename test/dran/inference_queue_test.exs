@@ -9,7 +9,8 @@ defmodule Dran.InferenceQueueTest do
     Application.put_env(:dran, :inference,
       base_url: "http://localhost:9999",
       api_key: "test",
-      timeout: 5_000
+      timeout: 5_000,
+      schedule_async: false
     )
 
     ensure_registry()

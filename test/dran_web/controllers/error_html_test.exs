@@ -1,5 +1,7 @@
 defmodule DranWeb.ErrorHTMLTest do
-  use DranWeb.ConnCase, async: true
+  # No DB access — ConnCase's sandbox checkout is unnecessary and raced
+  # with sync tests running in shared mode.
+  use ExUnit.Case, async: true
 
   # Bring render_to_string/4 for testing custom views
   import Phoenix.Template, only: [render_to_string: 4]

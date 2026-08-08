@@ -1,5 +1,8 @@
 defmodule Dran.AccountsTest do
-  use Dran.DataCase, async: true
+  # async: false — this suite checks out a sandbox connection. Async DB
+  # tests race with sync tests running in shared mode (DBConnection
+  # OwnershipError / "client exited"), so all Repo-using suites are sync.
+  use Dran.DataCase, async: false
 
   alias Dran.Accounts
   alias Dran.Accounts.User

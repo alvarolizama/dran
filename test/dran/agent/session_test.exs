@@ -1,5 +1,8 @@
 defmodule Dran.Agent.SessionTest do
-  use Dran.DataCase, async: true
+  # Pure changeset tests — no Repo access, so ExUnit.Case suffices. (Using
+  # DataCase here checked out a sandbox connection concurrently with sync
+  # tests running in shared mode, which corrupts their ownership.)
+  use ExUnit.Case, async: true
 
   alias Dran.Agent.Session
 

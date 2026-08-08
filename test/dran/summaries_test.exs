@@ -15,6 +15,7 @@ defmodule Dran.SummariesTest do
       chat_model: "Qwen3.5-9B",
       timeout: 5_000,
       req_plug: {Req.Test, Dran.Inference.Client},
+      schedule_async: false,
       use_rerank: false,
       embedding_dimensions: 1024
     )
