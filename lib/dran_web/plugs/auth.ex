@@ -30,6 +30,7 @@ defmodule DranWeb.Plugs.Auth do
   alias Dran.Auth
 
   @session_key :user
+  @admin_key :is_admin
   @context_key :context_slug
   @context_cookie "dran_last_context"
   # 30 days in seconds
@@ -52,14 +53,25 @@ defmodule DranWeb.Plugs.Auth do
   # ── Session management (for controllers) ──
 
   def login(conn, username, context_slug \\ Auth.default_context_slug()) do
+    # Cache `is_admin` in the session so router pipelines don't hit the DB on
+    # every request. A session user with no row in the users table (e.g.
+    # created before multi-user auth) is treated as a full admin.
+    is_admin =
+      case Dran.Accounts.get_user_by_email(username) do
+        nil -> true
+        %{is_admin: admin?} -> admin?
+      end
+
     conn
     |> put_session(@session_key, username)
+    |> put_session(@admin_key, is_admin)
     |> put_context(context_slug)
   end
 
   def logout(conn) do
     conn
     |> delete_session(@session_key)
+    |> delete_session(@admin_key)
     |> delete_session(@context_key)
     |> delete_resp_cookie(@context_cookie)
   end

@@ -61,7 +61,12 @@ defmodule DranWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
-    json_decoder: Phoenix.json_library()
+    json_decoder: Phoenix.json_library(),
+    # Explicit body-size limits. The multipart cap matches the app's configured
+    # upload max (UPLOADS_MAX_SIZE, default 100MB); urlencoded/json stay small
+    # so a huge form/API body is rejected at the parser, before any app code runs.
+    length: 2_000_000,
+    multipart_length: 200_000_000
 
   plug Plug.MethodOverride
   plug Plug.Head

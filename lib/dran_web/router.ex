@@ -55,30 +55,23 @@ defmodule DranWeb.Router do
   # ── Admin auth plug ──
 
   defp require_admin(conn, _opts) do
-    user_email = Plug.Conn.get_session(conn, "user")
+    # `is_admin` is cached in the session at login (see DranWeb.Plugs.Auth.login/3),
+    # so we don't hit the users table on every admin request. A session without
+    # the flag (e.g. an old pre-multi-user session) is treated as full admin.
+    cond do
+      is_nil(Plug.Conn.get_session(conn, "user")) ->
+        conn
+        |> Phoenix.Controller.redirect(to: ~p"/login")
+        |> Plug.Conn.halt()
 
-    if user_email do
-      user = Dran.Accounts.get_user_by_email(user_email)
+      Plug.Conn.get_session(conn, "is_admin") == false ->
+        conn
+        |> Phoenix.Controller.put_flash(:error, "Admin access required")
+        |> Phoenix.Controller.redirect(to: ~p"/")
+        |> Plug.Conn.halt()
 
-      # Session users without a DB row (e.g. created before multi-user auth)
-      # are treated as full admin. A DB user is admin iff users.is_admin.
-      cond do
-        is_nil(user) ->
-          conn
-
-        user.is_admin ->
-          conn
-
-        true ->
-          conn
-          |> Phoenix.Controller.put_flash(:error, "Admin access required")
-          |> Phoenix.Controller.redirect(to: ~p"/")
-          |> Plug.Conn.halt()
-      end
-    else
-      conn
-      |> Phoenix.Controller.redirect(to: ~p"/login")
-      |> Plug.Conn.halt()
+      true ->
+        conn
     end
   end
 

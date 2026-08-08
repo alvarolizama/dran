@@ -56,7 +56,7 @@ COPY rel rel
 # JS deps for the TipTap/three.js editor (assets/package.json). The tailwind
 # and esbuild hex wrappers fetch their own platform binaries on first run,
 # so they don't need a node_modules install.
-RUN cd assets && npm install
+RUN cd assets && npm ci
 
 RUN mix compile
 RUN mix assets.deploy

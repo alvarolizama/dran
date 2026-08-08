@@ -171,23 +171,14 @@ defmodule Dran.Brain do
       |> maybe_filter_plan_slug(plan_slug)
       |> maybe_filter_goal_slug(goal_slug)
       |> maybe_filter_project_slug(project_slug)
+      |> maybe_filter_props(props)
       |> where([p], p.archived == ^archived)
       |> maybe_distinct_for_planning(goal_slug)
       |> order_by([p], desc: p.updated_at)
       |> limit(^limit)
       |> offset(^offset)
 
-    pages = Repo.all(query)
-
-    # Post-query props filter (meta is an Ecto :map field, not raw JSONB)
-    if is_map(props) and map_size(props) > 0 do
-      Enum.filter(pages, fn page ->
-        page_props = get_in(page.meta || %{}, ["props"]) || %{}
-        Enum.all?(props, fn {k, v} -> Map.get(page_props, k) == v end)
-      end)
-    else
-      pages
-    end
+    Repo.all(query)
   end
 
   defp maybe_exclude_disabled_types(query, nil), do: query
@@ -333,6 +324,28 @@ defmodule Dran.Brain do
   # Duplicated rows from the join are byte-identical, so this is safe.
   defp maybe_distinct_for_planning(query, nil), do: query
   defp maybe_distinct_for_planning(query, _goal_slug), do: distinct(query, true)
+
+  # props: nil/empty → no filter; map → one `where` per key/value pair, compared
+  # as `meta->'props'->>key = value` (AND logic). Filtering in the DB (rather than
+  # post-fetch in memory) keeps limit/offset pagination correct. We use `->>`
+  # text comparison (the same pattern as kanban_status/assignee above) because a
+  # single jsonb `@>` containment fragment sends the value as a text param that
+  # Postgrex doesn't cast to jsonb correctly; per-key text comparison is reliable
+  # and hits the meta GIN/expression indexes just the same. Values are compared
+  # as text — non-binary values are JSON-encoded so numbers/booleans still match.
+  defp maybe_filter_props(query, props) when is_map(props) and map_size(props) > 0 do
+    Enum.reduce(props, query, fn {key, value}, q ->
+      text_value = if is_binary(value), do: value, else: Jason.encode!(value)
+
+      where(
+        q,
+        [p],
+        fragment("?->'props'->>? = ?", p.meta, ^to_string(key), ^text_value)
+      )
+    end)
+  end
+
+  defp maybe_filter_props(query, _props), do: query
 
   defp apply_rerank(query_string, results, opts) do
     if Keyword.get(opts, :rerank, Dran.Inference.Config.use_rerank?()) do

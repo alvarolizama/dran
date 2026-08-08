@@ -69,7 +69,10 @@ defmodule Dran.MixProject do
       {:mdex, "~> 0.13.1"},
       {:bcrypt_elixir, "~> 3.0"},
       {:pgvector, "~> 0.3"},
-      {:quantum, "~> 3.5"}
+      {:quantum, "~> 3.5"},
+      # Security / quality audit tooling (dev & test only, not in the release)
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -98,7 +101,14 @@ defmodule Dran.MixProject do
         "esbuild dran --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "deps.audit",
+        "sobelow --exit medium",
+        "test"
+      ]
     ]
   end
 end
