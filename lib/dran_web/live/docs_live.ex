@@ -323,7 +323,12 @@ defmodule DranWeb.DocsLive do
         {"backlinks", "Backlinks"},
         {"smart-collections", "Smart Collections"},
         {"planning-hierarchy", "Planning hierarchy"},
-        {"graph-intelligence", "Graph intelligence"}
+        {"graph-intelligence", "Graph intelligence"},
+        {"props", "Custom props"},
+        {"view-edit-modes", "View & edit modes"},
+        {"graph-3d", "3D graph navigation"},
+        {"real-time", "Real-time updates"},
+        {"disabled-types", "Type disabling"}
       ]} />
 
       <.h2_heading id="contexts" icon="hero-squares-2x2" label="Contexts" />
@@ -442,6 +447,59 @@ defmodule DranWeb.DocsLive do
         id="graph-intelligence-doc"
         code={DranWeb.DocsContent.graph_intelligence_doc()}
       />
+
+      <.h2_heading id="props" icon="hero-tag" label="Custom props (meta.props)" />
+      <p>
+        Every page may carry <code>meta.props</code>: a free-form key-value bag for
+        metadata that doesn't fit the typed fields. Five prop keys auto-create
+        typed graph relations during augmentation:
+      </p>
+      <ul>
+        <li><code>role</code> → <code>works_in</code> → entity</li>
+        <li><code>tier</code> → <code>has_tier</code> → concept</li>
+        <li><code>location</code> → <code>based_in</code> → entity</li>
+        <li><code>language</code> → <code>written_in</code> → entity</li>
+        <li><code>framework</code> → <code>built_with</code> → entity</li>
+      </ul>
+      <p>
+        Other keys are stored but generate no edge. Props are GIN-indexed and
+        backfillable via Settings → Brain → "Run backfill".
+      </p>
+
+      <.h2_heading id="view-edit-modes" icon="hero-eye" label="Read-only view & edit mode" />
+      <p>
+        Page detail views show rendered markdown + mermaid diagrams by default
+        (read-only mode). Click the <strong>Edit</strong> button to switch to
+        the TipTap editor. In the editor, mermaid code blocks display as raw
+        source (editable text) — click <strong>Preview</strong> on the block to
+        see the SVG diagram. Click <strong>View</strong> to return to read-only.
+      </p>
+
+      <.h2_heading id="graph-3d" icon="hero-share" label="3D graph navigation" />
+      <p>
+        The graph at <code>/graph</code> renders the full knowledge graph in 3D.
+        Single-click a node to reveal labels for it and its direct neighbors
+        (non-neighbors dim). Double-click a node to navigate to that page.
+        Background click clears the selection. No hover behavior — all
+        interaction is click-based. Per-page subgraphs at
+        <code>/graph/:slug</code> show a page's neighborhood.
+      </p>
+
+      <.h2_heading id="real-time" icon="hero-bolt" label="Real-time updates" />
+      <p>
+        When a page changes (edited, created, deleted, archived) anywhere in
+        the app — another tab, an agent, an MCP call — all open page detail
+        views reload automatically via Phoenix PubSub. The 3D graph also
+        debounces and re-fetches on changes.
+      </p>
+
+      <.h2_heading id="disabled-types" icon="hero-eye-slash" label="Per-context type disabling" />
+      <p>
+        Each context can disable page types via Settings → Contexts → "Page
+        types". Disabled types are hidden from the sidebar, dashboard, command
+        palette, and direct URL access is blocked by an <code>on_mount</code>
+        hook that redirects to the dashboard.
+      </p>
     </div>
     """
   end
