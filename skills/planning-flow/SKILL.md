@@ -193,7 +193,7 @@ en el plan — va en el todo de cada fase (ver `todo-flow` y `coder-flow`).
        goal_slug: "<goal>"          → opcional, independiente
      },
      owner: "alvaro",
-     created_by: "agent"
+     created_by: "chaos manager"
    })
 4. Crear los todos listados (vía todo-flow) con plan_slug apuntando aquí
 ```

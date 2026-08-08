@@ -39,7 +39,7 @@ flowchart TD
   START[Pedido de Álvaro] --> SEARCH["SEARCH 2-3 variantes\ndran_search"]
   SEARCH --> EXISTS{¿Existe el\ntodo?}
   EXISTS -->|Sí| UPDATE["UPDATE\ndran_update_todo\n(merge meta)"]
-  EXISTS -->|No| ASSIGNEE["CLARIFY assignee\nalvaro / agent / otro\nSIEMPRE pregunta"]
+  EXISTS -->|No| ASSIGNEE["CLARIFY assignee\nalvaro / chaos manager / otro\nSIEMPRE pregunta"]
   ASSIGNEE --> TYPE{¿Qué variante?}
   TYPE -->|"acción manual\nsimple"| SIMPLE["Template SIMPLE\nsolo esqueleto base"]
   TYPE -->|"la ejecuta un agente\ncon entregable"| AGENT["Template AGENTE\n+ Entregable + Pasos\ncon mermaid"]
@@ -254,14 +254,14 @@ escribe el todo.
 | `kind` | personal / coding / business / learning / health / finance / other / investing / marketing / product / writing / career / relationship / travel | |
 | `kanban_status` | backlog / this_week / today / in_progress / done / cancelled | Ver kanban |
 | `priority` | low / medium / high / urgent | |
-| `assignee` | alvaro / agent / otro | SIEMPRE clarify |
+| `assignee` | alvaro / chaos manager / otro | SIEMPRE clarify |
 | `due_date` | ISO date | Opcional |
 | `project_slug` / `goal_slug` / `plan_slug` | slugs | Independientes, 0-3 |
 
 ### Recipe — crear
 
 ```
-1. clarify assignee → alvaro / agent / otro        (SIEMPRE)
+1. clarify assignee → alvaro / chaos manager / otro        (SIEMPRE)
 2. dran_search({ context: "personal", query: "<pendiente>" })   → existe? UPDATE
 3. dran_create_todo({
      context: "personal",

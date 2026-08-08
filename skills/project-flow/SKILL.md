@@ -167,7 +167,7 @@ relaciones, operado por agentes vía MCP. Para Álvaro y sus agentes.
        target_date: "2026-12-31"
      },
      owner: "alvaro",
-     created_by: "agent"
+     created_by: "chaos manager"
    })
 ```
 

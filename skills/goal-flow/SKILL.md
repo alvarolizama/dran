@@ -163,7 +163,7 @@ memoria humana para operar Dran.
        project_slug: "<project>"        → opcional
      },
      owner: "alvaro",
-     created_by: "agent"
+     created_by: "chaos manager"
    })
 ```
 

@@ -117,7 +117,7 @@ La lista completa de kinds vive en el skill `dran` (§3).
      body: "Today I learned...",
      meta: { kind: "thought" },
      tags: ["elixir"],
-     owner: "alvaro", created_by: "agent"
+     owner: "alvaro", created_by: "chaos manager"
    })
 ```
 
