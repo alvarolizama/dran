@@ -13,7 +13,7 @@ Includes a TipTap markdown editor, three autonomous agents (curator, link_garden
 - **9 page types** — note, concept, entity, reference, project, goal, plan, todo, query — each with type-specific metadata and subtypes (`meta.kind`)
 - **Markdown editor** — TipTap WYSIWYG with tables, code blocks, mermaid diagrams, and file embeds `![[slug]]`
 - **Read-only + edit modes** — pages show rendered markdown + mermaid by default; click *Edit* to switch to the editor
-- **Knowledge graph** — 3D graph at `/graph`, click a node to reveal labels, double-click to navigate; per-page subgraphs at `/graph/:slug`
+- **Knowledge graph** — 3D graph at `/graph`, hover a node to highlight it and its neighbors, click to navigate; per-page subgraphs at `/graph/:slug`
 - **Real-time updates** — page detail views sync live via PubSub when the page changes elsewhere
 - **ETS cache** — global graph, per-page subgraphs, and page-by-slug lookups cached in ETS with read concurrency; invalidated on page changes
 - **Autonomous agents** — curator (daily cron), link_gardener (manual), graph_rag (manual, GraphRAG search)
@@ -86,11 +86,11 @@ Directed, typed: `related`, `part_of`, `supersedes`, `contradicts`, `embeds` (au
 
 | Agent | Trigger | What it does |
 | --- | --- | --- |
-| `curator` | Cron daily 06:00 | Finds duplicates and contested knowledge; writes a cleanup report |
-| `link_gardener` | Manual (`dran_start_agent`) | Proposes relations for orphaned pages, including transitive `part_of` |
+| `curator` | Cron daily 06:00 + manual | Finds duplicates and contested knowledge; writes a cleanup report |
+| `link_gardener` | Cron weekly (Sun 07:00) + manual (`dran_start_agent`) | Proposes relations for orphaned pages, including transitive `part_of` |
 | `graph_rag` | Manual (`dran_start_agent`) | GraphRAG: local/global/drift search, creates query pages with citations |
 
-Quantum crons: `curator_daily` (06:00), `pagerank_nightly` (03:00), `community_summaries_nightly` (03:30).
+Quantum crons: `curator_daily` (06:00), `pagerank_nightly` (03:00), `community_summaries_nightly` (03:30), `graph_maintenance_nightly` (03:45), `link_gardener_weekly` (Sun 07:00).
 
 ## MCP server
 
@@ -141,7 +141,7 @@ Ships with a Dockerfile. Start command: `bin/server`. Runtime env vars only — 
 ## Pre-commit
 
 ```bash
-mix precommit   # compile --warnings-as-errors → deps.unlock --unused → format → test
+mix precommit   # compile --warnings-as-errors → deps.unlock --unused → format → deps.audit → sobelow --exit medium → test
 ```
 
 ## License

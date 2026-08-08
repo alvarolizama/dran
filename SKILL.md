@@ -1,7 +1,7 @@
 ---
 name: second-brain
 description: "Use when operating Álvaro's personal second brain via the Dran MCP server. 18 tools for capturing, relating, querying and maintaining typed knowledge pages (notes, concepts, entities, references, goals, plans, projects, todos, queries) as a knowledge graph. Triggers on anything Dran / segundo cerebro / brain: thoughts, notes, research, URLs, goals, plans, projects, todos, or delegating longer tasks to agents."
-version: 7.3.0
+version: 8.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -18,9 +18,9 @@ metadata:
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|Capturar, buscar, actualizar o mantener conocimiento| SELF[ESTE SKILL — tools + page types + recipes]
-  Q -->|Estructurar projects, goals, plans o todos| SW[second-brain-workflow — niveles + mermaid + subagentes]
-  Q -->|Notas fuera de Dran| OTHER[obsidian, notion o apple-notes]
+  Q{¿Qué necesitas?} -->|Capturar, buscar, actualizar\no mantener conocimiento| SELF[ESTE SKILL\ntools + page types + recipes]
+  Q -->|Estructura y táctica de\nprojects, goals, plans, todos| SW[second-brain-workflow\nniveles + mermaid + subagentes]
+  Q -->|Notas fuera de Dran| OTHER[obsidian, notion\no apple-notes]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -73,7 +73,7 @@ through a single MCP endpoint.
 | --- | --- |
 | Transport | Streamable HTTP, MCP spec **2025-03-26** |
 | Endpoint | `POST http://<host>/api/mcp` |
-| Auth | `Authorization: Bearer <token>` — legacy admin, per-user, or context API key |
+| Auth | `Authorization: Bearer *** — legacy admin, per-user, or context API key |
 | Default context | **`personal`** — do not ask, do not switch unless Álvaro says so |
 
 Auth accepts three token kinds, checked in order:
@@ -89,6 +89,24 @@ Requests return `401` for invalid/revoked tokens and `403` for contexts the
 token isn't allowed to touch.
 
 ## 3. Page types (9)
+
+Cada página tiene UN `page_type`. Este decide qué `meta` acepta y cómo la
+trata la búsqueda / kanban / grafo.
+
+```mermaid
+flowchart TD
+  W{¿Qué es lo que capturo?} -->|"Pensamiento, idea, journal\nreunión, cita, recordatorio"| NOTE[note]
+  W -->|"Técnica, patrón, teoría\nmétodo, principio"| CONCEPT[concept]
+  W -->|"Persona, empresa, herramienta\nlugar, producto, evento"| ENTITY[entity]
+  W -->|"Fuente externa: artículo\npaper, video, libro, repo"| REFERENCE[reference]
+  W -->|"Objetivo medible con\ntarget y fechas"| GOAL[goal]
+  W -->|"Plan con horizonte\nweekly/quarterly/yearly"| PLAN[plan]
+  W -->|"Iniciativa grande que\nagrupa goals/plans/todos"| PROJECT[project]
+  W -->|"Acción concreta\ncon kanban"| TODO[todo]
+  W -->|"Pregunta con respuesta"| QUERY[query]
+
+  style TODO fill:#fde68a,stroke:#d97706
+```
 
 | Type | Use it for | Subtypes (`meta.kind`) |
 | --- | --- | --- |
@@ -106,6 +124,36 @@ Default to `note` with `meta.kind: "thought"` when unsure — promote later.
 
 Notes with `meta.kind: "code"` may carry `meta.language` (e.g. `elixir`,
 `python`) to filter by programming language.
+
+### Meta fields por tipo (los que de verdad acepta cada uno)
+
+Fuente: `dran_create_page` en `lib/dran/mcp.ex`. Campos clave:
+
+```mermaid
+flowchart LR
+  subgraph CORE["meta core por tipo"]
+    N["note → kind, date"]
+    TD["todo → kind, kanban_status\npriority, due_date"]
+    G["goal → kind, health, metric\ntarget_value, current_value\nunit, progress, dates"]
+    PL["plan → kind, horizon, period\nstatus, due_date"]
+    PR["project → status, priority\nhealth, health_source, dates"]
+    Q2["query → kind, difficulty\nstatus, answered_by"]
+    RF["reference → source_url, kind"]
+    EN["entity → kind, aliases\nexternal_url"]
+    CN["concept → kind, domain\nparent_concept"]
+  end
+```
+
+- **goal**: `health` (green/yellow/red), `metric` + `target_value` +
+  `current_value` + `unit` para medir, `progress`, `start_date`, `target_date`.
+- **plan**: `horizon` (weekly/monthly/quarterly/yearly), `period` (ej
+  `2026-Q3`), `status` (draft/active/done/archived), `due_date`.
+- **project**: `status` (draft/active/on_hold/done/archived), `priority`,
+  `health`, `health_source` (manual/derived), fechas.
+- **todo**: `kanban_status` (backlog/this_week/today/in_progress/done/
+  cancelled), `priority` (low/medium/high/urgent), `due_date`.
+- **query**: la pregunta + respuesta; `status` es **`answer_status` a nivel de
+  negocio** (open/answered/verified), `difficulty`, `answered_by`.
 
 ### Custom properties — `meta.props`
 
@@ -207,15 +255,19 @@ Prompts: `brainstorm` (generate interlinked idea pages), `goal_review`
 
 ## 6. Autonomous agents (3)
 
-| Agent | Purpose | Limits |
-| --- | --- | --- |
-| `curator` | Finds near-duplicate pages (embedding distance < 0.05), flags contested knowledge, writes a report note. Runs daily at 06:00 via Quantum | max 20 flags/session |
-| `link_gardener` | Proposes typed relations for orphaned/under-linked pages, including verified transitive `part_of` candidates (A→C via B) | max 10 proposals/session |
-| `graph_rag` | Answers questions using GraphRAG patterns — local search (fan-out to neighbors), global search (community summaries), or drift search (hybrid). Creates query pages with cited sources | 10 searches, 5 expands, 3 community contexts, 1 query page/session |
+| Agent | Trigger | Purpose | Limits |
+| --- | --- | --- | --- |
+| `curator` | Cron diario 06:00 + manual | Finds near-duplicates (embedding distance < 0.05), flags contested knowledge, writes a report note | max 20 flags/session |
+| `link_gardener` | Cron semanal (dom 07:00) + manual | Proposes typed relations for orphan/under-linked pages, incl. verified transitive `part_of` (A→C via B) | max 10 proposals/session |
+| `graph_rag` | Manual | Answers questions via GraphRAG: local (fan-out to neighbors), global (community summaries), or drift (hybrid). Creates query pages with cited sources | 10 searches, 5 expands, 3 community contexts, 1 query page/session |
 
 Lifecycle: `dran_start_agent` returns a `session_id` immediately → poll
 `dran_get_agent_session` until `completed`/`failed`. Sessions persist every
 step and track `meta.tokens_used` + `meta.model`.
+
+Quantum crons: `curator_daily` (06:00), `pagerank_nightly` (03:00),
+`community_summaries_nightly` (03:30), `graph_maintenance_nightly` (03:45),
+`link_gardener_weekly` (dom 07:00).
 
 ## 7. Working rules
 
@@ -247,6 +299,23 @@ step and track `meta.tokens_used` + `meta.model`.
 
 ## 8. Status workflows
 
+```mermaid
+flowchart LR
+  subgraph TODOFLOW["todo (kanban)"]
+    B[backlog] --> TW[this_week] --> T[today] --> IP[in_progress] --> D[done]
+    IP --> C[cancelled]
+  end
+```
+
+```mermaid
+flowchart LR
+  subgraph PROJFLOW["project / plan"]
+    DR[draft] --> AC[active] --> DN[done]
+    AC --> OH[on_hold]
+    DN --> AR[archived]
+  end
+```
+
 - **todo** — create in `backlog`, move to `in_progress` immediately with
   `dran_update_todo`, `done` only after verifying + committing. One
   `in_progress` at a time.
@@ -262,31 +331,124 @@ step and track `meta.tokens_used` + `meta.model`.
 
 ## 9. Recipes
 
-### Capture a thought
+Recetas prácticas de USO — cómo crear cada tipo, escoger tipo cuando dudas,
+buscar y leer. No son flujos de proyecto; son instrucciones operativas.
+
+### 9.0 Escoger el page_type cuando el agente duda
+
+Si tras el router de §3 todavía no queda claro el tipo, **pregunta con
+`clarify`** ofreciendo 2-3 candidatos reales — no adivines.
+
+```mermaid
+flowchart TD
+  IN{¿Tipo claro\ndel router §3?} -->|sí| CREATE[Crea con ese tipo]
+  IN -->|"dudo entre 2-3"| CL[clarify\n¿cómo lo guardo?]
+  CL --> PICK{Álvaro escoge}
+  PICK --> CREATE
+
+  style CL fill:#dbeafe,stroke:#3b82f6
+```
 
 ```
-1. dran_search({ context: "personal", query: "<keywords>" })   → exists? update instead
-2. dran_create_page({
-     context: "personal",
-     page_type: "note",
-     body: "Today I learned...",
-     meta: { kind: "thought" },
-     tags: ["elixir"],
-     owner: "alvaro",
-     created_by: "agent"
-   })
+# Ejemplo: "guarda lo de la reunión con el proveedor"
+clarify(
+  question: "¿Cómo lo registro?",
+  choices: [
+    "note (kind: meeting) — solo el resumen de la reunión",
+    "entity (kind: company) — la empresa como entidad reutilizable",
+    "reference — si hay un documento/contrato externo"
+  ]
+)
 ```
 
-### Add a todo
+Regla: clarify SOLO cuando el tipo cambia lo que capturas (nota vs entidad vs
+referencia). Si es obvio (un pendiente → todo), no preguntes.
+
+### 9.1 Crear páginas por tipo
+
+Patrón base — **siempre** search antes:
 
 ```
-1. clarify assignee → alvaro or agent
+1. dran_search({ context: "personal", query: "<keywords>" })   → existe? UPDATE, no crees
+2. dran_create_page({ context, page_type, title/body, meta, tags, owner: "alvaro", created_by: "agent" })
+```
+
+**note** (thought/idea/journal):
+```
+dran_create_page({ page_type: "note", body: "...", meta: { kind: "thought" }, tags: ["elixir"] })
+# kind=code → añade meta.language: "elixir"
+```
+
+**concept** (técnica/patrón):
+```
+dran_create_page({ page_type: "concept", title: "Circuit Breaker", meta: { kind: "pattern", domain: "resilience" } })
+```
+
+**entity** (persona/empresa/herramienta):
+```
+dran_create_page({ page_type: "entity", title: "Anthropic", meta: { kind: "company", external_url: "https://..." } })
+```
+
+**reference** (fuente externa):
+```
+dran_create_page({ page_type: "reference", title: "Paper X", meta: { kind: "paper", source_url: "https://arxiv.org/..." } })
+```
+
+**query** (pregunta con respuesta):
+```
+dran_create_page({ page_type: "query", title: "¿Cómo funciona X?", body: "Respuesta...",
+                   meta: { kind: "how_to", difficulty: "simple", status: "answered", answered_by: "agent" } })
+# ⚠️ el campo es status/answer_status: open/answered/verified — NO "status: done"
+```
+
+### 9.2 Crear goal, plan, project
+
+```mermaid
+flowchart TD
+  GOAL[goal\nobjetivo medible] -->|metric + target_value| PLAN[plan\nhorizonte]
+  PLAN -->|period| PROJ[project\niniciativa]
+  PROJ --> TODOS[todos\nacciones]
+  GOAL -.->|project_slug/goal_slug/plan_slug\nlinks independientes| TODOS
+```
+
+**goal** — objetivo medible:
+```
+dran_create_page({ page_type: "goal", title: "Ship v1 con 100 usuarios",
+  meta: { kind: "business", metric: "active_users", target_value: 100, current_value: 0,
+          unit: "users", health: "green", start_date: "2026-08-01", target_date: "2026-12-31" } })
+# clarify metric/target si no son inferibles
+```
+
+**plan** — con horizonte:
+```
+dran_create_page({ page_type: "plan", title: "Plan Q3",
+  meta: { kind: "business", horizon: "quarterly", period: "2026-Q3", status: "draft",
+          goal_slug: "ship-v1", project_slug: "dran-saas" } })
+```
+
+**project** — iniciativa que agrupa:
+```
+dran_create_page({ page_type: "project", title: "Dran SaaS",
+  meta: { status: "draft", priority: "high", health_source: "derived" } })
+# health se deriva de los goals ligados salvo health_source: "manual"
+```
+
+### 9.3 Crear una tarea (todo)
+
+```mermaid
+flowchart LR
+  A[1. clarify\nassignee] --> B[2. dran_create_todo\nbacklog]
+  B --> C[3. dran_update_todo\nin_progress]
+```
+
+```
+1. clarify assignee → alvaro / agent / otro          (SIEMPRE pregunta)
 2. dran_create_todo({
      context: "personal",
      title: "Refactor MCP controller",
-     project_slug: "<project>",   → optional, independent
-     goal_slug: "<goal>",         → optional, independent
-     plan_slug: "<plan>",         → optional, independent
+     project_slug: "<project>",   → opcional, independiente
+     goal_slug: "<goal>",         → opcional, independiente
+     plan_slug: "<plan>",         → opcional, independiente
      kanban_status: "backlog",
      priority: "high",
      assignee: "alvaro"
@@ -294,21 +456,76 @@ step and track `meta.tokens_used` + `meta.model`.
 3. dran_update_todo({ slug: "<slug>", kanban_status: "in_progress" })   → auto-move
 ```
 
-### Plan a project
+Los 3 links son **independientes**: pon 0, 1, 2 o 3. Sin links = inbox legítimo.
+
+### 9.4 Usar props (meta.props)
+
+```mermaid
+flowchart LR
+  P[page con\nmeta.props] -->|role: sales| R[works_in → entity Sales]
+  P -->|location: cdmx| L[based_in → entity CDMX]
+  P -->|language: elixir| LA[written_in → entity Elixir]
+```
+
+Solo 5 keys crean aristas (`role`, `tier`, `location`, `language`,
+`framework`). El resto se guarda sin arista.
 
 ```
-1. dran_create_page({ page_type: "project", title: "...", meta: { status: "draft", priority: "high" } })
-2. dran_create_page({ page_type: "goal", title: "...", meta: { kind: "business", metric: "...", target_value: N } })
-3. dran_create_page({ page_type: "plan", meta: { horizon: "quarterly", period: "2026-Q3", project_slug: "...", goal_slug: "..." } })
-4. dran_create_todo({ ..., project_slug: "...", goal_slug: "...", plan_slug: "..." })   → set whichever subset applies
+dran_create_page({ page_type: "entity", title: "María",
+  meta: { kind: "person", props: { role: "sales", location: "cdmx" } } })
+# → crea edges works_in→Sales y based_in→CDMX automáticamente
 ```
 
-### Brain hygiene
+### 9.5 Leer y buscar info
+
+```mermaid
+flowchart TD
+  Q{¿Qué busco?} -->|"no sé el slug"| S[1. dran_search\n2-3 variantes]
+  Q -->|"sé el slug"| G[dran_get_page]
+  Q -->|"filtrar por tipo/estado"| L[dran_list_pages]
+  Q -->|"todo el contexto"| W[wiki://index resource]
+  S --> G[2. dran_get_page\ntop 2-3 resultados]
+  G --> ANS[responde con\ncontenido real]
+
+  style ANS fill:#d1fae5,stroke:#059669
+```
+
+Reglas:
+- **Nunca respondas desde el excerpt del search** — `dran_get_page` primero.
+- `dran_search` acepta `type` para acotar (ej `type: "todo"`).
+- `dran_list_pages` con `status` filtra todos por kanban; `"none"` = huérfanos.
+- Para overview completo, lee el resource `wiki://{context}/index` (una llamada).
+
+### 9.6 Usar agentes
+
+```mermaid
+sequenceDiagram
+  participant A as Agente (tú)
+  participant D as Dran MCP
+  A->>D: dran_start_agent(agent_type, context, input)
+  D-->>A: session_id (inmediato)
+  loop poll
+    A->>D: dran_get_agent_session(session_id)
+    D-->>A: status: running / completed / failed
+  end
+```
+
+Cuándo usar cada uno:
+- **`curator`** → "limpia duplicados / detecta contradicciones". (También corre solo a las 06:00.)
+- **`link_gardener`** → "conecta páginas huérfanas". (También corre los domingos 07:00.)
+- **`graph_rag`** → "investiga esta pregunta usando el grafo" (búsqueda profunda con citas).
 
 ```
-1. dran_lint_brain({ context: "personal" })   → surface orphans/stale to Álvaro, don't auto-fix
+dran_start_agent({ agent_type: "link_gardener", context: "personal", input: "orphaned pages" })
+dran_get_agent_session({ session_id: "<id>" })   → hasta completed/failed
+```
+
+### 9.7 Brain hygiene
+
+```
+1. dran_lint_brain({ context: "personal" })   → MUESTRA orphans/stale a Álvaro, NO auto-arregles
 2. dran_start_agent({ agent_type: "link_gardener", context: "personal", input: "orphaned pages" })
-3. dran_get_agent_session({ session_id: "..." })   → poll until completed
+3. dran_get_agent_session({ session_id: "..." })   → poll hasta completed
 ```
 
 ## 10. Common mistakes
@@ -324,3 +541,5 @@ step and track `meta.tokens_used` + `meta.model`.
 - **Forgetting `progress_manual: true`** on goals not measured by todos.
 - **Deleting without confirmation** — irreversible; prefer archive.
 - **Answering from search excerpts** — read the page first.
+- **Not clarifying the type when it changes what you capture** — a meeting
+  note, a company entity and a contract reference are 3 different pages; ask.

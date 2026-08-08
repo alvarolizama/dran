@@ -4,8 +4,8 @@
 //   • Force-directed 3D layout (d3-force-3d under the hood)
 //   • Nodes sized by connection count
 //   • Curved edges with animated particle flow
-//   • Hover to reveal labels: 300ms debounce before showing, labels
-//     persist 3s after the cursor leaves, then auto-clear.
+//   • Hover to highlight a node and its direct neighbors (300ms debounce,
+//     highlight persists 3s after the cursor leaves, then auto-clears).
 //   • Click a node → navigate to that page (no double-click needed).
 //   • Background click clears the selection.
 //   • Auto zoom-to-fit after layout stabilizes
@@ -17,7 +17,8 @@
 
 import ForceGraph3D from "3d-force-graph"
 import * as THREE from "three"
-import SpriteText from "three-spritetext"
+// SpriteText import removed — labels are no longer rendered on hover.
+// The hover highlight (dim/glow neighbors) stays, just without text.
 
 // BFS depth for click-selection neighborhood (1 = direct neighbors only)
 const HIGHLIGHT_BFS_DEPTH = 1
@@ -122,7 +123,7 @@ const Graph3D = {
       .height(height)
       .backgroundColor("#0a0e27")
       .showNavInfo(false)
-      // Node appearance — sphere only (labels are added on click selection)
+      // Node appearance — sphere only (no text labels rendered)
       .nodeThreeObject(node => this.buildNodeObject(node))
       .nodeThreeObjectExtend(false)
       // Edge appearance
@@ -134,7 +135,7 @@ const Graph3D = {
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleSpeed(0.006)
       .linkDirectionalParticleColor(link => link.color || "#94A3B8")
-      // Interaction: hover to show labels (debounced 300ms), click to
+      // Interaction: hover to highlight neighborhood (debounced 300ms), click to
       // navigate to the page. No click-to-select — hover replaces it.
       .onNodeHover((node, prevNode) => this.handleNodeHover(node, prevNode))
       .onNodeClick((node, event) => this.handleNodeClick(node, event))
@@ -227,7 +228,7 @@ const Graph3D = {
     }
   },
 
-  // ── Node objects (sphere only — labels added on click selection) ────────
+  // ── Node objects (sphere only — no text labels rendered) ──────────────
 
   buildNodeObject(node) {
     const group = new THREE.Group()
@@ -332,11 +333,11 @@ const Graph3D = {
     this.clearSelection()
   },
 
-  // Hover with 300ms debounce: wait before showing labels so passing
-  // over nodes quickly doesn't trigger label flicker. Labels persist for
-  // 3s after the cursor leaves the node, then auto-clear.
+  // Hover with 300ms debounce: wait before highlighting neighborhood so
+  // passing over nodes quickly doesn't trigger flicker. Highlight persists
+  // for 3s after the cursor leaves the node, then auto-clears.
   handleNodeHover(node, prevNode) {
-    // Clear any pending label-expiry timer from a previous hover-out.
+    // Clear any pending highlight-expiry timer from a previous hover-out.
     if (this.labelExpiryTimer) {
       clearTimeout(this.labelExpiryTimer)
       this.labelExpiryTimer = null
@@ -352,7 +353,7 @@ const Graph3D = {
           clearTimeout(this.hoverTimer)
         }
 
-        // Debounce: wait 300ms before showing labels.
+        // Debounce: wait 300ms before highlighting the neighborhood.
         this.hoverTimer = setTimeout(() => {
           this.hoverTimer = null
           // Only select if the user is still hovering the same node.
@@ -363,7 +364,7 @@ const Graph3D = {
       }
     } else if (prevNode) {
       // Cursor left the node — cancel any pending hover timer, then
-      // schedule the labels to expire after 3s.
+      // schedule the highlight to expire after 3s.
       if (this.hoverTimer) {
         clearTimeout(this.hoverTimer)
         this.hoverTimer = null
@@ -390,7 +391,7 @@ const Graph3D = {
     this.hoveredNode = null
   },
 
-  // Show labels and highlight the hovered node + its direct neighbors.
+  // Highlight the hovered node + its direct neighbors.
   // Triggered by handleNodeHover after the 300ms debounce elapses.
   selectNode(node) {
     // Reset previous selection first.
@@ -405,12 +406,9 @@ const Graph3D = {
     this.highlightNodes = new Set(depths.keys())
     this.highlightLinks = links
 
-    // Dim non-neighborhood spheres, glow the selected neighborhood, and add
-    // a clickable SpriteText label above each labeled node. The label faces
-    // the camera (SpriteText extends THREE.Sprite) and is a child of the
-    // node's Group, so raycasting reports it as the parent node — clicking
-    // it lands in handleNodeClick, which sees the node as already selected
-    // and triggers navigation.
+    // Dim non-neighborhood spheres and glow the selected neighborhood.
+    // Labels (SpriteText) were removed — the highlight alone communicates
+    // which nodes are in the neighborhood.
     this.graph.graphData().nodes.forEach(n => {
       if (!n.__sphere) return
       const depth = this.nodeDepths.get(n.id)
@@ -421,38 +419,16 @@ const Graph3D = {
       n.__sphere.material.emissiveIntensity = isLabeled ? (isCenter ? 1.2 : 0.55) : 0.05
       const scale = isCenter ? 1.35 : (depth === 1 ? 1.15 : 1)
       n.__sphere.scale.setScalar(scale)
-
-      // Add a clickable label sprite for this node and its direct neighbors.
-      if (isLabeled && n.label) {
-        const group = n.__sphere.parent
-        const sprite = new SpriteText(n.label)
-        sprite.color = "#f1f5f9"
-        sprite.textHeight = 6
-        sprite.backgroundColor = "rgba(10, 14, 39, 0.88)"
-        sprite.borderColor = "rgba(148, 163, 184, 0.4)"
-        sprite.borderWidth = 1
-        sprite.padding = [4, 6]
-        sprite.position.y = this.nodeRadius(n) + 10
-        group.add(sprite)
-        n.__label = sprite
-        this.labeledNodes.add(n.id)
-      }
     })
 
     // Trigger link restyle (linkColor / linkWidth / particles are accessor-based)
     this.graph.refresh()
   },
 
-  // Remove the active selection, dispose labels, restore spheres/links.
+  // Remove the active selection, restore spheres/links.
   clearSelection() {
     if (this.graph) {
       this.graph.graphData().nodes.forEach(n => {
-        if (n.__label) {
-          if (n.__label.parent) n.__label.parent.remove(n.__label)
-          if (n.__label.material.map) n.__label.material.map.dispose()
-          n.__label.material.dispose()
-          n.__label = null
-        }
         if (n.__sphere) {
           n.__sphere.material.opacity = 0.95
           n.__sphere.material.emissiveIntensity = 0.35
@@ -559,13 +535,8 @@ const Graph3D = {
       this.visibilityObserver = null
     }
     if (this.graph) {
-      // Dispose sphere geometries/materials and any active labels
+      // Dispose sphere geometries/materials
       this.graph.graphData().nodes.forEach(node => {
-        if (node.__label) {
-          if (node.__label.material.map) node.__label.material.map.dispose()
-          node.__label.material.dispose()
-          node.__label = null
-        }
         if (node.__sphere) {
           node.__sphere.geometry.dispose()
           node.__sphere.material.dispose()
