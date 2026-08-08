@@ -11,9 +11,9 @@ defmodule DranWeb.TodoLive do
   on_mount {DranWeb.DisabledTypes, "todo"}
 
   alias Dran.Brain
+  alias DranWeb.PageDetail
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
-  alias DranWeb.Plugs.Auth
   import DranWeb.TodoHelpers
 
   @page_type "todo"
@@ -327,94 +327,18 @@ defmodule DranWeb.TodoLive do
 
   @impl true
   def mount(_params, session, socket) do
-    {socket, context} = Auth.assign_to_socket(socket, session)
-
-    socket =
-      if context do
-        if connected?(socket) do
-          Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
-        end
-
-        allow_upload(
-          socket,
-          :file,
-          accept:
-            ~w(image/* video/* audio/* application/pdf text/plain text/markdown text/csv text/html application/json application/zip),
-          max_file_size: Dran.Uploads.max_size(),
-          auto_upload: true,
-          progress: &handle_progress/3
-        )
-      else
-        socket
-      end
-
-    {:ok,
-     assign(socket,
-       context: context,
-       page_type: @page_type,
-       active_tab: "content",
-       kanban_columns: @kanban_columns,
-       editing: false,
-       save_status: "idle",
-       active_nav: "todos",
-       community_summary: nil
-     )}
+    PageDetail.mount_page_viewer(socket, session,
+      page_type: @page_type,
+      active_nav: "todos",
+      extra_assigns: [
+        kanban_columns: @kanban_columns
+      ]
+    )
   end
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    {socket, context} = Auth.resolve_context(socket, params)
-
-    if context do
-      case Brain.get_page_by_slug(slug, context.id) do
-        nil ->
-          {:noreply, push_navigate(socket, to: ~p"/todos")}
-
-        page ->
-          relations = Brain.list_relations_for_page(page.id)
-          versions = Brain.list_page_versions(page.id)
-          logs = Brain.list_log(context_id: context.id, limit: 10)
-
-          form = Brain.change_page(page) |> to_form(as: :page)
-
-          community_summary =
-            try do
-              case Dran.Graph.CommunitySummaries.get_summary_for_page(page.id) do
-                {:ok, summary} -> summary
-                _ -> nil
-              end
-            rescue
-              _ -> nil
-            end
-
-          rendered_body =
-            render_markdown(page.body,
-              context_id: page.context_id,
-              inline_links: Map.get(page.meta || %{}, "inline_links", [])
-            )
-
-          active_tab = Map.get(socket.assigns, :active_tab, "content")
-
-          {:noreply,
-           assign(socket,
-             page: page,
-             relations: relations,
-             versions: versions,
-             compare_version: nil,
-             logs: logs,
-             page_title: page.title,
-             active_tab: active_tab,
-             community_summary: community_summary,
-             editing: Map.get(params, "edit") == "true",
-             form: form,
-             context_id: context.id,
-             save_status: "idle",
-             rendered_body: rendered_body
-           )}
-      end
-    else
-      {:noreply, push_navigate(socket, to: ~p"/todos")}
-    end
+    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/todos")
   end
 
   def handle_params(_params, _url, socket) do
@@ -596,7 +520,6 @@ defmodule DranWeb.TodoLive do
   def handle_event("clear_compare", params, socket),
     do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
 
-  defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
 
   # ──────────────────────────────────────────────────────────────────────────
   # Helpers
