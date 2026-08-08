@@ -26,8 +26,8 @@ defmodule Dran.EntityLinker do
 
   require Logger
 
-  alias Dran.Brain
   alias Dran.Brain.Page
+  alias Dran.PageFactory
   alias Dran.Slug
 
   @max_entities_per_page 10
@@ -76,8 +76,8 @@ defmodule Dran.EntityLinker do
   # ── Internals ──
 
   defp link_one(page, entity_slug) do
-    with {:ok, entity_page} <- get_or_create_entity(page, entity_slug),
-         :ok <- create_mentions_edge(page, entity_page) do
+    with {:ok, entity_page} <- PageFactory.get_or_create(page, entity_slug, "entity", created_by: "entity_linker"),
+         :ok <- PageFactory.create_edge(page, entity_page, "mentions", "entity_linker") do
       {:ok, :linked}
     else
       {:skip, reason} ->
@@ -88,69 +88,5 @@ defmodule Dran.EntityLinker do
         Logger.warning("EntityLinker failed #{entity_slug}: #{inspect(reason)}")
         {:error, reason}
     end
-  end
-
-  defp get_or_create_entity(page, entity_slug) do
-    case Brain.get_page_by_slug(entity_slug, page.context_id) do
-      nil ->
-        create_entity_page(page, entity_slug)
-
-      %Page{page_type: "entity"} = existing ->
-        {:ok, existing}
-
-      %Page{page_type: other} ->
-        {:skip, "slug taken by #{other} page"}
-    end
-  end
-
-  defp create_entity_page(page, entity_slug) do
-    attrs = %{
-      context_id: page.context_id,
-      title: titleize(entity_slug),
-      slug: entity_slug,
-      page_type: "entity",
-      body: "",
-      owner: page.owner || "system",
-      created_by: "entity_linker",
-      meta: %{"auto" => true, "created_from" => "entity_linker"}
-    }
-
-    case Brain.create_page(attrs) do
-      {:ok, entity_page} ->
-        {:ok, entity_page}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        # Race: another augmenter created it concurrently — fetch and reuse.
-        case Brain.get_page_by_slug(entity_slug, page.context_id) do
-          %Page{page_type: "entity"} = existing ->
-            {:ok, existing}
-
-          _ ->
-            {:error, changeset}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp create_mentions_edge(page, entity_page) do
-    case Brain.create_relation(%{
-           source_id: page.id,
-           target_id: entity_page.id,
-           relation_type: "mentions",
-           meta: %{"auto" => true, "created_from" => "entity_linker"}
-         }) do
-      {:ok, _} -> :ok
-      # on_conflict: :nothing returns the struct unchanged on dupes — treat as ok
-      {:error, _} -> :ok
-    end
-  end
-
-  defp titleize(slug) do
-    slug
-    |> String.split("-")
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(" ")
   end
 end

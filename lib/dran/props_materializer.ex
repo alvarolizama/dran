@@ -44,8 +44,8 @@ defmodule Dran.PropsMaterializer do
 
   require Logger
 
-  alias Dran.Brain
   alias Dran.Brain.Page
+  alias Dran.PageFactory
   alias Dran.Slug
 
   @max_props_per_page 10
@@ -107,8 +107,9 @@ defmodule Dran.PropsMaterializer do
     with {:ok, {relation_type, target_type}} <- fetch_mapping(prop_key),
          {:ok, target_slug} <- normalize_value(prop_value),
          :ok <- skip_self_link(page, target_slug),
-         {:ok, target_page} <- get_or_create_target(page, target_slug, target_type),
-         :ok <- create_typed_edge(page, target_page, relation_type) do
+         {:ok, target_page} <-
+           PageFactory.get_or_create(page, target_slug, target_type, created_by: "props_materializer"),
+         :ok <- PageFactory.create_edge(page, target_page, relation_type, "props_materializer") do
       {:ok, :linked}
     else
       {:skip, reason} ->
@@ -145,68 +146,4 @@ defmodule Dran.PropsMaterializer do
 
   defp skip_self_link(%Page{slug: slug}, slug), do: {:skip, "self-link"}
   defp skip_self_link(_, _), do: :ok
-
-  defp get_or_create_target(page, target_slug, target_type) do
-    case Brain.get_page_by_slug(target_slug, page.context_id) do
-      nil ->
-        create_target_page(page, target_slug, target_type)
-
-      %Page{page_type: ^target_type} = existing ->
-        {:ok, existing}
-
-      %Page{page_type: other} ->
-        {:skip, "slug taken by #{other} page"}
-    end
-  end
-
-  defp create_target_page(page, target_slug, target_type) do
-    attrs = %{
-      context_id: page.context_id,
-      title: titleize(target_slug),
-      slug: target_slug,
-      page_type: target_type,
-      body: "",
-      owner: page.owner || "system",
-      created_by: "props_materializer",
-      meta: %{"auto" => true, "created_from" => "props_materializer"}
-    }
-
-    case Brain.create_page(attrs) do
-      {:ok, target_page} ->
-        {:ok, target_page}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        # Race: another augmenter created it concurrently — fetch and reuse.
-        case Brain.get_page_by_slug(target_slug, page.context_id) do
-          %Page{page_type: t} = existing when t == target_type ->
-            {:ok, existing}
-
-          _ ->
-            {:error, changeset}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp create_typed_edge(page, target_page, relation_type) do
-    case Brain.create_relation(%{
-           source_id: page.id,
-           target_id: target_page.id,
-           relation_type: relation_type,
-           meta: %{"auto" => true, "created_from" => "props_materializer"}
-         }) do
-      {:ok, _} -> :ok
-      # on_conflict: :nothing returns the struct unchanged on dupes — treat as ok
-      {:error, _} -> :ok
-    end
-  end
-
-  defp titleize(slug) do
-    slug
-    |> String.split("-")
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(" ")
-  end
 end

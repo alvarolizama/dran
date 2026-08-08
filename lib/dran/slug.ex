@@ -33,6 +33,20 @@ defmodule Dran.Slug do
   def slugify(_), do: "untitled"
 
   @doc """
+  Convert a slug back into a human-readable title.
+
+  Splits on hyphens, capitalizes each word, and joins with spaces.
+  `"sales-team"` becomes `"Sales Team"`.
+  """
+  @spec titleize(binary()) :: binary()
+  def titleize(slug) do
+    slug
+    |> String.split("-")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+
+  @doc """
   Generate a unique slug from a title within a context.
 
   Slugifies `title`, falls back to `fallback_type` if the result is empty,
