@@ -31,9 +31,7 @@ defmodule DranWeb.API.PageController do
 
   @doc "GET /api/pages/:slug — get a page"
   def show(conn, %{"slug" => slug, "context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -47,11 +45,7 @@ defmodule DranWeb.API.PageController do
             json(conn, %{data: page_without_body(page)})
           end
       end
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def show(conn, _params) do
@@ -80,9 +74,7 @@ defmodule DranWeb.API.PageController do
 
   @doc "PUT /api/pages/:slug — update a page"
   def update(conn, %{"slug" => slug, "context" => context_slug} = params) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -102,11 +94,7 @@ defmodule DranWeb.API.PageController do
               |> json(%{errors: format_errors(changeset)})
           end
       end
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def update(conn, _params) do
@@ -117,9 +105,7 @@ defmodule DranWeb.API.PageController do
 
   @doc "DELETE /api/pages/:slug — delete a page"
   def delete(conn, %{"slug" => slug, "context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -137,11 +123,7 @@ defmodule DranWeb.API.PageController do
               |> json(%{errors: %{detail: "could not delete"}})
           end
       end
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def delete(conn, _params) do
@@ -152,9 +134,7 @@ defmodule DranWeb.API.PageController do
 
   @doc "GET /api/pages/:slug/links — inbound + outbound relations"
   def links(conn, %{"slug" => slug, "context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -165,11 +145,7 @@ defmodule DranWeb.API.PageController do
           relations = Brain.list_relations_for_page(page.id)
           json(conn, %{data: relations})
       end
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def links(conn, _params) do
@@ -180,9 +156,7 @@ defmodule DranWeb.API.PageController do
 
   @doc "GET /api/pages/:slug/graph — subgraph centered on a page"
   def graph(conn, %{"slug" => slug, "context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -193,11 +167,7 @@ defmodule DranWeb.API.PageController do
           relations = Brain.list_relations_for_page(page.id)
           json(conn, %{data: %{node: page, edges: relations}})
       end
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def graph(conn, _params) do

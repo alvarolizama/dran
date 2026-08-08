@@ -1,16 +1,13 @@
 defmodule DranWeb.API.GraphController do
   use DranWeb, :controller
 
-  alias Dran.Brain
   import Ecto.Query
   alias Dran.Repo
   alias Dran.Brain.{Page, Relation}
 
   @doc "GET /api/graph?context=... — full graph (nodes + edges)"
   def graph(conn, %{"context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       nodes =
         Repo.all(
           from p in Page,
@@ -32,11 +29,7 @@ defmodule DranWeb.API.GraphController do
         end
 
       json(conn, %{data: %{nodes: nodes, edges: edges}})
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def graph(conn, _params) do

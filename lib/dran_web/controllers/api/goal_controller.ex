@@ -4,14 +4,9 @@ defmodule DranWeb.API.GoalController do
 
   @doc "GET /api/goals?context=... — list goals in a context"
   def index(conn, %{"context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
-      goals = Brain.list_pages(context_id: context.id, type: "goal")
-      json(conn, %{data: goals})
-    else
-      conn |> put_status(:not_found) |> json(%{errors: %{detail: "context not found"}})
-    end
+    with_context(conn, context_slug, fn conn, context ->
+      json(conn, %{data: Brain.list_pages(context_id: context.id, type: "goal")})
+    end)
   end
 
   def index(conn, _params) do
@@ -22,9 +17,7 @@ defmodule DranWeb.API.GoalController do
 
   @doc "GET /api/goals/:slug?context=... — goal detail with related todos and plans"
   def show(conn, %{"slug" => slug, "context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn |> put_status(:not_found) |> json(%{errors: %{detail: "goal not found"}})
@@ -51,9 +44,7 @@ defmodule DranWeb.API.GoalController do
 
           json(conn, %{data: %{goal: goal, todos: goal_todos, plans: goal_plans}})
       end
-    else
-      conn |> put_status(:not_found) |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def show(conn, _params) do

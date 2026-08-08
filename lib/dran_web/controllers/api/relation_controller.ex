@@ -10,9 +10,8 @@ defmodule DranWeb.API.RelationController do
           params
       ) do
     relation_type = params["relation_type"] || "related"
-    context = Brain.get_context_by_slug(context_slug)
 
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       case Brain.create_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
         {:ok, relation} ->
           conn
@@ -34,11 +33,7 @@ defmodule DranWeb.API.RelationController do
           |> put_status(:unprocessable_entity)
           |> json(%{errors: format_errors(changeset)})
       end
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def create(conn, %{"source_id" => _, "target_id" => _} = params) do

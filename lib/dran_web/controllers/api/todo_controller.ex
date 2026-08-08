@@ -5,9 +5,7 @@ defmodule DranWeb.API.TodoController do
 
   @doc "GET /api/todos?context=...&status=... — list todos in a context"
   def index(conn, %{"context" => context_slug} = params) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       opts = [context_id: context.id, type: "todo", include_body: false]
 
       opts =
@@ -17,11 +15,8 @@ defmodule DranWeb.API.TodoController do
           opts
         end
 
-      todos = Brain.list_pages(opts)
-      json(conn, %{data: todos})
-    else
-      conn |> put_status(:not_found) |> json(%{errors: %{detail: "context not found"}})
-    end
+      json(conn, %{data: Brain.list_pages(opts)})
+    end)
   end
 
   def index(conn, _params) do

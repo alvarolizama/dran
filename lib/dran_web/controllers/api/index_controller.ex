@@ -5,9 +5,7 @@ defmodule DranWeb.API.IndexController do
 
   @doc "GET /api/index?context=... — wiki index (all page slugs + titles)"
   def index(conn, %{"context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
+    with_context(conn, context_slug, fn conn, context ->
       pages = Brain.list_pages(context_id: context.id, limit: 10_000)
 
       index =
@@ -25,11 +23,7 @@ defmodule DranWeb.API.IndexController do
         end)
 
       json(conn, %{data: index})
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    end)
   end
 
   def index(conn, _params) do

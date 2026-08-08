@@ -5,16 +5,9 @@ defmodule DranWeb.API.LintController do
 
   @doc "GET /api/lint?context=..."
   def lint(conn, %{"context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
-
-    if context do
-      report = Brain.lint(context.id)
-      json(conn, %{data: report})
-    else
-      conn
-      |> put_status(:not_found)
-      |> json(%{errors: %{detail: "context not found"}})
-    end
+    with_context(conn, context_slug, fn conn, context ->
+      json(conn, %{data: Brain.lint(context.id)})
+    end)
   end
 
   def lint(conn, _params) do
