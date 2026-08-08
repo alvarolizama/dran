@@ -43,6 +43,7 @@ defmodule DranWeb do
       use Gettext, backend: DranWeb.Gettext
 
       import Plug.Conn
+      import DranWeb.ControllerHelpers
 
       unquote(verified_routes())
     end

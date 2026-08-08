@@ -259,12 +259,4 @@ defmodule DranWeb.API.PageController do
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
-
-  defp format_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, val}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(val))
-      end)
-    end)
-  end
 end
