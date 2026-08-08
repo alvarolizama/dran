@@ -53,7 +53,11 @@ defmodule DranWeb.TodoLive do
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <.link navigate={~p"/kanban"} class="btn btn-ghost btn-sm">
+            <.link
+              :if={Brain.page_type_enabled?(@context, "todo")}
+              navigate={~p"/kanban"}
+              class="btn btn-ghost btn-sm"
+            >
               <.icon name="hero-view-columns" class="w-4 h-4" /> {gettext("Board")}
             </.link>
             <button

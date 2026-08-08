@@ -35,10 +35,32 @@ defmodule DranWeb.CommandPalette do
 
   @impl true
   def update(%{context_slug: context_slug} = assigns, socket) do
+    disabled_types =
+      case context_slug && Brain.get_context_by_slug(context_slug) do
+        %{disabled_page_types: disabled} when is_list(disabled) -> disabled
+        _ -> []
+      end
+
+    # Map quick action keys to page types for filtering
+    action_page_types = %{
+      "New Note" => "note",
+      "New Todo" => "todo",
+      "New Project" => "project",
+      "Go to Kanban" => "todo",
+      "Go to Todos" => "todo"
+    }
+
+    filtered_actions =
+      Enum.reject(@quick_actions, fn action ->
+        page_type = Map.get(action_page_types, action.label)
+        page_type && page_type in disabled_types
+      end)
+
     {:ok,
      socket
      |> assign(:context_slug, context_slug)
-     |> assign(:id, assigns[:id] || "command-palette")}
+     |> assign(:id, assigns[:id] || "command-palette")
+     |> assign(:quick_actions, filtered_actions)}
   end
 
   @impl true
@@ -218,7 +240,7 @@ defmodule DranWeb.CommandPalette do
 
   def handle_event("navigate_action", %{"index" => index_str}, socket) do
     index = String.to_integer(index_str)
-    action = Enum.at(@quick_actions, index)
+    action = Enum.at(socket.assigns.quick_actions, index)
 
     if action do
       {:noreply, push_navigate(socket, to: action.path)}
@@ -231,16 +253,17 @@ defmodule DranWeb.CommandPalette do
   # Helpers
   # ---------------------------------------------------------------------------
 
-  defp list_size(%{query: q}) when q in ["", nil] do
-    length(@quick_actions)
+  defp list_size(%{query: q, quick_actions: qa}) when q in ["", nil] do
+    length(qa)
   end
 
   defp list_size(%{results: results}) do
     max(length(results), 1)
   end
 
-  defp resolve_selected_path(%{query: q, selected: selected}) when q in ["", nil] do
-    Enum.at(@quick_actions, selected, %{path: "/"}).path
+  defp resolve_selected_path(%{query: q, selected: selected, quick_actions: qa})
+       when q in ["", nil] do
+    Enum.at(qa, selected, %{path: "/"}).path
   end
 
   defp resolve_selected_path(%{results: [], selected: _}) do

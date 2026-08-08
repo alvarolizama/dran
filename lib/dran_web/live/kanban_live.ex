@@ -319,37 +319,42 @@ defmodule DranWeb.KanbanLive do
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
-    socket =
-      assign(socket,
-        context: context,
-        kanban_columns: @kanban_columns,
-        badge_styles: @badge_styles,
-        filter_project: "all",
-        filter_goal: "all",
-        filter_plan: "all",
-        filter_project_options: [],
-        filter_goal_options: [],
-        filter_plan_options: [],
-        all_todos: [],
-        filtered_todos: [],
-        filtered_count: 0,
-        show_form: false,
-        priority_options: @priorities,
-        status_options: @quick_add_statuses,
-        goal_options: [{gettext("No goal"), ""}],
-        project_enabled: Brain.page_type_enabled?(context, "project"),
-        goal_enabled: Brain.page_type_enabled?(context, "goal"),
-        plan_enabled: Brain.page_type_enabled?(context, "plan"),
-        form: %{
-          "title" => "",
-          "priority" => "medium",
-          "due_date" => "",
-          "goal_slug" => "",
-          "kanban_status" => "backlog"
-        }
-      )
+    if context && Brain.page_type_enabled?(context, "todo") do
+      socket =
+        assign(socket,
+          context: context,
+          kanban_columns: @kanban_columns,
+          badge_styles: @badge_styles,
+          filter_project: "all",
+          filter_goal: "all",
+          filter_plan: "all",
+          filter_project_options: [],
+          filter_goal_options: [],
+          filter_plan_options: [],
+          all_todos: [],
+          filtered_todos: [],
+          filtered_count: 0,
+          show_form: false,
+          priority_options: @priorities,
+          status_options: @quick_add_statuses,
+          goal_options: [{gettext("No goal"), ""}],
+          project_enabled: Brain.page_type_enabled?(context, "project"),
+          goal_enabled: Brain.page_type_enabled?(context, "goal"),
+          plan_enabled: Brain.page_type_enabled?(context, "plan"),
+          form: %{
+            "title" => "",
+            "priority" => "medium",
+            "due_date" => "",
+            "goal_slug" => "",
+            "kanban_status" => "backlog"
+          }
+        )
 
-    {:ok, socket}
+      {:ok, socket}
+    else
+      # Todos disabled in this context (or no context) — kanban has nothing to show.
+      {:ok, redirect(socket, to: ~p"/")}
+    end
   end
 
   # Lee query params project/goal/plan (§5.4) para que /kanban?project=slug

@@ -101,6 +101,7 @@ defmodule DranWeb.DashboardLive do
             </div>
             <div class="flex gap-2">
               <.link
+                :if={Brain.page_type_enabled?(@context, "todo")}
                 navigate={~p"/kanban"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
