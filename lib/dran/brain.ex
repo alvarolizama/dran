@@ -715,9 +715,10 @@ defmodule Dran.Brain do
   """
   def broadcast_page_change(context_id, action, page) do
     Phoenix.PubSub.broadcast(Dran.PubSub, "brain:#{context_id}", {:page_changed, action, page})
-    # Invalidate the in-memory graph cache so the next /api/graph-json
-    # request rebuilds from the DB (the data changed).
-    Dran.GraphCache.invalidate(context_id)
+    # Invalidate granularly: the page cache entry, the page's subgraph, and
+    # the global graph (any page change affects the global view).
+    Dran.GraphCache.invalidate_page_slug(page.slug, context_id)
+    if page.id, do: Dran.GraphCache.invalidate_page(page.id, context_id)
   rescue
     # PubSub may not be running during release tasks (bin/dran eval, seeds)
     # where only the repo is started — the broadcast is a UI notification,

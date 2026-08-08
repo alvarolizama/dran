@@ -10,6 +10,7 @@ defmodule DranWeb.NoteLive do
   alias DranWeb.Plugs.Auth
 
   @page_type "note"
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -112,6 +113,7 @@ defmodule DranWeb.NoteLive do
     """
   end
 
+  @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
@@ -130,6 +132,10 @@ defmodule DranWeb.NoteLive do
         socket
       end
 
+    if context && connected?(socket) do
+      Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
+    end
+
     {:ok,
      assign(socket,
        context: context,
@@ -142,6 +148,7 @@ defmodule DranWeb.NoteLive do
      )}
   end
 
+  @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
     {socket, context} = Auth.resolve_context(socket, params)
 
@@ -225,6 +232,7 @@ defmodule DranWeb.NoteLive do
 
   # ── Graph events (from GraphEvents import) ──
 
+  @impl true
   def handle_event("filter_archived", %{"type" => type}, socket) do
     {:noreply, assign(socket, archived_filter: type)}
   end
@@ -294,4 +302,36 @@ defmodule DranWeb.NoteLive do
   defp handle_progress(:file, _entry, socket) do
     {:noreply, socket}
   end
+
+  # ── PubSub: real-time update when a page changes ──
+
+  @impl true
+  def handle_info({:page_changed, _action, changed_page}, socket) do
+    if socket.assigns[:page] && socket.assigns.page.id == changed_page.id do
+      page = Brain.get_page(changed_page.id)
+
+      if page do
+        rendered_body =
+          render_markdown(page.body,
+            context_id: page.context_id,
+            inline_links: Map.get(page.meta || %{}, "inline_links", [])
+          )
+
+        form = Brain.change_page(page) |> to_form(as: :page)
+
+        {:noreply,
+         assign(socket,
+           page: page,
+           rendered_body: rendered_body,
+           form: form
+         )}
+      else
+        {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
 end

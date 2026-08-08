@@ -229,7 +229,7 @@ defmodule DranWeb.GraphLive do
   end
 
   defp load_show_graph(socket, page) do
-    %{nodes: nodes, edges: edges} = GraphHelpers.build_page_subgraph(page)
+    %{nodes: nodes, edges: edges} = Dran.GraphCache.get_subgraph(page.id, page.context_id)
 
     # Show mode: all types visible (including the operational layer — the
     # subgraph is local context, not the global filtered view).

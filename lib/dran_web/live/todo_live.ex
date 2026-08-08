@@ -442,17 +442,35 @@ defmodule DranWeb.TodoLive do
   # ──────────────────────────────────────────────────────────────────────────
 
   @impl true
-  def handle_info({:page_changed, _action, _page}, socket) do
-    # A page changed (agent, MCP, another tab) — reload the list if we're on
-    # the index so moved/created/archived todos appear in real time.
-    if socket.assigns.live_action == :index and socket.assigns.context do
-      {:noreply,
-       assign(socket,
-         items: Brain.list_todos(socket.assigns.context.id),
-         archived_items: Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
-       )}
-    else
-      {:noreply, socket}
+  def handle_info({:page_changed, _action, changed_page}, socket) do
+    cond do
+      # Index: reload the list so moved/created/archived todos appear in real time
+      socket.assigns.live_action == :index and socket.assigns.context ->
+        {:noreply,
+         assign(socket,
+           items: Brain.list_todos(socket.assigns.context.id),
+           archived_items: Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
+         )}
+
+      # Show: if the page we're viewing changed, reload it
+      socket.assigns[:page] && socket.assigns.page.id == changed_page.id ->
+        page = Brain.get_page(changed_page.id)
+
+        if page do
+          rendered_body =
+            render_markdown(page.body,
+              context_id: page.context_id,
+              inline_links: Map.get(page.meta || %{}, "inline_links", [])
+            )
+
+          form = Brain.change_page(page) |> to_form(as: :page)
+          {:noreply, assign(socket, page: page, rendered_body: rendered_body, form: form)}
+        else
+          {:noreply, socket}
+        end
+
+      true ->
+        {:noreply, socket}
     end
   end
 
