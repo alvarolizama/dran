@@ -100,8 +100,29 @@ Estas 5 keys en `meta.props` crean edges solas durante la augmentación
 | `language` | `written_in` | entity | `language: "elixir"` |
 | `framework` | `built_with` | entity | `framework: "phoenix"` |
 
-Cualquier otra key se guarda sin edge. **Backfill:** Settings → Brain →
-"Run backfill" re-materializa props de páginas existentes.
+**Cualquier otra key se guarda sin edge** — es metadata pasiva: se puede
+filtrar al buscar, pero el grafo no la ve (ni PageRank ni communities).
+
+**Límites del materializer** (verificado en `lib/dran/props_materializer.ex`):
+- Máx **10 props** por página — el resto se ignora al materializar.
+- **Solo strings** como valores — integers/booleans se ignoran.
+- Corre en el augmenter tras cada create/update (idempotente).
+- **Backfill:** Settings → Brain → "Run backfill" re-materializa props de
+  páginas existentes.
+
+### Buscar por props (AND)
+
+Tanto `dran_search` como `dran_list_pages` aceptan `props` — la página debe
+tener TODOS los pares key-value (lógica AND):
+
+```
+dran_search({ query: "maria", props: { role: "sales" } })
+dran_list_pages({ type: "entity", props: { role: "sales", tier: "vip" } })
+```
+
+- `dran_list_pages` filtra en la DB (`meta->'props'->>key = value`);
+  `dran_search` filtra los resultados rankeados.
+- Funciona para las 5 keys materializadas Y para custom keys.
 
 ### Independent slugs (link model)
 
@@ -171,6 +192,8 @@ dran_get_links({ slug: "a" })   → inbound + outbound
 | `dran_delete_relation` | `from`, `to` | Eliminado |
 | `dran_rename_slug` | `old_slug`, `new_slug` | Renombrado + embeds reescritos |
 | `dran_update_page` | `slug`, `meta.props` | Props → edges automáticos |
+| `dran_search` | `query`, `props` | Filtra resultados por props (AND) |
+| `dran_list_pages` | `type`, `props` | Lista filtrada por props (AND) |
 
 ## Cuándo NO usar este skill
 

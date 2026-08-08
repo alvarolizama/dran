@@ -247,6 +247,12 @@ is inference-independent — works even with the LLM off.
 **Backfill**: Settings → Brain → "Run backfill" re-materializes props for
 every existing page with non-empty `meta.props` (Dran.PropsBackfill).
 
+**Buscar por props (AND)** — `dran_search` y `dran_list_pages` aceptan
+`props: { key: value }` y exigen TODOS los pares:
+`dran_search({ query, props: { role: "sales" } })` /
+`dran_list_pages({ type: "entity", props: { tier: "vip" } })`. Límites: máx
+10 props por página, solo strings como valores.
+
 El uso operativo de props y relaciones vive en `relations-flow`.
 
 ### Per-context page type disabling
@@ -449,6 +455,8 @@ Reglas:
 - **Nunca respondas desde el excerpt del search** — `dran_get_page` primero.
 - `dran_search` acepta `type` para acotar (ej `type: "todo"`).
 - `dran_list_pages` con `status` filtra todos por kanban; `"none"` = huérfanos.
+- `dran_search` / `dran_list_pages` con `props: { key: value }` filtran por
+  custom properties (AND — todos los pares deben coincidir).
 - Para overview completo, lee el resource `wiki://{context}/index` (una
   llamada).
 

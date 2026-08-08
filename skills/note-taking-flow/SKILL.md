@@ -127,10 +127,11 @@ dran_create_page({ page_type: "concept", title: "Circuit Breaker",
   meta: { kind: "pattern", domain: "resilience" } })
 ```
 
-**Entity:**
+**Entity (con props):**
 ```
 dran_create_page({ page_type: "entity", title: "Anthropic",
-  meta: { kind: "company", external_url: "https://..." } })
+  meta: { kind: "company", external_url: "https://...",
+          props: { location: "sf", framework: "claude" } } })
 ```
 
 **Reference (con la regla del por qué):**
@@ -150,6 +151,23 @@ dran_create_page({ page_type: "reference", title: "Paper X",
 
 **Notas de código:** `meta.kind: "code"` + `meta.language: "elixir"` para
 filtrar por lenguaje.
+
+### Props al capturar (meta.props)
+
+Cualquier página puede llevar `meta.props`: bag libre key-value (solo
+strings, máx 10). Las keys `role`, `tier`, `location`, `language`,
+`framework` materializan edges automáticos; las custom keys se guardan y se
+pueden filtrar al buscar, pero no generan edge (detalle en `relations-flow`).
+
+**Dónde natural:** entity de tool → `language` + `framework`; entity de
+persona → `role` + `location`; concept con tier → `tier`; reference → nada
+(usa `source_url`/`kind`).
+
+**Buscar por props (AND):**
+```
+dran_search({ query: "elixir", props: { language: "elixir" } })
+dran_list_pages({ type: "entity", props: { framework: "phoenix" } })
+```
 
 ### Brainstorming (generar ideas)
 

@@ -116,7 +116,8 @@ dran_create_page({
   page_type: "reference",
   title: "<título de la fuente>",
   body: "## Por qué\n\n<para qué la guardo, qué aporta>\n\n## Hallazgos clave\n\n- ...",
-  meta: { kind: "article", source_url: "https://..." },
+  meta: { kind: "article", source_url: "https://...",
+          props: { language: "elixir" } },
   owner: "alvaro", created_by: "agent"
 })
 ```
@@ -137,6 +138,24 @@ dran_create_page({
 ```
 dran_create_relation({ from: "<query-slug>", to: "<reference-slug>", relation_type: "related" })
 dran_create_relation({ from: "<concept-slug>", to: "<query-slug>", relation_type: "part_of" })
+```
+
+### Props al capturar (meta.props)
+
+`meta.props` es un bag libre key-value (solo strings, máx 10). Las keys
+`role`, `tier`, `location`, `language`, `framework` materializan edges
+automáticos (ej. `language: "elixir"` → `written_in` → entity "elixir"); las
+custom keys se guardan y se pueden filtrar al buscar, pero no generan edge
+(detalle en `relations-flow`).
+
+**Dónde natural en research:** reference de paper → `language`; entity de la
+herramienta investigada → `framework` + `language`; entity de la empresa →
+`location` + `role`.
+
+**Buscar por props (AND):**
+```
+dran_search({ query: "elixir", props: { language: "elixir" } })
+dran_list_pages({ type: "reference", props: { language: "elixir" } })
 ```
 
 **Research interno del brain (sin internet):** el agente `graph_rag` responde

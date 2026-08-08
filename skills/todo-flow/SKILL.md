@@ -42,7 +42,7 @@ flowchart TD
   EXISTS -->|No| ASSIGNEE["CLARIFY assignee\nalvaro / agent / otro\nSIEMPRE pregunta"]
   ASSIGNEE --> TYPE{¿Qué variante?}
   TYPE -->|"acción manual\nsimple"| SIMPLE["Template SIMPLE\nsolo esqueleto base"]
-  TYPE -->|"la ejecuta un agente\ncon entregable"| AGENT["Template AGENTE\n+ Entregable + Pasos"]
+  TYPE -->|"la ejecuta un agente\ncon entregable"| AGENT["Template AGENTE\n+ Entregable + Pasos\ncon mermaid"]
   TYPE -->|"feature de\ndesarrollo"| DEV["Template DEV\n+ Fases con mermaid"]
   SIMPLE --> CREATE["CREATE\ndran_create_todo\nkanban_status: backlog"]
   AGENT --> CREATE
@@ -98,6 +98,10 @@ no hay forma honesta de cerrarlo.
    No forzar `project_slug`/`goal_slug`/`plan_slug` si no aplican.
 4. **Un `in_progress` a la vez** — si vas a empezar otro, mueve el actual
    primero.
+5. **Pasos de ejecución con mermaid** — variantes 2 y 3: los pasos van como
+   diagrama mermaid con verbos (`READ` / `EDIT` / `CREATE` / `RUN` / `VERIFY`
+   / `ASK`), descritos uno por uno; el último paso SIEMPRE valida el
+   entregable, y el flujo mueve el kanban (`in_progress` → `done`).
 
 ## Shaping — questioning antes de crear
 
@@ -138,7 +142,11 @@ Comprar los boletos de avión Mérida–CDMX para el 15 de septiembre.
 
 ### Variante 2 — Agente con entregable
 
-Esqueleto **+** `## Entregable` **+** `## Pasos de ejecución`:
+Esqueleto **+** `## Entregable` **+** `## Pasos de ejecución` (mermaid de
+verbos + descripción). El mermaid es el **flujo dependiente/secuencial** del
+pedido: nodos con verbo (`READ` / `RUN` / `CREATE` / `VERIFY`), el último
+paso SIEMPRE valida el entregable, y el flujo mueve el kanban
+(`in_progress` → `done`):
 
 ```markdown
 ## Qué hacer
@@ -152,9 +160,23 @@ existentes.
 
 ## Pasos de ejecución
 
-1. Leer lib/dran/mcp.ex y extraer las tools registradas
-2. Para cada tool, verificar si tiene test en test/dran/mcp_test.exs
-3. Publicar la tabla como comentario
+```mermaid
+flowchart TD
+  K1["MOVER kanban → in_progress"] --> P1["READ lib/dran/mcp.ex\nextraer tools registradas"]
+  P1 --> P2["READ test/dran/mcp_test.exs\nverificar tests por tool"]
+  P2 --> P3["CREATE comentario\npublicar tabla completa"]
+  P3 --> V["VERIFY entregable\n17 tools + descripción + tests"]
+  V -->|"no pasa"| P3
+  V -->|"pasa"| K2["MOVER kanban → done"]
+```
+
+1. **MOVER kanban → in_progress** — el todo arranca en ejecución.
+2. **READ lib/dran/mcp.ex** — extraer las tools registradas.
+3. **READ test/dran/mcp_test.exs** — verificar cobertura de tests por tool.
+4. **CREATE comentario** — publicar la tabla tool/descripción/tests.
+5. **VERIFY entregable** — el comentario cumple los criterios de
+   `## Cómo verificar`; si no pasa, corregir y re-verificar.
+6. **MOVER kanban → done** — solo con la validación en verde.
 
 ## Cómo verificar
 
@@ -166,8 +188,11 @@ existentes.
 ### Variante 3 — Feature de desarrollo (con fases)
 
 Esqueleto **+** `## Entregable` **+** mermaid `## Fases` **+** detalle por
-fase **+** verificación global. Las fases son la unidad de ejecución para
-subagentes — **disjuntas** (archivos distintos) o serializadas.
+fase **+** verificación global del entregable. Los pasos de ejecución SON
+las fases: el mermaid es el DAG (nodos = fases con verbo, flechas =
+dependencias), cada fase se describe con qué cambia (código) y cómo se
+prueba, el último paso SIEMPRE valida el entregable y el flujo mueve el
+kanban. Fases **disjuntas** (archivos distintos) o serializadas.
 
 ```markdown
 ## Qué hacer
@@ -183,18 +208,22 @@ PR con la lógica de routing + tests verdes.
 
 ```mermaid
 flowchart TD
-  F1["Fase 1: Lógica sticky\n(lib/routing/router.ex)"] --> F2["Fase 2: Tests\n(test/routing/router_test.exs)"]
-  F2 --> F3["Fase 3: VERIFY global\ncompile + format"]
+  K1["MOVER kanban → in_progress"] --> F1["Fase 1: EDIT router.ex\nlógica sticky"]
+  F1 --> F2["Fase 2: CREATE router_test.exs\ntests de sticky"]
+  F2 --> F3["Fase 3: VERIFY entregable\ncompile + format + suite"]
+  F3 -->|"pasa"| K2["MOVER kanban → done\n+ reportar PR"]
+  F3 -->|"no pasa"| FIX["Corregir y re-verificar"]
+  FIX --> F3
 ```
 
-### Fase 1: Lógica sticky
+### Fase 1: EDIT router.ex — lógica sticky
 
 **Qué cambia:** `router.ex` gana selección sticky por member.
 
-**Instrucciones:**
-1. Leer router.ex actual
-2. Agregar selección sticky
-3. ...
+**Instrucciones (verbos):**
+1. READ lib/routing/router.ex — leer la selección de upstream actual
+2. EDIT lib/routing/router.ex — agregar selección sticky por member
+3. RUN mix format lib/routing/router.ex
 
 **Snippet de código** (real, verificado contra el repo — nunca inventado):
 ```elixir
@@ -209,6 +238,7 @@ flowchart TD
 - [ ] `mix compile --warnings-as-errors` pasa
 - [ ] Suite completa verde
 - [ ] Diff solo toca archivos del scope
+- [ ] Entregable (PR) existe y es revisable
 ```
 
 **La ejecución de estas fases** (despacho de subagentes, gates entre fases,
