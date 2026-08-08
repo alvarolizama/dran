@@ -42,6 +42,12 @@ defmodule DranWeb.GoalLive do
           editing={@editing}
         >
           <:actions>
+            <.link navigate={~p"/goals"} class="btn btn-primary btn-sm">
+              <.icon name="hero-arrow-left" class="size-4" /> Back
+            </.link>
+            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
+            </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
               <.icon name="hero-eye" class="size-4" /> {gettext("View")}
             </.link>
@@ -51,12 +57,6 @@ defmodule DranWeb.GoalLive do
               class="btn btn-ghost btn-sm"
             >
               <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
-            </.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
-              <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
-            </.link>
-            <.link navigate={~p"/goals"} class="btn btn-primary btn-sm">
-              <.icon name="hero-arrow-left" class="size-4" /> Back
             </.link>
           </:actions>
 
