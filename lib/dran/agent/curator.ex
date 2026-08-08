@@ -4,7 +4,7 @@ defmodule Dran.Agent.Curator do
 
   Reviews pairs of pages with very similar embeddings, decides which are
   genuine duplicates vs. distinct content, flags contested pages, and
-  writes a report note explaining its decisions.
+  writes a report page explaining its decisions.
 
   Enforces a hard limit of `@max_flags` (20) contested flags per session.
 
@@ -13,7 +13,8 @@ defmodule Dran.Agent.Curator do
       embedding distance < 0.05.
     * `flag_contested` — sets `kb_contested = true` on pages by slug.
     * `lint_report` — delegates to `Brain.lint/1`.
-    * `create_note` — creates a `note` page with the curator's report.
+    * `create_report` — creates a `report` page (kind `log`) with the
+      curator's report.
     * `done` — finishes the session.
   """
 
@@ -112,9 +113,10 @@ defmodule Dran.Agent.Curator do
       %{
         "type" => "function",
         "function" => %{
-          "name" => "create_note",
+          "name" => "create_report",
           "description" =>
-            "Create a note page with the curator report. The title will be 'Curator report <date>'.",
+            "Create a report page (page_type 'report', kind 'log') with the curator report. " <>
+              "The title will be 'Curator report <date>'.",
           "parameters" => %{
             "type" => "object",
             "properties" => %{
@@ -172,14 +174,14 @@ defmodule Dran.Agent.Curator do
        per session.
     4. Optionally call `lint_report` to get an overview of orphan, stale, and
        contested pages.
-    5. Call `create_note` with a markdown report explaining your decisions:
+    5. Call `create_report` with a markdown report explaining your decisions:
        which pairs you reviewed, which you flagged as contested and why,
        and which you left alone.
     6. Call `done` with a short summary.
 
     RULES:
     - Only flag pages that genuinely need attention. Do not flag everything.
-    - The report note should be concise but informative.
+    - The report page should be concise but informative.
     - Be efficient: review the pairs, make decisions, write the report, finish.
     """
   end
@@ -307,7 +309,7 @@ defmodule Dran.Agent.Curator do
     {{:ok, report}, state}
   end
 
-  def execute_tool("create_note", args, %State{} = state) do
+  def execute_tool("create_report", args, %State{} = state) do
     body = args["body"] || ""
 
     if String.trim(body) == "" do
@@ -320,10 +322,10 @@ defmodule Dran.Agent.Curator do
         context_id: state.session.context_id,
         title: title,
         body: body,
-        page_type: "note",
+        page_type: "report",
         created_by: "curator",
         owner: "curator",
-        meta: %{"agent_session_id" => state.session.id}
+        meta: %{"kind" => "log", "agent_session_id" => state.session.id}
       }
 
       case Brain.create_page(page_attrs) do
@@ -377,7 +379,7 @@ defmodule Dran.Agent.Curator do
   @impl true
   def gathered_summary(%State{flags_made: flags, duplicate_pairs: pairs}) do
     "Curator has found #{length(pairs)} duplicate pair(s) and flagged #{flags} page(s). " <>
-      "Maximum flags is #{@max_flags}. Write your report with `create_note` and call `done`."
+      "Maximum flags is #{@max_flags}. Write your report with `create_report` and call `done`."
   end
 
   # ── Helpers ────────────────────────────────────────────────────────────────

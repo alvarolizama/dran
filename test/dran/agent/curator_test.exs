@@ -6,8 +6,8 @@ defmodule Dran.Agent.CuratorTest do
   #      and verifies the self-join returns only the close pair.
   #   2. Unit test for flag_contested — verifies kb_contested is set to true.
   #   3. E2E test with Req.Test stub — the LLM calls find_duplicates →
-  #      flag_contested → create_note → done; verifies the note was created
-  #      and the flags were applied.
+  #      flag_contested → create_report → done; verifies the report page was
+  #      created and the flags were applied.
   use Dran.DataCase, async: false
 
   alias Dran.Agent.{Curator, Session}
@@ -304,7 +304,7 @@ defmodule Dran.Agent.CuratorTest do
 
   # ── E2E test with Req.Test stub ────────────────────────────────────────────
 
-  describe "E2E: LLM calls find_duplicates → flag_contested → create_note → done" do
+  describe "E2E: LLM calls find_duplicates → flag_contested → create_report → done" do
     setup do
       original = Application.get_env(:dran, :inference)
 
@@ -350,11 +350,11 @@ defmodule Dran.Agent.CuratorTest do
       {:ok, context: context}
     end
 
-    test "full curator workflow creates a report note and flags duplicates", %{context: ctx} do
+    test "full curator workflow creates a report page and flags duplicates", %{context: ctx} do
       # The LLM stub simulates a 4-step conversation:
       # Step 1: call find_duplicates
       # Step 2: call flag_contested with the duplicate slugs
-      # Step 3: call create_note with a report body
+      # Step 3: call create_report with a report body
       # Step 4: call done
       #
       # We use a counter to serve different responses on each call.
@@ -363,7 +363,9 @@ defmodule Dran.Agent.CuratorTest do
       Req.Test.stub(Dran.Inference.Client, fn conn ->
         case conn.request_path do
           "/v1/embeddings" ->
-            # Answer embedding requests (from Brain.create_page on create_note)
+            # Answer embedding requests. Report pages skip embeddings
+            # entirely (page_type "report" has no embeddings capability), so
+            # this branch is defensive — the E2E flow should never hit it.
             Req.Test.json(conn, %{
               "object" => "list",
               "data" => [
@@ -401,7 +403,7 @@ defmodule Dran.Agent.CuratorTest do
                     "id" => "call-3",
                     "type" => "function",
                     "function" => %{
-                      "name" => "create_note",
+                      "name" => "create_report",
                       "arguments" =>
                         ~s({"body": "## Curator Report\\n\\nReviewed 1 duplicate pair. Flagged dup-a and dup-b as contested."})
                     }
@@ -449,13 +451,16 @@ defmodule Dran.Agent.CuratorTest do
       assert session.status == "done"
       assert session.summary =~ "Reviewed duplicates"
 
-      # Verify the note was created
+      # Verify the report page was created
       date_str = Date.utc_today() |> Date.to_iso8601()
-      note = Brain.get_page_by_slug("curator-report-" <> date_str, ctx.id)
-      assert note != nil
-      assert note.title =~ "Curator report"
-      assert note.created_by == "curator"
-      assert note.body =~ "Curator Report"
+      report = Brain.get_page_by_slug("curator-report-" <> date_str, ctx.id)
+      assert report != nil
+      assert report.title =~ "Curator report"
+      assert report.page_type == "report"
+      assert report.created_by == "curator"
+      assert report.body =~ "Curator Report"
+      assert report.meta["kind"] == "log"
+      assert report.meta["agent_session_id"] == session.id
 
       # Verify the pages were flagged as contested
       page_a = Brain.get_page_by_slug("dup-a", ctx.id)

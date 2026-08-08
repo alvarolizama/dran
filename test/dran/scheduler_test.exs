@@ -40,14 +40,23 @@ defmodule Dran.SchedulerTest do
 
     test "production config (config.exs) declares the expected jobs" do
       # Read the source of config.exs so the assertion locks in the schedule
-      # and task pairs for curator_daily independent of the test-env guard.
+      # and task pairs independent of the test-env guard. All tasks route
+      # through Dran.Jobs.run_scheduled/1 (job control plane: toggles + run
+      # reports); the registry in Dran.Jobs holds the actual job MFAs.
       config_path = Path.join([File.cwd!(), "config", "config.exs"])
       source = File.read!(config_path)
 
-      assert source =~ "curator_daily:"
-      assert source =~ ~s(schedule: "0 6 * * *")
-      assert source =~ "Dran.Agent.Curator"
-      assert source =~ ":run_scheduled"
+      for {key, cron} <- [
+            {:curator_daily, "0 6 * * *"},
+            {:pagerank_nightly, "0 3 * * *"},
+            {:community_summaries_nightly, "30 3 * * *"},
+            {:graph_maintenance_nightly, "45 3 * * *"},
+            {:link_gardener_weekly, "0 7 * * 0"}
+          ] do
+        assert source =~ "#{key}:"
+        assert source =~ ~s(schedule: "#{cron}")
+        assert source =~ ~s({Dran.Jobs, :run_scheduled, [:#{key}]})
+      end
     end
   end
 end

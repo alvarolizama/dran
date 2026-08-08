@@ -48,7 +48,7 @@ Tools like `gather_stats` or `find_duplicates` query the DB directly via
 
 ### Tools that create pages
 
-Follow the `create_note` / `create_review_page` pattern:
+Follow the `create_report` / `create_review_page` pattern:
 
 - Validate required args (return `{{:error, "msg"}, state}` if missing).
 - Build `page_attrs` map with `context_id`, `title`, `body`, `page_type`,

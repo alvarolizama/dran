@@ -68,6 +68,10 @@ config :phoenix, :json_library, Jason
 
 # Quantum scheduler jobs
 #
+# Every task routes through `Dran.Jobs.run_scheduled/1`, which honors the
+# runtime enable/disable toggles (Dran.Settings "disabled_jobs") and writes a
+# `report` page (kind: log) per run. The job registry lives in `Dran.Jobs`.
+#
 # Defined for dev/prod only. `config/test.exs` sets `jobs: []` to disable the
 # scheduler during the test suite. We guard with `config_env() != :test` here
 # because `Config` deep-merges keyword lists, so an empty `jobs: []` in
@@ -77,23 +81,23 @@ if config_env() != :test do
     jobs: [
       curator_daily: [
         schedule: "0 6 * * *",
-        task: {Dran.Agent.Curator, :run_scheduled, []}
+        task: {Dran.Jobs, :run_scheduled, [:curator_daily]}
       ],
       pagerank_nightly: [
         schedule: "0 3 * * *",
-        task: {Dran.Graph, :refresh_all_scheduled, []}
+        task: {Dran.Jobs, :run_scheduled, [:pagerank_nightly]}
       ],
       community_summaries_nightly: [
         schedule: "30 3 * * *",
-        task: {Dran.Graph.CommunitySummaries, :generate_all_scheduled, []}
+        task: {Dran.Jobs, :run_scheduled, [:community_summaries_nightly]}
       ],
       graph_maintenance_nightly: [
         schedule: "45 3 * * *",
-        task: {Dran.Graph.Maintenance, :sweep_scheduled, []}
+        task: {Dran.Jobs, :run_scheduled, [:graph_maintenance_nightly]}
       ],
       link_gardener_weekly: [
         schedule: "0 7 * * 0",
-        task: {Dran.Agent.LinkGardener, :run_scheduled, []}
+        task: {Dran.Jobs, :run_scheduled, [:link_gardener_weekly]}
       ]
     ]
 end
