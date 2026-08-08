@@ -40,7 +40,8 @@ defmodule DranWeb.ControllerHelpers do
         end)
       end
   """
-  @spec with_context(Plug.Conn.t(), binary(), (Plug.Conn.t(), Dran.Brain.Context.t() -> Plug.Conn.t())) ::
+  @spec with_context(Plug.Conn.t(), binary(), (Plug.Conn.t(), Dran.Brain.Context.t() ->
+                                                 Plug.Conn.t())) ::
           Plug.Conn.t()
   def with_context(conn, context_slug, fun) do
     case Dran.Brain.get_context_by_slug(context_slug) do

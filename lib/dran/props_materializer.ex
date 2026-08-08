@@ -108,7 +108,9 @@ defmodule Dran.PropsMaterializer do
          {:ok, target_slug} <- normalize_value(prop_value),
          :ok <- skip_self_link(page, target_slug),
          {:ok, target_page} <-
-           PageFactory.get_or_create(page, target_slug, target_type, created_by: "props_materializer"),
+           PageFactory.get_or_create(page, target_slug, target_type,
+             created_by: "props_materializer"
+           ),
          :ok <- PageFactory.create_edge(page, target_page, relation_type, "props_materializer") do
       {:ok, :linked}
     else

@@ -520,7 +520,6 @@ defmodule DranWeb.TodoLive do
   def handle_event("clear_compare", params, socket),
     do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
 
-
   # ──────────────────────────────────────────────────────────────────────────
   # Helpers
   # ──────────────────────────────────────────────────────────────────────────

@@ -213,7 +213,6 @@ defmodule DranWeb.QueryLive do
   def handle_event("clear_compare", params, socket),
     do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
 
-
   # ── PubSub: real-time update when a page changes ──
 
   @impl true

@@ -19,14 +19,10 @@ defmodule Dran.Repo.Migrations.AddQueryOptimizationIndexes do
 
   def up do
     # 1 + 2 + 4: pages filtered by type+archived within a context.
-    create index(:pages, [:context_id, :page_type, :archived],
-             name: :pages_ctx_type_archived_idx
-           )
+    create index(:pages, [:context_id, :page_type, :archived], name: :pages_ctx_type_archived_idx)
 
     # 3: pages by context+type for graph joins / counts.
-    create index(:pages, [:context_id, :page_type],
-             name: :pages_ctx_type_idx
-           )
+    create index(:pages, [:context_id, :page_type], name: :pages_ctx_type_idx)
 
     # 5: exact version lookup per page.
     create unique_index(:page_versions, [:page_id, :version],
@@ -34,26 +30,16 @@ defmodule Dran.Repo.Migrations.AddQueryOptimizationIndexes do
            )
 
     # 6: activity log — context scoped, time-ordered.
-    create index(:brain_log, [:context_id, :inserted_at],
-             name: :brain_log_ctx_inserted_at_idx
-           )
+    create index(:brain_log, [:context_id, :inserted_at], name: :brain_log_ctx_inserted_at_idx)
   end
 
   def down do
-    drop index(:pages, [:context_id, :page_type, :archived],
-           name: :pages_ctx_type_archived_idx
-         )
+    drop index(:pages, [:context_id, :page_type, :archived], name: :pages_ctx_type_archived_idx)
 
-    drop index(:pages, [:context_id, :page_type],
-           name: :pages_ctx_type_idx
-         )
+    drop index(:pages, [:context_id, :page_type], name: :pages_ctx_type_idx)
 
-    drop index(:page_versions, [:page_id, :version],
-           name: :page_versions_page_version_uidx
-         )
+    drop index(:page_versions, [:page_id, :version], name: :page_versions_page_version_uidx)
 
-    drop index(:brain_log, [:context_id, :inserted_at],
-           name: :brain_log_ctx_inserted_at_idx
-         )
+    drop index(:brain_log, [:context_id, :inserted_at], name: :brain_log_ctx_inserted_at_idx)
   end
 end

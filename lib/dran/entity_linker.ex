@@ -76,7 +76,8 @@ defmodule Dran.EntityLinker do
   # ── Internals ──
 
   defp link_one(page, entity_slug) do
-    with {:ok, entity_page} <- PageFactory.get_or_create(page, entity_slug, "entity", created_by: "entity_linker"),
+    with {:ok, entity_page} <-
+           PageFactory.get_or_create(page, entity_slug, "entity", created_by: "entity_linker"),
          :ok <- PageFactory.create_edge(page, entity_page, "mentions", "entity_linker") do
       {:ok, :linked}
     else
