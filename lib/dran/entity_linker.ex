@@ -32,6 +32,11 @@ defmodule Dran.EntityLinker do
 
   @max_entities_per_page 10
 
+  # File extensions that produce noisy stubs when the LLM extracts them as entities
+  @file_extensions ~w(ex exs md js heex eex ts tsx css html json)
+  # Generic tech terms that are noise when materialized as entity pages
+  @noise_slugs ~w(ai llm mcp log api socket pubsub kanban liveview report app heex otlp)
+
   @doc """
   Link a page to entity pages for each name in `entities`.
 
@@ -47,6 +52,7 @@ defmodule Dran.EntityLinker do
       entities
       |> normalize_entities()
       |> Enum.reject(&(&1 == page.slug))
+      |> Enum.reject(&reject_noise?/1)
       |> Enum.take(@max_entities_per_page)
       |> Enum.reduce(0, fn entity_slug, acc ->
         case link_one(page, entity_slug) do
@@ -90,4 +96,16 @@ defmodule Dran.EntityLinker do
         {:error, reason}
     end
   end
+
+  @doc """
+  Returns true when a normalized slug looks like noise (file extensions, generic tech terms).
+  Used as a guard before materializing an entity page.
+  """
+  @spec reject_noise?(String.t()) :: boolean()
+  def reject_noise?(slug) when is_binary(slug) do
+    Enum.any?(@file_extensions, &String.ends_with?(slug, "-" <> &1)) or
+      slug in @noise_slugs
+  end
+
+  def reject_noise?(_), do: false
 end

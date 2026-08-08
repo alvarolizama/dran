@@ -142,13 +142,18 @@ defmodule Dran.Brain.PageAugmenter do
   # Failures here must not break the augmentation pipeline — linking is a
   # best-effort enhancement.
   defp link_entities(page, entities) do
-    case Dran.EntityLinker.link(page, entities) do
-      {:ok, 0} ->
-        :ok
+    if Dran.Settings.get("entity_linker_enabled") != false do
+      case Dran.EntityLinker.link(page, entities) do
+        {:ok, 0} ->
+          :ok
 
-      {:ok, count} ->
-        Logger.debug("EntityLinker created #{count} mentions for #{page.slug}")
-        :ok
+        {:ok, count} ->
+          Logger.debug("EntityLinker created #{count} mentions for #{page.slug}")
+          :ok
+      end
+    else
+      Logger.debug("EntityLinker skipped for #{page.slug}: disabled by setting")
+      :ok
     end
   rescue
     e ->

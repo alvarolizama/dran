@@ -9,7 +9,8 @@ defmodule Dran.Settings do
     "semantic_threshold_long" => 0.28,
     "agent_max_pages" => 10,
     "agent_max_sources" => 10,
-    "pagerank_boost" => 0.15
+    "pagerank_boost" => 0.15,
+    "entity_linker_enabled" => true
   }
 
   def defaults, do: @defaults

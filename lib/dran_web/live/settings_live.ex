@@ -18,7 +18,7 @@ defmodule DranWeb.SettingsLive do
   alias DranWeb.Plugs.Auth
 
   # Keys managed by the "Brain tuning" form.
-  @brain_keys ~w(agent_max_pages)
+  @brain_keys ~w(agent_max_pages entity_linker_enabled)
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
   # Purposes shown in the "Modelos" card. Each entry is:
@@ -394,7 +394,8 @@ defmodule DranWeb.SettingsLive do
       "semantic_threshold_short" => &cast_float/1,
       "semantic_threshold_mid" => &cast_float/1,
       "semantic_threshold_long" => &cast_float/1,
-      "agent_max_pages" => &cast_int/1
+      "agent_max_pages" => &cast_int/1,
+      "entity_linker_enabled" => fn val -> val == "true" end
     }
 
     for key <- @brain_keys ++ @advanced_keys do
@@ -1072,6 +1073,18 @@ defmodule DranWeb.SettingsLive do
               <p class="text-xs text-base-content/60 mt-1.5">
                 {gettext(
                   "Maximum number of pages the autonomous agents will create in a single run. Higher values mean longer runs and more content per run. Default: 10."
+                )}
+              </p>
+            </div>
+            <div>
+              <.input
+                field={@form[:entity_linker_enabled]}
+                type="checkbox"
+                label={gettext("Entity linker (auto-create entities from page mentions)")}
+              />
+              <p class="text-xs text-base-content/60 mt-1.5">
+                {gettext(
+                  "When enabled, the augmenter auto-creates entity pages for named things (people, companies, tools) mentioned in page bodies. Disable for manual-only entity creation."
                 )}
               </p>
             </div>

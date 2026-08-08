@@ -62,6 +62,34 @@ defmodule Dran.EntityLinkerTest do
     end
   end
 
+  describe "reject_noise?/1" do
+    test "rejects file extension patterns" do
+      assert EntityLinker.reject_noise?("readme-md")
+      assert EntityLinker.reject_noise?("settings-live-ex")
+      assert EntityLinker.reject_noise?("graph-3d-js")
+      assert EntityLinker.reject_noise?("page-components-ex")
+      assert EntityLinker.reject_noise?("app-eex")
+    end
+
+    test "rejects generic tech slugs" do
+      assert EntityLinker.reject_noise?("ai")
+      assert EntityLinker.reject_noise?("llm")
+      assert EntityLinker.reject_noise?("mcp")
+      assert EntityLinker.reject_noise?("socket")
+      assert EntityLinker.reject_noise?("pubsub")
+      assert EntityLinker.reject_noise?("liveview")
+      assert EntityLinker.reject_noise?("kanban")
+    end
+
+    test "allows real entities" do
+      refute EntityLinker.reject_noise?("jacobo-grinberg")
+      refute EntityLinker.reject_noise?("phoenix-framework")
+      refute EntityLinker.reject_noise?("anthropic")
+      refute EntityLinker.reject_noise?("dran")
+      refute EntityLinker.reject_noise?("el-claro")
+    end
+  end
+
   describe "link/2" do
     test "creates entity pages and mentions relations" do
       ctx = fresh_context("link")
