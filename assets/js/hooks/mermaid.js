@@ -16,10 +16,9 @@ function loadMermaid() {
     script.src = MERMAID_CDN
     script.crossOrigin = "anonymous"
     script.onload = () => {
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark"
       window.mermaid.initialize({
         startOnLoad: false,
-        theme: isDark ? "dark" : "default",
+        theme: "dark",
         securityLevel: "strict",
       })
       resolve(window.mermaid)

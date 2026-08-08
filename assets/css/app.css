@@ -25,95 +25,17 @@
 
 /* daisyUI theme plugin. You can update this file by fetching the latest version with:
   curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
-  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
-  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+  We ship with a single theme, sunset. Build your own at:
+  https://daisyui.com/theme-generator/ */
 @plugin "../vendor/daisyui-theme" {
-  name: "dark";
-  default: false;
-  prefersdark: true;
-  color-scheme: "dark";
-  /* Gris-azulado muy oscuro y neutro (hue ~255, chroma bajo) */
-  --color-base-100: oklch(17.5% 0.008 255);
-  --color-base-200: oklch(21% 0.008 255);
-  --color-base-300: oklch(26.5% 0.008 255);
-  --color-base-content: oklch(95% 0.004 255);
-  /* Teal / verde-azulado sobrio */
-  --color-primary: oklch(72% 0.13 175);
-  --color-primary-content: oklch(98% 0.01 175);
-  /* Gris neutro */
-  --color-secondary: oklch(55% 0.006 255);
-  --color-secondary-content: oklch(95% 0.004 255);
-  /* Ámbar discreto */
-  --color-accent: oklch(75% 0.09 75);
-  --color-accent-content: oklch(20% 0.02 75);
-  --color-neutral: oklch(30% 0.008 255);
-  --color-neutral-content: oklch(98% 0.003 255);
-  /* Tonos sobrios armonizados */
-  --color-info: oklch(62% 0.09 240);
-  --color-info-content: oklch(97% 0.01 240);
-  --color-success: oklch(62% 0.10 160);
-  --color-success-content: oklch(98% 0.01 160);
-  --color-warning: oklch(70% 0.10 75);
-  --color-warning-content: oklch(20% 0.02 75);
-  --color-error: oklch(60% 0.13 25);
-  --color-error-content: oklch(97% 0.01 25);
-  --radius-selector: 0.375rem;
-  --radius-field: 0.375rem;
-  --radius-box: 0.625rem;
-  --size-selector: 0.21875rem;
-  --size-field: 0.21875rem;
-  --border: 1px;
-  --depth: 1;
-  --noise: 0;
-}
-
-@plugin "../vendor/daisyui-theme" {
-  name: "light";
+  name: "sunset";
   default: true;
-  prefersdark: false;
-  color-scheme: "light";
-  /* Fondos casi blancos con tinte frío */
-  --color-base-100: oklch(99% 0.003 255);
-  --color-base-200: oklch(96.5% 0.004 255);
-  --color-base-300: oklch(92% 0.005 255);
-  --color-base-content: oklch(24% 0.006 255);
-  /* Teal más oscuro para contraste */
-  --color-primary: oklch(55% 0.12 180);
-  --color-primary-content: oklch(98% 0.01 180);
-  /* Gris neutro */
-  --color-secondary: oklch(50% 0.006 255);
-  --color-secondary-content: oklch(98% 0.003 255);
-  /* Ámbar discreto */
-  --color-accent: oklch(68% 0.09 75);
-  --color-accent-content: oklch(20% 0.02 75);
-  --color-neutral: oklch(40% 0.008 255);
-  --color-neutral-content: oklch(98% 0.003 255);
-  /* Tonos sobrios armonizados */
-  --color-info: oklch(55% 0.10 240);
-  --color-info-content: oklch(98% 0.01 240);
-  --color-success: oklch(55% 0.10 160);
-  --color-success-content: oklch(98% 0.01 160);
-  --color-warning: oklch(68% 0.10 75);
-  --color-warning-content: oklch(20% 0.02 75);
-  --color-error: oklch(55% 0.13 25);
-  --color-error-content: oklch(98% 0.01 25);
-  --radius-selector: 0.375rem;
-  --radius-field: 0.375rem;
-  --radius-box: 0.625rem;
-  --size-selector: 0.21875rem;
-  --size-field: 0.21875rem;
-  --border: 1px;
-  --depth: 1;
-  --noise: 0;
 }
 
 /* Add variants based on LiveView classes */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
 @custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
-
-/* Use the data attribute for dark mode  */
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
@@ -546,22 +468,11 @@
 }
 
 /* ── Sistema de elevación ──
-   Las sombras usan oklch con alpha bajo para funcionar en ambos temas.
-   En dark, las variables proporcionan sombras más profundas.           */
+   Las sombras usan oklch con alpha bajo y funcionan con el tema único. */
 
 :root {
   --shadow-surface-2: 0 1px 2px oklch(0% 0 0 / 0.08);
   --shadow-surface-3: 0 4px 12px oklch(0% 0 0 / 0.12);
-}
-
-:root:where([data-theme="dark"]) {
-  --shadow-surface-2: 0 1px 3px oklch(0% 0 0 / 0.30);
-  --shadow-surface-3: 0 4px 16px oklch(0% 0 0 / 0.40);
-}
-
-:root:where([data-theme="light"]) {
-  --shadow-surface-2: 0 1px 2px oklch(20% 0.005 255 / 0.08);
-  --shadow-surface-3: 0 4px 12px oklch(20% 0.005 255 / 0.12);
 }
 
 .surface-1 {
