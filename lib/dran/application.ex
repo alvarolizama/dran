@@ -17,6 +17,7 @@ defmodule Dran.Application do
       Dran.Embeddings.Supervisor,
       Dran.Relations.Supervisor,
       Dran.Scheduler,
+      Dran.GraphCache,
       DranWeb.Endpoint
     ]
 

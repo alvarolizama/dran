@@ -4,33 +4,33 @@
 //   • Force-directed 3D layout (d3-force-3d under the hood)
 //   • Nodes sized by connection count
 //   • Curved edges with animated particle flow
-//   • Hover highlight with 2-level BFS neighborhood dimming + label reveal
-//   • Labels hidden by default, shown only for the hovered neighborhood
+//   • Hover highlight: neighborhood dimming + scale/glow (no labels)
+//   • Rich HTML tooltip on hover
 //   • Click to navigate (node_click)
 //   • Auto zoom-to-fit after layout stabilizes
 //   • Dark background matching Dran's brand color
 //
 // The hook reads graph data from `data-graph` attribute (JSON) on mount and on
-// every LiveView `updated()` callback.
+// every LiveView `updated()` callback (show mode only; index mode fetches via
+// HTTP and keeps the data in fullData).
 
 import ForceGraph3D from "3d-force-graph"
-import SpriteText from "three-spritetext"
 import * as THREE from "three"
 
-// Max BFS depth for label reveal on hover (2 = neighbors of neighbors)
-const LABEL_BFS_DEPTH = 2
+// Max BFS depth for hover neighborhood highlight (2 = neighbors of neighbors)
+const HIGHLIGHT_BFS_DEPTH = 2
 
 // Adaptive render quality: big graphs need cheap geometry, no particle
 // streams and a short force simulation to stay fluid. Small graphs keep the
 // full polish.
 function graphScale(nodeCount, edgeCount) {
   if (nodeCount > 700 || edgeCount > 2500) {
-    return { sphereSegments: 8, particles: 0, warmup: 15, cooldown: 500, labelRetries: 40 }
+    return { sphereSegments: 8, particles: 0, warmup: 15, cooldown: 500 }
   }
   if (nodeCount > 250 || edgeCount > 800) {
-    return { sphereSegments: 12, particles: 1, warmup: 40, cooldown: 1200, labelRetries: 80 }
+    return { sphereSegments: 12, particles: 1, warmup: 40, cooldown: 1200 }
   }
-  return { sphereSegments: 24, particles: 2, warmup: 100, cooldown: 2000, labelRetries: 120 }
+  return { sphereSegments: 24, particles: 2, warmup: 100, cooldown: 2000 }
 }
 
 const Graph3D = {
@@ -42,7 +42,6 @@ const Graph3D = {
     this.highlightNodes = new Set()
     this.highlightLinks = new Set()
     this.nodeDepths = new Map()
-    this.labelRetryId = null
     // Wave 2: data lives on the client. `fullData` is the raw {nodes, links}
     // from the fetch (or from data-graph in show mode); `visibleTypes` is the
     // Set of page types currently shown. The LiveView only ever receives
@@ -79,7 +78,6 @@ const Graph3D = {
       this.scale = graphScale(this.fullData.nodes.length, this.fullData.links.length)
       this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
       this.graph.graphData(this.fullData)
-      this.scheduleLabelRefresh()
     }
   },
 
@@ -118,7 +116,7 @@ const Graph3D = {
       .showNavInfo(false)
       // Rich HTML tooltip for the hovered node (styled in app.css)
       .nodeLabel(node => this.tooltipHtml(node))
-      // Node appearance — sphere + adaptive text label
+      // Node appearance — sphere only (no labels, saves GPU canvas per node)
       .nodeThreeObject(node => this.buildNodeObject(node))
       .nodeThreeObjectExtend(false)
       // Edge appearance
@@ -209,14 +207,13 @@ const Graph3D = {
     this.scale = graphScale(nodes.length, links.length)
     this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
     this.graph.graphData({ nodes, links })
-    this.scheduleLabelRefresh()
 
     if (this.progressive) {
       this.pushEvent("graph_counts", { node_count: nodes.length, edge_count: links.length })
     }
   },
 
-  // ── Node objects (sphere + label sprite) ─────────────────────────────
+  // ── Node objects (sphere only — no labels) ────────────────────────────
 
   buildNodeObject(node) {
     const group = new THREE.Group()
@@ -240,22 +237,6 @@ const Graph3D = {
     group.add(sphere)
     node.__sphere = sphere
 
-    // Text label — SpriteText, shown only on hover (BFS neighborhood)
-    const label = new SpriteText(node.label || "")
-    label.color = "#cbd5e1"
-    label.textHeight = Math.max(6, radius * 1.1)
-    label.fontFace = "'Inter', 'Helvetica Neue', Arial, sans-serif"
-    label.fontWeight = "500"
-    label.center.y = 1.0
-    label.position.y = radius + label.textHeight * 0.35
-    label.backgroundColor = "rgba(10, 14, 39, 0.6)"
-    label.padding = 3
-    label.borderRadius = 3
-    label.borderWidth = 0
-    label.visible = false // toggled on hover only
-    group.add(label)
-    node.__label = label
-
     return group
   },
 
@@ -277,74 +258,6 @@ const Graph3D = {
           <span class="graph-tooltip-conn">${node.connections || 0} links</span>
         </div>
       </div>`
-  },
-
-  // Show labels: only on hover — the node + its BFS neighborhood (2 levels).
-  // 3d-force-graph builds nodeThreeObject asynchronously, so we retry until
-  // every node has its __label attached (or give up after ~2s).
-  scheduleLabelRefresh(attempts = 0) {
-    if (this.labelRetryId) {
-      cancelAnimationFrame(this.labelRetryId)
-      this.labelRetryId = null
-    }
-    const tick = () => {
-      if (!this.graph) return
-      const { nodes } = this.graph.graphData()
-      const ready = nodes.every(n => n.__label)
-      this.refreshLabelVisibility()
-      if (!ready && attempts < this.scale.labelRetries) {
-        attempts++
-        this.labelRetryId = requestAnimationFrame(tick)
-      }
-    }
-    this.labelRetryId = requestAnimationFrame(tick)
-  },
-
-  // BFS from the hovered node up to LABEL_BFS_DEPTH levels, following links
-  // in both directions. Returns a Map of node id -> depth (0 = hovered) and
-  // the set of links traversed.
-  computeNeighborhood(startId, links) {
-    const linkId = l => (typeof l === "object" && l !== null ? String(l.id) : String(l))
-    const adjacency = new Map()
-    links.forEach(link => {
-      const s = linkId(link.source)
-      const t = linkId(link.target)
-      if (!adjacency.has(s)) adjacency.set(s, [])
-      if (!adjacency.has(t)) adjacency.set(t, [])
-      adjacency.get(s).push({ next: t, link })
-      adjacency.get(t).push({ next: s, link })
-    })
-
-    const depths = new Map([[startId, 0]])
-    const linksInPath = new Set()
-    let frontier = [startId]
-    for (let depth = 1; depth <= LABEL_BFS_DEPTH; depth++) {
-      const nextFrontier = []
-      for (const id of frontier) {
-        for (const { next, link } of adjacency.get(id) || []) {
-          linksInPath.add(link)
-          if (!depths.has(next)) {
-            depths.set(next, depth)
-            nextFrontier.push(next)
-          }
-        }
-      }
-      frontier = nextFrontier
-    }
-    return { depths, links: linksInPath }
-  },
-
-  // Text labels show only for the hovered node and its DIRECT neighbors
-  // (depth ≤ 1). The hovered node also gets the rich HTML tooltip.
-  refreshLabelVisibility() {
-    if (!this.graph) return
-    const { nodes } = this.graph.graphData()
-
-    nodes.forEach(node => {
-      if (!node.__label) return
-      const depth = this.nodeDepths.get(node.id)
-      node.__label.visible = depth !== undefined && depth <= 1
-    })
   },
 
   // ── Data transformation ───────────────────────────────────────────────
@@ -443,11 +356,42 @@ const Graph3D = {
       n.__sphere.scale.setScalar(scale)
     })
 
-    // Labels follow highlight
-    this.refreshLabelVisibility()
-
     // Trigger link restyle (linkColor / linkWidth / particles are accessor-based)
     this.graph.refresh()
+  },
+
+  // BFS from the hovered node up to HIGHLIGHT_BFS_DEPTH levels, following
+  // links in both directions. Returns a Map of node id -> depth (0 = hovered)
+  // and the set of links traversed. Used for hover neighborhood dimming.
+  computeNeighborhood(startId, links) {
+    const linkId = l => (typeof l === "object" && l !== null ? String(l.id) : String(l))
+    const adjacency = new Map()
+    links.forEach(link => {
+      const s = linkId(link.source)
+      const t = linkId(link.target)
+      if (!adjacency.has(s)) adjacency.set(s, [])
+      if (!adjacency.has(t)) adjacency.set(t, [])
+      adjacency.get(s).push({ next: t, link })
+      adjacency.get(t).push({ next: s, link })
+    })
+
+    const depths = new Map([[startId, 0]])
+    const linksInPath = new Set()
+    let frontier = [startId]
+    for (let depth = 1; depth <= HIGHLIGHT_BFS_DEPTH; depth++) {
+      const nextFrontier = []
+      for (const id of frontier) {
+        for (const { next, link } of adjacency.get(id) || []) {
+          linksInPath.add(link)
+          if (!depths.has(next)) {
+            depths.set(next, depth)
+            nextFrontier.push(next)
+          }
+        }
+      }
+      frontier = nextFrontier
+    }
+    return { depths, links: linksInPath }
   },
 
   linkDisplayColor(link) {
@@ -479,10 +423,6 @@ const Graph3D = {
   // ── Cleanup ───────────────────────────────────────────────────────────
 
   cleanup() {
-    if (this.labelRetryId) {
-      cancelAnimationFrame(this.labelRetryId)
-      this.labelRetryId = null
-    }
     if (this.resizeHandler) {
       window.removeEventListener("resize", this.resizeHandler)
       this.resizeHandler = null
@@ -492,15 +432,8 @@ const Graph3D = {
       this.visibilityObserver = null
     }
     if (this.graph) {
-      // Dispose sprite textures and sphere geometries
+      // Dispose sphere geometries and materials
       this.graph.graphData().nodes.forEach(node => {
-        if (node.__label) {
-          if (node.__label.material && node.__label.material.map) {
-            node.__label.material.map.dispose()
-          }
-          if (node.__label.material) node.__label.material.dispose()
-          node.__label = null
-        }
         if (node.__sphere) {
           node.__sphere.geometry.dispose()
           node.__sphere.material.dispose()
