@@ -4,9 +4,11 @@
 //   • Force-directed 3D layout (d3-force-3d under the hood)
 //   • Nodes sized by connection count
 //   • Curved edges with animated particle flow
-//   • Hover highlight: neighborhood dimming + scale/glow (no labels)
-//   • Rich HTML tooltip on hover
-//   • Click to navigate (node_click)
+//   • Click to select: shows labels for the clicked node and its direct
+//     neighbors, dims the rest. No hover behavior.
+//   • Click a labeled node again (the node you selected or any neighbor) →
+//     navigate to that page (treated as a label click).
+//   • Background click clears the selection.
 //   • Auto zoom-to-fit after layout stabilizes
 //   • Dark background matching Dran's brand color
 //
@@ -16,9 +18,10 @@
 
 import ForceGraph3D from "3d-force-graph"
 import * as THREE from "three"
+import SpriteText from "three-spritetext"
 
-// Max BFS depth for hover neighborhood highlight (2 = neighbors of neighbors)
-const HIGHLIGHT_BFS_DEPTH = 2
+// BFS depth for click-selection neighborhood (1 = direct neighbors only)
+const HIGHLIGHT_BFS_DEPTH = 1
 
 // Adaptive render quality: big graphs need cheap geometry, no particle
 // streams and a short force simulation to stay fluid. Small graphs keep the
@@ -38,7 +41,9 @@ const Graph3D = {
     this.graph = null
     this.resizeHandler = null
     this.visibilityObserver = null
-    this.hoveredNode = null
+    // Click selection state (replaces the old hover system)
+    this.selectedNode = null
+    this.labeledNodes = new Set()
     this.highlightNodes = new Set()
     this.highlightLinks = new Set()
     this.nodeDepths = new Map()
@@ -77,6 +82,7 @@ const Graph3D = {
       this.fullData = this.transformData(data)
       this.scale = graphScale(this.fullData.nodes.length, this.fullData.links.length)
       this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
+      this.clearSelection()
       this.graph.graphData(this.fullData)
     }
   },
@@ -114,9 +120,7 @@ const Graph3D = {
       .height(height)
       .backgroundColor("#0a0e27")
       .showNavInfo(false)
-      // Rich HTML tooltip for the hovered node (styled in app.css)
-      .nodeLabel(node => this.tooltipHtml(node))
-      // Node appearance — sphere only (no labels, saves GPU canvas per node)
+      // Node appearance — sphere only (labels are added on click selection)
       .nodeThreeObject(node => this.buildNodeObject(node))
       .nodeThreeObjectExtend(false)
       // Edge appearance
@@ -128,9 +132,10 @@ const Graph3D = {
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleSpeed(0.006)
       .linkDirectionalParticleColor(link => link.color || "#94A3B8")
-      // Interaction
+      // Interaction: click to select (or navigate a selected node), background
+      // click to clear. No hover callbacks wired — hover is fully inert.
       .onNodeClick(node => this.handleNodeClick(node))
-      .onNodeHover(node => this.handleNodeHover(node))
+      .onBackgroundClick(() => this.handleBackgroundClick())
       // Physics / layout — shorter warmup/cooldown on big graphs so the
       // force simulation doesn't peg the CPU for seconds
       .warmupTicks(this.scale.warmup)
@@ -194,6 +199,9 @@ const Graph3D = {
   // to the LV (index mode) so the sidebar Totals stay accurate.
   renderVisible() {
     if (!this.fullData) return
+    // Selection state becomes stale once the scene rebuilds — clear it.
+    this.clearSelection()
+
     const visible = this.visibleTypes
     let nodes = this.fullData.nodes
     let links = this.fullData.links
@@ -213,7 +221,7 @@ const Graph3D = {
     }
   },
 
-  // ── Node objects (sphere only — no labels) ────────────────────────────
+  // ── Node objects (sphere only — labels added on click selection) ────────
 
   buildNodeObject(node) {
     const group = new THREE.Group()
@@ -242,22 +250,6 @@ const Graph3D = {
 
   nodeRadius(node) {
     return 4 + Math.min(node.connections || 0, 12) * 0.8
-  },
-
-  // Rich HTML tooltip for the hovered node — escapes user content
-  tooltipHtml(node) {
-    const esc = s => String(s).replace(/[&<>"']/g, c => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    }[c]))
-    const color = node.color || "#94A3B8"
-    return `
-      <div class="graph-tooltip">
-        <div class="graph-tooltip-title">${esc(node.label)}</div>
-        <div class="graph-tooltip-meta">
-          <span class="graph-tooltip-type" style="--type-color: ${esc(color)}">${esc(node.type)}</span>
-          <span class="graph-tooltip-conn">${node.connections || 0} links</span>
-        </div>
-      </div>`
   },
 
   // ── Data transformation ───────────────────────────────────────────────
@@ -322,47 +314,105 @@ const Graph3D = {
   // ── Interaction handlers ──────────────────────────────────────────────
 
   handleNodeClick(node) {
-    if (node.slug) {
-      this.pushEvent("node_click", { slug: node.slug })
+    // If the clicked node is already part of the current selection (its
+    // label is visible), treat this as a label click → navigate to it.
+    if (this.selectedNode && this.nodeDepths.has(node.id)) {
+      if (node.slug) {
+        this.pushEvent("node_click", { slug: node.slug })
+      }
+      return
     }
+    // Otherwise, start a new selection: show labels for this node and its
+    // direct neighbors, dim the rest.
+    this.selectNode(node)
   },
 
-  handleNodeHover(node) {
-    this.hoveredNode = node || null
-    this.highlightNodes = new Set()
-    this.highlightLinks = new Set()
-    this.nodeDepths = new Map()
+  // Background click clears the selection.
+  handleBackgroundClick() {
+    this.clearSelection()
+  },
 
-    if (node) {
-      const { depths, links } = this.computeNeighborhood(
-        node.id,
-        this.graph.graphData().links
-      )
-      this.nodeDepths = depths
-      this.highlightNodes = new Set(depths.keys())
-      this.highlightLinks = links
-    }
+  // Show labels and highlight the clicked node + its direct neighbors.
+  // Does NOT navigate — the next click on a labeled node navigates.
+  selectNode(node) {
+    // Reset previous selection first.
+    this.clearSelection()
 
-    // Restyle nodes: highlight the neighborhood, dim everything else.
-    // The hovered node pops (scale + strong glow), direct neighbors glow.
+    this.selectedNode = node
+    const { depths, links } = this.computeNeighborhood(
+      node.id,
+      this.graph.graphData().links
+    )
+    this.nodeDepths = depths
+    this.highlightNodes = new Set(depths.keys())
+    this.highlightLinks = links
+
+    // Dim non-neighborhood spheres, glow the selected neighborhood, and add
+    // a clickable SpriteText label above each labeled node. The label faces
+    // the camera (SpriteText extends THREE.Sprite) and is a child of the
+    // node's Group, so raycasting reports it as the parent node — clicking
+    // it lands in handleNodeClick, which sees the node as already selected
+    // and triggers navigation.
     this.graph.graphData().nodes.forEach(n => {
       if (!n.__sphere) return
       const depth = this.nodeDepths.get(n.id)
-      const active = !node || depth !== undefined
-      const isHovered = node && n.id === node.id
-      n.__sphere.material.opacity = active ? 0.95 : 0.15
-      n.__sphere.material.emissiveIntensity = active ? (isHovered ? 1.2 : 0.55) : 0.05
-      const scale = isHovered ? 1.35 : (depth === 1 ? 1.15 : 1)
+      const isLabeled = depth !== undefined
+      const isCenter = n.id === node.id
+
+      n.__sphere.material.opacity = isLabeled ? 0.95 : 0.15
+      n.__sphere.material.emissiveIntensity = isLabeled ? (isCenter ? 1.2 : 0.55) : 0.05
+      const scale = isCenter ? 1.35 : (depth === 1 ? 1.15 : 1)
       n.__sphere.scale.setScalar(scale)
+
+      // Add a clickable label sprite for this node and its direct neighbors.
+      if (isLabeled && n.label) {
+        const group = n.__sphere.parent
+        const sprite = new SpriteText(n.label)
+        sprite.color = "#f1f5f9"
+        sprite.textHeight = 6
+        sprite.backgroundColor = "rgba(10, 14, 39, 0.88)"
+        sprite.borderColor = "rgba(148, 163, 184, 0.4)"
+        sprite.borderWidth = 1
+        sprite.padding = [4, 6]
+        sprite.position.y = this.nodeRadius(n) + 10
+        group.add(sprite)
+        n.__label = sprite
+        this.labeledNodes.add(n.id)
+      }
     })
 
     // Trigger link restyle (linkColor / linkWidth / particles are accessor-based)
     this.graph.refresh()
   },
 
-  // BFS from the hovered node up to HIGHLIGHT_BFS_DEPTH levels, following
-  // links in both directions. Returns a Map of node id -> depth (0 = hovered)
-  // and the set of links traversed. Used for hover neighborhood dimming.
+  // Remove the active selection, dispose labels, restore spheres/links.
+  clearSelection() {
+    if (this.graph) {
+      this.graph.graphData().nodes.forEach(n => {
+        if (n.__label) {
+          if (n.__label.parent) n.__label.parent.remove(n.__label)
+          if (n.__label.material.map) n.__label.material.map.dispose()
+          n.__label.material.dispose()
+          n.__label = null
+        }
+        if (n.__sphere) {
+          n.__sphere.material.opacity = 0.95
+          n.__sphere.material.emissiveIntensity = 0.35
+          n.__sphere.scale.setScalar(1)
+        }
+      })
+      this.graph.refresh()
+    }
+    this.selectedNode = null
+    this.highlightNodes = new Set()
+    this.highlightLinks = new Set()
+    this.nodeDepths = new Map()
+    this.labeledNodes = new Set()
+  },
+
+  // BFS from the selected node up to HIGHLIGHT_BFS_DEPTH levels, following
+  // links in both directions. Returns a Map of node id -> depth (0 = clicked)
+  // and the set of links traversed. Used for click-selection neighborhood.
   computeNeighborhood(startId, links) {
     const linkId = l => (typeof l === "object" && l !== null ? String(l.id) : String(l))
     const adjacency = new Map()
@@ -395,7 +445,7 @@ const Graph3D = {
   },
 
   linkDisplayColor(link) {
-    if (!this.hoveredNode) return link.color || "#94A3B8"
+    if (!this.selectedNode) return link.color || "#94A3B8"
     return this.highlightLinks.has(link)
       ? link.color || "#94A3B8"
       : "rgba(148, 163, 184, 0.05)"
@@ -432,8 +482,13 @@ const Graph3D = {
       this.visibilityObserver = null
     }
     if (this.graph) {
-      // Dispose sphere geometries and materials
+      // Dispose sphere geometries/materials and any active labels
       this.graph.graphData().nodes.forEach(node => {
+        if (node.__label) {
+          if (node.__label.material.map) node.__label.material.map.dispose()
+          node.__label.material.dispose()
+          node.__label = null
+        }
         if (node.__sphere) {
           node.__sphere.geometry.dispose()
           node.__sphere.material.dispose()
@@ -451,10 +506,11 @@ const Graph3D = {
       }
       this.graph = null
     }
-    this.hoveredNode = null
+    this.selectedNode = null
     this.highlightNodes = new Set()
     this.highlightLinks = new Set()
     this.nodeDepths = new Map()
+    this.labeledNodes = new Set()
   }
 }
 

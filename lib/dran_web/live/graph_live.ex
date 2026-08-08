@@ -282,7 +282,9 @@ defmodule DranWeb.GraphLive do
             <div :if={@live_action == :show and @page == nil}>{gettext("Graph")}</div>
           </h1>
           <p class="text-caption mt-1">
-            {gettext("Visualize how your pages connect. Drag nodes to reorganize, click to navigate.")}
+            {gettext(
+              "Visualize how your pages connect. Drag to rotate, click a node to reveal labels, click a label to navigate."
+            )}
           </p>
         </div>
 
@@ -356,7 +358,7 @@ defmodule DranWeb.GraphLive do
               class="w-full h-full"
             />
             <div class="absolute bottom-0 left-0 right-0 px-3 py-2 text-xs text-base-content/40 bg-base-200/50 border-t border-base-300">
-              {gettext("Drag to rotate · Scroll to zoom · Click to navigate")}
+              {gettext("Drag to rotate · Scroll to zoom · Click to reveal labels")}
             </div>
           </div>
         </div>
