@@ -407,8 +407,6 @@ const Graph3D = {
     this.highlightLinks = links
 
     // Dim non-neighborhood spheres and glow the selected neighborhood.
-    // Labels (SpriteText) were removed — the highlight alone communicates
-    // which nodes are in the neighborhood.
     this.graph.graphData().nodes.forEach(n => {
       if (!n.__sphere) return
       const depth = this.nodeDepths.get(n.id)
@@ -421,11 +419,79 @@ const Graph3D = {
       n.__sphere.scale.setScalar(scale)
     })
 
+    // Show the hover overlay (title + link) in the top-right corner.
+    this.showHoverOverlay(node)
+
     // Note: no graph.refresh() call — it flushes all Three.js objects
     // (_flushObjects = true) which causes a visible jump when zoomed.
     // The link accessors (linkColor, linkWidth, linkDirectionalParticles)
     // are evaluated every render frame, so the highlight updates without
     // a flush.
+  },
+
+  // ── Hover overlay (title + link in top-right corner) ──────────────────
+
+  showHoverOverlay(node) {
+    if (!node || !node.label) return
+
+    let overlay = this.el.querySelector(".graph-hover-overlay")
+    if (!overlay) {
+      overlay = document.createElement("div")
+      overlay.className = "graph-hover-overlay"
+      overlay.style.cssText = [
+        "position: absolute",
+        "top: 12px",
+        "right: 12px",
+        "z-index: 10",
+        "max-width: 320px",
+        "padding: 10px 14px",
+        "border-radius: 12px",
+        "background: rgba(10, 14, 39, 0.88)",
+        "border: 1px solid rgba(148, 163, 184, 0.25)",
+        "backdrop-filter: blur(8px)",
+        "font-family: ui-sans-serif, system-ui, sans-serif",
+        "pointer-events: auto",
+        "transition: opacity 0.2s ease",
+        "opacity: 0"
+      ].join("; ")
+      this.el.appendChild(overlay)
+    }
+
+    // Determine the page path from the slug + type
+    // The graph nodes carry {label, slug, type} — we build the path.
+    const typePlurals = {
+      note: "notes", concept: "concepts", entity: "entities",
+      reference: "references", project: "projects", goal: "goals",
+      plan: "plans", todo: "todos", query: "queries"
+    }
+    const plural = typePlurals[node.type] || "notes"
+    const href = `/${plural}/${node.slug}`
+
+    overlay.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="font-size:11px;color:rgba(148,163,184,0.7);text-transform:uppercase;letter-spacing:0.05em;">${node.type || "page"}</span>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:#f1f5f9;line-height:1.35;margin-bottom:8px;">${node.label}</div>
+      <a href="${href}" onclick="event.stopPropagation();"
+        style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#60a5fa;text-decoration:none;hover:text-decoration:underline;">
+        Open page →
+      </a>
+    `
+
+    // Fade in
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "1"
+    })
+  },
+
+  hideHoverOverlay() {
+    const overlay = this.el.querySelector(".graph-hover-overlay")
+    if (overlay) {
+      overlay.style.opacity = "0"
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay)
+      }, 200)
+    }
   },
 
   // Remove the active selection, restore spheres/links.
@@ -438,9 +504,8 @@ const Graph3D = {
           n.__sphere.scale.setScalar(1)
         }
       })
-      // No graph.refresh() — see selectNode comment. Accessors re-evaluate
-      // every frame; manual material changes are visible without a flush.
     }
+    this.hideHoverOverlay()
     this.selectedNode = null
     this.highlightNodes = new Set()
     this.highlightLinks = new Set()
@@ -530,6 +595,7 @@ const Graph3D = {
   // ── Cleanup ───────────────────────────────────────────────────────────
 
   cleanup() {
+    this.hideHoverOverlay()
     if (this.resizeHandler) {
       window.removeEventListener("resize", this.resizeHandler)
       this.resizeHandler = null
