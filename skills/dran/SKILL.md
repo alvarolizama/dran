@@ -1,6 +1,6 @@
 ---
 name: dran
-description: "Use when operating Dran (second brain / knowledge graph) via its MCP server — 18 tools, 9 page types, connection/auth, and install + config of the dran skill suite. Triggers on anything Dran / segundo cerebro / brain."
+description: "Use when operating Dran (second brain / knowledge graph) via its MCP server — 18 tools, 10 page types, connection/auth, and install + config of the dran skill suite. Triggers on anything Dran / segundo cerebro / brain."
 version: 9.0.0
 author: Álvaro Lizama
 license: MIT
@@ -148,7 +148,7 @@ Auth accepts three token kinds, checked in order:
 Requests return `401` for invalid/revoked tokens and `403` for contexts the
 token isn't allowed to touch.
 
-## 3. Page types (9)
+## 3. Page types (10)
 
 Cada página tiene UN `page_type`. Este decide qué `meta` acepta y cómo la
 trata la búsqueda / kanban / grafo.
@@ -179,6 +179,11 @@ flowchart TD
 | `plan` | Time-horizoned plans (weekly/monthly/quarterly/yearly) | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
 | `todo` | Actionable items with kanban status | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
 | `query` | Questions with answers | factual, conceptual, how_to, opinion, exploration, report, status, decision, comparison |
+| `report` | System-created run logs — **no se crea por MCP**, lo escribe `Dran.Jobs` | log |
+
+`report` es second-citizen: vive fuera del grafo, el journey, embeddings y
+`mcp_create`; aparece en el activity log y tiene vista en `/reports/<slug>`.
+No lo uses para capturar conocimiento — es salida de sistema (ver §4 Jobs).
 
 Default to `note` with `meta.kind: "thought"` when unsure — promote later.
 La creación de cada tipo vive en su flow (`note-taking-flow`, `goal-flow`,
@@ -306,6 +311,18 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 | --- | --- |
 | `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) — operación completa en `maintenance-flow` |
 | `dran_get_agent_session` | Poll an agent session for status, steps, summary |
+
+### Jobs programados (Dran.Jobs)
+
+Los 5 crons de Quantum (`curator_daily`, `pagerank_nightly`,
+`community_summaries_nightly`, `graph_maintenance_nightly`,
+`link_gardener_weekly`) pasan por `Dran.Jobs.run_scheduled/1` y se controlan
+desde **Settings → Brain → "Jobs programados"**: toggle por job (afecta SOLO
+las corridas programadas), "Correr ahora" (siempre ejecuta, ignora el toggle)
+y último run con link al reporte. Cada corrida escribe una página `report`
+(kind `log`) en `/reports/<slug>` con status/trigger/duración; se conservan
+las 20 más recientes por job y las viejas se archivan. Programáticamente:
+`Dran.Jobs.list/0`, `set_enabled/2`, `run_now/1`, `run_scheduled/1`.
 
 ## 5. Resources & prompts
 

@@ -22,6 +22,10 @@ defmodule Dran.Jobs do
   strings). Manual runs (`run_now/1`) ALWAYS execute — the toggle only
   affects scheduled runs.
 
+  The Settings → Brain "Jobs programados" panel (`DranWeb.SettingsLive`)
+  drives `set_enabled/2` and `run_now/1` from the UI, listing each job's
+  schedule and last run (status, duration, link to its report page).
+
   ## Adding a new job
 
   1. Add an entry to `@jobs` here (`key`, `label`, `mfa`, `description`).

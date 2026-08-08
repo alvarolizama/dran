@@ -99,7 +99,7 @@ sequenceDiagram
 
 Las sesiones persisten cada paso y trackean `meta.tokens_used` + `meta.model`.
 
-### Jobs programados (Quantum) — corren solos, NO se lanzan a mano
+### Jobs programados (Quantum) — corren solos; control en Settings → Brain
 
 | Job | Horario | Qué hace |
 |-----|---------|----------|
@@ -109,7 +109,15 @@ Las sesiones persisten cada paso y trackean `meta.tokens_used` + `meta.model`.
 | `graph_maintenance_nightly` | 03:45 | Limpia edges/orphans del grafo |
 | `link_gardener_weekly` | Dom 07:00 | Propone relaciones pa' huérfanos |
 
-Todos apuntan al contexto default y están deshabilitados en test.
+Todos apuntan al contexto default y están deshabilitados en test. Pasan por
+`Dran.Jobs.run_scheduled/1`, que respeta el toggle del job y escribe una
+página `report` (kind `log`, `/reports/<slug>`) por corrida — ahí ves status,
+trigger y duración (se conservan las 20 más recientes por job).
+
+**Control:** Settings → Brain → "Jobs programados" — toggle por job (afecta
+SOLO las corridas programadas), "Correr ahora" (manual, siempre ejecuta) y
+último run con link al reporte. Programáticamente: `Dran.Jobs.list/0`,
+`set_enabled/2`, `run_now/1`.
 
 ## Uso de Dran
 

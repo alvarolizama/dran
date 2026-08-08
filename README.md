@@ -6,19 +6,20 @@ A personal second-brain application built with **Phoenix 1.8 + LiveView**. It st
 
 Includes a TipTap markdown editor, three autonomous agents (curator, link_gardener, graph_rag), an MCP endpoint for AI agent integration, and a REST API.
 
-> **[SKILL.md](SKILL.md)** — Agent operating manual: tools, page types, meta props, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+> **[SKILL.md](skills/dran/SKILL.md)** — Agent operating manual: tools, page types, meta props, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
 
 ## Key features
 
-- **9 page types** — note, concept, entity, reference, project, goal, plan, todo, query — each with type-specific metadata and subtypes (`meta.kind`)
+- **10 page types** — note, concept, entity, reference, project, goal, plan, todo, query, plus `report` (system-created run logs; second-citizen: no graph/journey/embeddings) — each with type-specific metadata and subtypes (`meta.kind`)
 - **Markdown editor** — TipTap WYSIWYG with tables, code blocks, mermaid diagrams, and file embeds `![[slug]]`
 - **Read-only + edit modes** — pages show rendered markdown + mermaid by default; click *Edit* to switch to the editor
 - **Knowledge graph** — 3D graph at `/graph`, hover a node to highlight it and its neighbors, click to navigate; per-page subgraphs at `/graph/:slug`
 - **Real-time updates** — page detail views sync live via PubSub when the page changes elsewhere
 - **ETS cache** — global graph, per-page subgraphs, and page-by-slug lookups cached in ETS with read concurrency; invalidated on page changes
-- **Autonomous agents** — curator (daily cron), link_gardener (manual), graph_rag (manual, GraphRAG search)
+- **Autonomous agents** — curator (daily cron), link_gardener (weekly cron + manual), graph_rag (manual, GraphRAG search)
+- **Scheduled jobs control** — the 5 Quantum crons route through `Dran.Jobs`: runtime toggles, manual "run now", and a `report` page per run, all from Settings → Brain
 - **Per-context page type disabling** — restrict which page types appear in a context; enforced via on_mount hooks, sidebar, dashboard, and command palette
-- **Custom props** — `meta.props` key-value bag auto-materializes into typed graph relations (role→works_in, tier→has_tier, location→based_in, language→written_in, framework→built_with). See [SKILL.md](SKILL.md) for the full table.
+- **Custom props** — `meta.props` key-value bag auto-materializes into typed graph relations (role→works_in, tier→has_tier, location→based_in, language→written_in, framework→built_with). See [SKILL.md](skills/dran/SKILL.md) for the full table.
 - **Multi-user auth** — Google OAuth + per-user API tokens with context scoping
 - **Hybrid search** — full-text, fuzzy, semantic, or hybrid with RRF fusion + PageRank authority boost
 - **Version history** with diff, activity feed, runtime settings, and full context export
@@ -46,7 +47,7 @@ See [`.env.example`](.env.example) for the full annotated list. Key ones: `SECRE
 
 ## Settings
 
-Admin-only at `/settings/:tab`. Tabs: `users` (accounts, tokens, context membership), `contexts` (CRUD + page type toggles), `brain` (semantic thresholds, agent limits), `models` (inference config), `system` (read-only), `danger` (reset).
+Admin-only at `/settings/:tab`. Tabs: `users` (accounts, tokens, context membership), `contexts` (CRUD + page type toggles), `brain` (semantic thresholds, agent limits, scheduled jobs), `models` (inference config), `system` (read-only), `danger` (reset).
 
 ## Page types
 
@@ -61,6 +62,7 @@ Admin-only at `/settings/:tab`. Tabs: `users` (accounts, tokens, context members
 | `plan` | Time-horizoned plans (weekly/quarterly/yearly) |
 | `todo` | Actionable items with kanban status |
 | `query` | Questions with answers |
+| `report` | System-created run logs (`meta.kind: "log"`) — detail view at `/reports/:slug`; excluded from graph, journey, embeddings, and MCP-create |
 
 Pages link via independent `meta.project_slug`, `meta.goal_slug`, `meta.plan_slug` — each materializes a `part_of` relation. No rigid hierarchy; orphans are legitimate.
 
@@ -92,11 +94,13 @@ Directed, typed: `related`, `part_of`, `supersedes`, `contradicts`, `embeds` (au
 
 Quantum crons: `curator_daily` (06:00), `pagerank_nightly` (03:00), `community_summaries_nightly` (03:30), `graph_maintenance_nightly` (03:45), `link_gardener_weekly` (Sun 07:00).
 
+All five route through `Dran.Jobs.run_scheduled/1` and are controlled from **Settings → Brain → "Jobs programados"**: per-job toggle (scheduled runs only), "Correr ahora" (always runs), and last-run status. Each run writes a `report` page (`/reports/:slug`) with status, trigger and duration; the newest 20 per job are kept, older ones archived.
+
 ## MCP server
 
 `POST /api/mcp` — Streamable HTTP, MCP spec 2025-03-26. Auth: `Authorization: Bearer <token>`.
 
-**18 tools, 3 agents, 5 resources, 2 prompts** — see [**SKILL.md**](SKILL.md) for the complete operational guide.
+**18 tools, 3 agents, 5 resources, 2 prompts** — see [**SKILL.md**](skills/dran/SKILL.md) for the complete operational guide.
 
 ```json
 { "mcpServers": { "dran": { "url": "http://localhost:4000/api/mcp", "headers": { "Authorization": "Bearer <token>" } } } }
