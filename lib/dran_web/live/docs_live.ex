@@ -477,12 +477,11 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="graph-3d" icon="hero-share" label="3D graph navigation" />
       <p>
-        The graph at <code>/graph</code> renders the full knowledge graph in 3D.
-        Single-click a node to reveal labels for it and its direct neighbors
-        (non-neighbors dim). Double-click a node to navigate to that page.
-        Background click clears the selection. No hover behavior — all
-        interaction is click-based. Per-page subgraphs at
-        <code>/graph/:slug</code> show a page's neighborhood.
+        The graph at <code>/graph</code> renders the full knowledge graph in
+        3D. Hover a node to reveal labels for it and its direct neighbors
+        (non-neighbors dim) after a brief delay. Click a node to navigate to
+        that page. Background click clears the selection. Per-page subgraphs
+        at <code>/graph/:slug</code> show a page's neighborhood.
       </p>
 
       <.h2_heading id="real-time" icon="hero-bolt" label="Real-time updates" />
@@ -518,7 +517,7 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="autonomous-agents" icon="hero-cpu-chip" label="Autonomous agents" />
       <p>
-        Dran runs six autonomous ReAct agents that plan, act, and log every step. Some are
+        Dran runs three autonomous ReAct agents that plan, act, and log every step. Some are
         triggered on demand; others run on a fixed schedule.
       </p>
       <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
@@ -785,7 +784,7 @@ defmodule DranWeb.DocsLive do
   defp agents_data do
     [
       %{
-        label: "Ask (Q&A)",
+        label: "Ask / GraphRAG (Q&A)",
         icon: "hero-chat-bubble-left-right",
         color: "text-violet-500 dark:text-violet-400",
         trigger: :manual,
@@ -813,16 +812,6 @@ defmodule DranWeb.DocsLive do
         description:
           "Reads orphaned and under-linked pages, proposes typed relations with justifications.",
         limits: "Max 10 proposals per session; semantic type forbidden."
-      },
-      %{
-        label: "Weekly Review",
-        icon: "hero-calendar-days",
-        color: "text-rose-500 dark:text-rose-400",
-        trigger: :scheduled,
-        schedule: "Sun 08:00",
-        description:
-          "Gathers brain stats and writes a weekly review journal page with activity, goals progress, and highlights.",
-        limits: "Window: pages created in last 7 days. Output in Spanish."
       }
     ]
   end

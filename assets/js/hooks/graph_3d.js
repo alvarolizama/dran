@@ -4,9 +4,9 @@
 //   • Force-directed 3D layout (d3-force-3d under the hood)
 //   • Nodes sized by connection count
 //   • Curved edges with animated particle flow
-//   • Click to select: shows labels for the clicked node and its direct
-//     neighbors, dims the rest. No hover behavior.
-//   • Double-click a node → navigate to that page.
+//   • Hover to reveal labels: 300ms debounce before showing, labels
+//     persist 3s after the cursor leaves, then auto-clear.
+//   • Click a node → navigate to that page (no double-click needed).
 //   • Background click clears the selection.
 //   • Auto zoom-to-fit after layout stabilizes
 //   • Dark background matching Dran's brand color
@@ -40,8 +40,11 @@ const Graph3D = {
     this.graph = null
     this.resizeHandler = null
     this.visibilityObserver = null
-    // Click selection state (replaces the old hover system)
+    // Hover selection state (replaces the old click-to-select)
     this.selectedNode = null
+    this.hoveredNode = null
+    this.hoverTimer = null
+    this.labelExpiryTimer = null
     this.labeledNodes = new Set()
     this.highlightNodes = new Set()
     this.highlightLinks = new Set()
@@ -131,8 +134,9 @@ const Graph3D = {
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleSpeed(0.006)
       .linkDirectionalParticleColor(link => link.color || "#94A3B8")
-      // Interaction: click to select (show labels + dim), double-click to
-      // navigate, background click to clear. No hover callbacks.
+      // Interaction: hover to show labels (debounced 300ms), click to
+      // navigate to the page. No click-to-select — hover replaces it.
+      .onNodeHover((node, prevNode) => this.handleNodeHover(node, prevNode))
       .onNodeClick((node, event) => this.handleNodeClick(node, event))
       .onBackgroundClick(() => this.handleBackgroundClick())
       // Physics / layout — shorter warmup/cooldown on big graphs so the
@@ -315,26 +319,79 @@ const Graph3D = {
 
   // ── Interaction handlers ──────────────────────────────────────────────
 
+  // Click → navigate to the page. No selection, no double-click logic.
   handleNodeClick(node, event) {
-    // Double-click → navigate to the page.
-    if (event && event.detail === 2) {
-      if (node.slug) {
-        this.pushEvent("node_click", { slug: node.slug })
-      }
-      return
+    if (node.slug) {
+      this.pushEvent("node_click", { slug: node.slug })
     }
-    // Single click → select: show labels for this node and its direct
-    // neighbors, dim the rest. Does NOT navigate.
-    this.selectNode(node)
   },
 
   // Background click clears the selection.
   handleBackgroundClick() {
+    this.clearHover()
     this.clearSelection()
   },
 
-  // Show labels and highlight the clicked node + its direct neighbors.
-  // Does NOT navigate — the next click on a labeled node navigates.
+  // Hover with 300ms debounce: wait before showing labels so passing
+  // over nodes quickly doesn't trigger label flicker. Labels persist for
+  // 3s after the cursor leaves the node, then auto-clear.
+  handleNodeHover(node, prevNode) {
+    // Clear any pending label-expiry timer from a previous hover-out.
+    if (this.labelExpiryTimer) {
+      clearTimeout(this.labelExpiryTimer)
+      this.labelExpiryTimer = null
+    }
+
+    if (node) {
+      // New node hovered — if it changed, restart the debounce timer.
+      if (this.hoveredNode !== node) {
+        this.hoveredNode = node
+
+        // Cancel any previous pending hover timer.
+        if (this.hoverTimer) {
+          clearTimeout(this.hoverTimer)
+        }
+
+        // Debounce: wait 300ms before showing labels.
+        this.hoverTimer = setTimeout(() => {
+          this.hoverTimer = null
+          // Only select if the user is still hovering the same node.
+          if (this.hoveredNode === node) {
+            this.selectNode(node)
+          }
+        }, 300)
+      }
+    } else if (prevNode) {
+      // Cursor left the node — cancel any pending hover timer, then
+      // schedule the labels to expire after 3s.
+      if (this.hoverTimer) {
+        clearTimeout(this.hoverTimer)
+        this.hoverTimer = null
+      }
+      this.hoveredNode = null
+
+      this.labelExpiryTimer = setTimeout(() => {
+        this.clearSelection()
+        this.labelExpiryTimer = null
+      }, 3000)
+    }
+  },
+
+  // Cancel any pending hover timer without clearing the selection.
+  clearHover() {
+    if (this.hoverTimer) {
+      clearTimeout(this.hoverTimer)
+      this.hoverTimer = null
+    }
+    if (this.labelExpiryTimer) {
+      clearTimeout(this.labelExpiryTimer)
+      this.labelExpiryTimer = null
+    }
+    this.hoveredNode = null
+  },
+
+  // Show labels and highlight the hovered node + its direct neighbors.
+  // Triggered by handleNodeHover after the 300ms debounce elapses.
   selectNode(node) {
     // Reset previous selection first.
     this.clearSelection()
@@ -515,6 +572,15 @@ const Graph3D = {
           node.__sphere = null
         }
       })
+      // Clear hover timer state
+      if (this.hoverTimer) {
+        clearTimeout(this.hoverTimer)
+        this.hoverTimer = null
+      }
+      if (this.labelExpiryTimer) {
+        clearTimeout(this.labelExpiryTimer)
+        this.labelExpiryTimer = null
+      }
       // Clear graph data to free GPU buffers
       this.graph.graphData({ nodes: [], links: [] })
       // Remove canvas from DOM

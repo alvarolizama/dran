@@ -283,13 +283,13 @@ defmodule DranWeb.GraphLive do
           </h1>
           <p class="text-caption mt-1">
             {gettext(
-              "Visualize how your pages connect. Drag to rotate, click a node to reveal labels, click a label to navigate."
+              "Visualize how your pages connect. Drag to rotate, hover a node to reveal labels, click a node to navigate."
             )}
           </p>
         </div>
 
         <div class="flex gap-4 flex-1 min-h-0">
-          <div class="w-48 shrink-0">
+          <div class="w-48 shrink-0 p-2">
             <h3 class="text-xs font-semibold text-base-content/40 uppercase mb-2">
               {gettext("Types")}
             </h3>
@@ -358,7 +358,7 @@ defmodule DranWeb.GraphLive do
               class="w-full h-full"
             />
             <div class="absolute bottom-0 left-0 right-0 px-3 py-2 text-xs text-base-content/40 bg-base-200/50 border-t border-base-300">
-              {gettext("Drag to rotate · Scroll to zoom · Click to reveal labels")}
+              {gettext("Drag to rotate · Scroll to zoom · Hover to reveal labels · Click to navigate")}
             </div>
           </div>
         </div>
