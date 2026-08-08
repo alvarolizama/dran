@@ -602,10 +602,21 @@ defmodule DranWeb.PageComponents do
   @doc """
   Renders the 3D force-directed graph using the Graph3D hook.
   Replaces the old SVG 2D page_graph.
+
+  The hook div is ALWAYS rendered (no empty-state branch): in index mode the
+  LiveView starts with `nodes == []` and the hook fetches /api/graph-json via
+  HTTP after the shell renders. A `nil` empty-state here would block the mount
+  and the progressive fetch would never start. The "Loading graph..." overlay
+  in GraphLive covers the initial load.
   """
   attr :id, :string, default: "graph-3d"
   attr :nodes, :list, required: true, doc: "list of %{id, slug, label, type, color}"
   attr :edges, :list, required: true, doc: "list of %{source_id, target_id, color}"
+
+  attr :visible_types, :list,
+    default: nil,
+    doc: "types the hook may show (used by GraphLive index). nil = show all (subgraphs)"
+
   attr :class, :string, default: ""
   attr :style, :string, default: ""
 
@@ -613,25 +624,27 @@ defmodule DranWeb.PageComponents do
     # Build the JSON data for the hook
     graph_data = %{nodes: assigns.nodes, edges: assigns.edges}
     assigns = assign(assigns, :graph_json, Jason.encode!(graph_data))
+    # nil attribute values are omitted by HEEx, so passing nil skips the hook's
+    # client-side type filter (subgraphs always render everything).
+    assigns =
+      assign(
+        assigns,
+        :visible_types_json,
+        assigns.visible_types && Jason.encode!(assigns.visible_types)
+      )
 
     ~H"""
     <div
       class={["relative overflow-hidden", @class]}
       style={"background: #0a0e27; #{@style}"}
     >
-      <%= if @nodes == [] do %>
-        <div class="flex flex-col items-center justify-center h-full min-h-[300px] text-base-content/40">
-          <.icon name="hero-circle-stack" class="size-10 mb-3" />
-          <p class="text-sm">No graph data</p>
-        </div>
-      <% else %>
-        <div
-          id={@id}
-          phx-hook="Graph3D"
-          data-graph={@graph_json}
-          style="width: 100%; height: 100%; min-height: 300px;"
-        />
-      <% end %>
+      <div
+        id={@id}
+        phx-hook="Graph3D"
+        data-graph={@graph_json}
+        data-visible-types={@visible_types_json}
+        style="width: 100%; height: 100%; min-height: 300px;"
+      />
     </div>
     """
   end

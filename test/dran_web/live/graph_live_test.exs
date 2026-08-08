@@ -82,10 +82,8 @@ defmodule DranWeb.GraphLiveTest do
     {:ok, conn: conn, todo: todo, goal: goal}
   end
 
-  # The 3D hook receives the graph as JSON inside the #graph-3d element's
+  # Show mode: the subgraph is serialized into the #graph-3d element's
   # data-graph attribute. Parse it back so tests assert on the real payload.
-  # In progressive mode (index), the data comes from the graph_loaded event,
-  # so we render after pushing it.
   defp graph_from_html(html) do
     [_, encoded] = Regex.run(~r/data-graph="([^"]*)"/, html)
 
@@ -96,42 +94,21 @@ defmodule DranWeb.GraphLiveTest do
     |> Jason.decode!()
   end
 
-  # In progressive mode, simulate the hook fetching /api/graph-json and
-  # pushing the result back to the LiveView.
+  # Wave 2: index mode keeps the graph data in the hook client-side. The
+  # progressive fetch now pushes only counters back to the LV, so we simulate
+  # that lightweight payload (never nodes/edges).
   defp push_graph_loaded(view, context) do
-    %{nodes: nodes, edges: edges, total_nodes: total_nodes, total_edges: total_edges} =
+    %{total_nodes: total_nodes, total_edges: total_edges} =
       Brain.graph_data(context.id, exclude_types: ~w(todo plan), max_nodes: 400)
 
     type_counts = Brain.graph_type_counts(context.id, ~w(todo plan))
 
-    payload = %{
-      "nodes" =>
-        Enum.map(nodes, fn n ->
-          %{
-            "id" => n.id,
-            "slug" => n.slug,
-            "label" => n.title,
-            "type" => n.type,
-            "color" => "#60A5FA"
-          }
-        end),
-      "edges" =>
-        Enum.map(edges, fn e ->
-          %{
-            "source_id" => e.source,
-            "target_id" => e.target,
-            "color" => "#94A3B8"
-          }
-        end),
+    render_hook(view, "graph_loaded", %{
       "total_nodes" => total_nodes,
       "total_edges" => total_edges,
       "type_counts" => type_counts
-    }
-
-    render_hook(view, "graph_loaded", payload)
+    })
   end
-
-  defp graph_types(graph), do: graph["nodes"] |> Enum.map(& &1["type"]) |> Enum.uniq()
 
   defp graph_from_view(view), do: view |> render() |> graph_from_html()
 
@@ -147,28 +124,66 @@ defmodule DranWeb.GraphLiveTest do
     end)
   end
 
-  describe "global graph type filter" do
-    test "index excludes the operational layer (todo, plan) entirely", %{conn: conn} do
+  describe "global graph index" do
+    test "mounts the hook div even when the graph starts empty (no empty-state)", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/graph")
+
+      # Wave 1: the hook div must exist on the initial render (nodes are empty
+      # in progressive mode) or the client-side fetch never starts.
+      assert html =~ ~s(phx-hook="Graph3D")
+      assert html =~ ~s(id="graph-3d")
+      refute html =~ "No graph data"
+
+      # The initial visible_types are passed to the hook via data-visible-types.
+      assert html =~ ~s(data-visible-types=)
+
+      # data-graph is empty — the hook must fetch /api/graph-json over HTTP.
+      graph = graph_from_view(view)
+      assert graph["nodes"] == []
+      assert graph["edges"] == []
+
+      # The payload is lightweight: no nodes/edges pushed over the socket.
+      assert render(view) =~ ~s(data-visible-types=)
+    end
+
+    test "graph_loaded pushes only counters, not nodes/edges", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/graph")
 
-      # Progressive: push the data the hook would fetch
       context = Brain.get_context_by_slug("personal")
       push_graph_loaded(view, context)
 
+      # After the fetch the sidebar totals reflect the counters, and the
+      # rendered data-graph remains an empty payload (the dataset lives in the
+      # hook, not in the socket).
+      html = render(view)
+      assert html =~ ~s(data-visible-types=)
       graph = graph_from_view(view)
-      types = graph_types(graph)
+      assert graph["nodes"] == []
+      assert graph["edges"] == []
+    end
 
-      refute "todo" in types, "todos should be excluded from the global graph"
-      refute "plan" in types, "plans should be excluded from the global graph"
+    test "toggle_type pushes set_visible_types to the hook (client-side filter)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/graph")
 
-      # Strategic hubs and knowledge stay visible
+      # Toggling a type off must tell the hook to hide it client-side — the
+      # LiveView no longer filters nodes over the socket.
+      view |> render_hook("toggle_type", %{"type" => "note"})
+
+      assert_push_event(view, "set_visible_types", %{types: types})
+      refute "note" in types
       assert "goal" in types
-      assert "project" in types
-      assert "note" in types
-      assert "concept" in types
+    end
 
-      # No edge points at a hidden node
-      assert_edges_connect_visible_nodes(graph)
+    test "toggling a visible type off and on restores it in the pushed set", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/graph")
+
+      view |> render_hook("toggle_type", %{"type" => "goal"})
+      assert_push_event(view, "set_visible_types", %{types: types})
+      refute "goal" in types
+
+      view |> render_hook("toggle_type", %{"type" => "goal"})
+      assert_push_event(view, "set_visible_types", %{types: types})
+      assert "goal" in types
     end
 
     test "sidebar omits plan and todo, lists the rest as toggles", %{conn: conn} do
@@ -186,35 +201,6 @@ defmodule DranWeb.GraphLiveTest do
       assert html =~ ~s(phx-value-type="note")
       assert html =~ ~s(phx-value-type="concept")
     end
-
-    test "toggle_type hides a visible type and drops its edges", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/graph")
-
-      context = Brain.get_context_by_slug("personal")
-      push_graph_loaded(view, context)
-
-      assert "note" in graph_types(graph_from_view(view))
-
-      view |> render_hook("toggle_type", %{"type" => "note"})
-
-      graph = graph_from_view(view)
-
-      refute "note" in graph_types(graph)
-      assert_edges_connect_visible_nodes(graph)
-    end
-
-    test "toggling a visible type off and on restores the original state", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/graph")
-
-      context = Brain.get_context_by_slug("personal")
-      push_graph_loaded(view, context)
-
-      view |> render_hook("toggle_type", %{"type" => "goal"})
-      refute "goal" in graph_types(graph_from_view(view))
-
-      view |> render_hook("toggle_type", %{"type" => "goal"})
-      assert "goal" in graph_types(graph_from_view(view))
-    end
   end
 
   describe "per-page subgraph" do
@@ -222,12 +208,19 @@ defmodule DranWeb.GraphLiveTest do
       {:ok, view, _html} = live(conn, ~p"/graph/#{todo.slug}")
 
       graph = graph_from_view(view)
-      types = graph_types(graph)
+      types = graph["nodes"] |> Enum.map(& &1["type"]) |> Enum.uniq()
 
       # The center itself is a todo and its part_of goal neighbor shows up —
       # the subgraph must NOT apply the global filter.
       assert "todo" in types
       assert "goal" in types
+
+      # Wave 3: show-mode payload carries no dead layout coordinates.
+      assert Enum.all?(graph["nodes"], &(not Map.has_key?(&1, "x")))
+      assert Enum.all?(graph["nodes"], &(not Map.has_key?(&1, "y")))
+      assert Enum.all?(graph["nodes"], &(not Map.has_key?(&1, "radius")))
+      assert Enum.all?(graph["edges"], &(not Map.has_key?(&1, "x1")))
+      assert Enum.all?(graph["edges"], &(not Map.has_key?(&1, "y2")))
     end
   end
 end

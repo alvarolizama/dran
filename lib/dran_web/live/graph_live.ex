@@ -24,11 +24,6 @@ defmodule DranWeb.GraphLive do
   # context matters.
   @hidden_by_default ~w(todo plan)
 
-  # Hard cap for the global graph: when a brain has more visible pages than
-  # this, only the most-connected pages are rendered (see Brain.graph_data/2)
-  # so the 3D view stays fluid on large datasets.
-  @max_graph_nodes 400
-
   @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
@@ -42,10 +37,11 @@ defmodule DranWeb.GraphLive do
        context: context,
        active_nav: "graph",
        page: nil,
+       # Wave 2: data no longer crosses the socket in index mode — the hook
+       # fetches /api/graph-json and filters client-side. The LV only holds
+       # counters, visible_types and, in show mode, the small subgraph.
        nodes: [],
        edges: [],
-       all_nodes: [],
-       all_edges: [],
        visible_types: default_visible_types(),
        type_colors: sidebar_type_colors(),
        type_counts: %{},
@@ -53,6 +49,8 @@ defmodule DranWeb.GraphLive do
        edge_count: 0,
        total_node_count: 0,
        total_edge_count: 0,
+       # Wave 3: debounce timer handle for page_changed re-fetches in index.
+       refetch_timer: nil,
        # Progressive loading: index mode fetches data via HTTP (see hook),
        # show mode loads synchronously (small subgraph, fast query).
        loading: false
@@ -123,51 +121,67 @@ defmodule DranWeb.GraphLive do
         MapSet.put(socket.assigns.visible_types, type)
       end
 
-    {:noreply, socket |> assign(visible_types: visible) |> filter_visible()}
+    socket = assign(socket, visible_types: visible)
+
+    case socket.assigns.live_action do
+      # Wave 2: in index the hook owns the data — tell it which types to show
+      # and let it filter client-side (no socket roundtrip of nodes/edges).
+      :index ->
+        {:noreply, push_event(socket, "set_visible_types", %{types: MapSet.to_list(visible)})}
+
+      # Show mode still carries the small subgraph in the socket (data-graph),
+      # so the server filters it as before.
+      :show ->
+        {:noreply, filter_visible(socket)}
+    end
   end
 
   @impl true
-  def handle_event("graph_loaded", %{"nodes" => nodes, "edges" => edges} = payload, socket) do
-    # Progressive load: the Graph3D hook fetched /api/graph-json and pushed
-    # the result here. Store as all_nodes/all_edges so type filtering works.
-    all_nodes =
-      Enum.map(nodes, fn n ->
+  def handle_event(
+        "graph_loaded",
         %{
-          id: n["id"],
-          slug: n["slug"],
-          label: n["label"],
-          type: n["type"],
-          color: n["color"]
-        }
-      end)
-
-    all_edges =
-      Enum.map(edges, fn e ->
-        %{
-          source_id: e["source_id"],
-          target_id: e["target_id"],
-          color: e["color"]
-        }
-      end)
-
+          "total_nodes" => total_nodes,
+          "total_edges" => total_edges,
+          "type_counts" => type_counts
+        },
+        socket
+      ) do
+    # Wave 2: the progressive fetch pushes only counters — the graph data
+    # itself stays in the hook's fullData and never crosses the socket.
     {:noreply,
-     socket
-     |> assign(
-       all_nodes: all_nodes,
-       all_edges: all_edges,
-       type_counts: payload["type_counts"] || %{},
-       total_node_count: payload["total_nodes"] || length(all_nodes),
-       total_edge_count: payload["total_edges"] || length(all_edges),
+     assign(socket,
+       type_counts: type_counts || %{},
+       total_node_count: total_nodes || 0,
+       total_edge_count: total_edges || 0,
        loading: false
-     )
-     |> filter_visible()}
+     )}
+  end
+
+  # Wave 2: after the hook filters client-side (initial load or a type toggle),
+  # it reports the visible counts so the sidebar stays accurate.
+  @impl true
+  def handle_event(
+        "graph_counts",
+        %{"node_count" => node_count, "edge_count" => edge_count},
+        socket
+      ) do
+    {:noreply, assign(socket, node_count: node_count || 0, edge_count: edge_count || 0)}
   end
 
   @impl true
   def handle_info({:page_changed, _action, changed_page}, socket) do
     case socket.assigns.live_action do
       :index ->
-        {:noreply, load_index_graph(socket)}
+        # Wave 3: debounce broadcasts — a rapid burst of page_changed should
+        # collapse into a single re-fetch. Cancel any pending timer, then
+        # schedule one; when it fires we tell the hook to re-fetch over HTTP.
+        timer = Process.send_after(self(), :graph_refetch, 1500)
+
+        if socket.assigns.refetch_timer do
+          Process.cancel_timer(socket.assigns.refetch_timer)
+        end
+
+        {:noreply, assign(socket, refetch_timer: timer)}
 
       :show ->
         page = socket.assigns.page
@@ -180,66 +194,28 @@ defmodule DranWeb.GraphLive do
     end
   end
 
-  # ── Data loading ───────────────────────────────────────────────────────────
-
-  defp load_index_graph(socket) do
-    context = socket.assigns.context
-
-    if context do
-      hidden = @hidden_by_default
-
-      %{nodes: raw_nodes, edges: raw_edges, total_nodes: total_nodes, total_edges: total_edges} =
-        Brain.graph_data(context.id, exclude_types: hidden, max_nodes: @max_graph_nodes)
-
-      # Lightweight payload for the 3D hook: the client runs its own force
-      # layout, so no server-side positioning is needed (the old circular
-      # layout was pure payload waste). No summary/tags — the hook only
-      # needs id, slug, label, type, color.
-      all_nodes =
-        Enum.map(raw_nodes, fn n ->
-          %{
-            id: n.id,
-            slug: n.slug,
-            label: n.title,
-            type: n.type,
-            color: Map.get(GraphHelpers.type_colors(), n.type, "#94A3B8")
-          }
-        end)
-
-      all_edges =
-        Enum.map(raw_edges, fn e ->
-          %{
-            source_id: e.source,
-            target_id: e.target,
-            color: Map.get(GraphHelpers.edge_colors(), e.type, "#94A3B8")
-          }
-        end)
-
-      socket
-      |> assign(
-        all_nodes: all_nodes,
-        all_edges: all_edges,
-        type_counts: Brain.graph_type_counts(context.id, hidden),
-        total_node_count: total_nodes,
-        total_edge_count: total_edges
-      )
-      |> filter_visible()
-    else
-      socket
-    end
+  # Wave 3: debounce elapsed — mark the graph stale and tell the hook to
+  # re-fetch /api/graph-json. The full graph is never re-serialized over the
+  # socket on every broadcast anymore.
+  @impl true
+  def handle_info(:graph_refetch, socket) do
+    {:noreply, assign(socket, refetch_timer: nil) |> push_event("graph_refetch", %{})}
   end
+
+  # ── Data loading ───────────────────────────────────────────────────────────
 
   # Restrict the rendered nodes/edges to the currently visible types. Edges
   # whose endpoints are both hidden are dropped too, so the 3D view never
-  # draws a line pointing at a node that isn't there.
+  # draws a line pointing at a node that isn't there. Used by show mode where
+  # the small subgraph still lives in the socket.
   defp filter_visible(socket) do
     visible = socket.assigns.visible_types
 
-    nodes = Enum.filter(socket.assigns.all_nodes, &MapSet.member?(visible, &1.type))
+    nodes = Enum.filter(socket.assigns.nodes, &MapSet.member?(visible, &1.type))
     visible_ids = MapSet.new(nodes, & &1.id)
 
     edges =
-      Enum.filter(socket.assigns.all_edges, fn e ->
+      Enum.filter(socket.assigns.edges, fn e ->
         MapSet.member?(visible_ids, e.source_id) and MapSet.member?(visible_ids, e.target_id)
       end)
 
@@ -387,6 +363,7 @@ defmodule DranWeb.GraphLive do
               id="graph-3d"
               nodes={@nodes}
               edges={@edges}
+              visible_types={if @live_action == :index, do: MapSet.to_list(@visible_types), else: nil}
               class="w-full h-full"
             />
             <div class="absolute bottom-0 left-0 right-0 px-3 py-2 text-xs text-base-content/40 bg-base-200/50 border-t border-base-300">

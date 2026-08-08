@@ -91,58 +91,32 @@ defmodule DranWeb.GraphHelpers do
       slug: page.slug,
       label: page.title,
       type: page.page_type,
-      color: Map.get(@type_colors, page.page_type, "#94A3B8"),
-      radius: 30,
-      x: 400,
-      y: 300
+      color: Map.get(@type_colors, page.page_type, "#94A3B8")
     }
 
+    # Wave 3: no server-side positioning. The 3D hook runs its own force
+    # layout, so x/y/radius coordinates in the payload were pure waste.
     neighbors_laid =
-      neighbors
-      |> Enum.map(fn n ->
+      Enum.map(neighbors, fn n ->
         %{
           id: n.id,
           slug: n.slug,
           label: n.title,
           type: n.type,
           color: Map.get(@type_colors, n.type, "#94A3B8"),
-          radius: 20,
           relation_type: n.relation_type
         }
       end)
-      |> circular_layout(400, 300, 200)
 
     edges =
       Enum.map(neighbors_laid, fn n ->
         %{
           source_id: center.id,
           target_id: n.id,
-          x1: 400,
-          y1: 300,
-          x2: n.x,
-          y2: n.y,
           color: Map.get(@edge_colors, n.relation_type, "#94A3B8")
         }
       end)
 
     %{nodes: [center | neighbors_laid], edges: edges}
-  end
-
-  def circular_layout(nodes, center_x, center_y, radius) do
-    count = length(nodes)
-
-    if count == 0 do
-      []
-    else
-      nodes
-      |> Enum.with_index()
-      |> Enum.map(fn {node, i} ->
-        angle = i / count * 2 * :math.pi()
-
-        node
-        |> Map.put(:x, center_x + radius * :math.cos(angle))
-        |> Map.put(:y, center_y + radius * :math.sin(angle))
-      end)
-    end
   end
 end

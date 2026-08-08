@@ -43,17 +43,42 @@ const Graph3D = {
     this.highlightLinks = new Set()
     this.nodeDepths = new Map()
     this.labelRetryId = null
+    // Wave 2: data lives on the client. `fullData` is the raw {nodes, links}
+    // from the fetch (or from data-graph in show mode); `visibleTypes` is the
+    // Set of page types currently shown. The LiveView only ever receives
+    // counters — nodes/edges never cross the socket in index mode.
+    this.fullData = null
+    this.visibleTypes = null
+    // true when in index (progressive) mode: data is fetched via HTTP and
+    // rendered client-side, so updated() must not try to re-read data-graph.
+    this.progressive = false
+    // Wave 2: the LV pushes the sidebar's visible_types after a toggle; filter
+    // client-side against our own data. No socket roundtrip of nodes/edges.
+    this.handleEvent("set_visible_types", ({ types }) => {
+      this.visibleTypes = new Set(types || [])
+      if (this.fullData) {
+        this.renderVisible()
+      }
+    })
+    // Wave 3: the LV debounces page_changed broadcasts and tells us to
+    // re-fetch the graph over HTTP when it's time.
+    this.handleEvent("graph_refetch", () => {
+      this.fetchGraphData()
+    })
     this.init()
   },
 
   updated() {
-    // Re-sync data when LiveView pushes new assigns
+    // Wave 2: in index mode the LV no longer carries nodes/edges — the hook
+    // owns the data in `fullData`. Re-sync from data-graph only in show mode
+    // (small pre-rendered subgraph), where the LV still drives the payload.
+    if (this.progressive) return
     const data = this.readGraphData()
     if (data && this.graph) {
-      // Re-evaluate quality for the new dataset (type toggles can shrink it)
-      this.scale = graphScale(data.nodes.length, data.edges.length)
+      this.fullData = this.transformData(data)
+      this.scale = graphScale(this.fullData.nodes.length, this.fullData.links.length)
       this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
-      this.graph.graphData(this.transformData(data))
+      this.graph.graphData(this.fullData)
       this.scheduleLabelRefresh()
     }
   },
@@ -71,11 +96,16 @@ const Graph3D = {
     const width = container.clientWidth || 800
     const height = container.clientHeight || 600
 
+    // Wave 2: read the initial visible-types from the element (index mode
+    // passes the sidebar's current set; show mode omits the attribute → null).
+    this.visibleTypes = this.readVisibleTypes()
+
     // Progressive loading: when data-graph is empty (index mode), fetch the
     // graph JSON via HTTP after the shell renders. When it's pre-populated
     // (show mode / search results), use it directly.
     const initial = this.readGraphData()
     const needsFetch = !initial || initial.nodes.length === 0
+    this.progressive = needsFetch
 
     // Pick render quality from the incoming graph size before wiring accessors
     this.scale = graphScale(initial ? initial.nodes.length : 0, initial ? initial.edges.length : 0)
@@ -113,8 +143,8 @@ const Graph3D = {
       this.fetchGraphData()
     } else {
       // Load initial data (show mode, search results)
-      this.graph.graphData(this.transformData(initial))
-      this.scheduleLabelRefresh()
+      this.fullData = this.transformData(initial)
+      this.renderVisible()
     }
 
     // Resize handling
@@ -142,23 +172,48 @@ const Graph3D = {
         this.scale = graphScale(data.nodes.length, data.edges.length)
         this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
 
-        // Push to LiveView so sidebar counts and filtering work
+        // Wave 2: keep the full dataset client-side; push only counters so
+        // the LV updates the sidebar without the graph crossing the socket.
+        this.fullData = this.transformData(data)
         this.pushEvent("graph_loaded", {
-          nodes: data.nodes,
-          edges: data.edges,
           total_nodes: data.total_nodes,
           total_edges: data.total_edges,
           type_counts: data.type_counts
         })
 
         // Render in the 3D view immediately (don't wait for LV roundtrip)
-        this.graph.graphData(this.transformData(data))
-        this.scheduleLabelRefresh()
+        this.renderVisible()
       })
       .catch(err => {
         console.error("Graph3D: failed to fetch graph data", err)
-        this.pushEvent("graph_loaded", { nodes: [], edges: [], total_nodes: 0, total_edges: 0, type_counts: {} })
+        this.pushEvent("graph_loaded", { total_nodes: 0, total_edges: 0, type_counts: {} })
       })
+  },
+
+  // Wave 2: apply the current visible_types filter to fullData and render.
+  // Filters out nodes whose type is hidden and any link whose endpoints are
+  // both hidden — never touches the socket. Reports the visible counts back
+  // to the LV (index mode) so the sidebar Totals stay accurate.
+  renderVisible() {
+    if (!this.fullData) return
+    const visible = this.visibleTypes
+    let nodes = this.fullData.nodes
+    let links = this.fullData.links
+
+    if (visible) {
+      nodes = nodes.filter(n => visible.has(n.type))
+      const visibleIds = new Set(nodes.map(n => n.id))
+      links = links.filter(l => visibleIds.has(l.source) && visibleIds.has(l.target))
+    }
+
+    this.scale = graphScale(nodes.length, links.length)
+    this.graph.warmupTicks(this.scale.warmup).cooldownTime(this.scale.cooldown)
+    this.graph.graphData({ nodes, links })
+    this.scheduleLabelRefresh()
+
+    if (this.progressive) {
+      this.pushEvent("graph_counts", { node_count: nodes.length, edge_count: links.length })
+    }
   },
 
   // ── Node objects (sphere + label sprite) ─────────────────────────────
@@ -301,6 +356,20 @@ const Graph3D = {
       return JSON.parse(raw)
     } catch (e) {
       console.error("Graph3D: failed to parse data-graph JSON", e)
+      return null
+    }
+  },
+
+  // Wave 2: read the initial visible page-types from data-visible-types.
+  // Absent (subgraph views) → null = show everything.
+  readVisibleTypes() {
+    const raw = this.el.getAttribute("data-visible-types")
+    if (!raw) return null
+    try {
+      const types = JSON.parse(raw)
+      return Array.isArray(types) ? new Set(types) : null
+    } catch (e) {
+      console.error("Graph3D: failed to parse data-visible-types JSON", e)
       return null
     }
   },
