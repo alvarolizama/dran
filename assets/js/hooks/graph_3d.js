@@ -421,8 +421,11 @@ const Graph3D = {
       n.__sphere.scale.setScalar(scale)
     })
 
-    // Trigger link restyle (linkColor / linkWidth / particles are accessor-based)
-    this.graph.refresh()
+    // Note: no graph.refresh() call — it flushes all Three.js objects
+    // (_flushObjects = true) which causes a visible jump when zoomed.
+    // The link accessors (linkColor, linkWidth, linkDirectionalParticles)
+    // are evaluated every render frame, so the highlight updates without
+    // a flush.
   },
 
   // Remove the active selection, restore spheres/links.
@@ -435,7 +438,8 @@ const Graph3D = {
           n.__sphere.scale.setScalar(1)
         }
       })
-      this.graph.refresh()
+      // No graph.refresh() — see selectNode comment. Accessors re-evaluate
+      // every frame; manual material changes are visible without a flush.
     }
     this.selectedNode = null
     this.highlightNodes = new Set()
