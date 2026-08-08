@@ -18,10 +18,11 @@ defmodule Dran.Agent.Curator do
   """
 
   @behaviour Dran.Agent.Engine.Behaviour
+  use Dran.Agent.Schedulable, input: "scheduled run"
 
   import Ecto.Query
 
-  alias Dran.{Auth, Brain, Repo}
+  alias Dran.{Brain, Repo}
   alias Dran.Brain.Page
 
   @agent_type "curator"
@@ -46,25 +47,6 @@ defmodule Dran.Agent.Curator do
   @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Agent.Session.t()}
   def run(input, context_id, opts \\ []) do
     Dran.Agent.Engine.run(__MODULE__, input, context_id, opts)
-  end
-
-  @doc """
-  Run a scheduled curator pass on the default context.
-
-  Resolves the default context slug via `Auth.default_context_slug/0`,
-  looks it up, and starts the engine.
-  """
-  @spec run_scheduled() :: {:ok, Dran.Agent.Session.t()} | {:error, :context_not_found}
-  def run_scheduled do
-    slug = Auth.default_context_slug()
-
-    case Brain.get_context_by_slug(slug) do
-      nil ->
-        {:error, :context_not_found}
-
-      ctx ->
-        run("scheduled run", ctx.id)
-    end
   end
 
   @impl true
