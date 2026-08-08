@@ -72,15 +72,15 @@ defmodule DranWeb.DisabledTypes do
   @doc """
   on_mount hook that blocks access to disabled page types.
 
-  Reads `page_type` from the socket assigns (set by the LiveView's mount)
-  or from the module attribute `@page_type`. Redirects to the dashboard
-  if the type is disabled in the current context.
+  Receives the page_type string as the first arg (on_mount {Module, "note"}).
+  Resolves the context from the session itself (before mount runs) and
+  redirects to the dashboard if the page type is disabled.
   """
-  def on_mount(:guard_disabled_type, _params, _session, socket) do
-    context = socket.assigns[:context]
-    page_type = socket.assigns[:page_type]
+  def on_mount(page_type, _params, session, socket) when is_binary(page_type) do
+    context_slug = session["context_slug"]
+    context = context_slug && Dran.Brain.get_context_by_slug(context_slug)
 
-    if context && page_type do
+    if context do
       if Dran.Brain.page_type_enabled?(context, page_type) do
         {:cont, socket}
       else
