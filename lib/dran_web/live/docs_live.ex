@@ -577,8 +577,9 @@ defmodule DranWeb.DocsLive do
       />
       <p>
         AI agents can connect to Dran via the MCP endpoint at <code>/api/mcp</code> using the
-        Streamable HTTP transport. The repository includes a <code>SKILL.md</code> file with the
-        full operational manual for agent integration. To verify your MCP schema is live and
+        Streamable HTTP transport. The repository includes a <code>skills/</code> directory with the
+        full operational manual suite for agent integration (<code>skills/dran/SKILL.md</code> plus
+        per-flow skills). To verify your MCP schema is live and
         correct, run <code>scripts/mcp_smoke.sh</code> — it exercises the tools list and validates
         the response schema.
       </p>
