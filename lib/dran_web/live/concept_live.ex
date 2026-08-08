@@ -247,10 +247,6 @@ defmodule DranWeb.ConceptLive do
     {:noreply, node_click(socket, slug)}
   end
 
-  def handle_event("node_drag", %{"id" => id, "x" => x, "y" => y}, socket) do
-    {:noreply, node_drag(socket, id, x, y)}
-  end
-
   def handle_event("show_page", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/concepts/#{slug}")}
   end

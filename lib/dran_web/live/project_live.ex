@@ -448,10 +448,6 @@ defmodule DranWeb.ProjectLive do
     {:noreply, node_click(socket, slug)}
   end
 
-  def handle_event("node_drag", %{"id" => id, "x" => x, "y" => y}, socket) do
-    {:noreply, node_drag(socket, id, x, y)}
-  end
-
   def handle_event("new_page", _params, socket) do
     {:noreply, push_navigate(socket, to: ~p"/projects/new")}
   end

@@ -40,8 +40,13 @@ defmodule DranWeb.GraphLive do
        # Wave 2: data no longer crosses the socket in index mode — the hook
        # fetches /api/graph-json and filters client-side. The LV only holds
        # counters, visible_types and, in show mode, the small subgraph.
+       # Show mode carries the small subgraph in the socket (data-graph);
+       # all_nodes/all_edges hold the unfiltered source so toggle_type is
+       # non-destructive. Index mode doesn't use them (the hook owns the data).
        nodes: [],
        edges: [],
+       all_nodes: [],
+       all_edges: [],
        visible_types: default_visible_types(),
        type_colors: sidebar_type_colors(),
        type_counts: %{},
@@ -51,8 +56,6 @@ defmodule DranWeb.GraphLive do
        total_edge_count: 0,
        # Wave 3: debounce timer handle for page_changed re-fetches in index.
        refetch_timer: nil,
-       # Progressive loading: index mode fetches data via HTTP (see hook),
-       # show mode loads synchronously (small subgraph, fast query).
        loading: false
      )}
   end
@@ -91,25 +94,6 @@ defmodule DranWeb.GraphLive do
   @impl true
   def handle_event("node_click", %{"slug" => slug}, socket) do
     {:noreply, push_navigate(socket, to: ~p"/graph/#{slug}")}
-  end
-
-  @impl true
-  def handle_event("node_drag", %{"id" => id, "x" => x, "y" => y}, socket) do
-    nodes =
-      Enum.map(socket.assigns.nodes, fn n ->
-        if n.id == id, do: %{n | x: x, y: y}, else: n
-      end)
-
-    edges =
-      Enum.map(socket.assigns.edges, fn e ->
-        cond do
-          e.source_id == id -> %{e | x1: x, y1: y}
-          e.target_id == id -> %{e | x2: x, y2: y}
-          true -> e
-        end
-      end)
-
-    {:noreply, assign(socket, nodes: nodes, edges: edges)}
   end
 
   @impl true
@@ -173,14 +157,13 @@ defmodule DranWeb.GraphLive do
     case socket.assigns.live_action do
       :index ->
         # Wave 3: debounce broadcasts — a rapid burst of page_changed should
-        # collapse into a single re-fetch. Cancel any pending timer, then
-        # schedule one; when it fires we tell the hook to re-fetch over HTTP.
-        timer = Process.send_after(self(), :graph_refetch, 1500)
-
+        # collapse into a single re-fetch. Cancel any pending timer first,
+        # then schedule one; when it fires we tell the hook to re-fetch.
         if socket.assigns.refetch_timer do
           Process.cancel_timer(socket.assigns.refetch_timer)
         end
 
+        timer = Process.send_after(self(), :graph_refetch, 1500)
         {:noreply, assign(socket, refetch_timer: timer)}
 
       :show ->
@@ -207,15 +190,16 @@ defmodule DranWeb.GraphLive do
   # Restrict the rendered nodes/edges to the currently visible types. Edges
   # whose endpoints are both hidden are dropped too, so the 3D view never
   # draws a line pointing at a node that isn't there. Used by show mode where
-  # the small subgraph still lives in the socket.
+  # the small subgraph still lives in the socket. Filters from all_nodes/
+  # all_edges (the unfiltered source) so toggling is non-destructive.
   defp filter_visible(socket) do
     visible = socket.assigns.visible_types
 
-    nodes = Enum.filter(socket.assigns.nodes, &MapSet.member?(visible, &1.type))
+    nodes = Enum.filter(socket.assigns.all_nodes, &MapSet.member?(visible, &1.type))
     visible_ids = MapSet.new(nodes, & &1.id)
 
     edges =
-      Enum.filter(socket.assigns.edges, fn e ->
+      Enum.filter(socket.assigns.all_edges, fn e ->
         MapSet.member?(visible_ids, e.source_id) and MapSet.member?(visible_ids, e.target_id)
       end)
 
@@ -247,13 +231,18 @@ defmodule DranWeb.GraphLive do
   defp load_show_graph(socket, page) do
     %{nodes: nodes, edges: edges} = GraphHelpers.build_page_subgraph(page)
 
-    assign(socket,
-      nodes: nodes,
-      edges: edges,
-      node_count: length(nodes),
-      edge_count: length(edges),
+    # Show mode: all types visible (including the operational layer — the
+    # subgraph is local context, not the global filtered view).
+    visible_types = MapSet.new(nodes, & &1.type)
+
+    socket
+    |> assign(
+      all_nodes: nodes,
+      all_edges: edges,
+      visible_types: visible_types,
       type_counts: count_types(nodes)
     )
+    |> filter_visible()
   end
 
   defp count_types(nodes) do

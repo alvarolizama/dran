@@ -249,10 +249,6 @@ defmodule DranWeb.NoteLive do
     {:noreply, node_click(socket, slug)}
   end
 
-  def handle_event("node_drag", %{"id" => id, "x" => x, "y" => y}, socket) do
-    {:noreply, node_drag(socket, id, x, y)}
-  end
-
   # ── Page navigation ──
 
   def handle_event("show_page", %{"slug" => slug}, socket) do

@@ -244,9 +244,6 @@ defmodule DranWeb.EntityLive do
   def handle_event("node_click", %{"slug" => slug}, socket),
     do: {:noreply, node_click(socket, slug)}
 
-  def handle_event("node_drag", %{"id" => id, "x" => x, "y" => y}, socket),
-    do: {:noreply, node_drag(socket, id, x, y)}
-
   def handle_event("show_page", %{"slug" => slug}, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/entities/#{slug}")}
 

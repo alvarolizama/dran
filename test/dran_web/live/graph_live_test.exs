@@ -222,5 +222,24 @@ defmodule DranWeb.GraphLiveTest do
       assert Enum.all?(graph["edges"], &(not Map.has_key?(&1, "x1")))
       assert Enum.all?(graph["edges"], &(not Map.has_key?(&1, "y2")))
     end
+
+    test "toggle_type off and on in show mode is non-destructive", %{conn: conn, todo: todo} do
+      {:ok, view, _html} = live(conn, ~p"/graph/#{todo.slug}")
+
+      graph = graph_from_view(view)
+      initial_count = length(graph["nodes"])
+
+      # Toggle "goal" off
+      view |> render_hook("toggle_type", %{"type" => "goal"})
+      graph_hidden = graph_from_view(view)
+      refute graph_hidden["nodes"] |> Enum.any?(&(&1["type"] == "goal"))
+
+      # Toggle "goal" back on — all original nodes must return
+      view |> render_hook("toggle_type", %{"type" => "goal"})
+      graph_restored = graph_from_view(view)
+
+      assert length(graph_restored["nodes"]) == initial_count,
+             "toggle off-on must restore all original nodes (non-destructive)"
+    end
   end
 end

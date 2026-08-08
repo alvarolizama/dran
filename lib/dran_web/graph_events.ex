@@ -3,7 +3,7 @@ defmodule DranWeb.GraphEvents do
   Shared helpers for inline graph tab event handling.
 
   LiveViews call these from their `handle_event/3` clauses for the
-  `switch_tab`, `node_click`, and `node_drag` events.
+  `switch_tab` and `node_click` events.
   """
 
   import Phoenix.Component, only: [assign: 2]
@@ -20,23 +20,5 @@ defmodule DranWeb.GraphEvents do
 
   def node_click(socket, slug) do
     push_navigate(socket, to: ~p"/graph/#{slug}")
-  end
-
-  def node_drag(socket, id, x, y) do
-    graph_nodes =
-      Enum.map(socket.assigns[:graph_nodes] || [], fn n ->
-        if n.id == id, do: %{n | x: x, y: y}, else: n
-      end)
-
-    graph_edges =
-      Enum.map(socket.assigns[:graph_edges] || [], fn e ->
-        cond do
-          e.source_id == id -> %{e | x1: x, y1: y}
-          e.target_id == id -> %{e | x2: x, y2: y}
-          true -> e
-        end
-      end)
-
-    assign(socket, graph_nodes: graph_nodes, graph_edges: graph_edges)
   end
 end
