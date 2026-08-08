@@ -105,4 +105,24 @@ defmodule Dran.Brain.PageMetaTest do
       assert {:props, "props", "Custom properties"} in fields
     end
   end
+
+  describe "changeset/3 with report type" do
+    test "accepts kind log for report" do
+      cs = PageMeta.changeset(%PageMeta{}, %{"kind" => "log"}, "report")
+
+      assert cs.valid?
+      assert Ecto.Changeset.get_change(cs, :kind) == "log"
+    end
+
+    test "rejects a kind outside the report kinds" do
+      cs = PageMeta.changeset(%PageMeta{}, %{"kind" => "thought"}, "report")
+
+      refute cs.valid?
+      assert %{kind: [_ | _]} = errors_on(cs)
+    end
+
+    test "report_kinds/0 returns exactly the log kind" do
+      assert PageMeta.report_kinds() == ~w(log)
+    end
+  end
 end

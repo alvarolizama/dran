@@ -24,7 +24,9 @@ defmodule Dran.GraphCache do
   alias Dran.Brain
   alias DranWeb.GraphHelpers
 
-  @hidden_by_default ~w(todo plan)
+  # Types hidden from the global graph (todo, plan, report) — the canonical
+  # list lives in the Dran.Brain.PageTypes capability registry.
+  @hidden_by_default Dran.Brain.PageTypes.hidden_from_graph()
   @max_graph_nodes 400
 
   # Tables

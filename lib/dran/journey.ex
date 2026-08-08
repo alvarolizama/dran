@@ -8,6 +8,7 @@ defmodule Dran.Journey do
   import Ecto.Query
   alias Dran.Repo
   alias Dran.Brain.Log
+  alias Dran.Brain.PageTypes
 
   @day 86_400
   @month 30 * @day
@@ -26,6 +27,10 @@ defmodule Dran.Journey do
     }
   """
   def timeline(context_id, _opts \\ []) do
+    # Second-citizen page types (e.g. report) never enter the journey — the
+    # canonical exclusion list lives in the Dran.Brain.PageTypes registry.
+    excluded = PageTypes.excluded_from_journey()
+
     entries =
       Repo.all(
         from l in Log,
@@ -33,6 +38,7 @@ defmodule Dran.Journey do
           order_by: [asc: l.inserted_at],
           select: %{subject: l.subject, details: l.details, inserted_at: l.inserted_at}
       )
+      |> Enum.reject(fn e -> Map.get(e.details, "page_type") in excluded end)
 
     if entries == [] do
       empty_payload()

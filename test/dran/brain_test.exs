@@ -370,6 +370,31 @@ defmodule Dran.BrainTest do
       assert graph.total_edges == 0
     end
 
+    test "registry-hidden types (todo, plan, report) keep report pages out of the graph", %{
+      context: ctx
+    } do
+      {:ok, note} = Brain.create_page(%{context_id: ctx.id, title: "Note", page_type: "note"})
+
+      {:ok, report} =
+        Brain.create_page(%{context_id: ctx.id, title: "Report", page_type: "report"})
+
+      {:ok, _} =
+        Brain.create_relation(%{
+          source_id: note.id,
+          target_id: report.id,
+          relation_type: "related"
+        })
+
+      # The capability registry is what GraphCache uses to hide types by default.
+      exclude = Dran.Brain.PageTypes.hidden_from_graph()
+      assert Enum.sort(exclude) == ~w(plan report todo)
+
+      graph = Brain.graph_data(ctx.id, exclude_types: exclude)
+
+      assert Enum.map(graph.nodes, & &1.type) == ["note"]
+      assert graph.edges == []
+    end
+
     test "max_nodes caps to the most-connected pages and reports real totals", %{context: ctx} do
       # Hub page with 3 relations — always makes the cut
       {:ok, hub} = Brain.create_page(%{context_id: ctx.id, title: "Hub", page_type: "note"})

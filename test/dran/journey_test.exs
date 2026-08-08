@@ -122,6 +122,39 @@ defmodule Dran.JourneyTest do
       assert is_integer(result.range.max_ts)
       assert result.range.granularity in ["day", "month", "year"]
     end
+
+    test "excludes second-citizen report pages from the whole timeline", %{context: context} do
+      Brain.create_page(%{context_id: context.id, title: "Note", slug: "n1", page_type: "note"})
+
+      Brain.create_page(%{
+        context_id: context.id,
+        title: "Job report",
+        slug: "r1",
+        page_type: "report"
+      })
+
+      result = Journey.timeline(context.id)
+
+      # Only the note counts — in total, buckets, by_type and trajectory
+      assert result.total == 1
+      assert Map.get(result.stats.by_type, "note") == 1
+      refute Map.has_key?(result.stats.by_type, "report")
+      assert List.last(result.trajectory) == 1
+
+      bucket_pages = Enum.flat_map(result.buckets, & &1.pages)
+      assert Enum.map(bucket_pages, & &1.slug) == ["n1"]
+    end
+
+    test "a context with only report pages yields the empty payload", %{context: context} do
+      Brain.create_page(%{
+        context_id: context.id,
+        title: "Job report",
+        slug: "r1",
+        page_type: "report"
+      })
+
+      assert Journey.timeline(context.id) == Journey.empty_payload()
+    end
   end
 
   describe "suggest_granularity/2" do

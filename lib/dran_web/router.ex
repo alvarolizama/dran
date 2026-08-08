@@ -178,6 +178,10 @@ defmodule DranWeb.Router do
     live "/todos/new", PageNewLive, :new
     live "/todos/:slug", TodoLive, :show
 
+    # System reports (second-citizen pages): detail only — reports are
+    # system-created, so there is no index or new form.
+    live "/reports/:slug", ReportLive, :show
+
     # Views
     live "/graph", GraphLive, :index
     live "/graph/:slug", GraphLive, :show

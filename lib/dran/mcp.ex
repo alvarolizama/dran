@@ -46,6 +46,7 @@ defmodule Dran.MCP do
   """
 
   alias Dran.{Agent, Brain, Repo}
+  alias Dran.Brain.PageTypes
   import Ecto.Query, warn: false
 
   @protocol_version "2025-03-26"
@@ -122,6 +123,8 @@ defmodule Dran.MCP do
       - project: has status (draft/active/on_hold/done/archived), priority, health, health_source (manual/derived), start_date, target_date
       - todo: has kind (personal/coding/business/learning/health/finance/other), kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent)
       - query: question+answer; has kind (factual/conceptual/how_to/opinion), difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
+
+      The `report` page type is system-only: reports are created by Dran itself (jobs, system output) and CANNOT be created via this tool — they live outside the graph, journey and embeddings, and are visible in the activity log and at /reports/:slug in the web UI.
 
       Links are INDEPENDENT and OPTIONAL with NO precedence. Any page (including todos, notes, plans, goals, projects) may carry `meta.project_slug`, `meta.goal_slug`, and/or `meta.plan_slug` simultaneously — each one materializes its own `part_of` relation independently. A page may have 0, 1, 2, or all 3 links. Orphan pages (no links) are legitimate. There is NO goal-derived-from-plan precedence: set each link explicitly when you want it.
       """,
@@ -1008,34 +1011,39 @@ defmodule Dran.MCP do
        ) do
     context = Brain.get_context_by_slug(context_slug)
 
-    if context do
-      attrs =
-        %{
-          context_id: context.id,
-          title: Map.get(args, "title"),
-          slug: Map.get(args, "slug"),
-          page_type: page_type,
-          body: Map.get(args, "body", ""),
-          tags: Map.get(args, "tags", []),
-          summary: Map.get(args, "summary"),
-          meta: Map.get(args, "meta", %{}),
-          created_by: Map.get(args, "created_by", "agent"),
-          owner: Map.get(args, "owner", "agent")
-        }
-        |> maybe_put(:on_behalf_of, args["on_behalf_of"])
+    cond do
+      is_nil(context) ->
+        "Error: context '#{context_slug}' not found"
 
-      case Brain.create_page(attrs) do
-        {:ok, page} ->
-          "Created page: #{page.title} (#{page.slug})"
+      not PageTypes.mcp_create?(page_type) ->
+        "Error: page type '#{page_type}' is system-created and cannot be created via MCP"
 
-        {:error, :page_type_disabled} ->
-          "Error: page type '#{attrs[:page_type]}' is disabled in context '#{context_slug}'"
+      true ->
+        attrs =
+          %{
+            context_id: context.id,
+            title: Map.get(args, "title"),
+            slug: Map.get(args, "slug"),
+            page_type: page_type,
+            body: Map.get(args, "body", ""),
+            tags: Map.get(args, "tags", []),
+            summary: Map.get(args, "summary"),
+            meta: Map.get(args, "meta", %{}),
+            created_by: Map.get(args, "created_by", "agent"),
+            owner: Map.get(args, "owner", "agent")
+          }
+          |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
-        {:error, changeset} ->
-          "Error: #{format_changeset_errors(changeset)}"
-      end
-    else
-      "Error: context '#{context_slug}' not found"
+        case Brain.create_page(attrs) do
+          {:ok, page} ->
+            "Created page: #{page.title} (#{page.slug})"
+
+          {:error, :page_type_disabled} ->
+            "Error: page type '#{attrs[:page_type]}' is disabled in context '#{context_slug}'"
+
+          {:error, changeset} ->
+            "Error: #{format_changeset_errors(changeset)}"
+        end
     end
   end
 

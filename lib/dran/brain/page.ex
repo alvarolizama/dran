@@ -12,6 +12,9 @@ defmodule Dran.Brain.Page do
   - `concept` — abstract idea, technique, pattern, discipline, theory
   - `reference` — immutable external source (article, paper, video, podcast, book)
   - `query` — question with answer; semantic relations link it to concepts/entities
+  - `project` — a project grouping goals, plans and todos
+  - `report` — system-created report (jobs, system output); second-citizen page,
+    see `Dran.Brain.PageTypes` for its capabilities
 
   ## Meta JSONB
 
@@ -66,7 +69,9 @@ defmodule Dran.Brain.Page do
              :updated_at
            ]}
 
-  @page_types ~w(note plan todo goal entity concept reference query project)
+  # The canonical list of page types lives in Dran.Brain.PageTypes (single
+  # source of truth, including per-type capabilities).
+  @page_types Dran.Brain.PageTypes.types()
   @confidence_levels ~w(low medium high verified)
 
   schema "pages" do

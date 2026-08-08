@@ -563,5 +563,4 @@ defmodule DranWeb.Layouts do
     </div>
     """
   end
-
 end

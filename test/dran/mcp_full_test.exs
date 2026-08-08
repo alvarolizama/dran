@@ -320,6 +320,22 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Error: context"
     end
 
+    test "rejects the system-only report page type", %{context: ctx} do
+      result =
+        call_tool("dran_create_page", %{
+          "context" => "personal",
+          "page_type" => "report",
+          "title" => "Job report",
+          "slug" => "mcp-report-create-test",
+          "body" => "must not be created"
+        })
+
+      assert result =~
+               "Error: page type 'report' is system-created and cannot be created via MCP"
+
+      assert Brain.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
+    end
+
     test "creates a project page with meta", %{context: ctx} do
       result =
         call_tool("dran_create_page", %{

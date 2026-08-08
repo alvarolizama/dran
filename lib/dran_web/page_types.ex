@@ -2,8 +2,11 @@ defmodule DranWeb.PageTypes do
   @moduledoc """
   Centralized page type mappings.
 
-  A single source of truth for the 11 page types, each with its
+  A single source of truth for the 10 page types, each with its
   URL path segment, display label, icon, and plural label.
+
+  Only presentation lives here — what a type CAN do (graph, journey,
+  embeddings, MCP-create) is defined in `Dran.Brain.PageTypes`.
   """
 
   use Gettext, backend: DranWeb.Gettext
@@ -37,6 +40,12 @@ defmodule DranWeb.PageTypes do
       label: "Query",
       icon: "hero-question-mark-circle",
       plural: "Queries"
+    },
+    "report" => %{
+      path: "reports",
+      label: "Report",
+      icon: "hero-clipboard-document-list",
+      plural: "Reports"
     }
   }
 
@@ -125,5 +134,7 @@ defmodule DranWeb.PageTypes do
     gettext("Plans")
     gettext("Todos")
     gettext("Queries")
+    gettext("Report")
+    gettext("Reports")
   end
 end

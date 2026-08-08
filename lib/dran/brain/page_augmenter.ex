@@ -18,6 +18,7 @@ defmodule Dran.Brain.PageAugmenter do
   alias Dran.Repo
   alias Dran.Brain
   alias Dran.Brain.Page
+  alias Dran.Brain.PageTypes
   alias Dran.Embeddings
   alias Dran.Inference
   alias Dran.Summaries
@@ -58,6 +59,22 @@ defmodule Dran.Brain.PageAugmenter do
   """
   @spec run(Page.t()) :: :ok | {:error, term()}
   def run(%Page{} = page) do
+    # Second-citizen page types (e.g. report) never enter the augmentation
+    # pipeline — no embeddings, no enrichment, no props materialization.
+    # This guard must stay at the very top, before PropsMaterializer and the
+    # inference early-returns.
+    if not PageTypes.embeddings?(page.page_type) do
+      Logger.debug(
+        "PageAugmenter skipped for #{page.slug}: type #{page.page_type} has no embeddings"
+      )
+
+      :ok
+    else
+      do_run(page)
+    end
+  end
+
+  defp do_run(%Page{} = page) do
     page = Repo.get(Page, page.id) || page
 
     # Props materialization is inference-independent — run it first so props
