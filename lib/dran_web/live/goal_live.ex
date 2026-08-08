@@ -4,7 +4,6 @@ defmodule DranWeb.GoalLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
   alias DranWeb.ListPagination
@@ -39,11 +38,13 @@ defmodule DranWeb.GoalLive do
           context_slug={@context_slug}
           rendered_body={@rendered_body}
           content_hidden={@active_tab != "overview"}
-          graph_active={@active_tab == "graph"}
           active_tab={@active_tab}
           editing={@editing}
         >
           <:actions>
+            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
+            </.link>
             <.link navigate={~p"/goals"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> Back
             </.link>
@@ -150,17 +151,6 @@ defmodule DranWeb.GoalLive do
                 {gettext("No hay planes vinculados a este objetivo.")}
               </p>
             </div>
-
-            <%!-- Graph: subgrafo del goal --%>
-            <div :if={@active_tab == "graph"} class="space-y-4">
-              <.graph_3d
-                id="goal-page-graph"
-                nodes={@graph_nodes}
-                edges={@graph_edges}
-                class="w-full"
-                style="height: calc(100vh - 200px);"
-              />
-            </div>
           </:extra_content>
         </.page_detail>
       </div><div :if={@live_action != :show}>
@@ -225,9 +215,6 @@ defmodule DranWeb.GoalLive do
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
 
-          %{nodes: graph_nodes, edges: graph_edges} =
-            GraphHelpers.build_page_subgraph(page, relations: relations)
-
           goal_todos =
             Brain.list_pages(
               context_id: context.id,
@@ -276,8 +263,6 @@ defmodule DranWeb.GoalLive do
              community_summary: community_summary,
              goal_todos: goal_todos,
              goal_plans: goal_plans,
-             graph_nodes: graph_nodes,
-             graph_edges: graph_edges,
              rendered_body: rendered_body,
              editing: true,
              form: form,
@@ -333,10 +318,6 @@ defmodule DranWeb.GoalLive do
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, active_tab: tab)}
-  end
-
-  def handle_event("node_click", %{"slug" => slug}, socket) do
-    {:noreply, node_click(socket, slug)}
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do

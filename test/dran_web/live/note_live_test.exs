@@ -131,32 +131,10 @@ defmodule DranWeb.NoteLiveTest do
 
       assert tab_class(html, "detail-tab-content") =~ "border-primary"
       refute tab_class(html, "detail-tab-content") =~ "border-transparent"
-      refute tab_class(html, "detail-tab-graph") =~ "border-primary"
       refute tab_class(html, "detail-tab-insights") =~ "border-primary"
-      # Content panel visible, graph + insights panels hidden
+      # Content panel visible, insights panel hidden
       refute panel_classes(html, "detail-panel-content") =~ "hidden"
-      assert panel_classes(html, "detail-panel-graph") =~ "hidden"
       assert panel_classes(html, "detail-panel-insights") =~ "hidden"
-    end
-
-    test "selecting graph deactivates the content tab and shows only the graph panel", %{
-      conn: conn,
-      target: target
-    } do
-      {:ok, view, _html} = live(conn, ~p"/notes/#{target.slug}")
-
-      view |> element("#detail-tab-graph") |> render_click()
-      html = render(view)
-
-      assert tab_class(html, "detail-tab-graph") =~ "border-primary"
-      # Content must NOT stay selected when graph is active (bug: both were active)
-      refute tab_class(html, "detail-tab-content") =~ "border-primary"
-      assert tab_class(html, "detail-tab-content") =~ "border-transparent"
-      refute tab_class(html, "detail-tab-insights") =~ "border-primary"
-
-      # Graph panel visible; content panel hidden
-      refute panel_classes(html, "detail-panel-graph") =~ "hidden"
-      assert panel_classes(html, "detail-panel-content") =~ "hidden"
     end
 
     test "selecting insights shows the insights panel and hides the content panel", %{
@@ -170,15 +148,19 @@ defmodule DranWeb.NoteLiveTest do
 
       assert tab_class(html, "detail-tab-insights") =~ "border-primary"
       refute tab_class(html, "detail-tab-content") =~ "border-primary"
-      refute tab_class(html, "detail-tab-graph") =~ "border-primary"
 
-      # Insights panel visible; content + graph panels hidden
+      # Insights panel visible; content panel hidden
       refute panel_classes(html, "detail-panel-insights") =~ "hidden"
       assert panel_classes(html, "detail-panel-content") =~ "hidden"
-      assert panel_classes(html, "detail-panel-graph") =~ "hidden"
 
       # The insights slot renders something (empty state when no community summary)
       assert html =~ t("No community data yet. Run community summaries first.")
+    end
+
+    test "graph button links to /graph/:slug", %{conn: conn, target: target} do
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
+
+      assert html =~ ~s(href="/graph/#{target.slug}")
     end
   end
 

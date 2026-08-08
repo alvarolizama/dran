@@ -4,7 +4,6 @@ defmodule DranWeb.PlanLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
   alias DranWeb.ListPagination
@@ -38,12 +37,14 @@ defmodule DranWeb.PlanLive do
           context_slug={@context_slug}
           rendered_body={@rendered_body}
           content_hidden={@active_tab != "content"}
-          graph_active={@active_tab == "graph"}
           content_tab_value="content"
           active_tab={@active_tab}
           editing={@editing}
         >
           <:actions>
+            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
+            </.link>
             <.link navigate={~p"/plans"} class="btn btn-primary btn-sm"><.icon
               name="hero-arrow-left"
               class="size-4"
@@ -58,16 +59,6 @@ defmodule DranWeb.PlanLive do
               editor_id="plan-editor"
             />
           </:attributes>
-          <:graph>
-            <.graph_3d
-              id="plan-page-graph"
-              nodes={@graph_nodes}
-              edges={@graph_edges}
-              class="w-full"
-              style="height: calc(100vh - 200px);"
-            />
-          </:graph>
-
           <:insights>
             <div class="space-y-4">
               <div :if={@community_summary} class="surface-2 rounded-lg p-4">
@@ -195,9 +186,6 @@ defmodule DranWeb.PlanLive do
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
 
-          %{nodes: graph_nodes, edges: graph_edges} =
-            GraphHelpers.build_page_subgraph(page, relations: relations)
-
           form = Brain.change_page(page) |> to_form(as: :page)
 
           # §7.2 — load todos linked to this plan via meta.plan_slug.
@@ -239,8 +227,6 @@ defmodule DranWeb.PlanLive do
              active_tab: "content",
              community_summary: community_summary,
              plan_todos: plan_todos,
-             graph_nodes: graph_nodes,
-             graph_edges: graph_edges,
              editing: true,
              form: form,
              context: context,
@@ -295,9 +281,6 @@ defmodule DranWeb.PlanLive do
     do: {:noreply, ListPagination.handle_load_more_archived(socket)}
 
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}
-
-  def handle_event("node_click", %{"slug" => slug}, socket),
-    do: {:noreply, node_click(socket, slug)}
 
   def handle_event("show_page", %{"slug" => slug}, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/plans/#{slug}")}

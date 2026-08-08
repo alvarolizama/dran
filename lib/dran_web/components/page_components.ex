@@ -29,8 +29,6 @@ defmodule DranWeb.PageComponents do
     default: false,
     doc: "hide the content panel when a server-side tab is active"
 
-  attr :graph_active, :boolean, default: false, doc: "graph tab is active (server-side tabs)"
-
   attr :content_tab_value, :string,
     default: "overview",
     doc: "switch_tab value for the Content tab"
@@ -41,9 +39,8 @@ defmodule DranWeb.PageComponents do
 
   slot :actions
   slot :tabs
-  slot :extra_tabs, doc: "extra server-side tabs rendered alongside Content + Graph"
+  slot :extra_tabs, doc: "extra server-side tabs rendered alongside Content"
   slot :extra_content, doc: "server-side tab content rendered outside the content panel"
-  slot :graph, doc: "rendered inside the first-row 'graph' detail tab panel"
   slot :insights, doc: "rendered inside the insights tab panel"
   slot :attributes, doc: "edit form attributes rendered at the top of the sidebar"
 
@@ -166,22 +163,6 @@ defmodule DranWeb.PageComponents do
             </button>
             {render_slot(@extra_tabs)}
             <button
-              id="detail-tab-graph"
-              phx-click="switch_tab"
-              phx-value-tab="graph"
-              role="tab"
-              aria-selected={@graph_active}
-              data-testid="detail-tab-graph"
-              class={[
-                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
-                @graph_active && "border-primary text-primary",
-                not @graph_active &&
-                  "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
-              ]}
-            >
-              {gettext("Graph")}
-            </button>
-            <button
               id="detail-tab-insights"
               phx-click="switch_tab"
               phx-value-tab="insights"
@@ -207,7 +188,7 @@ defmodule DranWeb.PageComponents do
             <div
               id="detail-panel-content"
               data-detail-panel
-              class={["space-y-6", (@content_hidden or @graph_active) && "hidden"]}
+              class={["space-y-6", @content_hidden && "hidden"]}
               phx-hook="Mermaid"
             >
               {render_slot(@tabs)}
@@ -228,15 +209,6 @@ defmodule DranWeb.PageComponents do
             </div>
 
             {render_slot(@extra_content)}
-
-            <%!-- ── Tab: Graph ───────────────────────────────────────────────── --%>
-            <div
-              id="detail-panel-graph"
-              data-detail-panel
-              class={["-m-6 -mt-4", not @graph_active && "hidden"]}
-            >
-              {render_slot(@graph)}
-            </div>
 
             <%!-- ── Tab: Insights ─────────────────────────────────────────────── --%>
             <div

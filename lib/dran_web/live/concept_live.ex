@@ -4,7 +4,6 @@ defmodule DranWeb.ConceptLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
   alias DranWeb.ListPagination
   alias DranWeb.Plugs.Auth
@@ -32,10 +31,12 @@ defmodule DranWeb.ConceptLive do
           editing={@editing}
           content_tab_value="content"
           content_hidden={@active_tab != "content"}
-          graph_active={@active_tab == "graph"}
           active_tab={@active_tab}
         >
           <:actions>
+            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
+            </.link>
             <.link navigate={~p"/concepts"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
@@ -50,16 +51,6 @@ defmodule DranWeb.ConceptLive do
               editor_id="concept-editor"
             />
           </:attributes>
-
-          <:graph>
-            <.graph_3d
-              id="concept-page-graph"
-              nodes={@graph_nodes}
-              edges={@graph_edges}
-              class="w-full"
-              style="height: calc(100vh - 200px);"
-            />
-          </:graph>
 
           <:insights>
             <div class="space-y-4">
@@ -153,9 +144,6 @@ defmodule DranWeb.ConceptLive do
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
 
-          %{nodes: graph_nodes, edges: graph_edges} =
-            GraphHelpers.build_page_subgraph(page, relations: relations)
-
           form = Brain.change_page(page) |> to_form(as: :page)
 
           community_summary =
@@ -185,8 +173,6 @@ defmodule DranWeb.ConceptLive do
              logs: logs,
              page_title: page.title,
              active_tab: active_tab,
-             graph_nodes: graph_nodes,
-             graph_edges: graph_edges,
              community_summary: community_summary,
              editing: true,
              form: form,
@@ -241,10 +227,6 @@ defmodule DranWeb.ConceptLive do
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, switch_tab(socket, tab)}
-  end
-
-  def handle_event("node_click", %{"slug" => slug}, socket) do
-    {:noreply, node_click(socket, slug)}
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do

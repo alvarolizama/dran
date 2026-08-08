@@ -6,8 +6,7 @@
 //   • Curved edges with animated particle flow
 //   • Click to select: shows labels for the clicked node and its direct
 //     neighbors, dims the rest. No hover behavior.
-//   • Click a labeled node again (the node you selected or any neighbor) →
-//     navigate to that page (treated as a label click).
+//   • Double-click a node → navigate to that page.
 //   • Background click clears the selection.
 //   • Auto zoom-to-fit after layout stabilizes
 //   • Dark background matching Dran's brand color
@@ -132,9 +131,9 @@ const Graph3D = {
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleSpeed(0.006)
       .linkDirectionalParticleColor(link => link.color || "#94A3B8")
-      // Interaction: click to select (or navigate a selected node), background
-      // click to clear. No hover callbacks wired — hover is fully inert.
-      .onNodeClick(node => this.handleNodeClick(node))
+      // Interaction: click to select (show labels + dim), double-click to
+      // navigate, background click to clear. No hover callbacks.
+      .onNodeClick((node, event) => this.handleNodeClick(node, event))
       .onBackgroundClick(() => this.handleBackgroundClick())
       // Physics / layout — shorter warmup/cooldown on big graphs so the
       // force simulation doesn't peg the CPU for seconds
@@ -154,11 +153,14 @@ const Graph3D = {
     this.resizeHandler = () => this.handleResize()
     window.addEventListener("resize", this.resizeHandler)
 
-    // Handle hidden tab panels (display:none) — re-fit when visible
+    // Handle hidden tab panels (display:none) — re-fit when the container
+    // becomes visible. When the graph mounts inside a hidden tab its
+    // dimensions are 0×0 and the initial layout is wrong; this observer
+    // fires when it becomes visible so we can resize AND re-fit the camera.
     this.visibilityObserver = new IntersectionObserver((entries) => {
       entries.forEach((e) => {
         if (e.isIntersecting) {
-          requestAnimationFrame(() => this.handleResize())
+          requestAnimationFrame(() => this.handleVisible())
         }
       })
     })
@@ -313,17 +315,16 @@ const Graph3D = {
 
   // ── Interaction handlers ──────────────────────────────────────────────
 
-  handleNodeClick(node) {
-    // If the clicked node is already part of the current selection (its
-    // label is visible), treat this as a label click → navigate to it.
-    if (this.selectedNode && this.nodeDepths.has(node.id)) {
+  handleNodeClick(node, event) {
+    // Double-click → navigate to the page.
+    if (event && event.detail === 2) {
       if (node.slug) {
         this.pushEvent("node_click", { slug: node.slug })
       }
       return
     }
-    // Otherwise, start a new selection: show labels for this node and its
-    // direct neighbors, dim the rest.
+    // Single click → select: show labels for this node and its direct
+    // neighbors, dim the rest. Does NOT navigate.
     this.selectNode(node)
   },
 
@@ -460,15 +461,34 @@ const Graph3D = {
 
   // ── Resize ────────────────────────────────────────────────────────────
 
-  handleResize() {
-    const container = this.el
-    if (!container || !this.graph) return
-    const width = container.clientWidth || 800
-    const height = container.clientHeight || 600
-    if (width > 0 && height > 0) {
-      this.graph.width(width).height(height)
-    }
-  },
+    handleResize() {
+      const container = this.el
+      if (!container || !this.graph) return
+      const width = container.clientWidth || 800
+      const height = container.clientHeight || 600
+      if (width > 0 && height > 0) {
+        this.graph.width(width).height(height)
+      }
+    },
+
+    // Called by the IntersectionObserver when the container transitions from
+    // hidden (display:none in a tab panel) to visible. Resize the canvas to
+    // the now-correct dimensions, re-trigger the force simulation so nodes
+    // re-settle, and re-fit the camera so all nodes are framed — the initial
+    // mount in a 0×0 container left everything mis-positioned.
+    handleVisible() {
+      this.handleResize()
+      if (!this.graph || !this.fullData) return
+      const nodes = this.graph.graphData().nodes
+      if (nodes.length === 0) return
+      // Re-trigger the force simulation so nodes settle in the now-correct
+      // canvas dimensions, then zoom-to-fit when the engine stops.
+      this.graph.d3AlphaTarget(0.001)
+      // d3ReCountdown that should exist on the inner forceGraph; call via the
+      // engine re-heat method if available, otherwise graphData re-assign
+      this.graph.graphData({ nodes, links: this.graph.graphData().links })
+      this.graph.zoomToFit(400, 40)
+    },
 
   // ── Cleanup ───────────────────────────────────────────────────────────
 

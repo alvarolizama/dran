@@ -4,7 +4,6 @@ defmodule DranWeb.ReferenceLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias DranWeb.GraphHelpers
   alias DranWeb.PageEdit
   alias DranWeb.ListPagination
   alias DranWeb.Plugs.Auth
@@ -32,10 +31,12 @@ defmodule DranWeb.ReferenceLive do
           editing={@editing}
           content_tab_value="content"
           content_hidden={@active_tab != "content"}
-          graph_active={@active_tab == "graph"}
           active_tab={@active_tab}
         >
           <:actions>
+            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
+            </.link>
             <.link navigate={~p"/references"} class="btn btn-primary btn-sm"><.icon
               name="hero-arrow-left"
               class="size-4"
@@ -50,16 +51,6 @@ defmodule DranWeb.ReferenceLive do
               editor_id="reference-editor"
             />
           </:attributes>
-
-          <:graph>
-            <.graph_3d
-              id="reference-page-graph"
-              nodes={@graph_nodes}
-              edges={@graph_edges}
-              class="w-full"
-              style="height: calc(100vh - 200px);"
-            />
-          </:graph>
 
           <:insights>
             <div class="space-y-4">
@@ -150,9 +141,6 @@ defmodule DranWeb.ReferenceLive do
           versions = Brain.list_page_versions(page.id)
           logs = Brain.list_log(context_id: context.id, limit: 10)
 
-          %{nodes: graph_nodes, edges: graph_edges} =
-            GraphHelpers.build_page_subgraph(page, relations: relations)
-
           form = Brain.change_page(page) |> to_form(as: :page)
 
           community_summary =
@@ -182,8 +170,6 @@ defmodule DranWeb.ReferenceLive do
              logs: logs,
              page_title: page.title,
              active_tab: active_tab,
-             graph_nodes: graph_nodes,
-             graph_edges: graph_edges,
              community_summary: community_summary,
              editing: true,
              form: form,
@@ -237,9 +223,6 @@ defmodule DranWeb.ReferenceLive do
     do: {:noreply, ListPagination.handle_load_more_archived(socket)}
 
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}
-
-  def handle_event("node_click", %{"slug" => slug}, socket),
-    do: {:noreply, node_click(socket, slug)}
 
   def handle_event("show_page", %{"slug" => slug}, socket),
     do: {:noreply, push_navigate(socket, to: ~p"/references/#{slug}")}
