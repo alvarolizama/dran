@@ -264,7 +264,9 @@ defmodule DranWeb.DocsLive do
         <li>Create pages from the UI or the API</li>
         <li>Link pages with relations</li>
         <li>Explore the graph to discover connections</li>
-        <li>Use goals to group related pages and track progress</li>
+        <li>
+          Organize work with projects, goals, plans and todos — all visible on the global kanban
+        </li>
       </ol>
 
       <.h2_heading id="next-steps" icon="hero-sparkles" label="Next steps" />
@@ -322,7 +324,7 @@ defmodule DranWeb.DocsLive do
         {"knowledge-graph", "Knowledge graph"},
         {"backlinks", "Backlinks"},
         {"smart-collections", "Smart Collections"},
-        {"planning-hierarchy", "Planning hierarchy"},
+        {"planning-model", "Planning model"},
         {"graph-intelligence", "Graph intelligence"},
         {"props", "Custom props"},
         {"view-edit-modes", "View & edit modes"},
@@ -354,6 +356,13 @@ defmodule DranWeb.DocsLive do
           <strong>query</strong>
           — questions with answers, linked semantically to concepts and entities
         </li>
+        <li><strong>project</strong> — initiatives grouping goals, plans and todos</li>
+        <li>
+          <strong>report</strong>
+          — system-created run logs (jobs and agent runs); detail view only at
+          <code>/reports/:slug</code>
+          — outside the graph, journey and embeddings
+        </li>
       </ul>
       <p>
         Pages store a body (Markdown), summary, tags, and an arbitrary <code>meta</code> map
@@ -377,13 +386,22 @@ defmodule DranWeb.DocsLive do
           <strong>semantic</strong>
           — auto-created by the PageAugmenter when two pages are semantically similar
         </li>
+        <li>
+          <strong>mentions</strong> — source mentions the target entity (created by the entity linker)
+        </li>
       </ul>
+      <p>
+        Five more types are materialized automatically from <code>meta.props</code>
+        (<code>works_in</code>, <code>has_tier</code>, <code>based_in</code>, <code>written_in</code>, <code>built_with</code>) — see
+        <a href="#docs-props" class="text-primary hover:underline">Custom props</a>
+        below.
+      </p>
 
       <.h2_heading id="knowledge-graph" icon="hero-circle-stack" label="Knowledge graph" />
       <p>
         Pages and relations form a directed graph. The <code>/graph</code>
         view renders the full
-        graph in 2D or 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong>
+        graph in 3D with zoom and pan. Each page detail view also has a <strong>Graph</strong>
         tab
         showing the page as the center with its direct neighbors. Relations carry a
         <code>weight</code>
@@ -403,25 +421,22 @@ defmodule DranWeb.DocsLive do
       </p>
 
       <.h2_heading
-        id="planning-hierarchy"
+        id="planning-model"
         icon="hero-clipboard-document-check"
-        label="Planning hierarchy"
+        label="Planning model (independent links)"
       />
       <p>
-        Dran organizes planning into a three-level hierarchy: <strong>goals</strong>
-        → <strong>plans</strong>
-        → <strong>todos</strong>.
-        Plans link to goals via <code>meta.goal_slug</code>, and todos link to plans via
-        <code>meta.plan_slug</code>
-        (the goal is derived from the plan). Todos and plans can be orphans — i.e. not linked to any
-        parent. The <code>part_of</code>
-        relation is materialized automatically when these links exist.
-        Use <code>dran_list_pages</code>
-        with <code>goal_slug</code>
+        Dran has no rigid planning hierarchy — every page is an orphan by default and the
+        three link slugs are independent: <code>meta.project_slug</code>, <code>meta.goal_slug</code>
+        and <code>meta.plan_slug</code>. There is no precedence between them; each one
+        materializes its own <code>part_of</code>
+        relation when set, and a page may carry
+        0, 1, 2 or all 3 slugs at once. Use <code>dran_list_pages</code>
+        with the <code>project_slug</code>, <code>goal_slug</code>
         or <code>plan_slug</code>
         filters
         (value <code>"none"</code>
-        returns orphans).
+        returns orphans — the GTD inbox).
       </p>
       <.code_block
         id="planning-hierarchy-diagram"
@@ -477,11 +492,13 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="graph-3d" icon="hero-share" label="3D graph navigation" />
       <p>
-        The graph at <code>/graph</code> renders the full knowledge graph in
-        3D. Hover a node to reveal labels for it and its direct neighbors
-        (non-neighbors dim) after a brief delay. Click a node to navigate to
-        that page. Background click clears the selection. Per-page subgraphs
-        at <code>/graph/:slug</code> show a page's neighborhood.
+        The graph at <code>/graph</code>
+        renders the full knowledge graph in
+        3D. Hover a node to highlight it and its direct neighbors — the rest
+        of the graph dims after a brief (~300ms) delay; no text labels are
+        rendered. Click a node to navigate to that page. Background click
+        clears the selection. Per-page subgraphs at <code>/graph/:slug</code>
+        show a page's neighborhood.
       </p>
 
       <.h2_heading id="real-time" icon="hero-bolt" label="Real-time updates" />
@@ -497,7 +514,11 @@ defmodule DranWeb.DocsLive do
         Each context can disable page types via Settings → Contexts → "Page
         types". Disabled types are hidden from the sidebar, dashboard, command
         palette, and direct URL access is blocked by an <code>on_mount</code>
-        hook that redirects to the dashboard.
+        hook that redirects to the dashboard. Creating a page of a disabled
+        type is rejected in the web UI and via MCP (<code>page type 'X' is
+        disabled in context 'Y'</code>), and disabled types are excluded from
+        <code>Brain.list_pages</code>
+        results.
       </p>
     </div>
     """
@@ -563,11 +584,14 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="kanban-board" icon="hero-view-columns" label="Kanban board" />
       <p>
-        The <code>/todos</code> page is a full-viewport kanban board with 6 columns
-        (backlog, this_week, today, in_progress, done, cancelled). You can drag and drop cards
-        between columns to update their <code>kanban_status</code>. The board updates in real
+        The <code>/kanban</code> page is a global full-viewport kanban board with 6 columns
+        (backlog, this_week, today, in_progress, done, cancelled) covering every todo in the
+        context. You can drag and drop cards between columns to update their <code>kanban_status</code>, and combine the Project / Goal / Plan filters
+        (each with All / None — orphans — / &lt;slug&gt;). Cards show link badges; click a
+        badge to filter the board by that link. The board updates in real
         time — when an autonomous agent creates or moves a todo, the change is pushed to all
-        connected clients via PubSub.
+        connected clients via PubSub. The <code>/todos</code> page offers the same board
+        scoped to the todo page type.
       </p>
 
       <.h2_heading
@@ -590,9 +614,16 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="settings" icon="hero-cog-6-tooth" label="Settings" />
       <p>
-        The Settings page (<code>/settings</code>) lets you tune brain behavior at runtime:
-        semantic similarity threshold, auto-linking, page augmenter on/off, and more — stored
-        in the database, no restart needed.
+        The Settings page (<code>/settings/:tab</code>, admin only) is organized in tabs:
+        <strong>Users</strong>
+        (accounts and per-user API tokens), <strong>Contexts</strong>
+        (context CRUD, member management, per-context page-type toggles), <strong>API keys</strong>
+        (context-scoped keys for REST/MCP), <strong>Brain</strong>
+        (runtime tuning — semantic thresholds, agent limits, entity-linker toggle, props
+        backfill, and the scheduled-jobs panel with per-job toggles and "run now" buttons),
+        <strong>Models</strong>
+        (inference model overrides), <strong>System</strong>
+        and <strong>Danger zone</strong>. Changes are stored in the database — no restart needed.
       </p>
     </div>
     """
@@ -616,9 +647,14 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="authentication" icon="hero-key" label="Authentication" />
       <p>
-        Dran uses single-user authentication. The same credentials protect both the
-        web UI (session-based) and the REST/MCP API (bearer token). Credentials are
-        read from environment variables at startup.
+        Dran is multi-user. Web accounts live in the database: the first one is created
+        by the <code>/setup</code>
+        flow on first run (becomes the admin), and the admin
+        creates additional users from Settings → Users. Optionally, "Sign in with Google"
+        can be enabled via environment variables — it only logs in existing users, unless
+        <code>GOOGLE_OAUTH_ALLOWED_DOMAINS</code>
+        is set to auto-register trusted domains.
+        The REST/MCP API is protected by bearer tokens (see below).
       </p>
 
       <.h2_heading id="environment-variables" icon="hero-cog-6-tooth" label="Environment variables" />
@@ -633,29 +669,80 @@ defmodule DranWeb.DocsLive do
           </thead>
           <tbody class="divide-y divide-base-300">
             <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">SECRET_KEY_BASE</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">(required)</td>
+              <td class="px-4 py-2">Session signing — generate with mix phx.gen.secret</td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">DATABASE_URL</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">
+                ecto://postgres:postgres@localhost/dran_dev
+              </td>
+              <td class="px-4 py-2">Ecto connection URL</td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">PHX_HOST / PHX_PORT / PHX_SCHEME</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">localhost / 443 / https</td>
+              <td class="px-4 py-2">Public host, port and scheme for URL generation</td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">DISABLE_FORCE_SSL</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">(unset)</td>
+              <td class="px-4 py-2">
+                Set to 1 at BUILD time when serving over plain HTTP (VPN tunnels)
+              </td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">DRAN_API_TOKEN</td>
               <td class="px-4 py-2 font-mono text-base-content/60">dran-token</td>
-              <td class="px-4 py-2">Bearer token for API and MCP</td>
+              <td class="px-4 py-2">Legacy admin bearer token for REST/MCP (full access)</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">DRAN_INFERENCE_URL</td>
-              <td class="px-4 py-2 font-mono text-base-content/60">http://localhost:8080/v1</td>
-              <td class="px-4 py-2">LLM inference endpoint</td>
+              <td class="px-4 py-2 font-mono text-primary">DRAN_CONTEXT_SLUG / DRAN_CONTEXT_NAME</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">personal / Personal</td>
+              <td class="px-4 py-2">Default context created on seed</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">DRAN_INFERENCE_API_KEY</td>
+              <td class="px-4 py-2 font-mono text-primary">
+                GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET
+              </td>
+              <td class="px-4 py-2 font-mono text-base-content/60">(unset)</td>
+              <td class="px-4 py-2">Enables "Sign in with Google" when both are set</td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">GOOGLE_OAUTH_ALLOWED_DOMAINS</td>
               <td class="px-4 py-2 font-mono text-base-content/60">(empty)</td>
-              <td class="px-4 py-2">API key for inference endpoint</td>
+              <td class="px-4 py-2">Domains allowed to auto-register via Google</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">DRAN_EMBEDDING_MODEL</td>
-              <td class="px-4 py-2 font-mono text-base-content/60">nomic-embed-text</td>
-              <td class="px-4 py-2">Embedding model name</td>
+              <td class="px-4 py-2 font-mono text-primary">
+                DRAN_INFERENCE_API_URL / DRAN_INFERENCE_API_KEY
+              </td>
+              <td class="px-4 py-2 font-mono text-base-content/60">(unset)</td>
+              <td class="px-4 py-2">
+                OpenAI-compatible inference endpoint — powers embeddings, summaries, agents, semantic search
+              </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">DRAN_CHAT_MODEL</td>
-              <td class="px-4 py-2 font-mono text-base-content/60">qwen3</td>
-              <td class="px-4 py-2">Chat/LLM model name</td>
+              <td class="px-4 py-2 font-mono text-primary">
+                DRAN_INFERENCE_CHAT_MODEL / DRAN_INFERENCE_EMBEDDING_MODEL / DRAN_INFERENCE_RERANK_MODEL
+              </td>
+              <td class="px-4 py-2 font-mono text-base-content/60">
+                Ornith-1.0-9B / Qwen3-Embedding / Qwen3-Reranker
+              </td>
+              <td class="px-4 py-2">Optional model overrides per capability</td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">
+                SESSION_SIGNING_SALT / SESSION_ENCRYPTION_SALT
+              </td>
+              <td class="px-4 py-2 font-mono text-base-content/60">(dev defaults)</td>
+              <td class="px-4 py-2">Required in production (mix phx.gen.secret 32)</td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">UPLOADS_DIR</td>
+              <td class="px-4 py-2 font-mono text-base-content/60">priv/static/uploads</td>
+              <td class="px-4 py-2">File upload storage path</td>
             </tr>
           </tbody>
         </table>
@@ -664,8 +751,9 @@ defmodule DranWeb.DocsLive do
       <h3 id="web-ui-authentication" class="scroll-mt-20">Web UI authentication</h3>
       <p>
         The web UI is protected by a session-based login at <code>/login</code>.
-        Unauthenticated requests are redirected there. After a successful login,
-        a session cookie is set and the user is redirected back to the requested page.
+        Unauthenticated requests are redirected there. On first run the app redirects to <code>/setup</code>, which creates the admin account (email + password). When
+        Google OAuth is configured, a "Sign in with Google" button appears on the login
+        page.
       </p>
       <p>
         A context selector in the sidebar lets you switch between contexts. The
@@ -677,21 +765,38 @@ defmodule DranWeb.DocsLive do
       <p>
         All endpoints under <code>/api</code>
         require a Bearer token in the <code>Authorization</code>
-        header:
+        header. Three kinds of token are accepted:
       </p>
+      <ul>
+        <li>
+          <strong>DRAN_API_TOKEN</strong> (env) — legacy admin token, full access to
+          every context.
+        </li>
+        <li>
+          <strong>Per-user API tokens</strong> — created in Settings → Users; reach only
+          the contexts assigned to that user.
+        </li>
+        <li>
+          <strong>Context API keys</strong> — created in Settings → API keys; scoped to a
+          single context.
+        </li>
+      </ul>
       <.code_block
         id="auth-api-curl"
         code={DranWeb.DocsContent.auth_api_curl()}
       />
       <p>
-        Without a valid token, the API responds with <code>401 Unauthorized</code>.
+        An invalid or missing token gets <code>401 Unauthorized</code>; a valid token
+        without access to the requested context gets <code>403 Forbidden</code>.
       </p>
 
       <h3 id="mcp-authentication" class="scroll-mt-20">MCP authentication</h3>
       <p>
-        The MCP endpoint at <code>/api/mcp</code> uses the same Bearer token.
-        MCP clients should send the token in the <code>Authorization</code> header
-        of every request:
+        The MCP endpoint at <code>/api/mcp</code> accepts the same three bearer-token
+        kinds (admin env token, per-user tokens, context API keys). MCP clients should
+        send the token in the <code>Authorization</code> header of every request. The
+        endpoint answers <code>401</code> for invalid tokens and <code>403</code> when
+        the token has no access to the requested context:
       </p>
       <.code_block
         id="auth-mcp-headers"
@@ -705,23 +810,37 @@ defmodule DranWeb.DocsLive do
       </p>
       <.code_block
         id="auth-mcp-config"
-        code={"{\"mcpServers\": {\"dran\": {\"url\": \"http://localhost:4000/api/mcp\", \"headers\": {\"Authorization\": \"Bearer dran-token\"}}}}"}
+        code={"{\"mcpServers\": {\"dran\": {\"url\": \"http://localhost:4000/api/mcp\", \"headers\": {\"Authorization\": \"Bearer <your-api-token>\"}}}}"}
       />
 
       <h3 id="runtime-settings" class="scroll-mt-20">Runtime Settings</h3>
       <p>
         Brain behavior can be tuned at runtime without restarting. Settings are stored
-        in the database and managed via the Settings page (/settings) or the API.
-        Key settings include similarity threshold, page augmenter toggle, and auto-linking.
+        in the database and managed from Settings → Brain. Available keys:
+        <code>semantic_threshold_short</code>
+        (0.15), <code>semantic_threshold_mid</code>
+        (0.22), <code>semantic_threshold_long</code>
+        (0.28), <code>agent_max_pages</code>
+        (10), <code>agent_max_sources</code>
+        (10), <code>pagerank_boost</code>
+        (0.15) and <code>entity_linker_enabled</code>
+        (true).
       </p>
 
       <h3 id="security-notes" class="scroll-mt-20">Security notes</h3>
       <.callout variant={:warning}>
         <ul class="space-y-1">
-          <li>Change the default credentials in production via environment variables.</li>
-          <li>The API token grants full read/write access — protect it like a password.</li>
+          <li>Change DRAN_API_TOKEN in production — the dev default is public.</li>
+          <li>
+            Per-user tokens and context API keys grant scoped access — protect them like passwords.
+          </li>
           <li>Use HTTPS in production to prevent credential interception.</li>
-          <li>There is no multi-user support; the same credentials are used by everyone.</li>
+          <li>
+            Set SESSION_SIGNING_SALT / SESSION_ENCRYPTION_SALT in production — the dev defaults are committed to the repo.
+          </li>
+          <li>
+            Google OAuth only logs in existing users; set GOOGLE_OAUTH_ALLOWED_DOMAINS to allow auto-registration.
+          </li>
         </ul>
       </.callout>
     </div>
@@ -743,8 +862,7 @@ defmodule DranWeb.DocsLive do
         {"todos-api", "Todos"},
         {"maintenance-api", "Maintenance"},
         {"wiki-api", "Wiki"},
-        {"export-api", "Export"},
-        {"settings-api", "Settings"}
+        {"export-api", "Export"}
       ]} />
 
       <.h2_heading id="rest-api" icon="hero-command-line" label="REST API" />
@@ -785,14 +903,14 @@ defmodule DranWeb.DocsLive do
   defp agents_data do
     [
       %{
-        label: "Ask / GraphRAG (Q&A)",
+        label: "GraphRAG (Q&A)",
         icon: "hero-chat-bubble-left-right",
         color: "text-violet-500 dark:text-violet-400",
         trigger: :manual,
         schedule: nil,
         description:
-          "Answers a question using ONLY knowledge already in the brain. Persists the answer as a query page citing sources.",
-        limits: "Max 5 searches; one query page per session."
+          "Answers a question using ONLY knowledge already in the brain — local/global/drift search over the graph. Persists the answer as a query page citing sources.",
+        limits: "Max 10 searches, 5 expands, 3 community contexts; one query page per session."
       },
       %{
         label: "Curator",
@@ -808,10 +926,10 @@ defmodule DranWeb.DocsLive do
         label: "Link Gardener",
         icon: "hero-link",
         color: "text-emerald-500 dark:text-emerald-400",
-        trigger: :manual,
-        schedule: nil,
+        trigger: :scheduled,
+        schedule: "Weekly Sun 07:00",
         description:
-          "Reads orphaned and under-linked pages, proposes typed relations with justifications.",
+          "Reads orphaned and under-linked pages, proposes typed relations with justifications. Also startable manually via dran_start_agent.",
         limits: "Max 10 proposals per session; semantic type forbidden."
       }
     ]
@@ -857,18 +975,6 @@ defmodule DranWeb.DocsLive do
         desc: "Subgraph centered on a page"
       },
       %{
-        group: "Pages",
-        method: "GET",
-        path: "/api/pages/:slug/backlinks",
-        desc: "Pages that reference this page, grouped by relation type"
-      },
-      %{
-        group: "Pages",
-        method: "GET",
-        path: "/api/pages/:slug/diff?v1=N&v2=M",
-        desc: "Version diff between two versions"
-      },
-      %{
         group: "Relations",
         method: "POST",
         path: "/api/relations",
@@ -891,6 +997,12 @@ defmodule DranWeb.DocsLive do
         method: "GET",
         path: "/api/search/fuzzy?q=...&context=...",
         desc: "Fuzzy search"
+      },
+      %{
+        group: "Search",
+        method: "GET",
+        path: "/api/search/semantic?q=...&context=...",
+        desc: "Semantic (embedding) search"
       },
       %{group: "Goals", method: "GET", path: "/api/goals?context=...", desc: "List goals"},
       %{
@@ -937,28 +1049,16 @@ defmodule DranWeb.DocsLive do
         desc: "Full graph (nodes + edges)"
       },
       %{
-        group: "Wiki",
+        group: "Export",
         method: "GET",
-        path: "/api/graph/3d?context=...",
-        desc: "3D graph data (nodes with x,y,z coords)"
+        path: "/api/contexts/:slug/export",
+        desc: "Single-context export (pages + relations)"
       },
       %{
         group: "Export",
         method: "GET",
         path: "/api/export/:context/full",
         desc: "Full brain export (all pages + relations + metadata as JSON)"
-      },
-      %{
-        group: "Settings",
-        method: "GET",
-        path: "/api/settings",
-        desc: "List all runtime settings"
-      },
-      %{
-        group: "Settings",
-        method: "PUT",
-        path: "/api/settings/:key",
-        desc: "Update a setting value"
       }
     ]
   end
@@ -1059,18 +1159,15 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Rename</strong>
           — use <code>dran_rename_slug</code>
-          to rename a page slug. Update existing <code>![[slug]]</code>
-          embeds manually if needed.
+          to rename a page slug; all <code>![[slug]]</code>
+          embeds in the context are rewritten automatically.
         </li>
         <li>
           <strong>Agents</strong>
           — use <code>dran_start_agent</code>
-          to delegate tasks to autonomous agents (curator, link_gardener).
+          to delegate tasks to autonomous agents (curator, link_gardener, graph_rag).
           Poll <code>dran_get_agent_session</code>
           for progress and results.
-        </li>
-        <li>
-          to save web pages or download files as references.
         </li>
         <li>
           <strong>Lint</strong> — use <code>dran_lint_brain</code> to find orphans and stale pages.
@@ -1169,6 +1266,22 @@ defmodule DranWeb.DocsLive do
                 kind, difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
               </td>
             </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">project</td>
+              <td class="px-4 py-2">Initiative grouping goals, plans and todos</td>
+              <td class="px-4 py-2 text-xs">—</td>
+              <td class="px-4 py-2 text-xs">
+                status (draft/active/on_hold/done/archived), priority, health, health_source, start_date, target_date
+              </td>
+            </tr>
+            <tr class="hover:bg-base-200/50 transition-colors">
+              <td class="px-4 py-2 font-mono text-primary">report</td>
+              <td class="px-4 py-2">System-created run logs (jobs and agent runs)</td>
+              <td class="px-4 py-2 text-xs">log</td>
+              <td class="px-4 py-2 text-xs">
+                kind — not creatable via MCP; outside the graph, journey and embeddings
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -1242,7 +1355,7 @@ defmodule DranWeb.DocsLive do
             name="type"
             type="string"
             required="no"
-            desc="note, concept, entity, reference, goal, plan, todo, query"
+            desc="note, concept, entity, reference, goal, plan, todo, query, project"
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
@@ -1284,7 +1397,7 @@ defmodule DranWeb.DocsLive do
             name="page_type"
             type="string"
             required="yes"
-            desc="note, concept, entity, reference, goal, plan, todo, query"
+            desc="note, concept, entity, reference, goal, plan, todo, query, project"
           />
           <:param
             name="body"
@@ -1487,8 +1600,15 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
+          name="dran_generate_community_summaries"
+          desc="Generate or regenerate LLM summaries for all detected graph communities (Label Propagation clusters). Requires inference configured."
+        >
+          <:param name="context" type="string" required="yes" desc="Context slug" />
+        </.mcp_tool>
+
+        <.mcp_tool
           name="dran_rename_slug"
-          desc="Rename a page's slug. Existing ![[slug]] embeds are not updated automatically."
+          desc="Rename a page's slug. All ![[old-slug]] embeds in the context are rewritten automatically."
         >
           <:param name="context" type="string" required="yes" desc="Context slug" />
           <:param name="old_slug" type="string" required="yes" desc="Current slug to rename" />
@@ -1511,10 +1631,15 @@ defmodule DranWeb.DocsLive do
             name="agent_type"
             type="string"
             required="yes"
-            desc="curator, link_gardener"
+            desc="curator, link_gardener, graph_rag"
           />
           <:param name="context" type="string" required="yes" desc="Context slug" />
-          <:param name="input" type="string" required="yes" desc="Topic, URL, or query" />
+          <:param
+            name="input"
+            type="string"
+            required="yes"
+            desc="Question for graph_rag; focus or instructions for curator / link_gardener"
+          />
           <:param name="opts" type="object" required="no" desc="Optional agent options" />
         </.mcp_tool>
 
@@ -1550,7 +1675,6 @@ defmodule DranWeb.DocsLive do
         Pre-built prompt templates for common agent workflows:
       </p>
       <div class="not-prose space-y-2">
-        <div class="rounded-lg border border-base-300 p-3"></div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">brainstorm</code>
           <span class="text-sm text-base-content/60 ml-2">Generate ideas around a topic. Args: topic, context.</span>
@@ -1585,7 +1709,7 @@ defmodule DranWeb.DocsLive do
       </p>
       <.code_block
         id="mcp-client-config"
-        code={"{\"mcpServers\": {\"dran\": {\"url\": \"http://localhost:4000/api/mcp\", \"headers\": {\"Authorization\": \"Bearer dran-token\"}}}}"}
+        code={"{\"mcpServers\": {\"dran\": {\"url\": \"http://localhost:4000/api/mcp\", \"headers\": {\"Authorization\": \"Bearer <your-api-token>\"}}}}"}
       />
     </div>
     """

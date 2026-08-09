@@ -83,9 +83,10 @@ defmodule DranWeb.DocsContent do
     todo    — actionable item with kind, kanban_status and assignee (lives in /kanban)
 
   Sidebar:
-    Dashboard, Kanban (top); Knowledge (Notes, Concepts, Entities,
-    Goals, Plans, References); Graphs, Outputs. Todos no longer in
-    the sidebar — its home is /kanban.
+    Top: Dashboard, Kanban, Projects, Objetivos, Grafo, Trayectoria,
+    Actividad. Planning: Planes, Tareas. Knowledge: Notes, Concepts,
+    Entities, References, Queries, Collections. Configs: Settings
+    (admin only), Documentation.
   """
 
   @planning_model_overview """
@@ -122,19 +123,12 @@ defmodule DranWeb.DocsContent do
     "none" — sentinel value meaning "no link of this kind" (orphan filter).
 
   Sidebar:
-    Dashboard
-    Kanban           ← new, at the top (after Dashboard)
-    ─────────────
-    Knowledge
-    ├── Notes
-    ├── Concepts
-    ├── Entities
-    ├── Goals        ← moved here (was under Planning)
-    ├── Plans        ← moved here
-    └── References
-    ─────────────
-    Graphs, Outputs, ...
-    (Todos is NOT in the sidebar — its home is /kanban.)
+    Top (no group): Dashboard, Kanban, Projects, Objetivos (goals),
+      Grafo, Trayectoria (journey), Actividad
+    Planning: Planes, Tareas (todo list; the global board is /kanban)
+    Knowledge: Notes, Concepts, Entities, References, Queries,
+      Collections
+    Configs: Settings (admin only), Documentation
   """
 
   @project_page_type """
@@ -428,13 +422,22 @@ defmodule DranWeb.DocsContent do
   Nightly refresh (Quantum)
   ─────────────────────────────────────────────────────────────────────
 
-  `Dran.Graph.refresh_all_scheduled/0` is the Quantum entrypoint. It
-  resolves the default context, then runs:
-    1. refresh_pagerank/1   (writes meta.pagerank)
+  `Dran.Graph.refresh_all_scheduled/0` runs via the `pagerank_nightly`
+  job at `0 3 * * *` (03:00 daily). It resolves the default context,
+  then runs:
+    1. refresh_pagerank/1    (writes meta.pagerank)
     2. refresh_communities/1 (writes meta.community_id)
 
-  Configured in `config/config.exs` as the `pagerank_nightly` job at
-  `0 3 * * *` (03:00 daily). Disabled in `config/test.exs`.
+  All 5 scheduled jobs route through `Dran.Jobs.run_scheduled/1`, which
+  honors the per-job toggles in Settings → Brain and writes a `report`
+  page per run:
+    curator_daily                06:00  daily
+    pagerank_nightly             03:00  daily  (this pipeline)
+    community_summaries_nightly  03:30  daily  (LLM summary per community)
+    graph_maintenance_nightly    03:45  daily  (prunes stale derived relations)
+    link_gardener_weekly         07:00  Sundays
+
+  Disabled in `config/test.exs`.
   """
 
   def agent_connect_example, do: @agent_connect_example

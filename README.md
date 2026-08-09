@@ -28,10 +28,10 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **Entity linker** — auto-creates entity pages from real-world names detected in bodies (people, companies, tools); noise-filtered (no file paths, modules, or generic terms) and toggleable from Settings → Brain
 
 ### Integration & admin
-- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 5 resources + 2 prompts
+- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 3 resources + 2 prompts
 - **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`)
 - **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users)
-- **Settings panel** (admin) — users, contexts, brain tuning, models, system, danger zone (`/settings/:tab`)
+- **Settings panel** (admin) — users, contexts, API keys, brain tuning, models, system, danger zone (`/settings/:tab`)
 
 ## Installation
 
