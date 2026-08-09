@@ -2,52 +2,104 @@
 
 # Dran
 
-A personal second-brain application built with **Phoenix 1.8 + LiveView**. It stores your knowledge as **typed pages** connected by **relations**, forming a queryable knowledge graph.
+A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledge lives as **typed pages** connected by **typed relations**, forming a queryable knowledge graph — editable in the browser and fully operable by AI agents through **MCP** and a **REST API**.
 
-Includes a TipTap markdown editor, three autonomous agents (curator, link_gardener, graph_rag), an MCP endpoint for AI agent integration, and a REST API.
+## Features
 
-> **[SKILL.md](skills/dran/SKILL.md)** — Agent operating manual: tools, page types, meta props, recipes, and pitfalls. If you're building an AI agent that connects to Dran via MCP, start there.
+### Knowledge
+- **10 page types** — `note`, `concept`, `entity`, `reference`, `project`, `goal`, `plan`, `todo`, `query`, plus `report` (system run logs) — each with its own list/new/detail UI (`/notes`, `/concepts`, …)
+- **TipTap markdown editor** — WYSIWYG with tables, code blocks, mermaid diagrams, and `![[slug]]` page embeds; pages render read-only by default, *Edit* opens the editor
+- **Relations** — directed and typed (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`, `semantic`, `mentions`); link pages freely — no rigid hierarchy, orphans are fine
+- **Custom props** — `meta.props` key-value bag; five keys (`role`, `tier`, `location`, `language`, `framework`) auto-materialize into graph edges
+- **Version history** — every edit is versioned with diff view on the page detail
 
-## Key features
+### Views
+- **Dashboard** (`/`) — context overview
+- **Kanban board** (`/kanban`) — all todos, columns `backlog → this_week → today → in_progress → done → cancelled`, drag-drop between columns, combinable filters (project / goal / plan)
+- **3D knowledge graph** (`/graph`, `/graph/:slug`) — force-directed 3D; hover highlights a node and its neighbors, click navigates
+- **Hybrid search** (`/search`) — full-text, fuzzy, semantic, or hybrid fusion
+- **Smart Collections** (`/collections`) — saved live queries rendered as pages
+- **Activity feed** (`/activity`), **Journey** (`/journey`), **Tags** (`/tags/:tag`), **Docs** (`/docs`)
+- **Multi-context** — switch brains from the sidebar; per-context page-type toggles (Settings → Contexts)
 
-- **10 page types** — note, concept, entity, reference, project, goal, plan, todo, query, plus `report` (system-created run logs; second-citizen: no graph/journey/embeddings) — each with type-specific metadata and subtypes (`meta.kind`)
-- **Markdown editor** — TipTap WYSIWYG with tables, code blocks, mermaid diagrams, and file embeds `![[slug]]`
-- **Read-only + edit modes** — pages show rendered markdown + mermaid by default; click *Edit* to switch to the editor
-- **Knowledge graph** — 3D graph at `/graph`, hover a node to highlight it and its neighbors, click to navigate; per-page subgraphs at `/graph/:slug`
-- **Real-time updates** — page detail views sync live via PubSub when the page changes elsewhere
-- **ETS cache** — global graph, per-page subgraphs, and page-by-slug lookups cached in ETS with read concurrency; invalidated on page changes
-- **Autonomous agents** — curator (daily cron), link_gardener (weekly cron + manual), graph_rag (manual, GraphRAG search)
-- **Scheduled jobs control** — the 5 Quantum crons route through `Dran.Jobs`: runtime toggles, manual "run now", and a `report` page per run, all from Settings → Brain
-- **Per-context page type disabling** — restrict which page types appear in a context; enforced via on_mount hooks, sidebar, dashboard, and command palette
-- **Custom props** — `meta.props` key-value bag auto-materializes into typed graph relations (role→works_in, tier→has_tier, location→based_in, language→written_in, framework→built_with). See [SKILL.md](skills/dran/SKILL.md) for the full table.
-- **Multi-user auth** — Google OAuth + per-user API tokens with context scoping
-- **Hybrid search** — full-text, fuzzy, semantic, or hybrid with RRF fusion + PageRank authority boost
-- **Version history** with diff, activity feed, runtime settings, and full context export
+### Automation
+- **3 autonomous agents** — `curator` (duplicates/contested cleanup, daily cron), `link_gardener` (proposes relations for orphans, weekly cron + manual), `graph_rag` (GraphRAG search with citations, manual)
+- **Scheduled jobs control** — 5 Quantum crons route through `Dran.Jobs`: per-job toggles, "run now" buttons, and a `report` page per run — all from **Settings → Brain**
+- **Entity linker** — auto-creates entity pages from real-world names detected in bodies (people, companies, tools); noise-filtered (no file paths, modules, or generic terms) and toggleable from Settings → Brain
 
-## Quick start
+### Integration & admin
+- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 5 resources + 2 prompts
+- **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`)
+- **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users)
+- **Settings panel** (admin) — users, contexts, brain tuning, models, system, danger zone (`/settings/:tab`)
+
+## Installation
+
+**Requirements:** Elixir ~> 1.15, Erlang/OTP 26+, PostgreSQL 14+ with the **pgvector** extension, Node (only for asset tooling, handled by `esbuild`/`tailwind` installers).
 
 ```bash
 git clone git@github.com:alvarolizama/dran.git && cd dran
-cp .env.example .env && $EDITOR .env
-mix setup    # deps → DB → migrations → assets → seed
+cp .env.example .env && $EDITOR .env   # fill in the values below
+mix setup        # deps → DB create → migrations → assets → seed
 mix phx.server
 ```
 
-Visit [localhost:4000](http://localhost:4000). First run redirects to `/setup` to create the admin account.
+Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup` to create the admin account.
 
-## Authentication
+## Configuration
 
-- **First run:** `/setup` creates the initial admin. No env-var web credentials.
-- **Google OAuth:** appears when `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET` are set. Auto-registers users from allowed domains only.
-- **API tokens:** each user gets one `api_token` (Settings → Users). The legacy `DRAN_API_TOKEN` acts as admin. MCP/REST return `401` for invalid tokens, `403` for unassigned contexts.
+All configuration is via environment variables — see [`.env.example`](.env.example) for the full annotated list. The essentials:
 
-## Environment variables
+| Variable | Purpose |
+| --- | --- |
+| `SECRET_KEY_BASE` | Session signing — generate with `mix phx.gen.secret` |
+| `DATABASE_URL` | Ecto URL, e.g. `ecto://postgres:postgres@localhost/dran_dev` |
+| `PHX_HOST` / `PHX_PORT` / `PHX_SCHEME` | Public host/port/scheme for URL generation |
+| `DRAN_API_TOKEN` | Legacy admin bearer token for REST/MCP |
+| `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME` | Default context created on seed |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Optional — enables "Sign in with Google" |
+| `GOOGLE_OAUTH_ALLOWED_DOMAINS` | Domains allowed to auto-register via Google |
+| `DRAN_INFERENCE_API_URL` / `DRAN_INFERENCE_API_KEY` | OpenAI-compatible inference endpoint (`/v1/embeddings`, `/v1/rerank`, `/v1/chat/completions`) — powers embeddings, summaries, agents, semantic search |
+| `DRAN_INFERENCE_CHAT_MODEL` / `DRAN_INFERENCE_EMBEDDING_MODEL` / `DRAN_INFERENCE_RERANK_MODEL` | Optional model overrides per capability |
+| `SESSION_SIGNING_SALT` / `SESSION_ENCRYPTION_SALT` | Required in production (`mix phx.gen.secret 32`) |
+| `UPLOADS_DIR` | File upload storage path |
+| `DISABLE_FORCE_SSL` | Set to `1` **at build time** when serving over plain HTTP (VPN tunnels) |
 
-See [`.env.example`](.env.example) for the full annotated list. Key ones: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST`, `DRAN_API_TOKEN`, `GOOGLE_OAUTH_CLIENT_ID`, `DRAN_INFERENCE_API_URL`.
+Inference is optional: without it, Dran still works — you lose embeddings, semantic search, auto-summaries, and agents.
 
-## Settings
+## Using the skills
 
-Admin-only at `/settings/:tab`. Tabs: `users` (accounts, tokens, context membership), `contexts` (CRUD + page type toggles), `brain` (semantic thresholds, agent limits, scheduled jobs), `models` (inference config), `system` (read-only), `danger` (reset).
+The [`skills/`](skills/) directory ships **agent operating manuals** — install them into your AI agent (Hermes, Claude Code, or any MCP-capable agent) so it knows how to operate Dran correctly instead of guessing.
+
+| Skill | Use it for |
+| --- | --- |
+| [`dran`](skills/dran/SKILL.md) | **Start here** — MCP tools reference, page types, props, relations, common recipes and pitfalls |
+| [`note-taking-flow`](skills/note-taking-flow/SKILL.md) | Capturing notes, concepts, entities, references |
+| [`research-flow`](skills/research-flow/SKILL.md) | Online research stored into the brain |
+| [`project-flow`](skills/project-flow/SKILL.md) | Creating/managing projects (strategy layer) |
+| [`goal-flow`](skills/goal-flow/SKILL.md) | Measurable objectives under projects |
+| [`planning-flow`](skills/planning-flow/SKILL.md) | Tactical plans with roadmaps and todos |
+| [`todo-flow`](skills/todo-flow/SKILL.md) | Creating todos (dev or general) with execution steps |
+| [`coder-flow`](skills/coder-flow/SKILL.md) | Executing dev todos — phases, gates, evidence |
+| [`relations-flow`](skills/relations-flow/SKILL.md) | Connecting pages with typed relations |
+| [`maintenance-flow`](skills/maintenance-flow/SKILL.md) | Brain hygiene — orphans, duplicates, stale pages |
+
+**Install (Hermes):** copy the skill folders into `~/.hermes/skills/` (or symlink them) and restart the agent. Each `SKILL.md` has portable frontmatter — other agents can load them the same way.
+
+**Connect the agent to Dran via MCP:**
+
+```json
+{
+  "mcpServers": {
+    "dran": {
+      "url": "http://localhost:4000/api/mcp",
+      "headers": { "Authorization": "Bearer <your-api-token>" }
+    }
+  }
+}
+```
+
+Get your token from **Settings → Users** (per-user token, scoped to your contexts) or use `DRAN_API_TOKEN` for admin access. MCP returns `401` for invalid tokens, `403` for contexts the user can't access.
 
 ## Page types
 
@@ -62,63 +114,7 @@ Admin-only at `/settings/:tab`. Tabs: `users` (accounts, tokens, context members
 | `plan` | Time-horizoned plans (weekly/quarterly/yearly) |
 | `todo` | Actionable items with kanban status |
 | `query` | Questions with answers |
-| `report` | System-created run logs (`meta.kind: "log"`) — detail view at `/reports/:slug`; excluded from graph, journey, embeddings, and MCP-create |
-
-Pages link via independent `meta.project_slug`, `meta.goal_slug`, `meta.plan_slug` — each materializes a `part_of` relation. No rigid hierarchy; orphans are legitimate.
-
-### Custom props (`meta.props`)
-
-Every page may carry `meta.props`: a free-form key-value bag. Five keys auto-create typed graph relations during augmentation:
-
-| Prop key | Relation | Target |
-| --- | --- | --- |
-| `role` | `works_in` | entity |
-| `tier` | `has_tier` | concept |
-| `location` | `based_in` | entity |
-| `language` | `written_in` | entity |
-| `framework` | `built_with` | entity |
-
-Other keys are stored but generate no edge. Props are GIN-indexed and backfillable via Settings → Brain → "Run backfill".
-
-### Relations
-
-Directed, typed: `related`, `part_of`, `supersedes`, `contradicts`, `embeds` (auto from `![[slug]]`), `semantic` (auto from PageAugmenter). Create explicit ones via `dran_create_relation` or POST /api/relations.
-
-## Autonomous agents
-
-| Agent | Trigger | What it does |
-| --- | --- | --- |
-| `curator` | Cron daily 06:00 + manual | Finds duplicates and contested knowledge; writes a cleanup report |
-| `link_gardener` | Cron weekly (Sun 07:00) + manual (`dran_start_agent`) | Proposes relations for orphaned pages, including transitive `part_of` |
-| `graph_rag` | Manual (`dran_start_agent`) | GraphRAG: local/global/drift search, creates query pages with citations |
-
-Quantum crons: `curator_daily` (06:00), `pagerank_nightly` (03:00), `community_summaries_nightly` (03:30), `graph_maintenance_nightly` (03:45), `link_gardener_weekly` (Sun 07:00).
-
-All five route through `Dran.Jobs.run_scheduled/1` and are controlled from **Settings → Brain → "Jobs programados"**: per-job toggle (scheduled runs only), "Correr ahora" (always runs), and last-run status. Each run writes a `report` page (`/reports/:slug`) with status, trigger and duration; the newest 20 per job are kept, older ones archived.
-
-## MCP server
-
-`POST /api/mcp` — Streamable HTTP, MCP spec 2025-03-26. Auth: `Authorization: Bearer <token>`.
-
-**18 tools, 3 agents, 5 resources, 2 prompts** — see [**SKILL.md**](skills/dran/SKILL.md) for the complete operational guide.
-
-```json
-{ "mcpServers": { "dran": { "url": "http://localhost:4000/api/mcp", "headers": { "Authorization": "Bearer <token>" } } } }
-```
-
-## REST API
-
-Bearer token required, scoped to user's contexts (`?context=<slug>`). Key routes:
-
-| Method | Path | Description |
-| --- | --- | --- |
-| CRUD | `/api/pages` | Page CRUD |
-| GET | `/api/pages/:slug/links` | Page relations |
-| GET | `/api/pages/:slug/graph` | Page subgraph |
-| GET | `/api/search?q=` | Unified search |
-| GET | `/api/graph` | Full knowledge graph |
-| CRUD | `/api/contexts` | Context management |
-| POST | `/api/mcp` | MCP JSON-RPC |
+| `report` | System-created agent run logs (detail view only, `/reports/:slug`) |
 
 ## Production
 
@@ -126,26 +122,19 @@ Bearer token required, scoped to user's contexts (`?context=<slug>`). Key routes
 MIX_ENV=prod mix deps.get --only prod
 MIX_ENV=prod mix compile
 MIX_ENV=prod mix assets.deploy
-MIX_ENV=prod mix release
+MIX_ENV=prod mix release   # start with bin/server
 ```
 
-Ships with a Dockerfile. Start command: `bin/server`. Runtime env vars only — never bake secrets. See `.env.example` for SSL/VPN dual-access config.
+A `Dockerfile` ships with the repo (Coolify-ready; `/app/bin/migrate` runs migrations as a pre-deploy step). Runtime env vars only — never bake secrets into the image.
 
 ## Tech stack
 
-- Phoenix 1.8 + LiveView
-- TipTap v3 editor with `@tiptap/markdown`
-- MDEx (comrak) server-side markdown rendering
-- Tailwind CSS v4 + daisyUI + `@tailwindcss/typography`
-- MCP (Model Context Protocol) for AI agent integration
-- Quantum cron scheduler
-- ETS cache (GraphCache) with read concurrency
-- PostgreSQL with pgvector, FTS, trigram, GIN indexes
+Phoenix 1.8 + LiveView · PostgreSQL + pgvector · TipTap v3 · MDEx (comrak) · Tailwind v4 + daisyUI · Bandit · Quantum (cron) · Req · MCP 2025-03-26
 
 ## Pre-commit
 
 ```bash
-mix precommit   # compile --warnings-as-errors → deps.unlock --unused → format → deps.audit → sobelow --exit medium → test
+mix precommit   # compile --warnings-as-errors → format → deps audit → sobelow → test
 ```
 
 ## License
