@@ -82,7 +82,21 @@ defmodule DranWeb.API.PageController do
           |> json(%{errors: %{detail: "page not found"}})
 
         page ->
-          params = Map.drop(params, ["slug", "context"])
+          # SEC-006: whitelist instead of blacklist — only these fields are
+          # client-settable. Prevents mass assignment of context_id, owner,
+          # created_by, updated_by, etc.
+          params =
+            Map.take(params, [
+              "title",
+              "body",
+              "tags",
+              "meta",
+              "summary",
+              "archived",
+              "kb_confidence",
+              "kb_source_url",
+              "kb_contested"
+            ])
 
           case Brain.update_page(page, params) do
             {:ok, updated} ->

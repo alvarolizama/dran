@@ -54,11 +54,12 @@ defmodule DranWeb.Plugs.Auth do
 
   def login(conn, username, context_slug \\ Auth.default_context_slug()) do
     # Cache `is_admin` in the session so router pipelines don't hit the DB on
-    # every request. A session user with no row in the users table (e.g.
-    # created before multi-user auth) is treated as a full admin.
+    # every request. SEC-002: fail closed — a session user with no row in the
+    # users table is NOT admin (previously nil -> true, which escalated deleted
+    # users to full admin).
     is_admin =
       case Dran.Accounts.get_user_by_email(username) do
-        nil -> true
+        nil -> false
         %{is_admin: admin?} -> admin?
       end
 
@@ -117,11 +118,12 @@ defmodule DranWeb.Plugs.Auth do
     page_counts = Dran.Brain.page_counts_by_context()
 
     # Per-user scoping: a DB user (created via Dran.Accounts) only sees their
-    # assigned contexts. A session user with no row in the users table (e.g.
-    # created before multi-user auth) is treated as a full admin.
+    # assigned contexts. SEC-002: fail closed — a session user with no row in
+    # the users table gets NO contexts and is NOT admin (previously nil ->
+    # {all_contexts, true}, which escalated deleted users to full admin).
     {accessible_contexts, is_admin} =
       case Dran.Accounts.get_user_by_email(current_user) do
-        nil -> {contexts, true}
+        nil -> {[], false}
         %{is_admin: true} -> {contexts, true}
         user -> {Dran.Accounts.list_user_contexts(user), false}
       end

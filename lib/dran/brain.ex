@@ -128,6 +128,10 @@ defmodule Dran.Brain do
     offset = Keyword.get(opts, :offset, 0)
     include_body = Keyword.get(opts, :include_body, false)
 
+    # P-03: accept an optional pre-loaded %Context{} to avoid the extra
+    # Repo.get(Context, context_id) query in maybe_exclude_disabled_types.
+    context = Keyword.get(opts, :context)
+
     base =
       if include_body do
         from(p in Page)
@@ -161,7 +165,7 @@ defmodule Dran.Brain do
     query =
       base
       |> maybe_filter_context(context_id)
-      |> maybe_exclude_disabled_types(context_id)
+      |> maybe_exclude_disabled_types(context, context_id)
       |> maybe_filter_type(type)
       |> maybe_filter_tag(tag)
       |> maybe_filter_status(status)
@@ -181,9 +185,18 @@ defmodule Dran.Brain do
     Repo.all(query)
   end
 
-  defp maybe_exclude_disabled_types(query, nil), do: query
+  # P-03: when the caller already loaded the %Context{} struct, use it
+  # directly instead of re-querying by id.
+  defp maybe_exclude_disabled_types(query, %Context{disabled_page_types: disabled}, _context_id)
+       when is_list(disabled) and disabled != [] do
+    where(query, [p], p.page_type not in ^disabled)
+  end
 
-  defp maybe_exclude_disabled_types(query, context_id) do
+  defp maybe_exclude_disabled_types(query, %Context{}, _context_id), do: query
+
+  defp maybe_exclude_disabled_types(query, nil, nil), do: query
+
+  defp maybe_exclude_disabled_types(query, nil, context_id) do
     case Repo.get(Context, context_id) do
       %Context{disabled_page_types: disabled} when is_list(disabled) and disabled != [] ->
         where(query, [p], p.page_type not in ^disabled)
@@ -1641,6 +1654,8 @@ defmodule Dran.Brain do
     # Build tsquery with prefix matching
     tsquery = String.replace(query_string, ~r/\s+/, " & ")
 
+    # P-06: compute excerpt in the main query's select instead of one
+    # Repo.one(ts_headline...) per result row (was N+1: 21 queries for 20 results)
     base =
       from p in Page,
         where: fragment("search_vector @@ plainto_tsquery('spanish', ?)", ^tsquery),
@@ -1648,32 +1663,24 @@ defmodule Dran.Brain do
         order_by:
           fragment("ts_rank(search_vector, plainto_tsquery('spanish', ?)) DESC", ^tsquery),
         limit: ^limit,
-        offset: ^offset
+        offset: ^offset,
+        select: %{
+          page: p,
+          excerpt:
+            fragment(
+              "ts_headline('spanish', immutable_unaccent(coalesce(body, '')), plainto_tsquery('spanish', ?), 'MaxWords=35, MinWords=15')",
+              ^tsquery
+            )
+        }
 
     query =
       base
       |> maybe_filter_context(context_id)
       |> maybe_filter_type(type)
 
-    results =
-      Repo.all(query)
+    results = Repo.all(query)
 
-    # Build excerpts using ts_headline
-    excerpts =
-      Enum.map(results, fn page ->
-        excerpt =
-          Repo.one(
-            from p in Page,
-              where: p.id == ^page.id,
-              select:
-                fragment(
-                  "ts_headline('spanish', immutable_unaccent(coalesce(body, '')), plainto_tsquery('spanish', ?), 'MaxWords=35, MinWords=15')",
-                  ^tsquery
-                )
-          )
-
-        {page, excerpt}
-      end)
+    excerpts = Enum.map(results, fn %{page: page, excerpt: excerpt} -> {page, excerpt} end)
 
     apply_rerank(query_string, excerpts, opts)
   end

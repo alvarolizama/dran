@@ -27,6 +27,16 @@ config :phoenix_live_view,
   # the attribute set on all root tags. Used for Phoenix.LiveView.ColocatedCSS.
   root_tag_attribute: "phx-r"
 
+# SEC-008: filter sensitive parameters from logs
+config :phoenix, :filter_parameters, [
+  "password",
+  "secret",
+  "token",
+  "api_key",
+  "client_secret",
+  "authorization"
+]
+
 # Configure the mailer
 #
 # By default it uses the "Local" adapter which stores the emails

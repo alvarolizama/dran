@@ -62,26 +62,43 @@ defmodule DranWeb.API.RelationController do
 
   @doc "DELETE /api/relations/:id — delete a relation"
   def delete(conn, %{"id" => id}) do
-    case Brain.get_page(id) do
+    # SEC-011: validate the user has access to the relation's context before deleting
+    user = conn.assigns[:user]
+
+    case Dran.Repo.get(Dran.Brain.Relation, id) do
       nil ->
-        # The id is a relation id — we need a delete_relation by id
-        case Dran.Repo.get(Dran.Brain.Relation, id) do
-          nil ->
-            conn
-            |> put_status(:not_found)
-            |> json(%{errors: %{detail: "relation not found"}})
+        conn
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "relation not found"}})
 
-          relation ->
-            case Brain.delete_relation(relation) do
-              {:ok, _} ->
-                conn |> send_resp(:no_content, "")
+      relation ->
+        # Load the source page to check context access
+        source_page = Dran.Brain.get_page(relation.source_id)
 
-              {:error, _} ->
-                conn
-                |> put_status(:internal_server_error)
-                |> json(%{errors: %{detail: "could not delete"}})
-            end
+        if user && source_page &&
+             (user.is_admin or user_has_context_access?(user, source_page.context_id)) do
+          case Brain.delete_relation(relation) do
+            {:ok, _} ->
+              conn |> send_resp(:no_content, "")
+
+            {:error, _} ->
+              conn
+              |> put_status(:internal_server_error)
+              |> json(%{errors: %{detail: "could not delete"}})
+          end
+        else
+          conn
+          |> put_status(:forbidden)
+          |> json(%{errors: %{detail: "access to context denied"}})
         end
     end
   end
+
+  defp user_has_context_access?(%{contexts: :all}, _context_id), do: true
+
+  defp user_has_context_access?(%{contexts: contexts}, context_id) when is_list(contexts) do
+    Enum.any?(contexts, &(&1.id == context_id))
+  end
+
+  defp user_has_context_access?(_, _), do: false
 end

@@ -43,38 +43,21 @@ defmodule DranWeb.DashboardLive do
                   0} {gettext("pages")}
               </p>
               <div
-                :if={@user_api_token}
+                :if={@user_api_token_prefix}
                 class="flex items-center gap-2 pt-0.5"
                 title={gettext("Your API key")}
               >
+                <%!-- SEC-005: only the prefix is rendered — the full token never reaches the DOM --%>
                 <code
                   id="dashboard-api-token"
-                  data-token={@user_api_token}
                   class="text-xs font-mono bg-base-100 rounded-md px-2 py-1 border border-base-300 select-all break-all max-w-[40ch]"
                 >
-                  {if @show_token do
-                    @user_api_token
-                  else
-                    String.slice(@user_api_token, 0, 8) <> "••••••••••••"
-                  end}
+                  {@user_api_token_prefix}••••••••••••
                 </code>
                 <button
                   type="button"
-                  phx-click="toggle_api_token"
-                  class="btn btn-ghost btn-xs gap-1 p-1.5 transition-colors active:scale-95"
-                  title={
-                    if @show_token, do: gettext("Hide API token"), else: gettext("Show API token")
-                  }
-                >
-                  <.icon
-                    name={if @show_token, do: "hero-eye-slash", else: "hero-eye"}
-                    class="size-3.5"
-                  />
-                </button>
-                <button
-                  type="button"
                   id="copy-dashboard-token-btn"
-                  phx-hook=".CopyApiToken"
+                  phx-click="copy_api_token"
                   class="btn btn-ghost btn-xs gap-1 p-1.5 transition-colors active:scale-95"
                   title={gettext("Copy")}
                 >
@@ -386,17 +369,15 @@ defmodule DranWeb.DashboardLive do
       </div>
     </Layouts.app>
 
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyApiToken">
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyToClipboard">
       export default {
         mounted() {
-          this.el.addEventListener("click", () => {
-            const target = document.getElementById("dashboard-api-token");
-            if (!target) return;
-            const text = target.dataset.token;
-            if (!text) return;
+          this.handleEvent("copy_to_clipboard", ({ text }) => {
             const copied = () => {
-              const icon = this.el.querySelector("[data-copy-icon]");
-              const check = this.el.querySelector("[data-check-icon]");
+              const btn = document.getElementById("copy-dashboard-token-btn");
+              if (!btn) return;
+              const icon = btn.querySelector("[data-copy-icon]");
+              const check = btn.querySelector("[data-check-icon]");
               if (icon && check) {
                 icon.classList.add("hidden");
                 check.classList.remove("hidden");
@@ -409,26 +390,23 @@ defmodule DranWeb.DashboardLive do
             if (navigator.clipboard && navigator.clipboard.writeText) {
               navigator.clipboard.writeText(text).then(copied);
             } else {
-              this.copyFallback(text);
+              const ta = document.createElement("textarea");
+              ta.value = text;
+              ta.setAttribute("readonly", "");
+              ta.style.position = "absolute";
+              ta.style.left = "-9999px";
+              document.body.appendChild(ta);
+              ta.select();
+              ta.setSelectionRange(0, text.length);
+              try {
+                document.execCommand("copy");
+              } catch (_e) {
+                // noop
+              }
+              document.body.removeChild(ta);
               copied();
             }
           });
-        },
-        copyFallback(text) {
-          const ta = document.createElement("textarea");
-          ta.value = text;
-          ta.setAttribute("readonly", "");
-          ta.style.position = "absolute";
-          ta.style.left = "-9999px";
-          document.body.appendChild(ta);
-          ta.select();
-          ta.setSelectionRange(0, text.length);
-          try {
-            document.execCommand("copy");
-          } catch (_e) {
-            // noop
-          }
-          document.body.removeChild(ta);
         }
       };
     </script>
@@ -466,8 +444,7 @@ defmodule DranWeb.DashboardLive do
        stats: stats,
        brain_metrics: brain_metrics,
        community_summaries: community_summaries,
-       user_api_token: db_user && db_user.api_token,
-       show_token: false,
+       user_api_token_prefix: db_user && String.slice(db_user.api_token, 0, 8),
        kanban_columns: @kanban_columns,
        page_title: gettext("Dashboard")
      )}
@@ -488,7 +465,7 @@ defmodule DranWeb.DashboardLive do
           {:ok, %Dran.Accounts.User{api_token: new_token}} when is_binary(new_token) ->
             {:noreply,
              socket
-             |> assign(user_api_token: new_token, show_token: false)
+             |> assign(user_api_token_prefix: String.slice(new_token, 0, 8))
              |> put_flash(
                :info,
                gettext("API token regenerated. Update any client that uses the old token.")
@@ -504,8 +481,22 @@ defmodule DranWeb.DashboardLive do
   end
 
   @impl true
-  def handle_event("toggle_api_token", _params, socket) do
-    {:noreply, assign(socket, show_token: !socket.assigns.show_token)}
+  def handle_event("copy_api_token", _params, socket) do
+    # SEC-005: the full token is never in assigns — we fetch it fresh from DB
+    # and push it to the client via a one-time event, never storing it in the
+    # socket state.
+    current_user = socket.assigns[:current_user]
+
+    case current_user && Dran.Accounts.get_user_by_email(current_user) do
+      %Dran.Accounts.User{api_token: token} when is_binary(token) ->
+        {:noreply,
+         socket
+         |> push_event("copy_to_clipboard", %{text: token})
+         |> put_flash(:info, gettext("API token copied to clipboard."))}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("Could not copy API token."))}
+    end
   end
 
   # ── Components ──

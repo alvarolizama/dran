@@ -3,6 +3,10 @@ defmodule DranWeb.API.ContextController do
 
   alias Dran.Brain
 
+  # SEC-007: context CRUD is admin-only. The :api_auth pipeline validates the
+  # token but not the user's role — we plug require_admin on top.
+  plug :require_admin when action in [:create, :update, :delete]
+
   @doc "GET /api/contexts — list all contexts"
   def index(conn, _params) do
     contexts = Brain.list_contexts()
@@ -84,6 +88,23 @@ defmodule DranWeb.API.ContextController do
             |> put_status(:internal_server_error)
             |> json(%{errors: %{detail: "could not delete"}})
         end
+    end
+  end
+
+  # SEC-007: admin check for destructive context operations
+  defp require_admin(conn, _opts) do
+    # The :api_auth pipeline already validated the token and set conn.assigns.user
+    # (or we need to look it up). For API token auth, the user is in the token.
+    # We need to check if the authenticated identity is admin.
+    case conn.assigns[:user] do
+      %{is_admin: true} ->
+        conn
+
+      _ ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{errors: %{detail: "admin access required"}})
+        |> halt()
     end
   end
 end

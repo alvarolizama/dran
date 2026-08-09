@@ -67,6 +67,14 @@ defmodule DranWeb.SettingsLive do
       |> assign_brain_form()
       |> assign_models()
       |> assign_jobs()
+      # SEC-004: defense-in-depth — halt every event for non-admins
+      |> attach_hook(:require_admin, :handle_event, fn _event, _params, socket ->
+        if socket.assigns[:is_admin] do
+          {:cont, socket}
+        else
+          {:halt, put_flash(socket, :error, gettext("No autorizado."))}
+        end
+      end)
 
     {:ok, socket}
   end

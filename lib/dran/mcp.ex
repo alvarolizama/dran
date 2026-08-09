@@ -51,6 +51,52 @@ defmodule Dran.MCP do
 
   @protocol_version "2025-03-26"
 
+  # ── Context cache (P-01) ───────────────────────────────────────────────────
+  # ETS table for context_slug → %Context{} lookups. Contexts change rarely
+  # (only in Settings), so caching is safe. The table is created lazily on
+  # first access to avoid boot-order issues in tests.
+
+  @context_cache_table :dran_mcp_context_cache
+
+  defp context_cache_get(slug) do
+    ensure_context_cache_table()
+
+    case :ets.lookup(@context_cache_table, slug) do
+      [{^slug, context}] -> context
+      [] -> context_cache_load(slug)
+    end
+  end
+
+  defp context_cache_load(slug) do
+    context = Brain.get_context_by_slug(slug)
+
+    if context do
+      :ets.insert(@context_cache_table, {slug, context})
+    end
+
+    context
+  end
+
+  defp ensure_context_cache_table do
+    case :ets.info(@context_cache_table) do
+      :undefined ->
+        :ets.new(@context_cache_table, [:set, :named_table, :public, {:read_concurrency, true}])
+
+      _ ->
+        :ok
+    end
+  rescue
+    ArgumentError -> :ok
+  end
+
+  @doc "Invalidate a cached context (call after update/delete in Settings)"
+  def invalidate_context_cache(slug) when is_binary(slug) do
+    ensure_context_cache_table()
+    :ets.delete(@context_cache_table, slug)
+  end
+
+  def invalidate_context_cache(_), do: :ok
+
   @tools [
     %{
       "name" => "dran_search",
@@ -837,15 +883,30 @@ defmodule Dran.MCP do
       %{"jsonrpc" => "2.0", "method" => "tools/call", "id" => id, "params" => params} ->
         tool_name = params["name"]
         args = params["arguments"] || %{}
-        result = execute_tool(tool_name, args)
 
-        %{
-          "jsonrpc" => "2.0",
-          "id" => id,
-          "result" => %{
-            "content" => [%{"type" => "text", "text" => result}]
-          }
-        }
+        # SEC-001: validate that the requested context is accessible by the user
+        case validate_tool_context_access(args, user) do
+          :ok ->
+            result = execute_tool(tool_name, args)
+
+            %{
+              "jsonrpc" => "2.0",
+              "id" => id,
+              "result" => %{
+                "content" => [%{"type" => "text", "text" => result}]
+              }
+            }
+
+          {:error, :forbidden} ->
+            %{
+              "jsonrpc" => "2.0",
+              "id" => id,
+              "error" => %{
+                "code" => -32602,
+                "message" => "Access to context denied"
+              }
+            }
+        end
 
       %{"jsonrpc" => "2.0", "method" => "resources/list", "id" => id} ->
         %{
@@ -856,15 +917,30 @@ defmodule Dran.MCP do
 
       %{"jsonrpc" => "2.0", "method" => "resources/read", "id" => id, "params" => params} ->
         uri = params["uri"]
-        content = read_resource(uri)
 
-        %{
-          "jsonrpc" => "2.0",
-          "id" => id,
-          "result" => %{
-            "contents" => [%{"uri" => uri, "mimeType" => "text/markdown", "text" => content}]
-          }
-        }
+        # SEC-001: validate context access for resources too
+        case validate_resource_context_access(uri, user) do
+          :ok ->
+            content = read_resource(uri)
+
+            %{
+              "jsonrpc" => "2.0",
+              "id" => id,
+              "result" => %{
+                "contents" => [%{"uri" => uri, "mimeType" => "text/markdown", "text" => content}]
+              }
+            }
+
+          {:error, :forbidden} ->
+            %{
+              "jsonrpc" => "2.0",
+              "id" => id,
+              "error" => %{
+                "code" => -32602,
+                "message" => "Access to context denied"
+              }
+            }
+        end
 
       %{"jsonrpc" => "2.0", "method" => "prompts/list", "id" => id} ->
         %{
@@ -902,6 +978,59 @@ defmodule Dran.MCP do
         }
     end
   end
+
+  # SEC-001: Validate that the user has access to the context requested in tool args
+  defp validate_tool_context_access(args, user) when is_map(args) do
+    context_slug = args["context"]
+
+    if context_slug do
+      validate_context_access(context_slug, user)
+    else
+      :ok
+    end
+  end
+
+  defp validate_tool_context_access(_, _), do: :ok
+
+  # SEC-001: Validate context access for resource URIs like page://context/slug
+  defp validate_resource_context_access(uri, user) when is_binary(uri) do
+    case String.split(uri, "://", parts: 2) do
+      [_scheme, rest] ->
+        case String.split(rest, "/", parts: 2) do
+          [context_slug, _path] -> validate_context_access(context_slug, user)
+          _ -> :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp validate_resource_context_access(_, _), do: :ok
+
+  defp validate_context_access(context_slug, user) do
+    cond do
+      is_nil(user) ->
+        :ok
+
+      user.is_admin ->
+        :ok
+
+      user_has_context_access?(user, context_slug) ->
+        :ok
+
+      true ->
+        {:error, :forbidden}
+    end
+  end
+
+  defp user_has_context_access?(%{contexts: :all}, _context_slug), do: true
+
+  defp user_has_context_access?(%{contexts: contexts}, context_slug) when is_list(contexts) do
+    Enum.any?(contexts, &(&1.slug == context_slug))
+  end
+
+  defp user_has_context_access?(_, _), do: false
 
   defp inject_user_context(msg, nil), do: msg
 
@@ -968,7 +1097,7 @@ defmodule Dran.MCP do
   # ── Tool execution ─────────────────────────────────────────────────────────
 
   defp execute_tool("dran_search", %{"query" => query, "context" => context_slug} = args) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       opts = [context_id: context.id]
@@ -1009,7 +1138,7 @@ defmodule Dran.MCP do
          "dran_create_page",
          %{"context" => context_slug, "page_type" => page_type} = args
        ) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     cond do
       is_nil(context) ->
@@ -1048,7 +1177,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_update_page", %{"context" => context_slug, "slug" => slug} = args) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1087,7 +1216,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_get_page", %{"context" => context_slug, "slug" => slug}) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1106,7 +1235,7 @@ defmodule Dran.MCP do
          "dran_create_todo",
          %{"context" => context_slug, "title" => title, "slug" => slug} = args
        ) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       meta =
@@ -1149,7 +1278,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_lint_brain", %{"context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       report = Brain.lint(context.id)
@@ -1172,7 +1301,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_delete_page", %{"context" => context_slug, "slug" => slug}) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1198,23 +1327,35 @@ defmodule Dran.MCP do
          %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
            args
        ) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       relation_type = Map.get(args, "relation_type", "related")
 
-      case Brain.create_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
-        {:ok, _relation} ->
-          "Created relation: #{source_slug} --#{relation_type}--> #{target_slug}"
+      # P-02: batch lookup both pages in one query
+      pages = Brain.get_pages_by_slugs([source_slug, target_slug], context.id)
 
-        {:error, :source_not_found} ->
+      case {Map.get(pages, source_slug), Map.get(pages, target_slug)} do
+        {nil, _} ->
           "Error: source page '#{source_slug}' not found"
 
-        {:error, :target_not_found} ->
+        {_, nil} ->
           "Error: target page '#{target_slug}' not found"
 
-        {:error, changeset} ->
-          "Error: #{format_changeset_errors(changeset)}"
+        {_source_type, _target_type} ->
+          case Brain.create_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
+            {:ok, _relation} ->
+              "Created relation: #{source_slug} --#{relation_type}--> #{target_slug}"
+
+            {:error, :source_not_found} ->
+              "Error: source page '#{source_slug}' not found"
+
+            {:error, :target_not_found} ->
+              "Error: target page '#{target_slug}' not found"
+
+            {:error, changeset} ->
+              "Error: #{format_changeset_errors(changeset)}"
+          end
       end
     else
       "Error: context '#{context_slug}' not found"
@@ -1222,7 +1363,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_get_links", %{"context" => context_slug, "slug" => slug}) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1258,13 +1399,13 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_list_pages", %{"context" => context_slug} = args) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       limit = min(Map.get(args, "limit", 50), 500)
       offset = Map.get(args, "offset", 0)
 
-      opts = [context_id: context.id, limit: limit, offset: offset]
+      opts = [context_id: context.id, context: context, limit: limit, offset: offset]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
       opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts
@@ -1312,7 +1453,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_update_todo", %{"context" => context_slug, "slug" => slug} = args) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1364,23 +1505,35 @@ defmodule Dran.MCP do
          %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
            args
        ) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       relation_type = Map.get(args, "relation_type")
 
-      case Brain.delete_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
-        {:error, :source_not_found} ->
+      # P-02: batch lookup both pages in one query
+      pages = Brain.get_pages_by_slugs([source_slug, target_slug], context.id)
+
+      case {Map.get(pages, source_slug), Map.get(pages, target_slug)} do
+        {nil, _} ->
           "Error: source page '#{source_slug}' not found"
 
-        {:error, :target_not_found} ->
+        {_, nil} ->
           "Error: target page '#{target_slug}' not found"
 
-        {count, []} ->
-          "Deleted #{count} relation(s) between '#{source_slug}' and '#{target_slug}'"
+        {_source_type, _target_type} ->
+          case Brain.delete_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
+            {:error, :source_not_found} ->
+              "Error: source page '#{source_slug}' not found"
 
-        {count, errors} ->
-          "Deleted #{count} relation(s), but encountered errors: #{Enum.join(errors, ", ")}"
+            {:error, :target_not_found} ->
+              "Error: target page '#{target_slug}' not found"
+
+            {count, []} ->
+              "Deleted #{count} relation(s) between '#{source_slug}' and '#{target_slug}'"
+
+            {count, errors} ->
+              "Deleted #{count} relation(s), but encountered errors: #{Enum.join(errors, ", ")}"
+          end
       end
     else
       "Error: context '#{context_slug}' not found"
@@ -1388,7 +1541,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_get_stats", %{"context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       s = Brain.stats(context.id)
@@ -1425,29 +1578,28 @@ defmodule Dran.MCP do
          "dran_rename_slug",
          %{"context" => context_slug, "old_slug" => old_slug, "new_slug" => new_slug}
        ) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       if old_slug == new_slug do
         "Error: old_slug and new_slug are the same"
       else
-        case Brain.get_page_by_slug(old_slug, context.id) do
-          nil ->
+        # P-02: batch lookup both slugs in one query
+        pages = Brain.get_pages_by_slugs([old_slug, new_slug], context.id)
+
+        case {Map.get(pages, old_slug), Map.get(pages, new_slug)} do
+          {nil, _} ->
             "Error: page '#{old_slug}' not found"
 
-          page ->
-            # Check that new_slug doesn't already exist
-            case Brain.get_page_by_slug(new_slug, context.id) do
-              nil ->
-                # Brain.rename_slug updates the page's slug in place and rewrites
-                # all ![[old-slug]] embeds in other pages of the same context.
-                Brain.rename_slug(page, new_slug)
+          {_, existing} when not is_nil(existing) ->
+            "Error: a page with slug '#{new_slug}' already exists"
 
-                "Renamed '#{old_slug}' → '#{new_slug}'. Updated ![[#{old_slug}]] references in this context."
+          {_page_type, nil} ->
+            # Brain.rename_slug updates the page's slug in place and rewrites
+            # all ![[old-slug]] embeds in other pages of the same context.
+            Brain.rename_slug(Brain.get_page_by_slug(old_slug, context.id), new_slug)
 
-              _existing ->
-                "Error: a page with slug '#{new_slug}' already exists"
-            end
+            "Renamed '#{old_slug}' → '#{new_slug}'. Updated ![[#{old_slug}]] references in this context."
         end
       end
     else
@@ -1459,7 +1611,7 @@ defmodule Dran.MCP do
          "dran_start_agent",
          %{"agent_type" => agent_type, "context" => context_slug, "input" => input} = args
        ) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       opts = Map.get(args, "opts", [])
@@ -1487,18 +1639,13 @@ defmodule Dran.MCP do
   defp execute_tool("dran_get_agent_session", %{"session_id" => session_id}) do
     case Ecto.UUID.cast(session_id) do
       {:ok, id} ->
-        case Repo.get(Agent.Session, id) do
+        # P-04: preload steps in one query instead of N+1
+        case Repo.get(Agent.Session, id) |> Repo.preload(:steps) do
           nil ->
             "Error: session not found"
 
           session ->
-            steps =
-              Repo.all(
-                from(s in Agent.Step,
-                  where: s.session_id == ^session.id,
-                  order_by: [asc: s.step_number]
-                )
-              )
+            steps = Enum.sort_by(session.steps, & &1.step_number)
 
             render_session(session, steps)
         end
@@ -1509,7 +1656,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_reaugment_page", %{"context" => context_slug, "slug" => slug}) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1529,7 +1676,7 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool("dran_generate_community_summaries", %{"context" => context_slug}) do
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Dran.Graph.CommunitySummaries.generate_all(context.id) do
@@ -1590,7 +1737,7 @@ defmodule Dran.MCP do
 
   defp read_resource("page://" <> rest) do
     [context_slug, slug] = String.split(rest, "/", parts: 2)
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1607,7 +1754,7 @@ defmodule Dran.MCP do
 
   defp read_resource("goal://" <> rest) do
     [context_slug, slug] = String.split(rest, "/", parts: 2)
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1618,6 +1765,7 @@ defmodule Dran.MCP do
           todos =
             Brain.list_pages(
               context_id: context.id,
+              context: context,
               type: "todo",
               limit: 500,
               include_body: false
@@ -1628,6 +1776,7 @@ defmodule Dran.MCP do
           plans =
             Brain.list_pages(
               context_id: context.id,
+              context: context,
               type: "plan",
               limit: 100,
               include_body: false
@@ -1652,17 +1801,25 @@ defmodule Dran.MCP do
 
   defp read_resource("wiki://" <> rest) do
     [context_slug, "index"] = String.split(rest, "/", parts: 2)
-    context = Brain.get_context_by_slug(context_slug)
+    context = context_cache_get(context_slug)
 
     if context do
-      pages = Brain.list_pages(context_id: context.id, limit: 10_000)
+      # P-05: cap at 1,000 pages to avoid loading entire brain into memory
+      pages = Brain.list_pages(context_id: context.id, context: context, limit: 1_000)
 
       lines =
         Enum.map(pages, fn page ->
           "- `#{page.slug}` — #{page.title} (#{page.page_type})"
         end)
 
-      Enum.join(lines, "\n")
+      total_note =
+        if length(pages) == 1_000 do
+          "\n\n---\n_Note: showing first 1,000 pages. Use dran_search or dran_list_pages with filters for more targeted results._"
+        else
+          ""
+        end
+
+      Enum.join(lines, "\n") <> total_note
     else
       "Error: context not found"
     end

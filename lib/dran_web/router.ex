@@ -80,10 +80,28 @@ defmodule DranWeb.Router do
   defp require_api_token(conn, _opts) do
     case extract_token(conn) do
       {:ok, token} ->
-        if Dran.Auth.valid_token?(token) do
-          conn
-        else
-          unauthorized(conn, "invalid token")
+        cond do
+          # Legacy admin token (backward compat) — full admin, no user row
+          token == Dran.Auth.api_token() ->
+            assign(conn, :user, %{is_admin: true, email: "admin", contexts: :all})
+
+          # Per-user token — look up the user and assign it
+          match?({:ok, _}, Dran.Accounts.valid_token?(token)) ->
+            {:ok, user} = Dran.Accounts.valid_token?(token)
+            assign(conn, :user, user)
+
+          # Context-scoped API key — synthetic user with single context
+          match?({:ok, _}, Dran.Accounts.valid_api_key?(token)) ->
+            {:ok, key} = Dran.Accounts.valid_api_key?(token)
+
+            assign(conn, :user, %{
+              is_admin: false,
+              email: "api-key:#{key.name}",
+              contexts: [key.context]
+            })
+
+          true ->
+            unauthorized(conn, "invalid token")
         end
 
       :error ->

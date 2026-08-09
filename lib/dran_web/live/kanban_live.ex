@@ -363,12 +363,14 @@ defmodule DranWeb.KanbanLive do
     context = socket.assigns.context
 
     if context do
+      # SEC-010: cap todos at 500 (was 1000) — kanban with >500 cards is
+      # unusable anyway; the filter UI exists precisely to narrow down.
       all_todos =
         Brain.list_pages(
           context_id: context.id,
           type: "todo",
           include_body: false,
-          limit: 1000
+          limit: 500
         )
 
       project_slugs = Brain.list_pages(context_id: context.id, type: "project", limit: 200)

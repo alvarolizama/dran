@@ -5,27 +5,35 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search?q=...&context=...&type=...&strategy=...&rerank=false"
   def search(conn, %{"q" => query} = params) do
-    opts =
-      []
-      |> maybe_put(:context_id, resolve_context_id(params["context"]))
-      |> maybe_put(:type, params["type"])
-      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
-      |> maybe_put(:strategy, parse_strategy(params["strategy"]))
-      |> maybe_put(:rerank, parse_rerank(params["rerank"]))
-
-    case Brain.search(query, opts) do
-      {:ok, results} ->
-        json(conn, %{data: results})
-
-      {:error, :not_configured} ->
+    case resolve_context_id(params["context"]) do
+      :error ->
         conn
-        |> put_status(:service_unavailable)
-        |> json(%{errors: %{detail: "Inference API is not configured"}})
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "context not found"}})
 
-      {:error, reason} ->
-        conn
-        |> put_status(:bad_gateway)
-        |> json(%{errors: %{detail: inspect(reason)}})
+      context_id ->
+        opts =
+          []
+          |> maybe_put(:context_id, context_id)
+          |> maybe_put(:type, params["type"])
+          |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+          |> maybe_put(:strategy, parse_strategy(params["strategy"]))
+          |> maybe_put(:rerank, parse_rerank(params["rerank"]))
+
+        case Brain.search(query, opts) do
+          {:ok, results} ->
+            json(conn, %{data: results})
+
+          {:error, :not_configured} ->
+            conn
+            |> put_status(:service_unavailable)
+            |> json(%{errors: %{detail: "Inference API is not configured"}})
+
+          {:error, reason} ->
+            conn
+            |> put_status(:bad_gateway)
+            |> json(%{errors: %{detail: inspect(reason)}})
+        end
     end
   end
 
@@ -37,14 +45,22 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search/fuzzy?q=...&context=..."
   def fuzzy(conn, %{"q" => query} = params) do
-    opts =
-      []
-      |> maybe_put(:context_id, resolve_context_id(params["context"]))
-      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+    case resolve_context_id(params["context"]) do
+      :error ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "context not found"}})
 
-    case Brain.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
-      {:ok, results} -> json(conn, %{data: results})
-      {:error, reason} -> json(conn, %{errors: %{detail: inspect(reason)}})
+      context_id ->
+        opts =
+          []
+          |> maybe_put(:context_id, context_id)
+          |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+
+        case Brain.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
+          {:ok, results} -> json(conn, %{data: results})
+          {:error, reason} -> json(conn, %{errors: %{detail: inspect(reason)}})
+        end
     end
   end
 
@@ -56,28 +72,36 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search/semantic?q=...&context=...&strategy=...&rerank=false"
   def semantic(conn, %{"q" => query} = params) do
-    opts =
-      []
-      |> maybe_put(:context_id, resolve_context_id(params["context"]))
-      |> maybe_put(:type, params["type"])
-      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
-      |> maybe_put(:rerank, parse_rerank(params["rerank"]))
-
-    strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
-
-    case Brain.search(query, Keyword.put(opts, :strategy, strategy)) do
-      {:ok, results} ->
-        json(conn, %{data: results})
-
-      {:error, :not_configured} ->
+    case resolve_context_id(params["context"]) do
+      :error ->
         conn
-        |> put_status(:service_unavailable)
-        |> json(%{errors: %{detail: "Inference API is not configured"}})
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "context not found"}})
 
-      {:error, reason} ->
-        conn
-        |> put_status(:bad_gateway)
-        |> json(%{errors: %{detail: inspect(reason)}})
+      context_id ->
+        opts =
+          []
+          |> maybe_put(:context_id, context_id)
+          |> maybe_put(:type, params["type"])
+          |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+          |> maybe_put(:rerank, parse_rerank(params["rerank"]))
+
+        strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
+
+        case Brain.search(query, Keyword.put(opts, :strategy, strategy)) do
+          {:ok, results} ->
+            json(conn, %{data: results})
+
+          {:error, :not_configured} ->
+            conn
+            |> put_status(:service_unavailable)
+            |> json(%{errors: %{detail: "Inference API is not configured"}})
+
+          {:error, reason} ->
+            conn
+            |> put_status(:bad_gateway)
+            |> json(%{errors: %{detail: inspect(reason)}})
+        end
     end
   end
 
@@ -90,8 +114,10 @@ defmodule DranWeb.API.SearchController do
   defp resolve_context_id(nil), do: nil
 
   defp resolve_context_id(slug) do
+    # SEC-012: fail closed — return :error for unknown contexts instead of nil
+    # (nil would mean "search all contexts" which is a fail-open IDOR)
     case Brain.get_context_by_slug(slug) do
-      nil -> nil
+      nil -> :error
       context -> context.id
     end
   end

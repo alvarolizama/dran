@@ -53,10 +53,10 @@ defmodule DranWeb.DashboardAuthFlowTest do
 
     assert html =~ ~p"/kanban"
     assert html =~ "dashboard-api-token"
-    # Full token is only available for copying, never rendered visible
-    assert html =~ "data-token=\"#{user.api_token}\""
+    # SEC-005: only the prefix is rendered — the full token never reaches the DOM
+    assert html =~ String.slice(user.api_token, 0, 8)
     assert html =~ "••••••"
     refute html =~ Regex.compile!(">#{Regex.escape(user.api_token)}<")
-    assert html =~ "CopyApiToken"
+    assert html =~ "copy_api_token"
   end
 end
