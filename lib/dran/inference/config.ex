@@ -27,40 +27,22 @@ defmodule Dran.Inference.Config do
   def api_key, do: get(:api_key)
 
   @spec embedding_model :: String.t()
-  def embedding_model, do: model_or_env("embedding", fn -> get(:embedding_model) end)
+  def embedding_model, do: model_or_setting("embedding")
 
   @spec rerank_model :: String.t()
-  def rerank_model, do: model_or_env("rerank", fn -> get(:rerank_model) end)
+  def rerank_model, do: model_or_setting("rerank")
 
   @spec chat_model :: String.t()
-  def chat_model, do: model_or_env("chat", fn -> get(:chat_model) end)
+  def chat_model, do: model_or_setting("chat")
 
-  @spec env_chat_model :: String.t() | nil
-  def env_chat_model, do: get(:chat_model)
-
-  @spec env_embedding_model :: String.t() | nil
-  def env_embedding_model, do: get(:embedding_model)
-
-  @spec env_rerank_model :: String.t() | nil
-  def env_rerank_model, do: get(:rerank_model)
-
-  defp model_or_env(key, fallback) do
-    # Check DB override first (settings panel), then env var.
+  defp model_or_setting(key) do
     case Dran.Settings.get("model_#{key}") do
-      nil -> fallback_env(fallback)
-      "" -> fallback_env(fallback)
+      nil -> get(:"#{key}_model")
+      "" -> get(:"#{key}_model")
       model -> model
     end
   rescue
-    # Settings table may not exist yet (test DB, first boot).
-    _ -> fallback_env(fallback)
-  end
-
-  defp fallback_env(fallback) do
-    case fallback.() do
-      nil -> nil
-      model -> model
-    end
+    _ -> get(:"#{key}_model")
   end
 
   @spec use_rerank?() :: boolean()
@@ -96,9 +78,6 @@ defmodule Dran.Inference.Config do
         [
           base_url: ensure_no_trailing_slash(url),
           api_key: System.get_env("DRAN_INFERENCE_API_KEY"),
-          embedding_model: System.get_env("DRAN_INFERENCE_EMBEDDING_MODEL"),
-          rerank_model: System.get_env("DRAN_INFERENCE_RERANK_MODEL"),
-          chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL"),
           timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
           use_rerank: parse_boolean(System.get_env("DRAN_INFERENCE_USE_RERANK", "true")),
           embedding_dimensions: 1024,

@@ -22,19 +22,18 @@ defmodule DranWeb.SettingsLive do
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
   # Purposes shown in the "Modelos" card. Each entry is:
-  #   {settings_key, env_getter, label_gettext_fn, description_gettext_fn}
-  # `env_getter` returns the env-only default (bypassing DB overrides) so the
-  # UI can mark that option as "(env)". Kept as a function (not a module
-  # attribute) because it contains anonymous fns which cannot be escaped.
+  #   {settings_key, label_gettext_fn, description_gettext_fn}
+  # Models come exclusively from the provider's `/v1/models` list — there are
+  # no env-var model defaults anymore.
   defp model_purposes do
     [
-      {"model_chat", &Config.env_chat_model/0, fn -> gettext("Chat / agentes") end,
+      {"model_chat", fn -> gettext("Chat / agentes") end,
        fn ->
          gettext("Model used for chat completions, agent reasoning, and title generation.")
        end},
-      {"model_embedding", &Config.env_embedding_model/0, fn -> gettext("Embeddings") end,
+      {"model_embedding", fn -> gettext("Embeddings") end,
        fn -> gettext("Model used to vectorize page bodies for semantic search and relations.") end},
-      {"model_rerank", &Config.env_rerank_model/0, fn -> gettext("Re-ranking") end,
+      {"model_rerank", fn -> gettext("Re-ranking") end,
        fn ->
          gettext("Model used to re-rank semantic search results by relevance to the query.")
        end}
@@ -423,7 +422,7 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("save_models", %{"models" => params}, socket) do
-    for {key, _env_fn, _label, _desc} <- model_purposes() do
+    for {key, _label, _desc} <- model_purposes() do
       raw = Map.get(params, key, "")
       value = if raw == "", do: nil, else: raw
       Settings.put(key, value)
@@ -677,8 +676,8 @@ defmodule DranWeb.SettingsLive do
 
     current =
       model_purposes()
-      |> Enum.map(fn {key, env_fn, _label, _desc} ->
-        {key, current_model_value(key, env_fn)}
+      |> Enum.map(fn {key, _label, _desc} ->
+        {key, current_model_value(key)}
       end)
       |> Map.new()
 
@@ -689,11 +688,12 @@ defmodule DranWeb.SettingsLive do
   defp extract_model_id(%{id: id}) when is_binary(id), do: id
   defp extract_model_id(_), do: nil
 
-  # Effective value for a purpose: Settings override if set, else env default.
-  defp current_model_value(key, env_fn) do
+  # Effective value for a purpose: the Settings override, if set. Models come
+  # exclusively from the provider's model list — no env fallback.
+  defp current_model_value(key) do
     case read_setting_safe(key) do
-      nil -> env_fn.()
-      "" -> env_fn.()
+      nil -> nil
+      "" -> nil
       value -> value
     end
   end
@@ -707,7 +707,7 @@ defmodule DranWeb.SettingsLive do
   # -- Per-model test ----------------------------------------------------------
 
   defp test_model_key?(key) do
-    Enum.any?(model_purposes(), fn {k, _env_fn, _label, _desc} -> k == key end)
+    Enum.any?(model_purposes(), fn {k, _label, _desc} -> k == key end)
   end
 
   # Runs a real inference call against the given model. `model` is the raw
@@ -1423,7 +1423,7 @@ defmodule DranWeb.SettingsLive do
           <h2 class="text-heading">{gettext("Modelos")}</h2>
           <p class="text-caption mt-0.5">
             {gettext(
-              "Override the model used for each purpose. Leave as “Por defecto (env)” to use the environment default."
+              "Pick the model used for each purpose from the provider's model list."
             )}
           </p>
         </div>
@@ -1442,9 +1442,9 @@ defmodule DranWeb.SettingsLive do
         </p>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <%= for {key, env_fn, label_fn, desc_fn} <- model_purposes() do %>
+          <%= for {key, label_fn, desc_fn} <- model_purposes() do %>
             <% current = Map.fetch!(@model_values, key) %>
-            <% options = model_options(@models_result, env_fn, current) %>
+            <% options = model_options(@models_result, current) %>
             <% test_status = Map.get(@model_test_status, key, nil) %>
             <div>
               <div class="flex items-end gap-2">
@@ -1456,7 +1456,7 @@ defmodule DranWeb.SettingsLive do
                     label={label_fn.()}
                     options={options}
                     value={current}
-                    prompt={gettext("Por defecto (env)")}
+                    prompt={gettext("Selecciona un modelo")}
                   />
                 </div>
                 <button
@@ -1521,30 +1521,20 @@ defmodule DranWeb.SettingsLive do
   end
 
   # Builds the <option> list for a purpose's select.
-  # - The env default model (if present in the fetched list) is annotated " (env)".
-  # - If the env default is NOT in the fetched list, it's still shown (so the
-  #   current effective value is always selectable) with the " (env)" suffix.
-  # - If the current value isn't in the env-or-fetched set, it's appended too.
-  defp model_options(models_result, env_fn, current) do
-    env_default = env_fn.()
-
+  # - Starts with the models fetched from the provider's `/v1/models`.
+  # - If the current saved value is not in that list, it's appended so the
+  #   effective selection is always visible (e.g. provider removed the model).
+  defp model_options(models_result, current) do
     fetched =
       case models_result do
         {:ok, ids} -> ids
         _ -> []
       end
 
-    # Start with fetched ids; ensure env_default and current are present.
-    ids =
-      fetched
-      |> maybe_prepend(env_default)
-      |> maybe_prepend(current)
-      |> Enum.uniq()
-
-    Enum.map(ids, fn id ->
-      label = if id == env_default, do: "#{id} (env)", else: id
-      {label, id}
-    end)
+    fetched
+    |> maybe_prepend(current)
+    |> Enum.uniq()
+    |> Enum.map(fn id -> {id, id} end)
   end
 
   defp maybe_prepend(list, nil), do: list

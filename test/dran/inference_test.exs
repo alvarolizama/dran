@@ -205,12 +205,14 @@ defmodule Dran.InferenceTest do
       end)
     end
 
-    test "load_from_env/0 strips trailing slash and uses env vars" do
+    test "load_from_env/0 strips trailing slash and ignores model env vars" do
       with_env(
         %{
           "DRAN_INFERENCE_API_URL" => "http://inference.example.com:8000/v1/",
           "DRAN_INFERENCE_API_KEY" => "secret",
           "DRAN_INFERENCE_EMBEDDING_MODEL" => "custom-embed",
+          "DRAN_INFERENCE_RERANK_MODEL" => "custom-rerank",
+          "DRAN_INFERENCE_CHAT_MODEL" => "custom-chat",
           "DRAN_INFERENCE_TIMEOUT" => "15000"
         },
         fn ->
@@ -218,9 +220,11 @@ defmodule Dran.InferenceTest do
 
           assert Keyword.get(cfg, :base_url) == "http://inference.example.com:8000/v1"
           assert Keyword.get(cfg, :api_key) == "secret"
-          assert Keyword.get(cfg, :embedding_model) == "custom-embed"
-          # No DRAN_INFERENCE_RERANK_MODEL set → nil (no hardcoded default)
+          # Models come exclusively from the provider's /v1/models list (saved
+          # to Settings) — model env vars are ignored.
+          assert Keyword.get(cfg, :embedding_model) == nil
           assert Keyword.get(cfg, :rerank_model) == nil
+          assert Keyword.get(cfg, :chat_model) == nil
           assert Keyword.get(cfg, :timeout) == 15_000
         end
       )
