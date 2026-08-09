@@ -180,6 +180,20 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ "disabled"
   end
 
+  test "models tab renders the selects with a per-model test button", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings/models")
+
+    assert html =~ ~s(id="models-form")
+
+    for purpose <- ~w(model_chat model_embedding model_rerank) do
+      assert html =~ ~s(id="models_#{purpose}")
+      assert html =~ ~s(id="test_model_#{purpose}")
+      assert html =~ "data-model-key=\"#{purpose}\""
+    end
+
+    assert html =~ t("Probar")
+  end
+
   describe "jobs panel (brain tab)" do
     import Ecto.Query
 
