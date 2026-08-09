@@ -145,7 +145,11 @@ inbox items legítimos estilo GTD — no forzar.
 **Crear relación explícita:**
 ```
 1. dran_get_links({ slug: "a" })   → ¿ya existe la relación?
-2. dran_create_relation({ from: "a", to: "b", relation_type: "part_of" })
+2. dran_create_relation({ source_slug: "a", target_slug: "b", relation_type: "part_of" })
+   → params REALES del MCP: source_slug / target_slug (NO from/to)
+   → enum real de relation_type: related, contradicts, supersedes, part_of, embeds
+     Los tipos prop-materialized (works_in, has_tier, based_in, written_in,
+     built_with) NO se crean a mano — solo salen via meta.props
 ```
 
 **Props que materializan:**
@@ -188,8 +192,8 @@ dran_get_links({ slug: "a" })   → inbound + outbound
 | Tool | Args mínimos | Retorna |
 |------|--------------|---------|
 | `dran_get_links` | `slug` | Inbound + outbound |
-| `dran_create_relation` | `from`, `to`, `relation_type` | Edge creado |
-| `dran_delete_relation` | `from`, `to` | Eliminado |
+| `dran_create_relation` | `source_slug`, `target_slug`, `relation_type` | Edge creado |
+| `dran_delete_relation` | `source_slug`, `target_slug` | Eliminado |
 | `dran_rename_slug` | `old_slug`, `new_slug` | Renombrado + embeds reescritos |
 | `dran_update_page` | `slug`, `meta.props` | Props → edges automáticos |
 | `dran_search` | `query`, `props` | Filtra resultados por props (AND) |

@@ -298,7 +298,7 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 | `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely**. ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks |
 | `dran_update_todo` | Update todo status/priority/date/links — **merges `meta`** (the only safe way to change todo status) |
 | `dran_rename_slug` | Rename a slug; rewrites all `![[old-slug]]` embeds in the context |
-| `dran_create_relation` | Explicit typed relation: `related`, `part_of`, `supersedes`, `contradicts`, `embeds`, plus prop-materialized types `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`. **Never `semantic`** (automatic) |
+| `dran_create_relation` | Explicit typed relation (params reales: `source_slug` + `target_slug`): `related`, `part_of`, `supersedes`, `contradicts`, `embeds` — el enum real NO incluye los tipos prop-materialized (`works_in`, `has_tier`, `based_in`, `written_in`, `built_with`); esos SOLO se materializan via `meta.props`. **Never `semantic`** (automatic) |
 | `dran_delete_relation` | Delete relations between two pages |
 | `dran_delete_page` | Delete a page — **irreversible**, confirm with Álvaro first |
 
