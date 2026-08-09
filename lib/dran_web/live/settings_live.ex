@@ -822,10 +822,11 @@ defmodule DranWeb.SettingsLive do
             <.jobs_section jobs={@jobs} running_jobs={@running_jobs} />
           </div>
 
-          <div :if={@active_tab == "models"}>
+          <div :if={@active_tab == "models"} class="space-y-6">
             <.models_section
               models_result={@models_result}
               model_values={@model_values}
+              model_test_status={@model_test_status}
             />
           </div>
 
@@ -1409,6 +1410,7 @@ defmodule DranWeb.SettingsLive do
 
   attr :models_result, :any, required: true
   attr :model_values, :map, required: true
+  attr :model_test_status, :map, required: true
 
   defp models_section(assigns) do
     ~H"""
