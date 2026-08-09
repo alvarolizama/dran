@@ -2,7 +2,7 @@
 name: maintenance-flow
 description: "Use when maintaining the Dran brain — lint orphans/stale, run autonomous agents, community summaries, archive, stats. Triggers on limpia, higiene, mantenimiento del brain."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

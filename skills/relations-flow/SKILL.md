@@ -2,7 +2,7 @@
 name: relations-flow
 description: "Use when connecting Dran pages — typed relations, materialized props, embeds and independent slugs. Triggers on relaciona, conecta, vincula, link entre páginas."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

@@ -2,7 +2,7 @@
 name: research-flow
 description: "Use when researching a topic online and storing it in Dran — web search, source capture, distillation and cited query pages. Triggers on investiga, research, busca info."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

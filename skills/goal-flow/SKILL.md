@@ -2,7 +2,7 @@
 name: goal-flow
 description: "Use when creating or managing a Dran goal — measurable objective with metric + target date. Triggers on new goal, goal progress, goal review."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

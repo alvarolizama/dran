@@ -2,7 +2,7 @@
 name: planning-flow
 description: "Use when creating or managing a Dran plan — tactical execution with mermaid roadmap, todos and gotchas. Triggers on new plan, plan update, plan review."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

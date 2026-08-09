@@ -2,7 +2,7 @@
 name: note-taking-flow
 description: "Use when capturing knowledge in Dran — notes, concepts, entities, references with the right page_type and kind. Triggers on guarda, captura, anota, apunta."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

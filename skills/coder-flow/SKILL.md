@@ -2,7 +2,7 @@
 name: coder-flow
 description: "Use when executing a Dran dev todo — parse the fases mermaid as spec, dispatch subagents per fase, validate gates, mark done with real evidence. Triggers on execute/implement todo."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

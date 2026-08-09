@@ -2,7 +2,7 @@
 name: project-flow
 description: "Use when creating or managing a Dran project — the strategic level: vision, scope, health. Triggers on new project, project update, project review."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:

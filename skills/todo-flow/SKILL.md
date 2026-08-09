@@ -2,7 +2,7 @@
 name: todo-flow
 description: "Use when creating todos in Dran — dev or general action items with kanban status, assignee and verification criteria. Triggers on new todo, task, pendiente."
 version: 1.0.0
-author: Chaos Manager
+author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
