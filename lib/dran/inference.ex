@@ -4,9 +4,12 @@ defmodule Dran.Inference do
 
   Works with three capabilities provided by the OpenAI-compatible inference server:
 
-  - embeddings (`Qwen3-Embedding`)
-  - reranking (`Qwen3-Reranker`)
-  - chat helpers (`Qwen3.6-35B-A3B`)
+  - embeddings (for semantic search)
+  - reranking (for better search result ordering)
+  - chat helpers (for summaries, tags, agents, and image descriptions)
+
+  Models are configured via environment variables or the Settings panel —
+  see `Dran.Inference.Config` for the full precedence chain.
 
   When DRAN_INFERENCE_API_URL is not set, every function returns
   {:error, :not_configured} so the rest of the app can degrade gracefully.

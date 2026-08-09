@@ -7,12 +7,6 @@ defmodule Dran.Inference.Config do
   `{:error, :not_configured}` for every call.
   """
 
-  @default_models %{
-    embedding: "Qwen3-Embedding",
-    rerank: "Qwen3-Reranker",
-    chat: "Ornith-1.0-9B"
-  }
-
   @spec config() :: keyword() | nil
   def config do
     case Application.get_env(:dran, :inference) do
@@ -102,10 +96,9 @@ defmodule Dran.Inference.Config do
         [
           base_url: ensure_no_trailing_slash(url),
           api_key: System.get_env("DRAN_INFERENCE_API_KEY"),
-          embedding_model:
-            System.get_env("DRAN_INFERENCE_EMBEDDING_MODEL", @default_models.embedding),
-          rerank_model: System.get_env("DRAN_INFERENCE_RERANK_MODEL", @default_models.rerank),
-          chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL", @default_models.chat),
+          embedding_model: System.get_env("DRAN_INFERENCE_EMBEDDING_MODEL"),
+          rerank_model: System.get_env("DRAN_INFERENCE_RERANK_MODEL"),
+          chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL"),
           timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
           use_rerank: parse_boolean(System.get_env("DRAN_INFERENCE_USE_RERANK", "true")),
           embedding_dimensions: 1024,

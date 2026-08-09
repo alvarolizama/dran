@@ -49,6 +49,7 @@ defmodule DranWeb.SettingsLive do
       socket
       |> assign(active_nav: "settings", page_title: gettext("Settings"))
       |> assign(inference_test: nil)
+      |> assign(model_test_status: %{})
       |> assign_users()
       |> assign_contexts()
       |> assign_new_user_form()
@@ -501,6 +502,24 @@ defmodule DranWeb.SettingsLive do
     {:noreply, assign(socket, inference_test: :testing)}
   end
 
+  @impl true
+  def handle_event("test_model", %{"key" => key, "model" => model}, socket) do
+    with true <- test_model_key?(key),
+         false <- Map.get(socket.assigns.model_test_status, key) == :testing do
+      pid = self()
+
+      Task.start(fn ->
+        result = run_model_test(key, model)
+        send(pid, {:model_test_done, key, result})
+      end)
+
+      status = Map.put(socket.assigns.model_test_status, key, :testing)
+      {:noreply, assign(socket, model_test_status: status)}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
   # -- Jobs panel -------------------------------------------------------------
 
   @impl true
@@ -535,6 +554,12 @@ defmodule DranWeb.SettingsLive do
   @impl true
   def handle_info({:inference_test_result, result}, socket) do
     {:noreply, assign(socket, inference_test: result)}
+  end
+
+  @impl true
+  def handle_info({:model_test_done, key, result}, socket) do
+    status = Map.put(socket.assigns.model_test_status, key, result)
+    {:noreply, assign(socket, model_test_status: status)}
   end
 
   @impl true
@@ -678,6 +703,61 @@ defmodule DranWeb.SettingsLive do
   rescue
     _ -> nil
   end
+
+  # -- Per-model test ----------------------------------------------------------
+
+  defp test_model_key?(key) do
+    Enum.any?(model_purposes(), fn {k, _env_fn, _label, _desc} -> k == key end)
+  end
+
+  # Runs a real inference call against the given model. `model` is the raw
+  # select value: "" (default/env) resolves to the effective configured model.
+  # Returns {:ok, latency_ms} or {:error, reason}.
+  defp run_model_test(key, model) do
+    model =
+      case model do
+        "" -> effective_model(key)
+        nil -> effective_model(key)
+        m -> m
+      end
+
+    start = System.monotonic_time(:millisecond)
+
+    result =
+      case key do
+        "model_chat" ->
+          Client.chat(%{
+            "model" => model,
+            "messages" => [%{"role" => "user", "content" => "Say OK"}],
+            "max_tokens" => 5
+          })
+
+        "model_embedding" ->
+          Client.embeddings(model, ["test"])
+
+        "model_rerank" ->
+          Client.rerank(model, "test", ["test doc"])
+
+        _ ->
+          {:error, :unknown_model_key}
+      end
+
+    case result do
+      {:ok, _} -> {:ok, System.monotonic_time(:millisecond) - start}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp effective_model("model_chat"), do: Config.chat_model()
+  defp effective_model("model_embedding"), do: Config.embedding_model()
+  defp effective_model("model_rerank"), do: Config.rerank_model()
+  defp effective_model(_), do: nil
+
+  # Compact, human-readable reason for the UI.
+  defp format_model_error({:http_error, status, _body}), do: "HTTP #{status}"
+  defp format_model_error(%Req.TransportError{reason: reason}), do: inspect(reason)
+  defp format_model_error(:not_configured), do: "inference no configurado"
+  defp format_model_error(other), do: inspect(other)
 
   @impl true
   def render(assigns) do
@@ -1363,19 +1443,62 @@ defmodule DranWeb.SettingsLive do
           <%= for {key, env_fn, label_fn, desc_fn} <- model_purposes() do %>
             <% current = Map.fetch!(@model_values, key) %>
             <% options = model_options(@models_result, env_fn, current) %>
+            <% test_status = Map.get(@model_test_status, key, nil) %>
             <div>
-              <.input
-                id={"models_#{key}"}
-                name={"models[#{key}]"}
-                type="select"
-                label={label_fn.()}
-                options={options}
-                value={current}
-                prompt={gettext("Por defecto (env)")}
-              />
+              <div class="flex items-end gap-2">
+                <div class="flex-1">
+                  <.input
+                    id={"models_#{key}"}
+                    name={"models[#{key}]"}
+                    type="select"
+                    label={label_fn.()}
+                    options={options}
+                    value={current}
+                    prompt={gettext("Por defecto (env)")}
+                  />
+                </div>
+                <button
+                  type="button"
+                  id={"test_model_#{key}"}
+                  phx-hook=".ModelTest"
+                  data-model-key={key}
+                  data-model-select={"models_#{key}"}
+                  disabled={test_status == :testing}
+                  class={[
+                    "btn btn-xs gap-1.5 mb-1 transition-all duration-150 active:scale-95",
+                    test_status == :testing && "btn-ghost opacity-60",
+                    test_status != :testing && "btn-ghost hover:bg-primary/10"
+                  ]}
+                >
+                  <.icon
+                    name={if test_status == :testing, do: "hero-arrow-path", else: "hero-bolt"}
+                    class={"size-3.5 #{if test_status == :testing, do: "animate-spin", else: ""}"}
+                  />
+                  {if test_status == :testing, do: gettext("Probando..."), else: gettext("Probar")}
+                </button>
+              </div>
               <p class="text-xs text-base-content/60 mt-1.5">
                 {desc_fn.()}
               </p>
+              <div
+                :if={test_status != nil && test_status != :testing}
+                class="mt-1.5 text-xs"
+              >
+                <span
+                  :if={match?({:ok, _}, test_status)}
+                  class="inline-flex items-center gap-1 text-success"
+                >
+                  <.icon name="hero-check-circle" class="size-3.5" />
+                  {gettext("OK · %{ms} ms", ms: elem(test_status, 1))}
+                </span>
+                <span
+                  :if={match?({:error, _}, test_status)}
+                  class="inline-flex items-center gap-1 text-error"
+                >
+                  <.icon name="hero-x-circle" class="size-3.5" />
+                  {gettext("Error: %{reason}", reason: format_model_error(elem(test_status, 1)))}
+                </span>
+              </div>
             </div>
           <% end %>
         </div>
@@ -1862,6 +1985,22 @@ defmodule DranWeb.SettingsLive do
                 document.body.removeChild(ta);
                 copied();
               }
+            });
+          }
+        }
+      </script>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ModelTest">
+        export default {
+          mounted() {
+            this.el.addEventListener("click", () => {
+              const selectId = this.el.dataset.modelSelect;
+              const select = document.getElementById(selectId);
+              const model = select ? select.value : "";
+              this.pushEventTo(this.el, "test_model", {
+                key: this.el.dataset.modelKey,
+                model: model
+              });
             });
           }
         }

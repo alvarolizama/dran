@@ -205,7 +205,7 @@ defmodule Dran.InferenceTest do
       end)
     end
 
-    test "load_from_env/0 strips trailing slash and sets defaults" do
+    test "load_from_env/0 strips trailing slash and uses env vars" do
       with_env(
         %{
           "DRAN_INFERENCE_API_URL" => "http://inference.example.com:8000/v1/",
@@ -219,7 +219,8 @@ defmodule Dran.InferenceTest do
           assert Keyword.get(cfg, :base_url) == "http://inference.example.com:8000/v1"
           assert Keyword.get(cfg, :api_key) == "secret"
           assert Keyword.get(cfg, :embedding_model) == "custom-embed"
-          assert Keyword.get(cfg, :rerank_model) == "Qwen3-Reranker"
+          # No DRAN_INFERENCE_RERANK_MODEL set → nil (no hardcoded default)
+          assert Keyword.get(cfg, :rerank_model) == nil
           assert Keyword.get(cfg, :timeout) == 15_000
         end
       )
