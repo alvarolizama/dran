@@ -714,7 +714,7 @@ defmodule DranWeb.PageComponents do
     sanitize: [
       add_tags: ["input", "figure", "figcaption", "video", "source", "embed"],
       add_generic_attributes: ["data-wikilink"],
-      add_tag_attributes: %{"a" => ["data-wikilink"]}
+      add_tag_attributes: %{"a" => ["data-wikilink"], "code" => ["class"]}
     ]
   ]
 

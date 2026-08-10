@@ -1422,9 +1422,7 @@ defmodule DranWeb.SettingsLive do
         <div class="min-w-0 flex-1">
           <h2 class="text-heading">{gettext("Modelos")}</h2>
           <p class="text-caption mt-0.5">
-            {gettext(
-              "Pick the model used for each purpose from the provider's model list."
-            )}
+            {gettext("Pick the model used for each purpose from the provider's model list.")}
           </p>
         </div>
       </header>
