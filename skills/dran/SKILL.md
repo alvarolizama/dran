@@ -295,7 +295,7 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely**. ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks |
+| `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely AND `body` entirely** (no append, no partial). ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks. **Never split a body update across calls** — the second call wipes the first; for bodies over the tool-call token limit, write the full body to a local file and `PUT /api/pages/:slug?context=X` with curl |
 | `dran_update_todo` | Update todo status/priority/date/links — **merges `meta`** (the only safe way to change todo status) |
 | `dran_rename_slug` | Rename a slug; rewrites all `![[old-slug]]` embeds in the context |
 | `dran_create_relation` | Explicit typed relation (params reales: `source_slug` + `target_slug`): `related`, `part_of`, `supersedes`, `contradicts`, `embeds` — el enum real NO incluye los tipos prop-materialized (`works_in`, `has_tier`, `based_in`, `written_in`, `built_with`); esos SOLO se materializan via `meta.props`. **Never `semantic`** (automatic) |
@@ -467,6 +467,14 @@ Reglas:
 - **`dran_update_page` for todo status** — use `dran_update_todo` (merges meta).
 - **`meta` + `body` together on pages with mermaid** — strips the diagrams;
   pass only `body`.
+- **Splitting a big body update into multiple `dran_update_page` calls** —
+  each call REPLACES the whole body, so the second call destroys the first
+  (real incidents: plan sections lost, todo phases lost). Write the full body
+  to a local file and send it in ONE call, or use REST
+  `PUT /api/pages/:slug?context=X` via curl/execute_code (host+token from
+  `~/.hermes/config.yaml` → `mcp_servers.dran`, strip `/api/mcp` from the
+  url). REST GET returns metadata only (`body: null`) — verify integrity by
+  comparing the page `body_hash` against sha256 of the body you sent.
 - **Manually creating `semantic` relations** — automatic only.
 - **Assuming link precedence** — project/goal/plan slugs are independent.
 - **Passing `status` for `query` pages** — the field is `answer_status`.
