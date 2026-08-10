@@ -1,7 +1,7 @@
 ---
 name: todo-flow
 description: "Use when creating todos in Dran — dev or general action items with kanban status, assignee and verification criteria. Triggers on new todo, task, pendiente."
-version: 1.0.0
+version: 1.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -101,7 +101,10 @@ no hay forma honesta de cerrarlo.
 5. **Pasos de ejecución con mermaid** — variantes 2 y 3: los pasos van como
    diagrama mermaid con verbos (`READ` / `EDIT` / `CREATE` / `RUN` / `VERIFY`
    / `ASK`), descritos uno por uno; el último paso SIEMPRE valida el
-   entregable, y el flujo mueve el kanban (`in_progress` → `done`).
+   entregable, y el flujo mueve el kanban (`in_progress` → `done`). En la
+   variante 3, además del DAG de `## Fases`, **cada fase lleva su propio
+   mermaid de verbos** (los pasos de esa fase, con loop de corrección si la
+   validación no pasa).
 
 ## Shaping — questioning antes de crear
 
@@ -189,10 +192,14 @@ flowchart TD
 
 Esqueleto **+** `## Entregable` **+** mermaid `## Fases` **+** detalle por
 fase **+** verificación global del entregable. Los pasos de ejecución SON
-las fases: el mermaid es el DAG (nodos = fases con verbo, flechas =
-dependencias), cada fase se describe con qué cambia (código) y cómo se
-prueba, el último paso SIEMPRE valida el entregable y el flujo mueve el
-kanban. Fases **disjuntas** (archivos distintos) o serializadas.
+las fases: el mermaid de `## Fases` es el DAG de alto nivel (nodos = fases,
+flechas = dependencias). **Cada fase lleva ADEMÁS su propio mermaid de
+verbos** (nodos = pasos `READ`/`EDIT`/`CREATE`/`RUN`/`VERIFY` de esa fase —
+el último paso valida la fase y regresa al paso que falló si no pasa), más
+su descripción: qué cambia (código), instrucciones numeradas con los mismos
+verbos, snippet de código real y cómo se prueba. El último paso del DAG
+SIEMPRE valida el entregable y el flujo mueve el kanban. Fases **disjuntas**
+(archivos distintos) o serializadas.
 
 ```markdown
 ## Qué hacer
@@ -219,6 +226,16 @@ flowchart TD
 ### Fase 1: EDIT router.ex — lógica sticky
 
 **Qué cambia:** `router.ex` gana selección sticky por member.
+
+**Mermaid de la fase (verbos):**
+
+```mermaid
+flowchart TD
+  P1[\"READ lib/routing/router.ex\\nleer selección actual\"] --> P2[\"EDIT lib/routing/router.ex\\nagregar sticky por member\"]
+  P2 --> P3[\"RUN mix format\\nlib/routing/router.ex\"]
+  P3 --> P4[\"VERIFY mix test\\nrouter_test.exs pasa\"]
+  P4 -->|\"no pasa\"| P2
+```
 
 **Instrucciones (verbos):**
 1. READ lib/routing/router.ex — leer la selección de upstream actual
