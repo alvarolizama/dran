@@ -44,6 +44,8 @@ defmodule DranWeb.DashboardLive do
               </p>
               <div
                 :if={@user_api_token_prefix}
+                id="dashboard-api-token-row"
+                phx-hook=".CopyToClipboard"
                 class="flex items-center gap-2 pt-0.5"
                 title={gettext("Your API key")}
               >
@@ -387,9 +389,7 @@ defmodule DranWeb.DashboardLive do
                 }, 1500);
               }
             };
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(text).then(copied);
-            } else {
+            const fallbackCopy = () => {
               const ta = document.createElement("textarea");
               ta.value = text;
               ta.setAttribute("readonly", "");
@@ -405,6 +405,11 @@ defmodule DranWeb.DashboardLive do
               }
               document.body.removeChild(ta);
               copied();
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(copied).catch(fallbackCopy);
+            } else {
+              fallbackCopy();
             }
           });
         }
