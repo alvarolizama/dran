@@ -475,6 +475,8 @@ defmodule Dran.Brain do
   end
 
   @doc "True if the given page type is enabled in the context."
+  def page_type_enabled?(nil, _page_type), do: true
+
   def page_type_enabled?(%Context{} = context, page_type) when is_binary(page_type) do
     page_type not in (context.disabled_page_types || [])
   end

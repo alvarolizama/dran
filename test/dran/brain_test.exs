@@ -50,6 +50,11 @@ defmodule Dran.BrainTest do
       assert Brain.page_type_enabled?(ctx, "note")
     end
 
+    test "page_type_enabled?/2 treats nil context as all types enabled" do
+      assert Brain.page_type_enabled?(nil, "todo")
+      assert Brain.page_type_enabled?(nil, "project")
+    end
+
     test "update_context_settings/2 rejects invalid page types", %{context: ctx} do
       assert {:error, changeset} =
                Brain.update_context_settings(ctx, %{disabled_page_types: ["bogus_type"]})
