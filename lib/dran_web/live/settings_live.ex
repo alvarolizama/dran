@@ -2085,7 +2085,7 @@ defmodule DranWeb.SettingsLive do
           </div>
           <input
             type="checkbox"
-            checked={@wiki_google_open_signup}
+            checked={Map.get(assigns, :wiki_google_open_signup, false)}
             phx-click="toggle_wiki_google_signup"
             class="toggle toggle-sm toggle-primary"
           />
