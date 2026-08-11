@@ -33,7 +33,7 @@ defmodule DranWeb.WikiLive do
   @impl true
   def mount(_params, session, socket) do
     {socket, _context} = Auth.assign_to_socket(socket, session)
-    {:ok, socket}
+    {:ok, assign(socket, graph_data: %{nodes: [], edges: []})}
   end
 
   # ── Handle params ──────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ defmodule DranWeb.WikiLive do
             # Load page with full body
             page = Brain.get_page!(page.id)
             rendered_body = render_wiki_markdown(page.body, context)
-            relations = Brain.list_relations_for_page(page)
+            relations = Brain.list_relations_for_page(page.id)
 
             socket
             |> assign(
@@ -177,9 +177,12 @@ defmodule DranWeb.WikiLive do
   defp apply_action(socket, :graph, %{"context_slug" => context_slug}) do
     case Brain.get_context_by_slug(context_slug) do
       %{wiki_enabled: true} = context ->
+        graph_data = Brain.graph_data(context.id)
+
         socket
         |> assign(
           context: context,
+          graph_data: graph_data,
           page_title: "#{context.name} · Graph"
         )
 
@@ -196,7 +199,7 @@ defmodule DranWeb.WikiLive do
     <Layouts.wiki
       flash={@flash}
       current_user={@current_user}
-      context_slug={@context[:slug]}
+      context_slug={@context && @context.slug}
       contexts={@contexts}
       page_title={@page_title}
     >
@@ -599,13 +602,12 @@ defmodule DranWeb.WikiLive do
           <span>{gettext("Graph")}</span>
         </div>
       </div>
-      <div
+      <.graph_3d
         id="wiki-graph"
-        class="h-full w-full"
-        phx-hook="WikiGraph"
-        data-context-slug={@context.slug}
-      >
-      </div>
+        nodes={@graph_data.nodes}
+        edges={@graph_data.edges}
+        class="w-full h-full"
+      />
     </div>
     """
   end
