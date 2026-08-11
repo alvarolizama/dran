@@ -23,7 +23,7 @@ defmodule DranWeb.Endpoint do
                      same_site: "Lax",
                      http_only: true,
                      max_age:
-                       String.to_integer(System.get_env("SESSION_MAX_AGE_SECONDS", "28800"))
+                       String.to_integer(System.get_env("SESSION_MAX_AGE_SECONDS", "31536000"))
                    ] ++ session_secure
 
   socket "/live", Phoenix.LiveView.Socket,
