@@ -554,7 +554,7 @@ defmodule DranWeb.PageComponents do
         title={gettext("No smart collections yet.")}
         caption={gettext("Save a set of filters from search or any page list to create one.")}
       >
-        <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm mt-4">
+        <.link navigate={~p"/panel/collections/new"} class="btn btn-primary btn-sm mt-4">
           <.icon name="hero-plus" class="w-4 h-4" />
           {gettext("Create your first collection")}
         </.link>
@@ -651,24 +651,24 @@ defmodule DranWeb.PageComponents do
   def tag_link_path(tag, _context_id, tag_map) when is_binary(tag) and is_map(tag_map) do
     case Map.get(tag_map, tag) do
       nil ->
-        "/search?q=#{URI.encode_www_form(tag)}"
+        "/panel/search?q=#{URI.encode_www_form(tag)}"
 
       page_type ->
-        "/#{PageTypes.path(page_type)}/#{tag}"
+        "/panel/#{PageTypes.path(page_type)}/#{tag}"
     end
   end
 
   def tag_link_path(tag, context_id, nil) when is_binary(tag) and is_binary(context_id) do
     case Dran.Brain.get_page_by_slug(tag, context_id) do
       %Page{page_type: type, slug: slug} ->
-        "/#{PageTypes.path(type)}/#{slug}"
+        "/panel/#{PageTypes.path(type)}/#{slug}"
 
       nil ->
-        "/search?q=#{URI.encode_www_form(tag)}"
+        "/panel/search?q=#{URI.encode_www_form(tag)}"
     end
   end
 
-  def tag_link_path(tag, _context_id, _tag_map), do: "/search?q=#{URI.encode_www_form(tag)}"
+  def tag_link_path(tag, _context_id, _tag_map), do: "/panel/search?q=#{URI.encode_www_form(tag)}"
 
   def format_date(nil), do: ""
 
@@ -789,7 +789,7 @@ defmodule DranWeb.PageComponents do
         Enum.reduce(slugs, %{}, fn slug, acc ->
           case Map.get(slug_types, slug) do
             nil -> acc
-            page_type -> Map.put(acc, slug, "/#{PageTypes.path(page_type)}/#{slug}")
+            page_type -> Map.put(acc, slug, "/panel/#{PageTypes.path(page_type)}/#{slug}")
           end
         end)
       else
@@ -1082,14 +1082,14 @@ defmodule DranWeb.PageComponents do
     """
   end
 
-  defp back_path(%{page_type: "note"}), do: "/notes"
-  defp back_path(%{page_type: "concept"}), do: "/concepts"
-  defp back_path(%{page_type: "entity"}), do: "/entities"
-  defp back_path(%{page_type: "reference"}), do: "/references"
-  defp back_path(%{page_type: "project"}), do: "/projects"
-  defp back_path(%{page_type: "goal"}), do: "/goals"
-  defp back_path(%{page_type: "plan"}), do: "/plans"
-  defp back_path(%{page_type: "todo"}), do: "/todos"
-  defp back_path(%{page_type: "query"}), do: "/queries"
+  defp back_path(%{page_type: "note"}), do: "/panel/notes"
+  defp back_path(%{page_type: "concept"}), do: "/panel/concepts"
+  defp back_path(%{page_type: "entity"}), do: "/panel/entities"
+  defp back_path(%{page_type: "reference"}), do: "/panel/references"
+  defp back_path(%{page_type: "project"}), do: "/panel/projects"
+  defp back_path(%{page_type: "goal"}), do: "/panel/goals"
+  defp back_path(%{page_type: "plan"}), do: "/panel/plans"
+  defp back_path(%{page_type: "todo"}), do: "/panel/todos"
+  defp back_path(%{page_type: "query"}), do: "/panel/queries"
   defp back_path(_), do: "/"
 end

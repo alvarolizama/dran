@@ -44,7 +44,7 @@ defmodule DranWeb.ReportLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={~p"/activity"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/activity"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -101,7 +101,7 @@ defmodule DranWeb.ReportLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/activity")
+    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/activity")
   end
 
   # ── Tab switching ──

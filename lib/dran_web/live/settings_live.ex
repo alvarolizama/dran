@@ -839,7 +839,7 @@ defmodule DranWeb.SettingsLive do
           <div class="tabs tabs-border">
             <.link
               :for={tab <- ~w(users contexts api_keys brain models system danger)}
-              patch={~p"/settings/#{tab}"}
+              patch={~p"/panel/settings/#{tab}"}
               class={["tab", @active_tab == tab && "tab-active"]}
             >
               {tab_label(tab)}

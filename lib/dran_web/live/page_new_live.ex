@@ -120,7 +120,7 @@ defmodule DranWeb.PageNewLive do
      assign(socket,
        context: context,
        page_type: "note",
-       back_path: "/notes",
+       back_path: "/panel/notes",
        form: nil,
        body: "",
        meta: %{},
@@ -132,10 +132,10 @@ defmodule DranWeb.PageNewLive do
   end
 
   def handle_params(_params, url, socket) do
-    # Derive the page type from the URL path (e.g. "/notes/new" → "note")
+    # Derive the page type from the URL path (e.g. "/panel/notes/new" → "note")
     path = URI.parse(url).path || ""
     page_type = type_from_path(path)
-    back_path = "/#{PageTypes.path(page_type)}"
+    back_path = "/panel/#{PageTypes.path(page_type)}"
 
     context = socket.assigns[:context]
     context_id = if context, do: context.id
@@ -211,7 +211,7 @@ defmodule DranWeb.PageNewLive do
         {:noreply,
          socket
          |> put_flash(:info, gettext("Page created."))
-         |> push_navigate(to: "/#{type_path}/#{page.slug}?edit=true")}
+         |> push_navigate(to: "/panel/#{type_path}/#{page.slug}?edit=true")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, form: to_form(changeset, as: :page))}
@@ -251,8 +251,11 @@ defmodule DranWeb.PageNewLive do
   # ── Helpers ──
 
   defp type_from_path(path) when is_binary(path) do
-    # path is like "/notes/new" or "/concepts/new"
+    # path is like "/panel/notes/new" or "/panel/concepts/new"
     case path |> String.trim("/") |> String.split("/") do
+      ["panel", type_plural, "new" | _] ->
+        type_to_page(type_plural)
+
       [type_plural, "new" | _] ->
         type_to_page(type_plural)
 

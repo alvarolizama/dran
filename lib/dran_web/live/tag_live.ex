@@ -94,7 +94,7 @@ defmodule DranWeb.TagLive do
             <div class="flex gap-1 mt-2">
               <.link
                 :for={t <- Enum.take(page.tags || [], 5)}
-                navigate={"/tags/#{URI.encode_www_form(t)}"}
+                navigate={"/panel/tags/#{URI.encode_www_form(t)}"}
                 class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-base-200 transition"
                 onclick="event.stopPropagation()"
               >

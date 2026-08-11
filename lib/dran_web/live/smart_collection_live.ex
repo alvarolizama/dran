@@ -51,7 +51,7 @@ defmodule DranWeb.SmartCollectionLive do
               {gettext("Saved queries that auto-update as your brain changes")}
             </p>
           </div>
-          <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm">
+          <.link navigate={~p"/panel/collections/new"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Collection")}
           </.link>
         </div>
@@ -62,7 +62,7 @@ defmodule DranWeb.SmartCollectionLive do
           title={gettext("No smart collections yet.")}
           caption={gettext("Save a set of filters from search or any page list to create one.")}
         >
-          <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm mt-4">
+          <.link navigate={~p"/panel/collections/new"} class="btn btn-primary btn-sm mt-4">
             <.icon name="hero-plus" class="w-4 h-4" />
             {gettext("Create your first collection")}
           </.link>
@@ -71,7 +71,7 @@ defmodule DranWeb.SmartCollectionLive do
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <.link
             :for={collection <- @collections}
-            navigate={~p"/collections/#{collection.slug}"}
+            navigate={~p"/panel/collections/#{collection.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer"
           >
             <div class="card-body p-5">
@@ -110,7 +110,7 @@ defmodule DranWeb.SmartCollectionLive do
             </p>
           </div>
           <div class="flex gap-2">
-            <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/collections"} class="btn btn-ghost btn-sm">
               <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
             </.link>
             <button
@@ -281,7 +281,7 @@ defmodule DranWeb.SmartCollectionLive do
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/collections"} class="btn btn-ghost btn-sm">
               {gettext("Cancel")}
             </.link>
             <button
@@ -359,7 +359,7 @@ defmodule DranWeb.SmartCollectionLive do
     if context do
       case SmartCollection.get_by_slug(slug, context.id) do
         nil ->
-          push_navigate(socket, to: ~p"/collections")
+          push_navigate(socket, to: ~p"/panel/collections")
 
         collection ->
           query = get_in(collection.meta, ["query"]) || %{}
@@ -375,7 +375,7 @@ defmodule DranWeb.SmartCollectionLive do
           )
       end
     else
-      push_navigate(socket, to: ~p"/collections")
+      push_navigate(socket, to: ~p"/panel/collections")
     end
   end
 
@@ -407,7 +407,7 @@ defmodule DranWeb.SmartCollectionLive do
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
     # Fallback: navigate to search by slug if type unknown
-    {:noreply, push_navigate(socket, to: "/search?q=#{URI.encode_www_form(slug)}")}
+    {:noreply, push_navigate(socket, to: "/panel/search?q=#{URI.encode_www_form(slug)}")}
   end
 
   def handle_event("delete_collection", _params, socket) do
@@ -420,7 +420,7 @@ defmodule DranWeb.SmartCollectionLive do
           {:noreply,
            socket
            |> put_flash(:info, gettext("Smart collection deleted."))
-           |> push_navigate(to: ~p"/collections")}
+           |> push_navigate(to: ~p"/panel/collections")}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, gettext("Could not delete collection."))}
@@ -454,7 +454,7 @@ defmodule DranWeb.SmartCollectionLive do
             {:noreply,
              socket
              |> put_flash(:info, gettext("Smart collection created."))
-             |> push_navigate(to: ~p"/collections/#{page.slug}")}
+             |> push_navigate(to: ~p"/panel/collections/#{page.slug}")}
 
           {:error, _changeset} ->
             {:noreply,

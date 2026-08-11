@@ -37,10 +37,10 @@ defmodule DranWeb.EntityLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={~p"/entities"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/entities"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -124,7 +124,7 @@ defmodule DranWeb.EntityLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/entities")
+    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/entities")
   end
 
   def handle_params(_params, _url, socket) do
@@ -170,10 +170,10 @@ defmodule DranWeb.EntityLive do
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}
 
   def handle_event("show_page", %{"slug" => slug}, socket),
-    do: {:noreply, push_navigate(socket, to: ~p"/entities/#{slug}")}
+    do: {:noreply, push_navigate(socket, to: ~p"/panel/entities/#{slug}")}
 
   def handle_event("new_page", _params, socket),
-    do: {:noreply, push_navigate(socket, to: ~p"/entities/new")}
+    do: {:noreply, push_navigate(socket, to: ~p"/panel/entities/new")}
 
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
   def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)

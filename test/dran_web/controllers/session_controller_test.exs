@@ -36,7 +36,7 @@ defmodule DranWeb.SessionControllerTest do
   describe "POST /context — switch_context" do
     test "sets the signed dran_last_context cookie", %{conn: conn} do
       conn =
-        post(conn, ~p"/context", %{"context_slug" => "work"})
+        post(conn, ~p"/panel/context", %{"context_slug" => "work"})
 
       # The session has the new context
       assert Plug.Conn.get_session(conn, :context_slug) == "work"
@@ -48,15 +48,15 @@ defmodule DranWeb.SessionControllerTest do
     test "redirects back to referer or /notes", %{conn: conn} do
       conn =
         conn
-        |> Plug.Conn.put_req_header("referer", "/notes")
-        |> post(~p"/context", %{"context_slug" => "work"})
+        |> Plug.Conn.put_req_header("referer", "/panel/notes")
+        |> post(~p"/panel/context", %{"context_slug" => "work"})
 
-      assert redirected_to(conn, 302) == "/notes"
+      assert redirected_to(conn, 302) == "/panel/notes"
     end
 
     test "without context_slug shows error flash", %{conn: conn} do
-      conn = post(conn, ~p"/context", %{})
-      assert redirected_to(conn, 302) == "/notes"
+      conn = post(conn, ~p"/panel/context", %{})
+      assert redirected_to(conn, 302) == "/panel/notes"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "required"
     end
   end

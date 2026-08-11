@@ -111,7 +111,7 @@ Las sesiones persisten cada paso y trackean `meta.tokens_used` + `meta.model`.
 
 Todos apuntan al contexto default y están deshabilitados en test. Pasan por
 `Dran.Jobs.run_scheduled/1`, que respeta el toggle del job y escribe una
-página `report` (kind `log`, `/reports/<slug>`) por corrida — ahí ves status,
+página `report` (kind `log`, `/panel/reports/<slug>`) por corrida — ahí ves status,
 trigger y duración (se conservan las 20 más recientes por job).
 
 **Control:** Settings → Brain → "Jobs programados" — toggle por job (afecta

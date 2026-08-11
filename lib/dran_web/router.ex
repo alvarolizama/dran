@@ -148,9 +148,9 @@ defmodule DranWeb.Router do
     get "/health", HealthController, :show
   end
 
-  # ── Authenticated web UI ──
+  # ── Admin panel UI (data administration) ──────────────────────────────────
 
-  scope "/", DranWeb do
+  scope "/panel", DranWeb do
     pipe_through [:browser, :auth]
 
     live "/", DashboardLive, :index
@@ -184,14 +184,6 @@ defmodule DranWeb.Router do
 
     live "/kanban", KanbanLive, :index
 
-    # ── Wiki (read-only knowledge browser) ─────────────────────────────────
-    live "/wiki", WikiLive, :index
-    live "/wiki/:context_slug", WikiLive, :context_home
-    live "/wiki/:context_slug/type/:page_type", WikiLive, :type_list
-    live "/wiki/:context_slug/type/:page_type/:slug", WikiLive, :page_show
-    live "/wiki/:context_slug/collection/:slug", WikiLive, :collection
-    live "/wiki/:context_slug/graph", WikiLive, :graph
-
     live "/projects", ProjectLive, :index
     live "/projects/new", PageNewLive, :new
     live "/projects/:slug", ProjectLive, :show
@@ -213,7 +205,7 @@ defmodule DranWeb.Router do
     live "/graph/:slug", GraphLive, :show
 
     # JSON endpoint for progressive graph loading (session-authenticated)
-    get "/api/graph-json", GraphJSONController, :show
+    get "/graph-json", GraphJSONController, :show
 
     live "/activity", ActivityLive, :index
 
@@ -237,7 +229,7 @@ defmodule DranWeb.Router do
 
   # ── Admin-only web UI ──
 
-  scope "/", DranWeb do
+  scope "/panel", DranWeb do
     pipe_through [:browser, :auth, :admin]
 
     live "/settings", SettingsLive, :index
@@ -320,5 +312,24 @@ defmodule DranWeb.Router do
       live_dashboard "/dashboard", metrics: DranWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
+  end
+
+  # ── Wiki (read-only knowledge browser) at the ROOT ─────────────────────────
+  #
+  # The wiki is the app's home — the first thing a logged-in user sees.
+  # This scope MUST stay last: `/:context_slug` is a wildcard and would swallow
+  # any static route defined after it (e.g. /dev/dashboard). Static segments
+  # (/login, /panel, /api, /health, /dev…) win because they are defined above.
+  # Consequently, context slugs named like a reserved segment (panel, api,
+  # login, setup, session, auth, health, context, dev) are unreachable by URL.
+  scope "/", DranWeb do
+    pipe_through [:browser, :auth]
+
+    live "/", WikiLive, :index
+    live "/:context_slug", WikiLive, :context_home
+    live "/:context_slug/type/:page_type", WikiLive, :type_list
+    live "/:context_slug/type/:page_type/:slug", WikiLive, :page_show
+    live "/:context_slug/collection/:slug", WikiLive, :collection
+    live "/:context_slug/graph", WikiLive, :graph
   end
 end

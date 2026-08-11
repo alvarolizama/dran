@@ -51,7 +51,7 @@ defmodule DranWeb.ReportLiveTest do
 
   describe "show" do
     test "renders the report detail at /reports/:slug", %{conn: conn, report: report} do
-      {:ok, _view, html} = live(conn, ~p"/reports/#{report.slug}")
+      {:ok, _view, html} = live(conn, ~p"/panel/reports/#{report.slug}")
 
       # Title, rendered body and the localized type badge
       assert html =~ report.title
@@ -60,14 +60,14 @@ defmodule DranWeb.ReportLiveTest do
     end
 
     test "edit mode shows the editor form", %{conn: conn, report: report} do
-      {:ok, _view, html} = live(conn, ~p"/reports/#{report.slug}?edit=true")
+      {:ok, _view, html} = live(conn, ~p"/panel/reports/#{report.slug}?edit=true")
 
       assert html =~ ~s(id="page-edit-form")
     end
 
     test "redirects to /activity when the report does not exist", %{conn: conn} do
-      assert {:error, {:live_redirect, %{to: "/activity"}}} =
-               live(conn, ~p"/reports/no-such-report")
+      assert {:error, {:live_redirect, %{to: "/panel/activity"}}} =
+               live(conn, ~p"/panel/reports/no-such-report")
     end
   end
 end

@@ -80,7 +80,7 @@ defmodule DranWeb.OAuthController do
               conn
               |> SessionAuth.login(user.email)
               |> put_flash(:info, "Account created — welcome to the wiki")
-              |> redirect(to: ~p"/wiki")
+              |> redirect(to: ~p"/")
 
             {:error, _} ->
               conn

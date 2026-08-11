@@ -87,19 +87,19 @@ defmodule DranWeb.DashboardLive do
             <div class="flex gap-2">
               <.link
                 :if={Brain.page_type_enabled?(@context, "todo")}
-                navigate={~p"/kanban"}
+                navigate={~p"/panel/kanban"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-view-columns" class="size-4" /> {gettext("Kanban")}
               </.link>
               <.link
-                navigate={~p"/graph"}
+                navigate={~p"/panel/graph"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
               </.link>
               <.link
-                navigate={~p"/search"}
+                navigate={~p"/panel/search"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-magnifying-glass" class="size-4" /> {gettext("Search")}
@@ -279,7 +279,7 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Pages by Type")}</h2>
-                  <.link navigate={~p"/search"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/panel/search"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -300,7 +300,7 @@ defmodule DranWeb.DashboardLive do
               >
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Todos")}</h2>
-                  <.link navigate={~p"/todos"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/panel/todos"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -323,7 +323,7 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Recently Updated")}</h2>
-                  <.link navigate={~p"/graph"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/panel/graph"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -468,7 +468,7 @@ defmodule DranWeb.DashboardLive do
     db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
 
     if contexts == [] and not is_admin and db_user != nil do
-      {:noreply, push_navigate(socket, to: ~p"/wiki")}
+      {:noreply, push_navigate(socket, to: ~p"/")}
     else
       {:noreply, socket}
     end
@@ -559,7 +559,7 @@ defmodule DranWeb.DashboardLive do
     ~H"""
     <div class="flex items-center gap-3">
       <.link
-        navigate={"/#{PageTypes.path(@type)}"}
+        navigate={"/panel/#{PageTypes.path(@type)}"}
         class="text-sm font-medium hover:text-primary transition-colors shrink-0 w-24"
       >
         {PageTypes.plural(@type)}
@@ -615,7 +615,7 @@ defmodule DranWeb.DashboardLive do
   defp relations_total(_), do: 0
 
   defp page_path(%Dran.Brain.Page{} = page) do
-    "/#{PageTypes.path(page.page_type)}/#{page.slug}"
+    "/panel/#{PageTypes.path(page.page_type)}/#{page.slug}"
   end
 
   defp page_path(_), do: "#"

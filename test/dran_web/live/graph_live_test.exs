@@ -126,7 +126,7 @@ defmodule DranWeb.GraphLiveTest do
 
   describe "global graph index" do
     test "mounts the hook div even when the graph starts empty (no empty-state)", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/graph")
+      {:ok, view, html} = live(conn, ~p"/panel/graph")
 
       # Wave 1: the hook div must exist on the initial render (nodes are empty
       # in progressive mode) or the client-side fetch never starts.
@@ -147,7 +147,7 @@ defmodule DranWeb.GraphLiveTest do
     end
 
     test "graph_loaded pushes only counters, not nodes/edges", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/graph")
+      {:ok, view, _html} = live(conn, ~p"/panel/graph")
 
       context = Brain.get_context_by_slug("personal")
       push_graph_loaded(view, context)
@@ -163,7 +163,7 @@ defmodule DranWeb.GraphLiveTest do
     end
 
     test "toggle_type pushes set_visible_types to the hook (client-side filter)", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/graph")
+      {:ok, view, _html} = live(conn, ~p"/panel/graph")
 
       # Toggling a type off must tell the hook to hide it client-side — the
       # LiveView no longer filters nodes over the socket.
@@ -175,7 +175,7 @@ defmodule DranWeb.GraphLiveTest do
     end
 
     test "toggling a visible type off and on restores it in the pushed set", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/graph")
+      {:ok, view, _html} = live(conn, ~p"/panel/graph")
 
       view |> render_hook("toggle_type", %{"type" => "goal"})
       assert_push_event(view, "set_visible_types", %{types: types})
@@ -187,7 +187,7 @@ defmodule DranWeb.GraphLiveTest do
     end
 
     test "sidebar omits plan and todo, lists the rest as toggles", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/graph")
+      {:ok, view, _html} = live(conn, ~p"/panel/graph")
 
       html = render(view)
 
@@ -205,7 +205,7 @@ defmodule DranWeb.GraphLiveTest do
 
   describe "per-page subgraph" do
     test "show view includes the operational layer, unfiltered", %{conn: conn, todo: todo} do
-      {:ok, view, _html} = live(conn, ~p"/graph/#{todo.slug}")
+      {:ok, view, _html} = live(conn, ~p"/panel/graph/#{todo.slug}")
 
       graph = graph_from_view(view)
       types = graph["nodes"] |> Enum.map(& &1["type"]) |> Enum.uniq()
@@ -224,7 +224,7 @@ defmodule DranWeb.GraphLiveTest do
     end
 
     test "toggle_type off and on in show mode is non-destructive", %{conn: conn, todo: todo} do
-      {:ok, view, _html} = live(conn, ~p"/graph/#{todo.slug}")
+      {:ok, view, _html} = live(conn, ~p"/panel/graph/#{todo.slug}")
 
       graph = graph_from_view(view)
       initial_count = length(graph["nodes"])

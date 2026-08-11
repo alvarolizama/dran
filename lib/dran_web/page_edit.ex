@@ -68,7 +68,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("cancel_edit", _params, socket) do
-    {:noreply, push_navigate(socket, to: "/notes")}
+    {:noreply, push_navigate(socket, to: "/panel/notes")}
   end
 
   def handle_event("suggest_summary", _params, %{assigns: %{page: %Page{}}} = socket) do

@@ -263,7 +263,7 @@ defmodule DranWeb.ActivityLive do
 
   defp page_path_for(%Dran.Brain.Log{action: "page." <> _rest, subject: slug})
        when is_binary(slug) do
-    "/notes/#{slug}"
+    "/panel/notes/#{slug}"
   end
 
   defp page_path_for(_), do: nil

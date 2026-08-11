@@ -42,7 +42,7 @@ defmodule DranWeb.TodoLiveTest do
   end
 
   test "todo list renders rows with status buttons", %{conn: conn, todo: todo} do
-    {:ok, view, _html} = live(conn, ~p"/todos")
+    {:ok, view, _html} = live(conn, ~p"/panel/todos")
 
     assert has_element?(view, ~s([data-testid="todo-list"]))
     assert has_element?(view, ~s([data-testid="todo-row-#{todo.slug}"]))
@@ -57,7 +57,7 @@ defmodule DranWeb.TodoLiveTest do
     conn: conn,
     todo: todo
   } do
-    {:ok, view, html} = live(conn, ~p"/todos")
+    {:ok, view, html} = live(conn, ~p"/panel/todos")
 
     assert html =~ "Kanban Realtime Test Todo"
     assert has_element?(view, ~s([data-testid="todo-row-#{todo.slug}"]))
@@ -75,7 +75,7 @@ defmodule DranWeb.TodoLiveTest do
     conn: conn,
     context: context
   } do
-    {:ok, view, _html} = live(conn, ~p"/todos")
+    {:ok, view, _html} = live(conn, ~p"/panel/todos")
 
     {:ok, agent_todo} =
       Brain.create_page(%{
@@ -90,7 +90,7 @@ defmodule DranWeb.TodoLiveTest do
   end
 
   test "change_status button updates the todo's kanban status", %{conn: conn, todo: todo} do
-    {:ok, view, _html} = live(conn, ~p"/todos")
+    {:ok, view, _html} = live(conn, ~p"/panel/todos")
 
     view
     |> element(~s(button[phx-value-slug="#{todo.slug}"][phx-value-status="today"]))
@@ -104,7 +104,7 @@ defmodule DranWeb.TodoLiveTest do
     todo: todo,
     context: context
   } do
-    {:ok, view, _html} = live(conn, ~p"/todos")
+    {:ok, view, _html} = live(conn, ~p"/panel/todos")
 
     # The row renders with its archive button (bottom-right of the row)
     assert has_element?(view, ~s(button[data-testid="archive-btn-#{todo.slug}"]))

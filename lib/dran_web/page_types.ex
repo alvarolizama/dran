@@ -95,19 +95,22 @@ defmodule DranWeb.PageTypes do
   @doc """
   Returns the show path for a page struct or map.
 
+  Page detail/list views live under the /panel scope (data administration);
+  the wiki at the root has its own path scheme.
+
   ## Examples
 
       iex> DranWeb.PageTypes.page_show_path(%Page{page_type: "note", slug: "my-note"})
-      "/notes/my-note"
+      "/panel/notes/my-note"
   """
   def page_show_path(%Dran.Brain.Page{page_type: type, slug: slug})
       when is_binary(type) and is_binary(slug) do
-    "/#{path(type)}/#{slug}"
+    "/panel/#{path(type)}/#{slug}"
   end
 
   def page_show_path(%{page_type: type, slug: slug})
       when is_binary(type) and is_binary(slug) do
-    "/#{path(type)}/#{slug}"
+    "/panel/#{path(type)}/#{slug}"
   end
 
   def page_show_path(_), do: "#"

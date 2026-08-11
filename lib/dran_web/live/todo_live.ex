@@ -56,7 +56,7 @@ defmodule DranWeb.TodoLive do
           <div class="flex items-center gap-2">
             <.link
               :if={Brain.page_type_enabled?(@context, "todo")}
-              navigate={~p"/kanban"}
+              navigate={~p"/panel/kanban"}
               class="btn btn-ghost btn-sm"
             >
               <.icon name="hero-view-columns" class="w-4 h-4" /> {gettext("Board")}
@@ -79,7 +79,7 @@ defmodule DranWeb.TodoLive do
                 do: length(@items),
                 else: length(@archived_items)})
             </button>
-            <.link navigate={~p"/todos/new"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/todos/new"} class="btn btn-primary btn-sm">
               <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Todo")}
             </.link>
           </div>
@@ -191,7 +191,7 @@ defmodule DranWeb.TodoLive do
             >
               <.icon name="hero-check-circle" class="size-4 text-base-content/40 shrink-0" />
               <.link
-                navigate={~p"/todos/#{item.slug}"}
+                navigate={~p"/panel/todos/#{item.slug}"}
                 class="text-sm flex-1 truncate hover:text-primary transition-colors"
               >
                 {item.title}
@@ -239,10 +239,10 @@ defmodule DranWeb.TodoLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={~p"/todos"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/todos"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -338,7 +338,7 @@ defmodule DranWeb.TodoLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/todos")
+    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/todos")
   end
 
   def handle_params(_params, _url, socket) do
@@ -415,7 +415,7 @@ defmodule DranWeb.TodoLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/todos/#{slug}")}
   end
 
   def handle_event("archive_todo", %{"slug" => slug}, socket) do
@@ -499,7 +499,7 @@ defmodule DranWeb.TodoLive do
   end
 
   def handle_event("new_page", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/todos/new")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/todos/new")}
   end
 
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)

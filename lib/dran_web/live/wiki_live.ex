@@ -75,7 +75,7 @@ defmodule DranWeb.WikiLive do
         )
 
       _ ->
-        push_navigate(socket, to: ~p"/wiki")
+        push_navigate(socket, to: ~p"/")
     end
   end
 
@@ -107,7 +107,7 @@ defmodule DranWeb.WikiLive do
         )
 
       _ ->
-        push_navigate(socket, to: ~p"/wiki")
+        push_navigate(socket, to: ~p"/")
     end
   end
 
@@ -137,11 +137,11 @@ defmodule DranWeb.WikiLive do
             )
 
           _ ->
-            push_navigate(socket, to: ~p"/wiki/#{context_slug}/type/#{page_type}")
+            push_navigate(socket, to: ~p"/#{context_slug}/type/#{page_type}")
         end
 
       _ ->
-        push_navigate(socket, to: ~p"/wiki")
+        push_navigate(socket, to: ~p"/")
     end
   end
 
@@ -152,7 +152,7 @@ defmodule DranWeb.WikiLive do
       %{wiki_enabled: true} = context ->
         case SmartCollection.get_by_slug(slug, context.id) do
           nil ->
-            push_navigate(socket, to: ~p"/wiki/#{context_slug}")
+            push_navigate(socket, to: ~p"/#{context_slug}")
 
           collection ->
             query = Map.get(collection.meta || %{}, "query", %{})
@@ -168,7 +168,7 @@ defmodule DranWeb.WikiLive do
         end
 
       _ ->
-        push_navigate(socket, to: ~p"/wiki")
+        push_navigate(socket, to: ~p"/")
     end
   end
 
@@ -187,7 +187,7 @@ defmodule DranWeb.WikiLive do
         )
 
       _ ->
-        push_navigate(socket, to: ~p"/wiki")
+        push_navigate(socket, to: ~p"/")
     end
   end
 
@@ -261,7 +261,7 @@ defmodule DranWeb.WikiLive do
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <.link
           :for={ctx <- @contexts}
-          navigate={~p"/wiki/#{ctx.slug}"}
+          navigate={~p"/#{ctx.slug}"}
           class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
         >
           <div class="card-body p-5">
@@ -296,7 +296,7 @@ defmodule DranWeb.WikiLive do
         </p>
         <div class="flex items-center gap-3 mt-3">
           <.link
-            navigate={~p"/wiki/#{@context.slug}/graph"}
+            navigate={~p"/#{@context.slug}/graph"}
             class="btn btn-ghost btn-sm gap-1.5"
           >
             <.icon name="hero-share" class="size-4" />
@@ -314,7 +314,7 @@ defmodule DranWeb.WikiLive do
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <.link
             :for={coll <- @collections}
-            navigate={~p"/wiki/#{@context.slug}/collection/#{coll.slug}"}
+            navigate={~p"/#{@context.slug}/collection/#{coll.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
@@ -336,7 +336,7 @@ defmodule DranWeb.WikiLive do
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <.link
             :for={page <- @pinned_pages}
-            navigate={~p"/wiki/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
+            navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
@@ -377,7 +377,7 @@ defmodule DranWeb.WikiLive do
             </summary>
             <div class="border-t border-base-300 bg-base-200/30 p-4">
               <.link
-                navigate={~p"/wiki/#{@context.slug}/type/#{type}"}
+                navigate={~p"/#{@context.slug}/type/#{type}"}
                 class="text-sm text-primary hover:underline"
               >
                 {gettext("View all")} →
@@ -395,7 +395,7 @@ defmodule DranWeb.WikiLive do
     <div class="max-w-4xl mx-auto px-6 py-8">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
-          <.link navigate={~p"/wiki/#{@context.slug}"} class="hover:underline">
+          <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
             {@context.name}
           </.link>
           <span>/</span>
@@ -416,7 +416,7 @@ defmodule DranWeb.WikiLive do
         <div class="space-y-1">
           <.link
             :for={page <- pages}
-            navigate={~p"/wiki/#{@context.slug}/type/#{@page_type}/#{page.slug}"}
+            navigate={~p"/#{@context.slug}/type/#{@page_type}/#{page.slug}"}
             class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
           >
             <div class="flex items-center gap-2">
@@ -440,11 +440,11 @@ defmodule DranWeb.WikiLive do
     <div class="max-w-3xl mx-auto px-6 py-8">
       <%!-- Breadcrumb --%>
       <div class="flex items-center gap-2 mb-4 text-sm text-base-content/50">
-        <.link navigate={~p"/wiki/#{@context.slug}"} class="hover:underline">
+        <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
           {@context.name}
         </.link>
         <span>/</span>
-        <.link navigate={~p"/wiki/#{@context.slug}/type/#{@page.page_type}"} class="hover:underline">
+        <.link navigate={~p"/#{@context.slug}/type/#{@page.page_type}"} class="hover:underline">
           {PageTypes.plural(@page.page_type)}
         </.link>
         <span>/</span>
@@ -493,7 +493,7 @@ defmodule DranWeb.WikiLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.outbound}
-              navigate={~p"/wiki/#{@context.slug}/type/#{rel.target.page_type}/#{rel.target.slug}"}
+              navigate={~p"/#{@context.slug}/type/#{rel.target.page_type}/#{rel.target.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -513,7 +513,7 @@ defmodule DranWeb.WikiLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.inbound}
-              navigate={~p"/wiki/#{@context.slug}/type/#{rel.source.page_type}/#{rel.source.slug}"}
+              navigate={~p"/#{@context.slug}/type/#{rel.source.page_type}/#{rel.source.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -537,7 +537,7 @@ defmodule DranWeb.WikiLive do
     <div class="max-w-4xl mx-auto px-6 py-8">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
-          <.link navigate={~p"/wiki/#{@context.slug}"} class="hover:underline">
+          <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
             {@context.name}
           </.link>
           <span>/</span>
@@ -566,7 +566,7 @@ defmodule DranWeb.WikiLive do
       <div class="space-y-2">
         <.link
           :for={page <- @results}
-          navigate={~p"/wiki/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
+          navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
           class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
         >
           <div class="flex items-center justify-between">
@@ -595,7 +595,7 @@ defmodule DranWeb.WikiLive do
     <div class="h-[calc(100vh-4rem)]">
       <div class="max-w-5xl mx-auto px-6 pt-4 pb-2">
         <div class="flex items-center gap-2 text-sm text-base-content/50 mb-1">
-          <.link navigate={~p"/wiki/#{@context.slug}"} class="hover:underline">
+          <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
             {@context.name}
           </.link>
           <span>/</span>
@@ -685,7 +685,7 @@ defmodule DranWeb.WikiLive do
       ~r/<a href="([^"]+)" data-wikilink="true">/,
       html,
       fn _full, slug ->
-        path = Map.get(slug_to_path, slug, "/wiki/#{context.slug}")
+        path = Map.get(slug_to_path, slug, "/#{context.slug}")
         ~s|<a href="#{path}" data-wikilink="true">|
       end
     )
@@ -707,7 +707,7 @@ defmodule DranWeb.WikiLive do
       Enum.reduce(slugs, %{}, fn slug, acc ->
         case Map.get(slug_types, slug) do
           nil -> acc
-          page_type -> Map.put(acc, slug, "/wiki/#{context.slug}/type/#{page_type}/#{slug}")
+          page_type -> Map.put(acc, slug, "/#{context.slug}/type/#{page_type}/#{slug}")
         end
       end)
     end

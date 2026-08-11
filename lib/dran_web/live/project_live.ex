@@ -50,10 +50,10 @@ defmodule DranWeb.ProjectLive do
           editing={@editing}
         >
           <:actions>
-            <.link navigate={~p"/projects"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/projects"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> Back
             </.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -268,7 +268,7 @@ defmodule DranWeb.ProjectLive do
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          {:noreply, push_navigate(socket, to: ~p"/projects")}
+          {:noreply, push_navigate(socket, to: ~p"/panel/projects")}
 
         page ->
           relations = Brain.list_relations_for_page(page.id)
@@ -359,7 +359,7 @@ defmodule DranWeb.ProjectLive do
            )}
       end
     else
-      {:noreply, push_navigate(socket, to: ~p"/projects")}
+      {:noreply, push_navigate(socket, to: ~p"/panel/projects")}
     end
   end
 
@@ -408,7 +408,7 @@ defmodule DranWeb.ProjectLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/projects/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/projects/#{slug}")}
   end
 
   def handle_event("change_status", %{"slug" => slug, "status" => status}, socket) do
@@ -446,7 +446,7 @@ defmodule DranWeb.ProjectLive do
   end
 
   def handle_event("new_page", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/projects/new")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/projects/new")}
   end
 
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)

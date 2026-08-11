@@ -92,12 +92,12 @@ defmodule DranWeb.SessionController do
       is_nil(context) ->
         conn
         |> put_flash(:error, "Unknown context")
-        |> redirect(to: ~p"/notes")
+        |> redirect(to: ~p"/panel/notes")
 
       accessible != :all and context_slug not in accessible ->
         conn
         |> put_flash(:error, "You don't have access to that context")
-        |> redirect(to: ~p"/notes")
+        |> redirect(to: ~p"/panel/notes")
 
       true ->
         conn
@@ -109,13 +109,13 @@ defmodule DranWeb.SessionController do
   def switch_context(conn, _params) do
     conn
     |> put_flash(:error, "Context slug is required")
-    |> redirect(to: ~p"/notes")
+    |> redirect(to: ~p"/panel/notes")
   end
 
   defp referer_path(conn) do
     case get_req_header(conn, "referer") |> List.first() do
       nil ->
-        ~p"/notes"
+        ~p"/panel/notes"
 
       url ->
         case URI.parse(url) do
@@ -126,7 +126,7 @@ defmodule DranWeb.SessionController do
             end
 
           _ ->
-            ~p"/notes"
+            ~p"/panel/notes"
         end
     end
   end

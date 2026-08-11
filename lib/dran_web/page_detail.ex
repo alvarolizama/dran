@@ -22,7 +22,7 @@ defmodule DranWeb.PageDetail do
       end
 
       def handle_params(%{"slug" => slug} = params, _url, socket) do
-        PageDetail.load_page_detail(socket, params, slug, redirect_to: "/notes")
+        PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/notes")
       end
   """
 
@@ -105,7 +105,7 @@ defmodule DranWeb.PageDetail do
 
   ## Options
 
-  * `:redirect_to` (required) — index path, e.g. `"/notes"`.
+  * `:redirect_to` (required) — index path, e.g. `"/panel/notes"`.
   """
   def load_page_detail(socket, params, slug, opts) do
     redirect_to = Keyword.fetch!(opts, :redirect_to)

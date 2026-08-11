@@ -80,7 +80,7 @@ defmodule DranWeb.Layouts do
         <div class="p-4 border-b border-base-300">
           <div class="flex items-center gap-2">
             <a
-              href={~p"/"}
+              href={~p"/panel"}
               class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
             >
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
@@ -95,7 +95,7 @@ defmodule DranWeb.Layouts do
         </div>
 
         <div class="p-3 border-b border-base-300">
-          <form action={~p"/search"} method="get" class="relative">
+          <form action={~p"/panel/search"} method="get" class="relative">
             <.icon
               name="hero-magnifying-glass"
               class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
@@ -242,14 +242,14 @@ defmodule DranWeb.Layouts do
             key: "settings",
             label: gettext("Settings"),
             icon: "hero-cog-6-tooth",
-            path: ~p"/settings"
+            path: ~p"/panel/settings"
           }
         ]
       else
         []
       end ++
         [
-          %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/docs"}
+          %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/panel/docs"}
         ]
 
     groups = [
@@ -260,46 +260,46 @@ defmodule DranWeb.Layouts do
             key: "dashboard",
             label: gettext("Dashboard"),
             icon: "hero-home",
-            path: ~p"/"
+            path: ~p"/panel"
           },
           %{
             key: "kanban",
             label: gettext("Kanban"),
             icon: "hero-view-columns",
-            path: ~p"/kanban",
+            path: ~p"/panel/kanban",
             badge: counts[:todos]
           },
           %{
             key: "projects",
             label: gettext("Projects"),
             icon: "hero-rocket-launch",
-            path: "/projects",
+            path: "/panel/projects",
             badge: counts[:projects]
           },
           %{
             key: "goals",
             label: gettext("Objetivos"),
             icon: "hero-flag",
-            path: ~p"/goals",
+            path: ~p"/panel/goals",
             badge: counts[:goals]
           },
           %{
             key: "graph",
             label: gettext("Grafo"),
             icon: "hero-share",
-            path: ~p"/graph"
+            path: ~p"/panel/graph"
           },
           %{
             key: "journey",
             label: gettext("Trayectoria"),
             icon: "hero-map",
-            path: ~p"/journey"
+            path: ~p"/panel/journey"
           },
           %{
             key: "activity",
             label: gettext("Actividad"),
             icon: "hero-clock",
-            path: ~p"/activity"
+            path: ~p"/panel/activity"
           }
         ]
       },
@@ -310,14 +310,14 @@ defmodule DranWeb.Layouts do
             key: "plans",
             label: gettext("Planes"),
             icon: "hero-clipboard-document-list",
-            path: ~p"/plans",
+            path: ~p"/panel/plans",
             badge: counts[:plans]
           },
           %{
             key: "todos",
             label: gettext("Tareas"),
             icon: "hero-check-circle",
-            path: ~p"/todos",
+            path: ~p"/panel/todos",
             badge: counts[:todos]
           }
         ]
@@ -329,42 +329,42 @@ defmodule DranWeb.Layouts do
             key: "notes",
             label: gettext("Notes"),
             icon: "hero-document-text",
-            path: ~p"/notes",
+            path: ~p"/panel/notes",
             badge: counts[:notes]
           },
           %{
             key: "concepts",
             label: gettext("Concepts"),
             icon: "hero-light-bulb",
-            path: ~p"/concepts",
+            path: ~p"/panel/concepts",
             badge: counts[:concepts]
           },
           %{
             key: "entities",
             label: gettext("Entities"),
             icon: "hero-user-group",
-            path: ~p"/entities",
+            path: ~p"/panel/entities",
             badge: counts[:entities]
           },
           %{
             key: "references",
             label: gettext("References"),
             icon: "hero-bookmark",
-            path: ~p"/references",
+            path: ~p"/panel/references",
             badge: counts[:references]
           },
           %{
             key: "queries",
             label: gettext("Queries"),
             icon: "hero-chat-bubble-bottom-center-text",
-            path: ~p"/queries",
+            path: ~p"/panel/queries",
             badge: counts[:queries]
           },
           %{
             key: "collections",
             label: gettext("Collections"),
             icon: "hero-funnel",
-            path: ~p"/collections",
+            path: ~p"/panel/collections",
             badge: counts[:collections]
           }
         ]
@@ -518,7 +518,7 @@ defmodule DranWeb.Layouts do
   def context_selector(assigns) do
     ~H"""
     <div :if={length(@contexts) > 0} class="flex-1">
-      <form action={~p"/context"} method="post">
+      <form action={~p"/panel/context"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <select
           id="context-selector"
@@ -586,7 +586,7 @@ defmodule DranWeb.Layouts do
         <div class="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <a
-              href={~p"/wiki"}
+              href={~p"/"}
               class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80"
             >
               <.icon name="hero-book-open" class="size-5 text-primary" />
@@ -600,7 +600,7 @@ defmodule DranWeb.Layouts do
           <div class="flex items-center gap-3">
             <a
               :if={@contexts != []}
-              href={~p"/"}
+              href={~p"/panel"}
               class="btn btn-ghost btn-sm gap-1.5"
               title={gettext("Back to app")}
             >

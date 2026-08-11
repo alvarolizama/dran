@@ -50,7 +50,7 @@ defmodule DranWeb.ActivityLiveTest do
   end
 
   test "renders the activity feed with the page.create entry", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/activity")
+    {:ok, _view, html} = live(conn, ~p"/panel/activity")
 
     # Header is present (localized)
     assert html =~ t("Activity")
@@ -62,17 +62,17 @@ defmodule DranWeb.ActivityLiveTest do
   end
 
   test "shows relative time for each entry", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/activity")
+    {:ok, _view, html} = live(conn, ~p"/panel/activity")
 
     # The entry was just created, so it should show "just now"
     assert html =~ t("just now")
   end
 
   test "links to the created page", %{conn: conn, page: page} do
-    {:ok, _view, html} = live(conn, ~p"/activity")
+    {:ok, _view, html} = live(conn, ~p"/panel/activity")
 
     # The subject slug should be a link to /notes/<slug>
-    assert html =~ "href=\"/notes/#{page.slug}\""
+    assert html =~ "href=\"/panel/notes/#{page.slug}\""
   end
 
   test "renders empty state when no log entries", %{conn: conn} do
@@ -82,14 +82,14 @@ defmodule DranWeb.ActivityLiveTest do
 
     Dran.Repo.delete_all(from(l in Dran.Brain.Log, where: l.context_id == ^context.id))
 
-    {:ok, _view, html} = live(conn, ~p"/activity")
+    {:ok, _view, html} = live(conn, ~p"/panel/activity")
 
     assert html =~ t("No activity yet")
     assert html =~ t("Create or edit a page to see it here.")
   end
 
   test "updates live when a new page is created (handle_info)", %{conn: conn} do
-    {:ok, view, html} = live(conn, ~p"/activity")
+    {:ok, view, html} = live(conn, ~p"/panel/activity")
 
     # Initially one page exists
     assert html =~ t("Created")

@@ -333,7 +333,7 @@ defmodule DranWeb.SearchLive do
           <div :if={tags_for(@result) != []} class="relative z-10 flex flex-wrap gap-1.5 mt-2.5">
             <.link
               :for={tag <- Enum.take(tags_for(@result), 5)}
-              navigate={"/tags/#{URI.encode_www_form(tag)}"}
+              navigate={"/panel/tags/#{URI.encode_www_form(tag)}"}
               class="px-1.5 py-0.5 text-[11px] rounded bg-base-200 text-base-content/60 hover:bg-primary/10 hover:text-primary transition-colors"
             >
               #{tag}
@@ -349,7 +349,7 @@ defmodule DranWeb.SearchLive do
 
   defp page_path_for(%{page_type: type, slug: slug})
        when is_binary(type) and is_binary(slug),
-       do: "/#{PageTypes.path(type)}/#{slug}"
+       do: "/panel/#{PageTypes.path(type)}/#{slug}"
 
   defp page_path_for(_), do: "#"
 

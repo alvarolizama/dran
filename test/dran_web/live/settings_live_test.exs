@@ -32,7 +32,7 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "the api keys tab renders the create form and empty list", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/api_keys")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings/api_keys")
 
     assert html =~ ~s(id="create-api-key-form")
     assert html =~ t("Create API Key")
@@ -43,7 +43,7 @@ defmodule DranWeb.SettingsLiveTest do
     unique = System.unique_integer([:positive])
     {:ok, ctx} = Dran.Brain.create_context(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
 
-    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
+    {:ok, view, _html} = live(conn, ~p"/panel/settings/api_keys")
 
     html =
       view
@@ -64,7 +64,7 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, ctx} = Dran.Brain.create_context(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
     {:ok, key} = Accounts.create_api_key(%{name: "Revocable", context_id: ctx.id})
 
-    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
+    {:ok, view, _html} = live(conn, ~p"/panel/settings/api_keys")
 
     html =
       view
@@ -76,14 +76,14 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "users tab shows a default context selector per user", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/users")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings/users")
 
     assert html =~ t("Default context")
     assert html =~ "default-context-select-"
   end
 
   test "renders the brain tuning form with default values", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/brain")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings/brain")
 
     # Section heading (localized)
     assert html =~ t("Brain tuning")
@@ -111,7 +111,7 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "saving the form persists values and shows a flash", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/settings/brain")
+    {:ok, view, _html} = live(conn, ~p"/panel/settings/brain")
 
     html =
       view
@@ -134,7 +134,7 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "settings page is organized by tabs with users as default", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings")
 
     # Tab navigation present with all tabs
     for tab_path <-
@@ -150,28 +150,28 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "the brain tuning form still renders the agent_max_pages input", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/brain")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings/brain")
 
     assert html =~ "agent_max_pages"
     assert html =~ t("Max pages per run")
   end
 
   test "the Entorno header exists with its read-only caption", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/system")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings/system")
 
     assert html =~ t("Entorno")
     assert html =~ t("Read-only — loaded from environment variables at startup.")
   end
 
   test "inference test button is present in the Inference API section", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/system")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings/system")
 
     assert html =~ "phx-click=\"test_inference\""
     assert html =~ t("Probar conexión")
   end
 
   test "clicking the test button shows the testing state", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/settings/system")
+    {:ok, view, _html} = live(conn, ~p"/panel/settings/system")
 
     html = render_click(view, "test_inference")
     # The button immediately switches to "Probando..." state
@@ -181,7 +181,7 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   test "models tab renders the selects with a per-model test button", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/models")
+    {:ok, _view, html} = live(conn, ~p"/panel/settings/models")
 
     assert html =~ ~s(id="models-form")
 
@@ -218,7 +218,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "renders the 5 registered jobs with toggles and run buttons", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/settings/brain")
+      {:ok, _view, html} = live(conn, ~p"/panel/settings/brain")
 
       assert html =~ t("Jobs programados")
       assert length(Jobs.list()) == 5
@@ -236,7 +236,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "toggle_job persists the enabled state and re-renders it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+      {:ok, view, _html} = live(conn, ~p"/panel/settings/brain")
       assert Jobs.enabled?(:curator_daily)
 
       _ = view |> element("#job-toggle-curator_daily") |> render_click()
@@ -249,7 +249,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "run_job marks only that job as running, then flashes on completion", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+      {:ok, view, _html} = live(conn, ~p"/panel/settings/brain")
 
       html = view |> element("#job-run-pagerank_nightly") |> render_click()
 
@@ -269,7 +269,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "job_run_done with an error result flashes the failure", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+      {:ok, view, _html} = live(conn, ~p"/panel/settings/brain")
 
       send(view.pid, {:job_run_done, :curator_daily, {:error, :boom}})
 
@@ -280,11 +280,11 @@ defmodule DranWeb.SettingsLiveTest do
       # Cheap real job (the same one Dran.JobsTest runs) — writes a run report.
       {:ok, report} = Jobs.run_now(:pagerank_nightly)
 
-      {:ok, _view, html} = live(conn, ~p"/settings/brain")
+      {:ok, _view, html} = live(conn, ~p"/panel/settings/brain")
 
       # Green ok badge, relative time linking to the report, compact duration
       assert html =~ "badge-success"
-      assert html =~ ~s(href="/reports/#{report.slug}")
+      assert html =~ ~s(href="/panel/reports/#{report.slug}")
       assert html =~ t("just now")
       assert html =~ ~r/\d+(\.\d+)? (ms|s)/
     end

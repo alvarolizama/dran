@@ -43,7 +43,7 @@ defmodule DranWeb.CommandPaletteTest do
 
   describe "rendering" do
     test "renders root container but no overlay when closed", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live(conn, ~p"/panel")
 
       assert html =~ ~s(id="command-palette")
       assert html =~ ~s(phx-hook="CommandPalette")
@@ -51,7 +51,7 @@ defmodule DranWeb.CommandPaletteTest do
     end
 
     test "toggle event opens the modal dialog", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/panel")
 
       view
       |> element("#command-palette")
@@ -65,7 +65,7 @@ defmodule DranWeb.CommandPaletteTest do
 
   describe "quick actions" do
     test "quick actions are visible when query is empty", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/panel")
 
       view
       |> element("#command-palette")
@@ -95,7 +95,7 @@ defmodule DranWeb.CommandPaletteTest do
           page_type: "note"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/panel")
 
       # Open the palette
       view

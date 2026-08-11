@@ -175,7 +175,7 @@ const Graph3D = {
   // ── Progressive loading (index mode) ──────────────────────────────────
 
   fetchGraphData() {
-    fetch("/api/graph-json")
+    fetch("/panel/graph-json")
       .then(r => r.json())
       .then(data => {
         // Update render quality for the fetched size

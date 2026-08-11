@@ -182,7 +182,7 @@ flowchart TD
 | `report` | System-created run logs — **no se crea por MCP**, lo escribe `Dran.Jobs` | log |
 
 `report` es second-citizen: vive fuera del grafo, el journey, embeddings y
-`mcp_create`; aparece en el activity log y tiene vista en `/reports/<slug>`.
+`mcp_create`; aparece en el activity log y tiene vista en `/panel/reports/<slug>`.
 No lo uses para capturar conocimiento — es salida de sistema (ver §4 Jobs).
 
 Default to `note` with `meta.kind: "thought"` when unsure — promote later.
@@ -326,7 +326,7 @@ Los 5 crons de Quantum (`curator_daily`, `pagerank_nightly`,
 desde **Settings → Brain → "Jobs programados"**: toggle por job (afecta SOLO
 las corridas programadas), "Correr ahora" (siempre ejecuta, ignora el toggle)
 y último run con link al reporte. Cada corrida escribe una página `report`
-(kind `log`) en `/reports/<slug>` con status/trigger/duración; se conservan
+(kind `log`) en `/panel/reports/<slug>` con status/trigger/duración; se conservan
 las 20 más recientes por job y las viejas se archivan. Programáticamente:
 `Dran.Jobs.list/0`, `set_enabled/2`, `run_now/1`, `run_scheduled/1`.
 

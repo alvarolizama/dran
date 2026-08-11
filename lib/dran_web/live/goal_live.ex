@@ -44,10 +44,10 @@ defmodule DranWeb.GoalLive do
           editing={@editing}
         >
           <:actions>
-            <.link navigate={~p"/goals"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/goals"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> Back
             </.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -226,7 +226,7 @@ defmodule DranWeb.GoalLive do
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          {:noreply, push_navigate(socket, to: ~p"/goals")}
+          {:noreply, push_navigate(socket, to: ~p"/panel/goals")}
 
         page ->
           relations = Brain.list_relations_for_page(page.id)
@@ -291,7 +291,7 @@ defmodule DranWeb.GoalLive do
            )}
       end
     else
-      {:noreply, push_navigate(socket, to: ~p"/goals")}
+      {:noreply, push_navigate(socket, to: ~p"/panel/goals")}
     end
   end
 
@@ -340,11 +340,11 @@ defmodule DranWeb.GoalLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/goals/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/goals/#{slug}")}
   end
 
   def handle_event("show_todo", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/todos/#{slug}")}
   end
 
   def handle_event("change_health", %{"slug" => slug, "health" => health}, socket) do
@@ -382,7 +382,7 @@ defmodule DranWeb.GoalLive do
   end
 
   def handle_event("new_page", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/goals/new")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/goals/new")}
   end
 
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)

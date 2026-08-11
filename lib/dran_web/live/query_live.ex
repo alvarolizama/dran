@@ -36,10 +36,10 @@ defmodule DranWeb.QueryLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={~p"/queries"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/queries"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -123,7 +123,7 @@ defmodule DranWeb.QueryLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/queries")
+    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/queries")
   end
 
   def handle_params(_params, _url, socket) do
@@ -171,11 +171,11 @@ defmodule DranWeb.QueryLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/queries/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/queries/#{slug}")}
   end
 
   def handle_event("new_page", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/queries/new")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/queries/new")}
   end
 
   def handle_event("delete_page", params, socket),

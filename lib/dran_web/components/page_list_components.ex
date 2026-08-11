@@ -148,7 +148,7 @@ defmodule DranWeb.PageListComponents do
         <div class="flex gap-2">
           <.link
             :if={@page_type}
-            navigate={"/collections/new?type=#{@page_type}&title=#{gettext("All")} #{PageTypes.plural(@page_type)}"}
+            navigate={"/panel/collections/new?type=#{@page_type}&title=#{gettext("All")} #{PageTypes.plural(@page_type)}"}
             class="btn btn-ghost btn-sm"
             title={gettext("Save as smart collection")}
           >
@@ -172,7 +172,7 @@ defmodule DranWeb.PageListComponents do
               do: if(@page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")),
               else: gettext("Archived")} ({if @show_archived, do: @total_count, else: @total_archived})
           </button>
-          <.link navigate={"/#{PageTypes.path(@page_type)}/new"} class="btn btn-primary btn-sm">
+          <.link navigate={"/panel/#{PageTypes.path(@page_type)}/new"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}
           </.link>
         </div>
@@ -279,7 +279,7 @@ defmodule DranWeb.PageListComponents do
             <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
           </div>
           <.link
-            navigate={"/#{PageTypes.path(@page_type)}/new"}
+            navigate={"/panel/#{PageTypes.path(@page_type)}/new"}
             class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
           >
             <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
@@ -355,7 +355,7 @@ defmodule DranWeb.PageListComponents do
           <div class="flex gap-1">
             <.link
               :for={tag <- Enum.take(@page.tags || [], 5)}
-              navigate={"/tags/#{URI.encode_www_form(tag)}"}
+              navigate={"/panel/tags/#{URI.encode_www_form(tag)}"}
               class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
             >
               {tag}

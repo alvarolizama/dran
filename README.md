@@ -7,19 +7,20 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 ## Features
 
 ### Knowledge
-- **10 page types** — `note`, `concept`, `entity`, `reference`, `project`, `goal`, `plan`, `todo`, `query`, plus `report` (system run logs) — each with its own list/new/detail UI (`/notes`, `/concepts`, …)
+- **10 page types** — `note`, `concept`, `entity`, `reference`, `project`, `goal`, `plan`, `todo`, `query`, plus `report` (system run logs) — each with its own list/new/detail UI (`/panel/notes`, `/panel/concepts`, …)
 - **TipTap markdown editor** — WYSIWYG with tables, code blocks, mermaid diagrams, and `![[slug]]` page embeds; pages render read-only by default, *Edit* opens the editor
 - **Relations** — directed and typed (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`, `semantic`, `mentions`); link pages freely — no rigid hierarchy, orphans are fine
 - **Custom props** — `meta.props` key-value bag; five keys (`role`, `tier`, `location`, `language`, `framework`) auto-materialize into graph edges
 - **Version history** — every edit is versioned with diff view on the page detail
 
 ### Views
-- **Dashboard** (`/`) — context overview
-- **Kanban board** (`/kanban`) — all todos, columns `backlog → this_week → today → in_progress → done → cancelled`, drag-drop between columns, combinable filters (project / goal / plan)
-- **3D knowledge graph** (`/graph`, `/graph/:slug`) — force-directed 3D; hover highlights a node and its neighbors, click navigates
-- **Hybrid search** (`/search`) — full-text, fuzzy, semantic, or hybrid fusion
-- **Smart Collections** (`/collections`) — saved live queries rendered as pages
-- **Activity feed** (`/activity`), **Journey** (`/journey`), **Tags** (`/tags/:tag`), **Docs** (`/docs`)
+- **Wiki at the root** (`/`, `/:context_slug`, …) — read-only knowledge browser per wiki-enabled context; the first thing a logged-in user sees. All data administration lives under **`/panel`**
+- **Dashboard** (`/panel`) — context overview
+- **Kanban board** (`/panel/kanban`) — all todos, columns `backlog → this_week → today → in_progress → done → cancelled`, drag-drop between columns, combinable filters (project / goal / plan)
+- **3D knowledge graph** (`/panel/graph`, `/panel/graph/:slug`) — force-directed 3D; hover highlights a node and its neighbors, click navigates
+- **Hybrid search** (`/panel/search`) — full-text, fuzzy, semantic, or hybrid fusion
+- **Smart Collections** (`/panel/collections`) — saved live queries rendered as pages
+- **Activity feed** (`/panel/activity`), **Journey** (`/panel/journey`), **Tags** (`/panel/tags/:tag`), **Docs** (`/panel/docs`)
 - **Multi-context** — switch brains from the sidebar; per-context page-type toggles (Settings → Contexts)
 
 ### Automation
@@ -31,7 +32,7 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 3 resources + 2 prompts
 - **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`)
 - **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users)
-- **Settings panel** (admin) — users, contexts, API keys, brain tuning, models, system, danger zone (`/settings/:tab`)
+- **Settings panel** (admin) — users, contexts, API keys, brain tuning, models, system, danger zone (`/panel/settings/:tab`)
 
 ## Installation
 
@@ -114,7 +115,7 @@ Get your token from **Settings → Users** (per-user token, scoped to your conte
 | `plan` | Time-horizoned plans (weekly/quarterly/yearly) |
 | `todo` | Actionable items with kanban status |
 | `query` | Questions with answers |
-| `report` | System-created agent run logs (detail view only, `/reports/:slug`) |
+| `report` | System-created agent run logs (detail view only, `/panel/reports/:slug`) |
 
 ## Production
 

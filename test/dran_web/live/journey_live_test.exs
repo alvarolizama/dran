@@ -49,7 +49,7 @@ defmodule DranWeb.JourneyLiveTest do
   end
 
   test "renders the journey page", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/journey")
+    {:ok, _view, html} = live(conn, ~p"/panel/journey")
     assert html =~ "Trayectoria" or html =~ "Journey"
   end
 end

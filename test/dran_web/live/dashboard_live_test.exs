@@ -62,13 +62,13 @@ defmodule DranWeb.DashboardLiveTest do
 
   describe "brain health section" do
     test "renders the Brain health heading", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live(conn, ~p"/panel")
 
       assert html =~ t("Brain health")
     end
 
     test "renders the four brain health cards with labels", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/")
+      {:ok, _view, html} = live(conn, ~p"/panel")
 
       # Card labels (localized)
       assert html =~ t("This week")

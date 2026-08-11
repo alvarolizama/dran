@@ -44,11 +44,11 @@ defmodule DranWeb.PlanLive do
           editing={@editing}
         >
           <:actions>
-            <.link navigate={~p"/plans"} class="btn btn-primary btn-sm"><.icon
+            <.link navigate={~p"/panel/plans"} class="btn btn-primary btn-sm"><.icon
               name="hero-arrow-left"
               class="size-4"
             /> {gettext("Back")}</.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -197,7 +197,7 @@ defmodule DranWeb.PlanLive do
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          {:noreply, push_navigate(socket, to: ~p"/plans")}
+          {:noreply, push_navigate(socket, to: ~p"/panel/plans")}
 
         page ->
           relations = Brain.list_relations_for_page(page.id)
@@ -255,7 +255,7 @@ defmodule DranWeb.PlanLive do
            )}
       end
     else
-      {:noreply, push_navigate(socket, to: ~p"/plans")}
+      {:noreply, push_navigate(socket, to: ~p"/panel/plans")}
     end
   end
 
@@ -302,10 +302,10 @@ defmodule DranWeb.PlanLive do
   def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}
 
   def handle_event("show_page", %{"slug" => slug}, socket),
-    do: {:noreply, push_navigate(socket, to: ~p"/plans/#{slug}")}
+    do: {:noreply, push_navigate(socket, to: ~p"/panel/plans/#{slug}")}
 
   def handle_event("show_todo", %{"slug" => slug}, socket),
-    do: {:noreply, push_navigate(socket, to: ~p"/todos/#{slug}")}
+    do: {:noreply, push_navigate(socket, to: ~p"/panel/todos/#{slug}")}
 
   def handle_event("change_status", %{"slug" => slug, "status" => status}, socket) do
     case update_page_meta(socket, slug, &Map.put(&1, "status", status)) do
@@ -342,7 +342,7 @@ defmodule DranWeb.PlanLive do
   end
 
   def handle_event("new_page", _params, socket),
-    do: {:noreply, push_navigate(socket, to: ~p"/plans/new")}
+    do: {:noreply, push_navigate(socket, to: ~p"/panel/plans/new")}
 
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
   def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)

@@ -40,7 +40,7 @@ defmodule DranWeb.PageNewLiveTest do
 
   describe "new page form — slug field removed (Task 2.1)" do
     test "the /notes/new form does not render a slug input", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/notes/new")
+      {:ok, _view, html} = live(conn, "/panel/notes/new")
 
       # The slug field used to be a labelled "Slug" input. It must be gone —
       # Brain now derives the slug from the title on save.
@@ -53,7 +53,7 @@ defmodule DranWeb.PageNewLiveTest do
     test "the new form renders a right-hand attributes sidebar with tags + summary + meta", %{
       conn: conn
     } do
-      {:ok, _view, html} = live(conn, "/notes/new")
+      {:ok, _view, html} = live(conn, "/panel/notes/new")
 
       # The sidebar aside exists with the Atributos heading
       assert html =~ "<aside"
@@ -66,7 +66,7 @@ defmodule DranWeb.PageNewLiveTest do
     end
 
     test "the primary fields (Title, Content) are in the main column", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/notes/new")
+      {:ok, _view, html} = live(conn, "/panel/notes/new")
 
       assert html =~ ~s(name="page[title]")
       assert html =~ "markdown_editor" or html =~ "ProseMirror" or html =~ "page-new-editor"
@@ -75,7 +75,7 @@ defmodule DranWeb.PageNewLiveTest do
 
   describe "smart defaults — meta prefilled per type on :new (Task 2.2)" do
     test "note form prefills kind=thought and date=today", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/notes/new")
+      {:ok, _view, html} = live(conn, "/panel/notes/new")
 
       today = Date.utc_today() |> Date.to_string()
 
@@ -87,20 +87,20 @@ defmodule DranWeb.PageNewLiveTest do
     end
 
     test "todo form prefills kanban_status=backlog and priority=medium", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/todos/new")
+      {:ok, _view, html} = live(conn, "/panel/todos/new")
 
       assert html =~ ~s(value="backlog")
       assert html =~ ~s(value="medium")
     end
 
     test "project form prefills status=draft", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/projects/new")
+      {:ok, _view, html} = live(conn, "/panel/projects/new")
 
       assert html =~ ~s(value="draft")
     end
 
     test "plan form prefills status=draft", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/plans/new")
+      {:ok, _view, html} = live(conn, "/panel/plans/new")
 
       assert html =~ ~s(value="draft")
     end

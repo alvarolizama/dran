@@ -52,9 +52,9 @@ defmodule DranWeb.DashboardAuthFlowTest do
       conn
       |> Plug.Test.init_test_session(%{user: user.email, context_slug: "personal"})
 
-    {:ok, _view, html} = live(conn, ~p"/")
+    {:ok, _view, html} = live(conn, ~p"/panel")
 
-    assert html =~ ~p"/kanban"
+    assert html =~ ~p"/panel/kanban"
     assert html =~ "dashboard-api-token"
     # SEC-005: only the prefix is rendered — the full token never reaches the DOM
     assert html =~ String.slice(user.api_token, 0, 8)
