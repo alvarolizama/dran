@@ -10,7 +10,8 @@ defmodule Dran.Settings do
     "agent_max_pages" => 10,
     "agent_max_sources" => 10,
     "pagerank_boost" => 0.15,
-    "entity_linker_enabled" => true
+    "entity_linker_enabled" => true,
+    "wiki_google_open_signup" => false
   }
 
   def defaults, do: @defaults

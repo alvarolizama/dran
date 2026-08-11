@@ -67,9 +67,31 @@ defmodule DranWeb.OAuthController do
         |> redirect(to: return_to)
 
       {:error, :unauthorized} ->
-        conn
-        |> put_flash(:error, "No account found for #{email} — ask an admin to create one")
-        |> redirect(to: ~p"/login")
+        # User doesn't exist. If wiki open-signup is enabled, auto-register
+        # them as a wiki-only user (no contexts, not admin). Otherwise reject.
+        if Dran.Settings.get("wiki_google_open_signup") == true do
+          case Accounts.create_user(%{
+                 email: email,
+                 name: Map.get(google_user, :name),
+                 google_id: Map.get(google_user, :google_id),
+                 avatar_url: Map.get(google_user, :avatar_url)
+               }) do
+            {:ok, user} ->
+              conn
+              |> SessionAuth.login(user.email)
+              |> put_flash(:info, "Account created — welcome to the wiki")
+              |> redirect(to: ~p"/wiki")
+
+            {:error, _} ->
+              conn
+              |> put_flash(:error, "Could not create account for #{email}")
+              |> redirect(to: ~p"/login")
+          end
+        else
+          conn
+          |> put_flash(:error, "No account found for #{email} — ask an admin to create one")
+          |> redirect(to: ~p"/login")
+        end
 
       {:error, _} ->
         conn

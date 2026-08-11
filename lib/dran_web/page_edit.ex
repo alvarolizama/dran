@@ -321,6 +321,28 @@ defmodule DranWeb.PageEdit do
     {:noreply, put_flash(socket, :error, gettext("Cannot unarchive: no page loaded."))}
   end
 
+  def handle_event("toggle_pinned", _params, %{assigns: %{page: %Page{} = page}} = socket) do
+    new_pinned = !page.pinned
+
+    case Brain.update_page(page, %{"pinned" => new_pinned}) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(page: updated)
+         |> put_flash(
+           :info,
+           if(new_pinned, do: gettext("Pinned to wiki"), else: gettext("Unpinned from wiki"))
+         )}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update pin status"))}
+    end
+  end
+
+  def handle_event("toggle_pinned", _params, socket) do
+    {:noreply, put_flash(socket, :error, gettext("Cannot pin: no page loaded."))}
+  end
+
   def handle_event("request_upload", _params, socket) do
     upload = socket.assigns[:upload]
 

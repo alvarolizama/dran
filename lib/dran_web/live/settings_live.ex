@@ -62,7 +62,8 @@ defmodule DranWeb.SettingsLive do
         new_api_key_form: to_form(%{}, as: :api_key),
         revealed_api_key: nil,
         props_backfill: :idle,
-        running_jobs: MapSet.new()
+        running_jobs: MapSet.new(),
+        wiki_google_open_signup: Settings.get("wiki_google_open_signup") == true
       )
       |> assign_brain_form()
       |> assign_models()
@@ -331,6 +332,53 @@ defmodule DranWeb.SettingsLive do
   end
 
   @impl true
+  def handle_event("toggle_wiki", %{"context_id" => context_id}, socket) do
+    context = Dran.Brain.get_context!(context_id)
+    new_wiki = !context.wiki_enabled
+
+    case Dran.Brain.update_context_settings(context, %{wiki_enabled: new_wiki}) do
+      {:ok, _} ->
+        {:noreply, assign_contexts(socket)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update wiki setting"))}
+    end
+  end
+
+  @impl true
+  def handle_event(
+        "update_wiki_description",
+        %{"context_id" => context_id, "value" => value},
+        socket
+      ) do
+    context = Dran.Brain.get_context!(context_id)
+
+    case Dran.Brain.update_context_settings(context, %{wiki_description: value}) do
+      {:ok, _} ->
+        {:noreply, assign_contexts(socket)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update wiki description"))}
+    end
+  end
+
+  @impl true
+  def handle_event("update_wiki_description", params, socket) do
+    # textarea blur sends raw text value differently — extract from params
+    context_id = params["context_id"]
+    value = (params["_target"] && params[params["_target"]]) || ""
+    context = Dran.Brain.get_context!(context_id)
+
+    case Dran.Brain.update_context_settings(context, %{wiki_description: value}) do
+      {:ok, _} ->
+        {:noreply, assign_contexts(socket)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update wiki description"))}
+    end
+  end
+
+  @impl true
   def handle_event("validate_context", %{"context" => params, "_target" => target}, socket) do
     name = params["name"] || ""
     slug_touched = socket.assigns[:slug_touched] || false
@@ -418,6 +466,13 @@ defmodule DranWeb.SettingsLive do
       |> put_flash(:info, gettext("Settings saved"))
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_wiki_google_signup", _params, socket) do
+    current = Settings.get("wiki_google_open_signup") == true
+    Settings.put("wiki_google_open_signup", !current)
+    {:noreply, assign(socket, wiki_google_open_signup: !current)}
   end
 
   @impl true
@@ -2011,6 +2066,32 @@ defmodule DranWeb.SettingsLive do
         <p class="text-caption mt-0.5">{gettext("Manage users and their context access.")}</p>
       </div>
 
+      <%!-- Google open signup toggle --%>
+      <div
+        :if={DranWeb.OAuth.Google.configured?()}
+        class="card bg-base-100 border border-base-300 mb-4"
+      >
+        <div class="card-body p-4 flex-row items-center justify-between gap-4">
+          <div>
+            <h3 class="text-sm font-semibold flex items-center gap-2">
+              <.icon name="hero-globe-alt" class="size-4 text-primary/70" />
+              {gettext("Google auto-signup")}
+            </h3>
+            <p class="text-xs text-base-content/50 mt-1">
+              {gettext(
+                "Allow anyone with a Google account to sign up and browse wikis. Users are created without context access."
+              )}
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={@wiki_google_open_signup}
+            phx-click="toggle_wiki_google_signup"
+            class="toggle toggle-sm toggle-primary"
+          />
+        </div>
+      </div>
+
       <%!-- Add new user form --%>
       <div class="card bg-base-100 border border-base-300">
         <div class="card-body">
@@ -2393,6 +2474,38 @@ defmodule DranWeb.SettingsLive do
                   class="toggle toggle-sm toggle-primary"
                 />
               </label>
+            </div>
+
+            <%!-- Wiki settings --%>
+            <div class="border-t border-base-300 mt-4 pt-4 space-y-3">
+              <h4 class="text-sm font-semibold">{gettext("Wiki")}</h4>
+
+              <label class="flex items-center justify-between gap-3 cursor-pointer hover:bg-base-200/50 px-2 py-1.5 rounded-lg transition-colors">
+                <div>
+                  <p class="text-sm font-medium">{gettext("Enable wiki")}</p>
+                  <p class="text-xs text-base-content/40">
+                    {gettext("Make this context browseable in the wiki")}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={pt_ctx && pt_ctx.wiki_enabled}
+                  phx-click="toggle_wiki"
+                  phx-value-context_id={@page_types_context_id}
+                  class="toggle toggle-sm toggle-primary"
+                />
+              </label>
+
+              <div :if={pt_ctx} class="px-2">
+                <label class="text-sm font-medium block mb-1">{gettext("Wiki description")}</label>
+                <textarea
+                  class="textarea textarea-bordered w-full text-sm"
+                  rows="2"
+                  placeholder={gettext("Short description shown on the wiki home")}
+                  phx-blur="update_wiki_description"
+                  phx-value-context_id={@page_types_context_id}
+                >{pt_ctx.wiki_description}</textarea>
+              </div>
             </div>
           </div>
         </div>

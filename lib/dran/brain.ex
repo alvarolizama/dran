@@ -60,6 +60,24 @@ defmodule Dran.Brain do
     Repo.one(from c in Context, where: c.slug == ^slug)
   end
 
+  @doc """
+  List all contexts that have the wiki enabled, ordered by name.
+  """
+  def list_wiki_contexts do
+    Repo.all(from c in Context, where: c.wiki_enabled == true, order_by: [asc: c.name])
+  end
+
+  @doc """
+  List pinned pages for a context.
+  """
+  def list_pinned_pages(context_id) when is_binary(context_id) do
+    from(p in Page,
+      where: p.context_id == ^context_id and p.pinned == true and p.archived == false,
+      order_by: [asc: p.title]
+    )
+    |> Repo.all()
+  end
+
   @doc "Get a context by id"
   def get_context!(id), do: Repo.get!(Context, id)
 
@@ -123,6 +141,7 @@ defmodule Dran.Brain do
     project_slug = Keyword.get(opts, :project_slug)
     assignee = Keyword.get(opts, :assignee)
     props = Keyword.get(opts, :props)
+    pinned = Keyword.get(opts, :pinned)
     archived = Keyword.get(opts, :archived, false)
     limit = Keyword.get(opts, :limit, 50)
     offset = Keyword.get(opts, :offset, 0)
@@ -157,6 +176,7 @@ defmodule Dran.Brain do
             updated_by: p.updated_by,
             on_behalf_of: p.on_behalf_of,
             archived: p.archived,
+            pinned: p.pinned,
             inserted_at: p.inserted_at,
             updated_at: p.updated_at
           }
@@ -176,6 +196,7 @@ defmodule Dran.Brain do
       |> maybe_filter_goal_slug(goal_slug)
       |> maybe_filter_project_slug(project_slug)
       |> maybe_filter_props(props)
+      |> maybe_filter_pinned(pinned)
       |> where([p], p.archived == ^archived)
       |> maybe_distinct_for_planning(goal_slug)
       |> order_by([p], desc: p.updated_at)
@@ -234,6 +255,12 @@ defmodule Dran.Brain do
 
   defp maybe_filter_owner(query, owner) do
     where(query, [p], p.owner == ^owner)
+  end
+
+  defp maybe_filter_pinned(query, nil), do: query
+
+  defp maybe_filter_pinned(query, pinned) when is_boolean(pinned) do
+    where(query, [p], p.pinned == ^pinned)
   end
 
   defp maybe_filter_created_by(query, nil), do: query

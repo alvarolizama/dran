@@ -10,6 +10,9 @@ defmodule DranWeb.DashboardAuthFlowTest do
         password: "supersecret123"
       })
 
+    # Make the user admin so they can see the dashboard
+    {:ok, user} = Accounts.update_user(user, %{is_admin: true})
+
     {:ok, conn: conn, user: user}
   end
 

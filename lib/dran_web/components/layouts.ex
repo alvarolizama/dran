@@ -563,4 +563,61 @@ defmodule DranWeb.Layouts do
     </div>
     """
   end
+
+  # ── Wiki layout ──────────────────────────────────────────────────────────
+  # Clean, full-width layout for the public wiki browser. No sidebar,
+  # no command palette — just a top nav bar and centered content.
+  #
+  # Wiki-only users (no contexts assigned) see a minimal bar. Users with
+  # contexts get a "Back to app" link.
+
+  attr :flash, :map, required: true
+  attr :current_user, :string, default: nil
+  attr :context_slug, :string, default: nil
+  attr :contexts, :list, default: []
+  attr :page_title, :string, default: nil
+
+  slot :inner_block, required: true
+
+  def wiki(assigns) do
+    ~H"""
+    <div class="min-h-screen bg-base-100 text-base-content flex flex-col">
+      <header class="border-b border-base-300 bg-base-200/50 sticky top-0 z-30 backdrop-blur-sm">
+        <div class="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <a
+              href={~p"/wiki"}
+              class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80"
+            >
+              <.icon name="hero-book-open" class="size-5 text-primary" />
+              <span class="text-lg font-bold tracking-tight">Dran Wiki</span>
+            </a>
+            <span :if={@page_title} class="text-base-content/30">/</span>
+            <span :if={@page_title} class="text-sm text-base-content/60 truncate max-w-xs sm:max-w-sm">
+              {@page_title}
+            </span>
+          </div>
+          <div class="flex items-center gap-3">
+            <a
+              :if={@contexts != []}
+              href={~p"/"}
+              class="btn btn-ghost btn-sm gap-1.5"
+              title={gettext("Back to app")}
+            >
+              <.icon name="hero-arrow-left" class="size-4" />
+              <span class="hidden sm:inline">{gettext("App")}</span>
+            </a>
+            <.user_footer current_user={@current_user} />
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1">
+        {render_slot(@inner_block)}
+      </main>
+
+      <.flash_group flash={@flash} />
+    </div>
+    """
+  end
 end

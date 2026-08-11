@@ -457,7 +457,21 @@ defmodule DranWeb.DashboardLive do
 
   @impl true
   def handle_params(_params, _url, socket) do
-    {:noreply, socket}
+    # Wiki-only users (no contexts assigned) get redirected to the wiki.
+    # They can browse all wiki-enabled contexts but have no dashboard.
+    # Admins always see the dashboard. Sessions without a DB user row
+    # (e.g. test sessions, legacy single-user) also see the dashboard.
+    contexts = socket.assigns[:contexts] || []
+    is_admin = socket.assigns[:is_admin] || false
+    current_user = socket.assigns[:current_user]
+
+    db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
+
+    if contexts == [] and not is_admin and db_user != nil do
+      {:noreply, push_navigate(socket, to: ~p"/wiki")}
+    else
+      {:noreply, socket}
+    end
   end
 
   @impl true

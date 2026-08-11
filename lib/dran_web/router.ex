@@ -184,6 +184,14 @@ defmodule DranWeb.Router do
 
     live "/kanban", KanbanLive, :index
 
+    # ── Wiki (read-only knowledge browser) ─────────────────────────────────
+    live "/wiki", WikiLive, :index
+    live "/wiki/:context_slug", WikiLive, :context_home
+    live "/wiki/:context_slug/type/:page_type", WikiLive, :type_list
+    live "/wiki/:context_slug/type/:page_type/:slug", WikiLive, :page_show
+    live "/wiki/:context_slug/collection/:slug", WikiLive, :collection
+    live "/wiki/:context_slug/graph", WikiLive, :graph
+
     live "/projects", ProjectLive, :index
     live "/projects/new", PageNewLive, :new
     live "/projects/:slug", ProjectLive, :show

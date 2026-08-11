@@ -134,6 +134,17 @@ defmodule DranWeb.PageComponents do
               <.icon name="hero-archive-box" class="size-4" /> {gettext("Archive")}
             </button>
             <button
+              phx-click="toggle_pinned"
+              class="btn btn-ghost btn-sm"
+              title={gettext("Pin this page in the wiki home")}
+            >
+              <.icon
+                name={if @page.pinned, do: "hero-bookmark-slash", else: "hero-bookmark"}
+                class="size-4"
+              />
+              {if @page.pinned, do: gettext("Unpin"), else: gettext("Pin")}
+            </button>
+            <button
               phx-click="delete_page"
               data-confirm={gettext("Are you sure? This cannot be undone.")}
               class="btn btn-ghost btn-sm text-error"
