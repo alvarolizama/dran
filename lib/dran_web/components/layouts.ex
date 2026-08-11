@@ -55,6 +55,16 @@ defmodule DranWeb.Layouts do
         assigns[:is_admin] || false
       end
 
+    is_editor =
+      if is_binary(assigns[:current_user]) do
+        case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
+          nil -> false
+          user -> user.is_editor == true
+        end
+      else
+        assigns[:is_editor] || false
+      end
+
     # If the caller didn't forward page_counts, compute them here so the
     # sidebar context selector never silently shows "Context (0)".
     page_counts =
@@ -72,7 +82,13 @@ defmodule DranWeb.Layouts do
           end
       end
 
-    assigns = assign(assigns, counts: counts, page_counts: page_counts, is_admin: is_admin)
+    assigns =
+      assign(assigns,
+        counts: counts,
+        page_counts: page_counts,
+        is_admin: is_admin,
+        is_editor: is_editor
+      )
 
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
@@ -172,12 +188,26 @@ defmodule DranWeb.Layouts do
             _ -> 0
           end
 
+        communities_count =
+          try do
+            Dran.Repo.aggregate(
+              from(cs in Dran.Graph.CommunitySummary,
+                where: cs.context_id == ^context.id,
+                select: cs.id
+              ),
+              :count
+            )
+          rescue
+            _ -> 0
+          end
+
         %{
           dashboard: stats[:total_pages] || 0,
           notes: by_type["note"] || 0,
           concepts: by_type["concept"] || 0,
           entities: by_type["entity"] || 0,
           references: by_type["reference"] || 0,
+          communities: communities_count,
           queries: by_type["query"] || 0,
           collections: collection_count || 0,
           projects: by_type["project"] || 0,
@@ -249,7 +279,12 @@ defmodule DranWeb.Layouts do
         []
       end ++
         [
-          %{key: "docs", label: gettext("Documentation"), icon: "hero-book-open", path: ~p"/panel/docs"}
+          %{
+            key: "docs",
+            label: gettext("Documentation"),
+            icon: "hero-book-open",
+            path: ~p"/panel/docs"
+          }
         ]
 
     groups = [
@@ -352,6 +387,13 @@ defmodule DranWeb.Layouts do
             icon: "hero-bookmark",
             path: ~p"/panel/references",
             badge: counts[:references]
+          },
+          %{
+            key: "communities",
+            label: gettext("Comunidades"),
+            icon: "hero-squares-2x2",
+            path: ~p"/panel/communities",
+            badge: counts[:communities]
           },
           %{
             key: "queries",
@@ -565,59 +607,239 @@ defmodule DranWeb.Layouts do
   end
 
   # ── Wiki layout ──────────────────────────────────────────────────────────
-  # Clean, full-width layout for the public wiki browser. No sidebar,
-  # no command palette — just a top nav bar and centered content.
-  #
-  # Wiki-only users (no contexts assigned) see a minimal bar. Users with
-  # contexts get a "Back to app" link.
+  # Sidebar + main shell, mirroring `app/1` but for the read-only wiki.
+  # The sidebar has: logo, context selector, search, and wiki navigation
+  # (categories + sections). Wiki-only users see "Back to app" in the footer.
 
   attr :flash, :map, required: true
   attr :current_user, :string, default: nil
   attr :context_slug, :string, default: nil
   attr :contexts, :list, default: []
   attr :page_title, :string, default: nil
+  attr :live_action, :atom, default: nil
+  attr :search_query, :string, default: ""
+  attr :search_results, :list, default: nil
+  attr :wiki_context, :map, default: nil
+  attr :type_index, :list, default: []
+  attr :collections, :list, default: []
+  attr :pinned_pages, :list, default: []
 
   slot :inner_block, required: true
 
   def wiki(assigns) do
     ~H"""
-    <div class="min-h-screen bg-base-100 text-base-content flex flex-col">
-      <header class="border-b border-base-300 bg-base-200/50 sticky top-0 z-30 backdrop-blur-sm">
-        <div class="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div class="flex items-center gap-3">
+    <div class="flex h-screen bg-base-100 text-base-content">
+      <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
+        <div class="p-4 border-b border-base-300">
+          <div class="flex items-center gap-2">
             <a
               href={~p"/"}
-              class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80"
+              class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
             >
               <.icon name="hero-book-open" class="size-5 text-primary" />
-              <span class="text-lg font-bold tracking-tight">Dran Wiki</span>
+              <span class="text-lg font-bold tracking-tight">Wiki</span>
             </a>
-            <span :if={@page_title} class="text-base-content/30">/</span>
-            <span :if={@page_title} class="text-sm text-base-content/60 truncate max-w-xs sm:max-w-sm">
-              {@page_title}
-            </span>
-          </div>
-          <div class="flex items-center gap-3">
-            <a
-              :if={@contexts != []}
-              href={~p"/panel"}
-              class="btn btn-ghost btn-sm gap-1.5"
-              title={gettext("Back to app")}
-            >
-              <.icon name="hero-arrow-left" class="size-4" />
-              <span class="hidden sm:inline">{gettext("App")}</span>
-            </a>
-            <.user_footer current_user={@current_user} />
+            <.wiki_context_selector
+              context_slug={@context_slug}
+              contexts={@contexts}
+            />
           </div>
         </div>
-      </header>
 
-      <main class="flex-1">
+        <div class="p-3 border-b border-base-300">
+          <form phx-change="wiki_search" phx-submit="wiki_search" class="relative">
+            <.icon
+              name="hero-magnifying-glass"
+              class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
+            />
+            <input
+              type="text"
+              name="q"
+              value={@search_query}
+              placeholder={gettext("Search wiki...")}
+              class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          </form>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto p-2 space-y-4">
+          <.wiki_sidebar_nav
+            context_slug={@context_slug}
+            live_action={@live_action}
+            type_index={@type_index}
+            collections={@collections}
+            pinned_pages={@pinned_pages}
+          />
+        </nav>
+
+        <div class="p-3 border-t border-base-300 space-y-2">
+          <a
+            :if={@contexts != []}
+            href={~p"/panel"}
+            class="btn btn-ghost btn-xs gap-1.5 w-full justify-start"
+            title={gettext("Panel")}
+          >
+            <.icon name="hero-squares-2x2" class="size-4" />
+            {gettext("Panel")}
+          </a>
+          <.user_footer current_user={@current_user} />
+        </div>
+      </aside>
+
+      <div class="flex-1 overflow-y-auto flex flex-col w-full">
         {render_slot(@inner_block)}
-      </main>
+      </div>
 
       <.flash_group flash={@flash} />
     </div>
+    """
+  end
+
+  # ── Wiki context selector ────────────────────────────────────────────────
+
+  attr :context_slug, :string, default: nil
+  attr :contexts, :list, default: []
+
+  defp wiki_context_selector(assigns) do
+    ~H"""
+    <div :if={length(@contexts) > 0} class="flex-1">
+      <select
+        id="wiki-context-selector"
+        class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
+        onchange="window.location.href = this.value"
+      >
+        <option value={~p"/"} selected={!@context_slug}>
+          {gettext("All contexts")}
+        </option>
+        <option :for={ctx <- @contexts} value={~p"/#{ctx.slug}"} selected={ctx.slug == @context_slug}>
+          {ctx.name}
+        </option>
+      </select>
+    </div>
+    """
+  end
+
+  # ── Wiki sidebar navigation ──────────────────────────────────────────────
+
+  attr :context_slug, :string, default: nil
+  attr :live_action, :atom, default: nil
+  attr :type_index, :list, default: []
+  attr :collections, :list, default: []
+  attr :pinned_pages, :list, default: []
+
+  defp wiki_sidebar_nav(assigns) do
+    ~H"""
+    <div :if={!@context_slug}>
+      <div class="space-y-1">
+        <a
+          href={~p"/"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 text-base-content/80 hover:bg-base-200 hover:text-base-content"
+        >
+          <.icon name="hero-home" class="size-4 shrink-0" />
+          <span>{gettext("Home")}</span>
+        </a>
+      </div>
+    </div>
+
+    <div :if={@context_slug}>
+      <div class="space-y-1">
+        <a
+          href={~p"/#{@context_slug}"}
+          class={[
+            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+            @live_action == :context_home &&
+              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
+            @live_action != :context_home &&
+              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
+          ]}
+        >
+          <.icon name="hero-home" class="size-4 shrink-0" />
+          <span>{gettext("Home")}</span>
+        </a>
+        <a
+          href={~p"/#{@context_slug}/graph"}
+          class={[
+            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+            @live_action == :graph &&
+              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
+            @live_action != :graph &&
+              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
+          ]}
+        >
+          <.icon name="hero-share" class="size-4 shrink-0" />
+          <span>{gettext("Graph")}</span>
+        </a>
+      </div>
+    </div>
+
+    <details :if={@context_slug && @pinned_pages != []} open class="group">
+      <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
+        <.icon
+          name="hero-chevron-right"
+          class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+        />
+        {gettext("Pinned")}
+      </summary>
+      <div class="space-y-1 mt-1">
+        <a
+          :for={page <- @pinned_pages}
+          href={~p"/#{@context_slug}/type/#{page.page_type}/#{page.slug}"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name="hero-bookmark" class="size-4 shrink-0 text-amber-500" />
+          <span class="truncate">{page.title}</span>
+        </a>
+      </div>
+    </details>
+
+    <details :if={@context_slug && @collections != []} open class="group">
+      <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
+        <.icon
+          name="hero-chevron-right"
+          class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+        />
+        {gettext("Collections")}
+      </summary>
+      <div class="space-y-1 mt-1">
+        <a
+          :for={coll <- @collections}
+          href={~p"/#{@context_slug}/collection/#{coll.slug}"}
+          class={[
+            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+            @live_action == :collection &&
+              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
+            @live_action != :collection &&
+              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
+          ]}
+        >
+          <.icon name="hero-funnel" class="size-4 shrink-0" />
+          <span class="truncate">{coll.title}</span>
+        </a>
+      </div>
+    </details>
+
+    <details :if={@context_slug && @type_index != []} open class="group">
+      <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
+        <.icon
+          name="hero-chevron-right"
+          class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+        />
+        {gettext("Categories")}
+      </summary>
+      <div class="space-y-1 mt-1">
+        <a
+          :for={item <- @type_index}
+          href={~p"/#{@context_slug}/type/#{item.type}"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name={item.icon} class="size-4 shrink-0" />
+          <span>{item.label}</span>
+          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
+            {item.count}
+          </span>
+        </a>
+      </div>
+    </details>
     """
   end
 end

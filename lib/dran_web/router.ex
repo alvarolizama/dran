@@ -178,6 +178,10 @@ defmodule DranWeb.Router do
     live "/queries/new", PageNewLive, :new
     live "/queries/:slug", QueryLive, :show
 
+    # Communities (clusters of related pages)
+    live "/communities", CommunityLive, :index
+    live "/communities/:id", CommunityLive, :show
+
     live "/goals", GoalLive, :index
     live "/goals/new", PageNewLive, :new
     live "/goals/:slug", GoalLive, :show

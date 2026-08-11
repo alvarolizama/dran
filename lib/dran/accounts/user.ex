@@ -8,6 +8,7 @@ defmodule Dran.Accounts.User do
     field :google_id, :string
     field :avatar_url, :string
     field :is_admin, :boolean, default: false
+    field :is_editor, :boolean, default: false
     field :api_token, :string
     field :password_hash, :string
     field :default_context_slug, :string
@@ -29,6 +30,7 @@ defmodule Dran.Accounts.User do
       :google_id,
       :avatar_url,
       :is_admin,
+      :is_editor,
       :api_token,
       :default_context_slug
     ])

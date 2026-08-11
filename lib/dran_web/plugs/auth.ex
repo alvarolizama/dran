@@ -31,6 +31,7 @@ defmodule DranWeb.Plugs.Auth do
 
   @session_key :user
   @admin_key :is_admin
+  @editor_key :is_editor
   @context_key :context_slug
   @context_cookie "dran_last_context"
   # 30 days in seconds
@@ -63,9 +64,16 @@ defmodule DranWeb.Plugs.Auth do
         %{is_admin: admin?} -> admin?
       end
 
+    is_editor =
+      case Dran.Accounts.get_user_by_email(username) do
+        nil -> false
+        %{is_editor: editor?} -> editor?
+      end
+
     conn
     |> put_session(@session_key, username)
     |> put_session(@admin_key, is_admin)
+    |> put_session(@editor_key, is_editor)
     |> put_context(context_slug)
   end
 
@@ -73,6 +81,7 @@ defmodule DranWeb.Plugs.Auth do
     conn
     |> delete_session(@session_key)
     |> delete_session(@admin_key)
+    |> delete_session(@editor_key)
     |> delete_session(@context_key)
     |> delete_resp_cookie(@context_cookie)
   end
@@ -121,17 +130,19 @@ defmodule DranWeb.Plugs.Auth do
     # assigned contexts. SEC-002: fail closed — a session user with no row in
     # the users table gets NO contexts and is NOT admin (previously nil ->
     # {all_contexts, true}, which escalated deleted users to full admin).
-    {accessible_contexts, is_admin} =
+    {accessible_contexts, is_admin, is_editor} =
       case Dran.Accounts.get_user_by_email(current_user) do
-        nil -> {[], false}
-        %{is_admin: true} -> {contexts, true}
-        user -> {Dran.Accounts.list_user_contexts(user), false}
+        nil -> {[], false, false}
+        %{is_admin: true} -> {contexts, true, false}
+        %{is_editor: true} = user -> {Dran.Accounts.list_user_contexts(user), false, true}
+        user -> {Dran.Accounts.list_user_contexts(user), false, false}
       end
 
     socket =
       socket
       |> Phoenix.Component.assign(:current_user, current_user)
       |> Phoenix.Component.assign(:is_admin, is_admin)
+      |> Phoenix.Component.assign(:is_editor, is_editor)
       |> Phoenix.Component.assign(:context_slug, context_slug)
       |> Phoenix.Component.assign(:contexts, accessible_contexts)
       |> Phoenix.Component.assign(:page_counts, page_counts)

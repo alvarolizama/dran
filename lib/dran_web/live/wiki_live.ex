@@ -33,7 +33,16 @@ defmodule DranWeb.WikiLive do
   @impl true
   def mount(_params, session, socket) do
     {socket, _context} = Auth.assign_to_socket(socket, session)
-    {:ok, assign(socket, graph_data: %{nodes: [], edges: []})}
+
+    {:ok,
+     assign(socket,
+       graph_data: %{nodes: [], edges: []},
+       search_query: "",
+       search_results: nil,
+       type_index: [],
+       collections: [],
+       pinned_pages: []
+     )}
   end
 
   # ── Handle params ──────────────────────────────────────────────────────────
@@ -52,7 +61,11 @@ defmodule DranWeb.WikiLive do
     |> assign(
       contexts: contexts,
       context: nil,
-      page_title: gettext("Wiki")
+      page_title: gettext("Wiki"),
+      type_index: [],
+      collections: [],
+      pinned_pages: [],
+      search_results: nil
     )
   end
 
@@ -71,7 +84,8 @@ defmodule DranWeb.WikiLive do
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
-          page_title: context.name
+          page_title: context.name,
+          search_results: nil
         )
 
       _ ->
@@ -97,13 +111,22 @@ defmodule DranWeb.WikiLive do
         # Group by first letter for A-Z index
         grouped = group_alphabetically(pages)
 
+        # Sidebar data
+        collections = SmartCollection.list_all(context.id)
+        pinned = Brain.list_pinned_pages(context.id)
+        type_index = build_type_index(context)
+
         socket
         |> assign(
           context: context,
           page_type: page_type,
           pages: pages,
           grouped_pages: grouped,
-          page_title: "#{context.name} · #{PageTypes.label(page_type)}"
+          page_title: "#{context.name} · #{PageTypes.label(page_type)}",
+          collections: collections,
+          pinned_pages: pinned,
+          type_index: type_index,
+          search_results: nil
         )
 
       _ ->
@@ -127,13 +150,22 @@ defmodule DranWeb.WikiLive do
             rendered_body = render_wiki_markdown(page.body, context)
             relations = Brain.list_relations_for_page(page.id)
 
+            # Sidebar data
+            collections = SmartCollection.list_all(context.id)
+            pinned = Brain.list_pinned_pages(context.id)
+            type_index = build_type_index(context)
+
             socket
             |> assign(
               context: context,
               page: page,
               rendered_body: rendered_body,
               relations: relations,
-              page_title: page.title
+              page_title: page.title,
+              collections: collections,
+              pinned_pages: pinned,
+              type_index: type_index,
+              search_results: nil
             )
 
           _ ->
@@ -158,12 +190,21 @@ defmodule DranWeb.WikiLive do
             query = Map.get(collection.meta || %{}, "query", %{})
             results = SmartCollection.execute(query, context.id)
 
+            # Sidebar data
+            all_collections = SmartCollection.list_all(context.id)
+            pinned = Brain.list_pinned_pages(context.id)
+            type_index = build_type_index(context)
+
             socket
             |> assign(
               context: context,
               collection: collection,
               results: results,
-              page_title: collection.title
+              page_title: collection.title,
+              collections: all_collections,
+              pinned_pages: pinned,
+              type_index: type_index,
+              search_results: nil
             )
         end
 
@@ -179,11 +220,20 @@ defmodule DranWeb.WikiLive do
       %{wiki_enabled: true} = context ->
         graph_data = Brain.graph_data(context.id)
 
+        # Sidebar data
+        collections = SmartCollection.list_all(context.id)
+        pinned = Brain.list_pinned_pages(context.id)
+        type_index = build_type_index(context)
+
         socket
         |> assign(
           context: context,
           graph_data: graph_data,
-          page_title: "#{context.name} · Graph"
+          page_title: "#{context.name} · Graph",
+          collections: collections,
+          pinned_pages: pinned,
+          type_index: type_index,
+          search_results: nil
         )
 
       _ ->
@@ -202,38 +252,52 @@ defmodule DranWeb.WikiLive do
       context_slug={@context && @context.slug}
       contexts={@contexts}
       page_title={@page_title}
+      live_action={@live_action}
+      search_query={@search_query}
+      search_results={@search_results}
+      type_index={@type_index}
+      collections={@collections}
+      pinned_pages={@pinned_pages}
     >
-      <%= case @live_action do %>
-        <% :index -> %>
-          <.index_view contexts={@contexts} />
-        <% :context_home -> %>
-          <.context_home_view
-            context={@context}
-            collections={@collections}
-            pinned_pages={@pinned_pages}
-            type_index={@type_index}
-          />
-        <% :type_list -> %>
-          <.type_list_view
-            context={@context}
-            page_type={@page_type}
-            grouped_pages={@grouped_pages}
-          />
-        <% :page_show -> %>
-          <.page_show_view
-            context={@context}
-            page={@page}
-            rendered_body={@rendered_body}
-            relations={@relations}
-          />
-        <% :collection -> %>
-          <.collection_view
-            context={@context}
-            collection={@collection}
-            results={@results}
-          />
-        <% :graph -> %>
-          <.graph_view context={@context} />
+      <%= if @search_results do %>
+        <.search_results_view
+          context={@context}
+          search_query={@search_query}
+          search_results={@search_results}
+        />
+      <% else %>
+        <%= case @live_action do %>
+          <% :index -> %>
+            <.index_view contexts={@contexts} />
+          <% :context_home -> %>
+            <.context_home_view
+              context={@context}
+              collections={@collections}
+              pinned_pages={@pinned_pages}
+              type_index={@type_index}
+            />
+          <% :type_list -> %>
+            <.type_list_view
+              context={@context}
+              page_type={@page_type}
+              grouped_pages={@grouped_pages}
+            />
+          <% :page_show -> %>
+            <.page_show_view
+              context={@context}
+              page={@page}
+              rendered_body={@rendered_body}
+              relations={@relations}
+            />
+          <% :collection -> %>
+            <.collection_view
+              context={@context}
+              collection={@collection}
+              results={@results}
+            />
+          <% :graph -> %>
+            <.graph_view context={@context} />
+        <% end %>
       <% end %>
     </Layouts.wiki>
     """
@@ -241,9 +305,56 @@ defmodule DranWeb.WikiLive do
 
   # ── Views ───────────────────────────────────────────────────────────────────
 
+  defp search_results_view(assigns) do
+    ~H"""
+    <div class="px-6 py-8">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold">{gettext("Search results")}</h1>
+        <p class="text-base-content/60 mt-1">
+          {gettext("Results for")} <span class="font-medium">"{@search_query}"</span>
+        </p>
+      </div>
+
+      <div :if={@search_results == []} class="text-center py-12">
+        <.icon
+          name="hero-document-magnifying-glass"
+          class="size-10 text-base-content/30 mx-auto mb-3"
+        />
+        <p class="text-base-content/50">{gettext("No pages found.")}</p>
+      </div>
+
+      <div :if={@search_results != []} class="space-y-2">
+        <.link
+          :for={result <- @search_results}
+          navigate={wiki_page_path(@context, result)}
+          class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 min-w-0">
+              <.icon
+                name={PageTypes.icon(result.page_type)}
+                class="size-4 text-base-content/40 group-hover:text-primary transition-colors shrink-0"
+              />
+              <span class="font-medium truncate group-hover:text-primary transition-colors">
+                {result.title}
+              </span>
+            </div>
+            <span class="text-xs text-base-content/50 shrink-0 ml-2">
+              {PageTypes.label(result.page_type)}
+            </span>
+          </div>
+          <p :if={result[:excerpt]} class="text-sm text-base-content/60 mt-1 line-clamp-2">
+            {raw(result.excerpt)}
+          </p>
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
   defp index_view(assigns) do
     ~H"""
-    <div class="max-w-5xl mx-auto px-6 py-10">
+    <div class="px-6 py-10">
       <div class="mb-8">
         <h1 class="text-3xl font-bold tracking-tight">Wiki</h1>
         <p class="text-base-content/60 mt-2">
@@ -287,7 +398,7 @@ defmodule DranWeb.WikiLive do
 
   defp context_home_view(assigns) do
     ~H"""
-    <div class="max-w-5xl mx-auto px-6 py-8 space-y-10">
+    <div class="px-6 py-8 space-y-10">
       <%!-- Context header --%>
       <div>
         <h1 class="text-3xl font-bold tracking-tight">{@context.name}</h1>
@@ -392,7 +503,7 @@ defmodule DranWeb.WikiLive do
 
   defp type_list_view(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto px-6 py-8">
+    <div class="px-6 py-8">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
           <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
@@ -437,7 +548,7 @@ defmodule DranWeb.WikiLive do
 
   defp page_show_view(assigns) do
     ~H"""
-    <div class="max-w-3xl mx-auto px-6 py-8">
+    <div class="px-6 py-8">
       <%!-- Breadcrumb --%>
       <div class="flex items-center gap-2 mb-4 text-sm text-base-content/50">
         <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
@@ -534,7 +645,7 @@ defmodule DranWeb.WikiLive do
 
   defp collection_view(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto px-6 py-8">
+    <div class="px-6 py-8">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
           <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
@@ -593,7 +704,7 @@ defmodule DranWeb.WikiLive do
   defp graph_view(assigns) do
     ~H"""
     <div class="h-[calc(100vh-4rem)]">
-      <div class="max-w-5xl mx-auto px-6 pt-4 pb-2">
+      <div class="px-6 pt-4 pb-2">
         <div class="flex items-center gap-2 text-sm text-base-content/50 mb-1">
           <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
             {@context.name}
@@ -615,6 +726,31 @@ defmodule DranWeb.WikiLive do
   # ── Event handlers ──────────────────────────────────────────────────────────
 
   @impl true
+  def handle_event("wiki_search", %{"q" => query}, socket) do
+    query = String.trim(query)
+
+    results =
+      if query == "" do
+        nil
+      else
+        context = socket.assigns[:context]
+
+        opts =
+          if context do
+            [context_id: context.id, limit: 30]
+          else
+            [limit: 30]
+          end
+
+        case Brain.search(query, opts) do
+          {:ok, res} -> res
+          _ -> []
+        end
+      end
+
+    {:noreply, assign(socket, search_query: query, search_results: results)}
+  end
+
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -732,5 +868,29 @@ defmodule DranWeb.WikiLive do
         add_tag_attributes: %{"a" => ["data-wikilink"], "code" => ["class"]}
       ]
     ]
+  end
+
+  # Build a wiki URL for a search result. Search results carry page_type + slug;
+  # if a context is active, the URL includes its slug so navigation stays in scope.
+  defp wiki_page_path(nil, result) do
+    # No active context — try to resolve the page's context from its fields.
+    # Fall back to the generic wiki root.
+    page_type = Map.get(result, :page_type) || Map.get(result, "page_type")
+    slug = Map.get(result, :slug) || Map.get(result, "slug")
+
+    if page_type && slug do
+      # We don't have a context slug, so we can't build a wiki path.
+      # The search result may include context_id but not the slug.
+      # Fallback: point to the wiki root.
+      ~p"/"
+    else
+      ~p"/"
+    end
+  end
+
+  defp wiki_page_path(context, result) do
+    page_type = Map.get(result, :page_type) || Map.get(result, "page_type")
+    slug = Map.get(result, :slug) || Map.get(result, "slug")
+    ~p"/#{context.slug}/type/#{page_type}/#{slug}"
   end
 end

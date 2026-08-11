@@ -58,6 +58,10 @@ defmodule DranWeb.SettingsLive do
         slug_touched: false,
         managing_context_id: nil,
         page_types_context_id: nil,
+        managing_wiki_id: nil,
+        show_user_modal: false,
+        show_context_modal: false,
+        context_user_search: "",
         api_keys: Dran.Accounts.list_api_keys(),
         new_api_key_form: to_form(%{}, as: :api_key),
         revealed_api_key: nil,
@@ -128,6 +132,16 @@ defmodule DranWeb.SettingsLive do
   # -- Admin: user & context management ---------------------------------------
 
   @impl true
+  def handle_event("open_user_modal", _params, socket) do
+    {:noreply, assign(socket, show_user_modal: true)}
+  end
+
+  @impl true
+  def handle_event("close_user_modal", _params, socket) do
+    {:noreply, assign(socket, show_user_modal: false)}
+  end
+
+  @impl true
   def handle_event("create_user", %{"user" => params}, socket) do
     email = Map.get(params, "email", "")
     name = Map.get(params, "name", "")
@@ -144,6 +158,7 @@ defmodule DranWeb.SettingsLive do
         socket
         |> assign_users()
         |> assign_new_user_form()
+        |> assign(show_user_modal: false)
         |> put_flash(:info, "User created: #{email}")
 
       {:error, changeset} ->
@@ -166,6 +181,40 @@ defmodule DranWeb.SettingsLive do
         put_flash(socket, :error, "Could not delete user")
     end
     |> then(&{:noreply, &1})
+  end
+
+  @impl true
+  def handle_event("copy_user_token", %{"id" => id}, socket) do
+    user = Dran.Accounts.get_user!(id)
+
+    if user.api_token do
+      {:noreply,
+       socket
+       |> push_event("copy_to_clipboard", %{text: user.api_token})
+       |> put_flash(:info, gettext("API token copied to clipboard."))}
+    else
+      {:noreply, put_flash(socket, :error, gettext("User has no API token."))}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_editor", %{"id" => id}, socket) do
+    user = Dran.Accounts.get_user!(id)
+    changeset = Dran.Accounts.User.changeset(user, %{is_editor: !user.is_editor})
+
+    case Dran.Repo.update(changeset) do
+      {:ok, _} ->
+        {:noreply, assign_users(socket)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update editor status."))}
+    end
+  end
+
+  @impl true
+  def handle_event("copy_api_key_prefix", %{"id" => id}, socket) do
+    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
+    {:noreply, push_event(socket, "copy_to_clipboard", %{text: key.token_prefix})}
   end
 
   @impl true
@@ -291,12 +340,27 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("manage_context_users", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :managing_context_id, id)}
+    {:noreply, assign(socket, managing_context_id: id, context_user_search: "")}
   end
 
   @impl true
   def handle_event("close_context_users", _params, socket) do
-    {:noreply, assign(socket, :managing_context_id, nil)}
+    {:noreply, assign(socket, managing_context_id: nil, context_user_search: "")}
+  end
+
+  @impl true
+  def handle_event("search_context_users", %{"q" => q}, socket) do
+    {:noreply, assign(socket, context_user_search: q)}
+  end
+
+  @impl true
+  def handle_event("manage_wiki", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :managing_wiki_id, id)}
+  end
+
+  @impl true
+  def handle_event("close_wiki", _params, socket) do
+    {:noreply, assign(socket, :managing_wiki_id, nil)}
   end
 
   @impl true
@@ -379,6 +443,16 @@ defmodule DranWeb.SettingsLive do
   end
 
   @impl true
+  def handle_event("open_context_modal", _params, socket) do
+    {:noreply, assign(socket, show_context_modal: true)}
+  end
+
+  @impl true
+  def handle_event("close_context_modal", _params, socket) do
+    {:noreply, assign(socket, show_context_modal: false)}
+  end
+
+  @impl true
   def handle_event("validate_context", %{"context" => params, "_target" => target}, socket) do
     name = params["name"] || ""
     slug_touched = socket.assigns[:slug_touched] || false
@@ -399,6 +473,14 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("create_context", %{"context" => params}, socket) do
+    # Slug always derives from name — user never edits it directly.
+    params =
+      if is_nil(params["slug"]) or params["slug"] == "" do
+        Map.put(params, "slug", Slug.slugify(params["name"] || ""))
+      else
+        params
+      end
+
     case Dran.Brain.create_context(params) do
       {:ok, _context} ->
         {:noreply,
@@ -406,6 +488,7 @@ defmodule DranWeb.SettingsLive do
          |> assign_contexts()
          |> assign_new_context_form()
          |> assign(:slug_touched, false)
+         |> assign(:show_context_modal, false)
          |> put_flash(:info, gettext("Context created"))}
 
       {:error, changeset} ->
@@ -847,8 +930,13 @@ defmodule DranWeb.SettingsLive do
           </div>
 
           <%!-- Tab content --%>
-          <div :if={@active_tab == "users"}>
-            <.users_section users={@users} all_contexts={@all_contexts} form={@new_user_form} />
+          <div :if={@active_tab == "users"} id="users-tab" phx-hook=".CopyUserToken">
+            <.users_section
+              users={@users}
+              all_contexts={@all_contexts}
+              form={@new_user_form}
+              show_user_modal={@show_user_modal}
+            />
           </div>
 
           <div :if={@active_tab == "contexts"}>
@@ -859,11 +947,14 @@ defmodule DranWeb.SettingsLive do
               confirm_delete_context_id={@confirm_delete_context_id}
               managing_context_id={@managing_context_id}
               page_types_context_id={@page_types_context_id}
+              managing_wiki_id={@managing_wiki_id}
+              context_user_search={@context_user_search}
               context_slug={@context_slug}
+              show_context_modal={@show_context_modal}
             />
           </div>
 
-          <div :if={@active_tab == "api_keys"}>
+          <div :if={@active_tab == "api_keys"} id="api-keys-tab" phx-hook=".CopyUserToken">
             <.api_keys_section
               api_keys={@api_keys}
               all_contexts={@all_contexts}
@@ -1920,7 +2011,18 @@ defmodule DranWeb.SettingsLive do
                     </span>
                   </td>
                   <td>
-                    <code class="text-xs">{key.token_prefix}••••••••••••</code>
+                    <div class="flex items-center gap-1">
+                      <code class="text-xs">{key.token_prefix}••••••••••••</code>
+                      <button
+                        type="button"
+                        phx-click="copy_api_key_prefix"
+                        phx-value-id={key.id}
+                        class="btn btn-ghost btn-xs p-1"
+                        title={gettext("Copy prefix")}
+                      >
+                        <.icon name="hero-clipboard-document" class="size-3.5" />
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <span :if={key.revoked_at} class="badge badge-error badge-sm">
@@ -2050,6 +2152,31 @@ defmodule DranWeb.SettingsLive do
           }
         }
       </script>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyUserToken">
+        export default {
+          mounted() {
+            this.handleEvent("copy_to_clipboard", ({ text }) => {
+              const fallback = () => {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.setAttribute("readonly", "");
+                ta.style.position = "absolute";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand("copy"); } catch (_e) { /* noop */ }
+                document.body.removeChild(ta);
+              };
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(fallback);
+              } else {
+                fallback();
+              }
+            });
+          }
+        }
+      </script>
     </div>
     """
   end
@@ -2057,13 +2184,23 @@ defmodule DranWeb.SettingsLive do
   attr :users, :list, required: true
   attr :all_contexts, :list, required: true
   attr :form, :map, required: true
+  attr :show_user_modal, :boolean, default: false
 
   def users_section(assigns) do
     ~H"""
     <div class="space-y-6">
-      <div>
-        <h2 class="text-heading">{gettext("Users")}</h2>
-        <p class="text-caption mt-0.5">{gettext("Manage users and their context access.")}</p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-heading">{gettext("Users")}</h2>
+          <p class="text-caption mt-0.5">{gettext("Manage users and their context access.")}</p>
+        </div>
+        <button
+          phx-click="open_user_modal"
+          class="btn btn-primary btn-sm gap-1.5"
+        >
+          <.icon name="hero-plus" class="size-4" />
+          {gettext("Add User")}
+        </button>
       </div>
 
       <%!-- Google open signup toggle --%>
@@ -2092,36 +2229,6 @@ defmodule DranWeb.SettingsLive do
         </div>
       </div>
 
-      <%!-- Add new user form --%>
-      <div class="card bg-base-100 border border-base-300">
-        <div class="card-body">
-          <h3 class="text-lg font-semibold">{gettext("Add User")}</h3>
-          <.form for={@form} phx-submit="create_user" class="space-y-3">
-            <div class="grid grid-cols-2 gap-3">
-              <.input field={@form[:email]} label={gettext("Email")} type="email" required />
-              <.input field={@form[:name]} label={gettext("Name")} />
-            </div>
-
-            <div>
-              <label class="text-sm font-medium">{gettext("Contexts")}</label>
-              <div class="flex flex-wrap gap-2 mt-2">
-                <label :for={ctx <- @all_contexts} class="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="user[context_ids][]"
-                    value={ctx.id}
-                    class="checkbox checkbox-sm"
-                  />
-                  <span class="text-sm">{ctx.name}</span>
-                </label>
-              </div>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-sm">{gettext("Create User")}</button>
-          </.form>
-        </div>
-      </div>
-
       <%!-- Users list --%>
       <div class="card bg-base-100 border border-base-300">
         <div class="card-body">
@@ -2133,6 +2240,7 @@ defmodule DranWeb.SettingsLive do
                   <th>{gettext("Email")}</th>
                   <th>{gettext("Name")}</th>
                   <th>{gettext("Admin")}</th>
+                  <th>{gettext("Editor")}</th>
                   <th>{gettext("Contexts")}</th>
                   <th>{gettext("Default context")}</th>
                   <th>{gettext("API Token")}</th>
@@ -2145,6 +2253,15 @@ defmodule DranWeb.SettingsLive do
                   <td>{user.name}</td>
                   <td>
                     <span :if={user.is_admin} class="badge badge-primary badge-sm">Admin</span>
+                  </td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={user.is_editor}
+                      phx-click="toggle_editor"
+                      phx-value-id={user.id}
+                      class="checkbox checkbox-sm checkbox-secondary"
+                    />
                   </td>
                   <td>
                     <div class="flex flex-wrap gap-1">
@@ -2175,7 +2292,18 @@ defmodule DranWeb.SettingsLive do
                     </form>
                   </td>
                   <td>
-                    <code class="text-xs">{String.slice(user.api_token, 0, 8)}...</code>
+                    <div class="flex items-center gap-1">
+                      <code class="text-xs">{String.slice(user.api_token, 0, 8)}...</code>
+                      <button
+                        type="button"
+                        phx-click="copy_user_token"
+                        phx-value-id={user.id}
+                        class="btn btn-ghost btn-xs p-1"
+                        title={gettext("Copy token")}
+                      >
+                        <.icon name="hero-clipboard-document" class="size-3.5" />
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <button
@@ -2193,6 +2321,64 @@ defmodule DranWeb.SettingsLive do
           </div>
         </div>
       </div>
+
+      <%!-- Add user modal --%>
+      <div
+        :if={@show_user_modal}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
+        <div
+          class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"
+          phx-click-away="close_user_modal"
+        >
+          <div class="card-body">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-lg font-semibold">{gettext("Add User")}</h3>
+              <button
+                phx-click="close_user_modal"
+                class="btn btn-ghost btn-xs btn-circle"
+              >
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </div>
+
+            <.form for={@form} phx-submit="create_user" class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <.input field={@form[:email]} label={gettext("Email")} type="email" required />
+                <.input field={@form[:name]} label={gettext("Name")} />
+              </div>
+
+              <div>
+                <label class="text-sm font-medium">{gettext("Contexts")}</label>
+                <div class="flex flex-wrap gap-2 mt-2">
+                  <label :for={ctx <- @all_contexts} class="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="user[context_ids][]"
+                      value={ctx.id}
+                      class="checkbox checkbox-sm"
+                    />
+                    <span class="text-sm">{ctx.name}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  phx-click="close_user_modal"
+                  class="btn btn-ghost btn-sm"
+                >
+                  {gettext("Cancel")}
+                </button>
+                <button type="submit" class="btn btn-primary btn-sm">
+                  {gettext("Create User")}
+                </button>
+              </div>
+            </.form>
+          </div>
+        </div>
+      </div>
     </div>
     """
   end
@@ -2203,71 +2389,30 @@ defmodule DranWeb.SettingsLive do
   attr :confirm_delete_context_id, :any, default: nil
   attr :managing_context_id, :any, default: nil
   attr :page_types_context_id, :any, default: nil
+  attr :managing_wiki_id, :any, default: nil
+  attr :context_user_search, :string, default: ""
   attr :context_slug, :string, default: nil
+
+  attr :show_context_modal, :boolean, default: false
 
   def contexts_section(assigns) do
     ~H"""
     <div class="space-y-6">
-      <div>
-        <h2 class="text-heading">{gettext("Contexts")}</h2>
-        <p class="text-caption mt-0.5">
-          {gettext("Create contexts and manage context access per user.")}
-        </p>
-      </div>
-
-      <%!-- Create context form --%>
-      <section class="surface-2 rounded-2xl overflow-hidden">
-        <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
-          <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
-            <.icon name="hero-plus" class="size-4 text-primary" />
-          </div>
-          <div class="min-w-0">
-            <h3 class="text-heading">{gettext("New context")}</h3>
-            <p class="text-caption mt-0.5">
-              {gettext("Create an isolated silo for your knowledge.")}
-            </p>
-          </div>
-        </header>
-
-        <.form
-          for={@form}
-          id="context-form"
-          phx-change="validate_context"
-          phx-submit="create_context"
-          class="px-5 py-5 space-y-4"
-        >
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <.input
-              field={@form[:name]}
-              type="text"
-              label={gettext("Name")}
-              placeholder={gettext("e.g. Personal")}
-              class="w-full"
-            />
-            <.input
-              field={@form[:slug]}
-              type="text"
-              label={gettext("Slug")}
-              placeholder={gettext("e.g. personal")}
-              class="w-full font-mono text-sm"
-            />
-          </div>
-          <p class="text-caption">
-            {gettext("The slug auto-derives from the name unless you edit it directly.")}
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-heading">{gettext("Contexts")}</h2>
+          <p class="text-caption mt-0.5">
+            {gettext("Create contexts and manage context access per user.")}
           </p>
-
-          <div class="flex justify-end pt-1">
-            <button
-              type="submit"
-              class="btn btn-primary btn-sm transition-colors active:scale-95"
-              phx-disable-with={gettext("Creating…")}
-            >
-              <.icon name="hero-plus" class="size-4" />
-              {gettext("Create")}
-            </button>
-          </div>
-        </.form>
-      </section>
+        </div>
+        <button
+          phx-click="open_context_modal"
+          class="btn btn-primary btn-sm gap-1.5"
+        >
+          <.icon name="hero-plus" class="size-4" />
+          {gettext("New context")}
+        </button>
+      </div>
 
       <%!-- Context list with user membership --%>
       <div class="space-y-4">
@@ -2294,28 +2439,39 @@ defmodule DranWeb.SettingsLive do
                     "%{count} members",
                     Enum.count(@users, &Dran.Accounts.user_in_context?(&1, ctx))
                   )}
+                  <span :if={ctx.wiki_enabled} class="text-primary">· Wiki</span>
                 </p>
               </div>
 
               <div class="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  phx-click="manage_page_types"
+                  phx-click="manage_context_users"
                   phx-value-id={ctx.id}
-                  class="btn btn-ghost btn-xs"
+                  class="btn btn-ghost btn-xs gap-1"
                 >
-                  <.icon name="hero-squares-2x2" class="size-3.5" />
-                  {gettext("Page types")}
+                  <.icon name="hero-users" class="size-3.5" />
+                  {gettext("Users")}
                 </button>
 
                 <button
                   type="button"
-                  phx-click="manage_context_users"
+                  phx-click="manage_wiki"
                   phx-value-id={ctx.id}
-                  class="btn btn-ghost btn-xs"
+                  class="btn btn-ghost btn-xs gap-1"
                 >
-                  <.icon name="hero-users" class="size-3.5" />
-                  {gettext("Manage users")}
+                  <.icon name="hero-book-open" class="size-3.5" />
+                  {gettext("Wiki")}
+                </button>
+
+                <button
+                  type="button"
+                  phx-click="manage_page_types"
+                  phx-value-id={ctx.id}
+                  class="btn btn-ghost btn-xs gap-1"
+                >
+                  <.icon name="hero-squares-2x2" class="size-3.5" />
+                  {gettext("Types")}
                 </button>
 
                 <%= if @confirm_delete_context_id == ctx.id do %>
@@ -2329,7 +2485,6 @@ defmodule DranWeb.SettingsLive do
                     class="btn btn-error btn-xs"
                   >
                     <.icon name="hero-check" class="size-3.5" />
-                    {gettext("Confirm")}
                   </button>
                   <button
                     type="button"
@@ -2355,11 +2510,68 @@ defmodule DranWeb.SettingsLive do
         </div>
       </div>
 
+      <%!-- New context modal --%>
+      <div
+        :if={@show_context_modal}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
+        <div
+          class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"
+          phx-click-away="close_context_modal"
+        >
+          <div class="card-body">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-lg font-semibold">{gettext("New context")}</h3>
+              <button
+                phx-click="close_context_modal"
+                class="btn btn-ghost btn-xs btn-circle"
+              >
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </div>
+
+            <.form
+              for={@form}
+              id="context-form"
+              phx-change="validate_context"
+              phx-submit="create_context"
+              class="space-y-4"
+            >
+              <.input
+                field={@form[:name]}
+                type="text"
+                label={gettext("Name")}
+                placeholder={gettext("e.g. Personal")}
+                class="w-full"
+                autofocus
+              />
+
+              <div class="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  phx-click="close_context_modal"
+                  class="btn btn-ghost btn-sm"
+                >
+                  {gettext("Cancel")}
+                </button>
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-sm transition-colors active:scale-95"
+                  phx-disable-with={gettext("Creating…")}
+                >
+                  <.icon name="hero-plus" class="size-4" />
+                  {gettext("Create")}
+                </button>
+              </div>
+            </.form>
+          </div>
+        </div>
+      </div>
+
       <%!-- Manage users modal --%>
       <div
         :if={@managing_context_id}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        phx-click="close_context_users"
       >
         <div
           class="card bg-base-100 w-full max-w-md shadow-xl border border-base-300"
@@ -2370,7 +2582,7 @@ defmodule DranWeb.SettingsLive do
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-lg font-semibold">
-                  {gettext("Manage users")}
+                  {gettext("Users")}
                 </h3>
                 <p class="text-caption mt-0.5">
                   {if managing_ctx, do: managing_ctx.name, else: ""}
@@ -2379,15 +2591,39 @@ defmodule DranWeb.SettingsLive do
               <button
                 type="button"
                 phx-click="close_context_users"
-                class="btn btn-ghost btn-xs"
+                class="btn btn-ghost btn-xs btn-circle"
               >
                 <.icon name="hero-x-mark" class="size-4" />
               </button>
             </div>
 
-            <div class="divide-y divide-base-300 mt-2">
+            <%!-- Search --%>
+            <form phx-change="search_context_users" class="relative mt-3">
+              <.icon
+                name="hero-magnifying-glass"
+                class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
+              />
+              <input
+                type="text"
+                name="q"
+                value={@context_user_search}
+                placeholder={gettext("Search users...")}
+                class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </form>
+
+            <div class="divide-y divide-base-300 mt-2 max-h-64 overflow-y-auto">
+              <% filtered_users =
+                @users
+                |> Enum.filter(fn user ->
+                  q = String.downcase(@context_user_search || "")
+
+                  q == "" or String.contains?(String.downcase(user.email), q) or
+                    (user.name && String.contains?(String.downcase(user.name), q))
+                end)
+                |> Enum.take(5) %>
               <label
-                :for={user <- @users}
+                :for={user <- filtered_users}
                 class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
               >
                 <div class="min-w-0">
@@ -2400,12 +2636,14 @@ defmodule DranWeb.SettingsLive do
                   phx-click="toggle_context_user"
                   phx-value-context_id={@managing_context_id}
                   phx-value-user_id={user.id}
-                  class="checkbox checkbox-sm"
+                  class="checkbox checkbox-sm checkbox-primary"
                 />
               </label>
 
-              <p :if={@users == []} class="text-caption py-4 text-center">
-                {gettext("No users yet — create one in the Users tab.")}
+              <p :if={filtered_users == []} class="text-caption py-4 text-center">
+                {if @users == [],
+                  do: gettext("No users yet — create one in the Users tab."),
+                  else: gettext("No users match your search.")}
               </p>
             </div>
           </div>
@@ -2416,7 +2654,6 @@ defmodule DranWeb.SettingsLive do
       <div
         :if={@page_types_context_id}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        phx-click="close_page_types"
       >
         <div
           class="card bg-base-100 w-full max-w-md shadow-xl border border-base-300"
@@ -2475,12 +2712,41 @@ defmodule DranWeb.SettingsLive do
                 />
               </label>
             </div>
+          </div>
+        </div>
+      </div>
 
-            <%!-- Wiki settings --%>
-            <div class="border-t border-base-300 mt-4 pt-4 space-y-3">
-              <h4 class="text-sm font-semibold">{gettext("Wiki")}</h4>
+      <%!-- Wiki modal --%>
+      <div
+        :if={@managing_wiki_id}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
+        <div
+          class="card bg-base-100 w-full max-w-md shadow-xl border border-base-300"
+          phx-click-away="close_wiki"
+        >
+          <div class="card-body">
+            <% wiki_ctx = Enum.find(@contexts, &(&1.id == @managing_wiki_id)) %>
+            <div class="flex items-start justify-between">
+              <div>
+                <h3 class="text-lg font-semibold">
+                  {gettext("Wiki")}
+                </h3>
+                <p class="text-caption mt-0.5">
+                  {if wiki_ctx, do: wiki_ctx.name, else: ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                phx-click="close_wiki"
+                class="btn btn-ghost btn-xs btn-circle"
+              >
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </div>
 
-              <label class="flex items-center justify-between gap-3 cursor-pointer hover:bg-base-200/50 px-2 py-1.5 rounded-lg transition-colors">
+            <div class="space-y-4 mt-2">
+              <label class="flex items-center justify-between gap-3 cursor-pointer hover:bg-base-200/50 px-2 py-2 rounded-lg transition-colors">
                 <div>
                   <p class="text-sm font-medium">{gettext("Enable wiki")}</p>
                   <p class="text-xs text-base-content/40">
@@ -2489,22 +2755,22 @@ defmodule DranWeb.SettingsLive do
                 </div>
                 <input
                   type="checkbox"
-                  checked={pt_ctx && pt_ctx.wiki_enabled}
+                  checked={wiki_ctx && wiki_ctx.wiki_enabled}
                   phx-click="toggle_wiki"
-                  phx-value-context_id={@page_types_context_id}
+                  phx-value-context_id={@managing_wiki_id}
                   class="toggle toggle-sm toggle-primary"
                 />
               </label>
 
-              <div :if={pt_ctx} class="px-2">
+              <div :if={wiki_ctx} class="px-2">
                 <label class="text-sm font-medium block mb-1">{gettext("Wiki description")}</label>
                 <textarea
                   class="textarea textarea-bordered w-full text-sm"
                   rows="2"
                   placeholder={gettext("Short description shown on the wiki home")}
                   phx-blur="update_wiki_description"
-                  phx-value-context_id={@page_types_context_id}
-                >{pt_ctx.wiki_description}</textarea>
+                  phx-value-context_id={@managing_wiki_id}
+                >{wiki_ctx.wiki_description}</textarea>
               </div>
             </div>
           </div>
