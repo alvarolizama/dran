@@ -393,6 +393,7 @@ defmodule DranWeb.Router do
     live "/:context_slug/type/:page_type/:slug", WikiLive, :page_show
     live "/:context_slug/collection/:slug", WikiLive, :collection
     live "/:context_slug/graph", WikiLive, :graph
+    get "/:context_slug/graph/json", WikiGraphController, :show
     live "/:context_slug/kanban", WikiLive, :kanban
     live "/:context_slug/letter/:letter", WikiLive, :letter
   end

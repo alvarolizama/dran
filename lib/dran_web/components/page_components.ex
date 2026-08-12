@@ -611,6 +611,11 @@ defmodule DranWeb.PageComponents do
     doc:
       "URL prefix for page navigation (e.g. \"/personal/type\"). nil = root-level \"/plural/slug\""
 
+  attr :graph_url, :string,
+    default: nil,
+    doc:
+      "URL for progressive graph JSON fetch. nil = panel default (\"/panel/graph-json\")"
+
   attr :class, :string, default: ""
   attr :style, :string, default: ""
 
@@ -638,6 +643,7 @@ defmodule DranWeb.PageComponents do
         data-graph={@graph_json}
         data-visible-types={@visible_types_json}
         data-base-path={@base_path}
+        data-graph-url={@graph_url}
         style="width: 100%; height: 100%; min-height: 300px;"
       />
     </div>

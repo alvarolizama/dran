@@ -65,6 +65,7 @@ defmodule DranWeb.SettingsLive do
         api_keys: Dran.Accounts.list_api_keys(),
         new_api_key_form: to_form(%{}, as: :api_key),
         revealed_api_key: nil,
+        show_api_key_modal: false,
         props_backfill: :idle,
         running_jobs: MapSet.new(),
         wiki_google_open_signup: Settings.get("wiki_google_open_signup") == true
@@ -88,7 +89,21 @@ defmodule DranWeb.SettingsLive do
 
   defp assign_users(socket) do
     users = Dran.Accounts.list_users()
-    assign(socket, users: users)
+    # Group: admins first, then editors, then regular users — alphabetical
+    # within each group.
+    grouped =
+      users
+      |> Enum.group_by(fn
+        %{is_admin: true} -> :admin
+        %{is_editor: true} -> :editor
+        _ -> :user
+      end)
+      |> Map.merge(%{admin: [], editor: [], user: []}, fn _k, v, _default -> v end)
+
+    sorted =
+      grouped[:admin] ++ grouped[:editor] ++ grouped[:user]
+
+    assign(socket, users: sorted)
   end
 
   defp assign_contexts(socket) do
@@ -238,6 +253,16 @@ defmodule DranWeb.SettingsLive do
   # -- Admin: context-scoped API keys ------------------------------------------
 
   @impl true
+  def handle_event("open_api_key_modal", _params, socket) do
+    {:noreply, assign(socket, show_api_key_modal: true)}
+  end
+
+  @impl true
+  def handle_event("close_api_key_modal", _params, socket) do
+    {:noreply, assign(socket, show_api_key_modal: false)}
+  end
+
+  @impl true
   def handle_event("create_api_key", %{"api_key" => params}, socket) do
     name = Map.get(params, "name", "") |> String.trim()
     context_id = Map.get(params, "context_id", "")
@@ -254,7 +279,8 @@ defmodule DranWeb.SettingsLive do
           |> assign(
             api_keys: Dran.Accounts.list_api_keys(),
             new_api_key_form: to_form(%{}, as: :api_key),
-            revealed_api_key: %{id: key.id, token: key.token}
+            revealed_api_key: %{id: key.id, token: key.token},
+            show_api_key_modal: false
           )
           |> put_flash(:info, gettext("API key created — copy it now, it won't be shown again"))
 
@@ -982,6 +1008,7 @@ defmodule DranWeb.SettingsLive do
               all_contexts={@all_contexts}
               form={@new_api_key_form}
               revealed_api_key={@revealed_api_key}
+              show_api_key_modal={@show_api_key_modal}
             />
           </div>
 
@@ -1916,17 +1943,27 @@ defmodule DranWeb.SettingsLive do
   attr :all_contexts, :list, required: true
   attr :form, :map, required: true
   attr :revealed_api_key, :map, default: nil
+  attr :show_api_key_modal, :boolean, default: false
 
   def api_keys_section(assigns) do
     ~H"""
     <div class="space-y-6">
-      <div>
-        <h2 class="text-heading">{gettext("API Keys")}</h2>
-        <p class="text-caption mt-0.5">
-          {gettext(
-            "Context-scoped keys for integrations and MCP clients. A key grants access to one context only — no user account needed."
-          )}
-        </p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-heading">{gettext("API Keys")}</h2>
+          <p class="text-caption mt-0.5">
+            {gettext(
+              "Context-scoped keys for integrations and MCP clients. A key grants access to one context only — no user account needed."
+            )}
+          </p>
+        </div>
+        <button
+          phx-click="open_api_key_modal"
+          class="btn btn-primary btn-sm gap-1.5"
+        >
+          <.icon name="hero-plus" class="size-4" />
+          {gettext("Add Key")}
+        </button>
       </div>
 
       <%!-- Newly created / regenerated token — shown ONCE --%>
@@ -1974,53 +2011,6 @@ defmodule DranWeb.SettingsLive do
               </span>
             </button>
           </div>
-        </div>
-      </div>
-
-      <%!-- Create new key form --%>
-      <div class="card bg-base-100 border border-base-300">
-        <div class="card-body">
-          <h3 class="text-lg font-semibold">{gettext("Create API Key")}</h3>
-          <.form for={@form} phx-submit="create_api_key" class="space-y-3" id="create-api-key-form">
-            <div class="grid grid-cols-2 gap-3">
-              <.input
-                field={@form[:name]}
-                label={gettext("Name")}
-                type="text"
-                placeholder={gettext("e.g. Hermes agent, backup script")}
-                required
-              />
-              <div class="form-control">
-                <label class="label">
-                  <span class="label-text">{gettext("Context")}</span>
-                </label>
-                <select name="api_key[context_id]" class="select select-bordered w-full" required>
-                  <option value="">{gettext("Select a context...")}</option>
-                  <option :for={ctx <- @all_contexts} value={ctx.id}>{ctx.name}</option>
-                </select>
-              </div>
-            </div>
-
-            <label class="label cursor-pointer justify-start gap-3 py-1">
-              <input
-                type="checkbox"
-                name="api_key[write_access]"
-                class="checkbox checkbox-sm checkbox-secondary"
-              />
-              <span class="label-text">
-                {gettext("Write access")}
-                <span class="text-base-content/50 text-xs">
-                  {gettext(
-                    "(unchecked = read-only: search, get pages, lint — no create/update/delete)"
-                  )}
-                </span>
-              </span>
-            </label>
-
-            <button type="submit" class="btn btn-primary btn-sm">
-              {gettext("Create Key")}
-            </button>
-          </.form>
         </div>
       </div>
 
@@ -2146,11 +2136,84 @@ defmodule DranWeb.SettingsLive do
                 </tr>
                 <tr :if={@api_keys == []}>
                   <td colspan="7" class="text-center text-base-content/50 py-6">
-                    {gettext("No API keys yet — create one above.")}
+                    {gettext("No API keys yet — create one with the button above.")}
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <%!-- Create API key modal --%>
+      <div
+        :if={@show_api_key_modal}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
+        <div
+          class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"
+          phx-click-away="close_api_key_modal"
+        >
+          <div class="card-body">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-lg font-semibold">{gettext("Create API Key")}</h3>
+              <button
+                phx-click="close_api_key_modal"
+                class="btn btn-ghost btn-xs btn-circle"
+              >
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </div>
+
+            <.form for={@form} phx-submit="create_api_key" class="space-y-3" id="create-api-key-form">
+              <div class="grid grid-cols-2 gap-3">
+                <.input
+                  field={@form[:name]}
+                  label={gettext("Name")}
+                  type="text"
+                  placeholder={gettext("e.g. Hermes agent, backup script")}
+                  required
+                />
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text">{gettext("Context")}</span>
+                  </label>
+                  <select name="api_key[context_id]" class="select select-bordered w-full" required>
+                    <option value="">{gettext("Select a context...")}</option>
+                    <option :for={ctx <- @all_contexts} value={ctx.id}>{ctx.name}</option>
+                  </select>
+                </div>
+              </div>
+
+              <label class="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  type="checkbox"
+                  name="api_key[write_access]"
+                  class="checkbox checkbox-sm checkbox-secondary"
+                />
+                <span class="label-text">
+                  {gettext("Write access")}
+                  <span class="text-base-content/50 text-xs">
+                    {gettext(
+                      "(unchecked = read-only: search, get pages, lint — no create/update/delete)"
+                    )}
+                  </span>
+                </span>
+              </label>
+
+              <div class="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  phx-click="close_api_key_modal"
+                  class="btn btn-ghost btn-sm"
+                >
+                  {gettext("Cancel")}
+                </button>
+                <button type="submit" class="btn btn-primary btn-sm">
+                  {gettext("Create Key")}
+                </button>
+              </div>
+            </.form>
           </div>
         </div>
       </div>
@@ -2307,8 +2370,8 @@ defmodule DranWeb.SettingsLive do
                 </tr>
               </thead>
               <tbody>
-                <tr :for={user <- @users}>
-                  <td>{user.email}</td>
+                <tr :for={user <- @users} id={"user-#{user.id}"}>
+                  <td class="font-medium">{user.email}</td>
                   <td>{user.name}</td>
                   <td>
                     <span :if={user.is_admin} class="badge badge-primary badge-sm">Admin</span>

@@ -803,22 +803,6 @@ defmodule DranWeb.Layouts do
           <.icon name="hero-view-columns" class="size-4 shrink-0" />
           <span>{gettext("Kanban")}</span>
         </a>
-        <a
-          :if={@counts[:projects] > 0}
-          href={~p"/#{@context_slug}/type/project"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name="hero-rocket-launch" class="size-4 shrink-0" />
-          <span>{gettext("Proyectos")}</span>
-        </a>
-        <a
-          :if={@counts[:goals] > 0}
-          href={~p"/#{@context_slug}/type/goal"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name="hero-flag" class="size-4 shrink-0" />
-          <span>{gettext("Objetivos")}</span>
-        </a>
       </div>
     </div>
 
@@ -885,6 +869,9 @@ defmodule DranWeb.Layouts do
     </div>
 
     <div :if={@context_slug && @type_index != []}>
+      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+        {gettext("Contenido")}
+      </h3>
       <div class="space-y-1">
         <a
           :for={item <- @type_index}

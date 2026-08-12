@@ -29,11 +29,22 @@ defmodule DranWeb.WikiLive do
   # Page types excluded from the wiki index — operational or second-citizen.
   @wiki_hidden_types ~w(todo plan report query)
 
+  # Types hidden from the global 3D graph — same list the panel uses via
+  # GraphCache. The wiki graph must match so both views render the same set.
+  @graph_hidden_types Dran.Brain.PageTypes.hidden_from_graph()
+
   # ── Mount ─────────────────────────────────────────────────────────────────
 
   @impl true
   def mount(_params, session, socket) do
-    {socket, _context} = Auth.assign_to_socket(socket, session)
+    {socket, context} = Auth.assign_to_socket(socket, session)
+
+    # Subscribe to PubSub for the context so the graph view can debounce
+    # page_changed broadcasts and tell the hook to re-fetch — same pattern
+    # as GraphLive (panel).
+    if context do
+      Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
+    end
 
     {:ok,
      assign(socket,
@@ -44,7 +55,19 @@ defmodule DranWeb.WikiLive do
        collections: [],
        pinned_pages: [],
        alphabet: [],
-       collection: nil
+       collection: nil,
+       # Progressive graph (mirrors GraphLive panel)
+       nodes: [],
+       edges: [],
+       visible_types: default_graph_visible_types(),
+       type_colors: sidebar_type_colors(),
+       type_counts: %{},
+       node_count: 0,
+       edge_count: 0,
+       total_node_count: 0,
+       total_edge_count: 0,
+       refetch_timer: nil,
+       loading: false
      )}
   end
 
@@ -231,29 +254,14 @@ defmodule DranWeb.WikiLive do
     end
   end
 
-  # ── :graph — graph view of the context ─────────────────────────────────────
+  # ── :graph — graph view of the context (progressive, mirrors GraphLive) ───
 
   defp apply_action(socket, :graph, %{"context_slug" => context_slug}) do
     case Brain.get_context_by_slug(context_slug) do
       %{wiki_enabled: true} = context ->
-        graph_data = Brain.graph_data(context.id)
-
-        # The Graph3D hook expects nodes with `label` + `color` (same shape
-        # GraphCache builds for the panel graph); Brain.graph_data returns
-        # `title` only, which would leave the hover overlay empty.
-        graph_data =
-          Map.update!(graph_data, :nodes, fn nodes ->
-            Enum.map(nodes, fn n ->
-              %{
-                id: n.id,
-                slug: n.slug,
-                label: n.title,
-                type: n.type,
-                color: Map.get(GraphHelpers.type_colors(), n.type, "#94A3B8")
-              }
-            end)
-          end)
-
+        # Progressive: no data load here — the Graph3D hook fetches
+        # /<context_slug>/graph/json via HTTP after the shell renders,
+        # keeping initial page load instant. Same pattern as GraphLive panel.
         # Sidebar data
         collections = SmartCollection.list_all(context.id)
         pinned = Brain.list_pinned_pages(context.id)
@@ -262,12 +270,13 @@ defmodule DranWeb.WikiLive do
         socket
         |> assign(
           context: context,
-          graph_data: graph_data,
+          graph_data: %{nodes: [], edges: []},
           page_title: "#{context.name} · Graph",
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
-          search_results: nil
+          search_results: nil,
+          loading: true
         )
 
       _ ->
@@ -354,6 +363,47 @@ defmodule DranWeb.WikiLive do
     end
   end
 
+  # ── Graph event handlers (mirror GraphLive panel) ─────────────────────────
+  # NOTE: handle_event clauses are grouped with the other event handlers near
+  # the bottom of this file to satisfy Elixir's clause-grouping requirement.
+  # node_click already exists there (pre-existing wiki graph navigation).
+
+  # ── Graph PubSub (mirror GraphLive panel) ──────────────────────────────────
+
+  @impl true
+  def handle_info({:page_changed, _action, _changed_page}, socket) do
+    # Only react on the graph view — other wiki actions ignore this broadcast.
+    if socket.assigns.live_action == :graph do
+      if socket.assigns.refetch_timer do
+        Process.cancel_timer(socket.assigns.refetch_timer)
+      end
+
+      timer = Process.send_after(self(), :graph_refetch, 1500)
+      {:noreply, assign(socket, refetch_timer: timer)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info(:graph_refetch, socket) do
+    {:noreply, assign(socket, refetch_timer: nil) |> push_event("graph_refetch", %{})}
+  end
+
+  # ── Graph helpers ──────────────────────────────────────────────────────────
+
+  defp default_graph_visible_types do
+    GraphHelpers.type_colors()
+    |> Map.keys()
+    |> MapSet.new()
+    |> MapSet.difference(MapSet.new(@graph_hidden_types))
+  end
+
+  defp sidebar_type_colors do
+    GraphHelpers.type_colors()
+    |> Enum.reject(fn {type, _color} -> type in @graph_hidden_types end)
+  end
+
   # ── Render ─────────────────────────────────────────────────────────────────
 
   @impl true
@@ -413,7 +463,20 @@ defmodule DranWeb.WikiLive do
               results={@results}
             />
           <% :graph -> %>
-            <.graph_view context={@context} graph_data={@graph_data} />
+            <.graph_view
+              context={@context}
+              graph_data={@graph_data}
+              type_colors={@type_colors}
+              visible_types={@visible_types}
+              type_counts={@type_counts}
+              node_count={@node_count}
+              edge_count={@edge_count}
+              total_node_count={@total_node_count}
+              total_edge_count={@total_edge_count}
+              nodes={@nodes}
+              edges={@edges}
+              loading={@loading}
+            />
           <% :kanban -> %>
             <.kanban_view context={@context} todos={@todos} kanban_columns={@kanban_columns} />
           <% :letter -> %>
@@ -837,9 +900,24 @@ defmodule DranWeb.WikiLive do
     """
   end
 
+  # ── Graph view (progressive, mirrors GraphLive panel) ──────────────────────
+
+  attr :context, :map, required: true
+  attr :graph_data, :map, default: %{nodes: [], edges: []}
+  attr :type_colors, :list, default: []
+  attr :visible_types, :map, default: %MapSet{}
+  attr :type_counts, :map, default: %{}
+  attr :node_count, :integer, default: 0
+  attr :edge_count, :integer, default: 0
+  attr :total_node_count, :integer, default: 0
+  attr :total_edge_count, :integer, default: 0
+  attr :nodes, :list, default: []
+  attr :edges, :list, default: []
+  attr :loading, :boolean, default: false
+
   defp graph_view(assigns) do
     ~H"""
-    <div class="h-[calc(100vh-4rem)]">
+    <div class="h-[calc(100vh-4rem)] flex flex-col">
       <div class="px-6 pt-4 pb-2">
         <div class="flex items-center gap-2 text-sm text-base-content/50 mb-1">
           <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
@@ -848,14 +926,90 @@ defmodule DranWeb.WikiLive do
           <span>/</span>
           <span>{gettext("Graph")}</span>
         </div>
+        <p class="text-caption">
+          {gettext(
+            "Visualize how your pages connect. Drag to rotate, hover a node to reveal labels, click a node to navigate."
+          )}
+        </p>
       </div>
-      <.graph_3d
-        id="wiki-graph"
-        nodes={@graph_data.nodes}
-        edges={@graph_data.edges}
-        base_path={"/#{@context.slug}/type"}
-        class="w-full h-full"
-      />
+
+      <div class="flex gap-4 flex-1 min-h-0 px-4 pb-4">
+        {# Type sidebar — same as GraphLive panel}
+        <div class="w-48 shrink-0 p-2">
+          <h3 class="text-xs font-semibold text-base-content/40 uppercase mb-2">
+            {gettext("Types")}
+          </h3>
+          <button
+            :for={{type, color} <- @type_colors}
+            type="button"
+            phx-click="toggle_type"
+            phx-value-type={type}
+            class={[
+              "flex w-full items-center gap-2 rounded px-1 py-0.5 text-left transition",
+              if(MapSet.member?(@visible_types, type),
+                do: "hover:bg-base-200",
+                else: "opacity-40 hover:opacity-70"
+              )
+            ]}
+          >
+            <div
+              class="w-3 h-3 shrink-0 rounded-full"
+              style={"background: #{if MapSet.member?(@visible_types, type), do: color, else: "#64748B"}"}
+            >
+            </div>
+            <span class="text-sm capitalize flex-1">{type}</span>
+            <span class="text-xs text-base-content/40 tabular-nums">
+              {@type_counts[type] || 0}
+            </span>
+          </button>
+
+          <h3 class="text-xs font-semibold text-base-content/40 uppercase mt-4 mb-2">
+            {gettext("Totals")}
+          </h3>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-sm flex-1">{gettext("Nodes")}</span>
+            <span class="text-xs text-base-content/40 tabular-nums">{@node_count}</span>
+          </div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-sm flex-1">{gettext("Edges")}</span>
+            <span class="text-xs text-base-content/40 tabular-nums">{@edge_count}</span>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-hidden relative">
+          <div
+            :if={@loading}
+            class="absolute inset-0 z-20 flex items-center justify-center bg-base-100/80 backdrop-blur-sm"
+          >
+            <div class="flex flex-col items-center gap-3">
+              <div class="loading loading-spinner loading-lg text-primary"></div>
+              <p class="text-sm text-base-content/60">{gettext("Loading graph...")}</p>
+            </div>
+          </div>
+          <div
+            :if={not @loading and @total_node_count > @node_count}
+            class="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-[90%] rounded-lg bg-base-100/90 border border-base-300 px-3 py-1.5 text-xs text-base-content/70 shadow-sm backdrop-blur"
+          >
+            {gettext(
+              "Showing the %{shown} most-connected nodes of %{total} — search for a page to explore its subgraph.",
+              shown: @node_count,
+              total: @total_node_count
+            )}
+          </div>
+          <.graph_3d
+            id="wiki-graph-3d"
+            nodes={@nodes}
+            edges={@edges}
+            visible_types={MapSet.to_list(@visible_types)}
+            base_path={"/#{@context.slug}/type"}
+            graph_url={"/#{@context.slug}/graph/json"}
+            class="w-full h-full"
+          />
+          <div class="absolute bottom-0 left-0 right-0 px-3 py-2 text-xs text-base-content/40 bg-base-200/50 border-t border-base-300">
+            {gettext("Drag to rotate · Scroll to zoom · Hover to highlight · Click to navigate")}
+          </div>
+        </div>
+      </div>
     </div>
     """
   end
@@ -1073,6 +1227,47 @@ defmodule DranWeb.WikiLive do
     else
       {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_event("toggle_type", %{"type" => type}, socket) do
+    visible =
+      if MapSet.member?(socket.assigns.visible_types, type) do
+        MapSet.delete(socket.assigns.visible_types, type)
+      else
+        MapSet.put(socket.assigns.visible_types, type)
+      end
+
+    socket = assign(socket, visible_types: visible)
+    {:noreply, push_event(socket, "set_visible_types", %{types: MapSet.to_list(visible)})}
+  end
+
+  @impl true
+  def handle_event(
+        "graph_loaded",
+        %{
+          "total_nodes" => total_nodes,
+          "total_edges" => total_edges,
+          "type_counts" => type_counts
+        },
+        socket
+      ) do
+    {:noreply,
+     assign(socket,
+       type_counts: type_counts || %{},
+       total_node_count: total_nodes || 0,
+       total_edge_count: total_edges || 0,
+       loading: false
+     )}
+  end
+
+  @impl true
+  def handle_event(
+        "graph_counts",
+        %{"node_count" => node_count, "edge_count" => edge_count},
+        socket
+      ) do
+    {:noreply, assign(socket, node_count: node_count || 0, edge_count: edge_count || 0)}
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}

@@ -111,6 +111,11 @@ const Graph3D = {
     // panel/search leave it unset → fall back to root-level "/plural/slug".
     this.basePath = this.el.getAttribute("data-base-path") || null
 
+    // URL for progressive graph JSON fetch. Panel uses the default
+    // "/panel/graph-json"; the wiki graph passes its own context-aware URL
+    // via data-graph-url.
+    this.graphUrl = this.el.getAttribute("data-graph-url") || "/panel/graph-json"
+
     // Progressive loading: when data-graph is empty (index mode), fetch the
     // graph JSON via HTTP after the shell renders. When it's pre-populated
     // (show mode / search results), use it directly.
@@ -179,7 +184,7 @@ const Graph3D = {
   // ── Progressive loading (index mode) ──────────────────────────────────
 
   fetchGraphData() {
-    fetch("/panel/graph-json")
+    fetch(this.graphUrl)
       .then(r => r.json())
       .then(data => {
         // Update render quality for the fetched size

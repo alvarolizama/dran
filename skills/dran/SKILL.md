@@ -1,7 +1,7 @@
 ---
 name: dran
 description: "Use when operating Dran (second brain / knowledge graph) via its MCP server — 18 tools, 10 page types, connection/auth, and install + config of the dran skill suite. Triggers on anything Dran / segundo cerebro / brain."
-version: 9.1.0
+version: 9.2.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -156,8 +156,16 @@ key name or user email) but can be overridden via the `created_by` parameter.
 On the web (no API key), `owner` is `"system"` and `created_by` is the
 logged-in user's email.
 
+**`write_access`** — API keys are **read-only by default**. A key with
+`write_access: false` (the default) can call all read tools but write tools
+return `403`. The 10 write tools are: `dran_create_page`, `dran_update_page`,
+`dran_delete_page`, `dran_create_todo`, `dran_update_todo`,
+`dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`,
+`dran_reaugment_page`, `dran_start_agent`. Toggle per-key in Settings →
+API Keys. Legacy admin and per-user tokens always have write access.
+
 Requests return `401` for invalid/revoked tokens and `403` for contexts the
-token isn't allowed to touch.
+token isn't allowed to touch (or write tools on a read-only key).
 
 ## 3. Page types (10)
 
@@ -290,8 +298,8 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_create_page` | Create any page type **except todos**. `owner` is derived from the API key (not client-settable); `created_by` defaults to auth identity, overrideable |
-| `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links. Same owner/created_by behavior as `dran_create_page` |
+| `dran_create_page` | Create any page type **except todos**. `owner` is derived from the API key (not client-settable); `created_by` defaults to auth identity, overrideable. ⚠️ **Write tool** — requires `write_access: true` on API keys |
+| `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links. Same owner/created_by behavior as `dran_create_page`. ⚠️ **Write tool** |
 
 ### Read & find
 
@@ -306,12 +314,12 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely AND `body` entirely** (no append, no partial). ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks. **Never split a body update across calls** — the second call wipes the first; for bodies over the tool-call token limit, write the full body to a local file and `PUT /api/pages/:slug?context=X` with curl |
-| `dran_update_todo` | Update todo status/priority/date/links — **merges `meta`** (the only safe way to change todo status) |
-| `dran_rename_slug` | Rename a slug; rewrites all `![[old-slug]]` embeds in the context |
-| `dran_create_relation` | Explicit typed relation (params reales: `source_slug` + `target_slug`): `related`, `part_of`, `supersedes`, `contradicts`, `embeds` — el enum real NO incluye los tipos prop-materialized (`works_in`, `has_tier`, `based_in`, `written_in`, `built_with`); esos SOLO se materializan via `meta.props`. **Never `semantic`** (automatic) |
-| `dran_delete_relation` | Delete relations between two pages |
-| `dran_delete_page` | Delete a page — **irreversible**, confirm with Álvaro first |
+| `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely AND `body` entirely** (no append, no partial). ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks. **Never split a body update across calls** — the second call wipes the first; for bodies over the tool-call token limit, write the full body to a local file and `PUT /api/pages/:slug?context=X` with curl. ⚠️ **Write tool** |
+| `dran_update_todo` | Update todo status/priority/date/links — **merges `meta`** (the only safe way to change todo status). ⚠️ **Write tool** |
+| `dran_rename_slug` | Rename a slug; rewrites all `![[old-slug]]` embeds in the context. ⚠️ **Write tool** |
+| `dran_create_relation` | Explicit typed relation (params reales: `source_slug` + `target_slug`): `related`, `part_of`, `supersedes`, `contradicts`, `embeds` — el enum real NO incluye los tipos prop-materialized (`works_in`, `has_tier`, `based_in`, `written_in`, `built_with`); esos SOLO se materializan via `meta.props`. **Never `semantic`** (automatic). ⚠️ **Write tool** |
+| `dran_delete_relation` | Delete relations between two pages. ⚠️ **Write tool** |
+| `dran_delete_page` | Delete a page — **irreversible**, confirm with Álvaro first. ⚠️ **Write tool** |
 
 ### Maintain
 
@@ -319,14 +327,14 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 | --- | --- |
 | `dran_get_stats` | Totals, pages by type, todos by status, orphans, relations |
 | `dran_lint_brain` | Orphans, stale pages (>90d), contested knowledge. Surface results — don't auto-fix |
-| `dran_reaugment_page` | Re-run augmentation (summary/tags/embedding/relations) for a page |
+| `dran_reaugment_page` | Re-run augmentation (summary/tags/embedding/relations) for a page. ⚠️ **Write tool** |
 | `dran_generate_community_summaries` | Generate LLM summaries for all detected graph communities |
 
 ### Automate
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) — operación completa en `maintenance-flow` |
+| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) — operación completa en `maintenance-flow`. ⚠️ **Write tool** |
 | `dran_get_agent_session` | Poll an agent session for status, steps, summary |
 
 ### Jobs programados (Dran.Jobs)
@@ -499,6 +507,10 @@ Reglas:
 - **Absorbing a flow's job** — si el pedido es de un flow (crear un goal,
   ejecutar un todo de código, relacionar páginas), carga ese flow y haz
   hand-off; no lo improvises desde aquí.
+- **Write tools on a read-only API key** — API keys are read-only by default
+  (`write_access: false`). If a write tool returns `403`, check whether the
+  key has `write_access` enabled in Settings → API Keys. Legacy admin and
+  per-user tokens always have write access.
 
 ## References (desarrollo interno del MCP)
 
