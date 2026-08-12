@@ -22,11 +22,12 @@ defmodule DranWeb.WikiLive do
   alias Dran.Brain
   alias Dran.Brain.PageTypes, as: BrainPageTypes
   alias Dran.SmartCollection
+  alias DranWeb.GraphHelpers
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
   # Page types excluded from the wiki index — operational or second-citizen.
-  @wiki_hidden_types ~w(todo plan report)
+  @wiki_hidden_types ~w(todo plan report query)
 
   # ── Mount ─────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,9 @@ defmodule DranWeb.WikiLive do
        search_results: nil,
        type_index: [],
        collections: [],
-       pinned_pages: []
+       pinned_pages: [],
+       alphabet: [],
+       collection: nil
      )}
   end
 
@@ -78,12 +81,22 @@ defmodule DranWeb.WikiLive do
         pinned = Brain.list_pinned_pages(context.id)
         type_index = build_type_index(context)
 
+        # Load all non-archived pages for the A-Z index
+        all_pages =
+          Brain.list_pages(
+            context_id: context.id,
+            limit: 500
+          )
+
+        alphabet = build_alphabet(all_pages)
+
         socket
         |> assign(
           context: context,
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
+          alphabet: alphabet,
           page_title: context.name,
           search_results: nil
         )
@@ -108,8 +121,13 @@ defmodule DranWeb.WikiLive do
             limit: 500
           )
 
-        # Group by first letter for A-Z index
-        grouped = group_alphabetically(pages)
+        # Todos group by kanban status; everything else by first letter (A-Z)
+        grouped =
+          if page_type == "todo" do
+            group_by_kanban_status(pages)
+          else
+            group_alphabetically(pages)
+          end
 
         # Sidebar data
         collections = SmartCollection.list_all(context.id)
@@ -220,6 +238,22 @@ defmodule DranWeb.WikiLive do
       %{wiki_enabled: true} = context ->
         graph_data = Brain.graph_data(context.id)
 
+        # The Graph3D hook expects nodes with `label` + `color` (same shape
+        # GraphCache builds for the panel graph); Brain.graph_data returns
+        # `title` only, which would leave the hover overlay empty.
+        graph_data =
+          Map.update!(graph_data, :nodes, fn nodes ->
+            Enum.map(nodes, fn n ->
+              %{
+                id: n.id,
+                slug: n.slug,
+                label: n.title,
+                type: n.type,
+                color: Map.get(GraphHelpers.type_colors(), n.type, "#94A3B8")
+              }
+            end)
+          end)
+
         # Sidebar data
         collections = SmartCollection.list_all(context.id)
         pinned = Brain.list_pinned_pages(context.id)
@@ -241,6 +275,85 @@ defmodule DranWeb.WikiLive do
     end
   end
 
+  # ── :kanban — read-only kanban board for todos ────────────────────────────
+
+  @kanban_columns [
+    {"backlog", "Backlog", "bg-base-300"},
+    {"this_week", "This Week", "bg-blue-500/20 text-blue-700"},
+    {"today", "Today", "bg-amber-500/20 text-amber-700"},
+    {"in_progress", "In Progress", "bg-purple-500/20 text-purple-700"},
+    {"done", "Done", "bg-green-500/20 text-green-700"},
+    {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
+  ]
+
+  defp apply_action(socket, :kanban, %{"context_slug" => context_slug}) do
+    case Brain.get_context_by_slug(context_slug) do
+      %{wiki_enabled: true} = context ->
+        todos =
+          Brain.list_pages(
+            context_id: context.id,
+            type: "todo",
+            include_body: false,
+            limit: 500
+          )
+
+        # Sidebar data
+        collections = SmartCollection.list_all(context.id)
+        pinned = Brain.list_pinned_pages(context.id)
+        type_index = build_type_index(context)
+
+        socket
+        |> assign(
+          context: context,
+          todos: todos,
+          kanban_columns: @kanban_columns,
+          page_title: "#{context.name} · Kanban",
+          collections: collections,
+          pinned_pages: pinned,
+          type_index: type_index,
+          search_results: nil
+        )
+
+      _ ->
+        push_navigate(socket, to: ~p"/")
+    end
+  end
+
+  # ── :letter — all pages starting with a given letter (read-only) ───────────
+
+  defp apply_action(socket, :letter, %{"context_slug" => context_slug, "letter" => letter}) do
+    case Brain.get_context_by_slug(context_slug) do
+      %{wiki_enabled: true} = context ->
+        all_pages = Brain.list_pages(context_id: context.id, limit: 500)
+
+        letter = String.upcase(letter)
+        grouped = group_alphabetically(all_pages)
+        pages = Enum.find_value(grouped, [], fn {l, p} -> if l == letter, do: p end)
+
+        # Sidebar data
+        collections = SmartCollection.list_all(context.id)
+        pinned = Brain.list_pinned_pages(context.id)
+        type_index = build_type_index(context)
+        alphabet = build_alphabet(all_pages)
+
+        socket
+        |> assign(
+          context: context,
+          letter: letter,
+          pages: pages,
+          alphabet: alphabet,
+          page_title: "#{context.name} · #{letter}",
+          collections: collections,
+          pinned_pages: pinned,
+          type_index: type_index,
+          search_results: nil
+        )
+
+      _ ->
+        push_navigate(socket, to: ~p"/")
+    end
+  end
+
   # ── Render ─────────────────────────────────────────────────────────────────
 
   @impl true
@@ -249,6 +362,8 @@ defmodule DranWeb.WikiLive do
     <Layouts.wiki
       flash={@flash}
       current_user={@current_user}
+      is_admin={@is_admin}
+      is_editor={@is_editor}
       context_slug={@context && @context.slug}
       contexts={@contexts}
       page_title={@page_title}
@@ -258,6 +373,7 @@ defmodule DranWeb.WikiLive do
       type_index={@type_index}
       collections={@collections}
       pinned_pages={@pinned_pages}
+      collection_slug={@collection && @collection.slug}
     >
       <%= if @search_results do %>
         <.search_results_view
@@ -275,6 +391,7 @@ defmodule DranWeb.WikiLive do
               collections={@collections}
               pinned_pages={@pinned_pages}
               type_index={@type_index}
+              alphabet={@alphabet}
             />
           <% :type_list -> %>
             <.type_list_view
@@ -296,7 +413,11 @@ defmodule DranWeb.WikiLive do
               results={@results}
             />
           <% :graph -> %>
-            <.graph_view context={@context} />
+            <.graph_view context={@context} graph_data={@graph_data} />
+          <% :kanban -> %>
+            <.kanban_view context={@context} todos={@todos} kanban_columns={@kanban_columns} />
+          <% :letter -> %>
+            <.letter_view context={@context} letter={@letter} pages={@pages} alphabet={@alphabet} />
         <% end %>
       <% end %>
     </Layouts.wiki>
@@ -405,13 +526,29 @@ defmodule DranWeb.WikiLive do
         <p :if={@context.wiki_description} class="text-base-content/60 mt-2">
           {@context.wiki_description}
         </p>
-        <div class="flex items-center gap-3 mt-3">
+      </div>
+
+      <%!-- Pinned pages --%>
+      <div :if={@pinned_pages != []}>
+        <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+          <.icon name="hero-star" class="size-5 text-amber-500" />
+          {gettext("Pinned")}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <.link
-            navigate={~p"/#{@context.slug}/graph"}
-            class="btn btn-ghost btn-sm gap-1.5"
+            :for={page <- @pinned_pages}
+            navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
+            class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
-            <.icon name="hero-share" class="size-4" />
-            {gettext("Graph")}
+            <div class="card-body p-5">
+              <div class="flex items-center gap-2 mb-1">
+                <.icon name="hero-star" class="size-4 text-amber-500" />
+                <h3 class="font-medium">{page.title}</h3>
+              </div>
+              <p :if={page.summary} class="text-sm text-base-content/60 line-clamp-2">
+                {page.summary}
+              </p>
+            </div>
           </.link>
         </div>
       </div>
@@ -420,7 +557,7 @@ defmodule DranWeb.WikiLive do
       <div :if={@collections != []}>
         <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
           <.icon name="hero-funnel" class="size-5 text-primary/70" />
-          {gettext("Collections")}
+          {gettext("Categorias")}
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <.link
@@ -438,63 +575,47 @@ defmodule DranWeb.WikiLive do
         </div>
       </div>
 
-      <%!-- Pinned pages --%>
-      <div :if={@pinned_pages != []}>
-        <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
-          <.icon name="hero-bookmark" class="size-5 text-amber-500" />
-          {gettext("Pinned")}
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <.link
-            :for={page <- @pinned_pages}
-            navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
-            class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
-          >
-            <div class="card-body p-5">
-              <div class="flex items-center gap-2 mb-1">
-                <.icon
-                  name={PageTypes.icon(page.page_type)}
-                  class="size-4 text-base-content/40 group-hover:text-primary transition-colors"
-                />
-                <h3 class="font-medium">{page.title}</h3>
-              </div>
-              <p :if={page.summary} class="text-sm text-base-content/60 line-clamp-2">
-                {page.summary}
-              </p>
-            </div>
-          </.link>
-        </div>
-      </div>
-
-      <%!-- Index by type + A-Z --%>
+      <%!-- Type cards (Notes, Concepts, Entities, References) + A-Z index --%>
       <div>
         <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
           <.icon name="hero-square-3-stack-3d" class="size-5 text-primary/70" />
           {gettext("Index")}
         </h2>
-        <div class="space-y-2">
-          <details
-            :for={%{type: type, label: label, count: count, icon: icon} <- @type_index}
-            class="group border border-base-300 rounded-lg overflow-hidden"
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
+          <.link
+            :for={item <- @type_index}
+            navigate={~p"/#{@context.slug}/type/#{item.type}"}
+            class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
-            <summary class="flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-base-200 transition-colors select-none">
-              <.icon name={icon} class="size-4 text-base-content/50 shrink-0" />
-              <span class="font-medium flex-1">{label}</span>
-              <span class="text-sm text-base-content/40">{count}</span>
+            <div class="card-body p-4 flex-row items-center gap-3">
               <.icon
-                name="hero-chevron-right"
-                class="size-4 text-base-content/30 group-open:rotate-90 transition-transform"
+                name={item.icon}
+                class="size-5 text-base-content/40 group-hover:text-primary transition-colors"
               />
-            </summary>
-            <div class="border-t border-base-300 bg-base-200/30 p-4">
-              <.link
-                navigate={~p"/#{@context.slug}/type/#{type}"}
-                class="text-sm text-primary hover:underline"
-              >
-                {gettext("View all")} →
-              </.link>
+              <div class="flex-1">
+                <h3 class="font-medium">{item.label}</h3>
+              </div>
+              <span class="text-sm text-base-content/40 font-medium">
+                {item.count}
+              </span>
             </div>
-          </details>
+          </.link>
+        </div>
+
+        <%!-- A-Z alphabet index --%>
+        <div :if={@alphabet != []}>
+          <h3 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-3">
+            {gettext("Alfabetico")}
+          </h3>
+          <div class="flex flex-wrap gap-1">
+            <a
+              :for={letter <- @alphabet}
+              href={~p"/#{@context.slug}/letter/#{letter}"}
+              class="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium bg-base-200 text-base-content/80 hover:bg-primary hover:text-white transition-colors"
+            >
+              {letter}
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -520,9 +641,17 @@ defmodule DranWeb.WikiLive do
         <p class="text-base-content/50">{gettext("No pages of this type.")}</p>
       </div>
 
-      <div :for={{letter, pages} <- @grouped_pages} class="mb-6">
-        <h2 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-2 border-b border-base-300 pb-1">
-          {letter}
+      <div :for={{group_key, pages} <- @grouped_pages} class="mb-6">
+        <h2 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-2 border-b border-base-300 pb-1 flex items-center gap-2">
+          <span :if={@page_type == "todo"} class={kanban_dot(group_key)}></span>
+          <span>
+            {if @page_type == "todo",
+              do: kanban_status_label(group_key),
+              else: group_key}
+          </span>
+          <span class="ml-auto text-base-content/30 normal-case tracking-normal">
+            {length(pages)}
+          </span>
         </h2>
         <div class="space-y-1">
           <.link
@@ -534,6 +663,13 @@ defmodule DranWeb.WikiLive do
               <span class="font-medium group-hover:text-primary transition-colors">{page.title}</span>
               <span :if={page.pinned} class="text-amber-500">
                 <.icon name="hero-bookmark" class="size-3" />
+              </span>
+              <span
+                :if={@page_type == "todo" && kanban_due(page)}
+                class={kanban_due_class(kanban_overdue?(page))}
+              >
+                <.icon name="hero-calendar-days" class="size-3.5" />
+                {kanban_format_due(kanban_due(page))}
               </span>
             </div>
             <p :if={page.summary} class="text-sm text-base-content/50 line-clamp-1 mt-0.5">
@@ -676,7 +812,7 @@ defmodule DranWeb.WikiLive do
 
       <div class="space-y-2">
         <.link
-          :for={page <- @results}
+          :for={page <- Enum.sort_by(@results, & &1.title, :asc)}
           navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
           class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
         >
@@ -717,8 +853,185 @@ defmodule DranWeb.WikiLive do
         id="wiki-graph"
         nodes={@graph_data.nodes}
         edges={@graph_data.edges}
+        base_path={"/#{@context.slug}/type"}
         class="w-full h-full"
       />
+    </div>
+    """
+  end
+
+  # ── Kanban view (read-only) ───────────────────────────────────────────────
+
+  attr :context, :map, required: true
+  attr :todos, :list, default: []
+  attr :kanban_columns, :list, default: []
+
+  defp kanban_view(assigns) do
+    ~H"""
+    <div class="px-6 py-8">
+      <div class="flex items-center gap-2 text-sm text-base-content/50 mb-2">
+        <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
+          {@context.name}
+        </.link>
+        <span>/</span>
+        <span>{gettext("Kanban")}</span>
+      </div>
+
+      <h1 class="text-2xl font-bold mb-6 flex items-center gap-2">
+        <.icon name="hero-view-columns" class="size-6 text-primary" />
+        {gettext("Kanban")}
+      </h1>
+
+      <div class="flex gap-4 overflow-x-auto pb-4">
+        <div
+          :for={{status, label, badge_class} <- @kanban_columns}
+          class="w-72 shrink-0 flex flex-col rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
+        >
+          <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300">
+            <div class="flex items-center gap-2">
+              <span class={kanban_dot(status)}></span>
+              <span class="text-sm font-semibold">{label}</span>
+            </div>
+            <span class={kanban_badge(badge_class)}>
+              {kanban_count(@todos, status)}
+            </span>
+          </div>
+          <div class="p-2 space-y-2">
+            <a
+              :for={todo <- kanban_items(@todos, status)}
+              href={~p"/#{@context.slug}/type/todo/#{todo.slug}"}
+              class="block p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition"
+            >
+              <div class="font-medium text-sm break-words">{todo.title}</div>
+
+              <div :if={kanban_due(todo)} class={kanban_due_class(kanban_overdue?(todo))}>
+                <.icon name="hero-calendar-days" class="size-3.5" />
+                {kanban_format_due(kanban_due(todo))}
+              </div>
+            </a>
+            <p
+              :if={kanban_items(@todos, status) == []}
+              class="text-xs text-base-content/30 text-center py-4"
+            >
+              {gettext("Empty")}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp kanban_status(page) do
+    case (page.meta || %{})["kanban_status"] do
+      s when is_binary(s) and s != "" -> s
+      _ -> "backlog"
+    end
+  end
+
+  defp kanban_items(todos, status), do: Enum.filter(todos, fn t -> kanban_status(t) == status end)
+  defp kanban_count(todos, status), do: Enum.count(todos, fn t -> kanban_status(t) == status end)
+
+  defp kanban_dot("backlog"), do: "size-2 rounded-full bg-base-content/30"
+  defp kanban_dot("this_week"), do: "size-2 rounded-full bg-blue-500"
+  defp kanban_dot("today"), do: "size-2 rounded-full bg-amber-500"
+  defp kanban_dot("in_progress"), do: "size-2 rounded-full bg-purple-500"
+  defp kanban_dot("done"), do: "size-2 rounded-full bg-green-500"
+  defp kanban_dot("cancelled"), do: "size-2 rounded-full bg-red-500"
+  defp kanban_dot(_), do: "size-2 rounded-full bg-base-content/30"
+
+  defp kanban_badge(class), do: "px-2 py-0.5 text-xs rounded-full " <> class
+
+  defp kanban_due(page), do: (page.meta || %{})["due_date"]
+
+  defp kanban_overdue?(page) do
+    case kanban_due(page) do
+      s when is_binary(s) and s != "" ->
+        case Date.from_iso8601(s) do
+          {:ok, d} -> Date.compare(d, Date.utc_today()) == :lt
+          _ -> false
+        end
+
+      _ ->
+        false
+    end
+  end
+
+  defp kanban_format_due(nil), do: ""
+  defp kanban_format_due(""), do: ""
+
+  defp kanban_format_due(s) when is_binary(s) do
+    case Date.from_iso8601(s) do
+      {:ok, d} -> Calendar.strftime(d, "%b %d")
+      _ -> s
+    end
+  end
+
+  defp kanban_due_class(true),
+    do: "flex items-center gap-1 mt-1.5 text-[11px] text-red-600 font-medium"
+
+  defp kanban_due_class(false),
+    do: "flex items-center gap-1 mt-1.5 text-[11px] text-base-content/60"
+
+  # ── Letter view (read-only) ───────────────────────────────────────────────
+
+  attr :context, :map, required: true
+  attr :letter, :string, required: true
+  attr :pages, :list, default: []
+  attr :alphabet, :list, default: []
+
+  defp letter_view(assigns) do
+    ~H"""
+    <div class="px-6 py-8">
+      <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
+        <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
+          {@context.name}
+        </.link>
+        <span>/</span>
+        <span>{@letter}</span>
+      </div>
+
+      <h1 class="text-2xl font-bold mb-6">{@letter}</h1>
+
+      <%!-- Alphabet bar --%>
+      <div class="flex flex-wrap gap-1 mb-8">
+        <a
+          :for={l <- @alphabet}
+          href={~p"/#{@context.slug}/letter/#{l}"}
+          class={[
+            "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors",
+            if(l == @letter,
+              do: "bg-primary text-white",
+              else: "bg-base-200 text-base-content/80 hover:bg-primary hover:text-white"
+            )
+          ]}
+        >
+          {l}
+        </a>
+      </div>
+
+      <div :if={@pages == []} class="text-center py-12">
+        <p class="text-base-content/50">{gettext("No pages start with this letter.")}</p>
+      </div>
+
+      <div :if={@pages != []} class="space-y-1">
+        <.link
+          :for={page <- @pages}
+          navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
+          class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
+        >
+          <div class="flex items-center gap-2">
+            <span class="font-medium group-hover:text-primary transition-colors">{page.title}</span>
+            <span class="text-xs text-base-content/40">({PageTypes.label(page.page_type)})</span>
+            <span :if={page.pinned} class="text-amber-500">
+              <.icon name="hero-star" class="size-3" />
+            </span>
+          </div>
+          <p :if={page.summary} class="text-sm text-base-content/50 line-clamp-1 mt-0.5">
+            {page.summary}
+          </p>
+        </.link>
+      </div>
     </div>
     """
   end
@@ -749,6 +1062,17 @@ defmodule DranWeb.WikiLive do
       end
 
     {:noreply, assign(socket, search_query: query, search_results: results)}
+  end
+
+  @impl true
+  def handle_event("node_click", %{"slug" => slug, "type" => type}, socket) do
+    context = socket.assigns[:context]
+
+    if context do
+      {:noreply, push_navigate(socket, to: ~p"/#{context.slug}/type/#{type}/#{slug}")}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
@@ -792,6 +1116,40 @@ defmodule DranWeb.WikiLive do
       |> String.replace(~r/[^A-Z]/, "#")
     end)
     |> Enum.sort_by(fn {letter, _} -> letter end)
+  end
+
+  @kanban_order ~w(backlog this_week today in_progress done cancelled)
+
+  defp group_by_kanban_status(pages) do
+    pages
+    |> Enum.group_by(fn page -> kanban_status(page) end)
+    |> Enum.map(fn {status, items} ->
+      {status, Enum.sort_by(items, fn item -> String.downcase(item.title) end)}
+    end)
+    |> Enum.sort_by(fn {status, _} ->
+      idx = Enum.find_index(@kanban_order, &(&1 == status))
+      idx || 99
+    end)
+  end
+
+  defp kanban_status_label("backlog"), do: gettext("Backlog")
+  defp kanban_status_label("this_week"), do: gettext("This Week")
+  defp kanban_status_label("today"), do: gettext("Today")
+  defp kanban_status_label("in_progress"), do: gettext("In Progress")
+  defp kanban_status_label("done"), do: gettext("Done")
+  defp kanban_status_label("cancelled"), do: gettext("Cancelled")
+  defp kanban_status_label(other), do: String.capitalize(other)
+
+  defp build_alphabet(pages) do
+    pages
+    |> Enum.map(fn page ->
+      page.title
+      |> String.first()
+      |> String.upcase()
+      |> String.replace(~r/[^A-Z]/, "#")
+    end)
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
   # Render markdown for the wiki — same MDEx pipeline as PageComponents but
