@@ -1,7 +1,7 @@
 ---
 name: dran
 description: "Use when operating Dran (second brain / knowledge graph) via its MCP server — 18 tools, 10 page types, connection/auth, and install + config of the dran skill suite. Triggers on anything Dran / segundo cerebro / brain."
-version: 9.0.0
+version: 9.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -145,6 +145,17 @@ Auth accepts three token kinds, checked in order:
    API Keys; plaintext shown once at creation, revocable, restorable,
    regenerable).
 
+**Roles** — `is_admin` (full access, all contexts), `is_editor` (panel +
+dashboard access, assigned contexts), regular user (wiki-only). The panel
+(`/panel/*`) is gated by the `admin_or_editor` pipeline; the wiki is open to
+all logged-in users.
+
+**Owner / created_by** — `owner` is derived from the API key name and is NOT
+client-settable. `created_by` defaults to the authenticated identity (API
+key name or user email) but can be overridden via the `created_by` parameter.
+On the web (no API key), `owner` is `"system"` and `created_by` is the
+logged-in user's email.
+
 Requests return `401` for invalid/revoked tokens and `403` for contexts the
 token isn't allowed to touch.
 
@@ -279,8 +290,8 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_create_page` | Create any page type **except todos** |
-| `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links |
+| `dran_create_page` | Create any page type **except todos**. `owner` is derived from the API key (not client-settable); `created_by` defaults to auth identity, overrideable |
+| `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links. Same owner/created_by behavior as `dran_create_page` |
 
 ### Read & find
 

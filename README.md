@@ -14,14 +14,15 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **Version history** — every edit is versioned with diff view on the page detail
 
 ### Views
-- **Wiki at the root** (`/`, `/:context_slug`, …) — read-only knowledge browser per wiki-enabled context; the first thing a logged-in user sees. All data administration lives under **`/panel`**
-- **Dashboard** (`/panel`) — context overview
-- **Kanban board** (`/panel/kanban`) — all todos, columns `backlog → this_week → today → in_progress → done → cancelled`, drag-drop between columns, combinable filters (project / goal / plan)
-- **3D knowledge graph** (`/panel/graph`, `/panel/graph/:slug`) — force-directed 3D; hover highlights a node and its neighbors, click navigates
+- **Wiki at the root** (`/`, `/:context_slug`, …) — read-only knowledge browser per wiki-enabled context; the first thing a logged-in user sees. Sidebar with search, type index, pinned pages, collections, kanban, graph, and a context-aware link to the admin panel (visible to admins and editors). All data administration lives under **`/panel`**
+- **Dashboard** (`/panel`) — context overview; accessible to admins and editors
+- **Kanban board** (`/panel/kanban`, `/:context_slug/kanban` in wiki) — all todos, columns `backlog → this_week → today → in_progress → done → cancelled`, drag-drop between columns, combinable filters (project / goal / plan)
+- **3D knowledge graph** (`/panel/graph`, `/panel/graph/:slug`, `/:context_slug/graph` in wiki) — force-directed 3D; hover highlights a node and its neighbors, click navigates (context-aware URLs in wiki via `data-base-path`)
 - **Hybrid search** (`/panel/search`) — full-text, fuzzy, semantic, or hybrid fusion
 - **Smart Collections** (`/panel/collections`) — saved live queries rendered as pages
 - **Activity feed** (`/panel/activity`), **Journey** (`/panel/journey`), **Tags** (`/panel/tags/:tag`), **Docs** (`/panel/docs`)
 - **Multi-context** — switch brains from the sidebar; per-context page-type toggles (Settings → Contexts)
+- **Pinned pages** — toggle pin on any page type; pinned pages surface in the wiki sidebar and context home
 
 ### Automation
 - **3 autonomous agents** — `curator` (duplicates/contested cleanup, daily cron), `link_gardener` (proposes relations for orphans, weekly cron + manual), `graph_rag` (GraphRAG search with citations, manual)
@@ -29,9 +30,9 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **Entity linker** — auto-creates entity pages from real-world names detected in bodies (people, companies, tools); noise-filtered (no file paths, modules, or generic terms) and toggleable from Settings → Brain
 
 ### Integration & admin
-- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 3 resources + 2 prompts
-- **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`)
-- **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users)
+- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 3 resources + 2 prompts. `owner` is derived from the API key name (not client-settable); `created_by` defaults to the authenticated identity but can be overridden
+- **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`). Owner/created_by injected from auth identity on create
+- **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users). Three roles: **admin** (`is_admin`, full access + all contexts), **editor** (`is_editor`, panel + dashboard access, assigned contexts), regular user (wiki-only). Panel routes gated by `admin_or_editor` pipeline; wiki open to all logged-in users
 - **Settings panel** (admin) — users, contexts, API keys, brain tuning, models, system, danger zone (`/panel/settings/:tab`)
 
 ## Installation
