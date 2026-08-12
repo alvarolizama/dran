@@ -707,7 +707,7 @@ defmodule DranWeb.Layouts do
             collection_slug={@collection_slug}
           />
           <a
-            :if={@contexts != [] and (@is_admin or @is_editor)}
+            :if={@is_admin or @is_editor}
             href={~p"/panel"}
             class="mt-auto flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
             title={gettext("Panel")}
