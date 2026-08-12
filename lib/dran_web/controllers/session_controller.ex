@@ -12,12 +12,10 @@ defmodule DranWeb.SessionController do
   def create(conn, %{"login" => %{"username" => username, "password" => password}}) do
     case Accounts.authenticate_user(username, password) do
       {:ok, user} ->
-        return_to = get_session(conn, :return_to) || ~p"/"
-
         conn
         |> SessionAuth.login(user.email)
         |> delete_session(:return_to)
-        |> redirect(to: return_to)
+        |> redirect(to: SessionAuth.resolve_login_redirect(conn))
 
       {:error, _} ->
         conn
@@ -51,7 +49,7 @@ defmodule DranWeb.SessionController do
             conn
             |> SessionAuth.login(user.email)
             |> put_flash(:info, "Admin account created — welcome to Dran")
-            |> redirect(to: ~p"/")
+            |> redirect(to: SessionAuth.resolve_login_redirect(conn))
 
           {:error, %Ecto.Changeset{} = changeset} ->
             message =

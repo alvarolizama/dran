@@ -59,12 +59,10 @@ defmodule DranWeb.OAuthController do
   defp handle_google_user(conn, %{email: email} = google_user) do
     case Accounts.find_or_link_from_google(google_user) do
       {:ok, user} ->
-        return_to = get_session(conn, :return_to) || ~p"/"
-
         conn
         |> SessionAuth.login(user.email)
         |> delete_session(:return_to)
-        |> redirect(to: return_to)
+        |> redirect(to: SessionAuth.resolve_login_redirect(conn))
 
       {:error, :unauthorized} ->
         # User doesn't exist. If wiki open-signup is enabled, auto-register

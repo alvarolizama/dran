@@ -99,6 +99,33 @@ defmodule DranWeb.Plugs.Auth do
     )
   end
 
+  # ── Post-login redirect helper ──
+
+  @doc """
+  Resolves where to redirect a user after a successful login.
+
+  If there's a `return_to` in the session, honor it. Otherwise, if the user
+  is admin or editor AND no wiki-enabled contexts exist, send them straight
+  to `/panel` — the wiki would be an empty page anyway. Fall back to `/`
+  (the wiki) in all other cases.
+  """
+  def resolve_login_redirect(conn) do
+    case get_session(conn, :return_to) do
+      path when is_binary(path) and path != "" ->
+        path
+
+      _ ->
+        is_admin = get_session(conn, "is_admin") == true
+        is_editor = get_session(conn, "is_editor") == true
+
+        if (is_admin or is_editor) and Dran.Brain.list_wiki_contexts() == [] do
+          ~p"/panel"
+        else
+          ~p"/"
+        end
+    end
+  end
+
   def current_user(conn), do: get_session(conn, @session_key)
 
   def current_context(conn), do: get_session(conn, @context_key) || Auth.default_context_slug()
