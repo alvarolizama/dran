@@ -203,6 +203,8 @@ defmodule DranWeb.PageNewLive do
       |> Map.put("page_type", page_type)
       |> Map.put_new("body", socket.assigns.body)
       |> ensure_slug(context_id)
+      |> Map.put_new("owner", "system")
+      |> Map.put_new("created_by", socket.assigns[:current_user] || "system")
 
     case Brain.create_page(page_params) do
       {:ok, page} ->

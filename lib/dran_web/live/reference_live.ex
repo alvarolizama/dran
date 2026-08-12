@@ -178,6 +178,10 @@ defmodule DranWeb.ReferenceLive do
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
   def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
   def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
+
+  def handle_event("toggle_pinned", p, s),
+    do: PageEdit.handle_event("toggle_pinned", p, s)
+
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
   def handle_event("save_page", p, s), do: PageEdit.handle_event("save_page", p, s)
   def handle_event("body_change", p, s), do: PageEdit.handle_event("body_change", p, s)

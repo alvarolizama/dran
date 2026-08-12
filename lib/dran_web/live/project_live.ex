@@ -450,6 +450,10 @@ defmodule DranWeb.ProjectLive do
   end
 
   def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
+
+  def handle_event("toggle_pinned", p, s),
+    do: PageEdit.handle_event("toggle_pinned", p, s)
+
   def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
   def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
   def handle_event("save_page", p, s), do: PageEdit.handle_event("save_page", p, s)

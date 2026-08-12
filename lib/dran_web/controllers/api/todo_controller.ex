@@ -33,6 +33,14 @@ defmodule DranWeb.API.TodoController do
     meta = params["meta"] || %{}
     params = Map.put(params, "meta", Map.put_new(meta, "kanban_status", "backlog"))
 
+    # Inject owner/created_by from the authenticated identity.
+    user = conn.assigns[:user]
+
+    params =
+      params
+      |> Map.put_new("owner", Dran.Auth.resolve_owner(user))
+      |> Map.put_new("created_by", Dran.Auth.resolve_created_by(user))
+
     case Brain.create_page(params) do
       {:ok, todo} ->
         conn

@@ -45,7 +45,7 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Agent, Brain, Repo}
+  alias Dran.{Agent, Auth, Brain, Repo}
   alias Dran.Brain.PageTypes
   import Ecto.Query, warn: false
 
@@ -228,12 +228,13 @@ defmodule Dran.MCP do
           },
           "owner" => %{
             "type" => "string",
-            "description" => "Owner identity for the page (defaults to 'agent')."
+            "description" =>
+              "Owner identity for the page. Derived from the API key name — not client-settable. Defaults to 'system' when no API key is present."
           },
           "created_by" => %{
             "type" => "string",
             "description" =>
-              "Who created this page, recorded for provenance (defaults to 'agent')."
+              "Who created this page, recorded for provenance. Defaults to the authenticated identity (API key name or user email). Override only when you need to attribute creation to a different actor."
           },
           "on_behalf_of" => %{
             "type" => "string",
@@ -401,11 +402,13 @@ defmodule Dran.MCP do
           },
           "owner" => %{
             "type" => "string",
-            "description" => "Owner identity for the todo (defaults to 'agent')."
+            "description" =>
+              "Owner identity for the todo. Derived from the API key name — not client-settable. Defaults to 'system' when no API key is present."
           },
           "created_by" => %{
             "type" => "string",
-            "description" => "Who created this todo, for provenance (defaults to 'agent')."
+            "description" =>
+              "Who created this todo, for provenance. Defaults to the authenticated identity (API key name or user email). Override only when you need to attribute creation to a different actor."
           },
           "on_behalf_of" => %{
             "type" => "string",
@@ -887,7 +890,7 @@ defmodule Dran.MCP do
         # SEC-001: validate that the requested context is accessible by the user
         case validate_tool_context_access(args, user) do
           :ok ->
-            result = execute_tool(tool_name, args)
+            result = execute_tool(tool_name, args, user)
 
             %{
               "jsonrpc" => "2.0",
@@ -1096,7 +1099,7 @@ defmodule Dran.MCP do
 
   # ── Tool execution ─────────────────────────────────────────────────────────
 
-  defp execute_tool("dran_search", %{"query" => query, "context" => context_slug} = args) do
+  defp execute_tool("dran_search", %{"query" => query, "context" => context_slug} = args, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1136,7 +1139,8 @@ defmodule Dran.MCP do
 
   defp execute_tool(
          "dran_create_page",
-         %{"context" => context_slug, "page_type" => page_type} = args
+         %{"context" => context_slug, "page_type" => page_type} = args,
+         user
        ) do
     context = context_cache_get(context_slug)
 
@@ -1158,8 +1162,8 @@ defmodule Dran.MCP do
             tags: Map.get(args, "tags", []),
             summary: Map.get(args, "summary"),
             meta: Map.get(args, "meta", %{}),
-            created_by: Map.get(args, "created_by", "agent"),
-            owner: Map.get(args, "owner", "agent")
+            created_by: Map.get(args, "created_by", Auth.resolve_created_by(user)),
+            owner: Auth.resolve_owner(user)
           }
           |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
@@ -1176,7 +1180,11 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_update_page", %{"context" => context_slug, "slug" => slug} = args) do
+  defp execute_tool(
+         "dran_update_page",
+         %{"context" => context_slug, "slug" => slug} = args,
+         _user
+       ) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1215,7 +1223,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_get_page", %{"context" => context_slug, "slug" => slug}) do
+  defp execute_tool("dran_get_page", %{"context" => context_slug, "slug" => slug}, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1233,7 +1241,8 @@ defmodule Dran.MCP do
 
   defp execute_tool(
          "dran_create_todo",
-         %{"context" => context_slug, "title" => title, "slug" => slug} = args
+         %{"context" => context_slug, "title" => title, "slug" => slug} = args,
+         user
        ) do
     context = context_cache_get(context_slug)
 
@@ -1256,8 +1265,8 @@ defmodule Dran.MCP do
           page_type: "todo",
           body: Map.get(args, "body", ""),
           meta: meta,
-          created_by: Map.get(args, "created_by", "agent"),
-          owner: Map.get(args, "owner", "agent")
+          created_by: Map.get(args, "created_by", Auth.resolve_created_by(user)),
+          owner: Auth.resolve_owner(user)
         }
         |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
@@ -1277,7 +1286,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_lint_brain", %{"context" => context_slug}) do
+  defp execute_tool("dran_lint_brain", %{"context" => context_slug}, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1300,7 +1309,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_delete_page", %{"context" => context_slug, "slug" => slug}) do
+  defp execute_tool("dran_delete_page", %{"context" => context_slug, "slug" => slug}, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1325,7 +1334,8 @@ defmodule Dran.MCP do
   defp execute_tool(
          "dran_create_relation",
          %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
-           args
+           args,
+         _user
        ) do
     context = context_cache_get(context_slug)
 
@@ -1362,7 +1372,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_get_links", %{"context" => context_slug, "slug" => slug}) do
+  defp execute_tool("dran_get_links", %{"context" => context_slug, "slug" => slug}, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1398,7 +1408,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_list_pages", %{"context" => context_slug} = args) do
+  defp execute_tool("dran_list_pages", %{"context" => context_slug} = args, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1452,7 +1462,11 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_update_todo", %{"context" => context_slug, "slug" => slug} = args) do
+  defp execute_tool(
+         "dran_update_todo",
+         %{"context" => context_slug, "slug" => slug} = args,
+         _user
+       ) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1503,7 +1517,8 @@ defmodule Dran.MCP do
   defp execute_tool(
          "dran_delete_relation",
          %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
-           args
+           args,
+         _user
        ) do
     context = context_cache_get(context_slug)
 
@@ -1540,7 +1555,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_get_stats", %{"context" => context_slug}) do
+  defp execute_tool("dran_get_stats", %{"context" => context_slug}, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1576,7 +1591,8 @@ defmodule Dran.MCP do
 
   defp execute_tool(
          "dran_rename_slug",
-         %{"context" => context_slug, "old_slug" => old_slug, "new_slug" => new_slug}
+         %{"context" => context_slug, "old_slug" => old_slug, "new_slug" => new_slug},
+         _user
        ) do
     context = context_cache_get(context_slug)
 
@@ -1609,7 +1625,8 @@ defmodule Dran.MCP do
 
   defp execute_tool(
          "dran_start_agent",
-         %{"agent_type" => agent_type, "context" => context_slug, "input" => input} = args
+         %{"agent_type" => agent_type, "context" => context_slug, "input" => input} = args,
+         _user
        ) do
     context = context_cache_get(context_slug)
 
@@ -1636,7 +1653,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_get_agent_session", %{"session_id" => session_id}) do
+  defp execute_tool("dran_get_agent_session", %{"session_id" => session_id}, _user) do
     case Ecto.UUID.cast(session_id) do
       {:ok, id} ->
         # P-04: preload steps in one query instead of N+1
@@ -1655,7 +1672,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_reaugment_page", %{"context" => context_slug, "slug" => slug}) do
+  defp execute_tool("dran_reaugment_page", %{"context" => context_slug, "slug" => slug}, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1675,7 +1692,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_generate_community_summaries", %{"context" => context_slug}) do
+  defp execute_tool("dran_generate_community_summaries", %{"context" => context_slug}, _user) do
     context = context_cache_get(context_slug)
 
     if context do
@@ -1692,9 +1709,7 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool(tool_name, _args) do
-    "Error: unknown tool '#{tool_name}'"
-  end
+  defp execute_tool(tool_name, _args, _user), do: "Error: unknown tool '#{tool_name}'"
 
   # ── Agent helpers ─────────────────────────────────────────────────────────
 

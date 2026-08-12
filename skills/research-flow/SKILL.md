@@ -118,7 +118,7 @@ dran_create_page({
   body: "## Por qué\n\n<para qué la guardo, qué aporta>\n\n## Hallazgos clave\n\n- ...",
   meta: { kind: "article", source_url: "https://...",
           props: { language: "elixir" } },
-  owner: "alvaro", created_by: "chaos manager"
+  owner: "alvaro", created_by: "chaos manager"  # owner from API key, created_by overrideable
 })
 ```
 

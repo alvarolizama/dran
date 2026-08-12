@@ -135,12 +135,18 @@ defmodule DranWeb.PageComponents do
             </button>
             <button
               phx-click="toggle_pinned"
-              class="btn btn-ghost btn-sm"
+              class={[
+                "btn btn-sm",
+                if(@page.pinned, do: "btn-warning", else: "btn-ghost")
+              ]}
               title={gettext("Pin this page in the wiki home")}
             >
               <.icon
-                name={if @page.pinned, do: "hero-bookmark-slash", else: "hero-bookmark"}
-                class="size-4"
+                name={if @page.pinned, do: "hero-star-solid", else: "hero-star"}
+                class={[
+                  "size-4",
+                  if(@page.pinned, do: "text-white", else: "text-amber-400")
+                ]}
               />
               {if @page.pinned, do: gettext("Unpin"), else: gettext("Pin")}
             </button>
@@ -600,6 +606,11 @@ defmodule DranWeb.PageComponents do
     default: nil,
     doc: "types the hook may show (used by GraphLive index). nil = show all (subgraphs)"
 
+  attr :base_path, :string,
+    default: nil,
+    doc:
+      "URL prefix for page navigation (e.g. \"/personal/type\"). nil = root-level \"/plural/slug\""
+
   attr :class, :string, default: ""
   attr :style, :string, default: ""
 
@@ -626,6 +637,7 @@ defmodule DranWeb.PageComponents do
         phx-hook="Graph3D"
         data-graph={@graph_json}
         data-visible-types={@visible_types_json}
+        data-base-path={@base_path}
         style="width: 100%; height: 100%; min-height: 300px;"
       />
     </div>

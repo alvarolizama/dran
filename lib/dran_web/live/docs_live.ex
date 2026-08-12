@@ -1417,13 +1417,13 @@ defmodule DranWeb.DocsLive do
             name="owner"
             type="string"
             required="no"
-            desc="Owner identity (defaults to 'agent')"
+            desc="Owner identity. Derived from API key name — not client-settable. Defaults to 'system'"
           />
           <:param
             name="created_by"
             type="string"
             required="no"
-            desc="Who created this page (defaults to 'agent')"
+            desc="Who created this page. Defaults to authenticated identity (API key name or user email)"
           />
           <:param
             name="on_behalf_of"
@@ -1499,13 +1499,13 @@ defmodule DranWeb.DocsLive do
             name="owner"
             type="string"
             required="no"
-            desc="Owner identity (defaults to 'agent')"
+            desc="Owner identity. Derived from API key name — not client-settable. Defaults to 'system'"
           />
           <:param
             name="created_by"
             type="string"
             required="no"
-            desc="Who created this todo (defaults to 'agent')"
+            desc="Who created this todo. Defaults to authenticated identity (API key name or user email)"
           />
           <:param
             name="on_behalf_of"

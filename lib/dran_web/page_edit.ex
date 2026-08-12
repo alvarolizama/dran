@@ -387,6 +387,15 @@ defmodule DranWeb.PageEdit do
   # ── Helpers ──
 
   defp create_page(socket, page_params) do
+    # Web: owner is always "system" (no API key). created_by is the logged-in user.
+    current_user = socket.assigns[:current_user]
+    user_identity = if is_binary(current_user), do: current_user, else: "system"
+
+    page_params =
+      page_params
+      |> Map.put_new("owner", "system")
+      |> Map.put_new("created_by", user_identity)
+
     case Brain.create_page(page_params) do
       {:ok, page} ->
         type = page.page_type
@@ -541,6 +550,8 @@ defmodule DranWeb.PageEdit do
         page_type: "reference",
         body: "",
         tags: [],
+        owner: "system",
+        created_by: socket.assigns[:current_user] || "system",
         meta: %{
           "kind" => "file",
           "filename" => stored.filename,

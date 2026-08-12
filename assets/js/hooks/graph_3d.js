@@ -107,6 +107,10 @@ const Graph3D = {
     // passes the sidebar's current set; show mode omits the attribute → null).
     this.visibleTypes = this.readVisibleTypes()
 
+    // URL prefix for page navigation. Wiki graph passes "/<context_slug>/type";
+    // panel/search leave it unset → fall back to root-level "/plural/slug".
+    this.basePath = this.el.getAttribute("data-base-path") || null
+
     // Progressive loading: when data-graph is empty (index mode), fetch the
     // graph JSON via HTTP after the shell renders. When it's pre-populated
     // (show mode / search results), use it directly.
@@ -321,9 +325,10 @@ const Graph3D = {
   // ── Interaction handlers ──────────────────────────────────────────────
 
   // Click → navigate to the page. No selection, no double-click logic.
+  // Includes the node type so LiveView can build a context-aware URL.
   handleNodeClick(node, event) {
     if (node.slug) {
-      this.pushEvent("node_click", { slug: node.slug })
+      this.pushEvent("node_click", { slug: node.slug, type: node.type })
     }
   },
 
@@ -457,15 +462,17 @@ const Graph3D = {
       this.el.appendChild(overlay)
     }
 
-    // Determine the page path from the slug + type
-    // The graph nodes carry {label, slug, type} — we build the path.
+    // Determine the page path from the slug + type.
+    // basePath (e.g. "/personal/type") is context-aware; otherwise fall back
+    // to root-level "/plural/slug" (panel graph).
     const typePlurals = {
       note: "notes", concept: "concepts", entity: "entities",
       reference: "references", project: "projects", goal: "goals",
       plan: "plans", todo: "todos", query: "queries"
     }
-    const plural = typePlurals[node.type] || "notes"
-    const href = `/${plural}/${node.slug}`
+    const href = this.basePath
+      ? `${this.basePath}/${node.type}/${node.slug}`
+      : `/${typePlurals[node.type] || "notes"}/${node.slug}`
 
     overlay.innerHTML = `
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">

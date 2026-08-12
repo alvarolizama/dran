@@ -161,6 +161,9 @@ defmodule DranWeb.Plugs.Auth do
     }
   end
 
+  # Owner / created_by resolution lives in Dran.Auth (domain layer, no web deps).
+  # See Dran.Auth.resolve_owner/1 and Dran.Auth.resolve_created_by/1.
+
   # ── Cookie-based context restoration plug ──
 
   @doc """

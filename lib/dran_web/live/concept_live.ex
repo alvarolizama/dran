@@ -37,7 +37,7 @@ defmodule DranWeb.ConceptLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={~p"/panel/concepts"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/panel/concepts"} class="btn btn-ghost btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
             <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
@@ -187,6 +187,9 @@ defmodule DranWeb.ConceptLive do
 
   def handle_event("unarchive_page", params, socket),
     do: PageEdit.handle_event("unarchive_page", params, socket)
+
+  def handle_event("toggle_pinned", params, socket),
+    do: PageEdit.handle_event("toggle_pinned", params, socket)
 
   def handle_event("validate_page", params, socket),
     do: PageEdit.handle_event("validate_page", params, socket)

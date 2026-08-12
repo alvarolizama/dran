@@ -188,6 +188,9 @@ defmodule DranWeb.NoteLive do
   def handle_event("delete_page", params, socket),
     do: PageEdit.handle_event("delete_page", params, socket)
 
+  def handle_event("toggle_pinned", params, socket),
+    do: PageEdit.handle_event("toggle_pinned", params, socket)
+
   def handle_event("archive_page", params, socket),
     do: PageEdit.handle_event("archive_page", params, socket)
 

@@ -32,6 +32,10 @@ defmodule DranWeb.Router do
     plug :require_admin
   end
 
+  pipeline :admin_or_editor do
+    plug :require_admin_or_editor
+  end
+
   # ── Browser auth plug ──
 
   defp require_login(conn, _opts) do
@@ -75,6 +79,29 @@ defmodule DranWeb.Router do
     end
   end
 
+  # ── Admin or editor auth plug ──
+
+  defp require_admin_or_editor(conn, _opts) do
+    cond do
+      is_nil(Plug.Conn.get_session(conn, "user")) ->
+        conn
+        |> Phoenix.Controller.redirect(to: ~p"/login")
+        |> Plug.Conn.halt()
+
+      Plug.Conn.get_session(conn, "is_admin") == true ->
+        conn
+
+      Plug.Conn.get_session(conn, "is_editor") == true ->
+        conn
+
+      true ->
+        conn
+        |> Phoenix.Controller.put_flash(:error, "Panel access requires admin or editor role")
+        |> Phoenix.Controller.redirect(to: ~p"/")
+        |> Plug.Conn.halt()
+    end
+  end
+
   # ── API token auth plug ──
 
   defp require_api_token(conn, _opts) do
@@ -97,6 +124,7 @@ defmodule DranWeb.Router do
             assign(conn, :user, %{
               is_admin: false,
               email: "api-key:#{key.name}",
+              key_name: key.name,
               contexts: [key.context]
             })
 
@@ -151,7 +179,7 @@ defmodule DranWeb.Router do
   # ── Admin panel UI (data administration) ──────────────────────────────────
 
   scope "/panel", DranWeb do
-    pipe_through [:browser, :auth]
+    pipe_through [:browser, :auth, :admin_or_editor]
 
     live "/", DashboardLive, :index
 
@@ -335,5 +363,7 @@ defmodule DranWeb.Router do
     live "/:context_slug/type/:page_type/:slug", WikiLive, :page_show
     live "/:context_slug/collection/:slug", WikiLive, :collection
     live "/:context_slug/graph", WikiLive, :graph
+    live "/:context_slug/kanban", WikiLive, :kanban
+    live "/:context_slug/letter/:letter", WikiLive, :letter
   end
 end

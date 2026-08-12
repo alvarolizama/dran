@@ -353,9 +353,11 @@ Estas reglas aplican en TODOS los flows:
 5. **Right `page_type` + `meta.kind`.** Action item → `todo` via
    `dran_create_todo`. External source → `reference`. Named thing in the world
    → `entity`. Abstract knowledge/technique → `concept`. Loose thought → `note`.
-6. **Ownership defaults:** `owner: "alvaro"`, `created_by: "chaos manager"`
-   on everything you create. For todos, ALWAYS `clarify` the `assignee`
-   (`alvaro` / `chaos manager` / other — specify) before creating.
+6. **Ownership defaults:** `owner` is derived from the API key name — do NOT
+   pass it manually. `created_by` defaults to the authenticated identity but
+   can be overridden (e.g. `created_by: "chaos manager"`). For todos, ALWAYS
+   `clarify` the `assignee` (`alvaro` / `chaos manager` / other — specify)
+   before creating.
 7. **Ask when risky, infer when obvious.** Ask before deleting, renaming, or
    when goal/plan/project required fields (metric, horizon, priority) aren't
    inferable.

@@ -162,8 +162,8 @@ memoria humana para operar Dran.
        target_date: "2026-09-30",
        project_slug: "<project>"        → opcional
      },
-     owner: "alvaro",
-     created_by: "chaos manager"
+     owner: "alvaro",  # from API key, not settable
+     created_by: "chaos manager"  # overrideable
    })
 ```
 

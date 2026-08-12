@@ -192,8 +192,8 @@ en el plan — va en el todo de cada fase (ver `todo-flow` y `coder-flow`).
        project_slug: "<project>",   → opcional, independiente
        goal_slug: "<goal>"          → opcional, independiente
      },
-     owner: "alvaro",
-     created_by: "chaos manager"
+     owner: "alvaro",  # from API key, not settable
+     created_by: "chaos manager"  # overrideable
    })
 4. Crear los todos listados (vía todo-flow) con plan_slug apuntando aquí
 ```

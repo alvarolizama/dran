@@ -335,6 +335,12 @@ defmodule DranWeb.Layouts do
             label: gettext("Actividad"),
             icon: "hero-clock",
             path: ~p"/panel/activity"
+          },
+          %{
+            key: "wiki",
+            label: gettext("Wiki"),
+            icon: "hero-globe-alt",
+            path: ~p"/"
           }
         ]
       },
@@ -613,6 +619,8 @@ defmodule DranWeb.Layouts do
 
   attr :flash, :map, required: true
   attr :current_user, :string, default: nil
+  attr :is_admin, :boolean, default: false
+  attr :is_editor, :boolean, default: false
   attr :context_slug, :string, default: nil
   attr :contexts, :list, default: []
   attr :page_title, :string, default: nil
@@ -623,10 +631,16 @@ defmodule DranWeb.Layouts do
   attr :type_index, :list, default: []
   attr :collections, :list, default: []
   attr :pinned_pages, :list, default: []
+  attr :counts, :map, default: %{}
+  attr :collection_slug, :string, default: nil
 
   slot :inner_block, required: true
 
   def wiki(assigns) do
+    counts = compute_counts(assigns[:context_slug])
+
+    assigns = assign(assigns, counts: counts)
+
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
       <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
@@ -662,26 +676,29 @@ defmodule DranWeb.Layouts do
           </form>
         </div>
 
-        <nav class="flex-1 overflow-y-auto p-2 space-y-4">
+        <nav class="flex-1 overflow-y-auto p-2 space-y-4 flex flex-col">
           <.wiki_sidebar_nav
             context_slug={@context_slug}
             live_action={@live_action}
             type_index={@type_index}
             collections={@collections}
             pinned_pages={@pinned_pages}
+            contexts={@contexts}
+            counts={@counts}
+            collection_slug={@collection_slug}
           />
-        </nav>
-
-        <div class="p-3 border-t border-base-300 space-y-2">
           <a
-            :if={@contexts != []}
+            :if={@contexts != [] and (@is_admin or @is_editor)}
             href={~p"/panel"}
-            class="btn btn-ghost btn-xs gap-1.5 w-full justify-start"
+            class="mt-auto flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
             title={gettext("Panel")}
           >
-            <.icon name="hero-squares-2x2" class="size-4" />
-            {gettext("Panel")}
+            <.icon name="hero-squares-2x2" class="size-4 shrink-0" />
+            <span>{gettext("Panel")}</span>
           </a>
+        </nav>
+
+        <div class="p-3 border-t border-base-300">
           <.user_footer current_user={@current_user} />
         </div>
       </aside>
@@ -726,6 +743,9 @@ defmodule DranWeb.Layouts do
   attr :type_index, :list, default: []
   attr :collections, :list, default: []
   attr :pinned_pages, :list, default: []
+  attr :contexts, :list, default: []
+  attr :counts, :map, default: %{}
+  attr :collection_slug, :string, default: nil
 
   defp wiki_sidebar_nav(assigns) do
     ~H"""
@@ -767,20 +787,46 @@ defmodule DranWeb.Layouts do
           ]}
         >
           <.icon name="hero-share" class="size-4 shrink-0" />
-          <span>{gettext("Graph")}</span>
+          <span>{gettext("Grafo")}</span>
+        </a>
+        <a
+          :if={@counts[:todos] > 0}
+          href={~p"/#{@context_slug}/kanban"}
+          class={[
+            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+            @live_action == :kanban &&
+              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
+            @live_action != :kanban &&
+              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
+          ]}
+        >
+          <.icon name="hero-view-columns" class="size-4 shrink-0" />
+          <span>{gettext("Kanban")}</span>
+        </a>
+        <a
+          :if={@counts[:projects] > 0}
+          href={~p"/#{@context_slug}/type/project"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name="hero-rocket-launch" class="size-4 shrink-0" />
+          <span>{gettext("Proyectos")}</span>
+        </a>
+        <a
+          :if={@counts[:goals] > 0}
+          href={~p"/#{@context_slug}/type/goal"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name="hero-flag" class="size-4 shrink-0" />
+          <span>{gettext("Objetivos")}</span>
         </a>
       </div>
     </div>
 
-    <details :if={@context_slug && @pinned_pages != []} open class="group">
-      <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
-        <.icon
-          name="hero-chevron-right"
-          class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
-        />
+    <div :if={@context_slug && @pinned_pages != []}>
+      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
         {gettext("Pinned")}
-      </summary>
-      <div class="space-y-1 mt-1">
+      </h3>
+      <div class="space-y-1">
         <a
           :for={page <- @pinned_pages}
           href={~p"/#{@context_slug}/type/#{page.page_type}/#{page.slug}"}
@@ -790,25 +836,45 @@ defmodule DranWeb.Layouts do
           <span class="truncate">{page.title}</span>
         </a>
       </div>
-    </details>
+    </div>
 
-    <details :if={@context_slug && @collections != []} open class="group">
-      <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
-        <.icon
-          name="hero-chevron-right"
-          class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
-        />
-        {gettext("Collections")}
-      </summary>
-      <div class="space-y-1 mt-1">
+    <div :if={@context_slug && (@counts[:plans] > 0 || @counts[:todos] > 0)}>
+      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+        {gettext("Planificacion")}
+      </h3>
+      <div class="space-y-1">
+        <a
+          :if={@counts[:plans] > 0}
+          href={~p"/#{@context_slug}/type/plan"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name="hero-clipboard-document-list" class="size-4 shrink-0" />
+          <span>{gettext("Planes")}</span>
+        </a>
+        <a
+          :if={@counts[:todos] > 0}
+          href={~p"/#{@context_slug}/type/todo"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name="hero-check-circle" class="size-4 shrink-0" />
+          <span>{gettext("Tareas")}</span>
+        </a>
+      </div>
+    </div>
+
+    <div :if={@context_slug && @collections != []}>
+      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+        {gettext("Categorias")}
+      </h3>
+      <div class="space-y-1">
         <a
           :for={coll <- @collections}
           href={~p"/#{@context_slug}/collection/#{coll.slug}"}
           class={[
             "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-            @live_action == :collection &&
+            @live_action == :collection && @collection_slug == coll.slug &&
               "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
-            @live_action != :collection &&
+            (@live_action != :collection || @collection_slug != coll.slug) &&
               "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
           ]}
         >
@@ -816,17 +882,10 @@ defmodule DranWeb.Layouts do
           <span class="truncate">{coll.title}</span>
         </a>
       </div>
-    </details>
+    </div>
 
-    <details :if={@context_slug && @type_index != []} open class="group">
-      <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
-        <.icon
-          name="hero-chevron-right"
-          class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
-        />
-        {gettext("Categories")}
-      </summary>
-      <div class="space-y-1 mt-1">
+    <div :if={@context_slug && @type_index != []}>
+      <div class="space-y-1">
         <a
           :for={item <- @type_index}
           href={~p"/#{@context_slug}/type/#{item.type}"}
@@ -839,7 +898,7 @@ defmodule DranWeb.Layouts do
           </span>
         </a>
       </div>
-    </details>
+    </div>
     """
   end
 end

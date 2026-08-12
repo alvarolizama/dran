@@ -59,6 +59,16 @@ defmodule DranWeb.API.PageController do
     # Resolve context slug to ID if needed
     params = resolve_context_id(conn, params)
 
+    # Inject owner/created_by from the authenticated identity.
+    # owner is derived from the API key — not client-settable.
+    # created_by is client-settable (falls back to the auth identity).
+    user = conn.assigns[:user]
+
+    params =
+      params
+      |> Map.put_new("owner", Dran.Auth.resolve_owner(user))
+      |> Map.put_new("created_by", Dran.Auth.resolve_created_by(user))
+
     case Brain.create_page(params) do
       {:ok, page} ->
         conn

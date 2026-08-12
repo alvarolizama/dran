@@ -166,8 +166,8 @@ relaciones, operado por agentes vía MCP. Para Álvaro y sus agentes.
        start_date: "2026-08-01",
        target_date: "2026-12-31"
      },
-     owner: "alvaro",
-     created_by: "chaos manager"
+     owner: "alvaro",  # from API key, not settable
+     created_by: "chaos manager"  # overrideable
    })
 ```
 

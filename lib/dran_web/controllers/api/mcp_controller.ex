@@ -45,7 +45,14 @@ defmodule DranWeb.API.MCPController do
           # only context is the key's. Access checks then work unchanged.
           match?({:ok, _}, Accounts.valid_api_key?(token)) ->
             {:ok, key} = Accounts.valid_api_key?(token)
-            {:ok, %{is_admin: false, email: "api-key:#{key.name}", contexts: [key.context]}}
+
+            {:ok,
+             %{
+               is_admin: false,
+               email: "api-key:#{key.name}",
+               key_name: key.name,
+               contexts: [key.context]
+             }}
 
           true ->
             {:error, :unauthorized}

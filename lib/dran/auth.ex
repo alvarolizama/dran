@@ -45,4 +45,42 @@ defmodule Dran.Auth do
   """
   def valid_token?(token) when is_binary(token), do: token == @api_token
   def valid_token?(_), do: false
+
+  # ── Owner / created_by resolution ──
+
+  @doc """
+  Resolve the owner identity for a page being created.
+
+  The owner is derived from the API key name — it is NOT client-settable.
+  Falls back to "system" when no identity is available.
+  """
+  def resolve_owner(user) when is_map(user) do
+    Map.get(user, :key_name) ||
+      case Map.get(user, :email) do
+        "api-key:" <> _ = email -> email
+        "admin" -> "system"
+        email when is_binary(email) -> email
+        _ -> "system"
+      end
+  end
+
+  def resolve_owner(_), do: "system"
+
+  @doc """
+  Resolve the created_by identity for a page being created.
+
+  For API key auth, uses the key name. For user auth, uses the user email.
+  Falls back to "system" when no identity is available.
+  """
+  def resolve_created_by(user) when is_map(user) do
+    Map.get(user, :key_name) ||
+      case Map.get(user, :email) do
+        "api-key:" <> _ = email -> email
+        "admin" -> "admin"
+        email when is_binary(email) -> email
+        _ -> "system"
+      end
+  end
+
+  def resolve_created_by(_), do: "system"
 end
