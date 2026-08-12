@@ -644,7 +644,24 @@ defmodule DranWeb.WikiLive do
           <.icon name="hero-square-3-stack-3d" class="size-5 text-primary/70" />
           {gettext("Index")}
         </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-8">
+
+        <%!-- A-Z alphabet index --%>
+        <div :if={@alphabet != []} class="mb-8">
+          <h3 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-3">
+            {gettext("Alfabetico")}
+          </h3>
+          <div class="flex flex-wrap gap-1">
+            <a
+              :for={letter <- @alphabet}
+              href={~p"/#{@context.slug}/letter/#{letter}"}
+              class="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium bg-base-200 text-base-content/80 hover:bg-primary hover:text-white transition-colors"
+            >
+              {letter}
+            </a>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           <.link
             :for={item <- @type_index}
             navigate={~p"/#{@context.slug}/type/#{item.type}"}
@@ -663,22 +680,6 @@ defmodule DranWeb.WikiLive do
               </span>
             </div>
           </.link>
-        </div>
-
-        <%!-- A-Z alphabet index --%>
-        <div :if={@alphabet != []}>
-          <h3 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-3">
-            {gettext("Alfabetico")}
-          </h3>
-          <div class="flex flex-wrap gap-1">
-            <a
-              :for={letter <- @alphabet}
-              href={~p"/#{@context.slug}/letter/#{letter}"}
-              class="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium bg-base-200 text-base-content/80 hover:bg-primary hover:text-white transition-colors"
-            >
-              {letter}
-            </a>
-          </div>
         </div>
       </div>
     </div>
