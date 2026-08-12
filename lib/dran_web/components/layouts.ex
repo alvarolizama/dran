@@ -777,19 +777,6 @@ defmodule DranWeb.Layouts do
           <span>{gettext("Home")}</span>
         </a>
         <a
-          href={~p"/#{@context_slug}/graph"}
-          class={[
-            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-            @live_action == :graph &&
-              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
-            @live_action != :graph &&
-              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
-          ]}
-        >
-          <.icon name="hero-share" class="size-4 shrink-0" />
-          <span>{gettext("Grafo")}</span>
-        </a>
-        <a
           :if={@counts[:todos] > 0}
           href={~p"/#{@context_slug}/kanban"}
           class={[
@@ -824,6 +811,19 @@ defmodule DranWeb.Layouts do
           <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
             {@counts[:goals]}
           </span>
+        </a>
+        <a
+          href={~p"/#{@context_slug}/graph"}
+          class={[
+            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+            @live_action == :graph &&
+              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
+            @live_action != :graph &&
+              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
+          ]}
+        >
+          <.icon name="hero-share" class="size-4 shrink-0" />
+          <span>{gettext("Grafo")}</span>
         </a>
       </div>
     </div>
