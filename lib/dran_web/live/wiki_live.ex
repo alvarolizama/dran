@@ -647,9 +647,6 @@ defmodule DranWeb.WikiLive do
 
         <%!-- A-Z alphabet index --%>
         <div :if={@alphabet != []} class="mb-8">
-          <h3 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-3">
-            {gettext("Alfabetico")}
-          </h3>
           <div class="flex flex-wrap gap-1">
             <a
               :for={letter <- @alphabet}
