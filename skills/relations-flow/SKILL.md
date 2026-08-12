@@ -168,7 +168,7 @@ dran_update_page({ slug: "plan-x",
 
 **Borrar relación:**
 ```
-dran_delete_relation({ from: "a", to: "b" })   → clarify si es masivo
+dran_delete_relation({ source_slug: "a", target_slug: "b" })   → clarify si es masivo
 ```
 
 **Explorar el vecindario:**

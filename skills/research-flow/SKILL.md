@@ -136,8 +136,8 @@ dran_create_page({
 
 **Relacionar:**
 ```
-dran_create_relation({ from: "<query-slug>", to: "<reference-slug>", relation_type: "related" })
-dran_create_relation({ from: "<concept-slug>", to: "<query-slug>", relation_type: "part_of" })
+dran_create_relation({ source_slug: "<query-slug>", target_slug: "<reference-slug>", relation_type: "related" })
+dran_create_relation({ source_slug: "<concept-slug>", target_slug: "<query-slug>", relation_type: "part_of" })
 ```
 
 ### Props al capturar (meta.props)
@@ -181,7 +181,7 @@ con local/global/drift search y crea la query page con citas — operación en
 | `web_extract` | URLs (3-5 mejores) | Contenido limpio |
 | `dran_search` | `query` | ¿Ya lo tenemos? |
 | `dran_create_page` | `page_type: "reference"` / `"query"` | Página + slug |
-| `dran_create_relation` | `from`, `to`, `relation_type` | Edge tipado |
+| `dran_create_relation` | `source_slug`, `target_slug`, `relation_type` | Edge tipado |
 
 ## Cuándo NO usar este skill
 

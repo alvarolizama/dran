@@ -198,7 +198,7 @@ dran_list_pages({ type: "entity", props: { framework: "phoenix" } })
 | `dran_search` | `query` (2-3 variantes) | ¿Ya existe? |
 | `dran_create_page` | `page_type`, `body`, `meta.kind` | Página + slug |
 | `dran_update_page` | `slug` + campos | Promoción/edición |
-| `dran_create_relation` | `from`, `to`, `relation_type` | Edge tipado |
+| `dran_create_relation` | `source_slug`, `target_slug`, `relation_type` | Edge tipado |
 | Prompt `brainstorm` | tema | Ideas interlinkeadas |
 
 ## Cuándo NO usar este skill

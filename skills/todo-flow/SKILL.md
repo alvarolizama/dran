@@ -154,7 +154,7 @@ paso SIEMPRE valida el entregable, y el flujo mueve el kanban
 ```markdown
 ## Qué hacer
 
-Auditar las 17 tools MCP actuales y listar su estado de documentación.
+Auditar las 18 tools MCP actuales y listar su estado de documentación.
 
 ## Entregable
 
@@ -168,7 +168,7 @@ flowchart TD
   K1["MOVER kanban → in_progress"] --> P1["READ lib/dran/mcp.ex\nextraer tools registradas"]
   P1 --> P2["READ test/dran/mcp_test.exs\nverificar tests por tool"]
   P2 --> P3["CREATE comentario\npublicar tabla completa"]
-  P3 --> V["VERIFY entregable\n17 tools + descripción + tests"]
+  P3 --> V["VERIFY entregable\n18 tools + descripción + tests"]
   V -->|"no pasa"| P3
   V -->|"pasa"| K2["MOVER kanban → done"]
 ```
@@ -183,7 +183,7 @@ flowchart TD
 
 ## Cómo verificar
 
-- [ ] Lista completa en comentario (17 tools)
+- [ ] Lista completa en comentario (18 tools)
 - [ ] Cada tool tiene descripción
 - [ ] Tests existentes identificados por tool
 ```

@@ -117,12 +117,12 @@ de coverage"), no preguntes lo que ya sabes.
 ```markdown
 ## Por qué
 
-Documentar y probar las 17 tools MCP para que el agente no dependa de
+Documentar y probar las 18 tools MCP para que el agente no dependa de
 memoria humana para operar Dran.
 
 ## Notas
 
-- 2026-08-08: 12/17 tools con smoke test verde.
+- 2026-08-08: 12/18 tools con smoke test verde.
 ```
 
 ## Uso de Dran
