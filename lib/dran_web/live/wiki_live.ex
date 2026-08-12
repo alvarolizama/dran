@@ -597,7 +597,7 @@ defmodule DranWeb.WikiLive do
           <.icon name="hero-star" class="size-5 text-amber-500" />
           {gettext("Pinned")}
         </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <.link
             :for={page <- @pinned_pages}
             navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
@@ -622,7 +622,7 @@ defmodule DranWeb.WikiLive do
           <.icon name="hero-funnel" class="size-5 text-primary/70" />
           {gettext("Categorias")}
         </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <.link
             :for={coll <- @collections}
             navigate={~p"/#{@context.slug}/collection/#{coll.slug}"}
