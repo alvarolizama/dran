@@ -803,6 +803,28 @@ defmodule DranWeb.Layouts do
           <.icon name="hero-view-columns" class="size-4 shrink-0" />
           <span>{gettext("Kanban")}</span>
         </a>
+        <a
+          :if={@counts[:projects] > 0}
+          href={~p"/#{@context_slug}/type/project"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name="hero-rocket-launch" class="size-4 shrink-0" />
+          <span>{gettext("Proyectos")}</span>
+          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
+            {@counts[:projects]}
+          </span>
+        </a>
+        <a
+          :if={@counts[:goals] > 0}
+          href={~p"/#{@context_slug}/type/goal"}
+          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        >
+          <.icon name="hero-flag" class="size-4 shrink-0" />
+          <span>{gettext("Objetivos")}</span>
+          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
+            {@counts[:goals]}
+          </span>
+        </a>
       </div>
     </div>
 

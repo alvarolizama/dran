@@ -1274,9 +1274,13 @@ defmodule DranWeb.WikiLive do
 
   # ── Helpers ─────────────────────────────────────────────────────────────────
 
+  # Types shown as featured links (Proyectos, Objetivos) above the type_index
+  # in the sidebar — excluded from the generic list to avoid duplication.
+  @featured_types ~w(project goal)
+
   defp build_type_index(context) do
     disabled = context.disabled_page_types || []
-    excluded = @wiki_hidden_types ++ disabled
+    excluded = @wiki_hidden_types ++ disabled ++ @featured_types
 
     BrainPageTypes.types()
     |> Enum.reject(&(&1 in excluded))
