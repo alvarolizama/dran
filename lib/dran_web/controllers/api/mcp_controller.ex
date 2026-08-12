@@ -51,7 +51,8 @@ defmodule DranWeb.API.MCPController do
                is_admin: false,
                email: "api-key:#{key.name}",
                key_name: key.name,
-               contexts: [key.context]
+               contexts: [key.context],
+               write_access: key.write_access
              }}
 
           true ->

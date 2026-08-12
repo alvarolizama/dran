@@ -887,28 +887,42 @@ defmodule Dran.MCP do
         tool_name = params["name"]
         args = params["arguments"] || %{}
 
-        # SEC-001: validate that the requested context is accessible by the user
-        case validate_tool_context_access(args, user) do
-          :ok ->
-            result = execute_tool(tool_name, args, user)
-
-            %{
-              "jsonrpc" => "2.0",
-              "id" => id,
-              "result" => %{
-                "content" => [%{"type" => "text", "text" => result}]
-              }
-            }
-
-          {:error, :forbidden} ->
+        cond do
+          # SEC-002: read-only API keys cannot call write tools
+          write_tool?(tool_name) and not can_write?(user) ->
             %{
               "jsonrpc" => "2.0",
               "id" => id,
               "error" => %{
                 "code" => -32602,
-                "message" => "Access to context denied"
+                "message" => "API key is read-only — write access disabled"
               }
             }
+
+          true ->
+            # SEC-001: validate that the requested context is accessible by the user
+            case validate_tool_context_access(args, user) do
+              :ok ->
+                result = execute_tool(tool_name, args, user)
+
+                %{
+                  "jsonrpc" => "2.0",
+                  "id" => id,
+                  "result" => %{
+                    "content" => [%{"type" => "text", "text" => result}]
+                  }
+                }
+
+              {:error, :forbidden} ->
+                %{
+                  "jsonrpc" => "2.0",
+                  "id" => id,
+                  "error" => %{
+                    "code" => -32602,
+                    "message" => "Access to context denied"
+                  }
+                }
+            end
         end
 
       %{"jsonrpc" => "2.0", "method" => "resources/list", "id" => id} ->
@@ -1034,6 +1048,29 @@ defmodule Dran.MCP do
   end
 
   defp user_has_context_access?(_, _), do: false
+
+  # SEC-002: Read-only API key enforcement
+  @write_tools MapSet.new([
+                 "dran_create_page",
+                 "dran_update_page",
+                 "dran_delete_page",
+                 "dran_create_todo",
+                 "dran_update_todo",
+                 "dran_create_relation",
+                 "dran_delete_relation",
+                 "dran_rename_slug",
+                 "dran_reaugment_page",
+                 "dran_start_agent",
+                 "dran_generate_community_summaries"
+               ])
+
+  defp write_tool?(name) when is_binary(name), do: MapSet.member?(@write_tools, name)
+  defp write_tool?(_), do: false
+
+  defp can_write?(%{write_access: true}), do: true
+  defp can_write?(%{write_access: false}), do: false
+  # nil/absent — normal users and legacy admin always have write access
+  defp can_write?(_), do: true
 
   defp inject_user_context(msg, nil), do: msg
 

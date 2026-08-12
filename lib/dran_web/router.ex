@@ -125,7 +125,8 @@ defmodule DranWeb.Router do
               is_admin: false,
               email: "api-key:#{key.name}",
               key_name: key.name,
-              contexts: [key.context]
+              contexts: [key.context],
+              write_access: key.write_access
             })
 
           true ->
@@ -150,6 +151,23 @@ defmodule DranWeb.Router do
     |> Plug.Conn.put_resp_content_type("application/json")
     |> Plug.Conn.send_resp(401, Jason.encode!(%{errors: %{detail: message}}))
     |> Plug.Conn.halt()
+  end
+
+  # ── API write-access plug (SEC-002) ──
+
+  defp require_write_access(conn, _opts) do
+    user = conn.assigns[:user]
+
+    # Only API keys with write_access: false are restricted.
+    # Normal users (nil) and admin (is_admin: true) always pass.
+    if user && Map.get(user, :write_access) == false do
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(403, Jason.encode!(%{errors: %{detail: "API key is read-only"}}))
+      |> Plug.Conn.halt()
+    else
+      conn
+    end
   end
 
   # ── Public routes (login page, session, health) ──
@@ -273,51 +291,63 @@ defmodule DranWeb.Router do
   scope "/api", DranWeb.API do
     pipe_through [:api, :api_auth]
 
-    # Contexts
+    # Contexts (read + export)
     get "/contexts", ContextController, :index
-    post "/contexts", ContextController, :create
     get "/contexts/:slug", ContextController, :show
-    put "/contexts/:slug", ContextController, :update
-    delete "/contexts/:slug", ContextController, :delete
     get "/contexts/:slug/export", ExportController, :show
 
     # Full export (by context id)
     get "/export/:context/full", ExportController, :full
 
-    # Pages
+    # Pages (read + graph)
     get "/pages", PageController, :index
-    post "/pages", PageController, :create
     get "/pages/:slug", PageController, :show
-    put "/pages/:slug", PageController, :update
-    delete "/pages/:slug", PageController, :delete
     get "/pages/:slug/links", PageController, :links
     get "/pages/:slug/graph", PageController, :graph
 
-    # Relations
-    post "/relations", RelationController, :create
-    delete "/relations/:id", RelationController, :delete
-
-    # Search
+    # Search (read-only)
     get "/search", SearchController, :search
     get "/search/fuzzy", SearchController, :fuzzy
     get "/search/semantic", SearchController, :semantic
 
-    # Goals
+    # Goals (read-only)
     get "/goals", GoalController, :index
     get "/goals/:slug", GoalController, :show
 
-    # Todos
+    # Todos (read)
     get "/todos", TodoController, :index
-    post "/todos", TodoController, :create
-    put "/todos/:id", TodoController, :update
 
-    # Quality / maintenance
+    # Quality / maintenance (read-only)
     get "/lint", LintController, :lint
 
-    # Wiki index + graph + log
+    # Wiki index + graph + log (read-only)
     get "/index", IndexController, :index
     get "/graph", GraphController, :graph
     get "/log", LogController, :index
+  end
+
+  # ── REST API — write routes (requires write_access on API keys) ────────────
+
+  scope "/api", DranWeb.API do
+    pipe_through [:api, :api_auth, :require_write_access]
+
+    # Contexts (write)
+    post "/contexts", ContextController, :create
+    put "/contexts/:slug", ContextController, :update
+    delete "/contexts/:slug", ContextController, :delete
+
+    # Pages (write)
+    post "/pages", PageController, :create
+    put "/pages/:slug", PageController, :update
+    delete "/pages/:slug", PageController, :delete
+
+    # Relations (write)
+    post "/relations", RelationController, :create
+    delete "/relations/:id", RelationController, :delete
+
+    # Todos (write)
+    post "/todos", TodoController, :create
+    put "/todos/:id", TodoController, :update
   end
 
   # ── MCP Streamable HTTP endpoint (self-authenticating) ────────────────────

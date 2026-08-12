@@ -241,8 +241,13 @@ defmodule DranWeb.SettingsLive do
   def handle_event("create_api_key", %{"api_key" => params}, socket) do
     name = Map.get(params, "name", "") |> String.trim()
     context_id = Map.get(params, "context_id", "")
+    write_access = Map.get(params, "write_access") == "true"
 
-    case Dran.Accounts.create_api_key(%{name: name, context_id: context_id}) do
+    case Dran.Accounts.create_api_key(%{
+           name: name,
+           context_id: context_id,
+           write_access: write_access
+         }) do
       {:ok, key} ->
         socket =
           socket
@@ -318,6 +323,23 @@ defmodule DranWeb.SettingsLive do
      socket
      |> assign(api_keys: Dran.Accounts.list_api_keys())
      |> put_flash(:info, gettext("API key deleted"))}
+  end
+
+  @impl true
+  def handle_event("toggle_write_access", %{"id" => id}, socket) do
+    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
+
+    {:ok, _} = Dran.Accounts.update_api_key(key, %{write_access: not key.write_access})
+
+    flash =
+      if key.write_access,
+        do: gettext("Write access disabled — key is now read-only"),
+        else: gettext("Write access enabled")
+
+    {:noreply,
+     socket
+     |> assign(api_keys: Dran.Accounts.list_api_keys())
+     |> put_flash(:info, flash)}
   end
 
   @impl true
@@ -1979,6 +2001,22 @@ defmodule DranWeb.SettingsLive do
               </div>
             </div>
 
+            <label class="label cursor-pointer justify-start gap-3 py-1">
+              <input
+                type="checkbox"
+                name="api_key[write_access]"
+                class="checkbox checkbox-sm checkbox-secondary"
+              />
+              <span class="label-text">
+                {gettext("Write access")}
+                <span class="text-base-content/50 text-xs">
+                  {gettext(
+                    "(unchecked = read-only: search, get pages, lint — no create/update/delete)"
+                  )}
+                </span>
+              </span>
+            </label>
+
             <button type="submit" class="btn btn-primary btn-sm">
               {gettext("Create Key")}
             </button>
@@ -1998,6 +2036,7 @@ defmodule DranWeb.SettingsLive do
                   <th>{gettext("Context")}</th>
                   <th>{gettext("Token")}</th>
                   <th>{gettext("Status")}</th>
+                  <th>{gettext("Write")}</th>
                   <th>{gettext("Created")}</th>
                   <th></th>
                 </tr>
@@ -2031,6 +2070,26 @@ defmodule DranWeb.SettingsLive do
                     <span :if={!key.revoked_at} class="badge badge-success badge-sm">
                       {gettext("Active")}
                     </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      phx-click="toggle_write_access"
+                      phx-value-id={key.id}
+                      class="btn btn-ghost btn-xs"
+                      title={
+                        if key.write_access,
+                          do: gettext("Click to make read-only"),
+                          else: gettext("Click to enable write access")
+                      }
+                    >
+                      <span :if={key.write_access} class="badge badge-primary badge-sm">
+                        {gettext("R/W")}
+                      </span>
+                      <span :if={!key.write_access} class="badge badge-ghost badge-sm">
+                        {gettext("R/O")}
+                      </span>
+                    </button>
                   </td>
                   <td class="text-xs text-base-content/60">
                     {Calendar.strftime(key.inserted_at, "%Y-%m-%d")}
@@ -2086,7 +2145,7 @@ defmodule DranWeb.SettingsLive do
                   </td>
                 </tr>
                 <tr :if={@api_keys == []}>
-                  <td colspan="6" class="text-center text-base-content/50 py-6">
+                  <td colspan="7" class="text-center text-base-content/50 py-6">
                     {gettext("No API keys yet — create one above.")}
                   </td>
                 </tr>

@@ -198,6 +198,160 @@ defmodule DranWeb.E2EAuthTest do
       assert Accounts.valid_api_key?(key.token) == :error
       refute Dran.Repo.get(Accounts.ApiKey, key.id)
     end
+
+    test "new API key defaults to read-only (write_access=false)", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+      assert key.write_access == false
+    end
+
+    test "create_api_key with write_access: true", %{ctx1: ctx1} do
+      {:ok, key} =
+        Accounts.create_api_key(%{name: "Writer", context_id: ctx1.id, write_access: true})
+
+      assert key.write_access == true
+    end
+
+    test "update_api_key toggles write_access", %{ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+      assert key.write_access == false
+
+      {:ok, updated} = Accounts.update_api_key(key, %{write_access: true})
+      assert updated.write_access == true
+
+      {:ok, updated2} = Accounts.update_api_key(updated, %{write_access: false})
+      assert updated2.write_access == false
+    end
+
+    test "MCP read-only key can call read tools (search)", %{conn: conn, ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+
+      msg = %{
+        "jsonrpc" => "2.0",
+        "method" => "tools/call",
+        "id" => 1,
+        "params" => %{
+          "name" => "dran_search",
+          "arguments" => %{"query" => "test", "context" => ctx1.slug}
+        }
+      }
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", msg)
+
+      assert conn.status == 200
+    end
+  end
+
+  describe "write_access enforcement — MCP" do
+    test "read-only key is blocked from dran_create_page", %{conn: conn, ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+
+      msg = %{
+        "jsonrpc" => "2.0",
+        "method" => "tools/call",
+        "id" => 1,
+        "params" => %{
+          "name" => "dran_create_page",
+          "arguments" => %{"context" => ctx1.slug, "page_type" => "note", "title" => "Test"}
+        }
+      }
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", msg)
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["error"]["message"] =~ "read-only"
+    end
+
+    test "read-only key is blocked from dran_create_todo", %{conn: conn, ctx1: ctx1} do
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+
+      msg = %{
+        "jsonrpc" => "2.0",
+        "method" => "tools/call",
+        "id" => 1,
+        "params" => %{
+          "name" => "dran_create_todo",
+          "arguments" => %{"context" => ctx1.slug, "title" => "T", "slug" => "t"}
+        }
+      }
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", msg)
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["error"]["message"] =~ "read-only"
+    end
+
+    test "write-enabled key can call dran_create_page", %{conn: conn, ctx1: ctx1} do
+      {:ok, key} =
+        Accounts.create_api_key(%{name: "Writer", context_id: ctx1.id, write_access: true})
+
+      msg = %{
+        "jsonrpc" => "2.0",
+        "method" => "tools/call",
+        "id" => 1,
+        "params" => %{
+          "name" => "dran_create_page",
+          "arguments" => %{
+            "context" => ctx1.slug,
+            "page_type" => "note",
+            "title" => "Write test",
+            "slug" => "write-test-#{System.unique_integer([:positive])}"
+          }
+        }
+      }
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", msg)
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      # No "error" key — the result is in "result"
+      refute Map.has_key?(body, "error")
+      assert body["result"]["content"]
+    end
+
+    test "legacy admin token bypasses write_access check", %{conn: conn, ctx1: ctx1} do
+      msg = %{
+        "jsonrpc" => "2.0",
+        "method" => "tools/call",
+        "id" => 1,
+        "params" => %{
+          "name" => "dran_create_page",
+          "arguments" => %{
+            "context" => ctx1.slug,
+            "page_type" => "note",
+            "title" => "Admin test",
+            "slug" => "admin-test-#{System.unique_integer([:positive])}"
+          }
+        }
+      }
+
+      conn =
+        conn
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{Dran.Auth.api_token()}")
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Phoenix.ConnTest.post("/api/mcp", msg)
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      refute Map.has_key?(body, "error")
+    end
   end
 
   describe "per-user default context" do

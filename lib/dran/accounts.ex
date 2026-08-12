@@ -180,6 +180,7 @@ defmodule Dran.Accounts do
     |> ApiKey.changeset(%{
       name: attrs.name,
       context_id: attrs.context_id,
+      write_access: Map.get(attrs, :write_access, false),
       token_hash: ApiKey.hash_token(token),
       token_prefix: ApiKey.prefix_of(token)
     })
@@ -188,6 +189,15 @@ defmodule Dran.Accounts do
       {:ok, key} -> {:ok, %{key | token: token}}
       error -> error
     end
+  end
+
+  @doc """
+  Update an API key's mutable fields (currently `write_access`).
+  """
+  def update_api_key(%ApiKey{} = key, attrs) do
+    key
+    |> ApiKey.changeset(attrs)
+    |> Repo.update()
   end
 
   @doc """

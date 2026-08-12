@@ -26,6 +26,7 @@ defmodule Dran.Accounts.ApiKey do
     field :token_hash, :string
     field :token_prefix, :string
     field :revoked_at, :utc_datetime
+    field :write_access, :boolean, default: false
 
     # Virtual — present only in the create/regenerate result, never persisted
     field :token, :string, virtual: true
@@ -38,7 +39,7 @@ defmodule Dran.Accounts.ApiKey do
   @doc "Changeset for creating an API key"
   def changeset(api_key, attrs) do
     api_key
-    |> cast(attrs, [:name, :token_hash, :token_prefix, :context_id])
+    |> cast(attrs, [:name, :token_hash, :token_prefix, :context_id, :write_access])
     |> validate_required([:name, :token_hash, :token_prefix, :context_id])
     |> unique_constraint(:token_hash)
     |> foreign_key_constraint(:context_id)
