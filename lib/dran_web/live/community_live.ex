@@ -258,9 +258,9 @@ defmodule DranWeb.CommunityLive do
     {summary, community_pages} =
       if context do
         with {community_id, ""} <- Integer.parse(id),
-             {:ok, summary} <- CommunitySummaries.get_summary(context.id, community_id) do
+             {:ok, raw} <- CommunitySummaries.get_summary(context.id, community_id) do
           pages = Brain.community_pages(context.id, community_id)
-          {summary, pages}
+          {normalize_summary(raw), pages}
         else
           _ -> {nil, []}
         end
@@ -342,7 +342,7 @@ defmodule DranWeb.CommunityLive do
                socket.assigns.context.id,
                socket.assigns.summary.community_id
              ) do
-          {:ok, s} -> s
+          {:ok, s} -> normalize_summary(s)
           _ -> socket.assigns.summary
         end
       else
@@ -376,6 +376,24 @@ defmodule DranWeb.CommunityLive do
   defp load_summaries(nil), do: []
 
   defp load_summaries(context) do
-    CommunitySummaries.list_summaries(context.id)
+    context.id
+    |> CommunitySummaries.list_summaries()
+    |> Enum.map(&normalize_summary/1)
+  end
+
+  # Postgres {:array, :map} round-trips maps with string keys, but the HEEX
+  # accesses them with dot syntax (page.title). Normalize top_pages maps to
+  # atom keys so the template doesn't KeyError.
+  defp normalize_summary(summary) do
+    top_pages =
+      Enum.map(summary.top_pages || [], fn page ->
+        %{
+          slug: Map.get(page, "slug") || Map.get(page, :slug),
+          title: Map.get(page, "title") || Map.get(page, :title),
+          pagerank: Map.get(page, "pagerank") || Map.get(page, :pagerank)
+        }
+      end)
+
+    %{summary | top_pages: top_pages}
   end
 end

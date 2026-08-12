@@ -639,7 +639,26 @@ defmodule DranWeb.Layouts do
   def wiki(assigns) do
     counts = compute_counts(assigns[:context_slug])
 
-    assigns = assign(assigns, counts: counts)
+    # Resolve admin/editor from the DB — same as app/1. The wiki layout must
+    # not depend on the caller passing correct flags; it should resolve them
+    # independently so the Panel button always shows for admins, even if the
+    # LiveView's socket assigns are stale or incomplete.
+    {is_admin, is_editor} =
+      if is_binary(assigns[:current_user]) do
+        case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
+          nil -> {true, false}
+          user -> {user.is_admin == true, user.is_editor == true}
+        end
+      else
+        {assigns[:is_admin] || false, assigns[:is_editor] || false}
+      end
+
+    assigns =
+      assign(assigns,
+        counts: counts,
+        is_admin: is_admin,
+        is_editor: is_editor
+      )
 
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
