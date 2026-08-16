@@ -1,6 +1,8 @@
 defmodule DranWeb.SettingsLiveTest do
   use DranWeb.ConnCase, async: false
 
+  import Ecto.Query
+
   alias Dran.Accounts
   alias Dran.Settings
 
@@ -80,6 +82,43 @@ defmodule DranWeb.SettingsLiveTest do
 
     assert html =~ t("Default context")
     assert html =~ "default-context-select-"
+  end
+
+  describe "google open signup toggle" do
+    setup do
+      Application.put_env(:dran, :google_oauth,
+        client_id: "test-client",
+        client_secret: "test-secret",
+        redirect_uri: "http://localhost/auth/google/callback",
+        allowed_domains: []
+      )
+
+      on_exit(fn ->
+        Application.delete_env(:dran, :google_oauth)
+        Dran.Repo.delete_all(from s in "settings", where: s.key == "wiki_google_open_signup")
+      end)
+
+      :ok
+    end
+
+    test "toggling persists the setting and re-renders the checkbox", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/panel/settings/users")
+
+      toggle = "input[phx-click='toggle_wiki_google_signup']"
+
+      refute Settings.get("wiki_google_open_signup")
+      refute has_element?(view, "#{toggle}[checked]")
+
+      _ = view |> element(toggle) |> render_click()
+
+      assert Settings.get("wiki_google_open_signup") == true
+      assert has_element?(view, "#{toggle}[checked]")
+
+      _ = view |> element(toggle) |> render_click()
+
+      refute Settings.get("wiki_google_open_signup")
+      refute has_element?(view, "#{toggle}[checked]")
+    end
   end
 
   test "renders the brain tuning form with default values", %{conn: conn} do

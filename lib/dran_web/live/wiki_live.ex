@@ -39,6 +39,13 @@ defmodule DranWeb.WikiLive do
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
+    # The wiki is browsable by ALL logged-in users (including wiki-only
+    # auto-registered accounts with no contexts assigned). The sidebar
+    # context selector must therefore list every wiki-enabled context, not
+    # just the current user's assigned contexts. `assign_to_socket` sets
+    # `contexts` to the user's accessible contexts, so override it here.
+    socket = assign(socket, contexts: Brain.list_wiki_contexts())
+
     # Subscribe to PubSub for the context so the graph view can debounce
     # page_changed broadcasts and tell the hook to re-fetch — same pattern
     # as GraphLive (panel).

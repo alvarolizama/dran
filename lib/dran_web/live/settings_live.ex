@@ -984,6 +984,7 @@ defmodule DranWeb.SettingsLive do
               all_contexts={@all_contexts}
               form={@new_user_form}
               show_user_modal={@show_user_modal}
+              wiki_google_open_signup={@wiki_google_open_signup}
             />
           </div>
 
@@ -2307,6 +2308,7 @@ defmodule DranWeb.SettingsLive do
   attr :all_contexts, :list, required: true
   attr :form, :map, required: true
   attr :show_user_modal, :boolean, default: false
+  attr :wiki_google_open_signup, :boolean, default: false
 
   def users_section(assigns) do
     ~H"""
@@ -2344,7 +2346,7 @@ defmodule DranWeb.SettingsLive do
           </div>
           <input
             type="checkbox"
-            checked={Map.get(assigns, :wiki_google_open_signup, false)}
+            checked={@wiki_google_open_signup}
             phx-click="toggle_wiki_google_signup"
             class="toggle toggle-sm toggle-primary"
           />
