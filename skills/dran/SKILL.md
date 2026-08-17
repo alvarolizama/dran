@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, second-brain, mcp, knowledge-graph, notes, productivity]
-    related_skills: [project-flow, goal-flow, planning-flow, todo-flow, coder-flow, research-flow, note-taking-flow, relations-flow, maintenance-flow]
+    related_skills: [project-flow, goal-flow, planning-flow, todo-flow, coder-flow, research-flow, note-taking-flow, relations-flow, maintenance-flow, verifica-dran]
 ---
 
 # dran — MCP reference + suite router
@@ -411,8 +411,8 @@ flowchart LR
 ```
 
 - **todo** — create in `backlog`, move to `in_progress` immediately with
-  `dran_update_todo`, `done` only after verifying + committing. One
-  `in_progress` at a time.
+  `dran_update_todo`, `done` only after verifying (cobertura + done-check en
+  `verifica` vía `verifica-dran`) + committing. One `in_progress` at a time.
 - **project** — create `draft`; auto-`active` when linked to a plan/todo/goal;
   `done`/`on_hold`/`archived` manual.
 - **plan** — create `draft`; auto-`active` when a task executes; auto-`done`
