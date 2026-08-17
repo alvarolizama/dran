@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, todo, kanban, execution]
-    related_skills: [dran, project-flow, goal-flow, planning-flow, coder-flow, relations-flow, verifica, verifica-dran]
+    related_skills: [dran, project-flow, goal-flow, planning-flow, coder-flow, relations-flow]
 ---
 
 # todo-flow — Crear todos en Dran (dev y generales)
@@ -93,8 +93,8 @@ no hay forma honesta de cerrarlo.
 1. **Anti-micro:** los pasos intermedios van como checklist interna del body
    (checkboxes), nunca como todos hijos.
 2. **`done` solo con verificación real** — todos los checks verdes + evidencia
-   (tests, commits, entregable). Qué cuenta como "verificación real"
-   (cobertura, done-check) vive en `verifica` vía `verifica-dran`. Nunca
+   (tests, commits, entregable). "Verificación real" = cobertura declarada (qué la verificó + con
+   qué + qué cubrió) + done-check (re-leer el objetivo línea por línea). Nunca
    "ya casi".
 3. **Huérfanos legítimos** — un todo sin links es un inbox item estilo GTD.
    No forzar `project_slug`/`goal_slug`/`plan_slug` si no aplican.
@@ -369,5 +369,4 @@ flowchart LR
 - Plan que lista estos todos: `planning-flow`
 - Ejecución de todos de desarrollo: `coder-flow`
 - Goal que recibe progress de los todos: `goal-flow`
-- Verificación y done-check: `verifica` (adaptador `verifica-dran`)
 - Links independientes: `relations-flow`

@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, coding, execution, subagents, gates, mermaid]
-    related_skills: [dran, todo-flow, planning-flow, verifica, verifica-dran, git-workflow, delegated-implementation-planning]
+    related_skills: [dran, todo-flow, planning-flow, git-workflow, delegated-implementation-planning]
 ---
 
 # coder-flow — Ejecutar un todo de desarrollo
@@ -157,7 +157,7 @@ brief + output del gate). Nunca se avanza con un gate rojo.
 ## Verificación global (antes de `done`)
 
 El done-check (releer el objetivo línea por línea, declarar cobertura, retry
-con diagnóstico) vive en `verifica`, cargado vía `verifica-dran`. Este skill
+con diagnóstico) es obligatorio. Este skill
 solo aplica el gate Elixir final:
 
 - [ ] Suite completa verde (en Elixir: `mix precommit` o equivalente del repo)
@@ -212,5 +212,4 @@ solo aplica el gate Elixir final:
 - Commit hygiene para subagentes: skill `git-workflow`
 - Dispatch de fases en proyectos grandes: skill
   `delegated-implementation-planning`
-- Verificación y done-check: `verifica` (adaptador `verifica-dran`)
 - Referencia MCP: `dran` — skill principal
