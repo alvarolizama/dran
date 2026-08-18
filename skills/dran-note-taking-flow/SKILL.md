@@ -1,5 +1,5 @@
 ---
-name: note-taking-flow
+name: dran-note-taking-flow
 description: "Use when capturing knowledge in Dran — notes, concepts, entities, references with the right page_type and kind. Triggers on the Spanish words guarda, captura, anota, apunta."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, capture, notes, concepts, entities]
-    related_skills: [dran, research-flow, relations-flow, maintenance-flow]
+    related_skills: [dran, dran-research-flow, dran-relations-flow, dran-maintenance-flow]
 ---
 
-# note-taking-flow — Capturing knowledge in Dran
+# dran-note-taking-flow — Capturing knowledge in Dran
 
 Everything that is NOT execution (project/goal/plan/todo) is capture: notes,
 concepts, entities, references. The mother rule: **when in doubt, `note` with
@@ -20,10 +20,10 @@ concepts, entities, references. The mother rule: **when in doubt, `note` with
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Capture note, concept,\nentity or reference"| SELF["THIS SKILL\nnote-taking-flow"]
-  Q -->|"Research with sources\nfrom the internet"| RF[research-flow]
-  Q -->|"Concrete action\nwith kanban"| TF[todo-flow]
-  Q -->|"Relate what\nwas captured"| RLF[relations-flow]
+  Q{What do you need?} -->|"Capture note, concept,\nentity or reference"| SELF["THIS SKILL\ndran-note-taking-flow"]
+  Q -->|"Research with sources\nfrom the internet"| RF[dran-research-flow]
+  Q -->|"Concrete action\nwith kanban"| TF[dran-todo-flow]
+  Q -->|"Relate what\nwas captured"| RLF[dran-relations-flow]
   Q -->|"MCP tools, page types"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -47,7 +47,7 @@ flowchart TD
   CONCEPT --> CREATE
   ENTITY --> CREATE
   REFERENCE --> CREATE
-  CREATE --> RELATE["RELATE\npart_of / related\n(relations-flow)"]
+  CREATE --> RELATE["RELATE\npart_of / related\n(dran-relations-flow)"]
   UPDATE --> RELATE
   RELATE --> PROMOTE{"Did it become\nrelevant?"}
   PROMOTE -->|"thought → concept/entity"| UP["PROMOTE\nedit the same page"]
@@ -93,7 +93,7 @@ created, but search and filters lose it.
 - **Type doubt** → default `note` thought; if the doubt changes what you're
   capturing (note vs entity vs reference), clarify with 2-3 candidates.
 - **Always relate** (`related`/`part_of`) — feeds PageRank and search (see
-  `relations-flow`).
+  `dran-relations-flow`).
 
 ### Kinds by type (operational summary)
 
@@ -157,7 +157,7 @@ language.
 Any page can carry `meta.props`: a free key-value bag (strings only, max 10).
 The keys `role`, `tier`, `location`, `language`, `framework` materialize
 automatic edges; custom keys are stored and can be filtered when searching,
-but they don't generate an edge (details in `relations-flow`).
+but they don't generate an edge (details in `dran-relations-flow`).
 
 **Where it fits naturally:** tool entity → `language` + `framework`; person
 entity → `role` + `location`; concept with tier → `tier`; reference → nothing
@@ -175,7 +175,7 @@ dran_list_pages({ type: "entity", props: { framework: "phoenix" } })
 2. **Search before create** — what do we already have on the topic?
 3. **Generate** — interlinked notes `kind: idea` (`related`), or Dran's
    `brainstorm` prompt (5-10 ideas as interlinked pages)
-4. **Research what's worth it** → `research-flow`
+4. **Research what's worth it** → `dran-research-flow`
 5. **Distill** — promote the good ones to `concept`/`entity`
 6. **Present + prioritize** — clarify to choose which ones become
    projects/goals/plans/todos (hand-off to the corresponding flow)
@@ -203,14 +203,14 @@ dran_list_pages({ type: "entity", props: { framework: "phoenix" } })
 
 ## When NOT to use this skill
 
-- **Research with web sources** → `research-flow`
-- **Pending task/action** → `todo-flow`
-- **Project/goal/plan definition** → `project-flow` / `goal-flow` /
-  `planning-flow`
+- **Research with web sources** → `dran-research-flow`
+- **Pending task/action** → `dran-todo-flow`
+- **Project/goal/plan definition** → `dran-project-flow` / `dran-goal-flow` /
+  `dran-planning-flow`
 
 ## Cross-references
 
 - Full list of kinds and page types: `dran` — main skill
-- Sources with full research: `research-flow`
-- Relations and props: `relations-flow`
-- Orphans and cleanup: `maintenance-flow`
+- Sources with full research: `dran-research-flow`
+- Relations and props: `dran-relations-flow`
+- Orphans and cleanup: `dran-maintenance-flow`

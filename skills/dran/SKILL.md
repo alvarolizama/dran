@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, second-brain, mcp, knowledge-graph, notes, productivity]
-    related_skills: [project-flow, goal-flow, planning-flow, todo-flow, coder-flow, research-flow, note-taking-flow, relations-flow, maintenance-flow]
+    related_skills: [dran-project-flow, dran-goal-flow, dran-planning-flow, dran-todo-flow, dran-coder-flow, dran-research-flow, dran-note-taking-flow, dran-relations-flow, dran-maintenance-flow]
 ---
 
 # dran — MCP reference + suite router
@@ -23,15 +23,15 @@ Are you in the right skill? Follow this diagram:
 ```mermaid
 flowchart TD
   Q{What do you need?} -->|"MCP tools, page types,\nconnection, installing skills"| SELF["THIS SKILL\nmain dran"]
-  Q -->|"Create or manage a project"| PF[project-flow]
-  Q -->|"Create or manage a goal\n(metric + date)"| GF[goal-flow]
-  Q -->|"Create a plan with a\nroute mermaid"| PLF[planning-flow]
-  Q -->|"Create a todo\ndev or general"| TF[todo-flow]
-  Q -->|"Run a development\ntodo (phases)"| CF[coder-flow]
-  Q -->|"Research the web\nsources + query pages"| RF[research-flow]
-  Q -->|"Capture a note, concept,\nentity or reference"| NTF[note-taking-flow]
-  Q -->|"Relate pages,\nprops, embeds"| RLF[relations-flow]
-  Q -->|"Agents, lint, stats,\narchive, hygiene"| MF[maintenance-flow]
+  Q -->|"Create or manage a project"| PF[dran-project-flow]
+  Q -->|"Create or manage a goal\n(metric + date)"| GF[dran-goal-flow]
+  Q -->|"Create a plan with a\nroute mermaid"| PLF[dran-planning-flow]
+  Q -->|"Create a todo\ndev or general"| TF[dran-todo-flow]
+  Q -->|"Run a development\ntodo (phases)"| CF[dran-coder-flow]
+  Q -->|"Research the web\nsources + query pages"| RF[dran-research-flow]
+  Q -->|"Capture a note, concept,\nentity or reference"| NTF[dran-note-taking-flow]
+  Q -->|"Relate pages,\nprops, embeds"| RLF[dran-relations-flow]
+  Q -->|"Agents, lint, stats,\narchive, hygiene"| MF[dran-maintenance-flow]
   Q -->|"Notes outside Dran"| OTHER[obsidian, notion\nor apple-notes]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -44,15 +44,15 @@ Run ONLY the section you landed on. If the diagram sends you to another skill,
 
 | Flow | When to load it |
 | --- | --- |
-| `project-flow` | Create, update or review a project (vision, scope, health) |
-| `goal-flow` | Goals with metric + date; auto/manual progress |
-| `planning-flow` | Tactical plans with route mermaid, todos and gotchas |
-| `todo-flow` | Create todos (dev or general): templates, kanban, assignee |
-| `coder-flow` | Run a development todo: phases, subagents, gates |
-| `research-flow` | Research online: web, sources, query pages |
-| `note-taking-flow` | Capture notes, concepts, entities, references |
-| `relations-flow` | Typed relations, materialized props, embeds |
-| `maintenance-flow` | Autonomous agents, lint, stats, archive, hygiene |
+| `dran-project-flow` | Create, update or review a project (vision, scope, health) |
+| `dran-goal-flow` | Goals with metric + date; auto/manual progress |
+| `dran-planning-flow` | Tactical plans with route mermaid, todos and gotchas |
+| `dran-todo-flow` | Create todos (dev or general): templates, kanban, assignee |
+| `dran-coder-flow` | Run a development todo: phases, subagents, gates |
+| `dran-research-flow` | Research online: web, sources, query pages |
+| `dran-note-taking-flow` | Capture notes, concepts, entities, references |
+| `dran-relations-flow` | Typed relations, materialized props, embeds |
+| `dran-maintenance-flow` | Autonomous agents, lint, stats, archive, hygiene |
 
 ## Installing and configuring the suite
 
@@ -61,15 +61,15 @@ The 10 skills live in the Dran repo under `skills/`:
 ```
 skills/
   dran/               ← this skill (main) + references/ + scripts/
-  project-flow/
-  goal-flow/
-  planning-flow/
-  todo-flow/
-  coder-flow/
-  research-flow/
-  note-taking-flow/
-  relations-flow/
-  maintenance-flow/
+  dran-project-flow/
+  dran-goal-flow/
+  dran-planning-flow/
+  dran-todo-flow/
+  dran-coder-flow/
+  dran-research-flow/
+  dran-note-taking-flow/
+  dran-relations-flow/
+  dran-maintenance-flow/
 ```
 
 ### Install in Hermes
@@ -127,7 +127,7 @@ through a single MCP endpoint.
   automatically by the augmenter after every create/update; the rest
   (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`,
   `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`) are explicit
-  or materialized from `meta.props` (see `relations-flow`).
+  or materialized from `meta.props` (see `dran-relations-flow`).
 - **Search** fuses FTS + semantic via reciprocal-rank fusion with a PageRank
   authority boost — well-linked pages rank higher.
 - **Contexts** partition the brain (e.g. `personal`, `work`). Pages, relations
@@ -212,8 +212,8 @@ embeddings and `mcp_create`; it appears in the activity log and has a view at
 (see §4 Jobs).
 
 Default to `note` with `meta.kind: "thought"` when unsure — promote later.
-Creating each type lives in its flow (`note-taking-flow`, `goal-flow`,
-`planning-flow`, `project-flow`, `todo-flow`).
+Creating each type lives in its flow (`dran-note-taking-flow`, `dran-goal-flow`,
+`dran-planning-flow`, `dran-project-flow`, `dran-todo-flow`).
 
 Notes with `meta.kind: "code"` may carry `meta.language` (e.g. `elixir`,
 `python`) to filter by programming language.
@@ -279,7 +279,7 @@ every existing page with non-empty `meta.props` (Dran.PropsBackfill).
 `dran_list_pages({ type: "entity", props: { tier: "vip" } })`. Limits: max
 10 props per page, only strings as values.
 
-Operational use of props and relations lives in `relations-flow`.
+Operational use of props and relations lives in `dran-relations-flow`.
 
 ### Per-context page type disabling
 
@@ -341,7 +341,7 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) — full operation in `maintenance-flow`. ⚠️ **Write tool** |
+| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) — full operation in `dran-maintenance-flow`. ⚠️ **Write tool** |
 | `dran_get_agent_session` | Poll an agent session for status, steps, summary |
 
 ### Scheduled jobs (Dran.Jobs)

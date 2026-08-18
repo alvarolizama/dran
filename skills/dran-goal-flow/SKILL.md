@@ -1,5 +1,5 @@
 ---
-name: goal-flow
+name: dran-goal-flow
 description: "Use when creating or managing a Dran goal — measurable objective with metric + target date. Triggers on new goal, goal progress, goal review."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, goal, metrics, strategy]
-    related_skills: [dran, project-flow, planning-flow, todo-flow, relations-flow]
+    related_skills: [dran, dran-project-flow, dran-planning-flow, dran-todo-flow, dran-relations-flow]
 ---
 
-# goal-flow — Create and manage goals in Dran
+# dran-goal-flow — Create and manage goals in Dran
 
 The goal is the **strategic level with a metric**: an objective with a number
 and a date. **If it can't be measured, it's a wish** — and wishes go as a
@@ -24,10 +24,10 @@ concrete deliverable, NOT a goal.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Measurable objective\nnumber + date"| SELF["THIS SKILL\ngoal-flow"]
-  Q -->|"Vision without a metric\n(the why)"| PF[project-flow]
-  Q -->|"The how: steps with\nroute mermaid"| PLF[planning-flow]
-  Q -->|"Concrete action\nwith kanban"| TF[todo-flow]
+  Q{What do you need?} -->|"Measurable objective\nnumber + date"| SELF["THIS SKILL\ndran-goal-flow"]
+  Q -->|"Vision without a metric\n(the why)"| PF[dran-project-flow]
+  Q -->|"The how: steps with\nroute mermaid"| PLF[dran-planning-flow]
+  Q -->|"Concrete action\nwith kanban"| TF[dran-todo-flow]
   Q -->|"MCP tools, page types,\nconnections"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -241,15 +241,15 @@ goal with its linked todos and plans.
 
 ## When NOT to use this skill
 
-- **No metric** (it's vision) → `project-flow`
-- **The request is how to achieve it (steps)** → `planning-flow`
-- **It's a concrete action** → `todo-flow`
-- **It's a question with a reusable answer** → `note-taking-flow` (query)
+- **No metric** (it's vision) → `dran-project-flow`
+- **The request is how to achieve it (steps)** → `dran-planning-flow`
+- **It's a concrete action** → `dran-todo-flow`
+- **It's a question with a reusable answer** → `dran-note-taking-flow` (query)
 
 ## Cross-references
 
 - MCP reference (tools, meta fields): `dran` — main skill
-- Project that groups the goal: `project-flow`
-- Plans that execute toward the goal: `planning-flow`
-- Todos that feed progress: `todo-flow`
-- `goal_slug` link (independent): `relations-flow`
+- Project that groups the goal: `dran-project-flow`
+- Plans that execute toward the goal: `dran-planning-flow`
+- Todos that feed progress: `dran-todo-flow`
+- `goal_slug` link (independent): `dran-relations-flow`

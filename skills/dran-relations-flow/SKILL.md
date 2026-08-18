@@ -1,5 +1,5 @@
 ---
-name: relations-flow
+name: dran-relations-flow
 description: "Use when connecting Dran pages — typed relations, materialized props, embeds and independent slugs. Triggers on relates, connects, links, link between pages."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, relations, graph, props, links]
-    related_skills: [dran, note-taking-flow, research-flow, maintenance-flow]
+    related_skills: [dran, dran-note-taking-flow, dran-research-flow, dran-maintenance-flow]
 ---
 
-# relations-flow — Connecting pages in Dran
+# dran-relations-flow — Connecting pages in Dran
 
 Relations are the heart of the graph: they feed PageRank, semantic search,
 and communities. **Link liberally** — a well-connected page ranks better and
@@ -20,10 +20,10 @@ gets found on its own.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Connect pages,\\nprops, embeds"| SELF["THIS SKILL\\nrelations-flow"]
-  Q -->|"Create the page\\nthat's missing"| NTF[note-taking-flow]
-  Q -->|"Links project/goal/plan\\nwhen creating a todo"| TF[todo-flow]
-  Q -->|"Massive orphans,\\nlink_gardener"| MF[maintenance-flow]
+  Q{What do you need?} -->|"Connect pages,\\nprops, embeds"| SELF["THIS SKILL\\ndran-relations-flow"]
+  Q -->|"Create the page\\nthat's missing"| NTF[dran-note-taking-flow]
+  Q -->|"Links project/goal/plan\\nwhen creating a todo"| TF[dran-todo-flow]
+  Q -->|"Massive orphans,\\nlink_gardener"| MF[dran-maintenance-flow]
   Q -->|"MCP tools, page types"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -202,14 +202,14 @@ dran_get_links({ slug: "a" })   → inbound + outbound
 
 ## When NOT to use this skill
 
-- **The page doesn't exist yet** → `note-taking-flow` (create it first)
-- **Massive orphans / automatic suggestions** → `maintenance-flow`
+- **The page doesn't exist yet** → `dran-note-taking-flow` (create it first)
+- **Massive orphans / automatic suggestions** → `dran-maintenance-flow`
   (`link_gardener` agent)
-- **Links when creating a todo** → `todo-flow` (slugs in `dran_create_todo`)
+- **Links when creating a todo** → `dran-todo-flow` (slugs in `dran_create_todo`)
 
 ## Cross-references
 
 - MCP reference (full relations table): `dran` — main skill
-- Capturing pages to connect: `note-taking-flow`
-- `link_gardener` proposes automatic relations: `maintenance-flow`
-- Slugs in todos: `todo-flow`
+- Capturing pages to connect: `dran-note-taking-flow`
+- `link_gardener` proposes automatic relations: `dran-maintenance-flow`
+- Slugs in todos: `dran-todo-flow`

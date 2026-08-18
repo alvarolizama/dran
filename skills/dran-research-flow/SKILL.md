@@ -1,5 +1,5 @@
 ---
-name: research-flow
+name: dran-research-flow
 description: "Use when researching a topic online and storing it in Dran — web search, source capture, distillation and cited query pages. Triggers on investiga, research, busca info."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, research, web, sources, query]
-    related_skills: [dran, note-taking-flow, relations-flow, maintenance-flow]
+    related_skills: [dran, dran-note-taking-flow, dran-relations-flow, dran-maintenance-flow]
 ---
 
-# research-flow — Research the internet and land it in Dran
+# dran-research-flow — Research the internet and land it in Dran
 
 Research = a bundle: **references** (sources) + a **query page** synthesized with
 citations + distilled **concepts/notes**. The query page is the index that ties
@@ -20,10 +20,10 @@ everything together. A link saved without context is noise, not knowledge.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Research a topic\non the internet"| SELF["THIS SKILL\nresearch-flow"]
-  Q -->|"Quick capture\nwithout research"| NTF[note-taking-flow]
-  Q -->|"Question the brain\ncan already answer"| RAG["dran_search first\n+ graph_rag (maintenance-flow)"]
-  Q -->|"Relate what\nwas captured"| RLF[relations-flow]
+  Q{What do you need?} -->|"Research a topic\non the internet"| SELF["THIS SKILL\ndran-research-flow"]
+  Q -->|"Quick capture\nwithout research"| NTF[dran-note-taking-flow]
+  Q -->|"Question the brain\ncan already answer"| RAG["dran_search first\n+ graph_rag (dran-maintenance-flow)"]
+  Q -->|"Relate what\nwas captured"| RLF[dran-relations-flow]
   Q -->|"MCP tools, page types"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -46,7 +46,7 @@ flowchart TD
   EXTRACT --> CAPTURE["CAPTURE references\none per useful source\nwith source_url + why"]
   CAPTURE --> DISTILL["DISTILL findings\nnote / concept"]
   DISTILL --> SYNTH["SYNTHESIZE query page\nanswer + citations to references"]
-  SYNTH --> RELATE["RELATE\nquery ↔ references ↔ concepts\n(relations-flow)"]
+  SYNTH --> RELATE["RELATE\nquery ↔ references ↔ concepts\n(dran-relations-flow)"]
   UPDATEQ --> RELATE
   RELATE --> DELIVER["DELIVER\nsummary in chat + link\nto the query page"]
   ANSWER --> DONE[End]
@@ -146,7 +146,7 @@ dran_create_relation({ source_slug: "<concept-slug>", target_slug: "<query-slug>
 `role`, `tier`, `location`, `language`, `framework` materialize automatic
 edges (e.g. `language: "elixir"` → `written_in` → entity "elixir"); custom
 keys are stored and filterable when searching, but don't generate an edge
-(details in `relations-flow`).
+(details in `dran-relations-flow`).
 
 **Where it's natural in research:** paper reference → `language`; entity of the
 researched tool → `framework` + `language`; entity of the company →
@@ -160,7 +160,7 @@ dran_list_pages({ type: "reference", props: { language: "elixir" } })
 
 **Internal brain research (no internet):** the `graph_rag` agent answers
 with local/global/drift search and creates the query page with citations —
-operation in `maintenance-flow`.
+operation in `dran-maintenance-flow`.
 
 ## Pitfalls
 
@@ -186,12 +186,12 @@ operation in `maintenance-flow`.
 ## When NOT to use this skill
 
 - **The answer is already in the brain** → `dran_search` + `graph_rag`
-- **Quick capture without sources** → `note-taking-flow`
-- **You're going to implement code** → `coder-flow`
+- **Quick capture without sources** → `dran-note-taking-flow`
+- **You're going to implement code** → `dran-coder-flow`
 
 ## Cross-references
 
-- Capturing what was distilled: `note-taking-flow`
-- Relations query ↔ references ↔ concepts: `relations-flow`
-- `graph_rag` agent (internal research): `maintenance-flow`
+- Capturing what was distilled: `dran-note-taking-flow`
+- Relations query ↔ references ↔ concepts: `dran-relations-flow`
+- `graph_rag` agent (internal research): `dran-maintenance-flow`
 - MCP reference: `dran` — main skill

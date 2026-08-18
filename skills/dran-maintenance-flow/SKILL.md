@@ -1,5 +1,5 @@
 ---
-name: maintenance-flow
+name: dran-maintenance-flow
 description: "Use when maintaining the Dran brain — lint orphans/stale, run autonomous agents, community summaries, archive, stats. Triggers on limpia, higiene, mantenimiento del brain (Spanish: cleaning, hygiene, brain maintenance)."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, maintenance, agents, lint, hygiene]
-    related_skills: [dran, relations-flow, note-taking-flow, research-flow]
+    related_skills: [dran, dran-relations-flow, dran-note-taking-flow, dran-research-flow]
 ---
 
-# maintenance-flow — Keeping the brain healthy
+# dran-maintenance-flow — Keeping the brain healthy
 
 Brain hygiene: detect orphans and stale pages, launch autonomous agents,
 regenerate community summaries, archive what no longer applies.
@@ -21,10 +21,10 @@ regenerate community summaries, archive what no longer applies.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Lint, agents, stats,\narchive, summaries"| SELF["THIS SKILL\nmaintenance-flow"]
-  Q -->|"Relate pages\nby hand"| RLF[relations-flow]
+  Q{What do you need?} -->|"Lint, agents, stats,\narchive, summaries"| SELF["THIS SKILL\ndran-maintenance-flow"]
+  Q -->|"Relate pages\nby hand"| RLF[dran-relations-flow]
   Q -->|"Answer a question\nwith the graph"| RAG["graph_rag\n(§ Agents, this skill)"]
-  Q -->|"Capture or create"| NTF[note-taking-flow]
+  Q -->|"Capture or create"| NTF[dran-note-taking-flow]
   Q -->|"MCP tools, page types"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -196,12 +196,12 @@ dran_generate_community_summaries({ context: "personal" })
 
 ## When NOT to use this skill
 
-- **Relating specific pages by hand** → `relations-flow`
-- **Capturing new content** → `note-taking-flow`
-- **Internet research** → `research-flow`
+- **Relating specific pages by hand** → `dran-relations-flow`
+- **Capturing new content** → `dran-note-taking-flow`
+- **Internet research** → `dran-research-flow`
 
 ## Cross-references
 
 - MCP reference (tools maintain/automate): `dran` — main skill
-- Relations that link_gardener proposes: `relations-flow`
-- Query pages that graph_rag creates: `research-flow`
+- Relations that link_gardener proposes: `dran-relations-flow`
+- Query pages that graph_rag creates: `dran-research-flow`

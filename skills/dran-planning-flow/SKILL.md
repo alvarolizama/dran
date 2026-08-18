@@ -1,5 +1,5 @@
 ---
-name: planning-flow
+name: dran-planning-flow
 description: "Use when creating or managing a Dran plan — tactical execution with mermaid roadmap, todos and gotchas. Triggers on new plan, plan update, plan review."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, plan, tactics, mermaid, planning]
-    related_skills: [dran, project-flow, goal-flow, todo-flow, coder-flow, relations-flow]
+    related_skills: [dran, dran-project-flow, dran-goal-flow, dran-todo-flow, dran-coder-flow, dran-relations-flow]
 ---
 
-# planning-flow — Create and manage plans in Dran
+# dran-planning-flow — Create and manage plans in Dran
 
 The plan is the **tactical/strategic** level: the "how" something will be executed.
 Sequence of steps, execution architecture, route mermaid. If a plan
@@ -28,11 +28,11 @@ tactical level the deliverable can differ from the objective.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Create, update, or\nreview a plan"| SELF["THIS SKILL\nplanning-flow"]
-  Q -->|"Vision and scope\n(the why)"| PF[project-flow]
-  Q -->|"Objective with metric\nand date"| GF[goal-flow]
-  Q -->|"Create the plan's\ntodos"| TF[todo-flow]
-  Q -->|"Execute a development\ntodo"| CF[coder-flow]
+  Q{What do you need?} -->|"Create, update, or\nreview a plan"| SELF["THIS SKILL\ndran-planning-flow"]
+  Q -->|"Vision and scope\n(the why)"| PF[dran-project-flow]
+  Q -->|"Objective with metric\nand date"| GF[dran-goal-flow]
+  Q -->|"Create the plan's\ntodos"| TF[dran-todo-flow]
+  Q -->|"Execute a development\ntodo"| CF[dran-coder-flow]
   Q -->|"MCP tools, page types,\nconnection"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -58,7 +58,7 @@ flowchart TD
   MERMAID -->|Yes| MM["Route MERMAID\nflowchart / timeline / gantt"]
   MERMAID -->|No| LINK
   MM --> LINK["LINK\nproject_slug / goal_slug\nindependent"]
-  LINK --> TODOS["GENERATE todos\n(via todo-flow)"]
+  LINK --> TODOS["GENERATE todos\n(via dran-todo-flow)"]
   TODOS --> AUTODONE["auto-DONE when ALL\ntodos are done/cancelled"]
   AUTODONE --> DONE[End]
 
@@ -103,7 +103,7 @@ is the plan's done criterion; without it there is no way to close it.
 1. **Born `active` if already fully defined** (objective + deliverable +
    execution + todos). `draft` only while being built.
 2. **The mermaid is the route map** — each node can expand into a todo
-   with its own detailed mermaid (that's `todo-flow` / `coder-flow`).
+   with its own detailed mermaid (that's `dran-todo-flow` / `dran-coder-flow`).
 3. **Annexes outside the plan** — system diagrams, glossaries, architecture
    → their own pages (`concept`/`note`) related with `part_of`/`related`.
    The plan only embeds with `![[slug]]` if it needs them visible.
@@ -193,7 +193,7 @@ flowchart TD
 ```
 
 The detailed execution mermaid (READ/EDIT/CREATE/RUN/VERIFY verbs) does NOT go
-in the plan — it goes in each phase's todo (see `todo-flow` and `coder-flow`).
+in the plan — it goes in each phase's todo (see `dran-todo-flow` and `dran-coder-flow`).
 
 ## Using Dran
 
@@ -229,7 +229,7 @@ in the plan — it goes in each phase's todo (see `todo-flow` and `coder-flow`).
      owner: "alvaro",  # from API key, not settable
      created_by: "chaos manager"  # overrideable
    })
-4. Create the listed todos (via todo-flow) with plan_slug pointing here
+4. Create the listed todos (via dran-todo-flow) with plan_slug pointing here
 ```
 
 ### Recipe — update (⚠️ mermaid)
@@ -292,16 +292,16 @@ the **nature** of the work changed (a different deliverable), then yes: new plan
 
 ## When NOT to use this skill
 
-- **The request is vision/why** → `project-flow`
-- **The request is a measurable objective** → `goal-flow`
-- **The request is an executable action** → `todo-flow`
-- **You're going to EXECUTE a todo's code** → `coder-flow`
-- **It's knowledge capture** → `note-taking-flow`
+- **The request is vision/why** → `dran-project-flow`
+- **The request is a measurable objective** → `dran-goal-flow`
+- **The request is an executable action** → `dran-todo-flow`
+- **You're going to EXECUTE a todo's code** → `dran-coder-flow`
+- **It's knowledge capture** → `dran-note-taking-flow`
 
 ## Cross-references
 
 - MCP reference: `dran` — main skill
-- Project/goal the plan serves: `project-flow`, `goal-flow`
-- Creation of the plan's todos: `todo-flow`
-- Execution of development todos: `coder-flow`
-- Links `project_slug`/`goal_slug`/`plan_slug`: `relations-flow`
+- Project/goal the plan serves: `dran-project-flow`, `dran-goal-flow`
+- Creation of the plan's todos: `dran-todo-flow`
+- Execution of development todos: `dran-coder-flow`
+- Links `project_slug`/`goal_slug`/`plan_slug`: `dran-relations-flow`

@@ -1,5 +1,5 @@
 ---
-name: project-flow
+name: dran-project-flow
 description: "Use when creating or managing a Dran project — the strategic level: vision, scope, health. Triggers on new project, project update, project review."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,13 +7,13 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, project, strategy, planning]
-    related_skills: [dran, goal-flow, planning-flow, todo-flow, relations-flow]
+    related_skills: [dran, dran-goal-flow, dran-planning-flow, dran-todo-flow, dran-relations-flow]
 ---
 
-# project-flow — Create and manage projects in Dran
+# dran-project-flow — Create and manage projects in Dran
 
 The project is the **strategic** level: vision and purpose. The "what" and the
-"for whom" — never the "how" (that's `planning-flow`).
+"for whom" — never the "how" (that's `dran-planning-flow`).
 
 **Hierarchy:** `project` (vision) → `goal` (metric) → `plan` (how) → `todo`
 (action). A todo's `## Goal` is its concrete deliverable (action), NOT a
@@ -23,10 +23,10 @@ goal nor the plan/project objective — it contributes to them.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Create, update or\nreview a project"| SELF["THIS SKILL\nproject-flow"]
-  Q -->|"Objective with metric\nand date"| GF[goal-flow]
-  Q -->|"The how: steps with\nroute mermaid"| PLF[planning-flow]
-  Q -->|"Concrete action\nwith kanban"| TF[todo-flow]
+  Q{What do you need?} -->|"Create, update or\nreview a project"| SELF["THIS SKILL\ndran-project-flow"]
+  Q -->|"Objective with metric\nand date"| GF[dran-goal-flow]
+  Q -->|"The how: steps with\nroute mermaid"| PLF[dran-planning-flow]
+  Q -->|"Concrete action\nwith kanban"| TF[dran-todo-flow]
   Q -->|"MCP tools, page types,\nconnection"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -213,7 +213,7 @@ record).
 
 ## Pitfalls
 
-- **Putting the how in** — architecture, stack, steps → that's `planning-flow`.
+- **Putting the how in** — architecture, stack, steps → that's `dran-planning-flow`.
 - **Metrics in the project** — numbers go in goals; the project inherits them
   via derived health.
 - **Diary in the body** — progress updates go in related notes or in the
@@ -236,14 +236,14 @@ record).
 
 ## When NOT to use this skill
 
-- **The request has a number + date** → `goal-flow`
-- **The request is the how (steps, architecture)** → `planning-flow`
-- **It's an action executable now** → `todo-flow`
-- **It's knowledge capture, not execution** → `note-taking-flow`
+- **The request has a number + date** → `dran-goal-flow`
+- **The request is the how (steps, architecture)** → `dran-planning-flow`
+- **It's an action executable now** → `dran-todo-flow`
+- **It's knowledge capture, not execution** → `dran-note-taking-flow`
 
 ## Cross-references
 
 - MCP reference (tools, page types, meta fields): `dran` — main skill
-- Goals that measure the project: `goal-flow`
-- Plans that execute the project: `planning-flow`
-- `project_slug` links and relations: `relations-flow`
+- Goals that measure the project: `dran-goal-flow`
+- Plans that execute the project: `dran-planning-flow`
+- `project_slug` links and relations: `dran-relations-flow`

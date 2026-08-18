@@ -1,5 +1,5 @@
 ---
-name: coder-flow
+name: dran-coder-flow
 description: "Use when executing a Dran dev todo (code) — shaping from draft + subagents + gates with smoke before commit + riel ledger. Triggers on execute/implement todo."
 version: 2.0.0
 author: Álvaro Lizama
@@ -7,26 +7,26 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, coding, execution, subagents, gates, mermaid, riel]
-    related_skills: [dran, todo-flow, planning-flow, riel-ledger, riel-contract, git-workflow]
+    related_skills: [dran, dran-todo-flow, dran-planning-flow, riel-ledger, riel-contract, git-workflow]
 ---
 
-# coder-flow — Execute a development todo (code)
+# dran-coder-flow — Execute a development todo (code)
 
-This skill takes a Dran development todo (level 3 of `todo-flow`:
+This skill takes a Dran development todo (level 3 of `dran-todo-flow`:
 `## Goal` + `## Phases` with code) and **executes** it: it does shaping if it
 arrived as a draft, dispatches subagents per phase, validates gates (with
 smoke **before** commit) and closes with real evidence.
 
 ## Layer separation (riel)
 
-`coder-flow` does **not reimplement the ledger** — it delegates local state to
+`dran-coder-flow` does **not reimplement the ledger** — it delegates local state to
 `riel-ledger`, and only acts as the **adapter** to Dran:
 
 | Layer | Skill | Responsibility |
 |---|---|---|
 | Local state (✓NN, recovery, done-check) | `riel-ledger` | `.riel/ledger.md` — never touches Dran |
-| Orchestration (shaping, subagents, gates) | `coder-flow` | execute the todo |
-| Dran adapter (minimal) | `coder-flow` | `pull` (read todo) + `push-phase` (checkbox) + `push-close` (status done) |
+| Orchestration (shaping, subagents, gates) | `dran-coder-flow` | execute the todo |
+| Dran adapter (minimal) | `dran-coder-flow` | `pull` (read todo) + `push-phase` (checkbox) + `push-close` (status done) |
 
 **Hard rule:** the `✓NN` (evidence with verifier + coverage) lives ONLY in the
 local ledger. Dran only receives *checked checkboxes* and *status* — never
@@ -36,16 +36,16 @@ accumulated evidence in the body.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Execute a dev\ntodo (code)"| SELF["THIS SKILL\ncoder-flow"]
-  Q -->|"WRITE the todo\n(templates, levels)"| TF[todo-flow]
-  Q -->|"The plan that groups\nthe todos"| PLF[planning-flow]
+  Q{What do you need?} -->|"Execute a dev\ntodo (code)"| SELF["THIS SKILL\ndran-coder-flow"]
+  Q -->|"WRITE the todo\n(templates, levels)"| TF[dran-todo-flow]
+  Q -->|"The plan that groups\nthe todos"| PLF[dran-planning-flow]
   Q -->|"MCP tools, page types,\nconnection"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
 If the todo is of another type (manual, non-code research), it is not for this
-skill — go back to `todo-flow` or execute manually.
+skill — go back to `dran-todo-flow` or execute manually.
 
 ## Operational flow — follow this DAG to the letter
 
@@ -54,7 +54,7 @@ flowchart TD
   START[Assigned development todo] --> PULL["PULL: dran_get_page\nread the FULL todo"]
   PULL --> SHAPE{"level 3?\n## Phases with DAG\n+ Scope + context"}
   SHAPE -->|"No (level 1 draft)"| DISCOVER["SHAPING: analyze real codebase\n+ clarify confirmation"]
-  DISCOVER --> EXTEND["Extend phases → level 3\n(via todo-flow)"]
+  DISCOVER --> EXTEND["Extend phases → level 3\n(via dran-todo-flow)"]
   EXTEND --> LEDGER
   SHAPE -->|"Yes"| LEDGER["Open .riel/ledger.md\n(via riel-ledger)\nGoal · Source · Phase · Next"]
   LEDGER --> LOOP{"for each phase\nper ## Phases"}
@@ -136,7 +136,7 @@ evidence.
 
 6. After confirmation, **extend the phases** to level 3 (per phase: `Scope` +
    `Context (what exists now)` + `What changes` + `Instruction DAG`) and
-   update the todo via `todo-flow`. Only then execute.
+   update the todo via `dran-todo-flow`. Only then execute.
 
 **Hard rule:** if the repo's reality doesn't match what the todo says
 (renamed module, moved function), do NOT improvise — report the discrepancy
@@ -175,11 +175,11 @@ Execution nodes use **only these 6 verbs** — semantic actions, not tool names:
 | `ASK question` | Clarify with human | `clarify` | `clarify(question, choices)` |
 
 **Rule:** if a node doesn't start with one of these 6 verbs, the todo is
-malformed → do not execute; ask for a correction via `todo-flow`.
+malformed → do not execute; ask for a correction via `dran-todo-flow`.
 
 ## Local ledger (delegated to riel-ledger)
 
-`coder-flow` does not keep cross-phase state in its head — it delegates it to
+`dran-coder-flow` does not keep cross-phase state in its head — it delegates it to
 the ledger. Load `riel-ledger` and follow its protocol:
 
 1. **Open** `.riel/ledger.md` at the start: `Goal` ← the todo's `## Goal`,
@@ -306,16 +306,16 @@ with a red gate.
 
 ## When NOT to use this skill
 
-- **The todo is not code** → manual execution or `todo-flow` (level 2 research)
-- **You're going to WRITE the todo** → `todo-flow`
-- **You're going to define the high-level path** → `planning-flow`
-- **It's research, not implementation** → `research-flow`
+- **The todo is not code** → manual execution or `dran-todo-flow` (level 2 research)
+- **You're going to WRITE the todo** → `dran-todo-flow`
+- **You're going to define the high-level path** → `dran-planning-flow`
+- **It's research, not implementation** → `dran-research-flow`
 
 ## Cross-references
 
-- How the todo is written (levels 1/2/3): `todo-flow`
+- How the todo is written (levels 1/2/3): `dran-todo-flow`
 - Local state (ledger ✓NN): `riel-ledger`
 - mermaid and verb contract: `riel-contract`
-- Plan that groups the todos: `planning-flow`
+- Plan that groups the todos: `dran-planning-flow`
 - Commit hygiene for subagents: `git-workflow`
 - MCP reference: `dran` — main skill

@@ -1,5 +1,5 @@
 ---
-name: todo-flow
+name: dran-todo-flow
 description: "Use when creating todos in Dran — every todo has Goal + Phases + Verification; phases at 3 detail levels (prose / DAG / code). Triggers on new todo, task, pending."
 version: 2.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, todo, kanban, execution]
-    related_skills: [dran, project-flow, goal-flow, planning-flow, coder-flow, relations-flow]
+    related_skills: [dran, dran-project-flow, dran-goal-flow, dran-planning-flow, dran-coder-flow, dran-relations-flow]
 ---
 
-# todo-flow — Create todos in Dran
+# dran-todo-flow — Create todos in Dran
 
 The todo is the **execution** level: a verifiable action start-to-finish.
 No micro-tasks — intermediate steps go as phases of the todo itself, never
@@ -20,17 +20,17 @@ as child todos.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"Create or update\na todo"| SELF["THIS SKILL\ntodo-flow"]
-  Q -->|"EXECUTE a development\ntodo (phases, gates)"| CF[coder-flow]
-  Q -->|"The plan that groups\nthese todos"| PLF[planning-flow]
-  Q -->|"Measurable goal"| GF[goal-flow]
+  Q{What do you need?} -->|"Create or update\na todo"| SELF["THIS SKILL\ndran-todo-flow"]
+  Q -->|"EXECUTE a development\ntodo (phases, gates)"| CF[dran-coder-flow]
+  Q -->|"The plan that groups\nthese todos"| PLF[dran-planning-flow]
+  Q -->|"Measurable goal"| GF[dran-goal-flow]
   Q -->|"MCP tools, page types,\nconnection"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
 This skill is for **writing** well-formed todos. If you're going to **execute** a
-development todo (phases, subagents, gates), load `coder-flow`.
+development todo (phases, subagents, gates), load `dran-coder-flow`.
 
 ## Canonical model — every todo, no exceptions
 
@@ -109,7 +109,7 @@ flowchart TD
   CREATE --> MOVE["AUTO-MOVE to in_progress\ndran_update_todo"]
   UPDATE --> MOVE
   MOVE --> LINKS["Independent LINKS\nproject/goal/plan slug\n0, 1, 2, or all 3"]
-  LINKS --> DONE[End — executing is coder-flow\nor manual work]
+  LINKS --> DONE[End — executing is dran-coder-flow\nor manual work]
 
   style ASSIGNEE fill:#fef3c7,stroke:#d97706
   style CREATE fill:#dbeafe,stroke:#2563eb
@@ -306,7 +306,7 @@ flowchart TD
 ````
 
 **The execution of these phases** (subagent dispatch, gates between phases,
-verb vocabulary) lives in `coder-flow` — this skill only defines how the todo
+verb vocabulary) lives in `dran-coder-flow` — this skill only defines how the todo
 is written.
 
 ## Golden rules
@@ -424,17 +424,17 @@ flowchart LR
 
 ## When NOT to use this skill
 
-- **You're going to EXECUTE the development todo** → `coder-flow`
-- **Grouping todos into an execution** → `planning-flow`
-- **The request has a metric + date** → `goal-flow`
-- **It's knowledge capture** → `note-taking-flow`
+- **You're going to EXECUTE the development todo** → `dran-coder-flow`
+- **Grouping todos into an execution** → `dran-planning-flow`
+- **The request has a metric + date** → `dran-goal-flow`
+- **It's knowledge capture** → `dran-note-taking-flow`
 
 ## Cross-references
 
 - MCP reference: `dran` — main skill
-- Plan that lists these todos: `planning-flow`
-- Execution of development todos: `coder-flow`
-- Goal that receives progress from the todos: `goal-flow`
-- Independent links: `relations-flow`
+- Plan that lists these todos: `dran-planning-flow`
+- Execution of development todos: `dran-coder-flow`
+- Goal that receives progress from the todos: `dran-goal-flow`
+- Independent links: `dran-relations-flow`
 - Vocabulary of 6 verbs and mermaid as contract: `riel-contract`
 - Local state (`✓NN`) during execution: `riel-ledger`
