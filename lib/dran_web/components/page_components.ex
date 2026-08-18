@@ -613,8 +613,7 @@ defmodule DranWeb.PageComponents do
 
   attr :graph_url, :string,
     default: nil,
-    doc:
-      "URL for progressive graph JSON fetch. nil = panel default (\"/panel/graph-json\")"
+    doc: "URL for progressive graph JSON fetch. nil = panel default (\"/panel/graph-json\")"
 
   attr :class, :string, default: ""
   attr :style, :string, default: ""
