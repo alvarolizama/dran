@@ -1,6 +1,6 @@
 ---
 name: note-taking-flow
-description: "Use when capturing knowledge in Dran — notes, concepts, entities, references with the right page_type and kind. Triggers on guarda, captura, anota, apunta."
+description: "Use when capturing knowledge in Dran — notes, concepts, entities, references with the right page_type and kind. Triggers on the Spanish words guarda, captura, anota, apunta."
 version: 1.0.0
 author: Álvaro Lizama
 license: MIT
@@ -10,48 +10,48 @@ metadata:
     related_skills: [dran, research-flow, relations-flow, maintenance-flow]
 ---
 
-# note-taking-flow — Captura de conocimiento en Dran
+# note-taking-flow — Capturing knowledge in Dran
 
-Todo lo que NO es ejecución (project/goal/plan/todo) es captura: notes,
-concepts, entities, references. La regla madre: **cuando dudes, `note` con
-`kind: thought`** — promover después es gratis.
+Everything that is NOT execution (project/goal/plan/todo) is capture: notes,
+concepts, entities, references. The mother rule: **when in doubt, `note` with
+`kind: thought`** — promoting later is free.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|"Capturar nota, concept,\nentity o reference"| SELF["ESTE SKILL\nnote-taking-flow"]
-  Q -->|"Investigar con fuentes\nde internet"| RF[research-flow]
-  Q -->|"Acción concreta\ncon kanban"| TF[todo-flow]
-  Q -->|"Relacionar lo\ncapturado"| RLF[relations-flow]
-  Q -->|"Tools MCP, page types"| D[dran — principal]
+  Q{What do you need?} -->|"Capture note, concept,\nentity or reference"| SELF["THIS SKILL\nnote-taking-flow"]
+  Q -->|"Research with sources\nfrom the internet"| RF[research-flow]
+  Q -->|"Concrete action\nwith kanban"| TF[todo-flow]
+  Q -->|"Relate what\nwas captured"| RLF[relations-flow]
+  Q -->|"MCP tools, page types"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
-## Flujo operativo — sigue este DAG al pie de la letra
+## Operational flow — follow this DAG to the letter
 
 ```mermaid
 flowchart TD
-  START[Lo que Álvaro quiere guardar] --> SEARCH["SEARCH 2-3 variantes\ndran_search"]
-  SEARCH --> EXISTS{¿Existe algo\nparecido?}
-  EXISTS -->|Sí| UPDATE["UPDATE la página existente\nEdit > duplicate"]
-  EXISTS -->|No| TYPE{¿Qué tipo?}
-  TYPE -->|"Pensamiento, idea,\njournal, reunión"| NOTE["note\ndefault kind: thought"]
-  TYPE -->|"Técnica, patrón,\nmétodo reutilizable"| CONCEPT[concept]
-  TYPE -->|"Persona, empresa,\nherramienta, lugar"| ENTITY[entity]
-  TYPE -->|"Fuente externa\ncon link"| REFERENCE[reference]
-  TYPE -->|"Dudo entre 2-3"| CLARIFY["clarify\n¿cómo lo guardo?"]
+  START[What Álvaro wants to save] --> SEARCH["SEARCH 2-3 variants\ndran_search"]
+  SEARCH --> EXISTS{Does something\nsimilar exist?}
+  EXISTS -->|Yes| UPDATE["UPDATE the existing page\nEdit > duplicate"]
+  EXISTS -->|No| TYPE{What type?}
+  TYPE -->|"Thought, idea,\njournal, meeting"| NOTE["note\ndefault kind: thought"]
+  TYPE -->|"Technique, pattern,\nreusable method"| CONCEPT[concept]
+  TYPE -->|"Person, company,\ntool, place"| ENTITY[entity]
+  TYPE -->|"External source\nwith link"| REFERENCE[reference]
+  TYPE -->|"Unsure between 2-3"| CLARIFY["clarify\nhow do I save it?"]
   CLARIFY --> TYPE
-  NOTE --> CREATE["CREATE\ndran_create_page\nmeta.kind correcto"]
+  NOTE --> CREATE["CREATE\ndran_create_page\ncorrect meta.kind"]
   CONCEPT --> CREATE
   ENTITY --> CREATE
   REFERENCE --> CREATE
-  CREATE --> RELATE["RELACIONAR\npart_of / related\n(relations-flow)"]
+  CREATE --> RELATE["RELATE\npart_of / related\n(relations-flow)"]
   UPDATE --> RELATE
-  RELATE --> PROMOTE{"¿Se volvió\nrelevante?"}
-  PROMOTE -->|"thought → concept/entity"| UP["PROMOVER\neditar la misma página"]
-  PROMOTE -->|No aún| DONE[Fin]
+  RELATE --> PROMOTE{"Did it become\nrelevant?"}
+  PROMOTE -->|"thought → concept/entity"| UP["PROMOTE\nedit the same page"]
+  PROMOTE -->|Not yet| DONE[End]
   UP --> DONE
 
   style CLARIFY fill:#fef3c7,stroke:#d97706
@@ -60,57 +60,57 @@ flowchart TD
 
 ## Parse contract
 
-### Qué CONSUME este skill
-- Lo que Álvaro quiere guardar: pensamiento, aprendizaje, dato de una persona/
-  empresa, link, cita, minuta de reunión
+### What this skill CONSUMES
+- What Álvaro wants to save: thought, learning, a fact about a person/
+  company, link, quote, meeting minutes
 
-### Qué PRODUCE este skill
+### What this skill PRODUCES
 
-| # | Artefacto | Propósito |
+| # | Artifact | Purpose |
 |---|-----------|-----------|
-| 1 | Página con `page_type` + `meta.kind` correctos | Búsqueda y grafo la tratan bien |
-| 2 | Relaciones tipadas hacia lo relacionado | PageRank y contexto |
-| 3 | Promoción de thought → concept/entity cuando aplica | El conocimiento madura sin duplicarse |
+| 1 | Page with the correct `page_type` + `meta.kind` | Search and the graph handle it well |
+| 2 | Typed relations to related content | PageRank and context |
+| 3 | Promotion of thought → concept/entity when it applies | Knowledge matures without duplicating |
 
-**Sin `meta.kind` correcto la captura está mal formada** — la página se crea,
-pero la búsqueda y los filtros la pierden.
+**Without the correct `meta.kind` the capture is malformed** — the page gets
+created, but search and filters lose it.
 
-## Descripción del flujo
+## Flow description
 
-| Tipo | Cuándo | Ejemplo |
+| Type | When | Example |
 |------|--------|---------|
-| `note` | En el momento — captura rápida (default) | idea, journal, meeting, quote |
-| `concept` | Conocimiento reutilizable destilado | técnica, patrón, framework |
-| `entity` | Persona/empresa/producto que aparece repetido | FAL.ai, Hermes, Anthropic |
-| `reference` | Fuente externa útil | artículo, video, paper |
+| `note` | On the spot — quick capture (default) | idea, journal, meeting, quote |
+| `concept` | Distilled reusable knowledge | technique, pattern, framework |
+| `entity` | Person/company/product that keeps appearing | FAL.ai, Hermes, Anthropic |
+| `reference` | Useful external source | article, video, paper |
 
-**Estrategias:**
+**Strategies:**
 
-- **Captura rápida** → `note` (kind thought) → **promover** a
-  `concept`/`entity` cuando se vuelve relevante. Edit > duplicate — promover
-  es editar la MISMA página (body, meta.kind), nunca crear otra.
-- **Search before create** (2-3 variantes); si existe, actualizar.
-- **Duda del tipo** → default `note` thought; si la duda cambia lo que
-  capturas (nota vs entidad vs referencia), clarify con 2-3 candidatos.
-- **Relacionar siempre** (`related`/`part_of`) — alimenta PageRank y la
-  búsqueda (ver `relations-flow`).
+- **Quick capture** → `note` (kind thought) → **promote** to
+  `concept`/`entity` when it becomes relevant. Edit > duplicate — promoting
+  means editing the SAME page (body, meta.kind), never creating another.
+- **Search before create** (2-3 variants); if it exists, update.
+- **Type doubt** → default `note` thought; if the doubt changes what you're
+  capturing (note vs entity vs reference), clarify with 2-3 candidates.
+- **Always relate** (`related`/`part_of`) — feeds PageRank and search (see
+  `relations-flow`).
 
-### Kinds por tipo (resumen operativo)
+### Kinds by type (operational summary)
 
 **Note:** thought (default), journal, idea, meeting, question, quote,
 reminder. **Concept:** technique, pattern, framework, method, principle.
 **Entity:** person, company, product, tool, place, event. **Reference:**
-article, paper, video, podcast, book — siempre con `source_url`.
+article, paper, video, podcast, book — always with `source_url`.
 
-La lista completa de kinds vive en el skill `dran` (§3).
+The full list of kinds lives in the `dran` skill (§3).
 
-## Uso de Dran
+## Using Dran
 
 ### Recipes
 
-**Captura rápida:**
+**Quick capture:**
 ```
-1. dran_search({ context: "personal", query: "<keywords>" })   → existe? UPDATE
+1. dran_search({ context: "personal", query: "<keywords>" })   → exists? UPDATE
 2. dran_create_page({
      context: "personal",
      page_type: "note",
@@ -121,96 +121,96 @@ La lista completa de kinds vive en el skill `dran` (§3).
    })
 ```
 
-**Concept destilado:**
+**Distilled concept:**
 ```
 dran_create_page({ page_type: "concept", title: "Circuit Breaker",
   meta: { kind: "pattern", domain: "resilience" } })
 ```
 
-**Entity (con props):**
+**Entity (with props):**
 ```
 dran_create_page({ page_type: "entity", title: "Anthropic",
   meta: { kind: "company", external_url: "https://...",
           props: { location: "sf", framework: "claude" } } })
 ```
 
-**Reference (con la regla del por qué):**
+**Reference (with the why rule):**
 ```
 dran_create_page({ page_type: "reference", title: "Paper X",
-  body: "## Por qué\n\n<para qué la guardo>",
+  body: "## Why\n\n<why I'm saving it>",
   meta: { kind: "paper", source_url: "https://arxiv.org/..." } })
 ```
 
-**Promover thought → concept:**
+**Promote thought → concept:**
 ```
-1. dran_get_page el note original
-2. dran_update_page: meta.kind "permanent"/reescribir body destilado,
-   o cambiar page_type vía nueva versión del meta — SIEMPRE la misma página
-3. dran_reaugment_page si el cambio es significativo
+1. dran_get_page the original note
+2. dran_update_page: meta.kind "permanent"/rewrite the distilled body,
+   or change page_type via a new version of the meta — ALWAYS the same page
+3. dran_reaugment_page if the change is significant
 ```
 
-**Notas de código:** `meta.kind: "code"` + `meta.language: "elixir"` para
-filtrar por lenguaje.
+**Code notes:** `meta.kind: "code"` + `meta.language: "elixir"` to filter by
+language.
 
-### Props al capturar (meta.props)
+### Props when capturing (meta.props)
 
-Cualquier página puede llevar `meta.props`: bag libre key-value (solo
-strings, máx 10). Las keys `role`, `tier`, `location`, `language`,
-`framework` materializan edges automáticos; las custom keys se guardan y se
-pueden filtrar al buscar, pero no generan edge (detalle en `relations-flow`).
+Any page can carry `meta.props`: a free key-value bag (strings only, max 10).
+The keys `role`, `tier`, `location`, `language`, `framework` materialize
+automatic edges; custom keys are stored and can be filtered when searching,
+but they don't generate an edge (details in `relations-flow`).
 
-**Dónde natural:** entity de tool → `language` + `framework`; entity de
-persona → `role` + `location`; concept con tier → `tier`; reference → nada
-(usa `source_url`/`kind`).
+**Where it fits naturally:** tool entity → `language` + `framework`; person
+entity → `role` + `location`; concept with tier → `tier`; reference → nothing
+(use `source_url`/`kind`).
 
-**Buscar por props (AND):**
+**Search by props (AND):**
 ```
 dran_search({ query: "elixir", props: { language: "elixir" } })
 dran_list_pages({ type: "entity", props: { framework: "phoenix" } })
 ```
 
-### Brainstorming (generar ideas)
+### Brainstorming (generating ideas)
 
-1. **Clarify** — tema, alcance y para qué
-2. **Search before create** — ¿qué ya tenemos del tema?
-3. **Generar** — notes `kind: idea` interlinkeadas (`related`), o el prompt
-   `brainstorm` de Dran (5-10 ideas como pages interlinkeadas)
-4. **Investigar lo que vale** → `research-flow`
-5. **Destilar** — promover lo bueno a `concept`/`entity`
-6. **Presentar + priorizar** — clarify para elegir cuáles se vuelven
-   projects/goals/plans/todos (hand-off al flow correspondiente)
+1. **Clarify** — topic, scope, and why
+2. **Search before create** — what do we already have on the topic?
+3. **Generate** — interlinked notes `kind: idea` (`related`), or Dran's
+   `brainstorm` prompt (5-10 ideas as interlinked pages)
+4. **Research what's worth it** → `research-flow`
+5. **Distill** — promote the good ones to `concept`/`entity`
+6. **Present + prioritize** — clarify to choose which ones become
+   projects/goals/plans/todos (hand-off to the corresponding flow)
 
 ## Pitfalls
 
-- **Crear sin search** — duplicados que fragmentan el grafo.
-- **Duplicar en vez de promover** — un thought que maduró se EDITA, no se
-  clona como concept nuevo.
-- **`note` genérico sin kind** — `meta.kind` es lo que lo hace encontrable.
-- **Reference sin `source_url` ni por qué** — ruido.
-- **Captura sin relacionar** — página huérfana que el search no levanta.
-- **Preguntar lo obvio** — un pendiente es todo, una cita es note quote;
-  clarify solo cuando el tipo cambia lo que capturas.
+- **Create without search** — duplicates that fragment the graph.
+- **Duplicate instead of promote** — a thought that matured gets EDITED, not
+  cloned as a new concept.
+- **Generic `note` without kind** — `meta.kind` is what makes it findable.
+- **Reference without `source_url` or why** — noise.
+- **Capture without relating** — an orphan page that search doesn't pick up.
+- **Asking the obvious** — a pending task is a todo, a quote is a note quote;
+  clarify only when the type changes what you capture.
 
 ## Quick reference
 
-| Tool | Args mínimos | Retorna |
+| Tool | Minimal args | Returns |
 |------|--------------|---------|
-| `dran_search` | `query` (2-3 variantes) | ¿Ya existe? |
-| `dran_create_page` | `page_type`, `body`, `meta.kind` | Página + slug |
-| `dran_update_page` | `slug` + campos | Promoción/edición |
-| `dran_create_relation` | `source_slug`, `target_slug`, `relation_type` | Edge tipado |
-| Prompt `brainstorm` | tema | Ideas interlinkeadas |
+| `dran_search` | `query` (2-3 variants) | Does it already exist? |
+| `dran_create_page` | `page_type`, `body`, `meta.kind` | Page + slug |
+| `dran_update_page` | `slug` + fields | Promotion/editing |
+| `dran_create_relation` | `source_slug`, `target_slug`, `relation_type` | Typed edge |
+| Prompt `brainstorm` | topic | Interlinked ideas |
 
-## Cuándo NO usar este skill
+## When NOT to use this skill
 
-- **Investigación con fuentes web** → `research-flow`
-- **Pendiente/acción** → `todo-flow`
-- **Definición de proyecto/objetivo/plan** → `project-flow` / `goal-flow` /
+- **Research with web sources** → `research-flow`
+- **Pending task/action** → `todo-flow`
+- **Project/goal/plan definition** → `project-flow` / `goal-flow` /
   `planning-flow`
 
 ## Cross-references
 
-- Lista completa de kinds y page types: `dran` — skill principal
-- Fuentes con research completo: `research-flow`
-- Relaciones y props: `relations-flow`
-- Huérfanos y limpieza: `maintenance-flow`
+- Full list of kinds and page types: `dran` — main skill
+- Sources with full research: `research-flow`
+- Relations and props: `relations-flow`
+- Orphans and cleanup: `maintenance-flow`

@@ -1,6 +1,6 @@
 ---
 name: dran
-description: "Use when operating Dran (second brain / knowledge graph) via its MCP server — 18 tools, 10 page types, connection/auth, and install + config of the dran skill suite. Triggers on anything Dran / segundo cerebro / brain."
+description: "Use when operating Dran (second brain / knowledge graph) via its MCP server — 18 tools, 10 page types, connection/auth, and install + config of the dran skill suite. Triggers on anything Dran / brain."
 version: 9.2.0
 author: Álvaro Lizama
 license: MIT
@@ -12,55 +12,55 @@ metadata:
 
 # dran — MCP reference + suite router
 
-Este es el skill **principal** de la suite Dran. Carga aquí primero: te dice si
-necesitas un flow específico, y te da la referencia MCP completa (tools, page
-types, meta fields, conexión).
+This is the **main** skill of the Dran suite. Load it first: it tells you whether
+you need a specific flow, and gives you the complete MCP reference (tools, page
+types, meta fields, connection).
 
 ## Entry router
 
-¿Estás en el skill correcto? Sigue este diagrama:
+Are you in the right skill? Follow this diagram:
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|"Tools MCP, page types,\nconexión, instalar skills"| SELF["ESTE SKILL\ndran principal"]
-  Q -->|"Crear o gestionar un project"| PF[project-flow]
-  Q -->|"Crear o gestionar un goal\n(métrica + fecha)"| GF[goal-flow]
-  Q -->|"Crear plan con mermaid\nde ruta"| PLF[planning-flow]
-  Q -->|"Crear todo\ndev o general"| TF[todo-flow]
-  Q -->|"Ejecutar un todo de\ndesarrollo (fases)"| CF[coder-flow]
-  Q -->|"Investigar por internet\nfuentes + query pages"| RF[research-flow]
-  Q -->|"Capturar nota, concept,\nentity o reference"| NTF[note-taking-flow]
-  Q -->|"Relacionar páginas,\nprops, embeds"| RLF[relations-flow]
-  Q -->|"Agentes, lint, stats,\narchive, higiene"| MF[maintenance-flow]
-  Q -->|"Notas fuera de Dran"| OTHER[obsidian, notion\no apple-notes]
+  Q{What do you need?} -->|"MCP tools, page types,\nconnection, installing skills"| SELF["THIS SKILL\nmain dran"]
+  Q -->|"Create or manage a project"| PF[project-flow]
+  Q -->|"Create or manage a goal\n(metric + date)"| GF[goal-flow]
+  Q -->|"Create a plan with a\nroute mermaid"| PLF[planning-flow]
+  Q -->|"Create a todo\ndev or general"| TF[todo-flow]
+  Q -->|"Run a development\ntodo (phases)"| CF[coder-flow]
+  Q -->|"Research the web\nsources + query pages"| RF[research-flow]
+  Q -->|"Capture a note, concept,\nentity or reference"| NTF[note-taking-flow]
+  Q -->|"Relate pages,\nprops, embeds"| RLF[relations-flow]
+  Q -->|"Agents, lint, stats,\narchive, hygiene"| MF[maintenance-flow]
+  Q -->|"Notes outside Dran"| OTHER[obsidian, notion\nor apple-notes]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
-Ejecuta SOLO la sección a la que llegaste. Si el diagrama te manda a otro
-skill, **paras aquí** y haces hand-off — no absorbes ese trabajo.
+Run ONLY the section you landed on. If the diagram sends you to another skill,
+**stop here** and hand off — don't absorb that work.
 
-## Los 9 flows de la suite
+## The 9 flows of the suite
 
-| Flow | Cuándo cargarlo |
+| Flow | When to load it |
 | --- | --- |
-| `project-flow` | Crear, actualizar o revisar un project (visión, alcance, health) |
-| `goal-flow` | Goals con métrica + fecha; progress auto/manual |
-| `planning-flow` | Plans tácticos con mermaid de ruta, todos y gotchas |
-| `todo-flow` | Crear todos (dev o generales): templates, kanban, assignee |
-| `coder-flow` | Ejecutar un todo de desarrollo: fases, subagentes, gates |
-| `research-flow` | Investigar por internet: web, fuentes, query pages |
-| `note-taking-flow` | Captura de notes, concepts, entities, references |
-| `relations-flow` | Relaciones tipadas, props materializadas, embeds |
-| `maintenance-flow` | Agentes autónomos, lint, stats, archive, higiene |
+| `project-flow` | Create, update or review a project (vision, scope, health) |
+| `goal-flow` | Goals with metric + date; auto/manual progress |
+| `planning-flow` | Tactical plans with route mermaid, todos and gotchas |
+| `todo-flow` | Create todos (dev or general): templates, kanban, assignee |
+| `coder-flow` | Run a development todo: phases, subagents, gates |
+| `research-flow` | Research online: web, sources, query pages |
+| `note-taking-flow` | Capture notes, concepts, entities, references |
+| `relations-flow` | Typed relations, materialized props, embeds |
+| `maintenance-flow` | Autonomous agents, lint, stats, archive, hygiene |
 
-## Instalación y configuración de la suite
+## Installing and configuring the suite
 
-Los 10 skills viven en el repo Dran bajo `skills/`:
+The 10 skills live in the Dran repo under `skills/`:
 
 ```
 skills/
-  dran/               ← este skill (principal) + references/ + scripts/
+  dran/               ← this skill (main) + references/ + scripts/
   project-flow/
   goal-flow/
   planning-flow/
@@ -72,16 +72,17 @@ skills/
   maintenance-flow/
 ```
 
-### Instalar en Hermes
+### Install in Hermes
 
 ```bash
-DRAN_REPO=/path/to/dran   # repo clonado
+DRAN_REPO=/path/to/dran   # cloned repo
 mkdir -p ~/.hermes/skills/dran
 cp -R "$DRAN_REPO/skills/"* ~/.hermes/skills/dran/
 ```
 
-Quedan como categoría `dran` en Hermes. Para actualizar tras un `git pull`,
-repite el `cp -R`. Si prefieres vivir al filo del repo, usa symlinks:
+They land in the `dran` category in Hermes. To update after a `git pull`,
+repeat the `cp -R`. If you prefer living on the bleeding edge of the repo, use
+symlinks:
 
 ```bash
 for s in "$DRAN_REPO/skills/"*/; do
@@ -89,9 +90,9 @@ for s in "$DRAN_REPO/skills/"*/; do
 done
 ```
 
-### Configurar el MCP server
+### Configure the MCP server
 
-En `~/.hermes/config.yaml`:
+In `~/.hermes/config.yaml`:
 
 ```yaml
 mcp_servers:
@@ -99,15 +100,15 @@ mcp_servers:
     enabled: true
     url: http://<host>/api/mcp
     headers:
-      Authorization: Bearer <token>
+      Authorization: Bearer ***
 ```
 
 - **Endpoint** — `POST http://<host>/api/mcp`, MCP spec **2025-03-26**,
   Streamable HTTP.
-- **Token** — legacy admin (`DRAN_API_TOKEN`), per-user, o context API key
-  (Settings → API Keys en la web de Dran; plaintext se muestra una sola vez).
-- **Verificación** — las 18 tools `mcp__dran__*` deben aparecer cargadas en el
-  agente; si no, revisa token (401) y contexto (403).
+- **Token** — legacy admin (`DRAN_API_TOKEN`), per-user, or context API key
+  (Settings → API Keys in the Dran web UI; plaintext is shown only once).
+- **Verification** — the 18 `mcp__dran__*` tools must show up as loaded in the
+  agent; if not, check token (401) and context (403).
 
 ## 1. What is Dran
 
@@ -121,7 +122,7 @@ through a single MCP endpoint.
   automatically by the augmenter after every create/update; the rest
   (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`,
   `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`) are explicit
-  or materialized from `meta.props` (ver `relations-flow`).
+  or materialized from `meta.props` (see `relations-flow`).
 - **Search** fuses FTS + semantic via reciprocal-rank fusion with a PageRank
   authority boost — well-linked pages rank higher.
 - **Contexts** partition the brain (e.g. `personal`, `work`). Pages, relations
@@ -133,7 +134,7 @@ through a single MCP endpoint.
 | --- | --- |
 | Transport | Streamable HTTP, MCP spec **2025-03-26** |
 | Endpoint | `POST http://<host>/api/mcp` |
-| Auth | `Authorization: Bearer <token>` — legacy admin, per-user, or context API key |
+| Auth | `Authorization: Bearer *** — legacy admin, per-user, or context API key |
 | Default context | **`personal`** — do not ask, do not switch unless Álvaro says so |
 
 Auth accepts three token kinds, checked in order:
@@ -169,20 +170,20 @@ token isn't allowed to touch (or write tools on a read-only key).
 
 ## 3. Page types (10)
 
-Cada página tiene UN `page_type`. Este decide qué `meta` acepta y cómo la
-trata la búsqueda / kanban / grafo.
+Each page has ONE `page_type`. It decides which `meta` it accepts and how
+search / kanban / graph treat it.
 
 ```mermaid
 flowchart TD
-  W{¿Qué es lo que capturo?} -->|"Pensamiento, idea, journal\nreunión, cita, recordatorio"| NOTE[note]
-  W -->|"Técnica, patrón, teoría\nmétodo, principio"| CONCEPT[concept]
-  W -->|"Persona, empresa, herramienta\nlugar, producto, evento"| ENTITY[entity]
-  W -->|"Fuente externa: artículo\npaper, video, libro, repo"| REFERENCE[reference]
-  W -->|"Objetivo medible con\ntarget y fechas"| GOAL[goal]
-  W -->|"Plan con horizonte\nweekly/quarterly/yearly"| PLAN[plan]
-  W -->|"Iniciativa grande que\nagrupa goals/plans/todos"| PROJECT[project]
-  W -->|"Acción concreta\ncon kanban"| TODO[todo]
-  W -->|"Pregunta con respuesta"| QUERY[query]
+  W{What am I capturing?} -->|"Thought, idea, journal\nmeeting, quote, reminder"| NOTE[note]
+  W -->|"Technique, pattern, theory\nmethod, principle"| CONCEPT[concept]
+  W -->|"Person, company, tool\nplace, product, event"| ENTITY[entity]
+  W -->|"External source: article\npaper, video, book, repo"| REFERENCE[reference]
+  W -->|"Measurable objective with\ntarget and dates"| GOAL[goal]
+  W -->|"Plan with horizon\nweekly/quarterly/yearly"| PLAN[plan]
+  W -->|"Large initiative that\ngroups goals/plans/todos"| PROJECT[project]
+  W -->|"Concrete action\nwith kanban"| TODO[todo]
+  W -->|"Question with answer"| QUERY[query]
 
   style TODO fill:#fde68a,stroke:#d97706
 ```
@@ -198,26 +199,27 @@ flowchart TD
 | `plan` | Time-horizoned plans (weekly/monthly/quarterly/yearly) | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
 | `todo` | Actionable items with kanban status | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
 | `query` | Questions with answers | factual, conceptual, how_to, opinion, exploration, report, status, decision, comparison |
-| `report` | System-created run logs — **no se crea por MCP**, lo escribe `Dran.Jobs` | log |
+| `report` | System-created run logs — **not created via MCP**, written by `Dran.Jobs` | log |
 
-`report` es second-citizen: vive fuera del grafo, el journey, embeddings y
-`mcp_create`; aparece en el activity log y tiene vista en `/panel/reports/<slug>`.
-No lo uses para capturar conocimiento — es salida de sistema (ver §4 Jobs).
+`report` is a second-class citizen: it lives outside the graph, the journey,
+embeddings and `mcp_create`; it appears in the activity log and has a view at
+`/panel/reports/<slug>`. Don't use it to capture knowledge — it's system output
+(see §4 Jobs).
 
 Default to `note` with `meta.kind: "thought"` when unsure — promote later.
-La creación de cada tipo vive en su flow (`note-taking-flow`, `goal-flow`,
+Creating each type lives in its flow (`note-taking-flow`, `goal-flow`,
 `planning-flow`, `project-flow`, `todo-flow`).
 
 Notes with `meta.kind: "code"` may carry `meta.language` (e.g. `elixir`,
 `python`) to filter by programming language.
 
-### Meta fields por tipo (los que de verdad acepta cada uno)
+### Meta fields by type (what each one actually accepts)
 
-Fuente: `dran_create_page` en `lib/dran/mcp.ex`. Campos clave:
+Source: `dran_create_page` in `lib/dran/mcp.ex`. Key fields:
 
 ```mermaid
 flowchart LR
-  subgraph CORE["meta core por tipo"]
+  subgraph CORE["meta core by type"]
     N["note → kind, date"]
     TD["todo → kind, kanban_status\npriority, due_date"]
     G["goal → kind, health, metric\ntarget_value, current_value\nunit, progress, dates"]
@@ -231,15 +233,15 @@ flowchart LR
 ```
 
 - **goal**: `health` (green/yellow/red), `metric` + `target_value` +
-  `current_value` + `unit` para medir, `progress`, `start_date`, `target_date`.
-- **plan**: `horizon` (weekly/monthly/quarterly/yearly), `period` (ej
+  `current_value` + `unit` for measuring, `progress`, `start_date`, `target_date`.
+- **plan**: `horizon` (weekly/monthly/quarterly/yearly), `period` (e.g.
   `2026-Q3`), `status` (draft/active/done/archived), `due_date`.
 - **project**: `status` (draft/active/on_hold/done/archived), `priority`,
-  `health`, `health_source` (manual/derived), fechas.
+  `health`, `health_source` (manual/derived), dates.
 - **todo**: `kanban_status` (backlog/this_week/today/in_progress/done/
   cancelled), `priority` (low/medium/high/urgent), `due_date`.
-- **query**: la pregunta + respuesta; `status` es **`answer_status` a nivel de
-  negocio** (open/answered/verified), `difficulty`, `answered_by`.
+- **query**: the question + answer; `status` is **`answer_status` at the
+  business level** (open/answered/verified), `difficulty`, `answered_by`.
 
 ### Custom properties — `meta.props`
 
@@ -266,13 +268,13 @@ is inference-independent — works even with the LLM off.
 **Backfill**: Settings → Brain → "Run backfill" re-materializes props for
 every existing page with non-empty `meta.props` (Dran.PropsBackfill).
 
-**Buscar por props (AND)** — `dran_search` y `dran_list_pages` aceptan
-`props: { key: value }` y exigen TODOS los pares:
+**Searching by props (AND)** — `dran_search` and `dran_list_pages` accept
+`props: { key: value }` and require ALL pairs to match:
 `dran_search({ query, props: { role: "sales" } })` /
-`dran_list_pages({ type: "entity", props: { tier: "vip" } })`. Límites: máx
-10 props por página, solo strings como valores.
+`dran_list_pages({ type: "entity", props: { tier: "vip" } })`. Limits: max
+10 props per page, only strings as values.
 
-El uso operativo de props y relaciones vive en `relations-flow`.
+Operational use of props and relations lives in `relations-flow`.
 
 ### Per-context page type disabling
 
@@ -317,7 +319,7 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 | `dran_update_page` | Update title/body/tags/meta — **replaces `meta` entirely AND `body` entirely** (no append, no partial). ⚠️ When updating a page with mermaid diagrams, pass only `body` (no `meta`) or TipTap re-parses and strips the mermaid blocks. **Never split a body update across calls** — the second call wipes the first; for bodies over the tool-call token limit, write the full body to a local file and `PUT /api/pages/:slug?context=X` with curl. ⚠️ **Write tool** |
 | `dran_update_todo` | Update todo status/priority/date/links — **merges `meta`** (the only safe way to change todo status). ⚠️ **Write tool** |
 | `dran_rename_slug` | Rename a slug; rewrites all `![[old-slug]]` embeds in the context. ⚠️ **Write tool** |
-| `dran_create_relation` | Explicit typed relation (params reales: `source_slug` + `target_slug`): `related`, `part_of`, `supersedes`, `contradicts`, `embeds` — el enum real NO incluye los tipos prop-materialized (`works_in`, `has_tier`, `based_in`, `written_in`, `built_with`); esos SOLO se materializan via `meta.props`. **Never `semantic`** (automatic). ⚠️ **Write tool** |
+| `dran_create_relation` | Explicit typed relation (real params: `source_slug` + `target_slug`): `related`, `part_of`, `supersedes`, `contradicts`, `embeds` — the real enum does NOT include the prop-materialized types (`works_in`, `has_tier`, `based_in`, `written_in`, `built_with`); those are ONLY materialized via `meta.props`. **Never `semantic`** (automatic). ⚠️ **Write tool** |
 | `dran_delete_relation` | Delete relations between two pages. ⚠️ **Write tool** |
 | `dran_delete_page` | Delete a page — **irreversible**, confirm with Álvaro first. ⚠️ **Write tool** |
 
@@ -334,19 +336,19 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) — operación completa en `maintenance-flow`. ⚠️ **Write tool** |
+| `dran_start_agent` | Launch an autonomous agent (`curator`, `link_gardener`, `graph_rag`) — full operation in `maintenance-flow`. ⚠️ **Write tool** |
 | `dran_get_agent_session` | Poll an agent session for status, steps, summary |
 
-### Jobs programados (Dran.Jobs)
+### Scheduled jobs (Dran.Jobs)
 
-Los 5 crons de Quantum (`curator_daily`, `pagerank_nightly`,
+The 5 Quantum crons (`curator_daily`, `pagerank_nightly`,
 `community_summaries_nightly`, `graph_maintenance_nightly`,
-`link_gardener_weekly`) pasan por `Dran.Jobs.run_scheduled/1` y se controlan
-desde **Settings → Brain → "Jobs programados"**: toggle por job (afecta SOLO
-las corridas programadas), "Correr ahora" (siempre ejecuta, ignora el toggle)
-y último run con link al reporte. Cada corrida escribe una página `report`
-(kind `log`) en `/panel/reports/<slug>` con status/trigger/duración; se conservan
-las 20 más recientes por job y las viejas se archivan. Programáticamente:
+`link_gardener_weekly`) go through `Dran.Jobs.run_scheduled/1` and are
+controlled from **Settings → Brain → "Scheduled jobs"**: per-job toggle
+(affects ONLY scheduled runs), "Run now" (always executes, ignores the toggle)
+and last run with link to the report. Each run writes a `report` page
+(kind `log`) at `/panel/reports/<slug>` with status/trigger/duration; the 20
+most recent per job are kept and old ones are archived. Programmatically:
 `Dran.Jobs.list/0`, `set_enabled/2`, `run_now/1`, `run_scheduled/1`.
 
 ## 5. Resources & prompts
@@ -359,9 +361,9 @@ Resources (read-only, prefer over looping `dran_list_pages`):
 Prompts: `brainstorm` (generate interlinked idea pages), `goal_review`
 (review a goal with its todos/plans).
 
-## 6. Working rules (transversales)
+## 6. Working rules (cross-cutting)
 
-Estas reglas aplican en TODOS los flows:
+These rules apply in ALL flows:
 
 1. **Default context `personal`.** Don't ask, don't switch.
 2. **Search before create.** 2-3 `dran_search` variants before every create.
@@ -411,7 +413,7 @@ flowchart LR
 ```
 
 - **todo** — create in `backlog`, move to `in_progress` immediately with
-  `dran_update_todo`, `done` only after verifying (cobertura + done-check) +
+  `dran_update_todo`, `done` only after verifying (coverage + done-check) +
   committing. One `in_progress` at a time.
 - **project** — create `draft`; auto-`active` when linked to a plan/todo/goal;
   `done`/`on_hold`/`archived` manual.
@@ -423,63 +425,63 @@ flowchart LR
 - **project.health** — derived from linked goals unless
   `health_source: "manual"`.
 
-## 8. Recipes transversales
+## 8. Cross-cutting recipes
 
-Recetas de USO que no pertenecen a un flow específico. Las recetas de
-creación por tipo viven en su flow correspondiente.
+Usage recipes that don't belong to a specific flow. Type-specific creation
+recipes live in their corresponding flow.
 
-### 8.1 Escoger el page_type cuando el agente duda
+### 8.1 Choosing the page_type when the agent hesitates
 
-Si tras el router de §3 todavía no queda claro el tipo, **pregunta con
-`clarify`** ofreciendo 2-3 candidatos reales — no adivines.
+If after the §3 router the type still isn't clear, **ask with `clarify`**
+offering 2-3 real candidates — don't guess.
 
 ```mermaid
 flowchart TD
-  IN{¿Tipo claro\ndel router §3?} -->|sí| CREATE[Crea con ese tipo]
-  IN -->|"dudo entre 2-3"| CL["clarify\n¿cómo lo guardo?"]
-  CL --> PICK{Álvaro escoge}
+  IN{Is the type clear\nfrom the §3 router?} -->|yes| CREATE[Create with that type]
+  IN -->|"stuck between 2-3"| CL["clarify\nhow should I store it?"]
+  CL --> PICK{Álvaro picks}
   PICK --> CREATE
 
   style CL fill:#dbeafe,stroke:#3b82f6
 ```
 
 ```
-# Ejemplo: "guarda lo de la reunión con el proveedor"
+# Example: "save the vendor meeting notes"
 clarify(
-  question: "¿Cómo lo registro?",
+  question: "How should I record it?",
   choices: [
-    "note (kind: meeting) — solo el resumen de la reunión",
-    "entity (kind: company) — la empresa como entidad reutilizable",
-    "reference — si hay un documento/contrato externo"
+    "note (kind: meeting) — just the meeting summary",
+    "entity (kind: company) — the company as a reusable entity",
+    "reference — if there is an external document/contract"
   ]
 )
 ```
 
-Regla: clarify SOLO cuando el tipo cambia lo que capturas (nota vs entidad vs
-referencia). Si es obvio (un pendiente → todo), no preguntes.
+Rule: clarify ONLY when the type changes what you capture (note vs entity vs
+reference). If it's obvious (a pending item → todo), don't ask.
 
-### 8.2 Leer y buscar info
+### 8.2 Reading and searching info
 
 ```mermaid
 flowchart TD
-  Q{¿Qué busco?} -->|"no sé el slug"| S["1. dran_search\n2-3 variantes"]
-  Q -->|"sé el slug"| G[dran_get_page]
-  Q -->|"filtrar por tipo/estado"| L[dran_list_pages]
-  Q -->|"todo el contexto"| W[wiki://index resource]
-  S --> G2["2. dran_get_page\ntop 2-3 resultados"]
-  G2 --> ANS["responde con\ncontenido real"]
+  Q{What am I looking for?} -->|"don't know the slug"| S["1. dran_search\n2-3 variants"]
+  Q -->|"know the slug"| G[dran_get_page]
+  Q -->|"filter by type/status"| L[dran_list_pages]
+  Q -->|"the whole context"| W[wiki://index resource]
+  S --> G2["2. dran_get_page\ntop 2-3 results"]
+  G2 --> ANS["answer with\nreal content"]
 
   style ANS fill:#d1fae5,stroke:#059669
 ```
 
-Reglas:
-- **Nunca respondas desde el excerpt del search** — `dran_get_page` primero.
-- `dran_search` acepta `type` para acotar (ej `type: "todo"`).
-- `dran_list_pages` con `status` filtra todos por kanban; `"none"` = huérfanos.
-- `dran_search` / `dran_list_pages` con `props: { key: value }` filtran por
-  custom properties (AND — todos los pares deben coincidir).
-- Para overview completo, lee el resource `wiki://{context}/index` (una
-  llamada).
+Rules:
+- **Never answer from the search excerpt** — `dran_get_page` first.
+- `dran_search` accepts `type` to narrow down (e.g. `type: "todo"`).
+- `dran_list_pages` with `status` filters todos by kanban; `"none"` = orphans.
+- `dran_search` / `dran_list_pages` with `props: { key: value }` filter by
+  custom properties (AND — all pairs must match).
+- For a full overview, read the `wiki://{context}/index` resource (one
+  call).
 
 ## 9. Common mistakes
 
@@ -504,27 +506,27 @@ Reglas:
 - **Answering from search excerpts** — read the page first.
 - **Not clarifying the type when it changes what you capture** — a meeting
   note, a company entity and a contract reference are 3 different pages; ask.
-- **Absorbing a flow's job** — si el pedido es de un flow (crear un goal,
-  ejecutar un todo de código, relacionar páginas), carga ese flow y haz
-  hand-off; no lo improvises desde aquí.
+- **Absorbing a flow's job** — if the request belongs to a flow (creating a
+  goal, running a code todo, relating pages), load that flow and hand off;
+  don't improvise it from here.
 - **Write tools on a read-only API key** — API keys are read-only by default
   (`write_access: false`). If a write tool returns `403`, check whether the
   key has `write_access` enabled in Settings → API Keys. Legacy admin and
   per-user tokens always have write access.
 
-## References (desarrollo interno del MCP)
+## References (MCP internals)
 
-En `references/` — cargar solo al trabajar el servidor MCP o auditar este
+In `references/` — load only when working on the MCP server or auditing this
 skill:
 
-- `mcp-gotchas.md` — quirks de las tools (filtros, respuestas markdown vs JSON)
-- `testing-mcp-tools.md` — cómo probar tools MCP end-to-end
-- `mcp-tool-wrapping-agent.md` — envolver tools con un agente
-- `mcp-description-tuning.md` — afinar descriptions de tools
-- `adding-dran-agents.md` — agregar agentes autónomos nuevos
-- `dran-internals-audit.md` — auditoría de internals
-- `auditing-this-skill.md` — cómo auditar esta suite
-- `updating-readme.md` — mantener README/docs sincronizados
+- `mcp-gotchas.md` — tool quirks (filters, markdown vs JSON responses)
+- `testing-mcp-tools.md` — how to test MCP tools end-to-end
+- `mcp-tool-wrapping-agent.md` — wrapping tools with an agent
+- `mcp-description-tuning.md` — tuning tool descriptions
+- `adding-dran-agents.md` — adding new autonomous agents
+- `dran-internals-audit.md` — internals audit
+- `auditing-this-skill.md` — how to audit this suite
+- `updating-readme.md` — keeping README/docs in sync
 
-En `scripts/`: `mcp_smoke.sh` — smoke test de las 18 tools contra un server
-vivo.
+In `scripts/`: `mcp_smoke.sh` — smoke test of the 18 tools against a live
+server.

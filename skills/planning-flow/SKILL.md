@@ -10,142 +10,176 @@ metadata:
     related_skills: [dran, project-flow, goal-flow, todo-flow, coder-flow, relations-flow]
 ---
 
-# planning-flow — Crear y gestionar plans en Dran
+# planning-flow — Create and manage plans in Dran
 
-El plan es el nivel **táctico**: el "cómo" se hará. Secuencia de pasos,
-arquitectura de la ejecución, mermaid de ruta. Si un plan no genera todos,
-no es plan — es nota.
+The plan is the **tactical/strategic** level: the "how" something will be executed.
+Sequence of steps, execution architecture, route mermaid. If a plan
+doesn't generate todos, it's not a plan — it's a note.
+
+**Todos** are the **actions** needed to fulfill the plan. A todo's
+`## Objective` is its concrete deliverable (execution level), NOT a
+goal (measurable objective) nor the plan's objective — it contributes to them.
+
+Unlike the todo (which merges the deliverable into `## Objective`), the plan
+keeps `## Objective` and `## Deliverable / Outcome` separate: at the
+tactical level the deliverable can differ from the objective.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|"Crear, actualizar o\nrevisar un plan"| SELF["ESTE SKILL\nplanning-flow"]
-  Q -->|"Visión y alcance\n(el para qué)"| PF[project-flow]
-  Q -->|"Objetivo con métrica\ny fecha"| GF[goal-flow]
-  Q -->|"Crear los todos\ndel plan"| TF[todo-flow]
-  Q -->|"Ejecutar un todo de\ndesarrollo"| CF[coder-flow]
-  Q -->|"Tools MCP, page types,\nconexión"| D[dran — principal]
+  Q{What do you need?} -->|"Create, update, or\nreview a plan"| SELF["THIS SKILL\nplanning-flow"]
+  Q -->|"Vision and scope\n(the why)"| PF[project-flow]
+  Q -->|"Objective with metric\nand date"| GF[goal-flow]
+  Q -->|"Create the plan's\ntodos"| TF[todo-flow]
+  Q -->|"Execute a development\ntodo"| CF[coder-flow]
+  Q -->|"MCP tools, page types,\nconnection"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
-Ejecuta SOLO la sección a la que llegaste. Si el diagrama te manda a otro
-skill, **paras aquí** y haces hand-off.
+Execute ONLY the section you reached. If the diagram sends you to another
+skill, **stop here** and hand off.
 
-## Flujo operativo — sigue este DAG al pie de la letra
+## Operational flow — follow this DAG to the letter
 
 ```mermaid
 flowchart TD
-  START[Pedido de Álvaro] --> CLARIFY["CLARIFY\n¿plan nuevo o actualizar?\n¿horizonte?"]
-  CLARIFY --> SEARCH["SEARCH 2-3 variantes\ndran_search"]
-  SEARCH --> EXISTS{¿Existe el\nplan?}
-  EXISTS -->|Sí| READ["dran_get_page\nleer estado actual"]
-  READ --> UPDATE["UPDATE pasando\nSOLO body\n(protege el mermaid)"]
+  START[Álvaro's request] --> CLARIFY["CLARIFY\nnew plan or update?\nhorizon?"]
+  CLARIFY --> SEARCH["SEARCH 2-3 variants\ndran_search"]
+  SEARCH --> EXISTS{Does the\nplan exist?}
+  EXISTS -->|Yes| READ["dran_get_page\nread current state"]
+  READ --> UPDATE["UPDATE passing\nONLY body\n(protects the mermaid)"]
   EXISTS -->|No| SHAPE["SHAPING\nquestioning SR→JR"]
-  SHAPE --> CREATE["CREATE\ndran_create_page\nstatus: active si está completo"]
-  CREATE --> TEMPLATE["VALIDAR template\nsecciones mínimas"]
+  SHAPE --> CREATE["CREATE\ndran_create_page\nstatus: active if complete"]
+  CREATE --> TEMPLATE["VALIDATE template\nminimum sections"]
   UPDATE --> TEMPLATE
-  TEMPLATE --> MERMAID{"¿Amerita mermaid?\n+3 pasos o fechas"}
-  MERMAID -->|Sí| MM["MERMAID de ruta\nflowchart / timeline / gantt"]
+  TEMPLATE --> MERMAID{"Does it warrant mermaid?\n+3 steps or dates"}
+  MERMAID -->|Yes| MM["Route MERMAID\nflowchart / timeline / gantt"]
   MERMAID -->|No| LINK
-  MM --> LINK["VINCULAR\nproject_slug / goal_slug\nindependientes"]
-  LINK --> TODOS["GENERAR todos\n(vía todo-flow)"]
-  TODOS --> AUTODONE["auto-DONE cuando TODOS\nlos todos están done/cancelled"]
-  AUTODONE --> DONE[Fin]
+  MM --> LINK["LINK\nproject_slug / goal_slug\nindependent"]
+  LINK --> TODOS["GENERATE todos\n(via todo-flow)"]
+  TODOS --> AUTODONE["auto-DONE when ALL\ntodos are done/cancelled"]
+  AUTODONE --> DONE[End]
 
   style CLARIFY fill:#fef3c7,stroke:#d97706
   style CREATE fill:#dbeafe,stroke:#2563eb
   style MM fill:#d1fae5,stroke:#059669
 ```
 
-Cada nodo es un paso obligatorio: clarify, search, shaping, template con
-entregable, mermaid de ruta si lo amerita, links independientes, y los todos
-que ejecutan el plan.
+Each node is a mandatory step: clarify, search, shaping, template with
+deliverable, route mermaid if warranted, independent links, and the todos
+that execute the plan.
 
 ## Parse contract
 
-### Qué CONSUME este skill
-- Pedido de Álvaro: nuevo plan, ajuste de ruta, revisión de plan, o página
-  plan existente con su `meta` y mermaid actuales
+### What this skill CONSUMES
+- Álvaro's request: new plan, route adjustment, plan review, or an existing
+  plan page with its current `meta` and mermaid
 
-### Qué PRODUCE este skill
+### What this skill PRODUCES
 
-| # | Artefacto | Propósito |
-|---|-----------|-----------|
-| 1 | Página `plan` con secciones mínimas | Definición ejecutoria completa |
-| 2 | Mermaid de ruta parseable | Mapa de alto nivel; cada nodo puede expandirse en un todo |
-| 3 | `meta` válido (kind, horizon, period, links) | Ubicación temporal y estratégica |
-| 4 | Lista de todos a crear (checklist con slugs) | El plan sin todos no es plan |
+| # | Artifact | Purpose |
+|---|----------|---------|
+| 1 | `plan` page with minimum sections | Complete executable definition |
+| 2 | Parseable route mermaid | High-level map; each node can expand into a todo |
+| 3 | Valid `meta` (kind, horizon, period, links) | Temporal and strategic positioning |
+| 4 | List of todos to create (checklist with slugs) | A plan without todos is not a plan |
 
-**Sin `## Entregable / Resultado` el plan está mal formado** — el entregable
-es el criterio de done del plan; sin él no hay forma de cerrar.
+**Without `## Deliverable / Outcome` the plan is malformed** — the deliverable
+is the plan's done criterion; without it there is no way to close it.
 
-## Descripción del flujo
+## Flow description
 
-| Aspecto | Regla |
-|---------|-------|
-| Qué es | El "cómo" se hará: pasos, arquitectura, mermaid |
-| Horizonte | Días/semanas |
-| Pregunta que responde | ¿Cómo lo vamos a hacer, paso a paso? |
-| Vida | Un plan = una ejecución. Si la naturaleza cambia → plan nuevo |
+| Aspect | Rule |
+|--------|------|
+| What it is | The "how" it will be done: steps, architecture, mermaid |
+| Horizon | Days/weeks |
+| Question it answers | How are we going to do it, step by step? |
+| Life | One plan = one execution. If the nature changes → new plan |
 
-**Reglas de oro:**
+**Golden rules:**
 
-1. **Nace `active` si ya está definido completo** (objetivo + entregable +
-   ejecución + todos). `draft` solo mientras se construye.
-2. **El mermaid es el mapa de ruta** — cada nodo puede expandirse en un todo
-   con su propio mermaid detallado (eso es `todo-flow` / `coder-flow`).
-3. **Anexos fuera del plan** — diagramas de sistema, glosarios, arquitectura
-   → páginas propias (`concept`/`note`) relacionadas con `part_of`/`related`.
-   El plan solo embebe con `![[slug]]` si los necesita visibles.
-4. **Auto-`done`** cuando TODOS los todos vinculados están done/cancelled
-   (= entregable cumplido si los todos cubren el resultado).
+1. **Born `active` if already fully defined** (objective + deliverable +
+   execution + todos). `draft` only while being built.
+2. **The mermaid is the route map** — each node can expand into a todo
+   with its own detailed mermaid (that's `todo-flow` / `coder-flow`).
+3. **Annexes outside the plan** — system diagrams, glossaries, architecture
+   → their own pages (`concept`/`note`) related with `part_of`/`related`.
+   The plan only embeds with `![[slug]]` if it needs them visible.
+4. **Auto-`done`** when ALL linked todos are done/cancelled
+   (= deliverable met if the todos cover the outcome).
 
-## Shaping — questioning antes de crear
+## Shaping — questioning before creating
 
-1. **Objetivo** — ¿qué se ejecuta con este plan? (1-2 frases)
-2. **Entregable** — ¿qué se produce al terminar? (criterio de done)
-3. **Horizonte** — ¿semana, mes, quarter, año? (`horizon` + `period`)
-4. **Pasos** — ¿cuáles son las fases? (alimentan el mermaid y los todos)
-5. **Trampas** — ¿qué reglas del proyecto debe respetar quien ejecute?
-   (alimentan `## Gotchas`)
+1. **Objective** — what gets executed with this plan? (1-2 sentences)
+2. **Deliverable** — what is produced when finished? (done criterion)
+3. **Horizon** — week, month, quarter, year? (`horizon` + `period`)
+4. **Steps** — what are the phases? (feed the mermaid and the todos)
+5. **Pitfalls** — what project rules must the executor respect?
+   (feed `## Gotchas`)
 
-Una pregunta bloqueante por turno. Reusa lo que ya esté en la conversación.
+One blocking question per turn. Reuse what is already in the conversation.
 
-## Template de contenido — estructura mínima común
+### Technical questioning (SR reviewing JR — code plans)
 
-| # | Sección | Propósito | Obligatoria |
-|---|---------|-----------|-------------|
-| 1 | `## Objetivo` | Qué se ejecuta, 1-2 frases | Sí |
-| 2 | `## Entregable / Resultado` | Qué se produce al terminar — criterio de done del plan | Sí |
-| 3 | `## Contexto del plan` | Stack, módulos clave, objetivo de negocio (para coding: el ejecutor no re-lee todo el repo) | Opcional |
-| 4 | `## Ejecución` | Mermaid a ALTO NIVEL (solo si lo amerita: +3 pasos o fechas) | Condicional |
-| 5 | `## Todos` | Checklist de los todos reales que se crearán (con slugs) | Sí |
-| 6 | `## Gotchas` | Trampas/reglas específicas del proyecto que el ejecutor debe respetar | Opcional |
+Before creating a code plan, inspect the real codebase with
+`search_files`/`read_file` and ground each decision in evidence
+(`path:line`). Then `clarify` with concrete options:
 
-### Tipo de mermaid según el plan
+- **Scope feasibility** — does the change touch 5+ modules or require a
+  migration? Question the scope.
+- **Existing solutions** — is there already a plan/todo covering this? Search
+  before duplicating.
+- **Dependencies** — are there in-flight todos that block?
 
-| Tipo | Cuándo | Ejemplo |
-|------|--------|---------|
-| `flowchart` | Secuencia de fases (técnico, código) | `F1[Setup] --> F2[Core]` |
-| `timeline` | Cronograma por fechas (viajes, eventos) | `2026-09-01 : Salida` |
-| `gantt` | Fechas y duraciones (lanzamientos) | barras por tarea |
+```json
+{
+  "question": "I reviewed the codebase before creating this plan. How should I proceed?",
+  "choices": [
+    "Create the plan (manageable risks)",
+    "Reduce scope",
+    "Split into 2 plans",
+    "Cancel — something related already exists"
+  ]
+}
+```
 
-### Nivel de detalle del mermaid
+Only proceed to `dran_create_page` after confirmation.
 
-**Plan normal — alto nivel (solo fases):**
+## Content template — common minimum structure
+
+| # | Section | Purpose | Required |
+|---|---------|---------|----------|
+| 1 | `## Objective` | What gets executed, 1-2 sentences | Yes |
+| 2 | `## Deliverable / Outcome` | What is produced when finished — the plan's done criterion | Yes |
+| 3 | `## Plan context` | Stack, key modules, business objective (for coding: the executor doesn't re-read the whole repo) | Optional |
+| 4 | `## Execution` | HIGH-LEVEL mermaid (only if warranted: +3 steps or dates) | Conditional |
+| 5 | `## Tasks` | Checklist of the actual todos to be created (with slugs) | Yes |
+| 6 | `## Gotchas` | Project-specific pitfalls/rules the executor must respect | Optional |
+
+### Mermaid type by plan
+
+| Type | When | Example |
+|------|------|---------|
+| `flowchart` | Phase sequence (technical, code) | `F1[Setup] --> F2[Core]` |
+| `timeline` | Schedule by dates (trips, events) | `2026-09-01 : Departure` |
+| `gantt` | Dates and durations (launches) | bars per task |
+
+### Mermaid detail level
+
+**Normal plan — high level (phases only):**
 
 ```mermaid
 flowchart TD
-  F1["Fase 1: Setup"] --> F2["Fase 2: Core"]
-  F2 --> F3["Fase 3: UI"]
-  F3 --> F4["Fase 4: Tests"]
+  F1["Phase 1: Setup"] --> F2["Phase 2: Core"]
+  F2 --> F3["Phase 3: UI"]
+  F3 --> F4["Phase 4: Tests"]
 ```
 
-**Plan grande (+3 todos) — mapa de ruta con subgraphs por módulo**, cada nodo
-etiquetado con el slug del todo que lo ejecuta — el plan se vuelve índice
-navegable del trabajo:
+**Large plan (+3 todos) — route map with subgraphs per module**, each node
+labeled with the slug of the todo that executes it — the plan becomes a
+navigable index of the work:
 
 ```mermaid
 flowchart TD
@@ -158,54 +192,54 @@ flowchart TD
   T2 --> T3
 ```
 
-El mermaid detallado de ejecución (verbos READ/EDIT/CREATE/RUN/VERIFY) NO va
-en el plan — va en el todo de cada fase (ver `todo-flow` y `coder-flow`).
+The detailed execution mermaid (READ/EDIT/CREATE/RUN/VERIFY verbs) does NOT go
+in the plan — it goes in each phase's todo (see `todo-flow` and `coder-flow`).
 
-## Uso de Dran
+## Using Dran
 
-### Meta clave
+### Key meta
 
-| Campo | Valores | Nota |
-|-------|---------|------|
+| Field | Values | Note |
+|-------|--------|------|
 | `kind` | personal / coding / business / learning / health / finance / other / investing / marketing / product / writing / career / relationship / travel | |
 | `horizon` | weekly / monthly / quarterly / yearly | |
-| `period` | ej. `2026-Q3`, `2026-08` | |
-| `status` | draft / active / done / archived | Nace active si completo |
-| `project_slug` | slug | Link independiente |
-| `goal_slug` | slug | Link independiente |
+| `period` | e.g. `2026-Q3`, `2026-08` | |
+| `status` | draft / active / done / archived | Born active if complete |
+| `project_slug` | slug | Independent link |
+| `goal_slug` | slug | Independent link |
 
-### Recipe — crear
+### Recipe — create
 
 ```
-1. clarify alcance + shaping
-2. dran_search({ context: "personal", query: "<plan>" })   → existe? UPDATE
+1. clarify scope + shaping
+2. dran_search({ context: "personal", query: "<plan>" })   → exists? UPDATE
 3. dran_create_page({
      context: "personal",
      page_type: "plan",
-     title: "Q3 2026 — Documentar MCP tools",
-     body: "## Objetivo\n\n...\n\n## Entregable / Resultado\n\n...\n\n## Ejecución\n\n```mermaid\n...\n```\n\n## Todos\n\n- [ ] ...",
+     title: "Q3 2026 — Document MCP tools",
+     body: "## Objective\n\n...\n\n## Deliverable / Outcome\n\n...\n\n## Execution\n\n```mermaid\n...\n```\n\n## Tasks\n\n- [ ] ...",
      meta: {
        kind: "coding",
        horizon: "quarterly",
        period: "2026-Q3",
        status: "active",
-       project_slug: "<project>",   → opcional, independiente
-       goal_slug: "<goal>"          → opcional, independiente
+       project_slug: "<project>",   → optional, independent
+       goal_slug: "<goal>"          → optional, independent
      },
      owner: "alvaro",  # from API key, not settable
      created_by: "chaos manager"  # overrideable
    })
-4. Crear los todos listados (vía todo-flow) con plan_slug apuntando aquí
+4. Create the listed todos (via todo-flow) with plan_slug pointing here
 ```
 
-### Recipe — actualizar (⚠️ mermaid)
+### Recipe — update (⚠️ mermaid)
 
 ```
-1. dran_search el slug
-2. dran_get_page para leer el estado actual
-3. dran_update_page pasando SOLO body (NO meta)
-   → si pasas meta junto con body, TipTap re-parsea y STRIPEA los mermaid
-4. Marca los checkboxes de ## Todos conforme los todos van quedando done
+1. dran_search the slug
+2. dran_get_page to read the current state
+3. dran_update_page passing ONLY body (NOT meta)
+   → if you pass meta together with body, TipTap re-parses and STRIPS the mermaid
+4. Check off the ## Tasks checkboxes as todos become done
 ```
 
 ### Status workflow
@@ -219,55 +253,55 @@ flowchart LR
   style AC fill:#d1fae5,stroke:#059669
 ```
 
-- **create** → `draft` mientras se construye; `active` al estar completo
-- **auto-`done`** — cuando TODOS los todos vinculados están done/cancelled
-- **`archived`** — manual; planes viejos con valor histórico se archivan,
-  no se borran
+- **create** → `draft` while being built; `active` when complete
+- **auto-`done`** — when ALL linked todos are done/cancelled
+- **`archived`** — manual; old plans with historical value are archived,
+  not deleted
 
-### Cuándo revisar un plan
+### When to review a plan
 
-Cuando los pasos ya no son válidos o se descubre un camino mejor. Se edita el
-mismo plan (solo body) — no se crea otro plan para la misma ejecución. Si la
-**naturaleza** del trabajo cambió (otro entregable), entonces sí: plan nuevo.
+When the steps are no longer valid or a better path is discovered. Edit the
+same plan (body only) — don't create another plan for the same execution. If
+the **nature** of the work changed (a different deliverable), then yes: new plan.
 
 ## Pitfalls
 
-- **`meta` + `body` juntos en update** — strippea los mermaid. SOLO body.
-- **Plan sin entregable** — no hay criterio de done; es nota disfrazada.
-- **Plan sin todos** — no es plan, es nota. Generar los todos o replantear.
-- **Mermaid de ejecución en el plan** — el plan lleva la ruta de alto nivel;
-  la ejecución detallada (verbos) va en cada todo.
-- **Anexos dentro del plan** — diagramas de sistema/arquitectura van en
-  páginas propias relacionadas; el plan los embebe con `![[slug]]` si acaso.
-- **Operadores en labels de mermaid** — `==`, `!=`, `<=`, `>=` y `$` rompen
-  el parser. Usa comillas (`B{"type coincide?"}`) o reformula con palabras.
-- **Saltos de línea sin comillas** — labels con `\n` van entre comillas
-  dobles: `A["texto\nmás"]`.
-- **Crear status draft y olvidarlo** — si el plan está completo al crearlo,
-  nace `active`.
+- **`meta` + `body` together on update** — strips the mermaid. ONLY body.
+- **Plan without deliverable** — no done criterion; it's a note in disguise.
+- **Plan without todos** — it's not a plan, it's a note. Generate the todos or rethink.
+- **Execution mermaid in the plan** — the plan carries the high-level route;
+  the detailed execution (verbs) goes in each todo.
+- **Annexes inside the plan** — system/architecture diagrams go in their own
+  related pages; the plan embeds them with `![[slug]]` if at all.
+- **Operators in mermaid labels** — `==`, `!=`, `<=`, `>=` and `$` break
+  the parser. Use quotes (`B{"type matches?"}`) or rephrase with words.
+- **Line breaks without quotes** — labels with `\n` go in double
+  quotes: `A["text\nmore"]`.
+- **Creating status draft and forgetting it** — if the plan is complete when
+  created, it's born `active`.
 
 ## Quick reference
 
-| Tool | Args mínimos | Retorna |
+| Tool | Minimum args | Returns |
 |------|--------------|---------|
-| `dran_search` | `query`, `type: "plan"` | Lista rankeada |
-| `dran_get_page` | `slug` | Body markdown (con mermaid) |
-| `dran_create_page` | `page_type: "plan"`, `title`, `body`, `meta` | Plan creado + slug |
-| `dran_update_page` | `slug`, `body` (SOLO body) | Plan actualizado |
-| `dran_list_pages` | `type: "plan"`, `status` | Lista filtrada |
+| `dran_search` | `query`, `type: "plan"` | Ranked list |
+| `dran_get_page` | `slug` | Markdown body (with mermaid) |
+| `dran_create_page` | `page_type: "plan"`, `title`, `body`, `meta` | Created plan + slug |
+| `dran_update_page` | `slug`, `body` (ONLY body) | Updated plan |
+| `dran_list_pages` | `type: "plan"`, `status` | Filtered list |
 
-## Cuándo NO usar este skill
+## When NOT to use this skill
 
-- **El pedido es visión/para qué** → `project-flow`
-- **El pedido es un objetivo medible** → `goal-flow`
-- **El pedido es una acción ejecutable** → `todo-flow`
-- **Vas a EJECUTAR código de un todo** → `coder-flow`
-- **Es captura de conocimiento** → `note-taking-flow`
+- **The request is vision/why** → `project-flow`
+- **The request is a measurable objective** → `goal-flow`
+- **The request is an executable action** → `todo-flow`
+- **You're going to EXECUTE a todo's code** → `coder-flow`
+- **It's knowledge capture** → `note-taking-flow`
 
 ## Cross-references
 
-- Referencia MCP: `dran` — skill principal
-- Project/goal que el plan sirve: `project-flow`, `goal-flow`
-- Creación de los todos del plan: `todo-flow`
-- Ejecución de todos de desarrollo: `coder-flow`
+- MCP reference: `dran` — main skill
+- Project/goal the plan serves: `project-flow`, `goal-flow`
+- Creation of the plan's todos: `todo-flow`
+- Execution of development todos: `coder-flow`
 - Links `project_slug`/`goal_slug`/`plan_slug`: `relations-flow`

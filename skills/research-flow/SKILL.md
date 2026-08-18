@@ -10,46 +10,46 @@ metadata:
     related_skills: [dran, note-taking-flow, relations-flow, maintenance-flow]
 ---
 
-# research-flow — Investigar por internet y aterrizarlo en Dran
+# research-flow — Research the internet and land it in Dran
 
-Research = conjunto: **references** (fuentes) + **query page** sintetizada con
-citas + **concepts/notes** destilados. La query page es el índice que une todo.
-Un link guardado sin contexto es ruido, no conocimiento.
+Research = a bundle: **references** (sources) + a **query page** synthesized with
+citations + distilled **concepts/notes**. The query page is the index that ties
+everything together. A link saved without context is noise, not knowledge.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|"Investigar un tema\npor internet"| SELF["ESTE SKILL\nresearch-flow"]
-  Q -->|"Captura rápida\nsin investigación"| NTF[note-taking-flow]
-  Q -->|"Pregunta que el brain\nya puede responder"| RAG["dran_search primero\n+ graph_rag (maintenance-flow)"]
-  Q -->|"Relacionar lo\ncapturado"| RLF[relations-flow]
-  Q -->|"Tools MCP, page types"| D[dran — principal]
+  Q{What do you need?} -->|"Research a topic\non the internet"| SELF["THIS SKILL\nresearch-flow"]
+  Q -->|"Quick capture\nwithout research"| NTF[note-taking-flow]
+  Q -->|"Question the brain\ncan already answer"| RAG["dran_search first\n+ graph_rag (maintenance-flow)"]
+  Q -->|"Relate what\nwas captured"| RLF[relations-flow]
+  Q -->|"MCP tools, page types"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
-Antes de investigar afuera, busca adentro: si el brain ya tiene la respuesta,
-actualiza esa página en vez de duplicar.
+Before researching outside, search inside: if the brain already has the answer,
+update that page instead of duplicating.
 
-## Flujo operativo — sigue este DAG al pie de la letra
+## Operational flow — follow this DAG to the letter
 
 ```mermaid
 flowchart TD
-  START[Pregunta/tema de Álvaro] --> CLARIFY["CLARIFY\npregunta exacta, profundidad,\nformato de entrega"]
-  CLARIFY --> INTERNAL["SEARCH INTERNO\ndran_search 2-3 variantes\n¿el brain ya tiene algo?"]
-  INTERNAL --> HIT{¿Ya existe\nquery/nota?}
-  HIT -->|Sí, y basta| READ["dran_get_page\ntop 2-3"] --> ANSWER["Responder con\ncontenido real"]
-  HIT -->|"Sí, pero vieja"| UPDATEQ["UPDATE la query existente\nno duplicar"]
-  HIT -->|No| WEB["WEB SEARCH\n2-3 variantes de query"]
-  WEB --> EXTRACT["web_extract de las\n3-5 mejores fuentes\n(preferir primarias)"]
-  EXTRACT --> CAPTURE["CAPTURAR references\nuna por fuente útil\ncon source_url + por qué"]
-  CAPTURE --> DISTILL["DESTILAR hallazgos\nnote / concept"]
-  DISTILL --> SYNTH["SINTETIZAR query page\nrespuesta + citas a references"]
-  SYNTH --> RELATE["RELACIONAR\nquery ↔ references ↔ concepts\n(relations-flow)"]
+  START[Álvaro's question/topic] --> CLARIFY["CLARIFY\nexact question, depth,\ndelivery format"]
+  CLARIFY --> INTERNAL["INTERNAL SEARCH\ndran_search 2-3 variants\ndoes the brain already have something?"]
+  INTERNAL --> HIT{Does a\nquery/note already exist?}
+  HIT -->|Yes, and it's enough| READ["dran_get_page\ntop 2-3"] --> ANSWER["Answer with\nreal content"]
+  HIT -->|"Yes, but stale"| UPDATEQ["UPDATE the existing query\ndon't duplicate"]
+  HIT -->|No| WEB["WEB SEARCH\n2-3 query variants"]
+  WEB --> EXTRACT["web_extract of the\n3-5 best sources\n(prefer primary ones)"]
+  EXTRACT --> CAPTURE["CAPTURE references\none per useful source\nwith source_url + why"]
+  CAPTURE --> DISTILL["DISTILL findings\nnote / concept"]
+  DISTILL --> SYNTH["SYNTHESIZE query page\nanswer + citations to references"]
+  SYNTH --> RELATE["RELATE\nquery ↔ references ↔ concepts\n(relations-flow)"]
   UPDATEQ --> RELATE
-  RELATE --> DELIVER["ENTREGAR\nresumen en chat + link\na la query page"]
-  ANSWER --> DONE[Fin]
+  RELATE --> DELIVER["DELIVER\nsummary in chat + link\nto the query page"]
+  ANSWER --> DONE[End]
   DELIVER --> DONE
 
   style CLARIFY fill:#fef3c7,stroke:#d97706
@@ -59,139 +59,139 @@ flowchart TD
 
 ## Parse contract
 
-### Qué CONSUME este skill
-- Pregunta o tema de Álvaro + profundidad y formato de entrega acordados
+### What this skill CONSUMES
+- Álvaro's question or topic + agreed depth and delivery format
 
-### Qué PRODUCE este skill
+### What this skill PRODUCES
 
-| # | Artefacto | Propósito |
+| # | Artifact | Purpose |
 |---|-----------|-----------|
-| 1 | `reference` por fuente útil (con `source_url` y el por qué) | Fuentes trazables |
-| 2 | `query` page con la respuesta sintetizada y citas | Respuesta reutilizable |
-| 3 | `note`/`concept` destilados | Conocimiento que trasciende la fuente |
-| 4 | Relaciones entre todo lo anterior | El grafo aprende (PageRank) |
+| 1 | `reference` per useful source (with `source_url` and the why) | Traceable sources |
+| 2 | `query` page with the synthesized answer and citations | Reusable answer |
+| 3 | Distilled `note`/`concept` | Knowledge that outlives the source |
+| 4 | Relations between all of the above | The graph learns (PageRank) |
 
-**Una reference sin por qué está mal formada** — si no sabes para qué la
-guardas, no la guardes.
+**A reference without a why is malformed** — if you don't know why you're
+saving it, don't save it.
 
-## Descripción del flujo
+## Flow description
 
-| Aspecto | Regla |
+| Aspect | Rule |
 |---------|-------|
-| Fuentes primarias primero | Docs oficiales, papers, repos, fuentes citadas > blogs de blogs |
-| Destilar o morir | El valor está en lo que extraes, no en el link |
-| Research interno vs externo | Interno (el brain) → `graph_rag`; externo (internet) → este flujo |
-| Una sola vez vs reutilizable | Pregunta de una vez → responde en chat; respuesta que vale reutilizar → query page |
+| Primary sources first | Official docs, papers, repos, cited sources > blogs of blogs |
+| Distill or die | The value is in what you extract, not the link |
+| Internal vs external research | Internal (the brain) → `graph_rag`; external (internet) → this flow |
+| One-off vs reusable | One-off question → answer in chat; answer worth reusing → query page |
 
-**Regla del por qué:** toda reference se guarda con propósito ("¿para qué la
-guardo?"). **Linkear siempre:** reference → concept/query/project al que sirve.
+**Why rule:** every reference is saved with a purpose ("what am I saving it
+for?"). **Always link:** reference → concept/query/project it serves.
 
-## Gestión de fuentes — dónde vive cada cosa
+## Source management — where everything lives
 
-| Qué | Tipo (kind) | Campos clave |
+| What | Type (kind) | Key fields |
 |-----|-------------|--------------|
-| Link suelto / artículo | `reference` (article) | `source_url` |
+| Loose link / article | `reference` (article) | `source_url` |
 | Paper | `reference` (paper) | `source_url`, `author`, `published_at` |
 | Video / podcast | `reference` (video / podcast) | `source_url` |
-| Libro | `reference` (book) | `source_url`, `author` |
-| Persona/empresa/producto del link | `entity` | `external_url`, `aliases` |
-| Research sintetizado | `query` | answer + citas |
+| Book | `reference` (book) | `source_url`, `author` |
+| Person/company/product behind the link | `entity` | `external_url`, `aliases` |
+| Synthesized research | `query` | answer + citations |
 
-**Media → transcribir antes de destilar:** video/podcast → transcribir (skills
-`youtube-content` / `social-video-transcription`) → destilar a concept/note.
-Paper → `web_extract` (soporta PDFs) → destilar.
+**Media → transcribe before distilling:** video/podcast → transcribe (skills
+`youtube-content` / `social-video-transcription`) → distill into a concept/note.
+Paper → `web_extract` (supports PDFs) → distill.
 
-**Browser bookmarks ≠ Dran** — bookmarks son accesos rápidos del navegador;
-Dran es conocimiento con contexto. No sincronizar automáticamente — promover
-a reference solo lo que vale. Reference sin uso → archivar (no borrar).
+**Browser bookmarks ≠ Dran** — bookmarks are the browser's quick access;
+Dran is knowledge with context. Don't sync automatically — promote to
+reference only what's worth it. Unused reference → archive (don't delete).
 
-## Uso de Dran
+## Using Dran
 
 ### Recipes
 
-**Capturar una fuente:**
+**Capture a source:**
 ```
 dran_create_page({
   context: "personal",
   page_type: "reference",
-  title: "<título de la fuente>",
-  body: "## Por qué\n\n<para qué la guardo, qué aporta>\n\n## Hallazgos clave\n\n- ...",
+  title: "<source title>",
+  body: "## Why\n\n<why I'm saving it, what it adds>\n\n## Key findings\n\n- ...",
   meta: { kind: "article", source_url: "https://...",
           props: { language: "elixir" } },
   owner: "alvaro", created_by: "chaos manager"  # owner from API key, created_by overrideable
 })
 ```
 
-**Sintetizar la query page:**
+**Synthesize the query page:**
 ```
 dran_create_page({
   context: "personal",
   page_type: "query",
-  title: "<la pregunta>",
-  body: "## Respuesta\n\n<síntesis con citas: según [[slug-reference-1]]...>\n\n## Fuentes\n\n- ![[slug-reference-1]]\n- ![[slug-reference-2]]",
+  title: "<the question>",
+  body: "## Answer\n\n<synthesis with citations: according to [[slug-reference-1]]...>\n\n## Sources\n\n- ![[slug-reference-1]]\n- ![[slug-reference-2]]",
   meta: { kind: "conceptual", difficulty: "moderate", status: "answered", answered_by: "agent" }
 })
-# ⚠️ el campo es status/answer_status: open/answered/verified — NO "done"
+# ⚠️ the field is status/answer_status: open/answered/verified — NOT "done"
 ```
 
-**Relacionar:**
+**Relate:**
 ```
 dran_create_relation({ source_slug: "<query-slug>", target_slug: "<reference-slug>", relation_type: "related" })
 dran_create_relation({ source_slug: "<concept-slug>", target_slug: "<query-slug>", relation_type: "part_of" })
 ```
 
-### Props al capturar (meta.props)
+### Props when capturing (meta.props)
 
-`meta.props` es un bag libre key-value (solo strings, máx 10). Las keys
-`role`, `tier`, `location`, `language`, `framework` materializan edges
-automáticos (ej. `language: "elixir"` → `written_in` → entity "elixir"); las
-custom keys se guardan y se pueden filtrar al buscar, pero no generan edge
-(detalle en `relations-flow`).
+`meta.props` is a free key-value bag (strings only, max 10). The keys
+`role`, `tier`, `location`, `language`, `framework` materialize automatic
+edges (e.g. `language: "elixir"` → `written_in` → entity "elixir"); custom
+keys are stored and filterable when searching, but don't generate an edge
+(details in `relations-flow`).
 
-**Dónde natural en research:** reference de paper → `language`; entity de la
-herramienta investigada → `framework` + `language`; entity de la empresa →
+**Where it's natural in research:** paper reference → `language`; entity of the
+researched tool → `framework` + `language`; entity of the company →
 `location` + `role`.
 
-**Buscar por props (AND):**
+**Search by props (AND):**
 ```
 dran_search({ query: "elixir", props: { language: "elixir" } })
 dran_list_pages({ type: "reference", props: { language: "elixir" } })
 ```
 
-**Research interno del brain (sin internet):** el agente `graph_rag` responde
-con local/global/drift search y crea la query page con citas — operación en
-`maintenance-flow`.
+**Internal brain research (no internet):** the `graph_rag` agent answers
+with local/global/drift search and creates the query page with citations —
+operation in `maintenance-flow`.
 
 ## Pitfalls
 
-- **Responder desde excerpts de search** — `dran_get_page` antes de contestar.
-- **Guardar links sin por qué** — ruido, no conocimiento.
-- **Duplicar una query existente** — search interno primero; si existe, UPDATE.
-- **Solo blogs de blogs** — preferir fuentes primarias (docs, papers, repos).
-- **Query con `status: "done"`** — el campo es `answer_status`
+- **Answering from search excerpts** — `dran_get_page` before replying.
+- **Saving links without a why** — noise, not knowledge.
+- **Duplicating an existing query** — internal search first; if it exists, UPDATE.
+- **Only blogs of blogs** — prefer primary sources (docs, papers, repos).
+- **Query with `status: "done"`** — the field is `answer_status`
   (open/answered/verified).
-- **No citar** — la query page sin references citadas es opinión sin soporte.
-- **Sincronizar bookmarks a lo loco** — promover a reference solo lo que vale.
+- **Not citing** — a query page without cited references is unsupported opinion.
+- **Syncing bookmarks recklessly** — promote to reference only what's worth it.
 
 ## Quick reference
 
-| Tool | Args mínimos | Retorna |
+| Tool | Minimal args | Returns |
 |------|--------------|---------|
-| `web_search` | `query` (2-3 variantes) | Candidatos |
-| `web_extract` | URLs (3-5 mejores) | Contenido limpio |
-| `dran_search` | `query` | ¿Ya lo tenemos? |
-| `dran_create_page` | `page_type: "reference"` / `"query"` | Página + slug |
-| `dran_create_relation` | `source_slug`, `target_slug`, `relation_type` | Edge tipado |
+| `web_search` | `query` (2-3 variants) | Candidates |
+| `web_extract` | URLs (3-5 best) | Clean content |
+| `dran_search` | `query` | Do we already have it? |
+| `dran_create_page` | `page_type: "reference"` / `"query"` | Page + slug |
+| `dran_create_relation` | `source_slug`, `target_slug`, `relation_type` | Typed edge |
 
-## Cuándo NO usar este skill
+## When NOT to use this skill
 
-- **La respuesta ya está en el brain** → `dran_search` + `graph_rag`
-- **Captura rápida sin fuentes** → `note-taking-flow`
-- **Vas a implementar código** → `coder-flow`
+- **The answer is already in the brain** → `dran_search` + `graph_rag`
+- **Quick capture without sources** → `note-taking-flow`
+- **You're going to implement code** → `coder-flow`
 
 ## Cross-references
 
-- Captura de lo destilado: `note-taking-flow`
-- Relaciones query ↔ references ↔ concepts: `relations-flow`
-- Agente `graph_rag` (research interno): `maintenance-flow`
-- Referencia MCP: `dran` — skill principal
+- Capturing what was distilled: `note-taking-flow`
+- Relations query ↔ references ↔ concepts: `relations-flow`
+- `graph_rag` agent (internal research): `maintenance-flow`
+- MCP reference: `dran` — main skill

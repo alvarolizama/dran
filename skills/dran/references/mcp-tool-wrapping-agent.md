@@ -114,7 +114,7 @@ end
 ```
 
 - Only inject when `"context"` is absent — don't override an explicit value.
-- Default to `"personal"` (Drans's default context) when meta is nil/empty.
+- Default to `"personal"` (Dran's default context) when meta is nil/empty.
 - The `dran_get_agent_session` tool is the one exception: it takes
   `session_id`, not `context`. Injecting `context` is harmless (MCP ignores
   extra args).
@@ -142,8 +142,8 @@ def build_messages(input, session) do
   context_slug = get_in(session.meta, ["context_slug"]) || "personal"
   page_slug = get_in(session.meta, ["page_slug"])
 
-  system = system_prompt() <> "\nContexto actual: #{context_slug}"
-  system = if page_slug, do: system <> "\nPágina actual: #{page_slug}", else: system
+  system = system_prompt() <> "\nCurrent context: #{context_slug}"
+  system = if page_slug, do: system <> "\nCurrent page: #{page_slug}", else: system
 
   [%{"role" => "system", "content" => system}] ++ history_msgs ++ [%{"role" => "user", "content" => input}]
 end

@@ -47,7 +47,7 @@ Test: for each section, ask "does the agent need this to choose the right tool a
      dran:
        url: http://<dran-host>/<mcp-endpoint>
        headers:
-         Authorization: Bearer ${MCP_DRAN_API_KEY}
+         Authorization: Bearer ${MCP_...KEY}
    ```
 3. **No hardcoded personal paths** in the generic quickstart — use placeholders.
 4. **Copy-paste ready** — install by copying the SKILL.md + adding the config block.

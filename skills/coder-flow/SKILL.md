@@ -1,215 +1,321 @@
 ---
 name: coder-flow
-description: "Use when executing a Dran dev todo — parse the fases mermaid as spec, dispatch subagents per fase, validate gates, mark done with real evidence. Triggers on execute/implement todo."
-version: 1.0.0
+description: "Use when executing a Dran dev todo (code) — shaping from draft + subagents + gates with smoke before commit + riel ledger. Triggers on execute/implement todo."
+version: 2.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
-    tags: [dran, coding, execution, subagents, gates, mermaid]
-    related_skills: [dran, todo-flow, planning-flow, git-workflow, delegated-implementation-planning]
+    tags: [dran, coding, execution, subagents, gates, mermaid, riel]
+    related_skills: [dran, todo-flow, planning-flow, riel-ledger, riel-contract, git-workflow]
 ---
 
-# coder-flow — Ejecutar un todo de desarrollo
+# coder-flow — Execute a development todo (code)
 
-Este skill toma un todo de desarrollo (variante 3 de `todo-flow`: con
-`## Fases` en mermaid) y lo **ejecuta**: parsea el mermaid como spec, despacha
-subagentes por fase, valida gates entre fases y cierra solo con evidencia real.
+This skill takes a Dran development todo (level 3 of `todo-flow`:
+`## Goal` + `## Phases` with code) and **executes** it: it does shaping if it
+arrived as a draft, dispatches subagents per phase, validates gates (with
+smoke **before** commit) and closes with real evidence.
+
+## Layer separation (riel)
+
+`coder-flow` does **not reimplement the ledger** — it delegates local state to
+`riel-ledger`, and only acts as the **adapter** to Dran:
+
+| Layer | Skill | Responsibility |
+|---|---|---|
+| Local state (✓NN, recovery, done-check) | `riel-ledger` | `.riel/ledger.md` — never touches Dran |
+| Orchestration (shaping, subagents, gates) | `coder-flow` | execute the todo |
+| Dran adapter (minimal) | `coder-flow` | `pull` (read todo) + `push-phase` (checkbox) + `push-close` (status done) |
+
+**Hard rule:** the `✓NN` (evidence with verifier + coverage) lives ONLY in the
+local ledger. Dran only receives *checked checkboxes* and *status* — never
+accumulated evidence in the body.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|"Ejecutar un todo de\ndesarrollo existente"| SELF["ESTE SKILL\ncoder-flow"]
-  Q -->|"ESCRIBIR el todo\n(templates, variantes)"| TF[todo-flow]
-  Q -->|"El plan que agrupa\nlos todos"| PLF[planning-flow]
-  Q -->|"Tools MCP, page types,\nconexión"| D[dran — principal]
+  Q{What do you need?} -->|"Execute a dev\ntodo (code)"| SELF["THIS SKILL\ncoder-flow"]
+  Q -->|"WRITE the todo\n(templates, levels)"| TF[todo-flow]
+  Q -->|"The plan that groups\nthe todos"| PLF[planning-flow]
+  Q -->|"MCP tools, page types,\nconnection"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
-Si el todo NO tiene `## Fases` con mermaid, no está listo para este skill —
-vuelve a `todo-flow` y complétalo primero.
+If the todo is of another type (manual, non-code research), it is not for this
+skill — go back to `todo-flow` or execute manually.
 
-## Flujo operativo — sigue este DAG al pie de la letra
+## Operational flow — follow this DAG to the letter
 
 ```mermaid
 flowchart TD
-  START[Todo de desarrollo asignado] --> READ["dran_get_page\nleer el todo COMPLETO"]
-  READ --> PARSE{"¿Tiene ## Fases\ncon mermaid?"}
-  PARSE -->|No| ASK["clarify con Álvaro\no completar vía todo-flow\nNO improvisar"]
-  PARSE -->|Sí| REPO["VERIFICAR repo real\npath, rama, snippets\ncontra el código actual"]
-  REPO --> LOOP{"Por cada fase\nsegún el DAG"}
-  LOOP --> BRIEF["ARMAR brief del subagente\ncontexto obligatorio completo"]
-  BRIEF --> DISPATCH["DESPACHAR delegate_task\nparalelo si disjuntas\nserial si overlap"]
-  DISPATCH --> GATE{"GATE\ncompile + test + format\n+ diff ⊆ scope?"}
-  GATE -->|No| REDISPATCH["Re-dispatch con\nel error como contexto"]
+  START[Assigned development todo] --> PULL["PULL: dran_get_page\nread the FULL todo"]
+  PULL --> SHAPE{"level 3?\n## Phases with DAG\n+ Scope + context"}
+  SHAPE -->|"No (level 1 draft)"| DISCOVER["SHAPING: analyze real codebase\n+ clarify confirmation"]
+  DISCOVER --> EXTEND["Extend phases → level 3\n(via todo-flow)"]
+  EXTEND --> LEDGER
+  SHAPE -->|"Yes"| LEDGER["Open .riel/ledger.md\n(via riel-ledger)\nGoal · Source · Phase · Next"]
+  LEDGER --> LOOP{"for each phase\nper ## Phases"}
+  LOOP --> BRIEF["Subagent brief\n(Scope + Context + DAG)"]
+  BRIEF --> DISPATCH["dispatch\nparallel if disjoint\nserial if they share a file"]
+  DISPATCH --> GATE{"GATE\ncompile + test + smoke\n+ format + diff ⊆ scope"}
+  GATE -->|"fails"| REDISPATCH["re-dispatch with\nthe error as context"]
   REDISPATCH --> DISPATCH
-  GATE -->|"Sí, quedan fases"| CHECK["Marcar checkbox de la fase\nupdate SOLO body"]
+  GATE -->|"passes"| CONFIRM["clarify commit\n(verify BEFORE commit)"]
+  CONFIRM --> COMMIT["commit"]
+  COMMIT --> VNN["append ✓NN to local ledger\n(via riel-ledger)"]
+  VNN --> CHECK["check the phase checkbox\n(push-phase → Dran)"]
   CHECK --> LOOP
-  GATE -->|"Sí, última fase"| GLOBAL["VERIFY GLOBAL\nsuite completa + criterios\nglobales del todo"]
-  GLOBAL --> ALLDONE{"¿TODOS los criterios\nverdes + evidencia?"}
-  ALLDONE -->|No| FIX["Corregir y\nre-verificar"]
-  FIX --> GLOBAL
-  ALLDONE -->|Sí| DONE["dran_update_todo → done\n+ reportar entregable a Álvaro"]
+  LOOP -->|"last phase"| DONE{"done-check\n(via riel-ledger)"}
+  DONE --> CLOSE["status done\n(push-close → Dran)"]
 
+  style DISCOVER fill:#fef3c7,stroke:#d97706
   style DISPATCH fill:#dbeafe,stroke:#2563eb
   style GATE fill:#fef3c7,stroke:#d97706
-  style DONE fill:#d1fae5,stroke:#059669
+  style CLOSE fill:#d1fae5,stroke:#059669
 ```
-
-Cada nodo es obligatorio: leer el todo completo, verificar el repo real antes
-de despachar, gate después de CADA fase, verificación global antes de `done`.
-`done` solo con TODOS los criterios en verde — nunca "ya casi".
 
 ## Parse contract
 
-### Qué CONSUME este skill
-- Un todo de desarrollo Dran con `## Fases` (mermaid), snippet(s) de código y
-  criterios de aceptación por fase
-- Acceso al repo real donde se ejecuta (path, rama de trabajo)
+### What this skill CONSUMES
+- A Dran development todo (level 3, or a level 1 draft that will get shaping)
+  with `## Goal` + `## Phases` + `## Verification`
+- Access to the real repo where it runs (path, working branch)
 
-### Qué PRODUCE este skill
+### What this skill PRODUCES
 
-| # | Artefacto | Propósito |
+| # | Artifact | Purpose |
 |---|-----------|-----------|
-| 1 | Fases implementadas con commits limpios | Código real, verificado |
-| 2 | Checkboxes del todo marcados por fase | Progreso visible en Dran |
-| 3 | Gates pasados (compile, test, format, diff) | Evidencia de calidad |
-| 4 | Todo en `done` vía `dran_update_todo` | Cierre honesto con entregable reportado |
+| 1 | Phases implemented with clean commits | Real, verified code |
+| 2 | Todo checkboxes checked per phase | Visible progress in Dran |
+| 3 | Gates passed (compile, test, smoke, format, diff) | Quality evidence |
+| 4 | Todo in `done` via `dran_update_todo` | Honest close |
 
-**Sin evidencia real no hay `done`** — tests rojos, warnings o diff fuera de
-scope = la fase NO pasó, se re-despacha con el error como contexto.
+**Without real evidence there is no `done`** — red tests, warnings, failed
+smoke, or out-of-scope diff = the phase did NOT pass, it gets re-dispatched
+with the error.
 
-## Cómo leer el mermaid de fases (obligatorio)
+## Shaping — from draft (level 1) to level 3
 
-El mermaid de `## Fases` es la **especificación del DAG**, no una ilustración:
+A todo can arrive at level 1 (draft, phases in prose). **It is not rejected —
+it is extended** by analyzing the real codebase. Shaping is the *senior
+reviewing a junior* pattern: nothing is invented, everything is grounded in
+evidence.
 
-1. **Nodos = fases.** Cada nodo es una unidad de trabajo despachable.
-2. **Flechas entrantes** = fases que deben estar `done` antes de empezar esta.
-3. **Flechas salientes** = fases que esta habilita al pasar su gate.
-4. **Fases sin dependencia entre sí** → despachables **en paralelo** (un
-   subagente por fase) SI tocan archivos distintos.
-5. **Si dos fases tocan el mismo archivo** → **serializar** (una tras otra).
+### Procedure (technical discovery)
 
-**Regla dura:** el mermaid es el contrato. Si la realidad del repo no coincide
-(módulo renombrado, función movida), NO improvises: reporta la discrepancia y
-pide actualización del todo.
+1. Read the todo's `## Goal` and turn the functional outcome into concrete
+   questions: entry points, domain modules, data paths, interfaces, tests,
+   reusable patterns, migrations, authorization, risks.
+2. Use `search_files` by **domain and behavior names**, not only by the
+   proposed module name.
+3. Use `read_file` on every relevant file, citing `path:line` — never cite
+   search snippets as if the full implementation had been read.
+4. Build the evidence table:
 
-## Vocabulario de verbos → tools
+   | Area | Evidence (repo) | Finding | Proposed change | Risk |
+   |---|---|---|---|---|
+   | `<area>` | `<path:line>` | `<observed behavior>` | `<concrete approach>` | `<risk or none>` |
 
-Los nodos de ejecución detallada (dentro de cada fase) usan **solo estos 6
-verbos**. No son tool names — son acciones semánticas que se traducen a tools:
+5. **Confirmation `clarify`** with the proposal (scope, sequence, test
+   strategy, open assumptions, no-goals). Options like:
 
-| Verbo | Significado | Tool | Ejemplo de traducción |
-|-------|-------------|------|----------------------|
-| `READ path:line` | Leer archivo/sección | `read_file` | `read_file(path, offset, limit)` |
-| `EDIT path — x` | Modificar archivo | `patch` | `patch(path, old_string, new_string)` |
-| `CREATE path — x` | Archivo nuevo | `write_file` | `write_file(path, content)` |
-| `RUN cmd` | Ejecutar comando | `terminal` | `terminal(command=cmd)` |
-| `VERIFY cond` | Comprobación de gate | `terminal` + assert | `git diff --name-only` vs scope |
-| `ASK pregunta` | Clarify con humano | `clarify` | `clarify(question, choices)` |
+   ```json
+   {
+     "question": "I reviewed the codebase. How should I proceed with the shaping?",
+     "choices": [
+       "Approve the plan and extend the phases",
+       "Reduce scope",
+       "Adjust the approach (give me your correction)",
+       "Stop — information is missing"
+     ]
+   }
+   ```
 
-**Regla:** si un nodo no empieza con uno de estos 6 verbos, el todo está mal
-formado → no ejecutar; pedir corrección vía `todo-flow`.
+6. After confirmation, **extend the phases** to level 3 (per phase: `Scope` +
+   `Context (what exists now)` + `What changes` + `Instruction DAG`) and
+   update the todo via `todo-flow`. Only then execute.
 
-## Despacho de subagentes
+**Hard rule:** if the repo's reality doesn't match what the todo says
+(renamed module, moved function), do NOT improvise — report the discrepancy
+and `clarify` the correction.
 
-### Contexto obligatorio de cada brief
+## How to read `## Phases` (level 3) — mandatory
 
-Cada `delegate_task` DEBE incluir:
+The DAG in `## Phases` is the **specification**, not an illustration. Each
+phase carries:
 
-1. **Repo path** y rama de trabajo
-2. **Archivos de su fase** — los ÚNICOS que puede tocar
-3. **Criterios de aceptación de la fase** (los del todo)
-4. **Reglas:** no tocar archivos fuera del scope; commit por feature sin
-   arrastrar WIP ajeno
-5. **Idioma de respuesta** si aplica (ej. español)
+| Phase field | What it is | Used in |
+|---|---|---|
+| `**Scope**` | files it can touch (1 or several) | validating diff ⊆ scope |
+| `**Context (what exists now)**` | current state of the code | subagent brief |
+| `**What changes**` (+ algorithm) | the logic to implement | subagent brief |
+| `**Instruction DAG**` | steps with verbs | subagent brief |
 
-### Paralelo vs serial
+1. **Nodes = phases.** Each node is a dispatchable unit of work.
+2. **Incoming arrows** = phases that must be `done` before starting.
+3. **Phases without dependencies** → dispatchable in **parallel** IF they
+   touch different files; if they share a file → **serialize**.
+4. The **algorithm** (mermaid in `What changes`) describes the logic; the
+   **instruction DAG** describes the editing steps. They are not the same.
 
-| Situación | Decisión |
+## Verb vocabulary → tools
+
+Execution nodes use **only these 6 verbs** — semantic actions, not tool names:
+
+| Verb | Meaning | Tool | Example |
+|-------|-------------|------|---------|
+| `READ path:line` | Read file/section | `read_file` | `read_file(path, offset, limit)` |
+| `EDIT path — x` | Modify file | `patch` | `patch(path, old_string, new_string)` |
+| `CREATE path — x` | New file | `write_file` | `write_file(path, content)` |
+| `RUN cmd` | Run command | `terminal` | `terminal(command=cmd)` |
+| `VERIFY cond` | Gate check | `terminal` + assert | `git diff --name-only` vs scope |
+| `ASK question` | Clarify with human | `clarify` | `clarify(question, choices)` |
+
+**Rule:** if a node doesn't start with one of these 6 verbs, the todo is
+malformed → do not execute; ask for a correction via `todo-flow`.
+
+## Local ledger (delegated to riel-ledger)
+
+`coder-flow` does not keep cross-phase state in its head — it delegates it to
+the ledger. Load `riel-ledger` and follow its protocol:
+
+1. **Open** `.riel/ledger.md` at the start: `Goal` ← the todo's `## Goal`,
+   `Source` ← `todo:<slug>`, `Phase` ← first phase without a checkbox,
+   `Next` ← first action.
+2. **Re-read at every seam** (phase change, tool call, file, long gap).
+3. **Append `✓NN`** with verifier + coverage when passing each gate.
+4. **Recovery**: if the work degrades, go back to the last `✓NN` with a fresh
+   plan.
+5. **done-check** at the end: each line of the `## Goal` ↔ a `✓NN`.
+
+Make sure `.riel/` is in the worktree's `.gitignore` before committing
+anything.
+
+## Subagent dispatch
+
+### Mandatory context of each brief
+
+1. **Repo path** and working branch.
+2. **Scope** of its phase — the ONLY files it can touch.
+3. The phase's **Context (what exists now)** and **What changes**.
+4. The phase's **instruction DAG** (verbs).
+5. **Rules:** don't touch files outside the scope; commit per feature.
+6. Response **language** (Spanish).
+
+### Parallel vs serial
+
+| Situation | Decision |
 |-----------|----------|
-| Fases disjuntas (archivos distintos, sin dependencia en el DAG) | Un subagente por fase, **en paralelo** |
-| Dos fases tocan el mismo archivo | **Serializar** |
-| Fases con dependencia en el DAG (flecha entre ellas) | **Serializar** respetando el orden |
+| Disjoint phases (different files, no dependency) | one subagent per phase, **in parallel** |
+| Two phases touch the same file | **serialize** |
+| Phases with a dependency in the DAG | **serialize** respecting the order |
 
-⚠️ **Git race:** subagentes paralelos que commitean al mismo repo compiten
-por el git index y revuelven tareas en un solo commit. Prevención: despachar
-las tareas que commitean **en serial**, o que el agente padre haga los
-commits después de verificar el trabajo de cada subagente. Recuperación:
-`git reset --soft origin/main` y re-commit por tarea.
+⚠️ **Git race:** parallel subagents that commit compete for the git index.
+Prevention: dispatch serially, or have the parent make the commits after
+verifying each subagent's work. Recovery: `git reset --soft` and re-commit.
 
-## Gates de validación (padre → hijo)
+## Gates + confirmation before commit
 
-El padre verifica ANTES de marcar el checkbox de la fase o despachar la
-siguiente:
+Each phase's gate runs **before** commit, never after:
 
-- [ ] `mix compile --warnings-as-errors` pasa
-- [ ] Tests del scope pasan (`mix test <archivo(s)>`)
-- [ ] `mix format --check-formatted` sin diffs extra
-- [ ] Diff revisado: solo archivos del scope, sin basura
-- [ ] Commit limpio por feature (mensaje claro, sin WIP ajeno)
+- [ ] `mix compile --warnings-as-errors` passes
+- [ ] Scope tests pass (`mix test <file(s)>`)
+- [ ] **Smoke test** — boot/runtime that touches what changed (starts the
+  server, mounts the route, exercises the path). Mandatory for code.
+- [ ] `mix format --check-formatted` without extra diffs
+- [ ] Diff reviewed: only scope files
 
-**Gate reprobado** → re-dispatch con el error exacto como contexto (mismo
-brief + output del gate). Nunca se avanza con un gate rojo.
+**Confirm before commit** — never commit automatically. After the green gate,
+present files + message and `clarify`:
 
-## Verificación global (antes de `done`)
+```json
+{
+  "question": "Green gate. Shall I commit?",
+  "choices": ["Commit", "Edit message", "Split commits", "Cancel"]
+}
+```
 
-El done-check (releer el objetivo línea por línea, declarar cobertura, retry
-con diagnóstico) es obligatorio. Este skill
-solo aplica el gate Elixir final:
+**Failed gate** → re-dispatch with the exact error as context. Never advance
+with a red gate.
 
-- [ ] Suite completa verde (en Elixir: `mix precommit` o equivalente del repo)
+## Done-check and close
 
-## Actualización del todo durante la ejecución
+1. **done-check (riel-ledger):** each line of the `## Goal` ↔ a `✓NN` with
+   coverage. If missing → no done.
+2. Unclosed `?NN` → report to Álvaro (they don't go into the body).
+3. **push-close:** `dran_update_todo({ slug, kanban_status: "done" })` — the
+   only safe path (meta merge).
+4. Report to Álvaro: deliverable + evidence (tests, smoke, commits).
+
+## clarify rules
+
+1. **One blocking question per turn** — ask only for the input that unblocks
+   the most; never a questionnaire.
+2. **No re-ask** — never ask for what was already given in the conversation
+   or returned by a tool call.
+3. **TDD with human validation** — before writing production code, validate
+   the test behavior via `clarify` (what is tested, what is expected), then
+   red → green → refactor.
+4. **Don't modify tests without validation** — modify/delete/downgrade an
+   existing test only if strictly necessary and after `clarify`.
+5. **Confirm between phases** — if the mode is "one by one", `clarify`
+   between phases: `['Next phase', 'Review diff', 'Modify plan', 'Stop']`. In
+   "continuous run" mode, the technical gates suffice.
+
+## Updating the todo during execution (Dran adapter)
 
 ```
-1. Checkbox de fase cumplida → dran_update_page con SOLO body
-   (pasar meta junto con body strippearía los mermaid del todo)
-2. Status → dran_update_todo (merge meta) — la única vía segura
+1. Completed phase checkbox → dran_update_page with ONLY body
+   (passing meta together with body would strip the todo's mermaid)
+2. Status → dran_update_todo (meta merge) — the only safe path
 3. done → dran_update_todo({ slug, kanban_status: "done" })
-   SOLO con la verificación global en verde
-4. Reportar a Álvaro: entregable + evidencia (tests, commits)
+   ONLY with a green done-check
+4. Report to Álvaro: deliverable + evidence (tests, smoke, commits)
 ```
 
 ## Pitfalls
 
-- **Improvisar contra el mermaid** — el mermaid es el contrato; si el repo no
-  coincide, reportar y pedir actualización del todo.
-- **Snippet inventado** — los snippets del todo deben ser REALES, verificados
-  contra el repo antes de despachar. Si cambió, actualizar el todo primero.
-- **Paralelizar fases que se pisan** — si comparten archivo, van en serial.
-- **Commits de subagentes paralelos** — git race en el index; padre commitea
-  o serial (ver § Despacho).
-- **Avanzar con gate rojo** — la siguiente fase hereda el error y se compone.
-- **`done` con warnings** — `--warnings-as-errors` es parte del gate.
-- **Marcar `done` sin evidencia** — "debería funcionar" no es evidencia.
-- **Tocar archivos fuera del scope** — el diff se revisa contra la lista de
-  archivos de la fase; cualquier extra se revierte o se justifica con Álvaro.
+- **Improvising against the codebase** — the mermaid and the shaping are
+  grounded in real evidence (`path:line`); if it doesn't match, `clarify`,
+  don't invent.
+- **Committing before verifying** — the gate (including smoke) runs BEFORE the
+  commit, never after.
+- **Accumulating `✓NN` in Dran** — the evidence lives in the local ledger;
+  Dran only receives checkboxes + status.
+- **Reimplementing the ledger** — delegate to `riel-ledger`, don't duplicate.
+- **Parallelizing phases that overlap** — if they share a file, serialize.
+- **Advancing with a red gate** — the next phase inherits the error.
+- **`done` with warnings** — `--warnings-as-errors` is part of the gate.
+- **Skipping the smoke test** — it's mandatory for code.
+- **Committing `.riel/`** — make sure the worktree `.gitignore` first.
+- **Touching files outside the scope** — the diff is reviewed against the
+  `Scope`.
 
 ## Quick reference
 
-| Tool | Args mínimos | Retorna |
+| Tool | Minimal args | Returns |
 |------|--------------|---------|
-| `dran_get_page` | `slug` del todo | Body completo (fases + snippets) |
-| `delegate_task` | `goal` + `context` (brief completo) | Resultado del subagente |
-| `dran_update_page` | `slug`, `body` (SOLO body) | Checkboxes marcados |
-| `dran_update_todo` | `slug`, `kanban_status` | Status actualizado (merge) |
-| `terminal` | `mix compile --warnings-as-errors` / `mix test <file>` | Gates |
+| `dran_get_page` | todo `slug` | Full body (phases + context) |
+| `delegate_task` | `goal` + `context` (full brief) | Subagent result |
+| `dran_update_page` | `slug`, `body` (ONLY body) | Checked checkboxes |
+| `dran_update_todo` | `slug`, `kanban_status` | Updated status (merge) |
+| `terminal` | `mix compile --warnings-as-errors` / `mix test <file>` / smoke | Gates |
 
-## Cuándo NO usar este skill
+## When NOT to use this skill
 
-- **El todo no es de código** → ejecución manual normal, marca checks y done
-- **Vas a ESCRIBIR el todo** → `todo-flow`
-- **Vas a definir la ruta de alto nivel** → `planning-flow`
-- **Es investigación, no implementación** → `research-flow`
+- **The todo is not code** → manual execution or `todo-flow` (level 2 research)
+- **You're going to WRITE the todo** → `todo-flow`
+- **You're going to define the high-level path** → `planning-flow`
+- **It's research, not implementation** → `research-flow`
 
 ## Cross-references
 
-- Cómo se escribe el todo con fases: `todo-flow`
-- Plan que agrupa los todos: `planning-flow`
-- Commit hygiene para subagentes: skill `git-workflow`
-- Dispatch de fases en proyectos grandes: skill
-  `delegated-implementation-planning`
-- Referencia MCP: `dran` — skill principal
+- How the todo is written (levels 1/2/3): `todo-flow`
+- Local state (ledger ✓NN): `riel-ledger`
+- mermaid and verb contract: `riel-contract`
+- Plan that groups the todos: `planning-flow`
+- Commit hygiene for subagents: `git-workflow`
+- MCP reference: `dran` — main skill

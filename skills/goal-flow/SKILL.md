@@ -10,227 +10,246 @@ metadata:
     related_skills: [dran, project-flow, planning-flow, todo-flow, relations-flow]
 ---
 
-# goal-flow — Crear y gestionar goals en Dran
+# goal-flow — Create and manage goals in Dran
 
-El goal es el nivel **estratégico con métrica**: un objetivo con número y
-fecha. **Si no se puede medir, es un wish** — y los wishes van como project
-(visión) o como plan, no como goal.
+The goal is the **strategic level with a metric**: an objective with a number
+and a date. **If it can't be measured, it's a wish** — and wishes go as a
+project (vision) or as a plan, not as a goal.
+
+A **goal** is the measurable objective (metric + date). **Todos** are the
+actions that help fulfill a plan/goal/project — a todo's `## Objective` is its
+concrete deliverable, NOT a goal.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|"Objetivo medible\nnúmero + fecha"| SELF["ESTE SKILL\ngoal-flow"]
-  Q -->|"Visión sin métrica\n(el para qué)"| PF[project-flow]
-  Q -->|"El cómo: pasos con\nmermaid de ruta"| PLF[planning-flow]
-  Q -->|"Acción concreta\ncon kanban"| TF[todo-flow]
-  Q -->|"Tools MCP, page types,\nconexión"| D[dran — principal]
+  Q{What do you need?} -->|"Measurable objective\nnumber + date"| SELF["THIS SKILL\ngoal-flow"]
+  Q -->|"Vision without a metric\n(the why)"| PF[project-flow]
+  Q -->|"The how: steps with\nroute mermaid"| PLF[planning-flow]
+  Q -->|"Concrete action\nwith kanban"| TF[todo-flow]
+  Q -->|"MCP tools, page types,\nconnections"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
-Ejecuta SOLO la sección a la que llegaste. Si el diagrama te manda a otro
-skill, **paras aquí** y haces hand-off.
+Execute ONLY the section you arrived at. If the diagram sends you to another
+skill, **stop here** and hand off.
 
-## Flujo operativo — sigue este DAG al pie de la letra
+## Operational flow — follow this DAG to the letter
 
 ```mermaid
 flowchart TD
-  START[Pedido de Álvaro] --> CLARIFY["CLARIFY\n¿métrica, target\ny fecha inferibles?"]
-  CLARIFY -->|No| ASK["clarify\nuna pregunta por turno"]
+  START[Álvaro's request] --> CLARIFY["CLARIFY\nmetric, target\nand date inferable?"]
+  CLARIFY -->|No| ASK["clarify\none question per turn"]
   ASK --> SEARCH
-  CLARIFY -->|Sí| SEARCH["SEARCH 2-3 variantes\ndran_search"]
-  SEARCH --> EXISTS{¿Existe el\ngoal?}
-  EXISTS -->|Sí| READ["dran_get_page\no resource goal://"]
-  READ --> UPDATE["UPDATE progress /\ncurrent_value / notas"]
-  EXISTS -->|No| CREATE["CREATE\ndran_create_page\nmeta numérico completo"]
-  CREATE --> VALIDATE["VALIDAR\nnúmero + fecha + kind"]
+  CLARIFY -->|Yes| SEARCH["SEARCH 2-3 variants\ndran_search"]
+  SEARCH --> EXISTS{Does the\ngoal exist?}
+  EXISTS -->|Yes| READ["dran_get_page\nor resource goal://"]
+  READ --> UPDATE["UPDATE progress /\ncurrent_value / notes"]
+  EXISTS -->|No| CREATE["CREATE\ndran_create_page\nfull numeric meta"]
+  CREATE --> VALIDATE["VALIDATE\nnumber + date + kind"]
   UPDATE --> VALIDATE
-  VALIDATE --> LINK["VINCULAR\nproject_slug si aplica"]
-  LINK --> TODOS["Los todos vinculados\nalimentan progress"]
-  TODOS --> DONE[Fin]
+  VALIDATE --> LINK["LINK\nproject_slug if applicable"]
+  LINK --> TODOS["Linked todos\nfeed progress"]
+  TODOS --> DONE[End]
 
   style CLARIFY fill:#fef3c7,stroke:#d97706
   style CREATE fill:#dbeafe,stroke:#2563eb
   style ASK fill:#fef3c7,stroke:#d97706
 ```
 
-Cada nodo es un paso obligatorio: clarify la métrica si no es inferible,
-search antes de crear, meta numérico completo, y vinculación al project.
+Each node is a mandatory step: clarify the metric if it isn't inferable,
+search before creating, full numeric meta, and linking to the project.
 
 ## Parse contract
 
-### Qué CONSUME este skill
-- Pedido de Álvaro: objetivo nuevo, actualización de progreso, revisión de
-  goal, o página goal existente con su `meta` actual
+### What this skill CONSUMES
+- Álvaro's request: a new objective, progress update, goal review, or an
+  existing goal page with its current `meta`
 
-### Qué PRODUCE este skill
+### What this skill PRODUCES
 
-| # | Artefacto | Propósito |
-|---|-----------|-----------|
-| 1 | Página `goal` con `## Por qué` (+ `## Notas` opcional) | Justificación y bitácora |
-| 2 | `meta` numérico completo (metric, target_value, current_value, unit, fechas) | La medición vive en meta, NO en el body |
-| 3 | Progress auto-calculado o `progress_manual: true` | Saber si vamos bien sin preguntar |
+| # | Artifact | Purpose |
+|---|----------|---------|
+| 1 | `goal` page with `## Why` (+ optional `## Notes`) | Justification and log |
+| 2 | Full numeric `meta` (metric, target_value, current_value, unit, dates) | The measurement lives in meta, NOT in the body |
+| 3 | Auto-calculated progress or `progress_manual: true` | Know whether we're on track without asking |
 
-**Regla dura: número + fecha, o NO es goal.** Un goal sin `target_value` +
-`target_date` está mal formado — es un wish disfrazado.
+**Hard rule: number + date, or it is NOT a goal.** A goal without
+`target_value` + `target_date` is malformed — it's a wish in disguise.
 
-## Descripción del flujo
+## Flow description
 
-| Aspecto | Regla |
-|---------|-------|
-| Qué es | Objetivo medible con target y fecha |
-| Horizonte | Semanas/meses |
-| Pregunta que responde | ¿Cuánto, para cuándo, cómo medimos? |
-| Título | El objetivo completo: "Migrar todos los proyectos a X" |
+| Aspect | Rule |
+|--------|------|
+| What it is | Measurable objective with target and date |
+| Horizon | Weeks/months |
+| Question it answers | How much, by when, how do we measure? |
+| Title | The full objective: "Migrate all projects to X" |
 
-**Reglas de oro:**
+**Golden rules:**
 
-1. **Un goal = una métrica.** No mezclar objetivos en un solo goal — si son
-   dos números, son dos goals.
-2. **Todo lo numérico vive en el `meta`, NO en el body.** El body explica el
-   por qué; el meta mide.
-3. **Health y progress manuales solo cuando Álvaro lo pida** — el agente no
-   mueve `health` por iniciativa propia.
+1. **One goal = one metric.** Don't mix objectives in a single goal — if they
+   are two numbers, they are two goals.
+2. **Everything numeric lives in the `meta`, NOT in the body.** The body
+   explains the why; the meta measures.
+3. **Manual health and progress only when Álvaro asks** — the agent doesn't
+   move `health` on its own initiative.
 
-## Shaping — questioning antes de crear
+## Shaping — questioning before creating
 
-Antes de crear, verifica contra la realidad y pregunta lo que no sea
-inferible:
+Before creating, verify against reality and ask whatever isn't inferable:
 
-1. **Métrica** — ¿qué número lo mide? (`metric` + `unit`)
-2. **Target** — ¿a cuánto queremos llegar? (`target_value`)
-3. **Fecha** — ¿para cuándo? (`target_date`)
-4. **Medición** — ¿se mide solo con los todos vinculados, o a mano?
-   (`progress_manual: true` si es a mano)
+1. **Metric** — what number measures it? (`metric` + `unit`)
+2. **Target** — how far do we want to get? (`target_value`)
+3. **Date** — by when? (`target_date`)
+4. **Measurement** — is it measured only with linked todos, or manually?
+   (`progress_manual: true` if manual)
 
-Una pregunta bloqueante por turno. Si la métrica es obvia del pedido ("100%
-de coverage"), no preguntes lo que ya sabes.
+One blocking question per turn. If the metric is obvious from the request
+("100% coverage"), don't ask what you already know.
 
-## Template de contenido — body mínimo
+### If there is no measurable metric
 
-| # | Sección | Propósito |
-|---|---------|-----------|
-| 1 | `## Por qué` | 1 párrafo: por qué importa este objetivo ahora |
-| 2 | `## Notas` (opcional) | Progreso, bloqueos, hallazgos — bitácora viva |
+Use `clarify` before creating — never create a goal without a number:
+
+```json
+{
+  "question": "The objective has no measurable metric. How do we define it?",
+  "choices": [
+    "Give a KPI with number and date",
+    "Leave it qualitative (risk: success can't be measured)",
+    "Validate the problem first (it's not a goal yet)"
+  ]
+}
+```
+
+## Content template — minimal body
+
+| # | Section | Purpose |
+|---|---------|---------|
+| 1 | `## Why` | 1 paragraph: why this objective matters now |
+| 2 | `## Notes` (optional) | Progress, blockers, findings — living log |
 
 ```markdown
-## Por qué
+## Why
 
-Documentar y probar las 18 tools MCP para que el agente no dependa de
-memoria humana para operar Dran.
+Document and test the 18 MCP tools so the agent doesn't depend on human
+memory to operate Dran.
 
-## Notas
+## Notes
 
-- 2026-08-08: 12/18 tools con smoke test verde.
+- 2026-08-08: 12/18 tools with green smoke test.
 ```
 
-## Uso de Dran
+## Using Dran
 
-### Meta clave
+### Key meta
 
-| Campo | Valores | Nota |
-|-------|---------|------|
+| Field | Values | Note |
+|-------|--------|------|
 | `kind` | personal / coding / business / learning / health / finance / other / investing / marketing / product / writing / career / relationship / travel | |
-| `metric` | texto libre ("MCP tools documentadas") | QUÉ se mide |
-| `target_value` | número | A cuánto se llega |
-| `current_value` | número | Dónde vamos |
-| `unit` | texto ("tools", "users", "%") | |
+| `metric` | free text ("MCP tools documented") | WHAT is measured |
+| `target_value` | number | How far we get |
+| `current_value` | number | Where we stand |
+| `unit` | text ("tools", "users", "%") | |
 | `start_date` / `target_date` | ISO dates | |
-| `health` | green / yellow / red | Manual — solo si Álvaro lo pide |
-| `progress` | 0-100 | Auto-calculado salvo manual |
-| `progress_manual` | true/false | `true` = se mide a mano |
-| `project_slug` | slug | Link independiente al project |
+| `health` | green / yellow / red | Manual — only if Álvaro asks |
+| `progress` | 0-100 | Auto-calculated unless manual |
+| `progress_manual` | true/false | `true` = measured manually |
+| `project_slug` | slug | Independent link to the project |
 
-### Recipe — crear
+### Recipe — create
 
 ```
-1. clarify métrica/target/fecha si no son inferibles
-2. dran_search({ context: "personal", query: "<objetivo>" })   → existe? UPDATE
+1. clarify metric/target/date if they aren't inferable
+2. dran_search({ context: "personal", query: "<objective>" })   → exists? UPDATE
 3. dran_create_page({
      context: "personal",
      page_type: "goal",
-     title: "<objetivo completo>",
-     body: "## Por qué\n\n<1 párrafo>",
+     title: "<full objective>",
+     body: "## Why\n\n<1 paragraph>",
      meta: {
        kind: "coding",
-       metric: "MCP tools documentadas",
+       metric: "MCP tools documented",
        target_value: 17,
        current_value: 0,
        unit: "tools",
        start_date: "2026-08-01",
        target_date: "2026-09-30",
-       project_slug: "<project>"        → opcional
+       project_slug: "<project>"        → optional
      },
      owner: "alvaro",  # from API key, not settable
      created_by: "chaos manager"  # overrideable
    })
 ```
 
-### Recipe — actualizar progreso
+### Recipe — update progress
 
 ```
-1. dran_search el slug (o resource goal://{context}/{slug} — goal + todos/plans en JSON)
-2. dran_get_page para leer el estado actual
+1. dran_search the slug (or resource goal://{context}/{slug} — goal + todos/plans in JSON)
+2. dran_get_page to read the current state
 3. dran_update_page:
-   - current_value nuevo → meta COMPLETO (update_page REEMPLAZA meta)
-   - nota de progreso → body con ## Notas actualizado
-   - body + meta juntos OK aquí (los goals no llevan mermaid normalmente);
-     si el body tiene mermaid → SOLO body
+   - new current_value → FULL meta (update_page REPLACES meta)
+   - progress note → body with updated ## Notes
+   - body + meta together OK here (goals don't usually carry mermaid);
+     if the body has mermaid → ONLY body
 ```
 
 ### Status workflow
 
-- **Health** (`green`/`yellow`/`red`) — manual, solo cuando Álvaro lo pida.
-- **Progress** — auto-calculado de los todos vinculados (done/total), salvo
+- **Health** (`green`/`yellow`/`red`) — manual, only when Álvaro asks.
+- **Progress** — auto-calculated from linked todos (done/total), unless
   `progress_manual: true`.
-- No hay `status` de kanban — el goal vive de su métrica y sus todos.
-- **Auto-`done` implícito:** cuando `current_value` llega a `target_value`,
-  reportarlo a Álvaro — no cerrar nada sin su visto bueno.
+- There's no kanban `status` — the goal lives off its metric and its todos.
+- **Implicit auto-`done`:** when `current_value` reaches `target_value`,
+  report it to Álvaro — don't close anything without his approval.
 
-### Cuándo revisar un goal
+### When to review a goal
 
-Cuando la métrica ya no refleja el objetivo real (se movió el mercado, cambió
-la prioridad). Actualizar `metric`/`target_value` — no crear un goal nuevo
-para el mismo objetivo.
+When the metric no longer reflects the real objective (the market moved, the
+priority changed). Update `metric`/`target_value` — don't create a new goal
+for the same objective.
 
-**Review asistido:** el prompt `goal_review` de Dran (MCP prompts) revisa un
-goal con sus todos y planes vinculados.
+**Assisted review:** the Dran `goal_review` prompt (MCP prompts) reviews a
+goal with its linked todos and plans.
 
 ## Pitfalls
 
-- **Goal sin número o sin fecha** — es un wish; va como project o plan.
-- **Mezclar dos métricas en un goal** — partir en dos goals.
-- **Métrica en el body** — los números van en `meta`; el body es el por qué.
-- **Olvidar `progress_manual: true`** — si la métrica no se deriva de todos
-  (ej. "peso 75kg"), sin el flag el progress se calcula mal (0% o raro).
-- **Mover health por iniciativa propia** — solo cuando Álvaro lo pide.
-- **`dran_update_page` pasando meta parcial** — REEMPLAZA todo el meta;
-  siempre pasar el meta completo.
-- **Crear sin search** — actualizar gana sobre duplicar.
+- **Goal without a number or date** — it's a wish; goes as a project or plan.
+- **Mixing two metrics in one goal** — split into two goals.
+- **Metric in the body** — numbers go in `meta`; the body is the why.
+- **Forgetting `progress_manual: true`** — if the metric isn't derived from
+  todos (e.g. "weight 75kg"), without the flag progress is calculated wrong
+  (0% or weird).
+- **Moving health on your own initiative** — only when Álvaro asks.
+- **`dran_update_page` passing partial meta** — it REPLACES the entire meta;
+  always pass the full meta.
+- **Creating without search** — updating wins over duplicating.
 
 ## Quick reference
 
-| Tool | Args mínimos | Retorna |
+| Tool | Minimal args | Returns |
 |------|--------------|---------|
-| `dran_search` | `query`, `type: "goal"` | Lista rankeada |
+| `dran_search` | `query`, `type: "goal"` | Ranked list |
 | `dran_get_page` | `slug` | Body markdown |
-| `dran_create_page` | `page_type: "goal"`, `title`, `meta` | Goal creado + slug |
-| `dran_update_page` | `slug` + meta completo | Goal actualizado |
-| Resource `goal://{context}/{slug}` | — | Goal + todos/plans vinculados (JSON) |
-| Prompt `goal_review` | slug del goal | Revisión asistida |
+| `dran_create_page` | `page_type: "goal"`, `title`, `meta` | Created goal + slug |
+| `dran_update_page` | `slug` + full meta | Updated goal |
+| Resource `goal://{context}/{slug}` | — | Goal + linked todos/plans (JSON) |
+| Prompt `goal_review` | goal slug | Assisted review |
 
-## Cuándo NO usar este skill
+## When NOT to use this skill
 
-- **No hay métrica** (es visión) → `project-flow`
-- **El pedido es cómo lograrlo (pasos)** → `planning-flow`
-- **Es una acción concreta** → `todo-flow`
-- **Es una pregunta con respuesta reutilizable** → `note-taking-flow` (query)
+- **No metric** (it's vision) → `project-flow`
+- **The request is how to achieve it (steps)** → `planning-flow`
+- **It's a concrete action** → `todo-flow`
+- **It's a question with a reusable answer** → `note-taking-flow` (query)
 
 ## Cross-references
 
-- Referencia MCP (tools, meta fields): `dran` — skill principal
-- Project que agrupa el goal: `project-flow`
-- Plans que ejecutan hacia el goal: `planning-flow`
-- Todos que alimentan el progress: `todo-flow`
-- Link `goal_slug` (independiente): `relations-flow`
+- MCP reference (tools, meta fields): `dran` — main skill
+- Project that groups the goal: `project-flow`
+- Plans that execute toward the goal: `planning-flow`
+- Todos that feed progress: `todo-flow`
+- `goal_slug` link (independent): `relations-flow`

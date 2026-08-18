@@ -10,45 +10,49 @@ metadata:
     related_skills: [dran, goal-flow, planning-flow, todo-flow, relations-flow]
 ---
 
-# project-flow — Crear y gestionar projects en Dran
+# project-flow — Create and manage projects in Dran
 
-El project es el nivel **estratégico**: visión y propósito. El "qué" y el
-"para quién" — nunca el "cómo" (eso es `planning-flow`).
+The project is the **strategic** level: vision and purpose. The "what" and the
+"for whom" — never the "how" (that's `planning-flow`).
+
+**Hierarchy:** `project` (vision) → `goal` (metric) → `plan` (how) → `todo`
+(action). A todo's `## Goal` is its concrete deliverable (action), NOT a
+goal nor the plan/project objective — it contributes to them.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{¿Qué necesitas?} -->|"Crear, actualizar o\nrevisar un project"| SELF["ESTE SKILL\nproject-flow"]
-  Q -->|"Objetivo con métrica\ny fecha"| GF[goal-flow]
-  Q -->|"El cómo: pasos con\nmermaid de ruta"| PLF[planning-flow]
-  Q -->|"Acción concreta\ncon kanban"| TF[todo-flow]
-  Q -->|"Tools MCP, page types,\nconexión"| D[dran — principal]
+  Q{What do you need?} -->|"Create, update or\nreview a project"| SELF["THIS SKILL\nproject-flow"]
+  Q -->|"Objective with metric\nand date"| GF[goal-flow]
+  Q -->|"The how: steps with\nroute mermaid"| PLF[planning-flow]
+  Q -->|"Concrete action\nwith kanban"| TF[todo-flow]
+  Q -->|"MCP tools, page types,\nconnection"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
-Ejecuta SOLO la sección a la que llegaste. Si el diagrama te manda a otro
-skill, **paras aquí** y haces hand-off.
+Run ONLY the section you landed on. If the diagram sends you to another
+skill, **stop here** and hand off.
 
-## Flujo operativo — sigue este DAG al pie de la letra
+## Operational flow — follow this DAG to the letter
 
 ```mermaid
 flowchart TD
-  START[Pedido de Álvaro] --> CLARIFY["CLARIFY alcance\n¿visión nueva o\nactualizar existente?"]
-  CLARIFY --> SEARCH["SEARCH 2-3 variantes\ndran_search"]
-  SEARCH --> EXISTS{¿Existe el\nproject?}
-  EXISTS -->|Sí| READ["dran_get_page\nleer estado actual"]
+  START[Álvaro's request] --> CLARIFY["CLARIFY scope\nnew vision or\nupdate existing?"]
+  CLARIFY --> SEARCH["SEARCH 2-3 variants\ndran_search"]
+  SEARCH --> EXISTS{Does the\nproject exist?}
+  EXISTS -->|Yes| READ["dran_get_page\nread current state"]
   READ --> UPDATE["UPDATE\ndran_update_page"]
-  EXISTS -->|No| SHAPE["SHAPING\nquestioning SR→JR\nuna pregunta por turno"]
+  EXISTS -->|No| SHAPE["SHAPING\nquestioning SR→JR\none question per turn"]
   SHAPE --> CREATE["CREATE\ndran_create_page\nstatus: draft"]
-  CREATE --> TEMPLATE["VALIDAR template\n4 secciones exactas"]
+  CREATE --> TEMPLATE["VALIDATE template\nexactly 4 sections"]
   UPDATE --> TEMPLATE
-  TEMPLATE --> LINK["VINCULAR\ngoals / plans / todos\napuntan hacia arriba"]
-  LINK --> ACTIVE{"¿Tiene goals,\nplans o todos?"}
-  ACTIVE -->|Sí| AUTO["auto-ACTIVE\npor el sistema"]
-  ACTIVE -->|No| DRAFT["queda draft\nhasta vincularse"]
-  AUTO --> DONE[Fin]
+  TEMPLATE --> LINK["LINK\ngoals / plans / todos\npoint upward"]
+  LINK --> ACTIVE{"Has goals,\nplans or todos?"}
+  ACTIVE -->|Yes| AUTO["auto-ACTIVE\nby the system"]
+  ACTIVE -->|No| DRAFT["stays draft\nuntil linked"]
+  AUTO --> DONE[End]
   DRAFT --> DONE
 
   style CLARIFY fill:#fef3c7,stroke:#d97706
@@ -56,109 +60,110 @@ flowchart TD
   style SHAPE fill:#dbeafe,stroke:#2563eb
 ```
 
-Cada nodo es un paso obligatorio: clarify primero, search antes de crear,
-shaping con questioning, template de 4 secciones, y vinculación hacia arriba.
+Each node is a mandatory step: clarify first, search before creating,
+shaping with questioning, 4-section template, and upward linking.
 
 ## Parse contract
 
-### Qué CONSUME este skill
-- Pedido de Álvaro: idea de proyecto, cambio de visión/alcance, revisión de
-  project, o página project existente con su `meta` actual
+### What this skill CONSUMES
+- Álvaro's request: project idea, vision/scope change, project review,
+  or an existing project page with its current `meta`
 
-### Qué PRODUCE este skill
+### What this skill PRODUCES
 
-| # | Artefacto | Propósito |
-|---|-----------|-----------|
-| 1 | Página `project` con 4 secciones exactas | Eje estratégico del trabajo |
-| 2 | `meta` válido (status, priority, health, fechas) | Tracking y kanban de projects |
-| 3 | Links entrantes (goals/plans/todos apuntan al project) | El project se activa y agrupa ejecución |
+| # | Artifact | Purpose |
+|---|----------|---------|
+| 1 | `project` page with exactly 4 sections | Strategic axis of the work |
+| 2 | Valid `meta` (status, priority, health, dates) | Tracking and kanban of projects |
+| 3 | Incoming links (goals/plans/todos point to the project) | The project activates and groups execution |
 
-**Sin las 4 secciones el output está mal formado** — un project sin alcance
-explícito crece sin freno; sin objetivo claro no hay forma de saber si va bien.
+**Without the 4 sections the output is malformed** — a project without
+explicit scope grows unchecked; without a clear objective there's no way to
+know if it's going well.
 
-## Descripción del flujo
+## Flow description
 
-| Aspecto | Regla |
-|---------|-------|
-| Qué es | Visión y propósito. El "qué" y el "para quién" |
-| Qué NO es | Arquitectura, código, pasos operativos → eso va en plans |
-| Horizonte | Meses/años |
-| Pregunta que responde | ¿Qué queremos lograr y por qué? |
-| Título | Nombre funcional/descriptivo (no temático) |
+| Aspect | Rule |
+|--------|------|
+| What it is | Vision and purpose. The "what" and the "for whom" |
+| What it is NOT | Architecture, code, operational steps → that goes in plans |
+| Horizon | Months/years |
+| Question it answers | What do we want to achieve and why? |
+| Title | Functional/descriptive name (not thematic) |
 
-**Regla de oro:** si una sección no aporta, no se pone. Métricas → goals,
-pasos → plans, acciones → todos, decisiones/notas → pages note relacionadas.
-El project es el eje estratégico, no el diario.
+**Golden rule:** if a section doesn't add value, don't include it. Metrics →
+goals, steps → plans, actions → todos, decisions/notes → related note pages.
+The project is the strategic axis, not the diary.
 
-**Dirección de los links:** los niveles inferiores apuntan HACIA el project
-(goal/plan/todo llevan `project_slug`). El project NUNCA lista sus hijos en
-`meta` — la relación vive en los hijos.
+**Link direction:** lower levels point TOWARD the project (goal/plan/todo
+carry `project_slug`). The project NEVER lists its children in `meta` — the
+relation lives in the children.
 
-## Shaping — questioning antes de crear
+## Shaping — questioning before creating
 
-El contenido se arma **durante la conversación**, no rellenando el template a
-ciegas. Cuestiona como un senior revisando la propuesta de un junior:
+Content is built **during the conversation**, not by blindly filling in the
+template. Question like a senior reviewing a junior's proposal:
 
-1. **Origen** — ¿de dónde salió? (alimenta `## Idea original`)
-2. **Objetivo** — ¿qué se logra en 1-2 frases SIN el cómo?
-3. **Para quién** — ¿quién lo usa o se beneficia?
-4. **Anti-scope** — ¿qué NO incluye? (tan importante como lo que incluye)
+1. **Origin** — where did it come from? (feeds `## Original idea`)
+2. **Objective** — what is achieved in 1-2 sentences WITHOUT the how?
+3. **For whom** — who uses it or benefits?
+4. **Anti-scope** — what does it NOT include? (as important as what it includes)
 
-Una pregunta bloqueante por turno — nunca un cuestionario. Si el pedido ya
-trae la respuesta, no preguntes de nuevo (reusa el contexto).
+One blocking question per turn — never a questionnaire. If the request already
+carries the answer, don't ask again (reuse the context).
 
-## Template de contenido — 4 secciones, ni una más
+## Content template — 4 sections, not one more
 
-| # | Sección | Propósito |
-|---|---------|-----------|
-| 1 | `## Idea original` | De dónde salió el chispazo, contexto del origen. No cambia con el tiempo |
-| 2 | `## Objetivo` | Qué queremos lograr, 1-2 frases, SIN el cómo |
-| 3 | `## Descripción` | Qué es y para quién. Resumen ejecutivo de un párrafo |
-| 4 | `## Alcance` | Bullet list **Incluye** / **No incluye** (anti-scope explícito) |
+| # | Section | Purpose |
+|---|---------|---------|
+| 1 | `## Original idea` | Where the spark came from, origin context. Does not change over time |
+| 2 | `## Objective` | What we want to achieve, 1-2 sentences, WITHOUT the how |
+| 3 | `## Description` | What it is and for whom. One-paragraph executive summary |
+| 4 | `## Scope` | Bullet list **Includes** / **Does not include** (explicit anti-scope) |
 
 ```markdown
-## Idea original
+## Original idea
 
-Dran v2 nació de la frustración de perder contexto entre sesiones del agente...
+Dran v2 was born from the frustration of losing context between agent sessions...
 
-## Objetivo
+## Objective
 
-Convertir Dran en el segundo cerebro operativo de Álvaro: captura, búsqueda
-y ejecución de trabajo en un solo grafo.
+Turn Dran into Álvaro's operational second brain: capture, search,
+and execution of work in a single graph.
 
-## Descripción
+## Description
 
-Servidor MCP de knowledge-graph personal: páginas tipadas conectadas por
-relaciones, operado por agentes vía MCP. Para Álvaro y sus agentes.
+Personal knowledge-graph MCP server: typed pages connected by
+relations, operated by agents via MCP. For Álvaro and his agents.
 
-## Alcance
+## Scope
 
-- Incluye: MCP server, 9 page types, agentes autónomos, web UI, kanban
-- No incluye: mobile app, multi-tenant SaaS, sync con Notion/Obsidian
+- Includes: MCP server, 9 page types, autonomous agents, web UI, kanban
+- Does not include: mobile app, multi-tenant SaaS, sync with Notion/Obsidian
 ```
 
-## Uso de Dran
+## Using Dran
 
-### Meta clave
+### Key meta
 
-| Campo | Valores | Nota |
-|-------|---------|------|
-| `status` | draft / active / on_hold / done / archived | Ver status workflow |
+| Field | Values | Note |
+|-------|--------|------|
+| `status` | draft / active / on_hold / done / archived | See status workflow |
 | `priority` | low / medium / high / urgent | |
-| `health` | green / yellow / red | Derivado de goals salvo manual |
-| `health_source` | derived / manual | `manual` = Álvaro lo fija |
+| `health` | green / yellow / red | Derived from goals unless manual |
+| `health_source` | derived / manual | `manual` = Álvaro sets it |
 | `start_date` / `target_date` | ISO dates | |
 
-### Recipe — crear
+### Recipe — create
 
 ```
-1. clarify alcance + shaping (ver § Shaping)
-2. dran_search({ context: "personal", query: "<nombre>" })   → existe? UPDATE
+1. clarify scope + shaping (see § Shaping)
+2. dran_search({ context: "personal", query: "<name>" })   → exists? UPDATE
 3. dran_create_page({
      context: "personal",
      page_type: "project",
-     title: "<nombre funcional>",
-     body: "<4 secciones>",
+     title: "<functional name>",
+     body: "<4 sections>",
      meta: {
        status: "draft",
        priority: "high",
@@ -171,14 +176,14 @@ relaciones, operado por agentes vía MCP. Para Álvaro y sus agentes.
    })
 ```
 
-### Recipe — actualizar
+### Recipe — update
 
 ```
-1. dran_search el slug
-2. dran_get_page para leer el estado actual
-3. dran_update_page con el nuevo body/meta
-4. Si el body tiene mermaid → pasar SOLO body (no meta) o se strippean
-5. dran_reaugment_page si el contenido cambió significativamente
+1. dran_search the slug
+2. dran_get_page to read the current state
+3. dran_update_page with the new body/meta
+4. If the body has mermaid → pass ONLY body (not meta) or it gets stripped
+5. dran_reaugment_page if the content changed significantly
 ```
 
 ### Status workflow
@@ -196,48 +201,49 @@ flowchart LR
 ```
 
 - **create** → `draft`
-- **auto-`active`** — cuando un goal/plan/todo se vincula (el sistema lo mueve)
-- **`done` / `on_hold` / `archived`** — manual, solo cuando Álvaro lo pide
-- **health** — derivado de los goals vinculados salvo `health_source: "manual"`
+- **auto-`active`** — when a goal/plan/todo gets linked (the system moves it)
+- **`done` / `on_hold` / `archived`** — manual, only when Álvaro asks
+- **health** — derived from the linked goals unless `health_source: "manual"`
 
-### Cuándo revisar un project
+### When to review a project
 
-Cuando cambia la visión o el mercado. La revisión actualiza `## Objetivo` y
-`## Alcance` — la `## Idea original` **no se toca** (es el registro histórico).
+When the vision or the market changes. The review updates `## Objective` and
+`## Scope` — the `## Original idea` **is not touched** (it's the historical
+record).
 
 ## Pitfalls
 
-- **Meter el cómo** — arquitectura, stack, pasos → eso es `planning-flow`.
-- **Métricas en el project** — los números van en goals; el project los hereda
-  vía health derivado.
-- **Diario en el body** — updates de progreso van en notes relacionadas o en
-  los goals/todos, no en el project.
-- **Links desde el project hacia abajo** — los hijos apuntan hacia arriba con
-  `project_slug`; no listes hijos en el meta del project.
-- **Crear sin search** — si ya existe, UPDATE; nunca un project duplicado con
-  "v2" en el título.
-- **Archivar sin clarify** — archive es recoverable, pero confirma antes.
+- **Putting the how in** — architecture, stack, steps → that's `planning-flow`.
+- **Metrics in the project** — numbers go in goals; the project inherits them
+  via derived health.
+- **Diary in the body** — progress updates go in related notes or in the
+  goals/todos, not in the project.
+- **Links from the project downward** — children point upward with
+  `project_slug`; don't list children in the project's meta.
+- **Creating without search** — if it already exists, UPDATE; never a
+  duplicate project with "v2" in the title.
+- **Archiving without clarify** — archive is recoverable, but confirm first.
 
 ## Quick reference
 
-| Tool | Args mínimos | Retorna |
+| Tool | Minimal args | Returns |
 |------|--------------|---------|
-| `dran_search` | `query` | Lista rankeada (excerpts) |
-| `dran_get_page` | `slug` | Body markdown completo |
-| `dran_create_page` | `page_type`, `title`, `body`, `meta` | Página creada + slug |
-| `dran_update_page` | `slug` + campos a cambiar | Página actualizada |
-| `dran_list_pages` | `type: "project"` | Lista filtrada |
+| `dran_search` | `query` | Ranked list (excerpts) |
+| `dran_get_page` | `slug` | Full markdown body |
+| `dran_create_page` | `page_type`, `title`, `body`, `meta` | Created page + slug |
+| `dran_update_page` | `slug` + fields to change | Updated page |
+| `dran_list_pages` | `type: "project"` | Filtered list |
 
-## Cuándo NO usar este skill
+## When NOT to use this skill
 
-- **El pedido tiene número + fecha** → `goal-flow`
-- **El pedido es el cómo (pasos, arquitectura)** → `planning-flow`
-- **Es una acción ejecutable ahora** → `todo-flow`
-- **Es captura de conocimiento, no ejecución** → `note-taking-flow`
+- **The request has a number + date** → `goal-flow`
+- **The request is the how (steps, architecture)** → `planning-flow`
+- **It's an action executable now** → `todo-flow`
+- **It's knowledge capture, not execution** → `note-taking-flow`
 
 ## Cross-references
 
-- Referencia MCP (tools, page types, meta fields): `dran` — skill principal
-- Goals que miden el project: `goal-flow`
-- Plans que ejecutan el project: `planning-flow`
-- Links `project_slug` y relaciones: `relations-flow`
+- MCP reference (tools, page types, meta fields): `dran` — main skill
+- Goals that measure the project: `goal-flow`
+- Plans that execute the project: `planning-flow`
+- `project_slug` links and relations: `relations-flow`
