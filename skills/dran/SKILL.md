@@ -74,21 +74,26 @@ skills/
 
 ### Install in Hermes
 
+**Recommended — symlinks (bleeding edge):** the installed skills always point
+at the repo, so a `git pull` updates them with no extra step. Skills not in
+the repo (e.g. `dran-provenance-audit`) stay as copies.
+
 ```bash
 DRAN_REPO=/path/to/dran   # cloned repo
 mkdir -p ~/.hermes/skills/dran
-cp -R "$DRAN_REPO/skills/"* ~/.hermes/skills/dran/
-```
-
-They land in the `dran` category in Hermes. To update after a `git pull`,
-repeat the `cp -R`. If you prefer living on the bleeding edge of the repo, use
-symlinks:
-
-```bash
 for s in "$DRAN_REPO/skills/"*/; do
   ln -sfn "$s" ~/.hermes/skills/dran/$(basename "$s")
 done
 ```
+
+**Alternative — copies:** if you prefer isolation (repo changes don't affect
+the installed skills until you sync), copy instead:
+
+```bash
+cp -R "$DRAN_REPO/skills/"* ~/.hermes/skills/dran/
+```
+
+To update after a `git pull` with copies, repeat the `cp -R`.
 
 ### Configure the MCP server
 
