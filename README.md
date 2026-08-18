@@ -1,8 +1,19 @@
-<img src="docs/header.png" alt="Dran — personal second brain" width="100%">
+<div align="center">
 
-# Dran
+# 🧠 Dran
+
+### Personal Second Brain
 
 A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledge lives as **typed pages** connected by **typed relations**, forming a queryable knowledge graph — editable in the browser and fully operable by AI agents through **MCP** and a **REST API**.
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Elixir](https://img.shields.io/badge/Elixir-1.18+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
+[![Phoenix](https://img.shields.io/badge/Phoenix-LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
+[![MCP](https://img.shields.io/badge/MCP-Server-5B8DEF?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
+
+![Dran](docs/dran-header.png)
+
+</div>
 
 ## Features
 
