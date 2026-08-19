@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, research, web, sources, query]
-    related_skills: [dran, dran-note-taking-flow, dran-relations-flow, dran-maintenance-flow]
+    related_skills: [dran, dran-note-taking-flow, dran-relations-flow, dran-maintenance-flow, riel-protocol, riel-ledger]
 ---
 
 # dran-research-flow — Research the internet and land it in Dran
@@ -36,7 +36,8 @@ update that page instead of duplicating.
 
 ```mermaid
 flowchart TD
-  START[Álvaro's question/topic] --> CLARIFY["CLARIFY\nexact question, depth,\ndelivery format"]
+  START[Álvaro's question/topic] --> PROTO["OPEN riel-protocol\nanchored opening\nfrom the question"]
+  PROTO --> CLARIFY["CLARIFY\nexact question, depth,\ndelivery format"]
   CLARIFY --> INTERNAL["INTERNAL SEARCH\ndran_search 2-3 variants\ndoes the brain already have something?"]
   INTERNAL --> HIT{Does a\nquery/note already exist?}
   HIT -->|Yes, and it's enough| READ["dran_get_page\ntop 2-3"] --> ANSWER["Answer with\nreal content"]
@@ -194,4 +195,6 @@ operation in `dran-maintenance-flow`.
 - Capturing what was distilled: `dran-note-taking-flow`
 - Relations query ↔ references ↔ concepts: `dran-relations-flow`
 - `graph_rag` agent (internal research): `dran-maintenance-flow`
+- Anchored opening + trajectory maintenance: `riel-protocol`
+- Local state (✓NN) across research phases: `riel-ledger`
 - MCP reference: `dran` — main skill

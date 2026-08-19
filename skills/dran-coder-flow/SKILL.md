@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, coding, execution, subagents, gates, mermaid, riel]
-    related_skills: [dran, dran-todo-flow, dran-planning-flow, riel-protocol, riel-ledger, riel-contract, git-workflow]
+    related_skills: [dran, dran-todo-flow, dran-planning-flow, riel-protocol, riel-ledger, riel-contract, riel-delegate, riel-briefs, git-workflow]
 ---
 
 # dran-coder-flow — Execute a development todo (code)
@@ -271,9 +271,14 @@ info. From there:
 Make sure `.riel/` is in the worktree's `.gitignore` before committing
 anything.
 
-## Subagent dispatch
+## Subagent dispatch (via riel-delegate + riel-briefs)
 
-### Mandatory context of each brief
+Subagent dispatch uses the Riel delegation framework — `riel-delegate` for
+the dispatch/verify pattern, `riel-briefs` for the packet format. Do NOT
+build the brief inline — use `riel-briefs` to assemble a self-contained
+packet with curated context, verb-graph, gates, and anchored opening.
+
+### Mandatory context of each brief (via riel-briefs)
 
 1. **Protocol opening** (`riel-protocol`): `goal` opens with the shared
    objective — "We need <phase objective>…" — short stable persona, minimal
@@ -284,6 +289,15 @@ anything.
 5. The phase's **instruction DAG** (verbs).
 6. **Rules:** don't touch files outside the scope; commit per feature.
 7. Response **language** (Spanish).
+
+### Parent verifies returns (via riel-delegate)
+
+The parent agent does NOT trust the subagent's self-report — it verifies
+the return with confidence X/20 before accepting:
+- Re-run the gate (`mix compile --warnings-as-errors` + `mix test <paths>`)
+- `git diff --name-only` against the scope
+- If the return claims "done" but the gate fails → re-dispatch with the
+  error as context (riel-delegate recovery pattern)
 
 ### Parallel vs serial
 
@@ -335,6 +349,9 @@ with a red gate.
 3. **push-close:** `dran_update_todo({ slug, kanban_status: "done" })` — the
    only safe path (meta merge).
 4. Report to Álvaro: deliverable + evidence (tests, smoke, commits).
+5. **Hand-off to review:** after the PR is created, the review lives in
+   `dran-review-flow` — that skill reviews the PR against this todo's
+   `## Verification` and gates.
 
 ## clarify rules
 
@@ -405,15 +422,19 @@ with a red gate.
 
 - **The todo is not code** → manual execution or `dran-todo-flow` (level 2 research)
 - **You're going to WRITE the todo** → `dran-todo-flow`
+- **You're going to REVIEW a PR** → `dran-review-flow`
 - **You're going to define the high-level path** → `dran-planning-flow`
 - **It's research, not implementation** → `dran-research-flow`
 
 ## Cross-references
 
 - How the todo is written (levels 1/2/3): `dran-todo-flow`
+- Review of PRs against a todo: `dran-review-flow`
 - Anchored opening + trajectory maintenance: `riel-protocol`
 - Local state (ledger ✓NN): `riel-ledger`
 - mermaid and verb contract: `riel-contract`
+- Subagent dispatch + verify pattern: `riel-delegate`
+- Self-contained brief packets: `riel-briefs`
 - Plan that groups the todos: `dran-planning-flow`
 - Commit hygiene for subagents: `git-workflow`
 - MCP reference: `dran` — main skill

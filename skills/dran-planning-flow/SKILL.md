@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, plan, tactics, mermaid, planning]
-    related_skills: [dran, dran-project-flow, dran-goal-flow, dran-todo-flow, dran-coder-flow, dran-relations-flow]
+    related_skills: [dran, dran-project-flow, dran-goal-flow, dran-todo-flow, dran-coder-flow, dran-relations-flow, riel-protocol, riel-contract]
 ---
 
 # dran-planning-flow — Create and manage plans in Dran
@@ -300,8 +300,11 @@ the **nature** of the work changed (a different deliverable), then yes: new plan
 
 ## Cross-references
 
-- MCP reference: `dran` — main skill
+- MCP reference (tools, page types, meta fields): `dran` — main skill
 - Project/goal the plan serves: `dran-project-flow`, `dran-goal-flow`
 - Creation of the plan's todos: `dran-todo-flow`
 - Execution of development todos: `dran-coder-flow`
+- Review of PRs against a todo: `dran-review-flow`
 - Links `project_slug`/`goal_slug`/`plan_slug`: `dran-relations-flow`
+- Anchored opening + trajectory maintenance: `riel-protocol`
+- mermaid and verb contract: `riel-contract`

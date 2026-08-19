@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, goal, metrics, strategy]
-    related_skills: [dran, dran-project-flow, dran-planning-flow, dran-todo-flow, dran-relations-flow]
+    related_skills: [dran, dran-project-flow, dran-planning-flow, dran-todo-flow, dran-relations-flow, riel-protocol]
 ---
 
 # dran-goal-flow — Create and manage goals in Dran
@@ -253,3 +253,4 @@ goal with its linked todos and plans.
 - Plans that execute toward the goal: `dran-planning-flow`
 - Todos that feed progress: `dran-todo-flow`
 - `goal_slug` link (independent): `dran-relations-flow`
+- Anchored opening + trajectory maintenance: `riel-protocol`

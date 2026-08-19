@@ -597,7 +597,7 @@ defmodule DranWeb.Layouts do
         </span>
         {@current_user}
       </span>
-      <form action={~p"/session"} method="post">
+      <form id="logout-form" action={~p"/session"} method="post">
         <input type="hidden" name="_method" value="delete" />
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <button
@@ -680,7 +680,12 @@ defmodule DranWeb.Layouts do
         </div>
 
         <div class="p-3 border-b border-base-300">
-          <form phx-change="wiki_search" phx-submit="wiki_search" class="relative">
+          <form
+            id="wiki-search-form"
+            phx-change="wiki_search"
+            phx-submit="wiki_search"
+            class="relative"
+          >
             <.icon
               name="hero-magnifying-glass"
               class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
@@ -875,6 +880,9 @@ defmodule DranWeb.Layouts do
         >
           <.icon name="hero-clipboard-document-list" class="size-4 shrink-0" />
           <span>{gettext("Planes")}</span>
+          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
+            {@counts[:plans]}
+          </span>
         </a>
         <a
           :if={@counts[:todos] > 0}
@@ -883,6 +891,9 @@ defmodule DranWeb.Layouts do
         >
           <.icon name="hero-check-circle" class="size-4 shrink-0" />
           <span>{gettext("Tareas")}</span>
+          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
+            {@counts[:todos]}
+          </span>
         </a>
       </div>
     </div>

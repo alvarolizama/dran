@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, todo, kanban, execution]
-    related_skills: [dran, dran-project-flow, dran-goal-flow, dran-planning-flow, dran-coder-flow, dran-relations-flow]
+    related_skills: [dran, dran-project-flow, dran-goal-flow, dran-planning-flow, dran-coder-flow, dran-relations-flow, riel-protocol, riel-contract, riel-ledger]
 ---
 
 # dran-todo-flow — Create todos in Dran
@@ -99,7 +99,8 @@ not optional, it complements unit tests.
 
 ```mermaid
 flowchart TD
-  START[Álvaro's request] --> SEARCH["SEARCH 2-3 variants\ndran_search"]
+  START[Álvaro's request] --> PROTO["OPEN riel-protocol\nanchored opening\nfrom the request"]
+  PROTO --> SEARCH["SEARCH 2-3 variants\ndran_search"]
   SEARCH --> EXISTS{Does the\ntodo exist?}
   EXISTS -->|Yes| UPDATE["UPDATE\ndran_update_todo\n(merge meta)"]
   EXISTS -->|No| ASSIGNEE["CLARIFY assignee\nalvaro / chaos manager / other\nALWAYS ask"]
@@ -246,24 +247,26 @@ tokens and receives 429 when exhausted.
 
 ```mermaid
 flowchart TD
-  K1["MOVE kanban → in_progress"] --> F1["F1: Implement token bucket"]
-  F1 --> F2["F2: Integrate in the proxy"]
-  F2 --> V["F3: VERIFY deliverable\ncompile + suite"]
+  K1["MOVE kanban → in_progress"] --> F1["Fase 1: Token bucket module\nFiles: lib/dran/token_bucket.ex, lib/dran/rate_limiter.ex, config/config.exs"]
+  F1 --> F2["Fase 2: Integrate in the proxy\nFiles: lib/dran/proxy.ex"]
+  F2 --> V["F3: VERIFY deliverable\ncompile + suite + smoke"]
   V -->|"passes"| K2["MOVE kanban → done\n+ report PR"]
   V -->|"fails"| FIX["Fix and re-verify"]
   FIX --> V
 ```
 
-### Phase 1 — Implement token bucket
+### Phase 1 — Token bucket module
 
 **Scope:** `lib/dran/token_bucket.ex` · `lib/dran/rate_limiter.ex` · `config/config.exs`
 
-**Context (what exists now):** there is no rate limiting; requests go straight
-to the upstream without per-member control.
+**Context (what exists now):** No existe rate limiting; los requests van
+directo al upstream sin control por-member. El módulo `Dran.Proxy` hace
+`forward/2` sin consultar límites. **Arquitectura actual:** proxy → upstream
+sin gate. **Arquitectura propuesta:** proxy → token_bucket → forward o 429.
 
-**What changes — the algorithm:** token bucket: each member has a bucket with
-capacity N and a refill of 1 token every t. Before forwarding, one token is
-consumed; no token → 429.
+**What changes — the algorithm:** token bucket — cada member tiene un bucket
+con capacidad N y refill de 1 token cada t. Antes de forward, se consume 1
+token; sin token → 429.
 
 ```mermaid
 flowchart TD
@@ -278,35 +281,47 @@ flowchart TD
 **Instruction DAG:**
 
 ```mermaid
-flowchart TD
-  P1["READ lib/dran/rate_limiter.ex"] --> P2["CREATE lib/dran/token_bucket.ex"]
-  P2 --> P3["EDIT lib/dran/rate_limiter.ex\nintegrate bucket"]
-  P3 --> P4["EDIT config/config.exs\nparameters N and t"]
-  P4 --> P5["RUN mix test"]
-  P5 --> P6["VERIFY tests green"]
-  P6 -->|"fails"| P3
+flowchart LR
+  S1["READ lib/dran/rate_limiter.ex"] --> S2["CREATE lib/dran/token_bucket.ex"]
+  S2 --> S3["EDIT lib/dran/rate_limiter.ex — integrate bucket"]
+  S3 --> S4["EDIT config/config.exs — parameters N and t"]
+  S4 --> S5["RUN mix test"]
+  S5 --> S6["VERIFY tests green"]
+  S6 -->|"no pasa"| S3
 ```
+
+**Gate (habilita la Fase 2):**
+- [ ] `mix compile --warnings-as-errors` pasa
+- [ ] `mix test test/dran/rate_limiter_test.exs` verde
+- [ ] Smoke: boot + ruta de proxy responde sin error
 
 ### Phase 2 — Integrate in the proxy
 
 **Scope:** `lib/dran/proxy.ex`
 
 **Context (what exists now):** the proxy forwards without consulting rate
-limiting.
+limiting. **Arquitectura actual:** `Dran.Proxy.forward/2` → upstream directo.
+**Arquitectura propuesta:** `Dran.Proxy.forward/2` → `TokenBucket.consume/1`
+→ forward o 429.
 
-**What changes:** before forwarding, consult the member's bucket; if exhausted,
-respond 429.
+**What changes:** before forwarding, consult the member's bucket; if
+exhausted, respond 429.
 
 **Instruction DAG:**
 
 ```mermaid
-flowchart TD
-  P1["READ lib/dran/proxy.ex"] --> P2["EDIT consult bucket\nbefore forwarding"]
-  P2 --> P3["EDIT respond 429\nif exhausted"]
-  P3 --> P4["RUN mix test"]
-  P4 --> P5["VERIFY tests green"]
-  P5 -->|"fails"| P2
+flowchart LR
+  S1["READ lib/dran/proxy.ex"] --> S2["EDIT consult bucket\nbefore forwarding"]
+  S2 --> S3["EDIT respond 429\nif exhausted"]
+  S3 --> S4["RUN mix test"]
+  S4 --> S5["VERIFY tests green"]
+  S5 -->|"fails"| S2
 ```
+
+**Gate (cierre del todo):**
+- [ ] `mix compile --warnings-as-errors` pasa
+- [ ] `mix test test/dran/proxy_test.exs` verde
+- [ ] Smoke: exhausted member receives 429
 
 ## Verification
 
@@ -344,7 +359,49 @@ is written.
    → split it into several todos. Every `## Verification` criterion must be
    **verifiable by a human**. Without both, the todo is not ready to execute.
 
-## Shaping — questioning before creating
+## Convenciones de sintaxis mermaid
+
+Para que el coder-flow parseé los DAGs sin ambigüedad:
+
+1. **IDs de nodo predecibles**: `F1`, `F2` para fases; `S1`, `S2`, `S3`
+   para pasos de instrucción. Nada de IDs semánticos variables.
+
+2. **Labels con estructura fija** (parseable por regex):
+   - Fase: `F1["Fase 1: <entregable>\nFiles: <path1, path2>"]`
+   - Paso lectura: `S1["READ path:line"]`
+   - Paso escritura: `S2["EDIT path — <qué>"]`
+   - Paso validación: `S3["RUN <comando>"]`
+
+3. **Un solo tipo de diagrama por propósito**:
+   - `## Phases` (DAG de fases) → siempre `flowchart TD`
+   - Instruction DAG (por fase) → siempre `flowchart LR` con `S1→S2→S3`
+   - Algoritmo (dentro de "Qué cambia") → `flowchart TD` o `LR`
+
+4. **Sin `style` en mermaids de execution** — los `style` son ruido para
+   el parser del coder-flow. Solo en diagramas ilustrativos de skills
+   (entry routers), no en bodies de todos.
+
+**Regla:** si un nodo del DAG de instrucción no empieza con uno de los 6
+verbos (READ/EDIT/CREATE/RUN/VERIFY/ASK), el todo está mal formado. El
+coder-flow lo rechazará y pedirá corrección.
+
+## Shaping — darle forma antes de crear o al inicio de in_progress
+
+Shaping **no es un estado del kanban** — es el concepto de darle forma
+al todo (definir sus fases, scope, context, gates) **antes** de crearlo
+(desarrollándolo mentalmente en backlog) o **al inicio de in_progress**
+(analizándo el codebase real y extendiendo las fases de prosa a level 3).
+
+El shaping ocurre:
+- **En backlog** — el todo nace como draft (level 1 prosa) y se le da forma
+  mentalmente antes de moverlo a in_progress.
+- **Al inicio de in_progress** — el coder-flow abre con riel-protocol +
+  ledger, y si el todo llegó como draft (level 1), lo **extiende** a level 3
+  analizando el codebase real (`search_files` + `read_file`). El shaping
+  aquí es discovery técnico: nada se inventa, todo se grounded en
+  `path:line`.
+
+### Cuestionamiento SR → JR (antes de crear)
 
 1. **Assignee** — ALWAYS clarify: alvaro, agent, other? (no exceptions)
 2. **Detail level** — prose (draft), DAG (agent), or code?
@@ -453,7 +510,9 @@ flowchart LR
 - MCP reference: `dran` — main skill
 - Plan that lists these todos: `dran-planning-flow`
 - Execution of development todos: `dran-coder-flow`
+- Review of PRs against a todo: `dran-review-flow`
 - Goal that receives progress from the todos: `dran-goal-flow`
 - Independent links: `dran-relations-flow`
+- Anchored opening + trajectory maintenance: `riel-protocol`
 - Vocabulary of 6 verbs and mermaid as contract: `riel-contract`
 - Local state (`✓NN`) during execution: `riel-ledger`

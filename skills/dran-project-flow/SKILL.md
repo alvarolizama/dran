@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, project, strategy, planning]
-    related_skills: [dran, dran-goal-flow, dran-planning-flow, dran-todo-flow, dran-relations-flow]
+    related_skills: [dran, dran-goal-flow, dran-planning-flow, dran-todo-flow, dran-relations-flow, riel-protocol]
 ---
 
 # dran-project-flow — Create and manage projects in Dran
@@ -246,4 +246,6 @@ record).
 - MCP reference (tools, page types, meta fields): `dran` — main skill
 - Goals that measure the project: `dran-goal-flow`
 - Plans that execute the project: `dran-planning-flow`
+- Todos that execute: `dran-todo-flow`
 - `project_slug` links and relations: `dran-relations-flow`
+- Anchored opening + trajectory maintenance: `riel-protocol`
