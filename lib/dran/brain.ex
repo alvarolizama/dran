@@ -1402,9 +1402,9 @@ defmodule Dran.Brain do
   Build the full graph (nodes + edges) for a context.
 
   Returns `%{nodes: [...], edges: [...], total_nodes: int, total_edges: int}`
-  where each node is `%{id, title, slug, type, summary, tags}` and each edge
-  is `%{source, target, type, weight}`. Used by the graph LiveView and the
-  `/api/graph` endpoint.
+  where each edge is `%{source, target, type, weight}` and each node is
+  `%{id, title, slug, type}` plus `summary`/`tags` when not capped. Used by
+  the graph LiveView and the `/api/graph` endpoint.
 
   ## Options
 
@@ -1413,8 +1413,10 @@ defmodule Dran.Brain do
   - `:max_nodes` — hard cap: when the context has more visible pages than
     this, only the N most-connected pages (highest degree, counting inbound
     + outbound relations) are returned, plus the edges between them. The
-    `total_nodes`/`total_edges` keys always report the real totals so the UI
-    can show "showing X of Y". Keeps the 3D view fluid on large brains.
+    `total_nodes` always reports the real count; `total_edges` reports the
+    real count when capped (otherwise it reflects the fetched edges, capped
+    at 2500). The UI can show "showing X of Y". Keeps the 3D view fluid on
+    large brains.
   """
   @max_graph_edges 2500
 
@@ -1600,7 +1602,7 @@ defmodule Dran.Brain do
 
   - `:hybrid` — when inference is configured and the query is "meaningful"
     (more than 2 words or >25 chars). Combines FTS + semantic search + RRF.
-  - `:fuzzy_fts` — short queries (≤2 words or ≤20 chars). Tries fuzzy title
+  - `:fuzzy_fts` — short queries (≤2 words and ≤25 chars). Tries fuzzy title
     match plus full-text search.
   - `:fts` — fallback full-text search.
 
@@ -2518,8 +2520,8 @@ defmodule Dran.Brain do
   @doc """
   Compute extended brain-health metrics for a context.
 
-  All queries use SQL aggregates (count / sum / group_by) — no pages are
-  loaded into memory. Returns a map with:
+  All queries use SQL aggregates (count / sum / group_by) or lightweight
+  selects — no full pages are loaded into memory. Returns a map with:
 
   - `:pages_this_week` — pages created in the last 7 days
   - `:pages_last_week` — pages created in the 7 days before that

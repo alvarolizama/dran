@@ -101,7 +101,7 @@ defmodule Dran.MCPFullTest do
       end
     end
 
-    test "dran_start_agent enum has all 6 agent types" do
+    test "dran_start_agent enum has all 3 agent types" do
       resp =
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 

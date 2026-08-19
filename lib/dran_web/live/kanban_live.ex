@@ -1,6 +1,6 @@
 defmodule DranWeb.KanbanLive do
   @moduledoc """
-  Global kanban board for all todos. Filters by project_slug, goal_slug,
+  Kanban board for all todos in the current context. Filters by project_slug, goal_slug,
   plan_slug (combinable). Drag-drop updates kanban_status.
   """
   use DranWeb, :live_view

@@ -16,9 +16,6 @@ defmodule Dran.Rerank do
   return `true`. The `use_rerank` flag defaults to `false` in
   `Dran.Inference.Config` (though the env var
   `DRAN_INFERENCE_USE_RERANK` defaults to `"true"` when present).
-
-  Callers can also override the config per-call by passing `rerank: true`
-  in the options keyword list.
   """
 
   alias Dran.Inference

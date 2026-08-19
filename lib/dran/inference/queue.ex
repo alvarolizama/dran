@@ -12,7 +12,7 @@ defmodule Dran.Inference.Queue do
 
   The permit is re-entrant: if a caller already holds it, nested `run/2`
   calls proceed without deadlocking. This is needed because higher-level
-    same capability queue.
+  helpers may re-enter the same capability queue.
   """
 
   use GenServer

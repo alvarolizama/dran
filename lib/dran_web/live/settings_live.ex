@@ -521,7 +521,7 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("create_context", %{"context" => params}, socket) do
-    # Slug always derives from name — user never edits it directly.
+    # Slug derives from name only when not explicitly provided.
     params =
       if is_nil(params["slug"]) or params["slug"] == "" do
         Map.put(params, "slug", Slug.slugify(params["name"] || ""))
@@ -848,7 +848,7 @@ defmodule DranWeb.SettingsLive do
   # Fetches the available model ids from the inference API once on mount.
   # Stores `{:ok, ids}` or `{:error, reason}` so the UI can show a note when
   # the API is unavailable. Also builds the current-values map (Settings
-  # override or env default) per purpose.
+  # override, or nil when unset) per purpose.
   defp assign_models(socket) do
     models =
       case Client.models() do

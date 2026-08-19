@@ -20,11 +20,12 @@ defmodule Dran.Summaries do
   import Ecto.Query, warn: false
 
   @doc """
-  Suggest a one-line summary, kebab-case tags, and entity names for `page`
-  in a single inference call.
+  Suggest a title, one-line summary, kebab-case tags, entity names, and
+  inline links for `page` in a single inference call.
 
-  Returns `{:ok, %{summary: "...", tags: [...], entities: [...]}}`
-  or `{:error, :not_configured}`.
+  Returns `{:ok, %{title: "...", summary: "...", tags: [...],
+  entities: [...], inline_links: [...]}}` or `{:error, term()}`
+  (e.g. `:not_configured` when inference is disabled).
   """
   @spec augment_page(Page.t()) :: {:ok, map()} | {:error, term()}
   def augment_page(%Page{} = page) do

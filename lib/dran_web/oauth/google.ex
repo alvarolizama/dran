@@ -29,7 +29,8 @@ defmodule DranWeb.OAuth.Google do
   end
 
   @doc """
-  Returns true if Google OAuth is configured (client_id and client_secret present).
+  Returns true if Google OAuth is configured (client_id, client_secret and
+  redirect_uri present).
   """
   def configured? do
     cfg = config()

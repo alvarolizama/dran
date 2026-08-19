@@ -51,8 +51,9 @@ defmodule Dran.Auth do
   @doc """
   Resolve the owner identity for a page being created.
 
-  The owner is derived from the API key name — it is NOT client-settable.
-  Falls back to "system" when no identity is available.
+  Prefers the API key name; otherwise falls back to the authenticated
+  user's email (the literal `"admin"` email maps to `"system"`), then
+  `"system"` when no identity is available. Not client-settable.
   """
   def resolve_owner(user) when is_map(user) do
     Map.get(user, :key_name) ||

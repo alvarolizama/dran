@@ -3,13 +3,17 @@ defmodule Dran.Brain.Relation do
   Directed N:M relation between pages. The graph is directed:
   `source` → `target`.
 
-  ## Relation types
+  ## Relation types (manual)
   - `related` — generic connection (default)
   - `contradicts` — source contradicts target
   - `supersedes` — source replaces/obsoletes target
   - `part_of` — source is part of target
   - `embeds` — source embeds target (e.g. a file page in a note body)
   - `mentions` — source mentions the target entity (entity linking)
+
+  Additionally, `semantic` is created automatically by the augmenter and
+  `works_in` / `has_tier` / `based_in` / `written_in` / `built_with` are
+  materialized from `meta.props` — none of them are set manually.
   """
 
   use Ecto.Schema

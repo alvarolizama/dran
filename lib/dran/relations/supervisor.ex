@@ -5,10 +5,10 @@ defmodule Dran.Relations.Supervisor do
   When a page is created or updated, `Dran.Brain.PageAugmenter.schedule/1`
   enqueues a task under this supervisor. The task:
 
+  - Materializes `meta.props` into typed relations.
+  - Enriches metadata via the inference API (title, summary, tags, entities).
   - Generates/stores an embedding for the page.
-  - Finds semantically similar pages in the same context.
-  - Suggests related page links via the inference API.
-  - Creates `related` relations automatically when confidence is high.
+  - Creates `semantic` relations to the closest neighbours.
   """
 
   use Supervisor

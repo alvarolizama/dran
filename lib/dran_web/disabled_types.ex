@@ -56,7 +56,7 @@ defmodule DranWeb.DisabledTypes do
   @doc """
   Given a socket with `:context` in assigns and a `page_type` string,
   returns `{:cont, socket}` if the type is enabled, or
-  `{:halt, {:redirect, %{to: "/"}}}` if disabled — use in `handle_params`
+  `{:halt, {:push_navigate, ~p"/"}}` if disabled — use in `handle_params`
   to block direct URL access to disabled page types.
   """
   def guard_page_type(socket, page_type) do

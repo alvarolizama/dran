@@ -53,8 +53,8 @@ defmodule Dran.Agent.Engine do
   @doc """
   Cancel a running agent session.
 
-  Sends a graceful shutdown to the task. If the session is already done or
-  the runner is gone, it updates the session to `"cancelled"`.
+  Sends a graceful shutdown to the task and marks the session `"cancelled"`;
+  when the runner is already gone, it only marks sessions still `"running"`.
   """
   @spec cancel(Ecto.UUID.t()) :: :ok | {:error, :not_found}
   def cancel(session_id) do

@@ -295,9 +295,9 @@ defmodule Dran.Brain.PageMetaGettextTest do
   describe "regression — note kind list has no bogus 'Hecho' option" do
     # The original "Hecho" bug came from fuzzy .po pollution (msgid "None"
     # had msgstr "Hecho"). This guards the note kind list itself: it must
-    # contain exactly the 21 expected slugs and no 'Hecho' (which was never
+    # contain exactly the 23 expected slugs and no 'Hecho' (which was never
     # a real note kind, only a translation artefact).
-    test "note_kinds/0 returns exactly 21 expected slugs" do
+    test "note_kinds/0 returns exactly 23 expected slugs" do
       assert PageMeta.note_kinds() ==
                ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm)
     end

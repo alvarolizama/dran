@@ -1,7 +1,7 @@
 defmodule Dran.Exporter do
   @moduledoc """
   Context exporter — serializes a context, its pages (with body),
-  and outbound relations into a JSON-serializable map.
+  and the relations between its pages into a JSON-serializable map.
   """
 
   import Ecto.Query, warn: false

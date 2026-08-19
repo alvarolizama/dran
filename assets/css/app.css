@@ -548,6 +548,6 @@
 }
 
 /* ── 3D graph tooltip (hovered node) ── */
-/* No longer used — labels are now SpriteText objects in the 3D scene managed
-   entirely by the Graph3D hook. Kept as a placeholder for potential future
-   tooltip needs. */
+/* The hover overlay is rendered by the Graph3D hook as an inline-styled HTML
+   div (`.graph-hover-overlay`), so it needs no rules here. Kept as a
+   placeholder for potential future tooltip styling. */

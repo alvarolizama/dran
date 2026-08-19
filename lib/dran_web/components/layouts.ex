@@ -228,8 +228,8 @@ defmodule DranWeb.Layouts do
 
   @doc """
   Renders the grouped sidebar navigation for the second brain.
-  Links are grouped by category (Knowledge, Planning, Outputs, Agents,
-  Configs, Docs). Each labelled group is a collapsible `<details>` section.
+  Links are grouped by category (Dashboard, Planning, Knowledge, Configs).
+  Each labelled group is a collapsible `<details>` section.
   Pass `active` with the nav key of the current page to highlight it.
   Pass `counts` with optional badge data: `%{dashboard: n, todos: n}`.
   """
@@ -615,7 +615,7 @@ defmodule DranWeb.Layouts do
   # ── Wiki layout ──────────────────────────────────────────────────────────
   # Sidebar + main shell, mirroring `app/1` but for the read-only wiki.
   # The sidebar has: logo, context selector, search, and wiki navigation
-  # (categories + sections). Wiki-only users see "Back to app" in the footer.
+  # (categories + sections). Admins/editors get a "Panel" link back to the app.
 
   attr :flash, :map, required: true
   attr :current_user, :string, default: nil

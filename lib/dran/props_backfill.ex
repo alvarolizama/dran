@@ -25,7 +25,7 @@ defmodule Dran.PropsBackfill do
 
   The augmenter is best-effort: a failure on one page logs a warning and
   continues with the rest. The returned stats count every page that was
-  processed and the total number of new relations created.
+  successfully re-augmented and the total number of new relations created.
   """
   @spec run() :: {:ok, %{pages: non_neg_integer(), edges: non_neg_integer()}} | {:error, term()}
   def run do

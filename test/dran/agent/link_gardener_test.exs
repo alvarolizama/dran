@@ -59,7 +59,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   defp get_relation!(id), do: Repo.get!(Relation, id)
 
-  # ── Unit tests (no DB needed for limit/semantic guards) ───────────────────
+  # ── Unit tests (guard logic, no engine/LLM) ─────────────────────────────
 
   describe "agent_type/0" do
     test "returns link_gardener" do

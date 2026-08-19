@@ -1,8 +1,6 @@
 defmodule DranWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :dran
 
-  # The session will be stored in the cookie and signed,
-  # this means its contents can be read but not tampered with.
   # The session is stored in an encrypted cookie (contents can be neither
   # read nor tampered with by the client). Salts and lifetime are
   # runtime-configurable via env vars. SESSION_COOKIE_SECURE=true forces the
@@ -62,7 +60,7 @@ defmodule DranWeb.Endpoint do
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
     json_decoder: Phoenix.json_library(),
-    # Explicit body-size limits. The multipart cap matches the app's configured
+    # Explicit body-size limits. The multipart cap (200MB) is set above the app's
     # upload max (UPLOADS_MAX_SIZE, default 100MB); urlencoded/json stay small
     # so a huge form/API body is rejected at the parser, before any app code runs.
     length: 2_000_000,

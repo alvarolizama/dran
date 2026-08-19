@@ -546,7 +546,7 @@ concept_actores =
   })
 
 # ──────────────────────────────────────────────────────────────────────────
-# 7. Explicit relations (semantic, related, part_of)
+# 5. Explicit relations (semantic, related, part_of)
 # ──────────────────────────────────────────────────────────────────────────
 
 IO.puts("\nRelations:")

@@ -143,7 +143,7 @@ defmodule DranWeb.API.MCPController do
     end
   end
 
-  @doc "GET /api/mcp — open SSE stream"
+  @doc "GET /api/mcp — respond 405 (SSE stream not implemented)"
   def handle_get(conn, _params) do
     conn
     |> put_resp_header("allow", "POST, DELETE")

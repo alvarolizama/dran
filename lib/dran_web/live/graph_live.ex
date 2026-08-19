@@ -5,9 +5,10 @@ defmodule DranWeb.GraphLive do
   - `:index` renders the full graph of all pages and their relations.
   - `:show` renders a subgraph centered on a single page.
 
-  The graph is rendered as SVG (nodes as circles, edges as lines) using a
-  simple circular layout. Updates are pushed live via Phoenix.PubSub whenever
-  a page is created, updated, or deleted.
+  The graph is rendered client-side by the `graph_3d` component (a 3D
+  force-directed view; in index mode it fetches /api/graph-json itself).
+  Updates are pushed live via Phoenix.PubSub whenever a page is created,
+  updated, or deleted.
   """
 
   use DranWeb, :live_view

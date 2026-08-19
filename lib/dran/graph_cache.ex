@@ -7,8 +7,8 @@ defmodule Dran.GraphCache do
   | Table              | Key                          | Value                | Invalidated by           |
   |--------------------|------------------------------|----------------------|--------------------------|
   | `:dran_graph_cache`| `context_id`                 | global graph JSON    | `invalidate_context/1`  |
-  | `:dran_subgraph`   | `{page_id, context_id}`      | subgraph map         | `invalidate_page/2`     |
-  | `:dran_page_cache` | `{slug, context_id}`         | `%Page{}` or `nil`   | `invalidate_page/2`     |
+  | `:dran_subgraph_cache` | `{page_id, context_id}`  | subgraph map         | `invalidate_page/2`     |
+  | `:dran_page_cache` | `{slug, context_id}`         | `%Page{}` or `:not_found` | `invalidate_page_slug/2` |
 
   The GenServer owns the tables (creates them in `init/1`) and handles
   all writes (build + insert). Reads go directly to ETS — no GenServer
@@ -16,7 +16,8 @@ defmodule Dran.GraphCache do
 
   Invalidation is triggered by `Brain.broadcast_page_change/3`:
     - `invalidate_context/1` wipes the global graph for the context
-    - `invalidate_page/2` wipes the subgraph + page-cache entry for that page
+    - `invalidate_page/2` wipes the subgraph + global graph for that page
+    - `invalidate_page_slug/2` wipes the page-cache entry for that slug
   """
 
   use GenServer
@@ -55,7 +56,7 @@ defmodule Dran.GraphCache do
 
   @doc """
   Get the cached subgraph for a page, building if missing.
-  Returns `%{nodes: list, edges: list}`.
+  Returns `%{nodes: list, edges: list, cached: boolean}`.
   """
   def get_subgraph(page_id, context_id) do
     key = {page_id, context_id}
@@ -71,7 +72,7 @@ defmodule Dran.GraphCache do
 
   @doc """
   Get a page by slug from cache, fetching from DB on miss.
-  Returns `%Page{}`, `nil`, or `{:error, :not_found}`.
+  Returns `%Page{}` or `nil` (a cached miss is stored as `:not_found`).
   """
   def get_page(slug, context_id) do
     key = {slug, context_id}

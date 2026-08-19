@@ -18,7 +18,7 @@ defmodule Dran.Journey do
 
   Returns:
     %{
-      buckets: [%{label, period_key, pages: [%{slug, page_type, created_by}], total, recency, dominant_type}],
+      buckets: [%{label, period_key, ts, pages: [%{slug, page_type, created_by, inserted_at}], total, recency, dominant_type}],
       total: integer,
       stats: %{total_pages, by_type, by_creator, busiest_period, busiest_count},
       trajectory: [integer],  # cumulative count per bucket
@@ -134,7 +134,7 @@ defmodule Dran.Journey do
   """
   def type_colors do
     # Pre-computed colors with golden-angle hue spacing (137.508°)
-    # Ensures distinct colors for all 10 page types
+    # Ensures distinct colors for every page type shown in the journey
     %{
       "note" => "#D36969",
       "concept" => "#D3A369",
@@ -148,7 +148,7 @@ defmodule Dran.Journey do
     }
   end
 
-  # Convert utc_datetime to unix timestamp
+  # Convert DateTime/NaiveDateTime (assumed UTC) to unix timestamp
   defp to_unix(%DateTime{} = dt), do: DateTime.to_unix(dt)
 
   defp to_unix(%NaiveDateTime{} = ndt),

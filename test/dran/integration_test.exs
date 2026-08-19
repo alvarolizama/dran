@@ -4,10 +4,9 @@ defmodule Dran.IntegrationTest do
 
     create → embed → rename → search → export
 
-  Inference is configured with an invalid base_url and a 50ms timeout so
-  that any embedding calls fail fast. The Brain functions degrade
-  gracefully — embeddings stay nil, but FTS search and all other
-  operations work normally.
+  Inference is disabled entirely (base_url: nil) so no embedding calls
+  are attempted. The Brain functions degrade gracefully — embeddings
+  stay nil, but FTS search and all other operations work normally.
   """
   use Dran.DataCase, async: false
 
@@ -93,7 +92,7 @@ defmodule Dran.IntegrationTest do
 
       # ── 4. Verify embeddings degrade gracefully ──
       # create_page calls Embeddings.schedule which runs synchronously (schedule_async: false).
-      # With an invalid base_url + 50ms timeout, the embedding call fails,
+      # Inference is disabled (base_url: nil), so no embedding call is made
       # and the page's embedding stays nil.
       page_after = Brain.get_page!(note_page.id)
       assert page_after.embedding == nil

@@ -3,7 +3,7 @@ defmodule DranWeb.ProjectLive do
   LiveView for project pages: index list + detail view with sub-page tabs.
 
   Tabs: Overview (project dashboard — status, stat cards, linked items),
-  Goals, Plans, Todos, Graph, Related.
+  Goals, Plans, Todos. A separate Graph button navigates to the full graph view.
   """
 
   use DranWeb, :live_view
@@ -475,7 +475,7 @@ defmodule DranWeb.ProjectLive do
   # ── Helpers ──
 
   # nil-safe access into a page's `meta` map (string keys, as persisted in JSONB).
-  # Matches the repo convention (goal_live.ex:621).
+  # Matches the repo convention (goal_live.ex:414).
   defp meta_get(meta, key), do: get_in(meta, [key])
 
   # Updates a page's meta in the DB and replaces it in the `pages` assign list.

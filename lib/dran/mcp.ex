@@ -2,12 +2,12 @@ defmodule Dran.MCP do
   @moduledoc """
   MCP (Model Context Protocol) server for Dran — Streamable HTTP transport.
 
-  Served from Phoenix at `/api/mcp`. Supports POST, GET, and DELETE per
+  Served from Phoenix at `/api/mcp`. Supports POST and DELETE per
   MCP spec 2025-03-26 Streamable HTTP transport.
 
   ## Endpoints
-  - `POST /api/mcp` — send JSON-RPC request → JSON or SSE response
-  - `GET /api/mcp` — open SSE stream for server-initiated messages
+  - `POST /api/mcp` — send JSON-RPC request → JSON response
+  - `GET /api/mcp` — responds 405 (SSE stream not implemented)
   - `DELETE /api/mcp` — terminate session
 
   ## Tools (18)

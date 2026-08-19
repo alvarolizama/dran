@@ -17,8 +17,8 @@
 
 import ForceGraph3D from "3d-force-graph"
 import * as THREE from "three"
-// SpriteText import removed — labels are no longer rendered on hover.
-// The hover highlight (dim/glow neighbors) stays, just without text.
+// SpriteText import removed — labels are no longer rendered as 3D scene
+// text. Hover info (title + link) now shows in an HTML overlay instead.
 
 // BFS depth for click-selection neighborhood (1 = direct neighbors only)
 const HIGHLIGHT_BFS_DEPTH = 1
@@ -598,8 +598,7 @@ const Graph3D = {
       // Re-trigger the force simulation so nodes settle in the now-correct
       // canvas dimensions, then zoom-to-fit when the engine stops.
       this.graph.d3AlphaTarget(0.001)
-      // d3ReCountdown that should exist on the inner forceGraph; call via the
-      // engine re-heat method if available, otherwise graphData re-assign
+      // Re-assign graphData to re-heat the force simulation.
       this.graph.graphData({ nodes, links: this.graph.graphData().links })
       this.graph.zoomToFit(400, 40)
     },

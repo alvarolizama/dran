@@ -146,7 +146,7 @@ defmodule Dran.Brain.Page do
     |> changeset(attrs)
   end
 
-  @doc "Changeset for updating a page (increments version)"
+  @doc "Changeset for updating a page (increments version when body changes)"
   def update_changeset(page, attrs) do
     page
     |> changeset(attrs)

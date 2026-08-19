@@ -3,8 +3,8 @@ defmodule DranWeb.PageNewLive do
   Generic LiveView for creating a new page of any type.
 
   The page type is derived from the request path (e.g. `/notes/new`
-  → "note"). Renders the shared markdown editor and delegates save
-  to `DranWeb.PageEdit`.
+  → "note"). Renders the shared markdown editor and creates the page
+  directly via `Brain.create_page/1`.
   """
 
   use DranWeb, :live_view

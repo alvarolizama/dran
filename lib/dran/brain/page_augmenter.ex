@@ -4,10 +4,12 @@ defmodule Dran.Brain.PageAugmenter do
 
   The augmentation pipeline:
 
-  1. Generates and stores an embedding for the page (no-op if already current).
-  2. Calls the inference API once to extract summary, keywords, and entities.
-  3. Finds semantically similar pages in the same context.
-  4. Creates `semantic` relations for the closest neighbours.
+  1. Materializes `meta.props` into typed relations (inference-independent).
+  2. Calls the inference API once to extract title, summary, tags, entities,
+     and inline links.
+  3. Generates and stores an embedding for the page (no-op if already current).
+  4. Finds semantically similar pages in the same context.
+  5. Creates `semantic` relations for the closest neighbours.
 
   All work runs under `Dran.Relations.TaskSupervisor` so the HTTP/MCP request
   that created the page returns immediately.
