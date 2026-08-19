@@ -166,6 +166,12 @@ defmodule DranWeb.Layouts do
       if context do
         stats = Dran.Brain.stats(context.id)
         by_type = stats[:by_type] || %{}
+        disabled = context.disabled_page_types || []
+
+        # Zero out counts for disabled page types so sidebar links vanish.
+        safe_count = fn type ->
+          if type in disabled, do: 0, else: by_type[type] || 0
+        end
 
         # Smart collections = query pages that carry meta.query (filters).
         # GraphRag answer pages (also page_type: "query") do NOT have
@@ -203,17 +209,17 @@ defmodule DranWeb.Layouts do
 
         %{
           dashboard: stats[:total_pages] || 0,
-          notes: by_type["note"] || 0,
-          concepts: by_type["concept"] || 0,
-          entities: by_type["entity"] || 0,
-          references: by_type["reference"] || 0,
+          notes: safe_count.("note"),
+          concepts: safe_count.("concept"),
+          entities: safe_count.("entity"),
+          references: safe_count.("reference"),
           communities: communities_count,
-          queries: by_type["query"] || 0,
+          queries: safe_count.("query"),
           collections: collection_count || 0,
-          projects: by_type["project"] || 0,
-          goals: by_type["goal"] || 0,
-          plans: by_type["plan"] || 0,
-          todos: by_type["todo"] || 0,
+          projects: safe_count.("project"),
+          goals: safe_count.("goal"),
+          plans: safe_count.("plan"),
+          todos: safe_count.("todo"),
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
           activity: Dran.Brain.count_log(context.id)

@@ -1,7 +1,7 @@
 ---
 name: dran-coder-flow
 description: "Use when executing a Dran dev todo (code) — opens with riel-protocol + ledger from the todo, human-decides mode (test-first / research / autonomous TDD), gates before commit. Triggers on execute/implement todo."
-version: 2.1.0
+version: 2.2.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -287,8 +287,20 @@ packet with curated context, verb-graph, gates, and anchored opening.
 3. **Scope** of its phase — the ONLY files it can touch.
 4. The phase's **Context (what exists now)** and **What changes**.
 5. The phase's **instruction DAG** (verbs).
-6. **Rules:** don't touch files outside the scope; commit per feature.
-7. Response **language** (Spanish).
+7. **Rules:** don't touch files outside the scope; commit per feature.
+8. **Comment every technical decision in the source code** — each
+   non-obvious decision the phase executes must carry a comment **inside
+   the code file** (Elixir `#`, not commit messages, PR descriptions, or
+   external docs) that does two things: (a) explains *why* that technical
+   choice was made — the trade-off, constraint, or requirement that
+   motivated it; (b) reflects the *reality* of the code — the comment
+   must match what the code actually does, never aspirational or generic
+   descriptions that drift from the implementation. A reader who didn't
+   write the code should understand the decision and verify it against the
+   code from the comment alone. Obvious one-liners don't need a comment;
+   judgment calls, trade-offs, deviations from a pattern, and anything a
+   reviewer might question do.
+9. Response **language** (Spanish).
 
 ### Parent verifies returns (via riel-delegate)
 
@@ -325,6 +337,11 @@ Each phase's gate runs **before** commit, never after:
 - [ ] **Smoke test** — boot/runtime that touches what changed (starts the
   server, mounts the route, exercises the path). Mandatory for code.
 - [ ] `mix format --check-formatted` without extra diffs
+- [ ] **Technical decisions commented in source** — every non-obvious
+  decision in the diff carries a comment **inside the code file** (`#` in
+  Elixir) that explains *why* the choice was made and reflects the
+  *reality* of what the code does (no aspirational or generic comments
+  that drift from the implementation)
 - [ ] Diff reviewed: only scope files
 
 **Confirm before commit** — never commit automatically. After the green gate,
@@ -404,6 +421,13 @@ with a red gate.
 - **Committing `.riel/`** — make sure the worktree `.gitignore` first.
 - **Touching files outside the scope** — the diff is reviewed against the
   `Scope`.
+- **Uncommented or inaccurate decisions** — every non-obvious technical
+  decision must carry a comment **inside the code file** (`#` in Elixir,
+  not commit messages or PR descriptions) that explains *why* it was
+  chosen and reflects the *reality* of the code — the comment must match
+  what the code actually does. Aspirational or generic comments that drift
+  from the implementation are as bad as no comment: a liability for the
+  next reader and a failed gate.
 - **Oversized or unverifiable todo** — body max 6–8 KB and every verification
   criterion human-checkable; otherwise split/fix via `dran-todo-flow` before
   executing.

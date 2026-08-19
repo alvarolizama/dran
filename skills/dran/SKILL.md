@@ -1,13 +1,13 @@
 ---
 name: dran
 description: "Use when operating Dran (second brain / knowledge graph) via its MCP server — 18 tools, 10 page types, connection/auth, and install + config of the dran skill suite. Triggers on anything Dran / brain."
-version: 9.2.0
+version: 9.3.0
 author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
     tags: [dran, second-brain, mcp, knowledge-graph, notes, productivity]
-    related_skills: [dran-project-flow, dran-goal-flow, dran-planning-flow, dran-todo-flow, dran-coder-flow, dran-research-flow, dran-note-taking-flow, dran-relations-flow, dran-maintenance-flow]
+    related_skills: [dran-project-flow, dran-goal-flow, dran-planning-flow, dran-todo-flow, dran-coder-flow, dran-review-flow, dran-research-flow, dran-note-taking-flow, dran-relations-flow, dran-maintenance-flow]
 ---
 
 # dran — MCP reference + suite router
@@ -28,6 +28,7 @@ flowchart TD
   Q -->|"Create a plan with a\nroute mermaid"| PLF[dran-planning-flow]
   Q -->|"Create a todo\ndev or general"| TF[dran-todo-flow]
   Q -->|"Run a development\ntodo (phases)"| CF[dran-coder-flow]
+  Q -->|"Review a PR against\nits linked todo"| REV[dran-review-flow]
   Q -->|"Research the web\nsources + query pages"| RF[dran-research-flow]
   Q -->|"Capture a note, concept,\nentity or reference"| NTF[dran-note-taking-flow]
   Q -->|"Relate pages,\nprops, embeds"| RLF[dran-relations-flow]
@@ -40,7 +41,7 @@ flowchart TD
 Run ONLY the section you landed on. If the diagram sends you to another skill,
 **stop here** and hand off — don't absorb that work.
 
-## The 9 flows of the suite
+## The 10 flows of the suite
 
 | Flow | When to load it |
 | --- | --- |
@@ -49,6 +50,7 @@ Run ONLY the section you landed on. If the diagram sends you to another skill,
 | `dran-planning-flow` | Tactical plans with route mermaid, todos and gotchas |
 | `dran-todo-flow` | Create todos (dev or general): templates, kanban, assignee |
 | `dran-coder-flow` | Run a development todo: phases, subagents, gates |
+| `dran-review-flow` | Review a PR against its linked todo: diff vs ## Verification, block/approve |
 | `dran-research-flow` | Research online: web, sources, query pages |
 | `dran-note-taking-flow` | Capture notes, concepts, entities, references |
 | `dran-relations-flow` | Typed relations, materialized props, embeds |
@@ -66,6 +68,7 @@ skills/
   dran-planning-flow/
   dran-todo-flow/
   dran-coder-flow/
+  dran-review-flow/
   dran-research-flow/
   dran-note-taking-flow/
   dran-relations-flow/

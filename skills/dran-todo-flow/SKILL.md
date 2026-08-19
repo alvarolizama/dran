@@ -1,7 +1,7 @@
 ---
 name: dran-todo-flow
 description: "Use when creating todos in Dran — every todo has Goal + Phases + Verification; phases at 3 detail levels (prose / DAG / code); 6–8KB max, human-verifiable. Triggers on new todo, task, pending."
-version: 2.1.0
+version: 2.2.0
 author: Álvaro Lizama
 license: MIT
 metadata:
