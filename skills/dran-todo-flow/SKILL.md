@@ -1,7 +1,7 @@
 ---
 name: dran-todo-flow
-description: "Use when creating todos in Dran — every todo has Goal + Phases + Verification; phases at 3 detail levels (prose / DAG / code). Triggers on new todo, task, pending."
-version: 2.0.0
+description: "Use when creating todos in Dran — every todo has Goal + Phases + Verification; phases at 3 detail levels (prose / DAG / code); 6–8KB max, human-verifiable. Triggers on new todo, task, pending."
+version: 2.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -48,6 +48,10 @@ Every todo carries exactly **3 sections**, always in this order:
   deliverable. They can be prose or a diagram (see levels below).
 - The **Verification** is the validation checklist: what I check to declare
   "done". It is not filled during execution — it's the *plan* of validation.
+  Every criterion must be **verifiable by a human** — a person can check it by
+  hand (run a command, see a UI behavior, read an output). "The code is
+  correct" is not a criterion; "`mix test` green and the member receives 429"
+  is.
 
 **A todo without the 3 sections is malformed.**
 
@@ -137,6 +141,13 @@ to `in_progress`, and links only if they apply (orphans are legitimate).
 
 **A todo without `## Verification` is malformed** — without done criteria
 there's no honest way to close it.
+
+**Todo contract limits** — if violated, split or fix before creating:
+
+| Limit | Rule |
+|---|---|
+| Size | todo body **6–8 KB max**. Bigger = split it into separate todos (each with its 3 sections) before creating. |
+| Verifiability | every `## Verification` criterion must be **verifiable by a human** — a person can check it by hand (run a command, see a UI behavior, read an output). |
 
 ## Content templates
 
@@ -329,12 +340,16 @@ is written.
 7. **Code → mandatory smoke test:** every level 3 (code) todo carries a smoke
    test before each commit (boot/runtime that touches what changed), not just
    unit tests.
+8. **Size and verifiability limits** — the todo body is **6–8 KB max**; bigger
+   → split it into several todos. Every `## Verification` criterion must be
+   **verifiable by a human**. Without both, the todo is not ready to execute.
 
 ## Shaping — questioning before creating
 
 1. **Assignee** — ALWAYS clarify: alvaro, agent, other? (no exceptions)
 2. **Detail level** — prose (draft), DAG (agent), or code?
-3. **Verification** — how do you check it's done? (feeds `## Verification`)
+3. **Verification** — how do you check it's done? Every criterion must be
+   **verifiable by a human** (feeds `## Verification`)
 4. **Links** — does it belong to a project/goal/plan? Only if obvious.
 
 One blocking question per turn. The assignee is NOT negotiable — always ask,
@@ -411,6 +426,10 @@ flowchart LR
   another.
 - **Without the 3 sections** — `Goal` + `Phases` + `Verification` are mandatory
   in EVERY todo.
+- **Oversized todo** — body over 6–8 KB: split into several todos, never one
+  mega-todo.
+- **Unverifiable verification** — criteria a human can't check by hand are not
+  criteria.
 
 ## Quick reference
 
