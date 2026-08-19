@@ -1569,6 +1569,14 @@ defmodule DranWeb.WikiLive do
     {:noreply, assign(socket, node_count: node_count || 0, edge_count: edge_count || 0)}
   end
 
+  # Catch-all for graph hook events that may fire when no longer on the graph
+  # view. Graph events (graph_loaded, graph_counts) arrive here harmlessly.
+  # Unknown events are logged rather than silently swallowed so filter or
+  # navigation bugs don't disappear into the void.
+  def handle_event(event, _params, socket) when event in ["graph_loaded", "graph_counts"] do
+    {:noreply, socket}
+  end
+
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   # ── Filter helpers ──
@@ -1767,18 +1775,18 @@ defmodule DranWeb.WikiLive do
 
   defp wiki_filter_select(assigns) do
     ~H"""
-    <div class="flex flex-col">
+    <form id={"#{@id}-form"} phx-change={@phx_change} class="flex flex-col">
       <label for={@id} class="text-xs font-medium text-base-content/60 mb-1">{@label}</label>
       <select
         id={@id}
+        name="value"
         class="px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100"
-        phx-change={@phx_change}
       >
         <%= for {label, value} <- @options do %>
           <option value={value} selected={value == @value}>{label}</option>
         <% end %>
       </select>
-    </div>
+    </form>
     """
   end
 

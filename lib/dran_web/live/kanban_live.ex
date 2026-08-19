@@ -501,7 +501,7 @@ defmodule DranWeb.KanbanLive do
                 context_id: context.id,
                 type: "todo",
                 include_body: false,
-                limit: 1000
+                limit: 500
               )
 
             socket =
@@ -564,7 +564,7 @@ defmodule DranWeb.KanbanLive do
                   context_id: context.id,
                   type: "todo",
                   include_body: false,
-                  limit: 1000
+                  limit: 500
                 )
 
               {:noreply,
@@ -732,18 +732,18 @@ defmodule DranWeb.KanbanLive do
 
   defp filter_select(assigns) do
     ~H"""
-    <div class="flex flex-col">
+    <form id={"#{@id}-form"} phx-change={@phx_change} class="flex flex-col">
       <label for={@id} class="text-xs font-medium text-base-content/60 mb-1">{@label}</label>
       <select
         id={@id}
+        name="value"
         class="px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100"
-        phx-change={@phx_change}
       >
         <%= for {label, value} <- @options do %>
           <option value={value} selected={value == @value}>{label}</option>
         <% end %>
       </select>
-    </div>
+    </form>
     """
   end
 end

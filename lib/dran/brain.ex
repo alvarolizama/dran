@@ -403,7 +403,7 @@ defmodule Dran.Brain do
   def list_todos(opts) when is_list(opts) do
     context_id = Keyword.get(opts, :context_id)
     status = Keyword.get(opts, :status)
-    limit = Keyword.get(opts, :limit, 200)
+    limit = Keyword.get(opts, :limit, 500)
     archived = Keyword.get(opts, :archived, false)
 
     opts =
