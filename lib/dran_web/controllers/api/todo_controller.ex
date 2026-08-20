@@ -3,10 +3,10 @@ defmodule DranWeb.API.TodoController do
 
   alias Dran.Brain
 
-  @doc "GET /api/todos?context=...&status=... — list todos in a context"
+  @doc "GET /api/todos?context=...&status=... — list todo-style notes in a context"
   def index(conn, %{"workspace" => workspace_slug} = params) do
     with_context(conn, workspace_slug, fn conn, context ->
-      opts = [workspace_id: context.id, type: "todo", include_body: false]
+      opts = [workspace_id: context.id, type: "note", include_body: false]
 
       opts =
         if params["status"] do
@@ -15,7 +15,12 @@ defmodule DranWeb.API.TodoController do
           opts
         end
 
-      json(conn, %{data: Brain.list_pages(opts)})
+      # Only notes with kind: "todo" are todo-style notes
+      todos =
+        Brain.list_pages(opts)
+        |> Enum.filter(fn p -> get_in(p.meta, ["kind"]) == "todo" end)
+
+      json(conn, %{data: todos})
     end)
   end
 
@@ -25,12 +30,13 @@ defmodule DranWeb.API.TodoController do
     |> json(%{errors: %{detail: "context query param is required"}})
   end
 
-  @doc "POST /api/todos — create a todo"
+  @doc "POST /api/todos — create a todo-style note"
   def create(conn, params) do
-    params = Map.put_new(params, "page_type", "todo")
+    params = Map.put_new(params, "page_type", "note")
 
-    # Set default kanban_status in meta
+    # Set default kind "todo" and kanban_status in meta
     meta = params["meta"] || %{}
+    meta = Map.put_new(meta, "kind", "todo")
     params = Map.put(params, "meta", Map.put_new(meta, "kanban_status", "backlog"))
 
     # Inject owner/created_by from the authenticated identity.
@@ -54,7 +60,7 @@ defmodule DranWeb.API.TodoController do
     end
   end
 
-  @doc "PUT /api/todos/:id — update a todo (kanban status, etc.)"
+  @doc "PUT /api/todos/:id — update a todo-style note (kanban status, etc.)"
   def update(conn, %{"id" => id} = params) do
     case Brain.get_page(id) do
       nil ->
