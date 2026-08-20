@@ -279,7 +279,7 @@ defmodule DranWeb.DashboardLive do
               >
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Todos")}</h2>
-                  <.link navigate={~p"/panel/todos"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/panel/kanban"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -408,7 +408,7 @@ defmodule DranWeb.DashboardLive do
       if context do
         metrics = Brain.metrics(context.id)
 
-        {Brain.stats(context.id), metrics}
+        {stats_with_new_model(context, Brain.stats(context.id)), metrics}
       else
         {%{}, %{}}
       end
@@ -422,6 +422,44 @@ defmodule DranWeb.DashboardLive do
        kanban_columns: @kanban_columns,
        page_title: gettext("Dashboard")
      )}
+  end
+
+  # Augment the page-based stats with the first-class entities (goals,
+  # projects) and recompute todos = pages WHERE kanban_status IS NOT NULL.
+  defp stats_with_new_model(context, stats) do
+    goal_count = length(Brain.list_goals(workspace_id: context.id, limit: 500))
+    project_count = length(Brain.list_projects(workspace_id: context.id, limit: 500))
+
+    # goals/projects live outside the pages table — fold them into by_type so
+    # the "Pages by Type" list and totals reflect the full hierarchy.
+    by_type =
+      stats[:by_type] ||
+        %{}
+        |> Map.put("goal", goal_count)
+        |> Map.put("project", project_count)
+
+    todos_by_status = todos_by_status(context.id)
+
+    stats
+    |> Map.put(:by_type, by_type)
+    |> Map.put(:total_pages, (stats[:total_pages] || 0) + goal_count + project_count)
+    |> Map.put(:todos_by_status, todos_by_status)
+  end
+
+  # todos_by_status: group by kanban_status column for all non-archived
+  # pages that have a kanban_status set.
+  defp todos_by_status(workspace_id) do
+    import Ecto.Query
+
+    from(p in Dran.Brain.Page,
+      where:
+        p.workspace_id == ^workspace_id and p.archived == false and
+          not is_nil(p.kanban_status),
+      group_by: fragment("coalesce(kanban_status, '')"),
+      select: {fragment("coalesce(kanban_status, '')"), count(p.id)}
+    )
+    |> Dran.Repo.all()
+    |> Map.new()
   end
 
   @impl true

@@ -270,10 +270,6 @@ defmodule DranWeb.PageNewLive do
   defp type_to_page("concepts"), do: "concept"
   defp type_to_page("entities"), do: "entity"
   defp type_to_page("references"), do: "reference"
-  defp type_to_page("goals"), do: "goal"
-  defp type_to_page("projects"), do: "project"
-  defp type_to_page("plans"), do: "plan"
-  defp type_to_page("todos"), do: "todo"
   defp type_to_page("queries"), do: "query"
   defp type_to_page(_), do: "note"
 
@@ -283,18 +279,6 @@ defmodule DranWeb.PageNewLive do
   # the title on save.
   defp default_meta_for("note") do
     %{"kind" => "thought", "date" => Date.utc_today() |> Date.to_string()}
-  end
-
-  defp default_meta_for("todo") do
-    %{"kanban_status" => "backlog", "priority" => "medium"}
-  end
-
-  defp default_meta_for(type) when type in ["project", "plan"] do
-    %{"status" => "draft"}
-  end
-
-  defp default_meta_for("goal") do
-    %{"health_source" => "derived"}
   end
 
   defp default_meta_for(_), do: %{}

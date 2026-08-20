@@ -1104,10 +1104,6 @@ defmodule DranWeb.PageComponents do
   defp back_path(%{page_type: "concept"}), do: "/panel/concepts"
   defp back_path(%{page_type: "entity"}), do: "/panel/entities"
   defp back_path(%{page_type: "reference"}), do: "/panel/references"
-  defp back_path(%{page_type: "project"}), do: "/panel/projects"
-  defp back_path(%{page_type: "goal"}), do: "/panel/goals"
-  defp back_path(%{page_type: "plan"}), do: "/panel/plans"
-  defp back_path(%{page_type: "todo"}), do: "/panel/todos"
   defp back_path(%{page_type: "query"}), do: "/panel/queries"
   defp back_path(_), do: "/"
 end

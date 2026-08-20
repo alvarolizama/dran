@@ -115,10 +115,6 @@ defmodule DranWeb.PageCardComponents do
   defp page_url(%{page_type: "concept", slug: s}), do: "/panel/concepts/#{s}"
   defp page_url(%{page_type: "entity", slug: s}), do: "/panel/entities/#{s}"
   defp page_url(%{page_type: "reference", slug: s}), do: "/panel/references/#{s}"
-  defp page_url(%{page_type: "project", slug: s}), do: "/panel/projects/#{s}"
-  defp page_url(%{page_type: "goal", slug: s}), do: "/panel/goals/#{s}"
-  defp page_url(%{page_type: "plan", slug: s}), do: "/panel/plans/#{s}"
-  defp page_url(%{page_type: "todo", slug: s}), do: "/panel/todos/#{s}"
   defp page_url(%{page_type: "query", slug: s}), do: "/panel/queries/#{s}"
   defp page_url(_), do: "#"
 end

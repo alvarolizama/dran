@@ -2,32 +2,13 @@ defmodule DranWeb.SmartCollectionLive do
   @moduledoc """
   LiveView for Smart Collections.
 
-  A smart collection is a page with `page_type: "query"` whose `meta` field
-  contains a `"query"` map with filter criteria. When viewed, the collection
-  parses the query, calls `Brain.list_pages/1` with the resulting filters, and
-  renders the matching pages as a live-updating list.
-
-  ## Routes
-
-  - `:index` — `/collections` — lists all saved smart collections
-  - `:show`  — `/collections/:slug` — renders the live query results
-
-  The `:show` view subscribes to the context's PubSub topic so that
-  whenever any page is created, updated, or deleted, the collection
-  re-executes its query and refreshes the results in real time.
-
-  ## Saving
-
-  The `:new` action provides a form for saving a set of filters as a
-  new smart collection. Filter params can arrive via URL query string
-  (e.g. from the "Save as Smart Collection" button on search results
-  or filtered list pages).
+  A collection is a saved filter query that auto-updates as pages change.
+  Lives in its own table with `filters` JSONB.
   """
 
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias Dran.SmartCollection
   alias DranWeb.Plugs.Auth
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -77,21 +58,21 @@ defmodule DranWeb.SmartCollectionLive do
             <div class="card-body p-5">
               <div class="flex items-center gap-2 mb-1">
                 <.icon name="hero-funnel" class="w-5 h-5 text-primary/70" />
-                <h2 class="card-title text-lg">{collection.title}</h2>
+                <h2 class="card-title text-lg">{collection.name}</h2>
               </div>
-              <p :if={collection.summary} class="text-sm text-base-content/60">
-                {collection.summary}
+              <p :if={collection.description} class="text-sm text-base-content/60">
+                {collection.description}
               </p>
               <div class="flex flex-wrap gap-1.5 mt-3">
                 <span
-                  :for={{key, value} <- format_query_tags(collection)}
+                  :for={{key, value} <- format_filters(collection)}
                   class="px-2 py-0.5 text-xs rounded-full bg-base-200 text-base-content/70"
                 >
                   {key}: {value}
                 </span>
-                <span :if={format_query_tags(collection) == []} class="text-xs text-base-content/40">
-                  {gettext("All pages")}
-                </span>
+                <span :if={format_filters(collection) == []} class="text-xs text-base-content/40">{gettext(
+                  "All pages"
+                )}</span>
               </div>
             </div>
           </.link>
@@ -103,11 +84,9 @@ defmodule DranWeb.SmartCollectionLive do
           <div>
             <div class="flex items-center gap-2 mb-1">
               <.icon name="hero-funnel" class="w-6 h-6 text-primary/70" />
-              <h1 class="text-title">{@collection.title}</h1>
+              <h1 class="text-title">{@collection.name}</h1>
             </div>
-            <p :if={@collection.summary} class="text-caption">
-              {@collection.summary}
-            </p>
+            <p :if={@collection.description} class="text-caption">{@collection.description}</p>
           </div>
           <div class="flex gap-2">
             <.link navigate={~p"/panel/collections"} class="btn btn-ghost btn-sm">
@@ -172,14 +151,6 @@ defmodule DranWeb.SmartCollectionLive do
             <p :if={page.summary} class="text-sm text-base-content/60 mt-1 truncate">
               {page.summary}
             </p>
-            <div class="flex flex-wrap gap-1 mt-2">
-              <span
-                :for={tag <- Enum.take(page.tags || [], 5)}
-                class="px-1.5 py-0.5 text-xs rounded bg-base-300"
-              >
-                {tag}
-              </span>
-            </div>
           </div>
 
           <.empty_state
@@ -201,10 +172,10 @@ defmodule DranWeb.SmartCollectionLive do
         <form phx-submit="create_collection" class="space-y-5">
           <.input
             id="collection-title"
-            name="title"
+            name="name"
             type="text"
-            label={gettext("Title")}
-            value={@form["title"]}
+            label={gettext("Name")}
+            value={@form["name"]}
             placeholder={gettext("e.g. Urgent Todos This Week")}
             required
           />
@@ -215,16 +186,16 @@ defmodule DranWeb.SmartCollectionLive do
             type="text"
             label={gettext("Slug")}
             value={@form["slug"]}
-            placeholder={gettext("auto-generated from title if blank")}
+            placeholder={gettext("auto-generated from name if blank")}
             class="font-mono text-sm"
           />
 
           <.input
-            id="collection-summary"
-            name="summary"
+            id="collection-description"
+            name="description"
             type="text"
-            label={gettext("Summary")}
-            value={@form["summary"]}
+            label={gettext("Description")}
+            value={@form["description"]}
             placeholder={gettext("One-line description")}
           />
 
@@ -263,27 +234,11 @@ defmodule DranWeb.SmartCollectionLive do
                 value={@form["owner"]}
                 placeholder={gettext("any owner")}
               />
-              <.input
-                id="filter-due-after"
-                name="due_after"
-                type="date"
-                label={gettext("Due after")}
-                value={@form["due_after"]}
-              />
-              <.input
-                id="filter-due-before"
-                name="due_before"
-                type="date"
-                label={gettext("Due before")}
-                value={@form["due_before"]}
-              />
             </div>
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/panel/collections"} class="btn btn-ghost btn-sm">
-              {gettext("Cancel")}
-            </.link>
+            <.link navigate={~p"/panel/collections"} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
             <button
               type="submit"
               class="btn btn-primary btn-sm"
@@ -311,7 +266,7 @@ defmodule DranWeb.SmartCollectionLive do
 
     type_options =
       [{gettext("All types"), ""}] ++
-        Enum.map(Brain.page_types(), fn t -> {String.capitalize(t), t} end)
+        Enum.map(DranWeb.PageTypes.all(), fn {type, _} -> {String.capitalize(type), type} end)
 
     status_options = [
       {gettext("Any status"), ""},
@@ -339,13 +294,14 @@ defmodule DranWeb.SmartCollectionLive do
   end
 
   def handle_params(params, _url, socket) do
+    {socket, _context} = Auth.resolve_workspace(socket, params)
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
   defp apply_action(socket, :index, _params) do
     collections =
       if socket.assigns.context do
-        SmartCollection.list_all(socket.assigns.context.id)
+        Brain.list_collections(socket.assigns.context.id)
       else
         []
       end
@@ -357,21 +313,21 @@ defmodule DranWeb.SmartCollectionLive do
     context = socket.assigns.context
 
     if context do
-      case SmartCollection.get_by_slug(slug, context.id) do
+      case Brain.get_collection_by_slug(slug, context.id) do
         nil ->
           push_navigate(socket, to: ~p"/panel/collections")
 
         collection ->
-          query = get_in(collection.meta, ["query"]) || %{}
-          results = SmartCollection.execute(query, context.id)
-          query_tags = format_query_tags(collection)
+          filters = collection.filters || %{}
+          results = execute_filters(filters, context.id)
+          query_tags = format_filters(collection)
 
           assign(socket,
             collection: collection,
             results: results,
             result_count: length(results),
             query_tags: query_tags,
-            page_title: collection.title
+            page_title: collection.name
           )
       end
     else
@@ -380,17 +336,14 @@ defmodule DranWeb.SmartCollectionLive do
   end
 
   defp apply_action(socket, :new, params) do
-    # Pre-fill filter fields from URL params (e.g. from "Save as Smart Collection" button)
     form = %{
-      "title" => params["title"] || "",
+      "name" => params["name"] || "",
       "slug" => "",
-      "summary" => "",
+      "description" => params["description"] || "",
       "type" => params["type"] || "",
       "tag" => params["tag"] || "",
       "status" => params["status"] || "",
-      "owner" => params["owner"] || "",
-      "due_before" => params["due_before"] || "",
-      "due_after" => params["due_after"] || ""
+      "owner" => params["owner"] || ""
     }
 
     assign(socket, form: form, page_title: gettext("New Smart Collection"))
@@ -406,7 +359,6 @@ defmodule DranWeb.SmartCollectionLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    # Fallback: navigate to search by slug if type unknown
     {:noreply, push_navigate(socket, to: "/panel/search?q=#{URI.encode_www_form(slug)}")}
   end
 
@@ -415,7 +367,7 @@ defmodule DranWeb.SmartCollectionLive do
     context = socket.assigns.context
 
     if collection && context do
-      case Brain.delete_page(collection) do
+      case Brain.delete_collection(collection) do
         {:ok, _} ->
           {:noreply,
            socket
@@ -437,24 +389,37 @@ defmodule DranWeb.SmartCollectionLive do
       context == nil ->
         {:noreply, put_flash(socket, :error, gettext("No context available."))}
 
-      String.trim(params["title"] || "") == "" ->
-        {:noreply, put_flash(socket, :error, gettext("Title is required."))}
+      String.trim(params["name"] || "") == "" ->
+        {:noreply, put_flash(socket, :error, gettext("Name is required."))}
 
       true ->
+        filters =
+          %{
+            "type" => params["type"],
+            "status" => params["status"],
+            "tag" => params["tag"],
+            "owner" => params["owner"]
+          }
+          |> Enum.reject(fn {_k, v} -> v in ["", nil] end)
+          |> Map.new()
+
+        slug = params["slug"]
+        slug = if slug in ["", nil], do: Dran.Slug.slugify(params["name"]), else: slug
+
         attrs = %{
           "workspace_id" => context.id,
-          "title" => params["title"],
-          "slug" => params["slug"],
-          "summary" => params["summary"],
-          "query" => params
+          "name" => params["name"],
+          "slug" => slug,
+          "description" => params["description"],
+          "filters" => filters
         }
 
-        case SmartCollection.create(attrs) do
-          {:ok, page} ->
+        case Brain.create_collection(attrs) do
+          {:ok, collection} ->
             {:noreply,
              socket
              |> put_flash(:info, gettext("Smart collection created."))
-             |> push_navigate(to: ~p"/panel/collections/#{page.slug}")}
+             |> push_navigate(to: ~p"/panel/collections/#{collection.slug}")}
 
           {:error, _changeset} ->
             {:noreply,
@@ -467,22 +432,17 @@ defmodule DranWeb.SmartCollectionLive do
     end
   end
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # PubSub — auto-refresh on any page change in the context
-  # ──────────────────────────────────────────────────────────────────────────
+  # ── PubSub ──
 
   def handle_info({:page_changed, _action, _page}, socket) do
-    # Re-execute the query if we're on a collection show view
     if socket.assigns.live_action == :show && socket.assigns.collection do
       context = socket.assigns.context
-      query = get_in(socket.assigns.collection.meta, ["query"]) || %{}
-      results = SmartCollection.execute(query, context.id)
-
+      filters = socket.assigns.collection.filters || %{}
+      results = execute_filters(filters, context.id)
       {:noreply, assign(socket, results: results, result_count: length(results))}
     else
-      # On index view, refresh the collection list
       if socket.assigns.live_action == :index && socket.assigns.context do
-        collections = SmartCollection.list_all(socket.assigns.context.id)
+        collections = Brain.list_collections(socket.assigns.context.id)
         {:noreply, assign(socket, collections: collections)}
       else
         {:noreply, socket}
@@ -490,17 +450,32 @@ defmodule DranWeb.SmartCollectionLive do
     end
   end
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Helpers
-  # ──────────────────────────────────────────────────────────────────────────
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
-  defp format_query_tags(collection) do
-    query = get_in(collection.meta, ["query"]) || %{}
+  # ── Helpers ──
 
-    query
+  defp execute_filters(filters, workspace_id) do
+    opts = [workspace_id: workspace_id]
+
+    opts =
+      opts
+      |> maybe_add_filter(:type, filters["type"])
+      |> maybe_add_filter(:status, filters["status"])
+      |> maybe_add_filter(:tag, filters["tag"])
+      |> maybe_add_filter(:owner, filters["owner"])
+
+    Brain.list_pages(opts)
+  end
+
+  defp maybe_add_filter(opts, _key, nil), do: opts
+  defp maybe_add_filter(opts, _key, ""), do: opts
+  defp maybe_add_filter(opts, key, value), do: Keyword.put(opts, key, value)
+
+  defp format_filters(collection) do
+    (collection.filters || %{})
     |> Enum.reject(fn {_k, v} -> v == nil or v == "" end)
     |> Enum.map(fn {k, v} ->
-      {format_label(k), format_value(v)}
+      {format_label(k), v}
     end)
   end
 
@@ -508,7 +483,4 @@ defmodule DranWeb.SmartCollectionLive do
   defp format_label("due_after"), do: gettext("due after")
   defp format_label("created_by"), do: gettext("created by")
   defp format_label(key), do: String.replace(key, "_", " ")
-
-  defp format_value("<today>"), do: gettext("today")
-  defp format_value(value), do: to_string(value)
 end

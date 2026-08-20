@@ -1132,14 +1132,14 @@ defmodule DranWeb.DocsLive do
           <strong>Create</strong>
           — use <code>dran_create_page</code>
           with the appropriate <code>page_type</code>
-          and <code>meta</code>. Use <code>dran_create_todo</code>
-          for action items.
+          and <code>meta</code>. Use <code>dran_create_note</code>
+          for action items (notes with kanban tracking).
         </li>
         <li>
           <strong>Update</strong>
           — use <code>dran_update_page</code>
-          to refine content. Use <code>dran_update_todo</code>
-          to change a todo's status (merges meta).
+          to refine content. Use <code>dran_update_note</code>
+          to change a note's kanban status (merges meta).
         </li>
         <li>
           <strong>Delete</strong>
@@ -1442,7 +1442,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="dran_update_page"
-          desc="Update any page field. Version auto-increments on body change. Meta is replaced (not merged) — use dran_update_todo for todos."
+          desc="Update any page field. Version auto-increments on body change. Meta is replaced (not merged) — use dran_update_note for kanban notes."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Page slug to update" />
@@ -1474,19 +1474,12 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="dran_create_todo"
-          desc="Create a todo with kanban status and priority, optionally linked to a project, goal, and/or plan (independent links)."
+          name="dran_create_note"
+          desc="Create a note with todo-style kanban tracking (kind todo). Notes with kanban_status appear on the board."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
-          <:param name="title" type="string" required="yes" desc="Todo title" />
-          <:param name="slug" type="string" required="yes" desc="Todo slug" />
-          <:param name="goal_slug" type="string" required="no" desc="Goal this todo belongs to" />
-          <:param
-            name="plan_slug"
-            type="string"
-            required="no"
-            desc="Plan this todo belongs to (independent link, no precedence)"
-          />
+          <:param name="title" type="string" required="yes" desc="Note title" />
+          <:param name="slug" type="string" required="yes" desc="Note slug" />
           <:param
             name="kanban_status"
             type="string"
@@ -1501,33 +1494,15 @@ defmodule DranWeb.DocsLive do
             required="no"
             desc="Who executes this todo (alvaro, hermes, claude-code...)"
           />
-          <:param name="body" type="string" required="no" desc="Todo description (markdown)" />
-          <:param
-            name="owner"
-            type="string"
-            required="no"
-            desc="Owner identity. Derived from API key name — not client-settable. Defaults to 'system'"
-          />
-          <:param
-            name="created_by"
-            type="string"
-            required="no"
-            desc="Who created this todo. Defaults to authenticated identity (API key name or user email)"
-          />
-          <:param
-            name="on_behalf_of"
-            type="string"
-            required="no"
-            desc="Who an agent is acting on behalf of"
-          />
+          <:param name="body" type="string" required="no" desc="Note description (markdown)" />
         </.mcp_tool>
 
         <.mcp_tool
-          name="dran_update_todo"
-          desc="Update a todo's status, priority, due date, assignee, goal, or plan. Merges meta — only pass changed fields."
+          name="dran_update_note"
+          desc="Update a note's kanban fields (status, priority, due date, assignee). Merges meta — only pass changed fields."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
-          <:param name="slug" type="string" required="yes" desc="Todo slug to update" />
+          <:param name="slug" type="string" required="yes" desc="Note slug to update" />
           <:param name="kanban_status" type="string" required="no" desc="New kanban status" />
           <:param name="priority" type="string" required="no" desc="New priority" />
           <:param name="due_date" type="string" required="no" desc="New due date YYYY-MM-DD" />
@@ -1537,21 +1512,9 @@ defmodule DranWeb.DocsLive do
             required="no"
             desc="Reassign todo (alvaro, hermes, claude-code...)"
           />
-          <:param name="goal_slug" type="string" required="no" desc="New goal slug" />
-          <:param name="plan_slug" type="string" required="no" desc="New plan slug" />
           <:param name="title" type="string" required="no" desc="New title" />
           <:param name="body" type="string" required="no" desc="New body (markdown)" />
           <:param name="tags" type="array" required="no" desc="New tags (replaces existing)" />
-          <:param name="project_slug" type="string" required="no" desc="New project slug" />
-          <:param name="owner" type="string" required="no" desc="New owner identity" />
-          <:param name="created_by" type="string" required="no" desc="Override who created this todo" />
-          <:param name="on_behalf_of" type="string" required="no" desc="Set or clear on-behalf-of" />
-          <:param
-            name="updated_by"
-            type="string"
-            required="no"
-            desc="Who is updating (defaults to 'agent')"
-          />
         </.mcp_tool>
 
         <.mcp_tool

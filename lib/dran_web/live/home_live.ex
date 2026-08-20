@@ -28,16 +28,8 @@ defmodule DranWeb.HomeLive do
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
-  # Which link types each page_type can be filtered by (link model:
-  # todo→project/goal/plan, goal→project, plan→project/goal).
-  @type_filter_links %{
-    "todo" => [:project, :goal, :plan],
-    "goal" => [:project],
-    "plan" => [:project, :goal]
-  }
-
-  # Page types excluded from the wiki index — operational or second-citizen.
-  @wiki_hidden_types ~w(todo plan report query)
+  # Page types excluded from the wiki index — second-citizen types.
+  @wiki_hidden_types ~w(query)
 
   # Types hidden from the global 3D graph — same list the panel uses via
   # GraphCache. The wiki graph must match so both views render the same set.
@@ -84,19 +76,7 @@ defmodule DranWeb.HomeLive do
        total_node_count: 0,
        total_edge_count: 0,
        refetch_timer: nil,
-       loading: false,
-       # Todo filters (kanban + type_list :todo)
-       filter_project: "all",
-       filter_goal: "all",
-       filter_plan: "all",
-       filter_project_options: [],
-       filter_goal_options: [],
-       filter_plan_options: [],
-       slug_maps: %{},
-       project_enabled: true,
-       goal_enabled: true,
-       plan_enabled: true,
-       filtered_count: nil
+       loading: false
      )}
   end
 
@@ -167,11 +147,15 @@ defmodule DranWeb.HomeLive do
     case Brain.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
         pages =
-          Brain.list_pages(
-            workspace_id: workspace.id,
-            type: page_type,
-            limit: 500
-          )
+          if page_type == "todo" do
+            Brain.list_todos(workspace_id: workspace.id, limit: 500)
+          else
+            Brain.list_pages(
+              workspace_id: workspace.id,
+              type: page_type,
+              limit: 500
+            )
+          end
 
         # Todos group by kanban status; everything else by first letter (A-Z)
         grouped =
@@ -186,10 +170,6 @@ defmodule DranWeb.HomeLive do
         pinned = Brain.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
-        # Load filter options + enabled flags for any type that supports
-        # link filtering (todo, goal, plan). Mirrors the kanban pattern.
-        {filter_opts, enabled_flags} = load_type_filter_data(workspace, page_type)
-
         socket
         |> assign(
           workspace: workspace,
@@ -201,19 +181,6 @@ defmodule DranWeb.HomeLive do
           pinned_pages: pinned,
           type_index: type_index,
           search_results: nil
-        )
-        |> assign(
-          filter_project: "all",
-          filter_goal: "all",
-          filter_plan: "all",
-          filter_project_options: filter_opts[:project_options] || [],
-          filter_goal_options: filter_opts[:goal_options] || [],
-          filter_plan_options: filter_opts[:plan_options] || [],
-          slug_maps: filter_opts[:slug_maps] || %{},
-          project_enabled: enabled_flags[:project_enabled],
-          goal_enabled: enabled_flags[:goal_enabled],
-          plan_enabled: enabled_flags[:plan_enabled],
-          filtered_count: nil
         )
 
       nil ->
@@ -344,20 +311,12 @@ defmodule DranWeb.HomeLive do
   defp apply_action(socket, :kanban, %{"workspace_slug" => workspace_slug}) do
     case Brain.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        todos =
-          Brain.list_pages(
-            workspace_id: workspace.id,
-            type: "todo",
-            include_body: false,
-            limit: 500
-          )
+        todos = Brain.list_todos(workspace_id: workspace.id, limit: 500)
 
         # Sidebar data
         collections = SmartCollection.list_all(workspace.id)
         pinned = Brain.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
-
-        {filter_opts, enabled_flags} = load_type_filter_data(workspace, "todo")
 
         socket
         |> assign(
@@ -369,19 +328,6 @@ defmodule DranWeb.HomeLive do
           pinned_pages: pinned,
           type_index: type_index,
           search_results: nil
-        )
-        |> assign(
-          filter_project: "all",
-          filter_goal: "all",
-          filter_plan: "all",
-          filter_project_options: filter_opts[:project_options] || [],
-          filter_goal_options: filter_opts[:goal_options] || [],
-          filter_plan_options: filter_opts[:plan_options] || [],
-          slug_maps: filter_opts[:slug_maps] || %{},
-          project_enabled: enabled_flags[:project_enabled],
-          goal_enabled: enabled_flags[:goal_enabled],
-          plan_enabled: enabled_flags[:plan_enabled],
-          filtered_count: nil
         )
 
       nil ->
@@ -508,17 +454,7 @@ defmodule DranWeb.HomeLive do
               workspace={@workspace}
               page_type={@page_type}
               grouped_pages={@grouped_pages}
-              filter_project={@filter_project}
-              filter_goal={@filter_goal}
-              filter_plan={@filter_plan}
-              filter_project_options={@filter_project_options}
-              filter_goal_options={@filter_goal_options}
-              filter_plan_options={@filter_plan_options}
-              project_enabled={@project_enabled}
-              goal_enabled={@goal_enabled}
-              plan_enabled={@plan_enabled}
               pages={@pages}
-              slug_maps={@slug_maps}
             />
           <% :page_show -> %>
             <.page_show_view
@@ -553,17 +489,6 @@ defmodule DranWeb.HomeLive do
               workspace={@workspace}
               todos={@todos}
               kanban_columns={@kanban_columns}
-              filter_project={@filter_project}
-              filter_goal={@filter_goal}
-              filter_plan={@filter_plan}
-              filter_project_options={@filter_project_options}
-              filter_goal_options={@filter_goal_options}
-              filter_plan_options={@filter_plan_options}
-              project_enabled={@project_enabled}
-              goal_enabled={@goal_enabled}
-              plan_enabled={@plan_enabled}
-              filtered_count={@filtered_count}
-              slug_maps={@slug_maps}
             />
           <% :letter -> %>
             <.letter_view workspace={@workspace} letter={@letter} pages={@pages} alphabet={@alphabet} />
@@ -766,17 +691,7 @@ defmodule DranWeb.HomeLive do
   attr :workspace, :map, required: true
   attr :page_type, :string, required: true
   attr :grouped_pages, :list, default: []
-  attr :filter_project, :string, default: "all"
-  attr :filter_goal, :string, default: "all"
-  attr :filter_plan, :string, default: "all"
-  attr :filter_project_options, :list, default: []
-  attr :filter_goal_options, :list, default: []
-  attr :filter_plan_options, :list, default: []
-  attr :project_enabled, :boolean, default: true
-  attr :goal_enabled, :boolean, default: true
-  attr :plan_enabled, :boolean, default: true
   attr :pages, :list, default: []
-  attr :slug_maps, :map, default: %{}
 
   defp type_list_view(assigns) do
     ~H"""
@@ -792,78 +707,12 @@ defmodule DranWeb.HomeLive do
         <h1 class="text-2xl font-bold">{PageTypes.plural(@page_type)}</h1>
       </div>
 
-      <%!-- Filtros combinables para tipos que soportan links (todo, goal, plan) --%>
-      <div
-        :if={
-          @page_type in ["todo", "goal", "plan"] and
-            (@project_enabled or @goal_enabled or @plan_enabled)
-        }
-        class="flex flex-wrap gap-3 mb-6 p-3 rounded-lg bg-base-200/50 border border-base-300"
-      >
-        <.wiki_filter_select
-          :if={@project_enabled and @filter_project_options != []}
-          label={gettext("Project")}
-          id={"wiki-#{@page_type}-filter-project"}
-          value={@filter_project}
-          options={@filter_project_options}
-          phx_change="filter_project"
-        />
-        <.wiki_filter_select
-          :if={@goal_enabled and @filter_goal_options != []}
-          label={gettext("Goal")}
-          id={"wiki-#{@page_type}-filter-goal"}
-          value={@filter_goal}
-          options={@filter_goal_options}
-          phx_change="filter_goal"
-        />
-        <.wiki_filter_select
-          :if={@plan_enabled and @filter_plan_options != []}
-          label={gettext("Plan")}
-          id={"wiki-#{@page_type}-filter-plan"}
-          value={@filter_plan}
-          options={@filter_plan_options}
-          phx_change="filter_plan"
-        />
-        <button
-          :if={
-            @page_type in ["todo", "goal", "plan"] and
-              ((@project_enabled and @filter_project != "all") or
-                 (@goal_enabled and @filter_goal != "all") or
-                 (@plan_enabled and @filter_plan != "all"))
-          }
-          phx-click="clear_filters"
-          class="btn btn-ghost btn-sm"
-        >
-          <.icon name="hero-x-mark" class="size-4" /> {gettext("Clear")}
-        </button>
-        <div
-          :if={@page_type in ["todo", "goal", "plan"]}
-          class="ml-auto text-sm text-base-content/60 self-center"
-        >
-          {wiki_filtered_count(@pages, @page_type, @filter_project, @filter_goal, @filter_plan)} {wiki_type_label(
-            @page_type
-          )}
-        </div>
-      </div>
-
       <div :if={@grouped_pages == []} class="text-center py-12">
         <.icon name={PageTypes.icon(@page_type)} class="size-10 text-base-content/30 mx-auto mb-3" />
         <p class="text-base-content/50">{gettext("No pages of this type.")}</p>
       </div>
 
-      <div
-        :for={
-          {group_key, pages} <-
-            wiki_filter_grouped(
-              @grouped_pages,
-              @page_type,
-              @filter_project,
-              @filter_goal,
-              @filter_plan
-            )
-        }
-        class="mb-6"
-      >
+      <div :for={{group_key, pages} <- @grouped_pages} class="mb-6">
         <h2 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-2 border-b border-base-300 pb-1 flex items-center gap-2">
           <span :if={@page_type == "todo"} class={kanban_dot(group_key)}></span>
           <span>
@@ -892,31 +741,6 @@ defmodule DranWeb.HomeLive do
               >
                 <.icon name="hero-calendar-days" class="size-3.5" />
                 {kanban_format_due(kanban_due(page))}
-              </span>
-            </div>
-            <%!-- Badges de vínculos (project/goal/plan) — todo, goal, plan --%>
-            <div
-              :if={
-                @page_type in ["todo", "goal", "plan"] and
-                  wiki_page_badges(page, @page_type, @workspace, @slug_maps) != []
-              }
-              class="flex flex-wrap items-center gap-1.5 mt-1"
-            >
-              <span
-                :for={badge <- wiki_page_badges(page, @page_type, @workspace, @slug_maps)}
-                class={"px-1.5 py-0.5 text-[11px] rounded " <> wiki_badge_class(badge.type)}
-                title={badge.label}
-              >
-                {badge.label}
-              </span>
-              <span
-                :if={
-                  @page_type in ["todo", "goal", "plan"] and
-                    wiki_extra_badge_count(page, @page_type, @workspace, @slug_maps) > 0
-                }
-                class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/60"
-              >
-                +{wiki_extra_badge_count(page, @page_type, @workspace, @slug_maps)}
               </span>
             </div>
             <p :if={page.summary} class="text-sm text-base-content/50 line-clamp-1 mt-0.5">
@@ -1203,17 +1027,6 @@ defmodule DranWeb.HomeLive do
   attr :workspace, :map, required: true
   attr :todos, :list, default: []
   attr :kanban_columns, :list, default: []
-  attr :filter_project, :string, default: "all"
-  attr :filter_goal, :string, default: "all"
-  attr :filter_plan, :string, default: "all"
-  attr :filter_project_options, :list, default: []
-  attr :filter_goal_options, :list, default: []
-  attr :filter_plan_options, :list, default: []
-  attr :project_enabled, :boolean, default: true
-  attr :goal_enabled, :boolean, default: true
-  attr :plan_enabled, :boolean, default: true
-  attr :filtered_count, :integer, default: nil
-  attr :slug_maps, :map, default: %{}
 
   defp kanban_view(assigns) do
     ~H"""
@@ -1231,53 +1044,6 @@ defmodule DranWeb.HomeLive do
         {gettext("Kanban")}
       </h1>
 
-      <%!-- Filtros combinables — solo se muestran si hay opciones reales --%>
-      <div
-        :if={@project_enabled or @goal_enabled or @plan_enabled}
-        class="flex flex-wrap gap-3 mb-4 p-3 rounded-lg bg-base-200/50 border border-base-300"
-      >
-        <.wiki_filter_select
-          :if={@project_enabled and @filter_project_options != []}
-          label={gettext("Project")}
-          id="wiki-filter-project"
-          value={@filter_project}
-          options={@filter_project_options}
-          phx_change="filter_project"
-        />
-        <.wiki_filter_select
-          :if={@goal_enabled and @filter_goal_options != []}
-          label={gettext("Goal")}
-          id="wiki-filter-goal"
-          value={@filter_goal}
-          options={@filter_goal_options}
-          phx_change="filter_goal"
-        />
-        <.wiki_filter_select
-          :if={@plan_enabled and @filter_plan_options != []}
-          label={gettext("Plan")}
-          id="wiki-filter-plan"
-          value={@filter_plan}
-          options={@filter_plan_options}
-          phx_change="filter_plan"
-        />
-        <button
-          :if={
-            (@project_enabled and @filter_project != "all") or
-              (@goal_enabled and @filter_goal != "all") or
-              (@plan_enabled and @filter_plan != "all")
-          }
-          phx-click="clear_filters"
-          class="btn btn-ghost btn-sm"
-        >
-          <.icon name="hero-x-mark" class="size-4" /> {gettext("Clear")}
-        </button>
-        <div class="ml-auto text-sm text-base-content/60 self-center">
-          {wiki_filtered_count(@todos, "todo", @filter_project, @filter_goal, @filter_plan)} {gettext(
-            "todos"
-          )}
-        </div>
-      </div>
-
       <div class="flex gap-4 overflow-x-auto pb-4">
         <div
           :for={{status, label, badge_class} <- @kanban_columns}
@@ -1289,45 +1055,16 @@ defmodule DranWeb.HomeLive do
               <span class="text-sm font-semibold">{label}</span>
             </div>
             <span class={kanban_badge(badge_class)}>
-              {kanban_count(
-                wiki_filter_todos(@todos, @filter_project, @filter_goal, @filter_plan),
-                status
-              )}
+              {kanban_count(@todos, status)}
             </span>
           </div>
           <div class="p-2 space-y-2">
             <a
-              :for={
-                todo <-
-                  kanban_items(
-                    wiki_filter_todos(@todos, @filter_project, @filter_goal, @filter_plan),
-                    status
-                  )
-              }
+              :for={todo <- kanban_items(@todos, status)}
               href={~p"/#{@workspace.slug}/type/todo/#{todo.slug}"}
               class="block p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition"
             >
               <div class="font-medium text-sm break-words">{todo.title}</div>
-
-              <%!-- Badges de vínculos (project/goal/plan) — max 2 visibles --%>
-              <div
-                :if={wiki_page_badges(todo, "todo", @workspace, @slug_maps) != []}
-                class="flex flex-wrap items-center gap-1.5 mt-1.5"
-              >
-                <span
-                  :for={badge <- wiki_page_badges(todo, "todo", @workspace, @slug_maps)}
-                  class={"px-1.5 py-0.5 text-[11px] rounded " <> wiki_badge_class(badge.type)}
-                  title={badge.label}
-                >
-                  {badge.label}
-                </span>
-                <span
-                  :if={wiki_extra_badge_count(todo, "todo", @workspace, @slug_maps) > 0}
-                  class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/60"
-                >
-                  +{wiki_extra_badge_count(todo, "todo", @workspace, @slug_maps)}
-                </span>
-              </div>
 
               <div :if={kanban_due(todo)} class={kanban_due_class(kanban_overdue?(todo))}>
                 <.icon name="hero-calendar-days" class="size-3.5" />
@@ -1335,12 +1072,7 @@ defmodule DranWeb.HomeLive do
               </div>
             </a>
             <p
-              :if={
-                kanban_items(
-                  wiki_filter_todos(@todos, @filter_project, @filter_goal, @filter_plan),
-                  status
-                ) == []
-              }
+              :if={kanban_items(@todos, status) == []}
               class="text-xs text-base-content/30 text-center py-4"
             >
               {gettext("Empty")}
@@ -1353,7 +1085,7 @@ defmodule DranWeb.HomeLive do
   end
 
   defp kanban_status(page) do
-    case (page.meta || %{})["kanban_status"] do
+    case page.kanban_status do
       s when is_binary(s) and s != "" -> s
       _ -> "backlog"
     end
@@ -1496,22 +1228,6 @@ defmodule DranWeb.HomeLive do
 
   # ── Filter event handlers (kanban + todo type_list) ──
 
-  def handle_event("filter_project", %{"value" => value}, socket) do
-    {:noreply, assign(socket, filter_project: value)}
-  end
-
-  def handle_event("filter_goal", %{"value" => value}, socket) do
-    {:noreply, assign(socket, filter_goal: value)}
-  end
-
-  def handle_event("filter_plan", %{"value" => value}, socket) do
-    {:noreply, assign(socket, filter_plan: value)}
-  end
-
-  def handle_event("clear_filters", _params, socket) do
-    {:noreply, assign(socket, filter_project: "all", filter_goal: "all", filter_plan: "all")}
-  end
-
   @impl true
   def handle_event("node_click", %{"slug" => slug, "type" => type}, socket) do
     workspace = socket.assigns[:workspace]
@@ -1574,226 +1290,11 @@ defmodule DranWeb.HomeLive do
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
-  # ── Filter helpers ──
-
-  # Loads filter options + enabled flags for a page_type based on its
-  # supported link types (@type_filter_links). For todo→project/goal/plan,
-  # goal→project, plan→project/goal. Types not in the map get empty filters.
-  defp load_type_filter_data(workspace, page_type) do
-    link_types = Map.get(@type_filter_links, page_type, [])
-    disabled = workspace.disabled_page_types || []
-
-    # For each link type, load pages if the type is enabled (not disabled)
-    pages_by_type =
-      Map.new(link_types, fn type ->
-        type_str = Atom.to_string(type)
-
-        if type_str not in disabled do
-          {type, Brain.list_pages(workspace_id: workspace.id, type: type_str, limit: 200)}
-        else
-          {type, []}
-        end
-      end)
-
-    # Build a set of enabled link type strings for quick checks
-    enabled_link_strs =
-      link_types
-      |> Enum.map(&Atom.to_string/1)
-      |> Enum.reject(&(&1 in disabled))
-      |> MapSet.new()
-
-    filter_opts = %{
-      project_options:
-        if("project" in enabled_link_strs,
-          do: build_filter_options(pages_by_type[:project]),
-          else: []
-        ),
-      goal_options:
-        if("goal" in enabled_link_strs,
-          do: build_filter_options(pages_by_type[:goal]),
-          else: []
-        ),
-      plan_options:
-        if("plan" in enabled_link_strs,
-          do: build_filter_options(pages_by_type[:plan]),
-          else: []
-        ),
-      slug_maps: %{
-        "project" => Map.new(pages_by_type[:project] || [], &{&1.slug, &1.title}),
-        "goal" => Map.new(pages_by_type[:goal] || [], &{&1.slug, &1.title}),
-        "plan" => Map.new(pages_by_type[:plan] || [], &{&1.slug, &1.title})
-      }
-    }
-
-    enabled_flags = %{
-      project_enabled: "project" in enabled_link_strs,
-      goal_enabled: "goal" in enabled_link_strs,
-      plan_enabled: "plan" in enabled_link_strs
-    }
-
-    {filter_opts, enabled_flags}
-  end
-
-  defp build_filter_options(pages) do
-    [{gettext("All"), "all"}, {gettext("None (orphan)"), "none"}] ++
-      Enum.map(pages, fn p -> {p.title, p.slug} end)
-  end
-
-  # Filters a list of todo pages by project/goal/plan slugs.
-  # "all" = no filter; "none" = todos WITHOUT that link (orphan); anything else = exact slug match.
-  defp filter_by_slug(todos, _type, "all"), do: todos
-
-  defp filter_by_slug(todos, type, "none") do
-    key = "#{type}_slug"
-
-    Enum.reject(todos, fn t ->
-      v = wiki_meta_get(t.meta, key)
-      v != nil and v != ""
-    end)
-  end
-
-  defp filter_by_slug(todos, type, slug) do
-    key = "#{type}_slug"
-    Enum.filter(todos, fn t -> wiki_meta_get(t.meta, key) == slug end)
-  end
-
-  defp wiki_meta_get(meta, key) when is_map(meta), do: Map.get(meta, key)
-  defp wiki_meta_get(nil, _key), do: nil
-
-  # ── Badge helpers (project/goal/plan labels for todo, goal, plan) ──
-
-  @wiki_badge_styles %{
-    "project" => "bg-blue-100 text-blue-700",
-    "goal" => "bg-green-100 text-green-700",
-    "plan" => "bg-purple-100 text-purple-700"
-  }
-
-  # Build the list of badges for a page, resolving slug→title via slug_maps.
-  # Uses @type_filter_links to know which link types apply to this page_type.
-  # Filters by disabled page types. Max 2 visible, rest in +N.
-  defp wiki_page_badges(page, page_type, workspace, slug_maps) do
-    page
-    |> wiki_all_badges(page_type, workspace, slug_maps)
-    |> Enum.take(2)
-  end
-
-  defp wiki_all_badges(page, page_type, workspace, slug_maps) do
-    disabled = (workspace && workspace.disabled_page_types) || []
-    link_types = Map.get(@type_filter_links, page_type, [])
-
-    Enum.reduce(link_types, [], fn type, acc ->
-      type_str = Atom.to_string(type)
-      slug = wiki_meta_get(page.meta, "#{type_str}_slug")
-      wiki_maybe_add_badge(acc, type_str, slug, disabled, slug_maps)
-    end)
-  end
-
-  defp wiki_maybe_add_badge(list, _type, nil, _disabled, _slug_maps), do: list
-  defp wiki_maybe_add_badge(list, _type, "", _disabled, _slug_maps), do: list
-
-  defp wiki_maybe_add_badge(list, type, slug, disabled, slug_maps) do
-    if type in disabled do
-      list
-    else
-      type_map = Map.get(slug_maps, type, %{})
-      title = Map.get(type_map, slug, slug)
-      [%{type: type, slug: slug, label: title} | list]
-    end
-  end
-
-  defp wiki_extra_badge_count(page, page_type, workspace, slug_maps) do
-    max(0, length(wiki_all_badges(page, page_type, workspace, slug_maps)) - 2)
-  end
-
-  defp wiki_badge_class(type),
-    do: Map.get(@wiki_badge_styles, type, "bg-base-300 text-base-content/60")
-
-  # Plural label for the filtered count, compile-time gettext calls.
-  defp wiki_type_label("todo"), do: gettext("todos")
-  defp wiki_type_label("goal"), do: gettext("goals")
-  defp wiki_type_label("plan"), do: gettext("plans")
-  defp wiki_type_label(other), do: PageTypes.plural(other)
-
-  # Pure filter function used in the template (no socket state needed).
-  # Filters a list of pages by the active project/goal/plan slug filters,
-  # but only for link types that apply to the given page_type.
-  defp wiki_filter_pages(pages, page_type, filter_project, filter_goal, filter_plan) do
-    link_types = Map.get(@type_filter_links, page_type, [])
-
-    pages
-    |> maybe_filter_by_slug(:project, filter_project, link_types)
-    |> maybe_filter_by_slug(:goal, filter_goal, link_types)
-    |> maybe_filter_by_slug(:plan, filter_plan, link_types)
-  end
-
-  # Only applies the slug filter if the link type is relevant for this page_type.
-  defp maybe_filter_by_slug(pages, type, filter, link_types) do
-    if type in link_types do
-      filter_by_slug(pages, type, filter)
-    else
-      pages
-    end
-  end
-
-  # Kanban-specific filter (todos always support all 3 link types).
-  defp wiki_filter_todos(todos, filter_project, filter_goal, filter_plan) do
-    todos
-    |> filter_by_slug(:project, filter_project)
-    |> filter_by_slug(:goal, filter_goal)
-    |> filter_by_slug(:plan, filter_plan)
-  end
-
-  defp wiki_filtered_count(pages, page_type, filter_project, filter_goal, filter_plan) do
-    length(wiki_filter_pages(pages, page_type, filter_project, filter_goal, filter_plan))
-  end
-
-  # For type_list_view: when page_type supports links (todo, goal, plan),
-  # filter grouped_pages by the active filters. For other types, return unchanged.
-  defp wiki_filter_grouped(grouped_pages, page_type, filter_project, filter_goal, filter_plan)
-       when page_type in ["todo", "goal", "plan"] do
-    grouped_pages
-    |> Enum.map(fn {group_key, pages} ->
-      filtered = wiki_filter_pages(pages, page_type, filter_project, filter_goal, filter_plan)
-      {group_key, filtered}
-    end)
-    |> Enum.reject(fn {_group_key, pages} -> pages == [] end)
-  end
-
-  defp wiki_filter_grouped(grouped_pages, _page_type, _fp, _fg, _fpl), do: grouped_pages
-
-  # Filter dropdown component (read-only wiki, phx-change updates assigns)
-  attr :label, :string, required: true
-  attr :id, :string, required: true
-  attr :value, :string, required: true
-  attr :options, :list, required: true
-  attr :phx_change, :string, required: true
-
-  defp wiki_filter_select(assigns) do
-    ~H"""
-    <form id={"#{@id}-form"} phx-change={@phx_change} class="flex flex-col">
-      <label for={@id} class="text-xs font-medium text-base-content/60 mb-1">{@label}</label>
-      <select
-        id={@id}
-        name="value"
-        class="px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100"
-      >
-        <%= for {label, value} <- @options do %>
-          <option value={value} selected={value == @value}>{label}</option>
-        <% end %>
-      </select>
-    </form>
-    """
-  end
-
   # ── Helpers ─────────────────────────────────────────────────────────────────
-
-  # Types shown as featured links (Proyectos, Objetivos) above the type_index
-  # in the sidebar — excluded from the generic list to avoid duplication.
-  @featured_types ~w(project goal)
 
   defp build_type_index(workspace) do
     disabled = workspace.disabled_page_types || []
-    excluded = @wiki_hidden_types ++ disabled ++ @featured_types
+    excluded = @wiki_hidden_types ++ disabled
 
     BrainPageTypes.types()
     |> Enum.reject(&(&1 in excluded))

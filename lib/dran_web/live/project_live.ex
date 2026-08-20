@@ -1,29 +1,18 @@
 defmodule DranWeb.ProjectLive do
-  @moduledoc """
-  LiveView for project pages: index list + detail view with sub-page tabs.
-
-  Tabs: Overview (project dashboard — status, stat cards, linked items),
-  Goals, Plans, Todos. A separate Graph button navigates to the full graph view.
-  """
+  @moduledoc "LiveView for projects: index list + detail view with create/edit."
 
   use DranWeb, :live_view
-  on_mount {DranWeb.DisabledTypes, "project"}
 
   alias Dran.Brain
-  alias DranWeb.PageEdit
-  alias DranWeb.PageTypes
-  alias DranWeb.ListPagination
+  alias Dran.Brain.Project
   alias DranWeb.Plugs.Auth
 
-  @page_type "project"
+  @statuses ~w(draft active on_hold done)
+  @priorities ~w(low medium high urgent)
 
-  alias DranWeb.DisabledTypes
-
-  @project_tabs [
-    {"goals", gettext("Objetivos")},
-    {"plans", gettext("Planes")},
-    {"todos", gettext("Tareas")}
-  ]
+  # ──────────────────────────────────────────────────────────────────────────
+  # Render
+  # ──────────────────────────────────────────────────────────────────────────
 
   @impl true
   def render(assigns) do
@@ -36,213 +25,256 @@ defmodule DranWeb.ProjectLive do
       workspaces={@workspaces}
       active_nav={@active_nav}
     >
-      <div :if={@live_action == :show}>
-        <.page_detail
-          page={@page}
-          relations={@relations}
-          versions={@versions}
-          compare_version={@compare_version}
-          logs={@logs}
-          workspace_slug={@workspace_slug}
-          rendered_body={@rendered_body}
-          content_hidden={@active_tab != "overview"}
-          active_tab={@active_tab}
-          editing={@editing}
-        >
-          <:actions>
-            <.link navigate={~p"/panel/projects"} class="btn btn-primary btn-sm">
-              <.icon name="hero-arrow-left" class="size-4" /> Back
-            </.link>
-            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
-              <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
-            </.link>
-            <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
-              <.icon name="hero-eye" class="size-4" /> {gettext("View")}
-            </.link>
-            <.link
-              :if={not @editing}
-              patch={PageTypes.page_show_path(@page) <> "?edit=true"}
-              class="btn btn-ghost btn-sm"
-            >
-              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
-            </.link>
-          </:actions>
-
-          <:attributes>
-            <.page_attributes
-              form={@form}
-              page={@page}
-              page_type={@page_type}
-              workspace_id={@workspace_id}
-              editor_id="project-editor"
-            />
-          </:attributes>
-
-          <:extra_tabs>
-            <button
-              :for={{tab, label} <- @project_tabs}
-              phx-click="switch_tab"
-              phx-value-tab={tab}
-              class={[
-                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
-                @active_tab == tab && "border-primary text-primary",
-                @active_tab != tab &&
-                  "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
-              ]}
-            >
-              {label}
-            </button>
-          </:extra_tabs>
-
-          <:insights>
-            <div class="space-y-4">
-              <div :if={@community_summary} class="surface-2 rounded-lg p-4">
-                <h3 class="text-sm font-semibold mb-2">{gettext("Community Context")}</h3>
-                <p class="text-sm text-base-content/70">{@community_summary.summary}</p>
-                <p class="text-xs text-base-content/40 mt-1">
-                  {gettext("Community")} #{@community_summary.community_id} · {@community_summary.page_count} {gettext(
-                    "pages"
-                  )}
-                </p>
-              </div>
-              <div
-                :if={!@community_summary}
-                class="text-sm text-base-content/40 text-center py-8"
-              >
-                {gettext("No community data yet. Run community summaries first.")}
-              </div>
-            </div>
-          </:insights>
-
-          <:tabs :if={@editing}>
-            <%!-- Overview: dashboard del proyecto — status, stats, relacionados --%>
-            <div :if={@active_tab == "overview"}>
-              <.page_edit_form
-                form={@form}
-                page={@page}
-                page_type={@page_type}
-                workspace_id={@workspace_id}
-                save_status={@save_status}
-                editor_id="project-editor"
-              />
-            </div>
-          </:tabs>
-
-          <:extra_content>
-            <%!-- Todos: lista plana de todos los todos del project --%>
-            <div :if={@active_tab == "todos"}>
-              <div class="text-sm text-base-content/60 mb-3">
-                {length(@project_todos)} todos linked
-              </div>
-              <div :for={todo <- @project_todos} class="p-3 rounded-lg border border-base-300 mb-2">
-                <.link
-                  navigate={PageTypes.page_show_path(todo)}
-                  class="font-medium text-primary hover:underline"
+      <div :if={@live_action == :show} class="p-6 overflow-y-auto w-full">
+        <div class="max-w-4xl mx-auto space-y-6">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-2 text-caption">
+                <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                  <.icon name="hero-rocket-launch" class="size-3" />
+                  {gettext("Project")}
+                </span>
+                <code class="font-mono text-caption text-base-content/60">{@project.slug}</code>
+                <span
+                  :if={@project.status}
+                  class={"px-2 py-0.5 text-xs rounded-full " <> status_class(@project)}
                 >
-                  {todo.title}
-                </.link>
-                <div :if={todo.summary} class="text-xs text-base-content/60 mt-1">
-                  {todo.summary}
-                </div>
+                  {String.capitalize(@project.status)}
+                </span>
               </div>
-              <p :if={@project_todos == []} class="text-sm text-base-content/40">
-                No todos linked to this project.
+              <h1 class="text-title break-words">{@project.title}</h1>
+              <p :if={@project.description} class="text-sm text-base-content/60 mt-1">
+                {@project.description}
               </p>
             </div>
+            <div class="flex gap-2 shrink-0">
+              <.link navigate={~p"/panel/projects"} class="btn btn-ghost btn-sm">
+                <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
+              </.link>
+              <button :if={not @editing} phx-click="toggle_edit" class="btn btn-ghost btn-sm">
+                <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+              </button>
+              <button :if={@editing} phx-click="toggle_edit" class="btn btn-ghost btn-sm">
+                <.icon name="hero-eye" class="size-4" /> {gettext("View")}
+              </button>
+            </div>
+          </div>
 
-            <%!-- Goals: lista con health badge --%>
-            <div :if={@active_tab == "goals"}>
-              <div :for={goal <- @project_goals} class="p-3 rounded-lg border border-base-300 mb-2">
-                <div class="flex items-center justify-between">
-                  <.link
-                    navigate={PageTypes.page_show_path(goal)}
-                    class="font-medium text-primary hover:underline"
-                  >
-                    {goal.title}
-                  </.link>
-                  <span class={"px-2 py-0.5 text-xs rounded " <> health_class(goal)}>
-                    {String.capitalize(meta_get(goal.meta, "health") || "—")}
-                  </span>
-                </div>
-                <div :if={goal.summary} class="text-xs text-base-content/60 mt-1">
-                  {goal.summary}
-                </div>
-              </div>
-              <p :if={@project_goals == []} class="text-sm text-base-content/40">
-                No goals linked to this project.
-              </p>
+          <%!-- Metadata row --%>
+          <div class="flex flex-wrap gap-3">
+            <div
+              :if={@project.priority}
+              class="px-3 py-1.5 text-sm rounded-lg bg-base-200 border border-base-300"
+            >
+              <span class="text-base-content/50">{gettext("Priority")}:</span>
+              <span class="font-medium">{String.capitalize(@project.priority)}</span>
             </div>
+            <div
+              :if={@project.health}
+              class={"px-3 py-1.5 text-sm rounded-lg border " <> status_class(@project)}
+            >
+              <span class="text-base-content/50">{gettext("Health")}:</span>
+              <span class="font-medium">{String.capitalize(@project.health)}</span>
+            </div>
+            <div
+              :if={@project.start_date}
+              class="px-3 py-1.5 text-sm rounded-lg bg-base-200 border border-base-300"
+            >
+              <span class="text-base-content/50">{gettext("Start")}:</span>
+              <span class="font-medium">{@project.start_date}</span>
+            </div>
+            <div
+              :if={@project.target_date}
+              class="px-3 py-1.5 text-sm rounded-lg bg-base-200 border border-base-300"
+            >
+              <span class="text-base-content/50">{gettext("Target")}:</span>
+              <span class="font-medium">{@project.target_date}</span>
+            </div>
+            <div
+              :if={@project.goal_id}
+              class="px-3 py-1.5 text-sm rounded-lg bg-base-200 border border-base-300"
+            >
+              <span class="text-base-content/50">{gettext("Goal")}:</span>
+              <span class="font-medium">{@linked_goal_title}</span>
+            </div>
+          </div>
 
-            <%!-- Plans: lista con status + horizon + due_date --%>
-            <div :if={@active_tab == "plans"}>
-              <div :for={plan <- @project_plans} class="p-3 rounded-lg border border-base-300 mb-2">
-                <div class="flex items-center justify-between">
-                  <.link
-                    navigate={PageTypes.page_show_path(plan)}
-                    class="font-medium text-primary hover:underline"
-                  >
-                    {plan.title}
-                  </.link>
-                  <span class="px-2 py-0.5 text-xs rounded bg-base-300 text-base-content/70">
-                    {String.capitalize(meta_get(plan.meta, "status") || "draft")}
-                  </span>
-                </div>
-                <div class="text-xs text-base-content/60 mt-1 flex gap-3">
-                  <span :if={meta_get(plan.meta, "horizon")}>
-                    {String.capitalize(meta_get(plan.meta, "horizon"))}
-                  </span>
-                  <span :if={meta_get(plan.meta, "period")}>
-                    {meta_get(plan.meta, "period")}
-                  </span>
-                  <span :if={meta_get(plan.meta, "due_date")}>
-                    Due: {meta_get(plan.meta, "due_date")}
-                  </span>
-                </div>
+          <%!-- Edit form or body --%>
+          <div :if={@editing} class="surface-2 rounded-xl p-6">
+            <.form
+              for={@form}
+              id="project-edit-form"
+              phx-change="validate"
+              phx-submit="save"
+              class="space-y-4"
+            >
+              <.input field={@form[:title]} type="text" label={gettext("Title")} />
+              <.input field={@form[:slug]} type="text" label={gettext("Slug")} />
+              <.input
+                field={@form[:description]}
+                type="textarea"
+                label={gettext("Description")}
+                rows={2}
+              />
+
+              <div class="grid grid-cols-2 gap-4">
+                <.input
+                  field={@form[:status]}
+                  type="select"
+                  label={gettext("Status")}
+                  options={Enum.map(@statuses, &{String.capitalize(&1), &1})}
+                />
+                <.input
+                  field={@form[:priority]}
+                  type="select"
+                  label={gettext("Priority")}
+                  options={Enum.map(@priorities, &{String.capitalize(&1), &1})}
+                />
+                <.input
+                  field={@form[:health]}
+                  type="select"
+                  label={gettext("Health")}
+                  options={[{"—", ""}, {"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]}
+                />
+                <.input
+                  field={@form[:goal_id]}
+                  type="select"
+                  label={gettext("Goal")}
+                  options={@goal_options}
+                />
+                <.input field={@form[:start_date]} type="date" label={gettext("Start Date")} />
+                <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
               </div>
-              <p :if={@project_plans == []} class="text-sm text-base-content/40">
-                No plans linked to this project.
-              </p>
-            </div>
-          </:extra_content>
-        </.page_detail>
+
+              <div>
+                <span class="label mb-1 block text-sm font-medium text-base-content/70">{gettext(
+                  "Content"
+                )}</span>
+                <textarea
+                  name="project[body]"
+                  rows={8}
+                  class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                >{@project.body}</textarea>
+              </div>
+
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" phx-click="toggle_edit" class="btn btn-ghost btn-sm">{gettext(
+                  "Cancel"
+                )}</button>
+                <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
+              </div>
+            </.form>
+          </div>
+
+          <div
+            :if={not @editing and @project.body != nil and @project.body != ""}
+            class="prose prose-base dark:prose-invert"
+          >
+            {render_markdown(@project.body, [])}
+          </div>
+        </div>
       </div>
 
-      <div :if={@live_action != :show}>
-        <.page_list
-          pages={Enum.take(@pages, @visible_count)}
-          archived_pages={
-            if @show_archived, do: Enum.take(@archived_pages, @archived_visible_count), else: []
-          }
-          archived_filter={@archived_filter}
-          page_type={@page_type}
-          workspace_slug={@workspace_slug}
-          show_archived={@show_archived}
-          total_count={length(@pages)}
-          total_archived={length(@archived_pages)}
-        />
+      <div :if={@live_action == :new} class="p-6 overflow-y-auto w-full max-w-2xl mx-auto">
+        <div class="mb-6">
+          <h1 class="text-title">{gettext("New Project")}</h1>
+          <p class="text-caption mt-1">{gettext("Create a new project to group goals and work.")}</p>
+        </div>
+
+        <.form for={@form} id="project-new-form" phx-submit="create" class="space-y-4">
+          <.input
+            field={@form[:title]}
+            type="text"
+            label={gettext("Title")}
+            placeholder={gettext("Enter a title…")}
+            required
+          />
+          <.input field={@form[:description]} type="textarea" label={gettext("Description")} rows={2} />
+          <.input
+            field={@form[:status]}
+            type="select"
+            label={gettext("Status")}
+            options={Enum.map(@statuses, &{String.capitalize(&1), &1})}
+          />
+          <.input
+            field={@form[:priority]}
+            type="select"
+            label={gettext("Priority")}
+            options={Enum.map(@priorities, &{String.capitalize(&1), &1})}
+          />
+          <.input
+            field={@form[:goal_id]}
+            type="select"
+            label={gettext("Goal")}
+            options={@goal_options}
+          />
+          <.input field={@form[:start_date]} type="date" label={gettext("Start Date")} />
+          <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
+
+          <div class="flex justify-end gap-2 pt-2">
+            <.link navigate={~p"/panel/projects"} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm"
+              phx-disable-with={gettext("Creating…")}
+            >
+              <.icon name="hero-plus" class="w-4 h-4" /> {gettext("Create Project")}
+            </button>
+          </div>
+        </.form>
+      </div>
+
+      <div :if={@live_action == :index} class="p-6 overflow-y-auto w-full">
+        <div class="flex items-center justify-between mb-4">
+          <h1 class="text-title">{gettext("Projects")}</h1>
+          <.link navigate={~p"/panel/projects/new"} class="btn btn-primary btn-sm">
+            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Project")}
+          </.link>
+        </div>
+
+        <div :if={@projects == []} class="text-center py-12">
+          <div class="text-base-content/40">
+            <.icon name="hero-rocket-launch" class="size-12 mx-auto mb-3" />
+            <p class="text-sm">{gettext("No projects yet.")}</p>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <.link
+            :for={project <- @projects}
+            navigate={~p"/panel/projects/#{project.slug}"}
+            class="flex items-center gap-3 p-3 rounded-xl border border-base-300 hover:bg-base-200 transition cursor-pointer"
+          >
+            <.icon name="hero-rocket-launch" class="size-5 text-blue-500 shrink-0" />
+            <div class="min-w-0 flex-1">
+              <div class="font-medium text-sm truncate">{project.title}</div>
+              <div :if={project.description} class="text-xs text-base-content/60 mt-0.5 truncate">
+                {project.description}
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span
+                :if={project.status}
+                class={"px-2 py-0.5 text-xs rounded-full " <> status_class(project)}
+              >
+                {String.capitalize(project.status)}
+              </span>
+              <span :if={project.target_date} class="text-xs text-base-content/50">{project.target_date}</span>
+            </div>
+          </.link>
+        </div>
       </div>
     </Layouts.app>
     """
   end
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # Lifecycle
+  # ──────────────────────────────────────────────────────────────────────────
+
   @impl true
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
-
-    socket =
-      if context do
-        allow_upload(
-          socket,
-          :file,
-          accept:
-            ~w(image/* video/* audio/* application/pdf text/plain text/markdown text/csv text/html application/json application/zip),
-          max_file_size: Dran.Uploads.max_size(),
-          auto_upload: true,
-          progress: &handle_progress/3
-        )
-      else
-        socket
-      end
 
     if context && connected?(socket) do
       Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
@@ -251,302 +283,187 @@ defmodule DranWeb.ProjectLive do
     {:ok,
      assign(socket,
        context: context,
-       page_type: @page_type,
-       project_tabs: DisabledTypes.visible_tabs(@project_tabs, context),
-       active_tab: "overview",
        editing: false,
        save_status: "idle",
-       community_summary: nil,
-       active_nav: "projects"
+       active_nav: "projects",
+       goal_options: goal_options(context),
+       statuses: @statuses,
+       priorities: @priorities
      )}
   end
 
   @impl true
-  def handle_params(%{"slug" => slug} = params, _url, socket) do
+  def handle_params(params, _url, socket) do
     {socket, context} = Auth.resolve_workspace(socket, params)
+    socket = assign(socket, params: params, context: context, goal_options: goal_options(context))
 
-    if context do
-      case Brain.get_page_by_slug(slug, context.id) do
-        nil ->
-          {:noreply, push_navigate(socket, to: ~p"/panel/projects")}
-
-        page ->
-          relations = Brain.list_relations_for_page(page.id)
-          versions = Brain.list_page_versions(page.id)
-          logs = Brain.list_log(workspace_id: context.id, limit: 10)
-
-          form = Brain.change_page(page) |> to_form(as: :page)
-
-          # Preserve active_tab across patch (e.g. when toggling edit mode)
-          active_tab = Map.get(socket.assigns, :active_tab, "overview")
-
-          # Sub-páginas vinculadas por meta["project_slug"] == page.slug.
-          # Para todos/goals/plans usamos el filter SQL nativo de Brain.list_pages.
-          project_todos =
-            Brain.list_pages(
-              workspace_id: context.id,
-              type: "todo",
-              project_slug: page.slug,
-              include_body: false,
-              limit: 500
-            )
-
-          project_goals =
-            Brain.list_pages(
-              workspace_id: context.id,
-              type: "goal",
-              project_slug: page.slug,
-              include_body: false,
-              limit: 500
-            )
-
-          project_plans =
-            Brain.list_pages(
-              workspace_id: context.id,
-              type: "plan",
-              project_slug: page.slug,
-              include_body: false,
-              limit: 500
-            )
-
-          # Para notes/concepts/entities/references cargamos por type y filtramos
-          # en memoria por meta["project_slug"] (mismo patrón que goal_live.ex).
-          project_notes = filter_by_project_slug(context.id, "note", page.slug)
-          project_concepts = filter_by_project_slug(context.id, "concept", page.slug)
-          project_entities = filter_by_project_slug(context.id, "entity", page.slug)
-          project_references = filter_by_project_slug(context.id, "reference", page.slug)
-
-          rendered_body =
-            render_markdown(page.body,
-              workspace_id: page.workspace_id,
-              inline_links: Map.get(page.meta || %{}, "inline_links", [])
-            )
-
-          community_summary =
-            try do
-              case Dran.Graph.CommunitySummaries.get_summary_for_page(page.id) do
-                {:ok, summary} -> summary
-                _ -> nil
-              end
-            rescue
-              _ -> nil
-            end
-
-          {:noreply,
-           assign(socket,
-             page: page,
-             relations: relations,
-             versions: versions,
-             compare_version: nil,
-             logs: logs,
-             page_title: page.title,
-             active_tab: active_tab,
-             workspace_id: context.id,
-             community_summary: community_summary,
-             project_todos: project_todos,
-             project_goals: project_goals,
-             project_plans: project_plans,
-             project_notes: project_notes,
-             project_concepts: project_concepts,
-             project_entities: project_entities,
-             project_references: project_references,
-             rendered_body: rendered_body,
-             editing: Map.get(params, "edit") == "true",
-             form: form,
-             context: context,
-             project_tabs: DisabledTypes.visible_tabs(@project_tabs, context),
-             save_status: "idle"
-           )}
-      end
-    else
-      {:noreply, push_navigate(socket, to: ~p"/panel/projects")}
-    end
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
-  def handle_params(_params, _url, socket) do
-    {pages, archived_pages} =
+  defp apply_action(socket, :index, _params) do
+    projects =
       if socket.assigns.context do
-        {Brain.list_pages(workspace_id: socket.assigns.context.id, type: @page_type),
-         Brain.list_pages(
-           workspace_id: socket.assigns.context.id,
-           type: @page_type,
-           archived: true,
-           limit: 200
-         )}
+        Brain.list_projects(socket.assigns.context.id)
       else
-        {[], []}
+        []
       end
 
-    {:noreply,
-     assign(socket,
-       pages: pages,
-       archived_pages: archived_pages,
-       archived_filter: "all",
-       visible_count: 30,
-       show_archived: false,
-       archived_visible_count: 30,
-       page_title: "Projects"
-     )}
+    assign(socket, projects: projects, editing: false, page_title: gettext("Projects"))
   end
 
-  @impl true
-  def handle_event("filter_archived", %{"type" => type}, socket) do
-    {:noreply, assign(socket, archived_filter: type)}
-  end
-
-  def handle_event("load_more", _params, socket),
-    do: {:noreply, ListPagination.handle_load_more(socket)}
-
-  def handle_event("toggle_archived", _params, socket),
-    do: {:noreply, ListPagination.handle_toggle_archived(socket)}
-
-  def handle_event("load_more_archived", _params, socket),
-    do: {:noreply, ListPagination.handle_load_more_archived(socket)}
-
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, active_tab: tab)}
-  end
-
-  def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/projects/#{slug}")}
-  end
-
-  def handle_event("change_status", %{"slug" => slug, "status" => status}, socket) do
-    case update_page_meta(socket, slug, &Map.put(&1, "status", status)) do
-      {:ok, socket} -> {:noreply, socket}
-      {:error, socket} -> {:noreply, socket}
-    end
-  end
-
-  def handle_event("noop", _params, socket), do: {:noreply, socket}
-
-  # Override archive_page so the card disappears from the index list.
-  def handle_event("archive_page", %{"slug" => slug} = params, socket) do
-    if socket.assigns.live_action == :show do
-      PageEdit.handle_event("archive_page", params, socket)
-    else
-      context = socket.assigns.context
-
-      case context && Brain.get_page_by_slug(slug, context.id) do
-        nil ->
-          {:noreply, socket}
-
-        page ->
-          case Brain.archive_page(page) do
-            {:ok, _updated} ->
-              pages = Enum.reject(socket.assigns.pages, &(&1.slug == slug))
-              archived_pages = [page | socket.assigns[:archived_pages] || []]
-              {:noreply, assign(socket, pages: pages, archived_pages: archived_pages)}
-
-            {:error, _} ->
-              {:noreply, put_flash(socket, :error, gettext("Could not archive page."))}
-          end
-      end
-    end
-  end
-
-  def handle_event("new_page", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/projects/new")}
-  end
-
-  def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
-
-  def handle_event("toggle_pinned", p, s),
-    do: PageEdit.handle_event("toggle_pinned", p, s)
-
-  def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
-  def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
-  def handle_event("save_page", p, s), do: PageEdit.handle_event("save_page", p, s)
-  def handle_event("body_change", p, s), do: PageEdit.handle_event("body_change", p, s)
-  def handle_event("field_change", p, s), do: PageEdit.handle_event("field_change", p, s)
-  def handle_event("request_upload", p, s), do: PageEdit.handle_event("request_upload", p, s)
-  def handle_event("upload_complete", p, s), do: PageEdit.handle_event("upload_complete", p, s)
-
-  # ── Version comparison ──
-
-  def handle_event("compare_version", params, socket),
-    do: DranWeb.VersionCompare.handle_event("compare_version", params, socket)
-
-  def handle_event("clear_compare", params, socket),
-    do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
-
-  defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
-
-  # ── Helpers ──
-
-  # nil-safe access into a page's `meta` map (string keys, as persisted in JSONB).
-  # Matches the repo convention (goal_live.ex:414).
-  defp meta_get(meta, key), do: get_in(meta, [key])
-
-  # Updates a page's meta in the DB and replaces it in the `pages` assign list.
-  defp update_page_meta(socket, slug, updater) do
+  defp apply_action(socket, :show, %{"slug" => slug} = params) do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Brain.get_project_by_slug(slug, context.id) do
         nil ->
-          {:error, put_flash(socket, :error, gettext("Page not found."))}
+          push_navigate(socket, to: ~p"/panel/projects")
 
-        page ->
-          new_meta = updater.(page.meta || %{})
+        project ->
+          form = Brain.change_project(project) |> to_form(as: :project)
+          linked_goal_title = linked_goal_title(project, context)
 
-          case Brain.update_page(page, %{"meta" => new_meta}) do
-            {:ok, updated} ->
-              pages =
-                Enum.map(socket.assigns.pages, fn p ->
-                  if p.slug == slug, do: updated, else: p
-                end)
-
-              {:ok, assign(socket, pages: pages)}
-
-            {:error, _} ->
-              {:error, put_flash(socket, :error, gettext("Could not update page."))}
-          end
+          assign(socket,
+            project: project,
+            form: form,
+            linked_goal_title: linked_goal_title,
+            editing: Map.get(params, "edit") == "true",
+            page_title: project.title
+          )
       end
     else
-      {:error, socket}
+      push_navigate(socket, to: ~p"/panel/projects")
     end
   end
 
-  # Carga páginas de un type y filtra en memoria por meta["project_slug"].
-  defp filter_by_project_slug(workspace_id, type, project_slug) do
-    Brain.list_pages(workspace_id: workspace_id, type: type, include_body: false, limit: 500)
-    |> Enum.filter(fn p -> meta_get(p.meta, "project_slug") == project_slug end)
+  defp apply_action(socket, :new, _params) do
+    changeset = Brain.change_project(%Project{})
+
+    assign(socket,
+      form: to_form(changeset, as: :project),
+      editing: false,
+      page_title: gettext("New Project")
+    )
   end
 
-  # ── Health badge helpers (for Goals list) ──
-
-  defp health_class(page) do
-    case meta_get(page.meta, "health") do
-      "green" -> "bg-green-100 text-green-700"
-      "yellow" -> "bg-yellow-100 text-yellow-700"
-      "red" -> "bg-red-100 text-red-700"
-      _ -> "bg-base-300 text-base-content/60"
-    end
-  end
-
-  # ── PubSub: real-time update when a page changes ──
+  # ──────────────────────────────────────────────────────────────────────────
+  # Events
+  # ──────────────────────────────────────────────────────────────────────────
 
   @impl true
-  def handle_info({:page_changed, _action, changed_page}, socket) do
-    if socket.assigns[:page] && socket.assigns.page.id == changed_page.id do
-      page = Brain.get_page(changed_page.id)
+  def handle_event("toggle_edit", _params, socket) do
+    project = socket.assigns.project
+    editing = !socket.assigns.editing
 
-      if page do
-        rendered_body =
-          render_markdown(page.body,
-            workspace_id: page.workspace_id,
-            inline_links: Map.get(page.meta || %{}, "inline_links", [])
-          )
+    if editing do
+      {:noreply, push_patch(socket, to: ~p"/panel/projects/#{project.slug}?edit=true")}
+    else
+      {:noreply, push_patch(socket, to: ~p"/panel/projects/#{project.slug}")}
+    end
+  end
 
-        form = Brain.change_page(page) |> to_form(as: :page)
+  def handle_event("validate", %{"project" => project_params}, socket) do
+    project = socket.assigns[:project] || %Project{}
+    changeset = Brain.change_project(project, project_params) |> Map.put(:action, :validate)
+    {:noreply, assign(socket, form: to_form(changeset, as: :project))}
+  end
+
+  def handle_event("save", %{"project" => project_params}, socket) do
+    project = socket.assigns.project
+
+    case Brain.update_project(project, project_params) do
+      {:ok, updated} ->
+        form = Brain.change_project(updated) |> to_form(as: :project)
 
         {:noreply,
-         assign(socket,
-           page: page,
-           rendered_body: rendered_body,
-           form: form
-         )}
+         socket
+         |> assign(project: updated, form: form, editing: false)
+         |> put_flash(:info, gettext("Project updated."))}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, form: to_form(changeset, as: :project))}
+    end
+  end
+
+  def handle_event("create", %{"project" => project_params}, socket) do
+    context = socket.assigns.context
+
+    if context do
+      attrs =
+        project_params
+        |> Map.put("workspace_id", context.id)
+        |> ensure_slug()
+
+      case Brain.create_project(attrs) do
+        {:ok, project} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, gettext("Project created."))
+           |> push_navigate(to: ~p"/panel/projects/#{project.slug}")}
+
+        {:error, changeset} ->
+          {:noreply, assign(socket, form: to_form(changeset, as: :project))}
+      end
+    else
+      {:noreply, put_flash(socket, :error, gettext("No context available."))}
+    end
+  end
+
+  def handle_event("delete", _params, socket) do
+    project = socket.assigns.project
+
+    case Brain.delete_project(project) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Project deleted."))
+         |> push_navigate(to: ~p"/panel/projects")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not delete project."))}
+    end
+  end
+
+  # ── Helpers ──
+
+  defp goal_options(nil), do: [{gettext("No goal"), ""}]
+
+  defp goal_options(context) do
+    [{gettext("No goal"), ""} | Enum.map(Brain.list_goals(context.id), &{&1.title, &1.id})]
+  end
+
+  defp linked_goal_title(%{goal_id: nil}, _context), do: gettext("—")
+
+  defp linked_goal_title(%{goal_id: goal_id}, _context) do
+    case Brain.get_goal(goal_id) do
+      %{title: title} -> title
+      _ -> gettext("—")
+    end
+  end
+
+  defp ensure_slug(%{"slug" => slug} = params) when is_binary(slug) and slug != "", do: params
+
+  defp ensure_slug(%{"title" => title} = params) when is_binary(title) and title != "" do
+    Map.put(params, "slug", Dran.Slug.slugify(title))
+  end
+
+  defp ensure_slug(params), do: params
+
+  defp status_class(%{health: "green"}), do: "bg-green-100 text-green-700"
+  defp status_class(%{health: "yellow"}), do: "bg-yellow-100 text-yellow-700"
+  defp status_class(%{health: "red"}), do: "bg-red-100 text-red-700"
+  defp status_class(_), do: "bg-base-300 text-base-content/60"
+
+  # ── PubSub: real-time update when a project changes ──
+
+  @impl true
+  def handle_info({:page_changed, _action, changed_project}, socket) do
+    if socket.assigns[:project] && socket.assigns.project.id == changed_project.id do
+      project = Brain.get_project(changed_project.id)
+
+      if project do
+        form = Brain.change_project(project) |> to_form(as: :project)
+        {:noreply, assign(socket, project: project, form: form)}
       else
         {:noreply, socket}
       end

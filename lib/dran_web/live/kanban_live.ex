@@ -1,7 +1,7 @@
 defmodule DranWeb.KanbanLive do
   @moduledoc """
-  Kanban board for all todos in the current context. Filters by project_slug, goal_slug,
-  plan_slug (combinable). Drag-drop updates kanban_status.
+  Kanban board for all notes with kanban_status set. Filters by project/goal
+  (combinable). Drag-drop updates kanban_status column.
   """
   use DranWeb, :live_view
 
@@ -17,8 +17,6 @@ defmodule DranWeb.KanbanLive do
     {"cancelled", gettext("Cancelled"), "bg-red-500/20 text-red-700"}
   ]
 
-  # Columnas donde el usuario puede crear un todo vía quick-add (excluye
-  # estados terminales done/cancelled — esos se alcanzan por drag-drop).
   @quick_add_statuses [
     {"backlog", gettext("Backlog")},
     {"this_week", gettext("This Week")},
@@ -33,11 +31,9 @@ defmodule DranWeb.KanbanLive do
     {"urgent", gettext("Urgent")}
   ]
 
-  # Badges por tipo de vínculo (Tailwind puro, como en el plan §4.2).
   @badge_styles %{
     "project" => "bg-blue-100 text-blue-700 hover:bg-blue-200",
-    "goal" => "bg-green-100 text-green-700 hover:bg-green-200",
-    "plan" => "bg-purple-100 text-purple-700 hover:bg-purple-200"
+    "goal" => "bg-green-100 text-green-700 hover:bg-green-200"
   }
 
   def render(assigns) do
@@ -65,7 +61,7 @@ defmodule DranWeb.KanbanLive do
           </div>
         </div>
 
-        <%!-- Quick-add inline form (§3.1) --%>
+        <%!-- Quick-add inline form --%>
         <form
           :if={@show_form}
           id="kanban-quick-add"
@@ -145,16 +141,8 @@ defmodule DranWeb.KanbanLive do
           </div>
         </form>
 
-        <%!-- Filtros combinables — oculta los de tipos deshabilitados --%>
+        <%!-- Filtros combinables --%>
         <div class="flex flex-wrap gap-3 mx-4 mb-3 p-3 rounded-lg bg-base-200/50 border border-base-300 shrink-0">
-          <.filter_select
-            :if={@project_enabled}
-            label={gettext("Project")}
-            id="filter-project"
-            value={@filter_project}
-            options={@filter_project_options}
-            phx_change="filter_project"
-          />
           <.filter_select
             :if={@goal_enabled}
             label={gettext("Goal")}
@@ -163,19 +151,8 @@ defmodule DranWeb.KanbanLive do
             options={@filter_goal_options}
             phx_change="filter_goal"
           />
-          <.filter_select
-            :if={@plan_enabled}
-            label={gettext("Plan")}
-            id="filter-plan"
-            value={@filter_plan}
-            options={@filter_plan_options}
-            phx_change="filter_plan"
-          />
           <button
-            :if={
-              (@project_enabled and @filter_project != "all") or
-                (@goal_enabled and @filter_goal != "all") or (@plan_enabled and @filter_plan != "all")
-            }
+            :if={@goal_enabled and @filter_goal != "all"}
             phx-click="clear_filters"
             class="btn btn-ghost btn-sm"
           >
@@ -186,9 +163,7 @@ defmodule DranWeb.KanbanLive do
           </div>
         </div>
 
-        <%!-- Board: flex-1 para llenar el alto restante, min-h-0 para que
-             overflow-y-auto de las columnas internas funcione contra el
-             contenedor y no haga scrollear al wrapper del layout. --%>
+        <%!-- Board --%>
         <div
           class="flex gap-4 overflow-x-auto px-4 pb-4 flex-1 min-h-0"
           phx-hook="KanbanDragDrop"
@@ -219,9 +194,9 @@ defmodule DranWeb.KanbanLive do
               >
                 <div class="font-medium text-sm break-words">{todo.title}</div>
 
-                <%!-- Badges de vínculos (maximo 2 visibles) — filtrados por disabled_page_types --%>
+                <%!-- Badges --%>
                 <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                  <%= for {badge, _idx} <- visible_badges(todo, @workspace) do %>
+                  <%= for {badge, _idx} <- visible_badges(todo, @context) do %>
                     <span
                       class={"px-1.5 py-0.5 text-[11px] rounded cursor-pointer " <> Map.get(@badge_styles, badge.type, "bg-base-300")}
                       title={badge.slug}
@@ -233,13 +208,6 @@ defmodule DranWeb.KanbanLive do
                       {badge.label}
                     </span>
                   <% end %>
-                  <span
-                    :if={extra_badge_count(todo, @workspace) > 0}
-                    class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/60"
-                    title={extra_badge_titles(todo, @workspace)}
-                  >
-                    +{extra_badge_count(todo, @workspace)}
-                  </span>
                 </div>
 
                 <div :if={due_date(todo)} class={due_date_class(overdue?(todo))}>
@@ -247,7 +215,6 @@ defmodule DranWeb.KanbanLive do
                   {format_due(due_date(todo))}
                 </div>
 
-                <%!-- Archive button — bottom-right corner of the card, same as /todos --%>
                 <div class="flex justify-end mt-2">
                   <button
                     type="button"
@@ -319,18 +286,14 @@ defmodule DranWeb.KanbanLive do
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
-    if context && Brain.page_type_enabled?(context, "todo") do
+    if context do
       socket =
         assign(socket,
           context: context,
           kanban_columns: @kanban_columns,
           badge_styles: @badge_styles,
-          filter_project: "all",
           filter_goal: "all",
-          filter_plan: "all",
-          filter_project_options: [],
           filter_goal_options: [],
-          filter_plan_options: [],
           all_todos: [],
           filtered_todos: [],
           filtered_count: 0,
@@ -338,9 +301,7 @@ defmodule DranWeb.KanbanLive do
           priority_options: @priorities,
           status_options: @quick_add_statuses,
           goal_options: [{gettext("No goal"), ""}],
-          project_enabled: Brain.page_type_enabled?(context, "project"),
-          goal_enabled: Brain.page_type_enabled?(context, "goal"),
-          plan_enabled: Brain.page_type_enabled?(context, "plan"),
+          goal_enabled: true,
           form: %{
             "title" => "",
             "priority" => "medium",
@@ -352,42 +313,23 @@ defmodule DranWeb.KanbanLive do
 
       {:ok, socket}
     else
-      # Todos disabled in this context (or no context) — kanban has nothing to show.
       {:ok, redirect(socket, to: ~p"/")}
     end
   end
 
-  # Lee query params project/goal/plan (§5.4) para que /kanban?project=slug
-  # filtre automáticamente al llegar (p.ej. desde ProjectLive).
   def handle_params(params, _url, socket) do
     context = socket.assigns.context
 
     if context do
-      # SEC-010: cap todos at 500 (was 1000) — kanban with >500 cards is
-      # unusable anyway; the filter UI exists precisely to narrow down.
-      all_todos =
-        Brain.list_pages(
-          workspace_id: context.id,
-          type: "todo",
-          include_body: false,
-          limit: 500
-        )
+      all_todos = Brain.list_todos(workspace_id: context.id, limit: 500)
 
-      project_slugs = Brain.list_pages(workspace_id: context.id, type: "project", limit: 200)
-      goal_slugs = Brain.list_pages(workspace_id: context.id, type: "goal", limit: 200)
-      plan_slugs = Brain.list_pages(workspace_id: context.id, type: "plan", limit: 200)
+      goal_records = Brain.list_goals(context.id)
 
-      filter_project = Map.get(params, "project", "all")
       filter_goal = Map.get(params, "goal", "all")
-      filter_plan = Map.get(params, "plan", "all")
 
-      # Goal options for the quick-add form (todo_live.ex:118-125 pattern):
-      # first option "No goal" (empty slug), then goal titles → slugs.
       goal_options =
-        [{gettext("No goal"), ""} | Enum.map(goal_slugs, fn p -> {p.title, p.slug} end)]
+        [{gettext("No goal"), ""} | Enum.map(goal_records, fn g -> {g.title, g.slug} end)]
 
-      # When a single real goal slug is filtered, default the quick-add form
-      # to that goal so newly created todos carry the link automatically.
       form =
         socket.assigns.form
         |> maybe_set_form_filter("goal_slug", filter_goal)
@@ -396,12 +338,8 @@ defmodule DranWeb.KanbanLive do
         socket
         |> assign(
           all_todos: all_todos,
-          filter_project: filter_project,
           filter_goal: filter_goal,
-          filter_plan: filter_plan,
-          filter_project_options: build_filter_options(project_slugs),
-          filter_goal_options: build_filter_options(goal_slugs),
-          filter_plan_options: build_filter_options(plan_slugs),
+          filter_goal_options: build_goal_filter_options(goal_records),
           goal_options: goal_options,
           form: form
         )
@@ -413,52 +351,33 @@ defmodule DranWeb.KanbanLive do
     end
   end
 
-  # If the filter is a real slug (not "all"/"none"), pre-set the matching
-  # form field so quick-add carries the link. Otherwise clear it so the user
-  # can pick freely.
-  defp maybe_set_form_filter(form, key, filter) when filter in ["all", "none"] do
-    Map.put(form, key, "")
-  end
+  defp maybe_set_form_filter(form, key, filter) when filter in ["all", "none"],
+    do: Map.put(form, key, "")
 
   defp maybe_set_form_filter(form, key, filter), do: Map.put(form, key, filter)
 
   # ── Filtros ──
 
-  def handle_event("filter_project", %{"value" => value}, socket) do
-    {:noreply, socket |> assign(filter_project: value) |> recompute_filtered_todos()}
-  end
-
   def handle_event("filter_goal", %{"value" => value}, socket) do
     {:noreply, socket |> assign(filter_goal: value) |> recompute_filtered_todos()}
-  end
-
-  def handle_event("filter_plan", %{"value" => value}, socket) do
-    {:noreply, socket |> assign(filter_plan: value) |> recompute_filtered_todos()}
   end
 
   def handle_event("clear_filters", _params, socket) do
     socket =
       socket
-      |> assign(filter_project: "all", filter_goal: "all", filter_plan: "all")
+      |> assign(filter_goal: "all")
       |> recompute_filtered_todos()
 
     {:noreply, socket}
   end
 
-  def handle_event("filter_by_badge", %{"type" => type, "slug" => slug}, socket) do
-    socket =
-      case type do
-        "project" -> assign(socket, filter_project: slug)
-        "goal" -> assign(socket, filter_goal: slug)
-        "plan" -> assign(socket, filter_plan: slug)
-        _ -> socket
-      end
-      |> recompute_filtered_todos()
-
-    {:noreply, socket}
+  def handle_event("filter_by_badge", %{"type" => "goal", "slug" => slug}, socket) do
+    {:noreply, socket |> assign(filter_goal: slug) |> recompute_filtered_todos()}
   end
 
-  # ── Quick-add (§3.1) ──
+  def handle_event("filter_by_badge", _params, socket), do: {:noreply, socket}
+
+  # ── Quick-add ──
 
   def handle_event("toggle_form", _params, socket) do
     {:noreply, assign(socket, show_form: !socket.assigns.show_form)}
@@ -481,28 +400,24 @@ defmodule DranWeb.KanbanLive do
         due_date = params["due_date"] || ""
         kanban_status = params["kanban_status"] || "backlog"
 
-        meta =
-          %{"kanban_status" => kanban_status, "priority" => priority}
-          |> maybe_put("goal_slug", goal_slug)
-          |> maybe_put("due_date", due_date)
+        # Create as note with kind:todo; goal_slug stays in meta for filtering.
+        meta = %{"kind" => "todo"}
+        meta = if goal_slug != "", do: Map.put(meta, "goal_slug", goal_slug), else: meta
 
         attrs = %{
           "workspace_id" => context.id,
           "title" => title,
-          "slug" => Dran.Slug.generate(title, context.id, "todo"),
-          "page_type" => "todo",
-          "meta" => meta
+          "slug" => Dran.Slug.generate(title, context.id, "note"),
+          "page_type" => "note",
+          "meta" => meta,
+          "kanban_status" => kanban_status,
+          "priority" => priority,
+          "due_date" => if(due_date != "", do: due_date, else: nil)
         }
 
         case Brain.create_page(attrs) do
           {:ok, _page} ->
-            all_todos =
-              Brain.list_pages(
-                workspace_id: context.id,
-                type: "todo",
-                include_body: false,
-                limit: 500
-              )
+            all_todos = Brain.list_todos(workspace_id: context.id, limit: 500)
 
             socket =
               socket
@@ -529,9 +444,7 @@ defmodule DranWeb.KanbanLive do
           {:noreply, put_flash(socket, :error, "Todo not found.")}
 
         todo ->
-          new_meta = Map.put(todo.meta || %{}, "kanban_status", status)
-
-          case Brain.update_page(todo, %{"meta" => new_meta}) do
+          case Brain.update_page(todo, %{kanban_status: status}) do
             {:ok, _updated} ->
               {:noreply, recompute_filtered_todos(socket)}
 
@@ -545,7 +458,7 @@ defmodule DranWeb.KanbanLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/todos/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/panel/notes/#{slug}")}
   end
 
   def handle_event("archive_todo", %{"slug" => slug}, socket) do
@@ -559,13 +472,7 @@ defmodule DranWeb.KanbanLive do
         todo ->
           case Brain.archive_page(todo) do
             {:ok, _updated} ->
-              all_todos =
-                Brain.list_pages(
-                  workspace_id: context.id,
-                  type: "todo",
-                  include_body: false,
-                  limit: 500
-                )
+              all_todos = Brain.list_todos(workspace_id: context.id, limit: 500)
 
               {:noreply,
                socket
@@ -582,65 +489,38 @@ defmodule DranWeb.KanbanLive do
     end
   end
 
-  # ── Helpers de filtrado ──
+  # ── Filter helpers ──
 
   defp recompute_filtered_todos(socket) do
     todos =
       socket.assigns.all_todos
-      |> filter_by_slug(:project, socket.assigns.filter_project)
-      |> filter_by_slug(:goal, socket.assigns.filter_goal)
-      |> filter_by_slug(:plan, socket.assigns.filter_plan)
+      |> filter_by_goal_slug(socket.assigns.filter_goal)
 
     socket
     |> assign(filtered_todos: todos, filtered_count: length(todos))
   end
 
-  defp filter_by_slug(todos, _type, "all"), do: todos
+  defp filter_by_goal_slug(todos, "all"), do: todos
 
-  defp filter_by_slug(todos, type, "none") do
-    key = "#{type}_slug"
-
-    Enum.reject(todos, fn t ->
-      v = meta_get(t.meta, key)
-      v != nil and v != ""
+  defp filter_by_goal_slug(todos, slug) do
+    Enum.filter(todos, fn t ->
+      get_in(t.meta, ["goal_slug"]) == slug
     end)
   end
 
-  defp filter_by_slug(todos, type, slug) do
-    key = "#{type}_slug"
-    Enum.filter(todos, fn t -> meta_get(t.meta, key) == slug end)
-  end
-
-  defp build_filter_options(pages) do
+  defp build_goal_filter_options(goals) do
     [{gettext("All"), "all"}, {gettext("None (orphan)"), "none"}] ++
-      Enum.map(pages, fn p -> {p.title, p.slug} end)
+      Enum.map(goals, fn g -> {g.title, g.slug} end)
   end
 
-  # ── Helpers de card ──
+  # ── Card helpers ──
 
-  defp meta_get(meta, key) when is_map(meta), do: Map.get(meta, key)
-  defp meta_get(nil, _key), do: nil
+  defp kanban_status(page), do: page.kanban_status
 
-  # Only put a meta key when the value is non-empty (mirrors todo_live.ex).
-  defp maybe_put(meta, _key, ""), do: meta
-  defp maybe_put(meta, key, value), do: Map.put(meta, key, value)
+  defp column_items(todos, status), do: Enum.filter(todos, fn t -> kanban_status(t) == status end)
 
-  defp kanban_status(page) do
-    case meta_get(page.meta, "kanban_status") do
-      s when is_binary(s) and s != "" -> s
-      _ -> "backlog"
-    end
-  end
+  defp column_count(todos, status), do: Enum.count(todos, fn t -> kanban_status(t) == status end)
 
-  defp column_items(todos, status) do
-    Enum.filter(todos, fn t -> kanban_status(t) == status end)
-  end
-
-  defp column_count(todos, status) do
-    Enum.count(todos, fn t -> kanban_status(t) == status end)
-  end
-
-  # Status accent dot colors (matches project kanban + dashboard palette)
   defp accent_dot("backlog"), do: "bg-base-content/30"
   defp accent_dot("this_week"), do: "bg-blue-500"
   defp accent_dot("today"), do: "bg-amber-500"
@@ -649,8 +529,6 @@ defmodule DranWeb.KanbanLive do
   defp accent_dot("cancelled"), do: "bg-red-500"
   defp accent_dot(_), do: "bg-base-content/30"
 
-  # Construye la lista de badges de un todo. Máximo 2 visibles, resto en +N.
-  # Filtra badges de tipos deshabilitados en el contexto.
   defp visible_badges(todo, context) do
     todo
     |> all_badges(context)
@@ -658,63 +536,32 @@ defmodule DranWeb.KanbanLive do
     |> Enum.with_index(fn badge, idx -> {badge, idx} end)
   end
 
-  defp all_badges(todo, context) do
-    disabled = (context && context.disabled_page_types) || []
-
-    []
-    |> maybe_add_badge("project", meta_get(todo.meta, "project_slug"), disabled)
-    |> maybe_add_badge("goal", meta_get(todo.meta, "goal_slug"), disabled)
-    |> maybe_add_badge("plan", meta_get(todo.meta, "plan_slug"), disabled)
+  defp all_badges(todo, _context) do
+    goal_slug = get_in(todo.meta || %{}, ["goal_slug"])
+    maybe_add_badge([], "goal", goal_slug)
   end
 
-  defp maybe_add_badge(list, _type, nil, _disabled), do: list
-  defp maybe_add_badge(list, _type, "", _disabled), do: list
+  defp maybe_add_badge(list, _type, nil), do: list
+  defp maybe_add_badge(list, _type, ""), do: list
 
-  defp maybe_add_badge(list, type, slug, disabled) do
-    if type in disabled do
-      list
-    else
-      label = String.slice(slug, 0, 12)
-      [%{type: type, slug: slug, label: label} | list]
-    end
+  defp maybe_add_badge(list, type, slug) do
+    label = String.slice(slug, 0, 12)
+    [%{type: type, slug: slug, label: label} | list]
   end
 
-  defp extra_badge_count(todo, context) do
-    max(0, length(all_badges(todo, context)) - 2)
-  end
-
-  defp extra_badge_titles(todo, context) do
-    todo
-    |> all_badges(context)
-    |> Enum.drop(2)
-    |> Enum.map(fn b -> "#{b.type}: #{b.slug}" end)
-    |> Enum.join(", ")
-  end
-
-  defp due_date(page), do: meta_get(page.meta, "due_date")
+  defp due_date(page), do: page.due_date
 
   defp overdue?(page) do
-    case due_date(page) do
-      s when is_binary(s) and s != "" ->
-        case Date.from_iso8601(s) do
-          {:ok, d} -> Date.compare(d, Date.utc_today()) == :lt
-          _ -> false
-        end
-
-      _ ->
-        false
+    case page.due_date do
+      %Date{} = d -> Date.compare(d, Date.utc_today()) == :lt
+      _ -> false
     end
   end
 
   defp format_due(nil), do: ""
-  defp format_due(""), do: ""
-
-  defp format_due(s) when is_binary(s) do
-    case Date.from_iso8601(s) do
-      {:ok, d} -> Calendar.strftime(d, "%b %d")
-      _ -> s
-    end
-  end
+  defp format_due(%Date{} = d), do: Calendar.strftime(d, "%b %d")
+  defp format_due(s) when is_binary(s), do: s
+  defp format_due(_), do: ""
 
   defp due_date_class(true),
     do: "flex items-center gap-1 mt-1.5 text-[11px] text-red-600 font-medium"
@@ -722,7 +569,7 @@ defmodule DranWeb.KanbanLive do
   defp due_date_class(false),
     do: "flex items-center gap-1 mt-1.5 text-[11px] text-base-content/60"
 
-  # ── Componente de filtro ──
+  # ── Filter component ──
 
   attr :label, :string, required: true
   attr :id, :string, required: true

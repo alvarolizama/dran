@@ -2,7 +2,7 @@ defmodule DranWeb.PageTypes do
   @moduledoc """
   Centralized page type mappings.
 
-  A single source of truth for the 10 page types, each with its
+  A single source of truth for the 5 page types, each with its
   URL path segment, display label, icon, and plural label.
 
   Only presentation lives here — what a type CAN do (graph, journey,
@@ -20,32 +20,17 @@ defmodule DranWeb.PageTypes do
       plural: "Concepts"
     },
     "entity" => %{path: "entities", label: "Entity", icon: "hero-user", plural: "Entities"},
-    "project" => %{
-      path: "projects",
-      label: "Project",
-      icon: "hero-rocket-launch",
-      plural: "Projects"
-    },
     "reference" => %{
       path: "references",
       label: "Reference",
       icon: "hero-bookmark",
       plural: "References"
     },
-    "goal" => %{path: "goals", label: "Goal", icon: "hero-flag", plural: "Goals"},
-    "plan" => %{path: "plans", label: "Plan", icon: "hero-calendar-days", plural: "Plans"},
-    "todo" => %{path: "todos", label: "Todo", icon: "hero-check-circle", plural: "Todos"},
     "query" => %{
       path: "queries",
       label: "Query",
       icon: "hero-question-mark-circle",
       plural: "Queries"
-    },
-    "report" => %{
-      path: "reports",
-      label: "Report",
-      icon: "hero-clipboard-document-list",
-      plural: "Reports"
     }
   }
 
@@ -122,22 +107,12 @@ defmodule DranWeb.PageTypes do
     gettext("Note")
     gettext("Concept")
     gettext("Entity")
-    gettext("Project")
     gettext("Reference")
-    gettext("Goal")
-    gettext("Plan")
-    gettext("Todo")
     gettext("Query")
     gettext("Notes")
     gettext("Concepts")
     gettext("Entities")
-    gettext("Projects")
     gettext("References")
-    gettext("Goals")
-    gettext("Plans")
-    gettext("Todos")
     gettext("Queries")
-    gettext("Report")
-    gettext("Reports")
   end
 end

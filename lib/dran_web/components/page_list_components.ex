@@ -82,52 +82,6 @@ defmodule DranWeb.PageListComponents do
     Enum.filter(archived_pages, &(&1.page_type == type))
   end
 
-  # ── Group config (mirrors hermes-dran plugin) ──
-
-  defp group_config("project") do
-    [
-      {"active", gettext("Active"), "bg-green-500"},
-      {"draft", gettext("Draft"), "bg-base-300"},
-      {"on_hold", gettext("On Hold"), "bg-yellow-500"},
-      {"done", gettext("Done"), "bg-green-400"}
-    ]
-  end
-
-  defp group_config("plan") do
-    [
-      {"active", gettext("Active"), "bg-green-500"},
-      {"draft", gettext("Draft"), "bg-base-300"},
-      {"done", gettext("Done"), "bg-green-400"}
-    ]
-  end
-
-  defp group_config("goal") do
-    [
-      {"red", gettext("At Risk"), "bg-red-500"},
-      {"yellow", gettext("Caution"), "bg-yellow-500"},
-      {"green", gettext("Healthy"), "bg-green-500"}
-    ]
-  end
-
-  defp group_config(_), do: nil
-
-  defp group_key(page, "goal"), do: Map.get(page.meta || %{}, "health") || "green"
-  defp group_key(page, _type), do: Map.get(page.meta || %{}, "status") || "draft"
-
-  defp grouped_pages(pages, page_type) do
-    case group_config(page_type) do
-      nil ->
-        nil
-
-      groups ->
-        grouped = Enum.group_by(pages, fn page -> group_key(page, page_type) end)
-
-        groups
-        |> Enum.filter(fn {key, _label, _color} -> Map.has_key?(grouped, key) end)
-        |> Enum.map(fn {key, label, color} -> {key, label, color, grouped[key]} end)
-    end
-  end
-
   attr :pages, :list, required: true
   attr :archived_pages, :list, default: []
   attr :archived_filter, :string, default: "all"
@@ -286,27 +240,9 @@ defmodule DranWeb.PageListComponents do
           </.link>
         </div>
 
-        <%= cond do %>
-          <% @page_type in ["project", "plan", "goal"] -> %>
-            <div class="space-y-6">
-              <div :for={{_gkey, glabel, gcolor, gitems} <- grouped_pages(@pages, @page_type)}>
-                <div class="flex items-center gap-2 px-1 py-1">
-                  <span class={"size-2 rounded-full shrink-0 " <> gcolor}></span>
-                  <span class="text-sm font-medium text-base-content/60">{glabel}</span>
-                  <span class="text-xs text-base-content/40 tabular-nums">
-                    ({length(gitems)})
-                  </span>
-                </div>
-                <div class="space-y-2">
-                  <.page_card :for={page <- gitems} page={page} page_type={@page_type} />
-                </div>
-              </div>
-            </div>
-          <% true -> %>
-            <div class="space-y-2">
-              <.page_card :for={page <- @pages} page={page} page_type={@page_type} />
-            </div>
-        <% end %>
+        <div class="space-y-2">
+          <.page_card :for={page <- @pages} page={page} page_type={@page_type} />
+        </div>
 
         <button
           :if={length(@pages) < @total_count}
@@ -361,47 +297,6 @@ defmodule DranWeb.PageListComponents do
               {tag}
             </.link>
           </div>
-
-          <%!-- Status select for project & plan pages --%>
-          <form
-            :if={@page_type in ["project", "plan"]}
-            phx-change="change_status"
-            phx-value-slug={@page.slug}
-            id={"status-form-" <> @page.slug}
-            class="shrink-0"
-          >
-            <select
-              name="status"
-              class={status_select_class(status_value(@page, @page_type))}
-              data-testid={"status-select-" <> @page.slug}
-            >
-              <%= for status <- status_options(@page_type) do %>
-                <option value={status} selected={status_value(@page, @page_type) == status}>
-                  {String.capitalize(status)}
-                </option>
-              <% end %>
-            </select>
-          </form>
-
-          <%!-- Health dots for goal pages --%>
-          <div
-            :if={@page_type == "goal"}
-            class="flex items-center gap-1 shrink-0"
-            data-testid={"health-dots-" <> @page.slug}
-          >
-            <button
-              :for={{color, label} <- health_options()}
-              type="button"
-              phx-click="change_health"
-              phx-value-slug={@page.slug}
-              phx-value-health={color}
-              title={label}
-              class={[
-                "size-3 rounded-full transition-all",
-                health_dot_class(color, health_value(@page))
-              ]}
-            />
-          </div>
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
@@ -423,52 +318,4 @@ defmodule DranWeb.PageListComponents do
     </div>
     """
   end
-
-  # ── Status select helpers ──
-
-  defp status_options("project"), do: ["draft", "active", "on_hold", "done"]
-  defp status_options("plan"), do: ["draft", "active", "done"]
-  defp status_options(_), do: []
-
-  defp status_value(page, "project"), do: Map.get(page.meta || %{}, "status") || "draft"
-  defp status_value(page, "plan"), do: Map.get(page.meta || %{}, "status") || "draft"
-  defp status_value(_page, _), do: nil
-
-  defp status_select_class("done"),
-    do:
-      "text-xs rounded-md border border-base-300 px-2 py-1 bg-green-100 text-green-700 font-medium cursor-pointer"
-
-  defp status_select_class("active"),
-    do:
-      "text-xs rounded-md border border-base-300 px-2 py-1 bg-blue-100 text-blue-700 font-medium cursor-pointer"
-
-  defp status_select_class("on_hold"),
-    do:
-      "text-xs rounded-md border border-base-300 px-2 py-1 bg-yellow-100 text-yellow-700 font-medium cursor-pointer"
-
-  defp status_select_class("draft"),
-    do:
-      "text-xs rounded-md border border-base-300 px-2 py-1 bg-base-200 text-base-content/60 cursor-pointer"
-
-  defp status_select_class(_),
-    do:
-      "text-xs rounded-md border border-base-300 px-2 py-1 bg-base-200 text-base-content/60 cursor-pointer"
-
-  # ── Health dot helpers ──
-
-  defp health_options,
-    do: [{"green", gettext("Green")}, {"yellow", gettext("Yellow")}, {"red", gettext("Red")}]
-
-  defp health_value(page), do: Map.get(page.meta || %{}, "health") || "green"
-
-  defp health_dot_class(color, current) when color == current,
-    do: health_color(color) <> " ring-2 ring-offset-1 ring-base-300"
-
-  defp health_dot_class(color, _current),
-    do: health_color(color) <> " opacity-30 hover:opacity-70"
-
-  defp health_color("green"), do: "bg-green-500"
-  defp health_color("yellow"), do: "bg-yellow-500"
-  defp health_color("red"), do: "bg-red-500"
-  defp health_color(_), do: "bg-base-300"
 end

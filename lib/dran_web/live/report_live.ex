@@ -2,22 +2,16 @@ defmodule DranWeb.ReportLive do
   @moduledoc """
   LiveView for report pages: detail view only.
 
-  Reports are second-citizen pages (see `Dran.Brain.PageTypes`) — created by
-  the system (jobs, system output), never via MCP or the web UI. They live
-  outside the graph, journey and embeddings, surface in the activity log,
-  and are viewable here at `/reports/:slug`. There is intentionally no index
-  or new form.
+  Reports are second-citizen entities in their own table — created by the
+  system (jobs, system output), never via the web UI. They are viewable
+  here at `/reports/:slug`.
   """
 
   use DranWeb, :live_view
-  on_mount {DranWeb.DisabledTypes, "report"}
 
   alias Dran.Brain
-  alias DranWeb.PageDetail
-  alias DranWeb.PageEdit
-  alias DranWeb.PageTypes
+  alias DranWeb.Plugs.Auth
 
-  @page_type "report"
   @impl true
   def render(assigns) do
     ~H"""
@@ -29,63 +23,40 @@ defmodule DranWeb.ReportLive do
       workspaces={@workspaces}
       active_nav={@active_nav}
     >
-      <div :if={@live_action == :show}>
-        <.page_detail
-          page={@page}
-          relations={@relations}
-          versions={@versions}
-          compare_version={@compare_version}
-          logs={@logs}
-          workspace_slug={@workspace_slug}
-          rendered_body={@rendered_body}
-          editing={@editing}
-          content_tab_value="content"
-          content_hidden={@active_tab != "content"}
-          active_tab={@active_tab}
-        >
-          <:actions>
-            <.link navigate={~p"/panel/activity"} class="btn btn-primary btn-sm">
-              <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
-            </.link>
-            <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
-              <.icon name="hero-eye" class="size-4" /> {gettext("View")}
-            </.link>
-            <.link
-              :if={not @editing}
-              patch={PageTypes.page_show_path(@page) <> "?edit=true"}
-              class="btn btn-ghost btn-sm"
-            >
-              <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
-            </.link>
-          </:actions>
-
-          <:attributes>
-            <.page_attributes
-              form={@form}
-              page={@page}
-              page_type={@page_type}
-              workspace_id={@workspace_id}
-              editor_id="report-editor"
-            />
-          </:attributes>
-
-          <:insights>
-            <div class="text-sm text-base-content/40 text-center py-8">
-              {gettext("Reports are system-generated and do not participate in communities.")}
+      <div :if={@live_action == :show} class="p-6 overflow-y-auto w-full">
+        <div class="max-w-4xl mx-auto space-y-6">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-2 text-caption">
+                <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                  <.icon name="hero-document-chart-bar" class="size-3" />
+                  {gettext("Report")}
+                </span>
+                <code class="font-mono text-caption text-base-content/60">{@report.slug}</code>
+                <span
+                  :if={@report.report_type}
+                  class="px-2 py-0.5 text-xs rounded-full bg-base-300 text-base-content/70"
+                >
+                  {String.capitalize(@report.report_type)}
+                </span>
+              </div>
+              <h1 class="text-title break-words">{@report.title}</h1>
             </div>
-          </:insights>
+            <div class="flex gap-2 shrink-0">
+              <.link navigate={~p"/panel/activity"} class="btn btn-ghost btn-sm">
+                <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
+              </.link>
+            </div>
+          </div>
 
-          <:tabs :if={@editing}>
-            <.page_edit_form
-              form={@form}
-              page={@page}
-              page_type={@page_type}
-              workspace_id={@workspace_id}
-              save_status={@save_status}
-              editor_id="report-editor"
-            />
-          </:tabs>
-        </.page_detail>
+          <div class="prose prose-base dark:prose-invert">
+            {render_markdown(@report.body || "", [])}
+          </div>
+
+          <p class="text-xs text-base-content/40">
+            {gettext("Reports are system-generated and do not participate in communities.")}
+          </p>
+        </div>
       </div>
     </Layouts.app>
     """
@@ -93,86 +64,54 @@ defmodule DranWeb.ReportLive do
 
   @impl true
   def mount(_params, session, socket) do
-    PageDetail.mount_page_viewer(socket, session,
-      page_type: @page_type,
-      active_nav: "activity"
-    )
+    {socket, context} = Auth.assign_to_socket(socket, session)
+
+    if context && connected?(socket) do
+      Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
+    end
+
+    {:ok,
+     assign(socket,
+       context: context,
+       active_nav: "activity",
+       report: nil
+     )}
   end
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/activity")
+    {socket, context} = Auth.resolve_workspace(socket, params)
+
+    if context do
+      case Brain.get_report_by_slug(slug, context.id) do
+        nil ->
+          {:noreply, push_navigate(socket, to: ~p"/panel/activity")}
+
+        report ->
+          {:noreply,
+           assign(socket,
+             report: report,
+             page_title: report.title
+           )}
+      end
+    else
+      {:noreply, push_navigate(socket, to: ~p"/panel/activity")}
+    end
   end
 
-  # ── Tab switching ──
-
-  @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, switch_tab(socket, tab)}
+  def handle_params(_params, _url, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/panel/activity")}
   end
 
-  # ── Editing (delegated to PageEdit) ──
-
-  def handle_event("delete_page", params, socket),
-    do: PageEdit.handle_event("delete_page", params, socket)
-
-  def handle_event("toggle_pinned", params, socket),
-    do: PageEdit.handle_event("toggle_pinned", params, socket)
-
-  def handle_event("archive_page", params, socket),
-    do: PageEdit.handle_event("archive_page", params, socket)
-
-  def handle_event("unarchive_page", params, socket),
-    do: PageEdit.handle_event("unarchive_page", params, socket)
-
-  def handle_event("validate_page", params, socket),
-    do: PageEdit.handle_event("validate_page", params, socket)
-
-  def handle_event("save_page", params, socket),
-    do: PageEdit.handle_event("save_page", params, socket)
-
-  def handle_event("body_change", params, socket),
-    do: PageEdit.handle_event("body_change", params, socket)
-
-  def handle_event("field_change", params, socket),
-    do: PageEdit.handle_event("field_change", params, socket)
-
-  def handle_event("request_upload", params, socket),
-    do: PageEdit.handle_event("request_upload", params, socket)
-
-  def handle_event("upload_complete", params, socket),
-    do: PageEdit.handle_event("upload_complete", params, socket)
-
-  # ── Version comparison ──
-
-  def handle_event("compare_version", params, socket),
-    do: DranWeb.VersionCompare.handle_event("compare_version", params, socket)
-
-  def handle_event("clear_compare", params, socket),
-    do: DranWeb.VersionCompare.handle_event("clear_compare", params, socket)
-
-  # ── PubSub: real-time update when a page changes ──
+  # ── PubSub: real-time update when a report changes ──
 
   @impl true
-  def handle_info({:page_changed, _action, changed_page}, socket) do
-    if socket.assigns[:page] && socket.assigns.page.id == changed_page.id do
-      page = Brain.get_page(changed_page.id)
+  def handle_info({:page_changed, _action, changed_report}, socket) do
+    if socket.assigns[:report] && socket.assigns.report.id == changed_report.id do
+      report = Brain.get_report(changed_report.id)
 
-      if page do
-        rendered_body =
-          render_markdown(page.body,
-            workspace_id: page.workspace_id,
-            inline_links: Map.get(page.meta || %{}, "inline_links", [])
-          )
-
-        form = Brain.change_page(page) |> to_form(as: :page)
-
-        {:noreply,
-         assign(socket,
-           page: page,
-           rendered_body: rendered_body,
-           form: form
-         )}
+      if report do
+        {:noreply, assign(socket, report: report)}
       else
         {:noreply, socket}
       end

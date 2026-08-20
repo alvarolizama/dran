@@ -282,23 +282,15 @@ defmodule DranWeb.Router do
     live "/communities/:id", CommunityLive, :show
 
     live "/goals", GoalLive, :index
-    live "/goals/new", PageNewLive, :new
+    live "/goals/new", GoalLive, :new
     live "/goals/:slug", GoalLive, :show
 
     live "/kanban", KanbanLive, :index
     live "/projects", ProjectLive, :index
-    live "/projects/new", PageNewLive, :new
+    live "/projects/new", ProjectLive, :new
     live "/projects/:slug", ProjectLive, :show
 
-    live "/plans", PlanLive, :index
-    live "/plans/new", PageNewLive, :new
-    live "/plans/:slug", PlanLive, :show
-
-    live "/todos", TodoLive, :index
-    live "/todos/new", PageNewLive, :new
-    live "/todos/:slug", TodoLive, :show
-
-    # System reports (second-citizen pages): detail only — reports are
+    # System reports (second-citizen entities): detail only — reports are
     # system-created, so there is no index or new form.
     live "/reports/:slug", ReportLive, :show
 

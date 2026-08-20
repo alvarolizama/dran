@@ -205,10 +205,8 @@ defmodule DranWeb.Layouts do
           communities: communities_count,
           queries: safe_count.("query"),
           collections: collection_count || 0,
-          projects: safe_count.("project"),
-          goals: safe_count.("goal"),
-          plans: safe_count.("plan"),
-          todos: safe_count.("todo"),
+          projects: length(Dran.Brain.list_projects(workspace_id: context.id, limit: 500)),
+          goals: length(Dran.Brain.list_goals(workspace_id: context.id, limit: 500)),
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
           activity: Dran.Brain.count_log(context.id)
@@ -239,11 +237,6 @@ defmodule DranWeb.Layouts do
   # Maps sidebar nav keys to page types. Items whose page type is disabled in
   # the current context are hidden. Keys not in this map are always shown.
   @nav_key_page_types %{
-    "kanban" => "todo",
-    "todos" => "todo",
-    "projects" => "project",
-    "goals" => "goal",
-    "plans" => "plan",
     "notes" => "note",
     "concepts" => "concept",
     "entities" => "entity",
@@ -300,20 +293,6 @@ defmodule DranWeb.Layouts do
             badge: counts[:todos]
           },
           %{
-            key: "projects",
-            label: gettext("Projects"),
-            icon: "hero-rocket-launch",
-            path: "/panel/projects",
-            badge: counts[:projects]
-          },
-          %{
-            key: "goals",
-            label: gettext("Objetivos"),
-            icon: "hero-flag",
-            path: ~p"/panel/goals",
-            badge: counts[:goals]
-          },
-          %{
             key: "graph",
             label: gettext("Grafo"),
             icon: "hero-share",
@@ -343,18 +322,18 @@ defmodule DranWeb.Layouts do
         label: gettext("Planning"),
         items: [
           %{
-            key: "plans",
-            label: gettext("Planes"),
-            icon: "hero-clipboard-document-list",
-            path: ~p"/panel/plans",
-            badge: counts[:plans]
+            key: "goals",
+            label: gettext("Objetivos"),
+            icon: "hero-flag",
+            path: ~p"/panel/goals",
+            badge: counts[:goals]
           },
           %{
-            key: "todos",
-            label: gettext("Tareas"),
-            icon: "hero-check-circle",
-            path: ~p"/panel/todos",
-            badge: counts[:todos]
+            key: "projects",
+            label: gettext("Projects"),
+            icon: "hero-rocket-launch",
+            path: ~p"/panel/projects",
+            badge: counts[:projects]
           }
         ]
       },

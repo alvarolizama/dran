@@ -13,37 +13,6 @@ defmodule DranWeb.DisabledTypes do
 
   alias Dran.Brain.Workspace
 
-  # Maps tab keys (used in Goal/Plan/Project detail views) to page types.
-  @tab_key_page_types %{
-    "todos" => "todo",
-    "goals" => "goal",
-    "plans" => "plan",
-    "projects" => "project"
-  }
-
-  @doc """
-  Given a list of `{tab_key, label}` tuples and a context, returns only the
-  tabs whose page type is NOT in the context's disabled_page_types.
-
-  The "graph" tab is never filtered out.
-  """
-  def visible_tabs(tabs, %Workspace{} = context) do
-    disabled = context.disabled_page_types || []
-
-    Enum.reject(tabs, fn {key, _label} ->
-      page_type = Map.get(@tab_key_page_types, key)
-      page_type && page_type in disabled
-    end)
-  end
-
-  @doc """
-  True if the given tab key's page type is enabled for the context.
-  """
-  def tab_enabled?(key, %Workspace{} = context) do
-    page_type = Map.get(@tab_key_page_types, key)
-    is_nil(page_type) or page_type not in (context.disabled_page_types || [])
-  end
-
   @doc """
   Given a context and a page_type string, returns `true` if the type is
   enabled (not in disabled_page_types). Convenience wrapper around

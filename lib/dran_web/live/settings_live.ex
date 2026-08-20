@@ -14,7 +14,6 @@ defmodule DranWeb.SettingsLive do
   alias Dran.Jobs
   alias Dran.Settings
   alias Dran.Slug
-  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
   # Keys managed by the "Brain tuning" form.
@@ -111,10 +110,6 @@ defmodule DranWeb.SettingsLive do
   end
 
   # Short human-readable hint shown next to each page type toggle in Settings.
-  defp page_type_impact("todo"), do: gettext("Kanban, tasks, todos list")
-  defp page_type_impact("goal"), do: gettext("Goals, goal filters, goal badges")
-  defp page_type_impact("plan"), do: gettext("Plans, plan filters, plan badges")
-  defp page_type_impact("project"), do: gettext("Projects, project filters, project badges")
   defp page_type_impact("note"), do: gettext("Notes, notes list")
   defp page_type_impact("concept"), do: gettext("Concepts, concepts list")
   defp page_type_impact("entity"), do: gettext("Entities, entities list")
@@ -1497,9 +1492,7 @@ defmodule DranWeb.SettingsLive do
                   <div class="flex items-center gap-2 flex-wrap">
                     <.job_status_badge status={job.last_run.status} />
                     <.link
-                      navigate={
-                        PageTypes.page_show_path(%{page_type: "report", slug: job.last_run.slug})
-                      }
+                      navigate={"/panel/reports/#{job.last_run.slug}"}
                       class="link link-hover text-xs text-base-content/70"
                     >
                       {relative_time(job.last_run.at)}
