@@ -11,14 +11,9 @@ defmodule DranWeb.GraphHelpers do
 
   @type_colors %{
     "note" => "#60A5FA",
-    "todo" => "#34D399",
-    "goal" => "#F59E0B",
-    "plan" => "#A78BFA",
     "entity" => "#FB7185",
     "concept" => "#FBBF24",
     "reference" => "#60A5FA",
-    "project" => "#22D3EE",
-    "artifact" => "#2DD4BF",
     "query" => "#818CF8"
   }
 

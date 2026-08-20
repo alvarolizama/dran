@@ -62,6 +62,10 @@ defmodule Dran.Brain.Page do
              :version,
              :archived,
              :pinned,
+             :kanban_status,
+             :priority,
+             :due_date,
+             :assignee,
              :owner,
              :created_by,
              :updated_by,
@@ -90,6 +94,12 @@ defmodule Dran.Brain.Page do
     field :version, :integer, default: 1
     field :archived, :boolean, default: false
     field :pinned, :boolean, default: false
+
+    # Kanban columns (nullable — nil means not on kanban board)
+    field :kanban_status, :string
+    field :priority, :string
+    field :due_date, :date
+    field :assignee, :string
 
     # Embeddings
     field :embedding_hash, :string
@@ -129,7 +139,11 @@ defmodule Dran.Brain.Page do
       :updated_by,
       :on_behalf_of,
       :archived,
-      :pinned
+      :pinned,
+      :kanban_status,
+      :priority,
+      :due_date,
+      :assignee
     ])
     |> validate_required([:workspace_id, :title, :slug, :page_type])
     |> validate_length(:title, max: 500)

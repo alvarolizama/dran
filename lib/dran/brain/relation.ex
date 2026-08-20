@@ -1,7 +1,12 @@
 defmodule Dran.Brain.Relation do
   @moduledoc """
-  Directed N:M relation between pages. The graph is directed:
+  Directed N:M relation between nodes. The graph is directed:
   `source` → `target`.
+
+  Relations are **polymorphic**: `source_type` / `target_type` indicate which
+  table the `source_id` / `target_id` point to — `"page"`, `"goal"`,
+  `"project"`, or `"collection"`. App-level validation in `changeset/2`
+  ensures each endpoint resolves to a real row of the declared type.
 
   ## Relation types (manual)
   - `related` — generic connection (default)
@@ -18,21 +23,36 @@ defmodule Dran.Brain.Relation do
 
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
 
   @primary_key {:id, :binary_id, read_after_writes: true}
   @foreign_key_type :binary_id
 
   @derive {Jason.Encoder,
-           only: [:id, :source_id, :target_id, :relation_type, :weight, :inserted_at]}
+           only: [
+             :id,
+             :source_id,
+             :source_type,
+             :target_id,
+             :target_type,
+             :relation_type,
+             :weight,
+             :inserted_at
+           ]}
   @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with)
+  @node_types ~w(page goal project collection)
 
   schema "relations" do
+    field :source_id, :binary_id
+    field :source_type, :string, default: "page"
+    field :target_id, :binary_id
+    field :target_type, :string, default: "page"
     field :relation_type, :string, default: "related"
     field :weight, :float
     field :meta, :map, default: %{}
 
-    belongs_to :source, Dran.Brain.Page
-    belongs_to :target, Dran.Brain.Page
+    has_one :source, Dran.Brain.Page, foreign_key: :id, references: :source_id
+    has_one :target, Dran.Brain.Page, foreign_key: :id, references: :target_id
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -40,9 +60,21 @@ defmodule Dran.Brain.Relation do
   @doc "Changeset for creating a relation"
   def changeset(relation, attrs) do
     relation
-    |> cast(attrs, [:source_id, :target_id, :relation_type, :weight, :meta])
+    |> cast(attrs, [
+      :source_id,
+      :source_type,
+      :target_id,
+      :target_type,
+      :relation_type,
+      :weight,
+      :meta
+    ])
     |> validate_required([:source_id, :target_id])
+    |> validate_inclusion(:source_type, @node_types)
+    |> validate_inclusion(:target_type, @node_types)
     |> validate_inclusion(:relation_type, @relation_types)
+    |> validate_polymorphic_source()
+    |> validate_polymorphic_target()
     |> unique_constraint([:source_id, :target_id, :relation_type],
       name: :relations_source_id_target_id_relation_type_index
     )
@@ -50,4 +82,49 @@ defmodule Dran.Brain.Relation do
 
   @doc "List of valid relation types"
   def relation_types, do: @relation_types
+
+  @doc "List of valid node types (polymorphic endpoints)"
+  def node_types, do: @node_types
+
+  # App-level polymorphic validation — the DB has no FK to enforce that
+  # `(source_id, source_type)` resolves, so we check it here.
+  defp validate_polymorphic_source(changeset) do
+    with id when not is_nil(id) <- get_change(changeset, :source_id),
+         type when not is_nil(type) <- get_change(changeset, :source_type),
+         false <- endpoint_exists?(type, id) do
+      add_error(changeset, :source_id, "does not exist for type #{type}")
+    else
+      _ -> changeset
+    end
+  end
+
+  defp validate_polymorphic_target(changeset) do
+    with id when not is_nil(id) <- get_change(changeset, :target_id),
+         type when not is_nil(type) <- get_change(changeset, :target_type),
+         false <- endpoint_exists?(type, id) do
+      add_error(changeset, :target_id, "does not exist for type #{type}")
+    else
+      _ -> changeset
+    end
+  end
+
+  # Relationship modules for polymorphic endpoint lookup. When a relation is
+  # created via the context the ids are always present, so we query the repo
+  # for the declared type to confirm the row exists. Uses on_conflict-safe
+  # Repo.exists? checks that are cheap (single PK lookup per side).
+  defp endpoint_exists?(type, id) do
+    mod = endpoint_module(type)
+
+    if mod do
+      Dran.Repo.exists?(from e in mod, where: e.id == ^id)
+    else
+      false
+    end
+  end
+
+  defp endpoint_module("page"), do: Dran.Brain.Page
+  defp endpoint_module("goal"), do: Dran.Brain.Goal
+  defp endpoint_module("project"), do: Dran.Brain.Project
+  defp endpoint_module("collection"), do: Dran.Brain.Collection
+  defp endpoint_module(_), do: nil
 end

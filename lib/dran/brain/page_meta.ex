@@ -8,7 +8,7 @@ defmodule Dran.Brain.PageMeta do
 
   ## Usage
 
-      changeset = PageMeta.changeset(%PageMeta{}, attrs, "todo")
+      changeset = PageMeta.changeset(%PageMeta{}, attrs, "note")
       if changeset.valid?, do: ...
   """
 
@@ -21,9 +21,6 @@ defmodule Dran.Brain.PageMeta do
   embedded_schema do
     # Common
     field :kind, :string
-    field :project_slug, :string
-    field :goal_slug, :string
-    field :plan_slug, :string
 
     # graph signals (computed by Dran.Graph)
     field :pagerank, :float
@@ -38,33 +35,6 @@ defmodule Dran.Brain.PageMeta do
     field :source_ref, :string
     field :author, :string
     field :language, :string
-
-    # plan
-    field :horizon, :string
-    field :period, :string
-    field :status, :string
-
-    field :kanban_status, :string
-    field :priority, :string
-    field :due_date, :date
-    field :remind_at, :utc_datetime
-    field :acknowledged, :boolean
-    field :completed_at, :utc_datetime
-    field :assignee, :string
-
-    # goal
-    field :start_date, :date
-    field :target_date, :date
-    field :team, {:array, :string}
-    field :health, :string
-    field :metric, :string
-    field :target_value, :float
-    field :current_value, :float
-    field :unit, :string
-    field :progress, :float
-
-    # project
-    field :health_source, :string
 
     # entity
     field :aliases, {:array, :string}
@@ -92,25 +62,14 @@ defmodule Dran.Brain.PageMeta do
     field :props, :map
   end
 
-  @note_kinds ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm)
+  @note_kinds ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm todo plan)
   @entity_kinds ~w(person company product tool place event language framework service hardware protocol course community asset brand)
   @concept_kinds ~w(technique pattern discipline theory principle framework method model law heuristic strategy convention)
   @reference_kinds ~w(article paper video podcast book document code design deliverable file tweet docs course newsletter forum spec release website repo api guide interview talk)
   @query_kinds ~w(factual conceptual how_to opinion exploration report status decision comparison)
-  @plan_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
-  @goal_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
-  @todo_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
   @report_kinds ~w(log)
-  @kanban_statuses ~w(backlog this_week today in_progress done cancelled)
-  @priorities ~w(low medium high urgent)
-  @healths ~w(green yellow red)
-  @horizons ~w(weekly monthly quarterly yearly)
   @query_difficulties ~w(simple intermediate advanced)
   @query_statuses ~w(open answered verified)
-  @project_statuses ~w(draft active on_hold done archived)
-  @plan_statuses ~w(draft active done archived)
-  @health_sources ~w(manual derived)
-  @health_scores %{"green" => 3, "yellow" => 2, "red" => 1}
 
   def changeset(meta, attrs, page_type) do
     meta
@@ -122,9 +81,6 @@ defmodule Dran.Brain.PageMeta do
   defp all_fields do
     [
       :kind,
-      :project_slug,
-      :goal_slug,
-      :plan_slug,
       :pagerank,
       :community_id,
       :date,
@@ -135,26 +91,6 @@ defmodule Dran.Brain.PageMeta do
       :source_ref,
       :author,
       :language,
-      :horizon,
-      :period,
-      :status,
-      :kanban_status,
-      :priority,
-      :due_date,
-      :remind_at,
-      :acknowledged,
-      :completed_at,
-      :assignee,
-      :start_date,
-      :target_date,
-      :team,
-      :health,
-      :health_source,
-      :metric,
-      :target_value,
-      :current_value,
-      :unit,
-      :progress,
       :aliases,
       :external_url,
       :location,
@@ -172,7 +108,7 @@ defmodule Dran.Brain.PageMeta do
   end
 
   defp validate_kind(cs, type)
-       when type in ~w(note entity concept reference query plan goal todo report) do
+       when type in ~w(note entity concept reference query) do
     kinds = kinds_for(type)
 
     if kinds do
@@ -189,37 +125,8 @@ defmodule Dran.Brain.PageMeta do
   defp kinds_for("concept"), do: @concept_kinds
   defp kinds_for("reference"), do: @reference_kinds
   defp kinds_for("query"), do: @query_kinds
-  defp kinds_for("plan"), do: @plan_kinds
-  defp kinds_for("goal"), do: @goal_kinds
-  defp kinds_for("todo"), do: @todo_kinds
   defp kinds_for("report"), do: @report_kinds
   defp kinds_for(_), do: nil
-
-  defp validate_meta_for_type(cs, "todo") do
-    cs
-    |> validate_inclusion(:kanban_status, @kanban_statuses)
-    |> validate_inclusion(:priority, @priorities)
-  end
-
-  defp validate_meta_for_type(cs, "project") do
-    cs
-    |> validate_inclusion(:status, @project_statuses)
-    |> validate_inclusion(:priority, @priorities)
-    |> validate_inclusion(:health, @healths)
-    |> validate_inclusion(:health_source, @health_sources)
-  end
-
-  defp validate_meta_for_type(cs, "goal") do
-    cs
-    |> validate_inclusion(:health, @healths)
-    |> validate_progress_range()
-  end
-
-  defp validate_meta_for_type(cs, "plan") do
-    cs
-    |> validate_inclusion(:horizon, @horizons)
-    |> validate_inclusion(:status, @plan_statuses)
-  end
 
   defp validate_meta_for_type(cs, "query") do
     cs
@@ -229,79 +136,14 @@ defmodule Dran.Brain.PageMeta do
 
   defp validate_meta_for_type(cs, _type), do: cs
 
-  defp validate_progress_range(cs) do
-    case get_change(cs, :progress) do
-      nil -> cs
-      val when is_number(val) and val >= 0.0 and val <= 1.0 -> cs
-      _ -> add_error(cs, :progress, "must be between 0.0 and 1.0")
-    end
-  end
-
   def note_kinds, do: @note_kinds
   def entity_kinds, do: @entity_kinds
   def concept_kinds, do: @concept_kinds
   def reference_kinds, do: @reference_kinds
   def query_kinds, do: @query_kinds
-  def plan_kinds, do: @plan_kinds
-  def goal_kinds, do: @goal_kinds
-  def todo_kinds, do: @todo_kinds
   def report_kinds, do: @report_kinds
-  def kanban_statuses, do: @kanban_statuses
-  def priorities, do: @priorities
-  def healths, do: @healths
-  def horizons, do: @horizons
-  def plan_statuses, do: @plan_statuses
-  def project_statuses, do: @project_statuses
-  def health_sources, do: @health_sources
   def query_difficulties, do: @query_difficulties
   def query_statuses, do: @query_statuses
-
-  @doc """
-  Deriva el health de un project a partir del health de sus goals.
-  Regla: promedio de scores (green=3, yellow=2, red=1) con floor.
-  Devuelve nil si no hay goals (no se recalcula).
-  """
-  def derive_project_health([]), do: nil
-
-  def derive_project_health(goal_healths) when is_list(goal_healths) do
-    scores =
-      goal_healths
-      |> Enum.map(&Map.get(@health_scores, &1))
-      |> Enum.reject(&is_nil/1)
-
-    case scores do
-      [] ->
-        nil
-
-      list ->
-        avg = Enum.sum(list) / length(list)
-        score_to_health(floor(avg))
-    end
-  end
-
-  @doc """
-  Calcula el progreso de un goal a partir de sus todos vinculados.
-  Regla: (todos done) / (todos totales no cancelados).
-  Devuelve nil si no hay todos (o si todos están cancelados).
-  """
-  def derive_goal_progress([]), do: nil
-
-  def derive_goal_progress(todo_statuses) when is_list(todo_statuses) do
-    relevant = Enum.reject(todo_statuses, &(&1 == "cancelled"))
-
-    case relevant do
-      [] ->
-        nil
-
-      list ->
-        done = Enum.count(list, &(&1 == "done"))
-        done / length(list)
-    end
-  end
-
-  defp score_to_health(3), do: "green"
-  defp score_to_health(2), do: "yellow"
-  defp score_to_health(_), do: "red"
 
   @doc """
   Returns the metadata fields and their select options for a given page type.
@@ -310,35 +152,16 @@ defmodule Dran.Brain.PageMeta do
 
     * `:edit` (default) — the full field list used when editing an existing
       page. This is what the `<.meta_fields>` component renders today.
-    * `:new` — a reduced field list for the creation form. Only `("goal",
-      :new)` is filtered today: health and current_value/progress are
-      excluded (they are derived/progress-tracking fields, not capture
-      fields). All other types return their full `:edit` list in `:new`
-      mode.
+    * `:new` — same as `:edit` for the remaining page types.
 
   The arity-1 form `meta_fields_for(type)` delegates to
   `meta_fields_for(type, :edit)` so existing callers (notably the
   `<.meta_fields>` component in `markdown_editor_components.ex`) keep
-  working unchanged. The `:new` filtering for goals activates once that
-  component gains a `:mode` attr in a later wave.
+  working unchanged.
   """
   def meta_fields_for(type, mode \\ :edit)
 
   def meta_fields_for(type, :edit), do: meta_fields_edit(type)
-
-  def meta_fields_for("goal", :new) do
-    # Capture-only fields for goal creation: health, current_value and
-    # progress are derived/tracking fields, so they are hidden on the
-    # new-goal form.
-    [
-      {:text, "metric", gettext("Metric"), placeholder: "e.g. MRR, users, uptime"},
-      {:number, "target_value", gettext("Target value"), step: "0.01"},
-      {:text, "unit", gettext("Unit"), placeholder: "e.g. %, USD, users"},
-      {:date, "start_date", gettext("Start date")},
-      {:date, "target_date", gettext("Target date")},
-      {:slug_select, "project_slug", gettext("Project"), type: "project"}
-    ]
-  end
 
   def meta_fields_for(type, :new), do: meta_fields_edit(type)
 
@@ -381,91 +204,6 @@ defmodule Dran.Brain.PageMeta do
        Enum.map(@reference_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
       {:text, "source_url", gettext("Source URL")},
       {:date, "published_at", gettext("Published at")},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
-  defp meta_fields_edit("plan") do
-    [
-      {:select, "kind", gettext("Kind"),
-       Enum.map(@plan_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:select, "horizon", gettext("Horizon"),
-       Enum.map(@horizons, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:select, "status", gettext("Status"),
-       Enum.map(@plan_statuses, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:text, "period", gettext("Period")},
-      {:date, "due_date", gettext("Due date")},
-      {:slug_select, "goal_slug", gettext("Goal"), type: "goal"},
-      {:slug_select, "project_slug", gettext("Project"), type: "project"},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
-  defp meta_fields_edit("project") do
-    # NOTE: health_source is intentionally omitted — it is an internal
-    # detail defaulting to "derived" everywhere. Health itself stays
-    # editable as a manual override.
-    [
-      {:select, "status", gettext("Status"),
-       Enum.map(@project_statuses, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:select, "health", gettext("Health"),
-       [{gettext("Green"), "green"}, {gettext("Yellow"), "yellow"}, {gettext("Red"), "red"}]},
-      {:select, "priority", gettext("Priority"),
-       [
-         {gettext("Low"), "low"},
-         {gettext("Medium"), "medium"},
-         {gettext("High"), "high"},
-         {gettext("Urgent"), "urgent"}
-       ]},
-      {:date, "start_date", gettext("Start date")},
-      {:date, "target_date", gettext("Target date")},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
-  defp meta_fields_edit("goal") do
-    [
-      {:select, "kind", gettext("Kind"),
-       Enum.map(@goal_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:select, "health", gettext("Health"),
-       [{gettext("Green"), "green"}, {gettext("Yellow"), "yellow"}, {gettext("Red"), "red"}]},
-      {:text, "metric", gettext("Metric"), placeholder: "e.g. MRR, users, uptime"},
-      {:number, "target_value", gettext("Target value"), step: "0.01"},
-      {:number, "current_value", gettext("Current value"), step: "0.01"},
-      {:text, "unit", gettext("Unit"), placeholder: "e.g. %, USD, users"},
-      {:number, "progress", gettext("Progress (0.0-1.0)"), step: "0.01", min: "0", max: "1"},
-      {:date, "start_date", gettext("Start date")},
-      {:date, "target_date", gettext("Target date")},
-      {:slug_select, "project_slug", gettext("Project"), type: "project"},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
-  defp meta_fields_edit("todo") do
-    [
-      {:select, "kind", gettext("Kind"),
-       Enum.map(@todo_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:select, "kanban_status", gettext("Status"),
-       [
-         {gettext("Backlog"), "backlog"},
-         {gettext("This Week"), "this_week"},
-         {gettext("Today"), "today"},
-         {gettext("In Progress"), "in_progress"},
-         {gettext("Done"), "done"},
-         {gettext("Cancelled"), "cancelled"}
-       ]},
-      {:select, "priority", gettext("Priority"),
-       [
-         {gettext("Low"), "low"},
-         {gettext("Medium"), "medium"},
-         {gettext("High"), "high"},
-         {gettext("Urgent"), "urgent"}
-       ]},
-      {:date, "due_date", gettext("Due date")},
-      {:text, "assignee", gettext("Assignee"), placeholder: "alvaro, hermes, claude-code..."},
-      {:slug_select, "project_slug", gettext("Project"), type: "project"},
-      {:slug_select, "goal_slug", gettext("Goal"), type: "goal"},
-      {:slug_select, "plan_slug", gettext("Plan"), type: "plan"},
       {:props, "props", gettext("Custom properties")}
     ]
   end
@@ -529,6 +267,8 @@ defmodule Dran.Brain.PageMeta do
       "template" => gettext("Template"),
       "log" => gettext("Log"),
       "brainstorm" => gettext("Brainstorm"),
+      "todo" => gettext("Todo"),
+      "plan" => gettext("Plan"),
       # ── entity kinds ───────────────────────────────────────────────────
       "person" => gettext("Person"),
       "company" => gettext("Company"),
@@ -594,37 +334,7 @@ defmodule Dran.Brain.PageMeta do
       # ── query statuses ──────────────────────────────────────────────────
       "open" => gettext("Open"),
       "answered" => gettext("Answered"),
-      "verified" => gettext("Verified"),
-      # ── project statuses ────────────────────────────────────────────────
-      "active" => gettext("Active"),
-      "on_hold" => gettext("On hold"),
-      "archived" => gettext("Archived"),
-      # ── kanban statuses ─────────────────────────────────────────────────
-      "backlog" => gettext("Backlog"),
-      "this_week" => gettext("This Week"),
-      "today" => gettext("Today"),
-      "in_progress" => gettext("In Progress"),
-      "done" => gettext("Done"),
-      "cancelled" => gettext("Cancelled"),
-      # ── horizons ────────────────────────────────────────────────────────
-      "weekly" => gettext("Weekly"),
-      "monthly" => gettext("Monthly"),
-      "quarterly" => gettext("Quarterly"),
-      "yearly" => gettext("Yearly"),
-      # ── plan kinds ──────────────────────────────────────────────────────
-      "personal" => gettext("Personal"),
-      "coding" => gettext("Coding"),
-      "business" => gettext("Business"),
-      "learning" => gettext("Learning"),
-      "health" => gettext("Health"),
-      "finance" => gettext("Finance"),
-      "other" => gettext("Other"),
-      "investing" => gettext("Investing"),
-      "marketing" => gettext("Marketing"),
-      "writing" => gettext("Writing"),
-      "career" => gettext("Career"),
-      "relationship" => gettext("Relationship"),
-      "travel" => gettext("Travel")
+      "verified" => gettext("Verified")
     }
   end
 end

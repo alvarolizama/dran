@@ -139,11 +139,7 @@ defmodule Dran.Journey do
       "note" => "#D36969",
       "concept" => "#D3A369",
       "entity" => "#C4D369",
-      "project" => "#7DD369",
       "reference" => "#69D38A",
-      "goal" => "#69D3C4",
-      "plan" => "#6996D3",
-      "todo" => "#7D69D3",
       "query" => "#D369A3"
     }
   end

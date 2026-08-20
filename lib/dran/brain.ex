@@ -27,7 +27,18 @@ defmodule Dran.Brain do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.Brain.{Workspace, Page, Relation, PageVersion, Log, PageMeta}
+
+  alias Dran.Brain.{
+    Workspace,
+    Page,
+    Relation,
+    PageVersion,
+    Log,
+    Goal,
+    Project,
+    Collection,
+    Report
+  }
 
   # ──────────────────────────────────────────────────────────────────────────
   # Contexts
@@ -132,13 +143,11 @@ defmodule Dran.Brain do
   def list_pages(opts \\ []) do
     workspace_id = Keyword.get(opts, :workspace_id)
     type = Keyword.get(opts, :type)
+    kind = Keyword.get(opts, :kind)
     tag = Keyword.get(opts, :tag)
     status = Keyword.get(opts, :status)
     owner = Keyword.get(opts, :owner)
     created_by = Keyword.get(opts, :created_by)
-    goal_slug = Keyword.get(opts, :goal_slug)
-    plan_slug = Keyword.get(opts, :plan_slug)
-    project_slug = Keyword.get(opts, :project_slug)
     assignee = Keyword.get(opts, :assignee)
     props = Keyword.get(opts, :props)
     pinned = Keyword.get(opts, :pinned)
@@ -187,18 +196,15 @@ defmodule Dran.Brain do
       |> maybe_filter_context(workspace_id)
       |> maybe_exclude_disabled_types(context, workspace_id)
       |> maybe_filter_type(type)
+      |> maybe_filter_kind(kind)
       |> maybe_filter_tag(tag)
       |> maybe_filter_status(status)
       |> maybe_filter_owner(owner)
       |> maybe_filter_created_by(created_by)
       |> maybe_filter_assignee(assignee)
-      |> maybe_filter_plan_slug(plan_slug)
-      |> maybe_filter_goal_slug(goal_slug)
-      |> maybe_filter_project_slug(project_slug)
       |> maybe_filter_props(props)
       |> maybe_filter_pinned(pinned)
       |> where([p], p.archived == ^archived)
-      |> maybe_distinct_for_planning(goal_slug)
       |> order_by([p], desc: p.updated_at)
       |> limit(^limit)
       |> offset(^offset)
@@ -241,6 +247,13 @@ defmodule Dran.Brain do
 
   defp maybe_filter_type(query, type) do
     where(query, [p], p.page_type == ^type)
+  end
+
+  # kind filters on meta.kind — used for note sub-kinds like "todo"/"plan"
+  defp maybe_filter_kind(query, nil), do: query
+
+  defp maybe_filter_kind(query, kind) do
+    where(query, [p], fragment("?->>'kind' = ?", p.meta, ^kind))
   end
 
   defp maybe_filter_tag(query, nil), do: query
@@ -288,87 +301,6 @@ defmodule Dran.Brain do
     where(query, [p], fragment("?->>'assignee'", p.meta) == ^assignee)
   end
 
-  # ── Planning hierarchy filters (goal_slug / plan_slug) ─────────────────────
-  #
-  # meta is a jsonb/map column; we read it via the `p.meta->>'key'` fragment.
-  # plan_slug: nil → no filter; "none" → empty/null plan_slug; value → exact match.
-  defp maybe_filter_plan_slug(query, nil), do: query
-
-  defp maybe_filter_plan_slug(query, "none") do
-    where(
-      query,
-      [p],
-      is_nil(fragment("?->>'plan_slug'", p.meta)) or fragment("?->>'plan_slug'", p.meta) == ""
-    )
-  end
-
-  defp maybe_filter_plan_slug(query, plan_slug) do
-    where(query, [p], fragment("?->>'plan_slug'", p.meta) == ^plan_slug)
-  end
-
-  # goal_slug: nil → no filter; "none" → no direct goal AND no plan-with-goal;
-  # value → direct match OR (via join) the plan pointed to by plan_slug has that goal.
-  defp maybe_filter_goal_slug(query, nil), do: query
-
-  defp maybe_filter_goal_slug(query, "none") do
-    # LEFT JOIN the plan page so we can check both the page's own goal_slug
-    # and the goal_slug of the plan it references.
-    query
-    |> join(:left, [p], plan in Page,
-      on:
-        plan.slug == fragment("?->>'plan_slug'", p.meta) and
-          plan.workspace_id == p.workspace_id and
-          plan.page_type == "plan"
-    )
-    |> where(
-      [p, plan],
-      (is_nil(fragment("?->>'goal_slug'", p.meta)) or
-         fragment("?->>'goal_slug'", p.meta) == "") and
-        (is_nil(fragment("?->>'goal_slug'", plan.meta)) or
-           fragment("?->>'goal_slug'", plan.meta) == "")
-    )
-  end
-
-  defp maybe_filter_goal_slug(query, goal_slug) do
-    query
-    |> join(:left, [p], plan in Page,
-      on:
-        plan.slug == fragment("?->>'plan_slug'", p.meta) and
-          plan.workspace_id == p.workspace_id and
-          plan.page_type == "plan"
-    )
-    |> where(
-      [p, plan],
-      fragment("?->>'goal_slug'", p.meta) == ^goal_slug or
-        fragment("?->>'goal_slug'", plan.meta) == ^goal_slug
-    )
-  end
-
-  # project_slug: nil → no filter; "none" → empty/null project_slug (orphans);
-  # value → exact match on meta.project_slug.
-  defp maybe_filter_project_slug(query, nil), do: query
-
-  defp maybe_filter_project_slug(query, "none") do
-    where(
-      query,
-      [p],
-      is_nil(fragment("?->>'project_slug'", p.meta)) or
-        fragment("?->>'project_slug'", p.meta) == ""
-    )
-  end
-
-  defp maybe_filter_project_slug(query, project_slug) do
-    where(query, [p], fragment("?->>'project_slug'", p.meta) == ^project_slug)
-  end
-
-  # The goal_slug join can duplicate rows when a todo matches both via its own
-  # goal_slug and via its plan's goal_slug. Dedupe when that filter is active.
-  # We use `distinct: true` (full-row DISTINCT) rather than DISTINCT ON (p.id)
-  # so it doesn't conflict with the subsequent order_by(desc: updated_at).
-  # Duplicated rows from the join are byte-identical, so this is safe.
-  defp maybe_distinct_for_planning(query, nil), do: query
-  defp maybe_distinct_for_planning(query, _goal_slug), do: distinct(query, true)
-
   # props: nil/empty → no filter; map → one `where` per key/value pair, compared
   # as `meta->'props'->>key = value` (AND logic). Filtering in the DB (rather than
   # post-fetch in memory) keeps limit/offset pagination correct. We use `->>`
@@ -399,7 +331,7 @@ defmodule Dran.Brain do
     end
   end
 
-  @doc "List todos in a context, optionally filtered by kanban_status"
+  @doc "List notes with kind:todo in a context, optionally filtered by kanban_status"
   def list_todos(workspace_id) when is_binary(workspace_id) do
     list_todos(workspace_id: workspace_id)
   end
@@ -410,15 +342,34 @@ defmodule Dran.Brain do
     limit = Keyword.get(opts, :limit, 500)
     archived = Keyword.get(opts, :archived, false)
 
-    opts =
-      [type: "todo", include_body: false, limit: limit, archived: archived]
-      |> maybe_put_opt(:workspace_id, workspace_id)
-      |> maybe_put_opt(:status, status)
+    query =
+      from(p in Page,
+        where:
+          p.page_type == "note" and
+            p.archived == ^archived and
+            fragment("?->>'kind' = 'todo'", p.meta),
+        order_by: [asc: p.title],
+        limit: ^limit
+      )
 
-    list_pages(opts)
+    query =
+      if status do
+        where(query, [p], p.kanban_status == ^status)
+      else
+        query
+      end
+
+    query =
+      if workspace_id do
+        where(query, [p], p.workspace_id == ^workspace_id)
+      else
+        query
+      end
+
+    Repo.all(query)
   end
 
-  @doc "List goals in a context"
+  @doc "List goals from the goals table"
   def list_goals(workspace_id) when is_binary(workspace_id) do
     list_goals(workspace_id: workspace_id)
   end
@@ -426,16 +377,199 @@ defmodule Dran.Brain do
   def list_goals(opts) when is_list(opts) do
     workspace_id = Keyword.get(opts, :workspace_id)
     limit = Keyword.get(opts, :limit, 100)
+    archived = Keyword.get(opts, :archived, false)
 
-    opts =
-      [type: "goal", include_body: false, limit: limit]
-      |> maybe_put_opt(:workspace_id, workspace_id)
+    query =
+      from(g in Goal,
+        where: g.archived == ^archived,
+        order_by: [asc: g.title],
+        limit: ^limit
+      )
 
-    list_pages(opts)
+    query =
+      if workspace_id do
+        where(query, [g], g.workspace_id == ^workspace_id)
+      else
+        query
+      end
+
+    Repo.all(query)
   end
 
-  defp maybe_put_opt(opts, _key, nil), do: opts
-  defp maybe_put_opt(opts, key, value), do: Keyword.put(opts, key, value)
+  # ──────────────────────────────────────────────────────────────────────────
+  # Goal CRUD
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc "Get a goal by slug within a workspace"
+  def get_goal_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
+    Repo.one(from g in Goal, where: g.slug == ^slug and g.workspace_id == ^workspace_id)
+  end
+
+  @doc "Get a goal by id"
+  def get_goal!(id), do: Repo.get!(Goal, id)
+
+  @doc "Get a goal by id, returns nil if not found"
+  def get_goal(id), do: Repo.get(Goal, id)
+
+  @doc "Build a changeset for a goal (for LiveView forms)"
+  def change_goal(%Goal{} = goal, attrs \\ %{}) do
+    Goal.changeset(goal, attrs)
+  end
+
+  @doc "Create a new goal"
+  def create_goal(attrs) do
+    %Goal{}
+    |> Goal.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "Update an existing goal"
+  def update_goal(%Goal{} = goal, attrs) do
+    goal
+    |> Goal.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc "Delete a goal"
+  def delete_goal(%Goal{} = goal), do: Repo.delete(goal)
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Project CRUD
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc "Get a project by slug within a workspace"
+  def get_project_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
+    Repo.one(from p in Project, where: p.slug == ^slug and p.workspace_id == ^workspace_id)
+  end
+
+  @doc "Get a project by id"
+  def get_project!(id), do: Repo.get!(Project, id)
+
+  @doc "Get a project by id, returns nil if not found"
+  def get_project(id), do: Repo.get(Project, id)
+
+  @doc "Build a changeset for a project (for LiveView forms)"
+  def change_project(%Project{} = project, attrs \\ %{}) do
+    Project.changeset(project, attrs)
+  end
+
+  @doc "Create a new project"
+  def create_project(attrs) do
+    %Project{}
+    |> Project.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "Update an existing project"
+  def update_project(%Project{} = project, attrs) do
+    project
+    |> Project.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc "Delete a project"
+  def delete_project(%Project{} = project), do: Repo.delete(project)
+
+  @doc "List projects in a workspace, optionally filtered"
+  def list_projects(opts) when is_list(opts) do
+    workspace_id = Keyword.get(opts, :workspace_id)
+    limit = Keyword.get(opts, :limit, 100)
+    archived = Keyword.get(opts, :archived, false)
+
+    query =
+      from(p in Project,
+        where: p.archived == ^archived,
+        order_by: [asc: p.title],
+        limit: ^limit
+      )
+
+    query =
+      if workspace_id do
+        where(query, [p], p.workspace_id == ^workspace_id)
+      else
+        query
+      end
+
+    Repo.all(query)
+  end
+
+  def list_projects(workspace_id) when is_binary(workspace_id) do
+    list_projects(workspace_id: workspace_id)
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Collection CRUD
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc "Get a collection by slug within a workspace"
+  def get_collection_by_slug(slug, workspace_id)
+      when is_binary(slug) and is_binary(workspace_id) do
+    Repo.one(from c in Collection, where: c.slug == ^slug and c.workspace_id == ^workspace_id)
+  end
+
+  @doc "Get a collection by id"
+  def get_collection!(id), do: Repo.get!(Collection, id)
+
+  @doc "Get a collection by id, returns nil if not found"
+  def get_collection(id), do: Repo.get(Collection, id)
+
+  @doc "Build a changeset for a collection (for LiveView forms)"
+  def change_collection(%Collection{} = collection, attrs \\ %{}) do
+    Collection.changeset(collection, attrs)
+  end
+
+  @doc "Create a new collection"
+  def create_collection(attrs) do
+    %Collection{}
+    |> Collection.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "Update an existing collection"
+  def update_collection(%Collection{} = collection, attrs) do
+    collection
+    |> Collection.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc "Delete a collection"
+  def delete_collection(%Collection{} = collection), do: Repo.delete(collection)
+
+  @doc "List collections in a workspace"
+  def list_collections(workspace_id) when is_binary(workspace_id) do
+    Repo.all(
+      from c in Collection, where: c.workspace_id == ^workspace_id, order_by: [asc: c.name]
+    )
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Report CRUD
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc "Get a report by slug within a workspace"
+  def get_report_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
+    Repo.one(from r in Report, where: r.slug == ^slug and r.workspace_id == ^workspace_id)
+  end
+
+  @doc "Get a report by id"
+  def get_report!(id), do: Repo.get!(Report, id)
+
+  @doc "Get a report by id, returns nil if not found"
+  def get_report(id), do: Repo.get(Report, id)
+
+  @doc "Create a new report"
+  def create_report(attrs) do
+    %Report{}
+    |> Report.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "List reports in a workspace"
+  def list_reports(workspace_id) when is_binary(workspace_id) do
+    Repo.all(
+      from r in Report, where: r.workspace_id == ^workspace_id, order_by: [desc: r.inserted_at]
+    )
+  end
 
   @doc """
   All distinct tags used in a context, sorted alphabetically. Used for
@@ -546,7 +680,6 @@ defmodule Dran.Brain do
           })
 
           resolve_embeds(page)
-          sync_todo_links(page)
 
           broadcast_page_change(page.workspace_id, :created, page)
           Dran.Embeddings.schedule(page)
@@ -644,7 +777,6 @@ defmodule Dran.Brain do
         })
 
         reresolve_embeds(updated_page)
-        sync_todo_links(updated_page, page)
 
         broadcast_page_change(updated_page.workspace_id, :updated, updated_page)
         Dran.Embeddings.schedule(updated_page)
@@ -1177,237 +1309,6 @@ defmodule Dran.Brain do
         select: %{id: p.id, slug: p.slug, title: p.title, page_type: p.page_type}
     )
   end
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Page links materialization (part_of relations) + derived health/progress
-  # ──────────────────────────────────────────────────────────────────────────
-
-  @doc """
-  Sincroniza los vínculos `part_of` de una página con sus slugs en meta.
-  Sin precedencia: project_slug, goal_slug y plan_slug son independientes.
-  Cada uno materializa su propia relación part_of si está seteado, y se borra
-  si se quita. Si la página objetivo no existe, no se crea la relación (el lint
-  lo reportará).
-
-  Invocada desde create_page/1 y update_page/2.
-  """
-  def sync_todo_links(page, prior_page \\ nil)
-
-  def sync_todo_links(%Page{} = page, prior_page) do
-    workspace_id = page.workspace_id
-
-    sync_one_link(
-      page.slug,
-      "project_slug",
-      page.meta,
-      prior_page && prior_page.meta,
-      workspace_id
-    )
-
-    sync_one_link(page.slug, "goal_slug", page.meta, prior_page && prior_page.meta, workspace_id)
-    sync_one_link(page.slug, "plan_slug", page.meta, prior_page && prior_page.meta, workspace_id)
-
-    # Recalcular health de project padre si la página es un goal con project_slug
-    maybe_recompute_parent_project(page, prior_page, workspace_id)
-
-    # Recalcular progress de goal padre si la página es un todo con goal_slug
-    maybe_recompute_parent_goal_progress(page, prior_page, workspace_id)
-
-    :ok
-  end
-
-  # Sincroniza un único vínculo (project_slug, goal_slug o plan_slug).
-  # Compara el valor actual con el previo; si cambiaron, borra la relación vieja
-  # y crea la nueva. Si ambos son nil o iguales, no hace nada.
-  defp sync_one_link(source_slug, key, current_meta, prior_meta, workspace_id) do
-    current = meta_string(current_meta, key)
-    prior = if prior_meta, do: meta_string(prior_meta, key), else: nil
-
-    cond do
-      current == prior ->
-        :ok
-
-      is_nil(current) or current == "" ->
-        # El vínculo se quitó: borrar la relación previa (si la había).
-        if not blank?(prior) do
-          delete_relation_by_slugs(source_slug, prior, "part_of", workspace_id)
-        end
-
-        :ok
-
-      true ->
-        # El vínculo cambió o se creó: borrar el previo (si lo había), crear el nuevo.
-        if not blank?(prior) do
-          delete_relation_by_slugs(source_slug, prior, "part_of", workspace_id)
-        end
-
-        create_relation_by_slugs(source_slug, current, "part_of", workspace_id)
-        :ok
-    end
-  end
-
-  # ── Recálculo de health de project (cuando un goal cambia) ────────────────
-
-  defp maybe_recompute_parent_project(page, prior_page, workspace_id) do
-    # Solo recalcular si la página es un goal (su health alimenta el project)
-    if page.page_type != "goal" do
-      :ok
-    else
-      project_slug = meta_string(page.meta, "project_slug")
-
-      if blank?(project_slug) do
-        :ok
-      else
-        health_changed? =
-          prior_page &&
-            meta_string(page.meta, "health") != meta_string(prior_page.meta, "health")
-
-        project_changed? =
-          prior_page &&
-            meta_string(page.meta, "project_slug") != meta_string(prior_page.meta, "project_slug")
-
-        if is_nil(prior_page) or health_changed? or project_changed? do
-          case get_page_by_slug(project_slug, workspace_id) do
-            nil -> :ok
-            project_page -> recompute_project_health(project_page, workspace_id)
-          end
-        else
-          :ok
-        end
-      end
-    end
-  end
-
-  @doc """
-  Recomputa el `health` derivado de un project a partir del health de sus goals.
-
-  Si el project tiene `health_source: "manual"`, se respeta y no se recalcula.
-  Si no hay goals con health, no se sobreescribe (se mantiene el valor actual).
-  """
-  def recompute_project_health(project_page, _workspace_id) do
-    if meta_get(project_page.meta, "health_source") == "manual" do
-      :ok
-    else
-      goal_healths = list_goal_healths_for_project(project_page.slug, project_page.workspace_id)
-
-      case PageMeta.derive_project_health(goal_healths) do
-        nil ->
-          :ok
-
-        derived ->
-          update_page_meta_field(project_page, "health", derived)
-          update_page_meta_field(project_page, "health_source", "derived")
-      end
-    end
-  end
-
-  defp list_goal_healths_for_project(project_slug, workspace_id) do
-    from(p in Page,
-      where:
-        p.workspace_id == ^workspace_id and
-          p.page_type == "goal" and
-          fragment("?->>'project_slug'", p.meta) == ^project_slug,
-      select: fragment("?->>'health'", p.meta)
-    )
-    |> Repo.all()
-    |> Enum.reject(&is_nil/1)
-  end
-
-  # ── Recálculo de progress de goal (cuando un todo cambia) ──────────────────
-
-  defp maybe_recompute_parent_goal_progress(page, prior_page, workspace_id) do
-    # Solo recalcular si la página es un todo (su kanban_status alimenta el progress del goal)
-    if page.page_type != "todo" do
-      :ok
-    else
-      goal_slug = meta_string(page.meta, "goal_slug")
-
-      if blank?(goal_slug) do
-        :ok
-      else
-        status_changed? =
-          prior_page &&
-            meta_string(page.meta, "kanban_status") !=
-              meta_string(prior_page.meta, "kanban_status")
-
-        goal_changed? =
-          prior_page &&
-            meta_string(page.meta, "goal_slug") != meta_string(prior_page.meta, "goal_slug")
-
-        if is_nil(prior_page) or status_changed? or goal_changed? do
-          case get_page_by_slug(goal_slug, workspace_id) do
-            nil -> :ok
-            goal_page -> recompute_goal_progress(goal_page, workspace_id)
-          end
-        else
-          :ok
-        end
-      end
-    end
-  end
-
-  @doc """
-  Recomputa el `progress` derivado de un goal a partir del kanban_status de sus todos.
-
-  Si el goal tiene el flag `progress_manual: true` en el meta, se respeta el
-  valor manual y no se recalcula. Si no hay todos con status, no se sobreescribe.
-  """
-  def recompute_goal_progress(goal_page, _workspace_id) do
-    if Map.get(goal_page.meta || %{}, "progress_manual") == true do
-      :ok
-    else
-      todo_statuses = list_todo_statuses_for_goal(goal_page.slug, goal_page.workspace_id)
-
-      case PageMeta.derive_goal_progress(todo_statuses) do
-        nil -> :ok
-        derived -> update_page_meta_field(goal_page, "progress", Float.round(derived, 2))
-      end
-    end
-  end
-
-  defp list_todo_statuses_for_goal(goal_slug, workspace_id) do
-    from(p in Page,
-      where:
-        p.workspace_id == ^workspace_id and
-          p.page_type == "todo" and
-          fragment("?->>'goal_slug'", p.meta) == ^goal_slug,
-      select: fragment("?->>'kanban_status'", p.meta)
-    )
-    |> Repo.all()
-    |> Enum.reject(&is_nil/1)
-  end
-
-  defp update_page_meta_field(page, key, value) do
-    new_meta = Map.put(page.meta || %{}, key, value)
-    update_page(page, %{"meta" => new_meta})
-    :ok
-  end
-
-  # Helper local para leer meta con fallback atom/string (PageMeta.meta_get/2
-  # no existe aún — este helper lo sustituye).
-  defp meta_get(nil, _key), do: nil
-
-  defp meta_get(meta, key) when is_map(meta) do
-    case Map.get(meta, key) do
-      nil -> Map.get(meta, to_string(key))
-      val -> val
-    end
-  end
-
-  defp meta_get(_meta, _key), do: nil
-
-  defp meta_string(nil, _key), do: nil
-
-  defp meta_string(meta, key) when is_map(meta) do
-    case Map.get(meta, key) do
-      val when is_binary(val) -> val
-      _ -> nil
-    end
-  end
-
-  defp blank?(nil), do: true
-  defp blank?(""), do: true
-  defp blank?(_), do: false
 
   @doc """
   Build the full graph (nodes + edges) for a context.
@@ -2348,89 +2249,18 @@ defmodule Dran.Brain do
   end
 
   @doc """
-  Find todos whose `meta.plan_slug` does not resolve to an existing plan page
-  in the same context (broken planning references).
-  """
-  def broken_plan_refs(workspace_id) do
-    # All todos with a non-empty plan_slug whose slug isn't a plan in the context.
-    known_plan_slugs =
-      from(p in Page,
-        where: p.workspace_id == ^workspace_id and p.page_type == "plan",
-        select: p.slug
-      )
-
-    Repo.all(
-      from p in Page,
-        where:
-          p.workspace_id == ^workspace_id and p.page_type == "todo" and
-            not is_nil(fragment("?->>'plan_slug'", p.meta)) and
-            fragment("?->>'plan_slug'", p.meta) != "" and
-            fragment("?->>'plan_slug'", p.meta) not in subquery(known_plan_slugs),
-        order_by: [asc: p.title],
-        select: %{slug: p.slug, title: p.title, page_type: p.page_type}
-    )
-  end
-
-  @doc """
-  Find plans and todos whose `meta.goal_slug` does not resolve to an existing
-  goal page in the same context (broken planning references).
-  """
-  def broken_goal_refs(workspace_id) do
-    known_goal_slugs =
-      from(p in Page,
-        where: p.workspace_id == ^workspace_id and p.page_type == "goal",
-        select: p.slug
-      )
-
-    Repo.all(
-      from p in Page,
-        where:
-          p.workspace_id == ^workspace_id and p.page_type in ^["plan", "todo"] and
-            not is_nil(fragment("?->>'goal_slug'", p.meta)) and
-            fragment("?->>'goal_slug'", p.meta) != "" and
-            fragment("?->>'goal_slug'", p.meta) not in subquery(known_goal_slugs),
-        order_by: [asc: p.title],
-        select: %{slug: p.slug, title: p.title, page_type: p.page_type}
-    )
-  end
-
-  @doc """
-  Find todos with neither a `plan_slug` nor a `goal_slug` — informational,
-  not an error (inbox/orphan todos are legitimate).
-  """
-  def unplanned_todos(workspace_id) do
-    Repo.all(
-      from p in Page,
-        where:
-          p.workspace_id == ^workspace_id and p.page_type == "todo" and
-            (is_nil(fragment("?->>'plan_slug'", p.meta)) or
-               fragment("?->>'plan_slug'", p.meta) == "") and
-            (is_nil(fragment("?->>'goal_slug'", p.meta)) or
-               fragment("?->>'goal_slug'", p.meta) == ""),
-        order_by: [asc: p.title],
-        select: %{slug: p.slug, title: p.title, page_type: p.page_type}
-    )
-  end
-
-  @doc """
   Run a full lint report for a context.
 
   Returns a map with:
   - `:orphans` — pages with no inbound links
   - `:stale` — pages not updated in 90 days
   - `:contested` — pages flagged as contested
-  - `:broken_plan_refs` — todos whose plan_slug doesn't resolve to a plan
-  - `:broken_goal_refs` — plans/todos whose goal_slug doesn't resolve to a goal
-  - `:unplanned_todos` — todos with no plan_slug and no goal_slug (informational)
   """
   def lint(workspace_id) do
     %{
       orphans: orphan_pages(workspace_id),
       stale: stale_pages(workspace_id),
-      contested: contested_pages(workspace_id),
-      broken_plan_refs: broken_plan_refs(workspace_id),
-      broken_goal_refs: broken_goal_refs(workspace_id),
-      unplanned_todos: unplanned_todos(workspace_id)
+      contested: contested_pages(workspace_id)
     }
   end
 
@@ -2456,14 +2286,15 @@ defmodule Dran.Brain do
       )
       |> Map.new()
 
-    # todos_by_status: group_by on meta->>'kanban_status' for todo pages only
+    # todos_by_status: group_by on the kanban_status column for notes kind:"todo"
     todos_by_status =
       Repo.all(
         from p in Page,
           where:
-            p.workspace_id == ^workspace_id and p.page_type == "todo" and p.archived == false,
-          group_by: fragment("coalesce(meta->>'kanban_status', 'backlog')"),
-          select: {fragment("coalesce(meta->>'kanban_status', 'backlog')"), count(p.id)}
+            p.workspace_id == ^workspace_id and p.page_type == "note" and p.archived == false and
+              fragment("?->>'kind' = 'todo'", p.meta),
+          group_by: fragment("coalesce(kanban_status, 'backlog')"),
+          select: {fragment("coalesce(kanban_status, 'backlog')"), count(p.id)}
       )
       |> Map.new()
 

@@ -32,11 +32,21 @@ defmodule Dran.SmartCollection do
   ## Example
 
       iex> Dran.SmartCollection.query_to_opts(%{"type" => "todo", "status" => "in_progress"})
-      [type: "todo", status: "in_progress"]
+      [type: "note", kind: "todo", status: "in_progress"]
   """
   def query_to_opts(query) when is_map(query) do
+    type = query["type"] || query[:type]
+
+    # "todo"/"plan" are no longer page types — they are notes with a kind.
+    {type_opt, kind_opt} =
+      case type do
+        t when t in ["todo", "plan"] -> {"note", t}
+        t -> {t, nil}
+      end
+
     []
-    |> maybe_put(:type, query["type"] || query[:type])
+    |> maybe_put(:type, type_opt)
+    |> maybe_put(:kind, kind_opt)
     |> maybe_put(:tag, query["tag"] || query[:tag])
     |> maybe_put(:status, query["status"] || query[:status])
     |> maybe_put(:owner, query["owner"] || query[:owner])

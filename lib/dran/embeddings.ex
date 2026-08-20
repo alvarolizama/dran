@@ -13,7 +13,6 @@ defmodule Dran.Embeddings do
 
   alias Dran.Repo
   alias Dran.Brain.Page
-  alias Dran.Brain.PageTypes
   alias Dran.Inference
 
   @doc """
@@ -75,10 +74,7 @@ defmodule Dran.Embeddings do
   @spec schedule(Page.t()) :: :ok | :ignored
   def schedule(%Page{} = page) do
     cond do
-      # Second-citizen page types (e.g. report) never get embeddings.
-      not PageTypes.embeddings?(page.page_type) ->
-        :ignored
-
+      # All page types get embeddings — the guard was removed in Wave 6.
       not Inference.enabled?() ->
         :ignored
 
