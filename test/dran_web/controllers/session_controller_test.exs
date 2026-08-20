@@ -1,7 +1,7 @@
 defmodule DranWeb.SessionControllerTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.Plugs.Auth
 
   # The context selector cookie is signed with the endpoint's signing salt.
@@ -9,15 +9,15 @@ defmodule DranWeb.SessionControllerTest do
 
   setup %{conn: conn} do
     # Ensure we have at least two contexts to switch between
-    personal = Brain.get_workspace_by_slug("personal")
+    personal = Knowledge.get_workspace_by_slug("personal")
 
-    work = Brain.get_workspace_by_slug("work")
+    work = Knowledge.get_workspace_by_slug("work")
 
     if is_nil(work) do
-      {:ok, _work} = Brain.create_workspace(%{name: "Work", slug: "work"})
+      {:ok, _work} = Knowledge.create_workspace(%{name: "Work", slug: "work"})
     end
 
-    work = Brain.get_workspace_by_slug("work")
+    work = Knowledge.get_workspace_by_slug("work")
 
     # Log in and set initial context to "personal".
     # Set secret_key_base so signed cookies work in tests.
@@ -127,21 +127,21 @@ defmodule DranWeb.SessionControllerTest do
       personal: personal
     } do
       # Create a couple of pages in the personal context
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: personal.id,
         title: "Count Test 1",
         body: "",
         page_type: "note"
       })
 
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: personal.id,
         title: "Count Test 2",
         body: "",
         page_type: "note"
       })
 
-      counts = Brain.page_counts_by_workspace()
+      counts = Knowledge.page_counts_by_workspace()
 
       assert counts[personal.id] >= 2
     end

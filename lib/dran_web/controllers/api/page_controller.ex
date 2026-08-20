@@ -1,7 +1,7 @@
 defmodule DranWeb.API.PageController do
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @doc "GET /api/pages — list pages with filters"
   def index(conn, params) do
@@ -19,7 +19,7 @@ defmodule DranWeb.API.PageController do
       |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
       |> maybe_put(:include_body, params["include"] == "body")
 
-    pages = Brain.list_pages(opts)
+    pages = Knowledge.list_pages(opts)
 
     if opts[:include_body] do
       json(conn, %{data: pages})
@@ -32,7 +32,7 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/pages/:slug — get a page"
   def show(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -69,7 +69,7 @@ defmodule DranWeb.API.PageController do
       |> Map.put_new("owner", Dran.Auth.resolve_owner(user))
       |> Map.put_new("created_by", Dran.Auth.resolve_created_by(user))
 
-    case Brain.create_page(params) do
+    case Knowledge.create_page(params) do
       {:ok, page} ->
         conn
         |> put_status(:created)
@@ -85,7 +85,7 @@ defmodule DranWeb.API.PageController do
   @doc "PUT /api/pages/:slug — update a page"
   def update(conn, %{"slug" => slug, "workspace" => workspace_slug} = params) do
     with_context(conn, workspace_slug, fn conn, context ->
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -108,7 +108,7 @@ defmodule DranWeb.API.PageController do
               "kb_contested"
             ])
 
-          case Brain.update_page(page, params) do
+          case Knowledge.update_page(page, params) do
             {:ok, updated} ->
               json(conn, %{data: updated})
 
@@ -130,14 +130,14 @@ defmodule DranWeb.API.PageController do
   @doc "DELETE /api/pages/:slug — delete a page"
   def delete(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
           |> put_status(:not_found)
           |> json(%{errors: %{detail: "page not found"}})
 
         page ->
-          case Brain.delete_page(page) do
+          case Knowledge.delete_page(page) do
             {:ok, _} ->
               conn |> send_resp(:no_content, "")
 
@@ -159,14 +159,14 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/pages/:slug/links — inbound + outbound relations"
   def links(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
           |> put_status(:not_found)
           |> json(%{errors: %{detail: "page not found"}})
 
         page ->
-          relations = Brain.list_relations_for_page(page.id)
+          relations = Knowledge.list_relations_for_page(page.id)
           json(conn, %{data: relations})
       end
     end)
@@ -181,14 +181,14 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/pages/:slug/graph — subgraph centered on a page"
   def graph(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
           |> put_status(:not_found)
           |> json(%{errors: %{detail: "page not found"}})
 
         page ->
-          relations = Brain.list_relations_for_page(page.id)
+          relations = Knowledge.list_relations_for_page(page.id)
           json(conn, %{data: %{node: page, edges: relations}})
       end
     end)
@@ -230,7 +230,7 @@ defmodule DranWeb.API.PageController do
 
       context_val ->
         # Always try slug first, then fall back to ID lookup
-        context = Brain.get_workspace_by_slug(context_val)
+        context = Knowledge.get_workspace_by_slug(context_val)
 
         context =
           if context do

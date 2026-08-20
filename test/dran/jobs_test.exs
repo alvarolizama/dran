@@ -24,7 +24,7 @@ defmodule Dran.JobsTest do
   # the shared "personal" default context.
   use Dran.DataCase, async: false
 
-  alias Dran.{Brain, Jobs, Repo}
+  alias Dran.{Knowledge, Jobs, Repo}
   alias Dran.Report
   alias Dran.JobsTest.FakeJob
 
@@ -180,7 +180,7 @@ defmodule Dran.JobsTest do
     end
 
     test "reports land in the default context (not other contexts)", %{context: ctx} do
-      {:ok, other} = Brain.create_workspace(%{name: "Other", slug: "other"})
+      {:ok, other} = Knowledge.create_workspace(%{name: "Other", slug: "other"})
 
       assert {:ok, report} = Jobs.execute(:curator_daily, "manual", {FakeJob, :ok, []})
       assert report.workspace_id == ctx.id
@@ -302,8 +302,8 @@ defmodule Dran.JobsTest do
   # ── Helpers ───────────────────────────────────────────────────────────────
 
   defp ensure_default_context! do
-    Brain.get_workspace_by_slug("personal") ||
-      elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+    Knowledge.get_workspace_by_slug("personal") ||
+      elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
   end
 
   defp clear_disabled_jobs! do

@@ -9,7 +9,7 @@ defmodule DranWeb.ReportLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Reports
   alias DranWeb.Plugs.Auth
 
   @impl true
@@ -83,7 +83,7 @@ defmodule DranWeb.ReportLive do
     {socket, context} = Auth.resolve_workspace(socket, params)
 
     if context do
-      case Brain.get_report_by_slug(slug, context.id) do
+      case Reports.get_report_by_slug(slug, context.id) do
         nil ->
           {:noreply, push_navigate(socket, to: ~p"/panel/activity")}
 
@@ -108,7 +108,7 @@ defmodule DranWeb.ReportLive do
   @impl true
   def handle_info({:page_changed, _action, changed_report}, socket) do
     if socket.assigns[:report] && socket.assigns.report.id == changed_report.id do
-      report = Brain.get_report(changed_report.id)
+      report = Reports.get_report(changed_report.id)
 
       if report do
         {:noreply, assign(socket, report: report)}

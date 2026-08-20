@@ -9,7 +9,7 @@ defmodule DranWeb.CommandPalette do
 
   use DranWeb, :live_component
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.PageTypes
 
   @quick_actions [
@@ -36,7 +36,7 @@ defmodule DranWeb.CommandPalette do
   @impl true
   def update(%{workspace_slug: workspace_slug} = assigns, socket) do
     disabled_types =
-      case workspace_slug && Brain.get_workspace_by_slug(workspace_slug) do
+      case workspace_slug && Knowledge.get_workspace_by_slug(workspace_slug) do
         %{disabled_page_types: disabled} when is_list(disabled) -> disabled
         _ -> []
       end
@@ -284,7 +284,7 @@ defmodule DranWeb.CommandPalette do
       opts = [limit: 8]
       opts = if workspace_id, do: Keyword.put(opts, :workspace_id, workspace_id), else: opts
 
-      case Brain.search(query, opts) do
+      case Knowledge.search(query, opts) do
         {:ok, results} when is_list(results) -> results
         _ -> []
       end
@@ -297,7 +297,7 @@ defmodule DranWeb.CommandPalette do
 
   defp resolve_workspace_id(slug) when is_binary(slug) do
     try do
-      case Brain.get_workspace_by_slug(slug) do
+      case Knowledge.get_workspace_by_slug(slug) do
         nil -> nil
         context -> context.id
       end

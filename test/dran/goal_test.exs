@@ -1,7 +1,9 @@
 defmodule Dran.GoalTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Goals
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -24,8 +26,8 @@ defmodule Dran.GoalTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -42,7 +44,7 @@ defmodule Dran.GoalTest do
         unit: "%"
       }
 
-      assert {:ok, %Dran.Goal{} = goal} = Brain.create_goal(attrs)
+      assert {:ok, %Dran.Goal{} = goal} = Goals.create_goal(attrs)
       assert goal.title == "Test Goal"
       assert goal.metric == "completion %"
     end
@@ -51,14 +53,14 @@ defmodule Dran.GoalTest do
   describe "get_goal_by_slug/2" do
     test "retrieves a goal by slug and workspace_id", %{context: ctx} do
       {:ok, created} =
-        Brain.create_goal(%{
+        Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "Findable Goal",
           slug: "findable-goal",
           metric: "score"
         })
 
-      found = Brain.get_goal_by_slug("findable-goal", ctx.id)
+      found = Goals.get_goal_by_slug("findable-goal", ctx.id)
       assert found.id == created.id
     end
   end
@@ -66,7 +68,7 @@ defmodule Dran.GoalTest do
   describe "list_goals/1" do
     test "lists goals in a workspace", %{context: ctx} do
       {:ok, _} =
-        Brain.create_goal(%{
+        Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "Goal A",
           slug: "goal-a",
@@ -74,14 +76,14 @@ defmodule Dran.GoalTest do
         })
 
       {:ok, _} =
-        Brain.create_goal(%{
+        Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "Goal B",
           slug: "goal-b",
           metric: "score"
         })
 
-      goals = Brain.list_goals(workspace_id: ctx.id)
+      goals = Goals.list_goals(workspace_id: ctx.id)
       assert length(goals) == 2
     end
   end

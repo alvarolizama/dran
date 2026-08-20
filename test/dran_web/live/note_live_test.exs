@@ -1,7 +1,7 @@
 defmodule DranWeb.NoteLiveTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
@@ -28,11 +28,11 @@ defmodule DranWeb.NoteLiveTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     # Create source page (will link TO the target)
     {:ok, source} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Source Page",
         body: "This page links to the target",
@@ -41,7 +41,7 @@ defmodule DranWeb.NoteLiveTest do
 
     # Create target page (will receive the backlink)
     {:ok, target} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Target Page",
         body: "This page is linked from the source",
@@ -50,7 +50,7 @@ defmodule DranWeb.NoteLiveTest do
 
     # Create a relation: source -> target (so target has an inbound backlink)
     {:ok, _relation} =
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: source.id,
         target_id: target.id,
         relation_type: "related"
@@ -194,7 +194,7 @@ defmodule DranWeb.NoteLiveTest do
       # Archive via the detail button
       view |> element("button", t("Archive")) |> render_click()
 
-      assert Brain.get_page_by_slug(source.slug, source.workspace_id).archived == true
+      assert Knowledge.get_page_by_slug(source.slug, source.workspace_id).archived == true
 
       # The list no longer shows the page; the Archived section is hidden
       # until the header toggle is clicked
@@ -211,30 +211,30 @@ defmodule DranWeb.NoteLiveTest do
 
     test "archived detail shows banner and Unarchive restores the page",
          %{conn: conn, target: target} do
-      {:ok, _} = Brain.archive_page(target)
+      {:ok, _} = Knowledge.archive_page(target)
 
       {:ok, view, html} = live(conn, ~p"/notes/#{target.slug}")
       assert html =~ t("Archived")
 
       view |> element("button", t("Unarchive")) |> render_click()
 
-      assert Brain.get_page_by_slug(target.slug, target.workspace_id).archived == false
+      assert Knowledge.get_page_by_slug(target.slug, target.workspace_id).archived == false
 
       {:ok, _view, html} = live(conn, ~p"/notes")
       assert html =~ ~s(data-testid="page-card-#{target.slug}")
     end
 
     test "archived section filter narrows by page type", %{conn: conn} do
-      context = Brain.get_workspace_by_slug("personal")
+      context = Knowledge.get_workspace_by_slug("personal")
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Archived Note XYZ",
           page_type: "note"
         })
 
-      {:ok, _} = Brain.archive_page(note)
+      {:ok, _} = Knowledge.archive_page(note)
 
       {:ok, view, html} = live(conn, ~p"/notes")
       # Archived section hidden until toggled on

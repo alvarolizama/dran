@@ -513,7 +513,7 @@ defmodule DranWeb.DocsLive do
         hook that redirects to the dashboard. Creating a page of a disabled
         type is rejected in the web UI and via MCP (<code>page type 'X' is
         disabled in context 'Y'</code>), and disabled types are excluded from
-        <code>Brain.list_pages</code>
+        <code>Knowledge.list_pages</code>
         results.
       </p>
     </div>
@@ -814,7 +814,7 @@ defmodule DranWeb.DocsLive do
       <h3 id="runtime-settings" class="scroll-mt-20">Runtime Settings</h3>
       <p>
         Brain behavior can be tuned at runtime without restarting. Settings are stored
-        in the database and managed from Settings → Brain. Available keys:
+        in the database and managed from Settings → Knowledge. Available keys:
         <code>semantic_threshold_short</code>
         (0.15), <code>semantic_threshold_mid</code>
         (0.22), <code>semantic_threshold_long</code>

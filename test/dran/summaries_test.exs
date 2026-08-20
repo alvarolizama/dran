@@ -73,7 +73,7 @@ defmodule Dran.SummariesTest do
 
   describe "candidate_pages/1" do
     test "returns semantically closest pages, not just most recent" do
-      context = Dran.Brain.get_workspace_by_slug("personal")
+      context = Dran.Knowledge.get_workspace_by_slug("personal")
 
       # The target page has an embedding close to "relevant" pages below.
       # We use synthetic 1024-dim vectors: target = [1.0, 0.0, ...],
@@ -146,7 +146,7 @@ defmodule Dran.SummariesTest do
     end
 
     test "falls back to list_pages when page has no embedding" do
-      context = Dran.Brain.get_workspace_by_slug("personal")
+      context = Dran.Knowledge.get_workspace_by_slug("personal")
 
       for i <- 1..3 do
         %Page{

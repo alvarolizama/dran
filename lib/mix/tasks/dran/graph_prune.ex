@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Dran.Graph.Prune do
 
   use Mix.Task
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Graph.Maintenance
 
   @requirements ["app.start"]
@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Dran.Graph.Prune do
 
     slug = List.first(remaining) || raise "context slug is required"
 
-    context = Brain.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
+    context = Knowledge.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
 
     result =
       cond do

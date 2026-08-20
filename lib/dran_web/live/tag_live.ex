@@ -6,7 +6,7 @@ defmodule DranWeb.TagLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.Plugs.Auth
 
   @impl true
@@ -23,7 +23,7 @@ defmodule DranWeb.TagLive do
   def handle_params(%{"tag" => tag}, _url, socket) do
     pages =
       if socket.assigns.context do
-        Brain.list_pages(workspace_id: socket.assigns.context.id, tag: tag, limit: 200)
+        Knowledge.list_pages(workspace_id: socket.assigns.context.id, tag: tag, limit: 200)
       else
         []
       end

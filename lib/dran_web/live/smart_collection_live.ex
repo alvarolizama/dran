@@ -8,7 +8,9 @@ defmodule DranWeb.SmartCollectionLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Collections
   alias DranWeb.Plugs.Auth
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -301,7 +303,7 @@ defmodule DranWeb.SmartCollectionLive do
   defp apply_action(socket, :index, _params) do
     collections =
       if socket.assigns.context do
-        Brain.list_collections(socket.assigns.context.id)
+        Collections.list_collections(socket.assigns.context.id)
       else
         []
       end
@@ -313,7 +315,7 @@ defmodule DranWeb.SmartCollectionLive do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_collection_by_slug(slug, context.id) do
+      case Collections.get_collection_by_slug(slug, context.id) do
         nil ->
           push_navigate(socket, to: ~p"/panel/collections")
 
@@ -367,7 +369,7 @@ defmodule DranWeb.SmartCollectionLive do
     context = socket.assigns.context
 
     if collection && context do
-      case Brain.delete_collection(collection) do
+      case Collections.delete_collection(collection) do
         {:ok, _} ->
           {:noreply,
            socket
@@ -414,7 +416,7 @@ defmodule DranWeb.SmartCollectionLive do
           "filters" => filters
         }
 
-        case Brain.create_collection(attrs) do
+        case Collections.create_collection(attrs) do
           {:ok, collection} ->
             {:noreply,
              socket
@@ -442,7 +444,7 @@ defmodule DranWeb.SmartCollectionLive do
       {:noreply, assign(socket, results: results, result_count: length(results))}
     else
       if socket.assigns.live_action == :index && socket.assigns.context do
-        collections = Brain.list_collections(socket.assigns.context.id)
+        collections = Collections.list_collections(socket.assigns.context.id)
         {:noreply, assign(socket, collections: collections)}
       else
         {:noreply, socket}
@@ -464,7 +466,7 @@ defmodule DranWeb.SmartCollectionLive do
       |> maybe_add_filter(:tag, filters["tag"])
       |> maybe_add_filter(:owner, filters["owner"])
 
-    Brain.list_pages(opts)
+    Knowledge.list_pages(opts)
   end
 
   defp maybe_add_filter(opts, _key, nil), do: opts

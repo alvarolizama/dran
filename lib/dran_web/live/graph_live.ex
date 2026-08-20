@@ -13,7 +13,7 @@ defmodule DranWeb.GraphLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.GraphHelpers
   alias DranWeb.Plugs.Auth
 
@@ -78,7 +78,7 @@ defmodule DranWeb.GraphLive do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           push_navigate(socket, to: ~p"/graph")
 

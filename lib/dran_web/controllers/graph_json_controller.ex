@@ -14,16 +14,16 @@ defmodule DranWeb.GraphJSONController do
 
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.Plugs.Auth
 
   def show(conn, _params) do
     workspace_slug = Auth.current_context(conn)
-    context = Brain.get_workspace_by_slug(workspace_slug)
+    context = Knowledge.get_workspace_by_slug(workspace_slug)
 
     if context do
       # Serve from cache (ETS-backed GenServer). First hit builds the payload
-      # from Brain.graph_data; subsequent hits return the cached JSON.
+      # from Knowledge.graph_data; subsequent hits return the cached JSON.
       cached = Dran.GraphCache.get(context.id)
 
       conn

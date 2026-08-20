@@ -1,7 +1,7 @@
 defmodule Dran.Agent.EngineTest do
   use Dran.DataCase, async: false
 
-  alias Dran.{Brain, Repo}
+  alias Dran.{Knowledge, Repo}
   alias Dran.Agent.{Engine, Session}
 
   defmodule CrashingAgent do
@@ -40,8 +40,8 @@ defmodule Dran.Agent.EngineTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end

@@ -12,7 +12,7 @@ defmodule Dran.Agent.Curator do
     * `find_duplicates` — direct DB query (no LLM), returns page pairs with
       embedding distance < 0.05.
     * `flag_contested` — sets `kb_contested = true` on pages by slug.
-    * `lint_report` — delegates to `Brain.lint/1`.
+    * `lint_report` — delegates to `Knowledge.lint/1`.
     * `create_report` — creates a `report` page (kind `log`) with the
       curator's report.
     * `done` — finishes the session.
@@ -23,7 +23,7 @@ defmodule Dran.Agent.Curator do
 
   import Ecto.Query
 
-  alias Dran.{Brain, Repo}
+  alias Dran.{Knowledge, Repo, Reports}
   alias Dran.Page
 
   @agent_type "curator"
@@ -274,7 +274,7 @@ defmodule Dran.Agent.Curator do
 
         {flagged, errors} =
           Enum.reduce(slugs, {[], []}, fn slug, {flagged_acc, err_acc} ->
-            case Brain.get_page_by_slug(slug, workspace_id) do
+            case Knowledge.get_page_by_slug(slug, workspace_id) do
               nil ->
                 {flagged_acc, err_acc ++ ["page '#{slug}' not found"]}
 
@@ -305,7 +305,7 @@ defmodule Dran.Agent.Curator do
   end
 
   def execute_tool("lint_report", _args, %State{} = state) do
-    report = Brain.lint(state.session.workspace_id)
+    report = Knowledge.lint(state.session.workspace_id)
     {{:ok, report}, state}
   end
 
@@ -328,7 +328,7 @@ defmodule Dran.Agent.Curator do
         meta: %{"kind" => "log", "agent_session_id" => state.session.id}
       }
 
-      case Brain.create_report(report_attrs) do
+      case Reports.create_report(report_attrs) do
         {:ok, report} ->
           {{:ok, %{slug: report.slug, id: report.id, title: report.title}},
            %{state | pages_created: state.pages_created + 1}}

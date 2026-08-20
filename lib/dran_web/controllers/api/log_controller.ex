@@ -1,7 +1,7 @@
 defmodule DranWeb.API.LogController do
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @doc "GET /api/log?context=...&action=...&limit=..."
   def index(conn, params) do
@@ -11,14 +11,14 @@ defmodule DranWeb.API.LogController do
       |> maybe_put(:action, params["action"])
       |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
 
-    logs = Brain.list_log(opts)
+    logs = Knowledge.list_log(opts)
     json(conn, %{data: logs})
   end
 
   defp resolve_workspace_id(nil), do: nil
 
   defp resolve_workspace_id(slug) do
-    case Brain.get_workspace_by_slug(slug) do
+    case Knowledge.get_workspace_by_slug(slug) do
       nil -> nil
       context -> context.id
     end

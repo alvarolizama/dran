@@ -188,7 +188,7 @@ defmodule DranWeb.DocsContent do
     a stable identity. Do not display it to users or link to it.
 
   Reading a community's pages:
-    `Brain.community_pages(workspace_id, community_id)` returns the
+    `Knowledge.community_pages(workspace_id, community_id)` returns the
     lightweight list `%{id, slug, title, page_type}` of pages in a
     given community — no body, no embeddings. The Curator agent uses
     this to gather evidence when evaluating duplicate candidates.
@@ -205,7 +205,7 @@ defmodule DranWeb.DocsContent do
     then  (A, C)  is a candidate, with `via_slug = B` as evidence.
 
   Implementation:
-    `Brain.transitive_part_of_candidates/1` runs a recursive CTE
+    `Knowledge.transitive_part_of_candidates/1` runs a recursive CTE
     (depth capped at 2, cycle-guarded with a `visited` array) against
     the relations table, limited to 50 candidates per context.
 

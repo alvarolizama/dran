@@ -22,7 +22,7 @@ defmodule Mix.Tasks.Dran.Embeddings do
 
     Mix.Task.run("app.start")
 
-    case Dran.Brain.get_workspace_by_slug(slug) do
+    case Dran.Knowledge.get_workspace_by_slug(slug) do
       nil ->
         Mix.shell().error("Context not found: #{slug}")
         exit({:shutdown, 1})

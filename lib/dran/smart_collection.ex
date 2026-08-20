@@ -4,7 +4,7 @@ defmodule Dran.SmartCollection do
 
   A smart collection is a note page whose `meta` field
   contains a `"query"` map with filter criteria. This module parses that query
-  map into the keyword-list options that `Brain.list_pages/1` expects, and
+  map into the keyword-list options that `Knowledge.list_pages/1` expects, and
   builds the query map from user-facing filter parameters.
 
   ## Query format
@@ -23,11 +23,11 @@ defmodule Dran.SmartCollection do
   at query time, making saved collections dynamic.
   """
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @doc """
   Parse a saved query map (from `meta.query`) into a keyword list
-  suitable for `Brain.list_pages/1`.
+  suitable for `Knowledge.list_pages/1`.
 
   ## Example
 
@@ -77,12 +77,12 @@ defmodule Dran.SmartCollection do
     |> query_to_opts()
     |> Keyword.put(:workspace_id, workspace_id)
     |> Keyword.put(:limit, limit)
-    |> Brain.list_pages()
+    |> Knowledge.list_pages()
   end
 
   def execute(nil, workspace_id, opts) when is_binary(workspace_id) do
     limit = Keyword.get(opts, :limit, 200)
-    Brain.list_pages(workspace_id: workspace_id, limit: limit)
+    Knowledge.list_pages(workspace_id: workspace_id, limit: limit)
   end
 
   @doc """
@@ -159,7 +159,7 @@ defmodule Dran.SmartCollection do
       "created_by" => attrs["created_by"] || attrs[:created_by] || "system"
     }
 
-    Brain.create_page(page_attrs)
+    Knowledge.create_page(page_attrs)
   end
 
   @doc """
@@ -169,7 +169,7 @@ defmodule Dran.SmartCollection do
   `meta.query` filter.
   """
   def get_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
-    case Brain.get_page_by_slug(slug, workspace_id) do
+    case Knowledge.get_page_by_slug(slug, workspace_id) do
       %{page_type: "note", meta: %{"query" => _}} = page -> page
       _ -> nil
     end
@@ -179,7 +179,7 @@ defmodule Dran.SmartCollection do
   List all smart collections (note pages with a `meta.query` filter) in a context.
   """
   def list_all(workspace_id) when is_binary(workspace_id) do
-    Brain.list_pages(workspace_id: workspace_id, type: "note", limit: 100)
+    Knowledge.list_pages(workspace_id: workspace_id, type: "note", limit: 100)
     |> Enum.filter(&collection_page?/1)
   end
 

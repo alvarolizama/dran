@@ -1,7 +1,7 @@
 defmodule DranWeb.API.SearchController do
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @doc "GET /api/search?q=...&context=...&type=...&strategy=...&rerank=false"
   def search(conn, %{"q" => query} = params) do
@@ -20,7 +20,7 @@ defmodule DranWeb.API.SearchController do
           |> maybe_put(:strategy, parse_strategy(params["strategy"]))
           |> maybe_put(:rerank, parse_rerank(params["rerank"]))
 
-        case Brain.search(query, opts) do
+        case Knowledge.search(query, opts) do
           {:ok, results} ->
             json(conn, %{data: results})
 
@@ -57,7 +57,7 @@ defmodule DranWeb.API.SearchController do
           |> maybe_put(:workspace_id, workspace_id)
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
 
-        case Brain.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
+        case Knowledge.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
           {:ok, results} -> json(conn, %{data: results})
           {:error, reason} -> json(conn, %{errors: %{detail: inspect(reason)}})
         end
@@ -88,7 +88,7 @@ defmodule DranWeb.API.SearchController do
 
         strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
 
-        case Brain.search(query, Keyword.put(opts, :strategy, strategy)) do
+        case Knowledge.search(query, Keyword.put(opts, :strategy, strategy)) do
           {:ok, results} ->
             json(conn, %{data: results})
 
@@ -116,7 +116,7 @@ defmodule DranWeb.API.SearchController do
   defp resolve_workspace_id(slug) do
     # SEC-012: fail closed — return :error for unknown contexts instead of nil
     # (nil would mean "search all contexts" which is a fail-open IDOR)
-    case Brain.get_workspace_by_slug(slug) do
+    case Knowledge.get_workspace_by_slug(slug) do
       nil -> :error
       context -> context.id
     end

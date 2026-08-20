@@ -46,8 +46,9 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Agent, Auth, Brain, Repo}
+  alias Dran.{Agent, Auth, Goals, Knowledge, Repo}
   alias Dran.PageTypes
+  alias Dran.Goals
   import Ecto.Query, warn: false
 
   @protocol_version "2025-03-26"
@@ -69,7 +70,7 @@ defmodule Dran.MCP do
   end
 
   defp workspace_cache_load(slug) do
-    context = Brain.get_workspace_by_slug(slug)
+    context = Knowledge.get_workspace_by_slug(slug)
 
     if context do
       :ets.insert(@context_cache_table, {slug, context})
@@ -1185,7 +1186,7 @@ defmodule Dran.MCP do
       opts = if args["offset"], do: Keyword.put(opts, :offset, args["offset"]), else: opts
       opts = if args["props"], do: Keyword.put(opts, :props, args["props"]), else: opts
 
-      case Brain.search(query, opts) do
+      case Knowledge.search(query, opts) do
         {:ok, results} ->
           lines =
             Enum.map(results, fn result ->
@@ -1242,7 +1243,7 @@ defmodule Dran.MCP do
           }
           |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
-        case Brain.create_page(attrs) do
+        case Knowledge.create_page(attrs) do
           {:ok, page} ->
             "Created page: #{page.title} (#{page.slug})"
 
@@ -1263,7 +1264,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           "Error: page '#{slug}' not found in context '#{workspace_slug}'"
 
@@ -1285,7 +1286,7 @@ defmodule Dran.MCP do
             ])
             |> Map.put("updated_by", Map.get(args, "updated_by", "agent"))
 
-          case Brain.update_page(page, attrs) do
+          case Knowledge.update_page(page, attrs) do
             {:ok, updated} ->
               "Updated page: #{updated.title} (v#{updated.version})"
 
@@ -1302,7 +1303,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           "Error: page '#{slug}' not found"
 
@@ -1343,7 +1344,7 @@ defmodule Dran.MCP do
         }
         |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
-      case Brain.create_page(attrs) do
+      case Knowledge.create_page(attrs) do
         {:ok, note} ->
           status = Map.get(meta, "kanban_status")
           "Created note: #{note.title} (#{note.slug}) — status: #{status}"
@@ -1388,7 +1389,7 @@ defmodule Dran.MCP do
           team: args["team"] || []
         }
 
-      case Brain.create_goal(attrs) do
+      case Goals.create_goal(attrs) do
         {:ok, goal} ->
           "Created goal: #{goal.title} (#{goal.slug}) — status: #{goal.status}"
 
@@ -1404,7 +1405,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      report = Brain.lint(context.id)
+      report = Knowledge.lint(context.id)
 
       """
       # Lint Report for '#{workspace_slug}'
@@ -1427,12 +1428,12 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           "Error: page '#{slug}' not found in context '#{workspace_slug}'"
 
         page ->
-          case Brain.delete_page(page) do
+          case Knowledge.delete_page(page) do
             {:ok, _} ->
               "Deleted page: #{page.title} (#{page.slug})"
 
@@ -1461,7 +1462,7 @@ defmodule Dran.MCP do
       relation_type = Map.get(args, "relation_type", "related")
 
       # P-02: batch lookup both pages in one query
-      pages = Brain.get_pages_by_slugs([source_slug, target_slug], context.id)
+      pages = Knowledge.get_pages_by_slugs([source_slug, target_slug], context.id)
 
       case {Map.get(pages, source_slug), Map.get(pages, target_slug)} do
         {nil, _} ->
@@ -1471,7 +1472,12 @@ defmodule Dran.MCP do
           "Error: target page '#{target_slug}' not found"
 
         {_source_type, _target_type} ->
-          case Brain.create_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
+          case Knowledge.create_relation_by_slugs(
+                 source_slug,
+                 target_slug,
+                 relation_type,
+                 context.id
+               ) do
             {:ok, _relation} ->
               "Created relation: #{source_slug} --#{relation_type}--> #{target_slug}"
 
@@ -1494,12 +1500,12 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           "Error: page '#{slug}' not found"
 
         page ->
-          relations = Brain.list_relations_for_page(page.id)
+          relations = Knowledge.list_relations_for_page(page.id)
 
           outbound =
             Enum.map(relations.outbound, fn rel ->
@@ -1552,10 +1558,10 @@ defmodule Dran.MCP do
 
       opts = if args["props"], do: Keyword.put(opts, :props, args["props"]), else: opts
 
-      pages = Brain.list_pages(opts)
+      pages = Knowledge.list_pages(opts)
 
       lines =
-        if args["type"] && not Brain.page_type_enabled?(context, args["type"]) do
+        if args["type"] && not Knowledge.page_type_enabled?(context, args["type"]) do
           ["Error: page type '#{args["type"]}' is disabled in context '#{workspace_slug}'"]
         else
           Enum.map(pages, fn page ->
@@ -1577,7 +1583,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           "Error: note '#{slug}' not found"
 
@@ -1604,7 +1610,7 @@ defmodule Dran.MCP do
             |> maybe_put("created_by", args["created_by"])
             |> maybe_put("on_behalf_of", args["on_behalf_of"])
 
-          case Brain.update_page(note, attrs) do
+          case Knowledge.update_page(note, attrs) do
             {:ok, updated} ->
               status = get_in(updated.meta, ["kanban_status"]) || "unknown"
               "Updated note: #{updated.title} (#{updated.slug}) — status: #{status}"
@@ -1634,7 +1640,7 @@ defmodule Dran.MCP do
       relation_type = Map.get(args, "relation_type")
 
       # P-02: batch lookup both pages in one query
-      pages = Brain.get_pages_by_slugs([source_slug, target_slug], context.id)
+      pages = Knowledge.get_pages_by_slugs([source_slug, target_slug], context.id)
 
       case {Map.get(pages, source_slug), Map.get(pages, target_slug)} do
         {nil, _} ->
@@ -1644,7 +1650,12 @@ defmodule Dran.MCP do
           "Error: target page '#{target_slug}' not found"
 
         {_source_type, _target_type} ->
-          case Brain.delete_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
+          case Knowledge.delete_relation_by_slugs(
+                 source_slug,
+                 target_slug,
+                 relation_type,
+                 context.id
+               ) do
             {:error, :source_not_found} ->
               "Error: source page '#{source_slug}' not found"
 
@@ -1667,7 +1678,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      s = Brain.stats(context.id)
+      s = Knowledge.stats(context.id)
 
       by_type =
         s.by_type
@@ -1709,7 +1720,7 @@ defmodule Dran.MCP do
         "Error: old_slug and new_slug are the same"
       else
         # P-02: batch lookup both slugs in one query
-        pages = Brain.get_pages_by_slugs([old_slug, new_slug], context.id)
+        pages = Knowledge.get_pages_by_slugs([old_slug, new_slug], context.id)
 
         case {Map.get(pages, old_slug), Map.get(pages, new_slug)} do
           {nil, _} ->
@@ -1719,9 +1730,9 @@ defmodule Dran.MCP do
             "Error: a page with slug '#{new_slug}' already exists"
 
           {_page_type, nil} ->
-            # Brain.rename_slug updates the page's slug in place and rewrites
+            # Knowledge.rename_slug updates the page's slug in place and rewrites
             # all ![[old-slug]] embeds in other pages of the same context.
-            Brain.rename_slug(Brain.get_page_by_slug(old_slug, context.id), new_slug)
+            Knowledge.rename_slug(Knowledge.get_page_by_slug(old_slug, context.id), new_slug)
 
             "Renamed '#{old_slug}' → '#{new_slug}'. Updated ![[#{old_slug}]] references in this context."
         end
@@ -1788,7 +1799,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           "Error: page '#{slug}' not found in context '#{workspace_slug}'"
 
@@ -1867,7 +1878,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           "Error: page not found"
 
@@ -1884,7 +1895,7 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Brain.get_goal_by_slug(slug, context.id) do
+      case Goals.get_goal_by_slug(slug, context.id) do
         nil ->
           "Error: goal not found"
 
@@ -1938,7 +1949,7 @@ defmodule Dran.MCP do
 
     if context do
       # P-05: cap at 1,000 pages to avoid loading entire brain into memory
-      pages = Brain.list_pages(workspace_id: context.id, context: context, limit: 1_000)
+      pages = Knowledge.list_pages(workspace_id: context.id, context: context, limit: 1_000)
 
       lines =
         Enum.map(pages, fn page ->

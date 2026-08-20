@@ -1,7 +1,7 @@
 defmodule DranWeb.DashboardLiveTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
@@ -28,11 +28,11 @@ defmodule DranWeb.DashboardLiveTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     # Create some pages so the brain health cards have non-zero values
     {:ok, _page_a} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Dashboard Test Page A",
         slug: "dashboard-test-a",
@@ -41,7 +41,7 @@ defmodule DranWeb.DashboardLiveTest do
       })
 
     {:ok, _page_b} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Dashboard Test Page B",
         slug: "dashboard-test-b",

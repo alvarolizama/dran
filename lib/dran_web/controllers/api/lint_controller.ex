@@ -1,12 +1,12 @@
 defmodule DranWeb.API.LintController do
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @doc "GET /api/lint?context=..."
   def lint(conn, %{"workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      json(conn, %{data: Brain.lint(context.id)})
+      json(conn, %{data: Knowledge.lint(context.id)})
     end)
   end
 

@@ -11,7 +11,7 @@ defmodule DranWeb.PageComponents do
   import DranWeb.MarkdownEditorComponents,
     only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias DranWeb.PageTypes
   alias Phoenix.LiveView.JS
@@ -73,7 +73,7 @@ defmodule DranWeb.PageComponents do
       case assigns.page.tags do
         nil -> %{}
         [] -> %{}
-        tags -> Brain.get_pages_by_slugs(tags, assigns.page.workspace_id)
+        tags -> Knowledge.get_pages_by_slugs(tags, assigns.page.workspace_id)
       end
 
     assigns = assign(assigns, :tag_map, tag_map)
@@ -658,7 +658,7 @@ defmodule DranWeb.PageComponents do
   defdelegate page_show_path(page), to: DranWeb.PageTypes
 
   def tag_page_exists?(tag, workspace_id) when is_binary(tag) and is_binary(workspace_id) do
-    Dran.Brain.get_page_by_slug(tag, workspace_id) != nil
+    Dran.Knowledge.get_page_by_slug(tag, workspace_id) != nil
   end
 
   def tag_page_exists?(_tag, _workspace_id), do: false
@@ -676,7 +676,7 @@ defmodule DranWeb.PageComponents do
   end
 
   def tag_link_path(tag, workspace_id, nil) when is_binary(tag) and is_binary(workspace_id) do
-    case Dran.Brain.get_page_by_slug(tag, workspace_id) do
+    case Dran.Knowledge.get_page_by_slug(tag, workspace_id) do
       %Page{page_type: type, slug: slug} ->
         "/panel/#{PageTypes.path(type)}/#{slug}"
 
@@ -773,7 +773,7 @@ defmodule DranWeb.PageComponents do
   def render_markdown(body, opts) when is_binary(body) do
     workspace_id = Keyword.get(opts, :workspace_id)
     inline_links = Keyword.get(opts, :inline_links) || []
-    embeds = if workspace_id, do: Dran.Brain.fetch_embeds(body, workspace_id), else: %{}
+    embeds = if workspace_id, do: Dran.Knowledge.fetch_embeds(body, workspace_id), else: %{}
 
     html =
       case MDEx.to_html(body, @markdown_options) do
@@ -802,7 +802,7 @@ defmodule DranWeb.PageComponents do
           |> Enum.map(fn %{"slug" => slug} -> slug end)
           |> Enum.uniq()
 
-        slug_types = Dran.Brain.get_pages_by_slugs(slugs, workspace_id)
+        slug_types = Dran.Knowledge.get_pages_by_slugs(slugs, workspace_id)
 
         Enum.reduce(slugs, %{}, fn slug, acc ->
           case Map.get(slug_types, slug) do
@@ -923,7 +923,7 @@ defmodule DranWeb.PageComponents do
         nil ->
           case assigns.workspace_id do
             nil -> []
-            id -> Dran.Brain.list_tags(id)
+            id -> Dran.Knowledge.list_tags(id)
           end
 
         list ->
@@ -988,7 +988,7 @@ defmodule DranWeb.PageComponents do
         nil ->
           case assigns.workspace_id do
             nil -> []
-            id -> Dran.Brain.list_tags(id)
+            id -> Dran.Knowledge.list_tags(id)
           end
 
         list ->

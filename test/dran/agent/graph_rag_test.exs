@@ -2,7 +2,7 @@ defmodule Dran.Agent.GraphRagTest do
   use Dran.DataCase, async: false
 
   alias Dran.Agent.GraphRag
-  alias Dran.{Brain, Repo}
+  alias Dran.{Knowledge, Repo}
   alias Dran.Page
 
   #  Helpers 
@@ -50,8 +50,8 @@ defmodule Dran.Agent.GraphRagTest do
   end
 
   defp ensure_context! do
-    Brain.get_workspace_by_slug("personal") ||
-      elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+    Knowledge.get_workspace_by_slug("personal") ||
+      elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
   end
 
   defp insert_relation!(source_id, target_id, type) do
@@ -408,7 +408,7 @@ defmodule Dran.Agent.GraphRagTest do
     assert url =~ slug
 
     # Verify the page was created
-    page = Brain.get_page_by_slug(slug, workspace_id)
+    page = Knowledge.get_page_by_slug(slug, workspace_id)
     assert page != nil
     assert page.page_type == "note"
     assert page.title == "Test Query"
@@ -416,7 +416,7 @@ defmodule Dran.Agent.GraphRagTest do
     assert page.meta["kind"] == "answer"
 
     # Verify source relation was created
-    relations = Brain.list_relations_for_page(page.id)
+    relations = Knowledge.list_relations_for_page(page.id)
     assert length(relations.outbound) == 1
     assert hd(relations.outbound).relation_type == "related"
     assert hd(relations.outbound).target_id == source_page.id

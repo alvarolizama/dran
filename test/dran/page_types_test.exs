@@ -1,4 +1,4 @@
-defmodule Dran.Brain.PageTypesTest do
+defmodule Dran.PageTypesTest do
   use ExUnit.Case, async: true
 
   alias Dran.Page

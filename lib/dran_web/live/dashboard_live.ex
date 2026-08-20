@@ -6,7 +6,9 @@ defmodule DranWeb.DashboardLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Goals
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
@@ -86,7 +88,7 @@ defmodule DranWeb.DashboardLive do
             </div>
             <div class="flex gap-2">
               <.link
-                :if={Brain.page_type_enabled?(@workspace, "todo")}
+                :if={Knowledge.page_type_enabled?(@workspace, "todo")}
                 navigate={~p"/kanban"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
@@ -406,9 +408,9 @@ defmodule DranWeb.DashboardLive do
 
     {stats, brain_metrics} =
       if context do
-        metrics = Brain.metrics(context.id)
+        metrics = Knowledge.metrics(context.id)
 
-        {stats_with_new_model(context, Brain.stats(context.id)), metrics}
+        {stats_with_new_model(context, Knowledge.stats(context.id)), metrics}
       else
         {%{}, %{}}
       end
@@ -427,10 +429,10 @@ defmodule DranWeb.DashboardLive do
   # Augment the page-based stats with the first-class entities (goals,
   # projects) and recompute todos = pages WHERE kanban_status IS NOT NULL.
   defp stats_with_new_model(context, stats) do
-    goal_count = length(Brain.list_goals(workspace_id: context.id, limit: 500))
+    goal_count = length(Goals.list_goals(workspace_id: context.id, limit: 500))
 
     project_count =
-      length(Brain.list_pages(workspace_id: context.id, kind: "project", limit: 500))
+      length(Knowledge.list_pages(workspace_id: context.id, kind: "project", limit: 500))
 
     # goals/projects live outside the pages table — fold them into by_type so
     # the "Pages by Type" list and totals reflect the full hierarchy.

@@ -1,7 +1,7 @@
 defmodule DranWeb.API.TodoController do
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @doc "GET /api/todos?context=...&status=... — list todo-style notes in a context"
   def index(conn, %{"workspace" => workspace_slug} = params) do
@@ -17,7 +17,7 @@ defmodule DranWeb.API.TodoController do
 
       # Only notes with kind: "todo" are todo-style notes
       todos =
-        Brain.list_pages(opts)
+        Knowledge.list_pages(opts)
         |> Enum.filter(fn p -> get_in(p.meta, ["kind"]) == "todo" end)
 
       json(conn, %{data: todos})
@@ -47,7 +47,7 @@ defmodule DranWeb.API.TodoController do
       |> Map.put_new("owner", Dran.Auth.resolve_owner(user))
       |> Map.put_new("created_by", Dran.Auth.resolve_created_by(user))
 
-    case Brain.create_page(params) do
+    case Knowledge.create_page(params) do
       {:ok, todo} ->
         conn
         |> put_status(:created)
@@ -62,7 +62,7 @@ defmodule DranWeb.API.TodoController do
 
   @doc "PUT /api/todos/:id — update a todo-style note (kanban status, etc.)"
   def update(conn, %{"id" => id} = params) do
-    case Brain.get_page(id) do
+    case Knowledge.get_page(id) do
       nil ->
         conn
         |> put_status(:not_found)
@@ -81,7 +81,7 @@ defmodule DranWeb.API.TodoController do
               Map.put(params, "meta", Map.put(meta, "kanban_status", status))
           end
 
-        case Brain.update_page(todo, params) do
+        case Knowledge.update_page(todo, params) do
           {:ok, updated} ->
             json(conn, %{data: updated})
 

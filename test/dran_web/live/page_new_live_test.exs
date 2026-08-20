@@ -1,7 +1,7 @@
 defmodule DranWeb.PageNewLiveTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Slug
 
   # Gettext wrapper — the app default locale is "es", so assertions must
@@ -89,16 +89,16 @@ defmodule DranWeb.PageNewLiveTest do
 
   describe "auto-slug derivation on create (Task 2.1)" do
     test "creating a page titled 'Mi Nota Nueva' yields slug 'mi-nota-nueva'" do
-      context = Brain.get_workspace_by_slug("personal")
+      context = Knowledge.get_workspace_by_slug("personal")
 
       # Sanity-check the slugify behaviour directly.
       assert Slug.slugify("Mi Nota Nueva") == "mi-nota-nueva"
 
-      # The new form no longer submits a slug; Brain.ensure_title_and_slug/1
+      # The new form no longer submits a slug; Knowledge.ensure_title_and_slug/1
       # derives it from the title. We exercise the full path via Brain (the
       # same code the LiveView's save_page handler reaches).
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           page_type: "note",
           title: "Mi Nota Nueva",
@@ -110,10 +110,10 @@ defmodule DranWeb.PageNewLiveTest do
     end
 
     test "creating a page without an explicit slug derives one from the title" do
-      context = Brain.get_workspace_by_slug("personal")
+      context = Knowledge.get_workspace_by_slug("personal")
 
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           page_type: "note",
           title: "Otra Nota",

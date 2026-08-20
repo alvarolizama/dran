@@ -1,7 +1,7 @@
 defmodule Dran.SmartCollectionTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.SmartCollection
 
   setup do
@@ -25,7 +25,7 @@ defmodule Dran.SmartCollectionTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
     {:ok, context: context}
   end
 
@@ -203,7 +203,7 @@ defmodule Dran.SmartCollectionTest do
 
     test "returns nil when page is not a collection (no meta.query)", %{context: context} do
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "A Note",
           slug: "a-note",
@@ -243,7 +243,7 @@ defmodule Dran.SmartCollectionTest do
     end
 
     test "does not include non-collection note pages", %{context: context} do
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "A Note",
         slug: "a-regular-note",
@@ -263,7 +263,7 @@ defmodule Dran.SmartCollectionTest do
   describe "execute/2" do
     test "returns pages matching the query filters", %{context: context} do
       # Create test pages
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Todo One",
         slug: "todo-one",
@@ -273,7 +273,7 @@ defmodule Dran.SmartCollectionTest do
         kanban_status: "in_progress"
       })
 
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Note One",
         slug: "note-one",
@@ -300,7 +300,7 @@ defmodule Dran.SmartCollectionTest do
     end
 
     test "filters by status", %{context: context} do
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Active Todo",
         slug: "active-todo",
@@ -310,7 +310,7 @@ defmodule Dran.SmartCollectionTest do
         kanban_status: "in_progress"
       })
 
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Done Todo",
         slug: "done-todo",
@@ -328,7 +328,7 @@ defmodule Dran.SmartCollectionTest do
     end
 
     test "filters by tag", %{context: context} do
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Tagged Note",
         slug: "tagged-note",
@@ -337,7 +337,7 @@ defmodule Dran.SmartCollectionTest do
         tags: ["urgent", "work"]
       })
 
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Untagged Note",
         slug: "untagged-note",

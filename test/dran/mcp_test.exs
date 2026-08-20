@@ -1,7 +1,7 @@
 defmodule Dran.MCPTest do
   use Dran.DataCase, async: false
 
-  alias Dran.{Brain, MCP, Repo}
+  alias Dran.{Knowledge, MCP, Repo}
   alias Dran.Page
 
   # Same setup as brain_test.exs: disable inference so dran_create_page doesn't
@@ -27,8 +27,8 @@ defmodule Dran.MCPTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -51,7 +51,7 @@ defmodule Dran.MCPTest do
     test "renames the page and rewrites ![[old]] embeds in other pages", %{context: ctx} do
       # Target page that will be renamed.
       {:ok, art} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Art Page",
           slug: "old-art",
@@ -60,7 +60,7 @@ defmodule Dran.MCPTest do
 
       # Page that embeds it.
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Note",
           slug: "note-with-embed",
@@ -82,7 +82,7 @@ defmodule Dran.MCPTest do
       assert Repo.get!(Page, art.id).slug == "new-art"
 
       # The embedding page's body was rewritten to reference the new slug.
-      refreshed = Brain.get_page!(note.id)
+      refreshed = Knowledge.get_page!(note.id)
       assert refreshed.body =~ "![[new-art]]"
       refute refreshed.body =~ "![[old-art]]"
     end
@@ -100,7 +100,7 @@ defmodule Dran.MCPTest do
 
     test "errors when new_slug already exists", %{context: ctx} do
       {:ok, _a} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "A",
           slug: "exists-a",
@@ -108,7 +108,7 @@ defmodule Dran.MCPTest do
         })
 
       {:ok, b} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "B",
           slug: "exists-b",
@@ -131,7 +131,7 @@ defmodule Dran.MCPTest do
   describe "dran_reaugment_page (4.2)" do
     test "clears embedding_hash and schedules reaugmentation", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Stale",
           slug: "stale-page",
@@ -168,7 +168,7 @@ defmodule Dran.MCPTest do
   describe "dran_list_pages with owner/created_by filters (4.3)" do
     test "filters by created_by", %{context: ctx} do
       {:ok, _alice} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Alice's note",
           slug: "alice-note",
@@ -177,7 +177,7 @@ defmodule Dran.MCPTest do
         })
 
       {:ok, _bob} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Bob's note",
           slug: "bob-note",
@@ -194,7 +194,7 @@ defmodule Dran.MCPTest do
 
     test "filters by owner", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Owned by team",
           slug: "team-owned",
@@ -203,7 +203,7 @@ defmodule Dran.MCPTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Owned by agent",
           slug: "agent-owned",

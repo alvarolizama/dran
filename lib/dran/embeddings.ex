@@ -141,7 +141,7 @@ defmodule Dran.Embeddings do
   def backfill_pages(context_or_slug, opts \\ [])
 
   def backfill_pages(slug, opts) when is_binary(slug) do
-    context = Dran.Brain.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
+    context = Dran.Knowledge.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
     backfill_pages(context, opts)
   end
 

@@ -6,7 +6,7 @@ defmodule Dran.AccountsTest do
 
   alias Dran.Accounts
   alias Dran.Accounts.User
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @user_attrs %{email: "alice@example.com", name: "Alice", avatar_url: "http://example.com/a.png"}
 
@@ -287,7 +287,7 @@ defmodule Dran.AccountsTest do
     unique = System.unique_integer([:positive])
     attrs = Map.put_new(attrs, :name, "Context #{unique}")
     attrs = Map.put_new(attrs, :slug, "ctx-#{unique}")
-    {:ok, context} = Brain.create_workspace(attrs)
+    {:ok, context} = Knowledge.create_workspace(attrs)
     context
   end
 end

@@ -12,7 +12,7 @@ defmodule DranWeb.VersionCompare do
     page = socket.assigns.page
     version = String.to_integer(version_str)
 
-    old_version = Dran.Brain.get_page_version(page.id, version)
+    old_version = Dran.Knowledge.get_page_version(page.id, version)
 
     {:noreply, assign(socket, compare_version: old_version)}
   end

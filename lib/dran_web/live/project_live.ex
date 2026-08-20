@@ -3,7 +3,9 @@ defmodule DranWeb.ProjectLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Goals
   alias Dran.Page
   alias DranWeb.Plugs.Auth
 
@@ -303,7 +305,7 @@ defmodule DranWeb.ProjectLive do
   defp apply_action(socket, :index, _params) do
     projects =
       if socket.assigns.context do
-        Brain.list_pages(workspace_id: socket.assigns.context.id, kind: "project", limit: 500)
+        Knowledge.list_pages(workspace_id: socket.assigns.context.id, kind: "project", limit: 500)
       else
         []
       end
@@ -315,12 +317,12 @@ defmodule DranWeb.ProjectLive do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           push_navigate(socket, to: ~p"/panel/projects")
 
         project ->
-          form = Brain.change_page(project) |> to_form(as: :project)
+          form = Knowledge.change_page(project) |> to_form(as: :project)
           linked_goal_title = linked_goal_title(project, context)
 
           assign(socket,
@@ -337,7 +339,7 @@ defmodule DranWeb.ProjectLive do
   end
 
   defp apply_action(socket, :new, _params) do
-    changeset = Brain.change_page(%Page{})
+    changeset = Knowledge.change_page(%Page{})
 
     assign(socket,
       form: to_form(changeset, as: :project),
@@ -364,16 +366,16 @@ defmodule DranWeb.ProjectLive do
 
   def handle_event("validate", %{"project" => project_params}, socket) do
     project = socket.assigns[:project] || %Page{}
-    changeset = Brain.change_page(project, project_params) |> Map.put(:action, :validate)
+    changeset = Knowledge.change_page(project, project_params) |> Map.put(:action, :validate)
     {:noreply, assign(socket, form: to_form(changeset, as: :project))}
   end
 
   def handle_event("save", %{"project" => project_params}, socket) do
     project = socket.assigns.project
 
-    case Brain.update_page(project, project_params) do
+    case Knowledge.update_page(project, project_params) do
       {:ok, updated} ->
-        form = Brain.change_page(updated) |> to_form(as: :project)
+        form = Knowledge.change_page(updated) |> to_form(as: :project)
 
         {:noreply,
          socket
@@ -394,7 +396,7 @@ defmodule DranWeb.ProjectLive do
         |> Map.put("workspace_id", context.id)
         |> ensure_slug()
 
-      case Brain.create_page(attrs) do
+      case Knowledge.create_page(attrs) do
         {:ok, project} ->
           {:noreply,
            socket
@@ -412,7 +414,7 @@ defmodule DranWeb.ProjectLive do
   def handle_event("delete", _params, socket) do
     project = socket.assigns.project
 
-    case Brain.delete_page(project) do
+    case Knowledge.delete_page(project) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -429,7 +431,7 @@ defmodule DranWeb.ProjectLive do
   defp goal_options(nil), do: [{gettext("No goal"), ""}]
 
   defp goal_options(context) do
-    [{gettext("No goal"), ""} | Enum.map(Brain.list_goals(context.id), &{&1.title, &1.id})]
+    [{gettext("No goal"), ""} | Enum.map(Goals.list_goals(context.id), &{&1.title, &1.id})]
   end
 
   defp linked_goal_title(_project, _context) do
@@ -454,10 +456,10 @@ defmodule DranWeb.ProjectLive do
   @impl true
   def handle_info({:page_changed, _action, changed_project}, socket) do
     if socket.assigns[:project] && socket.assigns.project.id == changed_project.id do
-      project = Brain.get_page(changed_project.id)
+      project = Knowledge.get_page(changed_project.id)
 
       if project do
-        form = Brain.change_page(project) |> to_form(as: :project)
+        form = Knowledge.change_page(project) |> to_form(as: :project)
         {:noreply, assign(socket, project: project, form: form)}
       else
         {:noreply, socket}

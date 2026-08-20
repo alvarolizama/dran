@@ -23,7 +23,7 @@ defmodule Dran.Agent.GraphRag do
 
   @behaviour Dran.Agent.Engine.Behaviour
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Graph.CommunitySummaries
 
   @agent_type "graph_rag"
@@ -311,7 +311,7 @@ defmodule Dran.Agent.GraphRag do
         if String.trim(query) == "" do
           {{:error, "query is required"}, state}
         else
-          case Brain.search(query, workspace_id: state.session.workspace_id, limit: limit) do
+          case Knowledge.search(query, workspace_id: state.session.workspace_id, limit: limit) do
             {:ok, results} ->
               seeds =
                 Enum.map(results, fn r ->
@@ -347,7 +347,7 @@ defmodule Dran.Agent.GraphRag do
         else
           workspace_id = state.session.workspace_id
 
-          case Brain.get_page_by_slug(slug, workspace_id) do
+          case Knowledge.get_page_by_slug(slug, workspace_id) do
             nil ->
               {{:error, "page '#{slug}' not found"}, state}
 
@@ -384,7 +384,7 @@ defmodule Dran.Agent.GraphRag do
     else
       workspace_id = state.session.workspace_id
 
-      case Brain.get_page_by_slug(slug, workspace_id) do
+      case Knowledge.get_page_by_slug(slug, workspace_id) do
         nil ->
           {{:error, "page '#{slug}' not found"}, state}
 
@@ -415,7 +415,7 @@ defmodule Dran.Agent.GraphRag do
         else
           workspace_id = state.session.workspace_id
 
-          case Brain.get_page_by_slug(slug, workspace_id) do
+          case Knowledge.get_page_by_slug(slug, workspace_id) do
             nil ->
               {{:error, "page '#{slug}' not found"}, state}
 
@@ -528,7 +528,7 @@ defmodule Dran.Agent.GraphRag do
             }
           }
 
-          case Brain.create_page(page_attrs) do
+          case Knowledge.create_page(page_attrs) do
             {:ok, page} ->
               create_source_relations(page, sources, workspace_id)
 
@@ -610,7 +610,7 @@ defmodule Dran.Agent.GraphRag do
       []
     else
       visited = Map.put(visited, page_id, true)
-      %{outbound: outbound, inbound: inbound} = Brain.list_relations_for_page(page_id)
+      %{outbound: outbound, inbound: inbound} = Knowledge.list_relations_for_page(page_id)
 
       neighbors =
         Enum.map(outbound, fn r ->
@@ -644,12 +644,12 @@ defmodule Dran.Agent.GraphRag do
   @spec create_source_relations(map(), [String.t()], binary()) :: :ok
   defp create_source_relations(answer_page, source_slugs, workspace_id) do
     Enum.each(source_slugs, fn slug ->
-      case Brain.get_page_by_slug(slug, workspace_id) do
+      case Knowledge.get_page_by_slug(slug, workspace_id) do
         nil ->
           :ok
 
         source_page ->
-          Brain.create_relation(%{
+          Knowledge.create_relation(%{
             source_id: answer_page.id,
             target_id: source_page.id,
             relation_type: "related",

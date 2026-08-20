@@ -1,7 +1,7 @@
 defmodule DranWeb.CommandPaletteTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   import Phoenix.LiveViewTest
 
@@ -28,8 +28,8 @@ defmodule DranWeb.CommandPaletteTest do
 
     # Ensure the default "personal" context exists
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     # Log in — init_test_session is needed because ConnCase doesn't pipe through browser
     conn =
@@ -87,7 +87,7 @@ defmodule DranWeb.CommandPaletteTest do
     } do
       # Create a page whose title contains a searchable term
       {:ok, _page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Elixir Concurrency Guide",
           slug: "elixir-concurrency-guide",

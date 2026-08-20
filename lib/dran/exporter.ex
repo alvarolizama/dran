@@ -7,7 +7,7 @@ defmodule Dran.Exporter do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.{Workspace, Page, Relation, PageVersion}
 
   @doc """
@@ -25,7 +25,7 @@ defmodule Dran.Exporter do
     * `relations`   — list of `%{source_slug, target_slug, relation_type}`
   """
   def export_context(workspace_slug) when is_binary(workspace_slug) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       nil ->
         {:error, :not_found}
 

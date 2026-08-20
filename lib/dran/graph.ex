@@ -147,7 +147,7 @@ defmodule Dran.Graph do
   Recompute PageRank for a context and persist scores into each page's meta.
 
   Uses `Repo.update_all` with a jsonb merge (`COALESCE(meta, '{}'::jsonb) || ?`)
-  rather than `Brain.update_page/2` to avoid triggering the augmenter,
+  rather than `Knowledge.update_page/2` to avoid triggering the augmenter,
   embeddings, broadcasts, and other update side effects. Scores are rounded
   to 6 decimal places to keep meta clean.
   """
@@ -300,7 +300,7 @@ defmodule Dran.Graph do
   Refresh PageRank for the default context (Quantum entrypoint).
 
   Resolves the default context slug via `Dran.Auth.default_workspace_slug/0`,
-  looks it up with `Brain.get_workspace_by_slug/1`, and runs both
+  looks it up with `Knowledge.get_workspace_by_slug/1`, and runs both
   `refresh_pagerank/1` and `refresh_communities/1` on the same context.
   PageRank runs first so community detection can reuse any future
   cross-signal logic; both share the same edge load. Same pattern as
@@ -310,7 +310,7 @@ defmodule Dran.Graph do
   def refresh_all_scheduled do
     slug = Dran.Auth.default_workspace_slug()
 
-    case Dran.Brain.get_workspace_by_slug(slug) do
+    case Dran.Knowledge.get_workspace_by_slug(slug) do
       nil ->
         {:error, :workspace_not_found}
 

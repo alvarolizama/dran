@@ -1,7 +1,9 @@
 defmodule Dran.ReportTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Reports
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -24,8 +26,8 @@ defmodule Dran.ReportTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -38,7 +40,7 @@ defmodule Dran.ReportTest do
         slug: "test-report"
       }
 
-      assert {:ok, %Dran.Report{} = report} = Brain.create_report(attrs)
+      assert {:ok, %Dran.Report{} = report} = Reports.create_report(attrs)
       assert report.title == "Test Report"
     end
   end
@@ -46,20 +48,20 @@ defmodule Dran.ReportTest do
   describe "list_reports/1" do
     test "lists reports in a workspace", %{context: ctx} do
       {:ok, _} =
-        Brain.create_report(%{
+        Reports.create_report(%{
           workspace_id: ctx.id,
           title: "Report A",
           slug: "report-a"
         })
 
       {:ok, _} =
-        Brain.create_report(%{
+        Reports.create_report(%{
           workspace_id: ctx.id,
           title: "Report B",
           slug: "report-b"
         })
 
-      reports = Brain.list_reports(ctx.id)
+      reports = Reports.list_reports(ctx.id)
       assert length(reports) == 2
     end
   end

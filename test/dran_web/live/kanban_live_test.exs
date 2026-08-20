@@ -3,7 +3,9 @@ defmodule DranWeb.KanbanLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Goals
 
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
@@ -30,11 +32,11 @@ defmodule DranWeb.KanbanLiveTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     # A goal via the new Goal table so the goal-filter test has a real slug.
     {:ok, goal} =
-      Brain.create_goal(%{
+      Goals.create_goal(%{
         workspace_id: context.id,
         title: "Kanban Test Goal",
         slug: "kanban-test-goal"
@@ -81,7 +83,7 @@ defmodule DranWeb.KanbanLiveTest do
 
       # The todo was persisted as a note with kind:todo and kanban_status column.
       todo =
-        Brain.list_todos(workspace_id: context.id, limit: 500)
+        Knowledge.list_todos(workspace_id: context.id, limit: 500)
         |> Enum.find(fn p -> p.title == "Quick Add Test Todo" end)
 
       assert todo != nil
@@ -125,7 +127,7 @@ defmodule DranWeb.KanbanLiveTest do
       assert html =~ t("Todo created.")
 
       todo =
-        Brain.list_todos(workspace_id: context.id, limit: 500)
+        Knowledge.list_todos(workspace_id: context.id, limit: 500)
         |> Enum.find(fn p -> p.title == "Filtered Goal Todo" end)
 
       assert todo != nil
@@ -166,7 +168,7 @@ defmodule DranWeb.KanbanLiveTest do
       context: context
     } do
       {:ok, todo} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Todo To Archive",
           page_type: "note",
@@ -183,7 +185,7 @@ defmodule DranWeb.KanbanLiveTest do
       |> element(~s(button[phx-value-slug="#{todo.slug}"]))
       |> render_click()
 
-      assert Brain.get_page_by_slug(todo.slug, context.id).archived == true
+      assert Knowledge.get_page_by_slug(todo.slug, context.id).archived == true
 
       # The card disappears from the board after re-render
       refute has_element?(view, ~s(button[phx-value-slug="#{todo.slug}"]))

@@ -10,7 +10,7 @@ defmodule DranWeb.CommunityLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Graph
   alias Dran.Graph.CommunitySummaries
   alias DranWeb.Plugs.Auth
@@ -259,7 +259,7 @@ defmodule DranWeb.CommunityLive do
       if context do
         with {community_id, ""} <- Integer.parse(id),
              {:ok, raw} <- CommunitySummaries.get_summary(context.id, community_id) do
-          pages = Brain.community_pages(context.id, community_id)
+          pages = Knowledge.community_pages(context.id, community_id)
           {normalize_summary(raw), pages}
         else
           _ -> {nil, []}
@@ -294,7 +294,7 @@ defmodule DranWeb.CommunityLive do
         "/panel/#{PageTypes.path(type)}/#{slug}"
       else
         # For top_pages we don't have the type — try searching
-        case Brain.get_page_by_slug(slug, socket.assigns.context && socket.assigns.context.id) do
+        case Knowledge.get_page_by_slug(slug, socket.assigns.context && socket.assigns.context.id) do
           nil -> "/panel"
           page -> PageTypes.page_show_path(page)
         end
@@ -359,7 +359,7 @@ defmodule DranWeb.CommunityLive do
 
       if context do
         summary = socket.assigns.summary
-        pages = Brain.community_pages(context.id, summary.community_id)
+        pages = Knowledge.community_pages(context.id, summary.community_id)
         {:noreply, assign(socket, community_pages: pages)}
       else
         {:noreply, socket}

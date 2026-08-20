@@ -14,7 +14,7 @@ defmodule Dran.GraphCache do
   all writes (build + insert). Reads go directly to ETS — no GenServer
   call, no serialization, no bottleneck.
 
-  Invalidation is triggered by `Brain.broadcast_page_change/3`:
+  Invalidation is triggered by `Knowledge.broadcast_page_change/3`:
     - `invalidate_context/1` wipes the global graph for the context
     - `invalidate_page/2` wipes the subgraph + global graph for that page
     - `invalidate_page_slug/2` wipes the page-cache entry for that slug
@@ -22,7 +22,7 @@ defmodule Dran.GraphCache do
 
   use GenServer
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.GraphHelpers
 
   # Types hidden from the global graph — the canonical list lives in the
@@ -171,7 +171,7 @@ defmodule Dran.GraphCache do
         {:reply, elem(entry, 1), state}
 
       [] ->
-        page = Brain.get_page_by_slug(slug, workspace_id)
+        page = Knowledge.get_page_by_slug(slug, workspace_id)
         :ets.insert(@page_table, {key, page || :not_found})
         {:reply, page, state}
     end
@@ -185,7 +185,7 @@ defmodule Dran.GraphCache do
 
   defp build_graph_json(workspace_id) do
     %{nodes: raw_nodes, edges: raw_edges, total_nodes: total_nodes, total_edges: total_edges} =
-      Brain.graph_data(workspace_id,
+      Knowledge.graph_data(workspace_id,
         exclude_types: @hidden_by_default,
         max_nodes: @max_graph_nodes
       )
@@ -210,7 +210,7 @@ defmodule Dran.GraphCache do
         }
       end)
 
-    type_counts = Brain.graph_type_counts(workspace_id, @hidden_by_default)
+    type_counts = Knowledge.graph_type_counts(workspace_id, @hidden_by_default)
 
     Jason.encode!(%{
       nodes: nodes,
@@ -223,7 +223,7 @@ defmodule Dran.GraphCache do
   end
 
   defp build_subgraph(page_id, _workspace_id) do
-    page = Brain.get_page!(page_id)
+    page = Knowledge.get_page!(page_id)
     %{nodes: nodes, edges: edges} = GraphHelpers.build_page_subgraph(page)
     %{nodes: nodes, edges: edges}
   end

@@ -105,7 +105,7 @@ defmodule DranWeb.SettingsLive do
   end
 
   defp assign_workspaces(socket) do
-    workspaces = Dran.Brain.list_workspaces()
+    workspaces = Dran.Knowledge.list_workspaces()
     assign(socket, all_workspaces: workspaces)
   end
 
@@ -161,7 +161,7 @@ defmodule DranWeb.SettingsLive do
       {:ok, user} ->
         # Add to selected contexts
         for workspace_id <- workspace_ids do
-          context = Dran.Brain.get_workspace!(workspace_id)
+          context = Dran.Knowledge.get_workspace!(workspace_id)
           Dran.Accounts.add_user_to_workspace(user, context)
         end
 
@@ -222,7 +222,7 @@ defmodule DranWeb.SettingsLive do
         socket
       ) do
     user = Dran.Accounts.get_user!(user_id)
-    context = Dran.Brain.get_workspace!(workspace_id)
+    context = Dran.Knowledge.get_workspace!(workspace_id)
 
     if Dran.Accounts.user_in_workspace?(user, context) do
       Dran.Accounts.remove_user_from_workspace(user, context)
@@ -418,7 +418,7 @@ defmodule DranWeb.SettingsLive do
         %{"workspace_id" => workspace_id, "page_type" => page_type},
         socket
       ) do
-    context = Dran.Brain.get_workspace!(workspace_id)
+    context = Dran.Knowledge.get_workspace!(workspace_id)
     disabled = context.disabled_page_types || []
 
     new_disabled =
@@ -428,7 +428,7 @@ defmodule DranWeb.SettingsLive do
         disabled ++ [page_type]
       end
 
-    case Dran.Brain.update_workspace_settings(context, %{disabled_page_types: new_disabled}) do
+    case Dran.Knowledge.update_workspace_settings(context, %{disabled_page_types: new_disabled}) do
       {:ok, _} -> {:noreply, assign_workspaces(socket)}
       {:error, _} -> {:noreply, put_flash(socket, :error, gettext("Could not update page types"))}
     end
@@ -475,7 +475,7 @@ defmodule DranWeb.SettingsLive do
         params
       end
 
-    case Dran.Brain.create_workspace(params) do
+    case Dran.Knowledge.create_workspace(params) do
       {:ok, _context} ->
         {:noreply,
          socket
@@ -505,7 +505,7 @@ defmodule DranWeb.SettingsLive do
     context = Enum.find(socket.assigns.all_workspaces, &(&1.id == id))
 
     if context do
-      case Dran.Brain.delete_workspace(context) do
+      case Dran.Knowledge.delete_workspace(context) do
         {:ok, _} ->
           {:noreply,
            socket
@@ -573,9 +573,9 @@ defmodule DranWeb.SettingsLive do
     expected = socket.assigns.workspace_slug || ""
 
     if confirmation == expected do
-      context = Dran.Brain.get_workspace_by_slug(socket.assigns.workspace_slug)
+      context = Dran.Knowledge.get_workspace_by_slug(socket.assigns.workspace_slug)
 
-      case Dran.Brain.reset_context(context.id) do
+      case Dran.Knowledge.reset_context(context.id) do
         {:ok, counts} ->
           socket =
             socket
@@ -2757,7 +2757,7 @@ defmodule DranWeb.SettingsLive do
 
             <div class="divide-y divide-base-300 mt-2">
               <label
-                :for={page_type <- Dran.Brain.page_types()}
+                :for={page_type <- Dran.Knowledge.page_types()}
                 class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
               >
                 <div class="min-w-0">

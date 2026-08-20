@@ -1,7 +1,7 @@
 defmodule Dran.JourneyTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Journey
 
   setup do
@@ -25,7 +25,7 @@ defmodule Dran.JourneyTest do
       end
     end)
 
-    {:ok, context} = Brain.create_workspace(%{name: "Test", slug: "test"})
+    {:ok, context} = Knowledge.create_workspace(%{name: "Test", slug: "test"})
     {:ok, context: context}
   end
 
@@ -44,7 +44,7 @@ defmodule Dran.JourneyTest do
 
     test "groups pages by day", %{context: context} do
       for i <- 1..5 do
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Page #{i}",
           slug: "page-#{i}",
@@ -63,9 +63,14 @@ defmodule Dran.JourneyTest do
     end
 
     test "includes type distribution", %{context: context} do
-      Brain.create_page(%{workspace_id: context.id, title: "Note", slug: "n1", page_type: "note"})
+      Knowledge.create_page(%{
+        workspace_id: context.id,
+        title: "Note",
+        slug: "n1",
+        page_type: "note"
+      })
 
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Concept",
         slug: "c1",
@@ -79,7 +84,7 @@ defmodule Dran.JourneyTest do
     end
 
     test "includes creator distribution", %{context: context} do
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "By Alvaro",
         slug: "a1",
@@ -87,7 +92,7 @@ defmodule Dran.JourneyTest do
         created_by: "alvaro"
       })
 
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "By Agent",
         slug: "a2",
@@ -102,7 +107,7 @@ defmodule Dran.JourneyTest do
 
     test "computes cumulative trajectory points for sparkline", %{context: context} do
       for i <- 1..3 do
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "P#{i}",
           slug: "p#{i}",
@@ -119,7 +124,12 @@ defmodule Dran.JourneyTest do
     end
 
     test "exposes axis labels for the timeline", %{context: context} do
-      Brain.create_page(%{workspace_id: context.id, title: "Note", slug: "n1", page_type: "note"})
+      Knowledge.create_page(%{
+        workspace_id: context.id,
+        title: "Note",
+        slug: "n1",
+        page_type: "note"
+      })
 
       result = Journey.timeline(context.id)
       assert is_binary(result.axis.start)
@@ -130,9 +140,14 @@ defmodule Dran.JourneyTest do
     end
 
     test "excludes second-citizen report pages from the whole timeline", %{context: context} do
-      Brain.create_page(%{workspace_id: context.id, title: "Note", slug: "n1", page_type: "note"})
+      Knowledge.create_page(%{
+        workspace_id: context.id,
+        title: "Note",
+        slug: "n1",
+        page_type: "note"
+      })
 
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Job report",
         slug: "r1",
@@ -152,7 +167,7 @@ defmodule Dran.JourneyTest do
     end
 
     test "a context with only report pages yields the empty payload", %{context: context} do
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Job report",
         slug: "r1",

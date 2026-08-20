@@ -1,7 +1,7 @@
 defmodule DranWeb.GraphJSONControllerTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   setup %{conn: conn} do
     # Disable inference scheduling
@@ -24,17 +24,17 @@ defmodule DranWeb.GraphJSONControllerTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, note} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Graph JSON Note",
         page_type: "note"
       })
 
     {:ok, todo} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Graph JSON Todo",
         page_type: "note",
@@ -43,7 +43,7 @@ defmodule DranWeb.GraphJSONControllerTest do
       })
 
     {:ok, _} =
-      Brain.create_relation_by_slugs(note.slug, todo.slug, "related", context.id)
+      Knowledge.create_relation_by_slugs(note.slug, todo.slug, "related", context.id)
 
     conn =
       conn

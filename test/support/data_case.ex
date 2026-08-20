@@ -55,8 +55,8 @@ defmodule Dran.DataCase do
   by seeds in dev, but not in the test DB). Returns the workspace struct.
   """
   def ensure_workspace!(slug \\ "personal", name \\ "Personal") do
-    Dran.Brain.get_workspace_by_slug(slug) ||
-      case Dran.Brain.create_workspace(%{name: name, slug: slug}) do
+    Dran.Knowledge.get_workspace_by_slug(slug) ||
+      case Dran.Knowledge.create_workspace(%{name: name, slug: slug}) do
         {:ok, ws} ->
           ws
 

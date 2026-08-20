@@ -18,7 +18,7 @@ defmodule Dran.PageAugmenter do
   require Logger
 
   alias Dran.Repo
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias Dran.Embeddings
   alias Dran.Inference
@@ -209,7 +209,7 @@ defmodule Dran.PageAugmenter do
   defp find_semantic_neighbors(%Page{} = page) do
     text = Embeddings.text_for_page(page)
 
-    case Brain.semantic_search(text,
+    case Knowledge.semantic_search(text,
            workspace_id: page.workspace_id,
            limit: @suggestion_limit + 1
          ) do
@@ -261,7 +261,7 @@ defmodule Dran.PageAugmenter do
     else
       # Load existing outbound semantic targets once (no N+1).
       existing_targets =
-        Brain.list_relations_for_page(page.id)
+        Knowledge.list_relations_for_page(page.id)
         |> Map.get(:outbound, [])
         |> Enum.filter(&(&1.relation_type == "semantic"))
         |> MapSet.new(& &1.target_id)
@@ -275,7 +275,7 @@ defmodule Dran.PageAugmenter do
   end
 
   # Creates A→B and the inverse B→A when missing.
-  # `Brain.create_relation/1` uses `on_conflict: :nothing`, so attempting the
+  # `Knowledge.create_relation/1` uses `on_conflict: :nothing`, so attempting the
   # insert is safe even if a row already exists. We still consult the
   # `existing_targets` MapSet to avoid spurious inserts on the outbound side
   # and to know whether we need to create the inverse edge.
@@ -283,7 +283,7 @@ defmodule Dran.PageAugmenter do
     meta = %{"auto" => true, "confidence" => "medium"}
 
     unless MapSet.member?(existing_targets, target_id) do
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: page.id,
         target_id: target_id,
         relation_type: "semantic",
@@ -292,7 +292,7 @@ defmodule Dran.PageAugmenter do
     end
 
     # Inverse edge B→A — always attempt; on_conflict handles dedupe.
-    Brain.create_relation(%{
+    Knowledge.create_relation(%{
       source_id: target_id,
       target_id: page.id,
       relation_type: "semantic",

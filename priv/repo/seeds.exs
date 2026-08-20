@@ -11,8 +11,8 @@
 
 import Ecto.Query
 alias Dran.Repo
-alias Dran.Brain
-alias Dran.Brain.{Context, Page, Relation}
+alias Dran.Knowledge
+alias Dran.Workspace
 
 # ──────────────────────────────────────────────────────────────────────────
 # Seeds only run when the default context is explicitly configured via
@@ -33,9 +33,9 @@ workspace_slug = Dran.Auth.default_workspace_slug()
 context_name = Dran.Auth.default_workspace_name()
 
 context =
-  case Repo.get_by(Context, slug: workspace_slug) do
+  case Repo.get_by(Workspace, slug: workspace_slug) do
     nil ->
-      {:ok, ctx} = Brain.create_workspace(%{name: context_name, slug: workspace_slug})
+      {:ok, ctx} = Knowledge.create_workspace(%{name: context_name, slug: workspace_slug})
       IO.puts("Created context: #{ctx.name} (#{ctx.slug})")
       ctx
 
@@ -55,9 +55,9 @@ defmodule Seeder do
   def page!(workspace_id, attrs) do
     slug = attrs["slug"] || attrs[:slug]
 
-    case Dran.Brain.get_page_by_slug(slug, workspace_id) do
+    case Dran.Knowledge.get_page_by_slug(slug, workspace_id) do
       nil ->
-        {:ok, page} = Dran.Brain.create_page(Map.put(attrs, "workspace_id", workspace_id))
+        {:ok, page} = Dran.Knowledge.create_page(Map.put(attrs, "workspace_id", workspace_id))
         IO.puts("  ✓ Created #{page.page_type}: #{page.slug}")
         page
 
@@ -69,7 +69,7 @@ defmodule Seeder do
 
   @doc "Create a relation by slugs (idempotent via on_conflict: :nothing)."
   def rel!(workspace_id, source_slug, target_slug, type \\ "related") do
-    Dran.Brain.create_relation_by_slugs(source_slug, target_slug, type, workspace_id)
+    Dran.Knowledge.create_relation_by_slugs(source_slug, target_slug, type, workspace_id)
   end
 end
 

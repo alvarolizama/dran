@@ -15,7 +15,7 @@ defmodule Dran.GraphTest do
   # sharing "personal") so pagerank(ctx.id) only sees the relations
   # created by that test.
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Graph
 
   setup do
@@ -48,13 +48,13 @@ defmodule Dran.GraphTest do
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
 
-    {:ok, ctx} = Brain.create_workspace(%{name: "Graph Test #{slug}", slug: slug})
+    {:ok, ctx} = Knowledge.create_workspace(%{name: "Graph Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_page(ctx, slug) do
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: slug,
         slug: slug,
@@ -68,7 +68,7 @@ defmodule Dran.GraphTest do
 
   defp relate(source, target, type) do
     {:ok, _} =
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: source.id,
         target_id: target.id,
         relation_type: type
@@ -228,7 +228,7 @@ defmodule Dran.GraphTest do
 
       assert :ok = Graph.refresh_pagerank(ctx.id)
 
-      b_reloaded = Brain.get_page!(b.id)
+      b_reloaded = Knowledge.get_page!(b.id)
       pr = b_reloaded.meta["pagerank"]
 
       assert is_float(pr)
@@ -242,11 +242,11 @@ defmodule Dran.GraphTest do
       relate(a, b, "part_of")
 
       # Manually set an existing meta key (kind was set on create).
-      {:ok, _} = Brain.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
+      {:ok, _} = Knowledge.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
 
       :ok = Graph.refresh_pagerank(ctx.id)
 
-      b_reloaded = Brain.get_page!(b.id)
+      b_reloaded = Knowledge.get_page!(b.id)
       # Existing keys must survive the jsonb merge.
       assert b_reloaded.meta["author"] == "tester"
       assert b_reloaded.meta["kind"] == "thought"
@@ -266,7 +266,7 @@ defmodule Dran.GraphTest do
       :ok = Graph.refresh_pagerank(ctx.id)
 
       for page <- [a, b, c] do
-        reloaded = Brain.get_page!(page.id)
+        reloaded = Knowledge.get_page!(page.id)
         pr = reloaded.meta["pagerank"]
         assert is_float(pr)
         assert pr > 0
@@ -289,8 +289,8 @@ defmodule Dran.GraphTest do
       # depends on the default context slug being "personal" — same
       # assumption as sync_links_test.exs.
       ctx =
-        Brain.get_workspace_by_slug("personal") ||
-          elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+        Knowledge.get_workspace_by_slug("personal") ||
+          elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
       a = create_page(ctx, "g-sched-a-#{System.unique_integer([:positive])}")
       b = create_page(ctx, "g-sched-b-#{System.unique_integer([:positive])}")
@@ -299,7 +299,7 @@ defmodule Dran.GraphTest do
       result = Graph.refresh_all_scheduled()
       assert result == :ok
 
-      b_reloaded = Brain.get_page!(b.id)
+      b_reloaded = Knowledge.get_page!(b.id)
       pr = b_reloaded.meta["pagerank"]
       assert is_float(pr)
       assert pr > 0
@@ -307,8 +307,8 @@ defmodule Dran.GraphTest do
 
     test "refreshes both pagerank and community_id for the default context" do
       ctx =
-        Brain.get_workspace_by_slug("personal") ||
-          elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+        Knowledge.get_workspace_by_slug("personal") ||
+          elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
       uniq = System.unique_integer([:positive])
       a = create_page(ctx, "g-sched2-a-#{uniq}")
@@ -318,8 +318,8 @@ defmodule Dran.GraphTest do
       assert :ok = Graph.refresh_all_scheduled()
 
       # Both signals must be present after the scheduled refresh.
-      a_reloaded = Brain.get_page!(a.id)
-      b_reloaded = Brain.get_page!(b.id)
+      a_reloaded = Knowledge.get_page!(a.id)
+      b_reloaded = Knowledge.get_page!(b.id)
 
       assert is_float(a_reloaded.meta["pagerank"])
       assert is_float(b_reloaded.meta["pagerank"])
@@ -457,8 +457,8 @@ defmodule Dran.GraphTest do
 
       assert :ok = Graph.refresh_communities(ctx.id)
 
-      a_reloaded = Brain.get_page!(a.id)
-      b_reloaded = Brain.get_page!(b.id)
+      a_reloaded = Knowledge.get_page!(a.id)
+      b_reloaded = Knowledge.get_page!(b.id)
 
       cid_a = a_reloaded.meta["community_id"]
       cid_b = b_reloaded.meta["community_id"]
@@ -486,7 +486,7 @@ defmodule Dran.GraphTest do
 
       :ok = Graph.refresh_communities(ctx.id)
 
-      reload = fn page -> Brain.get_page!(page.id).meta["community_id"] end
+      reload = fn page -> Knowledge.get_page!(page.id).meta["community_id"] end
 
       cid_a = reload.(a)
       cid_b = reload.(b)
@@ -511,11 +511,11 @@ defmodule Dran.GraphTest do
       b = create_page(ctx, "g-rc-p-b")
       relate(a, b, "part_of")
 
-      {:ok, _} = Brain.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
+      {:ok, _} = Knowledge.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
 
       :ok = Graph.refresh_communities(ctx.id)
 
-      b_reloaded = Brain.get_page!(b.id)
+      b_reloaded = Knowledge.get_page!(b.id)
 
       assert b_reloaded.meta["author"] == "tester"
       assert b_reloaded.meta["kind"] == "thought"

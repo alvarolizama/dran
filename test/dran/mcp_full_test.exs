@@ -8,7 +8,7 @@ defmodule Dran.MCPFullTest do
   """
   use Dran.DataCase, async: false
 
-  alias Dran.{Brain, MCP}
+  alias Dran.{Goals, Knowledge, MCP}
 
   # Same setup as brain_test.exs / mcp_test.exs: disable inference so
   # dran_create_page doesn't call external APIs.
@@ -33,8 +33,8 @@ defmodule Dran.MCPFullTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -129,7 +129,7 @@ defmodule Dran.MCPFullTest do
 
     test "resources/read wiki index returns pages", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Resource Test Page",
           slug: "resource-test-page",
@@ -150,7 +150,7 @@ defmodule Dran.MCPFullTest do
 
     test "resources/read page returns full body", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Read Test",
           slug: "read-test-page",
@@ -173,7 +173,7 @@ defmodule Dran.MCPFullTest do
 
     test "resources/read goal returns JSON with todos", %{context: ctx} do
       {:ok, goal} =
-        Brain.create_goal(%{
+        Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "My Goal",
           slug: "my-goal-page",
@@ -181,7 +181,7 @@ defmodule Dran.MCPFullTest do
         })
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Goal Todo",
           slug: "goal-todo-page",
@@ -190,7 +190,7 @@ defmodule Dran.MCPFullTest do
         })
 
       # Link the note to the goal via a part_of relation
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: note.id,
         source_type: "page",
         target_id: goal.id,
@@ -245,7 +245,7 @@ defmodule Dran.MCPFullTest do
   describe "dran_search" do
     test "returns matching pages", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Elixir Phoenix Guide",
           slug: "elixir-phoenix-guide",
@@ -290,14 +290,14 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Created page: Test Note"
       assert result =~ "create-page-test-note"
 
-      page = Brain.get_page_by_slug("create-page-test-note", ctx.id)
+      page = Knowledge.get_page_by_slug("create-page-test-note", ctx.id)
       assert page.title == "Test Note"
       assert page.page_type == "note"
     end
 
     test "errors on duplicate slug", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Existing",
           slug: "dup-slug-test",
@@ -341,7 +341,7 @@ defmodule Dran.MCPFullTest do
       assert result =~
                "Error: page type 'report' is not a valid page type — use dran_create_goal or dran_create_note for goals and todo-style notes"
 
-      assert Brain.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
+      assert Knowledge.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
     end
 
     test "rejects non-page types (goal, project, todo, plan)", %{context: _ctx} do
@@ -364,7 +364,7 @@ defmodule Dran.MCPFullTest do
   describe "dran_update_page" do
     test "updates body and increments version", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Update Test",
           slug: "update-test-page",
@@ -382,14 +382,14 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Updated page"
       assert result =~ "v2"
 
-      refreshed = Brain.get_page!(page.id)
+      refreshed = Knowledge.get_page!(page.id)
       assert refreshed.body == "updated body"
       assert refreshed.version == 2
     end
 
     test "replaces meta entirely (not a merge)", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Meta Test",
           slug: "meta-test-page",
@@ -405,14 +405,14 @@ defmodule Dran.MCPFullTest do
         "meta" => %{"kind" => "idea"}
       })
 
-      refreshed = Brain.get_page!(page.id)
+      refreshed = Knowledge.get_page!(page.id)
       assert refreshed.meta["kind"] == "idea"
       refute Map.has_key?(refreshed.meta, "date")
     end
 
     test "archives a page", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Archive Me",
           slug: "archive-me-page",
@@ -427,7 +427,7 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~ "Updated page"
-      refreshed = Brain.get_page!(page.id)
+      refreshed = Knowledge.get_page!(page.id)
       assert refreshed.archived == true
     end
 
@@ -448,7 +448,7 @@ defmodule Dran.MCPFullTest do
   describe "dran_get_page" do
     test "returns full page body", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Get Page Test",
           slug: "get-page-test",
@@ -481,7 +481,7 @@ defmodule Dran.MCPFullTest do
   describe "dran_delete_page" do
     test "deletes a page", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Delete Me",
           slug: "delete-me-page",
@@ -492,7 +492,7 @@ defmodule Dran.MCPFullTest do
         call_tool("dran_delete_page", %{"workspace" => "personal", "slug" => "delete-me-page"})
 
       assert result =~ "Deleted page: Delete Me"
-      assert is_nil(Brain.get_page_by_slug("delete-me-page", ctx.id))
+      assert is_nil(Knowledge.get_page_by_slug("delete-me-page", ctx.id))
     end
 
     test "errors when slug not found" do
@@ -517,7 +517,7 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Created note: Test Todo"
       assert result =~ "status: today"
 
-      note = Brain.get_page_by_slug("create-todo-test", ctx.id)
+      note = Knowledge.get_page_by_slug("create-todo-test", ctx.id)
       assert note.page_type == "note"
       assert note.meta["kind"] == "todo"
       assert note.meta["kanban_status"] == "today"
@@ -534,7 +534,7 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~ "Created note"
-      note = Brain.get_page_by_slug("assigned-todo-test", ctx.id)
+      note = Knowledge.get_page_by_slug("assigned-todo-test", ctx.id)
       assert note.meta["assignee"] == "hermes"
     end
 
@@ -545,7 +545,7 @@ defmodule Dran.MCPFullTest do
         "slug" => "unassigned-todo-test"
       })
 
-      note = Brain.get_page_by_slug("unassigned-todo-test", ctx.id)
+      note = Knowledge.get_page_by_slug("unassigned-todo-test", ctx.id)
       refute Map.has_key?(note.meta, "assignee")
     end
 
@@ -556,14 +556,14 @@ defmodule Dran.MCPFullTest do
         "slug" => "default-todo-test"
       })
 
-      note = Brain.get_page_by_slug("default-todo-test", ctx.id)
+      note = Knowledge.get_page_by_slug("default-todo-test", ctx.id)
       assert note.meta["kind"] == "todo"
       assert note.meta["kanban_status"] == "backlog"
     end
 
     test "errors on duplicate slug", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Existing Todo",
           slug: "dup-todo-test",
@@ -587,7 +587,7 @@ defmodule Dran.MCPFullTest do
   describe "dran_update_note" do
     test "merges meta (preserves existing keys)", %{context: ctx} do
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Merge Todo",
           slug: "merge-todo-test",
@@ -610,7 +610,7 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Updated note"
       assert result =~ "status: today"
 
-      refreshed = Brain.get_page!(note.id)
+      refreshed = Knowledge.get_page!(note.id)
       assert refreshed.meta["kanban_status"] == "today"
       assert refreshed.meta["priority"] == "low"
       assert refreshed.meta["due_date"] == "2026-01-01"
@@ -618,7 +618,7 @@ defmodule Dran.MCPFullTest do
 
     test "updates assignee via merge", %{context: ctx} do
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Assign Todo",
           slug: "assign-update-test",
@@ -634,7 +634,7 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~ "Updated note"
-      refreshed = Brain.get_page!(note.id)
+      refreshed = Knowledge.get_page!(note.id)
       assert refreshed.meta["assignee"] == "hermes"
       # kanban_status preserved by merge
       assert refreshed.meta["kanban_status"] == "backlog"
@@ -678,7 +678,7 @@ defmodule Dran.MCPFullTest do
       assert result =~ "ship-v1-goal"
       assert result =~ "status: active"
 
-      goal = Brain.get_goal_by_slug("ship-v1-goal", ctx.id)
+      goal = Goals.get_goal_by_slug("ship-v1-goal", ctx.id)
       assert goal.kind == "business"
       assert goal.health == "green"
       assert goal.metric == "revenue"
@@ -695,12 +695,12 @@ defmodule Dran.MCPFullTest do
 
       assert result =~ "Created goal: Learn Elixir"
       assert result =~ "learn-elixir"
-      assert Brain.get_goal_by_slug("learn-elixir", ctx.id) != nil
+      assert Goals.get_goal_by_slug("learn-elixir", ctx.id) != nil
     end
 
     test "errors on duplicate slug", %{context: ctx} do
       {:ok, _} =
-        Brain.create_goal(%{
+        Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "Existing",
           slug: "dup-goal-test"
@@ -746,10 +746,20 @@ defmodule Dran.MCPFullTest do
   describe "dran_create_relation" do
     test "creates a related relation", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "A", slug: "rel-a", page_type: "note"})
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "A",
+          slug: "rel-a",
+          page_type: "note"
+        })
 
       {:ok, _} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "B", slug: "rel-b", page_type: "note"})
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "B",
+          slug: "rel-b",
+          page_type: "note"
+        })
 
       result =
         call_tool("dran_create_relation", %{
@@ -775,7 +785,7 @@ defmodule Dran.MCPFullTest do
 
     test "errors when target not found", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Src",
           slug: "src-exists",
@@ -794,10 +804,20 @@ defmodule Dran.MCPFullTest do
 
     test "defaults to related type", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "C", slug: "rel-c", page_type: "note"})
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "C",
+          slug: "rel-c",
+          page_type: "note"
+        })
 
       {:ok, _} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "D", slug: "rel-d", page_type: "note"})
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "D",
+          slug: "rel-d",
+          page_type: "note"
+        })
 
       result =
         call_tool("dran_create_relation", %{
@@ -815,7 +835,7 @@ defmodule Dran.MCPFullTest do
   describe "dran_delete_relation" do
     test "deletes a relation", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "X",
           slug: "del-rel-x",
@@ -823,14 +843,14 @@ defmodule Dran.MCPFullTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Y",
           slug: "del-rel-y",
           page_type: "note"
         })
 
-      Brain.create_relation_by_slugs("del-rel-x", "del-rel-y", "related", ctx.id)
+      Knowledge.create_relation_by_slugs("del-rel-x", "del-rel-y", "related", ctx.id)
 
       result =
         call_tool("dran_delete_relation", %{
@@ -860,7 +880,7 @@ defmodule Dran.MCPFullTest do
   describe "dran_get_links" do
     test "returns inbound and outbound relations", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Links A",
           slug: "links-a",
@@ -868,14 +888,14 @@ defmodule Dran.MCPFullTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Links B",
           slug: "links-b",
           page_type: "note"
         })
 
-      Brain.create_relation_by_slugs("links-a", "links-b", "related", ctx.id)
+      Knowledge.create_relation_by_slugs("links-a", "links-b", "related", ctx.id)
 
       result = call_tool("dran_get_links", %{"workspace" => "personal", "slug" => "links-a"})
 
@@ -902,7 +922,7 @@ defmodule Dran.MCPFullTest do
 
     test "filters by type", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Filter Note",
           slug: "filter-type-note",
@@ -921,7 +941,7 @@ defmodule Dran.MCPFullTest do
 
     test "filters by tag", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Tagged",
           slug: "tag-filter-test",
@@ -940,7 +960,7 @@ defmodule Dran.MCPFullTest do
 
     test "filters by owner", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Owner Test",
           slug: "owner-filter-test",
@@ -959,7 +979,7 @@ defmodule Dran.MCPFullTest do
 
     test "filters by created_by", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Creator Test",
           slug: "creator-filter-test",
@@ -978,7 +998,7 @@ defmodule Dran.MCPFullTest do
 
     test "filters by assignee", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Assigned to Hermes",
           slug: "assignee-filter-hermes",
@@ -987,7 +1007,7 @@ defmodule Dran.MCPFullTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Assigned to Alvaro",
           slug: "assignee-filter-alvaro",
@@ -1007,7 +1027,7 @@ defmodule Dran.MCPFullTest do
 
     test "filters unassigned todos with 'none'", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Unassigned Todo",
           slug: "assignee-filter-none",
@@ -1016,7 +1036,7 @@ defmodule Dran.MCPFullTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Assigned Todo",
           slug: "assignee-filter-set",

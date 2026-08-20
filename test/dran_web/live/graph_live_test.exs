@@ -3,7 +3,9 @@ defmodule DranWeb.GraphLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Goals
 
   setup %{conn: conn} do
     # Disable inference scheduling so create_page doesn't try to call external APIs
@@ -26,12 +28,12 @@ defmodule DranWeb.GraphLiveTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     # Pages of every relevant type so the global graph has a mixed dataset
     # (knowledge layer + operational layer) to filter by.
     {:ok, note} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Alpha Note",
         body: "First note for graph test",
@@ -39,7 +41,7 @@ defmodule DranWeb.GraphLiveTest do
       })
 
     {:ok, _concept} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Beta Concept",
         body: "Second page for graph test",
@@ -47,10 +49,10 @@ defmodule DranWeb.GraphLiveTest do
       })
 
     {:ok, goal} =
-      Brain.create_goal(%{workspace_id: context.id, title: "Test Goal", slug: "test-goal"})
+      Goals.create_goal(%{workspace_id: context.id, title: "Test Goal", slug: "test-goal"})
 
     {:ok, plan} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Test Plan",
         slug: "test-plan",
@@ -59,7 +61,7 @@ defmodule DranWeb.GraphLiveTest do
       })
 
     {:ok, todo} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Test Todo",
         slug: "test-todo",
@@ -69,7 +71,7 @@ defmodule DranWeb.GraphLiveTest do
       })
 
     {:ok, _project} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Test Project",
         slug: "test-project",
@@ -81,10 +83,10 @@ defmodule DranWeb.GraphLiveTest do
     # must preserve. Goals/projects live in their own tables now, so they are
     # not graph nodes (relations are page-to-page only).
     {:ok, _} =
-      Brain.create_relation_by_slugs(todo.slug, plan.slug, "related", context.id)
+      Knowledge.create_relation_by_slugs(todo.slug, plan.slug, "related", context.id)
 
     {:ok, _} =
-      Brain.create_relation_by_slugs(note.slug, todo.slug, "related", context.id)
+      Knowledge.create_relation_by_slugs(note.slug, todo.slug, "related", context.id)
 
     # Log in — init_test_session is needed because ConnCase doesn't pipe through browser
     conn =
@@ -113,9 +115,9 @@ defmodule DranWeb.GraphLiveTest do
   # that lightweight payload (never nodes/edges).
   defp push_graph_loaded(view, context) do
     %{total_nodes: total_nodes, total_edges: total_edges} =
-      Brain.graph_data(context.id, exclude_types: ~w(todo plan), max_nodes: 400)
+      Knowledge.graph_data(context.id, exclude_types: ~w(todo plan), max_nodes: 400)
 
-    type_counts = Brain.graph_type_counts(context.id, ~w(todo plan))
+    type_counts = Knowledge.graph_type_counts(context.id, ~w(todo plan))
 
     render_hook(view, "graph_loaded", %{
       "total_nodes" => total_nodes,
@@ -163,7 +165,7 @@ defmodule DranWeb.GraphLiveTest do
     test "graph_loaded pushes only counters, not nodes/edges", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/graph")
 
-      context = Brain.get_workspace_by_slug("personal")
+      context = Knowledge.get_workspace_by_slug("personal")
       push_graph_loaded(view, context)
 
       # After the fetch the sidebar totals reflect the counters, and the

@@ -1,7 +1,7 @@
 defmodule Dran.Graph.MaintenanceTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Graph.Maintenance
 
   setup do
@@ -29,13 +29,13 @@ defmodule Dran.Graph.MaintenanceTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_workspace(%{name: "Maintenance Test #{slug}", slug: slug})
+    {:ok, ctx} = Knowledge.create_workspace(%{name: "Maintenance Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_page(ctx, slug) do
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: slug,
         slug: slug,
@@ -48,7 +48,7 @@ defmodule Dran.Graph.MaintenanceTest do
 
   defp semantic_edge(source, target, distance) do
     {:ok, rel} =
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: source.id,
         target_id: target.id,
         relation_type: "semantic",
@@ -99,7 +99,7 @@ defmodule Dran.Graph.MaintenanceTest do
       b = create_page(ctx, "b")
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "related",
@@ -109,7 +109,7 @@ defmodule Dran.Graph.MaintenanceTest do
       deleted = Maintenance.prune_semantic(ctx.id, 0.1)
 
       assert deleted == 0
-      assert length(Brain.list_relations_for_page(a.id).outbound) == 1
+      assert length(Knowledge.list_relations_for_page(a.id).outbound) == 1
     end
 
     test "uses the long-body setting threshold when none is given" do
@@ -130,7 +130,7 @@ defmodule Dran.Graph.MaintenanceTest do
       b = create_page(ctx, "b")
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "semantic",
@@ -167,7 +167,7 @@ defmodule Dran.Graph.MaintenanceTest do
       b = create_page(ctx, "b")
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "part_of"

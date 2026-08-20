@@ -1,7 +1,9 @@
 defmodule DranWeb.HomeLiveTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Goals
 
   # The wiki lives at the ROOT of the app — `/` is the first thing a
   # logged-in user sees. Admin/data views live under /panel.
@@ -27,10 +29,10 @@ defmodule DranWeb.HomeLiveTest do
       end
     end)
 
-    {:ok, wiki_ctx} = Brain.create_workspace(%{name: "Wiki Test", slug: "wiki-test"})
+    {:ok, wiki_ctx} = Knowledge.create_workspace(%{name: "Wiki Test", slug: "wiki-test"})
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: wiki_ctx.id,
         title: "Wiki Test Note",
         body: "A note visible through the wiki",
@@ -97,7 +99,7 @@ defmodule DranWeb.HomeLiveTest do
   describe "todo kanban + type_list" do
     setup %{wiki_ctx: wiki_ctx} do
       {:ok, project} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Alpha Project",
           slug: "alpha-project",
@@ -106,14 +108,14 @@ defmodule DranWeb.HomeLiveTest do
         })
 
       {:ok, goal} =
-        Brain.create_goal(%{
+        Goals.create_goal(%{
           workspace_id: wiki_ctx.id,
           title: "Beta Goal",
           slug: "beta-goal"
         })
 
       {:ok, plan} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Gamma Plan",
           slug: "gamma-plan",
@@ -122,7 +124,7 @@ defmodule DranWeb.HomeLiveTest do
         })
 
       {:ok, linked} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Linked Todo",
           slug: "linked-todo",
@@ -132,7 +134,7 @@ defmodule DranWeb.HomeLiveTest do
         })
 
       {:ok, orphan} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Orphan Todo",
           slug: "orphan-todo",
@@ -187,7 +189,7 @@ defmodule DranWeb.HomeLiveTest do
   describe "todo kanban statuses" do
     setup %{wiki_ctx: wiki_ctx} do
       {:ok, done_todo} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Done Todo",
           slug: "done-todo",
@@ -197,7 +199,7 @@ defmodule DranWeb.HomeLiveTest do
         })
 
       {:ok, cancelled_todo} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Cancelled Todo",
           slug: "cancelled-todo",

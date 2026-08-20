@@ -10,7 +10,7 @@ defmodule Dran.IntegrationTest do
   """
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Exporter
 
   setup do
@@ -21,7 +21,7 @@ defmodule Dran.IntegrationTest do
     # - Embeddings.schedule/1 returns :ignored immediately (no API calls)
     # - PageAugmenter.schedule/1 returns :ignored immediately
     # - Embeddings stay nil on all pages
-    # - Brain.search/1 falls back to :fuzzy_fts or :fts strategy (graceful degradation)
+    # - Knowledge.search/1 falls back to :fuzzy_fts or :fts strategy (graceful degradation)
     # - FTS search works perfectly without embeddings
     Application.put_env(:dran, :inference,
       base_url: nil,
@@ -44,7 +44,7 @@ defmodule Dran.IntegrationTest do
 
     # Create a fresh context for this test
     {:ok, context} =
-      Brain.create_workspace(%{
+      Knowledge.create_workspace(%{
         name: "Integration Test",
         slug: "integration-test-#{System.unique_integer()}"
       })
@@ -56,7 +56,7 @@ defmodule Dran.IntegrationTest do
     test "create pages, resolve embeds, rename, search, and export", %{context: ctx} do
       # ── 1. Create a note page ──
       {:ok, note_page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Design Document",
           slug: "design-doc",
@@ -69,7 +69,7 @@ defmodule Dran.IntegrationTest do
 
       # ── 2. Create a note that embeds the page via ![[design-doc]] ──
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Project Notes",
           slug: "project-notes",
@@ -78,7 +78,7 @@ defmodule Dran.IntegrationTest do
         })
 
       # ── 3. Assert embeds relation exists ──
-      rels = Brain.list_relations_for_page(note.id)
+      rels = Knowledge.list_relations_for_page(note.id)
       embed_rels = Enum.filter(rels.outbound, &(&1.relation_type == "embeds"))
 
       assert length(embed_rels) == 1
@@ -94,31 +94,31 @@ defmodule Dran.IntegrationTest do
       # create_page calls Embeddings.schedule which runs synchronously (schedule_async: false).
       # Inference is disabled (base_url: nil), so no embedding call is made
       # and the page's embedding stays nil.
-      page_after = Brain.get_page!(note_page.id)
+      page_after = Knowledge.get_page!(note_page.id)
       assert page_after.embedding == nil
 
-      note_after = Brain.get_page!(note.id)
+      note_after = Knowledge.get_page!(note.id)
       assert note_after.embedding == nil
 
       # ── 5. Rename the page's slug ──
-      {:ok, renamed} = Brain.rename_slug(note_page, "design-spec")
+      {:ok, renamed} = Knowledge.rename_slug(note_page, "design-spec")
 
       assert renamed.slug == "design-spec"
 
       # The note's body should be updated to reference the new slug
-      updated_note = Brain.get_page!(note.id)
+      updated_note = Knowledge.get_page!(note.id)
       assert updated_note.body =~ "![[design-spec]]"
       refute updated_note.body =~ "![[design-doc]]"
 
       # The embeds relation should still point to the same page (by id)
-      rels_after = Brain.list_relations_for_page(note.id)
+      rels_after = Knowledge.list_relations_for_page(note.id)
       embed_rels_after = Enum.filter(rels_after.outbound, &(&1.relation_type == "embeds"))
       assert length(embed_rels_after) == 1
       assert hd(embed_rels_after).target_id == note_page.id
       assert hd(embed_rels_after).target.slug == "design-spec"
 
       # ── 6. Search for the renamed page by content (FTS, no embeddings needed) ──
-      {:ok, results} = Brain.search("design document", workspace_id: ctx.id)
+      {:ok, results} = Knowledge.search("design document", workspace_id: ctx.id)
 
       # The renamed page should be findable via full-text search
       found = Enum.find(results, &(&1.slug == "design-spec"))
@@ -126,7 +126,7 @@ defmodule Dran.IntegrationTest do
       assert found.title == "Design Document"
 
       # Also search for the note's content
-      {:ok, note_results} = Brain.search("project notes", workspace_id: ctx.id)
+      {:ok, note_results} = Knowledge.search("project notes", workspace_id: ctx.id)
       found_note = Enum.find(note_results, &(&1.slug == "project-notes"))
       assert found_note != nil
 
@@ -152,7 +152,7 @@ defmodule Dran.IntegrationTest do
       assert embed_in_export != nil
 
       # ── 8. Verify stats work with the optimized group_by queries ──
-      stats = Brain.stats(ctx.id)
+      stats = Knowledge.stats(ctx.id)
 
       assert stats.total_pages == 2
       assert stats.by_type["note"] == 2
@@ -163,7 +163,7 @@ defmodule Dran.IntegrationTest do
     test "stats with todos groups by kanban_status via SQL", %{context: ctx} do
       # Create todo-notes with different kanban statuses
       {:ok, _todo1} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Task A",
           slug: "task-a",
@@ -174,7 +174,7 @@ defmodule Dran.IntegrationTest do
         })
 
       {:ok, _todo2} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Task B",
           slug: "task-b",
@@ -185,7 +185,7 @@ defmodule Dran.IntegrationTest do
         })
 
       {:ok, _todo3} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Task C",
           slug: "task-c",
@@ -196,7 +196,7 @@ defmodule Dran.IntegrationTest do
         })
 
       {:ok, _todo4} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Task D",
           slug: "task-d",
@@ -206,7 +206,7 @@ defmodule Dran.IntegrationTest do
           # no kanban_status → should default to "backlog"
         })
 
-      stats = Brain.stats(ctx.id)
+      stats = Knowledge.stats(ctx.id)
 
       assert stats.total_pages == 4
       assert stats.by_type["note"] == 4
@@ -217,7 +217,7 @@ defmodule Dran.IntegrationTest do
 
     test "orphan_pages finds pages with no inbound relations", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Page A",
           slug: "page-a",
@@ -226,7 +226,7 @@ defmodule Dran.IntegrationTest do
         })
 
       {:ok, b} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Page B",
           slug: "page-b",
@@ -236,13 +236,13 @@ defmodule Dran.IntegrationTest do
 
       # Create a relation: A → B (B has an inbound relation, A does not)
       {:ok, _rel} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "related"
         })
 
-      orphans = Brain.orphan_pages(ctx.id)
+      orphans = Knowledge.orphan_pages(ctx.id)
       orphan_slugs = Enum.map(orphans, & &1.slug)
 
       # A has no inbound relations → orphan

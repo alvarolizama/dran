@@ -21,7 +21,7 @@ defmodule Dran.EntityLinker do
     the same slug (we never hijack a note's slug).
   * Skips self-links (an entity page mentioning itself).
   * Relations are created with `on_conflict: :nothing` via
-    `Brain.create_relation/1`, so re-running is idempotent.
+    `Knowledge.create_relation/1`, so re-running is idempotent.
   """
 
   require Logger

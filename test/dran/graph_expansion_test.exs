@@ -1,14 +1,14 @@
 defmodule Dran.GraphExpansionTest do
   use Dran.DataCase, async: false
 
-  # Tests for Brain.transitive_part_of_candidates/1 (Plan Task 3.1) and
-  # Brain.community_pages/2 (Task 4.3).
+  # Tests for Knowledge.transitive_part_of_candidates/1 (Plan Task 3.1) and
+  # Knowledge.community_pages/2 (Task 4.3).
   #
   # Fixture pattern mirrors sync_links_test.exs: inference is disabled so
   # create_page doesn't call external embedding/rerank APIs, and a
   # "personal" context is reused or created.
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -31,8 +31,8 @@ defmodule Dran.GraphExpansionTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -41,7 +41,7 @@ defmodule Dran.GraphExpansionTest do
 
   defp create_note(ctx, slug, opts \\ []) do
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: Keyword.get(opts, :title, slug),
         slug: slug,
@@ -55,7 +55,7 @@ defmodule Dran.GraphExpansionTest do
 
   defp relate!(source, target, type) do
     {:ok, _} =
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: source.id,
         target_id: target.id,
         relation_type: type
@@ -72,7 +72,7 @@ defmodule Dran.GraphExpansionTest do
       relate!(a, b, "part_of")
       relate!(b, c, "part_of")
 
-      candidates = Brain.transitive_part_of_candidates(ctx.id)
+      candidates = Knowledge.transitive_part_of_candidates(ctx.id)
 
       assert %{source_slug: "a", target_slug: "c", via_slug: "b"} in candidates,
              "expected (a, c, via b) in candidates, got: #{inspect(candidates)}"
@@ -87,7 +87,7 @@ defmodule Dran.GraphExpansionTest do
       # direct edge already present → must NOT be proposed
       relate!(a, c, "part_of")
 
-      candidates = Brain.transitive_part_of_candidates(ctx.id)
+      candidates = Knowledge.transitive_part_of_candidates(ctx.id)
 
       refute %{source_slug: "a", target_slug: "c", via_slug: "b"} in candidates,
              "must not propose a→c when direct edge exists, got: #{inspect(candidates)}"
@@ -102,7 +102,7 @@ defmodule Dran.GraphExpansionTest do
       # Must not hang or raise. The visited-array guard terminates the
       # recursion, and the depth=2 + source != target filter excludes
       # the trivial cycle.
-      candidates = Brain.transitive_part_of_candidates(ctx.id)
+      candidates = Knowledge.transitive_part_of_candidates(ctx.id)
 
       # The cycle produces depth=2 rows a→b→a (source=a, target=a) and
       # b→a→b (source=b, target=b); the `source_id != target_id` filter
@@ -117,7 +117,7 @@ defmodule Dran.GraphExpansionTest do
       # only related, not part_of → no transitive candidate
       relate!(a, b, "related")
 
-      candidates = Brain.transitive_part_of_candidates(ctx.id)
+      candidates = Knowledge.transitive_part_of_candidates(ctx.id)
       assert candidates == []
     end
 
@@ -130,7 +130,7 @@ defmodule Dran.GraphExpansionTest do
       relate!(b, c, "part_of")
       relate!(c, d, "part_of")
 
-      candidates = Brain.transitive_part_of_candidates(ctx.id)
+      candidates = Knowledge.transitive_part_of_candidates(ctx.id)
       candidate_pairs = Enum.map(candidates, &{&1.source_slug, &1.target_slug})
 
       # depth 2 (a→b→c) is the max, so a→c should be proposed but a→d
@@ -142,7 +142,7 @@ defmodule Dran.GraphExpansionTest do
     test "does not propose across contexts", %{context: ctx} do
       # Create a second context with its own part_of chain.
       {:ok, other_ctx} =
-        Brain.create_workspace(%{
+        Knowledge.create_workspace(%{
           name: "Other",
           slug: "other-context-#{:erlang.unique_integer([:positive])}"
         })
@@ -160,7 +160,7 @@ defmodule Dran.GraphExpansionTest do
       relate!(x, y, "part_of")
       relate!(y, z, "part_of")
 
-      candidates = Brain.transitive_part_of_candidates(ctx.id)
+      candidates = Knowledge.transitive_part_of_candidates(ctx.id)
       slugs = Enum.flat_map(candidates, &[&1.source_slug, &1.target_slug, &1.via_slug])
 
       assert "a" in slugs
@@ -190,12 +190,12 @@ defmodule Dran.GraphExpansionTest do
       :ok = Dran.Graph.refresh_communities(ctx.id)
 
       # Read the community_id assigned to cluster 1.
-      a_reloaded = Brain.get_page!(a.id)
+      a_reloaded = Knowledge.get_page!(a.id)
       cid_a = a_reloaded.meta["community_id"]
       assert is_integer(cid_a)
 
       # community_pages/2 must return exactly {a, b, c} for cid_a.
-      pages = Brain.community_pages(ctx.id, cid_a)
+      pages = Knowledge.community_pages(ctx.id, cid_a)
       slugs = Enum.map(pages, & &1.slug) |> Enum.sort()
 
       assert slugs == ["cp-a", "cp-b", "cp-c"]
@@ -214,7 +214,7 @@ defmodule Dran.GraphExpansionTest do
       :ok = Dran.Graph.refresh_communities(ctx.id)
 
       # 99999 is (almost certainly) not a real community_id.
-      assert Brain.community_pages(ctx.id, 999_999) == []
+      assert Knowledge.community_pages(ctx.id, 999_999) == []
     end
 
     test "does not leak pages from other contexts", %{context: ctx} do
@@ -224,11 +224,11 @@ defmodule Dran.GraphExpansionTest do
       relate!(a, b, "related")
       :ok = Dran.Graph.refresh_communities(ctx.id)
 
-      cid = Brain.get_page!(a.id).meta["community_id"]
+      cid = Knowledge.get_page!(a.id).meta["community_id"]
 
       # Same community_id value, but in a different context — must return [].
       {:ok, other_ctx} =
-        Brain.create_workspace(%{
+        Knowledge.create_workspace(%{
           name: "Other CP",
           slug: "cp-other-#{:erlang.unique_integer([:positive])}"
         })
@@ -236,9 +236,9 @@ defmodule Dran.GraphExpansionTest do
       # Manually stamp the same community_id on a page in the other context
       # to verify the workspace_id filter works.
       other_page = create_note(other_ctx, "cp-cross-other")
-      {:ok, _} = Brain.update_page(other_page, %{meta: %{"community_id" => cid}})
+      {:ok, _} = Knowledge.update_page(other_page, %{meta: %{"community_id" => cid}})
 
-      pages = Brain.community_pages(ctx.id, cid)
+      pages = Knowledge.community_pages(ctx.id, cid)
       slugs = Enum.map(pages, & &1.slug)
 
       assert "cp-cross-a" in slugs

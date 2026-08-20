@@ -1,7 +1,7 @@
 defmodule DranWeb.API.WorkspaceController do
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   # SEC-007: context CRUD is admin-only. The :api_auth pipeline validates the
   # token but not the user's role — we plug require_admin on top.
@@ -9,13 +9,13 @@ defmodule DranWeb.API.WorkspaceController do
 
   @doc "GET /api/workspaces — list all contexts"
   def index(conn, _params) do
-    contexts = Brain.list_workspaces()
+    contexts = Knowledge.list_workspaces()
     json(conn, %{data: contexts})
   end
 
   @doc "POST /api/workspaces — create a context"
   def create(conn, %{"name" => _name, "slug" => _slug} = params) do
-    case Brain.create_workspace(params) do
+    case Knowledge.create_workspace(params) do
       {:ok, context} ->
         conn
         |> put_status(:created)
@@ -36,7 +36,7 @@ defmodule DranWeb.API.WorkspaceController do
 
   @doc "GET /api/workspaces/:slug — get a context"
   def show(conn, %{"slug" => slug}) do
-    case Brain.get_workspace_by_slug(slug) do
+    case Knowledge.get_workspace_by_slug(slug) do
       nil ->
         conn
         |> put_status(:not_found)
@@ -49,12 +49,12 @@ defmodule DranWeb.API.WorkspaceController do
 
   @doc "PUT /api/workspaces/:slug — update a context"
   def update(conn, %{"slug" => slug} = params) do
-    context = Brain.get_workspace_by_slug(slug)
+    context = Knowledge.get_workspace_by_slug(slug)
 
     if context do
       params = Map.drop(params, ["slug"])
 
-      case Brain.update_workspace(context, params) do
+      case Knowledge.update_workspace(context, params) do
         {:ok, updated} ->
           json(conn, %{data: updated})
 
@@ -72,14 +72,14 @@ defmodule DranWeb.API.WorkspaceController do
 
   @doc "DELETE /api/workspaces/:slug — delete a context"
   def delete(conn, %{"slug" => slug}) do
-    case Brain.get_workspace_by_slug(slug) do
+    case Knowledge.get_workspace_by_slug(slug) do
       nil ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "context not found"}})
 
       context ->
-        case Brain.delete_workspace(context) do
+        case Knowledge.delete_workspace(context) do
           {:ok, _} ->
             conn |> put_status(:no_content) |> send_resp(:no_content, "")
 

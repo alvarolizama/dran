@@ -65,7 +65,7 @@ defmodule Dran.PropsBackfill do
   end
 
   defp count_edges_before(page) do
-    Dran.Brain.list_relations_for_page(page.id)
+    Dran.Knowledge.list_relations_for_page(page.id)
     |> Map.get(:outbound, [])
     |> length()
   end

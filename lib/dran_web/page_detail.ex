@@ -29,7 +29,7 @@ defmodule DranWeb.PageDetail do
   import Phoenix.LiveView, only: [allow_upload: 3, push_navigate: 2, connected?: 1]
   import Phoenix.Component, only: [assign: 2, to_form: 2]
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.Plugs.Auth
 
   @upload_accept ~w(image/* video/* audio/* application/pdf text/plain text/markdown text/csv text/html application/json application/zip)
@@ -112,21 +112,21 @@ defmodule DranWeb.PageDetail do
     {socket, context} = Auth.resolve_workspace(socket, params)
 
     with %{} = context <- context,
-         %Dran.Page{} = page <- Brain.get_page_by_slug(slug, context.id) do
+         %Dran.Page{} = page <- Knowledge.get_page_by_slug(slug, context.id) do
       active_tab = Map.get(socket.assigns, :active_tab, "content")
 
       {:noreply,
        assign(socket,
          page: page,
-         relations: Brain.list_relations_for_page(page.id),
-         versions: Brain.list_page_versions(page.id),
+         relations: Knowledge.list_relations_for_page(page.id),
+         versions: Knowledge.list_page_versions(page.id),
          compare_version: nil,
-         logs: Brain.list_log(workspace_id: context.id, limit: 10),
+         logs: Knowledge.list_log(workspace_id: context.id, limit: 10),
          page_title: page.title,
          active_tab: active_tab,
          community_summary: load_community_summary(page),
          editing: Map.get(params, "edit") == "true",
-         form: Brain.change_page(page) |> to_form(as: :page),
+         form: Knowledge.change_page(page) |> to_form(as: :page),
          workspace_id: context.id,
          save_status: "idle",
          rendered_body: render_body(page)

@@ -3,7 +3,7 @@ defmodule DranWeb.GoalLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Goals
   alias Dran.Goal
   alias DranWeb.Plugs.Auth
 
@@ -323,7 +323,7 @@ defmodule DranWeb.GoalLive do
   defp apply_action(socket, :index, _params) do
     goals =
       if socket.assigns.context do
-        Brain.list_goals(socket.assigns.context.id)
+        Goals.list_goals(socket.assigns.context.id)
       else
         []
       end
@@ -335,12 +335,12 @@ defmodule DranWeb.GoalLive do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_goal_by_slug(slug, context.id) do
+      case Goals.get_goal_by_slug(slug, context.id) do
         nil ->
           push_navigate(socket, to: ~p"/panel/goals")
 
         goal ->
-          form = Brain.change_goal(goal) |> to_form(as: :goal)
+          form = Goals.change_goal(goal) |> to_form(as: :goal)
 
           assign(socket,
             goal: goal,
@@ -355,7 +355,7 @@ defmodule DranWeb.GoalLive do
   end
 
   defp apply_action(socket, :new, _params) do
-    changeset = Brain.change_goal(%Goal{})
+    changeset = Goals.change_goal(%Goal{})
 
     assign(socket,
       form: to_form(changeset, as: :goal),
@@ -382,16 +382,16 @@ defmodule DranWeb.GoalLive do
 
   def handle_event("validate", %{"goal" => goal_params}, socket) do
     goal = socket.assigns[:goal] || %Goal{}
-    changeset = Brain.change_goal(goal, goal_params) |> Map.put(:action, :validate)
+    changeset = Goals.change_goal(goal, goal_params) |> Map.put(:action, :validate)
     {:noreply, assign(socket, form: to_form(changeset, as: :goal))}
   end
 
   def handle_event("save", %{"goal" => goal_params}, socket) do
     goal = socket.assigns.goal
 
-    case Brain.update_goal(goal, goal_params) do
+    case Goals.update_goal(goal, goal_params) do
       {:ok, updated} ->
-        form = Brain.change_goal(updated) |> to_form(as: :goal)
+        form = Goals.change_goal(updated) |> to_form(as: :goal)
 
         {:noreply,
          socket
@@ -412,7 +412,7 @@ defmodule DranWeb.GoalLive do
         |> Map.put("workspace_id", context.id)
         |> ensure_slug()
 
-      case Brain.create_goal(attrs) do
+      case Goals.create_goal(attrs) do
         {:ok, goal} ->
           {:noreply,
            socket
@@ -430,7 +430,7 @@ defmodule DranWeb.GoalLive do
   def handle_event("delete", _params, socket) do
     goal = socket.assigns.goal
 
-    case Brain.delete_goal(goal) do
+    case Goals.delete_goal(goal) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -462,10 +462,10 @@ defmodule DranWeb.GoalLive do
   @impl true
   def handle_info({:page_changed, _action, changed_goal}, socket) do
     if socket.assigns[:goal] && socket.assigns.goal.id == changed_goal.id do
-      goal = Brain.get_goal(changed_goal.id)
+      goal = Goals.get_goal(changed_goal.id)
 
       if goal do
-        form = Brain.change_goal(goal) |> to_form(as: :goal)
+        form = Goals.change_goal(goal) |> to_form(as: :goal)
         {:noreply, assign(socket, goal: goal, form: form)}
       else
         {:noreply, socket}

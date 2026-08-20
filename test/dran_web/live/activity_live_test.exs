@@ -1,7 +1,7 @@
 defmodule DranWeb.ActivityLiveTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
@@ -28,11 +28,11 @@ defmodule DranWeb.ActivityLiveTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     # Create a page — this generates a "page.create" log entry.
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Activity Test Page",
         body: "A page for the activity feed test",
@@ -76,7 +76,7 @@ defmodule DranWeb.ActivityLiveTest do
   end
 
   test "renders empty state when no log entries", %{conn: conn} do
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     import Ecto.Query
 
@@ -95,10 +95,10 @@ defmodule DranWeb.ActivityLiveTest do
     assert html =~ t("Created")
 
     # Create another page — broadcasts :page_changed to the brain topic
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, _page2} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Second Activity Page",
         body: "Another page",

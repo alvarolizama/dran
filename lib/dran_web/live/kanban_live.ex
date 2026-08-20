@@ -5,7 +5,9 @@ defmodule DranWeb.KanbanLive do
   """
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Goals
   alias DranWeb.Plugs.Auth
 
   @kanban_columns [
@@ -321,9 +323,9 @@ defmodule DranWeb.KanbanLive do
     context = socket.assigns.context
 
     if context do
-      all_todos = Brain.list_todos(workspace_id: context.id, limit: 500)
+      all_todos = Knowledge.list_todos(workspace_id: context.id, limit: 500)
 
-      goal_records = Brain.list_goals(context.id)
+      goal_records = Goals.list_goals(context.id)
 
       filter_goal = Map.get(params, "goal", "all")
 
@@ -415,9 +417,9 @@ defmodule DranWeb.KanbanLive do
           "due_date" => if(due_date != "", do: due_date, else: nil)
         }
 
-        case Brain.create_page(attrs) do
+        case Knowledge.create_page(attrs) do
           {:ok, _page} ->
-            all_todos = Brain.list_todos(workspace_id: context.id, limit: 500)
+            all_todos = Knowledge.list_todos(workspace_id: context.id, limit: 500)
 
             socket =
               socket
@@ -439,12 +441,12 @@ defmodule DranWeb.KanbanLive do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           {:noreply, put_flash(socket, :error, "Todo not found.")}
 
         todo ->
-          case Brain.update_page(todo, %{kanban_status: status}) do
+          case Knowledge.update_page(todo, %{kanban_status: status}) do
             {:ok, _updated} ->
               {:noreply, recompute_filtered_todos(socket)}
 
@@ -465,14 +467,14 @@ defmodule DranWeb.KanbanLive do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_page_by_slug(slug, context.id) do
+      case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           {:noreply, put_flash(socket, :error, gettext("Todo not found."))}
 
         todo ->
-          case Brain.archive_page(todo) do
+          case Knowledge.archive_page(todo) do
             {:ok, _updated} ->
-              all_todos = Brain.list_todos(workspace_id: context.id, limit: 500)
+              all_todos = Knowledge.list_todos(workspace_id: context.id, limit: 500)
 
               {:noreply,
                socket

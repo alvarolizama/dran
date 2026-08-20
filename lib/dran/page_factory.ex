@@ -11,11 +11,11 @@ defmodule Dran.PageFactory do
 
   * Skips slugs already taken by a page of a DIFFERENT `page_type`
     (`{:skip, reason}` — we never hijack a note's slug).
-  * `Brain.create_page/1` race (concurrent augmenters) is handled by
+  * `Knowledge.create_page/1` race (concurrent augmenters) is handled by
     re-fetching on changeset error and reusing the winner's page.
   """
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
 
   @doc """
@@ -34,7 +34,7 @@ defmodule Dran.PageFactory do
   def get_or_create(%Page{} = source_page, slug, page_type, opts \\ []) do
     created_by = Keyword.get(opts, :created_by, "page_factory")
 
-    case Brain.get_page_by_slug(slug, source_page.workspace_id) do
+    case Knowledge.get_page_by_slug(slug, source_page.workspace_id) do
       nil ->
         create_page(source_page, slug, page_type, created_by)
 
@@ -49,12 +49,12 @@ defmodule Dran.PageFactory do
   @doc """
   Create an auto-generated relation from `source_page` to `target_page`.
 
-  `Brain.create_relation/1` uses `on_conflict: :nothing`, so duplicates are
+  `Knowledge.create_relation/1` uses `on_conflict: :nothing`, so duplicates are
   silently treated as ok — callers can re-run freely.
   """
   @spec create_edge(Page.t(), Page.t(), binary(), binary()) :: :ok
   def create_edge(%Page{} = source_page, %Page{} = target_page, relation_type, created_by) do
-    case Brain.create_relation(%{
+    case Knowledge.create_relation(%{
            source_id: source_page.id,
            target_id: target_page.id,
            relation_type: relation_type,
@@ -78,13 +78,13 @@ defmodule Dran.PageFactory do
       meta: %{"auto" => true, "created_from" => created_by}
     }
 
-    case Brain.create_page(attrs) do
+    case Knowledge.create_page(attrs) do
       {:ok, page} ->
         {:ok, page}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         # Race: another augmenter created it concurrently — fetch and reuse.
-        case Brain.get_page_by_slug(slug, source_page.workspace_id) do
+        case Knowledge.get_page_by_slug(slug, source_page.workspace_id) do
           %Page{page_type: ^page_type} = existing ->
             {:ok, existing}
 

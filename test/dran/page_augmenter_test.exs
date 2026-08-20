@@ -1,7 +1,7 @@
-defmodule Dran.Brain.PageAugmenterTest do
+defmodule Dran.PageAugmenterTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias Dran.PageAugmenter
 
@@ -38,10 +38,10 @@ defmodule Dran.Brain.PageAugmenterTest do
   test "run/1 skips when inference is not configured" do
     Application.put_env(:dran, :inference, nil)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Standalone note",
         slug: "standalone-note",
@@ -54,16 +54,16 @@ defmodule Dran.Brain.PageAugmenterTest do
     assert %{
              outbound: [],
              inbound: []
-           } = Brain.list_relations_for_page(page.id)
+           } = Knowledge.list_relations_for_page(page.id)
   end
 
   test "run/1 enriches summary and creates high-confidence auto-relations" do
     Application.put_env(:dran, :inference, nil)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, target} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Phoenix framework",
         slug: "phoenix-framework",
@@ -79,7 +79,7 @@ defmodule Dran.Brain.PageAugmenterTest do
     |> Dran.Repo.update!()
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "My Phoenix project",
         slug: "my-phoenix-project",
@@ -136,7 +136,7 @@ defmodule Dran.Brain.PageAugmenterTest do
     assert refreshed.summary == "Building a Phoenix web app"
     assert "phoenix" in refreshed.tags
 
-    %{outbound: outbound} = Brain.list_relations_for_page(page.id)
+    %{outbound: outbound} = Knowledge.list_relations_for_page(page.id)
     assert Enum.any?(outbound, &(&1.target_id == target.id and &1.relation_type == "semantic"))
   end
 
@@ -230,10 +230,10 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, target} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Short neighbor",
         slug: "short-neighbor",
@@ -244,7 +244,7 @@ defmodule Dran.Brain.PageAugmenterTest do
     set_embedding(target, vector_at_distance(0.18))
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Short source",
         slug: "short-source",
@@ -254,7 +254,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     assert :ok = PageAugmenter.run(page)
 
-    %{outbound: outbound} = Brain.list_relations_for_page(page.id)
+    %{outbound: outbound} = Knowledge.list_relations_for_page(page.id)
     refute Enum.any?(outbound, &(&1.target_id == target.id))
   end
 
@@ -263,10 +263,10 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, target} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Long neighbor",
         slug: "long-neighbor",
@@ -277,7 +277,7 @@ defmodule Dran.Brain.PageAugmenterTest do
     set_embedding(target, vector_at_distance(0.25))
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Long source",
         slug: "long-source",
@@ -287,7 +287,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     assert :ok = PageAugmenter.run(page)
 
-    %{outbound: outbound} = Brain.list_relations_for_page(page.id)
+    %{outbound: outbound} = Knowledge.list_relations_for_page(page.id)
     assert Enum.any?(outbound, &(&1.target_id == target.id and &1.relation_type == "semantic"))
   end
 
@@ -297,10 +297,10 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, target} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Bidirectional target",
         slug: "bidir-target",
@@ -311,7 +311,7 @@ defmodule Dran.Brain.PageAugmenterTest do
     set_embedding(target, vector_at_distance(0.10))
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Bidirectional source",
         slug: "bidir-source",
@@ -321,8 +321,8 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     assert :ok = PageAugmenter.run(page)
 
-    %{outbound: outbound} = Brain.list_relations_for_page(page.id)
-    %{inbound: inbound} = Brain.list_relations_for_page(page.id)
+    %{outbound: outbound} = Knowledge.list_relations_for_page(page.id)
+    %{inbound: inbound} = Knowledge.list_relations_for_page(page.id)
 
     # A→B (page is source)
     assert Enum.any?(outbound, &(&1.target_id == target.id and &1.relation_type == "semantic"))
@@ -336,12 +336,12 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     targets =
       Enum.map(1..3, fn i ->
         {:ok, t} =
-          Brain.create_page(%{
+          Knowledge.create_page(%{
             workspace_id: context.id,
             title: "Neighbor #{i}",
             slug: "neighbor-#{i}",
@@ -355,7 +355,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     # 4th neighbor just above threshold should NOT get a relation.
     {:ok, far} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Far neighbor",
         slug: "far-neighbor",
@@ -366,7 +366,7 @@ defmodule Dran.Brain.PageAugmenterTest do
     set_embedding(far, vector_at_distance(0.40))
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Multi neighbor source",
         slug: "multi-neighbor-source",
@@ -376,7 +376,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     assert :ok = PageAugmenter.run(page)
 
-    %{outbound: outbound} = Brain.list_relations_for_page(page.id)
+    %{outbound: outbound} = Knowledge.list_relations_for_page(page.id)
 
     outbound_target_ids =
       outbound
@@ -393,7 +393,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     # Each close neighbor should also have an inbound edge back to the page (bidirectional).
     Enum.each(targets, fn t ->
-      %{outbound: t_outbound} = Brain.list_relations_for_page(t.id)
+      %{outbound: t_outbound} = Knowledge.list_relations_for_page(t.id)
 
       assert Enum.any?(t_outbound, &(&1.target_id == page.id and &1.relation_type == "semantic")),
              "expected reverse edge from #{t.slug} back to source page"

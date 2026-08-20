@@ -1,17 +1,20 @@
-defmodule Dran.Brain do
+defmodule Dran.Knowledge do
   @moduledoc """
-  The Brain context — public API for managing the second brain.
+  The Knowledge context — public API for the second brain content.
 
-  This module orchestrates Contexts, Pages, Relations, PageVersions,
-  and the audit Log. All operations go through here.
+  Owns workspaces, pages (CRUD, embeds, renames), relations, page
+  versions, search (FTS / fuzzy / semantic / hybrid), the audit log,
+  lint/health checks and stats/metrics. Goal, collection and report CRUD
+  live in their own contexts: `Dran.Goals`, `Dran.Collections`, and
+  `Dran.Reports`.
 
   ## Usage
 
       # Create a context
-      {:ok, ctx} = Dran.Brain.create_workspace(%{name: "Personal", slug: "personal"})
+      {:ok, ctx} = Dran.Knowledge.create_workspace(%{name: "Personal", slug: "personal"})
 
       # Create a page
-      {:ok, page} = Dran.Brain.create_page(%{
+      {:ok, page} = Dran.Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: "Elixir",
         slug: "elixir",
@@ -21,7 +24,7 @@ defmodule Dran.Brain do
       })
 
       # Search
-      {:ok, results} = Dran.Brain.search("functional language", ctx.id)
+      {:ok, results} = Dran.Knowledge.search("functional language", ctx.id)
   """
 
   import Ecto.Query, warn: false
@@ -33,10 +36,7 @@ defmodule Dran.Brain do
     Page,
     Relation,
     PageVersion,
-    Log,
-    Goal,
-    Collection,
-    Report
+    Log
   }
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -368,144 +368,6 @@ defmodule Dran.Brain do
     Repo.all(query)
   end
 
-  @doc "List goals from the goals table"
-  def list_goals(workspace_id) when is_binary(workspace_id) do
-    list_goals(workspace_id: workspace_id)
-  end
-
-  def list_goals(opts) when is_list(opts) do
-    workspace_id = Keyword.get(opts, :workspace_id)
-    limit = Keyword.get(opts, :limit, 100)
-    archived = Keyword.get(opts, :archived, false)
-
-    query =
-      from(g in Goal,
-        where: g.archived == ^archived,
-        order_by: [asc: g.title],
-        limit: ^limit
-      )
-
-    query =
-      if workspace_id do
-        where(query, [g], g.workspace_id == ^workspace_id)
-      else
-        query
-      end
-
-    Repo.all(query)
-  end
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Goal CRUD
-  # ──────────────────────────────────────────────────────────────────────────
-
-  @doc "Get a goal by slug within a workspace"
-  def get_goal_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
-    Repo.one(from g in Goal, where: g.slug == ^slug and g.workspace_id == ^workspace_id)
-  end
-
-  @doc "Get a goal by id"
-  def get_goal!(id), do: Repo.get!(Goal, id)
-
-  @doc "Get a goal by id, returns nil if not found"
-  def get_goal(id), do: Repo.get(Goal, id)
-
-  @doc "Build a changeset for a goal (for LiveView forms)"
-  def change_goal(%Goal{} = goal, attrs \\ %{}) do
-    Goal.changeset(goal, attrs)
-  end
-
-  @doc "Create a new goal"
-  def create_goal(attrs) do
-    %Goal{}
-    |> Goal.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc "Update an existing goal"
-  def update_goal(%Goal{} = goal, attrs) do
-    goal
-    |> Goal.changeset(attrs)
-    |> Repo.update()
-  end
-
-  @doc "Delete a goal"
-  def delete_goal(%Goal{} = goal), do: Repo.delete(goal)
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Collection CRUD
-  # ──────────────────────────────────────────────────────────────────────────
-
-  @doc "Get a collection by slug within a workspace"
-  def get_collection_by_slug(slug, workspace_id)
-      when is_binary(slug) and is_binary(workspace_id) do
-    Repo.one(from c in Collection, where: c.slug == ^slug and c.workspace_id == ^workspace_id)
-  end
-
-  @doc "Get a collection by id"
-  def get_collection!(id), do: Repo.get!(Collection, id)
-
-  @doc "Get a collection by id, returns nil if not found"
-  def get_collection(id), do: Repo.get(Collection, id)
-
-  @doc "Build a changeset for a collection (for LiveView forms)"
-  def change_collection(%Collection{} = collection, attrs \\ %{}) do
-    Collection.changeset(collection, attrs)
-  end
-
-  @doc "Create a new collection"
-  def create_collection(attrs) do
-    %Collection{}
-    |> Collection.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc "Update an existing collection"
-  def update_collection(%Collection{} = collection, attrs) do
-    collection
-    |> Collection.changeset(attrs)
-    |> Repo.update()
-  end
-
-  @doc "Delete a collection"
-  def delete_collection(%Collection{} = collection), do: Repo.delete(collection)
-
-  @doc "List collections in a workspace"
-  def list_collections(workspace_id) when is_binary(workspace_id) do
-    Repo.all(
-      from c in Collection, where: c.workspace_id == ^workspace_id, order_by: [asc: c.name]
-    )
-  end
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Report CRUD
-  # ──────────────────────────────────────────────────────────────────────────
-
-  @doc "Get a report by slug within a workspace"
-  def get_report_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
-    Repo.one(from r in Report, where: r.slug == ^slug and r.workspace_id == ^workspace_id)
-  end
-
-  @doc "Get a report by id"
-  def get_report!(id), do: Repo.get!(Report, id)
-
-  @doc "Get a report by id, returns nil if not found"
-  def get_report(id), do: Repo.get(Report, id)
-
-  @doc "Create a new report"
-  def create_report(attrs) do
-    %Report{}
-    |> Report.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc "List reports in a workspace"
-  def list_reports(workspace_id) when is_binary(workspace_id) do
-    Repo.all(
-      from r in Report, where: r.workspace_id == ^workspace_id, order_by: [desc: r.inserted_at]
-    )
-  end
-
   @doc """
   All distinct tags used in a context, sorted alphabetically. Used for
   tag-input autocomplete suggestions.
@@ -790,7 +652,7 @@ defmodule Dran.Brain do
   ## Example
 
       {:ok, %{pages: 42, relations: 18, versions: 35, logs: 50}} =
-        Dran.Brain.reset_context(workspace_id)
+        Dran.Knowledge.reset_context(workspace_id)
   """
   def reset_context(workspace_id) do
     import Ecto.Query, warn: false
@@ -1455,8 +1317,8 @@ defmodule Dran.Brain do
 
   You can force a strategy with `:strategy`:
 
-      Brain.search("elixir phoenix", workspace_id: ctx.id, strategy: :fuzzy)
-      Brain.search("cómo funciona el embedding", workspace_id: ctx.id, strategy: :hybrid)
+      Knowledge.search("elixir phoenix", workspace_id: ctx.id, strategy: :fuzzy)
+      Knowledge.search("cómo funciona el embedding", workspace_id: ctx.id, strategy: :hybrid)
 
   ## Options
   - `:workspace_id` — scope to a context (recommended)

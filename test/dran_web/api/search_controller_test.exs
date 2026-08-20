@@ -1,7 +1,7 @@
 defmodule DranWeb.API.SearchControllerTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   setup %{conn: conn} do
     original = Application.get_env(:dran, :inference)
@@ -47,10 +47,10 @@ defmodule DranWeb.API.SearchControllerTest do
       uniq = System.unique_integer([:positive])
 
       {:ok, context} =
-        Brain.create_workspace(%{name: "Semantic #{uniq}", slug: "semantic-#{uniq}"})
+        Knowledge.create_workspace(%{name: "Semantic #{uniq}", slug: "semantic-#{uniq}"})
 
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Semantic hit",
           slug: "semantic-hit",

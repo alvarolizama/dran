@@ -6,7 +6,7 @@ defmodule Dran.Slug do
   within a context.
   """
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @doc """
   Convert a string to a URL-safe slug.
@@ -69,7 +69,7 @@ defmodule Dran.Slug do
   def ensure_unique(base, workspace_id, attempt) do
     slug = candidate_slug(base, attempt)
 
-    if Brain.get_page_by_slug(slug, workspace_id) do
+    if Knowledge.get_page_by_slug(slug, workspace_id) do
       ensure_unique(base, workspace_id, attempt + 1)
     else
       slug
@@ -86,7 +86,7 @@ defmodule Dran.Slug do
   def ensure_unique(base, workspace_id, original_slug, attempt) do
     slug = candidate_slug(base, attempt)
 
-    if slug == original_slug or is_nil(Brain.get_page_by_slug(slug, workspace_id)) do
+    if slug == original_slug or is_nil(Knowledge.get_page_by_slug(slug, workspace_id)) do
       slug
     else
       ensure_unique(base, workspace_id, original_slug, attempt + 1)

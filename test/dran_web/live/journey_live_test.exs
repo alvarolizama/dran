@@ -3,7 +3,7 @@ defmodule DranWeb.JourneyLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   setup %{conn: conn} do
     # Disable inference scheduling so create_page doesn't try to call external APIs
@@ -27,10 +27,10 @@ defmodule DranWeb.JourneyLiveTest do
     end)
 
     # Create some pages for the journey
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     for i <- 1..3 do
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: context.id,
         title: "Test Page #{i}",
         slug: "test-page-#{i}",

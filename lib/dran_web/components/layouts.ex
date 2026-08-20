@@ -64,7 +64,7 @@ defmodule DranWeb.Layouts do
 
         _ ->
           try do
-            Dran.Brain.page_counts_by_workspace()
+            Dran.Knowledge.page_counts_by_workspace()
           rescue
             _ -> %{}
           catch
@@ -150,10 +150,10 @@ defmodule DranWeb.Layouts do
 
   defp compute_counts(workspace_slug) when is_binary(workspace_slug) do
     try do
-      context = Dran.Brain.get_workspace_by_slug(workspace_slug)
+      context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
 
       if context do
-        stats = Dran.Brain.stats(context.id)
+        stats = Dran.Knowledge.stats(context.id)
         by_type = stats[:by_type] || %{}
         disabled = context.disabled_page_types || []
 
@@ -163,11 +163,11 @@ defmodule DranWeb.Layouts do
         end
 
         # Smart collections are first-class Brain collections now.
-        collection_count = length(Dran.Brain.list_collections(context.id))
+        collection_count = length(Dran.Collections.list_collections(context.id))
 
         contexts_count =
           try do
-            length(Dran.Brain.list_workspaces())
+            length(Dran.Knowledge.list_workspaces())
           rescue
             _ -> 0
           end
@@ -194,11 +194,13 @@ defmodule DranWeb.Layouts do
           communities: communities_count,
           collections: collection_count,
           projects:
-            length(Dran.Brain.list_pages(workspace_id: context.id, kind: "project", limit: 500)),
-          goals: length(Dran.Brain.list_goals(workspace_id: context.id, limit: 500)),
+            length(
+              Dran.Knowledge.list_pages(workspace_id: context.id, kind: "project", limit: 500)
+            ),
+          goals: length(Dran.Goals.list_goals(workspace_id: context.id, limit: 500)),
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
-          activity: Dran.Brain.count_log(context.id)
+          activity: Dran.Knowledge.count_log(context.id)
         }
       else
         %{}
@@ -237,7 +239,8 @@ defmodule DranWeb.Layouts do
     is_owner = assigns[:is_owner] || false
 
     disabled_types =
-      case assigns[:workspace_slug] && Dran.Brain.get_workspace_by_slug(assigns[:workspace_slug]) do
+      case assigns[:workspace_slug] &&
+             Dran.Knowledge.get_workspace_by_slug(assigns[:workspace_slug]) do
         %{disabled_page_types: disabled} when is_list(disabled) -> disabled
         _ -> []
       end

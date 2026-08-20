@@ -4,7 +4,7 @@ defmodule DranWeb.ConceptLive do
   use DranWeb, :live_view
   on_mount {DranWeb.DisabledTypes, "concept"}
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.PageDetail
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
@@ -130,8 +130,8 @@ defmodule DranWeb.ConceptLive do
   def handle_params(_params, _url, socket) do
     {pages, archived_pages} =
       if socket.assigns.context do
-        {Brain.list_pages(workspace_id: socket.assigns.context.id, type: @page_type),
-         Brain.list_pages(
+        {Knowledge.list_pages(workspace_id: socket.assigns.context.id, type: @page_type),
+         Knowledge.list_pages(
            workspace_id: socket.assigns.context.id,
            type: @page_type,
            archived: true,
@@ -222,7 +222,7 @@ defmodule DranWeb.ConceptLive do
   @impl true
   def handle_info({:page_changed, _action, changed_page}, socket) do
     if socket.assigns[:page] && socket.assigns.page.id == changed_page.id do
-      page = Brain.get_page(changed_page.id)
+      page = Knowledge.get_page(changed_page.id)
 
       if page do
         rendered_body =
@@ -231,7 +231,7 @@ defmodule DranWeb.ConceptLive do
             inline_links: Map.get(page.meta || %{}, "inline_links", [])
           )
 
-        form = Brain.change_page(page) |> to_form(as: :page)
+        form = Knowledge.change_page(page) |> to_form(as: :page)
 
         {:noreply,
          assign(socket,

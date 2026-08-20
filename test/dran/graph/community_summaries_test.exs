@@ -10,7 +10,7 @@ defmodule Dran.Graph.CommunitySummariesTest do
   # in shared mode so the `Task.async_stream` workers can check out a
   # connection.
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Graph.CommunitySummaries
   alias Dran.Repo
 
@@ -41,13 +41,13 @@ defmodule Dran.Graph.CommunitySummariesTest do
 
   defp fresh_context(prefix) do
     slug = "comm-#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_workspace(%{name: "Comm Test #{slug}", slug: slug})
+    {:ok, ctx} = Knowledge.create_workspace(%{name: "Comm Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_page(ctx, slug, community_id, pagerank) do
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: slug,
         slug: slug,

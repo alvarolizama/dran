@@ -40,7 +40,7 @@ defmodule Dran.Jobs do
 
   import Ecto.Query
 
-  alias Dran.{Brain, Repo, Settings}
+  alias Dran.{Knowledge, Repo, Reports, Settings}
   alias Dran.Agent.Session
   alias Dran.Report
 
@@ -287,7 +287,7 @@ defmodule Dran.Jobs do
   # ── Internals ─────────────────────────────────────────────────────────────
 
   defp default_context do
-    Brain.get_workspace_by_slug(Dran.Auth.default_workspace_slug())
+    Knowledge.get_workspace_by_slug(Dran.Auth.default_workspace_slug())
   end
 
   defp safe_prune(key) do
@@ -324,7 +324,7 @@ defmodule Dran.Jobs do
             summary
           )
 
-        case Brain.create_report(attrs) do
+        case Reports.create_report(attrs) do
           # Two runs within the same second would collide on the slug —
           # retry once with a uniqueness suffix, keeping the canonical
           # "<key>-<unix_seconds>" format for the normal path.
@@ -332,7 +332,7 @@ defmodule Dran.Jobs do
             if slug_taken?(changeset) do
               suffix = Integer.to_string(System.unique_integer([:positive]), 36)
 
-              Brain.create_report(%{attrs | slug: "#{slug}-#{String.downcase(suffix)}"})
+              Reports.create_report(%{attrs | slug: "#{slug}-#{String.downcase(suffix)}"})
             else
               {:error, changeset}
             end

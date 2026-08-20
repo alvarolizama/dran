@@ -37,7 +37,7 @@ defmodule DranWeb.PageEdit do
   import Phoenix.Component, only: [to_form: 2, assign: 2]
   alias Phoenix.LiveView.Upload, as: Upload
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias Dran.Summaries
   alias Dran.Uploads
@@ -91,7 +91,7 @@ defmodule DranWeb.PageEdit do
     page = socket.assigns[:page] || %Page{}
 
     changeset =
-      Brain.change_page(page, Map.put_new(page_params, "workspace_id", workspace_id(socket)))
+      Knowledge.change_page(page, Map.put_new(page_params, "workspace_id", workspace_id(socket)))
 
     socket = assign(socket, form: to_form(changeset, as: :page))
 
@@ -137,14 +137,14 @@ defmodule DranWeb.PageEdit do
       old_slug = page.slug
 
       # Update the form's slug field
-      changeset = Brain.change_page(page, %{"slug" => new_slug})
+      changeset = Knowledge.change_page(page, %{"slug" => new_slug})
       socket = assign(socket, form: to_form(changeset, as: :page))
 
       if new_slug != "" and new_slug != old_slug do
         # Ensure uniqueness
         final_slug = ensure_unique_slug(new_slug, workspace_id, page.slug, 0)
 
-        case Brain.update_page(page, %{slug: final_slug}) do
+        case Knowledge.update_page(page, %{slug: final_slug}) do
           {:ok, updated_page} ->
             {:noreply,
              socket
@@ -190,7 +190,7 @@ defmodule DranWeb.PageEdit do
     if body == page.body do
       {:noreply, assign(socket, save_status: "saved")}
     else
-      case Brain.update_page(page, %{body: body}) do
+      case Knowledge.update_page(page, %{body: body}) do
         {:ok, updated_page} ->
           rendered_body =
             DranWeb.PageComponents.render_markdown(updated_page.body,
@@ -213,7 +213,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("delete_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
-    case Brain.delete_page(page) do
+    case Knowledge.delete_page(page) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -233,12 +233,12 @@ defmodule DranWeb.PageEdit do
     # List view — find page by slug and archive it
     workspace_id = workspace_id(socket)
 
-    case Brain.get_page_by_slug(slug, workspace_id) do
+    case Knowledge.get_page_by_slug(slug, workspace_id) do
       nil ->
         {:noreply, put_flash(socket, :error, gettext("Page not found."))}
 
       page ->
-        case Brain.archive_page(page) do
+        case Knowledge.archive_page(page) do
           {:ok, _updated} ->
             # Update list state if we're in a list view
             socket =
@@ -259,7 +259,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("archive_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
-    case Brain.archive_page(page) do
+    case Knowledge.archive_page(page) do
       {:ok, updated} ->
         {:noreply,
          socket
@@ -279,12 +279,12 @@ defmodule DranWeb.PageEdit do
     # List view — find page by slug and unarchive it
     workspace_id = workspace_id(socket)
 
-    case Brain.get_page_by_slug(slug, workspace_id) do
+    case Knowledge.get_page_by_slug(slug, workspace_id) do
       nil ->
         {:noreply, put_flash(socket, :error, gettext("Page not found."))}
 
       page ->
-        case Brain.unarchive_page(page) do
+        case Knowledge.unarchive_page(page) do
           {:ok, _updated} ->
             # Update list state if we're in a list view
             socket =
@@ -305,7 +305,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("unarchive_page", _params, %{assigns: %{page: %Page{} = page}} = socket) do
-    case Brain.unarchive_page(page) do
+    case Knowledge.unarchive_page(page) do
       {:ok, updated} ->
         {:noreply,
          socket
@@ -324,7 +324,7 @@ defmodule DranWeb.PageEdit do
   def handle_event("toggle_pinned", _params, %{assigns: %{page: %Page{} = page}} = socket) do
     new_pinned = !page.pinned
 
-    case Brain.update_page(page, %{"pinned" => new_pinned}) do
+    case Knowledge.update_page(page, %{"pinned" => new_pinned}) do
       {:ok, updated} ->
         {:noreply,
          socket
@@ -396,7 +396,7 @@ defmodule DranWeb.PageEdit do
       |> Map.put_new("owner", "system")
       |> Map.put_new("created_by", user_identity)
 
-    case Brain.create_page(page_params) do
+    case Knowledge.create_page(page_params) do
       {:ok, page} ->
         type = page.page_type
 
@@ -411,7 +411,7 @@ defmodule DranWeb.PageEdit do
   end
 
   defp update_page_with_relink(socket, %Page{} = page, page_params, _workspace_id) do
-    case Brain.update_page(page, page_params) do
+    case Knowledge.update_page(page, page_params) do
       {:ok, updated_page} ->
         socket =
           socket
@@ -449,7 +449,7 @@ defmodule DranWeb.PageEdit do
         end)
 
       if changed do
-        case Brain.update_page(page, save_params) do
+        case Knowledge.update_page(page, save_params) do
           {:ok, updated_page} ->
             socket
             |> assign(page: updated_page, save_status: "saved")
@@ -497,7 +497,7 @@ defmodule DranWeb.PageEdit do
         "#{base}-#{suffix}"
       end
 
-    if Brain.get_page_by_slug(slug, workspace_id) do
+    if Knowledge.get_page_by_slug(slug, workspace_id) do
       ensure_unique_slug(base, workspace_id, attempt + 1)
     else
       slug
@@ -514,7 +514,7 @@ defmodule DranWeb.PageEdit do
       end
 
     # The original slug belongs to the page being renamed, so it's valid
-    if slug == original_slug or is_nil(Brain.get_page_by_slug(slug, workspace_id)) do
+    if slug == original_slug or is_nil(Knowledge.get_page_by_slug(slug, workspace_id)) do
       slug
     else
       ensure_unique_slug(base, workspace_id, original_slug, attempt + 1)
@@ -562,7 +562,7 @@ defmodule DranWeb.PageEdit do
         }
       }
 
-      case Brain.create_page(attrs) do
+      case Knowledge.create_page(attrs) do
         {:ok, page} -> page
         {:error, _} -> nil
       end
@@ -612,7 +612,7 @@ defmodule DranWeb.PageEdit do
       nil ->
         case workspace_id(socket) do
           nil -> assign(socket, tag_suggestions: [])
-          id -> assign(socket, tag_suggestions: Brain.list_tags(id))
+          id -> assign(socket, tag_suggestions: Knowledge.list_tags(id))
         end
 
       _ ->

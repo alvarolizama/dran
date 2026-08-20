@@ -2,8 +2,8 @@ ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(Dran.Repo, :manual)
 
 # Force synchronous augmentation/embedding scheduling for the whole suite.
-# With `schedule_async: true` (the runtime default), `Brain.create_page/1`
-# and `Brain.update_page/2` spawn Task.Supervisor tasks (PageAugmenter /
+# With `schedule_async: true` (the runtime default), `Knowledge.create_page/1`
+# and `Knowledge.update_page/2` spawn Task.Supervisor tasks (PageAugmenter /
 # Embeddings) that outlive the test and keep using the SQL sandbox's shared
 # connection after the owner stops. When the owner stops, the connection is
 # torn down under those tasks — and any task mid-checkout takes the shared

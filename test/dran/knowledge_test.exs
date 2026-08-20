@@ -1,7 +1,7 @@
-defmodule Dran.BrainTest do
+defmodule Dran.KnowledgeTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   setup do
     # Disable inference so create_page doesn't call external APIs
@@ -25,49 +25,49 @@ defmodule Dran.BrainTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
 
   describe "disabled page types" do
     test "enabled_page_types/1 returns all types minus disabled", %{context: ctx} do
-      assert Brain.enabled_page_types(ctx) == Brain.page_types()
+      assert Knowledge.enabled_page_types(ctx) == Knowledge.page_types()
 
       {:ok, ctx} =
-        Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference", "entity"]})
+        Knowledge.update_workspace_settings(ctx, %{disabled_page_types: ["reference", "entity"]})
 
-      enabled = Brain.enabled_page_types(ctx)
+      enabled = Knowledge.enabled_page_types(ctx)
       refute "reference" in enabled
       refute "entity" in enabled
       assert "note" in enabled
     end
 
     test "page_type_enabled?/2 reflects disabled types", %{context: ctx} do
-      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
+      {:ok, ctx} = Knowledge.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
 
-      refute Brain.page_type_enabled?(ctx, "reference")
-      assert Brain.page_type_enabled?(ctx, "note")
+      refute Knowledge.page_type_enabled?(ctx, "reference")
+      assert Knowledge.page_type_enabled?(ctx, "note")
     end
 
     test "page_type_enabled?/2 treats nil context as all types enabled" do
-      assert Brain.page_type_enabled?(nil, "note")
-      assert Brain.page_type_enabled?(nil, "reference")
+      assert Knowledge.page_type_enabled?(nil, "note")
+      assert Knowledge.page_type_enabled?(nil, "reference")
     end
 
     test "update_workspace_settings/2 rejects invalid page types", %{context: ctx} do
       assert {:error, changeset} =
-               Brain.update_workspace_settings(ctx, %{disabled_page_types: ["bogus_type"]})
+               Knowledge.update_workspace_settings(ctx, %{disabled_page_types: ["bogus_type"]})
 
       assert %{disabled_page_types: [_]} = errors_on(changeset)
     end
 
     test "create_page/1 rejects disabled page types", %{context: ctx} do
-      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
+      {:ok, ctx} = Knowledge.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
 
       assert {:error, :page_type_disabled} =
-               Brain.create_page(%{
+               Knowledge.create_page(%{
                  "title" => "Disabled type page",
                  "page_type" => "reference",
                  "workspace_id" => ctx.id,
@@ -76,7 +76,7 @@ defmodule Dran.BrainTest do
 
       # Enabled types still work
       assert {:ok, _page} =
-               Brain.create_page(%{
+               Knowledge.create_page(%{
                  "title" => "Enabled type page",
                  "page_type" => "note",
                  "workspace_id" => ctx.id,
@@ -86,7 +86,7 @@ defmodule Dran.BrainTest do
 
     test "list_pages/1 excludes disabled page types", %{context: ctx} do
       {:ok, _ref} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           "title" => "Hidden reference",
           "page_type" => "reference",
           "workspace_id" => ctx.id,
@@ -94,7 +94,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           "title" => "Visible note",
           "page_type" => "note",
           "workspace_id" => ctx.id,
@@ -102,13 +102,13 @@ defmodule Dran.BrainTest do
         })
 
       # Before disabling, reference appears
-      pages = Brain.list_pages(workspace_id: ctx.id)
+      pages = Knowledge.list_pages(workspace_id: ctx.id)
       assert Enum.any?(pages, &(&1.page_type == "reference"))
 
       # After disabling, reference is hidden
-      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
+      {:ok, ctx} = Knowledge.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
 
-      pages = Brain.list_pages(workspace_id: ctx.id, workspace: ctx)
+      pages = Knowledge.list_pages(workspace_id: ctx.id, workspace: ctx)
       refute Enum.any?(pages, &(&1.page_type == "reference"))
       assert Enum.any?(pages, &(&1.page_type == "note"))
     end
@@ -117,7 +117,7 @@ defmodule Dran.BrainTest do
   describe "create_page/1 slug derivation" do
     test "derives slug with accent normalization", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Meditación",
           page_type: "note",
@@ -129,7 +129,7 @@ defmodule Dran.BrainTest do
 
     test "derives slug from body first line when title is missing", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           page_type: "note",
           body: "¿Qué onda con la Tántrica?\nresto del body"
@@ -140,7 +140,7 @@ defmodule Dran.BrainTest do
 
     test "auto-deduplicates slug on collision with hex suffix", %{context: ctx} do
       {:ok, first} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Reunión semanal",
           page_type: "note",
@@ -148,7 +148,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, second} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Reunión semanal",
           page_type: "note",
@@ -163,7 +163,7 @@ defmodule Dran.BrainTest do
 
     test "auto-deduplicates untitled pages", %{context: ctx} do
       {:ok, first} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "你好世界",
           page_type: "note",
@@ -171,7 +171,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, second} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "你好世界",
           page_type: "note",
@@ -186,7 +186,7 @@ defmodule Dran.BrainTest do
 
     test "respects explicit slug even if duplicate (returns error)", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "A",
           slug: "explicit-dup-test",
@@ -194,7 +194,7 @@ defmodule Dran.BrainTest do
         })
 
       {:error, changeset} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "B",
           slug: "explicit-dup-test",
@@ -211,7 +211,7 @@ defmodule Dran.BrainTest do
   describe "embeds auto-resolution" do
     test "create_page resolves ![[embed]] into embeds relation", %{context: ctx} do
       {:ok, target_page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "File",
           slug: "file-a",
@@ -219,7 +219,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Note",
           slug: "note-a",
@@ -227,20 +227,20 @@ defmodule Dran.BrainTest do
           body: "See ![[file-a]]"
         })
 
-      rels = Brain.list_relations_for_page(note.id).outbound
+      rels = Knowledge.list_relations_for_page(note.id).outbound
 
       assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == target_page.id))
     end
 
     test "update_page removes stale embeds relations", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "A", slug: "a", page_type: "note"})
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "A", slug: "a", page_type: "note"})
 
       {:ok, b} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "B", slug: "b", page_type: "note"})
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "B", slug: "b", page_type: "note"})
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "N",
           slug: "n",
@@ -248,10 +248,10 @@ defmodule Dran.BrainTest do
           body: "![[a]] ![[b]]"
         })
 
-      {:ok, note} = Brain.update_page(note, %{"body" => "only ![[a]] now"})
+      {:ok, note} = Knowledge.update_page(note, %{"body" => "only ![[a]] now"})
 
       targets =
-        Brain.list_relations_for_page(note.id).outbound
+        Knowledge.list_relations_for_page(note.id).outbound
         |> Enum.filter(&(&1.relation_type == "embeds"))
         |> Enum.map(& &1.target_id)
 
@@ -263,7 +263,7 @@ defmodule Dran.BrainTest do
   describe "rename_slug/2" do
     test "updates embed references in other pages", %{context: ctx} do
       {:ok, art} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Art",
           slug: "old-art",
@@ -271,7 +271,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "N",
           slug: "n",
@@ -279,16 +279,16 @@ defmodule Dran.BrainTest do
           body: "![[old-art]]"
         })
 
-      {:ok, _} = Brain.rename_slug(art, "new-art")
+      {:ok, _} = Knowledge.rename_slug(art, "new-art")
 
-      note = Brain.get_page!(note.id)
+      note = Knowledge.get_page!(note.id)
       assert note.body =~ "![[new-art]]"
       refute note.body =~ "old-art"
     end
 
     test "embeds relation follows the renamed slug", %{context: ctx} do
       {:ok, art} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Art2",
           slug: "old-art2",
@@ -296,7 +296,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "N2",
           slug: "n2",
@@ -304,10 +304,10 @@ defmodule Dran.BrainTest do
           body: "![[old-art2]]"
         })
 
-      {:ok, renamed} = Brain.rename_slug(art, "new-art2")
+      {:ok, renamed} = Knowledge.rename_slug(art, "new-art2")
       assert renamed.slug == "new-art2"
 
-      rels = Brain.list_relations_for_page(note.id).outbound
+      rels = Knowledge.list_relations_for_page(note.id).outbound
       assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == art.id))
     end
   end
@@ -322,14 +322,14 @@ defmodule Dran.BrainTest do
       uniq = System.unique_integer([:positive])
 
       {:ok, ctx} =
-        Brain.create_workspace(%{name: "Graph #{uniq}", slug: "graph-#{uniq}"})
+        Knowledge.create_workspace(%{name: "Graph #{uniq}", slug: "graph-#{uniq}"})
 
       {:ok, context: ctx}
     end
 
     test "exposes weight on edges and summary/tags on nodes", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Concept A",
           slug: "concept-a",
@@ -339,7 +339,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, b} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Concept B",
           slug: "concept-b",
@@ -349,14 +349,14 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _rel} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "related",
           weight: 0.85
         })
 
-      graph = Brain.graph_data(ctx.id)
+      graph = Knowledge.graph_data(ctx.id)
 
       # Nodes have summary and tags keys
       node_a = Enum.find(graph.nodes, &(&1.id == a.id))
@@ -372,19 +372,20 @@ defmodule Dran.BrainTest do
     end
 
     test "exclude_types filters types in SQL", %{context: ctx} do
-      {:ok, note} = Brain.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
+      {:ok, note} =
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
 
       {:ok, ref} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: note.id,
           target_id: ref.id,
           relation_type: "related"
         })
 
-      graph = Brain.graph_data(ctx.id, exclude_types: ~w(reference))
+      graph = Knowledge.graph_data(ctx.id, exclude_types: ~w(reference))
 
       assert Enum.map(graph.nodes, & &1.type) == ["note"]
       assert graph.edges == []
@@ -393,13 +394,14 @@ defmodule Dran.BrainTest do
     end
 
     test "hidden_from_graph lists no standard types since only 5 exist", %{context: ctx} do
-      {:ok, note} = Brain.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
+      {:ok, note} =
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
 
       {:ok, ref} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: note.id,
           target_id: ref.id,
           relation_type: "related"
@@ -409,7 +411,7 @@ defmodule Dran.BrainTest do
       # exclusion list is empty and both nodes appear in the graph.
       assert Dran.PageTypes.hidden_from_graph() == []
 
-      graph = Brain.graph_data(ctx.id, exclude_types: Dran.PageTypes.hidden_from_graph())
+      graph = Knowledge.graph_data(ctx.id, exclude_types: Dran.PageTypes.hidden_from_graph())
 
       assert Enum.sort(Enum.map(graph.nodes, & &1.type)) == ["note", "reference"]
       assert length(graph.edges) == 1
@@ -417,14 +419,14 @@ defmodule Dran.BrainTest do
 
     test "max_nodes caps to the most-connected pages and reports real totals", %{context: ctx} do
       # Hub page with 3 relations — always makes the cut
-      {:ok, hub} = Brain.create_page(%{workspace_id: ctx.id, title: "Hub", page_type: "note"})
+      {:ok, hub} = Knowledge.create_page(%{workspace_id: ctx.id, title: "Hub", page_type: "note"})
 
       # A reference that is excluded from this graph run (via exclude_types)
       {:ok, ref} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: hub.id,
           target_id: ref.id,
           relation_type: "related"
@@ -434,7 +436,7 @@ defmodule Dran.BrainTest do
       leaves =
         for i <- 1..3 do
           {:ok, leaf} =
-            Brain.create_page(%{
+            Knowledge.create_page(%{
               workspace_id: ctx.id,
               title: "Leaf #{i}",
               slug: "leaf-#{i}",
@@ -442,7 +444,7 @@ defmodule Dran.BrainTest do
             })
 
           {:ok, _} =
-            Brain.create_relation(%{
+            Knowledge.create_relation(%{
               source_id: hub.id,
               target_id: leaf.id,
               relation_type: "related"
@@ -451,7 +453,7 @@ defmodule Dran.BrainTest do
           leaf
         end
 
-      graph = Brain.graph_data(ctx.id, exclude_types: ~w(reference), max_nodes: 2)
+      graph = Knowledge.graph_data(ctx.id, exclude_types: ~w(reference), max_nodes: 2)
 
       # Top 2 by degree among non-excluded types: hub (3) + one of the
       # leaves (1). The other two leaves tie at degree 1, so only one of
@@ -469,30 +471,38 @@ defmodule Dran.BrainTest do
     end
 
     test "max_nodes above the page count returns everything (no cap artifacts)", %{context: ctx} do
-      {:ok, _a} = Brain.create_page(%{workspace_id: ctx.id, title: "A", page_type: "note"})
-      {:ok, _b} = Brain.create_page(%{workspace_id: ctx.id, title: "B", page_type: "note"})
+      {:ok, _a} = Knowledge.create_page(%{workspace_id: ctx.id, title: "A", page_type: "note"})
+      {:ok, _b} = Knowledge.create_page(%{workspace_id: ctx.id, title: "B", page_type: "note"})
 
-      graph = Brain.graph_data(ctx.id, max_nodes: 100)
+      graph = Knowledge.graph_data(ctx.id, max_nodes: 100)
 
       assert length(graph.nodes) == 2
       assert graph.total_nodes == 2
     end
 
     test "graph_type_counts groups real totals per type", %{context: ctx} do
-      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "N1", page_type: "note"})
-      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "N2", page_type: "note"})
-      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "R1", page_type: "reference"})
-      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "C1", page_type: "concept"})
+      {:ok, _} = Knowledge.create_page(%{workspace_id: ctx.id, title: "N1", page_type: "note"})
+      {:ok, _} = Knowledge.create_page(%{workspace_id: ctx.id, title: "N2", page_type: "note"})
 
-      assert Brain.graph_type_counts(ctx.id) == %{"note" => 2, "reference" => 1, "concept" => 1}
-      assert Brain.graph_type_counts(ctx.id, ~w(reference)) == %{"note" => 2, "concept" => 1}
+      {:ok, _} =
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "R1", page_type: "reference"})
+
+      {:ok, _} = Knowledge.create_page(%{workspace_id: ctx.id, title: "C1", page_type: "concept"})
+
+      assert Knowledge.graph_type_counts(ctx.id) == %{
+               "note" => 2,
+               "reference" => 1,
+               "concept" => 1
+             }
+
+      assert Knowledge.graph_type_counts(ctx.id, ~w(reference)) == %{"note" => 2, "concept" => 1}
     end
   end
 
   describe "list_relations_for_pages/1" do
     test "batches relations for multiple pages in two queries", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Batch A",
           slug: "batch-a",
@@ -500,7 +510,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, b} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Batch B",
           slug: "batch-b",
@@ -508,7 +518,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, c} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Batch C",
           slug: "batch-c",
@@ -516,7 +526,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, isolated} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Batch Iso",
           slug: "batch-iso",
@@ -524,15 +534,15 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _} =
-        Brain.create_relation(%{source_id: a.id, target_id: b.id, relation_type: "related"})
+        Knowledge.create_relation(%{source_id: a.id, target_id: b.id, relation_type: "related"})
 
       {:ok, _} =
-        Brain.create_relation(%{source_id: b.id, target_id: c.id, relation_type: "related"})
+        Knowledge.create_relation(%{source_id: b.id, target_id: c.id, relation_type: "related"})
 
       {:ok, _} =
-        Brain.create_relation(%{source_id: c.id, target_id: a.id, relation_type: "related"})
+        Knowledge.create_relation(%{source_id: c.id, target_id: a.id, relation_type: "related"})
 
-      result = Brain.list_relations_for_pages([a.id, b.id, c.id, isolated.id])
+      result = Knowledge.list_relations_for_pages([a.id, b.id, c.id, isolated.id])
 
       # Pages with relations are present
       assert %{outbound: [rel_a], inbound: [rel_a_in]} = result[a.id]
@@ -551,17 +561,20 @@ defmodule Dran.BrainTest do
     end
 
     test "returns empty map when no pages have relations", %{context: ctx} do
-      {:ok, a} = Brain.create_page(%{workspace_id: ctx.id, title: "Lonely A", page_type: "note"})
-      {:ok, b} = Brain.create_page(%{workspace_id: ctx.id, title: "Lonely B", page_type: "note"})
+      {:ok, a} =
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "Lonely A", page_type: "note"})
 
-      assert Brain.list_relations_for_pages([a.id, b.id]) == %{}
+      {:ok, b} =
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "Lonely B", page_type: "note"})
+
+      assert Knowledge.list_relations_for_pages([a.id, b.id]) == %{}
     end
   end
 
   describe "props filtering" do
     test "list_pages filters by meta.props with AND logic", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Sales VIP",
           slug: "sales-vip",
@@ -570,7 +583,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Sales Regular",
           slug: "sales-reg",
@@ -579,7 +592,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Marketing VIP",
           slug: "mkt-vip",
@@ -590,7 +603,7 @@ defmodule Dran.BrainTest do
       # Single prop filter (filter by the slugs we just created to avoid
       # interference from other tests in the same context)
       sales =
-        Brain.list_pages(workspace_id: ctx.id, props: %{"role" => "sales"})
+        Knowledge.list_pages(workspace_id: ctx.id, props: %{"role" => "sales"})
         |> Enum.filter(&(&1.slug in ["sales-vip", "sales-reg"]))
 
       assert length(sales) == 2
@@ -598,20 +611,20 @@ defmodule Dran.BrainTest do
 
       # Multiple props (AND logic)
       sales_vip =
-        Brain.list_pages(workspace_id: ctx.id, props: %{"role" => "sales", "tier" => "vip"})
+        Knowledge.list_pages(workspace_id: ctx.id, props: %{"role" => "sales", "tier" => "vip"})
         |> Enum.filter(&(&1.slug in ["sales-vip", "sales-reg", "mkt-vip"]))
 
       assert length(sales_vip) == 1
       assert hd(sales_vip).slug == "sales-vip"
 
       # No match
-      none = Brain.list_pages(workspace_id: ctx.id, props: %{"role" => "engineering"})
+      none = Knowledge.list_pages(workspace_id: ctx.id, props: %{"role" => "engineering"})
       assert none == []
     end
 
     test "search filters by props post-query", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Elixir Phoenix Guide",
           slug: "elixir-guide",
@@ -621,7 +634,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Python Django Guide",
           slug: "python-guide",
@@ -631,12 +644,12 @@ defmodule Dran.BrainTest do
         })
 
       # Search without props filter (baseline)
-      {:ok, all} = Brain.search("guide", workspace_id: ctx.id, strategy: :fts)
+      {:ok, all} = Knowledge.search("guide", workspace_id: ctx.id, strategy: :fts)
       assert length(all) == 2
 
       # Search with props filter
       {:ok, elixir_only} =
-        Brain.search("guide",
+        Knowledge.search("guide",
           workspace_id: ctx.id,
           strategy: :fts,
           props: %{"language" => "elixir"}
@@ -648,7 +661,7 @@ defmodule Dran.BrainTest do
 
       # Multiple props
       {:ok, phoenix_only} =
-        Brain.search("guide",
+        Knowledge.search("guide",
           workspace_id: ctx.id,
           strategy: :fts,
           props: %{"language" => "elixir", "framework" => "phoenix"}
@@ -662,7 +675,7 @@ defmodule Dran.BrainTest do
   describe "version_diff/2" do
     test "diffs v1 against current body with added/removed lines", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Diffable",
           slug: "diffable",
@@ -671,12 +684,14 @@ defmodule Dran.BrainTest do
         })
 
       # v1 snapshot is saved on first body change; update twice.
-      {:ok, _} = Brain.update_page(page, %{"body" => "line one\nline two changed\nline three"})
-      page = Brain.get_page!(page.id)
-      {:ok, _} = Brain.update_page(page, %{"body" => "line one\nline two changed\nline four"})
-      page = Brain.get_page!(page.id)
+      {:ok, _} =
+        Knowledge.update_page(page, %{"body" => "line one\nline two changed\nline three"})
 
-      {:ok, diff} = Brain.version_diff(page, 1)
+      page = Knowledge.get_page!(page.id)
+      {:ok, _} = Knowledge.update_page(page, %{"body" => "line one\nline two changed\nline four"})
+      page = Knowledge.get_page!(page.id)
+
+      {:ok, diff} = Knowledge.version_diff(page, 1)
 
       assert diff.from == 1
       assert diff.to == page.version
@@ -692,7 +707,7 @@ defmodule Dran.BrainTest do
 
     test "returns error for non-existent version", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "NoVer",
           slug: "no-ver",
@@ -700,7 +715,7 @@ defmodule Dran.BrainTest do
           body: "x"
         })
 
-      assert {:error, :version_not_found} = Brain.version_diff(page, 99)
+      assert {:error, :version_not_found} = Knowledge.version_diff(page, 99)
     end
   end
 
@@ -708,7 +723,7 @@ defmodule Dran.BrainTest do
     test "returns extended brain-health metrics with all expected keys", %{context: ctx} do
       # Create some pages and relations so the metrics are non-trivial
       {:ok, a} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Metric A",
           slug: "metric-a",
@@ -717,7 +732,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, b} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Metric B",
           slug: "metric-b",
@@ -726,20 +741,20 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "related"
         })
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "semantic"
         })
 
-      metrics = Brain.metrics(ctx.id)
+      metrics = Knowledge.metrics(ctx.id)
 
       assert Map.has_key?(metrics, :pages_this_week)
       assert Map.has_key?(metrics, :pages_last_week)
@@ -772,9 +787,10 @@ defmodule Dran.BrainTest do
 
     test "embedding_coverage is 0.0 when context has no pages" do
       # Use a fresh context with no pages
-      {:ok, empty_ctx} = Brain.create_workspace(%{name: "Empty Metrics", slug: "empty-metrics"})
+      {:ok, empty_ctx} =
+        Knowledge.create_workspace(%{name: "Empty Metrics", slug: "empty-metrics"})
 
-      metrics = Brain.metrics(empty_ctx.id)
+      metrics = Knowledge.metrics(empty_ctx.id)
       assert metrics.embedding_coverage == 0.0
       assert metrics.pages_this_week == 0
       assert metrics.relations_by_type == %{}
@@ -797,7 +813,7 @@ defmodule Dran.BrainTest do
         meta: %{"tokens_used" => 1500}
       })
 
-      metrics = Brain.metrics(ctx.id)
+      metrics = Knowledge.metrics(ctx.id)
 
       assert metrics.agents.sessions_this_week >= 1
       assert metrics.agents.tokens_this_week >= 1500
@@ -808,7 +824,7 @@ defmodule Dran.BrainTest do
   describe "edge cases — derive_title ignores embed lines" do
     test "create_page with body containing only ![[embed]] derives Untitled", %{context: ctx} do
       {:ok, target_page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "File Page",
           slug: "file-page-1",
@@ -816,7 +832,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           page_type: "note",
           body: "![[file-page-1]]"
@@ -826,13 +842,13 @@ defmodule Dran.BrainTest do
       assert page.slug == "untitled"
 
       # The embed itself is still resolved
-      rels = Brain.list_relations_for_page(page.id).outbound
+      rels = Knowledge.list_relations_for_page(page.id).outbound
       assert Enum.any?(rels, &(&1.relation_type == "embeds" and &1.target_id == target_page.id))
     end
 
     test "create_page with embed + text uses the text line as title", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           page_type: "note",
           body: "![[nonexistent]]\nActual Title Here"
@@ -843,7 +859,7 @@ defmodule Dran.BrainTest do
 
     test "create_page with body containing only [[wikilink]] derives Untitled", %{context: ctx} do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           page_type: "note",
           body: "[[Some Link]]"
@@ -856,13 +872,13 @@ defmodule Dran.BrainTest do
   describe "edge cases — reresolve_embeds with empty body" do
     test "clears all embeds when body becomes empty", %{context: ctx} do
       {:ok, _a} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "A", slug: "ea", page_type: "note"})
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "A", slug: "ea", page_type: "note"})
 
       {:ok, _b} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "B", slug: "eb", page_type: "note"})
+        Knowledge.create_page(%{workspace_id: ctx.id, title: "B", slug: "eb", page_type: "note"})
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "N",
           slug: "en",
@@ -872,16 +888,16 @@ defmodule Dran.BrainTest do
 
       # Verify embeds exist
       embeds =
-        Brain.list_relations_for_page(note.id).outbound
+        Knowledge.list_relations_for_page(note.id).outbound
         |> Enum.filter(&(&1.relation_type == "embeds"))
 
       assert length(embeds) == 2
 
       # Now clear the body
-      {:ok, note} = Brain.update_page(note, %{"body" => ""})
+      {:ok, note} = Knowledge.update_page(note, %{"body" => ""})
 
       embeds =
-        Brain.list_relations_for_page(note.id).outbound
+        Knowledge.list_relations_for_page(note.id).outbound
         |> Enum.filter(&(&1.relation_type == "embeds"))
 
       assert embeds == []
@@ -889,10 +905,15 @@ defmodule Dran.BrainTest do
 
     test "reresolve_embeds directly with empty body", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "A2", slug: "ea2", page_type: "note"})
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "A2",
+          slug: "ea2",
+          page_type: "note"
+        })
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "N2",
           slug: "en2",
@@ -901,18 +922,18 @@ defmodule Dran.BrainTest do
         })
 
       # Verify embed exists
-      assert Brain.list_relations_for_page(note.id).outbound
+      assert Knowledge.list_relations_for_page(note.id).outbound
              |> Enum.any?(&(&1.relation_type == "embeds" and &1.target_id == a.id))
 
       # Update body to empty and re-resolve
-      {:ok, note} = Brain.update_page(note, %{"body" => ""})
-      {created, not_found} = Brain.reresolve_embeds(note)
+      {:ok, note} = Knowledge.update_page(note, %{"body" => ""})
+      {created, not_found} = Knowledge.reresolve_embeds(note)
 
       assert created == 0
       assert not_found == []
 
       embeds =
-        Brain.list_relations_for_page(note.id).outbound
+        Knowledge.list_relations_for_page(note.id).outbound
         |> Enum.filter(&(&1.relation_type == "embeds"))
 
       assert embeds == []
@@ -924,20 +945,20 @@ defmodule Dran.BrainTest do
       context: ctx
     } do
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Test",
           slug: "My-Page",
           page_type: "note"
         })
 
-      {:ok, renamed} = Brain.rename_slug(page, "my-page")
+      {:ok, renamed} = Knowledge.rename_slug(page, "my-page")
       assert renamed.slug == "my-page"
     end
 
     test "preserves semantic relations (by IDs) when page is relation target", %{context: ctx} do
       {:ok, target} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Target",
           slug: "target-page",
@@ -945,7 +966,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, source} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Source",
           slug: "source-page",
@@ -953,7 +974,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, _rel} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: source.id,
           target_id: target.id,
           relation_type: "related",
@@ -961,19 +982,19 @@ defmodule Dran.BrainTest do
         })
 
       # Rename the target
-      {:ok, _renamed} = Brain.rename_slug(target, "renamed-target")
+      {:ok, _renamed} = Knowledge.rename_slug(target, "renamed-target")
 
       # The relation should still exist (it uses IDs, not slugs)
-      rels = Brain.list_relations_for_page(source.id).outbound
+      rels = Knowledge.list_relations_for_page(source.id).outbound
       assert Enum.any?(rels, &(&1.relation_type == "related" and &1.target_id == target.id))
     end
   end
 
-  describe "edge cases — Brain.stats" do
+  describe "edge cases — Knowledge.stats" do
     test "returns valid stats for context with 0 pages" do
-      {:ok, empty_ctx} = Brain.create_workspace(%{name: "Empty Context", slug: "empty-ctx"})
+      {:ok, empty_ctx} = Knowledge.create_workspace(%{name: "Empty Context", slug: "empty-ctx"})
 
-      stats = Brain.stats(empty_ctx.id)
+      stats = Knowledge.stats(empty_ctx.id)
 
       assert stats.total_pages == 0
       assert stats.by_type == %{}
@@ -987,7 +1008,7 @@ defmodule Dran.BrainTest do
   describe "edge cases — resolve_embeds with non-existent slug" do
     test "returns slug in not_found without creating broken relation", %{context: ctx} do
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Note",
           slug: "note-missing",
@@ -997,14 +1018,14 @@ defmodule Dran.BrainTest do
 
       # resolve_embeds is called during create_page, so the relation should
       # already have been attempted. Let's verify directly.
-      {created, not_found} = Brain.resolve_embeds(note)
+      {created, not_found} = Knowledge.resolve_embeds(note)
 
       assert created == 0
       assert "does-not-exist" in not_found
 
       # No embeds relation should exist
       embeds =
-        Brain.list_relations_for_page(note.id).outbound
+        Knowledge.list_relations_for_page(note.id).outbound
         |> Enum.filter(&(&1.relation_type == "embeds"))
 
       assert embeds == []
@@ -1012,7 +1033,7 @@ defmodule Dran.BrainTest do
 
     test "mixed existing and non-existent embeds", %{context: ctx} do
       {:ok, target_page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Art",
           slug: "art-exists",
@@ -1020,7 +1041,7 @@ defmodule Dran.BrainTest do
         })
 
       {:ok, note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "N",
           slug: "n-mixed",
@@ -1028,13 +1049,13 @@ defmodule Dran.BrainTest do
           body: "![[art-exists]] and ![[nope-not-here]]"
         })
 
-      {created, not_found} = Brain.resolve_embeds(note)
+      {created, not_found} = Knowledge.resolve_embeds(note)
 
       assert created == 1
       assert "nope-not-here" in not_found
 
       embeds =
-        Brain.list_relations_for_page(note.id).outbound
+        Knowledge.list_relations_for_page(note.id).outbound
         |> Enum.filter(&(&1.relation_type == "embeds"))
 
       assert length(embeds) == 1

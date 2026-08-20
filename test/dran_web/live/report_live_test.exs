@@ -1,7 +1,9 @@
 defmodule DranWeb.ReportLiveTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Reports
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
@@ -27,10 +29,10 @@ defmodule DranWeb.ReportLiveTest do
       end
     end)
 
-    context = Brain.get_workspace_by_slug("personal")
+    context = Knowledge.get_workspace_by_slug("personal")
 
     {:ok, report} =
-      Brain.create_report(%{
+      Reports.create_report(%{
         workspace_id: context.id,
         title: "Weekly job report",
         slug: "weekly-job-report",

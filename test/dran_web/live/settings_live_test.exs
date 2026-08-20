@@ -43,7 +43,9 @@ defmodule DranWeb.SettingsLiveTest do
 
   test "creating an api key from the form reveals the token once", %{conn: conn} do
     unique = System.unique_integer([:positive])
-    {:ok, ctx} = Dran.Brain.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+
+    {:ok, ctx} =
+      Dran.Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
 
     {:ok, view, _html} = live(conn, ~p"/panel/settings/api_keys")
 
@@ -63,7 +65,10 @@ defmodule DranWeb.SettingsLiveTest do
 
   test "revoking a key from the list marks it revoked", %{conn: conn} do
     unique = System.unique_integer([:positive])
-    {:ok, ctx} = Dran.Brain.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+
+    {:ok, ctx} =
+      Dran.Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+
     {:ok, key} = Accounts.create_api_key(%{name: "Revocable", workspace_id: ctx.id})
 
     {:ok, view, _html} = live(conn, ~p"/panel/settings/api_keys")
@@ -243,8 +248,8 @@ defmodule DranWeb.SettingsLiveTest do
       # of the shared default context — start from a clean slate and leave none
       # behind (mirrors Dran.JobsTest's defensive cleanup).
       context =
-        Dran.Brain.get_workspace_by_slug("personal") ||
-          elem(Dran.Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+        Dran.Knowledge.get_workspace_by_slug("personal") ||
+          elem(Dran.Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
       clear_disabled_jobs!()
 

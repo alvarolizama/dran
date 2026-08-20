@@ -27,7 +27,7 @@ defmodule Dran.Graph.Maintenance do
   require Logger
 
   alias Dran.Repo
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.{Page, Relation}
 
   @doc """
@@ -105,7 +105,7 @@ defmodule Dran.Graph.Maintenance do
   def sweep_scheduled do
     slug = Dran.Auth.default_workspace_slug()
 
-    case Brain.get_workspace_by_slug(slug) do
+    case Knowledge.get_workspace_by_slug(slug) do
       nil ->
         {:error, :workspace_not_found}
 
@@ -137,7 +137,7 @@ defmodule Dran.Graph.Maintenance do
     )
   end
 
-  # Distance lives in `weight` for edges created by `Brain.auto_relate/2`
+  # Distance lives in `weight` for edges created by `Knowledge.auto_relate/2`
   # and in `meta["distance"]` for edges created by older augmenter versions.
   defp distance_of(%{weight: w}) when is_float(w), do: w
 

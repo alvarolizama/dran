@@ -1,7 +1,7 @@
 defmodule Dran.EntityLinkerTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.EntityLinker
 
   setup do
@@ -29,13 +29,13 @@ defmodule Dran.EntityLinkerTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_workspace(%{name: "Linker Test #{slug}", slug: slug})
+    {:ok, ctx} = Knowledge.create_workspace(%{name: "Linker Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_note(ctx, slug) do
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: slug,
         slug: slug,
@@ -97,11 +97,11 @@ defmodule Dran.EntityLinkerTest do
 
       assert {:ok, 2} = EntityLinker.link(note, ["Elixir", "Phoenix Framework"])
 
-      entity = Brain.get_page_by_slug("elixir", ctx.id)
+      entity = Knowledge.get_page_by_slug("elixir", ctx.id)
       assert entity.page_type == "entity"
       assert entity.meta["auto"] == true
 
-      relations = Brain.list_relations_for_page(note.id).outbound
+      relations = Knowledge.list_relations_for_page(note.id).outbound
       mentions = Enum.filter(relations, &(&1.relation_type == "mentions"))
       assert length(mentions) == 2
       target_ids = Enum.map(mentions, & &1.target_id)
@@ -118,7 +118,7 @@ defmodule Dran.EntityLinkerTest do
 
       # Only ONE entity page exists
       entities =
-        Brain.list_pages(workspace_id: ctx.id, type: "entity")
+        Knowledge.list_pages(workspace_id: ctx.id, type: "entity")
         |> Enum.filter(&(&1.slug == "elixir"))
 
       assert length(entities) == 1
@@ -131,7 +131,7 @@ defmodule Dran.EntityLinkerTest do
       assert {:ok, 1} = EntityLinker.link(note, ["Elixir"])
       assert {:ok, 1} = EntityLinker.link(note, ["Elixir"])
 
-      relations = Brain.list_relations_for_page(note.id).outbound
+      relations = Knowledge.list_relations_for_page(note.id).outbound
       mentions = Enum.filter(relations, &(&1.relation_type == "mentions"))
       # create_relation uses on_conflict: :nothing, so at most 1 row exists
       assert length(mentions) == 1
@@ -145,8 +145,8 @@ defmodule Dran.EntityLinkerTest do
       assert {:ok, 0} = EntityLinker.link(other, ["Elixir"])
 
       # No entity page created, no relation created
-      assert Brain.get_page_by_slug("elixir", ctx.id).page_type == "note"
-      relations = Brain.list_relations_for_page(other.id).outbound
+      assert Knowledge.get_page_by_slug("elixir", ctx.id).page_type == "note"
+      relations = Knowledge.list_relations_for_page(other.id).outbound
       assert Enum.filter(relations, &(&1.relation_type == "mentions")) == []
     end
 
@@ -154,7 +154,7 @@ defmodule Dran.EntityLinkerTest do
       ctx = fresh_context("link-self")
 
       {:ok, entity} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Elixir",
           slug: "elixir",

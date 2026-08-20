@@ -11,7 +11,7 @@ defmodule Dran.Summaries do
   so the embedding and the augmentation use the same window.
   """
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias Dran.Embeddings
   alias Dran.Inference
@@ -124,7 +124,7 @@ defmodule Dran.Summaries do
   Select up to 50 candidate pages for inline links, preferring semantic
   closeness to `page` when an embedding is available.
 
-  Falls back to `Brain.list_pages/1` (recency-sorted) when `page` has no
+  Falls back to `Knowledge.list_pages/1` (recency-sorted) when `page` has no
   embedding.
   """
   @spec candidate_pages(Page.t()) :: [map()]
@@ -141,7 +141,7 @@ defmodule Dran.Summaries do
           select: %{slug: p.slug, title: p.title, summary: coalesce(p.summary, "")}
       )
     else
-      Brain.list_pages(workspace_id: page.workspace_id, limit: 50)
+      Knowledge.list_pages(workspace_id: page.workspace_id, limit: 50)
       |> Enum.reject(&(&1.id == page.id))
       |> Enum.map(&%{slug: &1.slug, title: &1.title, summary: &1.summary || ""})
     end

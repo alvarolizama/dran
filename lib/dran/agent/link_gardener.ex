@@ -23,7 +23,7 @@ defmodule Dran.Agent.LinkGardener do
   @behaviour Dran.Agent.Engine.Behaviour
   use Dran.Agent.Schedulable, input: "scheduled weekly run"
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   @agent_type "link_gardener"
   @max_proposals 10
@@ -255,13 +255,13 @@ defmodule Dran.Agent.LinkGardener do
 
   @impl true
   def execute_tool("transitive_candidates", _args, %State{} = state) do
-    candidates = Brain.transitive_part_of_candidates(state.session.workspace_id)
+    candidates = Knowledge.transitive_part_of_candidates(state.session.workspace_id)
     {{:ok, candidates}, state}
   end
 
   @impl true
   def execute_tool("list_orphans", _args, %State{} = state) do
-    orphans = Brain.orphan_pages(state.session.workspace_id)
+    orphans = Knowledge.orphan_pages(state.session.workspace_id)
     {{:ok, orphans}, state}
   end
 
@@ -271,7 +271,7 @@ defmodule Dran.Agent.LinkGardener do
     if slug == "" do
       {{:error, "empty slug"}, state}
     else
-      case Brain.get_page_by_slug(slug, state.session.workspace_id) do
+      case Knowledge.get_page_by_slug(slug, state.session.workspace_id) do
         nil ->
           {{:error, "page '#{slug}' not found"}, state}
 
@@ -290,7 +290,7 @@ defmodule Dran.Agent.LinkGardener do
 
   def execute_tool("search", args, %State{} = state) do
     result =
-      Brain.search(args["query"] || "", workspace_id: state.session.workspace_id, limit: 10)
+      Knowledge.search(args["query"] || "", workspace_id: state.session.workspace_id, limit: 10)
 
     {result, state}
   end
@@ -324,8 +324,8 @@ defmodule Dran.Agent.LinkGardener do
       true ->
         workspace_id = state.session.workspace_id
 
-        source = Brain.get_page_by_slug(source_slug, workspace_id)
-        target = Brain.get_page_by_slug(target_slug, workspace_id)
+        source = Knowledge.get_page_by_slug(source_slug, workspace_id)
+        target = Knowledge.get_page_by_slug(target_slug, workspace_id)
 
         cond do
           is_nil(source) ->
@@ -343,7 +343,7 @@ defmodule Dran.Agent.LinkGardener do
               "proposed_by" => "link-gardener"
             }
 
-            case Brain.create_relation(%{
+            case Knowledge.create_relation(%{
                    source_id: source.id,
                    target_id: target.id,
                    relation_type: relation_type,

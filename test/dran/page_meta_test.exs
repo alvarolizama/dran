@@ -1,4 +1,4 @@
-defmodule Dran.Brain.PageMetaTest do
+defmodule Dran.PageMetaTest do
   use ExUnit.Case, async: true
 
   import Ecto.Changeset, only: [traverse_errors: 2]

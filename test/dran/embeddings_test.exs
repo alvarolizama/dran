@@ -1,7 +1,7 @@
 defmodule Dran.EmbeddingsTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias Dran.Embeddings
 
@@ -55,7 +55,7 @@ defmodule Dran.EmbeddingsTest do
         Req.Test.json(conn, embeddings_response(5))
       end)
 
-      context = Brain.get_workspace_by_slug("personal")
+      context = Knowledge.get_workspace_by_slug("personal")
 
       page =
         Dran.Page.create_changeset(%{
@@ -120,7 +120,7 @@ defmodule Dran.EmbeddingsTest do
       uniq = System.unique_integer([:positive])
 
       {:ok, context} =
-        Brain.create_workspace(%{name: "Backfill #{uniq}", slug: "backfill-#{uniq}"})
+        Knowledge.create_workspace(%{name: "Backfill #{uniq}", slug: "backfill-#{uniq}"})
 
       p1 =
         Dran.Page.create_changeset(%{

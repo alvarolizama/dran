@@ -11,7 +11,7 @@ defmodule Dran.Agent.CuratorTest do
   use Dran.DataCase, async: false
 
   alias Dran.Agent.{Curator, Session}
-  alias Dran.{Brain, Repo}
+  alias Dran.{Knowledge, Repo, Reports}
   alias Dran.Page
 
   # ── Helpers ───────────────────────────────────────────────────────────────
@@ -63,15 +63,15 @@ defmodule Dran.Agent.CuratorTest do
   defp far_vector, do: [1.0] ++ List.duplicate(0.0, 1023)
 
   defp ensure_context! do
-    Brain.get_workspace_by_slug("personal") ||
-      elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+    Knowledge.get_workspace_by_slug("personal") ||
+      elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
   end
 
   # ── Unit test: find_duplicates ────────────────────────────────────────────
 
   describe "find_duplicates" do
     setup do
-      # Inference disabled so Brain.create_page (if called) doesn't hit the API.
+      # Inference disabled so Knowledge.create_page (if called) doesn't hit the API.
       original = Application.get_env(:dran, :inference)
 
       Application.put_env(:dran, :inference,
@@ -453,7 +453,7 @@ defmodule Dran.Agent.CuratorTest do
 
       # Verify the report was created
       date_str = Date.utc_today() |> Date.to_iso8601()
-      report = Brain.get_report_by_slug("curator-report-" <> date_str, ctx.id)
+      report = Reports.get_report_by_slug("curator-report-" <> date_str, ctx.id)
       assert report != nil
       assert report.title =~ "Curator report"
       assert report.report_type == "log"
@@ -462,8 +462,8 @@ defmodule Dran.Agent.CuratorTest do
       assert report.meta["agent_session_id"] == session.id
 
       # Verify the pages were flagged as contested
-      page_a = Brain.get_page_by_slug("dup-a", ctx.id)
-      page_b = Brain.get_page_by_slug("dup-b", ctx.id)
+      page_a = Knowledge.get_page_by_slug("dup-a", ctx.id)
+      page_b = Knowledge.get_page_by_slug("dup-b", ctx.id)
       assert page_a.kb_contested == true
       assert page_b.kb_contested == true
 

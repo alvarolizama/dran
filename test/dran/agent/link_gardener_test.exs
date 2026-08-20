@@ -1,7 +1,7 @@
 defmodule Dran.Agent.LinkGardenerTest do
   use Dran.DataCase, async: false
 
-  alias Dran.{Brain, Repo}
+  alias Dran.{Knowledge, Repo}
   alias Dran.Agent.{LinkGardener, Session}
   alias Dran.Agent.LinkGardener.State
   alias Dran.Relation
@@ -35,7 +35,10 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   defp create_workspace! do
     {:ok, ctx} =
-      Brain.create_workspace(%{name: "Test Context", slug: "test-ctx-#{:rand.uniform(999_999)}"})
+      Knowledge.create_workspace(%{
+        name: "Test Context",
+        slug: "test-ctx-#{:rand.uniform(999_999)}"
+      })
 
     ctx
   end
@@ -45,7 +48,7 @@ defmodule Dran.Agent.LinkGardenerTest do
     attrs = Map.merge(defaults, attrs)
 
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: attrs.title,
         slug: attrs.slug,
@@ -264,7 +267,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
       # Create a relation pointing at p2 so it is not an orphan
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: p1.id,
           target_id: p2.id,
           relation_type: "related"
@@ -316,14 +319,14 @@ defmodule Dran.Agent.LinkGardenerTest do
 
       # A part_of B, B part_of C  →  candidate: A part_of C (via B)
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "part_of"
         })
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: b.id,
           target_id: c.id,
           relation_type: "part_of"
@@ -350,14 +353,14 @@ defmodule Dran.Agent.LinkGardenerTest do
       c = create_page!(ctx, %{title: "C", slug: "c-direct"})
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: b.id,
           relation_type: "part_of"
         })
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: b.id,
           target_id: c.id,
           relation_type: "part_of"
@@ -365,7 +368,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
       # Direct edge A→C already exists, so (A, C, via B) must NOT be a candidate.
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: a.id,
           target_id: c.id,
           relation_type: "part_of"
@@ -388,7 +391,7 @@ defmodule Dran.Agent.LinkGardenerTest do
       p2 = create_page!(ctx, %{title: "Y", slug: "y"})
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: p1.id,
           target_id: p2.id,
           relation_type: "related"
@@ -437,7 +440,7 @@ defmodule Dran.Agent.LinkGardenerTest do
       p2 = create_page!(ctx, %{title: "Beta", slug: "beta", body: "beta content"})
 
       {:ok, _} =
-        Brain.create_relation(%{
+        Knowledge.create_relation(%{
           source_id: p1.id,
           target_id: p2.id,
           relation_type: "related"

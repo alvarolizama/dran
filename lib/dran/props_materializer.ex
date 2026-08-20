@@ -38,7 +38,7 @@ defmodule Dran.PropsMaterializer do
   * Skips targets whose slug collides with an existing page of a different
     `page_type` than the mapped one (never hijack a note's slug).
   * Caps materializations per page at `@max_props_per_page`.
-  * Relations use `Brain.create_relation/1` (on_conflict: :nothing), so
+  * Relations use `Knowledge.create_relation/1` (on_conflict: :nothing), so
     re-running the augmenter is idempotent.
   """
 

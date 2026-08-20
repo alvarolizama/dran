@@ -1,7 +1,7 @@
 defmodule DranWeb.E2EAuthTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Accounts, Brain}
+  alias Dran.{Accounts, Knowledge}
 
   setup %{conn: conn} do
     # Create owner user
@@ -24,9 +24,9 @@ defmodule DranWeb.E2EAuthTest do
     unique = System.unique_integer([:positive])
 
     {:ok, ctx1} =
-      Brain.create_workspace(%{name: "Personal #{unique}", slug: "personal-#{unique}"})
+      Knowledge.create_workspace(%{name: "Personal #{unique}", slug: "personal-#{unique}"})
 
-    {:ok, ctx2} = Brain.create_workspace(%{name: "Work #{unique}", slug: "work-#{unique}"})
+    {:ok, ctx2} = Knowledge.create_workspace(%{name: "Work #{unique}", slug: "work-#{unique}"})
 
     # Assign user to only the personal context
     Accounts.add_user_to_workspace(user, ctx1)
@@ -196,7 +196,7 @@ defmodule DranWeb.E2EAuthTest do
     test "deleting a context cascade-deletes its API keys", %{ctx1: ctx1} do
       {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
 
-      {:ok, _} = Brain.delete_workspace(ctx1)
+      {:ok, _} = Knowledge.delete_workspace(ctx1)
 
       assert Accounts.valid_api_key?(key.token) == :error
       refute Dran.Repo.get(Accounts.ApiKey, key.id)

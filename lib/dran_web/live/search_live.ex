@@ -9,7 +9,7 @@ defmodule DranWeb.SearchLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.GraphHelpers
   alias DranWeb.HTMLSanitizer
   alias DranWeb.PageTypes
@@ -45,7 +45,7 @@ defmodule DranWeb.SearchLive do
     case params["q"] do
       q when is_binary(q) and q != "" ->
         {:ok, results} =
-          Brain.search(q,
+          Knowledge.search(q,
             workspace_id: socket.assigns.context.id,
             limit: 20,
             strategy: String.to_atom(socket.assigns.search_mode)
@@ -72,7 +72,7 @@ defmodule DranWeb.SearchLive do
       case q do
         q when is_binary(q) and q != "" ->
           {:ok, r} =
-            Brain.search(q,
+            Knowledge.search(q,
               workspace_id: socket.assigns.context.id,
               limit: 20,
               strategy: String.to_atom(socket.assigns.search_mode)
@@ -364,7 +364,7 @@ defmodule DranWeb.SearchLive do
       # One query for ALL relations touching any result page (inbound or
       # outbound), with target/source pages pre-loaded. Replaces the old
       # N+1: 20 results × 2 queries each = 40+ queries.
-      relations_map = Brain.list_relations_for_pages(page_ids)
+      relations_map = Knowledge.list_relations_for_pages(page_ids)
 
       results
       |> Enum.reduce({%{}, %{}}, fn result, {nodes_acc, edges_acc} ->

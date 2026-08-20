@@ -1,7 +1,7 @@
 defmodule Dran.PropsBackfillTest do
   use Dran.DataCase, async: false
 
-  alias Dran.{Brain, PropsBackfill}
+  alias Dran.{Knowledge, PropsBackfill}
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -28,7 +28,7 @@ defmodule Dran.PropsBackfillTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_workspace(%{name: "Backfill #{slug}", slug: slug})
+    {:ok, ctx} = Knowledge.create_workspace(%{name: "Backfill #{slug}", slug: slug})
     ctx
   end
 
@@ -37,7 +37,7 @@ defmodule Dran.PropsBackfillTest do
       ctx = fresh_context("backfill")
 
       {:ok, person} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Juan",
           slug: "juan",
@@ -52,7 +52,7 @@ defmodule Dran.PropsBackfillTest do
 
       # After backfill, relations exist (augmenter ran, even without inference
       # the PropsMaterializer still materializes props)
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       works_in = Enum.filter(relations, &(&1.relation_type == "works_in"))
       assert length(works_in) >= 1
     end
@@ -61,7 +61,7 @@ defmodule Dran.PropsBackfillTest do
       ctx = fresh_context("backfill-no-props")
 
       {:ok, _note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "No Props",
           slug: "no-props",
@@ -79,7 +79,7 @@ defmodule Dran.PropsBackfillTest do
       ctx = fresh_context("backfill-empty-props")
 
       {:ok, _page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Empty Props",
           slug: "empty-props",
@@ -96,7 +96,7 @@ defmodule Dran.PropsBackfillTest do
       ctx = fresh_context("backfill-idem")
 
       {:ok, person} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Maria",
           slug: "maria",
@@ -108,7 +108,7 @@ defmodule Dran.PropsBackfillTest do
       assert {:ok, _} = PropsBackfill.run()
       assert {:ok, _} = PropsBackfill.run()
 
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       works_in = Enum.filter(relations, &(&1.relation_type == "works_in"))
       assert length(works_in) == 1
     end

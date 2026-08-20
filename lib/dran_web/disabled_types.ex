@@ -16,10 +16,10 @@ defmodule DranWeb.DisabledTypes do
   @doc """
   Given a context and a page_type string, returns `true` if the type is
   enabled (not in disabled_page_types). Convenience wrapper around
-  `Brain.page_type_enabled?/2` for use in templates without aliasing Brain.
+  `Knowledge.page_type_enabled?/2` for use in templates without aliasing Knowledge.
   """
   def type_enabled?(%Workspace{} = context, page_type) do
-    Dran.Brain.page_type_enabled?(context, page_type)
+    Dran.Knowledge.page_type_enabled?(context, page_type)
   end
 
   @doc """
@@ -31,7 +31,7 @@ defmodule DranWeb.DisabledTypes do
   def guard_page_type(socket, page_type) do
     context = socket.assigns[:workspace]
 
-    if context && Dran.Brain.page_type_enabled?(context, page_type) do
+    if context && Dran.Knowledge.page_type_enabled?(context, page_type) do
       {:cont, socket}
     else
       {:halt, {:push_navigate, ~p"/"}}
@@ -47,10 +47,10 @@ defmodule DranWeb.DisabledTypes do
   """
   def on_mount(page_type, _params, session, socket) when is_binary(page_type) do
     workspace_slug = session["workspace_slug"]
-    context = workspace_slug && Dran.Brain.get_workspace_by_slug(workspace_slug)
+    context = workspace_slug && Dran.Knowledge.get_workspace_by_slug(workspace_slug)
 
     if context do
-      if Dran.Brain.page_type_enabled?(context, page_type) do
+      if Dran.Knowledge.page_type_enabled?(context, page_type) do
         {:cont, socket}
       else
         {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/")}

@@ -108,7 +108,7 @@ defmodule DranWeb.Plugs.Auth do
       _ ->
         is_owner = get_session(conn, "is_owner") == true
 
-        if is_owner and Dran.Brain.list_workspaces() == [] do
+        if is_owner and Dran.Knowledge.list_workspaces() == [] do
           ~p"/panel"
         else
           ~p"/"
@@ -132,7 +132,7 @@ defmodule DranWeb.Plugs.Auth do
   the `dran_last_workspace` cookie, and the `fetch_workspace_cookie/2` plug
   merges it into the session before LiveView connects.
 
-  Returns `{socket, context}` where `context` is the loaded Brain.Context.
+  Returns `{socket, context}` where `context` is the loaded Knowledge.Context.
   """
   def assign_to_socket(socket, session) when is_map(session) do
     %{
@@ -140,8 +140,8 @@ defmodule DranWeb.Plugs.Auth do
       workspace_slug: workspace_slug
     } = from_session(session)
 
-    context = Dran.Brain.get_workspace_by_slug(workspace_slug)
-    page_counts = Dran.Brain.page_counts_by_workspace()
+    context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
+    page_counts = Dran.Knowledge.page_counts_by_workspace()
 
     # Per-user scoping: a DB user (created via Dran.Accounts) only sees their
     # assigned contexts. SEC-002: fail closed — a session user with no row in
@@ -243,7 +243,7 @@ defmodule DranWeb.Plugs.Auth do
 
       def handle_params(%{"slug" => slug} = params, _url, socket) do
         {socket, context} = Auth.resolve_workspace(socket, params)
-        page = Brain.get_page_by_slug(slug, context.id)
+        page = Knowledge.get_page_by_slug(slug, context.id)
         ...
       end
 
@@ -253,7 +253,7 @@ defmodule DranWeb.Plugs.Auth do
   def resolve_workspace(socket, params) do
     case params["workspace"] do
       slug when is_binary(slug) and slug != "" ->
-        case Dran.Brain.get_workspace_by_slug(slug) do
+        case Dran.Knowledge.get_workspace_by_slug(slug) do
           nil ->
             {socket, socket.assigns[:workspace]}
 

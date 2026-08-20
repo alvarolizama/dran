@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Dran.Relations do
   import Ecto.Query
 
   alias Dran.Repo
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
 
   @requirements ["app.start"]
@@ -28,7 +28,7 @@ defmodule Mix.Tasks.Dran.Relations do
 
     k = Keyword.get(opts, :k, 3)
 
-    context = Brain.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
+    context = Knowledge.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
 
     pages =
       Repo.all(
@@ -42,7 +42,7 @@ defmodule Mix.Tasks.Dran.Relations do
     pages
     |> Enum.with_index(1)
     |> Enum.each(fn {page, i} ->
-      case Brain.auto_relate(page, k: k) do
+      case Knowledge.auto_relate(page, k: k) do
         {:ok, rels} ->
           Mix.shell().info("[#{i}/#{total}] #{page.slug}: #{length(rels)} semantic relations")
 

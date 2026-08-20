@@ -1,7 +1,7 @@
 defmodule Dran.PropsMaterializerTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.PropsMaterializer
 
   setup do
@@ -29,13 +29,13 @@ defmodule Dran.PropsMaterializerTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_workspace(%{name: "Props Test #{slug}", slug: slug})
+    {:ok, ctx} = Knowledge.create_workspace(%{name: "Props Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_person(ctx, slug, props) do
     {:ok, page} =
-      Brain.create_page(%{
+      Knowledge.create_page(%{
         workspace_id: ctx.id,
         title: slug,
         slug: slug,
@@ -65,12 +65,12 @@ defmodule Dran.PropsMaterializerTest do
 
       assert {:ok, 1} = PropsMaterializer.materialize(person)
 
-      target = Brain.get_page_by_slug("sales", ctx.id)
+      target = Knowledge.get_page_by_slug("sales", ctx.id)
       assert target.page_type == "entity"
       assert target.meta["auto"] == true
       assert target.meta["created_from"] == "props_materializer"
 
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       works_in = Enum.filter(relations, &(&1.relation_type == "works_in"))
       assert length(works_in) == 1
       assert hd(works_in).target_id == target.id
@@ -82,12 +82,12 @@ defmodule Dran.PropsMaterializerTest do
 
       assert {:ok, 2} = PropsMaterializer.materialize(person)
 
-      sales = Brain.get_page_by_slug("sales", ctx.id)
-      vip = Brain.get_page_by_slug("vip", ctx.id)
+      sales = Knowledge.get_page_by_slug("sales", ctx.id)
+      vip = Knowledge.get_page_by_slug("vip", ctx.id)
       assert sales.page_type == "entity"
       assert vip.page_type == "concept"
 
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       works_in = Enum.filter(relations, &(&1.relation_type == "works_in"))
       has_tier = Enum.filter(relations, &(&1.relation_type == "has_tier"))
       assert length(works_in) == 1
@@ -101,19 +101,19 @@ defmodule Dran.PropsMaterializerTest do
       assert {:ok, 1} = PropsMaterializer.materialize(person)
 
       # Only the mapped prop created an edge
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       assert length(relations) == 1
       assert hd(relations).relation_type == "works_in"
 
       # No page for the unmapped prop
-      assert Brain.get_page_by_slug("blue", ctx.id) == nil
+      assert Knowledge.get_page_by_slug("blue", ctx.id) == nil
     end
 
     test "page without props materializes nothing" do
       ctx = fresh_context("mat-no-props")
 
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "plain",
           slug: "plain",
@@ -129,7 +129,7 @@ defmodule Dran.PropsMaterializerTest do
       ctx = fresh_context("mat-nil-meta")
 
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "nilmeta",
           slug: "nilmeta",
@@ -144,7 +144,7 @@ defmodule Dran.PropsMaterializerTest do
       ctx = fresh_context("mat-reuse")
 
       {:ok, _existing} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Sales",
           slug: "sales",
@@ -157,7 +157,7 @@ defmodule Dran.PropsMaterializerTest do
 
       # Only ONE sales page
       entities =
-        Brain.list_pages(workspace_id: ctx.id, type: "entity")
+        Knowledge.list_pages(workspace_id: ctx.id, type: "entity")
         |> Enum.filter(&(&1.slug == "sales"))
 
       assert length(entities) == 1
@@ -167,7 +167,7 @@ defmodule Dran.PropsMaterializerTest do
       ctx = fresh_context("mat-collision")
 
       {:ok, _note} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Sales",
           slug: "sales",
@@ -179,11 +179,11 @@ defmodule Dran.PropsMaterializerTest do
       assert {:ok, 0} = PropsMaterializer.materialize(person)
 
       # No works_in edge created
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       assert Enum.filter(relations, &(&1.relation_type == "works_in")) == []
 
       # Original note untouched
-      assert Brain.get_page_by_slug("sales", ctx.id).page_type == "note"
+      assert Knowledge.get_page_by_slug("sales", ctx.id).page_type == "note"
     end
 
     test "skips self-links" do
@@ -192,7 +192,7 @@ defmodule Dran.PropsMaterializerTest do
 
       assert {:ok, 0} = PropsMaterializer.materialize(person)
 
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       assert relations == []
     end
 
@@ -203,7 +203,7 @@ defmodule Dran.PropsMaterializerTest do
       assert {:ok, 1} = PropsMaterializer.materialize(person)
       assert {:ok, 1} = PropsMaterializer.materialize(person)
 
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       works_in = Enum.filter(relations, &(&1.relation_type == "works_in"))
       assert length(works_in) == 1
     end
@@ -241,7 +241,7 @@ defmodule Dran.PropsMaterializerTest do
       person = create_person(ctx, "juan", props)
       assert {:ok, 5} = PropsMaterializer.materialize(person)
 
-      relations = Brain.list_relations_for_page(person.id).outbound
+      relations = Knowledge.list_relations_for_page(person.id).outbound
       assert length(relations) == 5
 
       types = Enum.map(relations, & &1.relation_type) |> Enum.sort()
@@ -257,7 +257,7 @@ defmodule Dran.PropsMaterializerTest do
       ctx = fresh_context("mat-atom")
 
       {:ok, page} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "atom-props",
           slug: "atom-props",

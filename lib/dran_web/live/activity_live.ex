@@ -10,7 +10,7 @@ defmodule DranWeb.ActivityLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias DranWeb.Plugs.Auth
 
   @impl true
@@ -23,7 +23,7 @@ defmodule DranWeb.ActivityLive do
 
     entries =
       if context do
-        Brain.list_log(workspace_id: context.id, limit: 50)
+        Knowledge.list_log(workspace_id: context.id, limit: 50)
       else
         []
       end
@@ -40,12 +40,12 @@ defmodule DranWeb.ActivityLive do
   @impl true
   def handle_info({:page_changed, _action, _page}, socket) do
     # A page changed — reload the log to pick up the new entry created by
-    # Brain.create_page / update_page / delete_page (which log before broadcast).
+    # Knowledge.create_page / update_page / delete_page (which log before broadcast).
     context = socket.assigns.context
 
     entries =
       if context do
-        Brain.list_log(workspace_id: context.id, limit: 50)
+        Knowledge.list_log(workspace_id: context.id, limit: 50)
       else
         []
       end

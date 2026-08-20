@@ -11,7 +11,7 @@ defmodule Dran.Graph.CommunitySummaries do
 
   import Ecto.Query
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias Dran.Graph.CommunitySummary
   alias Dran.Inference
@@ -103,13 +103,13 @@ defmodule Dran.Graph.CommunitySummaries do
 
   Same pattern as `Dran.Graph.refresh_all_scheduled/0`: resolves the default
   context slug via `Dran.Auth.default_workspace_slug/0` and looks it up with
-  `Brain.get_workspace_by_slug/1`.
+  `Knowledge.get_workspace_by_slug/1`.
   """
   @spec generate_all_scheduled() :: :ok | {:error, :workspace_not_found}
   def generate_all_scheduled do
     slug = Dran.Auth.default_workspace_slug()
 
-    case Brain.get_workspace_by_slug(slug) do
+    case Knowledge.get_workspace_by_slug(slug) do
       nil ->
         {:error, :workspace_not_found}
 

@@ -29,7 +29,7 @@ defmodule Dran.Agent.Schedulable do
       Iterates every workspace and starts the engine against it.
       """
       def run_scheduled do
-        workspaces = Dran.Brain.list_workspaces()
+        workspaces = Dran.Knowledge.list_workspaces()
 
         if workspaces == [] do
           {:error, :no_workspaces}

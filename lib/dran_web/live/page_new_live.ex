@@ -4,12 +4,12 @@ defmodule DranWeb.PageNewLive do
 
   The page type is derived from the request path (e.g. `/notes/new`
   → "note"). Renders the shared markdown editor and creates the page
-  directly via `Brain.create_page/1`.
+  directly via `Knowledge.create_page/1`.
   """
 
   use DranWeb, :live_view
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
@@ -126,7 +126,7 @@ defmodule DranWeb.PageNewLive do
        body: "",
        meta: %{},
        workspace_id: if(context, do: context.id),
-       tag_suggestions: if(context, do: Brain.list_tags(context.id), else: []),
+       tag_suggestions: if(context, do: Knowledge.list_tags(context.id), else: []),
        save_status: "idle",
        active_nav: "notes"
      )}
@@ -144,7 +144,7 @@ defmodule DranWeb.PageNewLive do
     meta = default_meta_for(page_type)
 
     changeset =
-      Brain.change_page(%Page{}, %{
+      Knowledge.change_page(%Page{}, %{
         workspace_id: workspace_id,
         page_type: page_type,
         body: "",
@@ -172,7 +172,7 @@ defmodule DranWeb.PageNewLive do
     meta = Map.merge(base_meta, meta_from_params(page_params))
 
     changeset =
-      Brain.change_page(
+      Knowledge.change_page(
         %Page{},
         page_params
         |> Map.put("workspace_id", workspace_id)
@@ -207,7 +207,7 @@ defmodule DranWeb.PageNewLive do
       |> Map.put_new("owner", "system")
       |> Map.put_new("created_by", socket.assigns[:current_user] || "system")
 
-    case Brain.create_page(page_params) do
+    case Knowledge.create_page(page_params) do
       {:ok, page} ->
         type_path = PageTypes.path(page.page_type)
 
@@ -275,7 +275,7 @@ defmodule DranWeb.PageNewLive do
 
   # Smart defaults per page type for the :new form. These prefill the meta
   # map so the user does not have to pick the common starting state. The
-  # slug is NOT set here — Brain.ensure_title_and_slug/1 derives it from
+  # slug is NOT set here — Knowledge.ensure_title_and_slug/1 derives it from
   # the title on save.
   defp default_meta_for("note") do
     %{"kind" => "thought", "date" => Date.utc_today() |> Date.to_string()}

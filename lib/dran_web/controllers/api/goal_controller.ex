@@ -1,11 +1,11 @@
 defmodule DranWeb.API.GoalController do
   use DranWeb, :controller
-  alias Dran.Brain
+  alias Dran.Goals
 
   @doc "GET /api/goals?context=... — list goals in a context"
   def index(conn, %{"workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      json(conn, %{data: Brain.list_goals(context.id)})
+      json(conn, %{data: Goals.list_goals(context.id)})
     end)
   end
 
@@ -18,7 +18,7 @@ defmodule DranWeb.API.GoalController do
   @doc "GET /api/goals/:slug?context=... — goal detail"
   def show(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      case Brain.get_goal_by_slug(slug, context.id) do
+      case Goals.get_goal_by_slug(slug, context.id) do
         nil ->
           conn |> put_status(:not_found) |> json(%{errors: %{detail: "goal not found"}})
 

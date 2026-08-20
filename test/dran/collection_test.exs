@@ -1,7 +1,9 @@
 defmodule Dran.CollectionTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Collections
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -24,8 +26,8 @@ defmodule Dran.CollectionTest do
     end)
 
     context =
-      Brain.get_workspace_by_slug("personal") ||
-        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
+      Knowledge.get_workspace_by_slug("personal") ||
+        elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -38,7 +40,7 @@ defmodule Dran.CollectionTest do
         slug: "test-collection"
       }
 
-      assert {:ok, %Dran.Collection{} = collection} = Brain.create_collection(attrs)
+      assert {:ok, %Dran.Collection{} = collection} = Collections.create_collection(attrs)
       assert collection.name == "Test Collection"
     end
   end
@@ -46,20 +48,20 @@ defmodule Dran.CollectionTest do
   describe "list_collections/1" do
     test "lists collections in a workspace", %{context: ctx} do
       {:ok, _} =
-        Brain.create_collection(%{
+        Collections.create_collection(%{
           workspace_id: ctx.id,
           name: "Collection A",
           slug: "collection-a"
         })
 
       {:ok, _} =
-        Brain.create_collection(%{
+        Collections.create_collection(%{
           workspace_id: ctx.id,
           name: "Collection B",
           slug: "collection-b"
         })
 
-      collections = Brain.list_collections(ctx.id)
+      collections = Collections.list_collections(ctx.id)
       assert length(collections) == 2
     end
   end

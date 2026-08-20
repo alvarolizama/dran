@@ -14,11 +14,11 @@ defmodule DranWeb.HomeGraphController do
 
   use DranWeb, :controller
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.GraphCache
 
   def show(conn, %{"workspace_slug" => workspace_slug}) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %{} = context ->
         cached = GraphCache.get(context.id)
 

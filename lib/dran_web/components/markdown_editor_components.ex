@@ -268,7 +268,7 @@ defmodule DranWeb.MarkdownEditorComponents do
         <% slug_type = Keyword.get(@opts, :type) %>
         <% pages =
           if @workspace_id do
-            Dran.Brain.list_pages(workspace_id: @workspace_id, type: slug_type)
+            Dran.Knowledge.list_pages(workspace_id: @workspace_id, type: slug_type)
           else
             []
           end %>

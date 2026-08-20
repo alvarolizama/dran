@@ -5,7 +5,7 @@ defmodule Dran.Repo.Migrations.AddKanbanMetaExpressionIndexes do
   @disable_migration_lock true
 
   # Expression indexes on the hot JSONB meta keys the kanban / todos / planning
-  # views filter by (see Dran.Brain.list_pages/1). Without these, every
+  # views filter by (see Dran.Knowledge.list_pages/1). Without these, every
   # `meta->>'kanban_status' = ?`-style filter is a seq scan over pages. They are
   # partial (only rows where the key is present) to keep them small, and built
   # CONCURRENTLY so the table isn't locked on a populated prod database.

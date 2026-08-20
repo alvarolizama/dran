@@ -1,4 +1,4 @@
-defmodule Dran.Brain.PageMetaGettextTest do
+defmodule Dran.PageMetaGettextTest do
   # Verifies that all option labels and field labels returned by
   # meta_fields_for/1,2 go through gettext.
   #

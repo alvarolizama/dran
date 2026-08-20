@@ -134,7 +134,7 @@ defmodule Dran.Release do
           repo,
           fn _repo ->
             alias Dran.Repo
-            alias Dran.Brain
+            alias Dran.Knowledge
             alias Dran.Workspace
 
             slug = Dran.Auth.default_workspace_slug()
@@ -142,7 +142,7 @@ defmodule Dran.Release do
 
             case Repo.get_by(Workspace, slug: slug) do
               nil ->
-                {:ok, ctx} = Brain.create_workspace(%{name: name, slug: slug})
+                {:ok, ctx} = Knowledge.create_workspace(%{name: name, slug: slug})
                 Logger.info("[release] created context: #{ctx.name} (#{ctx.slug})")
 
               existing ->

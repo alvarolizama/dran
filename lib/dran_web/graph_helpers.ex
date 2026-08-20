@@ -5,7 +5,7 @@ defmodule DranWeb.GraphHelpers do
   Used by GraphLive (:show) and the inline graph tab on every page detail view.
   """
 
-  alias Dran.Brain
+  alias Dran.Knowledge
   alias Dran.Page
   import Ecto.Query
 
@@ -28,7 +28,7 @@ defmodule DranWeb.GraphHelpers do
 
   @doc """
   Builds the subgraph centered on `page`, expanded to `depth` levels of BFS
-  (default 3). Uses `Brain.list_relations_for_pages/1` (batch query) so each
+  (default 3). Uses `Knowledge.list_relations_for_pages/1` (batch query) so each
   BFS frontier is one pair of SQL queries, not 2×N.
 
   Returns `%{nodes: [...], edges: [...]}`.
@@ -36,7 +36,7 @@ defmodule DranWeb.GraphHelpers do
   ## Options
 
   - `:relations` — pre-loaded `%{outbound: [...], inbound: [...]}` from
-    `Brain.list_relations_for_page/1`. When provided, skips the first-level
+    `Knowledge.list_relations_for_page/1`. When provided, skips the first-level
     query (fixes the N+1 pattern where the LiveView already loaded them).
   - `:depth` — BFS depth from the center (default 3). Level 1 = direct
     neighbors, level 2 = neighbors of neighbors, etc.
@@ -72,7 +72,7 @@ defmodule DranWeb.GraphHelpers do
       else
         # Start BFS from scratch — first level uses list_relations_for_page,
         # subsequent levels use batch list_relations_for_pages.
-        rels = Brain.list_relations_for_page(page.id)
+        rels = Knowledge.list_relations_for_page(page.id)
         {first_neighbors, first_edges} = extract_neighbors(page.id, rels)
 
         bfs_expand(
@@ -195,7 +195,7 @@ defmodule DranWeb.GraphHelpers do
 
   defp bfs_expand(all_nodes, frontier, all_edges, visited, current_depth, max_depth, max_nodes) do
     # Fetch relations for all frontier pages in one batch
-    rels_by_page = Brain.list_relations_for_pages(frontier)
+    rels_by_page = Knowledge.list_relations_for_pages(frontier)
 
     {new_nodes, new_edges} =
       Enum.reduce(frontier, {[], []}, fn page_id, {nodes_acc, edges_acc} ->

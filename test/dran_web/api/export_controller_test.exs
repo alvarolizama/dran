@@ -1,7 +1,7 @@
 defmodule DranWeb.API.ExportControllerTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.Brain
+  alias Dran.Knowledge
 
   setup %{conn: conn} do
     {:ok, conn: put_req_header(conn, "authorization", "Bearer dran-token")}
@@ -9,10 +9,10 @@ defmodule DranWeb.API.ExportControllerTest do
 
   describe "GET /api/workspaces/:slug/export" do
     test "returns exported JSON with context, pages, and relations", %{conn: conn} do
-      context = Brain.get_workspace_by_slug("personal")
+      context = Knowledge.get_workspace_by_slug("personal")
 
       {:ok, page_a} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Page A",
           slug: "export-page-a",
@@ -23,7 +23,7 @@ defmodule DranWeb.API.ExportControllerTest do
         })
 
       {:ok, page_b} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Page B",
           slug: "export-page-b",
@@ -32,7 +32,7 @@ defmodule DranWeb.API.ExportControllerTest do
           tags: ["beta"]
         })
 
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: page_a.id,
         target_id: page_b.id,
         relation_type: "related"
@@ -81,10 +81,10 @@ defmodule DranWeb.API.ExportControllerTest do
 
   describe "GET /api/export/:workspace/full" do
     test "returns full export with pages, relations, and versions keys", %{conn: conn} do
-      context = Brain.get_workspace_by_slug("personal")
+      context = Knowledge.get_workspace_by_slug("personal")
 
       {:ok, page_a} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Full A",
           slug: "full-page-a",
@@ -93,10 +93,10 @@ defmodule DranWeb.API.ExportControllerTest do
         })
 
       # Create a version snapshot by updating the body
-      {:ok, _} = Brain.update_page(page_a, %{"body" => "v2 body"})
+      {:ok, _} = Knowledge.update_page(page_a, %{"body" => "v2 body"})
 
       {:ok, page_b} =
-        Brain.create_page(%{
+        Knowledge.create_page(%{
           workspace_id: context.id,
           title: "Full B",
           slug: "full-page-b",
@@ -104,7 +104,7 @@ defmodule DranWeb.API.ExportControllerTest do
           page_type: "concept"
         })
 
-      Brain.create_relation(%{
+      Knowledge.create_relation(%{
         source_id: page_a.id,
         target_id: page_b.id,
         relation_type: "related"

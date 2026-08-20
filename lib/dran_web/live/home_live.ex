@@ -19,7 +19,9 @@ defmodule DranWeb.HomeLive do
   import Ecto.Query
   import Phoenix.HTML, only: [raw: 1]
 
-  alias Dran.Brain
+  alias Dran.Knowledge
+
+  alias Dran.Collections
   alias Dran.Workspace
 
   alias Dran.PageTypes, as: BrainPageTypes
@@ -42,7 +44,7 @@ defmodule DranWeb.HomeLive do
     # workspace selector must therefore list every wiki-enabled workspace, not
     # just the current user's assigned contexts. `assign_to_socket` sets
     # `contexts` to the user's accessible contexts, so override it here.
-    socket = assign(socket, contexts: Brain.list_home_workspaces())
+    socket = assign(socket, contexts: Knowledge.list_home_workspaces())
 
     # Subscribe to PubSub for the workspace so the graph view can debounce
     # page_changed broadcasts and tell the hook to re-fetch — same pattern
@@ -86,7 +88,7 @@ defmodule DranWeb.HomeLive do
   # ── :index — landing page with all wiki-enabled contexts ──────────────────
 
   defp apply_action(socket, :index, _params) do
-    contexts = Brain.list_home_workspaces()
+    contexts = Knowledge.list_home_workspaces()
 
     socket
     |> assign(
@@ -103,15 +105,15 @@ defmodule DranWeb.HomeLive do
   # ── :workspace_home — collections + pinned + index by type ───────────────────
 
   defp apply_action(socket, :workspace_home, %{"workspace_slug" => workspace_slug}) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        collections = Brain.list_collections(workspace.id)
-        pinned = Brain.list_pinned_pages(workspace.id)
+        collections = Collections.list_collections(workspace.id)
+        pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
         # Load all non-archived pages for the A-Z index
         all_pages =
-          Brain.list_pages(
+          Knowledge.list_pages(
             workspace_id: workspace.id,
             limit: 500
           )
@@ -140,13 +142,13 @@ defmodule DranWeb.HomeLive do
          "workspace_slug" => workspace_slug,
          "page_type" => page_type
        }) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
         pages =
           if page_type == "todo" do
-            Brain.list_todos(workspace_id: workspace.id, limit: 500)
+            Knowledge.list_todos(workspace_id: workspace.id, limit: 500)
           else
-            Brain.list_pages(
+            Knowledge.list_pages(
               workspace_id: workspace.id,
               type: page_type,
               limit: 500
@@ -162,8 +164,8 @@ defmodule DranWeb.HomeLive do
           end
 
         # Sidebar data
-        collections = Brain.list_collections(workspace.id)
-        pinned = Brain.list_pinned_pages(workspace.id)
+        collections = Collections.list_collections(workspace.id)
+        pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
         socket
@@ -191,18 +193,18 @@ defmodule DranWeb.HomeLive do
          "page_type" => page_type,
          "slug" => slug
        }) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        case Brain.get_page_by_slug(slug, workspace.id) do
+        case Knowledge.get_page_by_slug(slug, workspace.id) do
           %{page_type: ^page_type} = page ->
             # Load page with full body
-            page = Brain.get_page!(page.id)
+            page = Knowledge.get_page!(page.id)
             rendered_body = render_wiki_markdown(page.body, workspace)
-            relations = Brain.list_relations_for_page(page.id)
+            relations = Knowledge.list_relations_for_page(page.id)
 
             # Sidebar data
-            collections = Brain.list_collections(workspace.id)
-            pinned = Brain.list_pinned_pages(workspace.id)
+            collections = Collections.list_collections(workspace.id)
+            pinned = Knowledge.list_pinned_pages(workspace.id)
             type_index = build_type_index(workspace)
 
             socket
@@ -230,9 +232,9 @@ defmodule DranWeb.HomeLive do
   # ── :collection — smart collection results in wiki mode ────────────────────
 
   defp apply_action(socket, :collection, %{"workspace_slug" => workspace_slug, "slug" => slug}) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        case Brain.get_collection_by_slug(slug, workspace.id) do
+        case Collections.get_collection_by_slug(slug, workspace.id) do
           nil ->
             push_navigate(socket, to: ~p"/#{workspace_slug}")
 
@@ -240,8 +242,8 @@ defmodule DranWeb.HomeLive do
             results = execute_filters(collection.filters || %{}, workspace.id)
 
             # Sidebar data
-            all_collections = Brain.list_collections(workspace.id)
-            pinned = Brain.list_pinned_pages(workspace.id)
+            all_collections = Collections.list_collections(workspace.id)
+            pinned = Knowledge.list_pinned_pages(workspace.id)
             type_index = build_type_index(workspace)
 
             socket
@@ -265,14 +267,14 @@ defmodule DranWeb.HomeLive do
   # ── :graph — graph view of the workspace (progressive, mirrors GraphLive) ───
 
   defp apply_action(socket, :graph, %{"workspace_slug" => workspace_slug}) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
         # Progressive: no data load here — the Graph3D hook fetches
         # /<workspace_slug>/graph/json via HTTP after the shell renders,
         # keeping initial page load instant. Same pattern as GraphLive panel.
         # Sidebar data
-        collections = Brain.list_collections(workspace.id)
-        pinned = Brain.list_pinned_pages(workspace.id)
+        collections = Collections.list_collections(workspace.id)
+        pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
         socket
@@ -304,13 +306,13 @@ defmodule DranWeb.HomeLive do
   ]
 
   defp apply_action(socket, :kanban, %{"workspace_slug" => workspace_slug}) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        todos = Brain.list_todos(workspace_id: workspace.id, limit: 500)
+        todos = Knowledge.list_todos(workspace_id: workspace.id, limit: 500)
 
         # Sidebar data
-        collections = Brain.list_collections(workspace.id)
-        pinned = Brain.list_pinned_pages(workspace.id)
+        collections = Collections.list_collections(workspace.id)
+        pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
         socket
@@ -333,17 +335,17 @@ defmodule DranWeb.HomeLive do
   # ── :letter — all pages starting with a given letter (read-only) ───────────
 
   defp apply_action(socket, :letter, %{"workspace_slug" => workspace_slug, "letter" => letter}) do
-    case Brain.get_workspace_by_slug(workspace_slug) do
+    case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        all_pages = Brain.list_pages(workspace_id: workspace.id, limit: 500)
+        all_pages = Knowledge.list_pages(workspace_id: workspace.id, limit: 500)
 
         letter = String.upcase(letter)
         grouped = group_alphabetically(all_pages)
         pages = Enum.find_value(grouped, [], fn {l, p} -> if l == letter, do: p end)
 
         # Sidebar data
-        collections = Brain.list_collections(workspace.id)
-        pinned = Brain.list_pinned_pages(workspace.id)
+        collections = Collections.list_collections(workspace.id)
+        pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
         alphabet = build_alphabet(all_pages)
 
@@ -1212,7 +1214,7 @@ defmodule DranWeb.HomeLive do
             [limit: 30]
           end
 
-        case Brain.search(query, opts) do
+        case Knowledge.search(query, opts) do
           {:ok, res} -> res
           _ -> []
         end
@@ -1298,7 +1300,7 @@ defmodule DranWeb.HomeLive do
       |> maybe_add_filter(:tag, filters["tag"])
       |> maybe_add_filter(:owner, filters["owner"])
 
-    Brain.list_pages(opts)
+    Knowledge.list_pages(opts)
   end
 
   defp execute_filters(_filters, _workspace_id), do: []
@@ -1424,7 +1426,7 @@ defmodule DranWeb.HomeLive do
     if slugs == [] do
       %{}
     else
-      slug_types = Brain.get_pages_by_slugs(slugs, workspace.id)
+      slug_types = Knowledge.get_pages_by_slugs(slugs, workspace.id)
 
       Enum.reduce(slugs, %{}, fn slug, acc ->
         case Map.get(slug_types, slug) do

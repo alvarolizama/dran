@@ -84,7 +84,7 @@ defmodule DranWeb.SessionController do
         true -> Accounts.list_user_workspaces(user) |> Enum.map(& &1.slug)
       end
 
-    context = Dran.Brain.get_workspace_by_slug(workspace_slug)
+    context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
 
     cond do
       is_nil(context) ->
