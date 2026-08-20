@@ -25,8 +25,8 @@ defmodule Dran.BrainTest do
     end)
 
     context =
-      Brain.get_context_by_slug("personal") ||
-        elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+      Brain.get_workspace_by_slug("personal") ||
+        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -35,7 +35,7 @@ defmodule Dran.BrainTest do
     test "enabled_page_types/1 returns all types minus disabled", %{context: ctx} do
       assert Brain.enabled_page_types(ctx) == Brain.page_types()
 
-      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["todo", "goal"]})
+      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["todo", "goal"]})
 
       enabled = Brain.enabled_page_types(ctx)
       refute "todo" in enabled
@@ -44,7 +44,7 @@ defmodule Dran.BrainTest do
     end
 
     test "page_type_enabled?/2 reflects disabled types", %{context: ctx} do
-      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["reference"]})
+      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
 
       refute Brain.page_type_enabled?(ctx, "reference")
       assert Brain.page_type_enabled?(ctx, "note")
@@ -55,21 +55,21 @@ defmodule Dran.BrainTest do
       assert Brain.page_type_enabled?(nil, "project")
     end
 
-    test "update_context_settings/2 rejects invalid page types", %{context: ctx} do
+    test "update_workspace_settings/2 rejects invalid page types", %{context: ctx} do
       assert {:error, changeset} =
-               Brain.update_context_settings(ctx, %{disabled_page_types: ["bogus_type"]})
+               Brain.update_workspace_settings(ctx, %{disabled_page_types: ["bogus_type"]})
 
       assert %{disabled_page_types: [_]} = errors_on(changeset)
     end
 
     test "create_page/1 rejects disabled page types", %{context: ctx} do
-      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["query"]})
+      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["query"]})
 
       assert {:error, :page_type_disabled} =
                Brain.create_page(%{
                  "title" => "Disabled type page",
                  "page_type" => "query",
-                 "context_id" => ctx.id,
+                 "workspace_id" => ctx.id,
                  "body" => "should not be created"
                })
 
@@ -78,7 +78,7 @@ defmodule Dran.BrainTest do
                Brain.create_page(%{
                  "title" => "Enabled type page",
                  "page_type" => "note",
-                 "context_id" => ctx.id,
+                 "workspace_id" => ctx.id,
                  "body" => "works fine"
                })
     end
@@ -88,7 +88,7 @@ defmodule Dran.BrainTest do
         Brain.create_page(%{
           "title" => "Hidden todo",
           "page_type" => "todo",
-          "context_id" => ctx.id,
+          "workspace_id" => ctx.id,
           "body" => "a todo"
         })
 
@@ -96,18 +96,18 @@ defmodule Dran.BrainTest do
         Brain.create_page(%{
           "title" => "Visible note",
           "page_type" => "note",
-          "context_id" => ctx.id,
+          "workspace_id" => ctx.id,
           "body" => "a note"
         })
 
       # Before disabling, todo appears
-      pages = Brain.list_pages(context_id: ctx.id)
+      pages = Brain.list_pages(workspace_id: ctx.id)
       assert Enum.any?(pages, &(&1.page_type == "todo"))
 
       # After disabling, todo is hidden
-      {:ok, ctx} = Brain.update_context_settings(ctx, %{disabled_page_types: ["todo"]})
+      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["todo"]})
 
-      pages = Brain.list_pages(context_id: ctx.id)
+      pages = Brain.list_pages(workspace_id: ctx.id)
       refute Enum.any?(pages, &(&1.page_type == "todo"))
       assert Enum.any?(pages, &(&1.page_type == "note"))
     end
@@ -117,7 +117,7 @@ defmodule Dran.BrainTest do
     test "derives slug with accent normalization", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Meditación",
           page_type: "note",
           body: "x"
@@ -129,7 +129,7 @@ defmodule Dran.BrainTest do
     test "derives slug from body first line when title is missing", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           page_type: "note",
           body: "¿Qué onda con la Tántrica?\nresto del body"
         })
@@ -140,7 +140,7 @@ defmodule Dran.BrainTest do
     test "auto-deduplicates slug on collision with hex suffix", %{context: ctx} do
       {:ok, first} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Reunión semanal",
           page_type: "note",
           body: "x"
@@ -148,7 +148,7 @@ defmodule Dran.BrainTest do
 
       {:ok, second} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Reunión semanal",
           page_type: "note",
           body: "y"
@@ -163,7 +163,7 @@ defmodule Dran.BrainTest do
     test "auto-deduplicates untitled pages", %{context: ctx} do
       {:ok, first} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "你好世界",
           page_type: "note",
           body: "x"
@@ -171,7 +171,7 @@ defmodule Dran.BrainTest do
 
       {:ok, second} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "你好世界",
           page_type: "note",
           body: "y"
@@ -186,7 +186,7 @@ defmodule Dran.BrainTest do
     test "respects explicit slug even if duplicate (returns error)", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "A",
           slug: "explicit-dup-test",
           page_type: "note"
@@ -194,7 +194,7 @@ defmodule Dran.BrainTest do
 
       {:error, changeset} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "B",
           slug: "explicit-dup-test",
           page_type: "note"
@@ -203,7 +203,7 @@ defmodule Dran.BrainTest do
       # When the user explicitly passes a slug, we don't auto-dedup —
       # we surface the unique constraint error so they can choose a different one.
       errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)
-      assert errors[:slug] || errors[:context_id]
+      assert errors[:slug] || errors[:workspace_id]
     end
   end
 
@@ -211,7 +211,7 @@ defmodule Dran.BrainTest do
     test "create_page resolves ![[embed]] into embeds relation", %{context: ctx} do
       {:ok, target_page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "File",
           slug: "file-a",
           page_type: "note"
@@ -219,7 +219,7 @@ defmodule Dran.BrainTest do
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Note",
           slug: "note-a",
           page_type: "note",
@@ -233,14 +233,14 @@ defmodule Dran.BrainTest do
 
     test "update_page removes stale embeds relations", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "a", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "A", slug: "a", page_type: "note"})
 
       {:ok, b} =
-        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "b", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "B", slug: "b", page_type: "note"})
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "N",
           slug: "n",
           page_type: "note",
@@ -263,7 +263,7 @@ defmodule Dran.BrainTest do
     test "updates embed references in other pages", %{context: ctx} do
       {:ok, art} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Art",
           slug: "old-art",
           page_type: "note"
@@ -271,7 +271,7 @@ defmodule Dran.BrainTest do
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "N",
           slug: "n",
           page_type: "note",
@@ -288,7 +288,7 @@ defmodule Dran.BrainTest do
     test "embeds relation follows the renamed slug", %{context: ctx} do
       {:ok, art} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Art2",
           slug: "old-art2",
           page_type: "note"
@@ -296,7 +296,7 @@ defmodule Dran.BrainTest do
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "N2",
           slug: "n2",
           page_type: "note",
@@ -321,7 +321,7 @@ defmodule Dran.BrainTest do
       uniq = System.unique_integer([:positive])
 
       {:ok, ctx} =
-        Brain.create_context(%{name: "Graph #{uniq}", slug: "graph-#{uniq}"})
+        Brain.create_workspace(%{name: "Graph #{uniq}", slug: "graph-#{uniq}"})
 
       {:ok, context: ctx}
     end
@@ -329,7 +329,7 @@ defmodule Dran.BrainTest do
     test "exposes weight on edges and summary/tags on nodes", %{context: ctx} do
       {:ok, a} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Concept A",
           slug: "concept-a",
           page_type: "concept",
@@ -339,7 +339,7 @@ defmodule Dran.BrainTest do
 
       {:ok, b} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Concept B",
           slug: "concept-b",
           page_type: "concept",
@@ -371,8 +371,8 @@ defmodule Dran.BrainTest do
     end
 
     test "exclude_types filters the operational layer in SQL", %{context: ctx} do
-      {:ok, note} = Brain.create_page(%{context_id: ctx.id, title: "Note", page_type: "note"})
-      {:ok, todo} = Brain.create_page(%{context_id: ctx.id, title: "Todo", page_type: "todo"})
+      {:ok, note} = Brain.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
+      {:ok, todo} = Brain.create_page(%{workspace_id: ctx.id, title: "Todo", page_type: "todo"})
 
       {:ok, _} =
         Brain.create_relation(%{
@@ -392,10 +392,10 @@ defmodule Dran.BrainTest do
     test "registry-hidden types (todo, plan, report) keep report pages out of the graph", %{
       context: ctx
     } do
-      {:ok, note} = Brain.create_page(%{context_id: ctx.id, title: "Note", page_type: "note"})
+      {:ok, note} = Brain.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
 
       {:ok, report} =
-        Brain.create_page(%{context_id: ctx.id, title: "Report", page_type: "report"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "Report", page_type: "report"})
 
       {:ok, _} =
         Brain.create_relation(%{
@@ -416,10 +416,10 @@ defmodule Dran.BrainTest do
 
     test "max_nodes caps to the most-connected pages and reports real totals", %{context: ctx} do
       # Hub page with 3 relations — always makes the cut
-      {:ok, hub} = Brain.create_page(%{context_id: ctx.id, title: "Hub", page_type: "note"})
+      {:ok, hub} = Brain.create_page(%{workspace_id: ctx.id, title: "Hub", page_type: "note"})
 
       # A todo that must never appear when the operational layer is excluded
-      {:ok, todo} = Brain.create_page(%{context_id: ctx.id, title: "Todo", page_type: "todo"})
+      {:ok, todo} = Brain.create_page(%{workspace_id: ctx.id, title: "Todo", page_type: "todo"})
 
       {:ok, _} =
         Brain.create_relation(%{
@@ -433,7 +433,7 @@ defmodule Dran.BrainTest do
         for i <- 1..3 do
           {:ok, leaf} =
             Brain.create_page(%{
-              context_id: ctx.id,
+              workspace_id: ctx.id,
               title: "Leaf #{i}",
               slug: "leaf-#{i}",
               page_type: "note"
@@ -467,8 +467,8 @@ defmodule Dran.BrainTest do
     end
 
     test "max_nodes above the page count returns everything (no cap artifacts)", %{context: ctx} do
-      {:ok, _a} = Brain.create_page(%{context_id: ctx.id, title: "A", page_type: "note"})
-      {:ok, _b} = Brain.create_page(%{context_id: ctx.id, title: "B", page_type: "note"})
+      {:ok, _a} = Brain.create_page(%{workspace_id: ctx.id, title: "A", page_type: "note"})
+      {:ok, _b} = Brain.create_page(%{workspace_id: ctx.id, title: "B", page_type: "note"})
 
       graph = Brain.graph_data(ctx.id, max_nodes: 100)
 
@@ -477,10 +477,10 @@ defmodule Dran.BrainTest do
     end
 
     test "graph_type_counts groups real totals per type", %{context: ctx} do
-      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "N1", page_type: "note"})
-      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "N2", page_type: "note"})
-      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "G1", page_type: "goal"})
-      {:ok, _} = Brain.create_page(%{context_id: ctx.id, title: "T1", page_type: "todo"})
+      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "N1", page_type: "note"})
+      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "N2", page_type: "note"})
+      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "G1", page_type: "goal"})
+      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "T1", page_type: "todo"})
 
       assert Brain.graph_type_counts(ctx.id) == %{"note" => 2, "goal" => 1, "todo" => 1}
       assert Brain.graph_type_counts(ctx.id, ~w(todo plan)) == %{"note" => 2, "goal" => 1}
@@ -491,7 +491,7 @@ defmodule Dran.BrainTest do
     test "batches relations for multiple pages in two queries", %{context: ctx} do
       {:ok, a} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Batch A",
           slug: "batch-a",
           page_type: "note"
@@ -499,7 +499,7 @@ defmodule Dran.BrainTest do
 
       {:ok, b} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Batch B",
           slug: "batch-b",
           page_type: "note"
@@ -507,7 +507,7 @@ defmodule Dran.BrainTest do
 
       {:ok, c} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Batch C",
           slug: "batch-c",
           page_type: "note"
@@ -515,7 +515,7 @@ defmodule Dran.BrainTest do
 
       {:ok, isolated} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Batch Iso",
           slug: "batch-iso",
           page_type: "note"
@@ -549,8 +549,8 @@ defmodule Dran.BrainTest do
     end
 
     test "returns empty map when no pages have relations", %{context: ctx} do
-      {:ok, a} = Brain.create_page(%{context_id: ctx.id, title: "Lonely A", page_type: "note"})
-      {:ok, b} = Brain.create_page(%{context_id: ctx.id, title: "Lonely B", page_type: "note"})
+      {:ok, a} = Brain.create_page(%{workspace_id: ctx.id, title: "Lonely A", page_type: "note"})
+      {:ok, b} = Brain.create_page(%{workspace_id: ctx.id, title: "Lonely B", page_type: "note"})
 
       assert Brain.list_relations_for_pages([a.id, b.id]) == %{}
     end
@@ -560,7 +560,7 @@ defmodule Dran.BrainTest do
     test "list_pages filters by meta.props with AND logic", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Sales VIP",
           slug: "sales-vip",
           page_type: "entity",
@@ -569,7 +569,7 @@ defmodule Dran.BrainTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Sales Regular",
           slug: "sales-reg",
           page_type: "entity",
@@ -578,7 +578,7 @@ defmodule Dran.BrainTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Marketing VIP",
           slug: "mkt-vip",
           page_type: "entity",
@@ -588,7 +588,7 @@ defmodule Dran.BrainTest do
       # Single prop filter (filter by the slugs we just created to avoid
       # interference from other tests in the same context)
       sales =
-        Brain.list_pages(context_id: ctx.id, props: %{"role" => "sales"})
+        Brain.list_pages(workspace_id: ctx.id, props: %{"role" => "sales"})
         |> Enum.filter(&(&1.slug in ["sales-vip", "sales-reg"]))
 
       assert length(sales) == 2
@@ -596,21 +596,21 @@ defmodule Dran.BrainTest do
 
       # Multiple props (AND logic)
       sales_vip =
-        Brain.list_pages(context_id: ctx.id, props: %{"role" => "sales", "tier" => "vip"})
+        Brain.list_pages(workspace_id: ctx.id, props: %{"role" => "sales", "tier" => "vip"})
         |> Enum.filter(&(&1.slug in ["sales-vip", "sales-reg", "mkt-vip"]))
 
       assert length(sales_vip) == 1
       assert hd(sales_vip).slug == "sales-vip"
 
       # No match
-      none = Brain.list_pages(context_id: ctx.id, props: %{"role" => "engineering"})
+      none = Brain.list_pages(workspace_id: ctx.id, props: %{"role" => "engineering"})
       assert none == []
     end
 
     test "search filters by props post-query", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Elixir Phoenix Guide",
           slug: "elixir-guide",
           page_type: "reference",
@@ -620,7 +620,7 @@ defmodule Dran.BrainTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Python Django Guide",
           slug: "python-guide",
           page_type: "reference",
@@ -629,13 +629,13 @@ defmodule Dran.BrainTest do
         })
 
       # Search without props filter (baseline)
-      {:ok, all} = Brain.search("guide", context_id: ctx.id, strategy: :fts)
+      {:ok, all} = Brain.search("guide", workspace_id: ctx.id, strategy: :fts)
       assert length(all) == 2
 
       # Search with props filter
       {:ok, elixir_only} =
         Brain.search("guide",
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           strategy: :fts,
           props: %{"language" => "elixir"}
         )
@@ -647,7 +647,7 @@ defmodule Dran.BrainTest do
       # Multiple props
       {:ok, phoenix_only} =
         Brain.search("guide",
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           strategy: :fts,
           props: %{"language" => "elixir", "framework" => "phoenix"}
         )
@@ -661,7 +661,7 @@ defmodule Dran.BrainTest do
     test "diffs v1 against current body with added/removed lines", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Diffable",
           slug: "diffable",
           page_type: "note",
@@ -691,7 +691,7 @@ defmodule Dran.BrainTest do
     test "returns error for non-existent version", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "NoVer",
           slug: "no-ver",
           page_type: "note",
@@ -707,7 +707,7 @@ defmodule Dran.BrainTest do
       # Create some pages and relations so the metrics are non-trivial
       {:ok, a} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Metric A",
           slug: "metric-a",
           page_type: "note",
@@ -716,7 +716,7 @@ defmodule Dran.BrainTest do
 
       {:ok, b} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Metric B",
           slug: "metric-b",
           page_type: "concept",
@@ -770,7 +770,7 @@ defmodule Dran.BrainTest do
 
     test "embedding_coverage is 0.0 when context has no pages" do
       # Use a fresh context with no pages
-      {:ok, empty_ctx} = Brain.create_context(%{name: "Empty Metrics", slug: "empty-metrics"})
+      {:ok, empty_ctx} = Brain.create_workspace(%{name: "Empty Metrics", slug: "empty-metrics"})
 
       metrics = Brain.metrics(empty_ctx.id)
       assert metrics.embedding_coverage == 0.0
@@ -787,7 +787,7 @@ defmodule Dran.BrainTest do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
       Dran.Repo.insert!(%Dran.Agent.Session{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         agent_type: "ask",
         input: "test query",
         status: "done",
@@ -807,7 +807,7 @@ defmodule Dran.BrainTest do
     test "create_page with body containing only ![[embed]] derives Untitled", %{context: ctx} do
       {:ok, target_page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "File Page",
           slug: "file-page-1",
           page_type: "note"
@@ -815,7 +815,7 @@ defmodule Dran.BrainTest do
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           page_type: "note",
           body: "![[file-page-1]]"
         })
@@ -831,7 +831,7 @@ defmodule Dran.BrainTest do
     test "create_page with embed + text uses the text line as title", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           page_type: "note",
           body: "![[nonexistent]]\nActual Title Here"
         })
@@ -842,7 +842,7 @@ defmodule Dran.BrainTest do
     test "create_page with body containing only [[wikilink]] derives Untitled", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           page_type: "note",
           body: "[[Some Link]]"
         })
@@ -854,14 +854,14 @@ defmodule Dran.BrainTest do
   describe "edge cases — reresolve_embeds with empty body" do
     test "clears all embeds when body becomes empty", %{context: ctx} do
       {:ok, _a} =
-        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "ea", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "A", slug: "ea", page_type: "note"})
 
       {:ok, _b} =
-        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "eb", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "B", slug: "eb", page_type: "note"})
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "N",
           slug: "en",
           page_type: "note",
@@ -887,11 +887,11 @@ defmodule Dran.BrainTest do
 
     test "reresolve_embeds directly with empty body", %{context: ctx} do
       {:ok, a} =
-        Brain.create_page(%{context_id: ctx.id, title: "A2", slug: "ea2", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "A2", slug: "ea2", page_type: "note"})
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "N2",
           slug: "en2",
           page_type: "note",
@@ -923,7 +923,7 @@ defmodule Dran.BrainTest do
     } do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Test",
           slug: "My-Page",
           page_type: "note"
@@ -936,7 +936,7 @@ defmodule Dran.BrainTest do
     test "preserves semantic relations (by IDs) when page is relation target", %{context: ctx} do
       {:ok, target} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Target",
           slug: "target-page",
           page_type: "concept"
@@ -944,7 +944,7 @@ defmodule Dran.BrainTest do
 
       {:ok, source} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Source",
           slug: "source-page",
           page_type: "concept"
@@ -969,7 +969,7 @@ defmodule Dran.BrainTest do
 
   describe "edge cases — Brain.stats" do
     test "returns valid stats for context with 0 pages" do
-      {:ok, empty_ctx} = Brain.create_context(%{name: "Empty Context", slug: "empty-ctx"})
+      {:ok, empty_ctx} = Brain.create_workspace(%{name: "Empty Context", slug: "empty-ctx"})
 
       stats = Brain.stats(empty_ctx.id)
 
@@ -986,7 +986,7 @@ defmodule Dran.BrainTest do
     test "returns slug in not_found without creating broken relation", %{context: ctx} do
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Note",
           slug: "note-missing",
           page_type: "note",
@@ -1011,7 +1011,7 @@ defmodule Dran.BrainTest do
     test "mixed existing and non-existent embeds", %{context: ctx} do
       {:ok, target_page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Art",
           slug: "art-exists",
           page_type: "note"
@@ -1019,7 +1019,7 @@ defmodule Dran.BrainTest do
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "N",
           slug: "n-mixed",
           page_type: "note",

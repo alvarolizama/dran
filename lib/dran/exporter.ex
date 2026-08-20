@@ -8,7 +8,7 @@ defmodule Dran.Exporter do
 
   alias Dran.Repo
   alias Dran.Brain
-  alias Dran.Brain.{Context, Page, Relation, PageVersion}
+  alias Dran.Brain.{Workspace, Page, Relation, PageVersion}
 
   @doc """
   Export a context by slug.
@@ -19,17 +19,17 @@ defmodule Dran.Exporter do
   The returned map is directly JSON-serializable and contains:
 
     * `exported_at` — UTC timestamp string
-    * `context`     — `%{name, slug, description}`
+    * `workspace`     — `%{name, slug, description}`
     * `pages`       — list of page maps (slug, title, page_type, body,
                       summary, tags, meta, timestamps)
     * `relations`   — list of `%{source_slug, target_slug, relation_type}`
   """
-  def export_context(context_slug) when is_binary(context_slug) do
-    case Brain.get_context_by_slug(context_slug) do
+  def export_context(workspace_slug) when is_binary(workspace_slug) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
       nil ->
         {:error, :not_found}
 
-      %Dran.Brain.Context{} = context ->
+      %Dran.Brain.Workspace{} = context ->
         pages = load_pages(context.id)
 
         page_ids = Enum.map(pages, & &1.id)
@@ -39,7 +39,7 @@ defmodule Dran.Exporter do
 
         data = %{
           exported_at: DateTime.utc_now() |> DateTime.to_iso8601(),
-          context: %{
+          workspace: %{
             name: context.name,
             slug: context.slug,
             description: nil
@@ -61,19 +61,19 @@ defmodule Dran.Exporter do
   The returned map contains:
 
     * `exported_at` — UTC timestamp string
-    * `context`     — `%{id, name, slug, inserted_at}`
+    * `workspace`     — `%{id, name, slug, inserted_at}`
     * `pages`       — list of page maps (slug, title, page_type, body,
                       summary, tags, meta, version, timestamps)
     * `relations`   — list of `%{source_slug, target_slug, relation_type, weight}`
     * `versions`    — list of all page_version snapshots for those pages
                       `%{page_slug, version, body, body_hash, changed_by, inserted_at}`
   """
-  def full_export(context_id) when is_binary(context_id) do
-    case Repo.get(Context, context_id) do
+  def full_export(workspace_id) when is_binary(workspace_id) do
+    case Repo.get(Workspace, workspace_id) do
       nil ->
         {:error, :not_found}
 
-      %Context{} = context ->
+      %Workspace{} = context ->
         pages = load_pages(context.id)
         page_ids = Enum.map(pages, & &1.id)
         slug_by_id = Map.new(pages, &{&1.id, &1.slug})
@@ -83,7 +83,7 @@ defmodule Dran.Exporter do
 
         data = %{
           exported_at: DateTime.utc_now() |> DateTime.to_iso8601(),
-          context: %{
+          workspace: %{
             id: context.id,
             name: context.name,
             slug: context.slug,
@@ -100,10 +100,10 @@ defmodule Dran.Exporter do
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 
-  defp load_pages(context_id) do
+  defp load_pages(workspace_id) do
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id,
+        where: p.workspace_id == ^workspace_id,
         order_by: [asc: p.slug]
     )
   end

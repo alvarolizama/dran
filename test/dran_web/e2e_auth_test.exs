@@ -4,12 +4,12 @@ defmodule DranWeb.E2EAuthTest do
   alias Dran.{Accounts, Brain}
 
   setup %{conn: conn} do
-    # Create admin user
+    # Create owner user
     {:ok, admin} =
       Accounts.create_user(%{
         email: "admin@example.com",
         name: "Admin",
-        is_admin: true
+        is_owner: true
       })
 
     # Create regular user with limited contexts
@@ -22,22 +22,25 @@ defmodule DranWeb.E2EAuthTest do
     # Create contexts — use unique slugs/names so they don't collide with
     # fixtures created by other async:false tests sharing this database.
     unique = System.unique_integer([:positive])
-    {:ok, ctx1} = Brain.create_context(%{name: "Personal #{unique}", slug: "personal-#{unique}"})
-    {:ok, ctx2} = Brain.create_context(%{name: "Work #{unique}", slug: "work-#{unique}"})
+
+    {:ok, ctx1} =
+      Brain.create_workspace(%{name: "Personal #{unique}", slug: "personal-#{unique}"})
+
+    {:ok, ctx2} = Brain.create_workspace(%{name: "Work #{unique}", slug: "work-#{unique}"})
 
     # Assign user to only the personal context
-    Accounts.add_user_to_context(user, ctx1)
+    Accounts.add_user_to_workspace(user, ctx1)
 
     {:ok, conn: conn, admin: admin, user: user, ctx1: ctx1, ctx2: ctx2}
   end
 
-  test "admin can access all contexts", %{admin: admin, ctx1: _ctx1, ctx2: _ctx2} do
-    assert Accounts.is_admin?(admin)
-    assert Accounts.list_user_contexts(admin) == []
+  test "owner can access all contexts", %{admin: admin, ctx1: _ctx1, ctx2: _ctx2} do
+    assert Accounts.is_owner?(admin)
+    assert Accounts.list_user_workspaces(admin) == []
   end
 
   test "regular user only sees assigned contexts", %{user: user, ctx1: ctx1, ctx2: ctx2} do
-    contexts = Accounts.list_user_contexts(user)
+    contexts = Accounts.list_user_workspaces(user)
     assert length(contexts) == 1
     assert hd(contexts).id == ctx1.id
     refute Enum.map(contexts, & &1.id) |> Enum.member?(ctx2.id)
@@ -46,7 +49,7 @@ defmodule DranWeb.E2EAuthTest do
   test "user api_token works for all assigned contexts", %{user: user, ctx1: ctx1} do
     assert {:ok, authed} = Accounts.valid_token?(user.api_token)
     assert authed.id == user.id
-    assert Enum.map(authed.contexts, & &1.id) |> Enum.member?(ctx1.id)
+    assert Enum.map(authed.workspaces, & &1.id) |> Enum.member?(ctx1.id)
   end
 
   test "unknown api_token is rejected", %{} do
@@ -71,7 +74,7 @@ defmodule DranWeb.E2EAuthTest do
       conn
       |> Plug.Conn.put_req_header("authorization", "Bearer #{user.api_token}")
       |> Plug.Conn.put_req_header("accept", "application/json")
-      |> Phoenix.ConnTest.post("/api/mcp", %{"context" => ctx2.slug})
+      |> Phoenix.ConnTest.post("/api/mcp", %{"workspace" => ctx2.slug})
 
     assert conn.status == 403
   end
@@ -83,7 +86,7 @@ defmodule DranWeb.E2EAuthTest do
   } do
     # A valid JSON-RPC request scoped to a context the user can access must
     # be accepted (200) and served.
-    msg = %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => 1, "context" => ctx1.slug}
+    msg = %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => 1, "workspace" => ctx1.slug}
 
     conn =
       conn
@@ -97,7 +100,7 @@ defmodule DranWeb.E2EAuthTest do
 
   describe "context-scoped API keys" do
     test "create_api_key returns plaintext token once, stores only hash + prefix", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
 
       assert is_binary(key.token)
       assert String.length(key.token) > 30
@@ -107,15 +110,15 @@ defmodule DranWeb.E2EAuthTest do
     end
 
     test "valid_api_key? accepts active keys and preloads the context", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
 
       assert {:ok, found} = Accounts.valid_api_key?(key.token)
       assert found.id == key.id
-      assert found.context.slug == ctx1.slug
+      assert Enum.any?(found.api_key_workspaces, &(&1.workspace.slug == ctx1.slug))
     end
 
     test "revoked keys fail validation, restored keys work again", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
 
       {:ok, revoked} = Accounts.revoke_api_key(key)
       assert revoked.revoked_at
@@ -126,7 +129,7 @@ defmodule DranWeb.E2EAuthTest do
     end
 
     test "regenerate_api_key invalidates the old token and returns a new one", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
       old_token = key.token
 
       {:ok, regenerated} = Accounts.regenerate_api_key(key)
@@ -137,7 +140,7 @@ defmodule DranWeb.E2EAuthTest do
     end
 
     test "regenerating a revoked key reactivates it", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
       {:ok, revoked} = Accounts.revoke_api_key(key)
 
       {:ok, regenerated} = Accounts.regenerate_api_key(revoked)
@@ -149,8 +152,8 @@ defmodule DranWeb.E2EAuthTest do
       conn: conn,
       ctx1: ctx1
     } do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
-      msg = %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => 1, "context" => ctx1.slug}
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
+      msg = %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => 1, "workspace" => ctx1.slug}
 
       conn =
         conn
@@ -166,64 +169,64 @@ defmodule DranWeb.E2EAuthTest do
       ctx1: ctx1,
       ctx2: ctx2
     } do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
 
       conn =
         conn
         |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
         |> Plug.Conn.put_req_header("accept", "application/json")
-        |> Phoenix.ConnTest.post("/api/mcp", %{"context" => ctx2.slug})
+        |> Phoenix.ConnTest.post("/api/mcp", %{"workspace" => ctx2.slug})
 
       assert conn.status == 403
     end
 
     test "MCP rejects a revoked key", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
       {:ok, _} = Accounts.revoke_api_key(key)
 
       conn =
         conn
         |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
         |> Plug.Conn.put_req_header("accept", "application/json")
-        |> Phoenix.ConnTest.post("/api/mcp", %{"context" => ctx1.slug})
+        |> Phoenix.ConnTest.post("/api/mcp", %{"workspace" => ctx1.slug})
 
       assert conn.status == 401
     end
 
     test "deleting a context cascade-deletes its API keys", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
 
-      {:ok, _} = Brain.delete_context(ctx1)
+      {:ok, _} = Brain.delete_workspace(ctx1)
 
       assert Accounts.valid_api_key?(key.token) == :error
       refute Dran.Repo.get(Accounts.ApiKey, key.id)
     end
 
     test "new API key defaults to read-only (write_access=false)", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
-      assert key.write_access == false
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
+      refute Dran.Accounts.ApiKey.write_access?(key)
     end
 
     test "create_api_key with write_access: true", %{ctx1: ctx1} do
       {:ok, key} =
-        Accounts.create_api_key(%{name: "Writer", context_id: ctx1.id, write_access: true})
+        Accounts.create_api_key(%{name: "Writer", workspace_id: ctx1.id, write_access: true})
 
-      assert key.write_access == true
+      assert Dran.Accounts.ApiKey.write_access?(key)
     end
 
     test "update_api_key toggles write_access", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
-      assert key.write_access == false
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
+      refute Dran.Accounts.ApiKey.write_access?(key)
 
       {:ok, updated} = Accounts.update_api_key(key, %{write_access: true})
-      assert updated.write_access == true
+      assert Dran.Accounts.ApiKey.write_access?(updated)
 
       {:ok, updated2} = Accounts.update_api_key(updated, %{write_access: false})
-      assert updated2.write_access == false
+      refute Dran.Accounts.ApiKey.write_access?(updated2)
     end
 
     test "MCP read-only key can call read tools (search)", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
 
       msg = %{
         "jsonrpc" => "2.0",
@@ -231,7 +234,7 @@ defmodule DranWeb.E2EAuthTest do
         "id" => 1,
         "params" => %{
           "name" => "dran_search",
-          "arguments" => %{"query" => "test", "context" => ctx1.slug}
+          "arguments" => %{"query" => "test", "workspace" => ctx1.slug}
         }
       }
 
@@ -247,7 +250,7 @@ defmodule DranWeb.E2EAuthTest do
 
   describe "write_access enforcement — MCP" do
     test "read-only key is blocked from dran_create_page", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
 
       msg = %{
         "jsonrpc" => "2.0",
@@ -255,7 +258,7 @@ defmodule DranWeb.E2EAuthTest do
         "id" => 1,
         "params" => %{
           "name" => "dran_create_page",
-          "arguments" => %{"context" => ctx1.slug, "page_type" => "note", "title" => "Test"}
+          "arguments" => %{"workspace" => ctx1.slug, "page_type" => "note", "title" => "Test"}
         }
       }
 
@@ -271,7 +274,7 @@ defmodule DranWeb.E2EAuthTest do
     end
 
     test "read-only key is blocked from dran_create_todo", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", context_id: ctx1.id})
+      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
 
       msg = %{
         "jsonrpc" => "2.0",
@@ -279,7 +282,7 @@ defmodule DranWeb.E2EAuthTest do
         "id" => 1,
         "params" => %{
           "name" => "dran_create_todo",
-          "arguments" => %{"context" => ctx1.slug, "title" => "T", "slug" => "t"}
+          "arguments" => %{"workspace" => ctx1.slug, "title" => "T", "slug" => "t"}
         }
       }
 
@@ -296,7 +299,7 @@ defmodule DranWeb.E2EAuthTest do
 
     test "write-enabled key can call dran_create_page", %{conn: conn, ctx1: ctx1} do
       {:ok, key} =
-        Accounts.create_api_key(%{name: "Writer", context_id: ctx1.id, write_access: true})
+        Accounts.create_api_key(%{name: "Writer", workspace_id: ctx1.id, write_access: true})
 
       msg = %{
         "jsonrpc" => "2.0",
@@ -305,7 +308,7 @@ defmodule DranWeb.E2EAuthTest do
         "params" => %{
           "name" => "dran_create_page",
           "arguments" => %{
-            "context" => ctx1.slug,
+            "workspace" => ctx1.slug,
             "page_type" => "note",
             "title" => "Write test",
             "slug" => "write-test-#{System.unique_integer([:positive])}"
@@ -334,7 +337,7 @@ defmodule DranWeb.E2EAuthTest do
         "params" => %{
           "name" => "dran_create_page",
           "arguments" => %{
-            "context" => ctx1.slug,
+            "workspace" => ctx1.slug,
             "page_type" => "note",
             "title" => "Admin test",
             "slug" => "admin-test-#{System.unique_integer([:positive])}"
@@ -357,10 +360,10 @@ defmodule DranWeb.E2EAuthTest do
   describe "per-user default context" do
     test "set_default_context persists the slug", %{user: user, ctx2: ctx2} do
       {:ok, updated} = Accounts.set_default_context(user, ctx2.slug)
-      assert updated.default_context_slug == ctx2.slug
+      assert updated.default_workspace_slug == ctx2.slug
 
       reloaded = Accounts.get_user!(user.id)
-      assert reloaded.default_context_slug == ctx2.slug
+      assert reloaded.default_workspace_slug == ctx2.slug
     end
   end
 
@@ -372,9 +375,9 @@ defmodule DranWeb.E2EAuthTest do
     } do
       conn =
         conn
-        |> init_test_session(%{user: admin.email, context_slug: ctx1.slug})
+        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
 
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/settings/contexts")
+      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/settings/workspaces")
 
       # The contexts tab renders the create form and the existing contexts
       assert html =~ "context-form"
@@ -391,9 +394,9 @@ defmodule DranWeb.E2EAuthTest do
     } do
       conn =
         conn
-        |> init_test_session(%{user: admin.email, context_slug: ctx1.slug})
+        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
 
-      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/settings/contexts")
+      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/settings/workspaces")
 
       # Open the modal for ctx1
       html = Phoenix.LiveViewTest.render_click(view, "manage_context_users", %{"id" => ctx1.id})
@@ -416,7 +419,7 @@ defmodule DranWeb.E2EAuthTest do
     } do
       conn =
         conn
-        |> init_test_session(%{user: admin.email, context_slug: ctx1.slug})
+        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
 
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/notes")
 
@@ -435,7 +438,7 @@ defmodule DranWeb.E2EAuthTest do
     } do
       conn =
         conn
-        |> init_test_session(%{user: user.email, context_slug: ctx1.slug})
+        |> init_test_session(%{user: user.email, workspace_slug: ctx1.slug})
 
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/notes")
 

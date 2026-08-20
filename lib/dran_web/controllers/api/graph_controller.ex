@@ -6,12 +6,12 @@ defmodule DranWeb.API.GraphController do
   alias Dran.Brain.{Page, Relation}
 
   @doc "GET /api/graph?context=... — full graph (nodes + edges)"
-  def graph(conn, %{"context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
+  def graph(conn, %{"workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
       nodes =
         Repo.all(
           from p in Page,
-            where: p.context_id == ^context.id,
+            where: p.workspace_id == ^context.id,
             select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
         )
 

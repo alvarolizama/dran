@@ -4,9 +4,9 @@ defmodule DranWeb.API.IndexController do
   alias Dran.Brain
 
   @doc "GET /api/index?context=... — wiki index (all page slugs + titles)"
-  def index(conn, %{"context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
-      pages = Brain.list_pages(context_id: context.id, limit: 10_000)
+  def index(conn, %{"workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
+      pages = Brain.list_pages(workspace_id: context.id, limit: 10_000)
 
       index =
         Enum.map(pages, fn page ->

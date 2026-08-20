@@ -11,7 +11,7 @@ defmodule Dran.Agent.SessionTest do
       Session.changeset(%Session{}, %{
         agent_type: "ask",
         input: "x",
-        context_id: Ecto.UUID.generate(),
+        workspace_id: Ecto.UUID.generate(),
         status: "bogus"
       })
 
@@ -24,7 +24,7 @@ defmodule Dran.Agent.SessionTest do
         Session.changeset(%Session{}, %{
           agent_type: "ask",
           input: "x",
-          context_id: Ecto.UUID.generate(),
+          workspace_id: Ecto.UUID.generate(),
           status: status
         })
 

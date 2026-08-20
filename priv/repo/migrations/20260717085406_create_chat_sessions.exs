@@ -5,7 +5,7 @@ defmodule Dran.Repo.Migrations.CreateChatSessions do
     create table(:chat_sessions, primary_key: false) do
       add :id, :binary_id, primary_key: true, default: fragment("gen_random_uuid()")
 
-      add :context_id, references(:contexts, type: :binary_id, on_delete: :delete_all),
+      add :workspace_id, references(:workspaces, type: :binary_id, on_delete: :delete_all),
         null: false
 
       add :user, :string, null: false, default: "anonymous"
@@ -15,6 +15,6 @@ defmodule Dran.Repo.Migrations.CreateChatSessions do
       timestamps(type: :utc_datetime)
     end
 
-    create index(:chat_sessions, [:context_id, :user])
+    create index(:chat_sessions, [:workspace_id, :user])
   end
 end

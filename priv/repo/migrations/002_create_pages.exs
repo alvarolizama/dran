@@ -5,7 +5,7 @@ defmodule Dran.Repo.Migrations.CreatePages do
     create table(:pages, primary_key: false) do
       add :id, :binary_id, primary_key: true, default: fragment("gen_random_uuid()")
 
-      add :context_id, references(:contexts, type: :binary_id, on_delete: :delete_all),
+      add :workspace_id, references(:workspaces, type: :binary_id, on_delete: :delete_all),
         null: false
 
       add :title, :string, size: 500, null: false
@@ -25,7 +25,7 @@ defmodule Dran.Repo.Migrations.CreatePages do
     end
 
     # Unique slug within context
-    create unique_index(:pages, [:context_id, :slug])
+    create unique_index(:pages, [:workspace_id, :slug])
 
     # immutable_unaccent wrapper — unaccent() is STABLE not IMMUTABLE,
     # so we wrap it to use in generated columns / expression indexes
@@ -57,7 +57,7 @@ defmodule Dran.Repo.Migrations.CreatePages do
     """
 
     # Lookup indexes
-    create index(:pages, [:context_id, :slug], name: :pages_slug_idx)
+    create index(:pages, [:workspace_id, :slug], name: :pages_workspace_id_slug_idx)
     create index(:pages, [:page_type], name: :pages_type_idx)
     create index(:pages, [:tags], using: :gin, name: :pages_tags_idx)
   end

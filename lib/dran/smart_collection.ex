@@ -51,28 +51,28 @@ defmodule Dran.SmartCollection do
   Execute the saved query against the Brain context.
 
   Returns a list of pages matching the filter criteria.
-  The `context_id` is always injected; the query's own filters are applied
+  The `workspace_id` is always injected; the query's own filters are applied
   on top.
 
   ## Options
 
   - `:limit` — max results (default 200 for collections, generous)
   """
-  def execute(query, context_id, opts \\ [])
+  def execute(query, workspace_id, opts \\ [])
 
-  def execute(query, context_id, opts) when is_map(query) and is_binary(context_id) do
+  def execute(query, workspace_id, opts) when is_map(query) and is_binary(workspace_id) do
     limit = Keyword.get(opts, :limit, 200)
 
     query
     |> query_to_opts()
-    |> Keyword.put(:context_id, context_id)
+    |> Keyword.put(:workspace_id, workspace_id)
     |> Keyword.put(:limit, limit)
     |> Brain.list_pages()
   end
 
-  def execute(nil, context_id, opts) when is_binary(context_id) do
+  def execute(nil, workspace_id, opts) when is_binary(workspace_id) do
     limit = Keyword.get(opts, :limit, 200)
-    Brain.list_pages(context_id: context_id, limit: limit)
+    Brain.list_pages(workspace_id: workspace_id, limit: limit)
   end
 
   @doc """
@@ -122,13 +122,13 @@ defmodule Dran.SmartCollection do
   - `:title` — display name for the collection (required)
   - `:slug` — URL slug (derived from title if omitted)
   - `:query` — the filter map (see `build_query/1`)
-  - `:context_id` — the brain context (required)
+  - `:workspace_id` — the brain context (required)
   - `:owner` — owner field (default "system")
   - `:created_by` — created_by field (default "system")
   """
   def create(attrs) when is_map(attrs) do
     %{
-      "context_id" => context_id,
+      "workspace_id" => workspace_id,
       "query" => query,
       "title" => title
     } = attrs
@@ -137,7 +137,7 @@ defmodule Dran.SmartCollection do
     meta = %{"query" => build_query(query)}
 
     page_attrs = %{
-      "context_id" => context_id,
+      "workspace_id" => workspace_id,
       "title" => title,
       "slug" => slug,
       "page_type" => "query",
@@ -157,8 +157,8 @@ defmodule Dran.SmartCollection do
 
   Returns `nil` if the page doesn't exist or is not a query page.
   """
-  def get_by_slug(slug, context_id) when is_binary(slug) and is_binary(context_id) do
-    case Brain.get_page_by_slug(slug, context_id) do
+  def get_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
+    case Brain.get_page_by_slug(slug, workspace_id) do
       %{page_type: "query"} = page -> page
       _ -> nil
     end
@@ -167,8 +167,8 @@ defmodule Dran.SmartCollection do
   @doc """
   List all smart collections (query pages) in a context.
   """
-  def list_all(context_id) when is_binary(context_id) do
-    Brain.list_pages(context_id: context_id, type: "query", limit: 100)
+  def list_all(workspace_id) when is_binary(workspace_id) do
+    Brain.list_pages(workspace_id: workspace_id, type: "query", limit: 100)
   end
 
   # ── Helpers ──

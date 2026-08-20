@@ -25,8 +25,8 @@ defmodule DranWeb.ReportLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show}>
@@ -36,7 +36,7 @@ defmodule DranWeb.ReportLive do
           versions={@versions}
           compare_version={@compare_version}
           logs={@logs}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           rendered_body={@rendered_body}
           editing={@editing}
           content_tab_value="content"
@@ -64,7 +64,7 @@ defmodule DranWeb.ReportLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               editor_id="report-editor"
             />
           </:attributes>
@@ -80,7 +80,7 @@ defmodule DranWeb.ReportLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               save_status={@save_status}
               editor_id="report-editor"
             />
@@ -161,7 +161,7 @@ defmodule DranWeb.ReportLive do
       if page do
         rendered_body =
           render_markdown(page.body,
-            context_id: page.context_id,
+            workspace_id: page.workspace_id,
             inline_links: Map.get(page.meta || %{}, "inline_links", [])
           )
 

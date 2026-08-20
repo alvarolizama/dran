@@ -29,11 +29,11 @@ defmodule DranWeb.Router do
   end
 
   pipeline :admin do
-    plug :require_admin
+    plug :require_instance_owner
   end
 
   pipeline :admin_or_editor do
-    plug :require_admin_or_editor
+    plug :require_workspace_role
   end
 
   # ── Browser auth plug ──
@@ -56,21 +56,21 @@ defmodule DranWeb.Router do
     end
   end
 
-  # ── Admin auth plug ──
+  # ── Instance owner auth plug ──
 
-  defp require_admin(conn, _opts) do
-    # `is_admin` is cached in the session at login (see DranWeb.Plugs.Auth.login/3),
-    # so we don't hit the users table on every admin request. A session without
-    # the flag (e.g. an old pre-multi-user session) is treated as full admin.
+  defp require_instance_owner(conn, _opts) do
+    # `is_owner` is cached in the session at login (see DranWeb.Plugs.Auth.login/3),
+    # so we don't hit the users table on every request. A session without
+    # the flag (e.g. an old pre-multi-user session) is NOT treated as owner.
     cond do
       is_nil(Plug.Conn.get_session(conn, "user")) ->
         conn
         |> Phoenix.Controller.redirect(to: ~p"/login")
         |> Plug.Conn.halt()
 
-      Plug.Conn.get_session(conn, "is_admin") == false ->
+      Plug.Conn.get_session(conn, "is_owner") == false ->
         conn
-        |> Phoenix.Controller.put_flash(:error, "Admin access required")
+        |> Phoenix.Controller.put_flash(:error, "Instance owner access required")
         |> Phoenix.Controller.redirect(to: ~p"/")
         |> Plug.Conn.halt()
 
@@ -79,26 +79,47 @@ defmodule DranWeb.Router do
     end
   end
 
-  # ── Admin or editor auth plug ──
-
-  defp require_admin_or_editor(conn, _opts) do
+  # ── Workspace role auth plug ──
+  # Grants access if the user is the instance owner OR has at least one
+  # workspace membership with a role in ["owner", "admin", "editor"].
+  defp require_workspace_role(conn, _opts) do
     cond do
       is_nil(Plug.Conn.get_session(conn, "user")) ->
         conn
         |> Phoenix.Controller.redirect(to: ~p"/login")
         |> Plug.Conn.halt()
 
-      Plug.Conn.get_session(conn, "is_admin") == true ->
-        conn
-
-      Plug.Conn.get_session(conn, "is_editor") == true ->
+      Plug.Conn.get_session(conn, "is_owner") == true ->
         conn
 
       true ->
-        conn
-        |> Phoenix.Controller.put_flash(:error, "Panel access requires admin or editor role")
-        |> Phoenix.Controller.redirect(to: ~p"/")
-        |> Plug.Conn.halt()
+        user_email = Plug.Conn.get_session(conn, "user")
+        user = user_email && Dran.Accounts.get_user_by_email(user_email)
+
+        has_role? =
+          case user do
+            # No DB row: pre-multi-user session, treat as owner (matches the
+            # legacy require_admin behavior of nil -> admin).
+            nil ->
+              true
+
+            # Instance owner has full access to every workspace.
+            %{is_owner: true} ->
+              true
+
+            user ->
+              Dran.Accounts.list_user_workspaces(user)
+              |> Enum.any?(fn ws -> Map.get(ws, :role) in ~w(owner admin editor) end)
+          end
+
+        if has_role? do
+          conn
+        else
+          conn
+          |> Phoenix.Controller.put_flash(:error, "Insufficient permissions")
+          |> Phoenix.Controller.redirect(to: ~p"/")
+          |> Plug.Conn.halt()
+        end
     end
   end
 
@@ -108,25 +129,34 @@ defmodule DranWeb.Router do
     case extract_token(conn) do
       {:ok, token} ->
         cond do
-          # Legacy admin token (backward compat) — full admin, no user row
+          # Legacy admin token (backward compat) — full owner, no user row
           token == Dran.Auth.api_token() ->
-            assign(conn, :user, %{is_admin: true, email: "admin", contexts: :all})
+            assign(conn, :user, %{is_owner: true, email: "admin", contexts: :all})
 
           # Per-user token — look up the user and assign it
           match?({:ok, _}, Dran.Accounts.valid_token?(token)) ->
             {:ok, user} = Dran.Accounts.valid_token?(token)
             assign(conn, :user, user)
 
-          # Context-scoped API key — synthetic user with single context
+          # Context-scoped API key — synthetic user with multi-workspace access
           match?({:ok, _}, Dran.Accounts.valid_api_key?(token)) ->
             {:ok, key} = Dran.Accounts.valid_api_key?(token)
 
+            workspaces =
+              key.api_key_workspaces
+              |> Enum.map(& &1.workspace)
+
+            access_levels =
+              key.api_key_workspaces
+              |> Enum.into(%{}, fn akw -> {akw.workspace_id, akw.access_level} end)
+
             assign(conn, :user, %{
-              is_admin: false,
-              email: "api-key:#{key.name}",
+              role: "viewer",
+              email: "api-key:***",
               key_name: key.name,
-              contexts: [key.context],
-              write_access: key.write_access
+              workspaces: workspaces,
+              access_levels: access_levels,
+              created_by_user_id: key.created_by_user_id
             })
 
           true ->
@@ -158,15 +188,38 @@ defmodule DranWeb.Router do
   defp require_write_access(conn, _opts) do
     user = conn.assigns[:user]
 
-    # Only API keys with write_access: false are restricted.
-    # Normal users (nil) and admin (is_admin: true) always pass.
-    if user && Map.get(user, :write_access) == false do
-      conn
-      |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.send_resp(403, Jason.encode!(%{errors: %{detail: "API key is read-only"}}))
-      |> Plug.Conn.halt()
+    # Check per-workspace access_level for API keys
+    if user && Map.has_key?(user, :access_levels) do
+      # API key user - check if they have write access to the requested workspace
+      workspace_id = get_requested_workspace_id(conn)
+      access_level = Map.get(user.access_levels, workspace_id)
+
+      if access_level == "write" do
+        conn
+      else
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          403,
+          Jason.encode!(%{
+            errors: %{detail: "API key does not have write access to this workspace"}
+          })
+        )
+        |> Plug.Conn.halt()
+      end
     else
+      # Normal user or admin - always pass
       conn
+    end
+  end
+
+  defp get_requested_workspace_id(conn) do
+    # Extract workspace_id from params or path
+    cond do
+      conn.params["workspace_id"] -> conn.params["workspace_id"]
+      # slug lookup would need extra query
+      conn.params["workspace"] -> conn.params["workspace"]
+      true -> nil
     end
   end
 
@@ -233,7 +286,6 @@ defmodule DranWeb.Router do
     live "/goals/:slug", GoalLive, :show
 
     live "/kanban", KanbanLive, :index
-
     live "/projects", ProjectLive, :index
     live "/projects/new", PageNewLive, :new
     live "/projects/:slug", ProjectLive, :show
@@ -273,8 +325,8 @@ defmodule DranWeb.Router do
     # Docs
     live "/docs", DocsLive, :index
 
-    # Context switching
-    post "/context", SessionController, :switch_context
+    # Workspace switching
+    post "/workspace", SessionController, :switch_workspace
   end
 
   # ── Admin-only web UI ──
@@ -292,12 +344,12 @@ defmodule DranWeb.Router do
     pipe_through [:api, :api_auth]
 
     # Contexts (read + export)
-    get "/contexts", ContextController, :index
-    get "/contexts/:slug", ContextController, :show
-    get "/contexts/:slug/export", ExportController, :show
+    get "/workspaces", WorkspaceController, :index
+    get "/workspaces/:slug", WorkspaceController, :show
+    get "/workspaces/:slug/export", ExportController, :show
 
     # Full export (by context id)
-    get "/export/:context/full", ExportController, :full
+    get "/export/:workspace/full", ExportController, :full
 
     # Pages (read + graph)
     get "/pages", PageController, :index
@@ -320,7 +372,7 @@ defmodule DranWeb.Router do
     # Quality / maintenance (read-only)
     get "/lint", LintController, :lint
 
-    # Wiki index + graph + log (read-only)
+    # Home index + graph + log (read-only)
     get "/index", IndexController, :index
     get "/graph", GraphController, :graph
     get "/log", LogController, :index
@@ -332,9 +384,9 @@ defmodule DranWeb.Router do
     pipe_through [:api, :api_auth, :require_write_access]
 
     # Contexts (write)
-    post "/contexts", ContextController, :create
-    put "/contexts/:slug", ContextController, :update
-    delete "/contexts/:slug", ContextController, :delete
+    post "/workspaces", WorkspaceController, :create
+    put "/workspaces/:slug", WorkspaceController, :update
+    delete "/workspaces/:slug", WorkspaceController, :delete
 
     # Pages (write)
     post "/pages", PageController, :create
@@ -376,10 +428,10 @@ defmodule DranWeb.Router do
     end
   end
 
-  # ── Wiki (read-only knowledge browser) at the ROOT ─────────────────────────
+  # ── Home (read-only knowledge browser) at the ROOT ─────────────────────────
   #
-  # The wiki is the app's home — the first thing a logged-in user sees.
-  # This scope MUST stay last: `/:context_slug` is a wildcard and would swallow
+  # The home is the app's home — the first thing a logged-in user sees.
+  # This scope MUST stay last: `/:workspace_slug` is a wildcard and would swallow
   # any static route defined after it (e.g. /dev/dashboard). Static segments
   # (/login, /panel, /api, /health, /dev…) win because they are defined above.
   # Consequently, context slugs named like a reserved segment (panel, api,
@@ -387,14 +439,14 @@ defmodule DranWeb.Router do
   scope "/", DranWeb do
     pipe_through [:browser, :auth]
 
-    live "/", WikiLive, :index
-    live "/:context_slug", WikiLive, :context_home
-    live "/:context_slug/type/:page_type", WikiLive, :type_list
-    live "/:context_slug/type/:page_type/:slug", WikiLive, :page_show
-    live "/:context_slug/collection/:slug", WikiLive, :collection
-    live "/:context_slug/graph", WikiLive, :graph
-    get "/:context_slug/graph/json", WikiGraphController, :show
-    live "/:context_slug/kanban", WikiLive, :kanban
-    live "/:context_slug/letter/:letter", WikiLive, :letter
+    live "/", HomeLive, :index
+    live "/:workspace_slug", HomeLive, :workspace_home
+    live "/:workspace_slug/type/:page_type", HomeLive, :type_list
+    live "/:workspace_slug/type/:page_type/:slug", HomeLive, :page_show
+    live "/:workspace_slug/collection/:slug", HomeLive, :collection
+    live "/:workspace_slug/graph", HomeLive, :graph
+    get "/:workspace_slug/graph/json", HomeGraphController, :show
+    live "/:workspace_slug/kanban", HomeLive, :kanban
+    live "/:workspace_slug/letter/:letter", HomeLive, :letter
   end
 end

@@ -31,8 +31,8 @@ defmodule Dran.GraphExpansionTest do
     end)
 
     context =
-      Brain.get_context_by_slug("personal") ||
-        elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+      Brain.get_workspace_by_slug("personal") ||
+        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -42,7 +42,7 @@ defmodule Dran.GraphExpansionTest do
   defp create_note(ctx, slug, opts \\ []) do
     {:ok, page} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: Keyword.get(opts, :title, slug),
         slug: slug,
         page_type: "note",
@@ -142,7 +142,7 @@ defmodule Dran.GraphExpansionTest do
     test "does not propose across contexts", %{context: ctx} do
       # Create a second context with its own part_of chain.
       {:ok, other_ctx} =
-        Brain.create_context(%{
+        Brain.create_workspace(%{
           name: "Other",
           slug: "other-context-#{:erlang.unique_integer([:positive])}"
         })
@@ -228,13 +228,13 @@ defmodule Dran.GraphExpansionTest do
 
       # Same community_id value, but in a different context — must return [].
       {:ok, other_ctx} =
-        Brain.create_context(%{
+        Brain.create_workspace(%{
           name: "Other CP",
           slug: "cp-other-#{:erlang.unique_integer([:positive])}"
         })
 
       # Manually stamp the same community_id on a page in the other context
-      # to verify the context_id filter works.
+      # to verify the workspace_id filter works.
       other_page = create_note(other_ctx, "cp-cross-other")
       {:ok, _} = Brain.update_page(other_page, %{meta: %{"community_id" => cid}})
 

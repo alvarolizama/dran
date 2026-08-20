@@ -12,7 +12,7 @@ defmodule Dran.Agent.LinkGardenerTest do
     struct(
       %Session{
         id: Ecto.UUID.generate(),
-        context_id: Ecto.UUID.generate(),
+        workspace_id: Ecto.UUID.generate(),
         agent_type: "link_gardener",
         input: "tend the graph",
         status: "running"
@@ -33,9 +33,9 @@ defmodule Dran.Agent.LinkGardenerTest do
     )
   end
 
-  defp create_context! do
+  defp create_workspace! do
     {:ok, ctx} =
-      Brain.create_context(%{name: "Test Context", slug: "test-ctx-#{:rand.uniform(999_999)}"})
+      Brain.create_workspace(%{name: "Test Context", slug: "test-ctx-#{:rand.uniform(999_999)}"})
 
     ctx
   end
@@ -46,7 +46,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: attrs.title,
         slug: attrs.slug,
         body: attrs.body,
@@ -100,11 +100,11 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   describe "propose_relation /2 — semantic rejection" do
     test "rejects relation_type semantic before hitting the DB" do
-      ctx = create_context!()
+      ctx = create_workspace!()
       p1 = create_page!(ctx, %{title: "A", slug: "page-a"})
       p2 = create_page!(ctx, %{title: "B", slug: "page-b"})
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       args = %{
         "source_slug" => p1.slug,
@@ -127,7 +127,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   describe "propose_relation — proposal limit (10)" do
     test "returns error after 10 proposals" do
-      ctx = create_context!()
+      ctx = create_workspace!()
 
       # Create enough pages so we can propose 10 distinct relations
       pages =
@@ -135,7 +135,7 @@ defmodule Dran.Agent.LinkGardenerTest do
           create_page!(ctx, %{title: "Page #{i}", slug: "page-#{i}", body: "content #{i}"})
         end
 
-      state = build_state(session: build_session(context_id: ctx.id), proposals_made: 10)
+      state = build_state(session: build_session(workspace_id: ctx.id), proposals_made: 10)
 
       args = %{
         "source_slug" => Enum.at(pages, 0).slug,
@@ -153,7 +153,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   describe "propose_relation — creating a typed relation" do
     test "creates a relation with justification in meta" do
-      ctx = create_context!()
+      ctx = create_workspace!()
 
       p1 =
         create_page!(ctx, %{
@@ -169,7 +169,7 @@ defmodule Dran.Agent.LinkGardenerTest do
           body: "detailed architecture doc"
         })
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       args = %{
         "source_slug" => p1.slug,
@@ -199,11 +199,11 @@ defmodule Dran.Agent.LinkGardenerTest do
     end
 
     test "rejects unknown relation_type" do
-      ctx = create_context!()
+      ctx = create_workspace!()
       p1 = create_page!(ctx, %{title: "A", slug: "a"})
       p2 = create_page!(ctx, %{title: "B", slug: "b"})
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       args = %{
         "source_slug" => p1.slug,
@@ -219,10 +219,10 @@ defmodule Dran.Agent.LinkGardenerTest do
     end
 
     test "rejects when source page not found" do
-      ctx = create_context!()
+      ctx = create_workspace!()
       p2 = create_page!(ctx, %{title: "B", slug: "b"})
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       args = %{
         "source_slug" => "does-not-exist",
@@ -237,10 +237,10 @@ defmodule Dran.Agent.LinkGardenerTest do
     end
 
     test "rejects when source and target are the same page" do
-      ctx = create_context!()
+      ctx = create_workspace!()
       p1 = create_page!(ctx, %{title: "Same", slug: "same"})
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       args = %{
         "source_slug" => p1.slug,
@@ -258,7 +258,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   describe "list_orphans" do
     test "returns orphan pages for the session context" do
-      ctx = create_context!()
+      ctx = create_workspace!()
       p1 = create_page!(ctx, %{title: "Orphan", slug: "orphan"})
       p2 = create_page!(ctx, %{title: "Linked", slug: "linked"})
 
@@ -270,7 +270,7 @@ defmodule Dran.Agent.LinkGardenerTest do
           relation_type: "related"
         })
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       {{:ok, orphans}, _} = LinkGardener.execute_tool("list_orphans", %{}, state)
 
@@ -285,10 +285,10 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   describe "get_page" do
     test "returns the page content as a map" do
-      ctx = create_context!()
+      ctx = create_workspace!()
       create_page!(ctx, %{title: "My Page", slug: "my-page", body: "hello world"})
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       {{:ok, page}, _} = LinkGardener.execute_tool("get_page", %{"slug" => "my-page"}, state)
 
@@ -298,8 +298,8 @@ defmodule Dran.Agent.LinkGardenerTest do
     end
 
     test "returns error for unknown slug" do
-      ctx = create_context!()
-      state = build_state(session: build_session(context_id: ctx.id))
+      ctx = create_workspace!()
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       {{:error, msg}, _} = LinkGardener.execute_tool("get_page", %{"slug" => "nope"}, state)
       assert msg =~ "not found"
@@ -308,7 +308,7 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   describe "transitive_candidates" do
     test "returns transitive part_of candidates with via_slug evidence" do
-      ctx = create_context!()
+      ctx = create_workspace!()
 
       a = create_page!(ctx, %{title: "Alpha", slug: "alpha-t"})
       b = create_page!(ctx, %{title: "Beta", slug: "beta-t"})
@@ -329,7 +329,7 @@ defmodule Dran.Agent.LinkGardenerTest do
           relation_type: "part_of"
         })
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       {{:ok, candidates}, _new_state} =
         LinkGardener.execute_tool("transitive_candidates", %{}, state)
@@ -343,7 +343,7 @@ defmodule Dran.Agent.LinkGardenerTest do
     end
 
     test "does not return a candidate when the direct edge already exists" do
-      ctx = create_context!()
+      ctx = create_workspace!()
 
       a = create_page!(ctx, %{title: "A", slug: "a-direct"})
       b = create_page!(ctx, %{title: "B", slug: "b-direct"})
@@ -371,7 +371,7 @@ defmodule Dran.Agent.LinkGardenerTest do
           relation_type: "part_of"
         })
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       {{:ok, candidates}, _new_state} =
         LinkGardener.execute_tool("transitive_candidates", %{}, state)
@@ -381,7 +381,7 @@ defmodule Dran.Agent.LinkGardenerTest do
     end
 
     test "returns empty list when context has no part_of chains" do
-      ctx = create_context!()
+      ctx = create_workspace!()
 
       # Only a related edge — not part_of.
       p1 = create_page!(ctx, %{title: "X", slug: "x"})
@@ -394,7 +394,7 @@ defmodule Dran.Agent.LinkGardenerTest do
           relation_type: "related"
         })
 
-      state = build_state(session: build_session(context_id: ctx.id))
+      state = build_state(session: build_session(workspace_id: ctx.id))
 
       {{:ok, candidates}, _new_state} =
         LinkGardener.execute_tool("transitive_candidates", %{}, state)
@@ -431,7 +431,7 @@ defmodule Dran.Agent.LinkGardenerTest do
       original = Application.get_env(:dran, :inference)
       Application.delete_env(:dran, :inference)
 
-      ctx = create_context!()
+      ctx = create_workspace!()
 
       p1 = create_page!(ctx, %{title: "Alpha", slug: "alpha", body: "alpha content"})
       p2 = create_page!(ctx, %{title: "Beta", slug: "beta", body: "beta content"})
@@ -498,7 +498,7 @@ defmodule Dran.Agent.LinkGardenerTest do
         LinkGardener.init_state(
           struct!(Session, %{
             id: Ecto.UUID.generate(),
-            context_id: ctx.id,
+            workspace_id: ctx.id,
             agent_type: "link_gardener",
             input: "tend links",
             status: "running"

@@ -8,7 +8,7 @@ defmodule DranWeb.SettingsLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain.Context
+  alias Dran.Brain.Workspace
   alias Dran.Inference.Client
   alias Dran.Inference.Config
   alias Dran.Jobs
@@ -50,18 +50,18 @@ defmodule DranWeb.SettingsLive do
       |> assign(inference_test: nil)
       |> assign(model_test_status: %{})
       |> assign_users()
-      |> assign_contexts()
+      |> assign_workspaces()
       |> assign_new_user_form()
-      |> assign_new_context_form()
+      |> assign_new_workspace_form()
       |> assign(
-        confirm_delete_context_id: nil,
+        confirm_delete_workspace_id: nil,
         slug_touched: false,
-        managing_context_id: nil,
-        page_types_context_id: nil,
+        managing_workspace_id: nil,
+        page_types_workspace_id: nil,
         managing_wiki_id: nil,
         show_user_modal: false,
-        show_context_modal: false,
-        context_user_search: "",
+        show_workspace_modal: false,
+        workspace_user_search: "",
         api_keys: Dran.Accounts.list_api_keys(),
         new_api_key_form: to_form(%{}, as: :api_key),
         revealed_api_key: nil,
@@ -75,7 +75,7 @@ defmodule DranWeb.SettingsLive do
       |> assign_jobs()
       # SEC-004: defense-in-depth — halt every event for non-admins
       |> attach_hook(:require_admin, :handle_event, fn _event, _params, socket ->
-        if socket.assigns[:is_admin] do
+        if socket.assigns[:is_owner] do
           {:cont, socket}
         else
           {:halt, put_flash(socket, :error, gettext("No autorizado."))}
@@ -89,26 +89,25 @@ defmodule DranWeb.SettingsLive do
 
   defp assign_users(socket) do
     users = Dran.Accounts.list_users()
-    # Group: admins first, then editors, then regular users — alphabetical
+    # Group: owners first, then regular users — alphabetical
     # within each group.
     grouped =
       users
       |> Enum.group_by(fn
-        %{is_admin: true} -> :admin
-        %{is_editor: true} -> :editor
+        %{is_owner: true} -> :owner
         _ -> :user
       end)
-      |> Map.merge(%{admin: [], editor: [], user: []}, fn _k, v, _default -> v end)
+      |> Map.merge(%{owner: [], user: []}, fn _k, v, _default -> v end)
 
     sorted =
-      grouped[:admin] ++ grouped[:editor] ++ grouped[:user]
+      grouped[:owner] ++ grouped[:user]
 
     assign(socket, users: sorted)
   end
 
-  defp assign_contexts(socket) do
-    contexts = Dran.Brain.list_contexts()
-    assign(socket, all_contexts: contexts)
+  defp assign_workspaces(socket) do
+    workspaces = Dran.Brain.list_workspaces()
+    assign(socket, all_workspaces: workspaces)
   end
 
   # Short human-readable hint shown next to each page type toggle in Settings.
@@ -127,11 +126,13 @@ defmodule DranWeb.SettingsLive do
     assign(socket, new_user_form: to_form(%{}, as: :user))
   end
 
-  defp assign_new_context_form(socket) do
-    assign(socket, new_context_form: to_form(Context.changeset(%Context{}, %{}), as: :context))
+  defp assign_new_workspace_form(socket) do
+    assign(socket,
+      new_workspace_form: to_form(Workspace.changeset(%Workspace{}, %{}), as: :context)
+    )
   end
 
-  @tabs ~w(users contexts api_keys brain models system danger)
+  @tabs ~w(users workspaces api_keys brain models system danger)
 
   @impl true
   def handle_params(params, _url, socket) do
@@ -160,14 +161,14 @@ defmodule DranWeb.SettingsLive do
   def handle_event("create_user", %{"user" => params}, socket) do
     email = Map.get(params, "email", "")
     name = Map.get(params, "name", "")
-    context_ids = Map.get(params, "context_ids", []) |> List.wrap()
+    workspace_ids = Map.get(params, "workspace_ids", []) |> List.wrap()
 
     case Dran.Accounts.create_user(%{email: email, name: name}) do
       {:ok, user} ->
         # Add to selected contexts
-        for context_id <- context_ids do
-          context = Dran.Brain.get_context!(context_id)
-          Dran.Accounts.add_user_to_context(user, context)
+        for workspace_id <- workspace_ids do
+          context = Dran.Brain.get_workspace!(workspace_id)
+          Dran.Accounts.add_user_to_workspace(user, context)
         end
 
         socket
@@ -212,19 +213,7 @@ defmodule DranWeb.SettingsLive do
     end
   end
 
-  @impl true
-  def handle_event("toggle_editor", %{"id" => id}, socket) do
-    user = Dran.Accounts.get_user!(id)
-    changeset = Dran.Accounts.User.changeset(user, %{is_editor: !user.is_editor})
-
-    case Dran.Repo.update(changeset) do
-      {:ok, _} ->
-        {:noreply, assign_users(socket)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update editor status."))}
-    end
-  end
+  # toggle_editor handler removed — is_editor dropped from users; roles are per-workspace now
 
   @impl true
   def handle_event("copy_api_key_prefix", %{"id" => id}, socket) do
@@ -235,16 +224,16 @@ defmodule DranWeb.SettingsLive do
   @impl true
   def handle_event(
         "toggle_context_user",
-        %{"context_id" => context_id, "user_id" => user_id},
+        %{"workspace_id" => workspace_id, "user_id" => user_id},
         socket
       ) do
     user = Dran.Accounts.get_user!(user_id)
-    context = Dran.Brain.get_context!(context_id)
+    context = Dran.Brain.get_workspace!(workspace_id)
 
-    if Dran.Accounts.user_in_context?(user, context) do
-      Dran.Accounts.remove_user_from_context(user, context)
+    if Dran.Accounts.user_in_workspace?(user, context) do
+      Dran.Accounts.remove_user_from_workspace(user, context)
     else
-      Dran.Accounts.add_user_to_context(user, context)
+      Dran.Accounts.add_user_to_workspace(user, context)
     end
 
     {:noreply, assign_users(socket)}
@@ -265,13 +254,29 @@ defmodule DranWeb.SettingsLive do
   @impl true
   def handle_event("create_api_key", %{"api_key" => params}, socket) do
     name = Map.get(params, "name", "") |> String.trim()
-    context_id = Map.get(params, "context_id", "")
-    write_access = Map.get(params, "write_access") == "true"
+
+    # Parse workspace_ids from comma-separated "id1:read,id2:write" format
+    workspace_ids_str = Map.get(params, "workspace_ids", "")
+
+    workspace_ids =
+      if workspace_ids_str != "" do
+        workspace_ids_str
+        |> String.split(",", trim: true)
+        |> Enum.map(fn pair ->
+          case String.split(pair, ":", trim: true) do
+            [wid, level] -> {String.trim(wid), String.trim(level)}
+            [wid] -> {String.trim(wid), "read"}
+            _ -> nil
+          end
+        end)
+        |> Enum.reject(&is_nil/1)
+      else
+        []
+      end
 
     case Dran.Accounts.create_api_key(%{
            name: name,
-           context_id: context_id,
-           write_access: write_access
+           workspace_ids: workspace_ids
          }) do
       {:ok, key} ->
         socket =
@@ -352,20 +357,12 @@ defmodule DranWeb.SettingsLive do
   end
 
   @impl true
-  def handle_event("toggle_write_access", %{"id" => id}, socket) do
-    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
-
-    {:ok, _} = Dran.Accounts.update_api_key(key, %{write_access: not key.write_access})
-
-    flash =
-      if key.write_access,
-        do: gettext("Write access disabled — key is now read-only"),
-        else: gettext("Write access enabled")
-
+  def handle_event("toggle_write_access", %{"id" => _id}, socket) do
+    # Deprecated: write_access is now per-workspace via api_key_workspaces.
+    # The parent agent will replace this with per-workspace UI.
     {:noreply,
      socket
-     |> assign(api_keys: Dran.Accounts.list_api_keys())
-     |> put_flash(:info, flash)}
+     |> put_flash(:error, gettext("Write access is now managed per-workspace"))}
   end
 
   @impl true
@@ -388,17 +385,17 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("manage_context_users", %{"id" => id}, socket) do
-    {:noreply, assign(socket, managing_context_id: id, context_user_search: "")}
+    {:noreply, assign(socket, managing_workspace_id: id, workspace_user_search: "")}
   end
 
   @impl true
   def handle_event("close_context_users", _params, socket) do
-    {:noreply, assign(socket, managing_context_id: nil, context_user_search: "")}
+    {:noreply, assign(socket, managing_workspace_id: nil, workspace_user_search: "")}
   end
 
   @impl true
   def handle_event("search_context_users", %{"q" => q}, socket) do
-    {:noreply, assign(socket, context_user_search: q)}
+    {:noreply, assign(socket, workspace_user_search: q)}
   end
 
   @impl true
@@ -413,21 +410,21 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("manage_page_types", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :page_types_context_id, id)}
+    {:noreply, assign(socket, :page_types_workspace_id, id)}
   end
 
   @impl true
   def handle_event("close_page_types", _params, socket) do
-    {:noreply, assign(socket, :page_types_context_id, nil)}
+    {:noreply, assign(socket, :page_types_workspace_id, nil)}
   end
 
   @impl true
   def handle_event(
         "toggle_page_type",
-        %{"context_id" => context_id, "page_type" => page_type},
+        %{"workspace_id" => workspace_id, "page_type" => page_type},
         socket
       ) do
-    context = Dran.Brain.get_context!(context_id)
+    context = Dran.Brain.get_workspace!(workspace_id)
     disabled = context.disabled_page_types || []
 
     new_disabled =
@@ -437,67 +434,22 @@ defmodule DranWeb.SettingsLive do
         disabled ++ [page_type]
       end
 
-    case Dran.Brain.update_context_settings(context, %{disabled_page_types: new_disabled}) do
-      {:ok, _} -> {:noreply, assign_contexts(socket)}
+    case Dran.Brain.update_workspace_settings(context, %{disabled_page_types: new_disabled}) do
+      {:ok, _} -> {:noreply, assign_workspaces(socket)}
       {:error, _} -> {:noreply, put_flash(socket, :error, gettext("Could not update page types"))}
     end
   end
 
-  @impl true
-  def handle_event("toggle_wiki", %{"context_id" => context_id}, socket) do
-    context = Dran.Brain.get_context!(context_id)
-    new_wiki = !context.wiki_enabled
-
-    case Dran.Brain.update_context_settings(context, %{wiki_enabled: new_wiki}) do
-      {:ok, _} ->
-        {:noreply, assign_contexts(socket)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update wiki setting"))}
-    end
-  end
-
-  @impl true
-  def handle_event(
-        "update_wiki_description",
-        %{"context_id" => context_id, "value" => value},
-        socket
-      ) do
-    context = Dran.Brain.get_context!(context_id)
-
-    case Dran.Brain.update_context_settings(context, %{wiki_description: value}) do
-      {:ok, _} ->
-        {:noreply, assign_contexts(socket)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update wiki description"))}
-    end
-  end
-
-  @impl true
-  def handle_event("update_wiki_description", params, socket) do
-    # textarea blur sends raw text value differently — extract from params
-    context_id = params["context_id"]
-    value = (params["_target"] && params[params["_target"]]) || ""
-    context = Dran.Brain.get_context!(context_id)
-
-    case Dran.Brain.update_context_settings(context, %{wiki_description: value}) do
-      {:ok, _} ->
-        {:noreply, assign_contexts(socket)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update wiki description"))}
-    end
-  end
+  # wiki toggle and description handlers removed — wiki_enabled dropped from workspaces
 
   @impl true
   def handle_event("open_context_modal", _params, socket) do
-    {:noreply, assign(socket, show_context_modal: true)}
+    {:noreply, assign(socket, show_workspace_modal: true)}
   end
 
   @impl true
   def handle_event("close_context_modal", _params, socket) do
-    {:noreply, assign(socket, show_context_modal: false)}
+    {:noreply, assign(socket, show_workspace_modal: false)}
   end
 
   @impl true
@@ -515,12 +467,12 @@ defmodule DranWeb.SettingsLive do
         Map.put(params, "slug", Slug.slugify(name))
       end
 
-    form = %Context{} |> Context.changeset(params) |> to_form(as: :context)
-    {:noreply, assign(socket, new_context_form: form, slug_touched: slug_touched)}
+    form = %Workspace{} |> Workspace.changeset(params) |> to_form(as: :context)
+    {:noreply, assign(socket, new_workspace_form: form, slug_touched: slug_touched)}
   end
 
   @impl true
-  def handle_event("create_context", %{"context" => params}, socket) do
+  def handle_event("create_workspace", %{"context" => params}, socket) do
     # Slug derives from name only when not explicitly provided.
     params =
       if is_nil(params["slug"]) or params["slug"] == "" do
@@ -529,42 +481,42 @@ defmodule DranWeb.SettingsLive do
         params
       end
 
-    case Dran.Brain.create_context(params) do
+    case Dran.Brain.create_workspace(params) do
       {:ok, _context} ->
         {:noreply,
          socket
-         |> assign_contexts()
-         |> assign_new_context_form()
+         |> assign_workspaces()
+         |> assign_new_workspace_form()
          |> assign(:slug_touched, false)
-         |> assign(:show_context_modal, false)
+         |> assign(:show_workspace_modal, false)
          |> put_flash(:info, gettext("Context created"))}
 
       {:error, changeset} ->
-        {:noreply, assign(socket, new_context_form: to_form(changeset, as: :context))}
+        {:noreply, assign(socket, new_workspace_form: to_form(changeset, as: :context))}
     end
   end
 
   @impl true
-  def handle_event("ask_delete_context", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :confirm_delete_context_id, id)}
+  def handle_event("ask_delete_workspace", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :confirm_delete_workspace_id, id)}
   end
 
   @impl true
-  def handle_event("cancel_delete_context", _params, socket) do
-    {:noreply, assign(socket, :confirm_delete_context_id, nil)}
+  def handle_event("cancel_delete_workspace", _params, socket) do
+    {:noreply, assign(socket, :confirm_delete_workspace_id, nil)}
   end
 
   @impl true
-  def handle_event("delete_context", %{"id" => id}, socket) do
-    context = Enum.find(socket.assigns.all_contexts, &(&1.id == id))
+  def handle_event("delete_workspace", %{"id" => id}, socket) do
+    context = Enum.find(socket.assigns.all_workspaces, &(&1.id == id))
 
     if context do
-      case Dran.Brain.delete_context(context) do
+      case Dran.Brain.delete_workspace(context) do
         {:ok, _} ->
           {:noreply,
            socket
-           |> assign_contexts()
-           |> assign(:confirm_delete_context_id, nil)
+           |> assign_workspaces()
+           |> assign(:confirm_delete_workspace_id, nil)
            |> put_flash(:info, gettext("Context \"%{name}\" deleted", name: context.name))}
 
         {:error, _} ->
@@ -624,10 +576,10 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("reset_context", %{"danger" => %{"confirmation" => confirmation}}, socket) do
-    expected = socket.assigns.context_slug || ""
+    expected = socket.assigns.workspace_slug || ""
 
     if confirmation == expected do
-      context = Dran.Brain.get_context_by_slug(socket.assigns.context_slug)
+      context = Dran.Brain.get_workspace_by_slug(socket.assigns.workspace_slug)
 
       case Dran.Brain.reset_context(context.id) do
         {:ok, counts} ->
@@ -952,8 +904,8 @@ defmodule DranWeb.SettingsLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
@@ -969,7 +921,7 @@ defmodule DranWeb.SettingsLive do
           <%!-- Tabs navigation --%>
           <div class="tabs tabs-border">
             <.link
-              :for={tab <- ~w(users contexts api_keys brain models system danger)}
+              :for={tab <- ~w(users workspaces api_keys brain models system danger)}
               patch={~p"/panel/settings/#{tab}"}
               class={["tab", @active_tab == tab && "tab-active"]}
             >
@@ -981,32 +933,32 @@ defmodule DranWeb.SettingsLive do
           <div :if={@active_tab == "users"} id="users-tab" phx-hook=".CopyUserToken">
             <.users_section
               users={@users}
-              all_contexts={@all_contexts}
+              all_workspaces={@all_workspaces}
               form={@new_user_form}
               show_user_modal={@show_user_modal}
               wiki_google_open_signup={@wiki_google_open_signup}
             />
           </div>
 
-          <div :if={@active_tab == "contexts"}>
-            <.contexts_section
-              contexts={@all_contexts}
+          <div :if={@active_tab == "workspaces"}>
+            <.workspaces_section
+              all_workspaces={@all_workspaces}
               users={@users}
-              form={@new_context_form}
-              confirm_delete_context_id={@confirm_delete_context_id}
-              managing_context_id={@managing_context_id}
-              page_types_context_id={@page_types_context_id}
+              form={@new_workspace_form}
+              confirm_delete_workspace_id={@confirm_delete_workspace_id}
+              managing_workspace_id={@managing_workspace_id}
+              page_types_workspace_id={@page_types_workspace_id}
               managing_wiki_id={@managing_wiki_id}
-              context_user_search={@context_user_search}
-              context_slug={@context_slug}
-              show_context_modal={@show_context_modal}
+              workspace_user_search={@workspace_user_search}
+              workspace_slug={@workspace_slug}
+              show_workspace_modal={@show_workspace_modal}
             />
           </div>
 
           <div :if={@active_tab == "api_keys"} id="api-keys-tab" phx-hook=".CopyUserToken">
             <.api_keys_section
               api_keys={@api_keys}
-              all_contexts={@all_contexts}
+              all_workspaces={@all_workspaces}
               form={@new_api_key_form}
               revealed_api_key={@revealed_api_key}
               show_api_key_modal={@show_api_key_modal}
@@ -1256,7 +1208,7 @@ defmodule DranWeb.SettingsLive do
 
           <%!-- Danger zone — destructive operations --%>
           <div :if={@active_tab == "danger"}>
-            <.danger_zone_section context_slug={@context_slug} />
+            <.danger_zone_section workspace_slug={@workspace_slug} />
           </div>
         </div>
       </div>
@@ -1866,14 +1818,14 @@ defmodule DranWeb.SettingsLive do
     do: gettext("%{n}mo ago", n: div(sec, 2_592_000))
 
   defp tab_label("users"), do: gettext("Users")
-  defp tab_label("contexts"), do: gettext("Contexts")
+  defp tab_label("workspaces"), do: gettext("Contexts")
   defp tab_label("api_keys"), do: gettext("API Keys")
   defp tab_label("brain"), do: gettext("Brain")
   defp tab_label("models"), do: gettext("Models")
   defp tab_label("system"), do: gettext("System")
   defp tab_label("danger"), do: gettext("Danger zone")
 
-  attr :context_slug, :string, required: true
+  attr :workspace_slug, :string, required: true
 
   defp danger_zone_section(assigns) do
     ~H"""
@@ -1911,12 +1863,12 @@ defmodule DranWeb.SettingsLive do
           <div>
             <label class="text-xs text-base-content/60 mb-1 block">
               {gettext("Para confirmar, escribe el slug del contexto:")}
-              <code class="ml-1 font-mono text-error">{@context_slug}</code>
+              <code class="ml-1 font-mono text-error">{@workspace_slug}</code>
             </label>
             <.input
               field={to_form(%{}, as: :danger)[:confirmation]}
               type="text"
-              placeholder={@context_slug}
+              placeholder={@workspace_slug}
               class="w-full"
             />
           </div>
@@ -1941,7 +1893,7 @@ defmodule DranWeb.SettingsLive do
   # ── API Keys section ──────────────────────────────────────────────────────
 
   attr :api_keys, :list, required: true
-  attr :all_contexts, :list, required: true
+  attr :all_workspaces, :list, required: true
   attr :form, :map, required: true
   attr :revealed_api_key, :map, default: nil
   attr :show_api_key_modal, :boolean, default: false
@@ -2037,7 +1989,9 @@ defmodule DranWeb.SettingsLive do
                   <td class="font-medium">{key.name}</td>
                   <td>
                     <span class="badge badge-ghost badge-sm">
-                      {if key.context, do: key.context.name, else: "—"}
+                      {if Enum.any?(key.api_key_workspaces),
+                        do: hd(key.api_key_workspaces).workspace.name,
+                        else: "—"}
                     </span>
                   </td>
                   <td>
@@ -2069,15 +2023,21 @@ defmodule DranWeb.SettingsLive do
                       phx-value-id={key.id}
                       class="btn btn-ghost btn-xs"
                       title={
-                        if key.write_access,
+                        if Dran.Accounts.ApiKey.write_access?(key),
                           do: gettext("Click to make read-only"),
                           else: gettext("Click to enable write access")
                       }
                     >
-                      <span :if={key.write_access} class="badge badge-primary badge-sm">
+                      <span
+                        :if={Dran.Accounts.ApiKey.write_access?(key)}
+                        class="badge badge-primary badge-sm"
+                      >
                         {gettext("R/W")}
                       </span>
-                      <span :if={!key.write_access} class="badge badge-ghost badge-sm">
+                      <span
+                        :if={!Dran.Accounts.ApiKey.write_access?(key)}
+                        class="badge badge-ghost badge-sm"
+                      >
                         {gettext("R/O")}
                       </span>
                     </button>
@@ -2179,9 +2139,9 @@ defmodule DranWeb.SettingsLive do
                   <label class="label">
                     <span class="label-text">{gettext("Context")}</span>
                   </label>
-                  <select name="api_key[context_id]" class="select select-bordered w-full" required>
+                  <select name="api_key[workspace_id]" class="select select-bordered w-full" required>
                     <option value="">{gettext("Select a context...")}</option>
-                    <option :for={ctx <- @all_contexts} value={ctx.id}>{ctx.name}</option>
+                    <option :for={ctx <- @all_workspaces} value={ctx.id}>{ctx.name}</option>
                   </select>
                 </div>
               </div>
@@ -2189,7 +2149,7 @@ defmodule DranWeb.SettingsLive do
               <label class="label cursor-pointer justify-start gap-3 py-1">
                 <input
                   type="checkbox"
-                  name="api_key[write_access]"
+                  name="api_key[workspace_ids]"
                   class="checkbox checkbox-sm checkbox-secondary"
                 />
                 <span class="label-text">
@@ -2305,7 +2265,7 @@ defmodule DranWeb.SettingsLive do
   end
 
   attr :users, :list, required: true
-  attr :all_contexts, :list, required: true
+  attr :all_workspaces, :list, required: true
   attr :form, :map, required: true
   attr :show_user_modal, :boolean, default: false
   attr :wiki_google_open_signup, :boolean, default: false
@@ -2376,20 +2336,14 @@ defmodule DranWeb.SettingsLive do
                   <td class="font-medium">{user.email}</td>
                   <td>{user.name}</td>
                   <td>
-                    <span :if={user.is_admin} class="badge badge-primary badge-sm">Admin</span>
+                    <span :if={user.is_owner} class="badge badge-primary badge-sm">Admin</span>
                   </td>
                   <td>
-                    <input
-                      type="checkbox"
-                      checked={user.is_editor}
-                      phx-click="toggle_editor"
-                      phx-value-id={user.id}
-                      class="checkbox checkbox-sm checkbox-secondary"
-                    />
+                    <span :if={user.is_owner} class="badge badge-primary badge-sm">Owner</span>
                   </td>
                   <td>
                     <div class="flex flex-wrap gap-1">
-                      <span :for={ctx <- user.contexts} class="badge badge-ghost badge-sm">
+                      <span :for={ctx <- user.workspaces} class="badge badge-ghost badge-sm">
                         {ctx.name}
                       </span>
                     </div>
@@ -2402,13 +2356,13 @@ defmodule DranWeb.SettingsLive do
                         class="select select-bordered select-xs w-full max-w-[12rem]"
                         id={"default-context-select-#{user.id}"}
                       >
-                        <option value="" selected={is_nil(user.default_context_slug)}>
+                        <option value="" selected={is_nil(user.default_workspace_slug)}>
                           {gettext("— Global default —")}
                         </option>
                         <option
-                          :for={ctx <- @all_contexts}
+                          :for={ctx <- @all_workspaces}
                           value={ctx.slug}
-                          selected={user.default_context_slug == ctx.slug}
+                          selected={user.default_workspace_slug == ctx.slug}
                         >
                           {ctx.name}
                         </option>
@@ -2475,10 +2429,10 @@ defmodule DranWeb.SettingsLive do
               <div>
                 <label class="text-sm font-medium">{gettext("Contexts")}</label>
                 <div class="flex flex-wrap gap-2 mt-2">
-                  <label :for={ctx <- @all_contexts} class="flex items-center gap-2">
+                  <label :for={ctx <- @all_workspaces} class="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      name="user[context_ids][]"
+                      name="user[workspace_ids][]"
                       value={ctx.id}
                       class="checkbox checkbox-sm"
                     />
@@ -2507,19 +2461,19 @@ defmodule DranWeb.SettingsLive do
     """
   end
 
-  attr :contexts, :list, required: true
+  attr :all_workspaces, :list, required: true
   attr :users, :list, required: true
   attr :form, :map, required: true
-  attr :confirm_delete_context_id, :any, default: nil
-  attr :managing_context_id, :any, default: nil
-  attr :page_types_context_id, :any, default: nil
+  attr :confirm_delete_workspace_id, :any, default: nil
+  attr :managing_workspace_id, :any, default: nil
+  attr :page_types_workspace_id, :any, default: nil
   attr :managing_wiki_id, :any, default: nil
-  attr :context_user_search, :string, default: ""
-  attr :context_slug, :string, default: nil
+  attr :workspace_user_search, :string, default: ""
+  attr :workspace_slug, :string, default: nil
 
-  attr :show_context_modal, :boolean, default: false
+  attr :show_workspace_modal, :boolean, default: false
 
-  def contexts_section(assigns) do
+  def workspaces_section(assigns) do
     ~H"""
     <div class="space-y-6">
       <div class="flex items-center justify-between">
@@ -2541,10 +2495,10 @@ defmodule DranWeb.SettingsLive do
       <%!-- Context list with user membership --%>
       <div class="space-y-4">
         <div
-          :for={ctx <- @contexts}
+          :for={ctx <- @workspaces}
           class={[
             "card bg-base-100 border border-base-300",
-            @confirm_delete_context_id == ctx.id && "ring-2 ring-error/60 bg-error/5"
+            @confirm_delete_workspace_id == ctx.id && "ring-2 ring-error/60 bg-error/5"
           ]}
         >
           <div class="card-body">
@@ -2553,7 +2507,7 @@ defmodule DranWeb.SettingsLive do
                 <h3 class="text-lg font-semibold">
                   {ctx.name}
                   <code class="text-sm text-base-content/60">({ctx.slug})</code>
-                  <span :if={@context_slug == ctx.slug} class="text-caption text-primary">
+                  <span :if={@workspace_slug == ctx.slug} class="text-caption text-primary">
                     · {gettext("current")}
                   </span>
                 </h3>
@@ -2561,7 +2515,7 @@ defmodule DranWeb.SettingsLive do
                   {ngettext(
                     "%{count} member",
                     "%{count} members",
-                    Enum.count(@users, &Dran.Accounts.user_in_context?(&1, ctx))
+                    Enum.count(@users, &Dran.Accounts.user_in_workspace?(&1, ctx))
                   )}
                   <span :if={ctx.wiki_enabled} class="text-primary">· Wiki</span>
                 </p>
@@ -2598,13 +2552,13 @@ defmodule DranWeb.SettingsLive do
                   {gettext("Types")}
                 </button>
 
-                <%= if @confirm_delete_context_id == ctx.id do %>
+                <%= if @confirm_delete_workspace_id == ctx.id do %>
                   <span class="text-caption text-error mr-1 hidden sm:inline">
                     {gettext("Delete?")}
                   </span>
                   <button
                     type="button"
-                    phx-click="delete_context"
+                    phx-click="delete_workspace"
                     phx-value-id={ctx.id}
                     class="btn btn-error btn-xs"
                   >
@@ -2612,7 +2566,7 @@ defmodule DranWeb.SettingsLive do
                   </button>
                   <button
                     type="button"
-                    phx-click="cancel_delete_context"
+                    phx-click="cancel_delete_workspace"
                     class="btn btn-ghost btn-xs"
                   >
                     {gettext("Cancel")}
@@ -2620,7 +2574,7 @@ defmodule DranWeb.SettingsLive do
                 <% else %>
                   <button
                     type="button"
-                    phx-click="ask_delete_context"
+                    phx-click="ask_delete_workspace"
                     phx-value-id={ctx.id}
                     class="btn btn-ghost btn-xs text-error hover:bg-error/10"
                     title={gettext("Delete context")}
@@ -2636,7 +2590,7 @@ defmodule DranWeb.SettingsLive do
 
       <%!-- New context modal --%>
       <div
-        :if={@show_context_modal}
+        :if={@show_workspace_modal}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       >
         <div
@@ -2658,7 +2612,7 @@ defmodule DranWeb.SettingsLive do
               for={@form}
               id="context-form"
               phx-change="validate_context"
-              phx-submit="create_context"
+              phx-submit="create_workspace"
               class="space-y-4"
             >
               <.input
@@ -2694,7 +2648,7 @@ defmodule DranWeb.SettingsLive do
 
       <%!-- Manage users modal --%>
       <div
-        :if={@managing_context_id}
+        :if={@managing_workspace_id}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       >
         <div
@@ -2702,7 +2656,7 @@ defmodule DranWeb.SettingsLive do
           phx-click-away="close_context_users"
         >
           <div class="card-body">
-            <% managing_ctx = Enum.find(@contexts, &(&1.id == @managing_context_id)) %>
+            <% managing_ctx = Enum.find(@workspaces, &(&1.id == @managing_workspace_id)) %>
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-lg font-semibold">
@@ -2730,7 +2684,7 @@ defmodule DranWeb.SettingsLive do
               <input
                 type="text"
                 name="q"
-                value={@context_user_search}
+                value={@workspace_user_search}
                 placeholder={gettext("Search users...")}
                 class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -2740,7 +2694,7 @@ defmodule DranWeb.SettingsLive do
               <% filtered_users =
                 @users
                 |> Enum.filter(fn user ->
-                  q = String.downcase(@context_user_search || "")
+                  q = String.downcase(@workspace_user_search || "")
 
                   q == "" or String.contains?(String.downcase(user.email), q) or
                     (user.name && String.contains?(String.downcase(user.name), q))
@@ -2756,9 +2710,9 @@ defmodule DranWeb.SettingsLive do
                 </div>
                 <input
                   type="checkbox"
-                  checked={managing_ctx && Dran.Accounts.user_in_context?(user, managing_ctx)}
+                  checked={managing_ctx && Dran.Accounts.user_in_workspace?(user, managing_ctx)}
                   phx-click="toggle_context_user"
-                  phx-value-context_id={@managing_context_id}
+                  phx-value-workspace_id={@managing_workspace_id}
                   phx-value-user_id={user.id}
                   class="checkbox checkbox-sm checkbox-primary"
                 />
@@ -2776,7 +2730,7 @@ defmodule DranWeb.SettingsLive do
 
       <%!-- Page types modal --%>
       <div
-        :if={@page_types_context_id}
+        :if={@page_types_workspace_id}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       >
         <div
@@ -2784,7 +2738,7 @@ defmodule DranWeb.SettingsLive do
           phx-click-away="close_page_types"
         >
           <div class="card-body">
-            <% pt_ctx = Enum.find(@contexts, &(&1.id == @page_types_context_id)) %>
+            <% pt_ctx = Enum.find(@workspaces, &(&1.id == @page_types_workspace_id)) %>
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-lg font-semibold">
@@ -2830,7 +2784,7 @@ defmodule DranWeb.SettingsLive do
                   type="checkbox"
                   checked={pt_ctx && page_type not in (pt_ctx.disabled_page_types || [])}
                   phx-click="toggle_page_type"
-                  phx-value-context_id={@page_types_context_id}
+                  phx-value-workspace_id={@page_types_workspace_id}
                   phx-value-page_type={page_type}
                   class="toggle toggle-sm toggle-primary"
                 />
@@ -2850,7 +2804,7 @@ defmodule DranWeb.SettingsLive do
           phx-click-away="close_wiki"
         >
           <div class="card-body">
-            <% wiki_ctx = Enum.find(@contexts, &(&1.id == @managing_wiki_id)) %>
+            <% wiki_ctx = Enum.find(@workspaces, &(&1.id == @managing_wiki_id)) %>
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-lg font-semibold">
@@ -2881,7 +2835,7 @@ defmodule DranWeb.SettingsLive do
                   type="checkbox"
                   checked={wiki_ctx && wiki_ctx.wiki_enabled}
                   phx-click="toggle_wiki"
-                  phx-value-context_id={@managing_wiki_id}
+                  phx-value-workspace_id={@managing_wiki_id}
                   class="toggle toggle-sm toggle-primary"
                 />
               </label>
@@ -2893,7 +2847,7 @@ defmodule DranWeb.SettingsLive do
                   rows="2"
                   placeholder={gettext("Short description shown on the wiki home")}
                   phx-blur="update_wiki_description"
-                  phx-value-context_id={@managing_wiki_id}
+                  phx-value-workspace_id={@managing_wiki_id}
                 >{wiki_ctx.wiki_description}</textarea>
               </div>
             </div>

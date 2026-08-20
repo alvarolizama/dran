@@ -2,7 +2,7 @@ defmodule Dran.Agent.Engine do
   @moduledoc """
   Generic ReAct engine for Dran agents.
 
-  `run(module, input, context_id, opts)` creates a session, then spawns the
+  `run(module, input, workspace_id, opts)` creates a session, then spawns the
   loop on `Dran.Relations.TaskSupervisor`. The supplied `module` must implement
   the `Dran.Agent.Engine.Behaviour` callbacks.
 
@@ -34,8 +34,8 @@ defmodule Dran.Agent.Engine do
   `Dran.PubSub` topics or poll the session in the database.
   """
   @spec run(module(), String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Session.t()}
-  def run(module, input, context_id, opts \\ []) do
-    session = create_session!(module, input, context_id, opts)
+  def run(module, input, workspace_id, opts \\ []) do
+    session = create_session!(module, input, workspace_id, opts)
 
     Task.Supervisor.start_child(Dran.Relations.TaskSupervisor, fn ->
       register_runner(session.id)
@@ -97,13 +97,13 @@ defmodule Dran.Agent.Engine do
     |> Repo.update!()
   end
 
-  defp create_session!(module, input, context_id, opts) do
+  defp create_session!(module, input, workspace_id, opts) do
     {:ok, session} =
       %Session{}
       |> Session.changeset(%{
         agent_type: module.agent_type(),
         input: input,
-        context_id: context_id,
+        workspace_id: workspace_id,
         status: "running",
         started_at: DateTime.utc_now() |> DateTime.truncate(:second),
         meta: %{model: Inference.chat_model(), opts: opts_to_map(opts)}

@@ -105,7 +105,7 @@ defmodule Dran.Release do
   @doc """
   Create only the default context if it does not exist.
 
-  Skipped unless `DRAN_CONTEXT_SLUG` (or `DRAN_CONTEXT_NAME`) is explicitly
+  Skipped unless `DRAN_WORKSPACE_SLUG` (or `DRAN_WORKSPACE_NAME`) is explicitly
   set in the environment — a deleted context stays deleted across deploys
   when no env var is present.
 
@@ -118,7 +118,7 @@ defmodule Dran.Release do
       do_seed_context()
     else
       Logger.info(
-        "[release] DRAN_CONTEXT_SLUG/DRAN_CONTEXT_NAME not set, skipping default context seed"
+        "[release] DRAN_WORKSPACE_SLUG/DRAN_WORKSPACE_NAME not set, skipping default context seed"
       )
 
       :ok
@@ -135,14 +135,14 @@ defmodule Dran.Release do
           fn _repo ->
             alias Dran.Repo
             alias Dran.Brain
-            alias Dran.Brain.Context
+            alias Dran.Brain.Workspace
 
-            slug = Dran.Auth.default_context_slug()
-            name = Dran.Auth.default_context_name()
+            slug = Dran.Auth.default_workspace_slug()
+            name = Dran.Auth.default_workspace_name()
 
-            case Repo.get_by(Context, slug: slug) do
+            case Repo.get_by(Workspace, slug: slug) do
               nil ->
-                {:ok, ctx} = Brain.create_context(%{name: name, slug: slug})
+                {:ok, ctx} = Brain.create_workspace(%{name: name, slug: slug})
                 Logger.info("[release] created context: #{ctx.name} (#{ctx.slug})")
 
               existing ->

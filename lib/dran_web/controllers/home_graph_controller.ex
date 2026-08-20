@@ -1,11 +1,11 @@
-defmodule DranWeb.WikiGraphController do
+defmodule DranWeb.HomeGraphController do
   @moduledoc """
-  Wiki-accessible JSON endpoint for the 3D graph.
+  Home-accessible JSON endpoint for the 3D graph.
 
   Serves the same ETS-cached payload as `GraphJSONController` (panel), but is
   accessible to ALL logged-in users — not just admins/editors. The panel's
   `/panel/graph-json` lives behind the `admin_or_editor` pipeline, which
-  wiki-only users cannot pass; this controller sits under the wiki scope
+  home-only users cannot pass; this controller sits under the home scope
   (`[:browser, :auth]`).
 
   The payload is cached in `Dran.GraphCache` (ETS-backed GenServer): the
@@ -17,9 +17,9 @@ defmodule DranWeb.WikiGraphController do
   alias Dran.Brain
   alias Dran.GraphCache
 
-  def show(conn, %{"context_slug" => context_slug}) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
+  def show(conn, %{"workspace_slug" => workspace_slug}) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %{} = context ->
         cached = GraphCache.get(context.id)
 
         conn
@@ -29,7 +29,7 @@ defmodule DranWeb.WikiGraphController do
       _ ->
         conn
         |> put_status(:not_found)
-        |> json(%{error: "context not found or wiki not enabled"})
+        |> json(%{error: "context not found"})
     end
   end
 end

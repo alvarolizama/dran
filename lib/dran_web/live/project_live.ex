@@ -32,8 +32,8 @@ defmodule DranWeb.ProjectLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show}>
@@ -43,7 +43,7 @@ defmodule DranWeb.ProjectLive do
           versions={@versions}
           compare_version={@compare_version}
           logs={@logs}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           rendered_body={@rendered_body}
           content_hidden={@active_tab != "overview"}
           active_tab={@active_tab}
@@ -73,7 +73,7 @@ defmodule DranWeb.ProjectLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               editor_id="project-editor"
             />
           </:attributes>
@@ -121,7 +121,7 @@ defmodule DranWeb.ProjectLive do
                 form={@form}
                 page={@page}
                 page_type={@page_type}
-                context_id={@context_id}
+                workspace_id={@workspace_id}
                 save_status={@save_status}
                 editor_id="project-editor"
               />
@@ -215,7 +215,7 @@ defmodule DranWeb.ProjectLive do
           }
           archived_filter={@archived_filter}
           page_type={@page_type}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           show_archived={@show_archived}
           total_count={length(@pages)}
           total_archived={length(@archived_pages)}
@@ -263,7 +263,7 @@ defmodule DranWeb.ProjectLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    {socket, context} = Auth.resolve_context(socket, params)
+    {socket, context} = Auth.resolve_workspace(socket, params)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -273,7 +273,7 @@ defmodule DranWeb.ProjectLive do
         page ->
           relations = Brain.list_relations_for_page(page.id)
           versions = Brain.list_page_versions(page.id)
-          logs = Brain.list_log(context_id: context.id, limit: 10)
+          logs = Brain.list_log(workspace_id: context.id, limit: 10)
 
           form = Brain.change_page(page) |> to_form(as: :page)
 
@@ -284,7 +284,7 @@ defmodule DranWeb.ProjectLive do
           # Para todos/goals/plans usamos el filter SQL nativo de Brain.list_pages.
           project_todos =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               type: "todo",
               project_slug: page.slug,
               include_body: false,
@@ -293,7 +293,7 @@ defmodule DranWeb.ProjectLive do
 
           project_goals =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               type: "goal",
               project_slug: page.slug,
               include_body: false,
@@ -302,7 +302,7 @@ defmodule DranWeb.ProjectLive do
 
           project_plans =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               type: "plan",
               project_slug: page.slug,
               include_body: false,
@@ -318,7 +318,7 @@ defmodule DranWeb.ProjectLive do
 
           rendered_body =
             render_markdown(page.body,
-              context_id: page.context_id,
+              workspace_id: page.workspace_id,
               inline_links: Map.get(page.meta || %{}, "inline_links", [])
             )
 
@@ -341,7 +341,7 @@ defmodule DranWeb.ProjectLive do
              logs: logs,
              page_title: page.title,
              active_tab: active_tab,
-             context_id: context.id,
+             workspace_id: context.id,
              community_summary: community_summary,
              project_todos: project_todos,
              project_goals: project_goals,
@@ -366,9 +366,9 @@ defmodule DranWeb.ProjectLive do
   def handle_params(_params, _url, socket) do
     {pages, archived_pages} =
       if socket.assigns.context do
-        {Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
+        {Brain.list_pages(workspace_id: socket.assigns.context.id, type: @page_type),
          Brain.list_pages(
-           context_id: socket.assigns.context.id,
+           workspace_id: socket.assigns.context.id,
            type: @page_type,
            archived: true,
            limit: 200
@@ -509,8 +509,8 @@ defmodule DranWeb.ProjectLive do
   end
 
   # Carga páginas de un type y filtra en memoria por meta["project_slug"].
-  defp filter_by_project_slug(context_id, type, project_slug) do
-    Brain.list_pages(context_id: context_id, type: type, include_body: false, limit: 500)
+  defp filter_by_project_slug(workspace_id, type, project_slug) do
+    Brain.list_pages(workspace_id: workspace_id, type: type, include_body: false, limit: 500)
     |> Enum.filter(fn p -> meta_get(p.meta, "project_slug") == project_slug end)
   end
 
@@ -535,7 +535,7 @@ defmodule DranWeb.ProjectLive do
       if page do
         rendered_body =
           render_markdown(page.body,
-            context_id: page.context_id,
+            workspace_id: page.workspace_id,
             inline_links: Map.get(page.meta || %{}, "inline_links", [])
           )
 

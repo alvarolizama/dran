@@ -15,7 +15,7 @@ defmodule Dran.AccountsTest do
       assert {:ok, user} = Accounts.create_user(@user_attrs)
       assert user.email == "alice@example.com"
       assert user.name == "Alice"
-      assert user.is_admin == false
+      assert user.is_owner == false
       assert is_binary(user.api_token)
       assert String.length(user.api_token) > 20
     end
@@ -38,11 +38,11 @@ defmodule Dran.AccountsTest do
     test "get_user_by_email/1 returns the preloaded user" do
       assert {:ok, user} = Accounts.create_user(@user_attrs)
       context = context_fixture()
-      {:ok, _} = Accounts.add_user_to_context(user, context)
+      {:ok, _} = Accounts.add_user_to_workspace(user, context)
 
       found = Accounts.get_user_by_email(user.email)
       assert found.id == user.id
-      assert [_ctx] = found.contexts
+      assert [_ctx] = found.workspaces
     end
 
     test "get_user_by_email/1 returns nil when not found" do
@@ -85,11 +85,11 @@ defmodule Dran.AccountsTest do
     test "list_users/0 returns all users with preloaded contexts" do
       assert {:ok, user} = Accounts.create_user(@user_attrs)
       context = context_fixture()
-      {:ok, _} = Accounts.add_user_to_context(user, context)
+      {:ok, _} = Accounts.add_user_to_workspace(user, context)
 
       assert [found] = Accounts.list_users()
       assert found.id == user.id
-      assert [_ctx] = found.contexts
+      assert [_ctx] = found.workspaces
     end
 
     test "update_user/2 updates a user" do
@@ -181,75 +181,78 @@ defmodule Dran.AccountsTest do
       %{user: user, context: context}
     end
 
-    test "add_user_to_context/2 associates a user with a context", %{user: user, context: context} do
-      assert {:ok, uc} = Accounts.add_user_to_context(user, context)
+    test "add_user_to_workspace/2 associates a user with a context", %{
+      user: user,
+      context: context
+    } do
+      assert {:ok, uc} = Accounts.add_user_to_workspace(user, context)
       assert uc.user_id == user.id
-      assert uc.context_id == context.id
-      assert Accounts.user_in_context?(user, context)
+      assert uc.workspace_id == context.id
+      assert Accounts.user_in_workspace?(user, context)
     end
 
-    test "add_user_to_context/2 enforces uniqueness", %{user: user, context: context} do
-      assert {:ok, _} = Accounts.add_user_to_context(user, context)
-      assert {:error, changeset} = Accounts.add_user_to_context(user, context)
+    test "add_user_to_workspace/2 enforces uniqueness", %{user: user, context: context} do
+      assert {:ok, _} = Accounts.add_user_to_workspace(user, context)
+      assert {:error, changeset} = Accounts.add_user_to_workspace(user, context)
 
       assert {"has already been taken", _} =
                changeset.errors |> Enum.map(& &1) |> List.first() |> elem(1)
     end
 
-    test "user_in_context?/2 returns true for a member", %{user: user, context: context} do
-      refute Accounts.user_in_context?(user, context)
-      {:ok, _} = Accounts.add_user_to_context(user, context)
-      assert Accounts.user_in_context?(user, context)
+    test "user_in_workspace?/2 returns true for a member", %{user: user, context: context} do
+      refute Accounts.user_in_workspace?(user, context)
+      {:ok, _} = Accounts.add_user_to_workspace(user, context)
+      assert Accounts.user_in_workspace?(user, context)
     end
 
-    test "remove_user_from_context/2 detaches a user", %{user: user, context: context} do
-      {:ok, _} = Accounts.add_user_to_context(user, context)
-      assert Accounts.user_in_context?(user, context)
+    test "remove_user_from_workspace/2 detaches a user", %{user: user, context: context} do
+      {:ok, _} = Accounts.add_user_to_workspace(user, context)
+      assert Accounts.user_in_workspace?(user, context)
 
-      assert {1, _} = Accounts.remove_user_from_context(user, context)
-      refute Accounts.user_in_context?(user, context)
-      assert {0, _} = Accounts.remove_user_from_context(user, context)
+      assert {1, _} = Accounts.remove_user_from_workspace(user, context)
+      refute Accounts.user_in_workspace?(user, context)
+      assert {0, _} = Accounts.remove_user_from_workspace(user, context)
     end
 
-    test "list_user_contexts/1 returns the user's assigned contexts", %{
+    test "list_user_workspaces/1 returns the user's assigned contexts", %{
       user: user,
       context: context
     } do
       other = context_fixture(%{name: "Work", slug: "work"})
-      {:ok, _} = Accounts.add_user_to_context(user, context)
-      {:ok, _} = Accounts.add_user_to_context(user, other)
+      {:ok, _} = Accounts.add_user_to_workspace(user, context)
+      {:ok, _} = Accounts.add_user_to_workspace(user, other)
 
-      ids = Accounts.list_user_contexts(user) |> Enum.map(& &1.id)
+      ids = Accounts.list_user_workspaces(user) |> Enum.map(& &1.id)
       assert Enum.sort(ids) == Enum.sort([context.id, other.id])
     end
   end
 
-  describe "admin" do
-    test "admin_user/0 returns the admin user" do
+  describe "owner" do
+    test "owner_user/0 returns the owner user" do
       assert {:ok, _} = Accounts.create_user(@user_attrs)
 
-      admin_attrs =
-        @user_attrs |> Map.put(:email, "admin@example.com") |> Map.put(:is_admin, true)
+      owner_attrs =
+        @user_attrs |> Map.put(:email, "owner@example.com") |> Map.put(:is_owner, true)
 
-      assert {:ok, admin} = Accounts.create_user(admin_attrs)
+      assert {:ok, owner} = Accounts.create_user(owner_attrs)
 
-      assert Accounts.admin_user().id == admin.id
+      assert Accounts.owner_user().id == owner.id
     end
 
-    test "admin_user/0 returns nil when no admin exists" do
+    test "owner_user/0 returns nil when no owner exists" do
       assert {:ok, _} = Accounts.create_user(@user_attrs)
-      assert Accounts.admin_user() == nil
+      assert Accounts.owner_user() == nil
     end
 
-    test "is_admin?/1 returns true only for admins" do
+    test "is_owner?/1 returns true only for owners" do
       {:ok, user} = Accounts.create_user(@user_attrs)
 
-      admin_attrs =
-        @user_attrs |> Map.put(:email, "admin@example.com") |> Map.put(:is_admin, true)
+      owner_attrs =
+        @user_attrs |> Map.put(:email, "owner@example.com") |> Map.put(:is_owner, true)
 
-      {:ok, admin} = Accounts.create_user(admin_attrs)
-      assert Accounts.is_admin?(admin)
-      refute Accounts.is_admin?(user)
+      {:ok, owner} = Accounts.create_user(owner_attrs)
+      assert Accounts.is_owner?(owner)
+      refute Accounts.is_owner?(user)
     end
   end
 
@@ -268,12 +271,12 @@ defmodule Dran.AccountsTest do
       {:ok, user} = Accounts.create_user(@user_attrs)
       ctx1 = context_fixture(%{name: "A", slug: "a"})
       ctx2 = context_fixture(%{name: "B", slug: "b"})
-      {:ok, _} = Accounts.add_user_to_context(user, ctx1)
-      {:ok, _} = Accounts.add_user_to_context(user, ctx2)
+      {:ok, _} = Accounts.add_user_to_workspace(user, ctx1)
+      {:ok, _} = Accounts.add_user_to_workspace(user, ctx2)
 
       assert {:ok, authed} = Accounts.valid_token?(user.api_token)
 
-      assert Enum.map(authed.contexts, & &1.id) |> Enum.sort() ==
+      assert Enum.map(authed.workspaces, & &1.id) |> Enum.sort() ==
                Enum.sort([ctx1.id, ctx2.id])
     end
   end
@@ -284,7 +287,7 @@ defmodule Dran.AccountsTest do
     unique = System.unique_integer([:positive])
     attrs = Map.put_new(attrs, :name, "Context #{unique}")
     attrs = Map.put_new(attrs, :slug, "ctx-#{unique}")
-    {:ok, context} = Brain.create_context(attrs)
+    {:ok, context} = Brain.create_workspace(attrs)
     context
   end
 end

@@ -5,7 +5,7 @@ defmodule Dran.Repo.Migrations.CreateAgentSessions do
     create table(:agent_sessions, primary_key: false) do
       add :id, :binary_id, primary_key: true, default: fragment("gen_random_uuid()")
 
-      add :context_id, references(:contexts, type: :binary_id, on_delete: :delete_all),
+      add :workspace_id, references(:workspaces, type: :binary_id, on_delete: :delete_all),
         null: false
 
       add :agent_type, :string, null: false
@@ -21,7 +21,7 @@ defmodule Dran.Repo.Migrations.CreateAgentSessions do
       timestamps(type: :utc_datetime)
     end
 
-    create index(:agent_sessions, [:context_id])
+    create index(:agent_sessions, [:workspace_id])
     create index(:agent_sessions, [:agent_type])
     create index(:agent_sessions, [:status])
 

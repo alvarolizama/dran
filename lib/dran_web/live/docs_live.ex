@@ -34,8 +34,8 @@ defmodule DranWeb.DocsLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav="docs"
     >
       <div class="p-6 w-full">
@@ -318,7 +318,7 @@ defmodule DranWeb.DocsLive do
     ~H"""
     <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
       <.toc items={[
-        {"contexts", "Contexts"},
+        {"workspaces", "Contexts"},
         {"pages", "Pages"},
         {"relations", "Relations"},
         {"knowledge-graph", "Knowledge graph"},
@@ -333,7 +333,7 @@ defmodule DranWeb.DocsLive do
         {"disabled-types", "Type disabling"}
       ]} />
 
-      <.h2_heading id="contexts" icon="hero-squares-2x2" label="Contexts" />
+      <.h2_heading id="workspaces" icon="hero-squares-2x2" label="Contexts" />
       <p>
         A context is a self-contained workspace (e.g. "personal", "work"). All pages, relations,
         and logs belong to a single context. Most operations require a context, identified by
@@ -698,7 +698,9 @@ defmodule DranWeb.DocsLive do
               <td class="px-4 py-2">Legacy admin bearer token for REST/MCP (full access)</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">DRAN_CONTEXT_SLUG / DRAN_CONTEXT_NAME</td>
+              <td class="px-4 py-2 font-mono text-primary">
+                DRAN_WORKSPACE_SLUG / DRAN_WORKSPACE_NAME
+              </td>
               <td class="px-4 py-2 font-mono text-base-content/60">personal / Personal</td>
               <td class="px-4 py-2">Default context created on seed</td>
             </tr>
@@ -757,7 +759,7 @@ defmodule DranWeb.DocsLive do
       </p>
       <p>
         A context selector in the sidebar lets you switch between contexts. The
-        selection persists via a signed cookie (dran_last_context) and is restored
+        selection persists via a signed cookie (dran_last_workspace) and is restored
         on next visit. The selector also shows page counts per context.
       </p>
 
@@ -937,19 +939,24 @@ defmodule DranWeb.DocsLive do
 
   defp api_endpoints do
     [
-      %{group: "Contexts", method: "GET", path: "/api/contexts", desc: "List all contexts"},
-      %{group: "Contexts", method: "POST", path: "/api/contexts", desc: "Create a context"},
+      %{group: "Contexts", method: "GET", path: "/api/workspaces", desc: "List all contexts"},
+      %{group: "Contexts", method: "POST", path: "/api/workspaces", desc: "Create a context"},
       %{
         group: "Contexts",
         method: "GET",
-        path: "/api/contexts/:slug",
+        path: "/api/workspaces/:slug",
         desc: "Get a context by slug"
       },
-      %{group: "Contexts", method: "PUT", path: "/api/contexts/:slug", desc: "Update a context"},
+      %{
+        group: "Contexts",
+        method: "PUT",
+        path: "/api/workspaces/:slug",
+        desc: "Update a context"
+      },
       %{
         group: "Contexts",
         method: "DELETE",
-        path: "/api/contexts/:slug",
+        path: "/api/workspaces/:slug",
         desc: "Delete a context"
       },
       %{
@@ -1051,13 +1058,13 @@ defmodule DranWeb.DocsLive do
       %{
         group: "Export",
         method: "GET",
-        path: "/api/contexts/:slug/export",
+        path: "/api/workspaces/:slug/export",
         desc: "Single-context export (pages + relations)"
       },
       %{
         group: "Export",
         method: "GET",
-        path: "/api/export/:context/full",
+        path: "/api/export/:workspace/full",
         desc: "Full brain export (all pages + relations + metadata as JSON)"
       }
     ]
@@ -1321,7 +1328,7 @@ defmodule DranWeb.DocsLive do
           desc="Unified search across pages. Auto picks full-text, fuzzy, semantic or hybrid."
         >
           <:param name="query" type="string" required="yes" desc="Search query (natural language)" />
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="type" type="string" required="no" desc="Filter by page type" />
           <:param
             name="strategy"
@@ -1343,14 +1350,14 @@ defmodule DranWeb.DocsLive do
           desc="Get a page by slug. Returns full markdown content + metadata."
         >
           <:param name="slug" type="string" required="yes" desc="Page slug" />
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
 
         <.mcp_tool
           name="dran_list_pages"
           desc="List pages with optional filters. Returns lightweight metadata (no body)."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param
             name="type"
             type="string"
@@ -1390,7 +1397,7 @@ defmodule DranWeb.DocsLive do
           name="dran_create_page"
           desc="Create a new page. See Page Types table above for type-specific meta fields."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="title" type="string" required="yes" desc="Page title" />
           <:param name="slug" type="string" required="yes" desc="URL-friendly slug (kebab-case)" />
           <:param
@@ -1437,7 +1444,7 @@ defmodule DranWeb.DocsLive do
           name="dran_update_page"
           desc="Update any page field. Version auto-increments on body change. Meta is replaced (not merged) — use dran_update_todo for todos."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Page slug to update" />
           <:param name="title" type="string" required="no" desc="New title" />
           <:param name="body" type="string" required="no" desc="New markdown body" />
@@ -1462,7 +1469,7 @@ defmodule DranWeb.DocsLive do
           name="dran_delete_page"
           desc="Delete a page by slug. Cascades to relations and page versions. Irreversible."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Slug of the page to delete" />
         </.mcp_tool>
 
@@ -1470,7 +1477,7 @@ defmodule DranWeb.DocsLive do
           name="dran_create_todo"
           desc="Create a todo with kanban status and priority, optionally linked to a project, goal, and/or plan (independent links)."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="title" type="string" required="yes" desc="Todo title" />
           <:param name="slug" type="string" required="yes" desc="Todo slug" />
           <:param name="goal_slug" type="string" required="no" desc="Goal this todo belongs to" />
@@ -1519,7 +1526,7 @@ defmodule DranWeb.DocsLive do
           name="dran_update_todo"
           desc="Update a todo's status, priority, due date, assignee, goal, or plan. Merges meta — only pass changed fields."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Todo slug to update" />
           <:param name="kanban_status" type="string" required="no" desc="New kanban status" />
           <:param name="priority" type="string" required="no" desc="New priority" />
@@ -1551,7 +1558,7 @@ defmodule DranWeb.DocsLive do
           name="dran_create_relation"
           desc="Create a typed relation between two pages. Use for contradicts, supersedes, part_of, embeds."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="source_slug" type="string" required="yes" desc="Source page slug" />
           <:param name="target_slug" type="string" required="yes" desc="Target page slug" />
           <:param
@@ -1566,7 +1573,7 @@ defmodule DranWeb.DocsLive do
           name="dran_delete_relation"
           desc="Delete a relation between two pages. Without relation_type, deletes ALL relations between them."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="source_slug" type="string" required="yes" desc="Source page slug" />
           <:param name="target_slug" type="string" required="yes" desc="Target page slug" />
           <:param
@@ -1581,7 +1588,7 @@ defmodule DranWeb.DocsLive do
           name="dran_get_links"
           desc="Get all inbound + outbound relations for a page. Shows inbound and outbound graph connections."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Page slug" />
         </.mcp_tool>
 
@@ -1589,28 +1596,28 @@ defmodule DranWeb.DocsLive do
           name="dran_get_stats"
           desc="Aggregate statistics for a context. Returns page counts, todos by status, orphans, and total relations."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
 
         <.mcp_tool
           name="dran_lint_brain"
           desc="Quality report: orphans, stale pages, and contested knowledge."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
 
         <.mcp_tool
           name="dran_generate_community_summaries"
           desc="Generate or regenerate LLM summaries for all detected graph communities (Label Propagation clusters). Requires inference configured."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
 
         <.mcp_tool
           name="dran_rename_slug"
           desc="Rename a page's slug. All ![[old-slug]] embeds in the context are rewritten automatically."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="old_slug" type="string" required="yes" desc="Current slug to rename" />
           <:param name="new_slug" type="string" required="yes" desc="New slug (kebab-case)" />
         </.mcp_tool>
@@ -1619,7 +1626,7 @@ defmodule DranWeb.DocsLive do
           name="dran_reaugment_page"
           desc="Re-run the augmentation pipeline (summary/tags/embedding/relations) for a page. Use after major edits."
         >
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Slug of the page to reaugment" />
         </.mcp_tool>
 
@@ -1633,7 +1640,7 @@ defmodule DranWeb.DocsLive do
             required="yes"
             desc="curator, link_gardener, graph_rag"
           />
-          <:param name="context" type="string" required="yes" desc="Context slug" />
+          <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param
             name="input"
             type="string"

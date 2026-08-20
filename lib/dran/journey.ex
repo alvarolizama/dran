@@ -26,7 +26,7 @@ defmodule Dran.Journey do
       range: %{min_ts, max_ts, granularity}
     }
   """
-  def timeline(context_id, _opts \\ []) do
+  def timeline(workspace_id, _opts \\ []) do
     # Second-citizen page types (e.g. report) never enter the journey — the
     # canonical exclusion list lives in the Dran.Brain.PageTypes registry.
     excluded = PageTypes.excluded_from_journey()
@@ -34,7 +34,7 @@ defmodule Dran.Journey do
     entries =
       Repo.all(
         from l in Log,
-          where: l.context_id == ^context_id and l.action == "page.create",
+          where: l.workspace_id == ^workspace_id and l.action == "page.create",
           order_by: [asc: l.inserted_at],
           select: %{subject: l.subject, details: l.details, inserted_at: l.inserted_at}
       )

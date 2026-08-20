@@ -28,11 +28,11 @@ defmodule DranWeb.ReportLiveTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, report} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Weekly job report",
         body: "All jobs succeeded.",
         page_type: "report",
@@ -44,7 +44,7 @@ defmodule DranWeb.ReportLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, report: report}
   end

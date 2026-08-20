@@ -70,7 +70,7 @@ defmodule Dran.PropsMaterializer do
   `{:ok, 0}`.
   """
   @spec materialize(Page.t()) :: {:ok, non_neg_integer()}
-  def materialize(%Page{context_id: nil}), do: {:ok, 0}
+  def materialize(%Page{workspace_id: nil}), do: {:ok, 0}
 
   def materialize(%Page{} = page) do
     props = extract_props(page)

@@ -33,8 +33,8 @@ defmodule Dran.MCPFullTest do
     end)
 
     context =
-      Brain.get_context_by_slug("personal") ||
-        elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+      Brain.get_workspace_by_slug("personal") ||
+        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -122,15 +122,15 @@ defmodule Dran.MCPFullTest do
         send_message(%{"jsonrpc" => "2.0", "id" => 3, "method" => "resources/list"})
 
       uris = Enum.map(resp["result"]["resources"], & &1["uri"])
-      assert "page://{context}/{slug}" in uris
-      assert "goal://{context}/{slug}" in uris
-      assert "wiki://{context}/index" in uris
+      assert "page://{workspace}/{slug}" in uris
+      assert "goal://{workspace}/{slug}" in uris
+      assert "home://{workspace}/index" in uris
     end
 
     test "resources/read wiki index returns pages", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Resource Test Page",
           slug: "resource-test-page",
           page_type: "note"
@@ -141,7 +141,7 @@ defmodule Dran.MCPFullTest do
           "jsonrpc" => "2.0",
           "id" => 4,
           "method" => "resources/read",
-          "params" => %{"uri" => "wiki://personal/index"}
+          "params" => %{"uri" => "home://personal/index"}
         })
 
       text = resp["result"]["contents"] |> Enum.at(0) |> Map.get("text")
@@ -151,7 +151,7 @@ defmodule Dran.MCPFullTest do
     test "resources/read page returns full body", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Read Test",
           slug: "read-test-page",
           page_type: "note",
@@ -174,7 +174,7 @@ defmodule Dran.MCPFullTest do
     test "resources/read goal returns JSON with todos", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "My Goal",
           slug: "my-goal-page",
           page_type: "goal",
@@ -183,7 +183,7 @@ defmodule Dran.MCPFullTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Goal Todo",
           slug: "goal-todo-page",
           page_type: "todo",
@@ -238,28 +238,28 @@ defmodule Dran.MCPFullTest do
     test "returns matching pages", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Elixir Phoenix Guide",
           slug: "elixir-phoenix-guide",
           page_type: "note",
           body: "Learn Elixir and Phoenix framework"
         })
 
-      result = call_tool("dran_search", %{"query" => "elixir", "context" => "personal"})
+      result = call_tool("dran_search", %{"query" => "elixir", "workspace" => "personal"})
       refute result =~ "Error:"
       assert result =~ "elixir-phoenix-guide"
     end
 
     test "filters by type" do
       result =
-        call_tool("dran_search", %{"query" => "test", "context" => "personal", "type" => "note"})
+        call_tool("dran_search", %{"query" => "test", "workspace" => "personal", "type" => "note"})
 
       # Should return only notes — no error.
       refute result =~ "Error:"
     end
 
     test "errors on non-existent context" do
-      result = call_tool("dran_search", %{"query" => "test", "context" => "no-such-context"})
+      result = call_tool("dran_search", %{"query" => "test", "workspace" => "no-such-context"})
       assert result =~ "Error: context 'no-such-context' not found"
     end
   end
@@ -270,7 +270,7 @@ defmodule Dran.MCPFullTest do
     test "creates a note page", %{context: ctx} do
       result =
         call_tool("dran_create_page", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "page_type" => "note",
           "title" => "Test Note",
           "slug" => "create-page-test-note",
@@ -290,7 +290,7 @@ defmodule Dran.MCPFullTest do
     test "errors on duplicate slug", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Existing",
           slug: "dup-slug-test",
           page_type: "note"
@@ -298,7 +298,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_create_page", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "page_type" => "note",
           "title" => "Another",
           "slug" => "dup-slug-test",
@@ -311,7 +311,7 @@ defmodule Dran.MCPFullTest do
     test "errors on non-existent context" do
       result =
         call_tool("dran_create_page", %{
-          "context" => "no-such-context",
+          "workspace" => "no-such-context",
           "page_type" => "note",
           "title" => "X",
           "slug" => "x"
@@ -323,7 +323,7 @@ defmodule Dran.MCPFullTest do
     test "rejects the system-only report page type", %{context: ctx} do
       result =
         call_tool("dran_create_page", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "page_type" => "report",
           "title" => "Job report",
           "slug" => "mcp-report-create-test",
@@ -339,7 +339,7 @@ defmodule Dran.MCPFullTest do
     test "creates a project page with meta", %{context: ctx} do
       result =
         call_tool("dran_create_page", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "page_type" => "project",
           "title" => "Test Project",
           "slug" => "test-project-create",
@@ -358,7 +358,7 @@ defmodule Dran.MCPFullTest do
     test "updates body and increments version", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Update Test",
           slug: "update-test-page",
           page_type: "note",
@@ -367,7 +367,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_update_page", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "slug" => "update-test-page",
           "body" => "updated body"
         })
@@ -383,7 +383,7 @@ defmodule Dran.MCPFullTest do
     test "replaces meta entirely (not a merge)", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Meta Test",
           slug: "meta-test-page",
           page_type: "note",
@@ -393,7 +393,7 @@ defmodule Dran.MCPFullTest do
 
       # Update with only `kind` — `date` should be gone.
       call_tool("dran_update_page", %{
-        "context" => "personal",
+        "workspace" => "personal",
         "slug" => "meta-test-page",
         "meta" => %{"kind" => "idea"}
       })
@@ -406,7 +406,7 @@ defmodule Dran.MCPFullTest do
     test "archives a page", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Archive Me",
           slug: "archive-me-page",
           page_type: "note"
@@ -414,7 +414,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_update_page", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "slug" => "archive-me-page",
           "archived" => true
         })
@@ -427,7 +427,7 @@ defmodule Dran.MCPFullTest do
     test "errors when slug not found" do
       result =
         call_tool("dran_update_page", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "slug" => "no-such-page",
           "body" => "x"
         })
@@ -442,7 +442,7 @@ defmodule Dran.MCPFullTest do
     test "returns full page body", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Get Page Test",
           slug: "get-page-test",
           page_type: "note",
@@ -450,7 +450,7 @@ defmodule Dran.MCPFullTest do
           tags: ["a", "b"]
         })
 
-      result = call_tool("dran_get_page", %{"context" => "personal", "slug" => "get-page-test"})
+      result = call_tool("dran_get_page", %{"workspace" => "personal", "slug" => "get-page-test"})
 
       assert result =~ "Get Page Test"
       assert result =~ "This is the body content"
@@ -459,12 +459,12 @@ defmodule Dran.MCPFullTest do
     end
 
     test "errors when slug not found" do
-      result = call_tool("dran_get_page", %{"context" => "personal", "slug" => "missing-slug"})
+      result = call_tool("dran_get_page", %{"workspace" => "personal", "slug" => "missing-slug"})
       assert result =~ "Error: page 'missing-slug' not found"
     end
 
     test "errors when context not found" do
-      result = call_tool("dran_get_page", %{"context" => "no-such", "slug" => "x"})
+      result = call_tool("dran_get_page", %{"workspace" => "no-such", "slug" => "x"})
       assert result =~ "Error: context"
     end
   end
@@ -475,21 +475,21 @@ defmodule Dran.MCPFullTest do
     test "deletes a page", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Delete Me",
           slug: "delete-me-page",
           page_type: "note"
         })
 
       result =
-        call_tool("dran_delete_page", %{"context" => "personal", "slug" => "delete-me-page"})
+        call_tool("dran_delete_page", %{"workspace" => "personal", "slug" => "delete-me-page"})
 
       assert result =~ "Deleted page: Delete Me"
       assert is_nil(Brain.get_page_by_slug("delete-me-page", ctx.id))
     end
 
     test "errors when slug not found" do
-      result = call_tool("dran_delete_page", %{"context" => "personal", "slug" => "no-such"})
+      result = call_tool("dran_delete_page", %{"workspace" => "personal", "slug" => "no-such"})
       assert result =~ "Error: page 'no-such' not found"
     end
   end
@@ -500,7 +500,7 @@ defmodule Dran.MCPFullTest do
     test "creates a todo with kanban status", %{context: ctx} do
       result =
         call_tool("dran_create_todo", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "title" => "Test Todo",
           "slug" => "create-todo-test",
           "kanban_status" => "today",
@@ -518,7 +518,7 @@ defmodule Dran.MCPFullTest do
     test "sets assignee in meta", %{context: ctx} do
       result =
         call_tool("dran_create_todo", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "title" => "Assigned Todo",
           "slug" => "assigned-todo-test",
           "assignee" => "hermes"
@@ -531,7 +531,7 @@ defmodule Dran.MCPFullTest do
 
     test "without assignee leaves it absent", %{context: ctx} do
       call_tool("dran_create_todo", %{
-        "context" => "personal",
+        "workspace" => "personal",
         "title" => "Unassigned Todo",
         "slug" => "unassigned-todo-test"
       })
@@ -542,7 +542,7 @@ defmodule Dran.MCPFullTest do
 
     test "defaults to backlog status", %{context: ctx} do
       call_tool("dran_create_todo", %{
-        "context" => "personal",
+        "workspace" => "personal",
         "title" => "Default Todo",
         "slug" => "default-todo-test"
       })
@@ -554,7 +554,7 @@ defmodule Dran.MCPFullTest do
     test "with independent project/goal/plan links", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Project",
           slug: "link-project",
           page_type: "project"
@@ -562,7 +562,7 @@ defmodule Dran.MCPFullTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Goal",
           slug: "link-goal",
           page_type: "goal"
@@ -570,7 +570,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_create_todo", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "title" => "Linked Todo",
           "slug" => "linked-todo-test",
           "project_slug" => "link-project",
@@ -587,7 +587,7 @@ defmodule Dran.MCPFullTest do
     test "errors on duplicate slug", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Existing Todo",
           slug: "dup-todo-test",
           page_type: "todo"
@@ -595,7 +595,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_create_todo", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "title" => "Another",
           "slug" => "dup-todo-test"
         })
@@ -610,7 +610,7 @@ defmodule Dran.MCPFullTest do
     test "merges meta (preserves existing keys)", %{context: ctx} do
       {:ok, todo} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Merge Todo",
           slug: "merge-todo-test",
           page_type: "todo",
@@ -619,7 +619,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_update_todo", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "slug" => "merge-todo-test",
           "kanban_status" => "today"
         })
@@ -636,7 +636,7 @@ defmodule Dran.MCPFullTest do
     test "updates assignee via merge", %{context: ctx} do
       {:ok, todo} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Assign Todo",
           slug: "assign-update-test",
           page_type: "todo",
@@ -645,7 +645,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_update_todo", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "slug" => "assign-update-test",
           "assignee" => "hermes"
         })
@@ -660,7 +660,7 @@ defmodule Dran.MCPFullTest do
     test "updates links independently", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Proj",
           slug: "update-proj",
           page_type: "project"
@@ -668,7 +668,7 @@ defmodule Dran.MCPFullTest do
 
       {:ok, todo} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Link Todo",
           slug: "link-update-todo",
           page_type: "todo",
@@ -676,7 +676,7 @@ defmodule Dran.MCPFullTest do
         })
 
       call_tool("dran_update_todo", %{
-        "context" => "personal",
+        "workspace" => "personal",
         "slug" => "link-update-todo",
         "project_slug" => "update-proj"
       })
@@ -689,7 +689,7 @@ defmodule Dran.MCPFullTest do
     test "errors when todo not found" do
       result =
         call_tool("dran_update_todo", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "slug" => "no-such-todo",
           "kanban_status" => "done"
         })
@@ -703,14 +703,14 @@ defmodule Dran.MCPFullTest do
   describe "dran_create_relation" do
     test "creates a related relation", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "rel-a", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "A", slug: "rel-a", page_type: "note"})
 
       {:ok, _} =
-        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "rel-b", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "B", slug: "rel-b", page_type: "note"})
 
       result =
         call_tool("dran_create_relation", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "source_slug" => "rel-a",
           "target_slug" => "rel-b",
           "relation_type" => "related"
@@ -722,7 +722,7 @@ defmodule Dran.MCPFullTest do
     test "errors when source not found" do
       result =
         call_tool("dran_create_relation", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "source_slug" => "no-source",
           "target_slug" => "no-target"
         })
@@ -733,7 +733,7 @@ defmodule Dran.MCPFullTest do
     test "errors when target not found", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Src",
           slug: "src-exists",
           page_type: "note"
@@ -741,7 +741,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_create_relation", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "source_slug" => "src-exists",
           "target_slug" => "no-target"
         })
@@ -751,14 +751,14 @@ defmodule Dran.MCPFullTest do
 
     test "defaults to related type", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{context_id: ctx.id, title: "C", slug: "rel-c", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "C", slug: "rel-c", page_type: "note"})
 
       {:ok, _} =
-        Brain.create_page(%{context_id: ctx.id, title: "D", slug: "rel-d", page_type: "note"})
+        Brain.create_page(%{workspace_id: ctx.id, title: "D", slug: "rel-d", page_type: "note"})
 
       result =
         call_tool("dran_create_relation", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "source_slug" => "rel-c",
           "target_slug" => "rel-d"
         })
@@ -772,16 +772,26 @@ defmodule Dran.MCPFullTest do
   describe "dran_delete_relation" do
     test "deletes a relation", %{context: ctx} do
       {:ok, _} =
-        Brain.create_page(%{context_id: ctx.id, title: "X", slug: "del-rel-x", page_type: "note"})
+        Brain.create_page(%{
+          workspace_id: ctx.id,
+          title: "X",
+          slug: "del-rel-x",
+          page_type: "note"
+        })
 
       {:ok, _} =
-        Brain.create_page(%{context_id: ctx.id, title: "Y", slug: "del-rel-y", page_type: "note"})
+        Brain.create_page(%{
+          workspace_id: ctx.id,
+          title: "Y",
+          slug: "del-rel-y",
+          page_type: "note"
+        })
 
       Brain.create_relation_by_slugs("del-rel-x", "del-rel-y", "related", ctx.id)
 
       result =
         call_tool("dran_delete_relation", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "source_slug" => "del-rel-x",
           "target_slug" => "del-rel-y"
         })
@@ -792,7 +802,7 @@ defmodule Dran.MCPFullTest do
     test "handles non-existent pages gracefully" do
       result =
         call_tool("dran_delete_relation", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "source_slug" => "no-page-a",
           "target_slug" => "no-page-b"
         })
@@ -808,7 +818,7 @@ defmodule Dran.MCPFullTest do
     test "returns inbound and outbound relations", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Links A",
           slug: "links-a",
           page_type: "note"
@@ -816,7 +826,7 @@ defmodule Dran.MCPFullTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Links B",
           slug: "links-b",
           page_type: "note"
@@ -824,7 +834,7 @@ defmodule Dran.MCPFullTest do
 
       Brain.create_relation_by_slugs("links-a", "links-b", "related", ctx.id)
 
-      result = call_tool("dran_get_links", %{"context" => "personal", "slug" => "links-a"})
+      result = call_tool("dran_get_links", %{"workspace" => "personal", "slug" => "links-a"})
 
       assert result =~ "Relations for 'Links A'"
       assert result =~ "Outbound (1)"
@@ -833,7 +843,7 @@ defmodule Dran.MCPFullTest do
     end
 
     test "errors when page not found" do
-      result = call_tool("dran_get_links", %{"context" => "personal", "slug" => "no-links"})
+      result = call_tool("dran_get_links", %{"workspace" => "personal", "slug" => "no-links"})
       assert result =~ "Error: page 'no-links' not found"
     end
   end
@@ -842,7 +852,7 @@ defmodule Dran.MCPFullTest do
 
   describe "dran_list_pages" do
     test "lists pages in a context" do
-      result = call_tool("dran_list_pages", %{"context" => "personal", "limit" => 5})
+      result = call_tool("dran_list_pages", %{"workspace" => "personal", "limit" => 5})
       refute result =~ "Error:"
       assert result =~ "Found"
     end
@@ -850,7 +860,7 @@ defmodule Dran.MCPFullTest do
     test "filters by type", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Filter Note",
           slug: "filter-type-note",
           page_type: "note"
@@ -858,7 +868,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_list_pages", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "type" => "note",
           "limit" => 100
         })
@@ -869,7 +879,7 @@ defmodule Dran.MCPFullTest do
     test "filters by tag", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Tagged",
           slug: "tag-filter-test",
           page_type: "note",
@@ -878,7 +888,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_list_pages", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "tag" => "filter-tag-xyz"
         })
 
@@ -888,7 +898,7 @@ defmodule Dran.MCPFullTest do
     test "filters by owner", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Owner Test",
           slug: "owner-filter-test",
           page_type: "note",
@@ -897,7 +907,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_list_pages", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "owner" => "alice"
         })
 
@@ -907,7 +917,7 @@ defmodule Dran.MCPFullTest do
     test "filters by created_by", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Creator Test",
           slug: "creator-filter-test",
           page_type: "note",
@@ -916,7 +926,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_list_pages", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "created_by" => "bob"
         })
 
@@ -926,7 +936,7 @@ defmodule Dran.MCPFullTest do
     test "filters by assignee", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Assigned to Hermes",
           slug: "assignee-filter-hermes",
           page_type: "todo",
@@ -935,7 +945,7 @@ defmodule Dran.MCPFullTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Assigned to Alvaro",
           slug: "assignee-filter-alvaro",
           page_type: "todo",
@@ -944,7 +954,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_list_pages", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "assignee" => "hermes"
         })
 
@@ -955,7 +965,7 @@ defmodule Dran.MCPFullTest do
     test "filters unassigned todos with 'none'", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Unassigned Todo",
           slug: "assignee-filter-none",
           page_type: "todo",
@@ -964,7 +974,7 @@ defmodule Dran.MCPFullTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Assigned Todo",
           slug: "assignee-filter-set",
           page_type: "todo",
@@ -973,7 +983,7 @@ defmodule Dran.MCPFullTest do
 
       result =
         call_tool("dran_list_pages", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "assignee" => "none"
         })
 
@@ -984,7 +994,7 @@ defmodule Dran.MCPFullTest do
     test "respects limit" do
       result =
         call_tool("dran_list_pages", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "limit" => 2
         })
 
@@ -999,7 +1009,7 @@ defmodule Dran.MCPFullTest do
     end
 
     test "errors on non-existent context" do
-      result = call_tool("dran_list_pages", %{"context" => "no-such", "limit" => 5})
+      result = call_tool("dran_list_pages", %{"workspace" => "no-such", "limit" => 5})
       assert result =~ "Error: context"
     end
   end
@@ -1008,7 +1018,7 @@ defmodule Dran.MCPFullTest do
 
   describe "dran_get_stats" do
     test "returns stats with totals" do
-      result = call_tool("dran_get_stats", %{"context" => "personal"})
+      result = call_tool("dran_get_stats", %{"workspace" => "personal"})
       refute result =~ "Error:"
       assert result =~ "Stats for 'personal'"
       assert result =~ "Total pages:"
@@ -1018,7 +1028,7 @@ defmodule Dran.MCPFullTest do
     end
 
     test "errors on non-existent context" do
-      result = call_tool("dran_get_stats", %{"context" => "no-such"})
+      result = call_tool("dran_get_stats", %{"workspace" => "no-such"})
       assert result =~ "Error: context"
     end
   end
@@ -1027,7 +1037,7 @@ defmodule Dran.MCPFullTest do
 
   describe "dran_lint_brain" do
     test "returns lint report with categories" do
-      result = call_tool("dran_lint_brain", %{"context" => "personal"})
+      result = call_tool("dran_lint_brain", %{"workspace" => "personal"})
       refute result =~ "Error:"
       assert result =~ "Lint Report"
       assert result =~ "Orphan pages"
@@ -1036,7 +1046,7 @@ defmodule Dran.MCPFullTest do
     end
 
     test "errors on non-existent context" do
-      result = call_tool("dran_lint_brain", %{"context" => "no-such"})
+      result = call_tool("dran_lint_brain", %{"workspace" => "no-such"})
       assert result =~ "Error: context"
     end
   end
@@ -1047,7 +1057,7 @@ defmodule Dran.MCPFullTest do
     test "errors when old_slug equals new_slug" do
       result =
         call_tool("dran_rename_slug", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "old_slug" => "same",
           "new_slug" => "same"
         })
@@ -1058,7 +1068,7 @@ defmodule Dran.MCPFullTest do
     test "errors when context not found" do
       result =
         call_tool("dran_rename_slug", %{
-          "context" => "no-such",
+          "workspace" => "no-such",
           "old_slug" => "a",
           "new_slug" => "b"
         })
@@ -1073,7 +1083,7 @@ defmodule Dran.MCPFullTest do
     test "errors when context not found" do
       result =
         call_tool("dran_reaugment_page", %{
-          "context" => "no-such",
+          "workspace" => "no-such",
           "slug" => "x"
         })
 
@@ -1088,7 +1098,7 @@ defmodule Dran.MCPFullTest do
       result =
         call_tool("dran_start_agent", %{
           "agent_type" => "nonexistent",
-          "context" => "personal",
+          "workspace" => "personal",
           "input" => "test"
         })
 
@@ -1099,7 +1109,7 @@ defmodule Dran.MCPFullTest do
       result =
         call_tool("dran_start_agent", %{
           "agent_type" => "ask",
-          "context" => "no-such",
+          "workspace" => "no-such",
           "input" => "test"
         })
 

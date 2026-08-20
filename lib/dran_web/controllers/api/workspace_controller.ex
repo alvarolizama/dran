@@ -1,4 +1,4 @@
-defmodule DranWeb.API.ContextController do
+defmodule DranWeb.API.WorkspaceController do
   use DranWeb, :controller
 
   alias Dran.Brain
@@ -7,15 +7,15 @@ defmodule DranWeb.API.ContextController do
   # token but not the user's role — we plug require_admin on top.
   plug :require_admin when action in [:create, :update, :delete]
 
-  @doc "GET /api/contexts — list all contexts"
+  @doc "GET /api/workspaces — list all contexts"
   def index(conn, _params) do
-    contexts = Brain.list_contexts()
+    contexts = Brain.list_workspaces()
     json(conn, %{data: contexts})
   end
 
-  @doc "POST /api/contexts — create a context"
+  @doc "POST /api/workspaces — create a context"
   def create(conn, %{"name" => _name, "slug" => _slug} = params) do
-    case Brain.create_context(params) do
+    case Brain.create_workspace(params) do
       {:ok, context} ->
         conn
         |> put_status(:created)
@@ -34,9 +34,9 @@ defmodule DranWeb.API.ContextController do
     |> json(%{errors: %{detail: "name and slug are required"}})
   end
 
-  @doc "GET /api/contexts/:slug — get a context"
+  @doc "GET /api/workspaces/:slug — get a context"
   def show(conn, %{"slug" => slug}) do
-    case Brain.get_context_by_slug(slug) do
+    case Brain.get_workspace_by_slug(slug) do
       nil ->
         conn
         |> put_status(:not_found)
@@ -47,14 +47,14 @@ defmodule DranWeb.API.ContextController do
     end
   end
 
-  @doc "PUT /api/contexts/:slug — update a context"
+  @doc "PUT /api/workspaces/:slug — update a context"
   def update(conn, %{"slug" => slug} = params) do
-    context = Brain.get_context_by_slug(slug)
+    context = Brain.get_workspace_by_slug(slug)
 
     if context do
       params = Map.drop(params, ["slug"])
 
-      case Brain.update_context(context, params) do
+      case Brain.update_workspace(context, params) do
         {:ok, updated} ->
           json(conn, %{data: updated})
 
@@ -70,16 +70,16 @@ defmodule DranWeb.API.ContextController do
     end
   end
 
-  @doc "DELETE /api/contexts/:slug — delete a context"
+  @doc "DELETE /api/workspaces/:slug — delete a context"
   def delete(conn, %{"slug" => slug}) do
-    case Brain.get_context_by_slug(slug) do
+    case Brain.get_workspace_by_slug(slug) do
       nil ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "context not found"}})
 
       context ->
-        case Brain.delete_context(context) do
+        case Brain.delete_workspace(context) do
           {:ok, _} ->
             conn |> put_status(:no_content) |> send_resp(:no_content, "")
 
@@ -97,7 +97,7 @@ defmodule DranWeb.API.ContextController do
     # (or we need to look it up). For API token auth, the user is in the token.
     # We need to check if the authenticated identity is admin.
     case conn.assigns[:user] do
-      %{is_admin: true} ->
+      %{is_owner: true} ->
         conn
 
       _ ->

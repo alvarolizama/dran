@@ -40,8 +40,8 @@ defmodule Dran.Agent.EngineTest do
     end)
 
     context =
-      Brain.get_context_by_slug("personal") ||
-        elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+      Brain.get_workspace_by_slug("personal") ||
+        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end

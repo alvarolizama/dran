@@ -1,14 +1,14 @@
-defmodule DranWeb.WikiLive do
+defmodule DranWeb.HomeLive do
   @moduledoc """
-  Read-only wiki browser for contexts with `wiki_enabled: true`.
+  Home — workspace browser for contexts with `wiki_enabled: true`.
 
   Six actions:
   - `:index`         — landing: list of wiki-enabled contexts
-  - `:context_home`  — home of a context: collections + pinned + index by type
+  - `:workspace_home`  — home of a workspace: collections + pinned + index by type
   - `:type_list`      — alphabetical list of pages of one type
   - `:page_show`     — rendered page (markdown + mermaid, read-only)
   - `:collection`     — smart collection results in wiki mode
-  - `:graph`          — graph of the context's pages
+  - `:graph`          — graph of the workspace's pages
 
   Authenticated but accessible to ALL logged-in users, including wiki-only
   users (no contexts assigned). No edit/delete/create controls — pure browse.
@@ -20,6 +20,8 @@ defmodule DranWeb.WikiLive do
   import Phoenix.HTML, only: [raw: 1]
 
   alias Dran.Brain
+  alias Dran.Brain.Workspace
+
   alias Dran.Brain.PageTypes, as: BrainPageTypes
   alias Dran.SmartCollection
   alias DranWeb.GraphHelpers
@@ -45,20 +47,20 @@ defmodule DranWeb.WikiLive do
 
   @impl true
   def mount(_params, session, socket) do
-    {socket, context} = Auth.assign_to_socket(socket, session)
+    {socket, workspace} = Auth.assign_to_socket(socket, session)
 
     # The wiki is browsable by ALL logged-in users (including wiki-only
     # auto-registered accounts with no contexts assigned). The sidebar
-    # context selector must therefore list every wiki-enabled context, not
+    # workspace selector must therefore list every wiki-enabled workspace, not
     # just the current user's assigned contexts. `assign_to_socket` sets
     # `contexts` to the user's accessible contexts, so override it here.
-    socket = assign(socket, contexts: Brain.list_wiki_contexts())
+    socket = assign(socket, contexts: Brain.list_home_workspaces())
 
-    # Subscribe to PubSub for the context so the graph view can debounce
+    # Subscribe to PubSub for the workspace so the graph view can debounce
     # page_changed broadcasts and tell the hook to re-fetch — same pattern
     # as GraphLive (panel).
-    if context do
-      Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
+    if workspace do
+      Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{workspace.id}")
     end
 
     {:ok,
@@ -108,12 +110,12 @@ defmodule DranWeb.WikiLive do
   # ── :index — landing page with all wiki-enabled contexts ──────────────────
 
   defp apply_action(socket, :index, _params) do
-    contexts = Brain.list_wiki_contexts()
+    contexts = Brain.list_home_workspaces()
 
     socket
     |> assign(
       contexts: contexts,
-      context: nil,
+      workspace: nil,
       page_title: gettext("Wiki"),
       type_index: [],
       collections: [],
@@ -122,19 +124,19 @@ defmodule DranWeb.WikiLive do
     )
   end
 
-  # ── :context_home — collections + pinned + index by type ───────────────────
+  # ── :workspace_home — collections + pinned + index by type ───────────────────
 
-  defp apply_action(socket, :context_home, %{"context_slug" => context_slug}) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
-        collections = SmartCollection.list_all(context.id)
-        pinned = Brain.list_pinned_pages(context.id)
-        type_index = build_type_index(context)
+  defp apply_action(socket, :workspace_home, %{"workspace_slug" => workspace_slug}) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %Workspace{} = workspace ->
+        collections = SmartCollection.list_all(workspace.id)
+        pinned = Brain.list_pinned_pages(workspace.id)
+        type_index = build_type_index(workspace)
 
         # Load all non-archived pages for the A-Z index
         all_pages =
           Brain.list_pages(
-            context_id: context.id,
+            workspace_id: workspace.id,
             limit: 500
           )
 
@@ -142,16 +144,16 @@ defmodule DranWeb.WikiLive do
 
         socket
         |> assign(
-          context: context,
+          workspace: workspace,
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
           alphabet: alphabet,
-          page_title: context.name,
+          page_title: workspace.name,
           search_results: nil
         )
 
-      _ ->
+      nil ->
         push_navigate(socket, to: ~p"/")
     end
   end
@@ -159,14 +161,14 @@ defmodule DranWeb.WikiLive do
   # ── :type_list — alphabetical list of pages of one type ───────────────────
 
   defp apply_action(socket, :type_list, %{
-         "context_slug" => context_slug,
+         "workspace_slug" => workspace_slug,
          "page_type" => page_type
        }) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %Workspace{} = workspace ->
         pages =
           Brain.list_pages(
-            context_id: context.id,
+            workspace_id: workspace.id,
             type: page_type,
             limit: 500
           )
@@ -180,21 +182,21 @@ defmodule DranWeb.WikiLive do
           end
 
         # Sidebar data
-        collections = SmartCollection.list_all(context.id)
-        pinned = Brain.list_pinned_pages(context.id)
-        type_index = build_type_index(context)
+        collections = SmartCollection.list_all(workspace.id)
+        pinned = Brain.list_pinned_pages(workspace.id)
+        type_index = build_type_index(workspace)
 
         # Load filter options + enabled flags for any type that supports
         # link filtering (todo, goal, plan). Mirrors the kanban pattern.
-        {filter_opts, enabled_flags} = load_type_filter_data(context, page_type)
+        {filter_opts, enabled_flags} = load_type_filter_data(workspace, page_type)
 
         socket
         |> assign(
-          context: context,
+          workspace: workspace,
           page_type: page_type,
           pages: pages,
           grouped_pages: grouped,
-          page_title: "#{context.name} · #{PageTypes.label(page_type)}",
+          page_title: "#{workspace.name} · #{PageTypes.label(page_type)}",
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
@@ -214,7 +216,7 @@ defmodule DranWeb.WikiLive do
           filtered_count: nil
         )
 
-      _ ->
+      nil ->
         push_navigate(socket, to: ~p"/")
     end
   end
@@ -222,27 +224,27 @@ defmodule DranWeb.WikiLive do
   # ── :page_show — rendered page (markdown + mermaid, read-only) ────────────
 
   defp apply_action(socket, :page_show, %{
-         "context_slug" => context_slug,
+         "workspace_slug" => workspace_slug,
          "page_type" => page_type,
          "slug" => slug
        }) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
-        case Brain.get_page_by_slug(slug, context.id) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %Workspace{} = workspace ->
+        case Brain.get_page_by_slug(slug, workspace.id) do
           %{page_type: ^page_type} = page ->
             # Load page with full body
             page = Brain.get_page!(page.id)
-            rendered_body = render_wiki_markdown(page.body, context)
+            rendered_body = render_wiki_markdown(page.body, workspace)
             relations = Brain.list_relations_for_page(page.id)
 
             # Sidebar data
-            collections = SmartCollection.list_all(context.id)
-            pinned = Brain.list_pinned_pages(context.id)
-            type_index = build_type_index(context)
+            collections = SmartCollection.list_all(workspace.id)
+            pinned = Brain.list_pinned_pages(workspace.id)
+            type_index = build_type_index(workspace)
 
             socket
             |> assign(
-              context: context,
+              workspace: workspace,
               page: page,
               rendered_body: rendered_body,
               relations: relations,
@@ -253,36 +255,36 @@ defmodule DranWeb.WikiLive do
               search_results: nil
             )
 
-          _ ->
-            push_navigate(socket, to: ~p"/#{context_slug}/type/#{page_type}")
+          nil ->
+            push_navigate(socket, to: ~p"/#{workspace_slug}/type/#{page_type}")
         end
 
-      _ ->
+      nil ->
         push_navigate(socket, to: ~p"/")
     end
   end
 
   # ── :collection — smart collection results in wiki mode ────────────────────
 
-  defp apply_action(socket, :collection, %{"context_slug" => context_slug, "slug" => slug}) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
-        case SmartCollection.get_by_slug(slug, context.id) do
+  defp apply_action(socket, :collection, %{"workspace_slug" => workspace_slug, "slug" => slug}) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %Workspace{} = workspace ->
+        case SmartCollection.get_by_slug(slug, workspace.id) do
           nil ->
-            push_navigate(socket, to: ~p"/#{context_slug}")
+            push_navigate(socket, to: ~p"/#{workspace_slug}")
 
           collection ->
             query = Map.get(collection.meta || %{}, "query", %{})
-            results = SmartCollection.execute(query, context.id)
+            results = SmartCollection.execute(query, workspace.id)
 
             # Sidebar data
-            all_collections = SmartCollection.list_all(context.id)
-            pinned = Brain.list_pinned_pages(context.id)
-            type_index = build_type_index(context)
+            all_collections = SmartCollection.list_all(workspace.id)
+            pinned = Brain.list_pinned_pages(workspace.id)
+            type_index = build_type_index(workspace)
 
             socket
             |> assign(
-              context: context,
+              workspace: workspace,
               collection: collection,
               results: results,
               page_title: collection.title,
@@ -293,29 +295,29 @@ defmodule DranWeb.WikiLive do
             )
         end
 
-      _ ->
+      nil ->
         push_navigate(socket, to: ~p"/")
     end
   end
 
-  # ── :graph — graph view of the context (progressive, mirrors GraphLive) ───
+  # ── :graph — graph view of the workspace (progressive, mirrors GraphLive) ───
 
-  defp apply_action(socket, :graph, %{"context_slug" => context_slug}) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
+  defp apply_action(socket, :graph, %{"workspace_slug" => workspace_slug}) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %Workspace{} = workspace ->
         # Progressive: no data load here — the Graph3D hook fetches
-        # /<context_slug>/graph/json via HTTP after the shell renders,
+        # /<workspace_slug>/graph/json via HTTP after the shell renders,
         # keeping initial page load instant. Same pattern as GraphLive panel.
         # Sidebar data
-        collections = SmartCollection.list_all(context.id)
-        pinned = Brain.list_pinned_pages(context.id)
-        type_index = build_type_index(context)
+        collections = SmartCollection.list_all(workspace.id)
+        pinned = Brain.list_pinned_pages(workspace.id)
+        type_index = build_type_index(workspace)
 
         socket
         |> assign(
-          context: context,
+          workspace: workspace,
           graph_data: %{nodes: [], edges: []},
-          page_title: "#{context.name} · Graph",
+          page_title: "#{workspace.name} · Graph",
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
@@ -323,7 +325,7 @@ defmodule DranWeb.WikiLive do
           loading: true
         )
 
-      _ ->
+      nil ->
         push_navigate(socket, to: ~p"/")
     end
   end
@@ -339,30 +341,30 @@ defmodule DranWeb.WikiLive do
     {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
   ]
 
-  defp apply_action(socket, :kanban, %{"context_slug" => context_slug}) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
+  defp apply_action(socket, :kanban, %{"workspace_slug" => workspace_slug}) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %Workspace{} = workspace ->
         todos =
           Brain.list_pages(
-            context_id: context.id,
+            workspace_id: workspace.id,
             type: "todo",
             include_body: false,
             limit: 500
           )
 
         # Sidebar data
-        collections = SmartCollection.list_all(context.id)
-        pinned = Brain.list_pinned_pages(context.id)
-        type_index = build_type_index(context)
+        collections = SmartCollection.list_all(workspace.id)
+        pinned = Brain.list_pinned_pages(workspace.id)
+        type_index = build_type_index(workspace)
 
-        {filter_opts, enabled_flags} = load_type_filter_data(context, "todo")
+        {filter_opts, enabled_flags} = load_type_filter_data(workspace, "todo")
 
         socket
         |> assign(
-          context: context,
+          workspace: workspace,
           todos: todos,
           kanban_columns: @kanban_columns,
-          page_title: "#{context.name} · Kanban",
+          page_title: "#{workspace.name} · Kanban",
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
@@ -382,42 +384,42 @@ defmodule DranWeb.WikiLive do
           filtered_count: nil
         )
 
-      _ ->
+      nil ->
         push_navigate(socket, to: ~p"/")
     end
   end
 
   # ── :letter — all pages starting with a given letter (read-only) ───────────
 
-  defp apply_action(socket, :letter, %{"context_slug" => context_slug, "letter" => letter}) do
-    case Brain.get_context_by_slug(context_slug) do
-      %{wiki_enabled: true} = context ->
-        all_pages = Brain.list_pages(context_id: context.id, limit: 500)
+  defp apply_action(socket, :letter, %{"workspace_slug" => workspace_slug, "letter" => letter}) do
+    case Brain.get_workspace_by_slug(workspace_slug) do
+      %Workspace{} = workspace ->
+        all_pages = Brain.list_pages(workspace_id: workspace.id, limit: 500)
 
         letter = String.upcase(letter)
         grouped = group_alphabetically(all_pages)
         pages = Enum.find_value(grouped, [], fn {l, p} -> if l == letter, do: p end)
 
         # Sidebar data
-        collections = SmartCollection.list_all(context.id)
-        pinned = Brain.list_pinned_pages(context.id)
-        type_index = build_type_index(context)
+        collections = SmartCollection.list_all(workspace.id)
+        pinned = Brain.list_pinned_pages(workspace.id)
+        type_index = build_type_index(workspace)
         alphabet = build_alphabet(all_pages)
 
         socket
         |> assign(
-          context: context,
+          workspace: workspace,
           letter: letter,
           pages: pages,
           alphabet: alphabet,
-          page_title: "#{context.name} · #{letter}",
+          page_title: "#{workspace.name} · #{letter}",
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
           search_results: nil
         )
 
-      _ ->
+      nil ->
         push_navigate(socket, to: ~p"/")
     end
   end
@@ -468,13 +470,12 @@ defmodule DranWeb.WikiLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.wiki
+    <Layouts.home
       flash={@flash}
       current_user={@current_user}
-      is_admin={@is_admin}
-      is_editor={@is_editor}
-      context_slug={@context && @context.slug}
-      contexts={@contexts}
+      is_owner={@is_owner}
+      workspace_slug={@workspace && @workspace.slug}
+      workspaces={@workspaces}
       page_title={@page_title}
       live_action={@live_action}
       search_query={@search_query}
@@ -486,17 +487,17 @@ defmodule DranWeb.WikiLive do
     >
       <%= if @search_results do %>
         <.search_results_view
-          context={@context}
+          workspace={@workspace}
           search_query={@search_query}
           search_results={@search_results}
         />
       <% else %>
         <%= case @live_action do %>
           <% :index -> %>
-            <.index_view contexts={@contexts} />
-          <% :context_home -> %>
+            <.index_view workspaces={@workspaces} />
+          <% :workspace_home -> %>
             <.context_home_view
-              context={@context}
+              workspace={@workspace}
               collections={@collections}
               pinned_pages={@pinned_pages}
               type_index={@type_index}
@@ -504,7 +505,7 @@ defmodule DranWeb.WikiLive do
             />
           <% :type_list -> %>
             <.type_list_view
-              context={@context}
+              workspace={@workspace}
               page_type={@page_type}
               grouped_pages={@grouped_pages}
               filter_project={@filter_project}
@@ -521,20 +522,20 @@ defmodule DranWeb.WikiLive do
             />
           <% :page_show -> %>
             <.page_show_view
-              context={@context}
+              workspace={@workspace}
               page={@page}
               rendered_body={@rendered_body}
               relations={@relations}
             />
           <% :collection -> %>
             <.collection_view
-              context={@context}
+              workspace={@workspace}
               collection={@collection}
               results={@results}
             />
           <% :graph -> %>
             <.graph_view
-              context={@context}
+              workspace={@workspace}
               graph_data={@graph_data}
               type_colors={@type_colors}
               visible_types={@visible_types}
@@ -549,7 +550,7 @@ defmodule DranWeb.WikiLive do
             />
           <% :kanban -> %>
             <.kanban_view
-              context={@context}
+              workspace={@workspace}
               todos={@todos}
               kanban_columns={@kanban_columns}
               filter_project={@filter_project}
@@ -565,10 +566,10 @@ defmodule DranWeb.WikiLive do
               slug_maps={@slug_maps}
             />
           <% :letter -> %>
-            <.letter_view context={@context} letter={@letter} pages={@pages} alphabet={@alphabet} />
+            <.letter_view workspace={@workspace} letter={@letter} pages={@pages} alphabet={@alphabet} />
         <% end %>
       <% end %>
-    </Layouts.wiki>
+    </Layouts.home>
     """
   end
 
@@ -595,7 +596,7 @@ defmodule DranWeb.WikiLive do
       <div :if={@search_results != []} class="space-y-2">
         <.link
           :for={result <- @search_results}
-          navigate={wiki_page_path(@context, result)}
+          navigate={wiki_page_path(@workspace, result)}
           class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
         >
           <div class="flex items-center justify-between">
@@ -627,20 +628,20 @@ defmodule DranWeb.WikiLive do
       <div class="mb-8">
         <h1 class="text-3xl font-bold tracking-tight">Wiki</h1>
         <p class="text-base-content/60 mt-2">
-          {gettext("Browse knowledge bases. Pick a context to start exploring.")}
+          {gettext("Browse knowledge bases. Pick a workspace to start exploring.")}
         </p>
       </div>
 
-      <div :if={@contexts == []} class="text-center py-16">
+      <div :if={@workspaces == []} class="text-center py-16">
         <.icon name="hero-book-open" class="size-12 text-base-content/30 mx-auto mb-4" />
         <p class="text-base-content/50">
-          {gettext("No wikis available yet. An admin needs to enable the wiki on a context.")}
+          {gettext("No wikis available yet. An admin needs to enable the wiki on a workspace.")}
         </p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <.link
-          :for={ctx <- @contexts}
+          :for={ctx <- @workspaces}
           navigate={~p"/#{ctx.slug}"}
           class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
         >
@@ -652,10 +653,7 @@ defmodule DranWeb.WikiLive do
               />
               <h2 class="card-title text-lg">{ctx.name}</h2>
             </div>
-            <p :if={ctx.wiki_description} class="text-sm text-base-content/60 line-clamp-2">
-              {ctx.wiki_description}
-            </p>
-            <p :if={!ctx.wiki_description} class="text-sm text-base-content/40 italic">
+            <p class="text-sm text-base-content/40 italic">
               {gettext("No description")}
             </p>
           </div>
@@ -670,10 +668,7 @@ defmodule DranWeb.WikiLive do
     <div class="px-6 py-8 space-y-10">
       <%!-- Context header --%>
       <div>
-        <h1 class="text-3xl font-bold tracking-tight">{@context.name}</h1>
-        <p :if={@context.wiki_description} class="text-base-content/60 mt-2">
-          {@context.wiki_description}
-        </p>
+        <h1 class="text-3xl font-bold tracking-tight">{@workspace.name}</h1>
       </div>
 
       <%!-- Pinned pages --%>
@@ -685,7 +680,7 @@ defmodule DranWeb.WikiLive do
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <.link
             :for={page <- @pinned_pages}
-            navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
+            navigate={~p"/#{@workspace.slug}/type/#{page.page_type}/#{page.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
@@ -710,7 +705,7 @@ defmodule DranWeb.WikiLive do
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <.link
             :for={coll <- @collections}
-            navigate={~p"/#{@context.slug}/collection/#{coll.slug}"}
+            navigate={~p"/#{@workspace.slug}/collection/#{coll.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
@@ -735,7 +730,7 @@ defmodule DranWeb.WikiLive do
           <div class="flex flex-wrap gap-1">
             <a
               :for={letter <- @alphabet}
-              href={~p"/#{@context.slug}/letter/#{letter}"}
+              href={~p"/#{@workspace.slug}/letter/#{letter}"}
               class="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium bg-base-200 text-base-content/80 hover:bg-primary hover:text-white transition-colors"
             >
               {letter}
@@ -746,7 +741,7 @@ defmodule DranWeb.WikiLive do
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           <.link
             :for={item <- @type_index}
-            navigate={~p"/#{@context.slug}/type/#{item.type}"}
+            navigate={~p"/#{@workspace.slug}/type/#{item.type}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-4 flex-row items-center gap-3">
@@ -768,7 +763,7 @@ defmodule DranWeb.WikiLive do
     """
   end
 
-  attr :context, :map, required: true
+  attr :workspace, :map, required: true
   attr :page_type, :string, required: true
   attr :grouped_pages, :list, default: []
   attr :filter_project, :string, default: "all"
@@ -788,8 +783,8 @@ defmodule DranWeb.WikiLive do
     <div class="px-6 py-8">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
-          <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
-            {@context.name}
+          <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
+            {@workspace.name}
           </.link>
           <span>/</span>
           <span>{PageTypes.label(@page_type)}</span>
@@ -883,7 +878,7 @@ defmodule DranWeb.WikiLive do
         <div class="space-y-1">
           <.link
             :for={page <- pages}
-            navigate={~p"/#{@context.slug}/type/#{@page_type}/#{page.slug}"}
+            navigate={~p"/#{@workspace.slug}/type/#{@page_type}/#{page.slug}"}
             class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
           >
             <div class="flex items-center gap-2">
@@ -903,12 +898,12 @@ defmodule DranWeb.WikiLive do
             <div
               :if={
                 @page_type in ["todo", "goal", "plan"] and
-                  wiki_page_badges(page, @page_type, @context, @slug_maps) != []
+                  wiki_page_badges(page, @page_type, @workspace, @slug_maps) != []
               }
               class="flex flex-wrap items-center gap-1.5 mt-1"
             >
               <span
-                :for={badge <- wiki_page_badges(page, @page_type, @context, @slug_maps)}
+                :for={badge <- wiki_page_badges(page, @page_type, @workspace, @slug_maps)}
                 class={"px-1.5 py-0.5 text-[11px] rounded " <> wiki_badge_class(badge.type)}
                 title={badge.label}
               >
@@ -917,11 +912,11 @@ defmodule DranWeb.WikiLive do
               <span
                 :if={
                   @page_type in ["todo", "goal", "plan"] and
-                    wiki_extra_badge_count(page, @page_type, @context, @slug_maps) > 0
+                    wiki_extra_badge_count(page, @page_type, @workspace, @slug_maps) > 0
                 }
                 class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/60"
               >
-                +{wiki_extra_badge_count(page, @page_type, @context, @slug_maps)}
+                +{wiki_extra_badge_count(page, @page_type, @workspace, @slug_maps)}
               </span>
             </div>
             <p :if={page.summary} class="text-sm text-base-content/50 line-clamp-1 mt-0.5">
@@ -939,11 +934,11 @@ defmodule DranWeb.WikiLive do
     <div class="px-6 py-8">
       <%!-- Breadcrumb --%>
       <div class="flex items-center gap-2 mb-4 text-sm text-base-content/50">
-        <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
-          {@context.name}
+        <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
+          {@workspace.name}
         </.link>
         <span>/</span>
-        <.link navigate={~p"/#{@context.slug}/type/#{@page.page_type}"} class="hover:underline">
+        <.link navigate={~p"/#{@workspace.slug}/type/#{@page.page_type}"} class="hover:underline">
           {PageTypes.plural(@page.page_type)}
         </.link>
         <span>/</span>
@@ -992,7 +987,7 @@ defmodule DranWeb.WikiLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.outbound}
-              navigate={~p"/#{@context.slug}/type/#{rel.target.page_type}/#{rel.target.slug}"}
+              navigate={~p"/#{@workspace.slug}/type/#{rel.target.page_type}/#{rel.target.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -1012,7 +1007,7 @@ defmodule DranWeb.WikiLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.inbound}
-              navigate={~p"/#{@context.slug}/type/#{rel.source.page_type}/#{rel.source.slug}"}
+              navigate={~p"/#{@workspace.slug}/type/#{rel.source.page_type}/#{rel.source.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -1036,8 +1031,8 @@ defmodule DranWeb.WikiLive do
     <div class="px-6 py-8">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
-          <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
-            {@context.name}
+          <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
+            {@workspace.name}
           </.link>
           <span>/</span>
           <span>{gettext("Collection")}</span>
@@ -1065,7 +1060,7 @@ defmodule DranWeb.WikiLive do
       <div class="space-y-2">
         <.link
           :for={page <- Enum.sort_by(@results, & &1.title, :asc)}
-          navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
+          navigate={~p"/#{@workspace.slug}/type/#{page.page_type}/#{page.slug}"}
           class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
         >
           <div class="flex items-center justify-between">
@@ -1091,7 +1086,7 @@ defmodule DranWeb.WikiLive do
 
   # ── Graph view (progressive, mirrors GraphLive panel) ──────────────────────
 
-  attr :context, :map, required: true
+  attr :workspace, :map, required: true
   attr :graph_data, :map, default: %{nodes: [], edges: []}
   attr :type_colors, :list, default: []
   attr :visible_types, :map, default: %MapSet{}
@@ -1109,8 +1104,8 @@ defmodule DranWeb.WikiLive do
     <div class="h-[calc(100vh-4rem)] flex flex-col">
       <div class="px-6 pt-4 pb-2">
         <div class="flex items-center gap-2 text-sm text-base-content/50 mb-1">
-          <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
-            {@context.name}
+          <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
+            {@workspace.name}
           </.link>
           <span>/</span>
           <span>{gettext("Graph")}</span>
@@ -1190,8 +1185,8 @@ defmodule DranWeb.WikiLive do
             nodes={@nodes}
             edges={@edges}
             visible_types={MapSet.to_list(@visible_types)}
-            base_path={"/#{@context.slug}/type"}
-            graph_url={"/#{@context.slug}/graph/json"}
+            base_path={"/#{@workspace.slug}/type"}
+            graph_url={"/#{@workspace.slug}/graph/json"}
             class="w-full h-full"
           />
           <div class="absolute bottom-0 left-0 right-0 px-3 py-2 text-xs text-base-content/40 bg-base-200/50 border-t border-base-300">
@@ -1205,7 +1200,7 @@ defmodule DranWeb.WikiLive do
 
   # ── Kanban view (read-only) ───────────────────────────────────────────────
 
-  attr :context, :map, required: true
+  attr :workspace, :map, required: true
   attr :todos, :list, default: []
   attr :kanban_columns, :list, default: []
   attr :filter_project, :string, default: "all"
@@ -1224,8 +1219,8 @@ defmodule DranWeb.WikiLive do
     ~H"""
     <div class="px-6 py-8">
       <div class="flex items-center gap-2 text-sm text-base-content/50 mb-2">
-        <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
-          {@context.name}
+        <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
+          {@workspace.name}
         </.link>
         <span>/</span>
         <span>{gettext("Kanban")}</span>
@@ -1309,28 +1304,28 @@ defmodule DranWeb.WikiLive do
                     status
                   )
               }
-              href={~p"/#{@context.slug}/type/todo/#{todo.slug}"}
+              href={~p"/#{@workspace.slug}/type/todo/#{todo.slug}"}
               class="block p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition"
             >
               <div class="font-medium text-sm break-words">{todo.title}</div>
 
               <%!-- Badges de vínculos (project/goal/plan) — max 2 visibles --%>
               <div
-                :if={wiki_page_badges(todo, "todo", @context, @slug_maps) != []}
+                :if={wiki_page_badges(todo, "todo", @workspace, @slug_maps) != []}
                 class="flex flex-wrap items-center gap-1.5 mt-1.5"
               >
                 <span
-                  :for={badge <- wiki_page_badges(todo, "todo", @context, @slug_maps)}
+                  :for={badge <- wiki_page_badges(todo, "todo", @workspace, @slug_maps)}
                   class={"px-1.5 py-0.5 text-[11px] rounded " <> wiki_badge_class(badge.type)}
                   title={badge.label}
                 >
                   {badge.label}
                 </span>
                 <span
-                  :if={wiki_extra_badge_count(todo, "todo", @context, @slug_maps) > 0}
+                  :if={wiki_extra_badge_count(todo, "todo", @workspace, @slug_maps) > 0}
                   class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/60"
                 >
-                  +{wiki_extra_badge_count(todo, "todo", @context, @slug_maps)}
+                  +{wiki_extra_badge_count(todo, "todo", @workspace, @slug_maps)}
                 </span>
               </div>
 
@@ -1410,7 +1405,7 @@ defmodule DranWeb.WikiLive do
 
   # ── Letter view (read-only) ───────────────────────────────────────────────
 
-  attr :context, :map, required: true
+  attr :workspace, :map, required: true
   attr :letter, :string, required: true
   attr :pages, :list, default: []
   attr :alphabet, :list, default: []
@@ -1419,8 +1414,8 @@ defmodule DranWeb.WikiLive do
     ~H"""
     <div class="px-6 py-8">
       <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
-        <.link navigate={~p"/#{@context.slug}"} class="hover:underline">
-          {@context.name}
+        <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
+          {@workspace.name}
         </.link>
         <span>/</span>
         <span>{@letter}</span>
@@ -1432,7 +1427,7 @@ defmodule DranWeb.WikiLive do
       <div class="flex flex-wrap gap-1 mb-8">
         <a
           :for={l <- @alphabet}
-          href={~p"/#{@context.slug}/letter/#{l}"}
+          href={~p"/#{@workspace.slug}/letter/#{l}"}
           class={[
             "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors",
             if(l == @letter,
@@ -1452,7 +1447,7 @@ defmodule DranWeb.WikiLive do
       <div :if={@pages != []} class="space-y-1">
         <.link
           :for={page <- @pages}
-          navigate={~p"/#{@context.slug}/type/#{page.page_type}/#{page.slug}"}
+          navigate={~p"/#{@workspace.slug}/type/#{page.page_type}/#{page.slug}"}
           class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
         >
           <div class="flex items-center gap-2">
@@ -1481,11 +1476,11 @@ defmodule DranWeb.WikiLive do
       if query == "" do
         nil
       else
-        context = socket.assigns[:context]
+        workspace = socket.assigns[:workspace]
 
         opts =
-          if context do
-            [context_id: context.id, limit: 30]
+          if workspace do
+            [workspace_id: workspace.id, limit: 30]
           else
             [limit: 30]
           end
@@ -1519,10 +1514,10 @@ defmodule DranWeb.WikiLive do
 
   @impl true
   def handle_event("node_click", %{"slug" => slug, "type" => type}, socket) do
-    context = socket.assigns[:context]
+    workspace = socket.assigns[:workspace]
 
-    if context do
-      {:noreply, push_navigate(socket, to: ~p"/#{context.slug}/type/#{type}/#{slug}")}
+    if workspace do
+      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/type/#{type}/#{slug}")}
     else
       {:noreply, socket}
     end
@@ -1584,9 +1579,9 @@ defmodule DranWeb.WikiLive do
   # Loads filter options + enabled flags for a page_type based on its
   # supported link types (@type_filter_links). For todo→project/goal/plan,
   # goal→project, plan→project/goal. Types not in the map get empty filters.
-  defp load_type_filter_data(context, page_type) do
+  defp load_type_filter_data(workspace, page_type) do
     link_types = Map.get(@type_filter_links, page_type, [])
-    disabled = context.disabled_page_types || []
+    disabled = workspace.disabled_page_types || []
 
     # For each link type, load pages if the type is enabled (not disabled)
     pages_by_type =
@@ -1594,7 +1589,7 @@ defmodule DranWeb.WikiLive do
         type_str = Atom.to_string(type)
 
         if type_str not in disabled do
-          {type, Brain.list_pages(context_id: context.id, type: type_str, limit: 200)}
+          {type, Brain.list_pages(workspace_id: workspace.id, type: type_str, limit: 200)}
         else
           {type, []}
         end
@@ -1676,14 +1671,14 @@ defmodule DranWeb.WikiLive do
   # Build the list of badges for a page, resolving slug→title via slug_maps.
   # Uses @type_filter_links to know which link types apply to this page_type.
   # Filters by disabled page types. Max 2 visible, rest in +N.
-  defp wiki_page_badges(page, page_type, context, slug_maps) do
+  defp wiki_page_badges(page, page_type, workspace, slug_maps) do
     page
-    |> wiki_all_badges(page_type, context, slug_maps)
+    |> wiki_all_badges(page_type, workspace, slug_maps)
     |> Enum.take(2)
   end
 
-  defp wiki_all_badges(page, page_type, context, slug_maps) do
-    disabled = (context && context.disabled_page_types) || []
+  defp wiki_all_badges(page, page_type, workspace, slug_maps) do
+    disabled = (workspace && workspace.disabled_page_types) || []
     link_types = Map.get(@type_filter_links, page_type, [])
 
     Enum.reduce(link_types, [], fn type, acc ->
@@ -1706,8 +1701,8 @@ defmodule DranWeb.WikiLive do
     end
   end
 
-  defp wiki_extra_badge_count(page, page_type, context, slug_maps) do
-    max(0, length(wiki_all_badges(page, page_type, context, slug_maps)) - 2)
+  defp wiki_extra_badge_count(page, page_type, workspace, slug_maps) do
+    max(0, length(wiki_all_badges(page, page_type, workspace, slug_maps)) - 2)
   end
 
   defp wiki_badge_class(type),
@@ -1796,8 +1791,8 @@ defmodule DranWeb.WikiLive do
   # in the sidebar — excluded from the generic list to avoid duplication.
   @featured_types ~w(project goal)
 
-  defp build_type_index(context) do
-    disabled = context.disabled_page_types || []
+  defp build_type_index(workspace) do
+    disabled = workspace.disabled_page_types || []
     excluded = @wiki_hidden_types ++ disabled ++ @featured_types
 
     BrainPageTypes.types()
@@ -1807,7 +1802,7 @@ defmodule DranWeb.WikiLive do
         Dran.Repo.aggregate(
           from(p in Dran.Brain.Page,
             where:
-              p.context_id == ^context.id and
+              p.workspace_id == ^workspace.id and
                 p.page_type == ^type and
                 p.archived == false
           ),
@@ -1873,7 +1868,7 @@ defmodule DranWeb.WikiLive do
   # without inline_links (which require internal page resolution that depends
   # on auth-scoped paths). Wikilinks `[[slug|display]]` are rewritten to
   # wiki URLs by post-processing the HTML.
-  defp render_wiki_markdown(body, context) do
+  defp render_wiki_markdown(body, workspace) do
     html =
       case MDEx.to_html(body, markdown_options()) do
         {:ok, html} -> html
@@ -1881,7 +1876,7 @@ defmodule DranWeb.WikiLive do
       end
 
     html
-    |> rewrite_wikilinks(context)
+    |> rewrite_wikilinks(workspace)
     |> raw()
   end
 
@@ -1889,14 +1884,14 @@ defmodule DranWeb.WikiLive do
   # We rewrite the href to point to the wiki URL for that slug.
   # We don't know the page_type from the slug alone, so we point to a
   # generic wiki path and let the lookup resolve it.
-  defp rewrite_wikilinks(html, context) do
-    slug_to_path = build_wikilink_map(html, context)
+  defp rewrite_wikilinks(html, workspace) do
+    slug_to_path = build_wikilink_map(html, workspace)
 
     Regex.replace(
       ~r/<a href="([^"]+)" data-wikilink="true">/,
       html,
       fn _full, slug ->
-        path = Map.get(slug_to_path, slug, "/#{context.slug}")
+        path = Map.get(slug_to_path, slug, "/#{workspace.slug}")
         ~s|<a href="#{path}" data-wikilink="true">|
       end
     )
@@ -1904,7 +1899,7 @@ defmodule DranWeb.WikiLive do
 
   # Extract all slugs from wikilinks and batch-resolve them to page types
   # so we can build proper wiki URLs.
-  defp build_wikilink_map(html, context) do
+  defp build_wikilink_map(html, workspace) do
     slugs =
       Regex.scan(~r/<a href="([^"]+)" data-wikilink="true">/, html, capture: :all_but_first)
       |> List.flatten()
@@ -1913,12 +1908,12 @@ defmodule DranWeb.WikiLive do
     if slugs == [] do
       %{}
     else
-      slug_types = Brain.get_pages_by_slugs(slugs, context.id)
+      slug_types = Brain.get_pages_by_slugs(slugs, workspace.id)
 
       Enum.reduce(slugs, %{}, fn slug, acc ->
         case Map.get(slug_types, slug) do
           nil -> acc
-          page_type -> Map.put(acc, slug, "/#{context.slug}/type/#{page_type}/#{slug}")
+          page_type -> Map.put(acc, slug, "/#{workspace.slug}/type/#{page_type}/#{slug}")
         end
       end)
     end
@@ -1946,16 +1941,16 @@ defmodule DranWeb.WikiLive do
   end
 
   # Build a wiki URL for a search result. Search results carry page_type + slug;
-  # if a context is active, the URL includes its slug so navigation stays in scope.
+  # if a workspace is active, the URL includes its slug so navigation stays in scope.
   defp wiki_page_path(nil, result) do
-    # No active context — try to resolve the page's context from its fields.
+    # No active workspace — try to resolve the page's workspace from its fields.
     # Fall back to the generic wiki root.
     page_type = Map.get(result, :page_type) || Map.get(result, "page_type")
     slug = Map.get(result, :slug) || Map.get(result, "slug")
 
     if page_type && slug do
-      # We don't have a context slug, so we can't build a wiki path.
-      # The search result may include context_id but not the slug.
+      # We don't have a workspace slug, so we can't build a wiki path.
+      # The search result may include workspace_id but not the slug.
       # Fallback: point to the wiki root.
       ~p"/"
     else
@@ -1963,9 +1958,9 @@ defmodule DranWeb.WikiLive do
     end
   end
 
-  defp wiki_page_path(context, result) do
+  defp wiki_page_path(workspace, result) do
     page_type = Map.get(result, :page_type) || Map.get(result, "page_type")
     slug = Map.get(result, :slug) || Map.get(result, "slug")
-    ~p"/#{context.slug}/type/#{page_type}/#{slug}"
+    ~p"/#{workspace.slug}/type/#{page_type}/#{slug}"
   end
 end

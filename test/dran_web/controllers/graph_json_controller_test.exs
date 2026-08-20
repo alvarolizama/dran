@@ -24,18 +24,18 @@ defmodule DranWeb.GraphJSONControllerTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, note} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Graph JSON Note",
         page_type: "note"
       })
 
     {:ok, todo} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Graph JSON Todo",
         page_type: "todo"
       })
@@ -47,7 +47,7 @@ defmodule DranWeb.GraphJSONControllerTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, note: note, todo: todo}
   end

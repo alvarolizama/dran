@@ -41,14 +41,14 @@ defmodule Dran.Graph.CommunitySummariesTest do
 
   defp fresh_context(prefix) do
     slug = "comm-#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_context(%{name: "Comm Test #{slug}", slug: slug})
+    {:ok, ctx} = Brain.create_workspace(%{name: "Comm Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_page(ctx, slug, community_id, pagerank) do
     {:ok, page} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "note",
@@ -71,10 +71,10 @@ defmodule Dran.Graph.CommunitySummariesTest do
     ctx
   end
 
-  defp persisted(context_id) do
+  defp persisted(workspace_id) do
     Repo.all(
       from cs in Dran.Graph.CommunitySummary,
-        where: cs.context_id == ^context_id,
+        where: cs.workspace_id == ^workspace_id,
         order_by: cs.community_id
     )
   end

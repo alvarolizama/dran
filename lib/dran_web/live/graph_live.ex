@@ -230,7 +230,7 @@ defmodule DranWeb.GraphLive do
   end
 
   defp load_show_graph(socket, page) do
-    %{nodes: nodes, edges: edges} = Dran.GraphCache.get_subgraph(page.id, page.context_id)
+    %{nodes: nodes, edges: edges} = Dran.GraphCache.get_subgraph(page.id, page.workspace_id)
 
     # Show mode: all types visible (including the operational layer — the
     # subgraph is local context, not the global filtered view).
@@ -269,8 +269,8 @@ defmodule DranWeb.GraphLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div class="flex flex-col flex-1 min-h-0">

@@ -24,10 +24,10 @@ defmodule DranWeb.Layouts do
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
   attr :current_user, :string, default: nil, doc: "the authenticated user"
-  attr :is_admin, :boolean, default: false, doc: "whether the current user is an admin"
-  attr :context_slug, :string, default: nil, doc: "the active context slug"
-  attr :contexts, :list, default: [], doc: "available contexts for the selector"
-  attr :page_counts, :map, default: %{}, doc: "map of context_id => page count"
+  attr :is_owner, :boolean, default: false, doc: "whether the current user is the instance owner"
+  attr :workspace_slug, :string, default: nil, doc: "the active workspace slug"
+  attr :workspaces, :list, default: [], doc: "available workspaces for the selector"
+  attr :page_counts, :map, default: %{}, doc: "map of workspace_id => page count"
 
   attr :active_nav, :string,
     default: nil,
@@ -40,29 +40,19 @@ defmodule DranWeb.Layouts do
   slot :inner_block, required: true
 
   def app(assigns) do
-    counts = compute_counts(assigns[:context_slug])
+    counts = compute_counts(assigns[:workspace_slug])
 
     # Resolve admin status for the sidebar's admin-only links. A session user
-    # with a row in users is admin iff users.is_admin; a session user without
+    # with a row in users is admin iff users.is_owner; a session user without
     # a DB row (pre-multi-user sessions) is treated as a full admin.
-    is_admin =
+    is_owner =
       if is_binary(assigns[:current_user]) do
         case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
           nil -> true
-          user -> user.is_admin == true
+          user -> user.is_owner == true
         end
       else
-        assigns[:is_admin] || false
-      end
-
-    is_editor =
-      if is_binary(assigns[:current_user]) do
-        case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
-          nil -> false
-          user -> user.is_editor == true
-        end
-      else
-        assigns[:is_editor] || false
+        assigns[:is_owner] || false
       end
 
     # If the caller didn't forward page_counts, compute them here so the
@@ -74,7 +64,7 @@ defmodule DranWeb.Layouts do
 
         _ ->
           try do
-            Dran.Brain.page_counts_by_context()
+            Dran.Brain.page_counts_by_workspace()
           rescue
             _ -> %{}
           catch
@@ -86,8 +76,7 @@ defmodule DranWeb.Layouts do
       assign(assigns,
         counts: counts,
         page_counts: page_counts,
-        is_admin: is_admin,
-        is_editor: is_editor
+        is_owner: is_owner
       )
 
     ~H"""
@@ -102,9 +91,9 @@ defmodule DranWeb.Layouts do
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
-            <.context_selector
-              context_slug={@context_slug}
-              contexts={@contexts}
+            <.workspace_selector
+              workspace_slug={@workspace_slug}
+              workspaces={@workspaces}
               page_counts={@page_counts}
             />
           </div>
@@ -132,8 +121,8 @@ defmodule DranWeb.Layouts do
           <.sidebar_nav
             active={@active_nav}
             counts={@counts}
-            is_admin={@is_admin}
-            context_slug={@context_slug}
+            is_owner={@is_owner}
+            workspace_slug={@workspace_slug}
           />
         </nav>
 
@@ -149,7 +138,7 @@ defmodule DranWeb.Layouts do
       <.live_component
         module={DranWeb.CommandPalette}
         id="command-palette"
-        context_slug={@context_slug}
+        workspace_slug={@workspace_slug}
       />
 
       <.flash_group flash={@flash} />
@@ -159,9 +148,9 @@ defmodule DranWeb.Layouts do
 
   defp compute_counts(nil), do: %{}
 
-  defp compute_counts(context_slug) when is_binary(context_slug) do
+  defp compute_counts(workspace_slug) when is_binary(workspace_slug) do
     try do
-      context = Dran.Brain.get_context_by_slug(context_slug)
+      context = Dran.Brain.get_workspace_by_slug(workspace_slug)
 
       if context do
         stats = Dran.Brain.stats(context.id)
@@ -180,7 +169,7 @@ defmodule DranWeb.Layouts do
           Dran.Repo.aggregate(
             from(p in Dran.Brain.Page,
               where:
-                p.context_id == ^context.id and p.page_type == "query" and
+                p.workspace_id == ^context.id and p.page_type == "query" and
                   p.archived == false and fragment("meta \\? 'query'"),
               select: p.id
             ),
@@ -189,7 +178,7 @@ defmodule DranWeb.Layouts do
 
         contexts_count =
           try do
-            length(Dran.Brain.list_contexts())
+            length(Dran.Brain.list_workspaces())
           rescue
             _ -> 0
           end
@@ -198,7 +187,7 @@ defmodule DranWeb.Layouts do
           try do
             Dran.Repo.aggregate(
               from(cs in Dran.Graph.CommunitySummary,
-                where: cs.context_id == ^context.id,
+                where: cs.workspace_id == ^context.id,
                 select: cs.id
               ),
               :count
@@ -241,9 +230,9 @@ defmodule DranWeb.Layouts do
   """
   attr :active, :string, default: nil
   attr :counts, :map, default: %{}
-  attr :context_slug, :string, default: nil
+  attr :workspace_slug, :string, default: nil
 
-  attr :is_admin, :boolean,
+  attr :is_owner, :boolean,
     default: false,
     doc: "whether to show admin-only links (e.g. Settings)"
 
@@ -263,16 +252,16 @@ defmodule DranWeb.Layouts do
 
   def sidebar_nav(assigns) do
     counts = assigns[:counts] || %{}
-    is_admin = assigns[:is_admin] || false
+    is_owner = assigns[:is_owner] || false
 
     disabled_types =
-      case assigns[:context_slug] && Dran.Brain.get_context_by_slug(assigns[:context_slug]) do
+      case assigns[:workspace_slug] && Dran.Brain.get_workspace_by_slug(assigns[:workspace_slug]) do
         %{disabled_page_types: disabled} when is_list(disabled) -> disabled
         _ -> []
       end
 
     config_items =
-      if is_admin do
+      if is_owner do
         [
           %{
             key: "settings",
@@ -565,14 +554,14 @@ defmodule DranWeb.Layouts do
   The `<select>` has `id="context-selector"` so the ⌘⇧C keyboard shortcut
   in app.js can focus and open it.
   """
-  attr :context_slug, :string, default: nil
-  attr :contexts, :list, default: []
+  attr :workspace_slug, :string, default: nil
+  attr :workspaces, :list, default: []
   attr :page_counts, :map, default: %{}
 
-  def context_selector(assigns) do
+  def workspace_selector(assigns) do
     ~H"""
-    <div :if={length(@contexts) > 0} class="flex-1">
-      <form action={~p"/panel/context"} method="post">
+    <div :if={length(@workspaces) > 0} class="flex-1">
+      <form action={~p"/panel/workspace"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <select
           id="context-selector"
@@ -580,7 +569,7 @@ defmodule DranWeb.Layouts do
           onchange="this.form.submit()"
           class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <option :for={ctx <- @contexts} value={ctx.slug} selected={ctx.slug == @context_slug}>
+          <option :for={ctx <- @workspaces} value={ctx.slug} selected={ctx.slug == @workspace_slug}>
             {ctx.name} ({Map.get(@page_counts, ctx.id, 0)})
           </option>
         </select>
@@ -625,10 +614,9 @@ defmodule DranWeb.Layouts do
 
   attr :flash, :map, required: true
   attr :current_user, :string, default: nil
-  attr :is_admin, :boolean, default: false
-  attr :is_editor, :boolean, default: false
-  attr :context_slug, :string, default: nil
-  attr :contexts, :list, default: []
+  attr :is_owner, :boolean, default: false
+  attr :workspace_slug, :string, default: nil
+  attr :workspaces, :list, default: []
   attr :page_title, :string, default: nil
   attr :live_action, :atom, default: nil
   attr :search_query, :string, default: ""
@@ -642,28 +630,27 @@ defmodule DranWeb.Layouts do
 
   slot :inner_block, required: true
 
-  def wiki(assigns) do
-    counts = compute_counts(assigns[:context_slug])
+  def home(assigns) do
+    counts = compute_counts(assigns[:workspace_slug])
 
     # Resolve admin/editor from the DB — same as app/1. The wiki layout must
     # not depend on the caller passing correct flags; it should resolve them
     # independently so the Panel button always shows for admins, even if the
     # LiveView's socket assigns are stale or incomplete.
-    {is_admin, is_editor} =
+    is_owner =
       if is_binary(assigns[:current_user]) do
         case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
-          nil -> {true, false}
-          user -> {user.is_admin == true, user.is_editor == true}
+          nil -> true
+          user -> user.is_owner == true
         end
       else
-        {assigns[:is_admin] || false, assigns[:is_editor] || false}
+        assigns[:is_owner] || false
       end
 
     assigns =
       assign(assigns,
         counts: counts,
-        is_admin: is_admin,
-        is_editor: is_editor
+        is_owner: is_owner
       )
 
     ~H"""
@@ -678,9 +665,9 @@ defmodule DranWeb.Layouts do
               <.icon name="hero-book-open" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Wiki</span>
             </a>
-            <.wiki_context_selector
-              context_slug={@context_slug}
-              contexts={@contexts}
+            <.home_workspace_selector
+              workspace_slug={@workspace_slug}
+              workspaces={@workspaces}
             />
           </div>
         </div>
@@ -708,17 +695,17 @@ defmodule DranWeb.Layouts do
 
         <nav class="flex-1 overflow-y-auto p-2 space-y-4 flex flex-col">
           <.wiki_sidebar_nav
-            context_slug={@context_slug}
+            workspace_slug={@workspace_slug}
             live_action={@live_action}
             type_index={@type_index}
             collections={@collections}
             pinned_pages={@pinned_pages}
-            contexts={@contexts}
+            workspaces={@workspaces}
             counts={@counts}
             collection_slug={@collection_slug}
           />
           <a
-            :if={@is_admin or @is_editor}
+            :if={@is_owner or @is_owner}
             href={~p"/panel"}
             class="mt-auto flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
             title={gettext("Panel")}
@@ -744,21 +731,25 @@ defmodule DranWeb.Layouts do
 
   # ── Wiki context selector ────────────────────────────────────────────────
 
-  attr :context_slug, :string, default: nil
-  attr :contexts, :list, default: []
+  attr :workspace_slug, :string, default: nil
+  attr :workspaces, :list, default: []
 
-  defp wiki_context_selector(assigns) do
+  defp home_workspace_selector(assigns) do
     ~H"""
-    <div :if={length(@contexts) > 0} class="flex-1">
+    <div :if={length(@workspaces) > 0} class="flex-1">
       <select
         id="wiki-context-selector"
         class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
         onchange="window.location.href = this.value"
       >
-        <option value={~p"/"} selected={!@context_slug}>
+        <option value={~p"/"} selected={!@workspace_slug}>
           {gettext("All contexts")}
         </option>
-        <option :for={ctx <- @contexts} value={~p"/#{ctx.slug}"} selected={ctx.slug == @context_slug}>
+        <option
+          :for={ctx <- @workspaces}
+          value={~p"/#{ctx.slug}"}
+          selected={ctx.slug == @workspace_slug}
+        >
           {ctx.name}
         </option>
       </select>
@@ -768,18 +759,18 @@ defmodule DranWeb.Layouts do
 
   # ── Wiki sidebar navigation ──────────────────────────────────────────────
 
-  attr :context_slug, :string, default: nil
+  attr :workspace_slug, :string, default: nil
   attr :live_action, :atom, default: nil
   attr :type_index, :list, default: []
   attr :collections, :list, default: []
   attr :pinned_pages, :list, default: []
-  attr :contexts, :list, default: []
+  attr :workspaces, :list, default: []
   attr :counts, :map, default: %{}
   attr :collection_slug, :string, default: nil
 
   defp wiki_sidebar_nav(assigns) do
     ~H"""
-    <div :if={!@context_slug}>
+    <div :if={!@workspace_slug}>
       <div class="space-y-1">
         <a
           href={~p"/"}
@@ -791,10 +782,10 @@ defmodule DranWeb.Layouts do
       </div>
     </div>
 
-    <div :if={@context_slug}>
+    <div :if={@workspace_slug}>
       <div class="space-y-1">
         <a
-          href={~p"/#{@context_slug}"}
+          href={~p"/#{@workspace_slug}"}
           class={[
             "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
             @live_action == :context_home &&
@@ -808,7 +799,7 @@ defmodule DranWeb.Layouts do
         </a>
         <a
           :if={@counts[:todos] > 0}
-          href={~p"/#{@context_slug}/kanban"}
+          href={~p"/#{@workspace_slug}/kanban"}
           class={[
             "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
             @live_action == :kanban &&
@@ -822,7 +813,7 @@ defmodule DranWeb.Layouts do
         </a>
         <a
           :if={@counts[:projects] > 0}
-          href={~p"/#{@context_slug}/type/project"}
+          href={~p"/#{@workspace_slug}/type/project"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name="hero-rocket-launch" class="size-4 shrink-0" />
@@ -833,7 +824,7 @@ defmodule DranWeb.Layouts do
         </a>
         <a
           :if={@counts[:goals] > 0}
-          href={~p"/#{@context_slug}/type/goal"}
+          href={~p"/#{@workspace_slug}/type/goal"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name="hero-flag" class="size-4 shrink-0" />
@@ -843,7 +834,7 @@ defmodule DranWeb.Layouts do
           </span>
         </a>
         <a
-          href={~p"/#{@context_slug}/graph"}
+          href={~p"/#{@workspace_slug}/graph"}
           class={[
             "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
             @live_action == :graph &&
@@ -858,14 +849,14 @@ defmodule DranWeb.Layouts do
       </div>
     </div>
 
-    <div :if={@context_slug && @pinned_pages != []}>
+    <div :if={@workspace_slug && @pinned_pages != []}>
       <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
         {gettext("Pinned")}
       </h3>
       <div class="space-y-1">
         <a
           :for={page <- @pinned_pages}
-          href={~p"/#{@context_slug}/type/#{page.page_type}/#{page.slug}"}
+          href={~p"/#{@workspace_slug}/type/#{page.page_type}/#{page.slug}"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name="hero-bookmark" class="size-4 shrink-0 text-amber-500" />
@@ -874,14 +865,14 @@ defmodule DranWeb.Layouts do
       </div>
     </div>
 
-    <div :if={@context_slug && (@counts[:plans] > 0 || @counts[:todos] > 0)}>
+    <div :if={@workspace_slug && (@counts[:plans] > 0 || @counts[:todos] > 0)}>
       <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
         {gettext("Planificacion")}
       </h3>
       <div class="space-y-1">
         <a
           :if={@counts[:plans] > 0}
-          href={~p"/#{@context_slug}/type/plan"}
+          href={~p"/#{@workspace_slug}/type/plan"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name="hero-clipboard-document-list" class="size-4 shrink-0" />
@@ -892,7 +883,7 @@ defmodule DranWeb.Layouts do
         </a>
         <a
           :if={@counts[:todos] > 0}
-          href={~p"/#{@context_slug}/type/todo"}
+          href={~p"/#{@workspace_slug}/type/todo"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name="hero-check-circle" class="size-4 shrink-0" />
@@ -904,14 +895,14 @@ defmodule DranWeb.Layouts do
       </div>
     </div>
 
-    <div :if={@context_slug && @collections != []}>
+    <div :if={@workspace_slug && @collections != []}>
       <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
         {gettext("Categorias")}
       </h3>
       <div class="space-y-1">
         <a
           :for={coll <- @collections}
-          href={~p"/#{@context_slug}/collection/#{coll.slug}"}
+          href={~p"/#{@workspace_slug}/collection/#{coll.slug}"}
           class={[
             "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
             @live_action == :collection && @collection_slug == coll.slug &&
@@ -926,14 +917,14 @@ defmodule DranWeb.Layouts do
       </div>
     </div>
 
-    <div :if={@context_slug && @type_index != []}>
+    <div :if={@workspace_slug && @type_index != []}>
       <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
         {gettext("Contenido")}
       </h3>
       <div class="space-y-1">
         <a
           :for={item <- @type_index}
-          href={~p"/#{@context_slug}/type/#{item.type}"}
+          href={~p"/#{@workspace_slug}/type/#{item.type}"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name={item.icon} class="size-4 shrink-0" />

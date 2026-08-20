@@ -21,7 +21,7 @@ defmodule DranWeb.PageComponents do
   attr :versions, :list, default: []
   attr :logs, :list, default: []
   attr :compare_version, :map, default: nil
-  attr :context_slug, :string, default: "personal"
+  attr :workspace_slug, :string, default: "personal"
   attr :rendered_body, :any, default: nil
   attr :editing, :boolean, default: false
 
@@ -62,7 +62,7 @@ defmodule DranWeb.PageComponents do
     rendered_body =
       Map.get(assigns, :rendered_body) ||
         render_markdown(assigns.page.body,
-          context_id: assigns.page.context_id,
+          workspace_id: assigns.page.workspace_id,
           inline_links: inline_links
         )
 
@@ -73,7 +73,7 @@ defmodule DranWeb.PageComponents do
       case assigns.page.tags do
         nil -> %{}
         [] -> %{}
-        tags -> Brain.get_pages_by_slugs(tags, assigns.page.context_id)
+        tags -> Brain.get_pages_by_slugs(tags, assigns.page.workspace_id)
       end
 
     assigns = assign(assigns, :tag_map, tag_map)
@@ -657,15 +657,15 @@ defmodule DranWeb.PageComponents do
   defdelegate type_path(type), to: DranWeb.PageTypes, as: :path
   defdelegate page_show_path(page), to: DranWeb.PageTypes
 
-  def tag_page_exists?(tag, context_id) when is_binary(tag) and is_binary(context_id) do
-    Dran.Brain.get_page_by_slug(tag, context_id) != nil
+  def tag_page_exists?(tag, workspace_id) when is_binary(tag) and is_binary(workspace_id) do
+    Dran.Brain.get_page_by_slug(tag, workspace_id) != nil
   end
 
-  def tag_page_exists?(_tag, _context_id), do: false
+  def tag_page_exists?(_tag, _workspace_id), do: false
 
-  def tag_link_path(tag, context_id, tag_map \\ nil)
+  def tag_link_path(tag, workspace_id, tag_map \\ nil)
 
-  def tag_link_path(tag, _context_id, tag_map) when is_binary(tag) and is_map(tag_map) do
+  def tag_link_path(tag, _workspace_id, tag_map) when is_binary(tag) and is_map(tag_map) do
     case Map.get(tag_map, tag) do
       nil ->
         "/panel/search?q=#{URI.encode_www_form(tag)}"
@@ -675,8 +675,8 @@ defmodule DranWeb.PageComponents do
     end
   end
 
-  def tag_link_path(tag, context_id, nil) when is_binary(tag) and is_binary(context_id) do
-    case Dran.Brain.get_page_by_slug(tag, context_id) do
+  def tag_link_path(tag, workspace_id, nil) when is_binary(tag) and is_binary(workspace_id) do
+    case Dran.Brain.get_page_by_slug(tag, workspace_id) do
       %Page{page_type: type, slug: slug} ->
         "/panel/#{PageTypes.path(type)}/#{slug}"
 
@@ -685,7 +685,8 @@ defmodule DranWeb.PageComponents do
     end
   end
 
-  def tag_link_path(tag, _context_id, _tag_map), do: "/panel/search?q=#{URI.encode_www_form(tag)}"
+  def tag_link_path(tag, _workspace_id, _tag_map),
+    do: "/panel/search?q=#{URI.encode_www_form(tag)}"
 
   def format_date(nil), do: ""
 
@@ -761,7 +762,7 @@ defmodule DranWeb.PageComponents do
   `<video>` tags when the slug resolves to a file page in the
   given context.
 
-  Pass `:context_id` to resolve embeds; otherwise embeds render as
+  Pass `:workspace_id` to resolve embeds; otherwise embeds render as
   literal text.
   """
   def render_markdown(body, opts \\ [])
@@ -770,9 +771,9 @@ defmodule DranWeb.PageComponents do
   def render_markdown("", _opts), do: raw("")
 
   def render_markdown(body, opts) when is_binary(body) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     inline_links = Keyword.get(opts, :inline_links) || []
-    embeds = if context_id, do: Dran.Brain.fetch_embeds(body, context_id), else: %{}
+    embeds = if workspace_id, do: Dran.Brain.fetch_embeds(body, workspace_id), else: %{}
 
     html =
       case MDEx.to_html(body, @markdown_options) do
@@ -781,7 +782,7 @@ defmodule DranWeb.PageComponents do
       end
 
     html
-    |> apply_inline_links(inline_links, context_id)
+    |> apply_inline_links(inline_links, workspace_id)
     |> rewrite_embeds(embeds)
     |> raw()
   end
@@ -791,17 +792,17 @@ defmodule DranWeb.PageComponents do
   # We find the first occurrence of text inside <p> tags that isn't already
   # inside an <a> tag, and wrap it in a link to the target page.
 
-  defp apply_inline_links(html, links, context_id)
+  defp apply_inline_links(html, links, workspace_id)
        when is_list(links) and links != [] do
     # Resolve slugs to page types for correct URLs (batched to avoid N+1)
     slug_to_path =
-      if context_id do
+      if workspace_id do
         slugs =
           links
           |> Enum.map(fn %{"slug" => slug} -> slug end)
           |> Enum.uniq()
 
-        slug_types = Dran.Brain.get_pages_by_slugs(slugs, context_id)
+        slug_types = Dran.Brain.get_pages_by_slugs(slugs, workspace_id)
 
         Enum.reduce(slugs, %{}, fn slug, acc ->
           case Map.get(slug_types, slug) do
@@ -912,7 +913,7 @@ defmodule DranWeb.PageComponents do
   attr :form, :any, required: true
   attr :page, :map, required: true
   attr :page_type, :string, required: true
-  attr :context_id, :any, required: true
+  attr :workspace_id, :any, required: true
   attr :editor_id, :string, required: true
   attr :tag_suggestions, :list, default: nil
 
@@ -920,7 +921,7 @@ defmodule DranWeb.PageComponents do
     suggestions =
       case assigns.tag_suggestions do
         nil ->
-          case assigns.context_id do
+          case assigns.workspace_id do
             nil -> []
             id -> Dran.Brain.list_tags(id)
           end
@@ -959,7 +960,7 @@ defmodule DranWeb.PageComponents do
           suggestions={@tag_suggestions}
         />
 
-        <.meta_fields page_type={@page_type} meta={@page.meta || %{}} context_id={@context_id} />
+        <.meta_fields page_type={@page_type} meta={@page.meta || %{}} workspace_id={@workspace_id} />
       </div>
     </details>
     """
@@ -974,7 +975,7 @@ defmodule DranWeb.PageComponents do
   attr :form, :any, required: true
   attr :page, :map, required: true
   attr :page_type, :string, required: true
-  attr :context_id, :any, required: true
+  attr :workspace_id, :any, required: true
   attr :save_status, :string, default: "idle"
   attr :editor_id, :string, required: true
   attr :tag_suggestions, :list, default: nil
@@ -985,7 +986,7 @@ defmodule DranWeb.PageComponents do
     suggestions =
       case assigns.tag_suggestions do
         nil ->
-          case assigns.context_id do
+          case assigns.workspace_id do
             nil -> []
             id -> Dran.Brain.list_tags(id)
           end
@@ -1014,7 +1015,7 @@ defmodule DranWeb.PageComponents do
           <.markdown_editor
             id={@editor_id}
             body={@page.body}
-            context_id={@context_id}
+            workspace_id={@workspace_id}
             save_status={@save_status}
           />
         </div>

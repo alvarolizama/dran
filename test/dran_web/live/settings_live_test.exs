@@ -16,7 +16,7 @@ defmodule DranWeb.SettingsLiveTest do
     case Accounts.get_user_by_email("test_user") do
       nil ->
         {:ok, _user} =
-          Accounts.create_user(%{email: "test_user", name: "Test Admin", is_admin: true})
+          Accounts.create_user(%{email: "test_user", name: "Test Admin", is_owner: true})
 
       _ ->
         :ok
@@ -28,7 +28,7 @@ defmodule DranWeb.SettingsLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn}
   end
@@ -43,13 +43,13 @@ defmodule DranWeb.SettingsLiveTest do
 
   test "creating an api key from the form reveals the token once", %{conn: conn} do
     unique = System.unique_integer([:positive])
-    {:ok, ctx} = Dran.Brain.create_context(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+    {:ok, ctx} = Dran.Brain.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
 
     {:ok, view, _html} = live(conn, ~p"/panel/settings/api_keys")
 
     html =
       view
-      |> form("#create-api-key-form", api_key: %{name: "Hermes", context_id: ctx.id})
+      |> form("#create-api-key-form", api_key: %{name: "Hermes", workspace_id: ctx.id})
       |> render_submit()
 
     # The one-time reveal card shows the full token + copy button
@@ -63,8 +63,8 @@ defmodule DranWeb.SettingsLiveTest do
 
   test "revoking a key from the list marks it revoked", %{conn: conn} do
     unique = System.unique_integer([:positive])
-    {:ok, ctx} = Dran.Brain.create_context(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
-    {:ok, key} = Accounts.create_api_key(%{name: "Revocable", context_id: ctx.id})
+    {:ok, ctx} = Dran.Brain.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+    {:ok, key} = Accounts.create_api_key(%{name: "Revocable", workspace_id: ctx.id})
 
     {:ok, view, _html} = live(conn, ~p"/panel/settings/api_keys")
 
@@ -177,7 +177,7 @@ defmodule DranWeb.SettingsLiveTest do
 
     # Tab navigation present with all tabs
     for tab_path <-
-          ~w(/settings/users /settings/contexts /settings/brain /settings/models /settings/system /settings/danger) do
+          ~w(/settings/users /settings/workspaces /settings/brain /settings/models /settings/system /settings/danger) do
       assert html =~ tab_path
     end
 
@@ -243,8 +243,8 @@ defmodule DranWeb.SettingsLiveTest do
       # of the shared default context — start from a clean slate and leave none
       # behind (mirrors Dran.JobsTest's defensive cleanup).
       context =
-        Dran.Brain.get_context_by_slug("personal") ||
-          elem(Dran.Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+        Dran.Brain.get_workspace_by_slug("personal") ||
+          elem(Dran.Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
       clear_disabled_jobs!()
 
@@ -332,12 +332,12 @@ defmodule DranWeb.SettingsLiveTest do
       Dran.Repo.delete_all(from s in "settings", where: s.key == "disabled_jobs")
     end
 
-    defp delete_job_reports!(context_id) do
+    defp delete_job_reports!(workspace_id) do
       keys = Enum.map(Jobs.list_keys(), &Atom.to_string/1)
 
       Dran.Repo.delete_all(
         from p in Dran.Brain.Page,
-          where: p.context_id == ^context_id and p.page_type == "report",
+          where: p.workspace_id == ^workspace_id and p.page_type == "report",
           where: fragment("?->>'job_key'", p.meta) in ^keys
       )
     end

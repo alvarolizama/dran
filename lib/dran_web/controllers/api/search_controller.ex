@@ -5,16 +5,16 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search?q=...&context=...&type=...&strategy=...&rerank=false"
   def search(conn, %{"q" => query} = params) do
-    case resolve_context_id(params["context"]) do
+    case resolve_workspace_id(params["workspace"]) do
       :error ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "context not found"}})
 
-      context_id ->
+      workspace_id ->
         opts =
           []
-          |> maybe_put(:context_id, context_id)
+          |> maybe_put(:workspace_id, workspace_id)
           |> maybe_put(:type, params["type"])
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
           |> maybe_put(:strategy, parse_strategy(params["strategy"]))
@@ -45,16 +45,16 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search/fuzzy?q=...&context=..."
   def fuzzy(conn, %{"q" => query} = params) do
-    case resolve_context_id(params["context"]) do
+    case resolve_workspace_id(params["workspace"]) do
       :error ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "context not found"}})
 
-      context_id ->
+      workspace_id ->
         opts =
           []
-          |> maybe_put(:context_id, context_id)
+          |> maybe_put(:workspace_id, workspace_id)
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
 
         case Brain.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
@@ -72,16 +72,16 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search/semantic?q=...&context=...&strategy=...&rerank=false"
   def semantic(conn, %{"q" => query} = params) do
-    case resolve_context_id(params["context"]) do
+    case resolve_workspace_id(params["workspace"]) do
       :error ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "context not found"}})
 
-      context_id ->
+      workspace_id ->
         opts =
           []
-          |> maybe_put(:context_id, context_id)
+          |> maybe_put(:workspace_id, workspace_id)
           |> maybe_put(:type, params["type"])
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
           |> maybe_put(:rerank, parse_rerank(params["rerank"]))
@@ -111,12 +111,12 @@ defmodule DranWeb.API.SearchController do
     |> json(%{errors: %{detail: "q parameter is required"}})
   end
 
-  defp resolve_context_id(nil), do: nil
+  defp resolve_workspace_id(nil), do: nil
 
-  defp resolve_context_id(slug) do
+  defp resolve_workspace_id(slug) do
     # SEC-012: fail closed — return :error for unknown contexts instead of nil
     # (nil would mean "search all contexts" which is a fail-open IDOR)
-    case Brain.get_context_by_slug(slug) do
+    case Brain.get_workspace_by_slug(slug) do
       nil -> :error
       context -> context.id
     end

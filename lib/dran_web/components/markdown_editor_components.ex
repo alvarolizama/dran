@@ -18,7 +18,7 @@ defmodule DranWeb.MarkdownEditorComponents do
 
   - `:id` (required) — unique DOM id for the editor mount container.
   - `:body` (required) — the initial markdown body.
-  - `:context_id` (required) — used to scope wikilink/embed resolution and uploads.
+  - `:workspace_id` (required) — used to scope wikilink/embed resolution and uploads.
   - `:upload` (optional) — a `Phoenix.LiveView.UploadConfig` for file uploads.
   - `:save_status` (optional) — `"saving" | "saved" | "idle"` for the indicator.
   - `:autosave` (optional, default `true`) — when `false`, the editor does not
@@ -28,7 +28,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   """
   attr :id, :string, required: true
   attr :body, :string, required: true
-  attr :context_id, :string, required: true
+  attr :workspace_id, :string, required: true
   attr :save_status, :string, default: "idle"
   attr :autosave, :boolean, default: true
   attr :class, :string, default: ""
@@ -48,7 +48,7 @@ defmodule DranWeb.MarkdownEditorComponents do
         phx-update="ignore"
         class="md-editor-mount flex-1 min-h-[300px] bg-base-100 overflow-y-auto"
         data-body={@body}
-        data-context-id={@context_id}
+        data-context-id={@workspace_id}
         data-autosave={@autosave}
       >
         <div
@@ -185,7 +185,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   attr :page_type, :string, required: true
   attr :meta, :map, default: %{}
   attr :form, :any, default: nil
-  attr :context_id, :any, required: true
+  attr :workspace_id, :any, required: true
 
   def meta_fields(assigns) do
     raw_fields = Dran.Brain.PageMeta.meta_fields_for(assigns.page_type)
@@ -218,7 +218,7 @@ defmodule DranWeb.MarkdownEditorComponents do
               label={label}
               opts={opts}
               value={value}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
             />
           <% end %>
         </div>
@@ -235,7 +235,7 @@ defmodule DranWeb.MarkdownEditorComponents do
               label={label}
               opts={opts}
               value={value}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
             />
           <% end %>
         <% end %>
@@ -249,7 +249,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   attr :label, :string, required: true
   attr :opts, :list, default: []
   attr :value, :any, default: nil
-  attr :context_id, :any, default: nil
+  attr :workspace_id, :any, default: nil
 
   defp meta_field_input(assigns) do
     ~H"""
@@ -267,8 +267,8 @@ defmodule DranWeb.MarkdownEditorComponents do
       <% :slug_select -> %>
         <% slug_type = Keyword.get(@opts, :type) %>
         <% pages =
-          if @context_id do
-            Dran.Brain.list_pages(context_id: @context_id, type: slug_type)
+          if @workspace_id do
+            Dran.Brain.list_pages(workspace_id: @workspace_id, type: slug_type)
           else
             []
           end %>

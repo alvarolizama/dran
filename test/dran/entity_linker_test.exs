@@ -29,14 +29,14 @@ defmodule Dran.EntityLinkerTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_context(%{name: "Linker Test #{slug}", slug: slug})
+    {:ok, ctx} = Brain.create_workspace(%{name: "Linker Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_note(ctx, slug) do
     {:ok, page} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "note",
@@ -118,7 +118,7 @@ defmodule Dran.EntityLinkerTest do
 
       # Only ONE entity page exists
       entities =
-        Brain.list_pages(context_id: ctx.id, type: "entity")
+        Brain.list_pages(workspace_id: ctx.id, type: "entity")
         |> Enum.filter(&(&1.slug == "elixir"))
 
       assert length(entities) == 1
@@ -155,7 +155,7 @@ defmodule Dran.EntityLinkerTest do
 
       {:ok, entity} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Elixir",
           slug: "elixir",
           page_type: "entity",
@@ -175,7 +175,7 @@ defmodule Dran.EntityLinkerTest do
     end
 
     test "page without context links nothing" do
-      page = %Brain.Page{context_id: nil}
+      page = %Brain.Page{workspace_id: nil}
       assert {:ok, 0} = EntityLinker.link(page, ["Elixir"])
     end
   end

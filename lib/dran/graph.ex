@@ -48,13 +48,13 @@ defmodule Dran.Graph do
   Load all edges for a context as a list of
   `%{source: id, target: id, type: type, weight: typed_weight}`.
 
-  Joins on `pages` to scope by the source page's `context_id`.
+  Joins on `pages` to scope by the source page's `workspace_id`.
   """
   @spec load_edges(binary()) :: [map()]
-  def load_edges(context_id) do
+  def load_edges(workspace_id) do
     from(r in Relation,
       join: s in assoc(r, :source),
-      where: s.context_id == ^context_id,
+      where: s.workspace_id == ^workspace_id,
       select: %{source: r.source_id, target: r.target_id, type: r.relation_type}
     )
     |> Repo.all()
@@ -84,8 +84,8 @@ defmodule Dran.Graph do
   1 after the final iteration.
   """
   @spec pagerank(binary()) :: %{binary() => float()}
-  def pagerank(context_id) do
-    edges = load_edges(context_id)
+  def pagerank(workspace_id) do
+    edges = load_edges(workspace_id)
     nodes = edges |> Enum.flat_map(&[&1.source, &1.target]) |> Enum.uniq()
 
     case nodes do
@@ -152,8 +152,8 @@ defmodule Dran.Graph do
   to 6 decimal places to keep meta clean.
   """
   @spec refresh_pagerank(binary()) :: :ok
-  def refresh_pagerank(context_id) do
-    ranks = pagerank(context_id)
+  def refresh_pagerank(workspace_id) do
+    ranks = pagerank(workspace_id)
 
     Enum.each(ranks, fn {page_id, score} ->
       new_meta = %{"pagerank" => Float.round(score, 6)}
@@ -210,11 +210,11 @@ defmodule Dran.Graph do
   opaque grouping key, never as a stable identity.
   """
   @spec communities(binary(), keyword()) :: %{binary() => integer()}
-  def communities(context_id, opts \\ []) do
+  def communities(workspace_id, opts \\ []) do
     if seed = Keyword.get(opts, :seed), do: :rand.seed(:exsss, seed)
 
     edges =
-      context_id
+      workspace_id
       |> load_edges()
       |> Enum.filter(&community_edge?(&1.type))
 
@@ -278,8 +278,8 @@ defmodule Dran.Graph do
   augmenter, embeddings, broadcasts, and other update side effects.
   """
   @spec refresh_communities(binary()) :: :ok
-  def refresh_communities(context_id) do
-    context_id
+  def refresh_communities(workspace_id) do
+    workspace_id
     |> communities()
     |> Enum.each(fn {page_id, cid} ->
       new_meta = %{"community_id" => cid}
@@ -299,20 +299,20 @@ defmodule Dran.Graph do
   @doc """
   Refresh PageRank for the default context (Quantum entrypoint).
 
-  Resolves the default context slug via `Dran.Auth.default_context_slug/0`,
-  looks it up with `Brain.get_context_by_slug/1`, and runs both
+  Resolves the default context slug via `Dran.Auth.default_workspace_slug/0`,
+  looks it up with `Brain.get_workspace_by_slug/1`, and runs both
   `refresh_pagerank/1` and `refresh_communities/1` on the same context.
   PageRank runs first so community detection can reuse any future
   cross-signal logic; both share the same edge load. Same pattern as
   `Dran.Agent.Curator.run_scheduled/0`.
   """
-  @spec refresh_all_scheduled() :: :ok | {:error, :context_not_found}
+  @spec refresh_all_scheduled() :: :ok | {:error, :workspace_not_found}
   def refresh_all_scheduled do
-    slug = Dran.Auth.default_context_slug()
+    slug = Dran.Auth.default_workspace_slug()
 
-    case Dran.Brain.get_context_by_slug(slug) do
+    case Dran.Brain.get_workspace_by_slug(slug) do
       nil ->
-        {:error, :context_not_found}
+        {:error, :workspace_not_found}
 
       ctx ->
         :ok = refresh_pagerank(ctx.id)

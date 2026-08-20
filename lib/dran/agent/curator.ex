@@ -46,8 +46,8 @@ defmodule Dran.Agent.Curator do
   Start a curator session.
   """
   @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Agent.Session.t()}
-  def run(input, context_id, opts \\ []) do
-    Dran.Agent.Engine.run(__MODULE__, input, context_id, opts)
+  def run(input, workspace_id, opts \\ []) do
+    Dran.Agent.Engine.run(__MODULE__, input, workspace_id, opts)
   end
 
   @impl true
@@ -211,15 +211,15 @@ defmodule Dran.Agent.Curator do
 
   @impl true
   def execute_tool("find_duplicates", _args, %State{} = state) do
-    context_id = state.session.context_id
+    workspace_id = state.session.workspace_id
 
     pairs =
       Repo.all(
         from p1 in Page,
           join: p2 in Page,
-          on: p1.context_id == p2.context_id and p1.id < p2.id,
+          on: p1.workspace_id == p2.workspace_id and p1.id < p2.id,
           where:
-            p1.context_id == ^context_id and
+            p1.workspace_id == ^workspace_id and
               not is_nil(p1.embedding) and not is_nil(p2.embedding),
           where: fragment("? <=> ?", p1.embedding, p2.embedding) < ^@duplicate_threshold,
           order_by: fragment("? <=> ?", p1.embedding, p2.embedding),
@@ -270,11 +270,11 @@ defmodule Dran.Agent.Curator do
         {{:error, "flag limit reached (#{@max_flags} per session)"}, state}
 
       true ->
-        context_id = state.session.context_id
+        workspace_id = state.session.workspace_id
 
         {flagged, errors} =
           Enum.reduce(slugs, {[], []}, fn slug, {flagged_acc, err_acc} ->
-            case Brain.get_page_by_slug(slug, context_id) do
+            case Brain.get_page_by_slug(slug, workspace_id) do
               nil ->
                 {flagged_acc, err_acc ++ ["page '#{slug}' not found"]}
 
@@ -305,7 +305,7 @@ defmodule Dran.Agent.Curator do
   end
 
   def execute_tool("lint_report", _args, %State{} = state) do
-    report = Brain.lint(state.session.context_id)
+    report = Brain.lint(state.session.workspace_id)
     {{:ok, report}, state}
   end
 
@@ -319,7 +319,7 @@ defmodule Dran.Agent.Curator do
       title = "Curator report #{date}"
 
       page_attrs = %{
-        context_id: state.session.context_id,
+        workspace_id: state.session.workspace_id,
         title: title,
         body: body,
         page_type: "report",

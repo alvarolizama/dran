@@ -40,8 +40,8 @@ defmodule DranWeb.SmartCollectionLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
     >
       <div :if={@live_action == :index} class="p-6 overflow-y-auto w-full">
         <div class="flex items-center justify-between mb-4">
@@ -442,7 +442,7 @@ defmodule DranWeb.SmartCollectionLive do
 
       true ->
         attrs = %{
-          "context_id" => context.id,
+          "workspace_id" => context.id,
           "title" => params["title"],
           "slug" => params["slug"],
           "summary" => params["summary"],

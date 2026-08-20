@@ -23,15 +23,15 @@ defmodule DranWeb.CommunityLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav="communities"
     >
       <div :if={@live_action == :index} class="p-6 overflow-y-auto w-full">
         <.index_view
           summaries={@summaries}
           generating={@generating}
-          context={@context}
+          workspace={@workspace}
         />
       </div>
 
@@ -127,7 +127,7 @@ defmodule DranWeb.CommunityLive do
       title={gettext("No community summaries yet.")}
     >
       <button
-        :if={@context}
+        :if={@workspace}
         phx-click="regenerate"
         disabled={@generating}
         class="btn btn-primary btn-sm mt-4"

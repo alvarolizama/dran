@@ -38,11 +38,11 @@ defmodule Dran.Brain.PageAugmenterTest do
   test "run/1 skips when inference is not configured" do
     Application.put_env(:dran, :inference, nil)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Standalone note",
         slug: "standalone-note",
         body: "No inference available.",
@@ -68,11 +68,11 @@ defmodule Dran.Brain.PageAugmenterTest do
       enable_inference()
       # No Req.Test stub: any HTTP call to the inference API would raise.
 
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "System report",
           slug: "system-report-augmenter-test",
           body: "Nightly job finished successfully.",
@@ -92,11 +92,11 @@ defmodule Dran.Brain.PageAugmenterTest do
   test "run/1 enriches summary and creates high-confidence auto-relations" do
     Application.put_env(:dran, :inference, nil)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, target} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Phoenix framework",
         slug: "phoenix-framework",
         body: "Phoenix is a web framework for Elixir.",
@@ -112,7 +112,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "My Phoenix project",
         slug: "my-phoenix-project",
         body: "I am building a web app with Phoenix.",
@@ -262,11 +262,11 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, target} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Short neighbor",
         slug: "short-neighbor",
         body: "neighbor body",
@@ -277,7 +277,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Short source",
         slug: "short-source",
         body: String.duplicate("x", 300),
@@ -295,11 +295,11 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, target} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Long neighbor",
         slug: "long-neighbor",
         body: "neighbor body",
@@ -310,7 +310,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Long source",
         slug: "long-source",
         body: String.duplicate("y", 4001),
@@ -329,11 +329,11 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, target} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Bidirectional target",
         slug: "bidir-target",
         body: "neighbor body",
@@ -344,7 +344,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Bidirectional source",
         slug: "bidir-source",
         body: String.duplicate("z", 2000),
@@ -368,13 +368,13 @@ defmodule Dran.Brain.PageAugmenterTest do
     enable_inference()
     stub_embeddings_chat()
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     targets =
       Enum.map(1..3, fn i ->
         {:ok, t} =
           Brain.create_page(%{
-            context_id: context.id,
+            workspace_id: context.id,
             title: "Neighbor #{i}",
             slug: "neighbor-#{i}",
             body: "neighbor body #{i}",
@@ -388,7 +388,7 @@ defmodule Dran.Brain.PageAugmenterTest do
     # 4th neighbor just above threshold should NOT get a relation.
     {:ok, far} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Far neighbor",
         slug: "far-neighbor",
         body: "far body",
@@ -399,7 +399,7 @@ defmodule Dran.Brain.PageAugmenterTest do
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Multi neighbor source",
         slug: "multi-neighbor-source",
         body: String.duplicate("w", 2000),

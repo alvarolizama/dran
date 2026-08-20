@@ -7,13 +7,13 @@ defmodule DranWeb.API.ExportControllerTest do
     {:ok, conn: put_req_header(conn, "authorization", "Bearer dran-token")}
   end
 
-  describe "GET /api/contexts/:slug/export" do
+  describe "GET /api/workspaces/:slug/export" do
     test "returns exported JSON with context, pages, and relations", %{conn: conn} do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       {:ok, page_a} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Page A",
           slug: "export-page-a",
           body: "Body of page A",
@@ -24,7 +24,7 @@ defmodule DranWeb.API.ExportControllerTest do
 
       {:ok, page_b} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Page B",
           slug: "export-page-b",
           body: "Body of page B",
@@ -38,13 +38,13 @@ defmodule DranWeb.API.ExportControllerTest do
         relation_type: "related"
       })
 
-      conn = get(conn, ~p"/api/contexts/personal/export")
+      conn = get(conn, ~p"/api/workspaces/personal/export")
 
       body = json_response(conn, 200)
 
-      assert body["context"]["slug"] == "personal"
-      assert body["context"]["name"] == context.name
-      assert Map.has_key?(body["context"], "description")
+      assert body["workspace"]["slug"] == "personal"
+      assert body["workspace"]["name"] == context.name
+      assert Map.has_key?(body["workspace"], "description")
       assert Map.has_key?(body, "exported_at")
 
       page_maps =
@@ -72,20 +72,20 @@ defmodule DranWeb.API.ExportControllerTest do
     end
 
     test "returns 404 for unknown context slug", %{conn: conn} do
-      conn = get(conn, ~p"/api/contexts/nonexistent-context/export")
+      conn = get(conn, ~p"/api/workspaces/nonexistent-context/export")
 
       assert json_response(conn, 404)
       assert %{"errors" => %{"detail" => "context not found"}} = json_response(conn, 404)
     end
   end
 
-  describe "GET /api/export/:context/full" do
+  describe "GET /api/export/:workspace/full" do
     test "returns full export with pages, relations, and versions keys", %{conn: conn} do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       {:ok, page_a} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Full A",
           slug: "full-page-a",
           body: "v1 body",
@@ -97,7 +97,7 @@ defmodule DranWeb.API.ExportControllerTest do
 
       {:ok, page_b} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Full B",
           slug: "full-page-b",
           body: "Body B",
@@ -118,7 +118,7 @@ defmodule DranWeb.API.ExportControllerTest do
 
       body = json_response(conn, 200)
 
-      assert body["context"]["slug"] == "personal"
+      assert body["workspace"]["slug"] == "personal"
       assert Map.has_key?(body, "exported_at")
       assert is_list(body["pages"])
       assert is_list(body["relations"])

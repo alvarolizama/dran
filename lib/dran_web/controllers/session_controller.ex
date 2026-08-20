@@ -44,11 +44,11 @@ defmodule DranWeb.SessionController do
       true ->
         case Accounts.create_user_with_password(%{email: email, password: password}) do
           {:ok, user} ->
-            {:ok, user} = Accounts.update_user(user, %{is_admin: true})
+            {:ok, user} = Accounts.update_user(user, %{is_owner: true})
 
             conn
             |> SessionAuth.login(user.email)
-            |> put_flash(:info, "Admin account created — welcome to Dran")
+            |> put_flash(:info, "Owner account created — welcome to Dran")
             |> redirect(to: SessionAuth.resolve_login_redirect(conn))
 
           {:error, %Ecto.Changeset{} = changeset} ->
@@ -73,18 +73,18 @@ defmodule DranWeb.SessionController do
   end
 
   @doc "POST /context — switch the active context"
-  def switch_context(conn, %{"context_slug" => context_slug}) do
+  def switch_workspace(conn, %{"workspace_slug" => workspace_slug}) do
     user_email = get_session(conn, "user")
     user = user_email && Accounts.get_user_by_email(user_email)
 
     accessible =
       cond do
         is_nil(user) -> :all
-        user.is_admin -> :all
-        true -> Accounts.list_user_contexts(user) |> Enum.map(& &1.slug)
+        user.is_owner -> :all
+        true -> Accounts.list_user_workspaces(user) |> Enum.map(& &1.slug)
       end
 
-    context = Dran.Brain.get_context_by_slug(context_slug)
+    context = Dran.Brain.get_workspace_by_slug(workspace_slug)
 
     cond do
       is_nil(context) ->
@@ -92,19 +92,19 @@ defmodule DranWeb.SessionController do
         |> put_flash(:error, "Unknown context")
         |> redirect(to: ~p"/panel/notes")
 
-      accessible != :all and context_slug not in accessible ->
+      accessible != :all and workspace_slug not in accessible ->
         conn
         |> put_flash(:error, "You don't have access to that context")
         |> redirect(to: ~p"/panel/notes")
 
       true ->
         conn
-        |> SessionAuth.put_context(context_slug)
+        |> SessionAuth.put_workspace(workspace_slug)
         |> redirect(to: referer_path(conn))
     end
   end
 
-  def switch_context(conn, _params) do
+  def switch_workspace(conn, _params) do
     conn
     |> put_flash(:error, "Context slug is required")
     |> redirect(to: ~p"/panel/notes")

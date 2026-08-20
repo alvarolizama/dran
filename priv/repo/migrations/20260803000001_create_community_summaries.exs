@@ -5,7 +5,7 @@ defmodule Dran.Repo.Migrations.CreateCommunitySummaries do
     create table(:community_summaries, primary_key: false) do
       add :id, :binary_id, primary_key: true, default: fragment("gen_random_uuid()")
 
-      add :context_id, references(:contexts, type: :binary_id, on_delete: :delete_all),
+      add :workspace_id, references(:workspaces, type: :binary_id, on_delete: :delete_all),
         null: false
 
       add :community_id, :integer, null: false
@@ -17,7 +17,7 @@ defmodule Dran.Repo.Migrations.CreateCommunitySummaries do
       timestamps(type: :utc_datetime)
     end
 
-    create unique_index(:community_summaries, [:context_id, :community_id])
-    create index(:community_summaries, [:context_id])
+    create unique_index(:community_summaries, [:workspace_id, :community_id])
+    create index(:community_summaries, [:workspace_id])
   end
 end

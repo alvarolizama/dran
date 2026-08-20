@@ -45,7 +45,7 @@ defmodule Dran.EntityLinker do
   counted as failures — they are reused).
   """
   @spec link(Page.t(), [String.t()]) :: {:ok, non_neg_integer()}
-  def link(%Page{context_id: nil}, _entities), do: {:ok, 0}
+  def link(%Page{workspace_id: nil}, _entities), do: {:ok, 0}
 
   def link(%Page{} = page, entities) when is_list(entities) do
     created =

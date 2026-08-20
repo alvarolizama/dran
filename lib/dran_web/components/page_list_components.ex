@@ -132,7 +132,7 @@ defmodule DranWeb.PageListComponents do
   attr :archived_pages, :list, default: []
   attr :archived_filter, :string, default: "all"
   attr :page_type, :string, default: nil
-  attr :context_slug, :string, default: "personal"
+  attr :workspace_slug, :string, default: "personal"
   # Pagination state (driven by the parent LiveView).
   attr :show_archived, :boolean, default: false
   attr :total_count, :integer, default: 0

@@ -5,12 +5,12 @@ defmodule DranWeb.API.PageController do
 
   @doc "GET /api/pages — list pages with filters"
   def index(conn, params) do
-    # Resolve context slug to context_id (like TodoController does)
-    params = resolve_context_id(conn, params)
+    # Resolve context slug to workspace_id (like TodoController does)
+    params = resolve_workspace_id(conn, params)
 
     opts =
       []
-      |> maybe_put(:context_id, params["context_id"])
+      |> maybe_put(:workspace_id, params["workspace_id"])
       |> maybe_put(:type, params["type"])
       |> maybe_put(:tag, params["tag"])
       |> maybe_put(:status, params["status"])
@@ -30,8 +30,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "GET /api/pages/:slug — get a page"
-  def show(conn, %{"slug" => slug, "context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
+  def show(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -57,7 +57,7 @@ defmodule DranWeb.API.PageController do
   @doc "POST /api/pages — create a page"
   def create(conn, params) do
     # Resolve context slug to ID if needed
-    params = resolve_context_id(conn, params)
+    params = resolve_workspace_id(conn, params)
 
     # Inject owner/created_by from the authenticated identity.
     # owner is derived from the API key — not client-settable.
@@ -83,8 +83,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "PUT /api/pages/:slug — update a page"
-  def update(conn, %{"slug" => slug, "context" => context_slug} = params) do
-    with_context(conn, context_slug, fn conn, context ->
+  def update(conn, %{"slug" => slug, "workspace" => workspace_slug} = params) do
+    with_context(conn, workspace_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -93,7 +93,7 @@ defmodule DranWeb.API.PageController do
 
         page ->
           # SEC-006: whitelist instead of blacklist — only these fields are
-          # client-settable. Prevents mass assignment of context_id, owner,
+          # client-settable. Prevents mass assignment of workspace_id, owner,
           # created_by, updated_by, etc.
           params =
             Map.take(params, [
@@ -128,8 +128,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "DELETE /api/pages/:slug — delete a page"
-  def delete(conn, %{"slug" => slug, "context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
+  def delete(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -157,8 +157,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "GET /api/pages/:slug/links — inbound + outbound relations"
-  def links(conn, %{"slug" => slug, "context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
+  def links(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -179,8 +179,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "GET /api/pages/:slug/graph — subgraph centered on a page"
-  def graph(conn, %{"slug" => slug, "context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
+  def graph(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -223,14 +223,14 @@ defmodule DranWeb.API.PageController do
     %{page | body: nil}
   end
 
-  defp resolve_context_id(conn, params) do
-    case params["context_id"] || params["context"] || conn.query_params["context"] do
+  defp resolve_workspace_id(conn, params) do
+    case params["workspace_id"] || params["workspace"] || conn.query_params["workspace"] do
       nil ->
         params
 
       context_val ->
         # Always try slug first, then fall back to ID lookup
-        context = Brain.get_context_by_slug(context_val)
+        context = Brain.get_workspace_by_slug(context_val)
 
         context =
           if context do
@@ -238,13 +238,13 @@ defmodule DranWeb.API.PageController do
           else
             # Try by ID — use Repo.get to avoid raising on invalid UUIDs
             case Ecto.UUID.cast(context_val) do
-              {:ok, uuid} -> Dran.Repo.get(Dran.Brain.Context, uuid)
+              {:ok, uuid} -> Dran.Repo.get(Dran.Brain.Workspace, uuid)
               :error -> nil
             end
           end
 
         if context do
-          Map.put(params, "context_id", context.id)
+          Map.put(params, "workspace_id", context.id)
         else
           params
         end

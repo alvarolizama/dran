@@ -28,15 +28,15 @@ defmodule DranWeb.CommandPaletteTest do
 
     # Ensure the default "personal" context exists
     context =
-      Brain.get_context_by_slug("personal") ||
-        elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+      Brain.get_workspace_by_slug("personal") ||
+        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     # Log in — init_test_session is needed because ConnCase doesn't pipe through browser
     conn =
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, context: context}
   end
@@ -88,7 +88,7 @@ defmodule DranWeb.CommandPaletteTest do
       # Create a page whose title contains a searchable term
       {:ok, _page} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Elixir Concurrency Guide",
           slug: "elixir-concurrency-guide",
           body: "Elixir processes and message passing",

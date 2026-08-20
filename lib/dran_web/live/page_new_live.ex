@@ -19,8 +19,8 @@ defmodule DranWeb.PageNewLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div class="w-full mx-auto p-6">
@@ -52,7 +52,7 @@ defmodule DranWeb.PageNewLive do
                 <.markdown_editor
                   id="page-new-editor"
                   body={@body}
-                  context_id={@context_id}
+                  workspace_id={@workspace_id}
                   save_status={@save_status}
                   autosave={false}
                 />
@@ -81,7 +81,7 @@ defmodule DranWeb.PageNewLive do
                 class="text-sm"
               />
 
-              <.meta_fields page_type={@page_type} meta={@meta} context_id={@context_id} />
+              <.meta_fields page_type={@page_type} meta={@meta} workspace_id={@workspace_id} />
             </aside>
           </div>
 
@@ -124,7 +124,7 @@ defmodule DranWeb.PageNewLive do
        form: nil,
        body: "",
        meta: %{},
-       context_id: if(context, do: context.id),
+       workspace_id: if(context, do: context.id),
        tag_suggestions: if(context, do: Brain.list_tags(context.id), else: []),
        save_status: "idle",
        active_nav: "notes"
@@ -137,14 +137,14 @@ defmodule DranWeb.PageNewLive do
     page_type = type_from_path(path)
     back_path = "/panel/#{PageTypes.path(page_type)}"
 
-    context = socket.assigns[:context]
-    context_id = if context, do: context.id
+    context = socket.assigns[:workspace]
+    workspace_id = if context, do: context.id
 
     meta = default_meta_for(page_type)
 
     changeset =
       Brain.change_page(%Brain.Page{}, %{
-        context_id: context_id,
+        workspace_id: workspace_id,
         page_type: page_type,
         body: "",
         tags: []
@@ -162,7 +162,7 @@ defmodule DranWeb.PageNewLive do
   end
 
   def handle_event("validate_page", %{"page" => page_params} = _event, socket) do
-    context_id = if socket.assigns[:context], do: socket.assigns.context.id
+    workspace_id = if socket.assigns[:workspace], do: socket.assigns.context.id
 
     # Carry smart-default meta through live validation so the meta_fields
     # component keeps showing the prefilled values until the user changes
@@ -174,7 +174,7 @@ defmodule DranWeb.PageNewLive do
       Brain.change_page(
         %Brain.Page{},
         page_params
-        |> Map.put("context_id", context_id)
+        |> Map.put("workspace_id", workspace_id)
         |> Map.put("page_type", socket.assigns.page_type)
       )
 
@@ -194,15 +194,15 @@ defmodule DranWeb.PageNewLive do
   end
 
   def handle_event("save_page", %{"page" => page_params}, socket) do
-    context_id = if socket.assigns[:context], do: socket.assigns.context.id
+    workspace_id = if socket.assigns[:workspace], do: socket.assigns.context.id
     page_type = socket.assigns.page_type
 
     page_params =
       page_params
-      |> Map.put("context_id", context_id)
+      |> Map.put("workspace_id", workspace_id)
       |> Map.put("page_type", page_type)
       |> Map.put_new("body", socket.assigns.body)
-      |> ensure_slug(context_id)
+      |> ensure_slug(workspace_id)
       |> Map.put_new("owner", "system")
       |> Map.put_new("created_by", socket.assigns[:current_user] || "system")
 
@@ -323,13 +323,13 @@ defmodule DranWeb.PageNewLive do
 
   defp parse_props_json(meta), do: meta
 
-  defp ensure_slug(%{"slug" => slug} = params, _context_id)
+  defp ensure_slug(%{"slug" => slug} = params, _workspace_id)
        when is_binary(slug) and slug != "",
        do: params
 
-  defp ensure_slug(params, context_id) do
+  defp ensure_slug(params, workspace_id) do
     title = Map.get(params, "title", "")
-    slug = Dran.Slug.generate(title, context_id, Map.get(params, "page_type", "page"))
+    slug = Dran.Slug.generate(title, workspace_id, Map.get(params, "page_type", "page"))
     Map.put(params, "slug", slug)
   end
 

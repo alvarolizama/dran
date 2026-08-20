@@ -28,12 +28,12 @@ defmodule DranWeb.ActivityLiveTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     # Create a page — this generates a "page.create" log entry.
     {:ok, page} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Activity Test Page",
         body: "A page for the activity feed test",
         page_type: "note"
@@ -44,7 +44,7 @@ defmodule DranWeb.ActivityLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, page: page}
   end
@@ -76,11 +76,11 @@ defmodule DranWeb.ActivityLiveTest do
   end
 
   test "renders empty state when no log entries", %{conn: conn} do
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     import Ecto.Query
 
-    Dran.Repo.delete_all(from(l in Dran.Brain.Log, where: l.context_id == ^context.id))
+    Dran.Repo.delete_all(from(l in Dran.Brain.Log, where: l.workspace_id == ^context.id))
 
     {:ok, _view, html} = live(conn, ~p"/panel/activity")
 
@@ -95,17 +95,17 @@ defmodule DranWeb.ActivityLiveTest do
     assert html =~ t("Created")
 
     # Create another page — broadcasts :page_changed to the brain topic
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, _page2} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Second Activity Page",
         body: "Another page",
         page_type: "note"
       })
 
-    # The LiveView is subscribed to the brain:<context_id> topic and should
+    # The LiveView is subscribed to the brain:<workspace_id> topic and should
     # reload on the broadcast. Give it a moment to process.
     Process.sleep(50)
 

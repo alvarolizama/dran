@@ -34,7 +34,7 @@ defmodule Dran.PageFactory do
   def get_or_create(%Page{} = source_page, slug, page_type, opts \\ []) do
     created_by = Keyword.get(opts, :created_by, "page_factory")
 
-    case Brain.get_page_by_slug(slug, source_page.context_id) do
+    case Brain.get_page_by_slug(slug, source_page.workspace_id) do
       nil ->
         create_page(source_page, slug, page_type, created_by)
 
@@ -68,7 +68,7 @@ defmodule Dran.PageFactory do
 
   defp create_page(source_page, slug, page_type, created_by) do
     attrs = %{
-      context_id: source_page.context_id,
+      workspace_id: source_page.workspace_id,
       title: Dran.Slug.titleize(slug),
       slug: slug,
       page_type: page_type,
@@ -84,7 +84,7 @@ defmodule Dran.PageFactory do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         # Race: another augmenter created it concurrently — fetch and reuse.
-        case Brain.get_page_by_slug(slug, source_page.context_id) do
+        case Brain.get_page_by_slug(slug, source_page.workspace_id) do
           %Page{page_type: ^page_type} = existing ->
             {:ok, existing}
 

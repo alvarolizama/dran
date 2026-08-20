@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Dran.Graph.Prune do
 
     slug = List.first(remaining) || raise "context slug is required"
 
-    context = Brain.get_context_by_slug(slug) || raise "context not found: #{slug}"
+    context = Brain.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
 
     result =
       cond do

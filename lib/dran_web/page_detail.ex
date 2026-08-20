@@ -109,7 +109,7 @@ defmodule DranWeb.PageDetail do
   """
   def load_page_detail(socket, params, slug, opts) do
     redirect_to = Keyword.fetch!(opts, :redirect_to)
-    {socket, context} = Auth.resolve_context(socket, params)
+    {socket, context} = Auth.resolve_workspace(socket, params)
 
     with %{} = context <- context,
          %Dran.Brain.Page{} = page <- Brain.get_page_by_slug(slug, context.id) do
@@ -121,13 +121,13 @@ defmodule DranWeb.PageDetail do
          relations: Brain.list_relations_for_page(page.id),
          versions: Brain.list_page_versions(page.id),
          compare_version: nil,
-         logs: Brain.list_log(context_id: context.id, limit: 10),
+         logs: Brain.list_log(workspace_id: context.id, limit: 10),
          page_title: page.title,
          active_tab: active_tab,
          community_summary: load_community_summary(page),
          editing: Map.get(params, "edit") == "true",
          form: Brain.change_page(page) |> to_form(as: :page),
-         context_id: context.id,
+         workspace_id: context.id,
          save_status: "idle",
          rendered_body: render_body(page)
        )}
@@ -156,7 +156,7 @@ defmodule DranWeb.PageDetail do
     import DranWeb.PageComponents, only: [render_markdown: 2]
 
     render_markdown(page.body,
-      context_id: page.context_id,
+      workspace_id: page.workspace_id,
       inline_links: Map.get(page.meta || %{}, "inline_links", [])
     )
   end

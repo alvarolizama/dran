@@ -10,7 +10,7 @@ defmodule Dran.Agent.Session do
   import Ecto.Changeset
 
   alias Dran.Agent.Step
-  alias Dran.Brain.Context
+  alias Dran.Brain.Workspace
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -26,7 +26,7 @@ defmodule Dran.Agent.Session do
     field :completed_at, :utc_datetime
     field :meta, :map, default: %{}
 
-    belongs_to :context, Context
+    belongs_to :workspace, Workspace
     has_many :steps, Step
 
     timestamps(type: :utc_datetime)
@@ -45,9 +45,9 @@ defmodule Dran.Agent.Session do
       :started_at,
       :completed_at,
       :meta,
-      :context_id
+      :workspace_id
     ])
-    |> validate_required([:agent_type, :input, :context_id])
+    |> validate_required([:agent_type, :input, :workspace_id])
     |> validate_inclusion(:status, ~w(pending running done failed cancelled))
   end
 end

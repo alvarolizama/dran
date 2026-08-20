@@ -7,20 +7,20 @@ defmodule Dran.Agent.GraphRagTest do
 
   #  Helpers 
 
-  defp build_session(context_id) do
+  defp build_session(workspace_id) do
     struct(%Dran.Agent.Session{
       id: Ecto.UUID.generate(),
-      context_id: context_id,
+      workspace_id: workspace_id,
       agent_type: "graph_rag",
       input: "test graph_rag query",
       status: "running"
     })
   end
 
-  defp build_state(context_id, attrs \\ []) do
+  defp build_state(workspace_id, attrs \\ []) do
     struct(
       %GraphRag.State{
-        session: build_session(context_id),
+        session: build_session(workspace_id),
         pages_created: 0,
         opts: [],
         mode: nil,
@@ -36,9 +36,9 @@ defmodule Dran.Agent.GraphRagTest do
     )
   end
 
-  defp insert_page!(context_id, attrs) do
+  defp insert_page!(workspace_id, attrs) do
     %Page{
-      context_id: context_id,
+      workspace_id: workspace_id,
       title: attrs[:title] || "Test page",
       slug: attrs[:slug] || "test-#{:rand.uniform(999_999)}",
       body: attrs[:body] || "test body",
@@ -50,8 +50,8 @@ defmodule Dran.Agent.GraphRagTest do
   end
 
   defp ensure_context! do
-    Brain.get_context_by_slug("personal") ||
-      elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+    Brain.get_workspace_by_slug("personal") ||
+      elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
   end
 
   defp insert_relation!(source_id, target_id, type) do
@@ -162,8 +162,8 @@ defmodule Dran.Agent.GraphRagTest do
   end
 
   test "expand_neighbors returns error when page not found" do
-    context_id = Ecto.UUID.generate()
-    state = build_state(context_id)
+    workspace_id = Ecto.UUID.generate()
+    state = build_state(workspace_id)
 
     {result, _state} =
       GraphRag.execute_tool("expand_neighbors", %{"slug" => "nonexistent"}, state)
@@ -180,18 +180,18 @@ defmodule Dran.Agent.GraphRagTest do
   end
 
   test "expand_neighbors finds outbound and inbound neighbors" do
-    context_id = ensure_context!().id
+    workspace_id = ensure_context!().id
 
-    page_a = insert_page!(context_id, title: "Page A", slug: "page-a")
-    page_b = insert_page!(context_id, title: "Page B", slug: "page-b")
-    page_c = insert_page!(context_id, title: "Page C", slug: "page-c")
+    page_a = insert_page!(workspace_id, title: "Page A", slug: "page-a")
+    page_b = insert_page!(workspace_id, title: "Page B", slug: "page-b")
+    page_c = insert_page!(workspace_id, title: "Page C", slug: "page-c")
 
     # A  B (outbound from A)
     insert_relation!(page_a.id, page_b.id, "related")
     # C  A (inbound to A)
     insert_relation!(page_c.id, page_a.id, "part_of")
 
-    state = build_state(context_id)
+    state = build_state(workspace_id)
 
     {result, new_state} =
       GraphRag.execute_tool("expand_neighbors", %{"slug" => "page-a", "depth" => 1}, state)
@@ -216,10 +216,10 @@ defmodule Dran.Agent.GraphRagTest do
   #  execute_tool: get_page_content 
 
   test "get_page_content returns page body and meta" do
-    context_id = ensure_context!().id
+    workspace_id = ensure_context!().id
 
     _page =
-      insert_page!(context_id,
+      insert_page!(workspace_id,
         title: "Test Content",
         slug: "test-content",
         body: "This is the body",
@@ -227,7 +227,7 @@ defmodule Dran.Agent.GraphRagTest do
         meta: %{"kind" => "technique", "domain" => "elixir"}
       )
 
-    state = build_state(context_id)
+    state = build_state(workspace_id)
 
     {result, _state} =
       GraphRag.execute_tool("get_page_content", %{"slug" => "test-content"}, state)
@@ -272,16 +272,16 @@ defmodule Dran.Agent.GraphRagTest do
   end
 
   test "get_community_context returns community data for a page with community_id" do
-    context_id = ensure_context!().id
+    workspace_id = ensure_context!().id
 
     _page =
-      insert_page!(context_id,
+      insert_page!(workspace_id,
         title: "Community Page",
         slug: "community-page",
         meta: %{"community_id" => 1}
       )
 
-    state = build_state(context_id)
+    state = build_state(workspace_id)
 
     {result, new_state} =
       GraphRag.execute_tool("get_community_context", %{"slug" => "community-page"}, state)
@@ -381,13 +381,13 @@ defmodule Dran.Agent.GraphRagTest do
   end
 
   test "create_query_page creates a query page with sources as relations" do
-    context_id = ensure_context!().id
+    workspace_id = ensure_context!().id
 
     source_page =
-      insert_page!(context_id, title: "Source Page", slug: "source-page")
+      insert_page!(workspace_id, title: "Source Page", slug: "source-page")
 
     state =
-      build_state(context_id,
+      build_state(workspace_id,
         answer: "The synthesized answer",
         mode: "local",
         sources: ["source-page"]
@@ -409,7 +409,7 @@ defmodule Dran.Agent.GraphRagTest do
     assert url =~ slug
 
     # Verify the page was created
-    page = Brain.get_page_by_slug(slug, context_id)
+    page = Brain.get_page_by_slug(slug, workspace_id)
     assert page != nil
     assert page.page_type == "query"
     assert page.title == "Test Query"

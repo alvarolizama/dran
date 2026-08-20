@@ -16,12 +16,12 @@ alias Dran.Brain.{Context, Page, Relation}
 
 # ──────────────────────────────────────────────────────────────────────────
 # Seeds only run when the default context is explicitly configured via
-# DRAN_CONTEXT_SLUG / DRAN_CONTEXT_NAME — otherwise a deleted "personal"
+# DRAN_WORKSPACE_SLUG / DRAN_WORKSPACE_NAME — otherwise a deleted "personal"
 # context would keep coming back from the dead.
 # ──────────────────────────────────────────────────────────────────────────
 
 unless Dran.Auth.default_context_configured?() do
-  IO.puts("DRAN_CONTEXT_SLUG/DRAN_CONTEXT_NAME not set — skipping seeds.")
+  IO.puts("DRAN_WORKSPACE_SLUG/DRAN_WORKSPACE_NAME not set — skipping seeds.")
   exit(:normal)
 end
 
@@ -29,13 +29,13 @@ end
 # Ensure the default context exists
 # ──────────────────────────────────────────────────────────────────────────
 
-context_slug = Dran.Auth.default_context_slug()
-context_name = Dran.Auth.default_context_name()
+workspace_slug = Dran.Auth.default_workspace_slug()
+context_name = Dran.Auth.default_workspace_name()
 
 context =
-  case Repo.get_by(Context, slug: context_slug) do
+  case Repo.get_by(Context, slug: workspace_slug) do
     nil ->
-      {:ok, ctx} = Brain.create_context(%{name: context_name, slug: context_slug})
+      {:ok, ctx} = Brain.create_workspace(%{name: context_name, slug: workspace_slug})
       IO.puts("Created context: #{ctx.name} (#{ctx.slug})")
       ctx
 
@@ -52,12 +52,12 @@ ctx_id = context.id
 
 defmodule Seeder do
   @doc "Create a page only if it doesn't already exist (by slug within context)."
-  def page!(context_id, attrs) do
+  def page!(workspace_id, attrs) do
     slug = attrs["slug"] || attrs[:slug]
 
-    case Dran.Brain.get_page_by_slug(slug, context_id) do
+    case Dran.Brain.get_page_by_slug(slug, workspace_id) do
       nil ->
-        {:ok, page} = Dran.Brain.create_page(Map.put(attrs, "context_id", context_id))
+        {:ok, page} = Dran.Brain.create_page(Map.put(attrs, "workspace_id", workspace_id))
         IO.puts("  ✓ Created #{page.page_type}: #{page.slug}")
         page
 
@@ -68,12 +68,12 @@ defmodule Seeder do
   end
 
   @doc "Create a relation by slugs (idempotent via on_conflict: :nothing)."
-  def rel!(context_id, source_slug, target_slug, type \\ "related") do
-    Dran.Brain.create_relation_by_slugs(source_slug, target_slug, type, context_id)
+  def rel!(workspace_id, source_slug, target_slug, type \\ "related") do
+    Dran.Brain.create_relation_by_slugs(source_slug, target_slug, type, workspace_id)
   end
 end
 
-IO.puts("\nSeeding context '#{context_slug}' with realistic content...\n")
+IO.puts("\nSeeding context '#{workspace_slug}' with realistic content...\n")
 
 # ──────────────────────────────────────────────────────────────────────────
 # 1. Goals (3) with kanban_status
@@ -614,13 +614,13 @@ IO.puts("  ✓ Relations created (related, semantic, part_of, embeds)")
 
 total_pages =
   Repo.aggregate(
-    from(p in Page, where: p.context_id == ^ctx_id),
+    from(p in Page, where: p.workspace_id == ^ctx_id),
     :count
   )
 
 total_relations =
   Repo.aggregate(
-    from(r in Relation, join: p in assoc(r, :source), where: p.context_id == ^ctx_id),
+    from(r in Relation, join: p in assoc(r, :source), where: p.workspace_id == ^ctx_id),
     :count
   )
 
@@ -628,7 +628,7 @@ IO.puts("""
 
 ╔══════════════════════════════════════════════╗
 ║  Seeds completados ✓                         ║
-║  Contexto: #{context_name} (#{context_slug})           ║
+║  Contexto: #{context_name} (#{workspace_slug})           ║
 ║  Páginas totales: #{total_pages}                          ║
 ║  Relaciones totales: #{total_relations}                       ║
 ╚══════════════════════════════════════════════╝

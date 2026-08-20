@@ -84,9 +84,9 @@ defmodule Dran.Summaries do
 
   # ── Prompts ──
 
-  defp augment_prompt(%Page{context_id: context_id} = page) do
+  defp augment_prompt(%Page{workspace_id: workspace_id} = page) do
     pages =
-      if context_id do
+      if workspace_id do
         candidate_pages(page)
       else
         []
@@ -134,14 +134,14 @@ defmodule Dran.Summaries do
 
       Repo.all(
         from p in Page,
-          where: p.context_id == ^page.context_id and p.id != ^page.id,
+          where: p.workspace_id == ^page.workspace_id and p.id != ^page.id,
           where: not is_nil(p.embedding),
           order_by: fragment("? <=> ?", p.embedding, ^vec),
           limit: 50,
           select: %{slug: p.slug, title: p.title, summary: coalesce(p.summary, "")}
       )
     else
-      Brain.list_pages(context_id: page.context_id, limit: 50)
+      Brain.list_pages(workspace_id: page.workspace_id, limit: 50)
       |> Enum.reject(&(&1.id == page.id))
       |> Enum.map(&%{slug: &1.slug, title: &1.title, summary: &1.summary || ""})
     end

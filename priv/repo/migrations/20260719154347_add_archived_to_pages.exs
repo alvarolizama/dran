@@ -6,6 +6,6 @@ defmodule Dran.Repo.Migrations.AddArchivedToPages do
       add :archived, :boolean, null: false, default: false
     end
 
-    create index(:pages, [:context_id, :archived])
+    create index(:pages, [:workspace_id, :archived])
   end
 end

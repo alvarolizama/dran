@@ -44,7 +44,7 @@ defmodule Dran.IntegrationTest do
 
     # Create a fresh context for this test
     {:ok, context} =
-      Brain.create_context(%{
+      Brain.create_workspace(%{
         name: "Integration Test",
         slug: "integration-test-#{System.unique_integer()}"
       })
@@ -57,7 +57,7 @@ defmodule Dran.IntegrationTest do
       # ── 1. Create a note page ──
       {:ok, note_page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Design Document",
           slug: "design-doc",
           page_type: "note",
@@ -70,7 +70,7 @@ defmodule Dran.IntegrationTest do
       # ── 2. Create a note that embeds the page via ![[design-doc]] ──
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Project Notes",
           slug: "project-notes",
           page_type: "note",
@@ -118,7 +118,7 @@ defmodule Dran.IntegrationTest do
       assert hd(embed_rels_after).target.slug == "design-spec"
 
       # ── 6. Search for the renamed page by content (FTS, no embeddings needed) ──
-      {:ok, results} = Brain.search("design document", context_id: ctx.id)
+      {:ok, results} = Brain.search("design document", workspace_id: ctx.id)
 
       # The renamed page should be findable via full-text search
       found = Enum.find(results, &(&1.slug == "design-spec"))
@@ -126,15 +126,15 @@ defmodule Dran.IntegrationTest do
       assert found.title == "Design Document"
 
       # Also search for the note's content
-      {:ok, note_results} = Brain.search("project notes", context_id: ctx.id)
+      {:ok, note_results} = Brain.search("project notes", workspace_id: ctx.id)
       found_note = Enum.find(note_results, &(&1.slug == "project-notes"))
       assert found_note != nil
 
       # ── 7. Export the context ──
       {:ok, export} = Exporter.full_export(ctx.id)
 
-      assert export.context.id == ctx.id
-      assert export.context.name == "Integration Test"
+      assert export.workspace.id == ctx.id
+      assert export.workspace.name == "Integration Test"
 
       # Export should include both pages
       exported_slugs = Enum.map(export.pages, & &1.slug)
@@ -164,7 +164,7 @@ defmodule Dran.IntegrationTest do
       # Create todos with different kanban statuses
       {:ok, _todo1} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Task A",
           slug: "task-a",
           page_type: "todo",
@@ -174,7 +174,7 @@ defmodule Dran.IntegrationTest do
 
       {:ok, _todo2} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Task B",
           slug: "task-b",
           page_type: "todo",
@@ -184,7 +184,7 @@ defmodule Dran.IntegrationTest do
 
       {:ok, _todo3} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Task C",
           slug: "task-c",
           page_type: "todo",
@@ -194,7 +194,7 @@ defmodule Dran.IntegrationTest do
 
       {:ok, _todo4} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Task D",
           slug: "task-d",
           page_type: "todo",
@@ -214,7 +214,7 @@ defmodule Dran.IntegrationTest do
     test "orphan_pages finds pages with no inbound relations", %{context: ctx} do
       {:ok, a} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Page A",
           slug: "page-a",
           page_type: "note",
@@ -223,7 +223,7 @@ defmodule Dran.IntegrationTest do
 
       {:ok, b} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Page B",
           slug: "page-b",
           page_type: "note",

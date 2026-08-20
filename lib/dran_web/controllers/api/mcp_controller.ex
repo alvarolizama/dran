@@ -34,7 +34,7 @@ defmodule DranWeb.API.MCPController do
         cond do
           # 1. Legacy admin token (backward compat)
           token == Dran.Auth.api_token() ->
-            {:ok, %{is_admin: true, email: "admin", contexts: :all}}
+            {:ok, %{is_owner: true, email: "admin", workspaces: :all}}
 
           # 2. Per-user token
           match?({:ok, _}, Accounts.valid_token?(token)) ->
@@ -42,17 +42,27 @@ defmodule DranWeb.API.MCPController do
             {:ok, user}
 
           # 3. Context-scoped API key — masquerades as a synthetic user whose
-          # only context is the key's. Access checks then work unchanged.
+          # workspaces are those granted by the key. Access checks then work unchanged.
           match?({:ok, _}, Accounts.valid_api_key?(token)) ->
             {:ok, key} = Accounts.valid_api_key?(token)
 
+            # Build workspaces list and access_levels map
+            workspaces =
+              key.api_key_workspaces
+              |> Enum.map(& &1.workspace)
+
+            access_levels =
+              key.api_key_workspaces
+              |> Enum.into(%{}, fn akw -> {akw.workspace_id, akw.access_level} end)
+
             {:ok,
              %{
-               is_admin: false,
-               email: "api-key:#{key.name}",
+               is_owner: false,
+               email: "api-key:***",
                key_name: key.name,
-               contexts: [key.context],
-               write_access: key.write_access
+               workspaces: workspaces,
+               access_levels: access_levels,
+               created_by_user_id: key.created_by_user_id
              }}
 
           true ->
@@ -65,9 +75,9 @@ defmodule DranWeb.API.MCPController do
   end
 
   defp validate_context_access(conn, user) do
-    requested_context = conn.params["context"] || get_default_context(user)
+    requested_context = conn.params["workspace"] || get_default_context(user)
 
-    if user.is_admin or user_has_context_access?(user, requested_context) do
+    if user.is_owner or user_has_context_access?(user, requested_context) do
       :ok
     else
       {:error, :forbidden}
@@ -75,17 +85,17 @@ defmodule DranWeb.API.MCPController do
   end
 
   defp get_default_context(user) do
-    case user.contexts do
-      :all -> Dran.Auth.default_context_slug()
-      [] -> Dran.Auth.default_context_slug()
+    case user.workspaces do
+      :all -> Dran.Auth.default_workspace_slug()
+      [] -> Dran.Auth.default_workspace_slug()
       [first | _] -> first.slug
     end
   end
 
-  defp user_has_context_access?(user, context_slug) do
-    case user.contexts do
+  defp user_has_context_access?(user, workspace_slug) do
+    case user.workspaces do
       :all -> true
-      contexts -> Enum.any?(contexts, &(&1.slug == context_slug))
+      contexts -> Enum.any?(contexts, &(&1.slug == workspace_slug))
     end
   end
 

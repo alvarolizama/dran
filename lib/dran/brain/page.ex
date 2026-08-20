@@ -47,7 +47,7 @@ defmodule Dran.Brain.Page do
   @derive {Jason.Encoder,
            only: [
              :id,
-             :context_id,
+             :workspace_id,
              :title,
              :slug,
              :body,
@@ -104,7 +104,7 @@ defmodule Dran.Brain.Page do
     # search_vector is a Postgres generated column — not mapped in Ecto.
     # It's maintained automatically by Postgres and used only in raw SQL queries.
 
-    belongs_to :context, Dran.Brain.Context
+    belongs_to :workspace, Dran.Brain.Workspace
 
     timestamps(type: :utc_datetime)
   end
@@ -113,7 +113,7 @@ defmodule Dran.Brain.Page do
   def changeset(page, attrs) do
     page
     |> cast(attrs, [
-      :context_id,
+      :workspace_id,
       :title,
       :slug,
       :body,
@@ -131,13 +131,13 @@ defmodule Dran.Brain.Page do
       :archived,
       :pinned
     ])
-    |> validate_required([:context_id, :title, :slug, :page_type])
+    |> validate_required([:workspace_id, :title, :slug, :page_type])
     |> validate_length(:title, max: 500)
     |> validate_length(:slug, max: 500)
     |> validate_inclusion(:page_type, @page_types)
     |> validate_inclusion(:kb_confidence, @confidence_levels)
     |> put_body_hash()
-    |> unique_constraint([:context_id, :slug], name: :pages_context_id_slug_index)
+    |> unique_constraint([:workspace_id, :slug], name: :pages_workspace_id_slug_index)
   end
 
   @doc "Changeset for creating a new page"

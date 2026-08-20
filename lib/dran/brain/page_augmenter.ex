@@ -216,12 +216,15 @@ defmodule Dran.Brain.PageAugmenter do
 
   # ── Semantic neighbors ──
 
-  defp find_semantic_neighbors(%Page{context_id: nil}), do: {:ok, []}
+  defp find_semantic_neighbors(%Page{workspace_id: nil}), do: {:ok, []}
 
   defp find_semantic_neighbors(%Page{} = page) do
     text = Embeddings.text_for_page(page)
 
-    case Brain.semantic_search(text, context_id: page.context_id, limit: @suggestion_limit + 1) do
+    case Brain.semantic_search(text,
+           workspace_id: page.workspace_id,
+           limit: @suggestion_limit + 1
+         ) do
       {:ok, results} ->
         neighbors =
           results

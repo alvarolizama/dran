@@ -17,12 +17,12 @@ defmodule Mix.Tasks.Dran.Embeddings do
   def run(args) do
     {opts, _, _} = OptionParser.parse(args, switches: [context: :string, async: :boolean])
 
-    slug = Keyword.get(opts, :context, "personal")
+    slug = Keyword.get(opts, :workspace, "personal")
     async? = Keyword.get(opts, :async, false)
 
     Mix.Task.run("app.start")
 
-    case Dran.Brain.get_context_by_slug(slug) do
+    case Dran.Brain.get_workspace_by_slug(slug) do
       nil ->
         Mix.shell().error("Context not found: #{slug}")
         exit({:shutdown, 1})

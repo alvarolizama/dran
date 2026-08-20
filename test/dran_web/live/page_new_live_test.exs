@@ -33,7 +33,7 @@ defmodule DranWeb.PageNewLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn}
   end
@@ -108,7 +108,7 @@ defmodule DranWeb.PageNewLiveTest do
 
   describe "auto-slug derivation on create (Task 2.1)" do
     test "creating a page titled 'Mi Nota Nueva' yields slug 'mi-nota-nueva'" do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       # Sanity-check the slugify behaviour directly.
       assert Slug.slugify("Mi Nota Nueva") == "mi-nota-nueva"
@@ -118,7 +118,7 @@ defmodule DranWeb.PageNewLiveTest do
       # same code the LiveView's save_page handler reaches).
       {:ok, page} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           page_type: "note",
           title: "Mi Nota Nueva",
           body: "Cuerpo de la nota",
@@ -129,11 +129,11 @@ defmodule DranWeb.PageNewLiveTest do
     end
 
     test "creating a page without an explicit slug derives one from the title" do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           page_type: "note",
           title: "Otra Nota",
           body: "",

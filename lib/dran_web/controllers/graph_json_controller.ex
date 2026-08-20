@@ -18,8 +18,8 @@ defmodule DranWeb.GraphJSONController do
   alias DranWeb.Plugs.Auth
 
   def show(conn, _params) do
-    context_slug = Auth.current_context(conn)
-    context = Brain.get_context_by_slug(context_slug)
+    workspace_slug = Auth.current_context(conn)
+    context = Brain.get_workspace_by_slug(workspace_slug)
 
     if context do
       # Serve from cache (ETS-backed GenServer). First hit builds the payload

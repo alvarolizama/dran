@@ -4,7 +4,7 @@ defmodule DranWeb.ActivityLive do
   (page.create, page.update, page.delete) in the active context.
 
   Shows the last 50 entries, newest first. Subscribes to the
-  "brain:<context_id>" PubSub topic so new page actions appear live
+  "brain:<workspace_id>" PubSub topic so new page actions appear live
   at the top of the list.
   """
 
@@ -23,7 +23,7 @@ defmodule DranWeb.ActivityLive do
 
     entries =
       if context do
-        Brain.list_log(context_id: context.id, limit: 50)
+        Brain.list_log(workspace_id: context.id, limit: 50)
       else
         []
       end
@@ -45,7 +45,7 @@ defmodule DranWeb.ActivityLive do
 
     entries =
       if context do
-        Brain.list_log(context_id: context.id, limit: 50)
+        Brain.list_log(workspace_id: context.id, limit: 50)
       else
         []
       end
@@ -60,13 +60,13 @@ defmodule DranWeb.ActivityLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
         <div class="w-full p-6 space-y-6">
-          <.header_section context={@context} />
+          <.header_section workspace={@workspace} />
 
           <.action_legend :if={legend_actions(@entries) != []} actions={legend_actions(@entries)} />
 
@@ -87,7 +87,7 @@ defmodule DranWeb.ActivityLive do
 
   # ── Render-only components ─────────────────────────────────────────────────
 
-  attr :context, :any, default: nil
+  attr :workspace, :any, default: nil
 
   defp header_section(assigns) do
     ~H"""
@@ -95,7 +95,7 @@ defmodule DranWeb.ActivityLive do
       <div>
         <h1 class="text-title">{gettext("Activity")}</h1>
         <p class="text-caption mt-1">
-          {gettext("Recent changes in %{name}", name: context_name(@context))}
+          {gettext("Recent changes in %{name}", name: context_name(@workspace))}
         </p>
       </div>
       <div class="flex items-center gap-1.5 text-caption">
@@ -202,7 +202,7 @@ defmodule DranWeb.ActivityLive do
 
   # ── Helpers ─────────────────────────────────────────────────────────────────
 
-  defp context_name(%Dran.Brain.Context{name: name}), do: name
+  defp context_name(%Dran.Brain.Workspace{name: name}), do: name
   defp context_name(_), do: gettext("this context")
 
   defp action_icon("page.create"), do: "hero-plus-circle"

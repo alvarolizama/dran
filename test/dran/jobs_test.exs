@@ -126,7 +126,7 @@ defmodule Dran.JobsTest do
     test "writes an ok report for a successful run", %{context: ctx} do
       assert {:ok, report} = Jobs.execute(:curator_daily, "manual", {FakeJob, :ok, []})
 
-      assert report.context_id == ctx.id
+      assert report.workspace_id == ctx.id
       assert report.page_type == "report"
       assert report.created_by == "curator_daily"
       assert report.owner == "curator_daily"
@@ -182,11 +182,11 @@ defmodule Dran.JobsTest do
     end
 
     test "reports land in the default context (not other contexts)", %{context: ctx} do
-      {:ok, other} = Brain.create_context(%{name: "Other", slug: "other"})
+      {:ok, other} = Brain.create_workspace(%{name: "Other", slug: "other"})
 
       assert {:ok, report} = Jobs.execute(:curator_daily, "manual", {FakeJob, :ok, []})
-      assert report.context_id == ctx.id
-      refute report.context_id == other.id
+      assert report.workspace_id == ctx.id
+      refute report.workspace_id == other.id
     end
   end
 
@@ -304,8 +304,8 @@ defmodule Dran.JobsTest do
   # ── Helpers ───────────────────────────────────────────────────────────────
 
   defp ensure_default_context! do
-    Brain.get_context_by_slug("personal") ||
-      elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+    Brain.get_workspace_by_slug("personal") ||
+      elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
   end
 
   defp clear_disabled_jobs! do
@@ -317,24 +317,24 @@ defmodule Dran.JobsTest do
   # rolls every test back, but if that ever changes (or a test run dies
   # mid-transaction), these reports must not leak into other suites that
   # assert exact page counts on the same context.
-  defp delete_job_reports!(context_id) do
+  defp delete_job_reports!(workspace_id) do
     keys = Enum.map(@expected_keys, &Atom.to_string/1)
 
     Repo.delete_all(
       from p in Page,
-        where: p.context_id == ^context_id and p.page_type == "report",
+        where: p.workspace_id == ^workspace_id and p.page_type == "report",
         where: fragment("?->>'job_key'", p.meta) in ^keys
     )
   end
 
-  defp insert_reports!(context_id, job_key, count) do
+  defp insert_reports!(workspace_id, job_key, count) do
     base = DateTime.utc_now() |> DateTime.add(-count, :second) |> DateTime.truncate(:second)
 
     for i <- 1..count do
       at = DateTime.add(base, i, :second)
 
       %Page{
-        context_id: context_id,
+        workspace_id: workspace_id,
         title: "Run #{i}",
         slug: "#{job_key}-#{i}",
         body: "report #{i}",
@@ -351,21 +351,21 @@ defmodule Dran.JobsTest do
     :ok
   end
 
-  defp job_reports(context_id, job_key, archived: archived?) do
+  defp job_reports(workspace_id, job_key, archived: archived?) do
     Repo.all(
       from p in Page,
         where:
-          p.context_id == ^context_id and p.page_type == "report" and
+          p.workspace_id == ^workspace_id and p.page_type == "report" and
             p.archived == ^archived?,
         where: fragment("?->>'job_key' = ?", p.meta, ^job_key),
         order_by: [desc: p.inserted_at]
     )
   end
 
-  defp count_job_reports(context_id, job_key) do
+  defp count_job_reports(workspace_id, job_key) do
     Repo.one(
       from p in Page,
-        where: p.context_id == ^context_id and p.page_type == "report",
+        where: p.workspace_id == ^workspace_id and p.page_type == "report",
         where: fragment("?->>'job_key' = ?", p.meta, ^job_key),
         select: count(p.id)
     )

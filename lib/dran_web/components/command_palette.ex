@@ -34,9 +34,9 @@ defmodule DranWeb.CommandPalette do
   end
 
   @impl true
-  def update(%{context_slug: context_slug} = assigns, socket) do
+  def update(%{workspace_slug: workspace_slug} = assigns, socket) do
     disabled_types =
-      case context_slug && Brain.get_context_by_slug(context_slug) do
+      case workspace_slug && Brain.get_workspace_by_slug(workspace_slug) do
         %{disabled_page_types: disabled} when is_list(disabled) -> disabled
         _ -> []
       end
@@ -58,7 +58,7 @@ defmodule DranWeb.CommandPalette do
 
     {:ok,
      socket
-     |> assign(:context_slug, context_slug)
+     |> assign(:workspace_slug, workspace_slug)
      |> assign(:id, assigns[:id] || "command-palette")
      |> assign(:quick_actions, filtered_actions)}
   end
@@ -205,7 +205,7 @@ defmodule DranWeb.CommandPalette do
   def handle_event("search", %{"query" => query}, socket) do
     results =
       if String.length(String.trim(query)) >= 2 do
-        do_search(socket.assigns.context_slug, query)
+        do_search(socket.assigns.workspace_slug, query)
       else
         []
       end
@@ -277,12 +277,12 @@ defmodule DranWeb.CommandPalette do
     end
   end
 
-  defp do_search(context_slug, query) do
-    context_id = resolve_context_id(context_slug)
+  defp do_search(workspace_slug, query) do
+    workspace_id = resolve_workspace_id(workspace_slug)
 
     try do
       opts = [limit: 8]
-      opts = if context_id, do: Keyword.put(opts, :context_id, context_id), else: opts
+      opts = if workspace_id, do: Keyword.put(opts, :workspace_id, workspace_id), else: opts
 
       case Brain.search(query, opts) do
         {:ok, results} when is_list(results) -> results
@@ -293,11 +293,11 @@ defmodule DranWeb.CommandPalette do
     end
   end
 
-  defp resolve_context_id(nil), do: nil
+  defp resolve_workspace_id(nil), do: nil
 
-  defp resolve_context_id(slug) when is_binary(slug) do
+  defp resolve_workspace_id(slug) when is_binary(slug) do
     try do
-      case Brain.get_context_by_slug(slug) do
+      case Brain.get_workspace_by_slug(slug) do
         nil -> nil
         context -> context.id
       end

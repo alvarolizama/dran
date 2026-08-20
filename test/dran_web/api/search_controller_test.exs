@@ -45,11 +45,13 @@ defmodule DranWeb.API.SearchControllerTest do
       # distance (NaN sorts last in Postgres), so any residue could push the
       # test's page past the result limit.
       uniq = System.unique_integer([:positive])
-      {:ok, context} = Brain.create_context(%{name: "Semantic #{uniq}", slug: "semantic-#{uniq}"})
+
+      {:ok, context} =
+        Brain.create_workspace(%{name: "Semantic #{uniq}", slug: "semantic-#{uniq}"})
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Semantic hit",
           slug: "semantic-hit",
           body: "Body",
@@ -61,7 +63,7 @@ defmodule DranWeb.API.SearchControllerTest do
       conn =
         get(conn, ~p"/api/search/semantic", %{
           "q" => "test query",
-          "context" => context.slug
+          "workspace" => context.slug
         })
 
       assert json_response(conn, 200)
@@ -77,7 +79,7 @@ defmodule DranWeb.API.SearchControllerTest do
       conn =
         get(conn, ~p"/api/search/semantic", %{
           "q" => "test",
-          "context" => "personal"
+          "workspace" => "personal"
         })
 
       assert json_response(conn, 503)

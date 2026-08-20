@@ -18,8 +18,8 @@ defmodule DranWeb.QueryLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
     >
       <div :if={@live_action == :show}>
         <.page_detail
@@ -28,7 +28,7 @@ defmodule DranWeb.QueryLive do
           versions={@versions}
           compare_version={@compare_version}
           logs={@logs}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           rendered_body={@rendered_body}
           editing={@editing}
           content_tab_value="content"
@@ -59,7 +59,7 @@ defmodule DranWeb.QueryLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               editor_id="query-editor"
             />
           </:attributes>
@@ -89,7 +89,7 @@ defmodule DranWeb.QueryLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               save_status={@save_status}
               editor_id="query-editor"
             />
@@ -103,7 +103,7 @@ defmodule DranWeb.QueryLive do
           }
           archived_filter={@archived_filter}
           page_type={@page_type}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           show_archived={@show_archived}
           total_count={length(@pages)}
           total_archived={length(@archived_pages)}
@@ -129,9 +129,9 @@ defmodule DranWeb.QueryLive do
   def handle_params(_params, _url, socket) do
     {pages, archived_pages} =
       if socket.assigns.context do
-        {Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
+        {Brain.list_pages(workspace_id: socket.assigns.context.id, type: @page_type),
          Brain.list_pages(
-           context_id: socket.assigns.context.id,
+           workspace_id: socket.assigns.context.id,
            type: @page_type,
            archived: true,
            limit: 200
@@ -226,7 +226,7 @@ defmodule DranWeb.QueryLive do
       if page do
         rendered_body =
           render_markdown(page.body,
-            context_id: page.context_id,
+            workspace_id: page.workspace_id,
             inline_links: Map.get(page.meta || %{}, "inline_links", [])
           )
 

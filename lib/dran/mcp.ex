@@ -21,7 +21,7 @@ defmodule Dran.MCP do
   - `dran_create_relation` — create a typed relation between two pages
   - `dran_delete_relation` — delete a relation between two pages; **irreversible**
   - `dran_get_links` — graph exploration: inbound + outbound relations of a page
-  - `dran_list_pages` — lightweight listing with filters (type/tag/status/project_slug/goal_slug/plan_slug); prefer wiki:// resource for full index
+  - `dran_list_pages` — lightweight listing with filters (type/tag/status/project_slug/goal_slug/plan_slug); prefer home:// resource for full index
   - `dran_get_stats` — context dashboard numbers: totals, by-type, todos by status, orphans
   - `dran_lint_brain` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
@@ -36,9 +36,9 @@ defmodule Dran.MCP do
   page. `dran_rename_slug` rewrites embed references across the whole context.
 
   ## Resources
-  - `page://{context}/{slug}` — page content as markdown
-  - `goal://{context}/{slug}` — goal detail with todos and plans
-  - `wiki://{context}/index` — wiki index (all slugs + titles)
+  - `page://{workspace}/{slug}` — page content as markdown
+  - `goal://{workspace}/{slug}` — goal detail with todos and plans
+  - `home://{workspace}/index` — home index (all slugs + titles)
 
   ## Prompts
   - `brainstorm` — generate ideas around a topic
@@ -52,23 +52,23 @@ defmodule Dran.MCP do
   @protocol_version "2025-03-26"
 
   # ── Context cache (P-01) ───────────────────────────────────────────────────
-  # ETS table for context_slug → %Context{} lookups. Contexts change rarely
+  # ETS table for workspace_slug → %Workspace{} lookups. Contexts change rarely
   # (only in Settings), so caching is safe. The table is created lazily on
   # first access to avoid boot-order issues in tests.
 
-  @context_cache_table :dran_mcp_context_cache
+  @context_cache_table :dran_mcp_workspace_cache
 
-  defp context_cache_get(slug) do
+  defp workspace_cache_get(slug) do
     ensure_context_cache_table()
 
     case :ets.lookup(@context_cache_table, slug) do
       [{^slug, context}] -> context
-      [] -> context_cache_load(slug)
+      [] -> workspace_cache_load(slug)
     end
   end
 
-  defp context_cache_load(slug) do
-    context = Brain.get_context_by_slug(slug)
+  defp workspace_cache_load(slug) do
+    context = Brain.get_workspace_by_slug(slug)
 
     if context do
       :ets.insert(@context_cache_table, {slug, context})
@@ -90,12 +90,12 @@ defmodule Dran.MCP do
   end
 
   @doc "Invalidate a cached context (call after update/delete in Settings)"
-  def invalidate_context_cache(slug) when is_binary(slug) do
+  def invalidate_workspace_cache(slug) when is_binary(slug) do
     ensure_context_cache_table()
     :ets.delete(@context_cache_table, slug)
   end
 
-  def invalidate_context_cache(_), do: :ok
+  def invalidate_workspace_cache(_), do: :ok
 
   @tools [
     %{
@@ -110,7 +110,7 @@ defmodule Dran.MCP do
             "description" =>
               "Natural-language search query. Keywords or a full sentence both work; fuzzy/semantic strategies handle typos and paraphrase."
           },
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug to search within, e.g. 'personal' or 'work'."
           },
@@ -151,7 +151,7 @@ defmodule Dran.MCP do
               "Number of results to skip for pagination (default 0). Use with limit to paginate large result sets."
           }
         },
-        "required" => ["query", "context"]
+        "required" => ["query", "workspace"]
       }
     },
     %{
@@ -177,7 +177,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug where the page will be created."
           },
@@ -241,7 +241,7 @@ defmodule Dran.MCP do
             "description" => "Who an agent is acting on behalf of (optional)."
           }
         },
-        "required" => ["context", "page_type"]
+        "required" => ["workspace", "page_type"]
       }
     },
     %{
@@ -251,7 +251,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing the page."
           },
@@ -319,7 +319,7 @@ defmodule Dran.MCP do
             "description" => "Mark the page's knowledge as contested/uncertain (optional)."
           }
         },
-        "required" => ["context", "slug"]
+        "required" => ["workspace", "slug"]
       }
     },
     %{
@@ -329,7 +329,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing the page."
           },
@@ -338,7 +338,7 @@ defmodule Dran.MCP do
             "description" => "Slug of the page to read."
           }
         },
-        "required" => ["context", "slug"]
+        "required" => ["workspace", "slug"]
       }
     },
     %{
@@ -348,7 +348,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug where the todo will be created."
           },
@@ -415,7 +415,7 @@ defmodule Dran.MCP do
             "description" => "Who an agent is acting on behalf of (optional)."
           }
         },
-        "required" => ["context", "title", "slug"]
+        "required" => ["workspace", "title", "slug"]
       }
     },
     %{
@@ -425,12 +425,12 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug to lint."
           }
         },
-        "required" => ["context"]
+        "required" => ["workspace"]
       }
     },
     %{
@@ -440,7 +440,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing the page."
           },
@@ -450,7 +450,7 @@ defmodule Dran.MCP do
               "Slug of the page to delete. All relations and version history for this page will be removed."
           }
         },
-        "required" => ["context", "slug"]
+        "required" => ["workspace", "slug"]
       }
     },
     %{
@@ -460,7 +460,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing both pages."
           },
@@ -479,7 +479,7 @@ defmodule Dran.MCP do
             "enum" => ["related", "contradicts", "supersedes", "part_of", "embeds"]
           }
         },
-        "required" => ["context", "source_slug", "target_slug"]
+        "required" => ["workspace", "source_slug", "target_slug"]
       }
     },
     %{
@@ -489,7 +489,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing the page."
           },
@@ -498,17 +498,17 @@ defmodule Dran.MCP do
             "description" => "Slug of the page whose relations to retrieve."
           }
         },
-        "required" => ["context", "slug"]
+        "required" => ["workspace", "slug"]
       }
     },
     %{
       "name" => "dran_list_pages",
       "description" =>
-        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type, `tag` to filter by tag, and `status` to filter todos by kanban status. Use `project_slug`/`goal_slug`/`plan_slug` to explore links INDEPENDENTLY — filter pages linked to a given project/goal/plan, or use the literal value 'none' to list pages with no link of that type (orphans). There is NO precedence between the three links: they can be combined freely. For a full index overview, prefer the `wiki://{context}/index` resource instead. Use `dran_get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
+        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type, `tag` to filter by tag, and `status` to filter todos by kanban status. Use `project_slug`/`goal_slug`/`plan_slug` to explore links INDEPENDENTLY — filter pages linked to a given project/goal/plan, or use the literal value 'none' to list pages with no link of that type (orphans). There is NO precedence between the three links: they can be combined freely. For a full index overview, prefer the `home://{workspace}/index` resource instead. Use `dran_get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug to list pages from."
           },
@@ -582,7 +582,7 @@ defmodule Dran.MCP do
               "Filter by custom properties (meta.props). Matches pages where ALL given key-value pairs are present (AND logic). Example: {\"role\": \"sales\", \"tier\": \"vip\"}"
           }
         },
-        "required" => ["context"]
+        "required" => ["workspace"]
       }
     },
     %{
@@ -592,7 +592,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing the todo."
           },
@@ -666,7 +666,7 @@ defmodule Dran.MCP do
             "description" => "Who is updating the todo, for provenance (defaults to 'agent')."
           }
         },
-        "required" => ["context", "slug"]
+        "required" => ["workspace", "slug"]
       }
     },
     %{
@@ -676,7 +676,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing both pages."
           },
@@ -695,7 +695,7 @@ defmodule Dran.MCP do
             "enum" => ["related", "contradicts", "supersedes", "part_of", "embeds"]
           }
         },
-        "required" => ["context", "source_slug", "target_slug"]
+        "required" => ["workspace", "source_slug", "target_slug"]
       }
     },
     %{
@@ -705,12 +705,12 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug to get statistics for."
           }
         },
-        "required" => ["context"]
+        "required" => ["workspace"]
       }
     },
     %{
@@ -720,7 +720,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing the page."
           },
@@ -734,7 +734,7 @@ defmodule Dran.MCP do
               "New kebab-case slug. Must not already exist in the context, and must differ from old_slug."
           }
         },
-        "required" => ["context", "old_slug", "new_slug"]
+        "required" => ["workspace", "old_slug", "new_slug"]
       }
     },
     %{
@@ -744,7 +744,7 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug containing the page."
           },
@@ -753,7 +753,7 @@ defmodule Dran.MCP do
             "description" => "Slug of the page to reaugment."
           }
         },
-        "required" => ["context", "slug"]
+        "required" => ["workspace", "slug"]
       }
     },
     %{
@@ -763,12 +763,12 @@ defmodule Dran.MCP do
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug to generate community summaries for."
           }
         },
-        "required" => ["context"]
+        "required" => ["workspace"]
       }
     },
     %{
@@ -784,7 +784,7 @@ defmodule Dran.MCP do
             "description" =>
               "Type of agent to run. 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'graph_rag' = answer questions using GraphRAG (local/global/drift search over the knowledge graph)."
           },
-          "context" => %{
+          "workspace" => %{
             "type" => "string",
             "description" => "Context slug where the agent will create pages."
           },
@@ -799,7 +799,7 @@ defmodule Dran.MCP do
               "Optional agent configuration options (e.g. max pages, tags). Passed through to the agent."
           }
         },
-        "required" => ["agent_type", "context", "input"]
+        "required" => ["agent_type", "workspace", "input"]
       }
     },
     %{
@@ -821,19 +821,19 @@ defmodule Dran.MCP do
 
   @resources [
     %{
-      "uri" => "page://{context}/{slug}",
+      "uri" => "page://{workspace}/{slug}",
       "name" => "Page content",
       "description" => "Full page content as markdown",
       "mimeType" => "text/markdown"
     },
     %{
-      "uri" => "goal://{context}/{slug}",
+      "uri" => "goal://{workspace}/{slug}",
       "name" => "Goal detail",
       "description" => "Goal with related todos and plans",
       "mimeType" => "application/json"
     },
     %{
-      "uri" => "wiki://{context}/index",
+      "uri" => "home://{workspace}/index",
       "name" => "Wiki index",
       "description" => "All pages in a context (slug + title + type)",
       "mimeType" => "application/json"
@@ -846,7 +846,7 @@ defmodule Dran.MCP do
       "description" => "Generate ideas around a topic.",
       "arguments" => [
         %{"name" => "topic", "description" => "The topic to brainstorm", "required" => true},
-        %{"name" => "context", "description" => "Context slug", "required" => true}
+        %{"name" => "workspace", "description" => "Context slug", "required" => true}
       ]
     },
     %{
@@ -854,7 +854,7 @@ defmodule Dran.MCP do
       "description" => "Review a goal's status, todos, and plans.",
       "arguments" => [
         %{"name" => "goal_slug", "description" => "Goal slug", "required" => true},
-        %{"name" => "context", "description" => "Context slug", "required" => true}
+        %{"name" => "workspace", "description" => "Context slug", "required" => true}
       ]
     }
   ]
@@ -998,10 +998,10 @@ defmodule Dran.MCP do
 
   # SEC-001: Validate that the user has access to the context requested in tool args
   defp validate_tool_context_access(args, user) when is_map(args) do
-    context_slug = args["context"]
+    workspace_slug = args["workspace"]
 
-    if context_slug do
-      validate_context_access(context_slug, user)
+    if workspace_slug do
+      validate_context_access(workspace_slug, user)
     else
       :ok
     end
@@ -1014,7 +1014,7 @@ defmodule Dran.MCP do
     case String.split(uri, "://", parts: 2) do
       [_scheme, rest] ->
         case String.split(rest, "/", parts: 2) do
-          [context_slug, _path] -> validate_context_access(context_slug, user)
+          [workspace_slug, _path] -> validate_context_access(workspace_slug, user)
           _ -> :ok
         end
 
@@ -1025,15 +1025,15 @@ defmodule Dran.MCP do
 
   defp validate_resource_context_access(_, _), do: :ok
 
-  defp validate_context_access(context_slug, user) do
+  defp validate_context_access(workspace_slug, user) do
     cond do
       is_nil(user) ->
         :ok
 
-      user.is_admin ->
+      user.is_owner ->
         :ok
 
-      user_has_context_access?(user, context_slug) ->
+      user_has_context_access?(user, workspace_slug) ->
         :ok
 
       true ->
@@ -1041,10 +1041,10 @@ defmodule Dran.MCP do
     end
   end
 
-  defp user_has_context_access?(%{contexts: :all}, _context_slug), do: true
+  defp user_has_context_access?(%{contexts: :all}, _workspace_slug), do: true
 
-  defp user_has_context_access?(%{contexts: contexts}, context_slug) when is_list(contexts) do
-    Enum.any?(contexts, &(&1.slug == context_slug))
+  defp user_has_context_access?(%{contexts: contexts}, workspace_slug) when is_list(contexts) do
+    Enum.any?(contexts, &(&1.slug == workspace_slug))
   end
 
   defp user_has_context_access?(_, _), do: false
@@ -1081,7 +1081,7 @@ defmodule Dran.MCP do
        when is_map(params) do
     args = params["arguments"] || %{}
 
-    if Map.has_key?(args, "context") do
+    if Map.has_key?(args, "workspace") do
       msg
     else
       case get_default_context_for_user(user) do
@@ -1089,14 +1089,14 @@ defmodule Dran.MCP do
           msg
 
         default_context ->
-          put_in(msg, ["params", "arguments", "context"], default_context)
+          put_in(msg, ["params", "arguments", "workspace"], default_context)
       end
     end
   end
 
   defp inject_user_context(msg, _user), do: msg
 
-  defp get_default_context_for_user(%{is_admin: true}), do: nil
+  defp get_default_context_for_user(%{is_owner: true}), do: nil
   defp get_default_context_for_user(%{contexts: :all}), do: nil
   defp get_default_context_for_user(%{contexts: [first | _]}), do: first.slug
   defp get_default_context_for_user(_), do: nil
@@ -1136,11 +1136,15 @@ defmodule Dran.MCP do
 
   # ── Tool execution ─────────────────────────────────────────────────────────
 
-  defp execute_tool("dran_search", %{"query" => query, "context" => context_slug} = args, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool(
+         "dran_search",
+         %{"query" => query, "workspace" => workspace_slug} = args,
+         _user
+       ) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
-      opts = [context_id: context.id]
+      opts = [workspace_id: context.id]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["strategy"], do: Keyword.put(opts, :strategy, args["strategy"]), else: opts
       opts = if args["limit"], do: Keyword.put(opts, :limit, min(args["limit"], 100)), else: opts
@@ -1170,20 +1174,20 @@ defmodule Dran.MCP do
           "Error: #{inspect(reason)}"
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
   defp execute_tool(
          "dran_create_page",
-         %{"context" => context_slug, "page_type" => page_type} = args,
+         %{"workspace" => workspace_slug, "page_type" => page_type} = args,
          user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     cond do
       is_nil(context) ->
-        "Error: context '#{context_slug}' not found"
+        "Error: context '#{workspace_slug}' not found"
 
       not PageTypes.mcp_create?(page_type) ->
         "Error: page type '#{page_type}' is system-created and cannot be created via MCP"
@@ -1191,7 +1195,7 @@ defmodule Dran.MCP do
       true ->
         attrs =
           %{
-            context_id: context.id,
+            workspace_id: context.id,
             title: Map.get(args, "title"),
             slug: Map.get(args, "slug"),
             page_type: page_type,
@@ -1209,7 +1213,7 @@ defmodule Dran.MCP do
             "Created page: #{page.title} (#{page.slug})"
 
           {:error, :page_type_disabled} ->
-            "Error: page type '#{attrs[:page_type]}' is disabled in context '#{context_slug}'"
+            "Error: page type '#{attrs[:page_type]}' is disabled in context '#{workspace_slug}'"
 
           {:error, changeset} ->
             "Error: #{format_changeset_errors(changeset)}"
@@ -1219,15 +1223,15 @@ defmodule Dran.MCP do
 
   defp execute_tool(
          "dran_update_page",
-         %{"context" => context_slug, "slug" => slug} = args,
+         %{"workspace" => workspace_slug, "slug" => slug} = args,
          _user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          "Error: page '#{slug}' not found in context '#{context_slug}'"
+          "Error: page '#{slug}' not found in context '#{workspace_slug}'"
 
         page ->
           attrs =
@@ -1256,12 +1260,12 @@ defmodule Dran.MCP do
           end
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_get_page", %{"context" => context_slug, "slug" => slug}, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool("dran_get_page", %{"workspace" => workspace_slug, "slug" => slug}, _user) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1272,16 +1276,16 @@ defmodule Dran.MCP do
           "# #{page.title}\n\n#{page.body}\n\n---\nType: #{page.page_type} | Tags: #{Enum.join(page.tags, ", ")} | Version: #{page.version}"
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
   defp execute_tool(
          "dran_create_todo",
-         %{"context" => context_slug, "title" => title, "slug" => slug} = args,
+         %{"workspace" => workspace_slug, "title" => title, "slug" => slug} = args,
          user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       meta =
@@ -1296,7 +1300,7 @@ defmodule Dran.MCP do
 
       attrs =
         %{
-          context_id: context.id,
+          workspace_id: context.id,
           title: title,
           slug: slug,
           page_type: "todo",
@@ -1313,24 +1317,24 @@ defmodule Dran.MCP do
           "Created todo: #{todo.title} (#{todo.slug}) — status: #{status}"
 
         {:error, :page_type_disabled} ->
-          "Error: page type 'todo' is disabled in context '#{context_slug}'"
+          "Error: page type 'todo' is disabled in context '#{workspace_slug}'"
 
         {:error, changeset} ->
           "Error: #{format_changeset_errors(changeset)}"
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_lint_brain", %{"context" => context_slug}, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool("dran_lint_brain", %{"workspace" => workspace_slug}, _user) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       report = Brain.lint(context.id)
 
       """
-      # Lint Report for '#{context_slug}'
+      # Lint Report for '#{workspace_slug}'
 
       ## Orphan pages (no inbound links): #{length(report.orphans)}
       #{format_page_list(report.orphans)}
@@ -1342,17 +1346,17 @@ defmodule Dran.MCP do
       #{format_page_list(report.contested)}
       """
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_delete_page", %{"context" => context_slug, "slug" => slug}, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool("dran_delete_page", %{"workspace" => workspace_slug, "slug" => slug}, _user) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          "Error: page '#{slug}' not found in context '#{context_slug}'"
+          "Error: page '#{slug}' not found in context '#{workspace_slug}'"
 
         page ->
           case Brain.delete_page(page) do
@@ -1364,17 +1368,21 @@ defmodule Dran.MCP do
           end
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
   defp execute_tool(
          "dran_create_relation",
-         %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
+         %{
+           "workspace" => workspace_slug,
+           "source_slug" => source_slug,
+           "target_slug" => target_slug
+         } =
            args,
          _user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       relation_type = Map.get(args, "relation_type", "related")
@@ -1405,12 +1413,12 @@ defmodule Dran.MCP do
           end
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_get_links", %{"context" => context_slug, "slug" => slug}, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool("dran_get_links", %{"workspace" => workspace_slug, "slug" => slug}, _user) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1441,18 +1449,18 @@ defmodule Dran.MCP do
           """
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_list_pages", %{"context" => context_slug} = args, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool("dran_list_pages", %{"workspace" => workspace_slug} = args, _user) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       limit = min(Map.get(args, "limit", 50), 500)
       offset = Map.get(args, "offset", 0)
 
-      opts = [context_id: context.id, context: context, limit: limit, offset: offset]
+      opts = [workspace_id: context.id, context: context, limit: limit, offset: offset]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
       opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts
@@ -1486,7 +1494,7 @@ defmodule Dran.MCP do
 
       lines =
         if args["type"] && not Brain.page_type_enabled?(context, args["type"]) do
-          ["Error: page type '#{args["type"]}' is disabled in context '#{context_slug}'"]
+          ["Error: page type '#{args["type"]}' is disabled in context '#{workspace_slug}'"]
         else
           Enum.map(pages, fn page ->
             "- **#{page.title}** (`#{page.slug}`, type: #{page.page_type})"
@@ -1495,16 +1503,16 @@ defmodule Dran.MCP do
 
       "Found #{length(pages)} pages:\n\n#{Enum.join(lines, "\n")}"
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
   defp execute_tool(
          "dran_update_todo",
-         %{"context" => context_slug, "slug" => slug} = args,
+         %{"workspace" => workspace_slug, "slug" => slug} = args,
          _user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1547,17 +1555,21 @@ defmodule Dran.MCP do
           end
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
   defp execute_tool(
          "dran_delete_relation",
-         %{"context" => context_slug, "source_slug" => source_slug, "target_slug" => target_slug} =
+         %{
+           "workspace" => workspace_slug,
+           "source_slug" => source_slug,
+           "target_slug" => target_slug
+         } =
            args,
          _user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       relation_type = Map.get(args, "relation_type")
@@ -1588,12 +1600,12 @@ defmodule Dran.MCP do
           end
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_get_stats", %{"context" => context_slug}, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool("dran_get_stats", %{"workspace" => workspace_slug}, _user) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       s = Brain.stats(context.id)
@@ -1609,7 +1621,7 @@ defmodule Dran.MCP do
         |> Enum.join("\n")
 
       """
-      # Stats for '#{context_slug}'
+      # Stats for '#{workspace_slug}'
 
       Total pages: #{s.total_pages}
       Total relations: #{s.total_relations}
@@ -1622,16 +1634,16 @@ defmodule Dran.MCP do
       #{todos_by_status}
       """
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
   defp execute_tool(
          "dran_rename_slug",
-         %{"context" => context_slug, "old_slug" => old_slug, "new_slug" => new_slug},
+         %{"workspace" => workspace_slug, "old_slug" => old_slug, "new_slug" => new_slug},
          _user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       if old_slug == new_slug do
@@ -1656,16 +1668,16 @@ defmodule Dran.MCP do
         end
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
   defp execute_tool(
          "dran_start_agent",
-         %{"agent_type" => agent_type, "context" => context_slug, "input" => input} = args,
+         %{"agent_type" => agent_type, "workspace" => workspace_slug, "input" => input} = args,
          _user
        ) do
-    context = context_cache_get(context_slug)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       opts = Map.get(args, "opts", [])
@@ -1686,7 +1698,7 @@ defmodule Dran.MCP do
           "Error: failed to start agent: #{inspect(reason)}"
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
@@ -1709,13 +1721,17 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_reaugment_page", %{"context" => context_slug, "slug" => slug}, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool(
+         "dran_reaugment_page",
+         %{"workspace" => workspace_slug, "slug" => slug},
+         _user
+       ) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          "Error: page '#{slug}' not found in context '#{context_slug}'"
+          "Error: page '#{slug}' not found in context '#{workspace_slug}'"
 
         page ->
           # Clear embedding_hash so the augmenter treats the page as stale,
@@ -1725,24 +1741,24 @@ defmodule Dran.MCP do
           "Reaugmentation scheduled for '#{slug}'"
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_generate_community_summaries", %{"context" => context_slug}, _user) do
-    context = context_cache_get(context_slug)
+  defp execute_tool("dran_generate_community_summaries", %{"workspace" => workspace_slug}, _user) do
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Dran.Graph.CommunitySummaries.generate_all(context.id) do
         :ok ->
           summaries = Dran.Graph.CommunitySummaries.list_summaries(context.id)
-          "Generated #{length(summaries)} community summaries for context '#{context_slug}'"
+          "Generated #{length(summaries)} community summaries for context '#{workspace_slug}'"
 
         {:error, reason} ->
           "Error generating community summaries: #{inspect(reason)}"
       end
     else
-      "Error: context '#{context_slug}' not found"
+      "Error: context '#{workspace_slug}' not found"
     end
   end
 
@@ -1750,16 +1766,16 @@ defmodule Dran.MCP do
 
   # ── Agent helpers ─────────────────────────────────────────────────────────
 
-  defp start_agent_by_type("link_gardener", input, context_id, opts),
-    do: Agent.LinkGardener.run(input, context_id, opts)
+  defp start_agent_by_type("link_gardener", input, workspace_id, opts),
+    do: Agent.LinkGardener.run(input, workspace_id, opts)
 
-  defp start_agent_by_type("curator", input, context_id, opts),
-    do: Agent.Curator.run(input, context_id, opts)
+  defp start_agent_by_type("curator", input, workspace_id, opts),
+    do: Agent.Curator.run(input, workspace_id, opts)
 
-  defp start_agent_by_type("graph_rag", input, context_id, opts),
-    do: Agent.GraphRag.run(input, context_id, opts)
+  defp start_agent_by_type("graph_rag", input, workspace_id, opts),
+    do: Agent.GraphRag.run(input, workspace_id, opts)
 
-  defp start_agent_by_type(_type, _input, _context_id, _opts),
+  defp start_agent_by_type(_type, _input, _workspace_id, _opts),
     do: {:error, :unknown_agent_type}
 
   defp render_session(session, steps) do
@@ -1788,8 +1804,8 @@ defmodule Dran.MCP do
   # ── Resource reading ──────────────────────────────────────────────────────
 
   defp read_resource("page://" <> rest) do
-    [context_slug, slug] = String.split(rest, "/", parts: 2)
-    context = context_cache_get(context_slug)
+    [workspace_slug, slug] = String.split(rest, "/", parts: 2)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1805,8 +1821,8 @@ defmodule Dran.MCP do
   end
 
   defp read_resource("goal://" <> rest) do
-    [context_slug, slug] = String.split(rest, "/", parts: 2)
-    context = context_cache_get(context_slug)
+    [workspace_slug, slug] = String.split(rest, "/", parts: 2)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -1816,7 +1832,7 @@ defmodule Dran.MCP do
         goal ->
           todos =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               context: context,
               type: "todo",
               limit: 500,
@@ -1827,7 +1843,7 @@ defmodule Dran.MCP do
 
           plans =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               context: context,
               type: "plan",
               limit: 100,
@@ -1851,13 +1867,13 @@ defmodule Dran.MCP do
     end
   end
 
-  defp read_resource("wiki://" <> rest) do
-    [context_slug, "index"] = String.split(rest, "/", parts: 2)
-    context = context_cache_get(context_slug)
+  defp read_resource("home://" <> rest) do
+    [workspace_slug, "index"] = String.split(rest, "/", parts: 2)
+    context = workspace_cache_get(workspace_slug)
 
     if context do
       # P-05: cap at 1,000 pages to avoid loading entire brain into memory
-      pages = Brain.list_pages(context_id: context.id, context: context, limit: 1_000)
+      pages = Brain.list_pages(workspace_id: context.id, context: context, limit: 1_000)
 
       lines =
         Enum.map(pages, fn page ->
@@ -1883,7 +1899,7 @@ defmodule Dran.MCP do
 
   # ── Prompts ─────────────────────────────────────────────────────────────────
 
-  defp get_prompt("brainstorm", %{"topic" => topic, "context" => context}) do
+  defp get_prompt("brainstorm", %{"topic" => topic, "workspace" => context}) do
     [
       %{
         "role" => "user",
@@ -1900,7 +1916,7 @@ defmodule Dran.MCP do
     ]
   end
 
-  defp get_prompt("goal_review", %{"goal_slug" => slug, "context" => context}) do
+  defp get_prompt("goal_review", %{"goal_slug" => slug, "workspace" => context}) do
     [
       %{
         "role" => "user",

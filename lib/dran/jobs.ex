@@ -261,7 +261,7 @@ defmodule Dran.Jobs do
           Repo.all(
             from p in Page,
               where:
-                p.context_id == ^context.id and p.page_type == "report" and
+                p.workspace_id == ^context.id and p.page_type == "report" and
                   p.archived == false,
               where: fragment("?->>'job_key' = ?", p.meta, ^key_str),
               order_by: [desc: p.inserted_at],
@@ -287,7 +287,7 @@ defmodule Dran.Jobs do
   # ── Internals ─────────────────────────────────────────────────────────────
 
   defp default_context do
-    Brain.get_context_by_slug(Dran.Auth.default_context_slug())
+    Brain.get_workspace_by_slug(Dran.Auth.default_workspace_slug())
   end
 
   defp safe_prune(key) do
@@ -304,7 +304,7 @@ defmodule Dran.Jobs do
   defp write_report(job, trigger, status, duration_ms, result_text, summary) do
     case default_context() do
       nil ->
-        {:error, :context_not_found}
+        {:error, :workspace_not_found}
 
       context ->
         now = DateTime.utc_now() |> DateTime.truncate(:second)
@@ -347,7 +347,7 @@ defmodule Dran.Jobs do
     key_str = Atom.to_string(job.key)
 
     %{
-      context_id: context.id,
+      workspace_id: context.id,
       title: "#{job.label} — #{Calendar.strftime(now, "%Y-%m-%d %H:%M")} UTC",
       slug: slug,
       body: report_body(status, trigger, duration_ms, result_text),
@@ -365,7 +365,7 @@ defmodule Dran.Jobs do
     }
   end
 
-  # Page's only unique constraint is (context_id, slug); the error is
+  # Page's only unique constraint is (workspace_id, slug); the error is
   # attached to the first field of the composite, so match on constraint type.
   defp slug_taken?(%Ecto.Changeset{errors: errors}) do
     Enum.any?(errors, fn {_field, {_msg, opts}} -> opts[:constraint] == :unique end)
@@ -420,7 +420,7 @@ defmodule Dran.Jobs do
         Repo.all(
           from p in Page,
             where:
-              p.context_id == ^context.id and p.page_type == "report" and p.archived == false,
+              p.workspace_id == ^context.id and p.page_type == "report" and p.archived == false,
             where: not is_nil(fragment("?->>'job_key'", p.meta)),
             order_by: [desc: p.inserted_at],
             limit: 500,

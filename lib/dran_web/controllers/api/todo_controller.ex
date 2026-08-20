@@ -4,9 +4,9 @@ defmodule DranWeb.API.TodoController do
   alias Dran.Brain
 
   @doc "GET /api/todos?context=...&status=... — list todos in a context"
-  def index(conn, %{"context" => context_slug} = params) do
-    with_context(conn, context_slug, fn conn, context ->
-      opts = [context_id: context.id, type: "todo", include_body: false]
+  def index(conn, %{"workspace" => workspace_slug} = params) do
+    with_context(conn, workspace_slug, fn conn, context ->
+      opts = [workspace_id: context.id, type: "todo", include_body: false]
 
       opts =
         if params["status"] do

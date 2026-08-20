@@ -1,4 +1,4 @@
-defmodule DranWeb.WikiLiveTest do
+defmodule DranWeb.HomeLiveTest do
   use DranWeb.ConnCase, async: false
 
   alias Dran.Brain
@@ -27,12 +27,11 @@ defmodule DranWeb.WikiLiveTest do
       end
     end)
 
-    {:ok, wiki_ctx} = Brain.create_context(%{name: "Wiki Test", slug: "wiki-test"})
-    {:ok, wiki_ctx} = Brain.update_context_settings(wiki_ctx, %{wiki_enabled: true})
+    {:ok, wiki_ctx} = Brain.create_workspace(%{name: "Wiki Test", slug: "wiki-test"})
 
     {:ok, page} =
       Brain.create_page(%{
-        context_id: wiki_ctx.id,
+        workspace_id: wiki_ctx.id,
         title: "Wiki Test Note",
         body: "A note visible through the wiki",
         page_type: "note"
@@ -42,22 +41,23 @@ defmodule DranWeb.WikiLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, wiki_ctx: wiki_ctx, page: page}
   end
 
   describe "wiki at root" do
-    test "GET / renders the wiki index listing wiki-enabled contexts", %{
+    test "GET / renders the home index listing accessible workspaces", %{
       conn: conn,
       wiki_ctx: wiki_ctx
     } do
       {:ok, _view, html} = live(conn, ~p"/")
 
-      assert html =~ wiki_ctx.name
+      # All workspaces the user can access are shown (personal is default)
+      assert html =~ "Personal"
     end
 
-    test "GET /:context_slug renders the context home when wiki is enabled", %{
+    test "GET /:workspace_slug renders the context home when wiki is enabled", %{
       conn: conn,
       wiki_ctx: wiki_ctx
     } do
@@ -66,7 +66,7 @@ defmodule DranWeb.WikiLiveTest do
       assert html =~ wiki_ctx.name
     end
 
-    test "GET /:context_slug/type/:page_type/:slug renders the page read-only", %{
+    test "GET /:workspace_slug/type/:page_type/:slug renders the page read-only", %{
       conn: conn,
       wiki_ctx: wiki_ctx,
       page: page
@@ -77,13 +77,8 @@ defmodule DranWeb.WikiLiveTest do
       assert html =~ "A note visible through the wiki"
     end
 
-    test "GET /:context_slug redirects to / when the wiki is not enabled", %{conn: conn} do
-      # "personal" exists but has no wiki_enabled flag
-      assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/personal")
-    end
-
-    test "GET /:unknown_slug redirects to / for an unknown context", %{conn: conn} do
-      assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/no-such-context")
+    test "GET /:unknown_slug redirects to / for an unknown workspace", %{conn: conn} do
+      assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/no-such-workspace")
     end
   end
 
@@ -103,28 +98,28 @@ defmodule DranWeb.WikiLiveTest do
     setup %{wiki_ctx: wiki_ctx} do
       {:ok, project} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Alpha Project",
           page_type: "project"
         })
 
       {:ok, goal} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Beta Goal",
           page_type: "goal"
         })
 
       {:ok, plan} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Gamma Plan",
           page_type: "plan"
         })
 
       {:ok, linked} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Linked Todo",
           page_type: "todo",
           meta: %{
@@ -136,7 +131,7 @@ defmodule DranWeb.WikiLiveTest do
 
       {:ok, orphan} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Orphan Todo",
           page_type: "todo",
           meta: %{"kanban_status" => "backlog"}
@@ -173,7 +168,7 @@ defmodule DranWeb.WikiLiveTest do
 
       html =
         view
-        |> element(~s{select#wiki-filter-project})
+        |> element(~s{form#wiki-filter-project-form})
         |> render_change(%{"value" => project.slug})
 
       assert html =~ "Linked Todo"
@@ -189,7 +184,7 @@ defmodule DranWeb.WikiLiveTest do
 
       html =
         view
-        |> element(~s{select#wiki-filter-project})
+        |> element(~s{form#wiki-filter-project-form})
         |> render_change(%{"value" => project.slug})
 
       assert html =~ "Linked Todo"
@@ -210,7 +205,7 @@ defmodule DranWeb.WikiLiveTest do
 
       html =
         view
-        |> element(~s{select#wiki-todo-filter-plan})
+        |> element(~s{form#wiki-todo-filter-plan-form})
         |> render_change(%{"value" => plan.slug})
 
       # Neither todo carries plan_slug — both should be filtered out
@@ -226,7 +221,7 @@ defmodule DranWeb.WikiLiveTest do
 
       html =
         view
-        |> element(~s{select#wiki-todo-filter-project})
+        |> element(~s{form#wiki-todo-filter-project-form})
         |> render_change(%{"value" => "none"})
 
       assert html =~ "Orphan Todo"
@@ -238,28 +233,28 @@ defmodule DranWeb.WikiLiveTest do
     setup %{wiki_ctx: wiki_ctx} do
       {:ok, project} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Badge Project",
           page_type: "project"
         })
 
       {:ok, goal} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Badge Goal",
           page_type: "goal"
         })
 
       {:ok, _plan} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Badge Plan",
           page_type: "plan"
         })
 
       {:ok, linked_todo} =
         Brain.create_page(%{
-          context_id: wiki_ctx.id,
+          workspace_id: wiki_ctx.id,
           title: "Badge Test Todo",
           page_type: "todo",
           meta: %{

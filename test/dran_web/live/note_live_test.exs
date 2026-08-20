@@ -28,12 +28,12 @@ defmodule DranWeb.NoteLiveTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     # Create source page (will link TO the target)
     {:ok, source} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Source Page",
         body: "This page links to the target",
         page_type: "note"
@@ -42,7 +42,7 @@ defmodule DranWeb.NoteLiveTest do
     # Create target page (will receive the backlink)
     {:ok, target} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Target Page",
         body: "This page is linked from the source",
         page_type: "note"
@@ -61,7 +61,7 @@ defmodule DranWeb.NoteLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, source: source, target: target}
   end
@@ -194,7 +194,7 @@ defmodule DranWeb.NoteLiveTest do
       # Archive via the detail button
       view |> element("button", t("Archive")) |> render_click()
 
-      assert Brain.get_page_by_slug(source.slug, source.context_id).archived == true
+      assert Brain.get_page_by_slug(source.slug, source.workspace_id).archived == true
 
       # The list no longer shows the page; the Archived section is hidden
       # until the header toggle is clicked
@@ -218,18 +218,18 @@ defmodule DranWeb.NoteLiveTest do
 
       view |> element("button", t("Unarchive")) |> render_click()
 
-      assert Brain.get_page_by_slug(target.slug, target.context_id).archived == false
+      assert Brain.get_page_by_slug(target.slug, target.workspace_id).archived == false
 
       {:ok, _view, html} = live(conn, ~p"/panel/notes")
       assert html =~ ~s(data-testid="page-card-#{target.slug}")
     end
 
     test "archived section filter narrows by page type", %{conn: conn} do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       {:ok, note} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Archived Note XYZ",
           page_type: "note"
         })

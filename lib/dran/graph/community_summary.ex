@@ -21,7 +21,7 @@ defmodule Dran.Graph.CommunitySummary do
     field :top_pages, {:array, :map}, default: []
     field :generated_at, :utc_datetime
 
-    belongs_to :context, Dran.Brain.Context
+    belongs_to :workspace, Dran.Brain.Workspace
 
     timestamps(type: :utc_datetime)
   end
@@ -29,8 +29,15 @@ defmodule Dran.Graph.CommunitySummary do
   @doc "Changeset for creating or updating a community summary."
   def changeset(summary, attrs) do
     summary
-    |> cast(attrs, [:context_id, :community_id, :summary, :page_count, :top_pages, :generated_at])
-    |> validate_required([:context_id, :community_id, :summary, :generated_at])
-    |> unique_constraint([:context_id, :community_id])
+    |> cast(attrs, [
+      :workspace_id,
+      :community_id,
+      :summary,
+      :page_count,
+      :top_pages,
+      :generated_at
+    ])
+    |> validate_required([:workspace_id, :community_id, :summary, :generated_at])
+    |> unique_constraint([:workspace_id, :community_id])
   end
 end

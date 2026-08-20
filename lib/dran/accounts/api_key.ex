@@ -1,10 +1,10 @@
 defmodule Dran.Accounts.ApiKey do
   @moduledoc """
-  Context-scoped API key, not tied to any user.
+  Context-scoped API key.
 
-  A key grants API/MCP access to exactly ONE context. Unlike per-user tokens
-  (`users.api_token`), these keys are standalone — ideal for integrations,
-  scripts, or MCP clients that should only ever touch a single brain context.
+  An API key grants API/MCP access to N workspaces, each with a specific access
+  level ('read' or 'write'). The key also inherits the role of its creator
+  (stored as `created_by_user_id`).
 
   ## Security model
 
@@ -26,12 +26,15 @@ defmodule Dran.Accounts.ApiKey do
     field :token_hash, :string
     field :token_prefix, :string
     field :revoked_at, :utc_datetime
-    field :write_access, :boolean, default: false
 
     # Virtual — present only in the create/regenerate result, never persisted
     field :token, :string, virtual: true
 
-    belongs_to :context, Dran.Brain.Context
+    belongs_to :created_by_user, Dran.Accounts.User,
+      type: :integer,
+      foreign_key: :created_by_user_id
+
+    has_many :api_key_workspaces, Dran.Accounts.ApiKeyWorkspace
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -39,10 +42,10 @@ defmodule Dran.Accounts.ApiKey do
   @doc "Changeset for creating an API key"
   def changeset(api_key, attrs) do
     api_key
-    |> cast(attrs, [:name, :token_hash, :token_prefix, :context_id, :write_access])
-    |> validate_required([:name, :token_hash, :token_prefix, :context_id])
+    |> cast(attrs, [:name, :token_hash, :token_prefix, :created_by_user_id])
+    |> validate_required([:name, :token_hash, :token_prefix])
     |> unique_constraint(:token_hash)
-    |> foreign_key_constraint(:context_id)
+    |> foreign_key_constraint(:created_by_user_id)
   end
 
   @doc "Generate a new random token (URL-safe, 43 chars)."
@@ -61,4 +64,34 @@ defmodule Dran.Accounts.ApiKey do
   @doc "True when the key is active (not revoked)."
   def active?(%__MODULE__{revoked_at: nil}), do: true
   def active?(_), do: false
+
+  @doc """
+  Returns the access level for a given workspace_id, or nil.
+  """
+  def access_level_for(%__MODULE__{api_key_workspaces: workspaces}, workspace_id)
+      when is_list(workspaces) do
+    case Enum.find(workspaces, &(&1.workspace_id == workspace_id)) do
+      nil -> nil
+      akw -> akw.access_level
+    end
+  end
+
+  @doc """
+  Convenience: true if ANY of the key's workspaces has write access.
+  """
+  def write_access?(%__MODULE__{api_key_workspaces: %Ecto.Association.NotLoaded{}} = key) do
+    key |> Dran.Repo.preload(api_key_workspaces: []) |> write_access?()
+  end
+
+  def write_access?(%__MODULE__{api_key_workspaces: workspaces}) when is_list(workspaces) do
+    Enum.any?(workspaces, &(&1.access_level == "write"))
+  end
+
+  @doc """
+  Convenience: true if the key has access to the given workspace.
+  """
+  def has_workspace?(%__MODULE__{api_key_workspaces: workspaces}, workspace_id)
+      when is_list(workspaces) do
+    Enum.any?(workspaces, &(&1.workspace_id == workspace_id))
+  end
 end

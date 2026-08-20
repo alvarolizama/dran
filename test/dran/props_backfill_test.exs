@@ -28,7 +28,7 @@ defmodule Dran.PropsBackfillTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_context(%{name: "Backfill #{slug}", slug: slug})
+    {:ok, ctx} = Brain.create_workspace(%{name: "Backfill #{slug}", slug: slug})
     ctx
   end
 
@@ -38,7 +38,7 @@ defmodule Dran.PropsBackfillTest do
 
       {:ok, person} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Juan",
           slug: "juan",
           page_type: "entity",
@@ -62,7 +62,7 @@ defmodule Dran.PropsBackfillTest do
 
       {:ok, _note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "No Props",
           slug: "no-props",
           page_type: "note",
@@ -80,7 +80,7 @@ defmodule Dran.PropsBackfillTest do
 
       {:ok, _page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Empty Props",
           slug: "empty-props",
           page_type: "entity",
@@ -97,7 +97,7 @@ defmodule Dran.PropsBackfillTest do
 
       {:ok, person} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Maria",
           slug: "maria",
           page_type: "entity",

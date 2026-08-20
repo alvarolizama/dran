@@ -8,11 +8,11 @@ defmodule Dran.Brain do
   ## Usage
 
       # Create a context
-      {:ok, ctx} = Dran.Brain.create_context(%{name: "Personal", slug: "personal"})
+      {:ok, ctx} = Dran.Brain.create_workspace(%{name: "Personal", slug: "personal"})
 
       # Create a page
       {:ok, page} = Dran.Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: "Elixir",
         slug: "elixir",
         body: "A functional language...",
@@ -27,76 +27,76 @@ defmodule Dran.Brain do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.Brain.{Context, Page, Relation, PageVersion, Log, PageMeta}
+  alias Dran.Brain.{Workspace, Page, Relation, PageVersion, Log, PageMeta}
 
   # ──────────────────────────────────────────────────────────────────────────
   # Contexts
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc "List all contexts"
-  def list_contexts do
-    Repo.all(from c in Context, order_by: [asc: c.name])
+  def list_workspaces do
+    Repo.all(from c in Workspace, order_by: [asc: c.name])
   end
 
   @doc """
-  Returns a map of `context_id => page_count` for all contexts.
+  Returns a map of `workspace_id => page_count` for all contexts.
 
   Lightweight single query (group_by) used by the context selector
   to show page counts next to each context name. Called once per mount,
   never per render.
   """
-  def page_counts_by_context do
+  def page_counts_by_workspace do
     Repo.all(
       from p in Page,
         where: p.archived == false,
-        group_by: p.context_id,
-        select: {p.context_id, count(p.id)}
+        group_by: p.workspace_id,
+        select: {p.workspace_id, count(p.id)}
     )
     |> Map.new()
   end
 
   @doc "Get a context by slug"
-  def get_context_by_slug(slug) when is_binary(slug) do
-    Repo.one(from c in Context, where: c.slug == ^slug)
+  def get_workspace_by_slug(slug) when is_binary(slug) do
+    Repo.one(from c in Workspace, where: c.slug == ^slug)
   end
 
   @doc """
-  List all contexts that have the wiki enabled, ordered by name.
+  List all workspaces, ordered by name.
   """
-  def list_wiki_contexts do
-    Repo.all(from c in Context, where: c.wiki_enabled == true, order_by: [asc: c.name])
+  def list_home_workspaces do
+    list_workspaces()
   end
 
   @doc """
   List pinned pages for a context.
   """
-  def list_pinned_pages(context_id) when is_binary(context_id) do
+  def list_pinned_pages(workspace_id) when is_binary(workspace_id) do
     from(p in Page,
-      where: p.context_id == ^context_id and p.pinned == true and p.archived == false,
+      where: p.workspace_id == ^workspace_id and p.pinned == true and p.archived == false,
       order_by: [asc: p.title]
     )
     |> Repo.all()
   end
 
   @doc "Get a context by id"
-  def get_context!(id), do: Repo.get!(Context, id)
+  def get_workspace!(id), do: Repo.get!(Workspace, id)
 
   @doc "Create a new context"
-  def create_context(attrs) do
-    %Context{}
-    |> Context.changeset(attrs)
+  def create_workspace(attrs) do
+    %Workspace{}
+    |> Workspace.changeset(attrs)
     |> Repo.insert()
   end
 
   @doc "Update a context"
-  def update_context(%Context{} = context, attrs) do
+  def update_workspace(%Workspace{} = context, attrs) do
     context
-    |> Context.changeset(attrs)
+    |> Workspace.changeset(attrs)
     |> Repo.update()
   end
 
   @doc "Delete a context (cascades to pages, relations, etc.)"
-  def delete_context(%Context{} = context) do
+  def delete_workspace(%Workspace{} = context) do
     Repo.delete(context)
   end
 
@@ -108,7 +108,7 @@ defmodule Dran.Brain do
   List pages with optional filters.
 
   ## Options
-  - `:context_id` — filter by context (required for multi-context isolation)
+  - `:workspace_id` — filter by context (required for multi-context isolation)
   - `:type` — filter by page_type
   - `:tag` — filter by a single tag
   - `:status` — filter by kanban_status (for todos)
@@ -130,7 +130,7 @@ defmodule Dran.Brain do
   Returns lightweight metadata by default. Use `include_body: true` for full content.
   """
   def list_pages(opts \\ []) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     type = Keyword.get(opts, :type)
     tag = Keyword.get(opts, :tag)
     status = Keyword.get(opts, :status)
@@ -147,9 +147,9 @@ defmodule Dran.Brain do
     offset = Keyword.get(opts, :offset, 0)
     include_body = Keyword.get(opts, :include_body, false)
 
-    # P-03: accept an optional pre-loaded %Context{} to avoid the extra
-    # Repo.get(Context, context_id) query in maybe_exclude_disabled_types.
-    context = Keyword.get(opts, :context)
+    # P-03: accept an optional pre-loaded %Workspace{} to avoid the extra
+    # Repo.get(Workspace, workspace_id) query in maybe_exclude_disabled_types.
+    context = Keyword.get(opts, :workspace)
 
     base =
       if include_body do
@@ -158,7 +158,7 @@ defmodule Dran.Brain do
         from p in Page,
           select: %Page{
             id: p.id,
-            context_id: p.context_id,
+            workspace_id: p.workspace_id,
             title: p.title,
             slug: p.slug,
             body: "",
@@ -184,8 +184,8 @@ defmodule Dran.Brain do
 
     query =
       base
-      |> maybe_filter_context(context_id)
-      |> maybe_exclude_disabled_types(context, context_id)
+      |> maybe_filter_context(workspace_id)
+      |> maybe_exclude_disabled_types(context, workspace_id)
       |> maybe_filter_type(type)
       |> maybe_filter_tag(tag)
       |> maybe_filter_status(status)
@@ -206,20 +206,24 @@ defmodule Dran.Brain do
     Repo.all(query)
   end
 
-  # P-03: when the caller already loaded the %Context{} struct, use it
+  # P-03: when the caller already loaded the %Workspace{} struct, use it
   # directly instead of re-querying by id.
-  defp maybe_exclude_disabled_types(query, %Context{disabled_page_types: disabled}, _context_id)
+  defp maybe_exclude_disabled_types(
+         query,
+         %Workspace{disabled_page_types: disabled},
+         _workspace_id
+       )
        when is_list(disabled) and disabled != [] do
     where(query, [p], p.page_type not in ^disabled)
   end
 
-  defp maybe_exclude_disabled_types(query, %Context{}, _context_id), do: query
+  defp maybe_exclude_disabled_types(query, %Workspace{}, _workspace_id), do: query
 
   defp maybe_exclude_disabled_types(query, nil, nil), do: query
 
-  defp maybe_exclude_disabled_types(query, nil, context_id) do
-    case Repo.get(Context, context_id) do
-      %Context{disabled_page_types: disabled} when is_list(disabled) and disabled != [] ->
+  defp maybe_exclude_disabled_types(query, nil, workspace_id) do
+    case Repo.get(Workspace, workspace_id) do
+      %Workspace{disabled_page_types: disabled} when is_list(disabled) and disabled != [] ->
         where(query, [p], p.page_type not in ^disabled)
 
       _ ->
@@ -229,8 +233,8 @@ defmodule Dran.Brain do
 
   defp maybe_filter_context(query, nil), do: query
 
-  defp maybe_filter_context(query, context_id) do
-    where(query, [p], p.context_id == ^context_id)
+  defp maybe_filter_context(query, workspace_id) do
+    where(query, [p], p.workspace_id == ^workspace_id)
   end
 
   defp maybe_filter_type(query, nil), do: query
@@ -313,7 +317,7 @@ defmodule Dran.Brain do
     |> join(:left, [p], plan in Page,
       on:
         plan.slug == fragment("?->>'plan_slug'", p.meta) and
-          plan.context_id == p.context_id and
+          plan.workspace_id == p.workspace_id and
           plan.page_type == "plan"
     )
     |> where(
@@ -330,7 +334,7 @@ defmodule Dran.Brain do
     |> join(:left, [p], plan in Page,
       on:
         plan.slug == fragment("?->>'plan_slug'", p.meta) and
-          plan.context_id == p.context_id and
+          plan.workspace_id == p.workspace_id and
           plan.page_type == "plan"
     )
     |> where(
@@ -396,36 +400,36 @@ defmodule Dran.Brain do
   end
 
   @doc "List todos in a context, optionally filtered by kanban_status"
-  def list_todos(context_id) when is_binary(context_id) do
-    list_todos(context_id: context_id)
+  def list_todos(workspace_id) when is_binary(workspace_id) do
+    list_todos(workspace_id: workspace_id)
   end
 
   def list_todos(opts) when is_list(opts) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     status = Keyword.get(opts, :status)
     limit = Keyword.get(opts, :limit, 500)
     archived = Keyword.get(opts, :archived, false)
 
     opts =
       [type: "todo", include_body: false, limit: limit, archived: archived]
-      |> maybe_put_opt(:context_id, context_id)
+      |> maybe_put_opt(:workspace_id, workspace_id)
       |> maybe_put_opt(:status, status)
 
     list_pages(opts)
   end
 
   @doc "List goals in a context"
-  def list_goals(context_id) when is_binary(context_id) do
-    list_goals(context_id: context_id)
+  def list_goals(workspace_id) when is_binary(workspace_id) do
+    list_goals(workspace_id: workspace_id)
   end
 
   def list_goals(opts) when is_list(opts) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     limit = Keyword.get(opts, :limit, 100)
 
     opts =
       [type: "goal", include_body: false, limit: limit]
-      |> maybe_put_opt(:context_id, context_id)
+      |> maybe_put_opt(:workspace_id, workspace_id)
 
     list_pages(opts)
   end
@@ -437,9 +441,9 @@ defmodule Dran.Brain do
   All distinct tags used in a context, sorted alphabetically. Used for
   tag-input autocomplete suggestions.
   """
-  def list_tags(context_id) when is_binary(context_id) do
+  def list_tags(workspace_id) when is_binary(workspace_id) do
     from(p in Page,
-      where: p.context_id == ^context_id and p.archived == false,
+      where: p.workspace_id == ^workspace_id and p.archived == false,
       select: p.tags
     )
     |> Repo.all()
@@ -449,12 +453,12 @@ defmodule Dran.Brain do
   end
 
   @doc "Get a page by slug within a context"
-  def get_page_by_slug(slug, context_id) when is_binary(slug) and is_binary(context_id) do
-    Repo.one(from p in Page, where: p.slug == ^slug and p.context_id == ^context_id)
+  def get_page_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
+    Repo.one(from p in Page, where: p.slug == ^slug and p.workspace_id == ^workspace_id)
   end
 
   @doc "Batch-fetch slug → page_type map for many slugs in one query"
-  def get_pages_by_slugs(slugs, context_id) when is_list(slugs) and is_binary(context_id) do
+  def get_pages_by_slugs(slugs, workspace_id) when is_list(slugs) and is_binary(workspace_id) do
     slugs =
       slugs
       |> Enum.filter(&is_binary/1)
@@ -467,7 +471,7 @@ defmodule Dran.Brain do
       [_ | _] = slugs ->
         Repo.all(
           from p in Page,
-            where: p.context_id == ^context_id and p.slug in ^slugs,
+            where: p.workspace_id == ^workspace_id and p.slug in ^slugs,
             select: {p.slug, p.page_type}
         )
         |> Map.new()
@@ -497,21 +501,21 @@ defmodule Dran.Brain do
   Page types enabled for a context — all types minus the context's
   `disabled_page_types`.
   """
-  def enabled_page_types(%Context{} = context) do
+  def enabled_page_types(%Workspace{} = context) do
     Page.all_types() -- (context.disabled_page_types || [])
   end
 
   @doc "True if the given page type is enabled in the context."
   def page_type_enabled?(nil, _page_type), do: true
 
-  def page_type_enabled?(%Context{} = context, page_type) when is_binary(page_type) do
+  def page_type_enabled?(%Workspace{} = context, page_type) when is_binary(page_type) do
     page_type not in (context.disabled_page_types || [])
   end
 
   @doc "Update a context's settings (e.g. disabled_page_types)."
-  def update_context_settings(%Context{} = context, attrs) do
+  def update_workspace_settings(%Workspace{} = context, attrs) do
     context
-    |> Context.settings_changeset(attrs)
+    |> Workspace.settings_changeset(attrs)
     |> Repo.update()
   end
 
@@ -534,7 +538,7 @@ defmodule Dran.Brain do
 
       case Repo.insert(changeset) do
         {:ok, page} ->
-          log_action(page.context_id, "page.create", page.slug, %{
+          log_action(page.workspace_id, "page.create", page.slug, %{
             page_id: page.id,
             page_type: page.page_type,
             owner: page.owner,
@@ -544,7 +548,7 @@ defmodule Dran.Brain do
           resolve_embeds(page)
           sync_todo_links(page)
 
-          broadcast_page_change(page.context_id, :created, page)
+          broadcast_page_change(page.workspace_id, :created, page)
           Dran.Embeddings.schedule(page)
           Dran.Brain.PageAugmenter.schedule(page)
           {:ok, page}
@@ -556,11 +560,11 @@ defmodule Dran.Brain do
   end
 
   defp check_page_type_enabled(attrs) do
-    context_id = attrs["context_id"]
+    workspace_id = attrs["workspace_id"]
     page_type = attrs["page_type"]
 
-    with %Context{} = context when not is_nil(context_id) <-
-           context_id && Repo.get(Context, context_id),
+    with %Workspace{} = context when not is_nil(workspace_id) <-
+           workspace_id && Repo.get(Workspace, workspace_id),
          false <- page_type_enabled?(context, page_type || "note") do
       {:error, :page_type_disabled}
     else
@@ -584,7 +588,7 @@ defmodule Dran.Brain do
       if is_binary(slug) and String.trim(slug) != "" do
         slug
       else
-        Dran.Slug.generate(title, attrs["context_id"], attrs["page_type"])
+        Dran.Slug.generate(title, attrs["workspace_id"], attrs["page_type"])
       end
 
     attrs
@@ -634,7 +638,7 @@ defmodule Dran.Brain do
 
     case Repo.update(changeset) do
       {:ok, updated_page} ->
-        log_action(updated_page.context_id, "page.update", updated_page.slug, %{
+        log_action(updated_page.workspace_id, "page.update", updated_page.slug, %{
           page_id: updated_page.id,
           version: updated_page.version
         })
@@ -642,7 +646,7 @@ defmodule Dran.Brain do
         reresolve_embeds(updated_page)
         sync_todo_links(updated_page, page)
 
-        broadcast_page_change(updated_page.context_id, :updated, updated_page)
+        broadcast_page_change(updated_page.workspace_id, :updated, updated_page)
         Dran.Embeddings.schedule(updated_page)
         Dran.Brain.PageAugmenter.schedule(updated_page)
         {:ok, updated_page}
@@ -658,14 +662,14 @@ defmodule Dran.Brain do
   Logs the action and broadcasts a PubSub change event.
   """
   def archive_page(%Page{} = page) do
-    log_action(page.context_id, "page.archive", page.slug, %{page_id: page.id})
+    log_action(page.workspace_id, "page.archive", page.slug, %{page_id: page.id})
 
     page
     |> Ecto.Changeset.change(archived: true)
     |> Repo.update()
     |> case do
       {:ok, updated} ->
-        broadcast_page_change(updated.context_id, :updated, updated)
+        broadcast_page_change(updated.workspace_id, :updated, updated)
         {:ok, updated}
 
       {:error, changeset} ->
@@ -675,14 +679,14 @@ defmodule Dran.Brain do
 
   @doc "Unarchive a page, restoring it to lists, stats and boards."
   def unarchive_page(%Page{} = page) do
-    log_action(page.context_id, "page.unarchive", page.slug, %{page_id: page.id})
+    log_action(page.workspace_id, "page.unarchive", page.slug, %{page_id: page.id})
 
     page
     |> Ecto.Changeset.change(archived: false)
     |> Repo.update()
     |> case do
       {:ok, updated} ->
-        broadcast_page_change(updated.context_id, :updated, updated)
+        broadcast_page_change(updated.workspace_id, :updated, updated)
         {:ok, updated}
 
       {:error, changeset} ->
@@ -695,12 +699,12 @@ defmodule Dran.Brain do
   Logs the action and broadcasts a PubSub change event for live views.
   """
   def delete_page(%Page{} = page) do
-    log_action(page.context_id, "page.delete", page.slug, %{page_id: page.id})
-    context_id = page.context_id
+    log_action(page.workspace_id, "page.delete", page.slug, %{page_id: page.id})
+    workspace_id = page.workspace_id
 
     case Repo.delete(page) do
       {:ok, page} ->
-        broadcast_page_change(context_id, :deleted, page)
+        broadcast_page_change(workspace_id, :deleted, page)
         {:ok, page}
 
       {:error, changeset} ->
@@ -719,12 +723,12 @@ defmodule Dran.Brain do
   ## Example
 
       {:ok, %{pages: 42, relations: 18, versions: 35, logs: 50}} =
-        Dran.Brain.reset_context(context_id)
+        Dran.Brain.reset_context(workspace_id)
   """
-  def reset_context(context_id) do
+  def reset_context(workspace_id) do
     import Ecto.Query, warn: false
 
-    page_ids_sub = page_ids(context_id)
+    page_ids_sub = page_ids(workspace_id)
 
     Repo.transaction(fn ->
       # Delete in dependency order: versions → relations → logs → pages.
@@ -740,11 +744,11 @@ defmodule Dran.Brain do
         |> Repo.delete_all()
 
       {logs_count, _} =
-        from(l in Log, where: l.context_id == ^context_id)
+        from(l in Log, where: l.workspace_id == ^workspace_id)
         |> Repo.delete_all()
 
       {pages_count, _} =
-        from(p in Page, where: p.context_id == ^context_id)
+        from(p in Page, where: p.workspace_id == ^workspace_id)
         |> Repo.delete_all()
 
       %{
@@ -756,24 +760,24 @@ defmodule Dran.Brain do
     end)
   end
 
-  defp page_ids(context_id) do
-    from(p in Page, where: p.context_id == ^context_id, select: p.id)
+  defp page_ids(workspace_id) do
+    from(p in Page, where: p.workspace_id == ^workspace_id, select: p.id)
   end
 
   @doc """
   Broadcast a page change event over Phoenix.PubSub so live views
   (e.g. the graph) can refresh in real time.
 
-  Subscribers on the "brain:<context_id>" topic receive
+  Subscribers on the "brain:<workspace_id>" topic receive
   `{:page_changed, action, page}` where `action` is `:created`,
   `:updated`, or `:deleted`.
   """
-  def broadcast_page_change(context_id, action, page) do
-    Phoenix.PubSub.broadcast(Dran.PubSub, "brain:#{context_id}", {:page_changed, action, page})
+  def broadcast_page_change(workspace_id, action, page) do
+    Phoenix.PubSub.broadcast(Dran.PubSub, "brain:#{workspace_id}", {:page_changed, action, page})
     # Invalidate granularly: the page cache entry, the page's subgraph, and
     # the global graph (any page change affects the global view).
-    Dran.GraphCache.invalidate_page_slug(page.slug, context_id)
-    if page.id, do: Dran.GraphCache.invalidate_page(page.id, context_id)
+    Dran.GraphCache.invalidate_page_slug(page.slug, workspace_id)
+    if page.id, do: Dran.GraphCache.invalidate_page(page.id, workspace_id)
   rescue
     # PubSub may not be running during release tasks (bin/dran eval, seeds)
     # where only the repo is started — the broadcast is a UI notification,
@@ -808,7 +812,7 @@ defmodule Dran.Brain do
   """
   def auto_relate(page_or_nil, opts \\ [])
 
-  def auto_relate(%Page{context_id: nil}, _opts), do: {:ok, []}
+  def auto_relate(%Page{workspace_id: nil}, _opts), do: {:ok, []}
 
   def auto_relate(%Page{} = page, opts) do
     import Ecto.Query
@@ -823,7 +827,7 @@ defmodule Dran.Brain do
         hits =
           Repo.all(
             from p in Page,
-              where: p.context_id == ^page.context_id and not is_nil(p.embedding),
+              where: p.workspace_id == ^page.workspace_id and not is_nil(p.embedding),
               where: p.id not in ^exclude_ids,
               order_by: fragment("? <=> ?", p.embedding, ^vec),
               limit: ^k,
@@ -838,7 +842,7 @@ defmodule Dran.Brain do
         # Fallback: embed the text if the page has no stored vector yet
         text = Dran.Embeddings.text_for_page(page)
 
-        case semantic_search(text, context_id: page.context_id, limit: k + 5) do
+        case semantic_search(text, workspace_id: page.workspace_id, limit: k + 5) do
           {:ok, hits} ->
             targets =
               hits
@@ -903,9 +907,9 @@ defmodule Dran.Brain do
   end
 
   @doc "Create a relation by slugs instead of IDs"
-  def create_relation_by_slugs(source_slug, target_slug, relation_type \\ "related", context_id) do
-    source = get_page_by_slug(source_slug, context_id)
-    target = get_page_by_slug(target_slug, context_id)
+  def create_relation_by_slugs(source_slug, target_slug, relation_type \\ "related", workspace_id) do
+    source = get_page_by_slug(source_slug, workspace_id)
+    target = get_page_by_slug(target_slug, workspace_id)
 
     cond do
       is_nil(source) ->
@@ -1055,9 +1059,9 @@ defmodule Dran.Brain do
 
   Returns `{deleted_count, []}` on success or `{0, errors}` on failure.
   """
-  def delete_relation_by_slugs(source_slug, target_slug, relation_type \\ nil, context_id) do
-    source = get_page_by_slug(source_slug, context_id)
-    target = get_page_by_slug(target_slug, context_id)
+  def delete_relation_by_slugs(source_slug, target_slug, relation_type \\ nil, workspace_id) do
+    source = get_page_by_slug(source_slug, workspace_id)
+    target = get_page_by_slug(target_slug, workspace_id)
 
     cond do
       is_nil(source) ->
@@ -1111,14 +1115,14 @@ defmodule Dran.Brain do
   recursive CTE with cycle guard (`NOT source_id = ANY(visited)`) and the
   `NOT EXISTS` anti-join are simpler to express in SQL than in Ecto's DSL.
   """
-  def transitive_part_of_candidates(context_id) do
+  def transitive_part_of_candidates(workspace_id) do
     sql = """
     WITH RECURSIVE chain AS (
       SELECT r.source_id, r.target_id, r.target_id AS via_id, 1 AS depth,
              ARRAY[r.source_id] AS visited
       FROM relations r
       JOIN pages p ON p.id = r.source_id
-      WHERE r.relation_type = 'part_of' AND p.context_id = $1::uuid
+      WHERE r.relation_type = 'part_of' AND p.workspace_id = $1::uuid
 
       UNION
 
@@ -1142,7 +1146,7 @@ defmodule Dran.Brain do
     LIMIT 50
     """
 
-    case Ecto.Adapters.SQL.query(Repo, sql, [Ecto.UUID.dump!(context_id)]) do
+    case Ecto.Adapters.SQL.query(Repo, sql, [Ecto.UUID.dump!(workspace_id)]) do
       {:ok, %{rows: rows}} ->
         Enum.map(rows, fn [s, t, v] ->
           %{source_slug: s, target_slug: t, via_slug: v}
@@ -1165,10 +1169,10 @@ defmodule Dran.Brain do
   how `refresh_communities/1` writes the value.
   """
   @spec community_pages(binary(), integer()) :: [map()]
-  def community_pages(context_id, community_id) do
+  def community_pages(workspace_id, community_id) do
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id,
+        where: p.workspace_id == ^workspace_id,
         where: fragment("(meta->>'community_id')::int = ?", ^community_id),
         select: %{id: p.id, slug: p.slug, title: p.title, page_type: p.page_type}
     )
@@ -1190,17 +1194,24 @@ defmodule Dran.Brain do
   def sync_todo_links(page, prior_page \\ nil)
 
   def sync_todo_links(%Page{} = page, prior_page) do
-    context_id = page.context_id
+    workspace_id = page.workspace_id
 
-    sync_one_link(page.slug, "project_slug", page.meta, prior_page && prior_page.meta, context_id)
-    sync_one_link(page.slug, "goal_slug", page.meta, prior_page && prior_page.meta, context_id)
-    sync_one_link(page.slug, "plan_slug", page.meta, prior_page && prior_page.meta, context_id)
+    sync_one_link(
+      page.slug,
+      "project_slug",
+      page.meta,
+      prior_page && prior_page.meta,
+      workspace_id
+    )
+
+    sync_one_link(page.slug, "goal_slug", page.meta, prior_page && prior_page.meta, workspace_id)
+    sync_one_link(page.slug, "plan_slug", page.meta, prior_page && prior_page.meta, workspace_id)
 
     # Recalcular health de project padre si la página es un goal con project_slug
-    maybe_recompute_parent_project(page, prior_page, context_id)
+    maybe_recompute_parent_project(page, prior_page, workspace_id)
 
     # Recalcular progress de goal padre si la página es un todo con goal_slug
-    maybe_recompute_parent_goal_progress(page, prior_page, context_id)
+    maybe_recompute_parent_goal_progress(page, prior_page, workspace_id)
 
     :ok
   end
@@ -1208,7 +1219,7 @@ defmodule Dran.Brain do
   # Sincroniza un único vínculo (project_slug, goal_slug o plan_slug).
   # Compara el valor actual con el previo; si cambiaron, borra la relación vieja
   # y crea la nueva. Si ambos son nil o iguales, no hace nada.
-  defp sync_one_link(source_slug, key, current_meta, prior_meta, context_id) do
+  defp sync_one_link(source_slug, key, current_meta, prior_meta, workspace_id) do
     current = meta_string(current_meta, key)
     prior = if prior_meta, do: meta_string(prior_meta, key), else: nil
 
@@ -1219,7 +1230,7 @@ defmodule Dran.Brain do
       is_nil(current) or current == "" ->
         # El vínculo se quitó: borrar la relación previa (si la había).
         if not blank?(prior) do
-          delete_relation_by_slugs(source_slug, prior, "part_of", context_id)
+          delete_relation_by_slugs(source_slug, prior, "part_of", workspace_id)
         end
 
         :ok
@@ -1227,17 +1238,17 @@ defmodule Dran.Brain do
       true ->
         # El vínculo cambió o se creó: borrar el previo (si lo había), crear el nuevo.
         if not blank?(prior) do
-          delete_relation_by_slugs(source_slug, prior, "part_of", context_id)
+          delete_relation_by_slugs(source_slug, prior, "part_of", workspace_id)
         end
 
-        create_relation_by_slugs(source_slug, current, "part_of", context_id)
+        create_relation_by_slugs(source_slug, current, "part_of", workspace_id)
         :ok
     end
   end
 
   # ── Recálculo de health de project (cuando un goal cambia) ────────────────
 
-  defp maybe_recompute_parent_project(page, prior_page, context_id) do
+  defp maybe_recompute_parent_project(page, prior_page, workspace_id) do
     # Solo recalcular si la página es un goal (su health alimenta el project)
     if page.page_type != "goal" do
       :ok
@@ -1256,9 +1267,9 @@ defmodule Dran.Brain do
             meta_string(page.meta, "project_slug") != meta_string(prior_page.meta, "project_slug")
 
         if is_nil(prior_page) or health_changed? or project_changed? do
-          case get_page_by_slug(project_slug, context_id) do
+          case get_page_by_slug(project_slug, workspace_id) do
             nil -> :ok
-            project_page -> recompute_project_health(project_page, context_id)
+            project_page -> recompute_project_health(project_page, workspace_id)
           end
         else
           :ok
@@ -1273,11 +1284,11 @@ defmodule Dran.Brain do
   Si el project tiene `health_source: "manual"`, se respeta y no se recalcula.
   Si no hay goals con health, no se sobreescribe (se mantiene el valor actual).
   """
-  def recompute_project_health(project_page, _context_id) do
+  def recompute_project_health(project_page, _workspace_id) do
     if meta_get(project_page.meta, "health_source") == "manual" do
       :ok
     else
-      goal_healths = list_goal_healths_for_project(project_page.slug, project_page.context_id)
+      goal_healths = list_goal_healths_for_project(project_page.slug, project_page.workspace_id)
 
       case PageMeta.derive_project_health(goal_healths) do
         nil ->
@@ -1290,10 +1301,10 @@ defmodule Dran.Brain do
     end
   end
 
-  defp list_goal_healths_for_project(project_slug, context_id) do
+  defp list_goal_healths_for_project(project_slug, workspace_id) do
     from(p in Page,
       where:
-        p.context_id == ^context_id and
+        p.workspace_id == ^workspace_id and
           p.page_type == "goal" and
           fragment("?->>'project_slug'", p.meta) == ^project_slug,
       select: fragment("?->>'health'", p.meta)
@@ -1304,7 +1315,7 @@ defmodule Dran.Brain do
 
   # ── Recálculo de progress de goal (cuando un todo cambia) ──────────────────
 
-  defp maybe_recompute_parent_goal_progress(page, prior_page, context_id) do
+  defp maybe_recompute_parent_goal_progress(page, prior_page, workspace_id) do
     # Solo recalcular si la página es un todo (su kanban_status alimenta el progress del goal)
     if page.page_type != "todo" do
       :ok
@@ -1324,9 +1335,9 @@ defmodule Dran.Brain do
             meta_string(page.meta, "goal_slug") != meta_string(prior_page.meta, "goal_slug")
 
         if is_nil(prior_page) or status_changed? or goal_changed? do
-          case get_page_by_slug(goal_slug, context_id) do
+          case get_page_by_slug(goal_slug, workspace_id) do
             nil -> :ok
-            goal_page -> recompute_goal_progress(goal_page, context_id)
+            goal_page -> recompute_goal_progress(goal_page, workspace_id)
           end
         else
           :ok
@@ -1341,11 +1352,11 @@ defmodule Dran.Brain do
   Si el goal tiene el flag `progress_manual: true` en el meta, se respeta el
   valor manual y no se recalcula. Si no hay todos con status, no se sobreescribe.
   """
-  def recompute_goal_progress(goal_page, _context_id) do
+  def recompute_goal_progress(goal_page, _workspace_id) do
     if Map.get(goal_page.meta || %{}, "progress_manual") == true do
       :ok
     else
-      todo_statuses = list_todo_statuses_for_goal(goal_page.slug, goal_page.context_id)
+      todo_statuses = list_todo_statuses_for_goal(goal_page.slug, goal_page.workspace_id)
 
       case PageMeta.derive_goal_progress(todo_statuses) do
         nil -> :ok
@@ -1354,10 +1365,10 @@ defmodule Dran.Brain do
     end
   end
 
-  defp list_todo_statuses_for_goal(goal_slug, context_id) do
+  defp list_todo_statuses_for_goal(goal_slug, workspace_id) do
     from(p in Page,
       where:
-        p.context_id == ^context_id and
+        p.workspace_id == ^workspace_id and
           p.page_type == "todo" and
           fragment("?->>'goal_slug'", p.meta) == ^goal_slug,
       select: fragment("?->>'kanban_status'", p.meta)
@@ -1420,7 +1431,7 @@ defmodule Dran.Brain do
   """
   @max_graph_edges 2500
 
-  def graph_data(context_id, opts \\ []) do
+  def graph_data(workspace_id, opts \\ []) do
     exclude_types = Keyword.get(opts, :exclude_types, [])
     max_nodes = Keyword.get(opts, :max_nodes)
 
@@ -1429,7 +1440,7 @@ defmodule Dran.Brain do
         is_nil(max_nodes) ->
           nodes =
             Repo.all(
-              from p in graph_base(context_id, exclude_types),
+              from p in graph_base(workspace_id, exclude_types),
                 select: %{
                   id: p.id,
                   title: p.title,
@@ -1443,22 +1454,22 @@ defmodule Dran.Brain do
           {nodes, length(nodes)}
 
         true ->
-          total = Repo.aggregate(graph_base(context_id, exclude_types), :count)
+          total = Repo.aggregate(graph_base(workspace_id, exclude_types), :count)
 
           nodes =
             if total <= max_nodes do
               Repo.all(
-                from p in graph_base(context_id, exclude_types),
+                from p in graph_base(workspace_id, exclude_types),
                   select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
               )
             else
-              top_ids = top_connected_ids(context_id, exclude_types, max_nodes)
+              top_ids = top_connected_ids(workspace_id, exclude_types, max_nodes)
 
               if top_ids == [] do
                 []
               else
                 Repo.all(
-                  from p in graph_base(context_id, exclude_types),
+                  from p in graph_base(workspace_id, exclude_types),
                     where: p.id in ^top_ids,
                     select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
                 )
@@ -1496,7 +1507,7 @@ defmodule Dran.Brain do
           from r in Relation,
             join: s in assoc(r, :source),
             join: t in assoc(r, :target),
-            where: s.context_id == ^context_id and t.context_id == ^context_id
+            where: s.workspace_id == ^workspace_id and t.workspace_id == ^workspace_id
 
         q =
           if exclude_types == [] do
@@ -1514,12 +1525,12 @@ defmodule Dran.Brain do
 
   # Base page query for the graph, scoped to the context and optionally
   # excluding page types (filtered in SQL so hidden types never load).
-  defp graph_base(context_id, exclude_types) do
+  defp graph_base(workspace_id, exclude_types) do
     if exclude_types == [] do
-      from p in Page, where: p.context_id == ^context_id
+      from p in Page, where: p.workspace_id == ^workspace_id
     else
       from p in Page,
-        where: p.context_id == ^context_id and p.page_type not in ^exclude_types
+        where: p.workspace_id == ^workspace_id and p.page_type not in ^exclude_types
     end
   end
 
@@ -1529,12 +1540,12 @@ defmodule Dran.Brain do
   # RAM and counting in Elixir — scales linearly with page count, not edge
   # count. Only relations whose BOTH endpoints are non-excluded count toward
   # the degree, matching what the graph actually renders.
-  defp top_connected_ids(context_id, exclude_types, limit) do
+  defp top_connected_ids(workspace_id, exclude_types, limit) do
     out_base =
       from r in Relation,
         join: s in assoc(r, :source),
         join: t in assoc(r, :target),
-        where: s.context_id == ^context_id and t.context_id == ^context_id
+        where: s.workspace_id == ^workspace_id and t.workspace_id == ^workspace_id
 
     out_base =
       if exclude_types == [] do
@@ -1548,7 +1559,7 @@ defmodule Dran.Brain do
       from r in Relation,
         join: s in assoc(r, :source),
         join: t in assoc(r, :target),
-        where: s.context_id == ^context_id and t.context_id == ^context_id
+        where: s.workspace_id == ^workspace_id and t.workspace_id == ^workspace_id
 
     in_base =
       if exclude_types == [] do
@@ -1582,9 +1593,9 @@ defmodule Dran.Brain do
   global graph). Used by the graph sidebar so totals stay truthful even when
   the rendered graph is capped.
   """
-  def graph_type_counts(context_id, exclude_types \\ []) do
+  def graph_type_counts(workspace_id, exclude_types \\ []) do
     Repo.all(
-      from p in graph_base(context_id, exclude_types),
+      from p in graph_base(workspace_id, exclude_types),
         group_by: p.page_type,
         select: {p.page_type, count(p.id)}
     )
@@ -1608,11 +1619,11 @@ defmodule Dran.Brain do
 
   You can force a strategy with `:strategy`:
 
-      Brain.search("elixir phoenix", context_id: ctx.id, strategy: :fuzzy)
-      Brain.search("cómo funciona el embedding", context_id: ctx.id, strategy: :hybrid)
+      Brain.search("elixir phoenix", workspace_id: ctx.id, strategy: :fuzzy)
+      Brain.search("cómo funciona el embedding", workspace_id: ctx.id, strategy: :hybrid)
 
   ## Options
-  - `:context_id` — scope to a context (recommended)
+  - `:workspace_id` — scope to a context (recommended)
   - `:type` — filter by page_type
   - `:limit` — max results (default 20)
   - `:strategy` — `:auto` (default), `:fts`, `:fuzzy`, `:semantic`, `:hybrid`
@@ -1672,12 +1683,12 @@ defmodule Dran.Brain do
   excerpts (not full bodies) to save tokens.
 
   ## Options
-  - `:context_id` — scope to a context (recommended)
+  - `:workspace_id` — scope to a context (recommended)
   - `:type` — filter by page_type
   - `:limit` — max results (default 20)
   """
   def fts_search(query_string, opts \\ []) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     type = Keyword.get(opts, :type)
     limit = Keyword.get(opts, :limit, 20)
     offset = Keyword.get(opts, :offset, 0)
@@ -1706,7 +1717,7 @@ defmodule Dran.Brain do
 
     query =
       base
-      |> maybe_filter_context(context_id)
+      |> maybe_filter_context(workspace_id)
       |> maybe_filter_type(type)
 
     results = Repo.all(query)
@@ -1722,7 +1733,7 @@ defmodule Dran.Brain do
   Returns pages sorted by similarity score (desc).
   """
   def fuzzy_search(query_string, opts \\ []) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     limit = Keyword.get(opts, :limit, 10)
     offset = Keyword.get(opts, :offset, 0)
 
@@ -1743,8 +1754,8 @@ defmodule Dran.Brain do
         }
 
     query =
-      if context_id do
-        where(query, [p], p.context_id == ^context_id)
+      if workspace_id do
+        where(query, [p], p.workspace_id == ^workspace_id)
       else
         query
       end
@@ -1758,13 +1769,13 @@ defmodule Dran.Brain do
   Returns pages sorted by cosine distance to the query embedding (ascending).
 
   ## Options
-  - `:context_id` — scope to a context
+  - `:workspace_id` — scope to a context
   - `:type` — filter by page_type
   - `:limit` — max results (default 20)
   """
   @spec semantic_search(String.t(), keyword()) :: {:ok, list(map())} | {:error, term()}
   def semantic_search(query_string, opts \\ []) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     type = Keyword.get(opts, :type)
     limit = Keyword.get(opts, :limit, 20)
     offset = Keyword.get(opts, :offset, 0)
@@ -1792,7 +1803,7 @@ defmodule Dran.Brain do
 
         query =
           query
-          |> maybe_filter_context(context_id)
+          |> maybe_filter_context(workspace_id)
           |> maybe_filter_type(type)
 
         results = Repo.all(query)
@@ -1808,7 +1819,7 @@ defmodule Dran.Brain do
   Reciprocal Rank Fusion (RRF).
 
   ## Options
-  - `:context_id` — scope to a context
+  - `:workspace_id` — scope to a context
   - `:type` — filter by page_type
   - `:limit` — max results (default 20)
   - `:k` — RRF constant (default 60)
@@ -2091,7 +2102,7 @@ defmodule Dran.Brain do
 
   @doc "List recent log entries"
   def list_log(opts \\ []) do
-    context_id = Keyword.get(opts, :context_id)
+    workspace_id = Keyword.get(opts, :workspace_id)
     action = Keyword.get(opts, :action)
     limit = Keyword.get(opts, :limit, 50)
 
@@ -2101,8 +2112,8 @@ defmodule Dran.Brain do
         limit: ^limit
 
     query =
-      if context_id do
-        where(query, [l], l.context_id == ^context_id)
+      if workspace_id do
+        where(query, [l], l.workspace_id == ^workspace_id)
       else
         query
       end
@@ -2117,14 +2128,14 @@ defmodule Dran.Brain do
     Repo.all(query)
   end
 
-  def count_log(context_id) when is_binary(context_id) do
-    Repo.aggregate(from(l in Log, where: l.context_id == ^context_id), :count)
+  def count_log(workspace_id) when is_binary(workspace_id) do
+    Repo.aggregate(from(l in Log, where: l.workspace_id == ^workspace_id), :count)
   end
 
-  defp log_action(context_id, action, subject, details) do
+  defp log_action(workspace_id, action, subject, details) do
     %Log{}
     |> Log.changeset(%{
-      context_id: context_id,
+      workspace_id: workspace_id,
       action: action,
       subject: subject,
       details: details
@@ -2169,7 +2180,7 @@ defmodule Dran.Brain do
 
     {created, not_found} =
       Enum.reduce(embeds, {0, []}, fn %{slug: slug}, {acc_created, acc_missing} ->
-        target = get_page_by_slug(slug, page.context_id)
+        target = get_page_by_slug(slug, page.workspace_id)
 
         if target && target.id != page.id do
           case create_relation(%{
@@ -2228,7 +2239,7 @@ defmodule Dran.Brain do
   every body change.
   """
   def rename_slug(%Page{} = page, new_slug) do
-    context_id = page.context_id
+    workspace_id = page.workspace_id
     old_slug = page.slug
 
     Repo.transaction(fn ->
@@ -2237,7 +2248,7 @@ defmodule Dran.Brain do
       pages_with_embed =
         Repo.all(
           from p in Page,
-            where: p.context_id == ^context_id and p.id != ^page.id,
+            where: p.workspace_id == ^workspace_id and p.id != ^page.id,
             where: like(p.body, ^"%![[#{old_slug}%")
         )
 
@@ -2267,13 +2278,13 @@ defmodule Dran.Brain do
   Returns a map of `slug => %Page{}` for all embeds that resolve to a page
   in the given context. Useful for rendering embedded media in markdown.
   """
-  def fetch_embeds(body, context_id) when is_binary(body) and is_binary(context_id) do
+  def fetch_embeds(body, workspace_id) when is_binary(body) and is_binary(workspace_id) do
     body
     |> extract_embeds()
     |> Enum.map(& &1.slug)
     |> Enum.uniq()
     |> Enum.reduce(%{}, fn slug, acc ->
-      case get_page_by_slug(slug, context_id) do
+      case get_page_by_slug(slug, workspace_id) do
         nil -> acc
         page -> Map.put(acc, slug, page)
       end
@@ -2301,36 +2312,36 @@ defmodule Dran.Brain do
   def replace_slug_in_body(body, _old_slug, _new_slug), do: body
 
   @doc "Find pages with no inbound relations (orphans)"
-  def orphan_pages(context_id) do
+  def orphan_pages(workspace_id) do
     # left_join + is_nil is more efficient than NOT IN subquery,
     # especially as the relations table grows.
     Repo.all(
       from p in Page,
         left_join: r in Relation,
         on: r.target_id == p.id,
-        where: p.context_id == ^context_id and is_nil(r.id) and p.archived == false,
+        where: p.workspace_id == ^workspace_id and is_nil(r.id) and p.archived == false,
         order_by: [asc: p.title],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
   end
 
   @doc "Find stale pages (not updated in X days)"
-  def stale_pages(context_id, days \\ 90) do
+  def stale_pages(workspace_id, days \\ 90) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 24 * 60 * 60, :second)
 
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id and p.updated_at < ^cutoff and p.archived == false,
+        where: p.workspace_id == ^workspace_id and p.updated_at < ^cutoff and p.archived == false,
         order_by: [asc: p.updated_at],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
   end
 
   @doc "Find contested pages (kb_contested = true)"
-  def contested_pages(context_id) do
+  def contested_pages(workspace_id) do
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id and p.kb_contested == true and p.archived == false,
+        where: p.workspace_id == ^workspace_id and p.kb_contested == true and p.archived == false,
         order_by: [asc: p.title],
         select: %{slug: p.slug, title: p.title, page_type: p.page_type}
     )
@@ -2340,18 +2351,18 @@ defmodule Dran.Brain do
   Find todos whose `meta.plan_slug` does not resolve to an existing plan page
   in the same context (broken planning references).
   """
-  def broken_plan_refs(context_id) do
+  def broken_plan_refs(workspace_id) do
     # All todos with a non-empty plan_slug whose slug isn't a plan in the context.
     known_plan_slugs =
       from(p in Page,
-        where: p.context_id == ^context_id and p.page_type == "plan",
+        where: p.workspace_id == ^workspace_id and p.page_type == "plan",
         select: p.slug
       )
 
     Repo.all(
       from p in Page,
         where:
-          p.context_id == ^context_id and p.page_type == "todo" and
+          p.workspace_id == ^workspace_id and p.page_type == "todo" and
             not is_nil(fragment("?->>'plan_slug'", p.meta)) and
             fragment("?->>'plan_slug'", p.meta) != "" and
             fragment("?->>'plan_slug'", p.meta) not in subquery(known_plan_slugs),
@@ -2364,17 +2375,17 @@ defmodule Dran.Brain do
   Find plans and todos whose `meta.goal_slug` does not resolve to an existing
   goal page in the same context (broken planning references).
   """
-  def broken_goal_refs(context_id) do
+  def broken_goal_refs(workspace_id) do
     known_goal_slugs =
       from(p in Page,
-        where: p.context_id == ^context_id and p.page_type == "goal",
+        where: p.workspace_id == ^workspace_id and p.page_type == "goal",
         select: p.slug
       )
 
     Repo.all(
       from p in Page,
         where:
-          p.context_id == ^context_id and p.page_type in ^["plan", "todo"] and
+          p.workspace_id == ^workspace_id and p.page_type in ^["plan", "todo"] and
             not is_nil(fragment("?->>'goal_slug'", p.meta)) and
             fragment("?->>'goal_slug'", p.meta) != "" and
             fragment("?->>'goal_slug'", p.meta) not in subquery(known_goal_slugs),
@@ -2387,11 +2398,11 @@ defmodule Dran.Brain do
   Find todos with neither a `plan_slug` nor a `goal_slug` — informational,
   not an error (inbox/orphan todos are legitimate).
   """
-  def unplanned_todos(context_id) do
+  def unplanned_todos(workspace_id) do
     Repo.all(
       from p in Page,
         where:
-          p.context_id == ^context_id and p.page_type == "todo" and
+          p.workspace_id == ^workspace_id and p.page_type == "todo" and
             (is_nil(fragment("?->>'plan_slug'", p.meta)) or
                fragment("?->>'plan_slug'", p.meta) == "") and
             (is_nil(fragment("?->>'goal_slug'", p.meta)) or
@@ -2412,14 +2423,14 @@ defmodule Dran.Brain do
   - `:broken_goal_refs` — plans/todos whose goal_slug doesn't resolve to a goal
   - `:unplanned_todos` — todos with no plan_slug and no goal_slug (informational)
   """
-  def lint(context_id) do
+  def lint(workspace_id) do
     %{
-      orphans: orphan_pages(context_id),
-      stale: stale_pages(context_id),
-      contested: contested_pages(context_id),
-      broken_plan_refs: broken_plan_refs(context_id),
-      broken_goal_refs: broken_goal_refs(context_id),
-      unplanned_todos: unplanned_todos(context_id)
+      orphans: orphan_pages(workspace_id),
+      stale: stale_pages(workspace_id),
+      contested: contested_pages(workspace_id),
+      broken_plan_refs: broken_plan_refs(workspace_id),
+      broken_goal_refs: broken_goal_refs(workspace_id),
+      unplanned_todos: unplanned_todos(workspace_id)
     }
   end
 
@@ -2434,12 +2445,12 @@ defmodule Dran.Brain do
   - `:orphan_count` — number of orphan pages
   - `:total_relations` — number of relations in the context
   """
-  def stats(context_id) when is_binary(context_id) do
+  def stats(workspace_id) when is_binary(workspace_id) do
     # by_type: single group_by query instead of loading all pages into memory
     by_type =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context_id and p.archived == false,
+          where: p.workspace_id == ^workspace_id and p.archived == false,
           group_by: p.page_type,
           select: {p.page_type, count(p.id)}
       )
@@ -2449,7 +2460,8 @@ defmodule Dran.Brain do
     todos_by_status =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context_id and p.page_type == "todo" and p.archived == false,
+          where:
+            p.workspace_id == ^workspace_id and p.page_type == "todo" and p.archived == false,
           group_by: fragment("coalesce(meta->>'kanban_status', 'backlog')"),
           select: {fragment("coalesce(meta->>'kanban_status', 'backlog')"), count(p.id)}
       )
@@ -2459,12 +2471,12 @@ defmodule Dran.Brain do
     recent =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context_id and p.archived == false,
+          where: p.workspace_id == ^workspace_id and p.archived == false,
           order_by: [desc: p.updated_at],
           limit: 5,
           select: %Page{
             id: p.id,
-            context_id: p.context_id,
+            workspace_id: p.workspace_id,
             title: p.title,
             slug: p.slug,
             body: "",
@@ -2488,7 +2500,7 @@ defmodule Dran.Brain do
 
     total_pages =
       Repo.aggregate(
-        from(p in Page, where: p.context_id == ^context_id and p.archived == false),
+        from(p in Page, where: p.workspace_id == ^workspace_id and p.archived == false),
         :count
       )
 
@@ -2496,7 +2508,7 @@ defmodule Dran.Brain do
       Repo.aggregate(
         from(r in Relation,
           join: p in assoc(r, :source),
-          where: p.context_id == ^context_id
+          where: p.workspace_id == ^workspace_id
         ),
         :count
       )
@@ -2506,7 +2518,7 @@ defmodule Dran.Brain do
       by_type: by_type,
       recent: recent,
       todos_by_status: todos_by_status,
-      orphan_count: length(orphan_pages(context_id)),
+      orphan_count: length(orphan_pages(workspace_id)),
       total_relations: total_relations
     }
   end
@@ -2530,42 +2542,42 @@ defmodule Dran.Brain do
   - `:contested_count` — number of contested pages
   - `:agents` — `%{sessions_this_week, tokens_this_week, total_sessions}`
   """
-  def metrics(context_id) when is_binary(context_id) do
+  def metrics(workspace_id) when is_binary(workspace_id) do
     now = DateTime.utc_now()
     week_ago = DateTime.add(now, -7 * 86400, :second)
     two_weeks_ago = DateTime.add(now, -14 * 86400, :second)
 
     %{
-      pages_this_week: count_pages_since(context_id, week_ago),
+      pages_this_week: count_pages_since(workspace_id, week_ago),
       pages_last_week:
-        count_pages_since(context_id, two_weeks_ago) - count_pages_since(context_id, week_ago),
-      embedding_coverage: embedding_coverage(context_id),
-      relations_by_type: relations_by_type(context_id),
-      contested_count: length(contested_pages(context_id)),
-      agents: agent_metrics(context_id)
+        count_pages_since(workspace_id, two_weeks_ago) - count_pages_since(workspace_id, week_ago),
+      embedding_coverage: embedding_coverage(workspace_id),
+      relations_by_type: relations_by_type(workspace_id),
+      contested_count: length(contested_pages(workspace_id)),
+      agents: agent_metrics(workspace_id)
     }
   end
 
   def metrics(_), do: %{}
 
-  defp count_pages_since(context_id, since) do
+  defp count_pages_since(workspace_id, since) do
     Repo.aggregate(
       from(p in Page,
-        where: p.context_id == ^context_id and p.inserted_at >= ^since
+        where: p.workspace_id == ^workspace_id and p.inserted_at >= ^since
       ),
       :count
     )
   end
 
-  defp embedding_coverage(context_id) do
-    total = Repo.aggregate(from(p in Page, where: p.context_id == ^context_id), :count)
+  defp embedding_coverage(workspace_id) do
+    total = Repo.aggregate(from(p in Page, where: p.workspace_id == ^workspace_id), :count)
 
     if total == 0 do
       0.0
     else
       embedded =
         Repo.aggregate(
-          from(p in Page, where: p.context_id == ^context_id and not is_nil(p.embedding)),
+          from(p in Page, where: p.workspace_id == ^workspace_id and not is_nil(p.embedding)),
           :count
         )
 
@@ -2573,24 +2585,24 @@ defmodule Dran.Brain do
     end
   end
 
-  defp relations_by_type(context_id) do
+  defp relations_by_type(workspace_id) do
     Repo.all(
       from r in Relation,
         join: p in assoc(r, :source),
-        where: p.context_id == ^context_id,
+        where: p.workspace_id == ^workspace_id,
         group_by: r.relation_type,
         select: {r.relation_type, count(r.id)}
     )
     |> Map.new()
   end
 
-  defp agent_metrics(context_id) do
+  defp agent_metrics(workspace_id) do
     week_ago = DateTime.add(DateTime.utc_now(), -7 * 86400, :second)
 
     sessions_this_week =
       Repo.aggregate(
         from(s in Dran.Agent.Session,
-          where: s.context_id == ^context_id and s.inserted_at >= ^week_ago
+          where: s.workspace_id == ^workspace_id and s.inserted_at >= ^week_ago
         ),
         :count
       )
@@ -2598,7 +2610,7 @@ defmodule Dran.Brain do
     tokens_this_week =
       Repo.one(
         from s in Dran.Agent.Session,
-          where: s.context_id == ^context_id and s.inserted_at >= ^week_ago,
+          where: s.workspace_id == ^workspace_id and s.inserted_at >= ^week_ago,
           select: coalesce(sum(fragment("(meta->>'tokens_used')::bigint")), 0)
       )
 
@@ -2606,7 +2618,7 @@ defmodule Dran.Brain do
 
     total_sessions =
       Repo.aggregate(
-        from(s in Dran.Agent.Session, where: s.context_id == ^context_id),
+        from(s in Dran.Agent.Session, where: s.workspace_id == ^workspace_id),
         :count
       )
 

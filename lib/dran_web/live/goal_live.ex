@@ -26,8 +26,8 @@ defmodule DranWeb.GoalLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show}>
@@ -37,7 +37,7 @@ defmodule DranWeb.GoalLive do
           versions={@versions}
           compare_version={@compare_version}
           logs={@logs}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           rendered_body={@rendered_body}
           content_hidden={@active_tab != "overview"}
           active_tab={@active_tab}
@@ -67,7 +67,7 @@ defmodule DranWeb.GoalLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               editor_id="goal-editor"
             />
           </:attributes>
@@ -114,7 +114,7 @@ defmodule DranWeb.GoalLive do
                 form={@form}
                 page={@page}
                 page_type={@page_type}
-                context_id={@context_id}
+                workspace_id={@workspace_id}
                 save_status={@save_status}
                 editor_id="goal-editor"
               />
@@ -173,7 +173,7 @@ defmodule DranWeb.GoalLive do
           }
           archived_filter={@archived_filter}
           page_type={@page_type}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           show_archived={@show_archived}
           total_count={length(@pages)}
           total_archived={length(@archived_pages)}
@@ -221,7 +221,7 @@ defmodule DranWeb.GoalLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    {socket, context} = Auth.resolve_context(socket, params)
+    {socket, context} = Auth.resolve_workspace(socket, params)
 
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
@@ -231,11 +231,11 @@ defmodule DranWeb.GoalLive do
         page ->
           relations = Brain.list_relations_for_page(page.id)
           versions = Brain.list_page_versions(page.id)
-          logs = Brain.list_log(context_id: context.id, limit: 10)
+          logs = Brain.list_log(workspace_id: context.id, limit: 10)
 
           goal_todos =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               type: "todo",
               include_body: false,
               limit: 500
@@ -244,7 +244,7 @@ defmodule DranWeb.GoalLive do
 
           goal_plans =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               type: "plan",
               include_body: false,
               limit: 500
@@ -255,7 +255,7 @@ defmodule DranWeb.GoalLive do
 
           rendered_body =
             render_markdown(page.body,
-              context_id: page.context_id,
+              workspace_id: page.workspace_id,
               inline_links: Map.get(page.meta || %{}, "inline_links", [])
             )
 
@@ -285,7 +285,7 @@ defmodule DranWeb.GoalLive do
              editing: Map.get(params, "edit") == "true",
              form: form,
              context: context,
-             context_id: context.id,
+             workspace_id: context.id,
              goal_tabs: DisabledTypes.visible_tabs(@goal_tabs, context),
              save_status: "idle"
            )}
@@ -298,9 +298,9 @@ defmodule DranWeb.GoalLive do
   def handle_params(_params, _url, socket) do
     {pages, archived_pages} =
       if socket.assigns.context do
-        {Brain.list_pages(context_id: socket.assigns.context.id, type: @page_type),
+        {Brain.list_pages(workspace_id: socket.assigns.context.id, type: @page_type),
          Brain.list_pages(
-           context_id: socket.assigns.context.id,
+           workspace_id: socket.assigns.context.id,
            type: @page_type,
            archived: true,
            limit: 200
@@ -453,7 +453,7 @@ defmodule DranWeb.GoalLive do
       if page do
         rendered_body =
           render_markdown(page.body,
-            context_id: page.context_id,
+            workspace_id: page.workspace_id,
             inline_links: Map.get(page.meta || %{}, "inline_links", [])
           )
 

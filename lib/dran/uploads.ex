@@ -4,7 +4,7 @@ defmodule Dran.Uploads do
 
   Files are stored content-addressed by sha256 to deduplicate uploads:
 
-      priv/static/uploads/{context_id}/{sha256[:2]}/{sha256}.{ext}
+      priv/static/uploads/{workspace_id}/{sha256[:2]}/{sha256}.{ext}
 
   They are served publicly by `Plug.Static` via the `/uploads` static path.
   """
@@ -20,8 +20,8 @@ defmodule Dran.Uploads do
   end
 
   @doc "The public URL path where uploads are served."
-  def public_path(context_id, sha256, ext) when is_binary(sha256) and is_binary(ext) do
-    "/uploads/#{context_id}/#{String.slice(sha256, 0, 2)}/#{sha256}.#{ext}"
+  def public_path(workspace_id, sha256, ext) when is_binary(sha256) and is_binary(ext) do
+    "/uploads/#{workspace_id}/#{String.slice(sha256, 0, 2)}/#{sha256}.#{ext}"
   end
 
   @doc "Computes the sha256 hex of a binary."
@@ -47,11 +47,11 @@ defmodule Dran.Uploads do
   def extension(_, client_type), do: ext_from_mime(client_type) || "bin"
 
   @doc "Persists an uploaded binary and returns `%{path, sha256, ext, size}`."
-  def store(context_id, binary, filename, client_type)
-      when is_binary(context_id) and is_binary(binary) do
+  def store(workspace_id, binary, filename, client_type)
+      when is_binary(workspace_id) and is_binary(binary) do
     sha256 = hash(binary)
     ext = extension(filename, client_type)
-    rel_path = "#{context_id}/#{String.slice(sha256, 0, 2)}/#{sha256}.#{ext}"
+    rel_path = "#{workspace_id}/#{String.slice(sha256, 0, 2)}/#{sha256}.#{ext}"
 
     uploads_dir = dir()
     abs_path = Path.join([File.cwd!(), uploads_dir, rel_path]) |> Path.expand()
@@ -67,7 +67,7 @@ defmodule Dran.Uploads do
       size: byte_size(binary),
       mime_type: client_type,
       filename: filename,
-      storage_path: public_path(context_id, sha256, ext)
+      storage_path: public_path(workspace_id, sha256, ext)
     }
   end
 

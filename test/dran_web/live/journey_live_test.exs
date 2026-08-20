@@ -27,11 +27,11 @@ defmodule DranWeb.JourneyLiveTest do
     end)
 
     # Create some pages for the journey
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     for i <- 1..3 do
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Test Page #{i}",
         slug: "test-page-#{i}",
         page_type: "note"
@@ -43,7 +43,7 @@ defmodule DranWeb.JourneyLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn}
   end

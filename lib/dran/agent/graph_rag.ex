@@ -51,8 +51,8 @@ defmodule Dran.Agent.GraphRag do
 
   @doc "Start a graph_rag session."
   @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Agent.Session.t()}
-  def run(input, context_id, opts \\ []) do
-    Dran.Agent.Engine.run(__MODULE__, input, context_id, opts)
+  def run(input, workspace_id, opts \\ []) do
+    Dran.Agent.Engine.run(__MODULE__, input, workspace_id, opts)
   end
 
   @impl true
@@ -280,7 +280,7 @@ defmodule Dran.Agent.GraphRag do
       %{
         "role" => "user",
         "content" =>
-          "GraphRAG query: #{input}\nContext: #{session.context_id}\nSession: #{session.id}"
+          "GraphRAG query: #{input}\nContext: #{session.workspace_id}\nSession: #{session.id}"
       }
     ]
   end
@@ -317,7 +317,7 @@ defmodule Dran.Agent.GraphRag do
         if String.trim(query) == "" do
           {{:error, "query is required"}, state}
         else
-          case Brain.search(query, context_id: state.session.context_id, limit: limit) do
+          case Brain.search(query, workspace_id: state.session.workspace_id, limit: limit) do
             {:ok, results} ->
               seeds =
                 Enum.map(results, fn r ->
@@ -351,14 +351,14 @@ defmodule Dran.Agent.GraphRag do
         if slug == "" do
           {{:error, "slug is required"}, state}
         else
-          context_id = state.session.context_id
+          workspace_id = state.session.workspace_id
 
-          case Brain.get_page_by_slug(slug, context_id) do
+          case Brain.get_page_by_slug(slug, workspace_id) do
             nil ->
               {{:error, "page '#{slug}' not found"}, state}
 
             page ->
-              neighbors = collect_neighbors(page.id, context_id, depth, 0, %{})
+              neighbors = collect_neighbors(page.id, workspace_id, depth, 0, %{})
 
               expanded =
                 Enum.map(neighbors, fn %{page: p, direction: dir, relation_type: rt} ->
@@ -388,9 +388,9 @@ defmodule Dran.Agent.GraphRag do
     if slug == "" do
       {{:error, "slug is required"}, state}
     else
-      context_id = state.session.context_id
+      workspace_id = state.session.workspace_id
 
-      case Brain.get_page_by_slug(slug, context_id) do
+      case Brain.get_page_by_slug(slug, workspace_id) do
         nil ->
           {{:error, "page '#{slug}' not found"}, state}
 
@@ -419,9 +419,9 @@ defmodule Dran.Agent.GraphRag do
         if slug == "" do
           {{:error, "slug is required"}, state}
         else
-          context_id = state.session.context_id
+          workspace_id = state.session.workspace_id
 
-          case Brain.get_page_by_slug(slug, context_id) do
+          case Brain.get_page_by_slug(slug, workspace_id) do
             nil ->
               {{:error, "page '#{slug}' not found"}, state}
 
@@ -430,7 +430,7 @@ defmodule Dran.Agent.GraphRag do
 
               result =
                 if Code.ensure_loaded?(Dran.Graph.CommunitySummaries) do
-                  case CommunitySummaries.get_summary(context_id, community_id) do
+                  case CommunitySummaries.get_summary(workspace_id, community_id) do
                     {:ok, cs} ->
                       {:ok,
                        %{
@@ -466,11 +466,11 @@ defmodule Dran.Agent.GraphRag do
   end
 
   def execute_tool("list_communities", _args, %State{} = state) do
-    context_id = state.session.context_id
+    workspace_id = state.session.workspace_id
 
     result =
       if Code.ensure_loaded?(Dran.Graph.CommunitySummaries) do
-        summaries = CommunitySummaries.list_summaries(context_id)
+        summaries = CommunitySummaries.list_summaries(workspace_id)
 
         {:ok,
          Enum.map(summaries, fn cs ->
@@ -517,11 +517,11 @@ defmodule Dran.Agent.GraphRag do
         if String.trim(title) == "" or String.trim(body) == "" do
           {{:error, "title and body are required"}, state}
         else
-          context_id = state.session.context_id
+          workspace_id = state.session.workspace_id
           sources = state.sources || []
 
           page_attrs = %{
-            context_id: context_id,
+            workspace_id: workspace_id,
             title: title,
             body: body,
             page_type: "query",
@@ -537,7 +537,7 @@ defmodule Dran.Agent.GraphRag do
 
           case Brain.create_page(page_attrs) do
             {:ok, page} ->
-              create_source_relations(page, sources, context_id)
+              create_source_relations(page, sources, workspace_id)
 
               Phoenix.PubSub.broadcast(
                 Dran.PubSub,
@@ -612,7 +612,7 @@ defmodule Dran.Agent.GraphRag do
   # ── Helpers ────────────────────────────────────────────────────────────────
 
   @spec collect_neighbors(binary(), binary(), integer(), integer(), map()) :: list()
-  defp collect_neighbors(page_id, context_id, max_depth, current_depth, visited) do
+  defp collect_neighbors(page_id, workspace_id, max_depth, current_depth, visited) do
     if current_depth >= max_depth or Map.has_key?(visited, page_id) do
       []
     else
@@ -638,7 +638,7 @@ defmodule Dran.Agent.GraphRag do
       if current_depth + 1 < max_depth do
         deeper =
           Enum.flat_map(neighbors, fn %{page: p} ->
-            collect_neighbors(p.id, context_id, max_depth, current_depth + 1, visited)
+            collect_neighbors(p.id, workspace_id, max_depth, current_depth + 1, visited)
           end)
 
         neighbors ++ deeper
@@ -649,9 +649,9 @@ defmodule Dran.Agent.GraphRag do
   end
 
   @spec create_source_relations(map(), [String.t()], binary()) :: :ok
-  defp create_source_relations(query_page, source_slugs, context_id) do
+  defp create_source_relations(query_page, source_slugs, workspace_id) do
     Enum.each(source_slugs, fn slug ->
-      case Brain.get_page_by_slug(slug, context_id) do
+      case Brain.get_page_by_slug(slug, workspace_id) do
         nil ->
           :ok
 

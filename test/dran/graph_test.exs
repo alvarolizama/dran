@@ -48,14 +48,14 @@ defmodule Dran.GraphTest do
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
 
-    {:ok, ctx} = Brain.create_context(%{name: "Graph Test #{slug}", slug: slug})
+    {:ok, ctx} = Brain.create_workspace(%{name: "Graph Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_page(ctx, slug) do
     {:ok, page} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "note",
@@ -289,8 +289,8 @@ defmodule Dran.GraphTest do
       # depends on the default context slug being "personal" — same
       # assumption as sync_links_test.exs.
       ctx =
-        Brain.get_context_by_slug("personal") ||
-          elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+        Brain.get_workspace_by_slug("personal") ||
+          elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
       a = create_page(ctx, "g-sched-a-#{System.unique_integer([:positive])}")
       b = create_page(ctx, "g-sched-b-#{System.unique_integer([:positive])}")
@@ -307,8 +307,8 @@ defmodule Dran.GraphTest do
 
     test "refreshes both pagerank and community_id for the default context" do
       ctx =
-        Brain.get_context_by_slug("personal") ||
-          elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+        Brain.get_workspace_by_slug("personal") ||
+          elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
       uniq = System.unique_integer([:positive])
       a = create_page(ctx, "g-sched2-a-#{uniq}")

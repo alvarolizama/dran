@@ -27,8 +27,8 @@ defmodule DranWeb.DashboardLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
     >
       <div class="flex-1 overflow-y-auto">
         <div class="w-full p-6 space-y-8">
@@ -37,7 +37,7 @@ defmodule DranWeb.DashboardLive do
             <div class="space-y-1">
               <h1 class="text-title">{greeting()}</h1>
               <p class="text-caption">
-                {format_today()} · {if @context, do: @context.name, else: gettext("No context")} · {@stats[
+                {format_today()} · {if @workspace, do: @workspace.name, else: gettext("No context")} · {@stats[
                   :total_pages
                 ] ||
                   0} {gettext("pages")}
@@ -86,7 +86,7 @@ defmodule DranWeb.DashboardLive do
             </div>
             <div class="flex gap-2">
               <.link
-                :if={Brain.page_type_enabled?(@context, "todo")}
+                :if={Brain.page_type_enabled?(@workspace, "todo")}
                 navigate={~p"/panel/kanban"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
@@ -429,13 +429,13 @@ defmodule DranWeb.DashboardLive do
     # Only admin and editor users can access the dashboard.
     # Regular users (even with contexts) and wiki-only users get redirected
     # to the wiki. Sessions without a DB user row (test/legacy) also see it.
-    is_admin = socket.assigns[:is_admin] || false
+    is_owner = socket.assigns[:is_owner] || false
     is_editor = socket.assigns[:is_editor] || false
     current_user = socket.assigns[:current_user]
 
     db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
 
-    if not is_admin and not is_editor and db_user != nil do
+    if not is_owner and not is_editor and db_user != nil do
       {:noreply, push_navigate(socket, to: ~p"/")}
     else
       {:noreply, socket}

@@ -28,12 +28,12 @@ defmodule DranWeb.DashboardLiveTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     # Create some pages so the brain health cards have non-zero values
     {:ok, _page_a} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Dashboard Test Page A",
         slug: "dashboard-test-a",
         page_type: "note",
@@ -42,7 +42,7 @@ defmodule DranWeb.DashboardLiveTest do
 
     {:ok, _page_b} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Dashboard Test Page B",
         slug: "dashboard-test-b",
         page_type: "concept",
@@ -55,7 +55,7 @@ defmodule DranWeb.DashboardLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn}
   end

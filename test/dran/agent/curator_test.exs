@@ -16,20 +16,20 @@ defmodule Dran.Agent.CuratorTest do
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 
-  defp build_session(context_id) do
+  defp build_session(workspace_id) do
     struct(%Session{
       id: Ecto.UUID.generate(),
-      context_id: context_id,
+      workspace_id: workspace_id,
       agent_type: "curator",
       input: "test curator run",
       status: "running"
     })
   end
 
-  defp build_state(context_id, attrs \\ []) do
+  defp build_state(workspace_id, attrs \\ []) do
     struct(
       %Curator.State{
-        session: build_session(context_id),
+        session: build_session(workspace_id),
         pages_created: 0,
         opts: [],
         duplicate_pairs: [],
@@ -39,9 +39,9 @@ defmodule Dran.Agent.CuratorTest do
     )
   end
 
-  defp insert_page!(context_id, attrs) do
+  defp insert_page!(workspace_id, attrs) do
     %Page{
-      context_id: context_id,
+      workspace_id: workspace_id,
       title: attrs[:title] || "Test page",
       slug: attrs[:slug] || "test-#{:rand.uniform(999_999)}",
       body: attrs[:body] || "test body",
@@ -63,8 +63,8 @@ defmodule Dran.Agent.CuratorTest do
   defp far_vector, do: [1.0] ++ List.duplicate(0.0, 1023)
 
   defp ensure_context! do
-    Brain.get_context_by_slug("personal") ||
-      elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+    Brain.get_workspace_by_slug("personal") ||
+      elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
   end
 
   # ── Unit test: find_duplicates ────────────────────────────────────────────

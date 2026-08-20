@@ -29,6 +29,14 @@ defmodule Dran.DataCase do
 
   setup tags do
     Dran.DataCase.setup_sandbox(tags)
+
+    # Many tests assume the default "personal" workspace exists (created by
+    # seeds in dev, absent in test). Create it by default unless a test opts
+    # out with `@tag :no_default_workspace`.
+    unless tags[:no_default_workspace] do
+      Dran.DataCase.ensure_workspace!()
+    end
+
     :ok
   end
 
@@ -38,6 +46,23 @@ defmodule Dran.DataCase do
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Dran.Repo, shared: not tags[:async])
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+  end
+
+  @doc """
+  Ensures the default "personal" workspace exists, creating it if needed.
+
+  Many tests assume the default workspace is present (it's normally created
+  by seeds in dev, but not in the test DB). Returns the workspace struct.
+  """
+  def ensure_workspace!(slug \\ "personal", name \\ "Personal") do
+    Dran.Brain.get_workspace_by_slug(slug) ||
+      case Dran.Brain.create_workspace(%{name: name, slug: slug}) do
+        {:ok, ws} ->
+          ws
+
+        {:error, changeset} ->
+          raise "Could not create workspace #{slug}: #{inspect(changeset.errors)}"
+      end
   end
 
   @doc """

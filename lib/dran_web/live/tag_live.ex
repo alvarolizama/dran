@@ -23,7 +23,7 @@ defmodule DranWeb.TagLive do
   def handle_params(%{"tag" => tag}, _url, socket) do
     pages =
       if socket.assigns.context do
-        Brain.list_pages(context_id: socket.assigns.context.id, tag: tag, limit: 200)
+        Brain.list_pages(workspace_id: socket.assigns.context.id, tag: tag, limit: 200)
       else
         []
       end
@@ -55,8 +55,8 @@ defmodule DranWeb.TagLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
     >
       <div class="p-6">
         <div class="flex items-center gap-2 mb-1">

@@ -55,11 +55,11 @@ defmodule Dran.EmbeddingsTest do
         Req.Test.json(conn, embeddings_response(5))
       end)
 
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       page =
         Dran.Brain.Page.create_changeset(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Elixir",
           slug: "elixir",
           body: "Functional language",
@@ -118,11 +118,13 @@ defmodule Dran.EmbeddingsTest do
       # the shared "personal" context (it can carry stale rows committed
       # outside the sandbox).
       uniq = System.unique_integer([:positive])
-      {:ok, context} = Brain.create_context(%{name: "Backfill #{uniq}", slug: "backfill-#{uniq}"})
+
+      {:ok, context} =
+        Brain.create_workspace(%{name: "Backfill #{uniq}", slug: "backfill-#{uniq}"})
 
       p1 =
         Dran.Brain.Page.create_changeset(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Page One",
           slug: "page-one",
           body: "body one",
@@ -134,7 +136,7 @@ defmodule Dran.EmbeddingsTest do
 
       p2 =
         Dran.Brain.Page.create_changeset(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Page Two",
           slug: "page-two",
           body: "body two",

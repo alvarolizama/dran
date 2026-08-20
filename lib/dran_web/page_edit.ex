@@ -11,7 +11,7 @@ defmodule DranWeb.PageEdit do
   LiveViews using these handlers must have in `socket.assigns`:
 
   - `:page` — the `%Dran.Brain.Page{}` being edited (for edit mode)
-  - `:context` — the `%Dran.Brain.Context{}` (or nil)
+  - `:workspace` — the `%Dran.Brain.Workspace{}` (or nil)
   - `:page_type` — the page type string (e.g. `"note"`)
 
   ## Events handled
@@ -91,7 +91,7 @@ defmodule DranWeb.PageEdit do
     page = socket.assigns[:page] || %Page{}
 
     changeset =
-      Brain.change_page(page, Map.put_new(page_params, "context_id", context_id(socket)))
+      Brain.change_page(page, Map.put_new(page_params, "workspace_id", workspace_id(socket)))
 
     socket = assign(socket, form: to_form(changeset, as: :page))
 
@@ -128,9 +128,9 @@ defmodule DranWeb.PageEdit do
         %{"page" => %{"slug" => new_slug}},
         %{assigns: %{page: %Page{} = page}} = socket
       ) do
-    context_id = context_id(socket)
+    workspace_id = workspace_id(socket)
 
-    if is_nil(context_id) do
+    if is_nil(workspace_id) do
       {:noreply, put_flash(socket, :error, gettext("No context available for slug rename."))}
     else
       new_slug = String.trim(new_slug)
@@ -142,7 +142,7 @@ defmodule DranWeb.PageEdit do
 
       if new_slug != "" and new_slug != old_slug do
         # Ensure uniqueness
-        final_slug = ensure_unique_slug(new_slug, context_id, page.slug, 0)
+        final_slug = ensure_unique_slug(new_slug, workspace_id, page.slug, 0)
 
         case Brain.update_page(page, %{slug: final_slug}) do
           {:ok, updated_page} ->
@@ -167,16 +167,16 @@ defmodule DranWeb.PageEdit do
   def handle_event("save_page", %{"page" => page_params}, socket) do
     page = socket.assigns[:page]
     page_type = socket.assigns.page_type
-    context_id = context_id(socket)
+    workspace_id = workspace_id(socket)
 
     page_params =
       page_params
-      |> Map.put_new("context_id", context_id)
+      |> Map.put_new("workspace_id", workspace_id)
       |> Map.put_new("page_type", page_type)
-      |> ensure_slug(context_id, page)
+      |> ensure_slug(workspace_id, page)
 
     if page do
-      update_page_with_relink(socket, page, page_params, context_id)
+      update_page_with_relink(socket, page, page_params, workspace_id)
     else
       create_page(socket, page_params)
     end
@@ -194,7 +194,7 @@ defmodule DranWeb.PageEdit do
         {:ok, updated_page} ->
           rendered_body =
             DranWeb.PageComponents.render_markdown(updated_page.body,
-              context_id: updated_page.context_id,
+              workspace_id: updated_page.workspace_id,
               inline_links: Map.get(updated_page.meta || %{}, "inline_links", [])
             )
 
@@ -231,9 +231,9 @@ defmodule DranWeb.PageEdit do
 
   def handle_event("archive_page", %{"slug" => slug}, socket) do
     # List view — find page by slug and archive it
-    context_id = context_id(socket)
+    workspace_id = workspace_id(socket)
 
-    case Brain.get_page_by_slug(slug, context_id) do
+    case Brain.get_page_by_slug(slug, workspace_id) do
       nil ->
         {:noreply, put_flash(socket, :error, gettext("Page not found."))}
 
@@ -277,9 +277,9 @@ defmodule DranWeb.PageEdit do
 
   def handle_event("unarchive_page", %{"slug" => slug}, socket) do
     # List view — find page by slug and unarchive it
-    context_id = context_id(socket)
+    workspace_id = workspace_id(socket)
 
-    case Brain.get_page_by_slug(slug, context_id) do
+    case Brain.get_page_by_slug(slug, workspace_id) do
       nil ->
         {:noreply, put_flash(socket, :error, gettext("Page not found."))}
 
@@ -355,7 +355,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("upload_complete", _params, %{assigns: %{upload: _upload}} = socket) do
-    context_id = context_id(socket)
+    workspace_id = workspace_id(socket)
 
     consumed =
       Upload.consume_uploaded_entries(socket, :file, fn _meta, entry ->
@@ -367,7 +367,7 @@ defmodule DranWeb.PageEdit do
             File.read!(path)
           end)
 
-        store_file_and_create_page(socket, context_id, binary, filename, client_type)
+        store_file_and_create_page(socket, workspace_id, binary, filename, client_type)
       end)
       |> List.wrap()
       |> Enum.reject(&is_nil/1)
@@ -410,7 +410,7 @@ defmodule DranWeb.PageEdit do
     end
   end
 
-  defp update_page_with_relink(socket, %Page{} = page, page_params, _context_id) do
+  defp update_page_with_relink(socket, %Page{} = page, page_params, _workspace_id) do
     case Brain.update_page(page, page_params) do
       {:ok, updated_page} ->
         socket =
@@ -463,32 +463,32 @@ defmodule DranWeb.PageEdit do
     end
   end
 
-  defp context_id(socket) do
-    case socket.assigns[:context] do
+  defp workspace_id(socket) do
+    case socket.assigns[:workspace] do
       %{id: id} -> id
       _ -> nil
     end
   end
 
-  defp ensure_slug(params, context_id, nil) do
+  defp ensure_slug(params, workspace_id, nil) do
     if Map.get(params, "slug") in [nil, ""] do
       title = Map.get(params, "title", "")
-      slug = unique_slug(title, context_id, Map.get(params, "page_type", "page"))
+      slug = unique_slug(title, workspace_id, Map.get(params, "page_type", "page"))
       Map.put(params, "slug", slug)
     else
       params
     end
   end
 
-  defp ensure_slug(params, _context_id, %Page{} = _page), do: params
+  defp ensure_slug(params, _workspace_id, %Page{} = _page), do: params
 
-  defp unique_slug(title, context_id, fallback_type) do
+  defp unique_slug(title, workspace_id, fallback_type) do
     base = slugify(title)
     base = if base == "", do: fallback_type, else: base
-    ensure_unique_slug(base, context_id, 0)
+    ensure_unique_slug(base, workspace_id, 0)
   end
 
-  defp ensure_unique_slug(base, context_id, attempt) do
+  defp ensure_unique_slug(base, workspace_id, attempt) do
     slug =
       if attempt == 0 do
         base
@@ -497,14 +497,14 @@ defmodule DranWeb.PageEdit do
         "#{base}-#{suffix}"
       end
 
-    if Brain.get_page_by_slug(slug, context_id) do
-      ensure_unique_slug(base, context_id, attempt + 1)
+    if Brain.get_page_by_slug(slug, workspace_id) do
+      ensure_unique_slug(base, workspace_id, attempt + 1)
     else
       slug
     end
   end
 
-  defp ensure_unique_slug(base, context_id, original_slug, attempt) do
+  defp ensure_unique_slug(base, workspace_id, original_slug, attempt) do
     slug =
       if attempt == 0 do
         base
@@ -514,10 +514,10 @@ defmodule DranWeb.PageEdit do
       end
 
     # The original slug belongs to the page being renamed, so it's valid
-    if slug == original_slug or is_nil(Brain.get_page_by_slug(slug, context_id)) do
+    if slug == original_slug or is_nil(Brain.get_page_by_slug(slug, workspace_id)) do
       slug
     else
-      ensure_unique_slug(base, context_id, original_slug, attempt + 1)
+      ensure_unique_slug(base, workspace_id, original_slug, attempt + 1)
     end
   end
 
@@ -532,19 +532,19 @@ defmodule DranWeb.PageEdit do
     "/#{DranWeb.PageTypes.path(type)}/#{slug}"
   end
 
-  defp store_file_and_create_page(socket, context_id, binary, filename, client_type) do
+  defp store_file_and_create_page(socket, workspace_id, binary, filename, client_type) do
     max_size = Uploads.max_size()
 
     if byte_size(binary) > max_size do
       put_flash(socket, :error, gettext("File too large (max %{max} bytes).", max: max_size))
       nil
     else
-      stored = Uploads.store(context_id, binary, filename, client_type)
+      stored = Uploads.store(workspace_id, binary, filename, client_type)
 
-      slug = unique_slug(filename, context_id, "reference")
+      slug = unique_slug(filename, workspace_id, "reference")
 
       attrs = %{
-        context_id: context_id,
+        workspace_id: workspace_id,
         title: filename,
         slug: slug,
         page_type: "reference",
@@ -610,7 +610,7 @@ defmodule DranWeb.PageEdit do
   defp ensure_tag_suggestions(socket) do
     case socket.assigns[:tag_suggestions] do
       nil ->
-        case context_id(socket) do
+        case workspace_id(socket) do
           nil -> assign(socket, tag_suggestions: [])
           id -> assign(socket, tag_suggestions: Brain.list_tags(id))
         end

@@ -46,8 +46,8 @@ defmodule DranWeb.KanbanLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav="kanban"
     >
       <div class="flex h-screen flex-col overflow-hidden">
@@ -221,7 +221,7 @@ defmodule DranWeb.KanbanLive do
 
                 <%!-- Badges de vínculos (maximo 2 visibles) — filtrados por disabled_page_types --%>
                 <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                  <%= for {badge, _idx} <- visible_badges(todo, @context) do %>
+                  <%= for {badge, _idx} <- visible_badges(todo, @workspace) do %>
                     <span
                       class={"px-1.5 py-0.5 text-[11px] rounded cursor-pointer " <> Map.get(@badge_styles, badge.type, "bg-base-300")}
                       title={badge.slug}
@@ -234,11 +234,11 @@ defmodule DranWeb.KanbanLive do
                     </span>
                   <% end %>
                   <span
-                    :if={extra_badge_count(todo, @context) > 0}
+                    :if={extra_badge_count(todo, @workspace) > 0}
                     class="px-1.5 py-0.5 text-[11px] rounded bg-base-300 text-base-content/60"
-                    title={extra_badge_titles(todo, @context)}
+                    title={extra_badge_titles(todo, @workspace)}
                   >
-                    +{extra_badge_count(todo, @context)}
+                    +{extra_badge_count(todo, @workspace)}
                   </span>
                 </div>
 
@@ -367,15 +367,15 @@ defmodule DranWeb.KanbanLive do
       # unusable anyway; the filter UI exists precisely to narrow down.
       all_todos =
         Brain.list_pages(
-          context_id: context.id,
+          workspace_id: context.id,
           type: "todo",
           include_body: false,
           limit: 500
         )
 
-      project_slugs = Brain.list_pages(context_id: context.id, type: "project", limit: 200)
-      goal_slugs = Brain.list_pages(context_id: context.id, type: "goal", limit: 200)
-      plan_slugs = Brain.list_pages(context_id: context.id, type: "plan", limit: 200)
+      project_slugs = Brain.list_pages(workspace_id: context.id, type: "project", limit: 200)
+      goal_slugs = Brain.list_pages(workspace_id: context.id, type: "goal", limit: 200)
+      plan_slugs = Brain.list_pages(workspace_id: context.id, type: "plan", limit: 200)
 
       filter_project = Map.get(params, "project", "all")
       filter_goal = Map.get(params, "goal", "all")
@@ -487,7 +487,7 @@ defmodule DranWeb.KanbanLive do
           |> maybe_put("due_date", due_date)
 
         attrs = %{
-          "context_id" => context.id,
+          "workspace_id" => context.id,
           "title" => title,
           "slug" => Dran.Slug.generate(title, context.id, "todo"),
           "page_type" => "todo",
@@ -498,7 +498,7 @@ defmodule DranWeb.KanbanLive do
           {:ok, _page} ->
             all_todos =
               Brain.list_pages(
-                context_id: context.id,
+                workspace_id: context.id,
                 type: "todo",
                 include_body: false,
                 limit: 500
@@ -561,7 +561,7 @@ defmodule DranWeb.KanbanLive do
             {:ok, _updated} ->
               all_todos =
                 Brain.list_pages(
-                  context_id: context.id,
+                  workspace_id: context.id,
                   type: "todo",
                   include_body: false,
                   limit: 500

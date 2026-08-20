@@ -29,14 +29,14 @@ defmodule Dran.PropsMaterializerTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_context(%{name: "Props Test #{slug}", slug: slug})
+    {:ok, ctx} = Brain.create_workspace(%{name: "Props Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_person(ctx, slug, props) do
     {:ok, page} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "entity",
@@ -114,7 +114,7 @@ defmodule Dran.PropsMaterializerTest do
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "plain",
           slug: "plain",
           page_type: "note",
@@ -130,7 +130,7 @@ defmodule Dran.PropsMaterializerTest do
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "nilmeta",
           slug: "nilmeta",
           page_type: "note",
@@ -145,7 +145,7 @@ defmodule Dran.PropsMaterializerTest do
 
       {:ok, _existing} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Sales",
           slug: "sales",
           page_type: "entity",
@@ -157,7 +157,7 @@ defmodule Dran.PropsMaterializerTest do
 
       # Only ONE sales page
       entities =
-        Brain.list_pages(context_id: ctx.id, type: "entity")
+        Brain.list_pages(workspace_id: ctx.id, type: "entity")
         |> Enum.filter(&(&1.slug == "sales"))
 
       assert length(entities) == 1
@@ -168,7 +168,7 @@ defmodule Dran.PropsMaterializerTest do
 
       {:ok, _note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Sales",
           slug: "sales",
           page_type: "note",
@@ -249,7 +249,7 @@ defmodule Dran.PropsMaterializerTest do
     end
 
     test "page without context materializes nothing" do
-      page = %Brain.Page{context_id: nil, meta: %{"props" => %{"role" => "sales"}}}
+      page = %Brain.Page{workspace_id: nil, meta: %{"props" => %{"role" => "sales"}}}
       assert {:ok, 0} = PropsMaterializer.materialize(page)
     end
 
@@ -258,7 +258,7 @@ defmodule Dran.PropsMaterializerTest do
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "atom-props",
           slug: "atom-props",
           page_type: "entity",

@@ -53,12 +53,12 @@ defmodule Dran.Brain.SemanticSearchTest do
     end
 
     test "returns only pages that have embeddings" do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       # Create directly so Brain.create_page does not auto-generate an embedding.
       _without =
         %Dran.Brain.Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Without embedding",
           slug: "without-embedding",
           body: "no vector",
@@ -70,7 +70,7 @@ defmodule Dran.Brain.SemanticSearchTest do
 
       _with_vec =
         %Dran.Brain.Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "With embedding",
           slug: "with-embedding",
           body: "has vector",
@@ -80,7 +80,7 @@ defmodule Dran.Brain.SemanticSearchTest do
         }
         |> Dran.Repo.insert!()
 
-      {:ok, results} = Brain.semantic_search("anything", context_id: context.id, limit: 10)
+      {:ok, results} = Brain.semantic_search("anything", workspace_id: context.id, limit: 10)
 
       assert length(results) == 1
       assert hd(results).slug == "with-embedding"
@@ -91,7 +91,7 @@ defmodule Dran.Brain.SemanticSearchTest do
       Application.put_env(:dran, :inference, nil)
 
       assert {:error, :not_configured} =
-               Brain.semantic_search("x", context_id: Ecto.UUID.generate())
+               Brain.semantic_search("x", workspace_id: Ecto.UUID.generate())
     end
   end
 
@@ -116,11 +116,11 @@ defmodule Dran.Brain.SemanticSearchTest do
     end
 
     test "merges fts and semantic results" do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       page =
         %Dran.Brain.Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Elixir",
           slug: "elixir",
           body: "A functional language",
@@ -130,7 +130,7 @@ defmodule Dran.Brain.SemanticSearchTest do
         }
         |> Dran.Repo.insert!()
 
-      {:ok, results} = Brain.hybrid_search("functional language", context_id: context.id)
+      {:ok, results} = Brain.hybrid_search("functional language", workspace_id: context.id)
 
       assert length(results) >= 1
       assert hd(results).slug == page.slug
@@ -158,7 +158,7 @@ defmodule Dran.Brain.SemanticSearchTest do
     end
 
     test "boosts pages with higher pagerank meta to the top" do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       # Two pages with identical body so FTS ts_rank ties. Both get the same
       # embedding (same mocked vector) so semantic distance ties. The only
@@ -167,7 +167,7 @@ defmodule Dran.Brain.SemanticSearchTest do
 
       _low =
         %Dran.Brain.Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Low rank",
           slug: "low-rank",
           body: shared_body,
@@ -180,7 +180,7 @@ defmodule Dran.Brain.SemanticSearchTest do
 
       _high =
         %Dran.Brain.Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "High rank",
           slug: "high-rank",
           body: shared_body,
@@ -191,20 +191,20 @@ defmodule Dran.Brain.SemanticSearchTest do
         }
         |> Dran.Repo.insert!()
 
-      {:ok, results} = Brain.hybrid_search("elixir deployment guide", context_id: context.id)
+      {:ok, results} = Brain.hybrid_search("elixir deployment guide", workspace_id: context.id)
 
       assert length(results) >= 2
       assert hd(results).slug == "high-rank"
     end
 
     test "pages without pagerank meta are unaffected (boost factor = 1.0)" do
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       shared_body = "rust ownership borrow checker move semantics"
 
       _no_pr =
         %Dran.Brain.Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "No pagerank",
           slug: "no-pagerank",
           body: shared_body,
@@ -217,7 +217,7 @@ defmodule Dran.Brain.SemanticSearchTest do
 
       _with_pr =
         %Dran.Brain.Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "With pagerank",
           slug: "with-pagerank",
           body: shared_body,
@@ -228,7 +228,7 @@ defmodule Dran.Brain.SemanticSearchTest do
         }
         |> Dran.Repo.insert!()
 
-      {:ok, results} = Brain.hybrid_search("rust ownership borrow", context_id: context.id)
+      {:ok, results} = Brain.hybrid_search("rust ownership borrow", workspace_id: context.id)
 
       # The page WITH pagerank must rank strictly above the page without it,
       # because boost * 0.0 = 0 (no change) for the empty-meta page but
@@ -253,11 +253,11 @@ defmodule Dran.Brain.SemanticSearchTest do
         })
       end)
 
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
 
       {:ok, page} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Auto embedded",
           slug: "auto-embedded",
           body: "Some content",

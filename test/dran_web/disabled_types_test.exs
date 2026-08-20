@@ -1,10 +1,10 @@
 defmodule DranWeb.DisabledTypesTest do
   use ExUnit.Case, async: true
 
-  alias Dran.Brain.Context
+  alias Dran.Brain.Workspace
   alias DranWeb.DisabledTypes
 
-  defp ctx(disabled), do: %Context{disabled_page_types: disabled}
+  defp ctx(disabled), do: %Workspace{disabled_page_types: disabled}
 
   @tabs [
     {"goals", "Goals"},

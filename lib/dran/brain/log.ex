@@ -10,13 +10,13 @@ defmodule Dran.Brain.Log do
   @primary_key {:id, :binary_id, read_after_writes: true}
   @foreign_key_type :binary_id
 
-  @derive {Jason.Encoder, only: [:id, :context_id, :action, :subject, :details, :inserted_at]}
+  @derive {Jason.Encoder, only: [:id, :workspace_id, :action, :subject, :details, :inserted_at]}
   schema "brain_log" do
     field :action, :string
     field :subject, :string
     field :details, :map, default: %{}
 
-    belongs_to :context, Dran.Brain.Context
+    belongs_to :workspace, Dran.Brain.Workspace
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -24,7 +24,7 @@ defmodule Dran.Brain.Log do
   @doc "Changeset for creating a log entry"
   def changeset(log, attrs) do
     log
-    |> cast(attrs, [:context_id, :action, :subject, :details])
+    |> cast(attrs, [:workspace_id, :action, :subject, :details])
     |> validate_required([:action])
   end
 end

@@ -46,7 +46,7 @@ defmodule DranWeb.SearchLive do
       q when is_binary(q) and q != "" ->
         {:ok, results} =
           Brain.search(q,
-            context_id: socket.assigns.context.id,
+            workspace_id: socket.assigns.context.id,
             limit: 20,
             strategy: String.to_atom(socket.assigns.search_mode)
           )
@@ -73,7 +73,7 @@ defmodule DranWeb.SearchLive do
         q when is_binary(q) and q != "" ->
           {:ok, r} =
             Brain.search(q,
-              context_id: socket.assigns.context.id,
+              workspace_id: socket.assigns.context.id,
               limit: 20,
               strategy: String.to_atom(socket.assigns.search_mode)
             )
@@ -107,8 +107,8 @@ defmodule DranWeb.SearchLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div class="p-6 overflow-y-auto w-full">

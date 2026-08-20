@@ -7,7 +7,7 @@ defmodule DranWeb.API.LogController do
   def index(conn, params) do
     opts =
       []
-      |> maybe_put(:context_id, resolve_context_id(params["context"]))
+      |> maybe_put(:workspace_id, resolve_workspace_id(params["workspace"]))
       |> maybe_put(:action, params["action"])
       |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
 
@@ -15,10 +15,10 @@ defmodule DranWeb.API.LogController do
     json(conn, %{data: logs})
   end
 
-  defp resolve_context_id(nil), do: nil
+  defp resolve_workspace_id(nil), do: nil
 
-  defp resolve_context_id(slug) do
-    case Brain.get_context_by_slug(slug) do
+  defp resolve_workspace_id(slug) do
+    case Brain.get_workspace_by_slug(slug) do
       nil -> nil
       context -> context.id
     end

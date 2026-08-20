@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Context do
+defmodule Dran.Brain.Workspace do
   @moduledoc """
   A context is an isolated silo of knowledge (personal, work, projects).
   All pages and relations belong to a context.
@@ -16,16 +16,12 @@ defmodule Dran.Brain.Context do
              :name,
              :slug,
              :disabled_page_types,
-             :wiki_enabled,
-             :wiki_description,
              :inserted_at
            ]}
-  schema "contexts" do
+  schema "workspaces" do
     field :name, :string
     field :slug, :string
     field :disabled_page_types, {:array, :string}, default: []
-    field :wiki_enabled, :boolean, default: false
-    field :wiki_description, :string
     timestamps(type: :utc_datetime, updated_at: false)
   end
 
@@ -43,7 +39,7 @@ defmodule Dran.Brain.Context do
   @doc "Changeset for updating settings like disabled page types or wiki config"
   def settings_changeset(context, attrs) do
     context
-    |> cast(attrs, [:disabled_page_types, :wiki_enabled, :wiki_description])
+    |> cast(attrs, [:disabled_page_types])
     |> validate_subset(:disabled_page_types, Dran.Brain.Page.all_types())
   end
 end

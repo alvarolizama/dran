@@ -21,11 +21,11 @@ defmodule DranWeb.TodoLiveTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     {:ok, todo} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Kanban Realtime Test Todo",
         body: "A todo for the list realtime test",
         page_type: "todo",
@@ -36,7 +36,7 @@ defmodule DranWeb.TodoLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, todo: todo, context: context}
   end
@@ -79,7 +79,7 @@ defmodule DranWeb.TodoLiveTest do
 
     {:ok, agent_todo} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Agent Created Todo Live",
         body: "Created while the list was open",
         page_type: "todo",
@@ -96,7 +96,7 @@ defmodule DranWeb.TodoLiveTest do
     |> element(~s(button[phx-value-slug="#{todo.slug}"][phx-value-status="today"]))
     |> render_click()
 
-    assert Brain.get_page_by_slug(todo.slug, todo.context_id).meta["kanban_status"] == "today"
+    assert Brain.get_page_by_slug(todo.slug, todo.workspace_id).meta["kanban_status"] == "today"
   end
 
   test "archive button on a row archives the todo and removes it from the list", %{

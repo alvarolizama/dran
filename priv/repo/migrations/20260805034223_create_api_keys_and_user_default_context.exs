@@ -1,4 +1,4 @@
-defmodule Dran.Repo.Migrations.CreateApiKeysAndUserDefaultContext do
+defmodule Dran.Repo.Migrations.CreateApiKeysAndUserDefaultWorkspace do
   use Ecto.Migration
 
   def change do
@@ -9,17 +9,17 @@ defmodule Dran.Repo.Migrations.CreateApiKeysAndUserDefaultContext do
       add :token_prefix, :string, null: false
       add :revoked_at, :utc_datetime
 
-      add :context_id, references(:contexts, type: :binary_id, on_delete: :delete_all),
+      add :workspace_id, references(:workspaces, type: :binary_id, on_delete: :delete_all),
         null: false
 
       timestamps(type: :utc_datetime, updated_at: false)
     end
 
     create unique_index(:api_keys, [:token_hash])
-    create index(:api_keys, [:context_id])
+    create index(:api_keys, [:workspace_id])
 
     alter table(:users) do
-      add :default_context_slug, :string
+      add :default_workspace_slug, :string
     end
   end
 end

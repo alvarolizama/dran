@@ -26,13 +26,13 @@ defmodule DranWeb.GraphLiveTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     # Pages of every relevant type so the global graph has a mixed dataset
     # (knowledge layer + operational layer) to filter by.
     {:ok, note} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Alpha Note",
         body: "First note for graph test",
         page_type: "note"
@@ -40,23 +40,23 @@ defmodule DranWeb.GraphLiveTest do
 
     {:ok, _concept} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Beta Concept",
         body: "Second page for graph test",
         page_type: "concept"
       })
 
     {:ok, goal} =
-      Brain.create_page(%{context_id: context.id, title: "Test Goal", page_type: "goal"})
+      Brain.create_page(%{workspace_id: context.id, title: "Test Goal", page_type: "goal"})
 
     {:ok, plan} =
-      Brain.create_page(%{context_id: context.id, title: "Test Plan", page_type: "plan"})
+      Brain.create_page(%{workspace_id: context.id, title: "Test Plan", page_type: "plan"})
 
     {:ok, todo} =
-      Brain.create_page(%{context_id: context.id, title: "Test Todo", page_type: "todo"})
+      Brain.create_page(%{workspace_id: context.id, title: "Test Todo", page_type: "todo"})
 
     {:ok, project} =
-      Brain.create_page(%{context_id: context.id, title: "Test Project", page_type: "project"})
+      Brain.create_page(%{workspace_id: context.id, title: "Test Project", page_type: "project"})
 
     # Relations: operational layer hangs off strategic hubs, knowledge
     # touches goals — the shape the filter must preserve.
@@ -77,7 +77,7 @@ defmodule DranWeb.GraphLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, todo: todo, goal: goal}
   end
@@ -149,7 +149,7 @@ defmodule DranWeb.GraphLiveTest do
     test "graph_loaded pushes only counters, not nodes/edges", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/panel/graph")
 
-      context = Brain.get_context_by_slug("personal")
+      context = Brain.get_workspace_by_slug("personal")
       push_graph_loaded(view, context)
 
       # After the fetch the sidebar totals reflect the counters, and the

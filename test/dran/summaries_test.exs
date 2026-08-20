@@ -61,7 +61,7 @@ defmodule Dran.SummariesTest do
   defp build_page(title, body) do
     %Page{
       id: Ecto.UUID.generate(),
-      context_id: Ecto.UUID.generate(),
+      workspace_id: Ecto.UUID.generate(),
       title: title,
       slug: title |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") |> String.trim("-"),
       body: body,
@@ -73,7 +73,7 @@ defmodule Dran.SummariesTest do
 
   describe "candidate_pages/1" do
     test "returns semantically closest pages, not just most recent" do
-      context = Dran.Brain.get_context_by_slug("personal")
+      context = Dran.Brain.get_workspace_by_slug("personal")
 
       # The target page has an embedding close to "relevant" pages below.
       # We use synthetic 1024-dim vectors: target = [1.0, 0.0, ...],
@@ -90,7 +90,7 @@ defmodule Dran.SummariesTest do
 
       for i <- 1..51 do
         %Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Noise #{i}",
           slug: "noise-#{i}",
           body: "noise body",
@@ -108,7 +108,7 @@ defmodule Dran.SummariesTest do
       relevant_slugs =
         for i <- 1..3 do
           %Page{
-            context_id: context.id,
+            workspace_id: context.id,
             title: "Relevant #{i}",
             slug: "relevant-#{i}",
             body: "relevant body",
@@ -124,7 +124,7 @@ defmodule Dran.SummariesTest do
 
       target =
         %Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Target",
           slug: "target",
           body: "target body",
@@ -146,11 +146,11 @@ defmodule Dran.SummariesTest do
     end
 
     test "falls back to list_pages when page has no embedding" do
-      context = Dran.Brain.get_context_by_slug("personal")
+      context = Dran.Brain.get_workspace_by_slug("personal")
 
       for i <- 1..3 do
         %Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Page #{i}",
           slug: "page-#{i}",
           body: "body",
@@ -163,7 +163,7 @@ defmodule Dran.SummariesTest do
 
       target =
         %Page{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Target no vec",
           slug: "target-no-vec",
           body: "body",

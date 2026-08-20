@@ -11,11 +11,11 @@ defmodule DranWeb.LoginLive do
 
   @impl true
   def mount(_params, session, socket) do
-    context_slug = session["context_slug"] || Auth.default_context_slug()
+    workspace_slug = session["workspace_slug"] || Auth.default_workspace_slug()
 
     {:ok,
      assign(socket,
-       context_slug: context_slug,
+       workspace_slug: workspace_slug,
        error: nil,
        page_title: "Login"
      )}

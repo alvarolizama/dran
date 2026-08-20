@@ -3,7 +3,7 @@ defmodule DranWeb.API.ExportController do
 
   alias Dran.Exporter
 
-  @doc "GET /api/contexts/:slug/export — export context as JSON"
+  @doc "GET /api/workspaces/:slug/export — export context as JSON"
   def show(conn, %{"slug" => slug}) do
     case Exporter.export_context(slug) do
       {:ok, data} ->
@@ -17,20 +17,20 @@ defmodule DranWeb.API.ExportController do
   end
 
   @doc """
-  GET /api/export/:context/full — full export of a context by id.
+  GET /api/export/:workspace/full — full export of a context by id.
 
   Returns JSON with a `content-disposition: attachment` header so the
   response can be saved as a file. The body contains context, pages,
   relations, and page versions.
   """
-  def full(conn, %{"context" => context_id}) do
+  def full(conn, %{"workspace" => workspace_id}) do
     # SEC-009: validate the user has access to this context before exporting
     user = conn.assigns[:user]
 
-    if user && (user.is_admin or user_has_context_access?(user, context_id)) do
-      case Exporter.full_export(context_id) do
+    if user && (user.is_owner or user_has_context_access?(user, workspace_id)) do
+      case Exporter.full_export(workspace_id) do
         {:ok, data} ->
-          filename = "dran-export-#{context_id}.json"
+          filename = "dran-export-#{workspace_id}.json"
 
           conn
           |> put_resp_header("content-disposition", "attachment; filename=\"#{filename}\"")
@@ -48,10 +48,10 @@ defmodule DranWeb.API.ExportController do
     end
   end
 
-  defp user_has_context_access?(%{contexts: :all}, _context_id), do: true
+  defp user_has_context_access?(%{contexts: :all}, _workspace_id), do: true
 
-  defp user_has_context_access?(%{contexts: contexts}, context_id) when is_list(contexts) do
-    Enum.any?(contexts, &(&1.id == context_id))
+  defp user_has_context_access?(%{contexts: contexts}, workspace_id) when is_list(contexts) do
+    Enum.any?(contexts, &(&1.id == workspace_id))
   end
 
   defp user_has_context_access?(_, _), do: false

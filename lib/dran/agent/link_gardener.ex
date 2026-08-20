@@ -45,8 +45,8 @@ defmodule Dran.Agent.LinkGardener do
   Start a link gardener session for a topic/context.
   """
   @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Agent.Session.t()}
-  def run(topic, context_id, opts \\ []) do
-    Dran.Agent.Engine.run(__MODULE__, topic, context_id, opts)
+  def run(topic, workspace_id, opts \\ []) do
+    Dran.Agent.Engine.run(__MODULE__, topic, workspace_id, opts)
   end
 
   @impl true
@@ -255,13 +255,13 @@ defmodule Dran.Agent.LinkGardener do
 
   @impl true
   def execute_tool("transitive_candidates", _args, %State{} = state) do
-    candidates = Brain.transitive_part_of_candidates(state.session.context_id)
+    candidates = Brain.transitive_part_of_candidates(state.session.workspace_id)
     {{:ok, candidates}, state}
   end
 
   @impl true
   def execute_tool("list_orphans", _args, %State{} = state) do
-    orphans = Brain.orphan_pages(state.session.context_id)
+    orphans = Brain.orphan_pages(state.session.workspace_id)
     {{:ok, orphans}, state}
   end
 
@@ -271,7 +271,7 @@ defmodule Dran.Agent.LinkGardener do
     if slug == "" do
       {{:error, "empty slug"}, state}
     else
-      case Brain.get_page_by_slug(slug, state.session.context_id) do
+      case Brain.get_page_by_slug(slug, state.session.workspace_id) do
         nil ->
           {{:error, "page '#{slug}' not found"}, state}
 
@@ -290,7 +290,7 @@ defmodule Dran.Agent.LinkGardener do
 
   def execute_tool("search", args, %State{} = state) do
     result =
-      Brain.search(args["query"] || "", context_id: state.session.context_id, limit: 10)
+      Brain.search(args["query"] || "", workspace_id: state.session.workspace_id, limit: 10)
 
     {result, state}
   end
@@ -322,10 +322,10 @@ defmodule Dran.Agent.LinkGardener do
         {{:error, "proposal limit reached"}, state}
 
       true ->
-        context_id = state.session.context_id
+        workspace_id = state.session.workspace_id
 
-        source = Brain.get_page_by_slug(source_slug, context_id)
-        target = Brain.get_page_by_slug(target_slug, context_id)
+        source = Brain.get_page_by_slug(source_slug, workspace_id)
+        target = Brain.get_page_by_slug(target_slug, workspace_id)
 
         cond do
           is_nil(source) ->

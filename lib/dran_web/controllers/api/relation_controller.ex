@@ -6,12 +6,16 @@ defmodule DranWeb.API.RelationController do
   @doc "POST /api/relations — create a relation"
   def create(
         conn,
-        %{"source_slug" => source_slug, "target_slug" => target_slug, "context" => context_slug} =
+        %{
+          "source_slug" => source_slug,
+          "target_slug" => target_slug,
+          "workspace" => workspace_slug
+        } =
           params
       ) do
     relation_type = params["relation_type"] || "related"
 
-    with_context(conn, context_slug, fn conn, context ->
+    with_context(conn, workspace_slug, fn conn, context ->
       case Brain.create_relation_by_slugs(source_slug, target_slug, relation_type, context.id) do
         {:ok, relation} ->
           conn
@@ -76,7 +80,7 @@ defmodule DranWeb.API.RelationController do
         source_page = Dran.Brain.get_page(relation.source_id)
 
         if user && source_page &&
-             (user.is_admin or user_has_context_access?(user, source_page.context_id)) do
+             (user.is_owner or user_has_context_access?(user, source_page.workspace_id)) do
           case Brain.delete_relation(relation) do
             {:ok, _} ->
               conn |> send_resp(:no_content, "")
@@ -94,10 +98,10 @@ defmodule DranWeb.API.RelationController do
     end
   end
 
-  defp user_has_context_access?(%{contexts: :all}, _context_id), do: true
+  defp user_has_context_access?(%{contexts: :all}, _workspace_id), do: true
 
-  defp user_has_context_access?(%{contexts: contexts}, context_id) when is_list(contexts) do
-    Enum.any?(contexts, &(&1.id == context_id))
+  defp user_has_context_access?(%{contexts: contexts}, workspace_id) when is_list(contexts) do
+    Enum.any?(contexts, &(&1.id == workspace_id))
   end
 
   defp user_has_context_access?(_, _), do: false

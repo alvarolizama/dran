@@ -10,9 +10,9 @@ defmodule DranWeb.Plugs.Auth do
 
   The active context is stored in two places:
 
-  1. **Session** (`:context_slug`) — the source of truth for the current tab.
-  2. **Signed cookie** (`dran_last_context`) — persists across browser restarts
-     and new tabs. When a LiveView mounts without a `context_slug` in the
+  1. **Session** (`:workspace_slug`) — the source of truth for the current tab.
+  2. **Signed cookie** (`dran_last_workspace`) — persists across browser restarts
+     and new tabs. When a LiveView mounts without a `workspace_slug` in the
      session (e.g. a fresh login or a new tab that hasn't switched yet), the
      cookie is read and the context is restored.
 
@@ -30,12 +30,11 @@ defmodule DranWeb.Plugs.Auth do
   alias Dran.Auth
 
   @session_key :user
-  @admin_key :is_admin
-  @editor_key :is_editor
-  @context_key :context_slug
-  @context_cookie "dran_last_context"
+  @owner_key :is_owner
+  @workspace_key :workspace_slug
+  @workspace_cookie "dran_last_workspace"
   # 30 days in seconds
-  @context_cookie_max_age 30 * 24 * 60 * 60
+  @workspace_cookie_max_age 30 * 24 * 60 * 60
 
   # ── Plug callbacks (for use in router pipelines) ──
 
@@ -46,55 +45,47 @@ defmodule DranWeb.Plugs.Auth do
 
   @doc """
   Plug call — dispatches to the named function.
-  Used as `plug DranWeb.Plugs.Auth, :fetch_context_cookie`.
+  Used as `plug DranWeb.Plugs.Auth, :fetch_workspace_cookie`.
   """
-  def call(conn, :fetch_context_cookie), do: fetch_context_cookie(conn, [])
+  def call(conn, :fetch_workspace_cookie), do: fetch_workspace_cookie(conn, [])
   def call(conn, _opts), do: conn
 
   # ── Session management (for controllers) ──
 
-  def login(conn, username, context_slug \\ Auth.default_context_slug()) do
-    # Cache `is_admin` in the session so router pipelines don't hit the DB on
+  def login(conn, username, workspace_slug \\ Auth.default_workspace_slug()) do
+    # Cache `is_owner` in the session so router pipelines don't hit the DB on
     # every request. SEC-002: fail closed — a session user with no row in the
-    # users table is NOT admin (previously nil -> true, which escalated deleted
+    # users table is NOT owner (previously nil -> true, which escalated deleted
     # users to full admin).
-    is_admin =
+    is_owner =
       case Dran.Accounts.get_user_by_email(username) do
         nil -> false
-        %{is_admin: admin?} -> admin?
-      end
-
-    is_editor =
-      case Dran.Accounts.get_user_by_email(username) do
-        nil -> false
-        %{is_editor: editor?} -> editor?
+        %{is_owner: owner?} -> owner?
       end
 
     conn
     |> put_session(@session_key, username)
-    |> put_session(@admin_key, is_admin)
-    |> put_session(@editor_key, is_editor)
-    |> put_context(context_slug)
+    |> put_session(@owner_key, is_owner)
+    |> put_workspace(workspace_slug)
   end
 
   def logout(conn) do
     conn
     |> delete_session(@session_key)
-    |> delete_session(@admin_key)
-    |> delete_session(@editor_key)
-    |> delete_session(@context_key)
-    |> delete_resp_cookie(@context_cookie)
+    |> delete_session(@owner_key)
+    |> delete_session(@workspace_key)
+    |> delete_resp_cookie(@workspace_cookie)
   end
 
   @doc """
   Switches the active context in the session and persists it to a signed
   cookie so it survives browser restarts and new tabs.
   """
-  def put_context(conn, context_slug) do
+  def put_workspace(conn, workspace_slug) do
     conn
-    |> put_session(@context_key, context_slug)
-    |> put_resp_cookie(@context_cookie, context_slug,
-      max_age: @context_cookie_max_age,
+    |> put_session(@workspace_key, workspace_slug)
+    |> put_resp_cookie(@workspace_cookie, workspace_slug,
+      max_age: @workspace_cookie_max_age,
       sign: true
     )
   end
@@ -105,9 +96,9 @@ defmodule DranWeb.Plugs.Auth do
   Resolves where to redirect a user after a successful login.
 
   If there's a `return_to` in the session, honor it. Otherwise, if the user
-  is admin or editor AND no wiki-enabled contexts exist, send them straight
-  to `/panel` — the wiki would be an empty page anyway. Fall back to `/`
-  (the wiki) in all other cases.
+  is admin or editor AND no all contexts exist, send them straight
+  to `/panel` — the home would be an empty page anyway. Fall back to `/`
+  (the home) in all other cases.
   """
   def resolve_login_redirect(conn) do
     case get_session(conn, :return_to) do
@@ -115,10 +106,9 @@ defmodule DranWeb.Plugs.Auth do
         path
 
       _ ->
-        is_admin = get_session(conn, "is_admin") == true
-        is_editor = get_session(conn, "is_editor") == true
+        is_owner = get_session(conn, "is_owner") == true
 
-        if (is_admin or is_editor) and Dran.Brain.list_wiki_contexts() == [] do
+        if is_owner and Dran.Brain.list_workspaces() == [] do
           ~p"/panel"
         else
           ~p"/"
@@ -128,7 +118,8 @@ defmodule DranWeb.Plugs.Auth do
 
   def current_user(conn), do: get_session(conn, @session_key)
 
-  def current_context(conn), do: get_session(conn, @context_key) || Auth.default_context_slug()
+  def current_context(conn),
+    do: get_session(conn, @workspace_key) || Auth.default_workspace_slug()
 
   # ── LiveView helpers ──
 
@@ -138,7 +129,7 @@ defmodule DranWeb.Plugs.Auth do
   The `session` map here is the LiveView connect_info session, which is a
   plain map (not a `Plug.Conn`). Cookie restoration for LiveViews is handled
   at the controller/router level: when a request arrives, the browser sends
-  the `dran_last_context` cookie, and the `fetch_context_cookie/2` plug
+  the `dran_last_workspace` cookie, and the `fetch_workspace_cookie/2` plug
   merges it into the session before LiveView connects.
 
   Returns `{socket, context}` where `context` is the loaded Brain.Context.
@@ -146,45 +137,48 @@ defmodule DranWeb.Plugs.Auth do
   def assign_to_socket(socket, session) when is_map(session) do
     %{
       current_user: current_user,
-      context_slug: context_slug
+      workspace_slug: workspace_slug
     } = from_session(session)
 
-    context = Dran.Brain.get_context_by_slug(context_slug)
-    contexts = Dran.Brain.list_contexts()
-    page_counts = Dran.Brain.page_counts_by_context()
+    context = Dran.Brain.get_workspace_by_slug(workspace_slug)
+    page_counts = Dran.Brain.page_counts_by_workspace()
 
     # Per-user scoping: a DB user (created via Dran.Accounts) only sees their
     # assigned contexts. SEC-002: fail closed — a session user with no row in
     # the users table gets NO contexts and is NOT admin (previously nil ->
     # {all_contexts, true}, which escalated deleted users to full admin).
-    {accessible_contexts, is_admin, is_editor} =
+    {accessible_workspaces, is_owner} =
       case Dran.Accounts.get_user_by_email(current_user) do
-        nil -> {[], false, false}
-        %{is_admin: true} -> {contexts, true, false}
-        %{is_editor: true} = user -> {Dran.Accounts.list_user_contexts(user), false, true}
-        user -> {Dran.Accounts.list_user_contexts(user), false, false}
+        nil ->
+          {[], false}
+
+        %{is_owner: true} = user ->
+          {Dran.Accounts.list_user_workspaces(user), true}
+
+        user ->
+          {Dran.Accounts.list_user_workspaces(user), false}
       end
 
     socket =
       socket
       |> Phoenix.Component.assign(:current_user, current_user)
-      |> Phoenix.Component.assign(:is_admin, is_admin)
-      |> Phoenix.Component.assign(:is_editor, is_editor)
-      |> Phoenix.Component.assign(:context_slug, context_slug)
-      |> Phoenix.Component.assign(:contexts, accessible_contexts)
+      |> Phoenix.Component.assign(:is_owner, is_owner)
+      |> Phoenix.Component.assign(:workspace_slug, workspace_slug)
+      |> Phoenix.Component.assign(:workspaces, accessible_workspaces)
       |> Phoenix.Component.assign(:page_counts, page_counts)
       |> Phoenix.Component.assign(:current_scope, current_user)
+      |> Phoenix.Component.assign(:workspace, context)
 
     {socket, context}
   end
 
   @doc """
-  Extracts user and context_slug from a LiveView session map.
+  Extracts user and workspace_slug from a LiveView session map.
   """
   def from_session(session) when is_map(session) do
     %{
       current_user: session["user"],
-      context_slug: session["context_slug"] || Auth.default_context_slug()
+      workspace_slug: session["workspace_slug"] || Auth.default_workspace_slug()
     }
   end
 
@@ -194,28 +188,28 @@ defmodule DranWeb.Plugs.Auth do
   # ── Cookie-based context restoration plug ──
 
   @doc """
-  Plug that restores the context from the signed `dran_last_context` cookie
-  when the session doesn't already carry a `context_slug`.
+  Plug that restores the context from the signed `dran_last_workspace` cookie
+  when the session doesn't already carry a `workspace_slug`.
 
   This runs in the `:browser` pipeline (or `:auth` pipeline) so that by the
   time a LiveView connects, the session already has the right context.
   """
-  def fetch_context_cookie(conn, _opts) do
-    if get_session(conn, @context_key) do
+  def fetch_workspace_cookie(conn, _opts) do
+    if get_session(conn, @workspace_key) do
       conn
     else
-      conn = fetch_cookies(conn, signed: [@context_cookie])
+      conn = fetch_cookies(conn, signed: [@workspace_cookie])
 
-      case conn.cookies[@context_cookie] do
+      case conn.cookies[@workspace_cookie] do
         slug when is_binary(slug) and slug != "" ->
-          put_session(conn, @context_key, slug)
+          put_session(conn, @workspace_key, slug)
 
         _ ->
           # No cookie either — fall back to the user's default context (if
           # their account has one set) before the global default.
           case user_default_context(conn) do
             nil -> conn
-            slug -> put_session(conn, @context_key, slug)
+            slug -> put_session(conn, @workspace_key, slug)
           end
       end
     end
@@ -229,7 +223,7 @@ defmodule DranWeb.Plugs.Auth do
 
       email ->
         case Dran.Accounts.get_user_by_email(email) do
-          %{default_context_slug: slug} when is_binary(slug) and slug != "" -> slug
+          %{default_workspace_slug: slug} when is_binary(slug) and slug != "" -> slug
           _ -> nil
         end
     end
@@ -241,14 +235,14 @@ defmodule DranWeb.Plugs.Auth do
   Resolves the context from query params, falling back to the socket's
   current context.
 
-  If `params["context"]` is present and matches a known context slug,
+  If `params["workspace"]` is present and matches a known context slug,
   returns that context and updates the socket assigns. Otherwise returns
   the socket's existing context.
 
   ## Usage in LiveView handle_params
 
       def handle_params(%{"slug" => slug} = params, _url, socket) do
-        {socket, context} = Auth.resolve_context(socket, params)
+        {socket, context} = Auth.resolve_workspace(socket, params)
         page = Brain.get_page_by_slug(slug, context.id)
         ...
       end
@@ -256,24 +250,24 @@ defmodule DranWeb.Plugs.Auth do
   This enables URLs like `/notes/my-slug?context=work` to open a page
   in a specific context regardless of the session's active context.
   """
-  def resolve_context(socket, params) do
-    case params["context"] do
+  def resolve_workspace(socket, params) do
+    case params["workspace"] do
       slug when is_binary(slug) and slug != "" ->
-        case Dran.Brain.get_context_by_slug(slug) do
+        case Dran.Brain.get_workspace_by_slug(slug) do
           nil ->
-            {socket, socket.assigns[:context]}
+            {socket, socket.assigns[:workspace]}
 
           context ->
             socket =
               socket
-              |> Phoenix.Component.assign(:context, context)
-              |> Phoenix.Component.assign(:context_slug, slug)
+              |> Phoenix.Component.assign(:workspace, context)
+              |> Phoenix.Component.assign(:workspace_slug, slug)
 
             {socket, context}
         end
 
       _ ->
-        {socket, socket.assigns[:context]}
+        {socket, socket.assigns[:workspace]}
     end
   end
 end

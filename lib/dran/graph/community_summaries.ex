@@ -24,9 +24,9 @@ defmodule Dran.Graph.CommunitySummaries do
   @doc """
   Generate and persist summaries for all communities in a context.
 
-  Loads every page in `context_id` with `meta->>'community_id'` set, groups
+  Loads every page in `workspace_id` with `meta->>'community_id'` set, groups
   them by community, and writes one `CommunitySummary` row per community
-  (upsert on the `[:context_id, :community_id]` unique constraint). Inference
+  (upsert on the `[:workspace_id, :community_id]` unique constraint). Inference
   calls run concurrently via `Task.async_stream`.
 
   When inference is not configured (`Dran.Inference.enabled?/0` is false) the
@@ -34,13 +34,13 @@ defmodule Dran.Graph.CommunitySummaries do
   the pipeline never blocks on a missing server.
   """
   @spec generate_all(binary()) :: :ok | {:error, term()}
-  def generate_all(context_id) when is_binary(context_id) do
-    context_id
+  def generate_all(workspace_id) when is_binary(workspace_id) do
+    workspace_id
     |> load_community_pages()
     |> Enum.group_by(fn p -> parse_int(p.meta["community_id"]) end)
     |> Enum.reject(fn {cid, _pages} -> is_nil(cid) end)
     |> Task.async_stream(
-      fn {community_id, pages} -> build_summary(context_id, community_id, pages) end,
+      fn {community_id, pages} -> build_summary(workspace_id, community_id, pages) end,
       max_concurrency: @max_concurrency,
       timeout: :infinity,
       ordered: false,
@@ -57,9 +57,9 @@ defmodule Dran.Graph.CommunitySummaries do
   @doc "Get the summary for a specific community."
   @spec get_summary(binary(), integer()) ::
           {:ok, CommunitySummary.t()} | {:error, :not_found}
-  def get_summary(context_id, community_id)
-      when is_binary(context_id) and is_integer(community_id) do
-    case Repo.get_by(CommunitySummary, context_id: context_id, community_id: community_id) do
+  def get_summary(workspace_id, community_id)
+      when is_binary(workspace_id) and is_integer(community_id) do
+    case Repo.get_by(CommunitySummary, workspace_id: workspace_id, community_id: community_id) do
       nil -> {:error, :not_found}
       summary -> {:ok, summary}
     end
@@ -72,7 +72,7 @@ defmodule Dran.Graph.CommunitySummaries do
 
     with %Page{} <- page,
          cid when is_integer(cid) <- parse_int(page.meta["community_id"]),
-         {:ok, summary} <- get_summary(page.context_id, cid) do
+         {:ok, summary} <- get_summary(page.workspace_id, cid) do
       {:ok, summary}
     else
       _ -> {:error, :not_found}
@@ -81,18 +81,18 @@ defmodule Dran.Graph.CommunitySummaries do
 
   @doc "List all community summaries for a context, ordered by page_count desc."
   @spec list_summaries(binary()) :: [CommunitySummary.t()]
-  def list_summaries(context_id) when is_binary(context_id) do
+  def list_summaries(workspace_id) when is_binary(workspace_id) do
     Repo.all(
       from cs in CommunitySummary,
-        where: cs.context_id == ^context_id,
+        where: cs.workspace_id == ^workspace_id,
         order_by: [desc: cs.page_count]
     )
   end
 
   @doc "Delete all summaries for a context (used before regenerating)."
   @spec delete_all(binary()) :: :ok
-  def delete_all(context_id) when is_binary(context_id) do
-    from(cs in CommunitySummary, where: cs.context_id == ^context_id)
+  def delete_all(workspace_id) when is_binary(workspace_id) do
+    from(cs in CommunitySummary, where: cs.workspace_id == ^workspace_id)
     |> Repo.delete_all()
 
     :ok
@@ -102,16 +102,16 @@ defmodule Dran.Graph.CommunitySummaries do
   Regenerate summaries for the default context (Quantum entrypoint).
 
   Same pattern as `Dran.Graph.refresh_all_scheduled/0`: resolves the default
-  context slug via `Dran.Auth.default_context_slug/0` and looks it up with
-  `Brain.get_context_by_slug/1`.
+  context slug via `Dran.Auth.default_workspace_slug/0` and looks it up with
+  `Brain.get_workspace_by_slug/1`.
   """
-  @spec generate_all_scheduled() :: :ok | {:error, :context_not_found}
+  @spec generate_all_scheduled() :: :ok | {:error, :workspace_not_found}
   def generate_all_scheduled do
-    slug = Dran.Auth.default_context_slug()
+    slug = Dran.Auth.default_workspace_slug()
 
-    case Brain.get_context_by_slug(slug) do
+    case Brain.get_workspace_by_slug(slug) do
       nil ->
-        {:error, :context_not_found}
+        {:error, :workspace_not_found}
 
       ctx ->
         generate_all(ctx.id)
@@ -120,16 +120,16 @@ defmodule Dran.Graph.CommunitySummaries do
 
   # ── Helpers ──
 
-  defp load_community_pages(context_id) do
+  defp load_community_pages(workspace_id) do
     Repo.all(
       from p in Page,
-        where: p.context_id == ^context_id,
+        where: p.workspace_id == ^workspace_id,
         where: fragment("meta->>'community_id' IS NOT NULL"),
         select: %{slug: p.slug, title: p.title, summary: p.summary, meta: p.meta}
     )
   end
 
-  defp build_summary(context_id, community_id, community_pages) do
+  defp build_summary(workspace_id, community_id, community_pages) do
     page_count = length(community_pages)
 
     top =
@@ -149,7 +149,7 @@ defmodule Dran.Graph.CommunitySummaries do
         fallback_summary(page_count, top_pages)
       end
 
-    upsert_summary(context_id, community_id, summary, page_count, top_pages)
+    upsert_summary(workspace_id, community_id, summary, page_count, top_pages)
   end
 
   defp summarize_with_llm(top) do
@@ -201,9 +201,9 @@ defmodule Dran.Graph.CommunitySummaries do
     Enum.map(top, fn p -> %{slug: p.slug, title: p.title || "", pagerank: pagerank_of(p)} end)
   end
 
-  defp upsert_summary(context_id, community_id, summary, page_count, top_pages) do
+  defp upsert_summary(workspace_id, community_id, summary, page_count, top_pages) do
     attrs = %{
-      context_id: context_id,
+      workspace_id: workspace_id,
       community_id: community_id,
       summary: summary,
       page_count: page_count,
@@ -214,7 +214,7 @@ defmodule Dran.Graph.CommunitySummaries do
     case Repo.insert(
            CommunitySummary.changeset(%CommunitySummary{}, attrs),
            on_conflict: {:replace, [:summary, :page_count, :top_pages, :generated_at]},
-           conflict_target: [:context_id, :community_id]
+           conflict_target: [:workspace_id, :community_id]
          ) do
       {:ok, _summary} -> :ok
       {:error, changeset} -> {:error, changeset}

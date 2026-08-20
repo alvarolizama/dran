@@ -30,12 +30,12 @@ defmodule DranWeb.KanbanLiveTest do
       end
     end)
 
-    context = Brain.get_context_by_slug("personal")
+    context = Brain.get_workspace_by_slug("personal")
 
     # A goal page so the goal-filter test has a real slug to use.
     {:ok, goal} =
       Brain.create_page(%{
-        context_id: context.id,
+        workspace_id: context.id,
         title: "Kanban Test Goal",
         page_type: "goal"
       })
@@ -44,7 +44,7 @@ defmodule DranWeb.KanbanLiveTest do
       conn
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
-      |> Plug.Conn.put_session(:context_slug, "personal")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
 
     {:ok, conn: conn, context: context, goal: goal}
   end
@@ -82,7 +82,7 @@ defmodule DranWeb.KanbanLiveTest do
       # The todo was persisted with the expected meta. Find by title since
       # Slug.generate appends a uniqueness suffix when re-run after create.
       todo =
-        Brain.list_pages(context_id: context.id, type: "todo", limit: 500)
+        Brain.list_pages(workspace_id: context.id, type: "todo", limit: 500)
         |> Enum.find(fn p -> p.title == "Quick Add Test Todo" end)
 
       assert todo != nil
@@ -126,7 +126,7 @@ defmodule DranWeb.KanbanLiveTest do
       assert html =~ t("Todo created.")
 
       todo =
-        Brain.list_pages(context_id: context.id, type: "todo", limit: 500)
+        Brain.list_pages(workspace_id: context.id, type: "todo", limit: 500)
         |> Enum.find(fn p -> p.title == "Filtered Goal Todo" end)
 
       assert todo != nil
@@ -168,7 +168,7 @@ defmodule DranWeb.KanbanLiveTest do
     } do
       {:ok, todo} =
         Brain.create_page(%{
-          context_id: context.id,
+          workspace_id: context.id,
           title: "Todo To Archive",
           page_type: "todo",
           meta: %{"kanban_status" => "backlog"}

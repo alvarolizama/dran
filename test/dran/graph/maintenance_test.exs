@@ -29,14 +29,14 @@ defmodule Dran.Graph.MaintenanceTest do
 
   defp fresh_context(prefix) do
     slug = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-    {:ok, ctx} = Brain.create_context(%{name: "Maintenance Test #{slug}", slug: slug})
+    {:ok, ctx} = Brain.create_workspace(%{name: "Maintenance Test #{slug}", slug: slug})
     ctx
   end
 
   defp create_page(ctx, slug) do
     {:ok, page} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "note",
@@ -66,7 +66,7 @@ defmodule Dran.Graph.MaintenanceTest do
       from r in Brain.Relation,
         join: s in Brain.Page,
         on: s.id == r.source_id,
-        where: s.context_id == ^ctx.id,
+        where: s.workspace_id == ^ctx.id,
         where: r.relation_type == "semantic",
         select: count(r.id)
     )

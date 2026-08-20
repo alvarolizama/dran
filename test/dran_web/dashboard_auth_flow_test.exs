@@ -11,7 +11,7 @@ defmodule DranWeb.DashboardAuthFlowTest do
       })
 
     # Make the user admin so they can see the dashboard
-    {:ok, user} = Accounts.update_user(user, %{is_admin: true})
+    {:ok, user} = Accounts.update_user(user, %{is_owner: true})
 
     {:ok, conn: conn, user: user}
   end
@@ -50,7 +50,7 @@ defmodule DranWeb.DashboardAuthFlowTest do
   } do
     conn =
       conn
-      |> Plug.Test.init_test_session(%{user: user.email, context_slug: "personal"})
+      |> Plug.Test.init_test_session(%{user: user.email, workspace_slug: "personal"})
 
     {:ok, _view, html} = live(conn, ~p"/panel")
 

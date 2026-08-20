@@ -39,8 +39,8 @@ defmodule Dran.SyncLinksTest do
     end)
 
     context =
-      Brain.get_context_by_slug("personal") ||
-        elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+      Brain.get_workspace_by_slug("personal") ||
+        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -59,7 +59,7 @@ defmodule Dran.SyncLinksTest do
 
     {:ok, project} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "project",
@@ -79,7 +79,7 @@ defmodule Dran.SyncLinksTest do
 
     {:ok, goal} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "goal",
@@ -101,7 +101,7 @@ defmodule Dran.SyncLinksTest do
 
     {:ok, plan} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "plan",
@@ -121,7 +121,7 @@ defmodule Dran.SyncLinksTest do
 
     {:ok, todo} =
       Brain.create_page(%{
-        context_id: ctx.id,
+        workspace_id: ctx.id,
         title: slug,
         slug: slug,
         page_type: "todo",
@@ -148,7 +148,7 @@ defmodule Dran.SyncLinksTest do
   # Reload a page fresh from the DB (so we see meta changes applied by
   # recompute_project_health / recompute_goal_progress via update_page).
   defp reload(page) do
-    Brain.get_page_by_slug(page.slug, page.context_id)
+    Brain.get_page_by_slug(page.slug, page.workspace_id)
   end
 
   defp meta_get(page, key), do: page.meta && Map.get(page.meta, key)

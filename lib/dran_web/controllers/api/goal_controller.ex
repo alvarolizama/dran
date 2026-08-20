@@ -3,9 +3,9 @@ defmodule DranWeb.API.GoalController do
   alias Dran.Brain
 
   @doc "GET /api/goals?context=... — list goals in a context"
-  def index(conn, %{"context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
-      json(conn, %{data: Brain.list_pages(context_id: context.id, type: "goal")})
+  def index(conn, %{"workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
+      json(conn, %{data: Brain.list_pages(workspace_id: context.id, type: "goal")})
     end)
   end
 
@@ -16,8 +16,8 @@ defmodule DranWeb.API.GoalController do
   end
 
   @doc "GET /api/goals/:slug?context=... — goal detail with related todos and plans"
-  def show(conn, %{"slug" => slug, "context" => context_slug}) do
-    with_context(conn, context_slug, fn conn, context ->
+  def show(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           conn |> put_status(:not_found) |> json(%{errors: %{detail: "goal not found"}})
@@ -25,7 +25,7 @@ defmodule DranWeb.API.GoalController do
         goal ->
           goal_todos =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               type: "todo",
               status: nil,
               limit: 500,
@@ -35,7 +35,7 @@ defmodule DranWeb.API.GoalController do
 
           goal_plans =
             Brain.list_pages(
-              context_id: context.id,
+              workspace_id: context.id,
               type: "plan",
               limit: 100,
               include_body: false

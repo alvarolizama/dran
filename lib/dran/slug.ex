@@ -53,10 +53,10 @@ defmodule Dran.Slug do
   then ensures the slug is unique within the given context.
   """
   @spec generate(binary() | nil, binary() | nil, binary()) :: binary()
-  def generate(title, context_id, fallback_type) do
+  def generate(title, workspace_id, fallback_type) do
     base = slugify(title)
     base = if base == "", do: fallback_type, else: base
-    ensure_unique(base, context_id, 0)
+    ensure_unique(base, workspace_id, 0)
   end
 
   @doc """
@@ -66,11 +66,11 @@ defmodule Dran.Slug do
   `attempt` should start at 0.
   """
   @spec ensure_unique(binary(), binary() | nil, non_neg_integer()) :: binary()
-  def ensure_unique(base, context_id, attempt) do
+  def ensure_unique(base, workspace_id, attempt) do
     slug = candidate_slug(base, attempt)
 
-    if Brain.get_page_by_slug(slug, context_id) do
-      ensure_unique(base, context_id, attempt + 1)
+    if Brain.get_page_by_slug(slug, workspace_id) do
+      ensure_unique(base, workspace_id, attempt + 1)
     else
       slug
     end
@@ -83,13 +83,13 @@ defmodule Dran.Slug do
   (the slug of the page being renamed).
   """
   @spec ensure_unique(binary(), binary() | nil, binary(), non_neg_integer()) :: binary()
-  def ensure_unique(base, context_id, original_slug, attempt) do
+  def ensure_unique(base, workspace_id, original_slug, attempt) do
     slug = candidate_slug(base, attempt)
 
-    if slug == original_slug or is_nil(Brain.get_page_by_slug(slug, context_id)) do
+    if slug == original_slug or is_nil(Brain.get_page_by_slug(slug, workspace_id)) do
       slug
     else
-      ensure_unique(base, context_id, original_slug, attempt + 1)
+      ensure_unique(base, workspace_id, original_slug, attempt + 1)
     end
   end
 

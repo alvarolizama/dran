@@ -25,7 +25,7 @@ defmodule DranWeb.ControllerHelpers do
 
   Replaces the recurring pattern in API controllers:
 
-      context = Brain.get_context_by_slug(slug)
+      context = Brain.get_workspace_by_slug(slug)
       if context do
         # ...happy path with context
       else
@@ -34,17 +34,17 @@ defmodule DranWeb.ControllerHelpers do
 
   ## Usage
 
-      def index(conn, %{"context" => slug}) do
+      def index(conn, %{"workspace" => slug}) do
         with_context(conn, slug, fn conn, context ->
-          json(conn, %{data: Brain.list_pages(context_id: context.id)})
+          json(conn, %{data: Brain.list_pages(workspace_id: context.id)})
         end)
       end
   """
-  @spec with_context(Plug.Conn.t(), binary(), (Plug.Conn.t(), Dran.Brain.Context.t() ->
+  @spec with_context(Plug.Conn.t(), binary(), (Plug.Conn.t(), Dran.Brain.Workspace.t() ->
                                                  Plug.Conn.t())) ::
           Plug.Conn.t()
-  def with_context(conn, context_slug, fun) do
-    case Dran.Brain.get_context_by_slug(context_slug) do
+  def with_context(conn, workspace_slug, fun) do
+    case Dran.Brain.get_workspace_by_slug(workspace_slug) do
       nil ->
         conn
         |> Plug.Conn.put_status(:not_found)

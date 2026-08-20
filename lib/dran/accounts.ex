@@ -8,31 +8,31 @@ defmodule Dran.Accounts do
 
   import Ecto.Query
   alias Dran.Repo
-  alias Dran.Accounts.{User, UserContext}
-  alias Dran.Brain.Context
+  alias Dran.Accounts.{User, UserWorkspace}
+  alias Dran.Brain.Workspace
 
   # ── User CRUD ──
 
   def list_users do
-    Repo.all(User) |> Repo.preload(:contexts)
+    Repo.all(User) |> Repo.preload(:workspaces)
   end
 
   @doc "True when at least one user exists (setup already completed)."
   def any_users?, do: Repo.exists?(User)
 
-  def get_user!(id), do: Repo.get!(User, id) |> Repo.preload(:contexts)
-  def get_user(id), do: Repo.get(User, id) |> Repo.preload(:contexts)
+  def get_user!(id), do: Repo.get!(User, id) |> Repo.preload(:workspaces)
+  def get_user(id), do: Repo.get(User, id) |> Repo.preload(:workspaces)
 
   def get_user_by_email(email) do
-    Repo.get_by(User, email: email) |> Repo.preload(:contexts)
+    Repo.get_by(User, email: email) |> Repo.preload(:workspaces)
   end
 
   def get_user_by_google_id(google_id) do
-    Repo.get_by(User, google_id: google_id) |> Repo.preload(:contexts)
+    Repo.get_by(User, google_id: google_id) |> Repo.preload(:workspaces)
   end
 
   def get_user_by_api_token(token) when is_binary(token) do
-    Repo.get_by(User, api_token: token) |> Repo.preload(:contexts)
+    Repo.get_by(User, api_token: token) |> Repo.preload(:workspaces)
   end
 
   def create_user(attrs) do
@@ -53,7 +53,7 @@ defmodule Dran.Accounts do
     case get_user_by_email(email) do
       %User{password_hash: hash} = user when is_binary(hash) ->
         if Bcrypt.verify_pass(password, hash),
-          do: {:ok, %{user | contexts: []}},
+          do: {:ok, %{user | workspaces: []}},
           else: {:error, :unauthorized}
 
       _ ->
@@ -102,36 +102,63 @@ defmodule Dran.Accounts do
 
   # ── Context membership ──
 
-  def add_user_to_context(%User{} = user, %Context{} = context) do
-    %UserContext{}
-    |> UserContext.changeset(%{user_id: user.id, context_id: context.id})
+  def add_user_to_workspace(%User{} = user, %Workspace{} = context) do
+    %UserWorkspace{}
+    |> UserWorkspace.changeset(%{user_id: user.id, workspace_id: context.id})
     |> Repo.insert()
   end
 
-  def remove_user_from_context(%User{} = user, %Context{} = context) do
-    UserContext
-    |> where([uc], uc.user_id == ^user.id and uc.context_id == ^context.id)
+  def remove_user_from_workspace(%User{} = user, %Workspace{} = context) do
+    UserWorkspace
+    |> where([uc], uc.user_id == ^user.id and uc.workspace_id == ^context.id)
     |> Repo.delete_all()
   end
 
-  def user_in_context?(%User{} = user, %Context{} = context) do
-    UserContext
-    |> where([uc], uc.user_id == ^user.id and uc.context_id == ^context.id)
+  def user_in_workspace?(%User{} = user, %Workspace{} = context) do
+    UserWorkspace
+    |> where([uc], uc.user_id == ^user.id and uc.workspace_id == ^context.id)
     |> Repo.exists?()
   end
 
-  def list_user_contexts(%User{} = user) do
-    user |> Repo.preload(:contexts) |> Map.get(:contexts)
+  def list_user_workspaces(%User{} = user) do
+    user
+    |> Repo.preload(user_workspaces: :workspace)
+    |> Map.get(:user_workspaces)
+    |> Enum.map(fn uw -> Map.put(uw.workspace, :role, uw.role) end)
   end
 
-  # ── Admin ──
+  # ── Owner / Role-based access ──
 
-  def admin_user do
-    Repo.get_by(User, is_admin: true) |> Repo.preload(:contexts)
+  def owner_user do
+    Repo.get_by(User, is_owner: true) |> Repo.preload(:workspaces)
   end
 
-  def is_admin?(%User{is_admin: true}), do: true
-  def is_admin?(_), do: false
+  def is_owner?(%User{is_owner: true}), do: true
+  def is_owner?(_), do: false
+
+  @doc """
+  Returns the user's role string for a given workspace.
+  Falls back to "viewer" if no membership exists.
+  """
+  def user_role_in_workspace(%User{id: user_id}, %Workspace{id: workspace_id}) do
+    case Repo.get_by(UserWorkspace, user_id: user_id, workspace_id: workspace_id) do
+      %{role: role} -> role
+      nil -> "viewer"
+    end
+  end
+
+  @doc """
+  True if the user can create API keys in the given workspace.
+  Owners, admins, and editors can create keys.
+  """
+  def can_create_api_keys?(%User{} = user, %Workspace{} = workspace) do
+    case user_role_in_workspace(user, workspace) do
+      "owner" -> true
+      "admin" -> true
+      "editor" -> true
+      _ -> false
+    end
+  end
 
   # ── API Token auth ──
 
@@ -154,61 +181,161 @@ defmodule Dran.Accounts do
 
   # ── Context-scoped API keys ──
 
-  alias Dran.Accounts.ApiKey
+  alias Dran.Accounts.{ApiKey, ApiKeyWorkspace}
 
   @doc """
-  List all API keys (active and revoked) with their context preloaded,
+  List all API keys (active and revoked) with associations preloaded,
   newest first.
   """
   def list_api_keys do
     ApiKey
     |> order_by([k], desc: k.inserted_at)
     |> Repo.all()
-    |> Repo.preload(:context)
+    |> Repo.preload([:created_by_user, api_key_workspaces: :workspace])
   end
 
   @doc """
   Create a context-scoped API key.
 
+  Accepts:
+    - `name`: Key name (required)
+    - `created_by_user_id`: The user who created this key (optional)
+    - `workspace_ids`: List of `{workspace_id, access_level}` tuples (required, can be empty)
+
   Returns `{:ok, %ApiKey{token: plaintext}}` — the plaintext token is only
   available in this return value and is never stored. Only its hash and an
   8-char display prefix are persisted.
   """
-  def create_api_key(%{name: _name, context_id: _context_id} = attrs) do
+  # New multi-workspace signature: %{name:, workspace_ids: [{wid, level}]}
+  def create_api_key(%{name: _name, workspace_ids: workspace_ids} = attrs) do
+    do_create_api_key(attrs, workspace_ids)
+  end
+
+  # Single-workspace backward-compat: %{name:, workspace_id:, write_access?}
+  # (tests and settings_live still use this format)
+  def create_api_key(%{name: _name, workspace_id: wid} = attrs) do
+    write_access = Map.get(attrs, :write_access, false)
+    workspace_ids = [{wid, if(write_access, do: "write", else: "read")}]
+    do_create_api_key(attrs, workspace_ids)
+  end
+
+  defp do_create_api_key(attrs, workspace_ids) do
     token = ApiKey.generate_token()
 
-    %ApiKey{}
-    |> ApiKey.changeset(%{
-      name: attrs.name,
-      context_id: attrs.context_id,
-      write_access: Map.get(attrs, :write_access, false),
-      token_hash: ApiKey.hash_token(token),
-      token_prefix: ApiKey.prefix_of(token)
-    })
-    |> Repo.insert()
+    Ecto.Multi.new()
+    |> Ecto.Multi.insert(
+      :api_key,
+      %ApiKey{}
+      |> ApiKey.changeset(%{
+        name: attrs.name,
+        created_by_user_id: attrs[:created_by_user_id],
+        token_hash: ApiKey.hash_token(token),
+        token_prefix: ApiKey.prefix_of(token)
+      })
+    )
+    |> Ecto.Multi.run(:workspace_entries, fn _repo, %{api_key: api_key} ->
+      entries =
+        Enum.map(workspace_ids, fn {wid, level} ->
+          %ApiKeyWorkspace{}
+          |> ApiKeyWorkspace.changeset(%{
+            api_key_id: api_key.id,
+            workspace_id: wid,
+            access_level: level
+          })
+        end)
+
+      {:ok, entries}
+    end)
+    |> Ecto.Multi.run(:insert_workspace_entries, fn _repo, %{workspace_entries: entries} ->
+      Enum.each(entries, fn changeset ->
+        Repo.insert!(changeset)
+      end)
+
+      {:ok, :done}
+    end)
+    |> Repo.transaction()
     |> case do
-      {:ok, key} -> {:ok, %{key | token: token}}
-      error -> error
+      {:ok, %{api_key: key}} -> {:ok, %{key | token: token}}
+      {:error, :api_key, changeset, _} -> {:error, changeset}
+      {:error, _step, reason, _} -> {:error, reason}
     end
   end
 
   @doc """
-  Update an API key's mutable fields (currently `write_access`).
+  Update an API key's mutable fields (currently `name`).
   """
   def update_api_key(%ApiKey{} = key, attrs) do
-    key
-    |> ApiKey.changeset(attrs)
-    |> Repo.update()
+    # Backward compat: if write_access is passed, toggle the
+    # access_level on the first api_key_workspace.
+    case Map.get(attrs, :write_access) do
+      nil ->
+        :ok
+
+      write? ->
+        # Update the first (or only) api_key_workspace's access_level
+        akw =
+          Repo.one(
+            from a in Dran.Accounts.ApiKeyWorkspace,
+              where: a.api_key_id == ^key.id,
+              limit: 1
+          )
+
+        if akw do
+          level = if(write?, do: "write", else: "read")
+
+          akw
+          |> Dran.Accounts.ApiKeyWorkspace.changeset(%{access_level: level})
+          |> Repo.update!()
+        end
+    end
+
+    # Also support name updates
+    if Map.get(attrs, :name) do
+      key
+      |> ApiKey.changeset(%{name: attrs.name})
+      |> Repo.update()
+    else
+      {:ok, key}
+    end
   end
 
   @doc """
-  Validate an API key token. Returns `{:ok, %ApiKey{}}` (with context
+  Update workspaces for an API key.
+
+  Accepts a list of `{workspace_id, access_level}` tuples.
+  Replaces all existing workspace associations.
+  """
+  def update_api_key_workspaces(%ApiKey{} = key, workspace_ids) do
+    # Delete existing
+    ApiKeyWorkspace
+    |> where([w], w.api_key_id == ^key.id)
+    |> Repo.delete_all()
+
+    # Insert new
+    entries =
+      Enum.map(workspace_ids, fn {wid, level} ->
+        %ApiKeyWorkspace{}
+        |> ApiKeyWorkspace.changeset(%{
+          api_key_id: key.id,
+          workspace_id: wid,
+          access_level: level
+        })
+        |> Repo.insert!()
+      end)
+
+    {:ok, entries}
+  end
+
+  @doc """
+  Validate an API key token. Returns `{:ok, %ApiKey{}}` (with workspaces
   preloaded) only when the key exists AND is not revoked.
   """
   def valid_api_key?(token) when is_binary(token) do
     case Repo.get_by(ApiKey, token_hash: ApiKey.hash_token(token)) do
       %ApiKey{} = key ->
-        if ApiKey.active?(key), do: {:ok, Repo.preload(key, :context)}, else: :error
+        if ApiKey.active?(key),
+          do: {:ok, Repo.preload(key, api_key_workspaces: :workspace, created_by_user: [])},
+          else: :error
 
       nil ->
         :error
@@ -216,6 +343,27 @@ defmodule Dran.Accounts do
   end
 
   def valid_api_key?(_), do: :error
+
+  @doc """
+  Check if an API key has access (read or write) to a specific workspace.
+  Returns the access level string or nil.
+  """
+  def api_key_access_level(%ApiKey{api_key_workspaces: workspaces}, workspace_id)
+      when is_list(workspaces) do
+    case Enum.find(workspaces, fn w -> w.workspace_id == workspace_id end) do
+      %{access_level: level} -> level
+      _ -> nil
+    end
+  end
+
+  def api_key_access_level(_, _), do: nil
+
+  @doc """
+  Check if an API key has write access to a specific workspace.
+  """
+  def api_key_has_write_access?(%ApiKey{} = key, workspace_id) do
+    api_key_access_level(key, workspace_id) == "write"
+  end
 
   @doc """
   Revoke an API key by setting `revoked_at`. The key stops working
@@ -270,7 +418,7 @@ defmodule Dran.Accounts do
   """
   def set_default_context(%User{} = user, slug) when is_binary(slug) do
     user
-    |> Ecto.Changeset.change(default_context_slug: slug)
+    |> Ecto.Changeset.change(default_workspace_slug: slug)
     |> Repo.update()
   end
 end

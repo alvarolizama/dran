@@ -140,16 +140,16 @@ defmodule Dran.Embeddings do
   @doc """
   Update all pages in a context that need embeddings. Useful for backfill.
   """
-  @spec backfill_pages(Dran.Brain.Context.t() | binary(), keyword()) ::
+  @spec backfill_pages(Dran.Brain.Workspace.t() | binary(), keyword()) ::
           {non_neg_integer(), list(term())}
   def backfill_pages(context_or_slug, opts \\ [])
 
   def backfill_pages(slug, opts) when is_binary(slug) do
-    context = Dran.Brain.get_context_by_slug(slug) || raise "context not found: #{slug}"
+    context = Dran.Brain.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
     backfill_pages(context, opts)
   end
 
-  def backfill_pages(%Dran.Brain.Context{id: context_id}, opts) do
+  def backfill_pages(%Dran.Brain.Workspace{id: workspace_id}, opts) do
     import Ecto.Query
 
     async = Keyword.get(opts, :async, schedule_async?())
@@ -157,7 +157,7 @@ defmodule Dran.Embeddings do
     page_ids =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context_id and is_nil(p.embedding),
+          where: p.workspace_id == ^workspace_id and is_nil(p.embedding),
           select: p.id
       )
 

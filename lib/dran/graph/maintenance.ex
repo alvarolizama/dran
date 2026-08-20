@@ -44,10 +44,10 @@ defmodule Dran.Graph.Maintenance do
   Returns the number of deleted relations (each direction counts separately).
   """
   @spec prune_semantic(binary(), float() | nil) :: non_neg_integer()
-  def prune_semantic(context_id, threshold \\ nil) do
+  def prune_semantic(workspace_id, threshold \\ nil) do
     threshold = threshold || Dran.Settings.get("semantic_threshold_long")
 
-    semantic_relations(context_id)
+    semantic_relations(workspace_id)
     |> Enum.filter(fn rel -> distance_of(rel) != nil and distance_of(rel) > threshold end)
     |> Enum.map(& &1.id)
     |> delete_by_ids()
@@ -62,8 +62,8 @@ defmodule Dran.Graph.Maintenance do
   Returns the number of deleted relations.
   """
   @spec filter_mutual(binary()) :: non_neg_integer()
-  def filter_mutual(context_id) do
-    relations = semantic_relations(context_id)
+  def filter_mutual(workspace_id) do
+    relations = semantic_relations(workspace_id)
 
     edge_set =
       relations
@@ -85,12 +85,12 @@ defmodule Dran.Graph.Maintenance do
   Returns `%{pruned: n, non_mutual: n}`.
   """
   @spec sweep(binary()) :: %{pruned: non_neg_integer(), non_mutual: non_neg_integer()}
-  def sweep(context_id) do
-    pruned = prune_semantic(context_id)
-    non_mutual = filter_mutual(context_id)
+  def sweep(workspace_id) do
+    pruned = prune_semantic(workspace_id)
+    non_mutual = filter_mutual(workspace_id)
 
     Logger.info(
-      "Graph.Maintenance sweep for context #{context_id}: " <>
+      "Graph.Maintenance sweep for context #{workspace_id}: " <>
         "pruned=#{pruned} non_mutual=#{non_mutual}"
     )
 
@@ -101,13 +101,13 @@ defmodule Dran.Graph.Maintenance do
   Scheduled entrypoint: sweep the default context (same resolution pattern
   as `Dran.Graph.refresh_all_scheduled/0`).
   """
-  @spec sweep_scheduled() :: :ok | {:error, :context_not_found}
+  @spec sweep_scheduled() :: :ok | {:error, :workspace_not_found}
   def sweep_scheduled do
-    slug = Dran.Auth.default_context_slug()
+    slug = Dran.Auth.default_workspace_slug()
 
-    case Brain.get_context_by_slug(slug) do
+    case Brain.get_workspace_by_slug(slug) do
       nil ->
-        {:error, :context_not_found}
+        {:error, :workspace_not_found}
 
       ctx ->
         sweep(ctx.id)
@@ -120,12 +120,12 @@ defmodule Dran.Graph.Maintenance do
   # All semantic relations whose source page lives in the context. Because
   # the augmenter writes both directions from the same context, scoping by
   # source context covers the whole auto-generated layer.
-  defp semantic_relations(context_id) do
+  defp semantic_relations(workspace_id) do
     Repo.all(
       from r in Relation,
         join: s in Page,
         on: s.id == r.source_id,
-        where: s.context_id == ^context_id,
+        where: s.workspace_id == ^workspace_id,
         where: r.relation_type == "semantic",
         select: %{
           id: r.id,

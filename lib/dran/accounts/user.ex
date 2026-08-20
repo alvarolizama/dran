@@ -7,17 +7,16 @@ defmodule Dran.Accounts.User do
     field :name, :string
     field :google_id, :string
     field :avatar_url, :string
-    field :is_admin, :boolean, default: false
-    field :is_editor, :boolean, default: false
+    field :is_owner, :boolean, default: false
     field :api_token, :string
     field :password_hash, :string
-    field :default_context_slug, :string
+    field :default_workspace_slug, :string
 
     # Virtual — consumed by changeset, never persisted
     field :password, :string, virtual: true
 
-    has_many :user_contexts, Dran.Accounts.UserContext
-    has_many :contexts, through: [:user_contexts, :context]
+    has_many :user_workspaces, Dran.Accounts.UserWorkspace
+    has_many :workspaces, through: [:user_workspaces, :workspace]
 
     timestamps()
   end
@@ -29,10 +28,9 @@ defmodule Dran.Accounts.User do
       :name,
       :google_id,
       :avatar_url,
-      :is_admin,
-      :is_editor,
+      :is_owner,
       :api_token,
-      :default_context_slug
+      :default_workspace_slug
     ])
     |> validate_required([:email])
     |> unique_constraint(:email)

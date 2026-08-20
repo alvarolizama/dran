@@ -28,12 +28,12 @@ defmodule Mix.Tasks.Dran.Relations do
 
     k = Keyword.get(opts, :k, 3)
 
-    context = Brain.get_context_by_slug(slug) || raise "context not found: #{slug}"
+    context = Brain.get_workspace_by_slug(slug) || raise "context not found: #{slug}"
 
     pages =
       Repo.all(
         from p in Page,
-          where: p.context_id == ^context.id,
+          where: p.workspace_id == ^context.id,
           select: p
       )
 

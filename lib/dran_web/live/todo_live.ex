@@ -37,8 +37,8 @@ defmodule DranWeb.TodoLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      context_slug={@context_slug}
-      contexts={@contexts}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
     >
       <div
         :if={@live_action == :index}
@@ -55,7 +55,7 @@ defmodule DranWeb.TodoLive do
           </div>
           <div class="flex items-center gap-2">
             <.link
-              :if={Brain.page_type_enabled?(@context, "todo")}
+              :if={Brain.page_type_enabled?(@workspace, "todo")}
               navigate={~p"/panel/kanban"}
               class="btn btn-ghost btn-sm"
             >
@@ -231,7 +231,7 @@ defmodule DranWeb.TodoLive do
           versions={@versions}
           compare_version={@compare_version}
           logs={@logs}
-          context_slug={@context_slug}
+          workspace_slug={@workspace_slug}
           rendered_body={@rendered_body}
           editing={@editing}
           content_tab_value="content"
@@ -262,7 +262,7 @@ defmodule DranWeb.TodoLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               editor_id="todo-editor"
             />
           </:attributes>
@@ -310,7 +310,7 @@ defmodule DranWeb.TodoLive do
               form={@form}
               page={@page}
               page_type={@page_type}
-              context_id={@context_id}
+              workspace_id={@workspace_id}
               save_status={@save_status}
               editor_id="todo-editor"
             />
@@ -344,7 +344,7 @@ defmodule DranWeb.TodoLive do
   def handle_params(_params, _url, socket) do
     if socket.assigns.context do
       items = Brain.list_todos(socket.assigns.context.id)
-      archived_items = Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
+      archived_items = Brain.list_todos(workspace_id: socket.assigns.context.id, archived: true)
 
       {:noreply,
        assign(socket,
@@ -378,7 +378,8 @@ defmodule DranWeb.TodoLive do
         {:noreply,
          assign(socket,
            items: Brain.list_todos(socket.assigns.context.id),
-           archived_items: Brain.list_todos(context_id: socket.assigns.context.id, archived: true)
+           archived_items:
+             Brain.list_todos(workspace_id: socket.assigns.context.id, archived: true)
          )}
 
       # Show: if the page we're viewing changed, reload it
@@ -388,7 +389,7 @@ defmodule DranWeb.TodoLive do
         if page do
           rendered_body =
             render_markdown(page.body,
-              context_id: page.context_id,
+              workspace_id: page.workspace_id,
               inline_links: Map.get(page.meta || %{}, "inline_links", [])
             )
 
@@ -433,7 +434,7 @@ defmodule DranWeb.TodoLive do
                socket
                |> assign(
                  items: Brain.list_todos(context.id),
-                 archived_items: Brain.list_todos(context_id: context.id, archived: true)
+                 archived_items: Brain.list_todos(workspace_id: context.id, archived: true)
                )
                |> put_flash(:info, gettext("Todo archived."))}
 
@@ -468,7 +469,7 @@ defmodule DranWeb.TodoLive do
           end
 
         attrs = %{
-          "context_id" => context.id,
+          "workspace_id" => context.id,
           "title" => title,
           "slug" => Dran.Slug.generate(title, context.id, "todo"),
           "page_type" => "todo",

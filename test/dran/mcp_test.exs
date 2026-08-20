@@ -27,8 +27,8 @@ defmodule Dran.MCPTest do
     end)
 
     context =
-      Brain.get_context_by_slug("personal") ||
-        elem(Brain.create_context(%{name: "Personal", slug: "personal"}), 1)
+      Brain.get_workspace_by_slug("personal") ||
+        elem(Brain.create_workspace(%{name: "Personal", slug: "personal"}), 1)
 
     {:ok, context: context}
   end
@@ -52,7 +52,7 @@ defmodule Dran.MCPTest do
       # Target page that will be renamed.
       {:ok, art} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Art Page",
           slug: "old-art",
           page_type: "note"
@@ -61,7 +61,7 @@ defmodule Dran.MCPTest do
       # Page that embeds it.
       {:ok, note} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Note",
           slug: "note-with-embed",
           page_type: "note",
@@ -70,7 +70,7 @@ defmodule Dran.MCPTest do
 
       result =
         call_tool("dran_rename_slug", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "old_slug" => "old-art",
           "new_slug" => "new-art"
         })
@@ -90,7 +90,7 @@ defmodule Dran.MCPTest do
     test "errors when old_slug is not found", %{context: _ctx} do
       result =
         call_tool("dran_rename_slug", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "old_slug" => "nope",
           "new_slug" => "still-nope"
         })
@@ -100,14 +100,24 @@ defmodule Dran.MCPTest do
 
     test "errors when new_slug already exists", %{context: ctx} do
       {:ok, _a} =
-        Brain.create_page(%{context_id: ctx.id, title: "A", slug: "exists-a", page_type: "note"})
+        Brain.create_page(%{
+          workspace_id: ctx.id,
+          title: "A",
+          slug: "exists-a",
+          page_type: "note"
+        })
 
       {:ok, b} =
-        Brain.create_page(%{context_id: ctx.id, title: "B", slug: "exists-b", page_type: "note"})
+        Brain.create_page(%{
+          workspace_id: ctx.id,
+          title: "B",
+          slug: "exists-b",
+          page_type: "note"
+        })
 
       result =
         call_tool("dran_rename_slug", %{
-          "context" => "personal",
+          "workspace" => "personal",
           "old_slug" => "exists-b",
           "new_slug" => "exists-a"
         })
@@ -122,7 +132,7 @@ defmodule Dran.MCPTest do
     test "clears embedding_hash and schedules reaugmentation", %{context: ctx} do
       {:ok, page} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Stale",
           slug: "stale-page",
           page_type: "note",
@@ -133,7 +143,7 @@ defmodule Dran.MCPTest do
       Ecto.Changeset.change(page, embedding_hash: "some-old-hash") |> Repo.update!()
 
       result =
-        call_tool("dran_reaugment_page", %{"context" => "personal", "slug" => "stale-page"})
+        call_tool("dran_reaugment_page", %{"workspace" => "personal", "slug" => "stale-page"})
 
       assert result =~ "Reaugmentation scheduled for 'stale-page'"
 
@@ -142,14 +152,14 @@ defmodule Dran.MCPTest do
     end
 
     test "errors when page is not found", %{context: _ctx} do
-      result = call_tool("dran_reaugment_page", %{"context" => "personal", "slug" => "missing"})
+      result = call_tool("dran_reaugment_page", %{"workspace" => "personal", "slug" => "missing"})
 
       assert result =~ "Error: page 'missing' not found"
     end
 
     test "errors when context is not found" do
       result =
-        call_tool("dran_reaugment_page", %{"context" => "no-such-context", "slug" => "whatever"})
+        call_tool("dran_reaugment_page", %{"workspace" => "no-such-context", "slug" => "whatever"})
 
       assert result =~ "Error: context 'no-such-context' not found"
     end
@@ -159,7 +169,7 @@ defmodule Dran.MCPTest do
     test "filters by created_by", %{context: ctx} do
       {:ok, _alice} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Alice's note",
           slug: "alice-note",
           page_type: "note",
@@ -168,14 +178,14 @@ defmodule Dran.MCPTest do
 
       {:ok, _bob} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Bob's note",
           slug: "bob-note",
           page_type: "note",
           created_by: "bob"
         })
 
-      result = call_tool("dran_list_pages", %{"context" => "personal", "created_by" => "alice"})
+      result = call_tool("dran_list_pages", %{"workspace" => "personal", "created_by" => "alice"})
 
       assert result =~ "Found 1 pages"
       assert result =~ "alice-note"
@@ -185,7 +195,7 @@ defmodule Dran.MCPTest do
     test "filters by owner", %{context: ctx} do
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Owned by team",
           slug: "team-owned",
           page_type: "note",
@@ -194,14 +204,14 @@ defmodule Dran.MCPTest do
 
       {:ok, _} =
         Brain.create_page(%{
-          context_id: ctx.id,
+          workspace_id: ctx.id,
           title: "Owned by agent",
           slug: "agent-owned",
           page_type: "note",
           owner: "agent"
         })
 
-      result = call_tool("dran_list_pages", %{"context" => "personal", "owner" => "team"})
+      result = call_tool("dran_list_pages", %{"workspace" => "personal", "owner" => "team"})
 
       assert result =~ "Found 1 pages"
       assert result =~ "team-owned"

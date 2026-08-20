@@ -386,7 +386,7 @@ defmodule DranWeb.DocsContent do
     a stable identity. Do not display it to users or link to it.
 
   Reading a community's pages:
-    `Brain.community_pages(context_id, community_id)` returns the
+    `Brain.community_pages(workspace_id, community_id)` returns the
     lightweight list `%{id, slug, title, page_type}` of pages in a
     given community — no body, no embeddings. The Curator agent uses
     this to gather evidence when evaluating duplicate candidates.
