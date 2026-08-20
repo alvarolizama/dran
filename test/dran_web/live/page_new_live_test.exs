@@ -86,23 +86,13 @@ defmodule DranWeb.PageNewLiveTest do
       assert html =~ ~s(value="#{today}")
     end
 
-    test "todo form prefills kanban_status=backlog and priority=medium", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/panel/todos/new")
+    test "query form renders the generic new-page form", %{conn: conn} do
+      # PageNewLive still serves the 5 remaining page types (note, concept,
+      # entity, reference, query). Goals/projects/plans/todos have their own
+      # LiveViews or were removed.
+      {:ok, _view, html} = live(conn, "/panel/queries/new")
 
-      assert html =~ ~s(value="backlog")
-      assert html =~ ~s(value="medium")
-    end
-
-    test "project form prefills status=draft", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/panel/projects/new")
-
-      assert html =~ ~s(value="draft")
-    end
-
-    test "plan form prefills status=draft", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/panel/plans/new")
-
-      assert html =~ ~s(value="draft")
+      assert html =~ ~s(name="page[title]")
     end
   end
 

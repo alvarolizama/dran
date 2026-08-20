@@ -451,13 +451,12 @@ defmodule Dran.Agent.CuratorTest do
       assert session.status == "done"
       assert session.summary =~ "Reviewed duplicates"
 
-      # Verify the report page was created
+      # Verify the report was created
       date_str = Date.utc_today() |> Date.to_iso8601()
-      report = Brain.get_page_by_slug("curator-report-" <> date_str, ctx.id)
+      report = Brain.get_report_by_slug("curator-report-" <> date_str, ctx.id)
       assert report != nil
       assert report.title =~ "Curator report"
-      assert report.page_type == "report"
-      assert report.created_by == "curator"
+      assert report.report_type == "log"
       assert report.body =~ "Curator Report"
       assert report.meta["kind"] == "log"
       assert report.meta["agent_session_id"] == session.id

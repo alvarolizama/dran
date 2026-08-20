@@ -2,7 +2,6 @@ defmodule DranWeb.ReportLiveTest do
   use DranWeb.ConnCase, async: false
 
   alias Dran.Brain
-
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
@@ -31,12 +30,12 @@ defmodule DranWeb.ReportLiveTest do
     context = Brain.get_workspace_by_slug("personal")
 
     {:ok, report} =
-      Brain.create_page(%{
+      Brain.create_report(%{
         workspace_id: context.id,
         title: "Weekly job report",
+        slug: "weekly-job-report",
         body: "All jobs succeeded.",
-        page_type: "report",
-        meta: %{"kind" => "log"}
+        report_type: "log"
       })
 
     # Log in — init_test_session is needed because ConnCase doesn't pipe through browser
@@ -57,12 +56,6 @@ defmodule DranWeb.ReportLiveTest do
       assert html =~ report.title
       assert html =~ "All jobs succeeded."
       assert html =~ t("Report")
-    end
-
-    test "edit mode shows the editor form", %{conn: conn, report: report} do
-      {:ok, _view, html} = live(conn, ~p"/panel/reports/#{report.slug}?edit=true")
-
-      assert html =~ ~s(id="page-edit-form")
     end
 
     test "redirects to /activity when the report does not exist", %{conn: conn} do

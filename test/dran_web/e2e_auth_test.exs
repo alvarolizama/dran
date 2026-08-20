@@ -273,7 +273,7 @@ defmodule DranWeb.E2EAuthTest do
       assert body["error"]["message"] =~ "read-only"
     end
 
-    test "read-only key is blocked from dran_create_todo", %{conn: conn, ctx1: ctx1} do
+    test "read-only key is blocked from dran_create_note", %{conn: conn, ctx1: ctx1} do
       {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
 
       msg = %{
@@ -281,7 +281,7 @@ defmodule DranWeb.E2EAuthTest do
         "method" => "tools/call",
         "id" => 1,
         "params" => %{
-          "name" => "dran_create_todo",
+          "name" => "dran_create_note",
           "arguments" => %{"workspace" => ctx1.slug, "title" => "T", "slug" => "t"}
         }
       }

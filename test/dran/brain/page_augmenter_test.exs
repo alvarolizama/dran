@@ -57,38 +57,6 @@ defmodule Dran.Brain.PageAugmenterTest do
            } = Brain.list_relations_for_page(page.id)
   end
 
-  describe "run/1 with second-citizen page types" do
-    test "short-circuits before any DB access for a report struct" do
-      # Unpersisted struct: proves the capability guard fires before Repo.get
-      # and before PropsMaterializer.
-      assert :ok = PageAugmenter.run(%Page{page_type: "report", slug: "sys-report"})
-    end
-
-    test "a persisted report gets no embedding, no enrichment and no relations" do
-      enable_inference()
-      # No Req.Test stub: any HTTP call to the inference API would raise.
-
-      context = Brain.get_workspace_by_slug("personal")
-
-      {:ok, page} =
-        Brain.create_page(%{
-          workspace_id: context.id,
-          title: "System report",
-          slug: "system-report-augmenter-test",
-          body: "Nightly job finished successfully.",
-          page_type: "report"
-        })
-
-      assert :ok = PageAugmenter.run(page)
-
-      refreshed = Dran.Repo.get!(Page, page.id)
-      assert refreshed.embedding == nil
-      assert refreshed.summary == nil
-
-      assert %{outbound: [], inbound: []} = Brain.list_relations_for_page(page.id)
-    end
-  end
-
   test "run/1 enriches summary and creates high-confidence auto-relations" do
     Application.put_env(:dran, :inference, nil)
 

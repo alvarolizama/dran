@@ -25,7 +25,7 @@ defmodule Dran.JobsTest do
   use Dran.DataCase, async: false
 
   alias Dran.{Brain, Jobs, Repo}
-  alias Dran.Brain.Page
+  alias Dran.Brain.Report
   alias Dran.JobsTest.FakeJob
 
   @expected_keys [
@@ -127,9 +127,7 @@ defmodule Dran.JobsTest do
       assert {:ok, report} = Jobs.execute(:curator_daily, "manual", {FakeJob, :ok, []})
 
       assert report.workspace_id == ctx.id
-      assert report.page_type == "report"
-      assert report.created_by == "curator_daily"
-      assert report.owner == "curator_daily"
+      assert report.report_type == "log"
       assert report.title =~ ~r/^Curator — \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/
       assert report.slug =~ ~r/^curator_daily-\d+$/
 
@@ -199,7 +197,7 @@ defmodule Dran.JobsTest do
       assert report.meta["status"] == "ok"
       assert report.meta["trigger"] == "scheduled"
       assert report.meta["job_key"] == "pagerank_nightly"
-      assert report.created_by == "pagerank_nightly"
+      assert report.report_type == "log"
       assert count_job_reports(ctx.id, "pagerank_nightly") == 1
     end
 
@@ -321,9 +319,9 @@ defmodule Dran.JobsTest do
     keys = Enum.map(@expected_keys, &Atom.to_string/1)
 
     Repo.delete_all(
-      from p in Page,
-        where: p.workspace_id == ^workspace_id and p.page_type == "report",
-        where: fragment("?->>'job_key'", p.meta) in ^keys
+      from r in Report,
+        where: r.workspace_id == ^workspace_id,
+        where: fragment("?->>'job_key'", r.meta) in ^keys
     )
   end
 
@@ -333,14 +331,12 @@ defmodule Dran.JobsTest do
     for i <- 1..count do
       at = DateTime.add(base, i, :second)
 
-      %Page{
+      %Report{
         workspace_id: workspace_id,
         title: "Run #{i}",
         slug: "#{job_key}-#{i}",
         body: "report #{i}",
-        page_type: "report",
-        created_by: job_key,
-        owner: job_key,
+        report_type: "log",
         meta: %{"kind" => "log", "job_key" => job_key, "status" => "ok"},
         inserted_at: at,
         updated_at: at
@@ -353,21 +349,21 @@ defmodule Dran.JobsTest do
 
   defp job_reports(workspace_id, job_key, archived: archived?) do
     Repo.all(
-      from p in Page,
+      from r in Report,
         where:
-          p.workspace_id == ^workspace_id and p.page_type == "report" and
-            p.archived == ^archived?,
-        where: fragment("?->>'job_key' = ?", p.meta, ^job_key),
-        order_by: [desc: p.inserted_at]
+          r.workspace_id == ^workspace_id and
+            r.archived == ^archived?,
+        where: fragment("?->>'job_key' = ?", r.meta, ^job_key),
+        order_by: [desc: r.inserted_at]
     )
   end
 
   defp count_job_reports(workspace_id, job_key) do
     Repo.one(
-      from p in Page,
-        where: p.workspace_id == ^workspace_id and p.page_type == "report",
-        where: fragment("?->>'job_key' = ?", p.meta, ^job_key),
-        select: count(p.id)
+      from r in Report,
+        where: r.workspace_id == ^workspace_id,
+        where: fragment("?->>'job_key' = ?", r.meta, ^job_key),
+        select: count(r.id)
     )
   end
 end

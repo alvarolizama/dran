@@ -100,54 +100,6 @@ defmodule Dran.Brain.PageMetaGettextTest do
   # ── option labels appear in default.pot ──────────────────────────────────
 
   describe "select option labels are routed through gettext (present in default.pot)" do
-    test "todo: kanban_status option labels" do
-      for {label, _value} <- select_pairs("todo") do
-        assert pot_has?(label),
-               "kanban_status/priority label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
-    test "todo: every option label is the expected msgid" do
-      labels = Enum.map(select_pairs("todo"), &elem(&1, 0))
-
-      for expected <- [
-            "Backlog",
-            "This Week",
-            "Today",
-            "In Progress",
-            "Done",
-            "Cancelled",
-            "Low",
-            "Medium",
-            "High",
-            "Urgent"
-          ] do
-        assert expected in labels,
-               "expected #{inspect(expected)} among todo option labels, got: #{inspect(labels)}"
-      end
-    end
-
-    test "project: every option label is in default.pot" do
-      for {label, _value} <- select_pairs("project") do
-        assert pot_has?(label),
-               "project option label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
-    test "goal: every option label is in default.pot" do
-      for {label, _value} <- select_pairs("goal") do
-        assert pot_has?(label),
-               "goal option label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
-    test "plan: every option label is in default.pot" do
-      for {label, _value} <- select_pairs("plan") do
-        assert pot_has?(label),
-               "plan option label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
     test "note: every kind option label is in default.pot" do
       for {label, _value} <- select_pairs("note") do
         assert pot_has?(label),
@@ -187,40 +139,6 @@ defmodule Dran.Brain.PageMetaGettextTest do
   # ── option values (DB slugs) are NEVER translated ───────────────────────
 
   describe "select option VALUES (DB slugs) are never translated" do
-    test "todo: kanban_status values are raw slugs" do
-      values = Enum.map(select_pairs("todo"), &elem(&1, 1))
-
-      for expected <-
-            ~w(backlog this_week today in_progress done cancelled low medium high urgent) do
-        assert expected in values
-      end
-    end
-
-    test "project: health, priority, status values are raw slugs" do
-      values = Enum.map(select_pairs("project"), &elem(&1, 1))
-
-      for expected <-
-            ~w(green yellow red low medium high urgent draft active on_hold done archived) do
-        assert expected in values
-      end
-    end
-
-    test "goal: health values are raw slugs" do
-      values = Enum.map(select_pairs("goal"), &elem(&1, 1))
-
-      for expected <- ~w(green yellow red) do
-        assert expected in values
-      end
-    end
-
-    test "plan: horizon and status values are raw slugs" do
-      values = Enum.map(select_pairs("plan"), &elem(&1, 1))
-
-      for expected <- ~w(weekly monthly quarterly yearly draft active done archived) do
-        assert expected in values
-      end
-    end
-
     test "note: kind values are raw slugs (lowercase)" do
       values = Enum.map(select_pairs("note"), &elem(&1, 1))
 
@@ -267,26 +185,11 @@ defmodule Dran.Brain.PageMetaGettextTest do
 
   describe "field labels (3rd tuple element) are routed through gettext" do
     test "every field label across all page types is in default.pot" do
-      for type <- ~w(note concept entity reference plan project goal todo query),
+      for type <- ~w(note concept entity reference query),
           label <- field_labels(type) do
         assert pot_has?(label),
                "field label #{inspect(label)} for type #{inspect(type)} not in default.pot — not gettext'd"
       end
-    end
-
-    test "goal :new mode: every field label is in default.pot" do
-      for label <- field_labels("goal", :new) do
-        assert pot_has?(label),
-               "goal :new field label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
-    test "goal :new mode excludes derived fields (health, current_value, progress)" do
-      labels = field_labels("goal", :new)
-      # msgids for the derived fields — should NOT appear in :new mode.
-      refute "Health" in labels
-      refute "Current value" in labels
-      refute "Progress (0.0-1.0)" in labels
     end
   end
 
@@ -295,11 +198,11 @@ defmodule Dran.Brain.PageMetaGettextTest do
   describe "regression — note kind list has no bogus 'Hecho' option" do
     # The original "Hecho" bug came from fuzzy .po pollution (msgid "None"
     # had msgstr "Hecho"). This guards the note kind list itself: it must
-    # contain exactly the 23 expected slugs and no 'Hecho' (which was never
+    # contain exactly the 25 expected slugs and no 'Hecho' (which was never
     # a real note kind, only a translation artefact).
-    test "note_kinds/0 returns exactly 23 expected slugs" do
+    test "note_kinds/0 returns exactly 25 expected slugs" do
       assert PageMeta.note_kinds() ==
-               ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm)
+               ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm todo plan)
     end
 
     test "note kinds are all lowercase slugs (never display labels)" do
@@ -322,7 +225,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     # prompts are not part of meta_fields_for's return, but we keep a guard
     # that no field label is the English literal "None".
     test "no page type returns 'None' as a field label" do
-      for type <- ~w(note concept entity reference plan project goal todo query) do
+      for type <- ~w(note concept entity reference query) do
         refute "None" in field_labels(type),
                "page type #{inspect(type)} has a raw 'None' field label"
       end
@@ -335,7 +238,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     # Guards against typos introduced during the gettext wrapping
     # (e.g. a stray gettext call with wrong arity returning a non-string label).
     test "every entry is {atom, binary, binary, list} or {atom, binary, binary}" do
-      for type <- ~w(note concept entity reference plan project goal todo query),
+      for type <- ~w(note concept entity reference query),
           entry <- PageMeta.meta_fields_for(type) do
         case entry do
           {type, key, label}
@@ -353,7 +256,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     end
 
     test "every :select field has non-empty options" do
-      for type <- ~w(note concept entity reference plan project goal todo query),
+      for type <- ~w(note concept entity reference query),
           {:select, key, _label, opts} <- PageMeta.meta_fields_for(type) do
         # Options may be inline (list of {binary, binary}) or under :options.
         direct_opts =

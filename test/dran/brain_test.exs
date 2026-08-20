@@ -35,11 +35,12 @@ defmodule Dran.BrainTest do
     test "enabled_page_types/1 returns all types minus disabled", %{context: ctx} do
       assert Brain.enabled_page_types(ctx) == Brain.page_types()
 
-      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["todo", "goal"]})
+      {:ok, ctx} =
+        Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference", "entity"]})
 
       enabled = Brain.enabled_page_types(ctx)
-      refute "todo" in enabled
-      refute "goal" in enabled
+      refute "reference" in enabled
+      refute "entity" in enabled
       assert "note" in enabled
     end
 
@@ -51,8 +52,8 @@ defmodule Dran.BrainTest do
     end
 
     test "page_type_enabled?/2 treats nil context as all types enabled" do
-      assert Brain.page_type_enabled?(nil, "todo")
-      assert Brain.page_type_enabled?(nil, "project")
+      assert Brain.page_type_enabled?(nil, "note")
+      assert Brain.page_type_enabled?(nil, "query")
     end
 
     test "update_workspace_settings/2 rejects invalid page types", %{context: ctx} do
@@ -84,12 +85,12 @@ defmodule Dran.BrainTest do
     end
 
     test "list_pages/1 excludes disabled page types", %{context: ctx} do
-      {:ok, _todo} =
+      {:ok, _ref} =
         Brain.create_page(%{
-          "title" => "Hidden todo",
-          "page_type" => "todo",
+          "title" => "Hidden reference",
+          "page_type" => "reference",
           "workspace_id" => ctx.id,
-          "body" => "a todo"
+          "body" => "a reference"
         })
 
       {:ok, _note} =
@@ -100,15 +101,15 @@ defmodule Dran.BrainTest do
           "body" => "a note"
         })
 
-      # Before disabling, todo appears
+      # Before disabling, reference appears
       pages = Brain.list_pages(workspace_id: ctx.id)
-      assert Enum.any?(pages, &(&1.page_type == "todo"))
+      assert Enum.any?(pages, &(&1.page_type == "reference"))
 
-      # After disabling, todo is hidden
-      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["todo"]})
+      # After disabling, reference is hidden
+      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
 
-      pages = Brain.list_pages(workspace_id: ctx.id)
-      refute Enum.any?(pages, &(&1.page_type == "todo"))
+      pages = Brain.list_pages(workspace_id: ctx.id, workspace: ctx)
+      refute Enum.any?(pages, &(&1.page_type == "reference"))
       assert Enum.any?(pages, &(&1.page_type == "note"))
     end
   end
@@ -370,18 +371,20 @@ defmodule Dran.BrainTest do
       assert_in_delta edge.weight, 0.85, 0.001
     end
 
-    test "exclude_types filters the operational layer in SQL", %{context: ctx} do
+    test "exclude_types filters types in SQL", %{context: ctx} do
       {:ok, note} = Brain.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
-      {:ok, todo} = Brain.create_page(%{workspace_id: ctx.id, title: "Todo", page_type: "todo"})
+
+      {:ok, ref} =
+        Brain.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
 
       {:ok, _} =
         Brain.create_relation(%{
           source_id: note.id,
-          target_id: todo.id,
+          target_id: ref.id,
           relation_type: "related"
         })
 
-      graph = Brain.graph_data(ctx.id, exclude_types: ~w(todo plan))
+      graph = Brain.graph_data(ctx.id, exclude_types: ~w(reference))
 
       assert Enum.map(graph.nodes, & &1.type) == ["note"]
       assert graph.edges == []
@@ -389,42 +392,41 @@ defmodule Dran.BrainTest do
       assert graph.total_edges == 0
     end
 
-    test "registry-hidden types (todo, plan, report) keep report pages out of the graph", %{
-      context: ctx
-    } do
+    test "hidden_from_graph lists no standard types since only 5 exist", %{context: ctx} do
       {:ok, note} = Brain.create_page(%{workspace_id: ctx.id, title: "Note", page_type: "note"})
 
-      {:ok, report} =
-        Brain.create_page(%{workspace_id: ctx.id, title: "Report", page_type: "report"})
+      {:ok, ref} =
+        Brain.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
 
       {:ok, _} =
         Brain.create_relation(%{
           source_id: note.id,
-          target_id: report.id,
+          target_id: ref.id,
           relation_type: "related"
         })
 
-      # The capability registry is what GraphCache uses to hide types by default.
-      exclude = Dran.Brain.PageTypes.hidden_from_graph()
-      assert Enum.sort(exclude) == ~w(plan report todo)
+      # Every registered page type is a full graph citizen, so the default
+      # exclusion list is empty and both nodes appear in the graph.
+      assert Brain.PageTypes.hidden_from_graph() == []
 
-      graph = Brain.graph_data(ctx.id, exclude_types: exclude)
+      graph = Brain.graph_data(ctx.id, exclude_types: Brain.PageTypes.hidden_from_graph())
 
-      assert Enum.map(graph.nodes, & &1.type) == ["note"]
-      assert graph.edges == []
+      assert Enum.sort(Enum.map(graph.nodes, & &1.type)) == ["note", "reference"]
+      assert length(graph.edges) == 1
     end
 
     test "max_nodes caps to the most-connected pages and reports real totals", %{context: ctx} do
       # Hub page with 3 relations — always makes the cut
       {:ok, hub} = Brain.create_page(%{workspace_id: ctx.id, title: "Hub", page_type: "note"})
 
-      # A todo that must never appear when the operational layer is excluded
-      {:ok, todo} = Brain.create_page(%{workspace_id: ctx.id, title: "Todo", page_type: "todo"})
+      # A reference that is excluded from this graph run (via exclude_types)
+      {:ok, ref} =
+        Brain.create_page(%{workspace_id: ctx.id, title: "Ref", page_type: "reference"})
 
       {:ok, _} =
         Brain.create_relation(%{
           source_id: hub.id,
-          target_id: todo.id,
+          target_id: ref.id,
           relation_type: "related"
         })
 
@@ -449,11 +451,11 @@ defmodule Dran.BrainTest do
           leaf
         end
 
-      graph = Brain.graph_data(ctx.id, exclude_types: ~w(todo plan), max_nodes: 2)
+      graph = Brain.graph_data(ctx.id, exclude_types: ~w(reference), max_nodes: 2)
 
       # Top 2 by degree among non-excluded types: hub (3) + one of the
       # leaves (1). The other two leaves tie at degree 1, so only one of
-      # them is present. The todo never makes the cut.
+      # them is present. The reference never makes the cut.
       assert length(graph.nodes) == 2
       assert Enum.any?(graph.nodes, &(&1.id == hub.id))
       assert Enum.count(graph.nodes, &(&1.id in Enum.map(leaves, fn l -> l.id end))) == 1
@@ -461,7 +463,7 @@ defmodule Dran.BrainTest do
       # Only edges between the returned nodes survive
       assert length(graph.edges) == 1
 
-      # Real totals still exclude the operational layer
+      # Real totals still exclude the reference
       assert graph.total_nodes == 4
       assert graph.total_edges == 3
     end
@@ -479,11 +481,11 @@ defmodule Dran.BrainTest do
     test "graph_type_counts groups real totals per type", %{context: ctx} do
       {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "N1", page_type: "note"})
       {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "N2", page_type: "note"})
-      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "G1", page_type: "goal"})
-      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "T1", page_type: "todo"})
+      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "R1", page_type: "reference"})
+      {:ok, _} = Brain.create_page(%{workspace_id: ctx.id, title: "C1", page_type: "concept"})
 
-      assert Brain.graph_type_counts(ctx.id) == %{"note" => 2, "goal" => 1, "todo" => 1}
-      assert Brain.graph_type_counts(ctx.id, ~w(todo plan)) == %{"note" => 2, "goal" => 1}
+      assert Brain.graph_type_counts(ctx.id) == %{"note" => 2, "reference" => 1, "concept" => 1}
+      assert Brain.graph_type_counts(ctx.id, ~w(reference)) == %{"note" => 2, "concept" => 1}
     end
   end
 

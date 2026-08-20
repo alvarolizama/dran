@@ -76,7 +76,7 @@ defmodule Dran.Brain.PageMetaTest do
     end
 
     test "props survive across all page types" do
-      for type <- ~w(note concept entity reference plan project goal todo query) do
+      for type <- ~w(note concept entity reference query) do
         attrs = %{"props" => %{"custom" => "value"}}
         cs = PageMeta.changeset(%PageMeta{}, attrs, type)
 
@@ -88,7 +88,7 @@ defmodule Dran.Brain.PageMetaTest do
 
   describe "meta_fields_for/1 with props" do
     test "every page type includes a props field" do
-      for type <- ~w(note concept entity reference plan project goal todo query) do
+      for type <- ~w(note concept entity reference query) do
         fields = PageMeta.meta_fields_for(type)
 
         assert Enum.any?(fields, fn
@@ -99,10 +99,13 @@ defmodule Dran.Brain.PageMetaTest do
       end
     end
 
-    test "props field label is Custom properties" do
+    test "props field label is present and points to the props key" do
       fields = PageMeta.meta_fields_for("entity")
 
-      assert {:props, "props", "Custom properties"} in fields
+      assert Enum.any?(fields, fn
+               {:props, "props", _label} -> true
+               _ -> false
+             end)
     end
   end
 
@@ -112,13 +115,6 @@ defmodule Dran.Brain.PageMetaTest do
 
       assert cs.valid?
       assert Ecto.Changeset.get_change(cs, :kind) == "log"
-    end
-
-    test "rejects a kind outside the report kinds" do
-      cs = PageMeta.changeset(%PageMeta{}, %{"kind" => "thought"}, "report")
-
-      refute cs.valid?
-      assert %{kind: [_ | _]} = errors_on(cs)
     end
 
     test "report_kinds/0 returns exactly the log kind" do

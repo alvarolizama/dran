@@ -64,11 +64,17 @@ defmodule Dran.JourneyTest do
 
     test "includes type distribution", %{context: context} do
       Brain.create_page(%{workspace_id: context.id, title: "Note", slug: "n1", page_type: "note"})
-      Brain.create_page(%{workspace_id: context.id, title: "Todo", slug: "t1", page_type: "todo"})
+
+      Brain.create_page(%{
+        workspace_id: context.id,
+        title: "Concept",
+        slug: "c1",
+        page_type: "concept"
+      })
 
       result = Journey.timeline(context.id)
       assert Map.get(result.stats.by_type, "note") == 1
-      assert Map.get(result.stats.by_type, "todo") == 1
+      assert Map.get(result.stats.by_type, "concept") == 1
       assert result.stats.busiest_count == 2
     end
 
@@ -178,7 +184,8 @@ defmodule Dran.JourneyTest do
     test "returns a deterministic hex color per page type" do
       colors = Journey.type_colors()
 
-      assert map_size(colors) == 9
+      # Only the 5 remaining page types: note, concept, entity, reference, query
+      assert map_size(colors) == 5
       assert colors == Journey.type_colors()
       assert colors["note"] == "#D36969"
       assert Enum.all?(colors, fn {_type, hex} -> Regex.match?(~r/^#[0-9A-F]{6}$/, hex) end)

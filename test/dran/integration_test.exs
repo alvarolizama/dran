@@ -161,15 +161,16 @@ defmodule Dran.IntegrationTest do
     end
 
     test "stats with todos groups by kanban_status via SQL", %{context: ctx} do
-      # Create todos with different kanban statuses
+      # Create todo-notes with different kanban statuses
       {:ok, _todo1} =
         Brain.create_page(%{
           workspace_id: ctx.id,
           title: "Task A",
           slug: "task-a",
-          page_type: "todo",
+          page_type: "note",
           body: "Do thing A",
-          meta: %{"kanban_status" => "doing"}
+          meta: %{"kind" => "todo"},
+          kanban_status: "doing"
         })
 
       {:ok, _todo2} =
@@ -177,9 +178,10 @@ defmodule Dran.IntegrationTest do
           workspace_id: ctx.id,
           title: "Task B",
           slug: "task-b",
-          page_type: "todo",
+          page_type: "note",
           body: "Do thing B",
-          meta: %{"kanban_status" => "done"}
+          meta: %{"kind" => "todo"},
+          kanban_status: "done"
         })
 
       {:ok, _todo3} =
@@ -187,9 +189,10 @@ defmodule Dran.IntegrationTest do
           workspace_id: ctx.id,
           title: "Task C",
           slug: "task-c",
-          page_type: "todo",
+          page_type: "note",
           body: "Do thing C",
-          meta: %{"kanban_status" => "backlog"}
+          meta: %{"kind" => "todo"},
+          kanban_status: "backlog"
         })
 
       {:ok, _todo4} =
@@ -197,15 +200,16 @@ defmodule Dran.IntegrationTest do
           workspace_id: ctx.id,
           title: "Task D",
           slug: "task-d",
-          page_type: "todo",
-          body: "Do thing D"
-          # no meta → should default to "backlog"
+          page_type: "note",
+          body: "Do thing D",
+          meta: %{"kind" => "todo"}
+          # no kanban_status → should default to "backlog"
         })
 
       stats = Brain.stats(ctx.id)
 
       assert stats.total_pages == 4
-      assert stats.by_type["todo"] == 4
+      assert stats.by_type["note"] == 4
       assert stats.todos_by_status["doing"] == 1
       assert stats.todos_by_status["done"] == 1
       assert stats.todos_by_status["backlog"] == 2

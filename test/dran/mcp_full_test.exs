@@ -83,12 +83,12 @@ defmodule Dran.MCPFullTest do
   # ── Protocol: tools/list ────────────────────────────────────────────────────
 
   describe "tools/list" do
-    test "returns exactly 18 tools" do
+    test "returns exactly 20 tools" do
       resp =
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 18
+      assert length(tools) == 20
     end
 
     test "all tools carry the dran_ prefix" do
@@ -172,23 +172,31 @@ defmodule Dran.MCPFullTest do
     end
 
     test "resources/read goal returns JSON with todos", %{context: ctx} do
-      {:ok, _} =
-        Brain.create_page(%{
+      {:ok, goal} =
+        Brain.create_goal(%{
           workspace_id: ctx.id,
           title: "My Goal",
           slug: "my-goal-page",
-          page_type: "goal",
-          meta: %{"health" => "green"}
+          health: "green"
         })
 
-      {:ok, _} =
+      {:ok, note} =
         Brain.create_page(%{
           workspace_id: ctx.id,
           title: "Goal Todo",
           slug: "goal-todo-page",
-          page_type: "todo",
-          meta: %{"goal_slug" => "my-goal-page", "kanban_status" => "today"}
+          page_type: "note",
+          meta: %{"kind" => "todo", "kanban_status" => "today"}
         })
+
+      # Link the note to the goal via a part_of relation
+      Brain.create_relation(%{
+        source_id: note.id,
+        source_type: "page",
+        target_id: goal.id,
+        target_type: "goal",
+        relation_type: "part_of"
+      })
 
       resp =
         send_message(%{
@@ -331,24 +339,23 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~
-               "Error: page type 'report' is system-created and cannot be created via MCP"
+               "Error: page type 'report' is not a valid page type — use dran_create_goal, dran_create_project, or dran_create_note for goals, projects, and todo-style notes"
 
       assert Brain.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
     end
 
-    test "creates a project page with meta", %{context: ctx} do
-      result =
-        call_tool("dran_create_page", %{
-          "workspace" => "personal",
-          "page_type" => "project",
-          "title" => "Test Project",
-          "slug" => "test-project-create",
-          "meta" => %{"status" => "active", "priority" => "high"}
-        })
+    test "rejects non-page types (goal, project, todo, plan)", %{context: _ctx} do
+      for page_type <- ~w(goal project todo plan) do
+        result =
+          call_tool("dran_create_page", %{
+            "workspace" => "personal",
+            "page_type" => page_type,
+            "title" => "Test #{page_type}",
+            "slug" => "test-#{page_type}-create"
+          })
 
-      assert result =~ "Created page: Test Project"
-      page = Brain.get_page_by_slug("test-project-create", ctx.id)
-      assert page.meta["status"] == "active"
+        assert result =~ "Error: page type '#{page_type}' is not a valid page type"
+      end
     end
   end
 
@@ -494,12 +501,12 @@ defmodule Dran.MCPFullTest do
     end
   end
 
-  # ── Tool: dran_create_todo ──────────────────────────────────────────────────
+  # ── Tool: dran_create_note ─────────────────────────────────────────────────
 
-  describe "dran_create_todo" do
-    test "creates a todo with kanban status", %{context: ctx} do
+  describe "dran_create_note" do
+    test "creates a todo-style note with kanban status", %{context: ctx} do
       result =
-        call_tool("dran_create_todo", %{
+        call_tool("dran_create_note", %{
           "workspace" => "personal",
           "title" => "Test Todo",
           "slug" => "create-todo-test",
@@ -507,81 +514,51 @@ defmodule Dran.MCPFullTest do
           "priority" => "high"
         })
 
-      assert result =~ "Created todo: Test Todo"
+      assert result =~ "Created note: Test Todo"
       assert result =~ "status: today"
 
-      todo = Brain.get_page_by_slug("create-todo-test", ctx.id)
-      assert todo.meta["kanban_status"] == "today"
-      assert todo.meta["priority"] == "high"
+      note = Brain.get_page_by_slug("create-todo-test", ctx.id)
+      assert note.page_type == "note"
+      assert note.meta["kind"] == "todo"
+      assert note.meta["kanban_status"] == "today"
+      assert note.meta["priority"] == "high"
     end
 
     test "sets assignee in meta", %{context: ctx} do
       result =
-        call_tool("dran_create_todo", %{
+        call_tool("dran_create_note", %{
           "workspace" => "personal",
           "title" => "Assigned Todo",
           "slug" => "assigned-todo-test",
           "assignee" => "hermes"
         })
 
-      assert result =~ "Created todo"
-      todo = Brain.get_page_by_slug("assigned-todo-test", ctx.id)
-      assert todo.meta["assignee"] == "hermes"
+      assert result =~ "Created note"
+      note = Brain.get_page_by_slug("assigned-todo-test", ctx.id)
+      assert note.meta["assignee"] == "hermes"
     end
 
     test "without assignee leaves it absent", %{context: ctx} do
-      call_tool("dran_create_todo", %{
+      call_tool("dran_create_note", %{
         "workspace" => "personal",
         "title" => "Unassigned Todo",
         "slug" => "unassigned-todo-test"
       })
 
-      todo = Brain.get_page_by_slug("unassigned-todo-test", ctx.id)
-      refute Map.has_key?(todo.meta, "assignee")
+      note = Brain.get_page_by_slug("unassigned-todo-test", ctx.id)
+      refute Map.has_key?(note.meta, "assignee")
     end
 
     test "defaults to backlog status", %{context: ctx} do
-      call_tool("dran_create_todo", %{
+      call_tool("dran_create_note", %{
         "workspace" => "personal",
         "title" => "Default Todo",
         "slug" => "default-todo-test"
       })
 
-      todo = Brain.get_page_by_slug("default-todo-test", ctx.id)
-      assert todo.meta["kanban_status"] == "backlog"
-    end
-
-    test "with independent project/goal/plan links", %{context: ctx} do
-      {:ok, _} =
-        Brain.create_page(%{
-          workspace_id: ctx.id,
-          title: "Project",
-          slug: "link-project",
-          page_type: "project"
-        })
-
-      {:ok, _} =
-        Brain.create_page(%{
-          workspace_id: ctx.id,
-          title: "Goal",
-          slug: "link-goal",
-          page_type: "goal"
-        })
-
-      result =
-        call_tool("dran_create_todo", %{
-          "workspace" => "personal",
-          "title" => "Linked Todo",
-          "slug" => "linked-todo-test",
-          "project_slug" => "link-project",
-          "goal_slug" => "link-goal"
-        })
-
-      assert result =~ "Created todo"
-      todo = Brain.get_page_by_slug("linked-todo-test", ctx.id)
-      assert todo.meta["project_slug"] == "link-project"
-      assert todo.meta["goal_slug"] == "link-goal"
-      refute Map.has_key?(todo.meta, "plan_slug")
+      note = Brain.get_page_by_slug("default-todo-test", ctx.id)
+      assert note.meta["kind"] == "todo"
+      assert note.meta["kanban_status"] == "backlog"
     end
 
     test "errors on duplicate slug", %{context: ctx} do
@@ -590,11 +567,12 @@ defmodule Dran.MCPFullTest do
           workspace_id: ctx.id,
           title: "Existing Todo",
           slug: "dup-todo-test",
-          page_type: "todo"
+          page_type: "note",
+          meta: %{"kind" => "todo"}
         })
 
       result =
-        call_tool("dran_create_todo", %{
+        call_tool("dran_create_note", %{
           "workspace" => "personal",
           "title" => "Another",
           "slug" => "dup-todo-test"
@@ -604,97 +582,221 @@ defmodule Dran.MCPFullTest do
     end
   end
 
-  # ── Tool: dran_update_todo ─────────────────────────────────────────────────
+  # ── Tool: dran_update_note ─────────────────────────────────────────────────
 
-  describe "dran_update_todo" do
+  describe "dran_update_note" do
     test "merges meta (preserves existing keys)", %{context: ctx} do
-      {:ok, todo} =
+      {:ok, note} =
         Brain.create_page(%{
           workspace_id: ctx.id,
           title: "Merge Todo",
           slug: "merge-todo-test",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog", "priority" => "low", "due_date" => "2026-01-01"}
+          page_type: "note",
+          meta: %{
+            "kind" => "todo",
+            "kanban_status" => "backlog",
+            "priority" => "low",
+            "due_date" => "2026-01-01"
+          }
         })
 
       result =
-        call_tool("dran_update_todo", %{
+        call_tool("dran_update_note", %{
           "workspace" => "personal",
           "slug" => "merge-todo-test",
           "kanban_status" => "today"
         })
 
-      assert result =~ "Updated todo"
+      assert result =~ "Updated note"
       assert result =~ "status: today"
 
-      refreshed = Brain.get_page!(todo.id)
+      refreshed = Brain.get_page!(note.id)
       assert refreshed.meta["kanban_status"] == "today"
       assert refreshed.meta["priority"] == "low"
       assert refreshed.meta["due_date"] == "2026-01-01"
     end
 
     test "updates assignee via merge", %{context: ctx} do
-      {:ok, todo} =
+      {:ok, note} =
         Brain.create_page(%{
           workspace_id: ctx.id,
           title: "Assign Todo",
           slug: "assign-update-test",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog", "assignee" => "alvaro"}
+          page_type: "note",
+          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "alvaro"}
         })
 
       result =
-        call_tool("dran_update_todo", %{
+        call_tool("dran_update_note", %{
           "workspace" => "personal",
           "slug" => "assign-update-test",
           "assignee" => "hermes"
         })
 
-      assert result =~ "Updated todo"
-      refreshed = Brain.get_page!(todo.id)
+      assert result =~ "Updated note"
+      refreshed = Brain.get_page!(note.id)
       assert refreshed.meta["assignee"] == "hermes"
       # kanban_status preserved by merge
       assert refreshed.meta["kanban_status"] == "backlog"
     end
 
-    test "updates links independently", %{context: ctx} do
-      {:ok, _} =
-        Brain.create_page(%{
-          workspace_id: ctx.id,
-          title: "Proj",
-          slug: "update-proj",
-          page_type: "project"
-        })
-
-      {:ok, todo} =
-        Brain.create_page(%{
-          workspace_id: ctx.id,
-          title: "Link Todo",
-          slug: "link-update-todo",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog"}
-        })
-
-      call_tool("dran_update_todo", %{
-        "workspace" => "personal",
-        "slug" => "link-update-todo",
-        "project_slug" => "update-proj"
-      })
-
-      refreshed = Brain.get_page!(todo.id)
-      assert refreshed.meta["project_slug"] == "update-proj"
-      assert refreshed.meta["kanban_status"] == "backlog"
-    end
-
-    test "errors when todo not found" do
+    test "errors when note not found" do
       result =
-        call_tool("dran_update_todo", %{
+        call_tool("dran_update_note", %{
           "workspace" => "personal",
           "slug" => "no-such-todo",
           "kanban_status" => "done"
         })
 
-      assert result =~ "Error: todo 'no-such-todo' not found"
+      assert result =~ "Error: note 'no-such-todo' not found"
+    end
+  end
+
+  # ── Tool: dran_create_goal ──────────────────────────────────────────────────
+
+  describe "dran_create_goal" do
+    test "creates a goal with full attrs", %{context: ctx} do
+      result =
+        call_tool("dran_create_goal", %{
+          "workspace" => "personal",
+          "title" => "Ship v1",
+          "slug" => "ship-v1-goal",
+          "description" => "Launch the product",
+          "kind" => "business",
+          "health" => "green",
+          "status" => "active",
+          "metric" => "revenue",
+          "target_value" => 100_000,
+          "current_value" => 40_000,
+          "unit" => "USD",
+          "start_date" => "2026-01-01",
+          "target_date" => "2026-12-31",
+          "team" => ["alvaro", "hermes"]
+        })
+
+      assert result =~ "Created goal: Ship v1"
+      assert result =~ "ship-v1-goal"
+      assert result =~ "status: active"
+
+      goal = Brain.get_goal_by_slug("ship-v1-goal", ctx.id)
+      assert goal.kind == "business"
+      assert goal.health == "green"
+      assert goal.metric == "revenue"
+      assert goal.target_value == 100_000
+      assert goal.team == ["alvaro", "hermes"]
+    end
+
+    test "derives slug from title when omitted", %{context: ctx} do
+      result =
+        call_tool("dran_create_goal", %{
+          "workspace" => "personal",
+          "title" => "Learn Elixir"
+        })
+
+      assert result =~ "Created goal: Learn Elixir"
+      assert result =~ "learn-elixir"
+      assert Brain.get_goal_by_slug("learn-elixir", ctx.id) != nil
+    end
+
+    test "errors on duplicate slug", %{context: ctx} do
+      {:ok, _} =
+        Brain.create_goal(%{
+          workspace_id: ctx.id,
+          title: "Existing",
+          slug: "dup-goal-test"
+        })
+
+      result =
+        call_tool("dran_create_goal", %{
+          "workspace" => "personal",
+          "title" => "Another",
+          "slug" => "dup-goal-test"
+        })
+
+      assert result =~ "Error:"
+    end
+
+    test "errors on non-existent context" do
+      result =
+        call_tool("dran_create_goal", %{
+          "workspace" => "no-such-context",
+          "title" => "X"
+        })
+
+      assert result =~ "Error: context"
+    end
+  end
+
+  # ── Tool: dran_create_project ──────────────────────────────────────────────
+
+  describe "dran_create_project" do
+    test "creates a project with full attrs", %{context: ctx} do
+      result =
+        call_tool("dran_create_project", %{
+          "workspace" => "personal",
+          "title" => "Website Redesign",
+          "slug" => "website-redesign-project",
+          "description" => "Redesign the marketing site",
+          "status" => "active",
+          "health" => "yellow",
+          "priority" => "high",
+          "start_date" => "2026-02-01",
+          "target_date" => "2026-06-01"
+        })
+
+      assert result =~ "Created project: Website Redesign"
+      assert result =~ "website-redesign-project"
+      assert result =~ "status: active"
+
+      project = Brain.get_project_by_slug("website-redesign-project", ctx.id)
+      assert project.status == "active"
+      assert project.health == "yellow"
+      assert project.priority == "high"
+    end
+
+    test "links project to a goal via goal_slug", %{context: ctx} do
+      {:ok, goal} =
+        Brain.create_goal(%{
+          workspace_id: ctx.id,
+          title: "Revenue Goal",
+          slug: "revenue-goal"
+        })
+
+      result =
+        call_tool("dran_create_project", %{
+          "workspace" => "personal",
+          "title" => "Growth Project",
+          "slug" => "growth-project",
+          "goal_slug" => "revenue-goal"
+        })
+
+      assert result =~ "Created project: Growth Project"
+
+      project = Brain.get_project_by_slug("growth-project", ctx.id)
+      assert project.goal_id == goal.id
+    end
+
+    test "errors when goal_slug not found", %{context: ctx} do
+      result =
+        call_tool("dran_create_project", %{
+          "workspace" => "personal",
+          "title" => "Orphan Project",
+          "slug" => "orphan-project",
+          "goal_slug" => "no-such-goal"
+        })
+
+      assert result =~ "Error: goal 'no-such-goal' not found"
+      assert Brain.get_project_by_slug("orphan-project", ctx.id) == nil
+    end
+
+    test "errors on non-existent context" do
+      result =
+        call_tool("dran_create_project", %{
+          "workspace" => "no-such-context",
+          "title" => "X"
+        })
+
+      assert result =~ "Error: context"
     end
   end
 
@@ -939,8 +1041,8 @@ defmodule Dran.MCPFullTest do
           workspace_id: ctx.id,
           title: "Assigned to Hermes",
           slug: "assignee-filter-hermes",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog", "assignee" => "hermes"}
+          page_type: "note",
+          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "hermes"}
         })
 
       {:ok, _} =
@@ -948,8 +1050,8 @@ defmodule Dran.MCPFullTest do
           workspace_id: ctx.id,
           title: "Assigned to Alvaro",
           slug: "assignee-filter-alvaro",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog", "assignee" => "alvaro"}
+          page_type: "note",
+          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "alvaro"}
         })
 
       result =
@@ -968,8 +1070,8 @@ defmodule Dran.MCPFullTest do
           workspace_id: ctx.id,
           title: "Unassigned Todo",
           slug: "assignee-filter-none",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog"}
+          page_type: "note",
+          meta: %{"kind" => "todo", "kanban_status" => "backlog"}
         })
 
       {:ok, _} =
@@ -977,8 +1079,8 @@ defmodule Dran.MCPFullTest do
           workspace_id: ctx.id,
           title: "Assigned Todo",
           slug: "assignee-filter-set",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog", "assignee" => "hermes"}
+          page_type: "note",
+          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "hermes"}
         })
 
       result =

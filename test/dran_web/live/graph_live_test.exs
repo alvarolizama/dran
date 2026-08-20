@@ -47,27 +47,39 @@ defmodule DranWeb.GraphLiveTest do
       })
 
     {:ok, goal} =
-      Brain.create_page(%{workspace_id: context.id, title: "Test Goal", page_type: "goal"})
+      Brain.create_goal(%{workspace_id: context.id, title: "Test Goal", slug: "test-goal"})
 
     {:ok, plan} =
-      Brain.create_page(%{workspace_id: context.id, title: "Test Plan", page_type: "plan"})
+      Brain.create_page(%{
+        workspace_id: context.id,
+        title: "Test Plan",
+        slug: "test-plan",
+        page_type: "note",
+        meta: %{"kind" => "plan"}
+      })
 
     {:ok, todo} =
-      Brain.create_page(%{workspace_id: context.id, title: "Test Todo", page_type: "todo"})
+      Brain.create_page(%{
+        workspace_id: context.id,
+        title: "Test Todo",
+        slug: "test-todo",
+        page_type: "note",
+        meta: %{"kind" => "todo"},
+        kanban_status: "backlog"
+      })
 
-    {:ok, project} =
-      Brain.create_page(%{workspace_id: context.id, title: "Test Project", page_type: "project"})
+    {:ok, _project} =
+      Brain.create_project(%{
+        workspace_id: context.id,
+        title: "Test Project",
+        slug: "test-project"
+      })
 
-    # Relations: operational layer hangs off strategic hubs, knowledge
-    # touches goals — the shape the filter must preserve.
+    # Relations: notes connect to each other — the subgraph shape the filter
+    # must preserve. Goals/projects live in their own tables now, so they are
+    # not graph nodes (relations are page-to-page only).
     {:ok, _} =
-      Brain.create_relation_by_slugs(todo.slug, goal.slug, "part_of", context.id)
-
-    {:ok, _} =
-      Brain.create_relation_by_slugs(note.slug, goal.slug, "related", context.id)
-
-    {:ok, _} =
-      Brain.create_relation_by_slugs(plan.slug, project.slug, "part_of", context.id)
+      Brain.create_relation_by_slugs(todo.slug, plan.slug, "related", context.id)
 
     {:ok, _} =
       Brain.create_relation_by_slugs(note.slug, todo.slug, "related", context.id)
@@ -171,49 +183,49 @@ defmodule DranWeb.GraphLiveTest do
 
       assert_push_event(view, "set_visible_types", %{types: types})
       refute "note" in types
-      assert "goal" in types
+      assert "concept" in types
     end
 
     test "toggling a visible type off and on restores it in the pushed set", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/panel/graph")
 
-      view |> render_hook("toggle_type", %{"type" => "goal"})
+      view |> render_hook("toggle_type", %{"type" => "concept"})
       assert_push_event(view, "set_visible_types", %{types: types})
-      refute "goal" in types
+      refute "concept" in types
 
-      view |> render_hook("toggle_type", %{"type" => "goal"})
+      view |> render_hook("toggle_type", %{"type" => "concept"})
       assert_push_event(view, "set_visible_types", %{types: types})
-      assert "goal" in types
+      assert "concept" in types
     end
 
-    test "sidebar omits plan and todo, lists the rest as toggles", %{conn: conn} do
+    test "sidebar lists the remaining types as toggles", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/panel/graph")
 
       html = render(view)
 
-      # No toggle exists to bring the operational layer back
+      # The removed types have no toggles
       refute html =~ ~s(phx-value-type="todo")
       refute html =~ ~s(phx-value-type="plan")
+      refute html =~ ~s(phx-value-type="goal")
+      refute html =~ ~s(phx-value-type="project")
 
       # The remaining types are toggleable
-      assert html =~ ~s(phx-value-type="goal")
-      assert html =~ ~s(phx-value-type="project")
       assert html =~ ~s(phx-value-type="note")
       assert html =~ ~s(phx-value-type="concept")
     end
   end
 
   describe "per-page subgraph" do
-    test "show view includes the operational layer, unfiltered", %{conn: conn, todo: todo} do
+    test "show view includes the full subgraph, unfiltered", %{conn: conn, todo: todo} do
       {:ok, view, _html} = live(conn, ~p"/panel/graph/#{todo.slug}")
 
       graph = graph_from_view(view)
       types = graph["nodes"] |> Enum.map(& &1["type"]) |> Enum.uniq()
 
-      # The center itself is a todo and its part_of goal neighbor shows up —
-      # the subgraph must NOT apply the global filter.
-      assert "todo" in types
-      assert "goal" in types
+      # The center is a note (kind:todo) and its related neighbors are notes —
+      # the subgraph must NOT apply the global filter and includes them all.
+      assert "note" in types
+      assert length(graph["nodes"]) >= 2
 
       # Wave 3: show-mode payload carries no dead layout coordinates.
       assert Enum.all?(graph["nodes"], &(not Map.has_key?(&1, "x")))
@@ -229,13 +241,13 @@ defmodule DranWeb.GraphLiveTest do
       graph = graph_from_view(view)
       initial_count = length(graph["nodes"])
 
-      # Toggle "goal" off
-      view |> render_hook("toggle_type", %{"type" => "goal"})
+      # Toggle "note" off (the center and its neighbors are all notes)
+      view |> render_hook("toggle_type", %{"type" => "note"})
       graph_hidden = graph_from_view(view)
-      refute graph_hidden["nodes"] |> Enum.any?(&(&1["type"] == "goal"))
+      refute graph_hidden["nodes"] |> Enum.any?(&(&1["type"] == "note"))
 
-      # Toggle "goal" back on — all original nodes must return
-      view |> render_hook("toggle_type", %{"type" => "goal"})
+      # Toggle "note" back on — all original nodes must return
+      view |> render_hook("toggle_type", %{"type" => "note"})
       graph_restored = graph_from_view(view)
 
       assert length(graph_restored["nodes"]) == initial_count,

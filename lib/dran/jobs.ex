@@ -9,8 +9,8 @@ defmodule Dran.Jobs do
   `Dran.Jobs.run_scheduled/1`, which:
 
     * Skips disabled jobs (returns `:skipped`, writes nothing).
-    * Executes enabled jobs, times them, and writes ONE `report` page
-      (`page_type: "report"`, `meta.kind: "log"`) per run with the status,
+    * Executes enabled jobs, times them, and writes ONE report row
+      (in the `reports` table, `report_type: "log"`) per run with the status,
       duration, trigger and a compact markdown body.
     * Prunes old run reports for the job, keeping the newest 20
       (older ones are archived, never deleted).
@@ -33,16 +33,16 @@ defmodule Dran.Jobs do
      `my_job: [schedule: "0 4 * * *", task: {Dran.Jobs, :run_scheduled, [:my_job]}]`
      (inside the existing `if config_env() != :test` guard).
 
-  Reports are second-citizen pages (see `Dran.Brain.PageTypes`): no graph,
+  Reports are second-citizen entities (see `Dran.Brain.Report`): no graph,
   no journey, no embeddings — they cost zero inference. They are viewable
-  at `/reports/:slug` and surface in the activity log.
+  at `/reports/:slug`.
   """
 
   import Ecto.Query
 
   alias Dran.{Brain, Repo, Settings}
   alias Dran.Agent.Session
-  alias Dran.Brain.Page
+  alias Dran.Brain.Report
 
   require Logger
 
@@ -234,10 +234,10 @@ defmodule Dran.Jobs do
       {"ok", {:ok, report}} ->
         # Reload so meta comes back with string keys (jsonb round-trip),
         # matching what any later DB read would return.
-        {:ok, Repo.get!(Page, report.id)}
+        {:ok, Repo.get!(Report, report.id)}
 
       {"error", {:ok, report}} ->
-        {:error, Repo.get!(Page, report.id)}
+        {:error, Repo.get!(Report, report.id)}
     end
   end
 
@@ -259,23 +259,23 @@ defmodule Dran.Jobs do
       context ->
         excess =
           Repo.all(
-            from p in Page,
+            from r in Report,
               where:
-                p.workspace_id == ^context.id and p.page_type == "report" and
-                  p.archived == false,
-              where: fragment("?->>'job_key' = ?", p.meta, ^key_str),
-              order_by: [desc: p.inserted_at],
+                r.workspace_id == ^context.id and
+                  r.archived == false,
+              where: fragment("?->>'job_key' = ?", r.meta, ^key_str),
+              order_by: [desc: r.inserted_at],
               offset: ^keep
           )
 
-        Enum.each(excess, fn page ->
-          case Brain.update_page(page, %{"archived" => true}) do
+        Enum.each(excess, fn report ->
+          case Repo.update(Report.changeset(report, %{"archived" => true})) do
             {:ok, _} ->
               :ok
 
             {:error, changeset} ->
               Logger.warning(
-                "Dran.Jobs: failed to archive old report #{page.slug}: #{inspect(changeset.errors)}"
+                "Dran.Jobs: failed to archive old report #{report.slug}: #{inspect(changeset.errors)}"
               )
           end
         end)
@@ -324,7 +324,7 @@ defmodule Dran.Jobs do
             summary
           )
 
-        case Brain.create_page(attrs) do
+        case Brain.create_report(attrs) do
           # Two runs within the same second would collide on the slug —
           # retry once with a uniqueness suffix, keeping the canonical
           # "<key>-<unix_seconds>" format for the normal path.
@@ -332,7 +332,7 @@ defmodule Dran.Jobs do
             if slug_taken?(changeset) do
               suffix = Integer.to_string(System.unique_integer([:positive]), 36)
 
-              Brain.create_page(%{attrs | slug: "#{slug}-#{String.downcase(suffix)}"})
+              Brain.create_report(%{attrs | slug: "#{slug}-#{String.downcase(suffix)}"})
             else
               {:error, changeset}
             end
@@ -351,9 +351,7 @@ defmodule Dran.Jobs do
       title: "#{job.label} — #{Calendar.strftime(now, "%Y-%m-%d %H:%M")} UTC",
       slug: slug,
       body: report_body(status, trigger, duration_ms, result_text),
-      page_type: "report",
-      created_by: key_str,
-      owner: key_str,
+      report_type: "log",
       meta: %{
         kind: "log",
         job_key: key_str,
@@ -418,19 +416,18 @@ defmodule Dran.Jobs do
 
       context ->
         Repo.all(
-          from p in Page,
-            where:
-              p.workspace_id == ^context.id and p.page_type == "report" and p.archived == false,
-            where: not is_nil(fragment("?->>'job_key'", p.meta)),
-            order_by: [desc: p.inserted_at],
+          from r in Report,
+            where: r.workspace_id == ^context.id and r.archived == false,
+            where: not is_nil(fragment("?->>'job_key'", r.meta)),
+            order_by: [desc: r.inserted_at],
             limit: 500,
             select: %{
-              job_key: fragment("?->>'job_key'", p.meta),
-              status: fragment("?->>'status'", p.meta),
-              duration_ms: fragment("?->>'duration_ms'", p.meta),
-              trigger: fragment("?->>'trigger'", p.meta),
-              slug: p.slug,
-              at: p.inserted_at
+              job_key: fragment("?->>'job_key'", r.meta),
+              status: fragment("?->>'status'", r.meta),
+              duration_ms: fragment("?->>'duration_ms'", r.meta),
+              trigger: fragment("?->>'trigger'", r.meta),
+              slug: r.slug,
+              at: r.inserted_at
             }
         )
         |> Enum.uniq_by(& &1.job_key)

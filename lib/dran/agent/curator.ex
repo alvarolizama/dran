@@ -317,26 +317,20 @@ defmodule Dran.Agent.Curator do
     else
       date = Date.utc_today() |> Date.to_iso8601()
       title = "Curator report #{date}"
+      slug = "curator-report-#{date}"
 
-      page_attrs = %{
+      report_attrs = %{
         workspace_id: state.session.workspace_id,
         title: title,
+        slug: slug,
         body: body,
-        page_type: "report",
-        created_by: "curator",
-        owner: "curator",
+        report_type: "log",
         meta: %{"kind" => "log", "agent_session_id" => state.session.id}
       }
 
-      case Brain.create_page(page_attrs) do
-        {:ok, page} ->
-          Phoenix.PubSub.broadcast(
-            Dran.PubSub,
-            "agents:#{state.session.id}",
-            {:page_created, page}
-          )
-
-          {{:ok, %{slug: page.slug, id: page.id, title: page.title}},
+      case Brain.create_report(report_attrs) do
+        {:ok, report} ->
+          {{:ok, %{slug: report.slug, id: report.id, title: report.title}},
            %{state | pages_created: state.pages_created + 1}}
 
         {:error, cs} ->

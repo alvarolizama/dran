@@ -37,7 +37,9 @@ defmodule DranWeb.GraphJSONControllerTest do
       Brain.create_page(%{
         workspace_id: context.id,
         title: "Graph JSON Todo",
-        page_type: "todo"
+        page_type: "note",
+        meta: %{"kind" => "todo"},
+        kanban_status: "backlog"
       })
 
     {:ok, _} =
@@ -67,10 +69,11 @@ defmodule DranWeb.GraphJSONControllerTest do
              "capped" => capped
            } = json_response(conn, 200)
 
-    # Note is present, todo is excluded (hidden type)
+    # All 5 remaining page types are visible in the graph; todo/plan are no
+    # longer page types (todos are notes with kind:"todo")
     assert Enum.any?(nodes, &(&1["slug"] == note.slug))
-    refute Enum.any?(nodes, &(&1["type"] == "todo"))
-    refute Enum.any?(nodes, &(&1["type"] == "plan"))
+    assert Enum.any?(nodes, &(&1["slug"] == "graph-json-todo"))
+    refute Enum.any?(nodes, &(&1["type"] not in ~w(note concept entity reference query)))
 
     # No edges to hidden nodes
     node_ids = MapSet.new(nodes, & &1["id"])

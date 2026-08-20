@@ -32,12 +32,12 @@ defmodule DranWeb.KanbanLiveTest do
 
     context = Brain.get_workspace_by_slug("personal")
 
-    # A goal page so the goal-filter test has a real slug to use.
+    # A goal via the new Goal table so the goal-filter test has a real slug.
     {:ok, goal} =
-      Brain.create_page(%{
+      Brain.create_goal(%{
         workspace_id: context.id,
         title: "Kanban Test Goal",
-        page_type: "goal"
+        slug: "kanban-test-goal"
       })
 
     conn =
@@ -79,17 +79,16 @@ defmodule DranWeb.KanbanLiveTest do
       # Form closes after create
       refute has_element?(view, "#kanban-quick-add")
 
-      # The todo was persisted with the expected meta. Find by title since
-      # Slug.generate appends a uniqueness suffix when re-run after create.
+      # The todo was persisted as a note with kind:todo and kanban_status column.
       todo =
-        Brain.list_pages(workspace_id: context.id, type: "todo", limit: 500)
+        Brain.list_todos(workspace_id: context.id, limit: 500)
         |> Enum.find(fn p -> p.title == "Quick Add Test Todo" end)
 
       assert todo != nil
-      assert todo.page_type == "todo"
-      assert todo.meta["kanban_status"] == "backlog"
-      assert todo.meta["priority"] == "medium"
-      assert todo.meta["goal_slug"] in [nil, ""]
+      assert todo.page_type == "note"
+      assert todo.kanban_status == "backlog"
+      assert todo.priority == "medium"
+      assert get_in(todo.meta, ["goal_slug"]) in [nil, ""]
     end
 
     test "with ?goal=<slug> filter active, created todo carries goal_slug", %{
@@ -126,11 +125,11 @@ defmodule DranWeb.KanbanLiveTest do
       assert html =~ t("Todo created.")
 
       todo =
-        Brain.list_pages(workspace_id: context.id, type: "todo", limit: 500)
+        Brain.list_todos(workspace_id: context.id, limit: 500)
         |> Enum.find(fn p -> p.title == "Filtered Goal Todo" end)
 
       assert todo != nil
-      assert todo.meta["goal_slug"] == goal.slug
+      assert get_in(todo.meta, ["goal_slug"]) == goal.slug
     end
 
     test "board renders the newly created todo in the backlog column", %{
@@ -170,23 +169,24 @@ defmodule DranWeb.KanbanLiveTest do
         Brain.create_page(%{
           workspace_id: context.id,
           title: "Todo To Archive",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog"}
+          page_type: "note",
+          meta: %{"kind" => "todo"},
+          kanban_status: "backlog"
         })
 
       {:ok, view, _html} = live(conn, ~p"/panel/kanban")
 
       # The card renders with its archive button (bottom-right of the card)
-      assert has_element?(view, "button[phx-value-slug=\"#{todo.slug}\"]")
+      assert has_element?(view, ~s(button[phx-value-slug="#{todo.slug}"]))
 
       view
-      |> element("button[phx-value-slug=\"#{todo.slug}\"]")
+      |> element(~s(button[phx-value-slug="#{todo.slug}"]))
       |> render_click()
 
       assert Brain.get_page_by_slug(todo.slug, context.id).archived == true
 
       # The card disappears from the board after re-render
-      refute has_element?(view, "button[phx-value-slug=\"#{todo.slug}\"]")
+      refute has_element?(view, ~s(button[phx-value-slug="#{todo.slug}"]))
     end
   end
 end

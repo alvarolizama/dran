@@ -94,47 +94,49 @@ defmodule DranWeb.HomeLiveTest do
     end
   end
 
-  describe "todo filters (kanban + type_list)" do
+  describe "todo kanban + type_list" do
     setup %{wiki_ctx: wiki_ctx} do
       {:ok, project} =
-        Brain.create_page(%{
+        Brain.create_project(%{
           workspace_id: wiki_ctx.id,
           title: "Alpha Project",
-          page_type: "project"
+          slug: "alpha-project"
         })
 
       {:ok, goal} =
-        Brain.create_page(%{
+        Brain.create_goal(%{
           workspace_id: wiki_ctx.id,
           title: "Beta Goal",
-          page_type: "goal"
+          slug: "beta-goal"
         })
 
       {:ok, plan} =
         Brain.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Gamma Plan",
-          page_type: "plan"
+          slug: "gamma-plan",
+          page_type: "note",
+          meta: %{"kind" => "plan"}
         })
 
       {:ok, linked} =
         Brain.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Linked Todo",
-          page_type: "todo",
-          meta: %{
-            "kanban_status" => "in_progress",
-            "project_slug" => project.slug,
-            "goal_slug" => goal.slug
-          }
+          slug: "linked-todo",
+          page_type: "note",
+          meta: %{"kind" => "todo"},
+          kanban_status: "in_progress"
         })
 
       {:ok, orphan} =
         Brain.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Orphan Todo",
-          page_type: "todo",
-          meta: %{"kanban_status" => "backlog"}
+          slug: "orphan-todo",
+          page_type: "note",
+          meta: %{"kind" => "todo"},
+          kanban_status: "backlog"
         })
 
       %{
@@ -146,151 +148,75 @@ defmodule DranWeb.HomeLiveTest do
       }
     end
 
-    test "wiki kanban renders the filter bar and both todos", %{
+    test "wiki kanban renders both todos grouped by status", %{
       conn: conn,
       wiki_ctx: wiki_ctx
     } do
       {:ok, _view, html} = live(conn, ~p"/#{wiki_ctx.slug}/kanban")
 
-      assert html =~ "Alpha Project"
-      assert html =~ "Beta Goal"
-      assert html =~ "Gamma Plan"
       assert html =~ "Linked Todo"
       assert html =~ "Orphan Todo"
+
+      # Kanban column headers
+      assert html =~ "In Progress"
+      assert html =~ "Backlog"
+
+      # Goals/projects/plans are separate tables — not on the kanban board
+      refute html =~ "Alpha Project"
+      refute html =~ "Beta Goal"
+      refute html =~ "Gamma Plan"
     end
 
-    test "wiki kanban filter_project narrows the board to the linked todo", %{
-      conn: conn,
-      wiki_ctx: wiki_ctx,
-      project: project
-    } do
-      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/kanban")
-
-      html =
-        view
-        |> element(~s{form#wiki-filter-project-form})
-        |> render_change(%{"value" => project.slug})
-
-      assert html =~ "Linked Todo"
-      refute html =~ "Orphan Todo"
-    end
-
-    test "wiki kanban clear_filters restores the full board", %{
-      conn: conn,
-      wiki_ctx: wiki_ctx,
-      project: project
-    } do
-      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/kanban")
-
-      html =
-        view
-        |> element(~s{form#wiki-filter-project-form})
-        |> render_change(%{"value" => project.slug})
-
-      assert html =~ "Linked Todo"
-      refute html =~ "Orphan Todo"
-
-      html = render_click(view, :clear_filters)
-
-      assert html =~ "Linked Todo"
-      assert html =~ "Orphan Todo"
-    end
-
-    test "wiki todo type_list filter_plan narrows the list", %{
-      conn: conn,
-      wiki_ctx: wiki_ctx,
-      plan: plan
-    } do
-      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/type/todo")
-
-      html =
-        view
-        |> element(~s{form#wiki-todo-filter-plan-form})
-        |> render_change(%{"value" => plan.slug})
-
-      # Neither todo carries plan_slug — both should be filtered out
-      refute html =~ "Linked Todo"
-      refute html =~ "Orphan Todo"
-    end
-
-    test "wiki todo type_list 'none' filter shows only orphans", %{
-      conn: conn,
-      wiki_ctx: wiki_ctx
-    } do
-      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/type/todo")
-
-      html =
-        view
-        |> element(~s{form#wiki-todo-filter-project-form})
-        |> render_change(%{"value" => "none"})
-
-      assert html =~ "Orphan Todo"
-      refute html =~ "Linked Todo"
-    end
-  end
-
-  describe "todo badges (project/goal/plan labels)" do
-    setup %{wiki_ctx: wiki_ctx} do
-      {:ok, project} =
-        Brain.create_page(%{
-          workspace_id: wiki_ctx.id,
-          title: "Badge Project",
-          page_type: "project"
-        })
-
-      {:ok, goal} =
-        Brain.create_page(%{
-          workspace_id: wiki_ctx.id,
-          title: "Badge Goal",
-          page_type: "goal"
-        })
-
-      {:ok, _plan} =
-        Brain.create_page(%{
-          workspace_id: wiki_ctx.id,
-          title: "Badge Plan",
-          page_type: "plan"
-        })
-
-      {:ok, linked_todo} =
-        Brain.create_page(%{
-          workspace_id: wiki_ctx.id,
-          title: "Badge Test Todo",
-          page_type: "todo",
-          meta: %{
-            "kanban_status" => "in_progress",
-            "project_slug" => project.slug,
-            "goal_slug" => goal.slug
-          }
-        })
-
-      %{
-        project: project,
-        goal: goal,
-        linked_todo: linked_todo
-      }
-    end
-
-    test "wiki kanban shows project and goal badge labels on todo cards", %{
-      conn: conn,
-      wiki_ctx: wiki_ctx
-    } do
-      {:ok, _view, html} = live(conn, ~p"/#{wiki_ctx.slug}/kanban")
-
-      assert html =~ "Badge Test Todo"
-      assert html =~ "Badge Project"
-      assert html =~ "Badge Goal"
-    end
-
-    test "wiki todo type_list shows project and goal badge labels on todo rows", %{
+    test "wiki todo type_list renders both todos", %{
       conn: conn,
       wiki_ctx: wiki_ctx
     } do
       {:ok, _view, html} = live(conn, ~p"/#{wiki_ctx.slug}/type/todo")
 
-      assert html =~ "Badge Test Todo"
-      assert html =~ "Badge Project"
-      assert html =~ "Badge Goal"
+      assert html =~ "Linked Todo"
+      assert html =~ "Orphan Todo"
+
+      # Grouped under kanban status headings (localized)
+      assert html =~ "En progreso"
+      assert html =~ "Pendientes"
+    end
+  end
+
+  describe "todo kanban statuses" do
+    setup %{wiki_ctx: wiki_ctx} do
+      {:ok, done_todo} =
+        Brain.create_page(%{
+          workspace_id: wiki_ctx.id,
+          title: "Done Todo",
+          slug: "done-todo",
+          page_type: "note",
+          meta: %{"kind" => "todo"},
+          kanban_status: "done"
+        })
+
+      {:ok, cancelled_todo} =
+        Brain.create_page(%{
+          workspace_id: wiki_ctx.id,
+          title: "Cancelled Todo",
+          slug: "cancelled-todo",
+          page_type: "note",
+          meta: %{"kind" => "todo"},
+          kanban_status: "cancelled"
+        })
+
+      %{done_todo: done_todo, cancelled_todo: cancelled_todo}
+    end
+
+    test "wiki kanban places todos in their status columns", %{
+      conn: conn,
+      wiki_ctx: wiki_ctx
+    } do
+      {:ok, _view, html} = live(conn, ~p"/#{wiki_ctx.slug}/kanban")
+
+      assert html =~ "Done Todo"
+      assert html =~ "Cancelled Todo"
+      assert html =~ "Done"
+      assert html =~ "Cancelled"
     end
   end
 end

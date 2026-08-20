@@ -44,7 +44,9 @@ defmodule Dran.SmartCollectionTest do
 
       opts = SmartCollection.query_to_opts(query)
 
-      assert Keyword.get(opts, :type) == "todo"
+      # "todo" maps to note + kind todo in the new model
+      assert Keyword.get(opts, :type) == "note"
+      assert Keyword.get(opts, :kind) == "todo"
       assert Keyword.get(opts, :tag) == "urgent"
       assert Keyword.get(opts, :status) == "in_progress"
       assert Keyword.get(opts, :owner) == "alvaro"
@@ -64,7 +66,8 @@ defmodule Dran.SmartCollectionTest do
       query = %{"type" => "todo", "tag" => "", "status" => nil}
       opts = SmartCollection.query_to_opts(query)
 
-      assert Keyword.get(opts, :type) == "todo"
+      assert Keyword.get(opts, :type) == "note"
+      assert Keyword.get(opts, :kind) == "todo"
       refute Keyword.has_key?(opts, :tag)
       refute Keyword.has_key?(opts, :status)
     end
@@ -264,9 +267,10 @@ defmodule Dran.SmartCollectionTest do
         workspace_id: context.id,
         title: "Todo One",
         slug: "todo-one",
-        page_type: "todo",
+        page_type: "note",
         body: "content",
-        meta: %{"kanban_status" => "in_progress"}
+        meta: %{"kind" => "todo", "kanban_status" => "in_progress"},
+        kanban_status: "in_progress"
       })
 
       Brain.create_page(%{
@@ -300,18 +304,20 @@ defmodule Dran.SmartCollectionTest do
         workspace_id: context.id,
         title: "Active Todo",
         slug: "active-todo",
-        page_type: "todo",
+        page_type: "note",
         body: "content",
-        meta: %{"kanban_status" => "in_progress"}
+        meta: %{"kind" => "todo", "kanban_status" => "in_progress"},
+        kanban_status: "in_progress"
       })
 
       Brain.create_page(%{
         workspace_id: context.id,
         title: "Done Todo",
         slug: "done-todo",
-        page_type: "todo",
+        page_type: "note",
         body: "content",
-        meta: %{"kanban_status" => "done"}
+        meta: %{"kind" => "todo", "kanban_status" => "done"},
+        kanban_status: "done"
       })
 
       results = SmartCollection.execute(%{"status" => "in_progress"}, context.id)
