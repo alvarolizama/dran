@@ -47,9 +47,6 @@ defmodule Dran.Goals do
     Repo.one(from g in Goal, where: g.slug == ^slug and g.workspace_id == ^workspace_id)
   end
 
-  @doc "Get a goal by id"
-  def get_goal!(id), do: Repo.get!(Goal, id)
-
   @doc "Get a goal by id, returns nil if not found"
   def get_goal(id), do: Repo.get(Goal, id)
 

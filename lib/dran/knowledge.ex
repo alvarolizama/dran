@@ -1728,9 +1728,6 @@ defmodule Dran.Knowledge do
     )
   end
 
-  @doc "Alias for list_page_versions/1"
-  def list_versions(page_id), do: list_page_versions(page_id)
-
   @doc "Get a specific version of a page"
   def get_page_version(page_id, version) do
     Repo.one(
@@ -1960,17 +1957,6 @@ defmodule Dran.Knowledge do
   end
 
   @doc """
-  Resolve embeds in a page's body, returning a result map:
-
-      %{embeds: {c, missing}}
-  """
-  def resolve_links(%Page{} = page) do
-    %{
-      embeds: resolve_embeds(page)
-    }
-  end
-
-  @doc """
   Fetch embedded pages referenced by `![[slug]]` in a body.
 
   Returns a map of `slug => %Page{}` for all embeds that resolve to a page
@@ -1989,12 +1975,8 @@ defmodule Dran.Knowledge do
     end)
   end
 
-  @doc """
-  Replace references to `old_slug` with `new_slug` in a markdown body,
-  preserving any display text. Handles embeds.
-  """
-  def replace_slug_in_body(body, old_slug, new_slug)
-      when is_binary(body) and is_binary(old_slug) and is_binary(new_slug) do
+  defp replace_slug_in_body(body, old_slug, new_slug)
+       when is_binary(body) and is_binary(old_slug) and is_binary(new_slug) do
     # Embeds: ![[old-slug]] and ![[old-slug|display]]
     embed_pattern = ~r/!\[\[(#{Regex.escape(old_slug)})(\|([^\]]+))?\]\]/
 
@@ -2007,7 +1989,7 @@ defmodule Dran.Knowledge do
     end)
   end
 
-  def replace_slug_in_body(body, _old_slug, _new_slug), do: body
+  defp replace_slug_in_body(body, _old_slug, _new_slug), do: body
 
   @doc "Find pages with no inbound relations (orphans)"
   def orphan_pages(workspace_id) do
@@ -2023,8 +2005,7 @@ defmodule Dran.Knowledge do
     )
   end
 
-  @doc "Find stale pages (not updated in X days)"
-  def stale_pages(workspace_id, days \\ 90) do
+  defp stale_pages(workspace_id, days \\ 90) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 24 * 60 * 60, :second)
 
     Repo.all(
@@ -2035,8 +2016,7 @@ defmodule Dran.Knowledge do
     )
   end
 
-  @doc "Find contested pages (kb_contested = true)"
-  def contested_pages(workspace_id) do
+  defp contested_pages(workspace_id) do
     Repo.all(
       from p in Page,
         where: p.workspace_id == ^workspace_id and p.kb_contested == true and p.archived == false,

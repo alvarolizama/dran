@@ -91,14 +91,6 @@ defmodule Dran.MCP do
     ArgumentError -> :ok
   end
 
-  @doc "Invalidate a cached context (call after update/delete in Settings)"
-  def invalidate_workspace_cache(slug) when is_binary(slug) do
-    ensure_context_cache_table()
-    :ets.delete(@context_cache_table, slug)
-  end
-
-  def invalidate_workspace_cache(_), do: :ok
-
   @tools [
     %{
       "name" => "dran_search",

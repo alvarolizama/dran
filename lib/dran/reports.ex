@@ -20,9 +20,6 @@ defmodule Dran.Reports do
     Repo.one(from r in Report, where: r.slug == ^slug and r.workspace_id == ^workspace_id)
   end
 
-  @doc "Get a report by id"
-  def get_report!(id), do: Repo.get!(Report, id)
-
   @doc "Get a report by id, returns nil if not found"
   def get_report(id), do: Repo.get(Report, id)
 

@@ -21,9 +21,6 @@ defmodule Dran.Collections do
     Repo.one(from c in Collection, where: c.slug == ^slug and c.workspace_id == ^workspace_id)
   end
 
-  @doc "Get a collection by id"
-  def get_collection!(id), do: Repo.get!(Collection, id)
-
   @doc "Get a collection by id, returns nil if not found"
   def get_collection(id), do: Repo.get(Collection, id)
 
