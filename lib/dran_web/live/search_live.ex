@@ -408,7 +408,6 @@ defmodule DranWeb.SearchLive do
   defp type_chip_bg("goal"), do: "bg-error/10"
   defp type_chip_bg("plan"), do: "bg-secondary/10"
   defp type_chip_bg("todo"), do: "bg-success/10"
-  defp type_chip_bg("query"), do: "bg-warning/10"
   defp type_chip_bg(_), do: "bg-base-content/10"
 
   defp type_icon_color("note"), do: "text-info"
@@ -419,7 +418,6 @@ defmodule DranWeb.SearchLive do
   defp type_icon_color("goal"), do: "text-error"
   defp type_icon_color("plan"), do: "text-secondary"
   defp type_icon_color("todo"), do: "text-success"
-  defp type_icon_color("query"), do: "text-warning"
   defp type_icon_color(_), do: "text-base-content/60"
 
   # Colored type badge shown on the right side of each card title.
@@ -431,7 +429,6 @@ defmodule DranWeb.SearchLive do
   defp type_badge("goal"), do: "bg-error/15 text-error"
   defp type_badge("plan"), do: "bg-secondary/15 text-secondary"
   defp type_badge("todo"), do: "bg-success/15 text-success"
-  defp type_badge("query"), do: "bg-warning/15 text-warning"
   defp type_badge(_), do: "bg-base-200 text-base-content/60"
 
   # Example queries shown as clickable chips in the empty hero. Each tuple is

@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Report do
+defmodule Dran.Report do
   @moduledoc """
   System-created report entity — lint outputs, community summaries,
   job results, etc.
@@ -37,7 +37,7 @@ defmodule Dran.Brain.Report do
     field :meta, :map, default: %{}
     field :archived, :boolean, default: false
 
-    belongs_to :workspace, Dran.Brain.Workspace
+    belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
   end

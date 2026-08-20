@@ -1,4 +1,4 @@
-defmodule Dran.Brain.PageAugmenter do
+defmodule Dran.PageAugmenter do
   @moduledoc """
   Asynchronously augments a page after creation or update.
 
@@ -19,7 +19,7 @@ defmodule Dran.Brain.PageAugmenter do
 
   alias Dran.Repo
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.Embeddings
   alias Dran.Inference
   alias Dran.Summaries

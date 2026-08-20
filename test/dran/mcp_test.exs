@@ -2,7 +2,7 @@ defmodule Dran.MCPTest do
   use Dran.DataCase, async: false
 
   alias Dran.{Brain, MCP, Repo}
-  alias Dran.Brain.Page
+  alias Dran.Page
 
   # Same setup as brain_test.exs: disable inference so dran_create_page doesn't
   # call external APIs, and ensure the "personal" context exists.

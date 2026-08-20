@@ -12,7 +12,7 @@ defmodule Dran.Embeddings do
   """
 
   alias Dran.Repo
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.Inference
 
   @doc """
@@ -136,7 +136,7 @@ defmodule Dran.Embeddings do
   @doc """
   Update all pages in a context that need embeddings. Useful for backfill.
   """
-  @spec backfill_pages(Dran.Brain.Workspace.t() | binary(), keyword()) ::
+  @spec backfill_pages(Dran.Workspace.t() | binary(), keyword()) ::
           {non_neg_integer(), list(term())}
   def backfill_pages(context_or_slug, opts \\ [])
 
@@ -145,7 +145,7 @@ defmodule Dran.Embeddings do
     backfill_pages(context, opts)
   end
 
-  def backfill_pages(%Dran.Brain.Workspace{id: workspace_id}, opts) do
+  def backfill_pages(%Dran.Workspace{id: workspace_id}, opts) do
     import Ecto.Query
 
     async = Keyword.get(opts, :async, schedule_async?())

@@ -359,7 +359,7 @@ defmodule DranWeb.SmartCollectionLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: "/panel/search?q=#{URI.encode_www_form(slug)}")}
+    {:noreply, push_navigate(socket, to: "/search?q=#{URI.encode_www_form(slug)}")}
   end
 
   def handle_event("delete_collection", _params, socket) do

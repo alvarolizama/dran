@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Log do
+defmodule Dran.Log do
   @moduledoc """
   Append-only audit log. Records every meaningful action in the brain:
   page.create, page.update, page.delete, relation.add, etc.
@@ -16,7 +16,7 @@ defmodule Dran.Brain.Log do
     field :subject, :string
     field :details, :map, default: %{}
 
-    belongs_to :workspace, Dran.Brain.Workspace
+    belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime, updated_at: false)
   end

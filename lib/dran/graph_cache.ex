@@ -26,9 +26,9 @@ defmodule Dran.GraphCache do
   alias DranWeb.GraphHelpers
 
   # Types hidden from the global graph — the canonical list lives in the
-  # Dran.Brain.PageTypes capability registry. Currently all 5 remaining types
+  # Dran.PageTypes capability registry. Currently all 5 remaining types
   # have graph: true, so this list is empty but kept for future use.
-  @hidden_by_default Dran.Brain.PageTypes.hidden_from_graph()
+  @hidden_by_default Dran.PageTypes.hidden_from_graph()
   @max_graph_nodes 400
 
   # Tables

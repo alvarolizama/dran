@@ -21,7 +21,7 @@ defmodule Dran.Graph.CommunitySummary do
     field :top_pages, {:array, :map}, default: []
     field :generated_at, :utc_datetime
 
-    belongs_to :workspace, Dran.Brain.Workspace
+    belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
   end

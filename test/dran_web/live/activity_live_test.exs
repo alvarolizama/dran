@@ -72,7 +72,7 @@ defmodule DranWeb.ActivityLiveTest do
     {:ok, _view, html} = live(conn, ~p"/panel/activity")
 
     # The subject slug should be a link to /notes/<slug>
-    assert html =~ "href=\"/panel/notes/#{page.slug}\""
+    assert html =~ "href=\"/notes/#{page.slug}\""
   end
 
   test "renders empty state when no log entries", %{conn: conn} do
@@ -80,7 +80,7 @@ defmodule DranWeb.ActivityLiveTest do
 
     import Ecto.Query
 
-    Dran.Repo.delete_all(from(l in Dran.Brain.Log, where: l.workspace_id == ^context.id))
+    Dran.Repo.delete_all(from(l in Dran.Log, where: l.workspace_id == ^context.id))
 
     {:ok, _view, html} = live(conn, ~p"/panel/activity")
 

@@ -144,7 +144,7 @@ defmodule Dran.SmartCollectionTest do
       }
 
       assert {:ok, page} = SmartCollection.create(attrs)
-      assert page.page_type == "query"
+      assert page.page_type == "note"
       assert page.title == "Urgent Todos"
       assert page.meta["query"]["type"] == "todo"
       assert page.meta["query"]["status"] == "in_progress"
@@ -198,10 +198,10 @@ defmodule Dran.SmartCollectionTest do
 
       found = SmartCollection.get_by_slug(page.slug, context.id)
       assert found.id == page.id
-      assert found.page_type == "query"
+      assert found.page_type == "note"
     end
 
-    test "returns nil when page is not a query type", %{context: context} do
+    test "returns nil when page is not a collection (no meta.query)", %{context: context} do
       {:ok, note} =
         Brain.create_page(%{
           workspace_id: context.id,
@@ -222,7 +222,7 @@ defmodule Dran.SmartCollectionTest do
   # ── list_all/1 ──
 
   describe "list_all/1" do
-    test "lists all query pages in a context", %{context: context} do
+    test "lists all collection pages in a context", %{context: context} do
       SmartCollection.create(%{
         "workspace_id" => context.id,
         "title" => "Collection One",
@@ -242,7 +242,7 @@ defmodule Dran.SmartCollectionTest do
       assert "Collection Two" in titles
     end
 
-    test "does not include non-query pages", %{context: context} do
+    test "does not include non-collection note pages", %{context: context} do
       Brain.create_page(%{
         workspace_id: context.id,
         title: "A Note",

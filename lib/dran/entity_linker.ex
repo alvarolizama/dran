@@ -26,7 +26,7 @@ defmodule Dran.EntityLinker do
 
   require Logger
 
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.PageFactory
   alias Dran.Slug
 

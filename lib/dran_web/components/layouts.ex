@@ -100,7 +100,7 @@ defmodule DranWeb.Layouts do
         </div>
 
         <div class="p-3 border-b border-base-300">
-          <form action={~p"/panel/search"} method="get" class="relative">
+          <form action={~p"/search"} method="get" class="relative">
             <.icon
               name="hero-magnifying-glass"
               class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
@@ -162,19 +162,8 @@ defmodule DranWeb.Layouts do
           if type in disabled, do: 0, else: by_type[type] || 0
         end
 
-        # Smart collections = query pages that carry meta.query (filters).
-        # GraphRag answer pages (also page_type: "query") do NOT have
-        # meta.query — they're static answers, not live collections.
-        collection_count =
-          Dran.Repo.aggregate(
-            from(p in Dran.Brain.Page,
-              where:
-                p.workspace_id == ^context.id and p.page_type == "query" and
-                  p.archived == false and fragment("meta \\? 'query'"),
-              select: p.id
-            ),
-            :count
-          )
+        # Smart collections are first-class Brain collections now.
+        collection_count = length(Dran.Brain.list_collections(context.id))
 
         contexts_count =
           try do
@@ -203,9 +192,9 @@ defmodule DranWeb.Layouts do
           entities: safe_count.("entity"),
           references: safe_count.("reference"),
           communities: communities_count,
-          queries: safe_count.("query"),
-          collections: collection_count || 0,
-          projects: length(Dran.Brain.list_projects(workspace_id: context.id, limit: 500)),
+          collections: collection_count,
+          projects:
+            length(Dran.Brain.list_pages(workspace_id: context.id, kind: "project", limit: 500)),
           goals: length(Dran.Brain.list_goals(workspace_id: context.id, limit: 500)),
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
@@ -289,14 +278,14 @@ defmodule DranWeb.Layouts do
             key: "kanban",
             label: gettext("Kanban"),
             icon: "hero-view-columns",
-            path: ~p"/panel/kanban",
+            path: ~p"/kanban",
             badge: counts[:todos]
           },
           %{
             key: "graph",
             label: gettext("Grafo"),
             icon: "hero-share",
-            path: ~p"/panel/graph"
+            path: ~p"/graph"
           },
           %{
             key: "journey",
@@ -344,7 +333,7 @@ defmodule DranWeb.Layouts do
             key: "notes",
             label: gettext("Notes"),
             icon: "hero-document-text",
-            path: ~p"/panel/notes",
+            path: ~p"/notes",
             badge: counts[:notes]
           },
           %{
@@ -374,13 +363,6 @@ defmodule DranWeb.Layouts do
             icon: "hero-squares-2x2",
             path: ~p"/panel/communities",
             badge: counts[:communities]
-          },
-          %{
-            key: "queries",
-            label: gettext("Queries"),
-            icon: "hero-chat-bubble-bottom-center-text",
-            path: ~p"/panel/queries",
-            badge: counts[:queries]
           },
           %{
             key: "collections",

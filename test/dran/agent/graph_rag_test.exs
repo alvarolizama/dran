@@ -3,7 +3,7 @@ defmodule Dran.Agent.GraphRagTest do
 
   alias Dran.Agent.GraphRag
   alias Dran.{Brain, Repo}
-  alias Dran.Brain.Page
+  alias Dran.Page
 
   #  Helpers 
 
@@ -55,7 +55,7 @@ defmodule Dran.Agent.GraphRagTest do
   end
 
   defp insert_relation!(source_id, target_id, type) do
-    %Dran.Brain.Relation{
+    %Dran.Relation{
       source_id: source_id,
       target_id: target_id,
       relation_type: type
@@ -84,7 +84,7 @@ defmodule Dran.Agent.GraphRagTest do
     assert "get_community_context" in tool_names
     assert "list_communities" in tool_names
     assert "synthesize_answer" in tool_names
-    assert "create_query_page" in tool_names
+    assert "create_answer_page" in tool_names
     assert "done" in tool_names
   end
 
@@ -336,14 +336,14 @@ defmodule Dran.Agent.GraphRagTest do
     assert {:error, "answer is required"} = result
   end
 
-  #  execute_tool: create_query_page 
+  #  execute_tool: create_answer_page 
 
-  test "create_query_page returns error without synthesize_answer first" do
+  test "create_answer_page returns error without synthesize_answer first" do
     state = build_state(Ecto.UUID.generate())
 
     {result, _state} =
       GraphRag.execute_tool(
-        "create_query_page",
+        "create_answer_page",
         %{"title" => "Test", "body" => "Body"},
         state
       )
@@ -352,26 +352,26 @@ defmodule Dran.Agent.GraphRagTest do
     assert msg =~ "synthesize_answer first"
   end
 
-  test "create_query_page returns error when limit reached" do
+  test "create_answer_page returns error when limit reached" do
     state = build_state(Ecto.UUID.generate(), pages_created: 1, answer: "test")
 
     {result, _state} =
       GraphRag.execute_tool(
-        "create_query_page",
+        "create_answer_page",
         %{"title" => "Test", "body" => "Body"},
         state
       )
 
     assert {:error, msg} = result
-    assert msg =~ "query page limit reached"
+    assert msg =~ "answer page limit reached"
   end
 
-  test "create_query_page returns error when title or body is empty" do
+  test "create_answer_page returns error when title or body is empty" do
     state = build_state(Ecto.UUID.generate(), answer: "test answer")
 
     {result, _state} =
       GraphRag.execute_tool(
-        "create_query_page",
+        "create_answer_page",
         %{"title" => "", "body" => "Body"},
         state
       )
@@ -380,7 +380,7 @@ defmodule Dran.Agent.GraphRagTest do
     assert msg =~ "title and body are required"
   end
 
-  test "create_query_page creates a query page with sources as relations" do
+  test "create_answer_page creates a note page with sources as relations" do
     workspace_id = ensure_context!().id
 
     source_page =
@@ -395,11 +395,10 @@ defmodule Dran.Agent.GraphRagTest do
 
     {result, new_state} =
       GraphRag.execute_tool(
-        "create_query_page",
+        "create_answer_page",
         %{
           "title" => "Test Query",
-          "body" => "The answer is...",
-          "kind" => "factual"
+          "body" => "The answer is..."
         },
         state
       )
@@ -411,10 +410,10 @@ defmodule Dran.Agent.GraphRagTest do
     # Verify the page was created
     page = Brain.get_page_by_slug(slug, workspace_id)
     assert page != nil
-    assert page.page_type == "query"
+    assert page.page_type == "note"
     assert page.title == "Test Query"
     assert page.meta["mode"] == "local"
-    assert page.meta["kind"] == "factual"
+    assert page.meta["kind"] == "answer"
 
     # Verify source relation was created
     relations = Brain.list_relations_for_page(page.id)

@@ -11,7 +11,7 @@ defmodule DranWeb.DisabledTypes do
     router: DranWeb.Router,
     statics: DranWeb.static_paths()
 
-  alias Dran.Brain.Workspace
+  alias Dran.Workspace
 
   @doc """
   Given a context and a page_type string, returns `true` if the type is

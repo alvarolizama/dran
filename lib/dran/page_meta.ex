@@ -1,4 +1,4 @@
-defmodule Dran.Brain.PageMeta do
+defmodule Dran.PageMeta do
   @moduledoc """
   Embedded schema for validating the `meta` JSONB of a page.
 
@@ -51,25 +51,16 @@ defmodule Dran.Brain.PageMeta do
     field :content_hash, :string
     field :fetched_at, :utc_datetime
 
-    # query
-    field :difficulty, :string
-    field :answer_status, :string
-    field :answered_by, :string
-
     # custom properties — namespaced free-form key-value bag for user metadata
     # (e.g. %{"role" => "sales", "tier" => "vip"}). Kept under :props so it
     # never collides with reserved top-level meta keys.
     field :props, :map
   end
 
-  @note_kinds ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm todo plan)
+  @note_kinds ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm todo plan project)
   @entity_kinds ~w(person company product tool place event language framework service hardware protocol course community asset brand)
   @concept_kinds ~w(technique pattern discipline theory principle framework method model law heuristic strategy convention)
   @reference_kinds ~w(article paper video podcast book document code design deliverable file tweet docs course newsletter forum spec release website repo api guide interview talk)
-  @query_kinds ~w(factual conceptual how_to opinion exploration report status decision comparison)
-  @report_kinds ~w(log)
-  @query_difficulties ~w(simple intermediate advanced)
-  @query_statuses ~w(open answered verified)
 
   def changeset(meta, attrs, page_type) do
     meta
@@ -100,15 +91,12 @@ defmodule Dran.Brain.PageMeta do
       :published_at,
       :content_hash,
       :fetched_at,
-      :difficulty,
-      :answer_status,
-      :answered_by,
       :props
     ]
   end
 
   defp validate_kind(cs, type)
-       when type in ~w(note entity concept reference query) do
+       when type in ~w(note entity concept reference) do
     kinds = kinds_for(type)
 
     if kinds do
@@ -124,15 +112,7 @@ defmodule Dran.Brain.PageMeta do
   defp kinds_for("entity"), do: @entity_kinds
   defp kinds_for("concept"), do: @concept_kinds
   defp kinds_for("reference"), do: @reference_kinds
-  defp kinds_for("query"), do: @query_kinds
-  defp kinds_for("report"), do: @report_kinds
   defp kinds_for(_), do: nil
-
-  defp validate_meta_for_type(cs, "query") do
-    cs
-    |> validate_inclusion(:difficulty, @query_difficulties)
-    |> validate_inclusion(:answer_status, @query_statuses)
-  end
 
   defp validate_meta_for_type(cs, _type), do: cs
 
@@ -140,10 +120,6 @@ defmodule Dran.Brain.PageMeta do
   def entity_kinds, do: @entity_kinds
   def concept_kinds, do: @concept_kinds
   def reference_kinds, do: @reference_kinds
-  def query_kinds, do: @query_kinds
-  def report_kinds, do: @report_kinds
-  def query_difficulties, do: @query_difficulties
-  def query_statuses, do: @query_statuses
 
   @doc """
   Returns the metadata fields and their select options for a given page type.
@@ -208,19 +184,6 @@ defmodule Dran.Brain.PageMeta do
     ]
   end
 
-  defp meta_fields_edit("query") do
-    [
-      {:select, "kind", gettext("Kind"),
-       Enum.map(@query_kinds, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:select, "difficulty", gettext("Difficulty"),
-       Enum.map(@query_difficulties, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:select, "answer_status", gettext("Status"),
-       Enum.map(@query_statuses, &{Gettext.gettext(DranWeb.Gettext, humanize_kind(&1)), &1})},
-      {:text, "answered_by", gettext("Answered by")},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
   defp meta_fields_edit(_), do: []
 
   # Humanize a kind/status/horizon slug for display. We keep this logic out of
@@ -269,6 +232,7 @@ defmodule Dran.Brain.PageMeta do
       "brainstorm" => gettext("Brainstorm"),
       "todo" => gettext("Todo"),
       "plan" => gettext("Plan"),
+      "project" => gettext("Project"),
       # ── entity kinds ───────────────────────────────────────────────────
       "person" => gettext("Person"),
       "company" => gettext("Company"),
@@ -318,23 +282,7 @@ defmodule Dran.Brain.PageMeta do
       "api" => gettext("API"),
       "guide" => gettext("Guide"),
       "interview" => gettext("Interview"),
-      "talk" => gettext("Talk"),
-      # ── query kinds ─────────────────────────────────────────────────────
-      "factual" => gettext("Factual"),
-      "conceptual" => gettext("Conceptual"),
-      "how_to" => gettext("How to"),
-      "opinion" => gettext("Opinion"),
-      "exploration" => gettext("Exploration"),
-      "report" => gettext("Report"),
-      "status" => gettext("Status"),
-      # ── query difficulties ─────────────────────────────────────────────
-      "simple" => gettext("Simple"),
-      "intermediate" => gettext("Intermediate"),
-      "advanced" => gettext("Advanced"),
-      # ── query statuses ──────────────────────────────────────────────────
-      "open" => gettext("Open"),
-      "answered" => gettext("Answered"),
-      "verified" => gettext("Verified")
+      "talk" => gettext("Talk")
     }
   end
 end

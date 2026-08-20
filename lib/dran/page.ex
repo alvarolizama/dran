@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Page do
+defmodule Dran.Page do
   @moduledoc """
   The core entity of the second brain. Every piece of knowledge is a page.
 
@@ -14,11 +14,11 @@ defmodule Dran.Brain.Page do
   - `query` — question with answer; semantic relations link it to concepts/entities
   - `project` — a project grouping goals, plans and todos
   - `report` — system-created report (jobs, system output); second-citizen page,
-    see `Dran.Brain.PageTypes` for its capabilities
+    see `Dran.PageTypes` for its capabilities
 
   ## Meta JSONB
 
-  The `meta` field stores type-specific data, validated via `Dran.Brain.PageMeta`:
+  The `meta` field stores type-specific data, validated via `Dran.PageMeta`:
   - `todo`: `%{kanban_status: "backlog", goal_slug: "dran"}`
   - `note`: `%{kind: "journal", date: ~D[2026-06-19]}`
   - `reference`: `%{source_url: "https://...", kind: "article"}`
@@ -74,9 +74,9 @@ defmodule Dran.Brain.Page do
              :updated_at
            ]}
 
-  # The canonical list of page types lives in Dran.Brain.PageTypes (single
+  # The canonical list of page types lives in Dran.PageTypes (single
   # source of truth, including per-type capabilities).
-  @page_types Dran.Brain.PageTypes.types()
+  @page_types Dran.PageTypes.types()
   @confidence_levels ~w(low medium high verified)
 
   schema "pages" do
@@ -114,7 +114,7 @@ defmodule Dran.Brain.Page do
     # search_vector is a Postgres generated column — not mapped in Ecto.
     # It's maintained automatically by Postgres and used only in raw SQL queries.
 
-    belongs_to :workspace, Dran.Brain.Workspace
+    belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
   end

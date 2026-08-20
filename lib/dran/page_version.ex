@@ -1,4 +1,4 @@
-defmodule Dran.Brain.PageVersion do
+defmodule Dran.PageVersion do
   @moduledoc """
   Snapshot of a page's body at a specific version. Append-only —
   created every time a page's body changes.
@@ -18,7 +18,7 @@ defmodule Dran.Brain.PageVersion do
     field :version, :integer
     field :changed_by, :string
 
-    belongs_to :page, Dran.Brain.Page
+    belongs_to :page, Dran.Page
 
     timestamps(type: :utc_datetime, updated_at: false)
   end

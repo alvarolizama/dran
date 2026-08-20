@@ -2,8 +2,8 @@ defmodule Dran.Brain.PageAugmenterTest do
   use Dran.DataCase, async: false
 
   alias Dran.Brain
-  alias Dran.Brain.Page
-  alias Dran.Brain.PageAugmenter
+  alias Dran.Page
+  alias Dran.PageAugmenter
 
   setup do
     original = Application.get_env(:dran, :inference)

@@ -249,7 +249,7 @@ defmodule Dran.PropsMaterializerTest do
     end
 
     test "page without context materializes nothing" do
-      page = %Brain.Page{workspace_id: nil, meta: %{"props" => %{"role" => "sales"}}}
+      page = %Dran.Page{workspace_id: nil, meta: %{"props" => %{"role" => "sales"}}}
       assert {:ok, 0} = PropsMaterializer.materialize(page)
     end
 

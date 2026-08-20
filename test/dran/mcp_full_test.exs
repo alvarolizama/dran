@@ -83,12 +83,12 @@ defmodule Dran.MCPFullTest do
   # ── Protocol: tools/list ────────────────────────────────────────────────────
 
   describe "tools/list" do
-    test "returns exactly 20 tools" do
+    test "returns exactly 19 tools" do
       resp =
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 20
+      assert length(tools) == 19
     end
 
     test "all tools carry the dran_ prefix" do
@@ -339,7 +339,7 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~
-               "Error: page type 'report' is not a valid page type — use dran_create_goal, dran_create_project, or dran_create_note for goals, projects, and todo-style notes"
+               "Error: page type 'report' is not a valid page type — use dran_create_goal or dran_create_note for goals and todo-style notes"
 
       assert Brain.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
     end
@@ -727,76 +727,17 @@ defmodule Dran.MCPFullTest do
     end
   end
 
-  # ── Tool: dran_create_project ──────────────────────────────────────────────
+  # ── Tool: dran_create_project (removed — projects are notes with kind:"project") ──
 
   describe "dran_create_project" do
-    test "creates a project with full attrs", %{context: ctx} do
+    test "returns unknown tool error", %{context: _ctx} do
       result =
         call_tool("dran_create_project", %{
           "workspace" => "personal",
-          "title" => "Website Redesign",
-          "slug" => "website-redesign-project",
-          "description" => "Redesign the marketing site",
-          "status" => "active",
-          "health" => "yellow",
-          "priority" => "high",
-          "start_date" => "2026-02-01",
-          "target_date" => "2026-06-01"
+          "title" => "Website Redesign"
         })
 
-      assert result =~ "Created project: Website Redesign"
-      assert result =~ "website-redesign-project"
-      assert result =~ "status: active"
-
-      project = Brain.get_project_by_slug("website-redesign-project", ctx.id)
-      assert project.status == "active"
-      assert project.health == "yellow"
-      assert project.priority == "high"
-    end
-
-    test "links project to a goal via goal_slug", %{context: ctx} do
-      {:ok, goal} =
-        Brain.create_goal(%{
-          workspace_id: ctx.id,
-          title: "Revenue Goal",
-          slug: "revenue-goal"
-        })
-
-      result =
-        call_tool("dran_create_project", %{
-          "workspace" => "personal",
-          "title" => "Growth Project",
-          "slug" => "growth-project",
-          "goal_slug" => "revenue-goal"
-        })
-
-      assert result =~ "Created project: Growth Project"
-
-      project = Brain.get_project_by_slug("growth-project", ctx.id)
-      assert project.goal_id == goal.id
-    end
-
-    test "errors when goal_slug not found", %{context: ctx} do
-      result =
-        call_tool("dran_create_project", %{
-          "workspace" => "personal",
-          "title" => "Orphan Project",
-          "slug" => "orphan-project",
-          "goal_slug" => "no-such-goal"
-        })
-
-      assert result =~ "Error: goal 'no-such-goal' not found"
-      assert Brain.get_project_by_slug("orphan-project", ctx.id) == nil
-    end
-
-    test "errors on non-existent context" do
-      result =
-        call_tool("dran_create_project", %{
-          "workspace" => "no-such-context",
-          "title" => "X"
-        })
-
-      assert result =~ "Error: context"
+      assert result =~ "Error: unknown tool"
     end
   end
 

@@ -135,7 +135,7 @@ defmodule Dran.Release do
           fn _repo ->
             alias Dran.Repo
             alias Dran.Brain
-            alias Dran.Brain.Workspace
+            alias Dran.Workspace
 
             slug = Dran.Auth.default_workspace_slug()
             name = Dran.Auth.default_workspace_name()

@@ -2,7 +2,7 @@ defmodule Dran.EmbeddingsTest do
   use Dran.DataCase, async: false
 
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.Embeddings
 
   setup do
@@ -58,7 +58,7 @@ defmodule Dran.EmbeddingsTest do
       context = Brain.get_workspace_by_slug("personal")
 
       page =
-        Dran.Brain.Page.create_changeset(%{
+        Dran.Page.create_changeset(%{
           workspace_id: context.id,
           title: "Elixir",
           slug: "elixir",
@@ -123,7 +123,7 @@ defmodule Dran.EmbeddingsTest do
         Brain.create_workspace(%{name: "Backfill #{uniq}", slug: "backfill-#{uniq}"})
 
       p1 =
-        Dran.Brain.Page.create_changeset(%{
+        Dran.Page.create_changeset(%{
           workspace_id: context.id,
           title: "Page One",
           slug: "page-one",
@@ -135,7 +135,7 @@ defmodule Dran.EmbeddingsTest do
         |> Dran.Repo.insert!()
 
       p2 =
-        Dran.Brain.Page.create_changeset(%{
+        Dran.Page.create_changeset(%{
           workspace_id: context.id,
           title: "Page Two",
           slug: "page-two",

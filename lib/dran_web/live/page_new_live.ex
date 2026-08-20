@@ -10,6 +10,7 @@ defmodule DranWeb.PageNewLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
+  alias Dran.Page
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
@@ -120,7 +121,7 @@ defmodule DranWeb.PageNewLive do
      assign(socket,
        context: context,
        page_type: "note",
-       back_path: "/panel/notes",
+       back_path: "/notes",
        form: nil,
        body: "",
        meta: %{},
@@ -132,7 +133,7 @@ defmodule DranWeb.PageNewLive do
   end
 
   def handle_params(_params, url, socket) do
-    # Derive the page type from the URL path (e.g. "/panel/notes/new" → "note")
+    # Derive the page type from the URL path (e.g. "/notes/new" → "note")
     path = URI.parse(url).path || ""
     page_type = type_from_path(path)
     back_path = "/panel/#{PageTypes.path(page_type)}"
@@ -143,7 +144,7 @@ defmodule DranWeb.PageNewLive do
     meta = default_meta_for(page_type)
 
     changeset =
-      Brain.change_page(%Brain.Page{}, %{
+      Brain.change_page(%Page{}, %{
         workspace_id: workspace_id,
         page_type: page_type,
         body: "",
@@ -172,7 +173,7 @@ defmodule DranWeb.PageNewLive do
 
     changeset =
       Brain.change_page(
-        %Brain.Page{},
+        %Page{},
         page_params
         |> Map.put("workspace_id", workspace_id)
         |> Map.put("page_type", socket.assigns.page_type)
@@ -253,7 +254,7 @@ defmodule DranWeb.PageNewLive do
   # ── Helpers ──
 
   defp type_from_path(path) when is_binary(path) do
-    # path is like "/panel/notes/new" or "/panel/concepts/new"
+    # path is like "/notes/new" or "/panel/concepts/new"
     case path |> String.trim("/") |> String.split("/") do
       ["panel", type_plural, "new" | _] ->
         type_to_page(type_plural)
@@ -270,7 +271,6 @@ defmodule DranWeb.PageNewLive do
   defp type_to_page("concepts"), do: "concept"
   defp type_to_page("entities"), do: "entity"
   defp type_to_page("references"), do: "reference"
-  defp type_to_page("queries"), do: "query"
   defp type_to_page(_), do: "note"
 
   # Smart defaults per page type for the :new form. These prefill the meta

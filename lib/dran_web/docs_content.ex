@@ -9,14 +9,14 @@ defmodule DranWeb.DocsContent do
 
   Dran uses a split model:
 
-    - **Pages** — the knowledge graph (5 types: note, concept, entity, reference,
-      query). Pages carry kanban fields (kanban_status, priority, due_date,
-      assignee) directly on the table — no meta overhead.
-    - **Goals** — first-class OKR entities (own table, not pages).
-    - **Projects** — first-class grouping entities (own table, not pages).
-    - **Collections** — saved filter queries (own table, replaces the old
-      Smart Collection pattern of query pages with `meta.query`).
-    - **Reports** — system-created logs, lint outputs, agent output (own table).
+    - **Pages** — the knowledge graph (4 types: note, concept, entity,
+    reference). Pages carry kanban fields (kanban_status, priority, due_date,
+    assignee) directly on the table — no meta overhead.
+  - **Goals** — first-class OKR entities (own table, not pages).
+  - **Projects** — first-class grouping entities (own table, not pages).
+  - **Collections** — saved filter queries (own table, replaces the old
+    Smart Collection pattern).
+  - **Reports** — system-created logs, lint outputs, agent output (own table).
 
   ## Polymorphic relations
 
@@ -96,12 +96,12 @@ defmodule DranWeb.DocsContent do
 
   Collections (first-class entity):
     Saved filter queries live in their own table with `filters` JSONB.
-    They replace the old pattern of query pages with `meta.query`.
+    They replace the old Smart Collection pattern.
 
   Sidebar:
     Top: Dashboard, Kanban, Projects, Goals, Graph, Journey,
     Activity. Knowledge: Notes, Concepts, Entities, References,
-    Queries, Collections. System: Reports. Config: Settings
+    Collections. System: Reports. Config: Settings
     (admin only), Documentation.
   """
 
@@ -232,7 +232,7 @@ defmodule DranWeb.DocsContent do
 
   All scheduled jobs route through `Dran.Jobs.run_scheduled/1`, which
   honors the per-job toggles in Settings → Brain and writes a
-  `Dran.Brain.Report` record per run:
+  `Dran.Report` record per run:
     curator_daily                06:00  daily
     pagerank_nightly             03:00  daily  (this pipeline)
     community_summaries_nightly  03:30  daily  (LLM summary per community)

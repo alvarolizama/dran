@@ -80,7 +80,7 @@ defmodule DranWeb.GraphLive do
     if context do
       case Brain.get_page_by_slug(slug, context.id) do
         nil ->
-          push_navigate(socket, to: ~p"/panel/graph")
+          push_navigate(socket, to: ~p"/graph")
 
         page ->
           socket
@@ -88,13 +88,13 @@ defmodule DranWeb.GraphLive do
           |> load_show_graph(page)
       end
     else
-      push_navigate(socket, to: ~p"/panel/graph")
+      push_navigate(socket, to: ~p"/graph")
     end
   end
 
   @impl true
   def handle_event("node_click", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/graph/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/graph/#{slug}")}
   end
 
   @impl true

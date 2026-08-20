@@ -4,7 +4,7 @@ defmodule Dran.Agent.LinkGardenerTest do
   alias Dran.{Brain, Repo}
   alias Dran.Agent.{LinkGardener, Session}
   alias Dran.Agent.LinkGardener.State
-  alias Dran.Brain.Relation
+  alias Dran.Relation
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 

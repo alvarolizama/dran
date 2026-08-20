@@ -3,7 +3,7 @@ defmodule DranWeb.API.GraphController do
 
   import Ecto.Query
   alias Dran.Repo
-  alias Dran.Brain.{Page, Relation}
+  alias Dran.{Page, Relation}
 
   @doc "GET /api/graph?context=... — full graph (nodes + edges)"
   def graph(conn, %{"workspace" => workspace_slug}) do

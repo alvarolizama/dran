@@ -9,7 +9,7 @@ defmodule Dran.Accounts do
   import Ecto.Query
   alias Dran.Repo
   alias Dran.Accounts.{User, UserWorkspace}
-  alias Dran.Brain.Workspace
+  alias Dran.Workspace
 
   # ── User CRUD ──
 

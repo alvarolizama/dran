@@ -4,7 +4,7 @@ defmodule DranWeb.ProjectLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias Dran.Brain.Project
+  alias Dran.Page
   alias DranWeb.Plugs.Auth
 
   @statuses ~w(draft active on_hold done)
@@ -303,7 +303,7 @@ defmodule DranWeb.ProjectLive do
   defp apply_action(socket, :index, _params) do
     projects =
       if socket.assigns.context do
-        Brain.list_projects(socket.assigns.context.id)
+        Brain.list_pages(workspace_id: socket.assigns.context.id, kind: "project", limit: 500)
       else
         []
       end
@@ -315,12 +315,12 @@ defmodule DranWeb.ProjectLive do
     context = socket.assigns.context
 
     if context do
-      case Brain.get_project_by_slug(slug, context.id) do
+      case Brain.get_page_by_slug(slug, context.id) do
         nil ->
           push_navigate(socket, to: ~p"/panel/projects")
 
         project ->
-          form = Brain.change_project(project) |> to_form(as: :project)
+          form = Brain.change_page(project) |> to_form(as: :project)
           linked_goal_title = linked_goal_title(project, context)
 
           assign(socket,
@@ -337,7 +337,7 @@ defmodule DranWeb.ProjectLive do
   end
 
   defp apply_action(socket, :new, _params) do
-    changeset = Brain.change_project(%Project{})
+    changeset = Brain.change_page(%Page{})
 
     assign(socket,
       form: to_form(changeset, as: :project),
@@ -363,17 +363,17 @@ defmodule DranWeb.ProjectLive do
   end
 
   def handle_event("validate", %{"project" => project_params}, socket) do
-    project = socket.assigns[:project] || %Project{}
-    changeset = Brain.change_project(project, project_params) |> Map.put(:action, :validate)
+    project = socket.assigns[:project] || %Page{}
+    changeset = Brain.change_page(project, project_params) |> Map.put(:action, :validate)
     {:noreply, assign(socket, form: to_form(changeset, as: :project))}
   end
 
   def handle_event("save", %{"project" => project_params}, socket) do
     project = socket.assigns.project
 
-    case Brain.update_project(project, project_params) do
+    case Brain.update_page(project, project_params) do
       {:ok, updated} ->
-        form = Brain.change_project(updated) |> to_form(as: :project)
+        form = Brain.change_page(updated) |> to_form(as: :project)
 
         {:noreply,
          socket
@@ -394,7 +394,7 @@ defmodule DranWeb.ProjectLive do
         |> Map.put("workspace_id", context.id)
         |> ensure_slug()
 
-      case Brain.create_project(attrs) do
+      case Brain.create_page(attrs) do
         {:ok, project} ->
           {:noreply,
            socket
@@ -412,7 +412,7 @@ defmodule DranWeb.ProjectLive do
   def handle_event("delete", _params, socket) do
     project = socket.assigns.project
 
-    case Brain.delete_project(project) do
+    case Brain.delete_page(project) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -432,13 +432,8 @@ defmodule DranWeb.ProjectLive do
     [{gettext("No goal"), ""} | Enum.map(Brain.list_goals(context.id), &{&1.title, &1.id})]
   end
 
-  defp linked_goal_title(%{goal_id: nil}, _context), do: gettext("—")
-
-  defp linked_goal_title(%{goal_id: goal_id}, _context) do
-    case Brain.get_goal(goal_id) do
-      %{title: title} -> title
-      _ -> gettext("—")
-    end
+  defp linked_goal_title(_project, _context) do
+    gettext("—")
   end
 
   defp ensure_slug(%{"slug" => slug} = params) when is_binary(slug) and slug != "", do: params
@@ -449,9 +444,9 @@ defmodule DranWeb.ProjectLive do
 
   defp ensure_slug(params), do: params
 
-  defp status_class(%{health: "green"}), do: "bg-green-100 text-green-700"
-  defp status_class(%{health: "yellow"}), do: "bg-yellow-100 text-yellow-700"
-  defp status_class(%{health: "red"}), do: "bg-red-100 text-red-700"
+  defp status_class(%{meta: %{"health" => "green"}}), do: "bg-green-100 text-green-700"
+  defp status_class(%{meta: %{"health" => "yellow"}}), do: "bg-yellow-100 text-yellow-700"
+  defp status_class(%{meta: %{"health" => "red"}}), do: "bg-red-100 text-red-700"
   defp status_class(_), do: "bg-base-300 text-base-content/60"
 
   # ── PubSub: real-time update when a project changes ──
@@ -459,10 +454,10 @@ defmodule DranWeb.ProjectLive do
   @impl true
   def handle_info({:page_changed, _action, changed_project}, socket) do
     if socket.assigns[:project] && socket.assigns.project.id == changed_project.id do
-      project = Brain.get_project(changed_project.id)
+      project = Brain.get_page(changed_project.id)
 
       if project do
-        form = Brain.change_project(project) |> to_form(as: :project)
+        form = Brain.change_page(project) |> to_form(as: :project)
         {:noreply, assign(socket, project: project, form: form)}
       else
         {:noreply, socket}

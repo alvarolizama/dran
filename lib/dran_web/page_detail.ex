@@ -1,7 +1,7 @@
 defmodule DranWeb.PageDetail do
   @moduledoc """
   Shared plumbing for the per-page-type LiveViews (note, entity, concept,
-  reference, query, todo, goal, plan, project).
+  reference, todo, goal, plan, project).
 
   Those LiveViews all follow the same shape: an index list at `/notes` and a
   detail view at `/notes/:slug` with relations, versions, activity log,
@@ -22,7 +22,7 @@ defmodule DranWeb.PageDetail do
       end
 
       def handle_params(%{"slug" => slug} = params, _url, socket) do
-        PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/notes")
+        PageDetail.load_page_detail(socket, params, slug, redirect_to: "/notes")
       end
   """
 
@@ -105,14 +105,14 @@ defmodule DranWeb.PageDetail do
 
   ## Options
 
-  * `:redirect_to` (required) — index path, e.g. `"/panel/notes"`.
+  * `:redirect_to` (required) — index path, e.g. `"/notes"`.
   """
   def load_page_detail(socket, params, slug, opts) do
     redirect_to = Keyword.fetch!(opts, :redirect_to)
     {socket, context} = Auth.resolve_workspace(socket, params)
 
     with %{} = context <- context,
-         %Dran.Brain.Page{} = page <- Brain.get_page_by_slug(slug, context.id) do
+         %Dran.Page{} = page <- Brain.get_page_by_slug(slug, context.id) do
       active_tab = Map.get(socket.assigns, :active_tab, "content")
 
       {:noreply,
@@ -140,7 +140,7 @@ defmodule DranWeb.PageDetail do
   Fetch the GraphRAG community summary for a page, swallowing any error
   (communities may not be computed yet, inference may be off, etc.).
   """
-  def load_community_summary(%Dran.Brain.Page{} = page) do
+  def load_community_summary(%Dran.Page{} = page) do
     case Dran.Graph.CommunitySummaries.get_summary_for_page(page.id) do
       {:ok, summary} -> summary
       _ -> nil
@@ -152,7 +152,7 @@ defmodule DranWeb.PageDetail do
   @doc """
   Render a page's markdown body with embeds and inline links resolved.
   """
-  def render_body(%Dran.Brain.Page{} = page) do
+  def render_body(%Dran.Page{} = page) do
     import DranWeb.PageComponents, only: [render_markdown: 2]
 
     render_markdown(page.body,

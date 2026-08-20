@@ -18,7 +18,7 @@ defmodule Dran.Agent.GraphRag do
   - Max 10 `hybrid_search` calls per session
   - Max 5 `expand_neighbors` calls per session
   - Max 3 `get_community_context` calls per session
-  - Max 1 query page per session
+  - Max 1 answer page per session
   """
 
   @behaviour Dran.Agent.Engine.Behaviour
@@ -201,27 +201,21 @@ defmodule Dran.Agent.GraphRag do
       %{
         "type" => "function",
         "function" => %{
-          "name" => "create_query_page",
+          "name" => "create_answer_page",
           "description" =>
-            "Persist the answer as a query page. " <>
-              "Creates a page with page_type: query and adds source relations. " <>
+            "Persist the answer as a note page. " <>
+              "Creates a page with page_type: note (kind=answer) and adds source relations. " <>
               "Limited to 1 per session.",
           "parameters" => %{
             "type" => "object",
             "properties" => %{
               "title" => %{
                 "type" => "string",
-                "description" => "Title for the query page"
+                "description" => "Title for the answer page"
               },
               "body" => %{
                 "type" => "string",
                 "description" => "Markdown body of the answer"
-              },
-              "kind" => %{
-                "type" => "string",
-                "enum" => ["factual", "conceptual", "how_to"],
-                "description" => "Kind of query",
-                "default" => "factual"
               }
             },
             "required" => ["title", "body"]
@@ -268,7 +262,7 @@ defmodule Dran.Agent.GraphRag do
 
     Rules:
     - Always cite sources (page slugs) in your answer
-    - Create exactly one query page with the final answer
+    - Create exactly one answer page (note with kind=answer) with the final answer
     - Be concise but thorough
     - If you can't find relevant information, say so honestly
     """
@@ -496,15 +490,15 @@ defmodule Dran.Agent.GraphRag do
     if String.trim(answer) == "" do
       {{:error, "answer is required"}, state}
     else
-      {{:ok, "Answer recorded. Use create_query_page to persist."},
+      {{:ok, "Answer recorded. Use create_answer_page to persist."},
        %{state | answer: answer, mode: mode, sources: sources}}
     end
   end
 
-  def execute_tool("create_query_page", args, %State{} = state) do
+  def execute_tool("create_answer_page", args, %State{} = state) do
     cond do
       state.pages_created >= 1 ->
-        {{:error, "query page limit reached (1 per session)"}, state}
+        {{:error, "answer page limit reached (1 per session)"}, state}
 
       is_nil(state.answer) ->
         {{:error, "call synthesize_answer first to record the answer"}, state}
@@ -512,7 +506,6 @@ defmodule Dran.Agent.GraphRag do
       true ->
         title = args["title"] || ""
         body = args["body"] || ""
-        kind = args["kind"] || "factual"
 
         if String.trim(title) == "" or String.trim(body) == "" do
           {{:error, "title and body are required"}, state}
@@ -524,12 +517,12 @@ defmodule Dran.Agent.GraphRag do
             workspace_id: workspace_id,
             title: title,
             body: body,
-            page_type: "query",
+            page_type: "note",
             created_by: "graph_rager",
             owner: "graph_rager",
             meta: %{
               "mode" => state.mode,
-              "kind" => kind,
+              "kind" => "answer",
               "agent_session_id" => state.session.id,
               "sources" => sources
             }
@@ -545,7 +538,7 @@ defmodule Dran.Agent.GraphRag do
                 {:page_created, page}
               )
 
-              url = "/pages/#{page.slug}"
+              url = "/notes/#{page.slug}"
 
               {{:ok, %{slug: page.slug, url: url}},
                %{state | pages_created: state.pages_created + 1}}
@@ -606,7 +599,7 @@ defmodule Dran.Agent.GraphRag do
     parts = if answer, do: ["Answer synthesized" | parts], else: parts
 
     "GraphRAG progress: #{Enum.join(Enum.reverse(parts), "; ")}. " <>
-      "Use synthesize_answer and create_query_page to finalize."
+      "Use synthesize_answer and create_answer_page to finalize."
   end
 
   # ── Helpers ────────────────────────────────────────────────────────────────
@@ -649,7 +642,7 @@ defmodule Dran.Agent.GraphRag do
   end
 
   @spec create_source_relations(map(), [String.t()], binary()) :: :ok
-  defp create_source_relations(query_page, source_slugs, workspace_id) do
+  defp create_source_relations(answer_page, source_slugs, workspace_id) do
     Enum.each(source_slugs, fn slug ->
       case Brain.get_page_by_slug(slug, workspace_id) do
         nil ->
@@ -657,7 +650,7 @@ defmodule Dran.Agent.GraphRag do
 
         source_page ->
           Brain.create_relation(%{
-            source_id: query_page.id,
+            source_id: answer_page.id,
             target_id: source_page.id,
             relation_type: "related",
             meta: %{"created_by" => "graph_rager", "purpose" => "source_citation"}

@@ -8,7 +8,7 @@ defmodule Dran.Graph do
 
   import Ecto.Query
   alias Dran.Repo
-  alias Dran.Brain.Relation
+  alias Dran.Relation
 
   # Authority-flow weight per relation type (single source of truth).
   @edge_weights %{
@@ -159,7 +159,7 @@ defmodule Dran.Graph do
       new_meta = %{"pagerank" => Float.round(score, 6)}
 
       query =
-        from(p in Dran.Brain.Page,
+        from(p in Dran.Page,
           where: p.id == ^page_id,
           update: [set: [meta: fragment("COALESCE(meta, '{}'::jsonb) || ?::jsonb", ^new_meta)]]
         )
@@ -285,7 +285,7 @@ defmodule Dran.Graph do
       new_meta = %{"community_id" => cid}
 
       query =
-        from(p in Dran.Brain.Page,
+        from(p in Dran.Page,
           where: p.id == ^page_id,
           update: [set: [meta: fragment("COALESCE(meta, '{}'::jsonb) || ?::jsonb", ^new_meta)]]
         )

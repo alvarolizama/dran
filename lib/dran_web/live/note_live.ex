@@ -37,10 +37,10 @@ defmodule DranWeb.NoteLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={~p"/panel/notes"} class="btn btn-primary btn-sm">
+            <.link navigate={~p"/notes"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
-            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
@@ -124,7 +124,7 @@ defmodule DranWeb.NoteLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/notes")
+    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/notes")
   end
 
   def handle_params(_params, _url, socket) do
@@ -176,11 +176,11 @@ defmodule DranWeb.NoteLive do
   # ── Page navigation ──
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/notes/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/notes/#{slug}")}
   end
 
   def handle_event("new_page", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/notes/new")}
+    {:noreply, push_navigate(socket, to: ~p"/notes/new")}
   end
 
   # ── Editing (delegated to PageEdit) ──

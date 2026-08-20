@@ -53,10 +53,6 @@ defmodule DranWeb.PageListComponents do
            gettext("Add actionable items and move them across the board."),
            gettext("Create Todo")}
 
-        "query" ->
-          {gettext("No queries yet"), gettext("Save smart queries over your knowledge graph."),
-           gettext("Create Query")}
-
         _ ->
           {gettext("No pages yet"),
            gettext("Your second brain is empty. Capture your first page."),

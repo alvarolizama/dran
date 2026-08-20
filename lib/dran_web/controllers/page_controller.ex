@@ -6,6 +6,6 @@ defmodule DranWeb.PageController do
   default landing page for the second-brain app.
   """
   def home(conn, _params) do
-    redirect(conn, to: ~p"/panel/notes")
+    redirect(conn, to: ~p"/notes")
   end
 end

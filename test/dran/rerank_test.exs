@@ -84,7 +84,7 @@ defmodule Dran.RerankTest do
         })
       end)
 
-      page = %Dran.Brain.Page{title: "Elixir", body: "functional language"}
+      page = %Dran.Page{title: "Elixir", body: "functional language"}
       candidates = [{page, "excerpt"}]
 
       assert {:ok, ^candidates} = Rerank.rerank("elixir", candidates)

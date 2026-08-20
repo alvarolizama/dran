@@ -458,7 +458,7 @@ defmodule DranWeb.KanbanLive do
   end
 
   def handle_event("show_page", %{"slug" => slug}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/notes/#{slug}")}
+    {:noreply, push_navigate(socket, to: ~p"/notes/#{slug}")}
   end
 
   def handle_event("archive_todo", %{"slug" => slug}, socket) do

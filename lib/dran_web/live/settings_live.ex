@@ -8,7 +8,7 @@ defmodule DranWeb.SettingsLive do
 
   use DranWeb, :live_view
 
-  alias Dran.Brain.Workspace
+  alias Dran.Workspace
   alias Dran.Inference.Client
   alias Dran.Inference.Config
   alias Dran.Jobs
@@ -114,7 +114,6 @@ defmodule DranWeb.SettingsLive do
   defp page_type_impact("concept"), do: gettext("Concepts, concepts list")
   defp page_type_impact("entity"), do: gettext("Entities, entities list")
   defp page_type_impact("reference"), do: gettext("References, references list")
-  defp page_type_impact("query"), do: gettext("Smart collections, queries")
   defp page_type_impact(_), do: ""
 
   defp assign_new_user_form(socket) do

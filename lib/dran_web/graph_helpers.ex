@@ -6,15 +6,14 @@ defmodule DranWeb.GraphHelpers do
   """
 
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
   import Ecto.Query
 
   @type_colors %{
     "note" => "#60A5FA",
     "entity" => "#FB7185",
     "concept" => "#FBBF24",
-    "reference" => "#60A5FA",
-    "query" => "#818CF8"
+    "reference" => "#60A5FA"
   }
 
   @edge_colors %{

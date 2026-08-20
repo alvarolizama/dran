@@ -12,7 +12,7 @@ defmodule Dran.Agent.CuratorTest do
 
   alias Dran.Agent.{Curator, Session}
   alias Dran.{Brain, Repo}
-  alias Dran.Brain.Page
+  alias Dran.Page
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 

@@ -10,8 +10,8 @@ defmodule DranWeb.PageEdit do
 
   LiveViews using these handlers must have in `socket.assigns`:
 
-  - `:page` — the `%Dran.Brain.Page{}` being edited (for edit mode)
-  - `:workspace` — the `%Dran.Brain.Workspace{}` (or nil)
+  - `:page` — the `%Dran.Page{}` being edited (for edit mode)
+  - `:workspace` — the `%Dran.Workspace{}` (or nil)
   - `:page_type` — the page type string (e.g. `"note"`)
 
   ## Events handled
@@ -38,7 +38,7 @@ defmodule DranWeb.PageEdit do
   alias Phoenix.LiveView.Upload, as: Upload
 
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.Summaries
   alias Dran.Uploads
 
@@ -68,7 +68,7 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("cancel_edit", _params, socket) do
-    {:noreply, push_navigate(socket, to: "/panel/notes")}
+    {:noreply, push_navigate(socket, to: "/notes")}
   end
 
   def handle_event("suggest_summary", _params, %{assigns: %{page: %Page{}}} = socket) do

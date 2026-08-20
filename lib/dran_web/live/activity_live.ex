@@ -141,7 +141,7 @@ defmodule DranWeb.ActivityLive do
     """
   end
 
-  attr :entry, Dran.Brain.Log, required: true
+  attr :entry, Dran.Log, required: true
 
   defp timeline_entry(assigns) do
     ~H"""
@@ -202,7 +202,7 @@ defmodule DranWeb.ActivityLive do
 
   # ── Helpers ─────────────────────────────────────────────────────────────────
 
-  defp context_name(%Dran.Brain.Workspace{name: name}), do: name
+  defp context_name(%Dran.Workspace{name: name}), do: name
   defp context_name(_), do: gettext("this context")
 
   defp action_icon("page.create"), do: "hero-plus-circle"
@@ -258,22 +258,22 @@ defmodule DranWeb.ActivityLive do
     end
   end
 
-  defp page_path_for(%Dran.Brain.Log{action: "page.delete"}), do: nil
-  defp page_path_for(%Dran.Brain.Log{action: "page.archive"}), do: nil
+  defp page_path_for(%Dran.Log{action: "page.delete"}), do: nil
+  defp page_path_for(%Dran.Log{action: "page.archive"}), do: nil
 
-  defp page_path_for(%Dran.Brain.Log{action: "page." <> _rest, subject: slug})
+  defp page_path_for(%Dran.Log{action: "page." <> _rest, subject: slug})
        when is_binary(slug) do
-    "/panel/notes/#{slug}"
+    "/notes/#{slug}"
   end
 
   defp page_path_for(_), do: nil
 
-  defp detail_badge(%Dran.Brain.Log{action: "page.create", details: %{"page_type" => type}})
+  defp detail_badge(%Dran.Log{action: "page.create", details: %{"page_type" => type}})
        when is_binary(type) do
     gettext("type: %{type}", type: type)
   end
 
-  defp detail_badge(%Dran.Brain.Log{action: "page.update", details: %{"version" => version}}) do
+  defp detail_badge(%Dran.Log{action: "page.update", details: %{"version" => version}}) do
     gettext("v%{version}", version: version)
   end
 

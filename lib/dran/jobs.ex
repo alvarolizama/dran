@@ -33,7 +33,7 @@ defmodule Dran.Jobs do
      `my_job: [schedule: "0 4 * * *", task: {Dran.Jobs, :run_scheduled, [:my_job]}]`
      (inside the existing `if config_env() != :test` guard).
 
-  Reports are second-citizen entities (see `Dran.Brain.Report`): no graph,
+  Reports are second-citizen entities (see `Dran.Report`): no graph,
   no journey, no embeddings — they cost zero inference. They are viewable
   at `/reports/:slug`.
   """
@@ -42,7 +42,7 @@ defmodule Dran.Jobs do
 
   alias Dran.{Brain, Repo, Settings}
   alias Dran.Agent.Session
-  alias Dran.Brain.Report
+  alias Dran.Report
 
   require Logger
 

@@ -97,10 +97,12 @@ defmodule DranWeb.HomeLiveTest do
   describe "todo kanban + type_list" do
     setup %{wiki_ctx: wiki_ctx} do
       {:ok, project} =
-        Brain.create_project(%{
+        Brain.create_page(%{
           workspace_id: wiki_ctx.id,
           title: "Alpha Project",
-          slug: "alpha-project"
+          slug: "alpha-project",
+          page_type: "note",
+          meta: %{"kind" => "project"}
         })
 
       {:ok, goal} =

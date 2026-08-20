@@ -238,7 +238,7 @@ defmodule DranWeb.API.PageController do
           else
             # Try by ID — use Repo.get to avoid raising on invalid UUIDs
             case Ecto.UUID.cast(context_val) do
-              {:ok, uuid} -> Dran.Repo.get(Dran.Brain.Workspace, uuid)
+              {:ok, uuid} -> Dran.Repo.get(Dran.Workspace, uuid)
               :error -> nil
             end
           end

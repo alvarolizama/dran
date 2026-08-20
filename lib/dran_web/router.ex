@@ -257,10 +257,6 @@ defmodule DranWeb.Router do
     # ── LiveView pages (second brain UI) ────────────────────────────────────
 
     # Knowledge
-    live "/notes", NoteLive, :index
-    live "/notes/new", PageNewLive, :new
-    live "/notes/:slug", NoteLive, :show
-
     live "/concepts", ConceptLive, :index
     live "/concepts/new", PageNewLive, :new
     live "/concepts/:slug", ConceptLive, :show
@@ -273,10 +269,6 @@ defmodule DranWeb.Router do
     live "/references/new", PageNewLive, :new
     live "/references/:slug", ReferenceLive, :show
 
-    live "/queries", QueryLive, :index
-    live "/queries/new", PageNewLive, :new
-    live "/queries/:slug", QueryLive, :show
-
     # Communities (clusters of related pages)
     live "/communities", CommunityLive, :index
     live "/communities/:id", CommunityLive, :show
@@ -285,7 +277,6 @@ defmodule DranWeb.Router do
     live "/goals/new", GoalLive, :new
     live "/goals/:slug", GoalLive, :show
 
-    live "/kanban", KanbanLive, :index
     live "/projects", ProjectLive, :index
     live "/projects/new", ProjectLive, :new
     live "/projects/:slug", ProjectLive, :show
@@ -295,17 +286,10 @@ defmodule DranWeb.Router do
     live "/reports/:slug", ReportLive, :show
 
     # Views
-    live "/graph", GraphLive, :index
-    live "/graph/:slug", GraphLive, :show
-
-    # JSON endpoint for progressive graph loading (session-authenticated)
-    get "/graph-json", GraphJSONController, :show
 
     live "/activity", ActivityLive, :index
 
     live "/journey", JourneyLive, :index
-
-    live "/search", SearchLive, :index
 
     live "/tags/:tag", TagLive, :index
 
@@ -432,6 +416,22 @@ defmodule DranWeb.Router do
     pipe_through [:browser, :auth]
 
     live "/", HomeLive, :index
+
+    # Essential views, root-level (moved out of /panel) — must be defined
+    # before the `/:workspace_slug` wildcard below so static segments win.
+    live "/notes", NoteLive, :index
+    live "/notes/new", PageNewLive, :new
+    live "/notes/:slug", NoteLive, :show
+
+    live "/graph", GraphLive, :index
+    live "/graph/:slug", GraphLive, :show
+    # JSON endpoint for progressive graph loading (session-authenticated)
+    get "/graph-json", GraphJSONController, :show
+
+    live "/kanban", KanbanLive, :index
+
+    live "/search", SearchLive, :index
+
     live "/:workspace_slug", HomeLive, :workspace_home
     live "/:workspace_slug/type/:page_type", HomeLive, :type_list
     live "/:workspace_slug/type/:page_type/:slug", HomeLive, :page_show

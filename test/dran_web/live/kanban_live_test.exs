@@ -54,7 +54,7 @@ defmodule DranWeb.KanbanLiveTest do
       conn: conn,
       context: context
     } do
-      {:ok, view, _html} = live(conn, ~p"/panel/kanban")
+      {:ok, view, _html} = live(conn, ~p"/kanban")
 
       # Form is hidden until the toggle button is clicked.
       refute has_element?(view, "#kanban-quick-add")
@@ -96,7 +96,7 @@ defmodule DranWeb.KanbanLiveTest do
       context: context,
       goal: goal
     } do
-      {:ok, view, _html} = live(conn, ~p"/panel/kanban?goal=#{goal.slug}")
+      {:ok, view, _html} = live(conn, ~p"/kanban?goal=#{goal.slug}")
 
       # The goal filter is active
       assert has_element?(view, "#filter-goal")
@@ -135,7 +135,7 @@ defmodule DranWeb.KanbanLiveTest do
     test "board renders the newly created todo in the backlog column", %{
       conn: conn
     } do
-      {:ok, view, _html} = live(conn, ~p"/panel/kanban")
+      {:ok, view, _html} = live(conn, ~p"/kanban")
 
       view |> element("button", t("Nueva tarea")) |> render_click()
 
@@ -174,7 +174,7 @@ defmodule DranWeb.KanbanLiveTest do
           kanban_status: "backlog"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/panel/kanban")
+      {:ok, view, _html} = live(conn, ~p"/kanban")
 
       # The card renders with its archive button (bottom-right of the card)
       assert has_element?(view, ~s(button[phx-value-slug="#{todo.slug}"]))

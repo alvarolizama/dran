@@ -170,7 +170,7 @@ defmodule DranWeb.MarkdownEditorComponents do
 
   ## Tuple shapes
 
-  `Dran.Brain.PageMeta.meta_fields_for/1` returns tuples of variable arity:
+  `Dran.PageMeta.meta_fields_for/1` returns tuples of variable arity:
 
       {:date, "due_date", "Due date"}
       {:select, "kind", "Kind", [{"Thought", "thought"}, ...]}
@@ -188,7 +188,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   attr :workspace_id, :any, required: true
 
   def meta_fields(assigns) do
-    raw_fields = Dran.Brain.PageMeta.meta_fields_for(assigns.page_type)
+    raw_fields = Dran.PageMeta.meta_fields_for(assigns.page_type)
     fields = Enum.map(raw_fields, &normalise_meta_field/1)
 
     {link_fields, plain_fields} =

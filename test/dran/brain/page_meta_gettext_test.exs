@@ -21,7 +21,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
   # We use ExUnit.Case (no DB) — same style as page_meta_test.exs.
   use ExUnit.Case, async: false
 
-  alias Dran.Brain.PageMeta
+  alias Dran.PageMeta
 
   # meta_fields_for/1,2 resolves gettext at call time against the CURRENT
   # process locale. The app default is "es", so labels come back translated
@@ -127,13 +127,6 @@ defmodule Dran.Brain.PageMetaGettextTest do
                "reference kind label #{inspect(label)} not in default.pot — not gettext'd"
       end
     end
-
-    test "query: every option label is in default.pot" do
-      for {label, _value} <- select_pairs("query") do
-        assert pot_has?(label),
-               "query option label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
   end
 
   # ── option values (DB slugs) are NEVER translated ───────────────────────
@@ -170,22 +163,13 @@ defmodule Dran.Brain.PageMetaGettextTest do
         assert expected in values
       end
     end
-
-    test "query: kind, difficulty, answer_status values are raw slugs" do
-      values = Enum.map(select_pairs("query"), &elem(&1, 1))
-
-      for expected <-
-            ~w(factual conceptual how_to opinion simple intermediate advanced open answered verified) do
-        assert expected in values
-      end
-    end
   end
 
   # ── field labels are routed through gettext ──────────────────────────────
 
   describe "field labels (3rd tuple element) are routed through gettext" do
     test "every field label across all page types is in default.pot" do
-      for type <- ~w(note concept entity reference query),
+      for type <- ~w(note concept entity reference),
           label <- field_labels(type) do
         assert pot_has?(label),
                "field label #{inspect(label)} for type #{inspect(type)} not in default.pot — not gettext'd"
@@ -198,11 +182,11 @@ defmodule Dran.Brain.PageMetaGettextTest do
   describe "regression — note kind list has no bogus 'Hecho' option" do
     # The original "Hecho" bug came from fuzzy .po pollution (msgid "None"
     # had msgstr "Hecho"). This guards the note kind list itself: it must
-    # contain exactly the 25 expected slugs and no 'Hecho' (which was never
+    # contain exactly the 26 expected slugs and no 'Hecho' (which was never
     # a real note kind, only a translation artefact).
-    test "note_kinds/0 returns exactly 25 expected slugs" do
+    test "note_kinds/0 returns exactly 26 expected slugs" do
       assert PageMeta.note_kinds() ==
-               ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm todo plan)
+               ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm todo plan project)
     end
 
     test "note kinds are all lowercase slugs (never display labels)" do
@@ -225,7 +209,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     # prompts are not part of meta_fields_for's return, but we keep a guard
     # that no field label is the English literal "None".
     test "no page type returns 'None' as a field label" do
-      for type <- ~w(note concept entity reference query) do
+      for type <- ~w(note concept entity reference) do
         refute "None" in field_labels(type),
                "page type #{inspect(type)} has a raw 'None' field label"
       end
@@ -238,7 +222,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     # Guards against typos introduced during the gettext wrapping
     # (e.g. a stray gettext call with wrong arity returning a non-string label).
     test "every entry is {atom, binary, binary, list} or {atom, binary, binary}" do
-      for type <- ~w(note concept entity reference query),
+      for type <- ~w(note concept entity reference),
           entry <- PageMeta.meta_fields_for(type) do
         case entry do
           {type, key, label}
@@ -256,7 +240,7 @@ defmodule Dran.Brain.PageMetaGettextTest do
     end
 
     test "every :select field has non-empty options" do
-      for type <- ~w(note concept entity reference query),
+      for type <- ~w(note concept entity reference),
           {:select, key, _label, opts} <- PageMeta.meta_fields_for(type) do
         # Options may be inline (list of {binary, binary}) or under :options.
         direct_opts =

@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Workspace do
+defmodule Dran.Workspace do
   @moduledoc """
   A context is an isolated silo of knowledge (personal, work, projects).
   All pages and relations belong to a context.
@@ -40,6 +40,6 @@ defmodule Dran.Brain.Workspace do
   def settings_changeset(context, attrs) do
     context
     |> cast(attrs, [:disabled_page_types])
-    |> validate_subset(:disabled_page_types, Dran.Brain.Page.all_types())
+    |> validate_subset(:disabled_page_types, Dran.Page.all_types())
   end
 end

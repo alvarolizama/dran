@@ -13,7 +13,7 @@ defmodule Dran.Accounts.ApiKeyWorkspace do
     field :access_level, :string, default: "read"
 
     belongs_to :api_key, Dran.Accounts.ApiKey
-    belongs_to :workspace, Dran.Brain.Workspace
+    belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime, updated_at: false)
   end

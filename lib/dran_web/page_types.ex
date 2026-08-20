@@ -2,11 +2,11 @@ defmodule DranWeb.PageTypes do
   @moduledoc """
   Centralized page type mappings.
 
-  A single source of truth for the 5 page types, each with its
+  A single source of truth for the 4 page types, each with its
   URL path segment, display label, icon, and plural label.
 
   Only presentation lives here — what a type CAN do (graph, journey,
-  embeddings, MCP-create) is defined in `Dran.Brain.PageTypes`.
+  embeddings, MCP-create) is defined in `Dran.PageTypes`.
   """
 
   use Gettext, backend: DranWeb.Gettext
@@ -25,12 +25,6 @@ defmodule DranWeb.PageTypes do
       label: "Reference",
       icon: "hero-bookmark",
       plural: "References"
-    },
-    "query" => %{
-      path: "queries",
-      label: "Query",
-      icon: "hero-question-mark-circle",
-      plural: "Queries"
     }
   }
 
@@ -86,19 +80,22 @@ defmodule DranWeb.PageTypes do
   ## Examples
 
       iex> DranWeb.PageTypes.page_show_path(%Page{page_type: "note", slug: "my-note"})
-      "/panel/notes/my-note"
+      "/notes/my-note"
   """
-  def page_show_path(%Dran.Brain.Page{page_type: type, slug: slug})
+  def page_show_path(%Dran.Page{page_type: type, slug: slug})
       when is_binary(type) and is_binary(slug) do
-    "/panel/#{path(type)}/#{slug}"
+    page_show_path(type, slug)
   end
 
   def page_show_path(%{page_type: type, slug: slug})
       when is_binary(type) and is_binary(slug) do
-    "/panel/#{path(type)}/#{slug}"
+    page_show_path(type, slug)
   end
 
   def page_show_path(_), do: "#"
+
+  defp page_show_path("note", slug), do: "/notes/#{slug}"
+  defp page_show_path(type, slug), do: "/panel/#{path(type)}/#{slug}"
 
   # Extraction markers — these msgids are looked up dynamically in label/1 and
   # plural/1 via Gettext.gettext/2, so the extractor never sees them. Listing
@@ -108,11 +105,9 @@ defmodule DranWeb.PageTypes do
     gettext("Concept")
     gettext("Entity")
     gettext("Reference")
-    gettext("Query")
     gettext("Notes")
     gettext("Concepts")
     gettext("Entities")
     gettext("References")
-    gettext("Queries")
   end
 end

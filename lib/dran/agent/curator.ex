@@ -24,7 +24,7 @@ defmodule Dran.Agent.Curator do
   import Ecto.Query
 
   alias Dran.{Brain, Repo}
-  alias Dran.Brain.Page
+  alias Dran.Page
 
   @agent_type "curator"
   @max_flags 20

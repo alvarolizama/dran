@@ -87,19 +87,19 @@ defmodule DranWeb.DashboardLive do
             <div class="flex gap-2">
               <.link
                 :if={Brain.page_type_enabled?(@workspace, "todo")}
-                navigate={~p"/panel/kanban"}
+                navigate={~p"/kanban"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-view-columns" class="size-4" /> {gettext("Kanban")}
               </.link>
               <.link
-                navigate={~p"/panel/graph"}
+                navigate={~p"/graph"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
               </.link>
               <.link
-                navigate={~p"/panel/search"}
+                navigate={~p"/search"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-magnifying-glass" class="size-4" /> {gettext("Search")}
@@ -258,7 +258,7 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Pages by Type")}</h2>
-                  <.link navigate={~p"/panel/search"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/search"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -279,7 +279,7 @@ defmodule DranWeb.DashboardLive do
               >
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Todos")}</h2>
-                  <.link navigate={~p"/panel/kanban"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/kanban"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -302,7 +302,7 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Recently Updated")}</h2>
-                  <.link navigate={~p"/panel/graph"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/graph"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -428,7 +428,9 @@ defmodule DranWeb.DashboardLive do
   # projects) and recompute todos = pages WHERE kanban_status IS NOT NULL.
   defp stats_with_new_model(context, stats) do
     goal_count = length(Brain.list_goals(workspace_id: context.id, limit: 500))
-    project_count = length(Brain.list_projects(workspace_id: context.id, limit: 500))
+
+    project_count =
+      length(Brain.list_pages(workspace_id: context.id, kind: "project", limit: 500))
 
     # goals/projects live outside the pages table — fold them into by_type so
     # the "Pages by Type" list and totals reflect the full hierarchy.
@@ -451,7 +453,7 @@ defmodule DranWeb.DashboardLive do
   defp todos_by_status(workspace_id) do
     import Ecto.Query
 
-    from(p in Dran.Brain.Page,
+    from(p in Dran.Page,
       where:
         p.workspace_id == ^workspace_id and p.archived == false and
           not is_nil(p.kanban_status),
@@ -620,7 +622,7 @@ defmodule DranWeb.DashboardLive do
 
   defp relations_total(_), do: 0
 
-  defp page_path(%Dran.Brain.Page{} = page) do
+  defp page_path(%Dran.Page{} = page) do
     "/panel/#{PageTypes.path(page.page_type)}/#{page.slug}"
   end
 

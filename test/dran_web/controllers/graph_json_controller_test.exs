@@ -58,7 +58,7 @@ defmodule DranWeb.GraphJSONControllerTest do
     conn: conn,
     note: note
   } do
-    conn = get(conn, ~p"/panel/graph-json")
+    conn = get(conn, ~p"/graph-json")
 
     assert %{
              "nodes" => nodes,
@@ -91,7 +91,7 @@ defmodule DranWeb.GraphJSONControllerTest do
   end
 
   test "GET /api/graph-json clamps max_nodes to its floor (50)", %{conn: conn} do
-    conn = get(conn, ~p"/panel/graph-json?max_nodes=1")
+    conn = get(conn, ~p"/graph-json?max_nodes=1")
 
     assert %{"nodes" => nodes, "total_nodes" => total} = json_response(conn, 200)
 
@@ -111,7 +111,7 @@ defmodule DranWeb.GraphJSONControllerTest do
       })
 
     conn = build_conn()
-    conn = get(conn, ~p"/panel/graph-json")
+    conn = get(conn, ~p"/graph-json")
 
     assert redirected_to(conn, 302) == "/login"
   end

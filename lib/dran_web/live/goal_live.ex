@@ -4,7 +4,7 @@ defmodule DranWeb.GoalLive do
   use DranWeb, :live_view
 
   alias Dran.Brain
-  alias Dran.Brain.Goal
+  alias Dran.Goal
   alias DranWeb.Plugs.Auth
 
   @goal_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)

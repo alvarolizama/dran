@@ -48,15 +48,15 @@ defmodule DranWeb.SessionControllerTest do
     test "redirects back to referer or /notes", %{conn: conn} do
       conn =
         conn
-        |> Plug.Conn.put_req_header("referer", "/panel/notes")
+        |> Plug.Conn.put_req_header("referer", "/notes")
         |> post(~p"/panel/workspace", %{"workspace_slug" => "work"})
 
-      assert redirected_to(conn, 302) == "/panel/notes"
+      assert redirected_to(conn, 302) == "/notes"
     end
 
     test "without workspace_slug shows error flash", %{conn: conn} do
       conn = post(conn, ~p"/panel/workspace", %{})
-      assert redirected_to(conn, 302) == "/panel/notes"
+      assert redirected_to(conn, 302) == "/notes"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "required"
     end
   end

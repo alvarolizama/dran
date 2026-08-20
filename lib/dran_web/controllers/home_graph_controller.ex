@@ -4,7 +4,7 @@ defmodule DranWeb.HomeGraphController do
 
   Serves the same ETS-cached payload as `GraphJSONController` (panel), but is
   accessible to ALL logged-in users — not just admins/editors. The panel's
-  `/panel/graph-json` lives behind the `admin_or_editor` pipeline, which
+  `/graph-json` lives behind the `admin_or_editor` pipeline, which
   home-only users cannot pass; this controller sits under the home scope
   (`[:browser, :auth]`).
 

@@ -17,8 +17,8 @@ defmodule Dran.PropsBackfill do
   import Ecto.Query
 
   alias Dran.Repo
-  alias Dran.Brain.Page
-  alias Dran.Brain.PageAugmenter
+  alias Dran.Page
+  alias Dran.PageAugmenter
 
   @doc """
   Find all pages with non-empty `meta.props` and re-augment them.

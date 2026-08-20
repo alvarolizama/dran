@@ -8,7 +8,7 @@ defmodule Dran.Exporter do
 
   alias Dran.Repo
   alias Dran.Brain
-  alias Dran.Brain.{Workspace, Page, Relation, PageVersion}
+  alias Dran.{Workspace, Page, Relation, PageVersion}
 
   @doc """
   Export a context by slug.
@@ -29,7 +29,7 @@ defmodule Dran.Exporter do
       nil ->
         {:error, :not_found}
 
-      %Dran.Brain.Workspace{} = context ->
+      %Dran.Workspace{} = context ->
         pages = load_pages(context.id)
 
         page_ids = Enum.map(pages, & &1.id)

@@ -20,7 +20,7 @@ defmodule Dran.Rerank do
 
   alias Dran.Inference
 
-  @type candidate :: map() | {Dran.Brain.Page.t(), String.t()}
+  @type candidate :: map() | {Dran.Page.t(), String.t()}
 
   @doc """
   Rerank candidates.
@@ -65,7 +65,7 @@ defmodule Dran.Rerank do
     end
   end
 
-  defp to_text({%Dran.Brain.Page{} = page, excerpt}) do
+  defp to_text({%Dran.Page{} = page, excerpt}) do
     [page.title, page.summary, excerpt, Enum.join(page.tags || [], " ")]
     |> Enum.reject(&is_nil/1)
     |> Enum.map(&String.trim/1)

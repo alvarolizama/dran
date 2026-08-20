@@ -175,7 +175,7 @@ defmodule Dran.EntityLinkerTest do
     end
 
     test "page without context links nothing" do
-      page = %Brain.Page{workspace_id: nil}
+      page = %Dran.Page{workspace_id: nil}
       assert {:ok, 0} = EntityLinker.link(page, ["Elixir"])
     end
   end

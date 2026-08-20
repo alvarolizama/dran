@@ -53,7 +53,7 @@ defmodule Dran.BrainTest do
 
     test "page_type_enabled?/2 treats nil context as all types enabled" do
       assert Brain.page_type_enabled?(nil, "note")
-      assert Brain.page_type_enabled?(nil, "query")
+      assert Brain.page_type_enabled?(nil, "reference")
     end
 
     test "update_workspace_settings/2 rejects invalid page types", %{context: ctx} do
@@ -64,12 +64,12 @@ defmodule Dran.BrainTest do
     end
 
     test "create_page/1 rejects disabled page types", %{context: ctx} do
-      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["query"]})
+      {:ok, ctx} = Brain.update_workspace_settings(ctx, %{disabled_page_types: ["reference"]})
 
       assert {:error, :page_type_disabled} =
                Brain.create_page(%{
                  "title" => "Disabled type page",
-                 "page_type" => "query",
+                 "page_type" => "reference",
                  "workspace_id" => ctx.id,
                  "body" => "should not be created"
                })
@@ -407,9 +407,9 @@ defmodule Dran.BrainTest do
 
       # Every registered page type is a full graph citizen, so the default
       # exclusion list is empty and both nodes appear in the graph.
-      assert Brain.PageTypes.hidden_from_graph() == []
+      assert Dran.PageTypes.hidden_from_graph() == []
 
-      graph = Brain.graph_data(ctx.id, exclude_types: Brain.PageTypes.hidden_from_graph())
+      graph = Brain.graph_data(ctx.id, exclude_types: Dran.PageTypes.hidden_from_graph())
 
       assert Enum.sort(Enum.map(graph.nodes, & &1.type)) == ["note", "reference"]
       assert length(graph.edges) == 1

@@ -90,12 +90,12 @@ defmodule DranWeb.SessionController do
       is_nil(context) ->
         conn
         |> put_flash(:error, "Unknown context")
-        |> redirect(to: ~p"/panel/notes")
+        |> redirect(to: ~p"/notes")
 
       accessible != :all and workspace_slug not in accessible ->
         conn
         |> put_flash(:error, "You don't have access to that context")
-        |> redirect(to: ~p"/panel/notes")
+        |> redirect(to: ~p"/notes")
 
       true ->
         conn
@@ -107,13 +107,13 @@ defmodule DranWeb.SessionController do
   def switch_workspace(conn, _params) do
     conn
     |> put_flash(:error, "Context slug is required")
-    |> redirect(to: ~p"/panel/notes")
+    |> redirect(to: ~p"/notes")
   end
 
   defp referer_path(conn) do
     case get_req_header(conn, "referer") |> List.first() do
       nil ->
-        ~p"/panel/notes"
+        ~p"/notes"
 
       url ->
         case URI.parse(url) do
@@ -124,7 +124,7 @@ defmodule DranWeb.SessionController do
             end
 
           _ ->
-            ~p"/panel/notes"
+            ~p"/notes"
         end
     end
   end

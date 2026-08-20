@@ -1,13 +1,13 @@
 defmodule Dran.Brain.PageTypesTest do
   use ExUnit.Case, async: true
 
-  alias Dran.Brain.Page
-  alias Dran.Brain.PageTypes
+  alias Dran.Page
+  alias Dran.PageTypes
 
   describe "types/0" do
-    test "returns the 5 canonical page types in order" do
+    test "returns the 4 canonical page types in order" do
       assert PageTypes.types() ==
-               ~w(note entity concept reference query)
+               ~w(note entity concept reference)
     end
 
     test "is the single source for Page.all_types/0" do
@@ -25,7 +25,7 @@ defmodule Dran.Brain.PageTypesTest do
     end
 
     test "all full-citizen types have every capability enabled" do
-      for type <- ~w(note entity concept reference query) do
+      for type <- ~w(note entity concept reference) do
         assert PageTypes.graph?(type), "#{type} should be in the graph"
         assert PageTypes.journey?(type), "#{type} should be in the journey"
         assert PageTypes.embeddings?(type), "#{type} should have embeddings"
@@ -44,7 +44,7 @@ defmodule Dran.Brain.PageTypesTest do
   describe "list helpers" do
     test "hidden_from_graph/0 returns empty for standard types" do
       # goal, plan, todo, and report have been removed from the page types registry
-      # or handled elsewhere. The PageTypes module now only contains 5 standard types.
+      # or handled elsewhere. The PageTypes module now only contains 4 standard types.
       assert PageTypes.hidden_from_graph() == []
     end
 

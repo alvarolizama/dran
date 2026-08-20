@@ -28,14 +28,13 @@ defmodule Dran.Brain do
 
   alias Dran.Repo
 
-  alias Dran.Brain.{
+  alias Dran.{
     Workspace,
     Page,
     Relation,
     PageVersion,
     Log,
     Goal,
-    Project,
     Collection,
     Report
   }
@@ -434,70 +433,6 @@ defmodule Dran.Brain do
   def delete_goal(%Goal{} = goal), do: Repo.delete(goal)
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Project CRUD
-  # ──────────────────────────────────────────────────────────────────────────
-
-  @doc "Get a project by slug within a workspace"
-  def get_project_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
-    Repo.one(from p in Project, where: p.slug == ^slug and p.workspace_id == ^workspace_id)
-  end
-
-  @doc "Get a project by id"
-  def get_project!(id), do: Repo.get!(Project, id)
-
-  @doc "Get a project by id, returns nil if not found"
-  def get_project(id), do: Repo.get(Project, id)
-
-  @doc "Build a changeset for a project (for LiveView forms)"
-  def change_project(%Project{} = project, attrs \\ %{}) do
-    Project.changeset(project, attrs)
-  end
-
-  @doc "Create a new project"
-  def create_project(attrs) do
-    %Project{}
-    |> Project.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc "Update an existing project"
-  def update_project(%Project{} = project, attrs) do
-    project
-    |> Project.changeset(attrs)
-    |> Repo.update()
-  end
-
-  @doc "Delete a project"
-  def delete_project(%Project{} = project), do: Repo.delete(project)
-
-  @doc "List projects in a workspace, optionally filtered"
-  def list_projects(opts) when is_list(opts) do
-    workspace_id = Keyword.get(opts, :workspace_id)
-    limit = Keyword.get(opts, :limit, 100)
-    archived = Keyword.get(opts, :archived, false)
-
-    query =
-      from(p in Project,
-        where: p.archived == ^archived,
-        order_by: [asc: p.title],
-        limit: ^limit
-      )
-
-    query =
-      if workspace_id do
-        where(query, [p], p.workspace_id == ^workspace_id)
-      else
-        query
-      end
-
-    Repo.all(query)
-  end
-
-  def list_projects(workspace_id) when is_binary(workspace_id) do
-    list_projects(workspace_id: workspace_id)
-  end
-
-  # ──────────────────────────────────────────────────────────────────────────
   # Collection CRUD
   # ──────────────────────────────────────────────────────────────────────────
 
@@ -683,7 +618,7 @@ defmodule Dran.Brain do
 
           broadcast_page_change(page.workspace_id, :created, page)
           Dran.Embeddings.schedule(page)
-          Dran.Brain.PageAugmenter.schedule(page)
+          Dran.PageAugmenter.schedule(page)
           {:ok, page}
 
         {:error, changeset} ->
@@ -780,7 +715,7 @@ defmodule Dran.Brain do
 
         broadcast_page_change(updated_page.workspace_id, :updated, updated_page)
         Dran.Embeddings.schedule(updated_page)
-        Dran.Brain.PageAugmenter.schedule(updated_page)
+        Dran.PageAugmenter.schedule(updated_page)
         {:ok, updated_page}
 
       {:error, changeset} ->
@@ -991,7 +926,7 @@ defmodule Dran.Brain do
     if err do
       {:error, err}
     else
-      threshold = Dran.Brain.PageAugmenter.semantic_threshold(page)
+      threshold = Dran.PageAugmenter.semantic_threshold(page)
 
       existing_target_ids =
         list_relations_for_page(page.id)
@@ -1790,7 +1725,7 @@ defmodule Dran.Brain do
     end)
   end
 
-  defp normalize_fuse_item({%Dran.Brain.Page{} = page, excerpt}), do: {page, excerpt}
+  defp normalize_fuse_item({%Dran.Page{} = page, excerpt}), do: {page, excerpt}
   defp normalize_fuse_item(%{} = map), do: {map, Map.get(map, :excerpt)}
 
   # ── PageRank authority boost ──
@@ -1886,7 +1821,7 @@ defmodule Dran.Brain do
     {:ok, Enum.map(results, &normalize_item(&1, strategy))}
   end
 
-  defp normalize_item({%Dran.Brain.Page{} = page, excerpt}, strategy) do
+  defp normalize_item({%Dran.Page{} = page, excerpt}, strategy) do
     %{
       id: page.id,
       title: page.title,

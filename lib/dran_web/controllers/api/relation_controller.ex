@@ -69,7 +69,7 @@ defmodule DranWeb.API.RelationController do
     # SEC-011: validate the user has access to the relation's context before deleting
     user = conn.assigns[:user]
 
-    case Dran.Repo.get(Dran.Brain.Relation, id) do
+    case Dran.Repo.get(Dran.Relation, id) do
       nil ->
         conn
         |> put_status(:not_found)

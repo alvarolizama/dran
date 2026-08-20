@@ -38,7 +38,7 @@ defmodule Dran.ReportTest do
         slug: "test-report"
       }
 
-      assert {:ok, %Brain.Report{} = report} = Brain.create_report(attrs)
+      assert {:ok, %Dran.Report{} = report} = Brain.create_report(attrs)
       assert report.title == "Test Report"
     end
   end

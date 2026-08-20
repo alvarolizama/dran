@@ -12,7 +12,7 @@ defmodule Dran.Summaries do
   """
 
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.Embeddings
   alias Dran.Inference
   alias Dran.Repo
@@ -107,7 +107,7 @@ defmodule Dran.Summaries do
     - "title": a concise title for the page (max 512 chars)
     - "summary": one concise sentence describing the page (max 120 chars)
     - "tags": 1-5 kebab-case tags
-    - "entities": names of real-world entities ONLY: specific people, companies, products, tools, or places. DO NOT include: file paths or names (e.g. "readme.md", "settings_live.ex"), Elixir module names (e.g. "Dran.Brain.Page"), file extensions, or generic tech acronyms (e.g. "ai", "llm", "mcp", "socket"). Focus on named entities that have their own real-world identity.
+    - "entities": names of real-world entities ONLY: specific people, companies, products, tools, or places. DO NOT include: file paths or names (e.g. "readme.md", "settings_live.ex"), Elixir module names (e.g. "Dran.Page"), file extensions, or generic tech acronyms (e.g. "ai", "llm", "mcp", "socket"). Focus on named entities that have their own real-world identity.
     - "inline_links": array of {"text": "exact text from body", "slug": "slug from available pages"} — link body text to related pages. Only use slugs from the available pages list. Pick the most relevant 1-5 links. The "text" must be an exact substring from the page body.
 
     Available pages in this context:

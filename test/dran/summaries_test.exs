@@ -1,7 +1,7 @@
 defmodule Dran.SummariesTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.Summaries
 
   setup do

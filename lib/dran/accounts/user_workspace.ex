@@ -5,7 +5,7 @@ defmodule Dran.Accounts.UserWorkspace do
   schema "user_workspaces" do
     belongs_to :user, Dran.Accounts.User
     field :workspace_id, :binary_id
-    belongs_to :workspace, Dran.Brain.Workspace, define_field: false
+    belongs_to :workspace, Dran.Workspace, define_field: false
     field :role, :string, default: "viewer"
 
     timestamps()

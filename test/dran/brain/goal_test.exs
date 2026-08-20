@@ -42,7 +42,7 @@ defmodule Dran.GoalTest do
         unit: "%"
       }
 
-      assert {:ok, %Brain.Goal{} = goal} = Brain.create_goal(attrs)
+      assert {:ok, %Dran.Goal{} = goal} = Brain.create_goal(attrs)
       assert goal.title == "Test Goal"
       assert goal.metric == "completion %"
     end

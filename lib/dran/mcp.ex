@@ -10,16 +10,15 @@ defmodule Dran.MCP do
   - `GET /api/mcp` — responds 405 (SSE stream not implemented)
   - `DELETE /api/mcp` — terminate session
 
-  ## Tools (20)
+  ## Tools (19)
   - `dran_search` — use FIRST to find anything; strategy=auto picks best available
-  - `dran_create_page` — create notes, concepts, entities, references, and queries
+  - `dran_create_page` — create notes, concepts, entities, and references
   - `dran_update_page` — update page fields; REPLACES meta entirely (not a merge)
   - `dran_get_page` — read full page body by slug; use after dran_search/dran_list_pages, not before
   - `dran_delete_page` — delete a page by slug; **irreversible** (cascades to relations + versions)
   - `dran_create_note` — create a note with kind:"todo" + kanban fields (todo-style note)
   - `dran_update_note` — update a note's kanban fields; MERGES meta (pass only what changes)
   - `dran_create_goal` — create a first-class goal (its own table, not a page)
-  - `dran_create_project` — create a first-class project (its own table, not a page)
   - `dran_create_relation` — create a typed relation between two pages
   - `dran_delete_relation` — delete a relation between two pages; **irreversible**
   - `dran_get_links` — graph exploration: inbound + outbound relations of a page
@@ -48,7 +47,7 @@ defmodule Dran.MCP do
   """
 
   alias Dran.{Agent, Auth, Brain, Repo}
-  alias Dran.Brain.PageTypes
+  alias Dran.PageTypes
   import Ecto.Query, warn: false
 
   @protocol_version "2025-03-26"
@@ -119,13 +118,12 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter restricting results to a single page type: note, concept, entity, reference, or query.",
+              "Optional filter restricting results to a single page type: note, concept, entity, or reference.",
             "enum" => [
               "note",
               "concept",
               "entity",
-              "reference",
-              "query"
+              "reference"
             ]
           },
           "strategy" => %{
@@ -155,14 +153,13 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_page",
       "description" => """
-      Use for notes, concepts, entities, references, and queries (page types only). Goals and projects are first-class entities — use `dran_create_goal` and `dran_create_project` for those. Notes with todo-style kanban tracking use `dran_create_note` instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
+      Use for notes, concepts, entities, and references (page types only). Goals are first-class entities — use `dran_create_goal` for those. Projects are notes with `meta.kind: "project"`, created with this same tool. Notes with todo-style kanban tracking use `dran_create_note` instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
 
       Page types and subtypes (set `meta.kind`):
       - note: thought, journal, idea, meeting, question, quote, reminder
       - concept: technique, pattern, discipline, theory
       - entity: person, company, product, tool, place, event
       - reference: article, paper, video, podcast, book
-      - query: question+answer; has kind (factual/conceptual/how_to/opinion), difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
 
       The `report` page type is system-only: reports are created by Dran itself (jobs, system output) and CANNOT be created via this tool — they live outside the graph, journey and embeddings, and are visible in the activity log and at /reports/:slug in the web UI.
       """,
@@ -191,13 +188,12 @@ defmodule Dran.MCP do
           "page_type" => %{
             "type" => "string",
             "description" =>
-              "Page type determining purpose and accepted meta fields. Only note, concept, entity, reference, and query are available. Use dran_create_goal/drake_create_project for goals/projects, dran_create_note for todo-style notes.",
+              "Page type determining purpose and accepted meta fields. Only note, concept, entity, and reference are available. Use dran_create_goal for goals, dran_create_note for todo-style notes.",
             "enum" => [
               "note",
               "concept",
               "entity",
-              "reference",
-              "query"
+              "reference"
             ]
           },
           "tags" => %{
@@ -208,7 +204,7 @@ defmodule Dran.MCP do
           "meta" => %{
             "type" => "object",
             "description" =>
-              "Type-specific metadata. Key fields by type: note→{kind, date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}, query→{kind, difficulty, status, answered_by}. **Custom properties**: use `meta.props` as a namespaced key-value bag for free-form metadata (e.g. `props: %{\\\"role\\\" => \\\"sales\\\", \\\"tier\\\" => \\\"vip\\\"}`). Props survive round-trips and are indexed by the existing meta GIN index."
+              "Type-specific metadata. Key fields by type: note→{kind, date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}. **Custom properties**: use `meta.props` as a namespaced key-value bag for free-form metadata (e.g. `props: %{\\\"role\\\" => \\\"sales\\\", \\\"tier\\\" => \\\"vip\\\"}`). Props survive round-trips and are indexed by the existing meta GIN index."
           },
           "summary" => %{
             "type" => "string",
@@ -492,68 +488,6 @@ defmodule Dran.MCP do
       }
     },
     %{
-      "name" => "dran_create_project",
-      "description" =>
-        "Create a first-class project (stored in its own table, NOT a page). Projects carry status (draft/active/on_hold/done/archived), health, priority, start_date, target_date, and optionally link to a goal via `goal_slug`. Link pages to the project later with dran_create_relation (relation_type `part_of`, target_slug = the project's slug). Creation fails if the slug already exists in the context. Returns the created project's slug and status.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "workspace" => %{
-            "type" => "string",
-            "description" => "Context slug where the project will be created."
-          },
-          "title" => %{
-            "type" => "string",
-            "description" => "Project title (human-readable)."
-          },
-          "slug" => %{
-            "type" => "string",
-            "description" =>
-              "URL-friendly kebab-case slug, unique per context. If omitted, derived from the title. Creation fails if it already exists."
-          },
-          "description" => %{
-            "type" => "string",
-            "description" => "Short one-line description of the project (optional)."
-          },
-          "body" => %{
-            "type" => "string",
-            "description" => "Project body in Markdown (optional)."
-          },
-          "status" => %{
-            "type" => "string",
-            "description" =>
-              "Project status: draft, active, on_hold, done, or archived (default: active).",
-            "enum" => ["draft", "active", "on_hold", "done", "archived"]
-          },
-          "health" => %{
-            "type" => "string",
-            "description" =>
-              "Project health: green, yellow, or red (optional; derived from linked goals if unset).",
-            "enum" => ["green", "yellow", "red"]
-          },
-          "priority" => %{
-            "type" => "string",
-            "description" => "Project priority: low, medium, high, or urgent (optional).",
-            "enum" => ["low", "medium", "high", "urgent"]
-          },
-          "start_date" => %{
-            "type" => "string",
-            "description" => "Start date in YYYY-MM-DD format (optional)."
-          },
-          "target_date" => %{
-            "type" => "string",
-            "description" => "Target/end date in YYYY-MM-DD format (optional)."
-          },
-          "goal_slug" => %{
-            "type" => "string",
-            "description" =>
-              "Slug of a goal to link this project to (optional). The project is created with a `belongs_to` link to that goal."
-          }
-        },
-        "required" => ["workspace", "title"]
-      }
-    },
-    %{
       "name" => "dran_lint_brain",
       "description" =>
         "Brain hygiene audit (read-only). Returns three categories: orphan pages (no inbound links, likely disconnected), stale pages (not updated in 90+ days, possibly outdated), and contested pages (conflicting knowledge flagged by the system). Use this during maintenance or cleanup to find pages needing attention. Does not modify anything.",
@@ -649,14 +583,12 @@ defmodule Dran.MCP do
           },
           "type" => %{
             "type" => "string",
-            "description" =>
-              "Optional filter by page type: note, concept, entity, reference, or query.",
+            "description" => "Optional filter by page type: note, concept, entity, or reference.",
             "enum" => [
               "note",
               "concept",
               "entity",
-              "reference",
-              "query"
+              "reference"
             ]
           },
           "tag" => %{
@@ -1158,7 +1090,6 @@ defmodule Dran.MCP do
                  "dran_create_note",
                  "dran_update_note",
                  "dran_create_goal",
-                 "dran_create_project",
                  "dran_create_relation",
                  "dran_delete_relation",
                  "dran_rename_slug",
@@ -1293,7 +1224,7 @@ defmodule Dran.MCP do
         "Error: context '#{workspace_slug}' not found"
 
       page_type not in PageTypes.types() ->
-        "Error: page type '#{page_type}' is not a valid page type — use dran_create_goal, dran_create_project, or dran_create_note for goals, projects, and todo-style notes"
+        "Error: page type '#{page_type}' is not a valid page type — use dran_create_goal or dran_create_note for goals and todo-style notes"
 
       true ->
         attrs =
@@ -1463,64 +1394,6 @@ defmodule Dran.MCP do
 
         {:error, changeset} ->
           "Error: #{format_changeset_errors(changeset)}"
-      end
-    else
-      "Error: context '#{workspace_slug}' not found"
-    end
-  end
-
-  defp execute_tool(
-         "dran_create_project",
-         %{"workspace" => workspace_slug, "title" => title} = args,
-         _user
-       ) do
-    context = workspace_cache_get(workspace_slug)
-
-    if context do
-      slug = Map.get(args, "slug") || Dran.Slug.generate(title, context.id, "project")
-
-      # Resolve goal_slug → goal_id
-      goal_id =
-        case args["goal_slug"] do
-          nil ->
-            nil
-
-          goal_slug ->
-            case Brain.get_goal_by_slug(goal_slug, context.id) do
-              nil ->
-                # Return early with error — can't bind it here, use the outer case
-                :goal_not_found
-
-              goal ->
-                goal.id
-            end
-        end
-
-      if goal_id == :goal_not_found do
-        "Error: goal '#{args["goal_slug"]}' not found in context '#{workspace_slug}'"
-      else
-        attrs =
-          %{
-            workspace_id: context.id,
-            title: title,
-            slug: slug,
-            description: Map.get(args, "description"),
-            body: Map.get(args, "body", ""),
-            status: Map.get(args, "status", "active"),
-            health: args["health"],
-            priority: args["priority"],
-            start_date: parse_date(args["start_date"]),
-            target_date: parse_date(args["target_date"]),
-            goal_id: goal_id
-          }
-
-        case Brain.create_project(attrs) do
-          {:ok, project} ->
-            "Created project: #{project.title} (#{project.slug}) — status: #{project.status}"
-
-          {:error, changeset} ->
-            "Error: #{format_changeset_errors(changeset)}"
-        end
       end
     else
       "Error: context '#{workspace_slug}' not found"
@@ -1923,7 +1796,7 @@ defmodule Dran.MCP do
           # Clear embedding_hash so the augmenter treats the page as stale,
           # then schedule async augmentation (summary/tags/embedding/relations).
           Ecto.Changeset.change(page, embedding_hash: nil) |> Repo.update!()
-          Brain.PageAugmenter.schedule(page)
+          Dran.PageAugmenter.schedule(page)
           "Reaugmentation scheduled for '#{slug}'"
       end
     else
@@ -2020,7 +1893,7 @@ defmodule Dran.MCP do
           import Ecto.Query
 
           linked_page_ids =
-            from(r in Dran.Brain.Relation,
+            from(r in Dran.Relation,
               where:
                 r.target_id == ^goal.id and
                   r.target_type == "goal" and
@@ -2033,7 +1906,7 @@ defmodule Dran.MCP do
             if linked_page_ids == [] do
               []
             else
-              from(p in Dran.Brain.Page,
+              from(p in Dran.Page,
                 where:
                   p.workspace_id == ^context.id and
                     p.id in ^linked_page_ids and

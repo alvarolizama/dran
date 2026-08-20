@@ -7,8 +7,8 @@ defmodule Dran.Journey do
 
   import Ecto.Query
   alias Dran.Repo
-  alias Dran.Brain.Log
-  alias Dran.Brain.PageTypes
+  alias Dran.Log
+  alias Dran.PageTypes
 
   @day 86_400
   @month 30 * @day
@@ -28,7 +28,7 @@ defmodule Dran.Journey do
   """
   def timeline(workspace_id, _opts \\ []) do
     # Second-citizen page types (e.g. report) never enter the journey — the
-    # canonical exclusion list lives in the Dran.Brain.PageTypes registry.
+    # canonical exclusion list lives in the Dran.PageTypes registry.
     excluded = PageTypes.excluded_from_journey()
 
     entries =
@@ -139,8 +139,7 @@ defmodule Dran.Journey do
       "note" => "#D36969",
       "concept" => "#D3A369",
       "entity" => "#C4D369",
-      "reference" => "#69D38A",
-      "query" => "#D369A3"
+      "reference" => "#69D38A"
     }
   end
 

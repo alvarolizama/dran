@@ -1,12 +1,12 @@
-defmodule Dran.Brain.PageTypes do
+defmodule Dran.PageTypes do
   @moduledoc """
   Canonical page type registry — the single source of truth for the list of
   page types and what each type can do (its *capabilities*).
 
   ## Page types
 
-  There are exactly **5** page types: `note`, `entity`, `concept`, `reference`,
-  and `query`. They are the only values accepted by `Page.@page_types` and by
+  There are exactly **4** page types: `note`, `entity`, `concept`, and
+  `reference`. They are the only values accepted by `Page.@page_types` and by
   the `dran_create_page` MCP tool.
 
   ## Capabilities
@@ -18,20 +18,20 @@ defmodule Dran.Brain.PageTypes do
   | `embeddings`  | gets embeddings + semantic relations (`PageAugmenter`)         |
   | `mcp_create`  | can be created through the `dran_create_page` MCP tool         |
 
-  All five types are full citizens (every capability `true`).
+  All four types are full citizens (every capability `true`).
 
   ## What is NOT a page type
 
-  Goals, projects, collections, and reports are **first-class entities in
-  their own tables** (`Dran.Brain.Goal`, `Dran.Brain.Project`,
-  `Dran.Brain.Collection`, `Dran.Brain.Report`) — they are not page types
+  Goals, collections, and reports are **first-class entities in
+  their own tables** (`Dran.Goal`,
+  `Dran.Collection`, `Dran.Report`) — they are not page types
   and are not created through `dran_create_page`. Todo-style action items
   are `note` pages with `meta.kind == "todo"` plus kanban columns
   (`kanban_status`, `priority`, `due_date`, `assignee`); use the
   `dran_create_note` MCP tool for those.
 
   `DranWeb.PageTypes` is only UI labels/icons/paths — THIS module decides
-  what a type can do. `Dran.Brain.Page.@page_types` derives from `types/0`,
+  what a type can do. `Dran.Page.@page_types` derives from `types/0`,
   so adding a type here propagates to changeset validation automatically.
   """
 
@@ -39,14 +39,13 @@ defmodule Dran.Brain.PageTypes do
     "note" => %{graph: true, journey: true, embeddings: true, mcp_create: true},
     "entity" => %{graph: true, journey: true, embeddings: true, mcp_create: true},
     "concept" => %{graph: true, journey: true, embeddings: true, mcp_create: true},
-    "reference" => %{graph: true, journey: true, embeddings: true, mcp_create: true},
-    "query" => %{graph: true, journey: true, embeddings: true, mcp_create: true}
+    "reference" => %{graph: true, journey: true, embeddings: true, mcp_create: true}
   }
 
   # Canonical ordering — preserves the historical `Page.all_types()` order so
   # UI surfaces that iterate the list (e.g. the Settings page-types modal)
   # keep their existing ordering.
-  @types ~w(note entity concept reference query)
+  @types ~w(note entity concept reference)
 
   @doc "Ordered list of all valid page types."
   def types, do: @types

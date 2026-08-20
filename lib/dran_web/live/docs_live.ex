@@ -352,10 +352,6 @@ defmodule DranWeb.DocsLive do
         <li><strong>goal</strong> — outcomes you want to achieve</li>
         <li><strong>plan</strong> — steps or roadmaps</li>
         <li><strong>todo</strong> — actionable items with kanban status</li>
-        <li>
-          <strong>query</strong>
-          — questions with answers, linked semantically to concepts and entities
-        </li>
         <li><strong>project</strong> — initiatives grouping goals, plans and todos</li>
         <li>
           <strong>report</strong>
@@ -911,8 +907,8 @@ defmodule DranWeb.DocsLive do
         trigger: :manual,
         schedule: nil,
         description:
-          "Answers a question using ONLY knowledge already in the brain — local/global/drift search over the graph. Persists the answer as a query page citing sources.",
-        limits: "Max 10 searches, 5 expands, 3 community contexts; one query page per session."
+          "Answers a question using ONLY knowledge already in the brain — local/global/drift search over the graph. Persists the answer as a note page (kind: answer) citing sources.",
+        limits: "Max 10 searches, 5 expands, 3 community contexts; one answer note per session."
       },
       %{
         label: "Curator",
@@ -1266,14 +1262,6 @@ defmodule DranWeb.DocsLive do
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">query</td>
-              <td class="px-4 py-2">Question with answer (LLM wiki style)</td>
-              <td class="px-4 py-2 text-xs">factual, conceptual, how_to, opinion</td>
-              <td class="px-4 py-2 text-xs">
-                kind, difficulty (simple/intermediate/advanced), status (open/answered/verified), answered_by
-              </td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">project</td>
               <td class="px-4 py-2">Initiative grouping goals, plans and todos</td>
               <td class="px-4 py-2 text-xs">—</td>
@@ -1362,7 +1350,7 @@ defmodule DranWeb.DocsLive do
             name="type"
             type="string"
             required="no"
-            desc="note, concept, entity, reference, goal, plan, todo, query, project"
+            desc="note, concept, entity, reference, goal, plan, todo, project"
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
@@ -1404,7 +1392,7 @@ defmodule DranWeb.DocsLive do
             name="page_type"
             type="string"
             required="yes"
-            desc="note, concept, entity, reference, goal, plan, todo, query, project"
+            desc="note, concept, entity, reference, goal, plan, todo, project"
           />
           <:param
             name="body"

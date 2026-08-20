@@ -336,7 +336,7 @@ defmodule DranWeb.SettingsLiveTest do
       keys = Enum.map(Jobs.list_keys(), &Atom.to_string/1)
 
       Dran.Repo.delete_all(
-        from p in Dran.Brain.Page,
+        from p in Dran.Page,
           where: p.workspace_id == ^workspace_id and p.page_type == "report",
           where: fragment("?->>'job_key'", p.meta) in ^keys
       )

@@ -184,8 +184,8 @@ defmodule Dran.JourneyTest do
     test "returns a deterministic hex color per page type" do
       colors = Journey.type_colors()
 
-      # Only the 5 remaining page types: note, concept, entity, reference, query
-      assert map_size(colors) == 5
+      # The 4 remaining page types: note, concept, entity, reference
+      assert map_size(colors) == 4
       assert colors == Journey.type_colors()
       assert colors["note"] == "#D36969"
       assert Enum.all?(colors, fn {_type, hex} -> Regex.match?(~r/^#[0-9A-F]{6}$/, hex) end)

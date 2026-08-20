@@ -10,7 +10,7 @@ defmodule Dran.Agent.Session do
   import Ecto.Changeset
 
   alias Dran.Agent.Step
-  alias Dran.Brain.Workspace
+  alias Dran.Workspace
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id

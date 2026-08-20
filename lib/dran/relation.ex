@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Relation do
+defmodule Dran.Relation do
   @moduledoc """
   Directed N:M relation between nodes. The graph is directed:
   `source` → `target`.
@@ -40,7 +40,7 @@ defmodule Dran.Brain.Relation do
              :inserted_at
            ]}
   @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with)
-  @node_types ~w(page goal project collection)
+  @node_types ~w(page goal collection)
 
   schema "relations" do
     field :source_id, :binary_id
@@ -51,8 +51,8 @@ defmodule Dran.Brain.Relation do
     field :weight, :float
     field :meta, :map, default: %{}
 
-    has_one :source, Dran.Brain.Page, foreign_key: :id, references: :source_id
-    has_one :target, Dran.Brain.Page, foreign_key: :id, references: :target_id
+    has_one :source, Dran.Page, foreign_key: :id, references: :source_id
+    has_one :target, Dran.Page, foreign_key: :id, references: :target_id
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -122,9 +122,8 @@ defmodule Dran.Brain.Relation do
     end
   end
 
-  defp endpoint_module("page"), do: Dran.Brain.Page
-  defp endpoint_module("goal"), do: Dran.Brain.Goal
-  defp endpoint_module("project"), do: Dran.Brain.Project
-  defp endpoint_module("collection"), do: Dran.Brain.Collection
+  defp endpoint_module("page"), do: Dran.Page
+  defp endpoint_module("goal"), do: Dran.Goal
+  defp endpoint_module("collection"), do: Dran.Collection
   defp endpoint_module(_), do: nil
 end

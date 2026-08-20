@@ -12,7 +12,7 @@ defmodule Dran.Graph.CommunitySummaries do
   import Ecto.Query
 
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias Dran.Graph.CommunitySummary
   alias Dran.Inference
   alias Dran.Repo

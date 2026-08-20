@@ -12,7 +12,7 @@ defmodule DranWeb.PageComponents do
     only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
 
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
   alias DranWeb.PageTypes
   alias Phoenix.LiveView.JS
 
@@ -613,7 +613,7 @@ defmodule DranWeb.PageComponents do
 
   attr :graph_url, :string,
     default: nil,
-    doc: "URL for progressive graph JSON fetch. nil = panel default (\"/panel/graph-json\")"
+    doc: "URL for progressive graph JSON fetch. nil = panel default (\"/graph-json\")"
 
   attr :class, :string, default: ""
   attr :style, :string, default: ""
@@ -668,7 +668,7 @@ defmodule DranWeb.PageComponents do
   def tag_link_path(tag, _workspace_id, tag_map) when is_binary(tag) and is_map(tag_map) do
     case Map.get(tag_map, tag) do
       nil ->
-        "/panel/search?q=#{URI.encode_www_form(tag)}"
+        "/search?q=#{URI.encode_www_form(tag)}"
 
       page_type ->
         "/panel/#{PageTypes.path(page_type)}/#{tag}"
@@ -681,12 +681,12 @@ defmodule DranWeb.PageComponents do
         "/panel/#{PageTypes.path(type)}/#{slug}"
 
       nil ->
-        "/panel/search?q=#{URI.encode_www_form(tag)}"
+        "/search?q=#{URI.encode_www_form(tag)}"
     end
   end
 
   def tag_link_path(tag, _workspace_id, _tag_map),
-    do: "/panel/search?q=#{URI.encode_www_form(tag)}"
+    do: "/search?q=#{URI.encode_www_form(tag)}"
 
   def format_date(nil), do: ""
 
@@ -873,7 +873,7 @@ defmodule DranWeb.PageComponents do
     )
   end
 
-  defp render_embed(%Dran.Brain.Page{} = page, display) do
+  defp render_embed(%Dran.Page{} = page, display) do
     meta = page.meta || %{}
     mime = Map.get(meta, "mime_type") || ""
     src = escape_html(Map.get(meta, "storage_path") || "")
@@ -1100,10 +1100,9 @@ defmodule DranWeb.PageComponents do
     """
   end
 
-  defp back_path(%{page_type: "note"}), do: "/panel/notes"
+  defp back_path(%{page_type: "note"}), do: "/notes"
   defp back_path(%{page_type: "concept"}), do: "/panel/concepts"
   defp back_path(%{page_type: "entity"}), do: "/panel/entities"
   defp back_path(%{page_type: "reference"}), do: "/panel/references"
-  defp back_path(%{page_type: "query"}), do: "/panel/queries"
   defp back_path(_), do: "/"
 end

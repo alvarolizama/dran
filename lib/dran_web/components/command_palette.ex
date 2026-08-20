@@ -13,11 +13,11 @@ defmodule DranWeb.CommandPalette do
   alias DranWeb.PageTypes
 
   @quick_actions [
-    %{label: "New Note", icon: "hero-plus", path: "/panel/notes/new"},
+    %{label: "New Note", icon: "hero-plus", path: "/notes/new"},
     %{label: "New Todo", icon: "hero-check-circle", path: "/panel/todos/new"},
     %{label: "New Project", icon: "hero-rocket-launch", path: "/panel/projects/new"},
-    %{label: "Go to Kanban", icon: "hero-view-columns", path: "/panel/kanban"},
-    %{label: "Go to Graph", icon: "hero-share", path: "/panel/graph"},
+    %{label: "Go to Kanban", icon: "hero-view-columns", path: "/kanban"},
+    %{label: "Go to Graph", icon: "hero-share", path: "/graph"},
     %{label: "Go to Todos", icon: "hero-list-bullet", path: "/panel/todos"},
     %{label: "Go to Dashboard", icon: "hero-home", path: "/"}
   ]

@@ -25,7 +25,7 @@ defmodule Dran.JobsTest do
   use Dran.DataCase, async: false
 
   alias Dran.{Brain, Jobs, Repo}
-  alias Dran.Brain.Report
+  alias Dran.Report
   alias Dran.JobsTest.FakeJob
 
   @expected_keys [

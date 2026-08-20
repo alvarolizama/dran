@@ -72,7 +72,7 @@ defmodule DranWeb.NoteLiveTest do
       target: target,
       source: source
     } do
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{target.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
 
       # The backlinks section header with count is present (localized)
       assert html =~ t("Linked from")
@@ -82,7 +82,7 @@ defmodule DranWeb.NoteLiveTest do
       assert html =~ source.title
 
       # The source page is a link to its detail view
-      assert html =~ "href=\"/panel/notes/#{source.slug}\""
+      assert html =~ "href=\"/notes/#{source.slug}\""
 
       # The relation type badge is present
       assert html =~ "related"
@@ -93,7 +93,7 @@ defmodule DranWeb.NoteLiveTest do
       source: source
     } do
       # The source page has no inbound relations (it only has outbound)
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{source.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{source.slug}")
 
       # The empty state is shown (localized)
       assert html =~ t("No backlinks yet")
@@ -101,7 +101,7 @@ defmodule DranWeb.NoteLiveTest do
 
     test "shows 'Links to' section with outbound relations", %{conn: conn, source: source} do
       # The source page has an outbound relation to the target
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{source.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{source.slug}")
 
       # The outbound section header is present (localized)
       assert html =~ t("Links to")
@@ -127,7 +127,7 @@ defmodule DranWeb.NoteLiveTest do
     end
 
     test "content tab is the only active tab on initial load", %{conn: conn, target: target} do
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{target.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
 
       assert tab_class(html, "detail-tab-content") =~ "border-primary"
       refute tab_class(html, "detail-tab-content") =~ "border-transparent"
@@ -141,7 +141,7 @@ defmodule DranWeb.NoteLiveTest do
       conn: conn,
       target: target
     } do
-      {:ok, view, _html} = live(conn, ~p"/panel/notes/#{target.slug}")
+      {:ok, view, _html} = live(conn, ~p"/notes/#{target.slug}")
 
       view |> element("#detail-tab-insights") |> render_click()
       html = render(view)
@@ -158,13 +158,13 @@ defmodule DranWeb.NoteLiveTest do
     end
 
     test "graph button links to /graph/:slug", %{conn: conn, target: target} do
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{target.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
 
-      assert html =~ ~s(href="/panel/graph/#{target.slug}")
+      assert html =~ ~s(href="/graph/#{target.slug}")
     end
 
     test "edit button links to ?edit=true", %{conn: conn, target: target} do
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{target.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
 
       assert html =~ "?edit=true"
     end
@@ -173,14 +173,14 @@ defmodule DranWeb.NoteLiveTest do
       conn: conn,
       target: target
     } do
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{target.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}")
 
       # The editor form should not be present in read-only mode
       refute html =~ ~s(id="page-edit-form")
     end
 
     test "edit mode shows the editor form", %{conn: conn, target: target} do
-      {:ok, _view, html} = live(conn, ~p"/panel/notes/#{target.slug}?edit=true")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{target.slug}?edit=true")
 
       assert html =~ ~s(id="page-edit-form")
     end
@@ -189,7 +189,7 @@ defmodule DranWeb.NoteLiveTest do
   describe "archive flow" do
     test "archiving a page from detail hides it from the list and shows it in the Archived section",
          %{conn: conn, source: source} do
-      {:ok, view, _html} = live(conn, ~p"/panel/notes/#{source.slug}")
+      {:ok, view, _html} = live(conn, ~p"/notes/#{source.slug}")
 
       # Archive via the detail button
       view |> element("button", t("Archive")) |> render_click()
@@ -198,7 +198,7 @@ defmodule DranWeb.NoteLiveTest do
 
       # The list no longer shows the page; the Archived section is hidden
       # until the header toggle is clicked
-      {:ok, view, html} = live(conn, ~p"/panel/notes")
+      {:ok, view, html} = live(conn, ~p"/notes")
       refute html =~ ~s(data-testid="page-card-#{source.slug}")
       refute html =~ ~s(data-testid="archived-section")
 
@@ -213,14 +213,14 @@ defmodule DranWeb.NoteLiveTest do
          %{conn: conn, target: target} do
       {:ok, _} = Brain.archive_page(target)
 
-      {:ok, view, html} = live(conn, ~p"/panel/notes/#{target.slug}")
+      {:ok, view, html} = live(conn, ~p"/notes/#{target.slug}")
       assert html =~ t("Archived")
 
       view |> element("button", t("Unarchive")) |> render_click()
 
       assert Brain.get_page_by_slug(target.slug, target.workspace_id).archived == false
 
-      {:ok, _view, html} = live(conn, ~p"/panel/notes")
+      {:ok, _view, html} = live(conn, ~p"/notes")
       assert html =~ ~s(data-testid="page-card-#{target.slug}")
     end
 
@@ -236,7 +236,7 @@ defmodule DranWeb.NoteLiveTest do
 
       {:ok, _} = Brain.archive_page(note)
 
-      {:ok, view, html} = live(conn, ~p"/panel/notes")
+      {:ok, view, html} = live(conn, ~p"/notes")
       # Archived section hidden until toggled on
       assert html =~ ~s(data-testid="toggle-archived")
       refute html =~ ~s(data-testid="archived-page-#{note.slug}")

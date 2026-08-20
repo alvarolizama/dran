@@ -63,8 +63,8 @@ defmodule Dran.Graph.MaintenanceTest do
     import Ecto.Query
 
     Dran.Repo.all(
-      from r in Brain.Relation,
-        join: s in Brain.Page,
+      from r in Dran.Relation,
+        join: s in Dran.Page,
         on: s.id == r.source_id,
         where: s.workspace_id == ^ctx.id,
         where: r.relation_type == "semantic",

@@ -97,7 +97,6 @@ defmodule DranWeb.PageCardComponents do
   defp type_color("goal"), do: "#F59E0B"
   defp type_color("plan"), do: "#A78BFA"
   defp type_color("todo"), do: "#34D399"
-  defp type_color("query"), do: "#818CF8"
   defp type_color(_), do: "#94A3B8"
 
   defp type_icon("note"), do: "hero-document-text"
@@ -108,13 +107,11 @@ defmodule DranWeb.PageCardComponents do
   defp type_icon("goal"), do: "hero-flag"
   defp type_icon("plan"), do: "hero-clipboard-document-list"
   defp type_icon("todo"), do: "hero-check-circle"
-  defp type_icon("query"), do: "hero-question-mark-circle"
   defp type_icon(_), do: "hero-document"
 
-  defp page_url(%{page_type: "note", slug: s}), do: "/panel/notes/#{s}"
+  defp page_url(%{page_type: "note", slug: s}), do: "/notes/#{s}"
   defp page_url(%{page_type: "concept", slug: s}), do: "/panel/concepts/#{s}"
   defp page_url(%{page_type: "entity", slug: s}), do: "/panel/entities/#{s}"
   defp page_url(%{page_type: "reference", slug: s}), do: "/panel/references/#{s}"
-  defp page_url(%{page_type: "query", slug: s}), do: "/panel/queries/#{s}"
   defp page_url(_), do: "#"
 end

@@ -40,7 +40,7 @@ defmodule DranWeb.PageNewLiveTest do
 
   describe "new page form — slug field removed (Task 2.1)" do
     test "the /notes/new form does not render a slug input", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/panel/notes/new")
+      {:ok, _view, html} = live(conn, "/notes/new")
 
       # The slug field used to be a labelled "Slug" input. It must be gone —
       # Brain now derives the slug from the title on save.
@@ -53,7 +53,7 @@ defmodule DranWeb.PageNewLiveTest do
     test "the new form renders a right-hand attributes sidebar with tags + summary + meta", %{
       conn: conn
     } do
-      {:ok, _view, html} = live(conn, "/panel/notes/new")
+      {:ok, _view, html} = live(conn, "/notes/new")
 
       # The sidebar aside exists with the Atributos heading
       assert html =~ "<aside"
@@ -66,7 +66,7 @@ defmodule DranWeb.PageNewLiveTest do
     end
 
     test "the primary fields (Title, Content) are in the main column", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/panel/notes/new")
+      {:ok, _view, html} = live(conn, "/notes/new")
 
       assert html =~ ~s(name="page[title]")
       assert html =~ "markdown_editor" or html =~ "ProseMirror" or html =~ "page-new-editor"
@@ -75,7 +75,7 @@ defmodule DranWeb.PageNewLiveTest do
 
   describe "smart defaults — meta prefilled per type on :new (Task 2.2)" do
     test "note form prefills kind=thought and date=today", %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/panel/notes/new")
+      {:ok, _view, html} = live(conn, "/notes/new")
 
       today = Date.utc_today() |> Date.to_string()
 
@@ -84,15 +84,6 @@ defmodule DranWeb.PageNewLiveTest do
       assert html =~ ~s(selected="")
       # The date input is prefilled with today's date.
       assert html =~ ~s(value="#{today}")
-    end
-
-    test "query form renders the generic new-page form", %{conn: conn} do
-      # PageNewLive still serves the 5 remaining page types (note, concept,
-      # entity, reference, query). Goals/projects/plans/todos have their own
-      # LiveViews or were removed.
-      {:ok, _view, html} = live(conn, "/panel/queries/new")
-
-      assert html =~ ~s(name="page[title]")
     end
   end
 

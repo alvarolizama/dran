@@ -421,7 +421,7 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
 
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/notes")
+      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
 
       # Admin sees the Settings link in the sidebar
       assert html =~ ~p"/panel/settings"
@@ -440,7 +440,7 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: user.email, workspace_slug: ctx1.slug})
 
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/notes")
+      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
 
       # Non-admin must NOT see the Settings link
       refute html =~ ~p"/panel/settings"

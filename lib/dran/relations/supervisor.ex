@@ -2,7 +2,7 @@ defmodule Dran.Relations.Supervisor do
   @moduledoc """
   Supervises async relation-augmentation jobs for pages.
 
-  When a page is created or updated, `Dran.Brain.PageAugmenter.schedule/1`
+  When a page is created or updated, `Dran.PageAugmenter.schedule/1`
   enqueues a task under this supervisor. The task:
 
   - Materializes `meta.props` into typed relations.

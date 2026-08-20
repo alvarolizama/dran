@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Collection do
+defmodule Dran.Collection do
   @moduledoc """
   Saved filter query — replaces the old Smart Collection pattern
   (query pages with `meta.query`).
@@ -31,7 +31,7 @@ defmodule Dran.Brain.Collection do
     field :description, :string
     field :filters, :map, default: %{}
 
-    belongs_to :workspace, Dran.Brain.Workspace
+    belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
   end

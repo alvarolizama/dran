@@ -1,4 +1,4 @@
-defmodule Dran.Brain.Goal do
+defmodule Dran.Goal do
   @moduledoc """
   First-class goal entity — OKR hierarchy, metrics, health, and progress.
 
@@ -70,8 +70,8 @@ defmodule Dran.Brain.Goal do
     field :meta, :map, default: %{}
     field :archived, :boolean, default: false
 
-    belongs_to :parent_goal, Dran.Brain.Goal
-    belongs_to :workspace, Dran.Brain.Workspace
+    belongs_to :parent_goal, Dran.Goal
+    belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
   end

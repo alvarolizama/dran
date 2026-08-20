@@ -2,7 +2,7 @@ defmodule Dran.Brain.SemanticSearchTest do
   use Dran.DataCase, async: false
 
   alias Dran.Brain
-  alias Dran.Brain.Page
+  alias Dran.Page
 
   defp test_vector do
     Enum.map(1..1024, fn i -> i / 1000.0 end)
@@ -57,7 +57,7 @@ defmodule Dran.Brain.SemanticSearchTest do
 
       # Create directly so Brain.create_page does not auto-generate an embedding.
       _without =
-        %Dran.Brain.Page{
+        %Dran.Page{
           workspace_id: context.id,
           title: "Without embedding",
           slug: "without-embedding",
@@ -69,7 +69,7 @@ defmodule Dran.Brain.SemanticSearchTest do
         |> Dran.Repo.insert!()
 
       _with_vec =
-        %Dran.Brain.Page{
+        %Dran.Page{
           workspace_id: context.id,
           title: "With embedding",
           slug: "with-embedding",
@@ -119,7 +119,7 @@ defmodule Dran.Brain.SemanticSearchTest do
       context = Brain.get_workspace_by_slug("personal")
 
       page =
-        %Dran.Brain.Page{
+        %Dran.Page{
           workspace_id: context.id,
           title: "Elixir",
           slug: "elixir",
@@ -166,7 +166,7 @@ defmodule Dran.Brain.SemanticSearchTest do
       shared_body = "elixir deployment guide release hot code reload"
 
       _low =
-        %Dran.Brain.Page{
+        %Dran.Page{
           workspace_id: context.id,
           title: "Low rank",
           slug: "low-rank",
@@ -179,7 +179,7 @@ defmodule Dran.Brain.SemanticSearchTest do
         |> Dran.Repo.insert!()
 
       _high =
-        %Dran.Brain.Page{
+        %Dran.Page{
           workspace_id: context.id,
           title: "High rank",
           slug: "high-rank",
@@ -203,7 +203,7 @@ defmodule Dran.Brain.SemanticSearchTest do
       shared_body = "rust ownership borrow checker move semantics"
 
       _no_pr =
-        %Dran.Brain.Page{
+        %Dran.Page{
           workspace_id: context.id,
           title: "No pagerank",
           slug: "no-pagerank",
@@ -216,7 +216,7 @@ defmodule Dran.Brain.SemanticSearchTest do
         |> Dran.Repo.insert!()
 
       _with_pr =
-        %Dran.Brain.Page{
+        %Dran.Page{
           workspace_id: context.id,
           title: "With pagerank",
           slug: "with-pagerank",

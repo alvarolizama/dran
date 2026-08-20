@@ -20,20 +20,16 @@ defmodule DranWeb.HomeLive do
   import Phoenix.HTML, only: [raw: 1]
 
   alias Dran.Brain
-  alias Dran.Brain.Workspace
+  alias Dran.Workspace
 
-  alias Dran.Brain.PageTypes, as: BrainPageTypes
-  alias Dran.SmartCollection
+  alias Dran.PageTypes, as: BrainPageTypes
   alias DranWeb.GraphHelpers
   alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
-  # Page types excluded from the wiki index — second-citizen types.
-  @wiki_hidden_types ~w(query)
-
   # Types hidden from the global 3D graph — same list the panel uses via
   # GraphCache. The wiki graph must match so both views render the same set.
-  @graph_hidden_types Dran.Brain.PageTypes.hidden_from_graph()
+  @graph_hidden_types Dran.PageTypes.hidden_from_graph()
 
   # ── Mount ─────────────────────────────────────────────────────────────────
 
@@ -109,7 +105,7 @@ defmodule DranWeb.HomeLive do
   defp apply_action(socket, :workspace_home, %{"workspace_slug" => workspace_slug}) do
     case Brain.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        collections = SmartCollection.list_all(workspace.id)
+        collections = Brain.list_collections(workspace.id)
         pinned = Brain.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
@@ -166,7 +162,7 @@ defmodule DranWeb.HomeLive do
           end
 
         # Sidebar data
-        collections = SmartCollection.list_all(workspace.id)
+        collections = Brain.list_collections(workspace.id)
         pinned = Brain.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
@@ -205,7 +201,7 @@ defmodule DranWeb.HomeLive do
             relations = Brain.list_relations_for_page(page.id)
 
             # Sidebar data
-            collections = SmartCollection.list_all(workspace.id)
+            collections = Brain.list_collections(workspace.id)
             pinned = Brain.list_pinned_pages(workspace.id)
             type_index = build_type_index(workspace)
 
@@ -236,16 +232,15 @@ defmodule DranWeb.HomeLive do
   defp apply_action(socket, :collection, %{"workspace_slug" => workspace_slug, "slug" => slug}) do
     case Brain.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        case SmartCollection.get_by_slug(slug, workspace.id) do
+        case Brain.get_collection_by_slug(slug, workspace.id) do
           nil ->
             push_navigate(socket, to: ~p"/#{workspace_slug}")
 
           collection ->
-            query = Map.get(collection.meta || %{}, "query", %{})
-            results = SmartCollection.execute(query, workspace.id)
+            results = execute_filters(collection.filters || %{}, workspace.id)
 
             # Sidebar data
-            all_collections = SmartCollection.list_all(workspace.id)
+            all_collections = Brain.list_collections(workspace.id)
             pinned = Brain.list_pinned_pages(workspace.id)
             type_index = build_type_index(workspace)
 
@@ -254,7 +249,7 @@ defmodule DranWeb.HomeLive do
               workspace: workspace,
               collection: collection,
               results: results,
-              page_title: collection.title,
+              page_title: collection.name,
               collections: all_collections,
               pinned_pages: pinned,
               type_index: type_index,
@@ -276,7 +271,7 @@ defmodule DranWeb.HomeLive do
         # /<workspace_slug>/graph/json via HTTP after the shell renders,
         # keeping initial page load instant. Same pattern as GraphLive panel.
         # Sidebar data
-        collections = SmartCollection.list_all(workspace.id)
+        collections = Brain.list_collections(workspace.id)
         pinned = Brain.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
@@ -314,7 +309,7 @@ defmodule DranWeb.HomeLive do
         todos = Brain.list_todos(workspace_id: workspace.id, limit: 500)
 
         # Sidebar data
-        collections = SmartCollection.list_all(workspace.id)
+        collections = Brain.list_collections(workspace.id)
         pinned = Brain.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
@@ -347,7 +342,7 @@ defmodule DranWeb.HomeLive do
         pages = Enum.find_value(grouped, [], fn {l, p} -> if l == letter, do: p end)
 
         # Sidebar data
-        collections = SmartCollection.list_all(workspace.id)
+        collections = Brain.list_collections(workspace.id)
         pinned = Brain.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
         alphabet = build_alphabet(all_pages)
@@ -634,9 +629,9 @@ defmodule DranWeb.HomeLive do
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
-              <h3 class="card-title text-base">{coll.title}</h3>
-              <p :if={coll.summary} class="text-sm text-base-content/60 line-clamp-2">
-                {coll.summary}
+              <h3 class="card-title text-base">{coll.name}</h3>
+              <p :if={coll.description} class="text-sm text-base-content/60 line-clamp-2">
+                {coll.description}
               </p>
             </div>
           </.link>
@@ -861,9 +856,9 @@ defmodule DranWeb.HomeLive do
           <span>/</span>
           <span>{gettext("Collection")}</span>
         </div>
-        <h1 class="text-2xl font-bold">{@collection.title}</h1>
-        <p :if={@collection.summary} class="text-base-content/60 mt-2">
-          {@collection.summary}
+        <h1 class="text-2xl font-bold">{@collection.name}</h1>
+        <p :if={@collection.description} class="text-base-content/60 mt-2">
+          {@collection.description}
         </p>
       </div>
 
@@ -1292,16 +1287,36 @@ defmodule DranWeb.HomeLive do
 
   # ── Helpers ─────────────────────────────────────────────────────────────────
 
+  # Execute a collection's saved filters, same pattern as SmartCollectionLive.
+  defp execute_filters(filters, workspace_id) when is_map(filters) do
+    opts = [workspace_id: workspace_id]
+
+    opts =
+      opts
+      |> maybe_add_filter(:type, filters["type"])
+      |> maybe_add_filter(:status, filters["status"])
+      |> maybe_add_filter(:tag, filters["tag"])
+      |> maybe_add_filter(:owner, filters["owner"])
+
+    Brain.list_pages(opts)
+  end
+
+  defp execute_filters(_filters, _workspace_id), do: []
+
+  defp maybe_add_filter(opts, _key, nil), do: opts
+  defp maybe_add_filter(opts, _key, ""), do: opts
+  defp maybe_add_filter(opts, key, value), do: Keyword.put(opts, key, value)
+
   defp build_type_index(workspace) do
     disabled = workspace.disabled_page_types || []
-    excluded = @wiki_hidden_types ++ disabled
+    excluded = disabled
 
     BrainPageTypes.types()
     |> Enum.reject(&(&1 in excluded))
     |> Enum.map(fn type ->
       count =
         Dran.Repo.aggregate(
-          from(p in Dran.Brain.Page,
+          from(p in Dran.Page,
             where:
               p.workspace_id == ^workspace.id and
                 p.page_type == ^type and

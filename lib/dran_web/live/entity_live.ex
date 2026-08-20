@@ -40,7 +40,7 @@ defmodule DranWeb.EntityLive do
             <.link navigate={~p"/panel/entities"} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
-            <.link navigate={~p"/panel/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
             <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">

@@ -2,7 +2,7 @@ defmodule Dran.SmartCollection do
   @moduledoc """
   Smart Collection helper logic.
 
-  A smart collection is a page with `page_type: "query"` whose `meta` field
+  A smart collection is a note page whose `meta` field
   contains a `"query"` map with filter criteria. This module parses that query
   map into the keyword-list options that `Brain.list_pages/1` expects, and
   builds the query map from user-facing filter parameters.
@@ -124,8 +124,8 @@ defmodule Dran.SmartCollection do
   @doc """
   Create a smart collection page.
 
-  Creates a page with `page_type: "query"` and `meta.query` containing
-  the filter criteria.
+  Creates a page with `page_type: "note"` and `meta.query` containing
+  the filter criteria (legacy module — kept for compatibility).
 
   ## Options
 
@@ -150,7 +150,7 @@ defmodule Dran.SmartCollection do
       "workspace_id" => workspace_id,
       "title" => title,
       "slug" => slug,
-      "page_type" => "query",
+      "page_type" => "note",
       "body" => attrs["body"] || attrs[:body] || "",
       "summary" => attrs["summary"] || attrs[:summary] || query_summary(query),
       "tags" => attrs["tags"] || attrs[:tags] || [],
@@ -165,21 +165,26 @@ defmodule Dran.SmartCollection do
   @doc """
   Get a smart collection page by slug within a context.
 
-  Returns `nil` if the page doesn't exist or is not a query page.
+  Returns `nil` if the page doesn't exist or is not a note page with a
+  `meta.query` filter.
   """
   def get_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do
     case Brain.get_page_by_slug(slug, workspace_id) do
-      %{page_type: "query"} = page -> page
+      %{page_type: "note", meta: %{"query" => _}} = page -> page
       _ -> nil
     end
   end
 
   @doc """
-  List all smart collections (query pages) in a context.
+  List all smart collections (note pages with a `meta.query` filter) in a context.
   """
   def list_all(workspace_id) when is_binary(workspace_id) do
-    Brain.list_pages(workspace_id: workspace_id, type: "query", limit: 100)
+    Brain.list_pages(workspace_id: workspace_id, type: "note", limit: 100)
+    |> Enum.filter(&collection_page?/1)
   end
+
+  defp collection_page?(%{meta: meta}) when is_map(meta), do: Map.has_key?(meta, "query")
+  defp collection_page?(_), do: false
 
   # ── Helpers ──
 
