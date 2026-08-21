@@ -1,15 +1,10 @@
 defmodule DranWeb.HomeGraphController do
   @moduledoc """
-  Home-accessible JSON endpoint for the 3D graph.
+  Workspace-scoped JSON endpoint for the 3D graph.
 
-  Serves the same ETS-cached payload as `GraphJSONController` (panel), but is
-  accessible to ALL logged-in users — not just admins/editors. The panel's
-  `/graph-json` lives behind the `admin_or_editor` pipeline, which
-  home-only users cannot pass; this controller sits under the home scope
-  (`[:browser, :auth]`).
-
-  The payload is cached in `Dran.GraphCache` (ETS-backed GenServer): the
-  first request builds the graph, subsequent requests serve the cached JSON.
+  Accessible to all logged-in users with access to the workspace. The payload
+  is cached in `Dran.GraphCache` (ETS-backed GenServer): the first request
+  builds the graph, subsequent requests serve the cached JSON.
   """
 
   use DranWeb, :controller

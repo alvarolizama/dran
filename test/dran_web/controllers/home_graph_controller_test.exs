@@ -1,4 +1,4 @@
-defmodule DranWeb.GraphJSONControllerTest do
+defmodule DranWeb.HomeGraphControllerTest do
   use DranWeb.ConnCase, async: false
 
   alias Dran.Knowledge
@@ -50,6 +50,7 @@ defmodule DranWeb.GraphJSONControllerTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn, note: note, todo: todo}
   end
@@ -58,7 +59,7 @@ defmodule DranWeb.GraphJSONControllerTest do
     conn: conn,
     note: note
   } do
-    conn = get(conn, ~p"/graph-json")
+    conn = get(conn, ~p"/personal/graph/json")
 
     assert %{
              "nodes" => nodes,
@@ -91,7 +92,7 @@ defmodule DranWeb.GraphJSONControllerTest do
   end
 
   test "GET /api/graph-json clamps max_nodes to its floor (50)", %{conn: conn} do
-    conn = get(conn, ~p"/graph-json?max_nodes=1")
+    conn = get(conn, ~p"/personal/graph/json?max_nodes=1")
 
     assert %{"nodes" => nodes, "total_nodes" => total} = json_response(conn, 200)
 
@@ -111,7 +112,7 @@ defmodule DranWeb.GraphJSONControllerTest do
       })
 
     conn = build_conn()
-    conn = get(conn, ~p"/graph-json")
+    conn = get(conn, ~p"/personal/graph/json")
 
     assert redirected_to(conn, 302) == "/login"
   end
