@@ -914,14 +914,14 @@ defmodule Dran.MCP do
         args = params["arguments"] || %{}
 
         cond do
-          # SEC-002: read-only API keys cannot call write tools
-          write_tool?(tool_name) and not can_write?(user) ->
+          # SEC-002: write enforcement — per-workspace via access_levels (API keys)
+          write_tool?(tool_name) and not can_write?(user, args) ->
             %{
               "jsonrpc" => "2.0",
               "id" => id,
               "error" => %{
                 "code" => -32602,
-                "message" => "API key is read-only — write access disabled"
+                "message" => "API key is read-only for this workspace"
               }
             }
 
@@ -1067,6 +1067,13 @@ defmodule Dran.MCP do
     end
   end
 
+  defp user_has_context_access?(%{workspaces: :all}, _workspace_slug), do: true
+
+  defp user_has_context_access?(%{workspaces: workspace_list}, workspace_slug)
+       when is_list(workspace_list) do
+    Enum.any?(workspace_list, &(&1.slug == workspace_slug))
+  end
+
   defp user_has_context_access?(%{contexts: :all}, _workspace_slug), do: true
 
   defp user_has_context_access?(%{contexts: contexts}, workspace_slug) when is_list(contexts) do
@@ -1094,10 +1101,41 @@ defmodule Dran.MCP do
   defp write_tool?(name) when is_binary(name), do: MapSet.member?(@write_tools, name)
   defp write_tool?(_), do: false
 
-  defp can_write?(%{write_access: true}), do: true
-  defp can_write?(%{write_access: false}), do: false
-  # nil/absent — normal users and legacy admin always have write access
-  defp can_write?(_), do: true
+  # SEC-002: per-workspace write enforcement via access_levels (API keys).
+  # access_levels is keyed by workspace_id (allocation id chain in controller) —
+  # resolve the tool's workspace slug to its id via the user's workspaces list.
+  defp can_write?(%{access_levels: levels, workspaces: workspace_list}, args)
+       when is_map(levels) and is_list(workspace_list) do
+    slug = args["workspace"]
+
+    case slug do
+      nil ->
+        # No workspace in args — the key must target a workspace to write.
+        false
+
+      _ ->
+        ws_id = Enum.find_value(workspace_list, nil, &(&1.slug == slug && &1.id))
+        ws_id != nil and Map.get(levels, ws_id) == "write"
+    end
+  end
+
+  defp can_write?(%{access_levels: levels}, args) when is_map(levels) do
+    slug = args["workspace"]
+
+    case slug do
+      nil -> false
+      _ -> Map.get(levels, slug) == "write"
+    end
+  end
+
+  defp can_write?(%{write_access: true}, _args), do: true
+  defp can_write?(%{write_access: false}, _args), do: false
+
+  # nil user — always allow (e.g. process_message tests without user context).
+  defp can_write?(nil, _args), do: true
+
+  # real users (User struct) and owner-like maps — allow (workspace validation happens in validate_tool_context_access).
+  defp can_write?(%{}, _args), do: true
 
   defp inject_user_context(msg, nil), do: msg
 
@@ -1124,6 +1162,10 @@ defmodule Dran.MCP do
   defp inject_user_context(msg, _user), do: msg
 
   defp get_default_context_for_user(%{is_owner: true}), do: nil
+  defp get_default_context_for_user(%{workspaces: :all}), do: nil
+
+  defp get_default_context_for_user(%{workspaces: [first | _]}), do: first.slug
+
   defp get_default_context_for_user(%{contexts: :all}), do: nil
   defp get_default_context_for_user(%{contexts: [first | _]}), do: first.slug
   defp get_default_context_for_user(_), do: nil
