@@ -183,6 +183,7 @@ defmodule DranWeb.Plugs.Auth do
       |> Phoenix.Component.assign(:page_counts, page_counts)
       |> Phoenix.Component.assign(:current_scope, current_user)
       |> Phoenix.Component.assign(:workspace, context)
+      |> Phoenix.Component.assign(:impersonator, session["impersonator"])
 
     {socket, context}
   end

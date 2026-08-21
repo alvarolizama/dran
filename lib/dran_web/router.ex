@@ -395,6 +395,10 @@ defmodule DranWeb.Router do
   scope "/admin", DranWeb do
     pipe_through [:browser, :auth, :admin]
 
+    # Impersonation (F6) — owner-only, defense-in-depth in the controller.
+    post "/impersonate/:id", ImpersonationController, :create
+    delete "/impersonate", ImpersonationController, :delete
+
     live "/", AdminLive, :index
     live "/users", AdminUsersLive, :index
     live "/workspaces", AdminWorkspacesLive, :index

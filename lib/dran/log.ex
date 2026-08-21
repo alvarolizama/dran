@@ -27,4 +27,11 @@ defmodule Dran.Log do
     |> cast(attrs, [:workspace_id, :action, :subject, :details])
     |> validate_required([:action])
   end
+
+  @doc "Public function to create a log entry"
+  def create(attrs) do
+    %__MODULE__{}
+    |> changeset(attrs)
+    |> Dran.Repo.insert()
+  end
 end

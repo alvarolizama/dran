@@ -29,7 +29,6 @@ defmodule DranWeb.DashboardLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      workspace_slug={@workspace_slug}
       workspaces={@workspaces}
     >
       <div class="flex-1 overflow-y-auto">

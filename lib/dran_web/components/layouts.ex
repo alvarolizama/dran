@@ -37,6 +37,10 @@ defmodule DranWeb.Layouts do
     default: false,
     doc: "when true, the main content area skips internal padding/constraints"
 
+  attr :impersonator, :string,
+    default: nil,
+    doc: "the email of the admin who is impersonating the current user"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -92,6 +96,7 @@ defmodule DranWeb.Layouts do
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
             <.workspace_selector
+              :if={@workspace_slug}
               workspace_slug={@workspace_slug}
               workspaces={@workspaces}
               page_counts={@page_counts}
@@ -123,6 +128,7 @@ defmodule DranWeb.Layouts do
             counts={@counts}
             is_owner={@is_owner}
             workspace_slug={@workspace_slug}
+            workspace_role={assigns[:workspace_role]}
           />
         </nav>
 
@@ -221,6 +227,10 @@ defmodule DranWeb.Layouts do
   attr :counts, :map, default: %{}
   attr :workspace_slug, :string, default: nil
 
+  attr :workspace_role, :string,
+    default: nil,
+    doc: "the current user's role in the active workspace (owner/admin/editor/viewer)"
+
   attr :is_owner, :boolean,
     default: false,
     doc: "whether to show admin-only links (e.g. Settings)"
@@ -264,7 +274,7 @@ defmodule DranWeb.Layouts do
                   key: "settings",
                   label: gettext("Settings"),
                   icon: "hero-cog-6-tooth",
-                  path: ~p"/settings"
+                  path: ~p"/admin"
                 }
               ],
               else: []
@@ -281,14 +291,20 @@ defmodule DranWeb.Layouts do
         assign(assigns, groups: [%{label: nil, items: global_items}])
       else
         # Workspace context active — build full nav with workspace-scoped paths
+        # (F4/F5) The Config link points to the workspace settings and is shown
+        # only to the workspace owner/admin (or the instance owner, who is
+        # owner everywhere).
+        can_config =
+          is_owner || assigns[:workspace_role] in ~w(owner admin)
+
         config_items =
-          if is_owner do
+          if can_config do
             [
               %{
                 key: "settings",
-                label: gettext("Settings"),
+                label: gettext("Config"),
                 icon: "hero-cog-6-tooth",
-                path: ~p"/settings"
+                path: ~p"/#{workspace_slug}/settings"
               }
             ]
           else
