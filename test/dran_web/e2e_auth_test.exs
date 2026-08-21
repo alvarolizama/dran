@@ -26,7 +26,15 @@ defmodule DranWeb.E2EAuthTest do
     {:ok, ctx1} =
       Knowledge.create_workspace(%{name: "Personal #{unique}", slug: "personal-#{unique}"})
 
-    {:ok, ctx2} = Knowledge.create_workspace(%{name: "Work #{unique}", slug: "work-#{unique}"})
+    {:ok, ctx2} =
+      Knowledge.create_workspace(%{
+        name: "Work #{unique}",
+        slug: "work-#{unique}",
+        # F2: ctx2 must be private to still test the restrict-access path;
+        # with the old default (public), accessible_workspaces broadens access
+        # and the 403 assertion no longer holds.
+        visibility: "private"
+      })
 
     # Assign user to only the personal context
     Accounts.add_user_to_workspace(user, ctx1)

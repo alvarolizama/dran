@@ -46,7 +46,7 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Agent, Auth, Goals, Knowledge, Repo}
+  alias Dran.{Accounts, Agent, Auth, Goals, Knowledge, Repo}
   alias Dran.PageTypes
   alias Dran.Goals
   import Ecto.Query, warn: false
@@ -1065,6 +1065,12 @@ defmodule Dran.MCP do
       true ->
         {:error, :forbidden}
     end
+  end
+
+  # F2: a per-user token's access is members ∪ public workspaces (the plain
+  # membership list would wrongly deny public workspaces the user can reach).
+  defp user_has_context_access?(%Dran.Accounts.User{} = user, workspace_slug) do
+    Enum.any?(Accounts.accessible_workspaces(user), &(&1.slug == workspace_slug))
   end
 
   defp user_has_context_access?(%{workspaces: :all}, _workspace_slug), do: true

@@ -92,6 +92,14 @@ defmodule DranWeb.API.MCPController do
     end
   end
 
+  # F2: a per-user token's access is members ∪ public workspaces (the plain
+  # membership list would wrongly deny public workspaces the user can reach).
+  defp user_has_context_access?(%Dran.Accounts.User{} = user, workspace_slug) do
+    Enum.any?(Accounts.accessible_workspaces(user), &(&1.slug == workspace_slug))
+  end
+
+  # API-key synthetic users keep the workspaces granted by the key (scoped,
+  # not broadened by instance-wide public visibility).
   defp user_has_context_access?(user, workspace_slug) do
     case user.workspaces do
       :all -> true

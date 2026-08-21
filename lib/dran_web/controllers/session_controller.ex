@@ -77,11 +77,14 @@ defmodule DranWeb.SessionController do
     user_email = get_session(conn, "user")
     user = user_email && Accounts.get_user_by_email(user_email)
 
+    # F2: owner can switch to any workspace; everyone else may switch to the
+    # workspaces in `accessible_workspaces` (member ∪ public). A nil user (no
+    # DB row) yields [] — fail-closed, previously nil granted :all.
     accessible =
-      cond do
-        is_nil(user) -> :all
-        user.is_owner -> :all
-        true -> Accounts.list_user_workspaces(user) |> Enum.map(& &1.slug)
+      if user && user.is_owner do
+        :all
+      else
+        Accounts.accessible_workspaces(user) |> Enum.map(& &1.slug)
       end
 
     context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)

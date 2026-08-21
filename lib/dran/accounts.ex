@@ -127,6 +127,44 @@ defmodule Dran.Accounts do
     |> Enum.map(fn uw -> Map.put(uw.workspace, :role, uw.role) end)
   end
 
+  @doc """
+  Returns every workspace the user can access: their assigned (member)
+  workspaces spliced together with all public workspaces of the instance.
+  Owners see all workspaces. Public non-members see member + public workspaces,
+  with public workspaces they are not a member of carrying `role: "viewer"`.
+
+  `nil` (no user row) yields `[]` — fail-closed, a session user with no DB row
+  has no accessible workspaces. The owner branch reuses `list_user_workspaces`
+  (owner sees all), the member role merge mirrors that same pattern.
+  """
+  def accessible_workspaces(%User{is_owner: true} = user), do: list_user_workspaces(user)
+
+  def accessible_workspaces(%User{id: user_id}) do
+    # Member workspaces with their real role (same merge as list_user_workspaces).
+    memberships =
+      UserWorkspace
+      |> where([uw], uw.user_id == ^user_id)
+      |> order_by([uw], uw.inserted_at)
+      |> Repo.all()
+      |> Repo.preload(:workspace)
+      |> Enum.map(fn uw -> Map.put(uw.workspace, :role, uw.role) end)
+
+    member_ids = Enum.map(memberships, & &1.id)
+
+    # Public workspaces the user is NOT a member of, defaulted to viewer role.
+    public_others =
+      Workspace
+      |> where([ws], ws.visibility == "public")
+      |> where([ws], ws.id not in ^member_ids)
+      |> order_by([ws], ws.inserted_at)
+      |> Repo.all()
+      |> Enum.map(&Map.put(&1, :role, "viewer"))
+
+    memberships ++ public_others
+  end
+
+  def accessible_workspaces(_), do: []
+
   # ── Owner / Role-based access ──
 
   def owner_user do

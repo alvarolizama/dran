@@ -32,6 +32,7 @@ defmodule DranWeb.Plugs.Auth do
   @session_key :user
   @owner_key :is_owner
   @workspace_key :workspace_slug
+  @impersonator_key :impersonator
   @workspace_cookie "dran_last_workspace"
   # 30 days in seconds
   @workspace_cookie_max_age 30 * 24 * 60 * 60
@@ -64,6 +65,10 @@ defmodule DranWeb.Plugs.Auth do
       end
 
     conn
+    # A fresh login must always drop any stale impersonation session (F6): the
+    # impersonated user logging out and back in, or logging in under another
+    # account, must not keep riding on the admin's impersonation.
+    |> delete_session(@impersonator_key)
     |> put_session(@session_key, username)
     |> put_session(@owner_key, is_owner)
     |> put_workspace(workspace_slug)
@@ -74,6 +79,7 @@ defmodule DranWeb.Plugs.Auth do
     |> delete_session(@session_key)
     |> delete_session(@owner_key)
     |> delete_session(@workspace_key)
+    |> delete_session(@impersonator_key)
     |> delete_resp_cookie(@workspace_cookie)
   end
 
@@ -143,20 +149,28 @@ defmodule DranWeb.Plugs.Auth do
     context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
     page_counts = Dran.Knowledge.page_counts_by_workspace()
 
-    # Per-user scoping: a DB user (created via Dran.Accounts) only sees their
-    # assigned contexts. SEC-002: fail closed — a session user with no row in
-    # the users table gets NO contexts and is NOT admin (previously nil ->
-    # {all_contexts, true}, which escalated deleted users to full admin).
-    {accessible_workspaces, is_owner} =
+    # Per-user scoping: a DB user (created via Dran.Accounts) sees their
+    # assigned workspaces PLUS all public workspaces of the instance (F2).
+    # SEC-002: fail closed — a session user with no row in the users table gets
+    # NO workspaces and is NOT owner (previously nil -> {all_workspaces, true},
+    # which escalated deleted users to full admin).
+    {user, user_workspaces, is_owner} =
       case Dran.Accounts.get_user_by_email(current_user) do
-        nil ->
-          {[], false}
+        nil -> {nil, [], false}
+        %{is_owner: true} = user -> {user, Dran.Accounts.accessible_workspaces(user), true}
+        user -> {user, Dran.Accounts.accessible_workspaces(user), false}
+      end
 
-        %{is_owner: true} = user ->
-          {Dran.Accounts.list_user_workspaces(user), true}
-
-        user ->
-          {Dran.Accounts.list_user_workspaces(user), false}
+    # F2: the user's role in the CURRENT workspace (from the session slug).
+    # The instance owner is owner everywhere; every other logged-in user uses
+    # their workspace membership role (public non-members fall back to
+    # "viewer"). A nil user (no DB row) gets nil — fail-closed.
+    workspace_role =
+      case {user, context} do
+        {nil, _} -> nil
+        {%{is_owner: true}, _} -> "owner"
+        {_, nil} -> nil
+        {logged_in, ws} -> Dran.Accounts.user_role_in_workspace(logged_in, ws)
       end
 
     socket =
@@ -164,7 +178,8 @@ defmodule DranWeb.Plugs.Auth do
       |> Phoenix.Component.assign(:current_user, current_user)
       |> Phoenix.Component.assign(:is_owner, is_owner)
       |> Phoenix.Component.assign(:workspace_slug, workspace_slug)
-      |> Phoenix.Component.assign(:workspaces, accessible_workspaces)
+      |> Phoenix.Component.assign(:workspaces, user_workspaces)
+      |> Phoenix.Component.assign(:workspace_role, workspace_role)
       |> Phoenix.Component.assign(:page_counts, page_counts)
       |> Phoenix.Component.assign(:current_scope, current_user)
       |> Phoenix.Component.assign(:workspace, context)
