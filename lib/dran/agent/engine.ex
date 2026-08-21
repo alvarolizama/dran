@@ -35,6 +35,10 @@ defmodule Dran.Agent.Engine do
   """
   @spec run(module(), String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Session.t()}
   def run(module, input, workspace_id, opts \\ []) do
+    # Wire agent_max_pages (per-workspace tuning) into the session as a
+    # per-session limit on pages_created. The limit is resolved once here so
+    # the loop doesn't re-query the workspace on every step.
+    opts = Keyword.put_new(opts, :max_pages, resolve_max_pages(workspace_id))
     session = create_session!(module, input, workspace_id, opts)
 
     Task.Supervisor.start_child(Dran.Relations.TaskSupervisor, fn ->
@@ -173,41 +177,54 @@ defmodule Dran.Agent.Engine do
   end
 
   defp loop(%{step: step} = state) do
-    if step >= max_steps() do
-      finish_session(state, %{"summary" => "Agent reached max steps (#{max_steps()})"})
-      :ok
-    else
-      task =
-        Task.Supervisor.async_nolink(Dran.Relations.TaskSupervisor, fn ->
-          single_turn(state)
-        end)
+    cond do
+      step >= max_steps() ->
+        finish_session(state, %{"summary" => "Agent reached max steps (#{max_steps()})"})
+        :ok
 
-      case Task.yield(task, per_step_timeout()) do
-        nil ->
-          Task.shutdown(task)
+      max_pages_reached?(state) ->
+        # Per-session pages_created limit from the workspace tuning
+        # (agent_max_pages). Same hard stop as max_steps: synthesize and quit.
+        finish_session(state, %{
+          "summary" =>
+            "Agent reached max pages created (#{session_max_pages(state)}). " <>
+              "Synthesize what you have."
+        })
 
-          finish_session(state, %{
-            "summary" => "Agent step timed out after #{per_step_timeout()}ms"
-          })
+        :ok
 
-        {:ok, {:continue, state}} ->
-          loop(state)
+      true ->
+        task =
+          Task.Supervisor.async_nolink(Dran.Relations.TaskSupervisor, fn ->
+            single_turn(state)
+          end)
 
-        {:ok, {:done, _state}} ->
-          :ok
+        case Task.yield(task, per_step_timeout()) do
+          nil ->
+            Task.shutdown(task)
 
-        {:ok, {:error, state, reason}} ->
-          Logger.warning("Agent.Engine: step failed: #{inspect(reason)}")
-          finish_session(state, %{"summary" => "Agent step failed: #{inspect(reason)}"})
+            finish_session(state, %{
+              "summary" => "Agent step timed out after #{per_step_timeout()}ms"
+            })
 
-        {:ok, result} ->
-          Logger.warning("Agent.Engine: unexpected step result: #{inspect(result)}")
-          finish_session(state, %{"summary" => "Agent step returned unexpected result"})
+          {:ok, {:continue, state}} ->
+            loop(state)
 
-        {:exit, reason} ->
-          Logger.warning("Agent.Engine: step crashed: #{inspect(reason)}")
-          finish_session(state, %{"summary" => "Agent step crashed: #{inspect(reason)}"})
-      end
+          {:ok, {:done, _state}} ->
+            :ok
+
+          {:ok, {:error, state, reason}} ->
+            Logger.warning("Agent.Engine: step failed: #{inspect(reason)}")
+            finish_session(state, %{"summary" => "Agent step failed: #{inspect(reason)}"})
+
+          {:ok, result} ->
+            Logger.warning("Agent.Engine: unexpected step result: #{inspect(result)}")
+            finish_session(state, %{"summary" => "Agent step returned unexpected result"})
+
+          {:exit, reason} ->
+            Logger.warning("Agent.Engine: step crashed: #{inspect(reason)}")
+            finish_session(state, %{"summary" => "Agent step crashed: #{inspect(reason)}"})
+        end
     end
   end
 
@@ -573,6 +590,33 @@ defmodule Dran.Agent.Engine do
   end
 
   @truncation_marker "\n…[truncated]"
+
+  # ── Per-workspace agent_max_pages ──
+  # Resolve the per-session pages_created limit from the workspace tuning.
+  # The limit is per-session (not cumulative across sessions), matching
+  # the design decision in the plan. Falls back to the global settings
+  # default (10) when workspace has no override.
+  defp resolve_max_pages(workspace_id) do
+    case load_workspace(workspace_id) do
+      %Dran.Workspace{} = ws -> Dran.Workspace.get_tuning(ws, :agent_max_pages)
+      nil -> Dran.Settings.get("agent_max_pages")
+    end
+  end
+
+  # Ecto.Repo.get/2 raises on nil id, so guard explicitly for sessions
+  # created without a workspace (e.g. tests, administrative runs).
+  defp load_workspace(nil), do: nil
+  defp load_workspace(workspace_id), do: Repo.get(Dran.Workspace, workspace_id)
+
+  defp session_max_pages(%{opts: opts}) when is_list(opts) do
+    opts[:max_pages] || Dran.Settings.get("agent_max_pages")
+  end
+
+  defp session_max_pages(_), do: Dran.Settings.get("agent_max_pages")
+
+  defp max_pages_reached?(state) do
+    state.pages_created >= session_max_pages(state)
+  end
 
   @doc """
   Truncates a string to at most `max_chars` characters, trying to find a

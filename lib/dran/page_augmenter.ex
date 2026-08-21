@@ -132,7 +132,11 @@ defmodule Dran.PageAugmenter do
   # Failures here must not break the augmentation pipeline — linking is a
   # best-effort enhancement.
   defp link_entities(page, entities) do
-    if Dran.Settings.get("entity_linker_enabled") != false do
+    # Resolve per-workspace settings with fallback to global.
+    ws = load_workspace(page.workspace_id)
+    entity_linker_enabled = safe_tuning(ws, :entity_linker_enabled)
+
+    if entity_linker_enabled != false do
       case Dran.EntityLinker.link(page, entities) do
         {:ok, 0} ->
           :ok
@@ -239,15 +243,22 @@ defmodule Dran.PageAugmenter do
     * otherwise           → 0.22
   """
   @spec semantic_threshold(Page.t()) :: float()
-  def semantic_threshold(%Page{body: body}) when is_binary(body) do
+  def semantic_threshold(%Page{} = page) do
+    # Resolve per-workspace settings with fallback to global.
+    # Guard against nil workspace_id (e.g. pages not yet assigned, tests).
+    ws = load_workspace(page.workspace_id)
+
     cond do
-      String.length(body) < 500 -> Dran.Settings.get("semantic_threshold_short")
-      String.length(body) > 4000 -> Dran.Settings.get("semantic_threshold_long")
-      true -> Dran.Settings.get("semantic_threshold_mid")
+      is_binary(page.body) and String.length(page.body) < 500 ->
+        safe_tuning(ws, :semantic_threshold_short)
+
+      is_binary(page.body) and String.length(page.body) > 4000 ->
+        safe_tuning(ws, :semantic_threshold_long)
+
+      true ->
+        safe_tuning(ws, :semantic_threshold_mid)
     end
   end
-
-  def semantic_threshold(%Page{body: _}), do: Dran.Settings.get("semantic_threshold_mid")
 
   defp create_relations(page, neighbor_ids) do
     target_ids =
@@ -309,6 +320,22 @@ defmodule Dran.PageAugmenter do
   end
 
   defp serialize_inline_links(_), do: []
+
+  # ── Per-workspace tuning helpers ──
+
+  # Safely load workspace by id; returns nil when workspace_id is nil.
+  # Ecto.Repo.get/2 raises on nil, so we guard explicitly.
+  defp load_workspace(nil), do: nil
+
+  defp load_workspace(workspace_id) do
+    Dran.Repo.get(Dran.Workspace, workspace_id)
+  end
+
+  # Read a tuning value from the workspace with fallback to the global
+  # Dran.Settings default. When ws is nil (no workspace assigned), the
+  # global default is used directly — same behaviour as the pre-F1 code.
+  defp safe_tuning(nil, key), do: Dran.Settings.get(to_string(key))
+  defp safe_tuning(ws, key), do: Dran.Workspace.get_tuning(ws, key)
 
   # ── Config ──
 

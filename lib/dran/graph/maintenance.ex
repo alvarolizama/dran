@@ -45,13 +45,26 @@ defmodule Dran.Graph.Maintenance do
   """
   @spec prune_semantic(binary(), float() | nil) :: non_neg_integer()
   def prune_semantic(workspace_id, threshold \\ nil) do
-    threshold = threshold || Dran.Settings.get("semantic_threshold_long")
+    # Per-workspace tuning with fallback to the global default
+    # (semantic_threshold_long). The workspace value is resolved when the
+    # workspace exists; otherwise the global Dran.Settings knob is used.
+    threshold =
+      threshold ||
+        case load_workspace(workspace_id) do
+          %Dran.Workspace{} = ws -> Dran.Workspace.get_tuning(ws, :semantic_threshold_long)
+          nil -> Dran.Settings.get("semantic_threshold_long")
+        end
 
     semantic_relations(workspace_id)
     |> Enum.filter(fn rel -> distance_of(rel) != nil and distance_of(rel) > threshold end)
     |> Enum.map(& &1.id)
     |> delete_by_ids()
   end
+
+  # Ecto.Repo.get/2 raises on nil, so guard explicitly — pruning without a
+  # workspace falls back to the global threshold.
+  defp load_workspace(nil), do: nil
+  defp load_workspace(workspace_id), do: Repo.get(Dran.Workspace, workspace_id)
 
   @doc """
   Keep only mutual `semantic` relations in a context.
