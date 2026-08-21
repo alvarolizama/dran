@@ -105,9 +105,44 @@ defmodule Dran.Knowledge do
     |> Repo.update()
   end
 
-  @doc "Delete a context (cascades to pages, relations, etc.)"
+  @doc """
+  Delete a context (cascades to pages, relations, etc.).
+
+  API keys whose LAST workspace was this one are revoked automatically —
+  the FK cascade removes their `api_key_workspaces` rows, but a key with no
+  workspaces left must not keep a working token (SEC: orphan tokens).
+  """
   def delete_workspace(%Workspace{} = context) do
-    Repo.delete(context)
+    Repo.transaction(fn ->
+      # Keys that currently include this workspace AND no other
+      orphan_keys =
+        from(k in Dran.Accounts.ApiKey,
+          join: akw in Dran.Accounts.ApiKeyWorkspace,
+          on: akw.api_key_id == k.id,
+          where: akw.workspace_id == ^context.id and k.revoked_at |> is_nil(),
+          group_by: k.id,
+          having: count(akw.workspace_id) == 1
+        )
+        |> Repo.all()
+
+      result = Repo.delete(context)
+
+      # The cascade has now removed the join rows; revoke the orphans.
+      now = DateTime.utc_now(:second)
+
+      Enum.each(orphan_keys, fn key ->
+        Repo.update_all(
+          from(k in Dran.Accounts.ApiKey, where: k.id == ^key.id),
+          set: [revoked_at: now]
+        )
+      end)
+
+      result
+    end)
+    |> case do
+      {:ok, result} -> result
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────────────
