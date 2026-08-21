@@ -195,6 +195,27 @@ defmodule Dran.Accounts do
   end
 
   @doc """
+  List API keys scoped to a specific user.
+
+  Owners (`user.is_owner == true`) see all keys. Other users only see keys
+  they created (`created_by_user_id == user.id`).
+  """
+  def list_api_keys(%User{is_owner: true}) do
+    list_api_keys()
+  end
+
+  # No user in session (e.g. pre-auth mount): no keys.
+  def list_api_keys(nil), do: []
+
+  def list_api_keys(%User{id: user_id}) do
+    ApiKey
+    |> where([k], k.created_by_user_id == ^user_id)
+    |> order_by([k], desc: k.inserted_at)
+    |> Repo.all()
+    |> Repo.preload([:created_by_user, api_key_workspaces: :workspace])
+  end
+
+  @doc """
   Create a context-scoped API key.
 
   Accepts:
@@ -220,44 +241,82 @@ defmodule Dran.Accounts do
   end
 
   defp do_create_api_key(attrs, workspace_ids) do
-    token = ApiKey.generate_token()
+    # Workspace membership validation
+    case validate_workspace_access(attrs[:created_by_user_id], workspace_ids) do
+      :ok ->
+        token = ApiKey.generate_token()
 
-    Ecto.Multi.new()
-    |> Ecto.Multi.insert(
-      :api_key,
-      %ApiKey{}
-      |> ApiKey.changeset(%{
-        name: attrs.name,
-        created_by_user_id: attrs[:created_by_user_id],
-        token_hash: ApiKey.hash_token(token),
-        token_prefix: ApiKey.prefix_of(token)
-      })
-    )
-    |> Ecto.Multi.run(:workspace_entries, fn _repo, %{api_key: api_key} ->
-      entries =
-        Enum.map(workspace_ids, fn {wid, level} ->
-          %ApiKeyWorkspace{}
-          |> ApiKeyWorkspace.changeset(%{
-            api_key_id: api_key.id,
-            workspace_id: wid,
-            access_level: level
+        Ecto.Multi.new()
+        |> Ecto.Multi.insert(
+          :api_key,
+          %ApiKey{}
+          |> ApiKey.changeset(%{
+            name: attrs.name,
+            created_by_user_id: attrs[:created_by_user_id],
+            token_hash: ApiKey.hash_token(token),
+            token_prefix: ApiKey.prefix_of(token)
           })
+        )
+        |> Ecto.Multi.run(:workspace_entries, fn _repo, %{api_key: api_key} ->
+          entries =
+            Enum.map(workspace_ids, fn {wid, level} ->
+              %ApiKeyWorkspace{}
+              |> ApiKeyWorkspace.changeset(%{
+                api_key_id: api_key.id,
+                workspace_id: wid,
+                access_level: level
+              })
+            end)
+
+          {:ok, entries}
         end)
+        |> Ecto.Multi.run(:insert_workspace_entries, fn _repo, %{workspace_entries: entries} ->
+          Enum.each(entries, fn changeset ->
+            Repo.insert!(changeset)
+          end)
 
-      {:ok, entries}
-    end)
-    |> Ecto.Multi.run(:insert_workspace_entries, fn _repo, %{workspace_entries: entries} ->
-      Enum.each(entries, fn changeset ->
-        Repo.insert!(changeset)
-      end)
+          {:ok, :done}
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{api_key: key}} -> {:ok, %{key | token: token}}
+          {:error, :api_key, changeset, _} -> {:error, changeset}
+          {:error, _step, reason, _} -> {:error, reason}
+        end
 
-      {:ok, :done}
-    end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{api_key: key}} -> {:ok, %{key | token: token}}
-      {:error, :api_key, changeset, _} -> {:error, changeset}
-      {:error, _step, reason, _} -> {:error, reason}
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp validate_workspace_access(nil, _workspace_ids), do: :ok
+
+  defp validate_workspace_access(user_id, workspace_ids) do
+    user = Repo.get(User, user_id)
+
+    cond do
+      user == nil ->
+        {:error, :user_not_found}
+
+      is_owner?(user) ->
+        :ok
+
+      true ->
+        allowed_workspaces =
+          UserWorkspace
+          |> where([uw], uw.user_id == ^user_id)
+          |> select([uw], uw.workspace_id)
+          |> Repo.all()
+          |> MapSet.new()
+
+        requested_workspaces =
+          Enum.map(workspace_ids, fn {wid, _level} -> wid end)
+
+        if Enum.all?(requested_workspaces, &MapSet.member?(allowed_workspaces, &1)) do
+          :ok
+        else
+          {:error, :workspace_not_allowed}
+        end
     end
   end
 
@@ -325,6 +384,25 @@ defmodule Dran.Accounts do
 
     {:ok, entries}
   end
+
+  @doc """
+  Update the access level for a specific workspace in an API key.
+  Returns `{:ok, updated_workspace}` or `{:error, reason}`.
+  """
+  def update_api_key_access(%ApiKey{id: key_id}, workspace_id, access_level)
+      when access_level in ["read", "write"] do
+    case Repo.get_by(ApiKeyWorkspace, api_key_id: key_id, workspace_id: workspace_id) do
+      nil ->
+        {:error, :workspace_not_found_for_key}
+
+      akw ->
+        akw
+        |> ApiKeyWorkspace.changeset(%{access_level: access_level})
+        |> Repo.update()
+    end
+  end
+
+  def update_api_key_access(_, _, _), do: {:error, :invalid_access_level}
 
   @doc """
   Validate an API key token. Returns `{:ok, %ApiKey{}}` (with workspaces

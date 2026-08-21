@@ -290,4 +290,164 @@ defmodule Dran.AccountsTest do
     {:ok, context} = Knowledge.create_workspace(attrs)
     context
   end
+
+  describe "API Key scoping" do
+    setup do
+      {:ok, owner} =
+        Accounts.create_user(
+          Map.put(@user_attrs, :email, "owner-scoping@example.com")
+          |> Map.put(:is_owner, true)
+        )
+
+      {:ok, user} =
+        Accounts.create_user(Map.put(@user_attrs, :email, "user-scoping@example.com"))
+
+      {:ok, non_member} =
+        Accounts.create_user(Map.put(@user_attrs, :email, "non-member@example.com"))
+
+      ctx1 = context_fixture(%{name: "Scoped1", slug: "scoped1"})
+      ctx2 = context_fixture(%{name: "Scoped2", slug: "scoped2"})
+
+      {:ok, _} = Accounts.add_user_to_workspace(user, ctx1)
+
+      %{owner: owner, user: user, non_member: non_member, ctx1: ctx1, ctx2: ctx2}
+    end
+
+    test "list_api_keys/1 returns all keys for owner", %{
+      owner: owner,
+      user: user,
+      ctx1: ctx1
+    } do
+      {:ok, key1} =
+        Accounts.create_api_key(%{
+          name: "key1",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      {:ok, key2} =
+        Accounts.create_api_key(%{
+          name: "key2",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: owner.id
+        })
+
+      keys = Accounts.list_api_keys(owner)
+      ids = Enum.map(keys, & &1.id)
+      assert key1.id in ids
+      assert key2.id in ids
+    end
+
+    test "list_api_keys/1 returns only own keys for non-owner", %{
+      user: user,
+      owner: owner,
+      ctx1: ctx1
+    } do
+      {:ok, key1} =
+        Accounts.create_api_key(%{
+          name: "key1",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      {:ok, _key2} =
+        Accounts.create_api_key(%{
+          name: "key2",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: owner.id
+        })
+
+      keys = Accounts.list_api_keys(user)
+      ids = Enum.map(keys, & &1.id)
+      assert key1.id in ids
+      # Should only have key1
+      refute Enum.any?(ids, &(&1 != key1.id))
+    end
+
+    test "create_api_key/1 allows owner to create key for any workspace", %{
+      owner: owner,
+      ctx2: ctx2
+    } do
+      assert {:ok, _key} =
+               Accounts.create_api_key(%{
+                 name: "owner-key",
+                 workspace_ids: [{ctx2.id, "read"}],
+                 created_by_user_id: owner.id
+               })
+    end
+
+    test "create_api_key/1 allows member to create key for their workspace", %{
+      user: user,
+      ctx1: ctx1
+    } do
+      assert {:ok, _key} =
+               Accounts.create_api_key(%{
+                 name: "user-key",
+                 workspace_ids: [{ctx1.id, "read"}],
+                 created_by_user_id: user.id
+               })
+    end
+
+    test "create_api_key/1 disallows non-member from creating key for unassigned workspace", %{
+      non_member: non_member,
+      ctx2: ctx2
+    } do
+      assert {:error, :workspace_not_allowed} =
+               Accounts.create_api_key(%{
+                 name: "non-member-key",
+                 workspace_ids: [{ctx2.id, "read"}],
+                 created_by_user_id: non_member.id
+               })
+    end
+
+    test "update_api_key_access/3 updates access level", %{
+      user: user,
+      ctx1: ctx1
+    } do
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "update-test",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      key = Dran.Repo.preload(key, api_key_workspaces: :workspace)
+      akw = hd(key.api_key_workspaces)
+      assert akw.access_level == "read"
+
+      assert {:ok, updated_akw} = Accounts.update_api_key_access(key, ctx1.id, "write")
+      assert updated_akw.access_level == "write"
+    end
+
+    test "update_api_key_access/3 returns error for invalid access level", %{
+      user: user,
+      ctx1: ctx1
+    } do
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "update-test-invalid",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      assert {:error, :invalid_access_level} =
+               Accounts.update_api_key_access(key, ctx1.id, "invalid")
+    end
+
+    test "update_api_key_access/3 returns error for workspace not in key", %{
+      user: user,
+      ctx1: ctx1,
+      ctx2: ctx2
+    } do
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "update-test-missing",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      assert {:error, :workspace_not_found_for_key} =
+               Accounts.update_api_key_access(key, ctx2.id, "write")
+    end
+  end
 end
