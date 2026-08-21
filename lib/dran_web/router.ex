@@ -386,13 +386,21 @@ defmodule DranWeb.Router do
     live "/api_keys", SettingsLive, :index
   end
 
-  # ── Settings (instance-level, admin-only) ────────────────────────────────
+  # ── Admin (instance-level, owner-only) ────────────────────────────────────
+  #
+  # Administration is instance policy (F3): users, workspaces, models, system
+  # info, and global jobs. Defined BEFORE the /:workspace_slug wildcard so
+  # 'admin' stays a reserved segment.
 
-  scope "/settings", DranWeb do
+  scope "/admin", DranWeb do
     pipe_through [:browser, :auth, :admin]
 
-    live "/", SettingsLive, :index
-    live "/:tab", SettingsLive, :index
+    live "/", AdminLive, :index
+    live "/users", AdminUsersLive, :index
+    live "/workspaces", AdminWorkspacesLive, :index
+    live "/models", AdminModelsLive, :index
+    live "/system", AdminSystemLive, :index
+    live "/jobs", AdminJobsLive, :index
   end
 
   # ── REST API (token-protected) ─────────────────────────────────────────────
