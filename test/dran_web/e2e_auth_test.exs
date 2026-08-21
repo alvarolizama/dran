@@ -457,9 +457,13 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: user.email, workspace_slug: ctx1.slug})
 
-      # Viewer should be redirected (insufficient permissions) when accessing workspace-scoped routes
+      # Viewer CAN access ctx1 — they are a member AND ctx1 is public.
+      assert {:ok, _view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
+
+      # Viewer should be redirected when accessing ctx2 (private workspace
+      # they are NOT a member of).
       assert {:error, {:redirect, %{to: "/"}}} =
-               Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
+               Phoenix.LiveViewTest.live(conn, ~p"/#{ctx2.slug}/notes")
     end
   end
 end

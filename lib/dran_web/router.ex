@@ -36,6 +36,18 @@ defmodule DranWeb.Router do
     plug :require_workspace_role
   end
 
+  # Per-workspace access (by URL slug) — members ∪ public ∪ owner.
+  pipeline :workspace_access do
+    plug :require_workspace_access
+  end
+
+  # Per-workspace admin (for /:workspace_slug/settings) — owner/admin of the
+  # workspace ∪ instance owner.
+  pipeline :workspace_admin do
+    plug :require_workspace_access
+    plug :require_workspace_admin
+  end
+
   # ── Browser auth plug ──
 
   defp require_login(conn, _opts) do
@@ -113,6 +125,106 @@ defmodule DranWeb.Router do
           end
 
         if has_role? do
+          conn
+        else
+          conn
+          |> Phoenix.Controller.put_flash(:error, "Insufficient permissions")
+          |> Phoenix.Controller.redirect(to: ~p"/")
+          |> Plug.Conn.halt()
+        end
+    end
+  end
+
+  # ── Workspace access plug (per-slug) ──
+  # Validates that the user can access the workspace in the URL slug
+  # (conn.params["workspace_slug"]). Grants if: instance owner, OR the
+  # workspace is public, OR the user is a member. This closes the gap where
+  # require_workspace_role only checked GLOBAL role (any workspace) and left
+  # private workspaces reachable by URL.
+  defp require_workspace_access(conn, _opts) do
+    cond do
+      is_nil(Plug.Conn.get_session(conn, "user")) ->
+        conn
+        |> Phoenix.Controller.redirect(to: ~p"/login")
+        |> Plug.Conn.halt()
+
+      Plug.Conn.get_session(conn, "is_owner") == true ->
+        conn
+
+      true ->
+        slug = conn.params["workspace_slug"]
+        user_email = Plug.Conn.get_session(conn, "user")
+        user = user_email && Dran.Accounts.get_user_by_email(user_email)
+
+        accessible? =
+          case {user, slug} do
+            {_, nil} ->
+              false
+
+            {nil, _} ->
+              false
+
+            # Instance owner always passes (already handled above, defense-in-depth).
+            {%{is_owner: true}, _} ->
+              true
+
+            {logged_in, slug} when is_binary(slug) ->
+              Dran.Accounts.accessible_workspaces(logged_in)
+              |> Enum.any?(fn ws -> ws.slug == slug end)
+          end
+
+        if accessible? do
+          conn
+        else
+          conn
+          |> Phoenix.Controller.put_flash(:error, "You don't have access to this workspace")
+          |> Phoenix.Controller.redirect(to: ~p"/")
+          |> Plug.Conn.halt()
+        end
+    end
+  end
+
+  # ── Workspace admin plug (for /:workspace_slug/settings) ──
+  # Grants if the user is the instance owner OR has a role in ["owner", "admin"]
+  # in the workspace of the URL slug. Editors/viewers are excluded from
+  # workspace configuration.
+  defp require_workspace_admin(conn, _opts) do
+    cond do
+      is_nil(Plug.Conn.get_session(conn, "user")) ->
+        conn
+        |> Phoenix.Controller.redirect(to: ~p"/login")
+        |> Plug.Conn.halt()
+
+      Plug.Conn.get_session(conn, "is_owner") == true ->
+        conn
+
+      true ->
+        slug = conn.params["workspace_slug"]
+        user_email = Plug.Conn.get_session(conn, "user")
+        user = user_email && Dran.Accounts.get_user_by_email(user_email)
+
+        admin? =
+          case {user, slug} do
+            {_, nil} ->
+              false
+
+            {nil, _} ->
+              false
+
+            {%{is_owner: true}, _} ->
+              true
+
+            {logged_in, slug} when is_binary(slug) ->
+              case Dran.Knowledge.get_workspace_by_slug(slug) do
+                nil ->
+                  false
+
+                ws ->
+                  Dran.Accounts.user_role_in_workspace(logged_in, ws) in ~w(owner admin)
+              end
+          end
+
+        if admin? do
           conn
         else
           conn
@@ -378,13 +490,21 @@ defmodule DranWeb.Router do
   # Everything below /:workspace_slug is workspace-scoped. This scope MUST
   # stay last: /:workspace_slug is a wildcard and would swallow any static
   # route defined after it. Reserved segments (settings, api, dev, login,
-  # session, auth, health, docs) are unreachable as workspace slugs because
-  # they are defined above.
+  # session, auth, health, docs, admin) are unreachable as workspace slugs
+  # because they are defined above.
+  #
+  # The :workspace_access pipeline validates access to the workspace in the
+  # URL slug (member ∪ public ∪ owner), closing the gap where the old
+  # :admin_or_editor only checked a GLOBAL role.
   scope "/", DranWeb do
-    pipe_through [:browser, :auth, :admin_or_editor]
+    pipe_through [:browser, :auth, :workspace_access]
 
     # Workspace home
     live "/:workspace_slug", HomeLive, :workspace_home
+
+    # Workspace settings — owner/admin of the workspace (∪ instance owner).
+    # Must be defined BEFORE the generic /:workspace_slug/:type route.
+    live "/:workspace_slug/settings", WorkspaceSettingsLive, :index
 
     # First-class entities (their own schemas, not page types) — MUST be
     # defined BEFORE the generic /:workspace_slug/:type route, otherwise
