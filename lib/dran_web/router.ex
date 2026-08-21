@@ -262,6 +262,18 @@ defmodule DranWeb.Router do
     post "/workspace", SessionController, :switch_workspace
   end
 
+  # ── Settings: API keys (per-user, any logged-in user) ──────────────────────
+  #
+  # API keys are personal: every user manages their own keys, scoped to the
+  # workspaces they belong to. Defined BEFORE the admin scope so the static
+  # segment wins over the admin-only `/:tab` wildcard below.
+
+  scope "/settings", DranWeb do
+    pipe_through [:browser, :auth]
+
+    live "/api_keys", SettingsLive, :index
+  end
+
   # ── Settings (instance-level, admin-only) ────────────────────────────────
 
   scope "/settings", DranWeb do

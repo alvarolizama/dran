@@ -260,7 +260,10 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Pages by Type")}</h2>
-                  <.link navigate={~p"/#{@workspace_slug}/search"} class="text-sm text-primary hover:underline">
+                  <.link
+                    navigate={~p"/#{@workspace_slug}/search"}
+                    class="text-sm text-primary hover:underline"
+                  >
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -282,7 +285,10 @@ defmodule DranWeb.DashboardLive do
               >
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Todos")}</h2>
-                  <.link navigate={~p"/#{@workspace_slug}/kanban"} class="text-sm text-primary hover:underline">
+                  <.link
+                    navigate={~p"/#{@workspace_slug}/kanban"}
+                    class="text-sm text-primary hover:underline"
+                  >
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -305,7 +311,10 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Recently Updated")}</h2>
-                  <.link navigate={~p"/#{@workspace_slug}/graph"} class="text-sm text-primary hover:underline">
+                  <.link
+                    navigate={~p"/#{@workspace_slug}/graph"}
+                    class="text-sm text-primary hover:underline"
+                  >
                     {gettext("View all")}
                   </.link>
                 </div>

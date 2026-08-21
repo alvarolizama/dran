@@ -61,7 +61,8 @@ defmodule DranWeb.SettingsLive do
         show_user_modal: false,
         show_workspace_modal: false,
         workspace_user_search: "",
-        api_keys: Dran.Accounts.list_api_keys(),
+        api_keys: Dran.Accounts.list_api_keys(session_user(session)),
+        api_key_workspaces: api_key_workspaces(session_user(session)),
         new_api_key_form: to_form(%{}, as: :api_key),
         revealed_api_key: nil,
         show_api_key_modal: false,
@@ -72,9 +73,17 @@ defmodule DranWeb.SettingsLive do
       |> assign_brain_form()
       |> assign_models()
       |> assign_jobs()
-      # SEC-004: defense-in-depth — halt every event for non-admins
-      |> attach_hook(:require_admin, :handle_event, fn _event, _params, socket ->
-        if socket.assigns[:is_owner] do
+      # SEC-004: defense-in-depth — halt every event for non-admins, EXCEPT
+      # the api_keys events: keys are personal, every user manages their own.
+      |> attach_hook(:require_admin, :handle_event, fn event, _params, socket ->
+        if socket.assigns[:is_owner] or event in ~w(
+             open_api_key_modal
+             close_api_key_modal
+             create_api_key
+             dismiss_revealed_key
+             revoke_api_key
+             restore_api_key
+           ) do
           {:cont, socket}
         else
           {:halt, put_flash(socket, :error, gettext("No autorizado."))}
@@ -85,6 +94,30 @@ defmodule DranWeb.SettingsLive do
   end
 
   # -- Admin: user & context management ---------------------------------------
+
+  # Resolves the %User{} (or nil) behind the LiveView session. The session
+  # stores the email; `nil` falls back to the no-user case (empty key lists).
+  defp session_user(session) do
+    case Auth.from_session(session) do
+      %{current_user: email} when is_binary(email) ->
+        Dran.Accounts.get_user_by_email(email)
+
+      _ ->
+        nil
+    end
+  end
+
+  # Workspaces the user may attach to a NEW api key: those where they are a
+  # member. Instance owners may use any workspace.
+  defp api_key_workspaces(nil), do: []
+
+  defp api_key_workspaces(%{is_owner: true}) do
+    Dran.Knowledge.list_workspaces()
+  end
+
+  defp api_key_workspaces(user) do
+    Dran.Accounts.list_user_workspaces(user)
+  end
 
   defp assign_users(socket) do
     users = Dran.Accounts.list_users()
@@ -129,11 +162,22 @@ defmodule DranWeb.SettingsLive do
   @tabs ~w(users workspaces api_keys brain models system danger)
 
   @impl true
-  def handle_params(params, _url, socket) do
+  def handle_params(params, url, socket) do
     tab =
       case params["tab"] do
-        t when t in @tabs -> t
-        _ -> "users"
+        t when t in @tabs ->
+          t
+
+        _ ->
+          # The per-user api_keys route is a static segment (no :tab param);
+          # derive the tab from the path so the section renders.
+          path = URI.parse(url).path
+
+          if is_binary(path) and String.ends_with?(path, "/api_keys") do
+            "api_keys"
+          else
+            "users"
+          end
       end
 
     {:noreply, assign(socket, active_tab: tab)}
@@ -249,34 +293,34 @@ defmodule DranWeb.SettingsLive do
   def handle_event("create_api_key", %{"api_key" => params}, socket) do
     name = Map.get(params, "name", "") |> String.trim()
 
-    # Parse workspace_ids from comma-separated "id1:read,id2:write" format
-    workspace_ids_str = Map.get(params, "workspace_ids", "")
+    # The modal submits one checkbox per workspace (`api_key[workspaces][id]`)
+    # plus a level select (`api_key[level][id]` = read|write). Unticked
+    # workspaces are absent from the params entirely.
+    levels = Map.get(params, "level", %{})
 
     workspace_ids =
-      if workspace_ids_str != "" do
-        workspace_ids_str
-        |> String.split(",", trim: true)
-        |> Enum.map(fn pair ->
-          case String.split(pair, ":", trim: true) do
-            [wid, level] -> {String.trim(wid), String.trim(level)}
-            [wid] -> {String.trim(wid), "read"}
-            _ -> nil
-          end
-        end)
-        |> Enum.reject(&is_nil/1)
-      else
-        []
-      end
+      params
+      |> Map.get("workspaces", %{})
+      |> Enum.reject(fn {_wid, ticked} -> ticked in [nil, "", "off", "false"] end)
+      |> Enum.map(fn {wid, _ticked} ->
+        level = if levels[wid] == "write", do: "write", else: "read"
+        {wid, level}
+      end)
 
-    case Dran.Accounts.create_api_key(%{
-           name: name,
-           workspace_ids: workspace_ids
-         }) do
+    user = socket.assigns[:current_user_struct] || session_user_via_assigns(socket)
+
+    attrs = %{
+      name: name,
+      workspace_ids: workspace_ids,
+      created_by_user_id: user && user.id
+    }
+
+    case Dran.Accounts.create_api_key(attrs) do
       {:ok, key} ->
         socket =
           socket
           |> assign(
-            api_keys: Dran.Accounts.list_api_keys(),
+            api_keys: Dran.Accounts.list_api_keys(user),
             new_api_key_form: to_form(%{}, as: :api_key),
             revealed_api_key: %{id: key.id, token: key.token},
             show_api_key_modal: false
@@ -285,11 +329,16 @@ defmodule DranWeb.SettingsLive do
 
         {:noreply, socket}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply,
          socket
          |> assign(new_api_key_form: to_form(changeset, as: :api_key))
          |> put_flash(:error, gettext("Could not create the API key"))}
+
+      {:error, :workspace_not_allowed} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, gettext("You can only grant access to your own workspaces"))}
     end
   end
 
@@ -300,63 +349,57 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("revoke_api_key", %{"id" => id}, socket) do
-    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
-    {:ok, _} = Dran.Accounts.revoke_api_key(key)
-
-    {:noreply,
-     socket
-     |> assign(api_keys: Dran.Accounts.list_api_keys())
-     |> put_flash(:info, gettext("API key revoked"))}
+    with {:ok, key} <- owned_api_key(id, socket),
+         {:ok, _} <- Dran.Accounts.revoke_api_key(key) do
+      {:noreply,
+       socket
+       |> assign(api_keys: current_api_keys(socket))
+       |> put_flash(:info, gettext("API key revoked"))}
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+    end
   end
 
   @impl true
   def handle_event("restore_api_key", %{"id" => id}, socket) do
-    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
-    {:ok, _} = Dran.Accounts.restore_api_key(key)
-
-    {:noreply,
-     socket
-     |> assign(api_keys: Dran.Accounts.list_api_keys())
-     |> put_flash(:info, gettext("API key restored"))}
+    with {:ok, key} <- owned_api_key(id, socket),
+         {:ok, _} <- Dran.Accounts.restore_api_key(key) do
+      {:noreply,
+       socket
+       |> assign(api_keys: current_api_keys(socket))
+       |> put_flash(:info, gettext("API key restored"))}
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+    end
   end
 
   @impl true
   def handle_event("regenerate_api_key", %{"id" => id}, socket) do
-    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
-
-    case Dran.Accounts.regenerate_api_key(key) do
-      {:ok, key} ->
-        {:noreply,
-         socket
-         |> assign(
-           api_keys: Dran.Accounts.list_api_keys(),
-           revealed_api_key: %{id: key.id, token: key.token}
-         )
-         |> put_flash(:info, gettext("API key regenerated — copy the new token now"))}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not regenerate the key"))}
+    with {:ok, key} <- owned_api_key(id, socket),
+         {:ok, key} <- Dran.Accounts.regenerate_api_key(key) do
+      {:noreply,
+       socket
+       |> assign(
+         api_keys: current_api_keys(socket),
+         revealed_api_key: %{id: key.id, token: key.token}
+       )
+       |> put_flash(:info, gettext("API key regenerated — copy the new token now"))}
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
     end
   end
 
   @impl true
   def handle_event("delete_api_key", %{"id" => id}, socket) do
-    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
-    {:ok, _} = Dran.Accounts.delete_api_key(key)
-
-    {:noreply,
-     socket
-     |> assign(api_keys: Dran.Accounts.list_api_keys())
-     |> put_flash(:info, gettext("API key deleted"))}
-  end
-
-  @impl true
-  def handle_event("toggle_write_access", %{"id" => _id}, socket) do
-    # Deprecated: write_access is now per-workspace via api_key_workspaces.
-    # The parent agent will replace this with per-workspace UI.
-    {:noreply,
-     socket
-     |> put_flash(:error, gettext("Write access is now managed per-workspace"))}
+    with {:ok, key} <- owned_api_key(id, socket),
+         {:ok, _} <- Dran.Accounts.delete_api_key(key) do
+      {:noreply,
+       socket
+       |> assign(api_keys: current_api_keys(socket))
+       |> put_flash(:info, gettext("API key deleted"))}
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+    end
   end
 
   @impl true
@@ -953,6 +996,7 @@ defmodule DranWeb.SettingsLive do
             <.api_keys_section
               api_keys={@api_keys}
               all_workspaces={@all_workspaces}
+              api_key_workspaces={@api_key_workspaces}
               form={@new_api_key_form}
               revealed_api_key={@revealed_api_key}
               show_api_key_modal={@show_api_key_modal}
@@ -1886,6 +1930,7 @@ defmodule DranWeb.SettingsLive do
 
   attr :api_keys, :list, required: true
   attr :all_workspaces, :list, required: true
+  attr :api_key_workspaces, :list, default: []
   attr :form, :map, required: true
   attr :revealed_api_key, :map, default: nil
   attr :show_api_key_modal, :boolean, default: false
@@ -2119,40 +2164,42 @@ defmodule DranWeb.SettingsLive do
             </div>
 
             <.form for={@form} phx-submit="create_api_key" class="space-y-3" id="create-api-key-form">
-              <div class="grid grid-cols-2 gap-3">
-                <.input
-                  field={@form[:name]}
-                  label={gettext("Name")}
-                  type="text"
-                  placeholder={gettext("e.g. Hermes agent, backup script")}
-                  required
-                />
-                <div class="form-control">
-                  <label class="label">
-                    <span class="label-text">{gettext("Context")}</span>
-                  </label>
-                  <select name="api_key[workspace_id]" class="select select-bordered w-full" required>
-                    <option value="">{gettext("Select a context...")}</option>
-                    <option :for={ctx <- @all_workspaces} value={ctx.id}>{ctx.name}</option>
-                  </select>
-                </div>
-              </div>
+              <.input
+                field={@form[:name]}
+                label={gettext("Name")}
+                type="text"
+                placeholder={gettext("e.g. Hermes agent, backup script")}
+                required
+              />
 
-              <label class="label cursor-pointer justify-start gap-3 py-1">
-                <input
-                  type="checkbox"
-                  name="api_key[workspace_ids]"
-                  class="checkbox checkbox-sm checkbox-secondary"
-                />
-                <span class="label-text">
-                  {gettext("Write access")}
-                  <span class="text-base-content/50 text-xs">
-                    {gettext(
-                      "(unchecked = read-only: search, get pages, lint — no create/update/delete)"
-                    )}
-                  </span>
-                </span>
-              </label>
+              <div>
+                <p class="text-sm font-medium mb-2">
+                  {gettext("Workspaces")} — {gettext("tick the ones this key may access")}
+                </p>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                  <div :for={ws <- @api_key_workspaces} class="flex items-center gap-3">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name={"api_key[workspaces][#{ws.id}]"}
+                        value="read"
+                        class="checkbox checkbox-sm checkbox-secondary"
+                      />
+                      <span class="text-sm">{ws.name}</span>
+                    </label>
+                    <select
+                      name={"api_key[level][#{ws.id}]"}
+                      class="select select-bordered select-xs ml-auto"
+                    >
+                      <option value="read">{gettext("Read only")}</option>
+                      <option value="write">{gettext("Read + write")}</option>
+                    </select>
+                  </div>
+                </div>
+                <p :if={@api_key_workspaces == []} class="text-sm text-base-content/60">
+                  {gettext("You are not a member of any workspace yet.")}
+                </p>
+              </div>
 
               <div class="flex justify-end gap-2 pt-2">
                 <button
@@ -2487,7 +2534,7 @@ defmodule DranWeb.SettingsLive do
       <%!-- Context list with user membership --%>
       <div class="space-y-4">
         <div
-          :for={ctx <- @workspaces}
+          :for={ctx <- @all_workspaces}
           class={[
             "card bg-base-100 border border-base-300",
             @confirm_delete_workspace_id == ctx.id && "ring-2 ring-error/60 bg-error/5"
@@ -2509,7 +2556,6 @@ defmodule DranWeb.SettingsLive do
                     "%{count} members",
                     Enum.count(@users, &Dran.Accounts.user_in_workspace?(&1, ctx))
                   )}
-                  <span :if={ctx.wiki_enabled} class="text-primary">· Wiki</span>
                 </p>
               </div>
 
@@ -2648,7 +2694,7 @@ defmodule DranWeb.SettingsLive do
           phx-click-away="close_context_users"
         >
           <div class="card-body">
-            <% managing_ctx = Enum.find(@workspaces, &(&1.id == @managing_workspace_id)) %>
+            <% managing_ctx = Enum.find(@all_workspaces, &(&1.id == @managing_workspace_id)) %>
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-lg font-semibold">
@@ -2730,7 +2776,7 @@ defmodule DranWeb.SettingsLive do
           phx-click-away="close_page_types"
         >
           <div class="card-body">
-            <% pt_ctx = Enum.find(@workspaces, &(&1.id == @page_types_workspace_id)) %>
+            <% pt_ctx = Enum.find(@all_workspaces, &(&1.id == @page_types_workspace_id)) %>
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-lg font-semibold">
@@ -2796,7 +2842,7 @@ defmodule DranWeb.SettingsLive do
           phx-click-away="close_wiki"
         >
           <div class="card-body">
-            <% wiki_ctx = Enum.find(@workspaces, &(&1.id == @managing_wiki_id)) %>
+            <% wiki_ctx = Enum.find(@all_workspaces, &(&1.id == @managing_wiki_id)) %>
             <div class="flex items-start justify-between">
               <div>
                 <h3 class="text-lg font-semibold">
@@ -2848,5 +2894,40 @@ defmodule DranWeb.SettingsLive do
       </div>
     </div>
     """
+  end
+
+  # The %User{} struct is not stored in assigns by default (only the email);
+  # resolve it lazily from the assign on the event paths that need the struct.
+  defp session_user_via_assigns(socket) do
+    with email when is_binary(email) <- socket.assigns[:current_user],
+         %{} = user <- Dran.Accounts.get_user_by_email(email) do
+      user
+    else
+      _ -> nil
+    end
+  end
+
+  # A key may only be managed by its creator or an instance owner.
+  defp owned_api_key(id, socket) do
+    user = session_user_via_assigns(socket)
+
+    cond do
+      socket.assigns[:is_owner] ->
+        {:ok, Dran.Repo.get!(Dran.Accounts.ApiKey, id)}
+
+      is_map(user) ->
+        key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
+
+        if key.created_by_user_id == user.id,
+          do: {:ok, key},
+          else: {:error, :not_owner}
+
+      true ->
+        {:error, :not_owner}
+    end
+  end
+
+  defp current_api_keys(socket) do
+    Dran.Accounts.list_api_keys(session_user_via_assigns(socket))
   end
 end

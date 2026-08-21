@@ -301,10 +301,12 @@ defmodule DranWeb.PagesLive do
   defp page_type_from_params(_), do: nil
 
   defp build_back_path(nil, page_type), do: "/#{PageTypes.path(page_type)}"
-  defp build_back_path(workspace_slug, page_type), do: "/#{workspace_slug}/#{PageTypes.path(page_type)}"
+
+  defp build_back_path(workspace_slug, page_type),
+    do: "/#{workspace_slug}/#{PageTypes.path(page_type)}"
 
   defp build_page_path(nil, page_type, slug), do: "/#{PageTypes.path(page_type)}/#{slug}"
+
   defp build_page_path(workspace_slug, page_type, slug),
     do: "/#{workspace_slug}/#{PageTypes.path(page_type)}/#{slug}"
-
 end

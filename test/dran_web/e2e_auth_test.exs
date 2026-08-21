@@ -193,13 +193,17 @@ defmodule DranWeb.E2EAuthTest do
       assert conn.status == 401
     end
 
-    test "deleting a context cascade-deletes its API keys", %{ctx1: ctx1} do
+    test "deleting a context revokes API keys whose last workspace it was", %{ctx1: ctx1} do
       {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
 
       {:ok, _} = Knowledge.delete_workspace(ctx1)
 
+      # Multi-workspace model: the join rows cascade away, and a key left
+      # with zero workspaces is revoked (not deleted) so the audit trail
+      # survives. The token must stop working immediately.
       assert Accounts.valid_api_key?(key.token) == :error
-      refute Dran.Repo.get(Accounts.ApiKey, key.id)
+      revoked = Dran.Repo.reload!(key)
+      assert revoked.revoked_at
     end
 
     test "new API key defaults to read-only (write_access=false)", %{ctx1: ctx1} do
@@ -375,15 +379,18 @@ defmodule DranWeb.E2EAuthTest do
     } do
       conn =
         conn
-        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
+        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/workspaces")
+      {:ok, view, html} = Phoenix.LiveViewTest.live(conn, ~p"/settings/workspaces")
 
-      # The contexts tab renders the create form and the existing contexts
-      assert html =~ "context-form"
+      # The settings contexts tab lists existing contexts and their controls
       assert html =~ ctx1.slug
       # Manage users button per context
       assert html =~ "manage_context_users"
+
+      # Opening the "New context" modal exposes the create form
+      html = Phoenix.LiveViewTest.render_click(view, "open_context_modal")
+      assert html =~ "context-form"
     end
 
     test "manage users modal opens with user checkboxes", %{
@@ -394,9 +401,9 @@ defmodule DranWeb.E2EAuthTest do
     } do
       conn =
         conn
-        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
+        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/workspaces")
+      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/settings/workspaces")
 
       # Open the modal for ctx1
       html = Phoenix.LiveViewTest.render_click(view, "manage_context_users", %{"id" => ctx1.id})
@@ -419,15 +426,17 @@ defmodule DranWeb.E2EAuthTest do
     } do
       conn =
         conn
-        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
+        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
-
-      # Admin sees the Settings link in the sidebar
-      assert html =~ ~p"/panel"
-      # Context selector includes both contexts (ctx2 was never assigned)
+      # Workspace-scoped page: admin sees the Settings link in the sidebar
+      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
+      assert html =~ ~p"/settings"
       assert html =~ ctx1.slug
-      assert html =~ ctx2.slug
+
+      # Settings contexts tab lists ALL workspaces for the instance owner
+      {:ok, _view, settings_html} = Phoenix.LiveViewTest.live(conn, ~p"/settings/workspaces")
+      assert settings_html =~ ctx1.slug
+      assert settings_html =~ ctx2.slug
     end
 
     test "non-admin session hides the Settings link and only sees assigned contexts", %{
@@ -440,13 +449,9 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: user.email, workspace_slug: ctx1.slug})
 
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
-
-      # Non-admin must NOT see the Settings link
-      refute html =~ ~p"/panel"
-      # Context selector shows only the assigned context, not ctx2
-      assert html =~ ctx1.slug
-      refute html =~ ctx2.slug
+      # Viewer should be redirected (insufficient permissions) when accessing workspace-scoped routes
+      assert {:error, {:redirect, %{to: "/"}}} =
+               Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
     end
   end
 end

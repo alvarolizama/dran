@@ -45,7 +45,10 @@ defmodule DranWeb.SmartCollectionLive do
           title={gettext("No smart collections yet.")}
           caption={gettext("Save a set of filters from search or any page list to create one.")}
         >
-          <.link navigate={~p"/#{@workspace_slug}/collections/new"} class="btn btn-primary btn-sm mt-4">
+          <.link
+            navigate={~p"/#{@workspace_slug}/collections/new"}
+            class="btn btn-primary btn-sm mt-4"
+          >
             <.icon name="hero-plus" class="w-4 h-4" />
             {gettext("Create your first collection")}
           </.link>
@@ -240,7 +243,9 @@ defmodule DranWeb.SmartCollectionLive do
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/#{@workspace_slug}/collections"} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
+            <.link navigate={~p"/#{@workspace_slug}/collections"} class="btn btn-ghost btn-sm">{gettext(
+              "Cancel"
+            )}</.link>
             <button
               type="submit"
               class="btn btn-primary btn-sm"
@@ -421,7 +426,9 @@ defmodule DranWeb.SmartCollectionLive do
             {:noreply,
              socket
              |> put_flash(:info, gettext("Smart collection created."))
-             |> push_navigate(to: ~p"/#{socket.assigns[:workspace_slug]}/collections/#{collection.slug}")}
+             |> push_navigate(
+               to: ~p"/#{socket.assigns[:workspace_slug]}/collections/#{collection.slug}"
+             )}
 
           {:error, _changeset} ->
             {:noreply,

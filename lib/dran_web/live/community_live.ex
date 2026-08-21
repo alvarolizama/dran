@@ -283,7 +283,8 @@ defmodule DranWeb.CommunityLive do
 
   @impl true
   def handle_event("show_community", %{"id" => id}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/communities/#{id}")}
+    {:noreply,
+     push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/communities/#{id}")}
   end
 
   def handle_event("show_page", %{"slug" => slug} = params, socket) do

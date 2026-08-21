@@ -232,7 +232,9 @@ defmodule DranWeb.GoalLive do
           <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
+            <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">{gettext(
+              "Cancel"
+            )}</.link>
             <button
               type="submit"
               class="btn btn-primary btn-sm"
@@ -374,9 +376,13 @@ defmodule DranWeb.GoalLive do
     editing = !socket.assigns.editing
 
     if editing do
-      {:noreply, push_patch(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}?edit=true")}
+      {:noreply,
+       push_patch(socket,
+         to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}?edit=true"
+       )}
     else
-      {:noreply, push_patch(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}")}
+      {:noreply,
+       push_patch(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}")}
     end
   end
 

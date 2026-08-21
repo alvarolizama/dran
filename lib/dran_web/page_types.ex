@@ -106,6 +106,7 @@ defmodule DranWeb.PageTypes do
   def page_show_path(_, _), do: "#"
 
   defp build_page_show_path(type, slug, nil), do: "/#{path(type)}/#{slug}"
+
   defp build_page_show_path(type, slug, workspace_slug),
     do: "/#{workspace_slug}/#{path(type)}/#{slug}"
 

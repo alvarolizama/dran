@@ -33,15 +33,19 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, conn: conn}
   end
 
-  test "the api keys tab renders the create form and empty list", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/api_keys")
+  test "the api keys tab renders the list and opens the create modal", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/settings/api_keys")
 
+    # The tab renders the (empty) list of the current user's keys
+    assert html =~ t("No API keys yet — create one with the button above.")
+    refute html =~ ~s(id="create-api-key-form")
+
+    # Opening the modal reveals the multi-workspace create form
+    html = view |> element("button[phx-click='open_api_key_modal']") |> render_click()
     assert html =~ ~s(id="create-api-key-form")
-    assert html =~ t("Create API Key")
-    assert html =~ t("No API keys yet — create one above.")
   end
 
-  test "creating an api key from the form reveals the token once", %{conn: conn} do
+  test "creating an api key from the modal reveals the token once", %{conn: conn} do
     unique = System.unique_integer([:positive])
 
     {:ok, ctx} =
@@ -49,9 +53,17 @@ defmodule DranWeb.SettingsLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
 
+    view |> element("button[phx-click='open_api_key_modal']") |> render_click()
+
     html =
       view
-      |> form("#create-api-key-form", api_key: %{name: "Hermes", workspace_id: ctx.id})
+      |> form("#create-api-key-form",
+        api_key: %{
+          "name" => "Hermes",
+          "workspaces" => %{"#{ctx.id}" => "read"},
+          "level" => %{"#{ctx.id}" => "write"}
+        }
+      )
       |> render_submit()
 
     # The one-time reveal card shows the full token + copy button
@@ -69,7 +81,14 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, ctx} =
       Dran.Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
 
-    {:ok, key} = Accounts.create_api_key(%{name: "Revocable", workspace_id: ctx.id})
+    user = Accounts.get_user_by_email("test_user")
+
+    {:ok, key} =
+      Accounts.create_api_key(%{
+        name: "Revocable",
+        workspace_ids: [{ctx.id, "read"}],
+        created_by_user_id: user.id
+      })
 
     {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
 
