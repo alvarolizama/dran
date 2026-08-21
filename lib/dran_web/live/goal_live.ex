@@ -47,7 +47,7 @@ defmodule DranWeb.GoalLive do
               </p>
             </div>
             <div class="flex gap-2 shrink-0">
-              <.link navigate={~p"/panel/goals"} class="btn btn-ghost btn-sm">
+              <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">
                 <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
               </.link>
               <button
@@ -232,7 +232,7 @@ defmodule DranWeb.GoalLive do
           <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/panel/goals"} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
+            <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
             <button
               type="submit"
               class="btn btn-primary btn-sm"
@@ -247,7 +247,7 @@ defmodule DranWeb.GoalLive do
       <div :if={@live_action == :index} class="p-6 overflow-y-auto w-full">
         <div class="flex items-center justify-between mb-4">
           <h1 class="text-title">{gettext("Goals")}</h1>
-          <.link navigate={~p"/panel/goals/new"} class="btn btn-primary btn-sm">
+          <.link navigate={~p"/#{@workspace_slug}/goals/new"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Goal")}
           </.link>
         </div>
@@ -262,7 +262,7 @@ defmodule DranWeb.GoalLive do
         <div class="space-y-2">
           <.link
             :for={goal <- @goals}
-            navigate={~p"/panel/goals/#{goal.slug}"}
+            navigate={~p"/#{@workspace_slug}/goals/#{goal.slug}"}
             class="flex items-center gap-3 p-3 rounded-xl border border-base-300 hover:bg-base-200 transition cursor-pointer"
           >
             <.icon name="hero-flag" class="size-5 text-green-500 shrink-0" />
@@ -337,7 +337,7 @@ defmodule DranWeb.GoalLive do
     if context do
       case Goals.get_goal_by_slug(slug, context.id) do
         nil ->
-          push_navigate(socket, to: ~p"/panel/goals")
+          push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals")
 
         goal ->
           form = Goals.change_goal(goal) |> to_form(as: :goal)
@@ -350,7 +350,7 @@ defmodule DranWeb.GoalLive do
           )
       end
     else
-      push_navigate(socket, to: ~p"/panel/goals")
+      push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals")
     end
   end
 
@@ -374,9 +374,9 @@ defmodule DranWeb.GoalLive do
     editing = !socket.assigns.editing
 
     if editing do
-      {:noreply, push_patch(socket, to: ~p"/panel/goals/#{goal.slug}?edit=true")}
+      {:noreply, push_patch(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}?edit=true")}
     else
-      {:noreply, push_patch(socket, to: ~p"/panel/goals/#{goal.slug}")}
+      {:noreply, push_patch(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}")}
     end
   end
 
@@ -417,7 +417,7 @@ defmodule DranWeb.GoalLive do
           {:noreply,
            socket
            |> put_flash(:info, gettext("Goal created."))
-           |> push_navigate(to: ~p"/panel/goals/#{goal.slug}")}
+           |> push_navigate(to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}")}
 
         {:error, changeset} ->
           {:noreply, assign(socket, form: to_form(changeset, as: :goal))}
@@ -435,7 +435,7 @@ defmodule DranWeb.GoalLive do
         {:noreply,
          socket
          |> put_flash(:info, gettext("Goal deleted."))
-         |> push_navigate(to: ~p"/panel/goals")}
+         |> push_navigate(to: ~p"/#{socket.assigns[:workspace_slug]}/goals")}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, gettext("Could not delete goal."))}

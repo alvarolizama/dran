@@ -14,11 +14,11 @@ defmodule DranWeb.CommandPalette do
 
   @quick_actions [
     %{label: "New Note", icon: "hero-plus", path: "/notes/new"},
-    %{label: "New Todo", icon: "hero-check-circle", path: "/panel/todos/new"},
-    %{label: "New Project", icon: "hero-rocket-launch", path: "/panel/projects/new"},
+    %{label: "New Todo", icon: "hero-check-circle", path: "/kanban"},
+    %{label: "New Project", icon: "hero-rocket-launch", path: "/projects/new"},
     %{label: "Go to Kanban", icon: "hero-view-columns", path: "/kanban"},
     %{label: "Go to Graph", icon: "hero-share", path: "/graph"},
-    %{label: "Go to Todos", icon: "hero-list-bullet", path: "/panel/todos"},
+    %{label: "Go to Todos", icon: "hero-list-bullet", path: "/kanban"},
     %{label: "Go to Dashboard", icon: "hero-home", path: "/"}
   ]
 
@@ -234,7 +234,7 @@ defmodule DranWeb.CommandPalette do
   def handle_event("key", _params, socket), do: {:noreply, socket}
 
   def handle_event("navigate", %{"slug" => slug, "type" => type}, socket) do
-    path = "/panel/#{PageTypes.path(type)}/#{slug}"
+    path = "/#{PageTypes.path(type)}/#{slug}"
     {:noreply, push_navigate(socket, to: path)}
   end
 
@@ -273,7 +273,7 @@ defmodule DranWeb.CommandPalette do
   defp resolve_selected_path(%{results: results, selected: selected}) do
     case Enum.at(results, selected) do
       nil -> "/"
-      result -> "/panel/#{PageTypes.path(result.page_type)}/#{result.slug}"
+      result -> "/#{PageTypes.path(result.page_type)}/#{result.slug}"
     end
   end
 

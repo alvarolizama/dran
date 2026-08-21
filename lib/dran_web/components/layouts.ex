@@ -85,7 +85,7 @@ defmodule DranWeb.Layouts do
         <div class="p-4 border-b border-base-300">
           <div class="flex items-center gap-2">
             <a
-              href={~p"/panel"}
+              href={~p"/"}
               class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
             >
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
@@ -99,8 +99,8 @@ defmodule DranWeb.Layouts do
           </div>
         </div>
 
-        <div class="p-3 border-b border-base-300">
-          <form action={~p"/search"} method="get" class="relative">
+        <div :if={@workspace_slug} class="p-3 border-b border-base-300">
+          <form action={~p"/#{@workspace_slug}/search"} method="get" class="relative">
             <.icon
               name="hero-magnifying-glass"
               class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
@@ -237,6 +237,7 @@ defmodule DranWeb.Layouts do
   def sidebar_nav(assigns) do
     counts = assigns[:counts] || %{}
     is_owner = assigns[:is_owner] || false
+    workspace_slug = assigns[:workspace_slug]
 
     disabled_types =
       case assigns[:workspace_slug] &&
@@ -245,159 +246,196 @@ defmodule DranWeb.Layouts do
         _ -> []
       end
 
-    config_items =
-      if is_owner do
-        [
-          %{
-            key: "settings",
-            label: gettext("Settings"),
-            icon: "hero-cog-6-tooth",
-            path: ~p"/panel/settings"
-          }
-        ]
+    # When no workspace context (e.g. instance-level dashboard at /),
+    # workspace-scoped paths would crash with nil interpolation.
+    # The nil branch is dead code per type inference (workspace_slug
+    # is dynamic(not nil) from assigns), but at runtime it can be nil
+    # when the Dashboard renders without a workspace. Guard with
+    # assigns[:workspace_slug] to avoid the type narrowing.
+    assigns =
+      if is_nil(assigns[:workspace_slug]) do
+        global_items =
+          [
+            %{key: "dashboard", label: gettext("Dashboard"), icon: "hero-home", path: ~p"/"}
+          ] ++
+            if(is_owner,
+              do: [
+                %{
+                  key: "settings",
+                  label: gettext("Settings"),
+                  icon: "hero-cog-6-tooth",
+                  path: ~p"/settings"
+                }
+              ],
+              else: []
+            ) ++
+            [
+              %{
+                key: "docs",
+                label: gettext("Documentation"),
+                icon: "hero-book-open",
+                path: ~p"/docs"
+              }
+            ]
+
+        assign(assigns, groups: [%{label: nil, items: global_items}])
       else
-        []
-      end ++
-        [
+        # Workspace context active — build full nav with workspace-scoped paths
+        config_items =
+          if is_owner do
+            [
+              %{
+                key: "settings",
+                label: gettext("Settings"),
+                icon: "hero-cog-6-tooth",
+                path: ~p"/settings"
+              }
+            ]
+          else
+            []
+          end ++
+            [
+              %{
+                key: "docs",
+                label: gettext("Documentation"),
+                icon: "hero-book-open",
+                path: ~p"/docs"
+              }
+            ]
+
+        groups = [
           %{
-            key: "docs",
-            label: gettext("Documentation"),
-            icon: "hero-book-open",
-            path: ~p"/panel/docs"
+            label: nil,
+            items: [
+              %{
+                key: "dashboard",
+                label: gettext("Dashboard"),
+                icon: "hero-home",
+                path: ~p"/"
+              },
+              %{
+                key: "kanban",
+                label: gettext("Kanban"),
+                icon: "hero-view-columns",
+                path: ~p"/#{workspace_slug}/kanban",
+                badge: counts[:todos]
+              },
+              %{
+                key: "graph",
+                label: gettext("Grafo"),
+                icon: "hero-share",
+                path: ~p"/#{workspace_slug}/graph"
+              },
+              %{
+                key: "journey",
+                label: gettext("Trayectoria"),
+                icon: "hero-map",
+                path: ~p"/#{workspace_slug}/journey"
+              },
+              %{
+                key: "activity",
+                label: gettext("Actividad"),
+                icon: "hero-clock",
+                path: ~p"/#{workspace_slug}/activity"
+              },
+              %{
+                key: "wiki",
+                label: gettext("Wiki"),
+                icon: "hero-globe-alt",
+                path: ~p"/"
+              }
+            ]
+          },
+          %{
+            label: gettext("Planning"),
+            items: [
+              %{
+                key: "goals",
+                label: gettext("Objetivos"),
+                icon: "hero-flag",
+                path: ~p"/#{workspace_slug}/goals",
+                badge: counts[:goals]
+              },
+              %{
+                key: "projects",
+                label: gettext("Projects"),
+                icon: "hero-rocket-launch",
+                path: ~p"/#{workspace_slug}/notes",
+                badge: counts[:projects]
+              }
+            ]
+          },
+          %{
+            label: gettext("Knowledge"),
+            items: [
+              %{
+                key: "notes",
+                label: gettext("Notes"),
+                icon: "hero-document-text",
+                path: ~p"/#{workspace_slug}/notes",
+                badge: counts[:notes]
+              },
+              %{
+                key: "concepts",
+                label: gettext("Concepts"),
+                icon: "hero-light-bulb",
+                path: ~p"/#{workspace_slug}/concepts",
+                badge: counts[:concepts]
+              },
+              %{
+                key: "entities",
+                label: gettext("Entities"),
+                icon: "hero-user-group",
+                path: ~p"/#{workspace_slug}/entities",
+                badge: counts[:entities]
+              },
+              %{
+                key: "references",
+                label: gettext("References"),
+                icon: "hero-bookmark",
+                path: ~p"/#{workspace_slug}/references",
+                badge: counts[:references]
+              },
+              %{
+                key: "communities",
+                label: gettext("Comunidades"),
+                icon: "hero-squares-2x2",
+                path: ~p"/#{workspace_slug}/communities",
+                badge: counts[:communities]
+              },
+              %{
+                key: "collections",
+                label: gettext("Collections"),
+                icon: "hero-funnel",
+                path: ~p"/#{workspace_slug}/collections",
+                badge: counts[:collections]
+              }
+            ]
+          },
+          %{
+            label: gettext("Configs"),
+            items: config_items
           }
         ]
 
-    groups = [
-      %{
-        label: nil,
-        items: [
-          %{
-            key: "dashboard",
-            label: gettext("Dashboard"),
-            icon: "hero-home",
-            path: ~p"/panel"
-          },
-          %{
-            key: "kanban",
-            label: gettext("Kanban"),
-            icon: "hero-view-columns",
-            path: ~p"/kanban",
-            badge: counts[:todos]
-          },
-          %{
-            key: "graph",
-            label: gettext("Grafo"),
-            icon: "hero-share",
-            path: ~p"/graph"
-          },
-          %{
-            key: "journey",
-            label: gettext("Trayectoria"),
-            icon: "hero-map",
-            path: ~p"/panel/journey"
-          },
-          %{
-            key: "activity",
-            label: gettext("Actividad"),
-            icon: "hero-clock",
-            path: ~p"/panel/activity"
-          },
-          %{
-            key: "wiki",
-            label: gettext("Wiki"),
-            icon: "hero-globe-alt",
-            path: ~p"/"
-          }
-        ]
-      },
-      %{
-        label: gettext("Planning"),
-        items: [
-          %{
-            key: "goals",
-            label: gettext("Objetivos"),
-            icon: "hero-flag",
-            path: ~p"/panel/goals",
-            badge: counts[:goals]
-          },
-          %{
-            key: "projects",
-            label: gettext("Projects"),
-            icon: "hero-rocket-launch",
-            path: ~p"/panel/projects",
-            badge: counts[:projects]
-          }
-        ]
-      },
-      %{
-        label: gettext("Knowledge"),
-        items: [
-          %{
-            key: "notes",
-            label: gettext("Notes"),
-            icon: "hero-document-text",
-            path: ~p"/notes",
-            badge: counts[:notes]
-          },
-          %{
-            key: "concepts",
-            label: gettext("Concepts"),
-            icon: "hero-light-bulb",
-            path: ~p"/panel/concepts",
-            badge: counts[:concepts]
-          },
-          %{
-            key: "entities",
-            label: gettext("Entities"),
-            icon: "hero-user-group",
-            path: ~p"/panel/entities",
-            badge: counts[:entities]
-          },
-          %{
-            key: "references",
-            label: gettext("References"),
-            icon: "hero-bookmark",
-            path: ~p"/panel/references",
-            badge: counts[:references]
-          },
-          %{
-            key: "communities",
-            label: gettext("Comunidades"),
-            icon: "hero-squares-2x2",
-            path: ~p"/panel/communities",
-            badge: counts[:communities]
-          },
-          %{
-            key: "collections",
-            label: gettext("Collections"),
-            icon: "hero-funnel",
-            path: ~p"/panel/collections",
-            badge: counts[:collections]
-          }
-        ]
-      },
-      %{
-        label: gettext("Configs"),
-        items: config_items
-      }
-    ]
+        groups =
+          groups
+          |> Enum.map(fn group ->
+            filtered_items =
+              group.items
+              |> Enum.reject(fn item ->
+                case Map.get(@nav_key_page_types, item.key) do
+                  nil -> false
+                  page_type -> page_type in disabled_types
+                end
+              end)
 
-    groups =
-      groups
-      |> Enum.map(fn group ->
-        filtered_items =
-          Enum.reject(group.items, fn item ->
-            case Map.get(@nav_key_page_types, item.key) do
-              nil -> false
-              page_type -> page_type in disabled_types
-            end
+            %{group | items: filtered_items}
           end)
+          |> Enum.reject(fn group -> group.label && group.items == [] end)
 
-        %{group | items: filtered_items}
-      end)
-      |> Enum.reject(fn group -> group.label && group.items == [] end)
-
-    assigns = assign(assigns, :groups, groups)
+        _assigns = assign(assigns, :groups, groups)
+      end
 
     ~H"""
     <div :for={group <- @groups}>
@@ -525,7 +563,7 @@ defmodule DranWeb.Layouts do
   def workspace_selector(assigns) do
     ~H"""
     <div :if={length(@workspaces) > 0} class="flex-1">
-      <form action={~p"/panel/workspace"} method="post">
+      <form action={~p"/workspace"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <select
           id="context-selector"
@@ -626,8 +664,8 @@ defmodule DranWeb.Layouts do
               href={~p"/"}
               class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
             >
-              <.icon name="hero-book-open" class="size-5 text-primary" />
-              <span class="text-lg font-bold tracking-tight">Wiki</span>
+              <.icon name="hero-cube-transparent" class="size-5 text-primary" />
+              <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
             <.home_workspace_selector
               workspace_slug={@workspace_slug}
@@ -670,7 +708,7 @@ defmodule DranWeb.Layouts do
           />
           <a
             :if={@is_owner or @is_owner}
-            href={~p"/panel"}
+            href={~p"/"}
             class="mt-auto flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
             title={gettext("Panel")}
           >
@@ -820,7 +858,7 @@ defmodule DranWeb.Layouts do
       <div class="space-y-1">
         <a
           :for={page <- @pinned_pages}
-          href={~p"/#{@workspace_slug}/type/#{page.page_type}/#{page.slug}"}
+          href={~p"/#{@workspace_slug}/#{page.page_type}/#{page.slug}"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name="hero-bookmark" class="size-4 shrink-0 text-amber-500" />
@@ -888,7 +926,7 @@ defmodule DranWeb.Layouts do
       <div class="space-y-1">
         <a
           :for={item <- @type_index}
-          href={~p"/#{@workspace_slug}/type/#{item.type}"}
+          href={~p"/#{@workspace_slug}/#{item.type}"}
           class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
         >
           <.icon name={item.icon} class="size-4 shrink-0" />

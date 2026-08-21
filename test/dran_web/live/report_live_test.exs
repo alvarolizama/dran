@@ -46,13 +46,14 @@ defmodule DranWeb.ReportLiveTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn, report: report}
   end
 
   describe "show" do
     test "renders the report detail at /reports/:slug", %{conn: conn, report: report} do
-      {:ok, _view, html} = live(conn, ~p"/panel/reports/#{report.slug}")
+      {:ok, _view, html} = live(conn, ~p"/personal/reports/#{report.slug}")
 
       # Title, rendered body and the localized type badge
       assert html =~ report.title
@@ -61,8 +62,8 @@ defmodule DranWeb.ReportLiveTest do
     end
 
     test "redirects to /activity when the report does not exist", %{conn: conn} do
-      assert {:error, {:live_redirect, %{to: "/panel/activity"}}} =
-               live(conn, ~p"/panel/reports/no-such-report")
+      result = live(conn, ~p"/personal/reports/no-such-report")
+      assert {:error, {:live_redirect, %{to: "/personal/activity"}}} = result
     end
   end
 end

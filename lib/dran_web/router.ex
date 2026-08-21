@@ -247,71 +247,28 @@ defmodule DranWeb.Router do
     get "/health", HealthController, :show
   end
 
-  # ── Admin panel UI (data administration) ──────────────────────────────────
+  # ── Global routes (instance-level, no workspace) ──────────────────────────
 
-  scope "/panel", DranWeb do
+  scope "/", DranWeb do
     pipe_through [:browser, :auth, :admin_or_editor]
 
+    # Dashboard — overview of the entire instance + all workspaces
     live "/", DashboardLive, :index
 
-    # ── LiveView pages (second brain UI) ────────────────────────────────────
-
-    # Knowledge
-    live "/concepts", ConceptLive, :index
-    live "/concepts/new", PageNewLive, :new
-    live "/concepts/:slug", ConceptLive, :show
-
-    live "/entities", EntityLive, :index
-    live "/entities/new", PageNewLive, :new
-    live "/entities/:slug", EntityLive, :show
-
-    live "/references", ReferenceLive, :index
-    live "/references/new", PageNewLive, :new
-    live "/references/:slug", ReferenceLive, :show
-
-    # Communities (clusters of related pages)
-    live "/communities", CommunityLive, :index
-    live "/communities/:id", CommunityLive, :show
-
-    live "/goals", GoalLive, :index
-    live "/goals/new", GoalLive, :new
-    live "/goals/:slug", GoalLive, :show
-
-    live "/projects", ProjectLive, :index
-    live "/projects/new", ProjectLive, :new
-    live "/projects/:slug", ProjectLive, :show
-
-    # System reports (second-citizen entities): detail only — reports are
-    # system-created, so there is no index or new form.
-    live "/reports/:slug", ReportLive, :show
-
-    # Views
-
-    live "/activity", ActivityLive, :index
-
-    live "/journey", JourneyLive, :index
-
-    live "/tags/:tag", TagLive, :index
-
-    # Smart Collections (saved live queries)
-    live "/collections", SmartCollectionLive, :index
-    live "/collections/new", SmartCollectionLive, :new
-    live "/collections/:slug", SmartCollectionLive, :show
-
-    # Docs
+    # Docs (global, not workspace-scoped)
     live "/docs", DocsLive, :index
 
     # Workspace switching
     post "/workspace", SessionController, :switch_workspace
   end
 
-  # ── Admin-only web UI ──
+  # ── Settings (instance-level, admin-only) ────────────────────────────────
 
-  scope "/panel", DranWeb do
+  scope "/settings", DranWeb do
     pipe_through [:browser, :auth, :admin]
 
-    live "/settings", SettingsLive, :index
-    live "/settings/:tab", SettingsLive, :index
+    live "/", SettingsLive, :index
+    live "/:tab", SettingsLive, :index
   end
 
   # ── REST API (token-protected) ─────────────────────────────────────────────
@@ -399,46 +356,54 @@ defmodule DranWeb.Router do
     scope "/dev" do
       pipe_through :browser
 
-      live_dashboard "/dashboard", metrics: DranWeb.Telemetry
+      live_dashboard "/", metrics: DranWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
   end
 
-  # ── Home (read-only knowledge browser) at the ROOT ─────────────────────────
+  # ── Workspace-scoped routes ────────────────────────────────────────────────
   #
-  # The home is the app's home — the first thing a logged-in user sees.
-  # This scope MUST stay last: `/:workspace_slug` is a wildcard and would swallow
-  # any static route defined after it (e.g. /dev/dashboard). Static segments
-  # (/login, /panel, /api, /health, /dev…) win because they are defined above.
-  # Consequently, context slugs named like a reserved segment (panel, api,
-  # login, setup, session, auth, health, context, dev) are unreachable by URL.
+  # Everything below /:workspace_slug is workspace-scoped. This scope MUST
+  # stay last: /:workspace_slug is a wildcard and would swallow any static
+  # route defined after it. Reserved segments (settings, api, dev, login,
+  # session, auth, health, docs) are unreachable as workspace slugs because
+  # they are defined above.
   scope "/", DranWeb do
-    pipe_through [:browser, :auth]
+    pipe_through [:browser, :auth, :admin_or_editor]
 
-    live "/", HomeLive, :index
-
-    # Essential views, root-level (moved out of /panel) — must be defined
-    # before the `/:workspace_slug` wildcard below so static segments win.
-    live "/notes", NoteLive, :index
-    live "/notes/new", PageNewLive, :new
-    live "/notes/:slug", NoteLive, :show
-
-    live "/graph", GraphLive, :index
-    live "/graph/:slug", GraphLive, :show
-    # JSON endpoint for progressive graph loading (session-authenticated)
-    get "/graph-json", GraphJSONController, :show
-
-    live "/kanban", KanbanLive, :index
-
-    live "/search", SearchLive, :index
-
+    # Workspace home
     live "/:workspace_slug", HomeLive, :workspace_home
-    live "/:workspace_slug/type/:page_type", HomeLive, :type_list
-    live "/:workspace_slug/type/:page_type/:slug", HomeLive, :page_show
-    live "/:workspace_slug/collection/:slug", HomeLive, :collection
+
+    # First-class entities (their own schemas, not page types) — MUST be
+    # defined BEFORE the generic /:workspace_slug/:type route, otherwise
+    # /:workspace_slug/:type would swallow /:workspace_slug/goals etc.
+    live "/:workspace_slug/goals", GoalLive, :index
+    live "/:workspace_slug/goals/new", GoalLive, :new
+    live "/:workspace_slug/goals/:slug", GoalLive, :show
+
+    live "/:workspace_slug/collections", SmartCollectionLive, :index
+    live "/:workspace_slug/collections/new", SmartCollectionLive, :new
+    live "/:workspace_slug/collections/:slug", SmartCollectionLive, :show
+
+    live "/:workspace_slug/communities", CommunityLive, :index
+    live "/:workspace_slug/communities/:id", CommunityLive, :show
+
+    live "/:workspace_slug/reports/:slug", ReportLive, :show
+
+    # Views — also before the generic /:type route
+    live "/:workspace_slug/search", SearchLive, :index
+    live "/:workspace_slug/activity", ActivityLive, :index
+    live "/:workspace_slug/journey", JourneyLive, :index
     live "/:workspace_slug/graph", HomeLive, :graph
     get "/:workspace_slug/graph/json", HomeGraphController, :show
     live "/:workspace_slug/kanban", HomeLive, :kanban
+    live "/:workspace_slug/collection/:slug", HomeLive, :collection
     live "/:workspace_slug/letter/:letter", HomeLive, :letter
+
+    # Generic page type routes — PagesLive handles note/concept/entity/reference.
+    # MUST be defined LAST so first-class entity routes above win.
+    live "/:workspace_slug/:type", PagesLive, :index
+    live "/:workspace_slug/:type/new", PagesLive, :new
+    live "/:workspace_slug/:type/:slug", PagesLive, :show
   end
 end

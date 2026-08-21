@@ -29,6 +29,7 @@ defmodule DranWeb.SessionControllerTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn, personal: personal, work: work}
   end
@@ -36,7 +37,7 @@ defmodule DranWeb.SessionControllerTest do
   describe "POST /context — switch_context" do
     test "sets the signed dran_last_workspace cookie", %{conn: conn} do
       conn =
-        post(conn, ~p"/panel/workspace", %{"workspace_slug" => "work"})
+        post(conn, ~p"/workspace", %{"workspace_slug" => "work"})
 
       # The session has the new context
       assert Plug.Conn.get_session(conn, :workspace_slug) == "work"
@@ -48,15 +49,15 @@ defmodule DranWeb.SessionControllerTest do
     test "redirects back to referer or /notes", %{conn: conn} do
       conn =
         conn
-        |> Plug.Conn.put_req_header("referer", "/notes")
-        |> post(~p"/panel/workspace", %{"workspace_slug" => "work"})
+        |> Plug.Conn.put_req_header("referer", "/")
+        |> post(~p"/workspace", %{"workspace_slug" => "work"})
 
-      assert redirected_to(conn, 302) == "/notes"
+      assert redirected_to(conn, 302) == "/"
     end
 
     test "without workspace_slug shows error flash", %{conn: conn} do
-      conn = post(conn, ~p"/panel/workspace", %{})
-      assert redirected_to(conn, 302) == "/notes"
+      conn = post(conn, ~p"/workspace", %{})
+      assert redirected_to(conn, 302) == "/"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "required"
     end
   end

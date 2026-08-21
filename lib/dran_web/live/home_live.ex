@@ -221,7 +221,7 @@ defmodule DranWeb.HomeLive do
             )
 
           nil ->
-            push_navigate(socket, to: ~p"/#{workspace_slug}/type/#{page_type}")
+            push_navigate(socket, to: ~p"/#{workspace_slug}/#{page_type}")
         end
 
       nil ->
@@ -602,7 +602,7 @@ defmodule DranWeb.HomeLive do
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <.link
             :for={page <- @pinned_pages}
-            navigate={~p"/#{@workspace.slug}/type/#{page.page_type}/#{page.slug}"}
+            navigate={~p"/#{@workspace.slug}/#{page.page_type}/#{page.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
@@ -663,7 +663,7 @@ defmodule DranWeb.HomeLive do
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           <.link
             :for={item <- @type_index}
-            navigate={~p"/#{@workspace.slug}/type/#{item.type}"}
+            navigate={~p"/#{@workspace.slug}/#{item.type}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-4 flex-row items-center gap-3">
@@ -724,7 +724,7 @@ defmodule DranWeb.HomeLive do
         <div class="space-y-1">
           <.link
             :for={page <- pages}
-            navigate={~p"/#{@workspace.slug}/type/#{@page_type}/#{page.slug}"}
+            navigate={~p"/#{@workspace.slug}/#{@page_type}/#{page.slug}"}
             class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
           >
             <div class="flex items-center gap-2">
@@ -759,7 +759,7 @@ defmodule DranWeb.HomeLive do
           {@workspace.name}
         </.link>
         <span>/</span>
-        <.link navigate={~p"/#{@workspace.slug}/type/#{@page.page_type}"} class="hover:underline">
+        <.link navigate={~p"/#{@workspace.slug}/#{@page.page_type}"} class="hover:underline">
           {PageTypes.plural(@page.page_type)}
         </.link>
         <span>/</span>
@@ -808,7 +808,7 @@ defmodule DranWeb.HomeLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.outbound}
-              navigate={~p"/#{@workspace.slug}/type/#{rel.target.page_type}/#{rel.target.slug}"}
+              navigate={~p"/#{@workspace.slug}/#{rel.target.page_type}/#{rel.target.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -828,7 +828,7 @@ defmodule DranWeb.HomeLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.inbound}
-              navigate={~p"/#{@workspace.slug}/type/#{rel.source.page_type}/#{rel.source.slug}"}
+              navigate={~p"/#{@workspace.slug}/#{rel.source.page_type}/#{rel.source.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -881,7 +881,7 @@ defmodule DranWeb.HomeLive do
       <div class="space-y-2">
         <.link
           :for={page <- Enum.sort_by(@results, & &1.title, :asc)}
-          navigate={~p"/#{@workspace.slug}/type/#{page.page_type}/#{page.slug}"}
+          navigate={~p"/#{@workspace.slug}/#{page.page_type}/#{page.slug}"}
           class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
         >
           <div class="flex items-center justify-between">
@@ -1058,7 +1058,7 @@ defmodule DranWeb.HomeLive do
           <div class="p-2 space-y-2">
             <a
               :for={todo <- kanban_items(@todos, status)}
-              href={~p"/#{@workspace.slug}/type/todo/#{todo.slug}"}
+              href={~p"/#{@workspace.slug}/notes/#{todo.slug}"}
               class="block p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition"
             >
               <div class="font-medium text-sm break-words">{todo.title}</div>
@@ -1176,7 +1176,7 @@ defmodule DranWeb.HomeLive do
       <div :if={@pages != []} class="space-y-1">
         <.link
           :for={page <- @pages}
-          navigate={~p"/#{@workspace.slug}/type/#{page.page_type}/#{page.slug}"}
+          navigate={~p"/#{@workspace.slug}/#{page.page_type}/#{page.slug}"}
           class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
         >
           <div class="flex items-center gap-2">
@@ -1230,7 +1230,7 @@ defmodule DranWeb.HomeLive do
     workspace = socket.assigns[:workspace]
 
     if workspace do
-      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/type/#{type}/#{slug}")}
+      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{type}/#{slug}")}
     else
       {:noreply, socket}
     end
@@ -1431,7 +1431,7 @@ defmodule DranWeb.HomeLive do
       Enum.reduce(slugs, %{}, fn slug, acc ->
         case Map.get(slug_types, slug) do
           nil -> acc
-          page_type -> Map.put(acc, slug, "/#{workspace.slug}/type/#{page_type}/#{slug}")
+          page_type -> Map.put(acc, slug, "/#{workspace.slug}/#{page_type}/#{slug}")
         end
       end)
     end
@@ -1479,6 +1479,6 @@ defmodule DranWeb.HomeLive do
   defp wiki_page_path(workspace, result) do
     page_type = Map.get(result, :page_type) || Map.get(result, "page_type")
     slug = Map.get(result, :slug) || Map.get(result, "slug")
-    ~p"/#{workspace.slug}/type/#{page_type}/#{slug}"
+    ~p"/#{workspace.slug}/#{page_type}/#{slug}"
   end
 end

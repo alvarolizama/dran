@@ -37,13 +37,14 @@ defmodule DranWeb.CommandPaletteTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn, context: context}
   end
 
   describe "rendering" do
     test "renders root container but no overlay when closed", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/panel")
+      {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ ~s(id="command-palette")
       assert html =~ ~s(phx-hook="CommandPalette")
@@ -51,7 +52,7 @@ defmodule DranWeb.CommandPaletteTest do
     end
 
     test "toggle event opens the modal dialog", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/panel")
+      {:ok, view, _html} = live(conn, ~p"/")
 
       view
       |> element("#command-palette")
@@ -65,7 +66,7 @@ defmodule DranWeb.CommandPaletteTest do
 
   describe "quick actions" do
     test "quick actions are visible when query is empty", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/panel")
+      {:ok, view, _html} = live(conn, ~p"/")
 
       view
       |> element("#command-palette")
@@ -95,7 +96,7 @@ defmodule DranWeb.CommandPaletteTest do
           page_type: "note"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/panel")
+      {:ok, view, _html} = live(conn, ~p"/")
 
       # Open the palette
       view

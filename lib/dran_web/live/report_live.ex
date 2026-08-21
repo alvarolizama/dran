@@ -43,7 +43,7 @@ defmodule DranWeb.ReportLive do
               <h1 class="text-title break-words">{@report.title}</h1>
             </div>
             <div class="flex gap-2 shrink-0">
-              <.link navigate={~p"/panel/activity"} class="btn btn-ghost btn-sm">
+              <.link navigate={~p"/#{@workspace_slug}/activity"} class="btn btn-ghost btn-sm">
                 <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
               </.link>
             </div>
@@ -85,7 +85,7 @@ defmodule DranWeb.ReportLive do
     if context do
       case Reports.get_report_by_slug(slug, context.id) do
         nil ->
-          {:noreply, push_navigate(socket, to: ~p"/panel/activity")}
+          {:noreply, push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/activity")}
 
         report ->
           {:noreply,
@@ -95,12 +95,12 @@ defmodule DranWeb.ReportLive do
            )}
       end
     else
-      {:noreply, push_navigate(socket, to: ~p"/panel/activity")}
+      {:noreply, push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/activity")}
     end
   end
 
   def handle_params(_params, _url, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/activity")}
+    {:noreply, push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/activity")}
   end
 
   # ── PubSub: real-time update when a report changes ──

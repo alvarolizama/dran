@@ -916,7 +916,7 @@ defmodule DranWeb.SettingsLive do
           <div class="tabs tabs-border">
             <.link
               :for={tab <- ~w(users workspaces api_keys brain models system danger)}
-              patch={~p"/panel/settings/#{tab}"}
+              patch={~p"/settings/#{tab}"}
               class={["tab", @active_tab == tab && "tab-active"]}
             >
               {tab_label(tab)}
@@ -1491,7 +1491,7 @@ defmodule DranWeb.SettingsLive do
                   <div class="flex items-center gap-2 flex-wrap">
                     <.job_status_badge status={job.last_run.status} />
                     <.link
-                      navigate={"/panel/reports/#{job.last_run.slug}"}
+                      navigate={"/reports/#{job.last_run.slug}"}
                       class="link link-hover text-xs text-base-content/70"
                     >
                       {relative_time(job.last_run.at)}

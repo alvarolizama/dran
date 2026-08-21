@@ -31,6 +31,15 @@ defmodule DranWeb.PageTypes do
   @doc "Returns the full types map."
   def all, do: @types
 
+  @doc "Returns the list of valid page type keys."
+  def keys, do: Map.keys(@types)
+
+  @doc "Resolves a URL path segment back to a page type (e.g. \"notes\" → \"note\")."
+  def type_from_path(path_segment) when is_binary(path_segment) do
+    @types
+    |> Enum.find_value(fn {type, %{path: p}} -> if p == path_segment, do: type end)
+  end
+
   @doc "Returns the URL path segment for a page type (e.g. `\"notes\"`)."
   def path(type) when is_binary(type) do
     case Map.get(@types, type) do
@@ -74,28 +83,31 @@ defmodule DranWeb.PageTypes do
   @doc """
   Returns the show path for a page struct or map.
 
-  Page detail/list views live under the /panel scope (data administration);
-  the wiki at the root has its own path scheme.
+  Pages live under the workspace scope: `/:workspace_slug/:type_path/:slug`.
+  Falls back to `/:type_path/:slug` when no workspace slug is available.
 
   ## Examples
 
-      iex> DranWeb.PageTypes.page_show_path(%Page{page_type: "note", slug: "my-note"})
-      "/notes/my-note"
+      iex> DranWeb.PageTypes.page_show_path(%Page{page_type: "note", slug: "my-note"}, "personal")
+      "/personal/notes/my-note"
   """
-  def page_show_path(%Dran.Page{page_type: type, slug: slug})
+  def page_show_path(page, workspace_slug \\ nil)
+
+  def page_show_path(%Dran.Page{page_type: type, slug: slug}, workspace_slug)
       when is_binary(type) and is_binary(slug) do
-    page_show_path(type, slug)
+    build_page_show_path(type, slug, workspace_slug)
   end
 
-  def page_show_path(%{page_type: type, slug: slug})
+  def page_show_path(%{page_type: type, slug: slug}, workspace_slug)
       when is_binary(type) and is_binary(slug) do
-    page_show_path(type, slug)
+    build_page_show_path(type, slug, workspace_slug)
   end
 
-  def page_show_path(_), do: "#"
+  def page_show_path(_, _), do: "#"
 
-  defp page_show_path("note", slug), do: "/notes/#{slug}"
-  defp page_show_path(type, slug), do: "/panel/#{path(type)}/#{slug}"
+  defp build_page_show_path(type, slug, nil), do: "/#{path(type)}/#{slug}"
+  defp build_page_show_path(type, slug, workspace_slug),
+    do: "/#{workspace_slug}/#{path(type)}/#{slug}"
 
   # Extraction markers — these msgids are looked up dynamically in label/1 and
   # plural/1 via Gettext.gettext/2, so the extractor never sees them. Listing

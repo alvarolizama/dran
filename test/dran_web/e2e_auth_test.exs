@@ -377,7 +377,7 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
 
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/settings/workspaces")
+      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/workspaces")
 
       # The contexts tab renders the create form and the existing contexts
       assert html =~ "context-form"
@@ -396,7 +396,7 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug})
 
-      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/settings/workspaces")
+      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/panel/workspaces")
 
       # Open the modal for ctx1
       html = Phoenix.LiveViewTest.render_click(view, "manage_context_users", %{"id" => ctx1.id})
@@ -424,7 +424,7 @@ defmodule DranWeb.E2EAuthTest do
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
 
       # Admin sees the Settings link in the sidebar
-      assert html =~ ~p"/panel/settings"
+      assert html =~ ~p"/panel"
       # Context selector includes both contexts (ctx2 was never assigned)
       assert html =~ ctx1.slug
       assert html =~ ctx2.slug
@@ -443,7 +443,7 @@ defmodule DranWeb.E2EAuthTest do
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
 
       # Non-admin must NOT see the Settings link
-      refute html =~ ~p"/panel/settings"
+      refute html =~ ~p"/panel"
       # Context selector shows only the assigned context, not ctx2
       assert html =~ ctx1.slug
       refute html =~ ctx2.slug

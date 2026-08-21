@@ -19,6 +19,6 @@ defmodule DranWeb.GraphEvents do
   end
 
   def node_click(socket, slug) do
-    push_navigate(socket, to: ~p"/graph/#{slug}")
+    push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/graph/#{slug}")
   end
 end

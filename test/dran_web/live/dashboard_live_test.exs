@@ -56,19 +56,20 @@ defmodule DranWeb.DashboardLiveTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn}
   end
 
   describe "brain health section" do
     test "renders the Brain health heading", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/panel")
+      {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ t("Brain health")
     end
 
     test "renders the four brain health cards with labels", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/panel")
+      {:ok, _view, html} = live(conn, ~p"/")
 
       # Card labels (localized)
       assert html =~ t("This week")

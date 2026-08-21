@@ -30,6 +30,7 @@ defmodule DranWeb.DocsLiveTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn}
   end
@@ -37,7 +38,7 @@ defmodule DranWeb.DocsLiveTest do
   # ── 1. Default tab ──
 
   test "GET /docs renders the default tab (getting-started) with visible content", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/panel/docs")
+    {:ok, _view, html} = live(conn, ~p"/docs")
 
     # The "What is Dran?" heading should be visible on the getting-started tab.
     # The heading text is not run through gettext in the template, so it stays
@@ -48,7 +49,7 @@ defmodule DranWeb.DocsLiveTest do
   # ── 2. Tab navigation ──
 
   test "switching to each tab reveals tab-specific content", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/panel/docs")
+    {:ok, view, _html} = live(conn, ~p"/docs")
 
     # getting-started: default tab — heading present
     assert has_element?(view, "h2", "What is Dran?")
@@ -82,7 +83,7 @@ defmodule DranWeb.DocsLiveTest do
   # ── 3. Concepts tab — planning hierarchy ──
 
   test "concepts tab contains the planning hierarchy section", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/panel/docs")
+    {:ok, view, _html} = live(conn, ~p"/docs")
 
     view |> element(~s(button[phx-value-tab="concepts"])) |> render_click()
     html = render(view)
@@ -94,7 +95,7 @@ defmodule DranWeb.DocsLiveTest do
   # ── 4. Guides tab — real-time kanban ──
 
   test "guides tab mentions the real-time kanban", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/panel/docs")
+    {:ok, view, _html} = live(conn, ~p"/docs")
 
     view |> element(~s(button[phx-value-tab="guides"])) |> render_click()
     html = render(view)
@@ -105,7 +106,7 @@ defmodule DranWeb.DocsLiveTest do
   # ── 5. Table of contents per tab ──
 
   test "getting-started tab shows a table of contents with anchor links", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/panel/docs")
+    {:ok, view, _html} = live(conn, ~p"/docs")
 
     # getting-started is the default tab — at least 2 TOC anchor links
     assert has_element?(view, ~s(a[href="#docs-what-is-dran"]))
@@ -113,7 +114,7 @@ defmodule DranWeb.DocsLiveTest do
   end
 
   test "mcp tab shows a table of contents with anchor links", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/panel/docs")
+    {:ok, view, _html} = live(conn, ~p"/docs")
 
     view |> element(~s(button[phx-value-tab="mcp"])) |> render_click()
 
@@ -124,7 +125,7 @@ defmodule DranWeb.DocsLiveTest do
   # ── 6. handle_params with ?tab= ──
 
   test "handle_params with ?tab=mcp activates the mcp tab", %{conn: conn} do
-    {:ok, view, html} = live(conn, ~p"/panel/docs?tab=mcp")
+    {:ok, view, html} = live(conn, ~p"/docs?tab=mcp")
 
     # The mcp tab button should be marked active (bg-base-100 shadow-sm class).
     assert has_element?(view, ~s(button[phx-value-tab="mcp"].bg-base-100))
@@ -134,7 +135,7 @@ defmodule DranWeb.DocsLiveTest do
   end
 
   test "handle_params with ?tab=auth activates the auth tab", %{conn: conn} do
-    {:ok, view, html} = live(conn, ~p"/panel/docs?tab=auth")
+    {:ok, view, html} = live(conn, ~p"/docs?tab=auth")
 
     assert has_element?(view, ~s(button[phx-value-tab="auth"].bg-base-100))
     assert html =~ "DRAN_API_TOKEN"

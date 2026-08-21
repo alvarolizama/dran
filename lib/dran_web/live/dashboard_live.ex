@@ -89,19 +89,19 @@ defmodule DranWeb.DashboardLive do
             <div class="flex gap-2">
               <.link
                 :if={Knowledge.page_type_enabled?(@workspace, "todo")}
-                navigate={~p"/kanban"}
+                navigate={~p"/#{@workspace_slug}/kanban"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-view-columns" class="size-4" /> {gettext("Kanban")}
               </.link>
               <.link
-                navigate={~p"/graph"}
+                navigate={~p"/#{@workspace_slug}/graph"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
               </.link>
               <.link
-                navigate={~p"/search"}
+                navigate={~p"/#{@workspace_slug}/search"}
                 class="btn btn-ghost btn-sm transition-colors active:scale-95"
               >
                 <.icon name="hero-magnifying-glass" class="size-4" /> {gettext("Search")}
@@ -260,7 +260,7 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Pages by Type")}</h2>
-                  <.link navigate={~p"/search"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/#{@workspace_slug}/search"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -270,6 +270,7 @@ defmodule DranWeb.DashboardLive do
                     type={type}
                     count={count}
                     total={@stats[:total_pages] || 1}
+                    workspace_slug={@workspace_slug}
                   />
                 </div>
               </div>
@@ -281,7 +282,7 @@ defmodule DranWeb.DashboardLive do
               >
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Todos")}</h2>
-                  <.link navigate={~p"/kanban"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/#{@workspace_slug}/kanban"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
@@ -304,14 +305,14 @@ defmodule DranWeb.DashboardLive do
               <div class="surface-2 p-5 rounded-2xl">
                 <div class="flex items-center justify-between">
                   <h2 class="text-heading">{gettext("Recently Updated")}</h2>
-                  <.link navigate={~p"/graph"} class="text-sm text-primary hover:underline">
+                  <.link navigate={~p"/#{@workspace_slug}/graph"} class="text-sm text-primary hover:underline">
                     {gettext("View all")}
                   </.link>
                 </div>
                 <div class="space-y-1 mt-4">
                   <.link
                     :for={page <- @stats[:recent] || []}
-                    navigate={page_path(page)}
+                    navigate={page_path(page, @workspace_slug)}
                     class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-base-200 transition cursor-pointer"
                   >
                     <div class="shrink-0 size-9 rounded-lg flex items-center justify-center bg-primary/10">
@@ -403,6 +404,20 @@ defmodule DranWeb.DashboardLive do
   def mount(_params, session, socket) do
     {socket, context} = Auth.assign_to_socket(socket, session)
 
+    # When no workspace in session (instance-level dashboard at /),
+    # fall back to the default workspace so sidebar links don't crash
+    # with nil interpolation. If even the default doesn't exist, keep
+    # the slug string so templates never see nil.
+    {context, workspace_slug} =
+      case context do
+        nil ->
+          slug = Dran.Auth.default_workspace_slug()
+          {Dran.Knowledge.get_workspace_by_slug(slug), slug}
+
+        ctx ->
+          {ctx, ctx.slug}
+      end
+
     current_user = socket.assigns[:current_user]
     db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
 
@@ -418,6 +433,9 @@ defmodule DranWeb.DashboardLive do
     {:ok,
      assign(socket,
        context: context,
+       workspace: context,
+       workspace_slug: workspace_slug,
+       workspaces: Dran.Knowledge.list_workspaces(),
        stats: stats,
        brain_metrics: brain_metrics,
        user_api_token_prefix: db_user && String.slice(db_user.api_token, 0, 8),
@@ -564,12 +582,13 @@ defmodule DranWeb.DashboardLive do
   attr :type, :string, required: true
   attr :count, :integer, required: true
   attr :total, :integer, required: true
+  attr :workspace_slug, :string, required: true
 
   defp type_row(assigns) do
     ~H"""
     <div class="flex items-center gap-3">
       <.link
-        navigate={"/panel/#{PageTypes.path(@type)}"}
+        navigate={"/#{@workspace_slug}/#{PageTypes.path(@type)}"}
         class="text-sm font-medium hover:text-primary transition-colors shrink-0 w-24"
       >
         {PageTypes.plural(@type)}
@@ -624,11 +643,11 @@ defmodule DranWeb.DashboardLive do
 
   defp relations_total(_), do: 0
 
-  defp page_path(%Dran.Page{} = page) do
-    "/panel/#{PageTypes.path(page.page_type)}/#{page.slug}"
+  defp page_path(%Dran.Page{} = page, workspace_slug) do
+    "/#{workspace_slug}/#{PageTypes.path(page.page_type)}/#{page.slug}"
   end
 
-  defp page_path(_), do: "#"
+  defp page_path(_, _), do: "#"
 
   defp sort_by_type(by_type) do
     type_order = ~w(note concept entity reference goal plan todo query project)

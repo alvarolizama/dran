@@ -158,7 +158,7 @@ defmodule DranWeb.CommunityLive do
             </span>
           </p>
         </div>
-        <.link navigate={~p"/panel/communities"} class="btn btn-ghost btn-sm">
+        <.link navigate={~p"/#{@workspace_slug}/communities"} class="btn btn-ghost btn-sm">
           <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
         </.link>
       </div>
@@ -214,7 +214,7 @@ defmodule DranWeb.CommunityLive do
     <div :if={!@summary} class="text-center py-16">
       <.icon name="hero-squares-2x2" class="size-12 text-base-content/30 mx-auto mb-4" />
       <h2 class="text-title">{gettext("Community not found")}</h2>
-      <.link navigate={~p"/panel/communities"} class="btn btn-ghost btn-sm mt-4">
+      <.link navigate={~p"/#{@workspace_slug}/communities"} class="btn btn-ghost btn-sm mt-4">
         <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
       </.link>
     </div>
@@ -283,7 +283,7 @@ defmodule DranWeb.CommunityLive do
 
   @impl true
   def handle_event("show_community", %{"id" => id}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/panel/communities/#{id}")}
+    {:noreply, push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/communities/#{id}")}
   end
 
   def handle_event("show_page", %{"slug" => slug} = params, socket) do
@@ -291,11 +291,11 @@ defmodule DranWeb.CommunityLive do
 
     path =
       if type do
-        "/panel/#{PageTypes.path(type)}/#{slug}"
+        "/#{PageTypes.path(type)}/#{slug}"
       else
         # For top_pages we don't have the type — try searching
         case Knowledge.get_page_by_slug(slug, socket.assigns.context && socket.assigns.context.id) do
-          nil -> "/panel"
+          nil -> "/"
           page -> PageTypes.page_show_path(page)
         end
       end

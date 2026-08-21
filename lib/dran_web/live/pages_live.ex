@@ -1,8 +1,13 @@
-defmodule DranWeb.EntityLive do
-  @moduledoc "LiveView for entity pages: index list + detail view with inline editing."
+defmodule DranWeb.PagesLive do
+  @moduledoc """
+  Generic LiveView for all page types (note, concept, entity, reference).
+
+  Replaces the per-type LiveViews (NoteLive, ConceptLive, EntityLive,
+  ReferenceLive). The page type is resolved from the URL params, not
+  hardcoded — making this a single thin wrapper over PageDetail.
+  """
 
   use DranWeb, :live_view
-  on_mount {DranWeb.DisabledTypes, "entity"}
 
   alias Dran.Knowledge
   alias DranWeb.PageDetail
@@ -10,7 +15,6 @@ defmodule DranWeb.EntityLive do
   alias DranWeb.PageTypes
   alias DranWeb.ListPagination
 
-  @page_type "entity"
   @impl true
   def render(assigns) do
     ~H"""
@@ -37,18 +41,22 @@ defmodule DranWeb.EntityLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={~p"/panel/entities"} class="btn btn-primary btn-sm">
+            <.link navigate={@back_path} class="btn btn-primary btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
-            <.link navigate={~p"/graph/#{@page.slug}"} class="btn btn-ghost btn-sm">
+            <.link
+              :if={@workspace_slug}
+              navigate={~p"/#{@workspace_slug}/graph"}
+              class="btn btn-ghost btn-sm"
+            >
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
             </.link>
-            <.link :if={@editing} patch={PageTypes.page_show_path(@page)} class="btn btn-ghost btn-sm">
+            <.link :if={@editing} patch={@page_path} class="btn btn-ghost btn-sm">
               <.icon name="hero-eye" class="size-4" /> {gettext("View")}
             </.link>
             <.link
               :if={not @editing}
-              patch={PageTypes.page_show_path(@page) <> "?edit=true"}
+              patch={@page_path <> "?edit=true"}
               class="btn btn-ghost btn-sm"
             >
               <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
@@ -61,7 +69,7 @@ defmodule DranWeb.EntityLive do
               page={@page}
               page_type={@page_type}
               workspace_id={@workspace_id}
-              editor_id="entity-editor"
+              editor_id={"#{@page_type}-editor"}
             />
           </:attributes>
 
@@ -71,7 +79,7 @@ defmodule DranWeb.EntityLive do
                 <h3 class="text-sm font-semibold mb-2">{gettext("Community Context")}</h3>
                 <p class="text-sm text-base-content/70">{@community_summary.summary}</p>
                 <p class="text-xs text-base-content/40 mt-1">
-                  {gettext("Community")} #{@community_summary.community_id} · {@community_summary.page_count} {gettext(
+                  {gettext("Community")} {@community_summary.community_id} · {@community_summary.page_count} {gettext(
                     "pages"
                   )}
                 </p>
@@ -92,7 +100,7 @@ defmodule DranWeb.EntityLive do
               page_type={@page_type}
               workspace_id={@workspace_id}
               save_status={@save_status}
-              editor_id="entity-editor"
+              editor_id={"#{@page_type}-editor"}
             />
           </:tabs>
         </.page_detail>
@@ -115,25 +123,44 @@ defmodule DranWeb.EntityLive do
   end
 
   @impl true
-  def mount(_params, session, socket) do
-    PageDetail.mount_page_viewer(socket, session,
-      page_type: @page_type,
-      active_nav: "entities"
-    )
+  def mount(params, session, socket) do
+    page_type = page_type_from_params(params)
+
+    if page_type not in PageTypes.keys() do
+      {:ok, push_navigate(socket, to: ~p"/")}
+    else
+      PageDetail.mount_page_viewer(socket, session,
+        page_type: page_type,
+        active_nav: PageTypes.path(page_type)
+      )
+    end
   end
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: "/panel/entities")
+    page_type = socket.assigns[:page_type] || page_type_from_params(params)
+    workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
+    back_path = build_back_path(workspace_slug, page_type)
+    page_path = build_page_path(workspace_slug, page_type, slug)
+
+    # Alias workspace_slug → workspace so Auth.resolve_workspace finds it
+    params = Map.put(params, "workspace", workspace_slug)
+
+    socket = assign(socket, back_path: back_path, page_path: page_path)
+
+    PageDetail.load_page_detail(socket, params, slug, redirect_to: back_path)
   end
 
-  def handle_params(_params, _url, socket) do
+  def handle_params(params, _url, socket) do
+    page_type = socket.assigns[:page_type] || page_type_from_params(params)
+    workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
+
     {pages, archived_pages} =
       if socket.assigns.context do
-        {Knowledge.list_pages(workspace_id: socket.assigns.context.id, type: @page_type),
+        {Knowledge.list_pages(workspace_id: socket.assigns.context.id, type: page_type),
          Knowledge.list_pages(
            workspace_id: socket.assigns.context.id,
-           type: @page_type,
+           type: page_type,
            archived: true,
            limit: 200
          )}
@@ -149,9 +176,12 @@ defmodule DranWeb.EntityLive do
        visible_count: 30,
        show_archived: false,
        archived_visible_count: 30,
-       page_title: gettext("Entities")
+       page_title: PageTypes.plural(page_type),
+       back_path: build_back_path(workspace_slug, page_type)
      )}
   end
+
+  # ── Pagination + filter events ──
 
   @impl true
   def handle_event("filter_archived", %{"type" => type}, socket) do
@@ -167,27 +197,56 @@ defmodule DranWeb.EntityLive do
   def handle_event("load_more_archived", _params, socket),
     do: {:noreply, ListPagination.handle_load_more_archived(socket)}
 
-  def handle_event("switch_tab", %{"tab" => tab}, socket), do: {:noreply, switch_tab(socket, tab)}
+  def handle_event("switch_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, active_tab: tab)}
+  end
 
-  def handle_event("show_page", %{"slug" => slug}, socket),
-    do: {:noreply, push_navigate(socket, to: ~p"/panel/entities/#{slug}")}
+  # ── Page navigation ──
 
-  def handle_event("new_page", _params, socket),
-    do: {:noreply, push_navigate(socket, to: ~p"/panel/entities/new")}
+  def handle_event("show_page", %{"slug" => slug}, socket) do
+    page_type = socket.assigns[:page_type]
+    workspace_slug = socket.assigns[:workspace_slug]
+    {:noreply, push_navigate(socket, to: build_page_path(workspace_slug, page_type, slug))}
+  end
 
-  def handle_event("delete_page", p, s), do: PageEdit.handle_event("delete_page", p, s)
-  def handle_event("archive_page", p, s), do: PageEdit.handle_event("archive_page", p, s)
-  def handle_event("unarchive_page", p, s), do: PageEdit.handle_event("unarchive_page", p, s)
+  def handle_event("new_page", _params, socket) do
+    page_type = socket.assigns[:page_type]
+    workspace_slug = socket.assigns[:workspace_slug]
+    type_path = PageTypes.path(page_type)
+    {:noreply, push_navigate(socket, to: ~p"/#{workspace_slug}/#{type_path}/new")}
+  end
 
-  def handle_event("toggle_pinned", p, s),
-    do: PageEdit.handle_event("toggle_pinned", p, s)
+  # ── Editing (delegated to PageEdit) ──
 
-  def handle_event("validate_page", p, s), do: PageEdit.handle_event("validate_page", p, s)
-  def handle_event("save_page", p, s), do: PageEdit.handle_event("save_page", p, s)
-  def handle_event("body_change", p, s), do: PageEdit.handle_event("body_change", p, s)
-  def handle_event("field_change", p, s), do: PageEdit.handle_event("field_change", p, s)
-  def handle_event("request_upload", p, s), do: PageEdit.handle_event("request_upload", p, s)
-  def handle_event("upload_complete", p, s), do: PageEdit.handle_event("upload_complete", p, s)
+  def handle_event("delete_page", params, socket),
+    do: PageEdit.handle_event("delete_page", params, socket)
+
+  def handle_event("toggle_pinned", params, socket),
+    do: PageEdit.handle_event("toggle_pinned", params, socket)
+
+  def handle_event("archive_page", params, socket),
+    do: PageEdit.handle_event("archive_page", params, socket)
+
+  def handle_event("unarchive_page", params, socket),
+    do: PageEdit.handle_event("unarchive_page", params, socket)
+
+  def handle_event("validate_page", params, socket),
+    do: PageEdit.handle_event("validate_page", params, socket)
+
+  def handle_event("save_page", params, socket),
+    do: PageEdit.handle_event("save_page", params, socket)
+
+  def handle_event("body_change", params, socket),
+    do: PageEdit.handle_event("body_change", params, socket)
+
+  def handle_event("field_change", params, socket),
+    do: PageEdit.handle_event("field_change", params, socket)
+
+  def handle_event("request_upload", params, socket),
+    do: PageEdit.handle_event("request_upload", params, socket)
+
+  def handle_event("upload_complete", params, socket),
+    do: PageEdit.handle_event("upload_complete", params, socket)
 
   # ── Version comparison ──
 
@@ -228,4 +287,24 @@ defmodule DranWeb.EntityLive do
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  # ── Helpers ──
+
+  defp page_type_from_params(%{"type" => type_path}) when is_binary(type_path) do
+    PageTypes.type_from_path(type_path)
+  end
+
+  defp page_type_from_params(%{"page_type" => type_path}) when is_binary(type_path) do
+    PageTypes.type_from_path(type_path)
+  end
+
+  defp page_type_from_params(_), do: nil
+
+  defp build_back_path(nil, page_type), do: "/#{PageTypes.path(page_type)}"
+  defp build_back_path(workspace_slug, page_type), do: "/#{workspace_slug}/#{PageTypes.path(page_type)}"
+
+  defp build_page_path(nil, page_type, slug), do: "/#{PageTypes.path(page_type)}/#{slug}"
+  defp build_page_path(workspace_slug, page_type, slug),
+    do: "/#{workspace_slug}/#{PageTypes.path(page_type)}/#{slug}"
+
 end

@@ -45,12 +45,13 @@ defmodule DranWeb.ActivityLiveTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn, page: page}
   end
 
   test "renders the activity feed with the page.create entry", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/panel/activity")
+    {:ok, _view, html} = live(conn, ~p"/personal/activity")
 
     # Header is present (localized)
     assert html =~ t("Activity")
@@ -62,14 +63,14 @@ defmodule DranWeb.ActivityLiveTest do
   end
 
   test "shows relative time for each entry", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/panel/activity")
+    {:ok, _view, html} = live(conn, ~p"/personal/activity")
 
     # The entry was just created, so it should show "just now"
     assert html =~ t("just now")
   end
 
   test "links to the created page", %{conn: conn, page: page} do
-    {:ok, _view, html} = live(conn, ~p"/panel/activity")
+    {:ok, _view, html} = live(conn, ~p"/personal/activity")
 
     # The subject slug should be a link to /notes/<slug>
     assert html =~ "href=\"/notes/#{page.slug}\""
@@ -82,14 +83,14 @@ defmodule DranWeb.ActivityLiveTest do
 
     Dran.Repo.delete_all(from(l in Dran.Log, where: l.workspace_id == ^context.id))
 
-    {:ok, _view, html} = live(conn, ~p"/panel/activity")
+    {:ok, _view, html} = live(conn, ~p"/personal/activity")
 
     assert html =~ t("No activity yet")
     assert html =~ t("Create or edit a page to see it here.")
   end
 
   test "updates live when a new page is created (handle_info)", %{conn: conn} do
-    {:ok, view, html} = live(conn, ~p"/panel/activity")
+    {:ok, view, html} = live(conn, ~p"/personal/activity")
 
     # Initially one page exists
     assert html =~ t("Created")

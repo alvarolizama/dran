@@ -44,12 +44,13 @@ defmodule DranWeb.JourneyLiveTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn}
   end
 
   test "renders the journey page", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/panel/journey")
+    {:ok, _view, html} = live(conn, ~p"/personal/journey")
     assert html =~ "Trayectoria" or html =~ "Journey"
   end
 end
