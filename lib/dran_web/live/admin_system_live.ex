@@ -8,6 +8,8 @@ defmodule DranWeb.AdminSystemLive do
 
   use DranWeb, :live_view
 
+  import DranWeb.Admin
+
   alias Dran.Inference.Client
   alias Dran.Inference.Config
   alias DranWeb.Plugs.Auth
@@ -18,7 +20,7 @@ defmodule DranWeb.AdminSystemLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Sistema"))
+      |> assign(active_nav: "admin", page_title: gettext("Sistema"), workspace_slug: nil)
       |> assign(inference_test: nil)
 
     {:ok, socket}
@@ -294,23 +296,11 @@ defmodule DranWeb.AdminSystemLive do
 
   defp config_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
-      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
-        <div
-          :if={@icon}
-          class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10"
-        >
-          <.icon name={@icon} class="size-4 text-primary" />
-        </div>
-        <div class="min-w-0">
-          <h2 class="text-heading">{@title}</h2>
-          <p :if={@subtitle} class="text-caption mt-0.5">{@subtitle}</p>
-        </div>
-      </header>
+    <.section title={@title} icon={@icon} caption={@subtitle}>
       <div class="divide-y divide-base-content/10">
         {render_slot(@inner_block)}
       </div>
-    </section>
+    </.section>
     """
   end
 
@@ -409,7 +399,7 @@ defmodule DranWeb.AdminSystemLive do
       :econnrefused -> gettext("Connection refused — el servidor no responde")
       :timeout -> gettext("Timeout — el servidor tardó demasiado")
       :nxdomain -> gettext("Dominio no resuelto")
-      _ -> "TransportError: #{inspect(reason)}"
+      _ -> gettext("TransportError: %{detail}", detail: inspect(reason))
     end
   end
 

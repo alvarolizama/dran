@@ -25,6 +25,7 @@ defmodule DranWeb.SmartCollectionLive do
       current_user={@current_user}
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
+      active_nav={@active_nav}
     >
       <div :if={@live_action == :index} class="p-6 overflow-y-auto w-full">
         <div class="flex items-center justify-between mb-4">

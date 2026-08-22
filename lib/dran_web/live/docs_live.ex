@@ -36,7 +36,7 @@ defmodule DranWeb.DocsLive do
       current_user={@current_user}
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
-      active_nav="docs"
+      active_nav={@active_nav}
     >
       <div class="p-6 w-full">
         <h1 class="text-2xl font-bold mb-6">{gettext("Documentation")}</h1>
@@ -126,7 +126,8 @@ defmodule DranWeb.DocsLive do
        active_nav: "docs",
        tabs: @tabs,
        active_tab: "getting-started",
-       page_title: gettext("Docs")
+       page_title: gettext("Docs"),
+       workspace_slug: nil
      )}
   end
 

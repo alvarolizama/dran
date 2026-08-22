@@ -7,6 +7,8 @@ defmodule DranWeb.AdminJobsLive do
 
   use DranWeb, :live_view
 
+  import DranWeb.Admin
+
   alias Dran.Jobs
   alias DranWeb.Plugs.Auth
 
@@ -16,7 +18,7 @@ defmodule DranWeb.AdminJobsLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Jobs"))
+      |> assign(active_nav: "admin", page_title: gettext("Jobs"), workspace_slug: nil)
       |> assign(running_jobs: MapSet.new())
       |> assign_jobs()
 
@@ -132,21 +134,15 @@ defmodule DranWeb.AdminJobsLive do
 
   defp jobs_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
-      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
-        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
-          <.icon name="hero-clock" class="size-4 text-primary" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <h2 class="text-heading">{gettext("Jobs programados")}</h2>
-          <p class="text-caption mt-0.5">
-            {gettext(
-              "Activa o desactiva los jobs recurrentes del cerebro. El toggle afecta solo las corridas programadas — \"Correr ahora\" siempre ejecuta."
-            )}
-          </p>
-        </div>
-      </header>
-
+    <.section
+      title={gettext("Jobs programados")}
+      icon="hero-clock"
+      caption={
+        gettext(
+          "Activa o desactiva los jobs recurrentes del cerebro. El toggle afecta solo las corridas programadas — \"Correr ahora\" siempre ejecuta."
+        )
+      }
+    >
       <div class="overflow-x-auto">
         <table class="table table-sm">
           <thead>
@@ -220,7 +216,7 @@ defmodule DranWeb.AdminJobsLive do
           </tbody>
         </table>
       </div>
-    </section>
+    </.section>
     """
   end
 

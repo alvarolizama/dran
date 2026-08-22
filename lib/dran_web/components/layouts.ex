@@ -122,13 +122,19 @@ defmodule DranWeb.Layouts do
           </form>
         </div>
 
-        <nav class="flex-1 overflow-y-auto p-2 space-y-4">
+        <nav class="flex-1 overflow-y-auto p-2 space-y-4 flex flex-col">
           <.sidebar_nav
             active={@active_nav}
             counts={@counts}
             is_owner={@is_owner}
             workspace_slug={@workspace_slug}
             workspace_role={assigns[:workspace_role]}
+          />
+          <.sidebar_footer_icons
+            is_owner={@is_owner}
+            workspace_slug={@workspace_slug}
+            workspace_role={assigns[:workspace_role]}
+            active={@active_nav}
           />
         </nav>
 
@@ -235,226 +241,18 @@ defmodule DranWeb.Layouts do
     default: false,
     doc: "whether to show admin-only links (e.g. Settings)"
 
-  # Maps sidebar nav keys to page types. Items whose page type is disabled in
-  # the current context are hidden. Keys not in this map are always shown.
-  @nav_key_page_types %{
-    "notes" => "note",
-    "concepts" => "concept",
-    "entities" => "entity",
-    "references" => "reference"
-  }
-
   def sidebar_nav(assigns) do
-    counts = assigns[:counts] || %{}
-    is_owner = assigns[:is_owner] || false
-    workspace_slug = assigns[:workspace_slug]
+    # Unified sidebar: empty — all links live in the header icons and the
+    # footer (Workspace config + Dashboard/Admin/Account/Docs icons).
+    groups = []
 
-    disabled_types =
-      case assigns[:workspace_slug] &&
-             Dran.Knowledge.get_workspace_by_slug(assigns[:workspace_slug]) do
-        %{disabled_page_types: disabled} when is_list(disabled) -> disabled
-        _ -> []
-      end
-
-    # When no workspace context (e.g. instance-level dashboard at /),
-    # workspace-scoped paths would crash with nil interpolation.
-    # The nil branch is dead code per type inference (workspace_slug
-    # is dynamic(not nil) from assigns), but at runtime it can be nil
-    # when the Dashboard renders without a workspace. Guard with
-    # assigns[:workspace_slug] to avoid the type narrowing.
-    assigns =
-      if is_nil(assigns[:workspace_slug]) do
-        global_items =
-          [
-            %{key: "dashboard", label: gettext("Dashboard"), icon: "hero-home", path: ~p"/"}
-          ] ++
-            if(is_owner,
-              do: [
-                %{
-                  key: "settings",
-                  label: gettext("Settings"),
-                  icon: "hero-cog-6-tooth",
-                  path: ~p"/admin"
-                }
-              ],
-              else: []
-            ) ++
-            [
-              %{
-                key: "docs",
-                label: gettext("Documentation"),
-                icon: "hero-book-open",
-                path: ~p"/docs"
-              }
-            ]
-
-        assign(assigns, groups: [%{label: nil, items: global_items}])
-      else
-        # Workspace context active — build full nav with workspace-scoped paths
-        # (F4/F5) The Config link points to the workspace settings and is shown
-        # only to the workspace owner/admin (or the instance owner, who is
-        # owner everywhere).
-        can_config =
-          is_owner || assigns[:workspace_role] in ~w(owner admin)
-
-        config_items =
-          if can_config do
-            [
-              %{
-                key: "settings",
-                label: gettext("Config"),
-                icon: "hero-cog-6-tooth",
-                path: ~p"/#{workspace_slug}/settings"
-              }
-            ]
-          else
-            []
-          end ++
-            [
-              %{
-                key: "docs",
-                label: gettext("Documentation"),
-                icon: "hero-book-open",
-                path: ~p"/docs"
-              }
-            ]
-
-        groups = [
-          %{
-            label: nil,
-            items: [
-              %{
-                key: "dashboard",
-                label: gettext("Dashboard"),
-                icon: "hero-home",
-                path: ~p"/"
-              },
-              %{
-                key: "kanban",
-                label: gettext("Kanban"),
-                icon: "hero-view-columns",
-                path: ~p"/#{workspace_slug}/kanban",
-                badge: counts[:todos]
-              },
-              %{
-                key: "graph",
-                label: gettext("Grafo"),
-                icon: "hero-share",
-                path: ~p"/#{workspace_slug}/graph"
-              },
-              %{
-                key: "journey",
-                label: gettext("Trayectoria"),
-                icon: "hero-map",
-                path: ~p"/#{workspace_slug}/journey"
-              },
-              %{
-                key: "activity",
-                label: gettext("Actividad"),
-                icon: "hero-clock",
-                path: ~p"/#{workspace_slug}/activity"
-              },
-              %{
-                key: "wiki",
-                label: gettext("Wiki"),
-                icon: "hero-globe-alt",
-                path: ~p"/"
-              }
-            ]
-          },
-          %{
-            label: gettext("Planning"),
-            items: [
-              %{
-                key: "goals",
-                label: gettext("Objetivos"),
-                icon: "hero-flag",
-                path: ~p"/#{workspace_slug}/goals",
-                badge: counts[:goals]
-              },
-              %{
-                key: "projects",
-                label: gettext("Projects"),
-                icon: "hero-rocket-launch",
-                path: ~p"/#{workspace_slug}/notes",
-                badge: counts[:projects]
-              }
-            ]
-          },
-          %{
-            label: gettext("Knowledge"),
-            items: [
-              %{
-                key: "notes",
-                label: gettext("Notes"),
-                icon: "hero-document-text",
-                path: ~p"/#{workspace_slug}/notes",
-                badge: counts[:notes]
-              },
-              %{
-                key: "concepts",
-                label: gettext("Concepts"),
-                icon: "hero-light-bulb",
-                path: ~p"/#{workspace_slug}/concepts",
-                badge: counts[:concepts]
-              },
-              %{
-                key: "entities",
-                label: gettext("Entities"),
-                icon: "hero-user-group",
-                path: ~p"/#{workspace_slug}/entities",
-                badge: counts[:entities]
-              },
-              %{
-                key: "references",
-                label: gettext("References"),
-                icon: "hero-bookmark",
-                path: ~p"/#{workspace_slug}/references",
-                badge: counts[:references]
-              },
-              %{
-                key: "communities",
-                label: gettext("Comunidades"),
-                icon: "hero-squares-2x2",
-                path: ~p"/#{workspace_slug}/communities",
-                badge: counts[:communities]
-              },
-              %{
-                key: "collections",
-                label: gettext("Collections"),
-                icon: "hero-funnel",
-                path: ~p"/#{workspace_slug}/collections",
-                badge: counts[:collections]
-              }
-            ]
-          },
-          %{
-            label: gettext("Configs"),
-            items: config_items
-          }
-        ]
-
-        groups =
-          groups
-          |> Enum.map(fn group ->
-            filtered_items =
-              group.items
-              |> Enum.reject(fn item ->
-                case Map.get(@nav_key_page_types, item.key) do
-                  nil -> false
-                  page_type -> page_type in disabled_types
-                end
-              end)
-
-            %{group | items: filtered_items}
-          end)
-          |> Enum.reject(fn group -> group.label && group.items == [] end)
-
-        _assigns = assign(assigns, :groups, groups)
-      end
+    assigns = assign(assigns, :groups, groups)
 
     ~H"""
-    <div :for={group <- @groups}>
+    <div
+      :for={{group, idx} <- Enum.with_index(@groups)}
+      class={idx == length(@groups) - 1 && "mt-auto"}
+    >
       <div :if={!group.label} class="space-y-1">
         <.nav_link
           :for={item <- group.items}
@@ -465,7 +263,7 @@ defmodule DranWeb.Layouts do
           badge={item[:badge]}
         />
       </div>
-      <details :if={group.label} open class="group">
+      <details :if={group.label && group.items != []} open class="group">
         <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
           <.icon
             name="hero-chevron-right"
@@ -513,6 +311,65 @@ defmodule DranWeb.Layouts do
         {@badge}
       </span>
     </a>
+    """
+  end
+
+  # ── Sidebar footer (Workspace link + Dashboard, Admin, Account, Docs) ───
+
+  attr :is_owner, :boolean, default: false
+  attr :workspace_slug, :string, default: nil
+  attr :workspace_role, :string, default: nil
+  attr :active, :string, default: nil
+
+  def sidebar_footer_icons(assigns) do
+    can_config = assigns[:is_owner] || assigns[:workspace_role] in ~w(owner admin)
+    assigns = assign(assigns, :can_config, can_config)
+
+    ~H"""
+    <div class="mt-auto flex items-center justify-center gap-1 pt-2 border-t border-base-300">
+      <a
+        href={~p"/"}
+        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        title={gettext("Dashboard")}
+      >
+        <.icon name="hero-squares-2x2" class="size-4" />
+      </a>
+      <a
+        :if={@workspace_slug && @can_config}
+        href={~p"/#{@workspace_slug}/settings"}
+        class={[
+          "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
+          @active == "workspace_settings" && "bg-primary/10 text-primary",
+          @active != "workspace_settings" &&
+            "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+        ]}
+        title={gettext("Workspace")}
+      >
+        <.icon name="hero-cog-6-tooth" class="size-4" />
+      </a>
+      <a
+        :if={@is_owner}
+        href={~p"/admin"}
+        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        title={gettext("Admin")}
+      >
+        <.icon name="hero-command-line" class="size-4" />
+      </a>
+      <a
+        href={~p"/settings/account"}
+        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        title={gettext("Account")}
+      >
+        <.icon name="hero-user" class="size-4" />
+      </a>
+      <a
+        href={~p"/docs"}
+        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+        title={gettext("Documentation")}
+      >
+        <.icon name="hero-book-open" class="size-4" />
+      </a>
+    </div>
     """
   end
 
@@ -597,19 +454,23 @@ defmodule DranWeb.Layouts do
   end
 
   @doc """
-  Shows the current user and a logout button.
+  Shows the current user (link to account settings) and a logout button.
   """
   attr :current_user, :string, default: nil
 
   def user_footer(assigns) do
     ~H"""
     <div :if={@current_user} class="flex items-center justify-between">
-      <span class="flex items-center gap-2 text-sm text-base-content/70 min-w-0">
+      <a
+        href={~p"/settings/account"}
+        class="flex items-center gap-2 text-sm text-base-content/70 hover:text-base-content min-w-0 transition-colors duration-150"
+        title={gettext("Account settings")}
+      >
         <span class="size-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold uppercase shrink-0">
           {String.first(@current_user)}
         </span>
-        {@current_user}
-      </span>
+        <span class="truncate">{@current_user}</span>
+      </a>
       <form id="logout-form" action={~p"/session"} method="post">
         <input type="hidden" name="_method" value="delete" />
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
@@ -626,34 +487,21 @@ defmodule DranWeb.Layouts do
   end
 
   # ── Wiki layout ──────────────────────────────────────────────────────────
-  # Sidebar + main shell, mirroring `app/1` but for the read-only wiki.
-  # The sidebar has: logo, context selector, search, and wiki navigation
-  # (categories + sections). Admins/editors get a "Panel" link back to the app.
+  # Sidebar + main shell, mirroring `app/1` for the read-only wiki. The
+  # sidebar is the SAME unified sidebar as every other page: Dashboard +
+  # Cuenta + Administración.
 
   attr :flash, :map, required: true
   attr :current_user, :string, default: nil
   attr :is_owner, :boolean, default: false
   attr :workspace_slug, :string, default: nil
-  attr :workspaces, :list, default: []
-  attr :page_title, :string, default: nil
-  attr :live_action, :atom, default: nil
-  attr :search_query, :string, default: ""
-  attr :search_results, :list, default: nil
-  attr :wiki_context, :map, default: nil
-  attr :type_index, :list, default: []
-  attr :collections, :list, default: []
-  attr :pinned_pages, :list, default: []
-  attr :counts, :map, default: %{}
-  attr :collection_slug, :string, default: nil
 
   slot :inner_block, required: true
 
   def home(assigns) do
-    counts = compute_counts(assigns[:workspace_slug])
-
     # Resolve admin/editor from the DB — same as app/1. The wiki layout must
     # not depend on the caller passing correct flags; it should resolve them
-    # independently so the Panel button always shows for admins, even if the
+    # independently so the Dashboard button always shows, even if the
     # LiveView's socket assigns are stale or incomplete.
     is_owner =
       if is_binary(assigns[:current_user]) do
@@ -667,7 +515,6 @@ defmodule DranWeb.Layouts do
 
     assigns =
       assign(assigns,
-        counts: counts,
         is_owner: is_owner
       )
 
@@ -683,20 +530,11 @@ defmodule DranWeb.Layouts do
               <.icon name="hero-cube-transparent" class="size-5 text-primary" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
-            <.home_workspace_selector
-              workspace_slug={@workspace_slug}
-              workspaces={@workspaces}
-            />
           </div>
         </div>
 
-        <div class="p-3 border-b border-base-300">
-          <form
-            id="wiki-search-form"
-            phx-change="wiki_search"
-            phx-submit="wiki_search"
-            class="relative"
-          >
+        <div :if={@workspace_slug} class="p-3 border-b border-base-300">
+          <form action={~p"/#{@workspace_slug}/search"} method="get" class="relative">
             <.icon
               name="hero-magnifying-glass"
               class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
@@ -704,33 +542,21 @@ defmodule DranWeb.Layouts do
             <input
               type="text"
               name="q"
-              value={@search_query}
-              placeholder={gettext("Search wiki...")}
-              class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
+              placeholder={gettext("Search...")}
+              class="w-full pl-8 pr-12 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
             />
+            <kbd class="absolute right-2.5 top-2 text-[10px] font-mono text-base-content/40 border border-base-300 rounded px-1">
+              ⌘K
+            </kbd>
           </form>
         </div>
 
         <nav class="flex-1 overflow-y-auto p-2 space-y-4 flex flex-col">
-          <.wiki_sidebar_nav
+          <.sidebar_nav
             workspace_slug={@workspace_slug}
-            live_action={@live_action}
-            type_index={@type_index}
-            collections={@collections}
-            pinned_pages={@pinned_pages}
-            workspaces={@workspaces}
-            counts={@counts}
-            collection_slug={@collection_slug}
+            is_owner={@is_owner}
           />
-          <a
-            :if={@is_owner or @is_owner}
-            href={~p"/"}
-            class="mt-auto flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-            title={gettext("Panel")}
-          >
-            <.icon name="hero-squares-2x2" class="size-4 shrink-0" />
-            <span>{gettext("Panel")}</span>
-          </a>
+          <.sidebar_footer_icons is_owner={@is_owner} workspace_slug={@workspace_slug} />
         </nav>
 
         <div class="p-3 border-t border-base-300">
@@ -743,215 +569,6 @@ defmodule DranWeb.Layouts do
       </div>
 
       <.flash_group flash={@flash} />
-    </div>
-    """
-  end
-
-  # ── Wiki context selector ────────────────────────────────────────────────
-
-  attr :workspace_slug, :string, default: nil
-  attr :workspaces, :list, default: []
-
-  defp home_workspace_selector(assigns) do
-    ~H"""
-    <div :if={length(@workspaces) > 0} class="flex-1">
-      <select
-        id="wiki-context-selector"
-        class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
-        onchange="window.location.href = this.value"
-      >
-        <option value={~p"/"} selected={!@workspace_slug}>
-          {gettext("All contexts")}
-        </option>
-        <option
-          :for={ctx <- @workspaces}
-          value={~p"/#{ctx.slug}"}
-          selected={ctx.slug == @workspace_slug}
-        >
-          {ctx.name}
-        </option>
-      </select>
-    </div>
-    """
-  end
-
-  # ── Wiki sidebar navigation ──────────────────────────────────────────────
-
-  attr :workspace_slug, :string, default: nil
-  attr :live_action, :atom, default: nil
-  attr :type_index, :list, default: []
-  attr :collections, :list, default: []
-  attr :pinned_pages, :list, default: []
-  attr :workspaces, :list, default: []
-  attr :counts, :map, default: %{}
-  attr :collection_slug, :string, default: nil
-
-  defp wiki_sidebar_nav(assigns) do
-    ~H"""
-    <div :if={!@workspace_slug}>
-      <div class="space-y-1">
-        <a
-          href={~p"/"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 text-base-content/80 hover:bg-base-200 hover:text-base-content"
-        >
-          <.icon name="hero-home" class="size-4 shrink-0" />
-          <span>{gettext("Home")}</span>
-        </a>
-      </div>
-    </div>
-
-    <div :if={@workspace_slug}>
-      <div class="space-y-1">
-        <a
-          href={~p"/#{@workspace_slug}"}
-          class={[
-            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-            @live_action == :context_home &&
-              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
-            @live_action != :context_home &&
-              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
-          ]}
-        >
-          <.icon name="hero-home" class="size-4 shrink-0" />
-          <span>{gettext("Home")}</span>
-        </a>
-        <a
-          :if={@counts[:todos] > 0}
-          href={~p"/#{@workspace_slug}/kanban"}
-          class={[
-            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-            @live_action == :kanban &&
-              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
-            @live_action != :kanban &&
-              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
-          ]}
-        >
-          <.icon name="hero-view-columns" class="size-4 shrink-0" />
-          <span>{gettext("Kanban")}</span>
-        </a>
-        <a
-          :if={@counts[:projects] > 0}
-          href={~p"/#{@workspace_slug}/type/project"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name="hero-rocket-launch" class="size-4 shrink-0" />
-          <span>{gettext("Proyectos")}</span>
-          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
-            {@counts[:projects]}
-          </span>
-        </a>
-        <a
-          :if={@counts[:goals] > 0}
-          href={~p"/#{@workspace_slug}/type/goal"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name="hero-flag" class="size-4 shrink-0" />
-          <span>{gettext("Objetivos")}</span>
-          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
-            {@counts[:goals]}
-          </span>
-        </a>
-        <a
-          href={~p"/#{@workspace_slug}/graph"}
-          class={[
-            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-            @live_action == :graph &&
-              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
-            @live_action != :graph &&
-              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
-          ]}
-        >
-          <.icon name="hero-share" class="size-4 shrink-0" />
-          <span>{gettext("Grafo")}</span>
-        </a>
-      </div>
-    </div>
-
-    <div :if={@workspace_slug && @pinned_pages != []}>
-      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
-        {gettext("Pinned")}
-      </h3>
-      <div class="space-y-1">
-        <a
-          :for={page <- @pinned_pages}
-          href={~p"/#{@workspace_slug}/#{page.page_type}/#{page.slug}"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name="hero-bookmark" class="size-4 shrink-0 text-amber-500" />
-          <span class="truncate">{page.title}</span>
-        </a>
-      </div>
-    </div>
-
-    <div :if={@workspace_slug && (@counts[:plans] > 0 || @counts[:todos] > 0)}>
-      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
-        {gettext("Planificacion")}
-      </h3>
-      <div class="space-y-1">
-        <a
-          :if={@counts[:plans] > 0}
-          href={~p"/#{@workspace_slug}/type/plan"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name="hero-clipboard-document-list" class="size-4 shrink-0" />
-          <span>{gettext("Planes")}</span>
-          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
-            {@counts[:plans]}
-          </span>
-        </a>
-        <a
-          :if={@counts[:todos] > 0}
-          href={~p"/#{@workspace_slug}/type/todo"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name="hero-check-circle" class="size-4 shrink-0" />
-          <span>{gettext("Tareas")}</span>
-          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
-            {@counts[:todos]}
-          </span>
-        </a>
-      </div>
-    </div>
-
-    <div :if={@workspace_slug && @collections != []}>
-      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
-        {gettext("Categorias")}
-      </h3>
-      <div class="space-y-1">
-        <a
-          :for={coll <- @collections}
-          href={~p"/#{@workspace_slug}/collection/#{coll.slug}"}
-          class={[
-            "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-            @live_action == :collection && @collection_slug == coll.slug &&
-              "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
-            (@live_action != :collection || @collection_slug != coll.slug) &&
-              "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
-          ]}
-        >
-          <.icon name="hero-funnel" class="size-4 shrink-0" />
-          <span class="truncate">{coll.title}</span>
-        </a>
-      </div>
-    </div>
-
-    <div :if={@workspace_slug && @type_index != []}>
-      <h3 class="px-2 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">
-        {gettext("Contenido")}
-      </h3>
-      <div class="space-y-1">
-        <a
-          :for={item <- @type_index}
-          href={~p"/#{@workspace_slug}/#{item.type}"}
-          class="flex items-center gap-2 py-1.5 pl-3 pr-2 rounded-lg text-sm text-base-content/80 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        >
-          <.icon name={item.icon} class="size-4 shrink-0" />
-          <span>{item.label}</span>
-          <span class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60">
-            {item.count}
-          </span>
-        </a>
-      </div>
     </div>
     """
   end

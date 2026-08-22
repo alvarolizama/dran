@@ -360,9 +360,13 @@ defmodule DranWeb.Router do
   end
 
   # ── Global routes (instance-level, no workspace) ──────────────────────────
+  #
+  # The dashboard is the instance overview (workspaces + metrics) and is
+  # reachable by every authenticated user: owners/admins manage all
+  # workspaces, regular users see their own workspaces and can enter them.
 
   scope "/", DranWeb do
-    pipe_through [:browser, :auth, :admin_or_editor]
+    pipe_through [:browser, :auth]
 
     # Dashboard — overview of the entire instance + all workspaces
     live "/", DashboardLive, :index
@@ -383,7 +387,8 @@ defmodule DranWeb.Router do
   scope "/settings", DranWeb do
     pipe_through [:browser, :auth]
 
-    live "/api_keys", SettingsLive, :index
+    live "/account", SettingsLive, :account
+    live "/api_keys", SettingsLive, :api_keys
   end
 
   # ── Admin (instance-level, owner-only) ────────────────────────────────────
@@ -497,7 +502,16 @@ defmodule DranWeb.Router do
     end
   end
 
-  # ── Workspace-scoped routes ────────────────────────────────────────────────
+  # ── Workspace admin routes ──────────────────────────────────────────────
+  # Settings is admin-only (owner/admin of the workspace ∪ instance owner).
+  # Separate scope from workspace_access so editors/viewers can't open it.
+  scope "/", DranWeb do
+    pipe_through [:browser, :auth, :workspace_admin]
+
+    live "/:workspace_slug/settings", WorkspaceSettingsLive, :index
+  end
+
+  # ── Workspace-scoped routes ──────────────────────────────────────────────
   #
   # Everything below /:workspace_slug is workspace-scoped. This scope MUST
   # stay last: /:workspace_slug is a wildcard and would swallow any static
@@ -513,10 +527,6 @@ defmodule DranWeb.Router do
 
     # Workspace home
     live "/:workspace_slug", HomeLive, :workspace_home
-
-    # Workspace settings — owner/admin of the workspace (∪ instance owner).
-    # Must be defined BEFORE the generic /:workspace_slug/:type route.
-    live "/:workspace_slug/settings", WorkspaceSettingsLive, :index
 
     # First-class entities (their own schemas, not page types) — MUST be
     # defined BEFORE the generic /:workspace_slug/:type route, otherwise

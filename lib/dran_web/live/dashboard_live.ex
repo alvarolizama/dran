@@ -1,26 +1,25 @@
 defmodule DranWeb.DashboardLive do
   @moduledoc """
-  Dashboard / landing page showing a summary of the second brain with
-  metrics and quick access to the most important areas.
+  Dashboard — instance overview of workspaces and their metrics.
+
+  Workspaces come first: the landing page at `/` is the workspace launcher,
+  not a per-workspace brain report.
+
+  - Instance owner (admin): sees every workspace, instance-level totals
+    (workspaces, pages, users) and a "New workspace" button that opens the
+    same creation modal as the admin area. The submit handler is guarded
+    server-side by `can_create_workspace`.
+  - Regular users: see only their accessible workspaces (memberships +
+    public), a few metrics per workspace (pages, todo items, last update)
+    and a direct link into each one. No create controls.
+  - Empty instance: the owner gets a create-workspace CTA; other users get
+    a "nothing assigned yet" state.
   """
 
   use DranWeb, :live_view
 
-  alias Dran.Knowledge
-
-  alias Dran.Goals
-  alias DranWeb.PageTypes
+  alias Dran.Slug
   alias DranWeb.Plugs.Auth
-
-  @kanban_columns [
-    {"backlog", gettext("Backlog"), "bg-base-300 text-base-content/70"},
-    {"this_week", gettext("This Week"), "bg-blue-500/15 text-blue-600 dark:text-blue-400"},
-    {"today", gettext("Today"), "bg-amber-500/15 text-amber-600 dark:text-amber-400"},
-    {"in_progress", gettext("In Progress"),
-     "bg-purple-500/15 text-purple-600 dark:text-purple-400"},
-    {"done", gettext("Done"), "bg-green-500/15 text-green-600 dark:text-green-400"},
-    {"cancelled", gettext("Cancelled"), "bg-red-500/15 text-red-600 dark:text-red-400"}
-  ]
 
   @impl true
   def render(assigns) do
@@ -29,591 +28,404 @@ defmodule DranWeb.DashboardLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
+      workspace_slug={@workspace_slug}
       workspaces={@workspaces}
+      active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
         <div class="w-full p-6 space-y-8">
-          <%!-- Header --%>
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-4">
             <div class="space-y-1">
               <h1 class="text-title">{greeting()}</h1>
               <p class="text-caption">
-                {format_today()} · {if @workspace, do: @workspace.name, else: gettext("No context")} · {@stats[
-                  :total_pages
-                ] ||
-                  0} {gettext("pages")}
+                {format_today()} · {ngettext(
+                  "%{count} workspace",
+                  "%{count} workspaces",
+                  @instance.total_workspaces
+                )} · {ngettext("%{count} page", "%{count} pages", @instance.total_pages)}
               </p>
-              <div
-                :if={@user_api_token_prefix}
-                id="dashboard-api-token-row"
-                phx-hook=".CopyToClipboard"
-                class="flex items-center gap-2 pt-0.5"
-                title={gettext("Your API key")}
-              >
-                <%!-- SEC-005: only the prefix is rendered — the full token never reaches the DOM --%>
-                <code
-                  id="dashboard-api-token"
-                  class="text-xs font-mono bg-base-100 rounded-md px-2 py-1 border border-base-300 select-all break-all max-w-[40ch]"
-                >
-                  {@user_api_token_prefix}••••••••••••
-                </code>
-                <button
-                  type="button"
-                  id="copy-dashboard-token-btn"
-                  phx-click="copy_api_token"
-                  class="btn btn-ghost btn-xs gap-1 p-1.5 transition-colors active:scale-95"
-                  title={gettext("Copy")}
-                >
-                  <span data-copy-icon>
-                    <.icon name="hero-clipboard-document" class="size-3.5" />
-                  </span>
-                  <span data-check-icon class="hidden">
-                    <.icon name="hero-clipboard-document-check" class="size-3.5 text-green-500" />
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  id="regenerate-dashboard-token-btn"
-                  phx-click="regenerate_api_token"
-                  data-confirm={
-                    gettext("Regenerate API token? The current token will stop working immediately.")
-                  }
-                  class="btn btn-ghost btn-xs gap-1 p-1.5 transition-colors active:scale-95 hover:text-warning"
-                  title={gettext("Regenerate API token")}
-                >
-                  <.icon name="hero-arrow-path" class="size-3.5" />
-                </button>
-              </div>
             </div>
-            <div class="flex gap-2">
-              <.link
-                :if={Knowledge.page_type_enabled?(@workspace, "todo")}
-                navigate={~p"/#{@workspace_slug}/kanban"}
-                class="btn btn-ghost btn-sm transition-colors active:scale-95"
-              >
-                <.icon name="hero-view-columns" class="size-4" /> {gettext("Kanban")}
-              </.link>
-              <.link
-                navigate={~p"/#{@workspace_slug}/graph"}
-                class="btn btn-ghost btn-sm transition-colors active:scale-95"
-              >
-                <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
-              </.link>
-              <.link
-                navigate={~p"/#{@workspace_slug}/search"}
-                class="btn btn-ghost btn-sm transition-colors active:scale-95"
-              >
-                <.icon name="hero-magnifying-glass" class="size-4" /> {gettext("Search")}
-              </.link>
-            </div>
+            <button
+              :if={@can_create_workspace}
+              phx-click="open_context_modal"
+              class="btn btn-primary btn-sm gap-1.5 transition-colors active:scale-95"
+            >
+              <.icon name="hero-plus" class="size-4" />
+              {gettext("New workspace")}
+            </button>
           </div>
 
-          <%!-- Metric cards --%>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <.metric_card
-              label={gettext("Total Pages")}
-              value={@stats[:total_pages] || 0}
-              icon="hero-document-duplicate"
-              color="text-primary"
-            />
-            <.metric_card
-              label={gettext("Relations")}
-              value={@stats[:total_relations] || 0}
-              icon="hero-share"
-              color="text-secondary"
-            />
-            <.metric_card
-              label={gettext("Orphans")}
-              value={@stats[:orphan_count] || 0}
-              icon="hero-exclamation-triangle"
-              color={if (@stats[:orphan_count] || 0) > 0, do: "text-warning", else: "text-success"}
-            />
-            <.metric_card
-              label={gettext("Broken Links")}
-              value={@stats[:broken_link_count] || 0}
-              icon="hero-link-slash"
-              color={if (@stats[:broken_link_count] || 0) > 0, do: "text-error", else: "text-success"}
-            />
-          </div>
+          <div class="space-y-4">
+            <h2 class="text-heading">
+              {if @can_create_workspace, do: gettext("Workspaces"), else: gettext("Your workspaces")}
+            </h2>
 
-          <%!-- Brain health --%>
-          <div class="surface-2 p-5 space-y-5 rounded-2xl">
-            <div class="flex items-center justify-between">
-              <h2 class="text-heading">{gettext("Brain health")}</h2>
-              <span :if={@brain_metrics[:contested_count] > 0} class="text-xs text-warning">
-                {gettext("%{count} contested", count: @brain_metrics[:contested_count])}
-              </span>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
-              <%!-- This week --%>
-              <div class="flex items-center gap-3">
-                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-info/10">
-                  <.icon name="hero-calendar-days" class="size-5 text-info" />
-                </div>
-                <div class="min-w-0">
-                  <div class="text-xl font-bold tabular-nums leading-tight">
-                    {@brain_metrics[:pages_this_week] || 0}
-                  </div>
-                  <div class="text-caption">{gettext("This week")}</div>
-                  <div
-                    :if={
-                      (@brain_metrics[:pages_this_week] || 0) !=
-                        (@brain_metrics[:pages_last_week] || 0)
-                    }
-                    class={[
-                      "text-xs font-medium mt-0.5",
-                      if(
-                        (@brain_metrics[:pages_this_week] || 0) >
-                          (@brain_metrics[:pages_last_week] || 0),
-                        do: "text-success",
-                        else: "text-base-content/50"
-                      )
-                    ]}
-                  >
-                    {delta_label(
-                      @brain_metrics[:pages_this_week] || 0,
-                      @brain_metrics[:pages_last_week] || 0
-                    )}
-                  </div>
-                </div>
+            <div
+              :if={@workspaces == []}
+              class="surface-2 p-12 rounded-2xl flex flex-col items-center gap-4 text-center"
+            >
+              <div class="size-14 rounded-full bg-base-200 flex items-center justify-center">
+                <.icon
+                  name={if @can_create_workspace, do: "hero-squares-2x2", else: "hero-lock-closed"}
+                  class="size-7 text-base-content/40"
+                />
               </div>
-
-              <%!-- Embedding coverage --%>
-              <div class="flex items-center gap-3">
-                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-accent/10">
-                  <.icon name="hero-cpu-chip" class="size-5 text-accent" />
+              <div class="space-y-1">
+                <div class="font-semibold">
+                  {if @can_create_workspace,
+                    do: gettext("No workspaces yet"),
+                    else: gettext("No workspaces assigned")}
                 </div>
-                <div class="min-w-0 flex-1">
-                  <div class="text-xl font-bold tabular-nums leading-tight">
-                    {trunc((@brain_metrics[:embedding_coverage] || 0.0) * 100)}%
-                  </div>
-                  <div class="text-caption">{gettext("Embedding coverage")}</div>
-                  <div class="h-1 rounded-full bg-base-200 overflow-hidden mt-1.5">
-                    <div
-                      class={[
-                        "h-full rounded-full transition-all",
-                        if((@brain_metrics[:embedding_coverage] || 0.0) >= 0.9,
-                          do: "bg-success",
-                          else: "bg-warning"
-                        )
-                      ]}
-                      style={"width: #{trunc((@brain_metrics[:embedding_coverage] || 0.0) * 100)}%"}
-                    >
-                    </div>
-                  </div>
-                  <div
-                    :if={(@brain_metrics[:embedding_coverage] || 0.0) < 0.9}
-                    class="text-xs text-warning mt-0.5"
-                  >
-                    {gettext("Below 90%")}
-                  </div>
-                </div>
+                <p class="text-caption max-w-md">
+                  {if @can_create_workspace,
+                    do: gettext("Create the first workspace to start building your second brain."),
+                    else:
+                      gettext(
+                        "Ask the instance owner to add you to a workspace, or browse public workspaces from the Wiki."
+                      )}
+                </p>
               </div>
-
-              <%!-- Relations by type --%>
-              <div class="flex items-center gap-3">
-                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-secondary/10">
-                  <.icon name="hero-share" class="size-5 text-secondary" />
-                </div>
-                <div class="min-w-0">
-                  <div class="text-xl font-bold tabular-nums leading-tight">
-                    {relations_total(@brain_metrics[:relations_by_type])}
-                  </div>
-                  <div class="text-caption">{gettext("Relations")}</div>
-                  <div class="text-xs text-base-content/60 mt-0.5">
-                    {gettext("semantic: %{n}",
-                      n: (@brain_metrics[:relations_by_type] || %{})["semantic"] || 0
-                    )} · {gettext("related: %{n}",
-                      n: (@brain_metrics[:relations_by_type] || %{})["related"] || 0
-                    )} · {gettext("embeds: %{n}",
-                      n: (@brain_metrics[:relations_by_type] || %{})["embeds"] || 0
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <%!-- Agents --%>
-              <div class="flex items-center gap-3">
-                <div class="shrink-0 size-10 rounded-lg flex items-center justify-center bg-primary/10">
-                  <.icon name="hero-user-group" class="size-5 text-primary" />
-                </div>
-                <div class="min-w-0">
-                  <div class="text-xl font-bold tabular-nums leading-tight">
-                    {(@brain_metrics[:agents] || %{})[:sessions_this_week] || 0}
-                  </div>
-                  <div class="text-caption">{gettext("Agent sessions")}</div>
-                  <div class="text-xs text-base-content/60 mt-0.5">
-                    {gettext("%{n} tokens · this week",
-                      n: (@brain_metrics[:agents] || %{})[:tokens_this_week] || 0
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <%!-- Pages by type --%>
-            <div class="lg:col-span-1 space-y-8">
-              <div class="surface-2 p-5 rounded-2xl">
-                <div class="flex items-center justify-between">
-                  <h2 class="text-heading">{gettext("Pages by Type")}</h2>
-                  <.link
-                    navigate={~p"/#{@workspace_slug}/search"}
-                    class="text-sm text-primary hover:underline"
-                  >
-                    {gettext("View all")}
-                  </.link>
-                </div>
-                <div class="space-y-2 mt-4">
-                  <.type_row
-                    :for={{type, count} <- sort_by_type(@stats[:by_type] || %{})}
-                    type={type}
-                    count={count}
-                    total={@stats[:total_pages] || 1}
-                    workspace_slug={@workspace_slug}
-                  />
-                </div>
-              </div>
-
-              <%!-- Todo board summary --%>
-              <div
-                :if={(@stats[:todos_by_status] || %{}) != %{}}
-                class="surface-2 p-5 rounded-2xl"
+              <button
+                :if={@can_create_workspace}
+                phx-click="open_context_modal"
+                class="btn btn-primary btn-sm gap-1.5 transition-colors active:scale-95"
               >
-                <div class="flex items-center justify-between">
-                  <h2 class="text-heading">{gettext("Todos")}</h2>
-                  <.link
-                    navigate={~p"/#{@workspace_slug}/kanban"}
-                    class="text-sm text-primary hover:underline"
-                  >
-                    {gettext("View all")}
-                  </.link>
-                </div>
-                <div class="space-y-1.5 mt-4">
-                  <div
-                    :for={{status, label, badge} <- @kanban_columns}
-                    class="flex items-center justify-between"
-                  >
-                    <span class={"px-2.5 py-1 text-xs rounded-lg #{badge}"}>{label}</span>
-                    <span class="text-sm font-semibold tabular-nums">
-                      {(@stats[:todos_by_status] || %{})[status] || 0}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                <.icon name="hero-plus" class="size-4" />
+                {gettext("New workspace")}
+              </button>
             </div>
 
-            <%!-- Recently updated --%>
-            <div class="lg:col-span-2 space-y-8">
-              <div class="surface-2 p-5 rounded-2xl">
-                <div class="flex items-center justify-between">
-                  <h2 class="text-heading">{gettext("Recently Updated")}</h2>
-                  <.link
-                    navigate={~p"/#{@workspace_slug}/graph"}
-                    class="text-sm text-primary hover:underline"
-                  >
-                    {gettext("View all")}
-                  </.link>
-                </div>
-                <div class="space-y-1 mt-4">
-                  <.link
-                    :for={page <- @stats[:recent] || []}
-                    navigate={page_path(page, @workspace_slug)}
-                    class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-base-200 transition cursor-pointer"
-                  >
-                    <div class="shrink-0 size-9 rounded-lg flex items-center justify-center bg-primary/10">
-                      <.icon
-                        name={PageTypes.icon(page.page_type)}
-                        class="size-4 text-primary"
-                      />
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <div class="font-medium text-sm truncate">{page.title}</div>
-                      <div class="text-caption">
-                        {PageTypes.plural(page.page_type)} · {format_date(page.updated_at)}
-                      </div>
-                    </div>
-                    <span
-                      :if={page.summary}
-                      class="text-caption truncate hidden md:block max-w-[200px]"
-                    >
-                      {page.summary}
-                    </span>
-                  </.link>
-                  <p
-                    :if={(@stats[:recent] || []) == []}
-                    class="text-caption py-8 text-center"
-                  >
-                    <div class="flex flex-col items-center gap-3">
-                      <div class="size-12 rounded-full bg-base-200 flex items-center justify-center">
-                        <.icon name="hero-document" class="size-6 text-base-content/40" />
-                      </div>
-                      <span>{gettext("No pages yet. Create one to get started.")}</span>
-                    </div>
-                  </p>
-                </div>
-              </div>
+            <div :if={@workspaces != []} class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <.workspace_card
+                :for={ws <- @workspaces}
+                ws={ws}
+                metrics={Map.get(@workspace_metrics, ws.id, %{pages: 0, todos: 0, last_updated: nil})}
+                can_manage={@can_create_workspace or Map.get(ws, :role) in ~w(owner admin)}
+              />
             </div>
           </div>
         </div>
       </div>
-    </Layouts.app>
 
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyToClipboard">
-      export default {
-        mounted() {
-          this.handleEvent("copy_to_clipboard", ({ text }) => {
-            const copied = () => {
-              const btn = document.getElementById("copy-dashboard-token-btn");
-              if (!btn) return;
-              const icon = btn.querySelector("[data-copy-icon]");
-              const check = btn.querySelector("[data-check-icon]");
-              if (icon && check) {
-                icon.classList.add("hidden");
-                check.classList.remove("hidden");
-                setTimeout(() => {
-                  icon.classList.remove("hidden");
-                  check.classList.add("hidden");
-                }, 1500);
-              }
-            };
-            const fallbackCopy = () => {
-              const ta = document.createElement("textarea");
-              ta.value = text;
-              ta.setAttribute("readonly", "");
-              ta.style.position = "absolute";
-              ta.style.left = "-9999px";
-              document.body.appendChild(ta);
-              ta.select();
-              ta.setSelectionRange(0, text.length);
-              try {
-                document.execCommand("copy");
-              } catch (_e) {
-                // noop
-              }
-              document.body.removeChild(ta);
-              copied();
-            };
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(text).then(copied).catch(fallbackCopy);
-            } else {
-              fallbackCopy();
-            }
-          });
-        }
-      };
-    </script>
+      <%!-- New workspace modal (owner-only) --%>
+      <div
+        :if={@show_workspace_modal}
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      >
+        <div
+          class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"
+          phx-click-away="close_context_modal"
+        >
+          <div class="card-body">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-lg font-semibold">{gettext("New workspace")}</h3>
+              <button phx-click="close_context_modal" class="btn btn-ghost btn-xs btn-circle">
+                <.icon name="hero-x-mark" class="size-4" />
+              </button>
+            </div>
+
+            <.form
+              for={@new_workspace_form}
+              id="context-form"
+              phx-change="validate_context"
+              phx-submit="create_workspace"
+              class="space-y-4"
+            >
+              <.input
+                field={@new_workspace_form[:name]}
+                type="text"
+                label={gettext("Name")}
+                placeholder={gettext("e.g. Personal")}
+                class="w-full"
+                autofocus
+              />
+
+              <p class="text-caption">
+                {gettext("Slug is generated automatically from the name:")}
+                <code class="font-mono text-base-content/70">{@suggested_slug}</code>
+              </p>
+
+              <div class="flex justify-end gap-2 pt-1">
+                <button type="button" phx-click="close_context_modal" class="btn btn-ghost btn-sm">
+                  {gettext("Cancel")}
+                </button>
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-sm transition-colors active:scale-95"
+                  phx-disable-with={gettext("Creating…")}
+                >
+                  <.icon name="hero-plus" class="size-4" />
+                  {gettext("Create")}
+                </button>
+              </div>
+            </.form>
+          </div>
+        </div>
+      </div>
+    </Layouts.app>
     """
   end
 
   @impl true
   def mount(_params, session, socket) do
-    {socket, context} = Auth.assign_to_socket(socket, session)
+    {socket, _context} = Auth.assign_to_socket(socket, session)
 
-    # When no workspace in session (instance-level dashboard at /),
-    # fall back to the default workspace so sidebar links don't crash
-    # with nil interpolation. If even the default doesn't exist, keep
-    # the slug string so templates never see nil.
-    {context, workspace_slug} =
-      case context do
-        nil ->
-          slug = Dran.Auth.default_workspace_slug()
-          {Dran.Knowledge.get_workspace_by_slug(slug), slug}
+    is_owner = socket.assigns[:is_owner] || false
 
-        ctx ->
-          {ctx, ctx.slug}
-      end
+    socket =
+      socket
+      |> assign(
+        can_create_workspace: is_owner,
+        new_workspace_form:
+          to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
+        show_workspace_modal: false,
+        slug_touched: false,
+        suggested_slug: "",
+        active_nav: "dashboard",
+        page_title: gettext("Dashboard"),
+        # The dashboard is instance-level (not inside a workspace), so the
+        # sidebar renders the global nav (Dashboard + Configuraciones) instead
+        # of the workspace nav that assign_to_socket would otherwise leak in.
+        workspace_slug: nil
+      )
+      |> reload_workspaces()
 
-    current_user = socket.assigns[:current_user]
-    db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
+    {:ok, socket}
+  end
 
-    {stats, brain_metrics} =
-      if context do
-        metrics = Knowledge.metrics(context.id)
+  @impl true
+  def handle_event("open_context_modal", _params, socket) do
+    {:noreply, assign(socket, show_workspace_modal: true)}
+  end
 
-        {stats_with_new_model(context, Knowledge.stats(context.id)), metrics}
+  @impl true
+  def handle_event("close_context_modal", _params, socket) do
+    {:noreply, assign(socket, show_workspace_modal: false)}
+  end
+
+  @impl true
+  def handle_event("validate_context", %{"context" => params} = event, socket) do
+    # LiveView includes "_target" on form events; guard for tests or hand
+    # crafted events that omit it.
+    target = Map.get(event, "_target", [])
+    name = params["name"] || ""
+    slug_touched = socket.assigns[:slug_touched] || false || target == ["context", "slug"]
+
+    params =
+      if slug_touched do
+        params
       else
-        {%{}, %{}}
+        Map.put(params, "slug", Slug.slugify(name))
       end
 
-    {:ok,
+    form = %Dran.Workspace{} |> Dran.Workspace.changeset(params) |> to_form(as: :context)
+
+    {:noreply,
      assign(socket,
-       context: context,
-       workspace: context,
-       workspace_slug: workspace_slug,
-       workspaces: Dran.Knowledge.list_workspaces(),
-       stats: stats,
-       brain_metrics: brain_metrics,
-       user_api_token_prefix: db_user && String.slice(db_user.api_token, 0, 8),
-       kanban_columns: @kanban_columns,
-       page_title: gettext("Dashboard")
+       new_workspace_form: form,
+       slug_touched: slug_touched,
+       suggested_slug: Slug.slugify(name)
      )}
   end
 
-  # Augment the page-based stats with the first-class entities (goals,
-  # projects) and recompute todos = pages WHERE kanban_status IS NOT NULL.
-  defp stats_with_new_model(context, stats) do
-    goal_count = length(Goals.list_goals(workspace_id: context.id, limit: 500))
-
-    project_count =
-      length(Knowledge.list_pages(workspace_id: context.id, kind: "project", limit: 500))
-
-    # goals/projects live outside the pages table — fold them into by_type so
-    # the "Pages by Type" list and totals reflect the full hierarchy.
-    by_type =
-      stats[:by_type] ||
-        %{}
-        |> Map.put("goal", goal_count)
-        |> Map.put("project", project_count)
-
-    todos_by_status = todos_by_status(context.id)
-
-    stats
-    |> Map.put(:by_type, by_type)
-    |> Map.put(:total_pages, (stats[:total_pages] || 0) + goal_count + project_count)
-    |> Map.put(:todos_by_status, todos_by_status)
-  end
-
-  # todos_by_status: group by kanban_status column for all non-archived
-  # pages that have a kanban_status set.
-  defp todos_by_status(workspace_id) do
-    import Ecto.Query
-
-    from(p in Dran.Page,
-      where:
-        p.workspace_id == ^workspace_id and p.archived == false and
-          not is_nil(p.kanban_status),
-      group_by: fragment("coalesce(kanban_status, '')"),
-      select: {fragment("coalesce(kanban_status, '')"), count(p.id)}
-    )
-    |> Dran.Repo.all()
-    |> Map.new()
-  end
-
   @impl true
-  def handle_params(_params, _url, socket) do
-    # Only admin and editor users can access the dashboard.
-    # Regular users (even with contexts) and wiki-only users get redirected
-    # to the wiki. Sessions without a DB user row (test/legacy) also see it.
-    is_owner = socket.assigns[:is_owner] || false
-    is_editor = socket.assigns[:is_editor] || false
-    current_user = socket.assigns[:current_user]
-
-    db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
-
-    if not is_owner and not is_editor and db_user != nil do
-      {:noreply, push_navigate(socket, to: ~p"/")}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_event("regenerate_api_token", _params, socket) do
-    current_user = socket.assigns[:current_user]
-
-    case current_user && Dran.Accounts.get_user_by_email(current_user) do
-      %Dran.Accounts.User{} = db_user ->
-        case Dran.Accounts.regenerate_api_token(db_user) do
-          {:ok, %Dran.Accounts.User{api_token: new_token}} when is_binary(new_token) ->
-            {:noreply,
-             socket
-             |> assign(user_api_token_prefix: String.slice(new_token, 0, 8))
-             |> put_flash(
-               :info,
-               gettext("API token regenerated. Update any client that uses the old token.")
-             )}
-
-          {:error, _changeset} ->
-            {:noreply, put_flash(socket, :error, gettext("Could not regenerate API token."))}
+  def handle_event("create_workspace", %{"context" => params}, socket) do
+    # Owner-only, enforced server-side (the button is hidden for everyone else).
+    if socket.assigns[:can_create_workspace] do
+      params =
+        if is_nil(params["slug"]) or params["slug"] == "" do
+          Map.put(params, "slug", Slug.slugify(params["name"] || ""))
+        else
+          params
         end
 
-      _ ->
-        {:noreply, put_flash(socket, :error, gettext("Could not regenerate API token."))}
+      case Dran.Knowledge.create_workspace(params) do
+        {:ok, _workspace} ->
+          {:noreply,
+           socket
+           |> reload_workspaces()
+           |> assign_new_form()
+           |> assign(show_workspace_modal: false, suggested_slug: "")
+           |> put_flash(:info, gettext("Workspace created"))}
+
+        {:error, changeset} ->
+          {:noreply, assign(socket, new_workspace_form: to_form(changeset, as: :context))}
+      end
+    else
+      {:noreply, put_flash(socket, :error, gettext("Insufficient permissions"))}
     end
   end
 
-  @impl true
-  def handle_event("copy_api_token", _params, socket) do
-    # SEC-005: the full token is never in assigns — we fetch it fresh from DB
-    # and push it to the client via a one-time event, never storing it in the
-    # socket state.
+  # ── Data ─────────────────────────────────────────────────────────────────
+
+  defp reload_workspaces(socket) do
+    is_owner = socket.assigns[:can_create_workspace] || false
     current_user = socket.assigns[:current_user]
+    db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
 
-    case current_user && Dran.Accounts.get_user_by_email(current_user) do
-      %Dran.Accounts.User{api_token: token} when is_binary(token) ->
-        {:noreply,
-         socket
-         |> push_event("copy_to_clipboard", %{text: token})
-         |> put_flash(:info, gettext("API token copied to clipboard."))}
+    workspaces =
+      if is_owner do
+        Dran.Knowledge.list_workspaces()
+        |> Enum.map(&Map.put_new(&1, :role, "owner"))
+      else
+        (db_user && Dran.Accounts.accessible_workspaces(db_user)) || []
+      end
 
-      _ ->
-        {:noreply, put_flash(socket, :error, gettext("Could not copy API token."))}
-    end
+    ws_metrics = workspace_metrics(workspaces)
+
+    total_pages =
+      ws_metrics
+      |> Map.values()
+      |> Enum.map(& &1.pages)
+      |> Enum.sum()
+
+    instance = %{
+      total_workspaces: length(workspaces),
+      total_pages: total_pages,
+      total_users: if(is_owner, do: length(Dran.Accounts.list_users()), else: 0)
+    }
+
+    socket
+    |> assign(
+      workspaces: workspaces,
+      workspace_metrics: ws_metrics,
+      instance: instance
+    )
   end
 
-  # ── Components ──
-
-  attr :label, :string, required: true
-  attr :value, :any, required: true
-  attr :icon, :string, required: true
-  attr :color, :string, default: "text-base-content"
-
-  defp metric_card(assigns) do
-    ~H"""
-    <div class="surface-2 lift p-5 flex items-center gap-4 rounded-2xl">
-      <div class={[
-        "shrink-0 size-11 rounded-xl flex items-center justify-center",
-        bg_for_color(@color)
-      ]}>
-        <.icon name={@icon} class={["size-5", @color]} />
-      </div>
-      <div class="min-w-0">
-        <div class="text-2xl font-bold tabular-nums leading-tight">{@value}</div>
-        <div class="text-caption mt-0.5">{@label}</div>
-      </div>
-    </div>
-    """
+  defp assign_new_form(socket) do
+    assign(socket,
+      new_workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
+      slug_touched: false
+    )
   end
 
-  defp bg_for_color("text-primary"), do: "bg-primary/10"
-  defp bg_for_color("text-secondary"), do: "bg-secondary/10"
-  defp bg_for_color("text-accent"), do: "bg-accent/10"
-  defp bg_for_color("text-info"), do: "bg-info/10"
-  defp bg_for_color("text-success"), do: "bg-success/10"
-  defp bg_for_color("text-warning"), do: "bg-warning/10"
-  defp bg_for_color("text-error"), do: "bg-error/10"
-  defp bg_for_color(_), do: "bg-base-content/10"
+  defp workspace_metrics([]), do: %{}
 
-  attr :type, :string, required: true
-  attr :count, :integer, required: true
-  attr :total, :integer, required: true
-  attr :workspace_slug, :string, required: true
+  defp workspace_metrics(workspaces) do
+    import Ecto.Query
 
-  defp type_row(assigns) do
+    ids = Enum.map(workspaces, & &1.id)
+
+    page_counts =
+      from(p in Dran.Page,
+        where: p.workspace_id in ^ids and p.archived == false,
+        group_by: p.workspace_id,
+        select: {p.workspace_id, count(p.id)}
+      )
+      |> Dran.Repo.all()
+      |> Map.new()
+
+    todo_counts =
+      from(p in Dran.Page,
+        where: p.workspace_id in ^ids and p.archived == false and not is_nil(p.kanban_status),
+        group_by: p.workspace_id,
+        select: {p.workspace_id, count(p.id)}
+      )
+      |> Dran.Repo.all()
+      |> Map.new()
+
+    last_updated =
+      from(p in Dran.Page,
+        where: p.workspace_id in ^ids and p.archived == false,
+        group_by: p.workspace_id,
+        select: {p.workspace_id, max(p.updated_at)}
+      )
+      |> Dran.Repo.all()
+      |> Map.new()
+
+    Map.new(workspaces, fn ws ->
+      {ws.id,
+       %{
+         pages: Map.get(page_counts, ws.id, 0),
+         todos: Map.get(todo_counts, ws.id, 0),
+         last_updated: Map.get(last_updated, ws.id)
+       }}
+    end)
+  end
+
+  # ── Components ───────────────────────────────────────────────────────────
+
+  attr :ws, :map, required: true
+  attr :metrics, :map, default: %{pages: 0, todos: 0, last_updated: nil}
+  attr :can_manage, :boolean, default: false
+
+  defp workspace_card(assigns) do
     ~H"""
-    <div class="flex items-center gap-3">
-      <.link
-        navigate={"/#{@workspace_slug}/#{PageTypes.path(@type)}"}
-        class="text-sm font-medium hover:text-primary transition-colors shrink-0 w-24"
-      >
-        {PageTypes.plural(@type)}
-      </.link>
-      <div class="flex-1 h-1 rounded-full bg-base-200 overflow-hidden">
-        <div
-          class="h-full rounded-full bg-primary transition-all"
-          style={"width: #{pct(@count, @total)}%"}
-        >
+    <div class="surface-2 lift p-5 rounded-2xl flex flex-col gap-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h3 class="font-semibold text-base truncate">{@ws.name}</h3>
+            <span :if={@ws.is_default} class="badge badge-primary badge-sm">{gettext("default")}</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 mt-1">
+            <code class="text-xs text-base-content/50 font-mono">{@ws.slug}</code>
+            <.role_badge role={Map.get(@ws, :role, "owner")} />
+            <span class="inline-flex items-center gap-1 text-xs text-base-content/60">
+              <.icon
+                name={if @ws.visibility == "public", do: "hero-globe-alt", else: "hero-lock-closed"}
+                class="size-3"
+              />
+              {if @ws.visibility == "public", do: gettext("Public"), else: gettext("Private")}
+            </span>
+          </div>
+        </div>
+        <div class="flex gap-1.5 shrink-0">
+          <.link
+            :if={@can_manage}
+            navigate={~p"/#{@ws.slug}/settings"}
+            class="btn btn-ghost btn-xs"
+            title={gettext("Workspace settings")}
+          >
+            <.icon name="hero-cog-6-tooth" class="size-4" />
+          </.link>
+          <.link navigate={~p"/#{@ws.slug}"} class="btn btn-primary btn-xs gap-1">
+            {gettext("Open")}
+            <.icon name="hero-arrow-right" class="size-3.5" />
+          </.link>
         </div>
       </div>
-      <span class="text-sm font-semibold text-base-content/70 w-8 text-right tabular-nums">{@count}</span>
+
+      <div class="grid grid-cols-3 gap-2 border-t border-base-300 pt-3">
+        <div class="text-center">
+          <div class="text-lg font-bold tabular-nums leading-tight">{@metrics.pages}</div>
+          <div class="text-caption">{gettext("pages")}</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-bold tabular-nums leading-tight">{@metrics.todos}</div>
+          <div class="text-caption">{gettext("todos")}</div>
+        </div>
+        <div class="text-center">
+          <div class="text-sm font-semibold tabular-nums leading-tight">
+            {last_updated_label(@metrics.last_updated)}
+          </div>
+          <div class="text-caption">{gettext("updated")}</div>
+        </div>
+      </div>
     </div>
     """
   end
 
-  # ── Helpers ──
+  attr :role, :string, required: true
+
+  defp role_badge(assigns) do
+    ~H"""
+    <span class={[
+      "px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-md",
+      role_color(@role)
+    ]}>
+      {@role}
+    </span>
+    """
+  end
+
+  defp role_color("owner"), do: "bg-primary/15 text-primary"
+  defp role_color("admin"), do: "bg-warning/15 text-warning"
+  defp role_color("editor"), do: "bg-info/15 text-info"
+  defp role_color(_), do: "bg-base-300 text-base-content/60"
+
+  # ── Helpers ──────────────────────────────────────────────────────────────
 
   defp greeting do
     hour = DateTime.utc_now().hour
@@ -630,41 +442,11 @@ defmodule DranWeb.DashboardLive do
     Calendar.strftime(Date.utc_today(), "%A, %B %d, %Y")
   end
 
-  defp pct(count, total) when total > 0, do: trunc(count / total * 100)
-  defp pct(_count, _total), do: 0
+  defp last_updated_label(nil), do: "—"
 
-  defp delta_label(this_week, last_week) do
-    diff = this_week - last_week
-
-    if diff > 0 do
-      "+#{diff}"
-    else
-      "#{diff}"
-    end
+  defp last_updated_label(%mod{} = dt) when mod in [DateTime, NaiveDateTime, Date] do
+    Calendar.strftime(dt, "%b %d")
   end
 
-  defp relations_total(relations_by_type) when is_map(relations_by_type) do
-    relations_by_type
-    |> Map.values()
-    |> Enum.sum()
-  end
-
-  defp relations_total(_), do: 0
-
-  defp page_path(%Dran.Page{} = page, workspace_slug) do
-    "/#{workspace_slug}/#{PageTypes.path(page.page_type)}/#{page.slug}"
-  end
-
-  defp page_path(_, _), do: "#"
-
-  defp sort_by_type(by_type) do
-    type_order = ~w(note concept entity reference goal plan todo query project)
-
-    by_type
-    |> Enum.filter(fn {type, _count} -> Map.has_key?(PageTypes.all(), type) end)
-    |> Enum.sort_by(fn {type, _count} ->
-      idx = Enum.find_index(type_order, &(&1 == type))
-      idx || 99
-    end)
-  end
+  defp last_updated_label(other), do: to_string(other)
 end

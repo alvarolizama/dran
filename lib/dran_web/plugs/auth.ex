@@ -101,10 +101,10 @@ defmodule DranWeb.Plugs.Auth do
   @doc """
   Resolves where to redirect a user after a successful login.
 
-  If there's a `return_to` in the session, honor it. Otherwise, if the user
-  is admin or editor AND no all contexts exist, send them straight
-  to `/panel` — the home would be an empty page anyway. Fall back to `/`
-  (the home) in all other cases.
+  If there's a `return_to` in the session, honor it. Otherwise send the
+  user to `/` — the dashboard (workspace/instance overview). When the
+  instance has no workspaces yet, the dashboard shows the empty state with
+  the create-workspace action straight from there.
   """
   def resolve_login_redirect(conn) do
     case get_session(conn, :return_to) do
@@ -112,13 +112,7 @@ defmodule DranWeb.Plugs.Auth do
         path
 
       _ ->
-        is_owner = get_session(conn, "is_owner") == true
-
-        if is_owner and Dran.Knowledge.list_workspaces() == [] do
-          ~p"/panel"
-        else
-          ~p"/"
-        end
+        ~p"/"
     end
   end
 

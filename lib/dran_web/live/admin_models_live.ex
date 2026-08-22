@@ -8,6 +8,8 @@ defmodule DranWeb.AdminModelsLive do
 
   use DranWeb, :live_view
 
+  import DranWeb.Admin
+
   alias Dran.Inference.Client
   alias Dran.Inference.Config
   alias Dran.Settings
@@ -38,7 +40,7 @@ defmodule DranWeb.AdminModelsLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Modelos"))
+      |> assign(active_nav: "admin", page_title: gettext("Modelos"), workspace_slug: nil)
       |> assign(model_test_status: %{})
       |> assign_models()
 
@@ -174,9 +176,11 @@ defmodule DranWeb.AdminModelsLive do
   defp effective_model(_), do: nil
 
   # Compact, human-readable reason for the UI.
-  defp format_model_error({:http_error, status, _body}), do: "HTTP #{status}"
+  defp format_model_error({:http_error, status, _body}),
+    do: gettext("HTTP %{status}", status: status)
+
   defp format_model_error(%Req.TransportError{reason: reason}), do: inspect(reason)
-  defp format_model_error(:not_configured), do: "inference no configurado"
+  defp format_model_error(:not_configured), do: gettext("API no configurada")
   defp format_model_error(other), do: inspect(other)
 
   @impl true
@@ -218,19 +222,11 @@ defmodule DranWeb.AdminModelsLive do
 
   defp models_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
-      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
-        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
-          <.icon name="hero-cpu-chip" class="size-4 text-primary" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <h2 class="text-heading">{gettext("Modelos")}</h2>
-          <p class="text-caption mt-0.5">
-            {gettext("Pick the model used for each purpose from the provider's model list.")}
-          </p>
-        </div>
-      </header>
-
+    <.section
+      title={gettext("Modelos")}
+      icon="hero-cpu-chip"
+      caption={gettext("Pick the model used for each purpose from the provider's model list.")}
+    >
       <.form
         for={to_form(%{}, as: :models)}
         id="models-form"
@@ -318,7 +314,7 @@ defmodule DranWeb.AdminModelsLive do
           </button>
         </div>
       </.form>
-    </section>
+    </.section>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".ModelTest">
       export default {

@@ -380,7 +380,7 @@ defmodule DranWeb.E2EAuthTest do
   end
 
   describe "sidebar integration" do
-    test "context CRUD lives inside the settings contexts tab", %{
+    test "workspace CRUD lives in /admin/workspaces", %{
       conn: conn,
       admin: admin,
       ctx1: ctx1
@@ -389,15 +389,15 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      {:ok, view, html} = Phoenix.LiveViewTest.live(conn, ~p"/settings/workspaces")
+      {:ok, view, html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
 
-      # The settings contexts tab lists existing contexts and their controls
+      # The workspaces table lists existing contexts and their controls
       assert html =~ ctx1.slug
-      # Manage users button per context
+      # Manage users button per workspace
       assert html =~ "manage_context_users"
 
       # Opening the "New context" modal exposes the create form
-      html = Phoenix.LiveViewTest.render_click(view, "open_context_modal")
+      html = Phoenix.LiveViewTest.render_click(view, "new_workspace")
       assert html =~ "context-form"
     end
 
@@ -411,7 +411,7 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/settings/workspaces")
+      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
 
       # Open the modal for ctx1
       html = Phoenix.LiveViewTest.render_click(view, "manage_context_users", %{"id" => ctx1.id})
@@ -426,7 +426,7 @@ defmodule DranWeb.E2EAuthTest do
       refute html =~ "toggle_context_user"
     end
 
-    test "admin session sees the Settings link and all contexts", %{
+    test "admin session sees the sidebars links and all workspaces", %{
       conn: conn,
       admin: admin,
       ctx1: ctx1,
@@ -436,15 +436,17 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      # Workspace-scoped page: admin sees the Settings link in the sidebar
+      # Workspace-scoped page: admin sees the workspace Config link + API Keys in the sidebar
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
-      assert html =~ ~p"/settings"
+      assert html =~ ~p"/#{ctx1.slug}/settings"
+      assert html =~ ~p"/settings/api_keys"
+      assert html =~ ~p"/admin"
       assert html =~ ctx1.slug
 
-      # Settings contexts tab lists ALL workspaces for the instance owner
-      {:ok, _view, settings_html} = Phoenix.LiveViewTest.live(conn, ~p"/settings/workspaces")
-      assert settings_html =~ ctx1.slug
-      assert settings_html =~ ctx2.slug
+      # /admin/workspaces lists ALL workspaces for the instance owner
+      {:ok, _view, ws_html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
+      assert ws_html =~ ctx1.slug
+      assert ws_html =~ ctx2.slug
     end
 
     test "non-admin session hides the Settings link and only sees assigned contexts", %{

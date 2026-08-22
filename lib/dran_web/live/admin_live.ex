@@ -15,7 +15,7 @@ defmodule DranWeb.AdminLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Admin"))
+      |> assign(active_nav: "admin", page_title: gettext("Admin"), workspace_slug: nil)
 
     {:ok, socket}
   end

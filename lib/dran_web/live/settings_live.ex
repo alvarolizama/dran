@@ -14,6 +14,8 @@ defmodule DranWeb.SettingsLive do
 
   use DranWeb, :live_view
 
+  import DranWeb.Admin
+
   alias DranWeb.Plugs.Auth
 
   # Workspaces the user may attach to a NEW api key: those where they are a
@@ -29,21 +31,52 @@ defmodule DranWeb.SettingsLive do
   end
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(params, session, socket) do
     {socket, _context} = Auth.assign_to_socket(socket, session)
+
+    user = session_user(session)
 
     socket =
       socket
-      |> assign(active_nav: "settings", page_title: gettext("API Keys"))
       |> assign(
-        api_keys: Dran.Accounts.list_api_keys(session_user(session)),
-        api_key_workspaces: api_key_workspaces(session_user(session)),
+        active_nav: "settings",
+        page_title: gettext("Settings"),
+        workspace_slug: nil,
+        current_user_struct: user
+      )
+      |> assign(
+        api_keys: Dran.Accounts.list_api_keys(user),
+        api_key_workspaces: api_key_workspaces(user),
         new_api_key_form: to_form(%{}, as: :api_key),
         revealed_api_key: nil,
-        show_api_key_modal: false
+        show_api_key_modal: false,
+        profile_form: to_form(Dran.Accounts.User.profile_changeset(user, %{}), as: :profile),
+        password_form:
+          to_form(Dran.Accounts.User.update_password_changeset(user, %{}), as: :password),
+        google_linked: Dran.Accounts.google_linked?(user)
       )
 
-    {:ok, socket}
+    {:ok, apply_tab(socket, socket.assigns.live_action, params)}
+  end
+
+  @impl true
+  def handle_params(_params, _uri, socket) do
+    {:noreply, apply_tab(socket, socket.assigns.live_action, %{})}
+  end
+
+  defp apply_tab(socket, :account, _params) do
+    socket
+    |> assign(active_tab: :account, page_title: gettext("Account"))
+  end
+
+  defp apply_tab(socket, :api_keys, _params) do
+    socket
+    |> assign(active_tab: :api_keys, page_title: gettext("API Keys"))
+  end
+
+  defp apply_tab(socket, _action, _params) do
+    socket
+    |> assign(active_tab: :api_keys, page_title: gettext("API Keys"))
   end
 
   # Resolves the %User{} (or nil) behind the LiveView session. The session
@@ -187,6 +220,69 @@ defmodule DranWeb.SettingsLive do
     {:noreply, push_event(socket, "copy_to_clipboard", %{text: key.token_prefix})}
   end
 
+  # ── Account tab ──
+
+  @impl true
+  def handle_event("save_profile", %{"profile" => profile_params}, socket) do
+    case Dran.Accounts.update_profile(socket.assigns.current_user_struct, profile_params) do
+      {:ok, updated_user} ->
+        socket =
+          socket
+          |> put_flash(:info, gettext("Profile updated"))
+          |> assign(
+            current_user_struct: updated_user,
+            profile_form:
+              to_form(Dran.Accounts.User.profile_changeset(updated_user, %{}), as: :profile)
+          )
+
+        {:noreply, socket}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, profile_form: to_form(changeset, as: :profile))}
+    end
+  end
+
+  @impl true
+  def handle_event("save_password", %{"password" => password_params}, socket) do
+    case Dran.Accounts.update_password(socket.assigns.current_user_struct, password_params) do
+      {:ok, _updated_user} ->
+        socket =
+          socket
+          |> put_flash(:info, gettext("Password changed"))
+          |> assign(
+            password_form:
+              to_form(
+                Dran.Accounts.User.update_password_changeset(
+                  socket.assigns.current_user_struct,
+                  %{}
+                ),
+                as: :password
+              )
+          )
+
+        {:noreply, socket}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, password_form: to_form(changeset, as: :password))}
+    end
+  end
+
+  @impl true
+  def handle_event("unlink_google", _params, socket) do
+    case Dran.Accounts.unlink_google(socket.assigns.current_user_struct) do
+      {:ok, updated_user} ->
+        socket =
+          socket
+          |> put_flash(:info, gettext("Google account unlinked"))
+          |> assign(current_user_struct: updated_user, google_linked: false)
+
+        {:noreply, socket}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not unlink Google account"))}
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -199,20 +295,152 @@ defmodule DranWeb.SettingsLive do
       active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full p-6 space-y-8">
-          <div id="api-keys-tab" phx-hook=".CopyUserToken">
-            <.api_keys_section
-              api_keys={@api_keys}
-              all_workspaces={@api_key_workspaces}
-              api_key_workspaces={@api_key_workspaces}
-              form={@new_api_key_form}
-              revealed_api_key={@revealed_api_key}
-              show_api_key_modal={@show_api_key_modal}
-            />
+        <div class="w-full p-6 space-y-6">
+          <div class="flex items-center gap-1 border-b border-base-300">
+            <.tab_link active={@active_tab == :account} to={~p"/settings/account"}>
+              {gettext("Account")}
+            </.tab_link>
+            <.tab_link active={@active_tab == :api_keys} to={~p"/settings/api_keys"}>
+              {gettext("API Keys")}
+            </.tab_link>
           </div>
+
+          <%= if @active_tab == :account do %>
+            <div class="space-y-6">
+              <.section
+                title={gettext("Profile")}
+                caption={gettext("Change your display name.")}
+                icon="hero-user"
+              >
+                <.form
+                  for={@profile_form}
+                  id="profile-form"
+                  phx-submit="save_profile"
+                  class="space-y-4"
+                >
+                  <.input
+                    field={@profile_form[:name]}
+                    label={gettext("Name")}
+                    placeholder={gettext("Your name")}
+                  />
+                  <button
+                    type="submit"
+                    class="btn btn-primary btn-sm"
+                    phx-disable-with={gettext("Saving…")}
+                  >
+                    {gettext("Save")}
+                  </button>
+                </.form>
+              </.section>
+
+              <.section
+                title={gettext("Password")}
+                caption={gettext("Change your password.")}
+                icon="hero-lock-closed"
+              >
+                <.form
+                  for={@password_form}
+                  id="password-form"
+                  phx-submit="save_password"
+                  class="space-y-4"
+                >
+                  <.input
+                    :if={@current_user_struct.password_hash}
+                    field={@password_form[:current_password]}
+                    type="password"
+                    label={gettext("Current password")}
+                    placeholder="••••••••"
+                  />
+                  <.input
+                    field={@password_form[:password]}
+                    type="password"
+                    label={gettext("New password")}
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="submit"
+                    class="btn btn-primary btn-sm"
+                    phx-disable-with={gettext("Saving…")}
+                  >
+                    {gettext("Change password")}
+                  </button>
+                </.form>
+              </.section>
+
+              <.section
+                title={gettext("Google Account")}
+                caption={gettext("Link or unlink your Google account.")}
+                icon="hero-globe-alt"
+              >
+                <div class="flex items-center gap-3">
+                  <.icon
+                    name={if @google_linked, do: "hero-check-badge", else: "hero-link-slash"}
+                    class="size-5"
+                  />
+                  <span class="text-sm text-base-content/70">
+                    {if @google_linked,
+                      do: gettext("Google account linked"),
+                      else: gettext("No Google account linked")}
+                  </span>
+                </div>
+
+                <div class="mt-4">
+                  <%= if @google_linked do %>
+                    <button
+                      type="button"
+                      phx-click="unlink_google"
+                      data-confirm={gettext("Are you sure you want to unlink your Google account?")}
+                      class="btn btn-ghost btn-sm gap-1.5 text-error"
+                      phx-disable-with={gettext("Unlinking…")}
+                    >
+                      <.icon name="hero-link-slash" class="size-4" />
+                      {gettext("Unlink")}
+                    </button>
+                  <% else %>
+                    <a href={~p"/auth/google"} class="btn btn-outline btn-sm gap-1.5">
+                      <.icon name="hero-globe-alt" class="size-4" />
+                      {gettext("Link Google account")}
+                    </a>
+                  <% end %>
+                </div>
+              </.section>
+            </div>
+          <% else %>
+            <div id="api-keys-tab" phx-hook=".CopyUserToken">
+              <.api_keys_section
+                api_keys={@api_keys}
+                all_workspaces={@api_key_workspaces}
+                api_key_workspaces={@api_key_workspaces}
+                form={@new_api_key_form}
+                revealed_api_key={@revealed_api_key}
+                show_api_key_modal={@show_api_key_modal}
+              />
+            </div>
+          <% end %>
         </div>
       </div>
     </Layouts.app>
+    """
+  end
+
+  # ── Tabs ──
+
+  attr :active, :boolean, default: false
+  attr :to, :any, required: true
+  slot :inner_block, required: true
+
+  defp tab_link(assigns) do
+    ~H"""
+    <.link
+      patch={@to}
+      class={[
+        "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
+        @active && "border-primary text-primary",
+        !@active && "border-transparent text-base-content/60 hover:text-base-content"
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.link>
     """
   end
 
@@ -230,8 +458,8 @@ defmodule DranWeb.SettingsLive do
     <div class="space-y-6">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-heading">{gettext("API Keys")}</h2>
-          <p class="text-caption mt-0.5">
+          <h1 class="text-title">{gettext("API Keys")}</h1>
+          <p class="text-caption mt-1">
             {gettext(
               "Context-scoped keys for integrations and MCP clients. A key grants access to one context only — no user account needed."
             )}
@@ -261,7 +489,7 @@ defmodule DranWeb.SettingsLive do
             <button
               type="button"
               phx-click="dismiss_revealed_key"
-              class="btn btn-ghost btn-xs"
+              class="btn btn-ghost btn-xs p-1"
               title={gettext("Dismiss")}
             >
               <.icon name="hero-x-mark" class="size-4" />
@@ -295,218 +523,207 @@ defmodule DranWeb.SettingsLive do
       </div>
 
       <%!-- Keys list --%>
-      <div class="card bg-base-100 border border-base-300">
-        <div class="card-body">
-          <h3 class="text-lg font-semibold">{gettext("Existing Keys")}</h3>
-          <div class="overflow-x-auto">
-            <table class="table table-sm">
-              <thead>
-                <tr>
-                  <th>{gettext("Name")}</th>
-                  <th>{gettext("Context")}</th>
-                  <th>{gettext("Token")}</th>
-                  <th>{gettext("Status")}</th>
-                  <th>{gettext("Write")}</th>
-                  <th>{gettext("Created")}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr :for={key <- @api_keys} id={"api-key-#{key.id}"}>
-                  <td class="font-medium">{key.name}</td>
-                  <td>
-                    <span class="badge badge-ghost badge-sm">
-                      {if Enum.any?(key.api_key_workspaces),
-                        do: hd(key.api_key_workspaces).workspace.name,
-                        else: "—"}
-                    </span>
-                  </td>
-                  <td>
-                    <div class="flex items-center gap-1">
-                      <code class="text-xs">{key.token_prefix}••••••••••••</code>
-                      <button
-                        type="button"
-                        phx-click="copy_api_key_prefix"
-                        phx-value-id={key.id}
-                        class="btn btn-ghost btn-xs p-1"
-                        title={gettext("Copy prefix")}
-                      >
-                        <.icon name="hero-clipboard-document" class="size-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    <span :if={key.revoked_at} class="badge badge-error badge-sm">
-                      {gettext("Revoked")}
-                    </span>
-                    <span :if={!key.revoked_at} class="badge badge-success badge-sm">
-                      {gettext("Active")}
-                    </span>
-                  </td>
-                  <td>
+      <.section
+        :if={@api_keys != []}
+        title={gettext("Existing Keys")}
+        icon="hero-key"
+      >
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>{gettext("Name")}</th>
+                <th>{gettext("Context")}</th>
+                <th>{gettext("Token")}</th>
+                <th>{gettext("Status")}</th>
+                <th>{gettext("Write")}</th>
+                <th>{gettext("Created")}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={key <- @api_keys} id={"api-key-#{key.id}"}>
+                <td class="font-medium">{key.name}</td>
+                <td>
+                  <span class="badge badge-ghost badge-sm">
+                    {if Enum.any?(key.api_key_workspaces),
+                      do: hd(key.api_key_workspaces).workspace.name,
+                      else: "—"}
+                  </span>
+                </td>
+                <td>
+                  <div class="flex items-center gap-1">
+                    <code class="text-xs">{key.token_prefix}••••••••••••</code>
                     <button
                       type="button"
-                      phx-click="toggle_write_access"
+                      phx-click="copy_api_key_prefix"
                       phx-value-id={key.id}
-                      class="btn btn-ghost btn-xs"
-                      title={
-                        if Dran.Accounts.ApiKey.write_access?(key),
-                          do: gettext("Click to make read-only"),
-                          else: gettext("Click to enable write access")
-                      }
+                      class="btn btn-ghost btn-xs p-1"
+                      title={gettext("Copy prefix")}
                     >
-                      <span
-                        :if={Dran.Accounts.ApiKey.write_access?(key)}
-                        class="badge badge-primary badge-sm"
-                      >
-                        {gettext("R/W")}
-                      </span>
-                      <span
-                        :if={!Dran.Accounts.ApiKey.write_access?(key)}
-                        class="badge badge-ghost badge-sm"
-                      >
-                        {gettext("R/O")}
-                      </span>
+                      <.icon name="hero-clipboard-document" class="size-3.5" />
                     </button>
-                  </td>
-                  <td class="text-xs text-base-content/60">
-                    {Calendar.strftime(key.inserted_at, "%Y-%m-%d")}
-                  </td>
-                  <td>
-                    <div class="flex items-center gap-1">
-                      <button
-                        :if={!key.revoked_at}
-                        type="button"
-                        phx-click="revoke_api_key"
-                        phx-value-id={key.id}
-                        data-confirm={gettext("Revoke this key? It will stop working immediately.")}
-                        class="btn btn-ghost btn-xs text-warning"
-                        title={gettext("Revoke")}
-                      >
-                        <.icon name="hero-no-symbol" class="size-4" />
-                      </button>
-                      <button
-                        :if={key.revoked_at}
-                        type="button"
-                        phx-click="restore_api_key"
-                        phx-value-id={key.id}
-                        class="btn btn-ghost btn-xs text-success"
-                        title={gettext("Restore")}
-                      >
-                        <.icon name="hero-arrow-uturn-left" class="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="regenerate_api_key"
-                        phx-value-id={key.id}
-                        data-confirm={
-                          gettext(
-                            "Regenerate this key? The current token stops working immediately and you'll get a new one."
-                          )
-                        }
-                        class="btn btn-ghost btn-xs"
-                        title={gettext("Regenerate")}
-                      >
-                        <.icon name="hero-arrow-path" class="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="delete_api_key"
-                        phx-value-id={key.id}
-                        data-confirm={gettext("Delete this key permanently?")}
-                        class="btn btn-ghost btn-xs text-error"
-                        title={gettext("Delete")}
-                      >
-                        <.icon name="hero-trash" class="size-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                <tr :if={@api_keys == []}>
-                  <td colspan="7" class="text-center text-base-content/50 py-6">
-                    {gettext("No API keys yet — create one with the button above.")}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+                  </div>
+                </td>
+                <td>
+                  <span :if={key.revoked_at} class="badge badge-error badge-sm">
+                    {gettext("Revoked")}
+                  </span>
+                  <span :if={!key.revoked_at} class="badge badge-success badge-sm">
+                    {gettext("Active")}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    phx-click="toggle_write_access"
+                    phx-value-id={key.id}
+                    class="btn btn-ghost btn-xs p-1"
+                    title={
+                      if Dran.Accounts.ApiKey.write_access?(key),
+                        do: gettext("Click to make read-only"),
+                        else: gettext("Click to enable write access")
+                    }
+                  >
+                    <span
+                      :if={Dran.Accounts.ApiKey.write_access?(key)}
+                      class="badge badge-primary badge-sm"
+                    >
+                      {gettext("R/W")}
+                    </span>
+                    <span
+                      :if={!Dran.Accounts.ApiKey.write_access?(key)}
+                      class="badge badge-ghost badge-sm"
+                    >
+                      {gettext("R/O")}
+                    </span>
+                  </button>
+                </td>
+                <td class="text-xs text-base-content/60">
+                  {Calendar.strftime(key.inserted_at, "%Y-%m-%d")}
+                </td>
+                <td>
+                  <div class="flex items-center gap-1 justify-end">
+                    <button
+                      :if={!key.revoked_at}
+                      type="button"
+                      phx-click="revoke_api_key"
+                      phx-value-id={key.id}
+                      data-confirm={gettext("Revoke this key? It will stop working immediately.")}
+                      class="btn btn-ghost btn-xs p-1 text-warning"
+                      title={gettext("Revoke")}
+                    >
+                      <.icon name="hero-no-symbol" class="size-4" />
+                    </button>
+                    <button
+                      :if={key.revoked_at}
+                      type="button"
+                      phx-click="restore_api_key"
+                      phx-value-id={key.id}
+                      class="btn btn-ghost btn-xs p-1 text-success"
+                      title={gettext("Restore")}
+                    >
+                      <.icon name="hero-arrow-uturn-left" class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="regenerate_api_key"
+                      phx-value-id={key.id}
+                      data-confirm={
+                        gettext(
+                          "Regenerate this key? The current token stops working immediately and you'll get a new one."
+                        )
+                      }
+                      class="btn btn-ghost btn-xs p-1"
+                      title={gettext("Regenerate")}
+                    >
+                      <.icon name="hero-arrow-path" class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="delete_api_key"
+                      phx-value-id={key.id}
+                      data-confirm={gettext("Delete this key permanently?")}
+                      class="btn btn-ghost btn-xs p-1 text-error"
+                      title={gettext("Delete")}
+                    >
+                      <.icon name="hero-trash" class="size-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+      </.section>
+
+      <div :if={@api_keys == []} class="text-center text-base-content/50 py-6">
+        {gettext("No API keys yet — create one with the button above.")}
       </div>
 
       <%!-- Create API key modal --%>
-      <div
-        :if={@show_api_key_modal}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      <.modal
+        id="api-key-modal"
+        show={@show_api_key_modal}
+        title={gettext("Create API Key")}
+        on_close="close_api_key_modal"
       >
-        <div
-          class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"
-          phx-click-away="close_api_key_modal"
-        >
-          <div class="card-body">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-lg font-semibold">{gettext("Create API Key")}</h3>
-              <button
-                phx-click="close_api_key_modal"
-                class="btn btn-ghost btn-xs btn-circle"
-              >
-                <.icon name="hero-x-mark" class="size-4" />
-              </button>
-            </div>
+        <.form for={@form} phx-submit="create_api_key" class="space-y-4" id="create-api-key-form">
+          <.input
+            field={@form[:name]}
+            label={gettext("Name")}
+            type="text"
+            placeholder={gettext("e.g. Hermes agent, backup script")}
+            required
+          />
 
-            <.form for={@form} phx-submit="create_api_key" class="space-y-3" id="create-api-key-form">
-              <.input
-                field={@form[:name]}
-                label={gettext("Name")}
-                type="text"
-                placeholder={gettext("e.g. Hermes agent, backup script")}
-                required
-              />
-
-              <div>
-                <p class="text-sm font-medium mb-2">
-                  {gettext("Workspaces")} — {gettext("tick the ones this key may access")}
-                </p>
-                <div class="space-y-2 max-h-60 overflow-y-auto">
-                  <div :for={ws <- @api_key_workspaces} class="flex items-center gap-3">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name={"api_key[workspaces][#{ws.id}]"}
-                        value="read"
-                        class="checkbox checkbox-sm checkbox-secondary"
-                      />
-                      <span class="text-sm">{ws.name}</span>
-                    </label>
-                    <select
-                      name={"api_key[level][#{ws.id}]"}
-                      class="select select-bordered select-xs ml-auto"
-                    >
-                      <option value="read">{gettext("Read only")}</option>
-                      <option value="write">{gettext("Read + write")}</option>
-                    </select>
-                  </div>
-                </div>
-                <p :if={@api_key_workspaces == []} class="text-sm text-base-content/60">
-                  {gettext("You are not a member of any workspace yet.")}
-                </p>
-              </div>
-
-              <div class="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  phx-click="close_api_key_modal"
-                  class="btn btn-ghost btn-sm"
+          <div>
+            <p class="text-sm font-medium mb-2">
+              {gettext("Workspaces")} — {gettext("tick the ones this key may access")}
+            </p>
+            <div class="space-y-2 max-h-60 overflow-y-auto">
+              <div :for={ws <- @api_key_workspaces} class="flex items-center gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name={"api_key[workspaces][#{ws.id}]"}
+                    value="read"
+                    class="checkbox checkbox-sm"
+                  />
+                  <span class="text-sm">{ws.name}</span>
+                </label>
+                <select
+                  name={"api_key[level][#{ws.id}]"}
+                  class="select select-bordered select-xs ml-auto"
                 >
-                  {gettext("Cancel")}
-                </button>
-                <button type="submit" class="btn btn-primary btn-sm">
-                  {gettext("Create Key")}
-                </button>
+                  <option value="read">{gettext("Read only")}</option>
+                  <option value="write">{gettext("Read + write")}</option>
+                </select>
               </div>
-            </.form>
+            </div>
+            <p :if={@api_key_workspaces == []} class="text-sm text-base-content/60">
+              {gettext("You are not a member of any workspace yet.")}
+            </p>
           </div>
-        </div>
-      </div>
+
+          <div class="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              phx-click="close_api_key_modal"
+              class="btn btn-ghost btn-sm"
+            >
+              {gettext("Cancel")}
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm"
+              phx-disable-with={gettext("Guardando…")}
+            >
+              {gettext("Create Key")}
+            </button>
+          </div>
+        </.form>
+      </.modal>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyApiToken">
         export default {

@@ -30,7 +30,9 @@ defmodule DranWeb.SearchLive do
     {:ok,
      assign(socket,
        context: context,
-       active_nav: "search",
+       # No sidebar item for search (it lives in the header form); passing
+       # nil means no nav item is highlighted, which is the correct state.
+       active_nav: nil,
        query: "",
        results: [],
        graph_nodes: [],

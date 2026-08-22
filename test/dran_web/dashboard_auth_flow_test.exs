@@ -3,6 +3,9 @@ defmodule DranWeb.DashboardAuthFlowTest do
 
   alias Dran.Accounts
 
+  # Gettext wrapper — the app default locale is "es".
+  defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
+
   setup %{conn: conn} do
     {:ok, user} =
       Accounts.create_user_with_password(%{
@@ -44,7 +47,7 @@ defmodule DranWeb.DashboardAuthFlowTest do
     assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Invalid"
   end
 
-  test "dashboard header shows kanban link and logged-in user api token", %{
+  test "dashboard renders the instance overview and never leaks the api token", %{
     conn: conn,
     user: user
   } do
@@ -54,12 +57,13 @@ defmodule DranWeb.DashboardAuthFlowTest do
 
     {:ok, _view, html} = live(conn, ~p"/")
 
-    assert html =~ ~p"/personal/kanban"
-    assert html =~ "dashboard-api-token"
-    # SEC-005: only the prefix is rendered — the full token never reaches the DOM
-    assert html =~ String.slice(user.api_token, 0, 8)
-    assert html =~ "••••••"
+    # Instance-level dashboard — the workspaces overview heading is present.
+    assert html =~ t("Workspaces")
+
+    # SEC-005: the api token lives only in /settings/api_keys — not even the
+    # prefix reaches the dashboard DOM.
+    refute html =~ String.slice(user.api_token, 0, 8)
     refute html =~ Regex.compile!(">#{Regex.escape(user.api_token)}<")
-    assert html =~ "copy_api_token"
+    refute html =~ "copy_api_token"
   end
 end

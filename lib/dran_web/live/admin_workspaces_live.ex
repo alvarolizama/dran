@@ -7,6 +7,8 @@ defmodule DranWeb.AdminWorkspacesLive do
 
   use DranWeb, :live_view
 
+  import DranWeb.Admin
+
   alias Dran.Slug
   alias DranWeb.Plugs.Auth
 
@@ -16,14 +18,15 @@ defmodule DranWeb.AdminWorkspacesLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Workspaces"))
+      |> assign(active_nav: "admin", page_title: gettext("Workspaces"), workspace_slug: nil)
       |> assign_workspaces()
       |> assign_users()
-      |> assign_new_workspace_form()
+      |> assign_workspace_form()
       |> assign(
-        confirm_delete_workspace_id: nil,
         slug_touched: false,
         show_workspace_modal: false,
+        editing_workspace: nil,
+        form_modal_title: gettext("Nuevo contexto"),
         managing_workspace_id: nil,
         workspace_user_search: "",
         page_types_workspace_id: nil
@@ -40,15 +43,34 @@ defmodule DranWeb.AdminWorkspacesLive do
     assign(socket, users: Dran.Accounts.list_users())
   end
 
-  defp assign_new_workspace_form(socket) do
+  defp assign_workspace_form(socket) do
     assign(socket,
-      new_workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context)
+      workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context)
     )
   end
 
   @impl true
-  def handle_event("open_context_modal", _params, socket) do
-    {:noreply, assign(socket, show_workspace_modal: true)}
+  def handle_event("new_workspace", _params, socket) do
+    {:noreply,
+     assign(socket,
+       editing_workspace: nil,
+       workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
+       form_modal_title: gettext("Nuevo contexto"),
+       show_workspace_modal: true
+     )}
+  end
+
+  @impl true
+  def handle_event("edit_workspace", %{"id" => id}, socket) do
+    ws = Dran.Knowledge.get_workspace!(id)
+
+    {:noreply,
+     assign(socket,
+       editing_workspace: ws,
+       workspace_form: to_form(Dran.Workspace.changeset(ws, %{}), as: :context),
+       form_modal_title: gettext("Editar contexto"),
+       show_workspace_modal: true
+     )}
   end
 
   @impl true
@@ -72,41 +94,29 @@ defmodule DranWeb.AdminWorkspacesLive do
       end
 
     form = %Dran.Workspace{} |> Dran.Workspace.changeset(params) |> to_form(as: :context)
-    {:noreply, assign(socket, new_workspace_form: form, slug_touched: slug_touched)}
+    {:noreply, assign(socket, workspace_form: form, slug_touched: slug_touched)}
   end
 
   @impl true
-  def handle_event("create_workspace", %{"context" => params}, socket) do
-    params =
-      if is_nil(params["slug"]) or params["slug"] == "" do
-        Map.put(params, "slug", Slug.slugify(params["name"] || ""))
-      else
-        params
-      end
+  def handle_event("save_workspace", %{"context" => params}, socket) do
+    attrs = %{
+      name: params["name"],
+      visibility: params["visibility"],
+      is_default: not is_nil(params["is_default"])
+    }
 
-    case Dran.Knowledge.create_workspace(params) do
+    case save_workspace(socket.assigns.editing_workspace, attrs) do
       {:ok, _context} ->
         {:noreply,
          socket
          |> assign_workspaces()
-         |> assign_new_workspace_form()
-         |> assign(slug_touched: false)
-         |> assign(show_workspace_modal: false)
-         |> put_flash(:info, gettext("Context created"))}
+         |> assign_workspace_form()
+         |> assign(slug_touched: false, editing_workspace: nil, show_workspace_modal: false)
+         |> put_flash(:info, gettext("Workspace guardado"))}
 
       {:error, changeset} ->
-        {:noreply, assign(socket, new_workspace_form: to_form(changeset, as: :context))}
+        {:noreply, assign(socket, workspace_form: to_form(changeset, as: :context))}
     end
-  end
-
-  @impl true
-  def handle_event("ask_delete_workspace", %{"id" => id}, socket) do
-    {:noreply, assign(socket, confirm_delete_workspace_id: id)}
-  end
-
-  @impl true
-  def handle_event("cancel_delete_workspace", _params, socket) do
-    {:noreply, assign(socket, confirm_delete_workspace_id: nil)}
   end
 
   @impl true
@@ -119,53 +129,13 @@ defmodule DranWeb.AdminWorkspacesLive do
           {:noreply,
            socket
            |> assign_workspaces()
-           |> assign(confirm_delete_workspace_id: nil)
-           |> put_flash(:info, gettext("Context \"%{name}\" deleted", name: context.name))}
+           |> put_flash(:info, gettext(~s(Context "%{name}" deleted), name: context.name))}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, gettext("Could not delete context"))}
       end
     else
       {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_event("toggle_is_default", %{"id" => id}, socket) do
-    context = Dran.Knowledge.get_workspace!(id)
-    new_value = !context.is_default
-
-    case Dran.Knowledge.update_workspace_settings(context, %{is_default: new_value}) do
-      {:ok, _} ->
-        msg =
-          if new_value,
-            do: gettext("Default workspace updated"),
-            else: gettext("Default workspace removed")
-
-        {:noreply, socket |> assign_workspaces() |> put_flash(:info, msg)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update default workspace"))}
-    end
-  end
-
-  @impl true
-  def handle_event("toggle_visibility", %{"id" => id}, socket) do
-    context = Dran.Knowledge.get_workspace!(id)
-    new_visibility = if context.visibility == "public", do: "private", else: "public"
-
-    case Dran.Knowledge.update_workspace_settings(context, %{visibility: new_visibility}) do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> assign_workspaces()
-         |> put_flash(
-           :info,
-           gettext("Visibility set to %{visibility}", visibility: new_visibility)
-         )}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update visibility"))}
     end
   end
 
@@ -250,361 +220,286 @@ defmodule DranWeb.AdminWorkspacesLive do
           <div class="flex items-center justify-between">
             <div>
               <h1 class="text-title">{gettext("Workspaces")}</h1>
-              <p class="text-caption mt-0.5">
+              <p class="text-caption mt-1">
                 {gettext("Create contexts and manage context access per user.")}
               </p>
             </div>
-            <button
-              phx-click="open_context_modal"
-              class="btn btn-primary btn-sm gap-1.5"
-            >
+            <button phx-click="new_workspace" class="btn btn-primary btn-sm gap-1.5">
               <.icon name="hero-plus" class="size-4" />
-              {gettext("New context")}
+              {gettext("Nuevo contexto")}
             </button>
           </div>
 
-          <%!-- Context list --%>
-          <div class="space-y-4">
-            <div
-              :for={ctx <- @all_workspaces}
-              class={[
-                "card bg-base-100 border border-base-300",
-                @confirm_delete_workspace_id == ctx.id && "ring-2 ring-error/60 bg-error/5"
-              ]}
-            >
-              <div class="card-body">
-                <div class="flex items-start justify-between gap-4">
-                  <div class="min-w-0 flex-1">
-                    <h3 class="text-lg font-semibold flex items-center gap-2">
-                      <span>{ctx.name}</span>
-                      <code class="text-sm text-base-content/60">({ctx.slug})</code>
-                      <span :if={ctx.is_default} class="badge badge-primary badge-sm">
-                        {gettext("default")}
-                      </span>
-                    </h3>
-                    <div class="flex flex-wrap items-center gap-3 mt-1 text-xs text-base-content/50">
-                      <span>
+          <%!-- Workspace list --%>
+          <.section
+            :if={@all_workspaces != []}
+            title={gettext("Workspaces")}
+            icon="hero-building-office-2"
+          >
+            <div class="overflow-x-auto">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>{gettext("Workspace")}</th>
+                    <th>{gettext("Visibilidad")}</th>
+                    <th>{gettext("Miembros")}</th>
+                    <th>{gettext("Default")}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={ctx <- @all_workspaces} id={"ws-#{ctx.id}"}>
+                    <td>
+                      <div class="font-medium">{ctx.name}</div>
+                      <code class="text-xs text-base-content/60">{ctx.slug}</code>
+                    </td>
+                    <td>
+                      <span class={[
+                        "badge badge-sm",
+                        ctx.visibility == "public" && "badge-success",
+                        ctx.visibility != "public" && "badge-warning"
+                      ]}>
                         {if ctx.visibility == "public",
                           do: gettext("Public"),
                           else: gettext("Private")}
                       </span>
-                      <span>
-                        {ngettext(
-                          "%{count} member",
-                          "%{count} members",
-                          Enum.count(@users, &Dran.Accounts.user_in_workspace?(&1, ctx))
-                        )}
+                    </td>
+                    <td>{Enum.count(@users, &Dran.Accounts.user_in_workspace?(&1, ctx))}</td>
+                    <td>
+                      <span :if={ctx.is_default} class="badge badge-primary badge-sm">
+                        {gettext("default")}
                       </span>
-                    </div>
-                  </div>
-
-                  <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                    <button
-                      type="button"
-                      phx-click="toggle_is_default"
-                      phx-value-id={ctx.id}
-                      class={[
-                        "btn btn-xs gap-1",
-                        ctx.is_default && "btn-primary",
-                        !ctx.is_default && "btn-ghost"
-                      ]}
-                      title={gettext("Toggle default")}
-                    >
-                      <.icon name="hero-star" class="size-3.5" />
-                      {gettext("Default")}
-                    </button>
-
-                    <button
-                      type="button"
-                      phx-click="toggle_visibility"
-                      phx-value-id={ctx.id}
-                      class={[
-                        "btn btn-xs gap-1",
-                        ctx.visibility == "public" && "btn-success",
-                        ctx.visibility != "public" && "btn-warning"
-                      ]}
-                      title={gettext("Toggle public/private")}
-                    >
-                      <.icon
-                        name={
-                          if ctx.visibility == "public",
-                            do: "hero-globe-alt",
-                            else: "hero-lock-closed"
-                        }
-                        class="size-3.5"
-                      />
-                      {if ctx.visibility == "public", do: gettext("Public"), else: gettext("Private")}
-                    </button>
-
-                    <button
-                      type="button"
-                      phx-click="manage_context_users"
-                      phx-value-id={ctx.id}
-                      class="btn btn-ghost btn-xs gap-1"
-                    >
-                      <.icon name="hero-users" class="size-3.5" />
-                      {gettext("Users")}
-                    </button>
-
-                    <button
-                      type="button"
-                      phx-click="manage_page_types"
-                      phx-value-id={ctx.id}
-                      class="btn btn-ghost btn-xs gap-1"
-                    >
-                      <.icon name="hero-squares-2x2" class="size-3.5" />
-                      {gettext("Types")}
-                    </button>
-
-                    <.link
-                      navigate={"/#{ctx.slug}/settings"}
-                      class="btn btn-ghost btn-xs gap-1"
-                      title={gettext("Workspace settings")}
-                    >
-                      <.icon name="hero-cog-6-tooth" class="size-3.5" />
-                      {gettext("Config")}
-                    </.link>
-
-                    <%= if @confirm_delete_workspace_id == ctx.id do %>
-                      <span class="text-caption text-error mr-1 hidden sm:inline">
-                        {gettext("Delete?")}
-                      </span>
-                      <button
-                        type="button"
-                        phx-click="delete_workspace"
-                        phx-value-id={ctx.id}
-                        class="btn btn-error btn-xs"
-                      >
-                        <.icon name="hero-check" class="size-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="cancel_delete_workspace"
-                        class="btn btn-ghost btn-xs"
-                      >
-                        {gettext("Cancel")}
-                      </button>
-                    <% else %>
-                      <button
-                        type="button"
-                        phx-click="ask_delete_workspace"
-                        phx-value-id={ctx.id}
-                        class="btn btn-ghost btn-xs text-error hover:bg-error/10"
-                        title={gettext("Delete context")}
-                      >
-                        <.icon name="hero-trash" class="size-3.5" />
-                      </button>
-                    <% end %>
-                  </div>
-                </div>
-              </div>
+                    </td>
+                    <td>
+                      <div class="flex items-center gap-1 justify-end">
+                        <button
+                          phx-click="edit_workspace"
+                          phx-value-id={ctx.id}
+                          class="btn btn-ghost btn-xs p-1"
+                          title={gettext("Editar")}
+                        >
+                          <.icon name="hero-pencil" class="size-4" />
+                        </button>
+                        <button
+                          phx-click="manage_context_users"
+                          phx-value-id={ctx.id}
+                          class="btn btn-ghost btn-xs gap-1"
+                        >
+                          <.icon name="hero-users" class="size-3.5" />
+                          {gettext("Usuarios")}
+                        </button>
+                        <button
+                          phx-click="manage_page_types"
+                          phx-value-id={ctx.id}
+                          class="btn btn-ghost btn-xs gap-1"
+                        >
+                          <.icon name="hero-squares-2x2" class="size-3.5" />
+                          {gettext("Tipos")}
+                        </button>
+                        <.link
+                          navigate={"/#{ctx.slug}/settings"}
+                          class="btn btn-ghost btn-xs gap-1"
+                          title={gettext("Configuración")}
+                        >
+                          <.icon name="hero-cog-6-tooth" class="size-3.5" />
+                          {gettext("Config")}
+                        </.link>
+                        <button
+                          phx-click="delete_workspace"
+                          phx-value-id={ctx.id}
+                          data-confirm={gettext("¿Eliminar este workspace?")}
+                          class="btn btn-ghost btn-xs p-1 text-error"
+                          title={gettext("Eliminar")}
+                        >
+                          <.icon name="hero-trash" class="size-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
+          </.section>
+
+          <div :if={@all_workspaces == []} class="text-center text-base-content/50 py-6">
+            {gettext("No workspaces yet — create one with the button above.")}
           </div>
 
-          <%!-- New context modal --%>
-          <div
-            :if={@show_workspace_modal}
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          <%!-- Add / edit context modal --%>
+          <.modal
+            id="context-modal"
+            show={@show_workspace_modal}
+            title={@form_modal_title}
+            on_close="close_context_modal"
           >
-            <div
-              class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"
-              phx-click-away="close_context_modal"
+            <.form
+              for={@workspace_form}
+              id="context-form"
+              phx-change="validate_context"
+              phx-submit="save_workspace"
+              class="space-y-4"
             >
-              <div class="card-body">
-                <div class="flex items-center justify-between mb-2">
-                  <h3 class="text-lg font-semibold">{gettext("New context")}</h3>
-                  <button
-                    phx-click="close_context_modal"
-                    class="btn btn-ghost btn-xs btn-circle"
-                  >
-                    <.icon name="hero-x-mark" class="size-4" />
-                  </button>
-                </div>
+              <.input
+                field={@workspace_form[:name]}
+                type="text"
+                label={gettext("Nombre")}
+                placeholder={gettext("p.ej. Personal")}
+                class="w-full"
+                autofocus
+              />
 
-                <.form
-                  for={@new_workspace_form}
-                  id="context-form"
-                  phx-change="validate_context"
-                  phx-submit="create_workspace"
-                  class="space-y-4"
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="context[is_default]"
+                  checked={@editing_workspace && @editing_workspace.is_default}
+                  class="checkbox checkbox-sm"
+                />
+                <span class="text-sm">{gettext("Workspace por defecto")}</span>
+              </label>
+
+              <div>
+                <label class="text-sm font-medium">{gettext("Visibilidad")}</label>
+                <select
+                  name="context[visibility]"
+                  class="select select-bordered select-sm w-full mt-1"
                 >
-                  <.input
-                    field={@new_workspace_form[:name]}
-                    type="text"
-                    label={gettext("Name")}
-                    placeholder={gettext("e.g. Personal")}
-                    class="w-full"
-                    autofocus
-                  />
-
-                  <div class="flex justify-end gap-2 pt-1">
-                    <button
-                      type="button"
-                      phx-click="close_context_modal"
-                      class="btn btn-ghost btn-sm"
-                    >
-                      {gettext("Cancel")}
-                    </button>
-                    <button
-                      type="submit"
-                      class="btn btn-primary btn-sm transition-colors active:scale-95"
-                      phx-disable-with={gettext("Creating…")}
-                    >
-                      <.icon name="hero-plus" class="size-4" />
-                      {gettext("Create")}
-                    </button>
-                  </div>
-                </.form>
+                  <option
+                    value="public"
+                    selected={@editing_workspace == nil || @editing_workspace.visibility == "public"}
+                  >
+                    {gettext("Public")}
+                  </option>
+                  <option
+                    value="private"
+                    selected={@editing_workspace && @editing_workspace.visibility == "private"}
+                  >
+                    {gettext("Private")}
+                  </option>
+                </select>
               </div>
-            </div>
-          </div>
+
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" phx-click="close_context_modal" class="btn btn-ghost btn-sm">
+                  {gettext("Cancelar")}
+                </button>
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-sm"
+                  phx-disable-with={gettext("Guardando…")}
+                >
+                  {gettext("Guardar")}
+                </button>
+              </div>
+            </.form>
+          </.modal>
 
           <%!-- Page types modal --%>
-          <div
-            :if={@page_types_workspace_id}
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          <.modal
+            id="page-types-modal"
+            show={@page_types_workspace_id != nil}
+            title={gettext("Page types")}
+            on_close="close_page_types"
+            max_w="max-w-md"
           >
-            <div
-              class="card bg-base-100 w-full max-w-md shadow-xl border border-base-300"
-              phx-click-away="close_page_types"
-            >
-              <div class="card-body">
-                <% pt_ctx = Enum.find(@all_workspaces, &(&1.id == @page_types_workspace_id)) %>
-                <div class="flex items-start justify-between">
-                  <div>
-                    <h3 class="text-lg font-semibold">
-                      {gettext("Page types")}
-                    </h3>
-                    <p class="text-caption mt-0.5">
-                      {if pt_ctx, do: pt_ctx.name, else: ""}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    phx-click="close_page_types"
-                    class="btn btn-ghost btn-xs btn-circle"
+            <% pt_ctx = Enum.find(@all_workspaces, &(&1.id == @page_types_workspace_id)) %>
+            <p class="text-caption mt-1">{if pt_ctx, do: pt_ctx.name, else: ""}</p>
+
+            <p class="text-caption mt-1">
+              {gettext(
+                "Disabled types are hidden in the web UI and rejected in the MCP API for this context."
+              )}
+            </p>
+
+            <div class="divide-y divide-base-300 mt-2">
+              <label
+                :for={page_type <- Dran.Knowledge.page_types()}
+                class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm font-medium">{String.capitalize(page_type)}</p>
+                  <p
+                    :if={pt_ctx && page_type in (pt_ctx.disabled_page_types || [])}
+                    class="text-xs text-error"
                   >
-                    <.icon name="hero-x-mark" class="size-4" />
-                  </button>
-                </div>
-
-                <p class="text-caption mt-1">
-                  {gettext(
-                    "Disabled types are hidden in the web UI and rejected in the MCP API for this context."
-                  )}
-                </p>
-
-                <div class="divide-y divide-base-300 mt-2">
-                  <label
-                    :for={page_type <- Dran.Knowledge.page_types()}
-                    class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
-                  >
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium">{String.capitalize(page_type)}</p>
-                      <p
-                        :if={pt_ctx && page_type in (pt_ctx.disabled_page_types || [])}
-                        class="text-xs text-error"
-                      >
-                        {gettext("Disabled")}
-                      </p>
-                      <p class="text-xs text-base-content/40">
-                        {page_type_impact(page_type)}
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={pt_ctx && page_type not in (pt_ctx.disabled_page_types || [])}
-                      phx-click="toggle_page_type"
-                      phx-value-workspace_id={@page_types_workspace_id}
-                      phx-value-page_type={page_type}
-                      class="toggle toggle-sm toggle-primary"
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <%!-- Manage users modal --%>
-          <div
-            :if={@managing_workspace_id}
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          >
-            <div
-              class="card bg-base-100 w-full max-w-md shadow-xl border border-base-300"
-              phx-click-away="close_context_users"
-            >
-              <div class="card-body">
-                <% managing_ctx = Enum.find(@all_workspaces, &(&1.id == @managing_workspace_id)) %>
-                <div class="flex items-start justify-between">
-                  <div>
-                    <h3 class="text-lg font-semibold">
-                      {gettext("Users")}
-                    </h3>
-                    <p class="text-caption mt-0.5">
-                      {if managing_ctx, do: managing_ctx.name, else: ""}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    phx-click="close_context_users"
-                    class="btn btn-ghost btn-xs btn-circle"
-                  >
-                    <.icon name="hero-x-mark" class="size-4" />
-                  </button>
-                </div>
-
-                <form phx-change="search_context_users" class="relative mt-3">
-                  <.icon
-                    name="hero-magnifying-glass"
-                    class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
-                  />
-                  <input
-                    type="text"
-                    name="q"
-                    value={@workspace_user_search}
-                    placeholder={gettext("Search users...")}
-                    class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </form>
-
-                <div class="divide-y divide-base-300 mt-2 max-h-64 overflow-y-auto">
-                  <% filtered_users =
-                    @users
-                    |> Enum.filter(fn user ->
-                      q = String.downcase(@workspace_user_search || "")
-
-                      q == "" or String.contains?(String.downcase(user.email), q) or
-                        (user.name && String.contains?(String.downcase(user.name), q))
-                    end)
-                    |> Enum.take(5) %>
-                  <label
-                    :for={user <- filtered_users}
-                    class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
-                  >
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium truncate">{user.email}</p>
-                      <p :if={user.name} class="text-caption truncate">{user.name}</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={managing_ctx && Dran.Accounts.user_in_workspace?(user, managing_ctx)}
-                      phx-click="toggle_context_user"
-                      phx-value-workspace_id={@managing_workspace_id}
-                      phx-value-user_id={user.id}
-                      class="checkbox checkbox-sm checkbox-primary"
-                    />
-                  </label>
-
-                  <p :if={filtered_users == []} class="text-caption py-4 text-center">
-                    {if @users == [],
-                      do: gettext("No users yet — create one in the Users section."),
-                      else: gettext("No users match your search.")}
+                    {gettext("Disabled")}
+                  </p>
+                  <p class="text-xs text-base-content/40">
+                    {page_type_impact(page_type)}
                   </p>
                 </div>
-              </div>
+                <input
+                  type="checkbox"
+                  checked={pt_ctx && page_type not in (pt_ctx.disabled_page_types || [])}
+                  phx-click="toggle_page_type"
+                  phx-value-workspace_id={@page_types_workspace_id}
+                  phx-value-page_type={page_type}
+                  class="toggle toggle-sm toggle-primary"
+                />
+              </label>
             </div>
-          </div>
+          </.modal>
+
+          <%!-- Manage users modal --%>
+          <.modal
+            id="context-users-modal"
+            show={@managing_workspace_id != nil}
+            title={gettext("Users")}
+            on_close="close_context_users"
+            max_w="max-w-md"
+          >
+            <% managing_ctx = Enum.find(@all_workspaces, &(&1.id == @managing_workspace_id)) %>
+            <p class="text-caption mt-1">{if managing_ctx, do: managing_ctx.name, else: ""}</p>
+
+            <form phx-change="search_context_users" class="relative mt-3">
+              <.icon
+                name="hero-magnifying-glass"
+                class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
+              />
+              <input
+                type="text"
+                name="q"
+                value={@workspace_user_search}
+                placeholder={gettext("Search users...")}
+                class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </form>
+
+            <div class="divide-y divide-base-300 mt-2 max-h-64 overflow-y-auto">
+              <% filtered_users =
+                @users
+                |> Enum.filter(fn user ->
+                  q = String.downcase(@workspace_user_search || "")
+
+                  q == "" or String.contains?(String.downcase(user.email), q) or
+                    (user.name && String.contains?(String.downcase(user.name), q))
+                end)
+                |> Enum.take(5) %>
+              <label
+                :for={user <- filtered_users}
+                class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm font-medium truncate">{user.email}</p>
+                  <p :if={user.name} class="text-caption truncate">{user.name}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={managing_ctx && Dran.Accounts.user_in_workspace?(user, managing_ctx)}
+                  phx-click="toggle_context_user"
+                  phx-value-workspace_id={@managing_workspace_id}
+                  phx-value-user_id={user.id}
+                  class="checkbox checkbox-sm"
+                />
+              </label>
+
+              <p :if={filtered_users == []} class="text-caption py-4 text-center">
+                {if @users == [],
+                  do: gettext("No users yet — create one in the Users section."),
+                  else: gettext("No users match your search.")}
+              </p>
+            </div>
+          </.modal>
         </div>
       </div>
     </Layouts.app>
@@ -617,4 +512,11 @@ defmodule DranWeb.AdminWorkspacesLive do
   defp page_type_impact("entity"), do: gettext("Entities, entities list")
   defp page_type_impact("reference"), do: gettext("References, references list")
   defp page_type_impact(_), do: ""
+
+  defp save_workspace(nil, attrs) do
+    attrs = Map.put_new(attrs, :slug, Slug.slugify(attrs[:name] || ""))
+    Dran.Knowledge.create_workspace(attrs)
+  end
+
+  defp save_workspace(ws, attrs), do: Dran.Knowledge.update_workspace(ws, attrs)
 end

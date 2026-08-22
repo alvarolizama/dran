@@ -14,6 +14,7 @@ defmodule Dran.Accounts.User do
 
     # Virtual — consumed by changeset, never persisted
     field :password, :string, virtual: true
+    field :current_password, :string, virtual: true
 
     has_many :user_workspaces, Dran.Accounts.UserWorkspace
     has_many :workspaces, through: [:user_workspaces, :workspace]
@@ -47,6 +48,49 @@ defmodule Dran.Accounts.User do
     |> validate_length(:password, min: 8)
     |> unique_constraint(:email)
     |> put_password_hash()
+  end
+
+  @doc """
+  Changeset for changing the password of an existing user.
+
+  Requires `password` (new, min 8 chars) and `current_password` (verified
+  against the stored hash when one exists). Users without a password_hash
+  (Google-only accounts) skip the current-password check.
+  """
+  def update_password_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:password, :current_password])
+    |> validate_required([:password], message: "Ingresa una nueva contraseña")
+    |> validate_length(:password, min: 8)
+    |> validate_current_password()
+    |> put_password_hash()
+  end
+
+  defp validate_current_password(changeset) do
+    current = get_field(changeset, :current_password)
+    stored = get_field(changeset, :password_hash)
+
+    cond do
+      # Google-only account (no hash yet): allow setting a password directly.
+      is_nil(stored) ->
+        changeset
+
+      # Must verify the current password when one exists.
+      is_nil(current) ->
+        add_error(changeset, :current_password, "Ingresa tu contraseña actual")
+
+      Bcrypt.verify_pass(current, stored) ->
+        changeset
+
+      true ->
+        add_error(changeset, :current_password, "La contraseña actual es incorrecta")
+    end
+  end
+
+  @doc "Changeset for profile updates: name, avatar_url, google_id (unlink)."
+  def profile_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:name, :avatar_url, :google_id])
   end
 
   defp put_password_hash(%Ecto.Changeset{valid?: true, changes: %{password: pass}} = changeset) do

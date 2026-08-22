@@ -418,15 +418,6 @@ defmodule DranWeb.HomeLive do
       current_user={@current_user}
       is_owner={@is_owner}
       workspace_slug={@workspace && @workspace.slug}
-      workspaces={@workspaces}
-      page_title={@page_title}
-      live_action={@live_action}
-      search_query={@search_query}
-      search_results={@search_results}
-      type_index={@type_index}
-      collections={@collections}
-      pinned_pages={@pinned_pages}
-      collection_slug={@collection && @collection.slug}
     >
       <%= if @search_results do %>
         <.search_results_view
