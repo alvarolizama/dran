@@ -1,11 +1,12 @@
 defmodule DranWeb.WorkspaceSettingsLive do
   @moduledoc """
-  Workspace configuration page: page types, enabled features, and brain
-  tuning for a single workspace.
+  Workspace configuration page with tabbed settings: General (name,
+  visibility), Page types, Features, Brain tuning, and Users (workspace
+  membership).
 
-  Access is enforced by the `:workspace_admin` router pipeline (owner/admin of
-  the workspace ∪ instance owner) plus an `attach_hook` defense-in-depth that
-  halts every event for non-owners/admins.
+  Access is enforced by the `:workspace_admin` router pipeline (owner/admin
+  of the workspace ∪ instance owner) plus an `attach_hook` defense-in-depth
+  that halts every event for non-owners/admins.
 
   The workspace is resolved from the URL slug (`params["workspace_slug"]`),
   NOT from the session — a user in session workspace "personal" navigating to
@@ -15,13 +16,16 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   use DranWeb, :live_view
 
+  import Ecto.Query
+
   alias Dran.Accounts
+  alias Dran.Accounts.UserWorkspace
   alias Dran.Knowledge
   alias Dran.Repo
   alias Dran.Workspace
   alias DranWeb.Plugs.Auth
 
-  # Ordered feature keys shown in the Features card. All are stored in the
+  # Ordered feature keys shown in the Features tab. All are stored in the
   # `enabled_features` map; an empty map means "all on" (see
   # `Workspace.feature_enabled?/2`).
   @features ~w(goals collections communities kanban graph journey activity search reports chat agents)
@@ -50,17 +54,24 @@ defmodule DranWeb.WorkspaceSettingsLive do
     socket =
       socket
       |> assign(
-        active_nav: "settings",
+        active_nav: "workspace_settings",
         page_title: gettext("Workspace settings"),
         current_user_struct: user,
         workspace: workspace,
         workspace_slug: slug,
-        workspace_role: role
+        workspace_role: role,
+        features: @features,
+        active_tab: :general,
+        user_search: "",
+        workspace_members: [],
+        all_users: []
       )
       |> assign_settings_form()
+      |> assign_general_form()
+      |> assign_workspace_members()
+      |> assign_all_users()
       # Corrección #11: defense-in-depth — halt every event for users who are
-      # not owner/admin of the URL workspace (same pattern as the old
-      # SettingsLive `attach_hook(:require_admin, :handle_event, ...)`).
+      # not owner/admin of the URL workspace.
       |> attach_hook(:require_workspace_admin, :handle_event, fn _event, _params, socket ->
         if workspace_admin?(socket) do
           {:cont, socket}
@@ -81,10 +92,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
       current_user={@current_user}
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
-      active_nav="settings"
+      active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full p-6 space-y-8">
+        <div class="w-full p-6 space-y-6">
           <%!-- Page header --%>
           <div>
             <h1 class="text-title">{gettext("Workspace settings")}</h1>
@@ -100,10 +111,63 @@ defmodule DranWeb.WorkspaceSettingsLive do
             <span>{gettext("Workspace not found.")}</span>
           </div>
 
-          <div :if={@workspace} class="space-y-8">
-            <.page_types_section workspace={@workspace} />
-            <.features_section workspace={@workspace} form={@settings_form} />
-            <.brain_tuning_section workspace={@workspace} form={@settings_form} />
+          <div :if={@workspace} class="space-y-6">
+            <%!-- Tab navigation --%>
+            <div class="flex items-center gap-1 border-b border-base-300 overflow-x-auto">
+              <.tab_button active={@active_tab == :general} tab="general" icon="hero-cog-6-tooth">
+                {gettext("General")}
+              </.tab_button>
+              <.tab_button
+                active={@active_tab == :page_types}
+                tab="page_types"
+                icon="hero-document-text"
+              >
+                {gettext("Page types")}
+              </.tab_button>
+              <.tab_button active={@active_tab == :features} tab="features" icon="hero-puzzle-piece">
+                {gettext("Features")}
+              </.tab_button>
+              <.tab_button
+                active={@active_tab == :brain_tuning}
+                tab="brain_tuning"
+                icon="hero-adjustments-horizontal"
+              >
+                {gettext("Brain tuning")}
+              </.tab_button>
+              <.tab_button active={@active_tab == :users} tab="users" icon="hero-users">
+                {gettext("Users")}
+              </.tab_button>
+            </div>
+
+            <%!-- Tab content --%>
+            <div :if={@active_tab == :general}>
+              <.general_section workspace={@workspace} form={@general_form} />
+            </div>
+
+            <div :if={@active_tab == :page_types}>
+              <.page_types_section workspace={@workspace} />
+            </div>
+
+            <div :if={@active_tab == :features}>
+              <.features_section
+                workspace={@workspace}
+                form={@settings_form}
+                features={@features}
+              />
+            </div>
+
+            <div :if={@active_tab == :brain_tuning}>
+              <.brain_tuning_section workspace={@workspace} form={@settings_form} />
+            </div>
+
+            <div :if={@active_tab == :users}>
+              <.users_section
+                workspace={@workspace}
+                members={@workspace_members}
+                all_users={@all_users}
+                user_search={@user_search}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -112,6 +176,38 @@ defmodule DranWeb.WorkspaceSettingsLive do
   end
 
   # -- Event handlers ---------------------------------------------------------
+
+  @impl true
+  def handle_event("select_tab", %{"tab" => tab}, socket) do
+    tab_atom = String.to_existing_atom(tab)
+    {:noreply, assign(socket, active_tab: tab_atom)}
+  end
+
+  @impl true
+  def handle_event("save_general", %{"workspace" => params}, socket) do
+    workspace = socket.assigns.workspace
+
+    attrs = %{
+      "name" => params["name"],
+      "visibility" => params["visibility"],
+      "is_default" => params["is_default"] == "true"
+    }
+
+    case workspace |> Workspace.changeset(attrs) |> Repo.update() do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(workspace: updated)
+         |> assign_general_form()
+         |> put_flash(:info, gettext("Workspace saved"))}
+
+      {:error, changeset} ->
+        {:noreply,
+         socket
+         |> assign(general_form: to_form(changeset, as: :workspace))
+         |> put_flash(:error, gettext("Could not save workspace"))}
+    end
+  end
 
   @impl true
   def handle_event("toggle_page_type", %{"page_type" => page_type}, socket) do
@@ -159,7 +255,141 @@ defmodule DranWeb.WorkspaceSettingsLive do
     end
   end
 
+  @impl true
+  def handle_event("search_users", %{"q" => q}, socket) do
+    {:noreply, assign(socket, user_search: q)}
+  end
+
+  @impl true
+  def handle_event("toggle_member", %{"user_id" => user_id}, socket) do
+    workspace = socket.assigns.workspace
+    user = Accounts.get_user!(user_id)
+
+    if Accounts.user_in_workspace?(user, workspace) do
+      Accounts.remove_user_from_workspace(user, workspace)
+    else
+      Accounts.add_user_to_workspace(user, workspace)
+    end
+
+    {:noreply,
+     socket
+     |> assign_workspace_members()
+     |> assign_all_users()
+     |> put_flash(:info, gettext("Membership updated"))}
+  end
+
+  @impl true
+  def handle_event("set_member_role", %{"user_id" => user_id, "role" => role}, socket) do
+    workspace = socket.assigns.workspace
+    user = Accounts.get_user!(user_id)
+
+    case Accounts.update_member_role(user, workspace, role) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign_workspace_members()
+         |> assign_all_users()
+         |> put_flash(:info, gettext("Role updated"))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update role"))}
+    end
+  end
+
   # -- View components --------------------------------------------------------
+
+  attr :active, :boolean, default: false
+  attr :tab, :string, required: true
+  attr :icon, :string, required: true
+  slot :inner_block, required: true
+
+  defp tab_button(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="select_tab"
+      phx-value-tab={@tab}
+      class={[
+        "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150 whitespace-nowrap",
+        @active && "border-primary text-primary",
+        !@active && "border-transparent text-base-content/60 hover:text-base-content"
+      ]}
+    >
+      <.icon name={@icon} class="size-4" />
+      {render_slot(@inner_block)}
+    </button>
+    """
+  end
+
+  attr :workspace, Workspace, required: true
+  attr :form, :any, required: true
+
+  defp general_section(assigns) do
+    ~H"""
+    <section class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+          <.icon name="hero-cog-6-tooth" class="size-4 text-primary" />
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-heading">{gettext("General")}</h2>
+          <p class="text-caption mt-1">
+            {gettext("Workspace name, visibility, and default status.")}
+          </p>
+        </div>
+      </header>
+
+      <div class="px-5 py-5">
+        <.form for={@form} id="workspace-general-form" phx-submit="save_general" class="space-y-4">
+          <.input
+            field={@form[:name]}
+            type="text"
+            label={gettext("Name")}
+            placeholder={gettext("p.ej. Personal")}
+            class="w-full"
+          />
+
+          <div>
+            <label class="text-sm font-medium">{gettext("Visibility")}</label>
+            <select
+              name="workspace[visibility]"
+              class="select select-bordered select-sm w-full mt-1"
+            >
+              <option value="public" selected={@workspace.visibility == "public"}>
+                {gettext("Public")}
+              </option>
+              <option value="private" selected={@workspace.visibility == "private"}>
+                {gettext("Private")}
+              </option>
+            </select>
+          </div>
+
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="workspace[is_default]"
+              value="true"
+              checked={@workspace.is_default}
+              class="checkbox checkbox-sm"
+            />
+            <span class="text-sm">{gettext("Default workspace (forces public visibility)")}</span>
+          </label>
+
+          <div class="flex justify-end pt-3 border-t border-base-content/10">
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm transition-colors active:scale-95"
+              phx-disable-with={gettext("Saving…")}
+            >
+              <.icon name="hero-check" class="size-4" />
+              {gettext("Save")}
+            </button>
+          </div>
+        </.form>
+      </div>
+    </section>
+    """
+  end
 
   attr :workspace, Workspace, required: true
 
@@ -172,7 +402,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         </div>
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Page types")}</h2>
-          <p class="text-caption mt-0.5">
+          <p class="text-caption mt-1">
             {gettext("Toggle which page types can be created in this workspace.")}
           </p>
         </div>
@@ -202,6 +432,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   attr :workspace, Workspace, required: true
   attr :form, :any, required: true
+  attr :features, :list, default: []
 
   defp features_section(assigns) do
     ~H"""
@@ -212,7 +443,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         </div>
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Features")}</h2>
-          <p class="text-caption mt-0.5">
+          <p class="text-caption mt-1">
             {gettext(
               "Enable or disable workspace features. Disabled features hide their entry points."
             )}
@@ -221,20 +452,33 @@ defmodule DranWeb.WorkspaceSettingsLive do
       </header>
 
       <div class="px-5 py-5">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <%= for feature <- @features do %>
-            <label class="flex items-center gap-3 rounded-xl border border-base-content/10 px-3 py-2.5 cursor-pointer hover:bg-base-200/50 transition-colors">
-              <input
-                type="checkbox"
-                name={"enabled_features[#{feature}]"}
-                value="true"
-                checked={Workspace.feature_enabled?(@workspace, feature)}
-                class="checkbox checkbox-sm checkbox-primary"
-              />
-              <span class="text-sm">{feature_label(feature)}</span>
-            </label>
-          <% end %>
-        </div>
+        <.form for={@form} id="workspace-features-form" phx-submit="save" class="space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <%= for feature <- @features do %>
+              <label class="flex items-center gap-3 rounded-xl border border-base-content/10 px-3 py-2.5 cursor-pointer hover:bg-base-200/50 transition-colors">
+                <input
+                  type="checkbox"
+                  name={"enabled_features[#{feature}]"}
+                  value="true"
+                  checked={Workspace.feature_enabled?(@workspace, feature)}
+                  class="checkbox checkbox-sm checkbox-primary"
+                />
+                <span class="text-sm">{feature_label(feature)}</span>
+              </label>
+            <% end %>
+          </div>
+
+          <div class="flex justify-end pt-3 border-t border-base-content/10">
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm transition-colors active:scale-95"
+              phx-disable-with={gettext("Saving…")}
+            >
+              <.icon name="hero-check" class="size-4" />
+              {gettext("Save")}
+            </button>
+          </div>
+        </.form>
       </div>
     </section>
     """
@@ -252,7 +496,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         </div>
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Brain tuning")}</h2>
-          <p class="text-caption mt-0.5">
+          <p class="text-caption mt-1">
             {gettext("Semantic thresholds and agent limits for this workspace.")}
           </p>
         </div>
@@ -359,6 +603,152 @@ defmodule DranWeb.WorkspaceSettingsLive do
     """
   end
 
+  attr :workspace, Workspace, required: true
+  attr :members, :list, required: true
+  attr :all_users, :list, required: true
+  attr :user_search, :string, required: true
+
+  defp users_section(assigns) do
+    ~H"""
+    <section class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+          <.icon name="hero-users" class="size-4 text-primary" />
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-heading">{gettext("Users")}</h2>
+          <p class="text-caption mt-1">
+            {gettext("Manage which instance users have access to this workspace.")}
+          </p>
+        </div>
+      </header>
+
+      <div class="px-5 py-5 space-y-6">
+        <%!-- Current members --%>
+        <div>
+          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
+            {gettext("Members")} ({length(@members)})
+          </h3>
+
+          <div :if={@members == []} class="text-sm text-base-content/50 py-4 text-center">
+            {gettext("No users have access to this workspace yet.")}
+          </div>
+
+          <div :if={@members != []} class="space-y-2">
+            <div
+              :for={member <- @members}
+              class="flex items-center justify-between gap-3 rounded-xl border border-base-content/10 px-3 py-2.5"
+            >
+              <div class="min-w-0 flex items-center gap-3">
+                <div class="size-8 rounded-full bg-base-content/10 flex items-center justify-center text-xs font-semibold">
+                  {String.slice(member.name || member.email || "?", 0, 1)}
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-medium truncate">{member.email}</p>
+                  <p :if={member.name} class="text-xs text-base-content/60 truncate">{member.name}</p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <select
+                  name={"role-#{member.id}"}
+                  class="select select-bordered select-xs"
+                  phx-change="set_member_role"
+                  phx-value-user_id={member.id}
+                >
+                  <%= for role <- ~w(owner admin editor viewer) do %>
+                    <option value={role} selected={member.role == role}>
+                      {String.capitalize(role)}
+                    </option>
+                  <% end %>
+                </select>
+
+                <button
+                  type="button"
+                  phx-click="toggle_member"
+                  phx-value-user_id={member.id}
+                  class="btn btn-ghost btn-xs btn-circle text-error"
+                  title={gettext("Remove from workspace")}
+                >
+                  <.icon name="hero-x-mark" class="size-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Add users --%>
+        <div class="border-t border-base-content/10 pt-5">
+          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
+            {gettext("Add users")}
+          </h3>
+
+          <form phx-change="search_users" class="relative">
+            <.icon
+              name="hero-magnifying-glass"
+              class="absolute left-3 top-2.5 size-4 text-base-content/50"
+            />
+            <input
+              type="text"
+              name="q"
+              value={@user_search}
+              placeholder={gettext("Search users by email or name...")}
+              class="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </form>
+
+          <div class="mt-3 space-y-2">
+            <% member_ids = MapSet.new(@members, & &1.id)
+            q = String.downcase(@user_search || "")
+
+            filtered =
+              @all_users
+              |> Enum.filter(fn user ->
+                q == "" or
+                  String.contains?(String.downcase(user.email), q) or
+                  (user.name && String.contains?(String.downcase(user.name), q))
+              end)
+              |> Enum.reject(&MapSet.member?(member_ids, &1.id))
+              |> Enum.take(5) %>
+
+            <div
+              :if={filtered == [] and @user_search != ""}
+              class="text-sm text-base-content/50 py-3 text-center"
+            >
+              {gettext("No users match your search.")}
+            </div>
+
+            <div
+              :for={user <- filtered}
+              class="flex items-center justify-between gap-3 rounded-xl border border-base-content/10 px-3 py-2.5"
+            >
+              <div class="min-w-0 flex items-center gap-3">
+                <div class="size-8 rounded-full bg-base-content/10 flex items-center justify-center text-xs font-semibold">
+                  {String.slice(user.name || user.email || "?", 0, 1)}
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-medium truncate">{user.email}</p>
+                  <p :if={user.name} class="text-xs text-base-content/60 truncate">{user.name}</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                phx-click="toggle_member"
+                phx-value-user_id={user.id}
+                class="btn btn-ghost btn-xs gap-1"
+              >
+                <.icon name="hero-plus" class="size-3.5" />
+                {gettext("Add")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
   # -- Helpers ----------------------------------------------------------------
 
   # True when the current user is owner/admin of the URL workspace (or the
@@ -378,6 +768,42 @@ defmodule DranWeb.WorkspaceSettingsLive do
       end)
 
     assign(socket, settings_form: to_form(values, as: :workspace))
+  end
+
+  # General tab form: name, visibility, is_default from the workspace itself.
+  defp assign_general_form(socket) do
+    workspace = socket.assigns.workspace
+    changeset = Workspace.changeset(workspace, %{})
+    assign(socket, general_form: to_form(changeset, as: :workspace))
+  end
+
+  # Loads all users that are members of this workspace, with their role.
+  defp assign_workspace_members(socket) do
+    workspace = socket.assigns.workspace
+
+    members =
+      if workspace do
+        UserWorkspace
+        |> where([uw], uw.workspace_id == ^workspace.id)
+        |> join(:inner, [uw], u in assoc(uw, :user))
+        |> order_by([_, u], asc: u.email)
+        |> select([uw, u], %{
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          role: uw.role
+        })
+        |> Repo.all()
+      else
+        []
+      end
+
+    assign(socket, workspace_members: members)
+  end
+
+  # Loads all instance users for the "Add users" search list.
+  defp assign_all_users(socket) do
+    assign(socket, all_users: Accounts.list_users())
   end
 
   # Normalizes the brain tuning params: blank number inputs become nil (so the

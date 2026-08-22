@@ -67,6 +67,42 @@ defmodule Dran.Accounts do
     |> Repo.update()
   end
 
+  @doc "Update the user's display name (and optionally avatar_url)."
+  def update_profile(%User{} = user, attrs) do
+    user
+    |> User.profile_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc "Change the user's password. Verifies current_password when one exists."
+  def update_password(%User{} = user, attrs) do
+    user
+    |> User.update_password_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc "Unlink the Google account: clears google_id and avatar_url."
+  def unlink_google(%User{} = user) do
+    user
+    |> User.profile_changeset(%{google_id: nil, avatar_url: nil})
+    |> Repo.update()
+  end
+
+  @doc "Link a Google account to an existing user (sets google_id + avatar)."
+  def link_google(%User{} = user, %{google_id: google_id} = attrs) do
+    user
+    |> User.profile_changeset(%{
+      google_id: google_id,
+      avatar_url: attrs[:avatar_url],
+      name: attrs[:name]
+    })
+    |> Repo.update()
+  end
+
+  @doc "True when the user has a Google account linked (google_id is set)."
+  def google_linked?(%User{google_id: gid}) when is_binary(gid), do: true
+  def google_linked?(_), do: false
+
   def delete_user(%User{} = user), do: Repo.delete(user)
 
   # ── Google OAuth ──
@@ -169,6 +205,23 @@ defmodule Dran.Accounts do
 
   def owner_user do
     Repo.get_by(User, is_owner: true) |> Repo.preload(:workspaces)
+  end
+
+  @doc """
+  Update a user's role in a workspace.
+  Validates the role against the allowed set and persists via UserWorkspace
+  changeset.
+  """
+  def update_member_role(%User{} = user, %Workspace{} = workspace, role) do
+    case Repo.get_by(UserWorkspace, user_id: user.id, workspace_id: workspace.id) do
+      nil ->
+        {:error, :not_a_member}
+
+      %UserWorkspace{} = uw ->
+        uw
+        |> UserWorkspace.changeset(%{role: role})
+        |> Repo.update()
+    end
   end
 
   def is_owner?(%User{is_owner: true}), do: true

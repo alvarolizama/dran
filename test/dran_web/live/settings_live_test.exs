@@ -4,7 +4,7 @@ defmodule DranWeb.SettingsLiveTest do
   import Ecto.Query
 
   alias Dran.Accounts
-  alias Dran.Settings
+  alias Dran.Knowledge
 
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
@@ -29,6 +29,7 @@ defmodule DranWeb.SettingsLiveTest do
       |> Plug.Test.init_test_session(%{})
       |> Plug.Conn.put_session(:user, "test_user")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, true)
 
     {:ok, conn: conn}
   end
@@ -49,7 +50,7 @@ defmodule DranWeb.SettingsLiveTest do
     unique = System.unique_integer([:positive])
 
     {:ok, ctx} =
-      Dran.Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+      Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
 
     {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
 
@@ -60,8 +61,8 @@ defmodule DranWeb.SettingsLiveTest do
       |> form("#create-api-key-form",
         api_key: %{
           "name" => "Hermes",
-          "workspaces" => %{"#{ctx.id}" => "read"},
-          "level" => %{"#{ctx.id}" => "write"}
+          "workspaces" => %{ctx.id => "read"},
+          "level" => %{ctx.id => "write"}
         }
       )
       |> render_submit()
@@ -79,7 +80,7 @@ defmodule DranWeb.SettingsLiveTest do
     unique = System.unique_integer([:positive])
 
     {:ok, ctx} =
-      Dran.Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+      Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
 
     user = Accounts.get_user_by_email("test_user")
 
@@ -101,13 +102,7 @@ defmodule DranWeb.SettingsLiveTest do
     assert Accounts.valid_api_key?(key.token) == :error
   end
 
-  test "users tab shows a default context selector per user", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/users")
-
-    assert html =~ t("Default context")
-    assert html =~ "default-context-select-"
-  end
-
+  # Tests L104, L128 → /admin/users
   describe "google open signup toggle" do
     setup do
       Application.put_env(:dran, :google_oauth,
@@ -126,115 +121,156 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "toggling persists the setting and re-renders the checkbox", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/users")
+      {:ok, view, _html} = live(conn, ~p"/admin/users")
 
       toggle = "input[phx-click='toggle_wiki_google_signup']"
 
-      refute Settings.get("wiki_google_open_signup")
+      refute Dran.Settings.get("wiki_google_open_signup")
       refute has_element?(view, "#{toggle}[checked]")
 
       _ = view |> element(toggle) |> render_click()
 
-      assert Settings.get("wiki_google_open_signup") == true
+      assert Dran.Settings.get("wiki_google_open_signup") == true
       assert has_element?(view, "#{toggle}[checked]")
 
       _ = view |> element(toggle) |> render_click()
 
-      refute Settings.get("wiki_google_open_signup")
+      refute Dran.Settings.get("wiki_google_open_signup")
       refute has_element?(view, "#{toggle}[checked]")
     end
   end
 
-  test "renders the brain tuning form with default values", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/brain")
+  # Test L199 → /admin (tabs change)
+  test "admin page is organized as a landing with links to all sections", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/admin")
 
-    # Section heading (localized)
-    assert html =~ t("Brain tuning")
-
-    # Primary fields visible
-    for name <- ~w(agent_max_pages) do
-      assert html =~ name
-    end
-
-    # Advanced thresholds tucked behind the details toggle
-    assert html =~ "Avanzado"
-
-    for name <- ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long) do
-      assert html =~ name
-    end
-
-    # Removed knobs are gone from the form
-    refute html =~ "agent_max_sources"
-
-    # Default values come from Dran.Settings.defaults/0
-    defaults = Settings.defaults()
-    assert html =~ to_string(defaults["semantic_threshold_short"])
-    assert html =~ to_string(defaults["agent_max_pages"])
-    assert html =~ t("Save")
-  end
-
-  test "saving the form persists values and shows a flash", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/settings/brain")
-
-    html =
-      view
-      |> form("#brain-tuning-form", %{
-        "settings" => %{
-          "semantic_threshold_short" => "0.10",
-          "semantic_threshold_mid" => "0.25",
-          "semantic_threshold_long" => "0.30",
-          "agent_max_pages" => "42"
-        }
-      })
-      |> render_submit()
-
-    # Success flash (localized)
-    assert html =~ t("Settings saved")
-
-    # The new values are persisted and readable via Settings.get/1
-    assert Settings.get("agent_max_pages") == 42
-    assert Settings.get("semantic_threshold_short") == 0.10
-  end
-
-  test "settings page is organized by tabs with users as default", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings")
-
-    # Tab navigation present with all tabs
-    for tab_path <-
-          ~w(/settings/users /settings/workspaces /settings/brain /settings/models /settings/system /settings/danger) do
+    # Navigation links to every admin section
+    for tab_path <- ~w(/admin/users /admin/workspaces /admin/models /admin/system /admin/jobs) do
       assert html =~ tab_path
     end
 
-    # Default tab is users — shows user management
-    assert html =~ t("Add User")
+    # Landing shows the admin title and intro
+    assert html =~ t("Admin")
 
-    # Brain tuning is NOT on the default tab (lives in /settings/brain)
+    # Brain tuning is NOT on the landing (lives in /:ws/settings)
     refute html =~ "agent_max_pages"
   end
 
-  test "the brain tuning form still renders the agent_max_pages input", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/brain")
+  # Tests L148, L176, L215 → /:ws/settings (reescribir a per-ws)
+  describe "brain tuning per-workspace" do
+    setup do
+      # Create a workspace for brain tuning tests
+      unique = System.unique_integer([:positive])
 
-    assert html =~ "agent_max_pages"
-    assert html =~ t("Max pages per run")
+      {:ok, ws} =
+        Knowledge.create_workspace(%{
+          name: "Brain Tuning #{unique}",
+          slug: "brain-tuning-#{unique}",
+          # The settings form only renders when all required features are on
+          enabled_features: %{feature_goals: true}
+        })
+
+      # Add the test user to the workspace as owner
+      user = Accounts.get_user_by_email("test_user")
+      Accounts.add_user_to_workspace(user, ws)
+
+      {:ok, ws: ws}
+    end
+
+    test "renders the brain tuning form with default values", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      # Navigate to the Brain tuning tab
+      html =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='brain_tuning']")
+        |> render_click()
+
+      # Section heading (localized)
+      assert html =~ t("Brain tuning")
+
+      # Primary fields visible
+      for name <- ~w(agent_max_pages) do
+        assert html =~ name
+      end
+
+      # Advanced thresholds tucked behind the details toggle
+      assert html =~ "Avanzado"
+
+      for name <- ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long) do
+        assert html =~ name
+      end
+
+      # Removed knobs are gone from the form
+      refute html =~ "agent_max_sources"
+
+      # Default values come from Workspace.get_tuning/2
+      assert html =~ to_string(Dran.Workspace.get_tuning(ws, :semantic_threshold_short))
+      assert html =~ to_string(Dran.Workspace.get_tuning(ws, :agent_max_pages))
+      assert html =~ t("Save")
+    end
+
+    test "saving the form persists values and shows a flash", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      # Navigate to the Brain tuning tab
+      _ =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='brain_tuning']")
+        |> render_click()
+
+      html =
+        view
+        |> form("#workspace-settings-form", %{
+          "workspace" => %{
+            "semantic_threshold_short" => "0.10",
+            "semantic_threshold_mid" => "0.25",
+            "semantic_threshold_long" => "0.30",
+            "agent_max_pages" => "42"
+          }
+        })
+        |> render_submit()
+
+      # Success flash (localized)
+      assert html =~ t("Settings saved")
+
+      # The new values are persisted and readable via Workspace.get_tuning/2
+      reloaded = Knowledge.get_workspace!(ws.id)
+      assert Dran.Workspace.get_tuning(reloaded, :agent_max_pages) == 42
+      assert Dran.Workspace.get_tuning(reloaded, :semantic_threshold_short) == 0.10
+    end
+
+    test "the brain tuning form still renders the agent_max_pages input", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      # Navigate to the Brain tuning tab
+      html =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='brain_tuning']")
+        |> render_click()
+
+      assert html =~ "agent_max_pages"
+      assert html =~ t("Max pages per run")
+    end
   end
 
-  test "the Entorno header exists with its read-only caption", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/system")
+  # Tests L222, L229, L236 → /admin/system
+  test "the Sistema header exists with its read-only caption", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/admin/system")
 
-    assert html =~ t("Entorno")
+    assert html =~ t("Sistema")
     assert html =~ t("Read-only — loaded from environment variables at startup.")
   end
 
   test "inference test button is present in the Inference API section", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/system")
+    {:ok, _view, html} = live(conn, ~p"/admin/system")
 
-    assert html =~ "phx-click=\"test_inference\""
+    assert html =~ ~s(phx-click="test_inference")
     assert html =~ t("Probar conexión")
   end
 
   test "clicking the test button shows the testing state", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/settings/system")
+    {:ok, view, _html} = live(conn, ~p"/admin/system")
 
     html = render_click(view, "test_inference")
     # The button immediately switches to "Probando..." state
@@ -243,8 +279,9 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ "disabled"
   end
 
+  # Test L246 → /admin/models
   test "models tab renders the selects with a per-model test button", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/models")
+    {:ok, _view, html} = live(conn, ~p"/admin/models")
 
     assert html =~ ~s(id="models-form")
 
@@ -257,6 +294,7 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ t("Probar")
   end
 
+  # Tests L283, L301, L314, L334, L342 → /admin/jobs
   describe "jobs panel (brain tab)" do
     import Ecto.Query
 
@@ -281,7 +319,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "renders the 5 registered jobs with toggles and run buttons", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/settings/brain")
+      {:ok, _view, html} = live(conn, ~p"/admin/jobs")
 
       assert html =~ t("Jobs programados")
       assert length(Jobs.list()) == 5
@@ -299,7 +337,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "toggle_job persists the enabled state and re-renders it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+      {:ok, view, _html} = live(conn, ~p"/admin/jobs")
       assert Jobs.enabled?(:curator_daily)
 
       _ = view |> element("#job-toggle-curator_daily") |> render_click()
@@ -312,7 +350,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "run_job marks only that job as running, then flashes on completion", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+      {:ok, view, _html} = live(conn, ~p"/admin/jobs")
 
       html = view |> element("#job-run-pagerank_nightly") |> render_click()
 
@@ -320,8 +358,8 @@ defmodule DranWeb.SettingsLiveTest do
       # the returned HTML deterministically shows the running state — and only
       # for the clicked job.
       assert html =~ t("Corriendo…")
-      assert html =~ ~r/<button(?=[^>]*\bdisabled\b)(?=[^>]*id="job-run-pagerank_nightly")[^>]*>/
-      refute html =~ ~r/<button(?=[^>]*\bdisabled\b)(?=[^>]*id="job-run-curator_daily")[^>]*>/
+      assert html =~ ~r/<button(?=[^>]*\bdisabled\b)(?=[^>]*id="job-run-pagerank_nightly")/
+      refute html =~ ~r/<button(?=[^>]*\bdisabled\b)(?=[^>]*id="job-run-curator_daily")/
 
       # Completion clears the running state, flashes and refreshes the list.
       # (The Task → run report wiring for the real job is covered in Dran.JobsTest.)
@@ -332,7 +370,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "job_run_done with an error result flashes the failure", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/settings/brain")
+      {:ok, view, _html} = live(conn, ~p"/admin/jobs")
 
       send(view.pid, {:job_run_done, :curator_daily, {:error, :boom}})
 
@@ -343,7 +381,7 @@ defmodule DranWeb.SettingsLiveTest do
       # Cheap real job (the same one Dran.JobsTest runs) — writes a run report.
       {:ok, report} = Jobs.run_now(:pagerank_nightly)
 
-      {:ok, _view, html} = live(conn, ~p"/settings/brain")
+      {:ok, _view, html} = live(conn, ~p"/admin/jobs")
 
       # Green ok badge, relative time linking to the report, compact duration
       assert html =~ "badge-success"
