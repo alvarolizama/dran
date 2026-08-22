@@ -31,7 +31,7 @@ defmodule Dran.JobsTest do
   @expected_keys [
     :curator_daily,
     :pagerank_nightly,
-    :community_summaries_nightly,
+    :cluster_summaries_nightly,
     :graph_maintenance_nightly,
     :link_gardener_weekly
   ]
@@ -65,8 +65,8 @@ defmodule Dran.JobsTest do
 
       assert %{mfa: {Dran.Graph, :refresh_all_scheduled, []}} = Jobs.get(:pagerank_nightly)
 
-      assert %{mfa: {Dran.Graph.CommunitySummaries, :generate_all_scheduled, []}} =
-               Jobs.get(:community_summaries_nightly)
+      assert %{mfa: {Dran.Graph.ClusterSummaries, :generate_all_scheduled, []}} =
+               Jobs.get(:cluster_summaries_nightly)
 
       assert %{mfa: {Dran.Graph.Maintenance, :sweep_scheduled, []}} =
                Jobs.get(:graph_maintenance_nightly)

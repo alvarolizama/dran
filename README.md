@@ -29,7 +29,7 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **Dashboard** (`/panel`) — context overview; accessible to admins and editors
 - **Kanban board** (`/panel/kanban`, `/:context_slug/kanban` in wiki) — all todos, columns `backlog → this_week → today → in_progress → done → cancelled`, drag-drop between columns, combinable filters (project / goal / plan)
 - **3D knowledge graph** (`/panel/graph`, `/panel/graph/:slug`, `/:context_slug/graph` in wiki) — force-directed 3D; hover highlights a node and its neighbors, click navigates (context-aware URLs in wiki via `data-base-path`)
-- **Communities** (`/panel/communities`, `/panel/communities/:id`) — graph communities (clusters of related pages) detected via modularity; each community gets an LLM-generated summary. Re-generated nightly or on demand
+- **Clusters** (`/panel/clusters`, `/panel/clusters/:id`) — graph clusters (clusters of related pages) detected via modularity; each cluster gets an LLM-generated summary. Re-generated nightly or on demand
 - **Hybrid search** (`/panel/search`) — full-text, fuzzy, semantic, or hybrid fusion
 - **Smart Collections** (`/panel/collections`) — saved live queries rendered as pages
 - **Activity feed** (`/panel/activity`), **Journey** (`/panel/journey`), **Tags** (`/panel/tags/:tag`), **Docs** (`/panel/docs`)
@@ -40,7 +40,7 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **3 autonomous agents** — `curator` (duplicates/contested cleanup, daily cron), `link_gardener` (proposes relations for orphans, weekly cron + manual), `graph_rag` (GraphRAG search with citations, manual)
 - **5 scheduled jobs** — `curator_daily`, `pagerank_nightly`, `community_summaries_nightly`, `graph_maintenance_nightly`, `link_gardener_weekly`. Controlled from **Settings → Brain** — per-job toggles, "run now" buttons, and a `report` page per run
 - **Entity linker** — auto-creates entity pages from real-world names detected in bodies (people, companies, tools); noise-filtered (no file paths, modules, or generic terms) and toggleable from Settings → Brain
-- **Graph intelligence** — PageRank authority scoring, community detection with LLM summaries, graph maintenance sweeps; all scheduled nightly
+- **Graph intelligence** — PageRank authority scoring, cluster detection with LLM summaries, graph maintenance sweeps; all scheduled nightly
 
 ### Integration & admin
 - **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 3 resources + 2 prompts. `owner` is derived from the API key name (not client-settable); `created_by` defaults to the authenticated identity but can be overridden. API keys with `write_access: false` are read-only — write tools (`dran_create_page`, `dran_update_page`, `dran_delete_page`, `dran_create_todo`, `dran_update_todo`, `dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`, `dran_reaugment_page`, `dran_start_agent`) return `403`

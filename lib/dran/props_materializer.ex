@@ -4,7 +4,7 @@ defmodule Dran.PropsMaterializer do
 
   The props map on a page is free-form user metadata (e.g.
   `%{"role" => "sales", "tier" => "vip"}`). By itself it is data the graph
-  cannot see — PageRank, community detection and GraphRAG only consume
+  cannot see — PageRank, cluster detection and GraphRAG only consume
   edges. This module materializes known props into typed relations so the
   graph feels them.
 

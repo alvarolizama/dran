@@ -30,7 +30,7 @@ defmodule Dran.Agent.GraphRagTest do
         sources: [],
         searches_done: 0,
         expands_done: 0,
-        community_contexts_done: 0
+        cluster_contexts_done: 0
       },
       attrs
     )
@@ -81,8 +81,8 @@ defmodule Dran.Agent.GraphRagTest do
     assert "hybrid_search" in tool_names
     assert "expand_neighbors" in tool_names
     assert "get_page_content" in tool_names
-    assert "get_community_context" in tool_names
-    assert "list_communities" in tool_names
+    assert "get_cluster_context" in tool_names
+    assert "list_clusters" in tool_names
     assert "synthesize_answer" in tool_names
     assert "create_answer_page" in tool_names
     assert "done" in tool_names
@@ -250,58 +250,58 @@ defmodule Dran.Agent.GraphRagTest do
     assert msg =~ "not found"
   end
 
-  #  execute_tool: get_community_context 
+  #  execute_tool: get_cluster_context 
 
-  test "get_community_context returns error when slug is empty" do
+  test "get_cluster_context returns error when slug is empty" do
     state = build_state(Ecto.UUID.generate())
 
     {result, _state} =
-      GraphRag.execute_tool("get_community_context", %{"slug" => ""}, state)
+      GraphRag.execute_tool("get_cluster_context", %{"slug" => ""}, state)
 
     assert {:error, "slug is required"} = result
   end
 
-  test "get_community_context returns error when limit reached" do
-    state = build_state(Ecto.UUID.generate(), community_contexts_done: 3)
+  test "get_cluster_context returns error when limit reached" do
+    state = build_state(Ecto.UUID.generate(), cluster_contexts_done: 3)
 
     {result, _state} =
-      GraphRag.execute_tool("get_community_context", %{"slug" => "test"}, state)
+      GraphRag.execute_tool("get_cluster_context", %{"slug" => "test"}, state)
 
     assert {:error, msg} = result
-    assert msg =~ "community_context limit reached"
+    assert msg =~ "cluster_context limit reached"
   end
 
-  test "get_community_context returns community data for a page with community_id" do
+  test "get_cluster_context returns cluster data for a page with cluster_id" do
     workspace_id = ensure_context!().id
 
     _page =
       insert_page!(workspace_id,
-        title: "Community Page",
-        slug: "community-page",
-        meta: %{"community_id" => 1}
+        title: "Cluster Page",
+        slug: "cluster-page",
+        meta: %{"cluster_id" => 1}
       )
 
     state = build_state(workspace_id)
 
     {result, new_state} =
-      GraphRag.execute_tool("get_community_context", %{"slug" => "community-page"}, state)
+      GraphRag.execute_tool("get_cluster_context", %{"slug" => "cluster-page"}, state)
 
     assert {:ok, data} = result
-    assert data.community_id == 1
+    assert data.cluster_id == 1
     # Will return fallback since no summary exists yet
     assert is_binary(data.summary)
-    assert new_state.community_contexts_done == 1
+    assert new_state.cluster_contexts_done == 1
   end
 
-  #  execute_tool: list_communities 
+  #  execute_tool: list_clusters 
 
-  test "list_communities returns a list (possibly empty)" do
+  test "list_clusters returns a list (possibly empty)" do
     state = build_state(Ecto.UUID.generate())
 
-    {result, _state} = GraphRag.execute_tool("list_communities", %{}, state)
+    {result, _state} = GraphRag.execute_tool("list_clusters", %{}, state)
 
-    assert {:ok, communities} = result
-    assert is_list(communities)
+    assert {:ok, clusters} = result
+    assert is_list(clusters)
   end
 
   #  execute_tool: synthesize_answer 

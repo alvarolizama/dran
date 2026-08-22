@@ -2,7 +2,7 @@ defmodule Dran.GraphExpansionTest do
   use Dran.DataCase, async: false
 
   # Tests for Knowledge.transitive_part_of_candidates/1 (Plan Task 3.1) and
-  # Knowledge.community_pages/2 (Task 4.3).
+  # Knowledge.cluster_pages/2 (Task 4.3).
   #
   # Fixture pattern mirrors sync_links_test.exs: inference is disabled so
   # create_page doesn't call external embedding/rerank APIs, and a
@@ -169,11 +169,11 @@ defmodule Dran.GraphExpansionTest do
     end
   end
 
-  # ── community_pages/2 (Task 4.3) ───────────────────────────────────────────
+  # ── cluster_pages/2 (Task 4.3) ───────────────────────────────────────────
 
-  describe "community_pages/2" do
-    test "returns only pages belonging to the given community", %{context: ctx} do
-      # Cluster 1: a-b-c triangle (will share one community_id).
+  describe "cluster_pages/2" do
+    test "returns only pages belonging to the given cluster", %{context: ctx} do
+      # Cluster 1: a-b-c triangle (will share one cluster_id).
       a = create_note(ctx, "cp-a")
       b = create_note(ctx, "cp-b")
       c = create_note(ctx, "cp-c")
@@ -181,21 +181,21 @@ defmodule Dran.GraphExpansionTest do
       relate!(b, c, "related")
       relate!(a, c, "related")
 
-      # Cluster 2: x-y single edge (different community_id).
+      # Cluster 2: x-y single edge (different cluster_id).
       x = create_note(ctx, "cp-x")
       y = create_note(ctx, "cp-y")
       relate!(x, y, "related")
 
-      # Persist community ids into meta.
-      :ok = Dran.Graph.refresh_communities(ctx.id)
+      # Persist cluster ids into meta.
+      :ok = Dran.Graph.refresh_clusters(ctx.id)
 
-      # Read the community_id assigned to cluster 1.
+      # Read the cluster_id assigned to cluster 1.
       a_reloaded = Knowledge.get_page!(a.id)
-      cid_a = a_reloaded.meta["community_id"]
+      cid_a = a_reloaded.meta["cluster_id"]
       assert is_integer(cid_a)
 
-      # community_pages/2 must return exactly {a, b, c} for cid_a.
-      pages = Knowledge.community_pages(ctx.id, cid_a)
+      # cluster_pages/2 must return exactly {a, b, c} for cid_a.
+      pages = Knowledge.cluster_pages(ctx.id, cid_a)
       slugs = Enum.map(pages, & &1.slug) |> Enum.sort()
 
       assert slugs == ["cp-a", "cp-b", "cp-c"]
@@ -207,14 +207,14 @@ defmodule Dran.GraphExpansionTest do
       assert a_entry.page_type == "note"
     end
 
-    test "returns empty list for a community_id that does not exist", %{context: ctx} do
+    test "returns empty list for a cluster_id that does not exist", %{context: ctx} do
       a = create_note(ctx, "cp-none-a")
       b = create_note(ctx, "cp-none-b")
       relate!(a, b, "related")
-      :ok = Dran.Graph.refresh_communities(ctx.id)
+      :ok = Dran.Graph.refresh_clusters(ctx.id)
 
-      # 99999 is (almost certainly) not a real community_id.
-      assert Knowledge.community_pages(ctx.id, 999_999) == []
+      # 99999 is (almost certainly) not a real cluster_id.
+      assert Knowledge.cluster_pages(ctx.id, 999_999) == []
     end
 
     test "does not leak pages from other contexts", %{context: ctx} do
@@ -222,23 +222,23 @@ defmodule Dran.GraphExpansionTest do
       a = create_note(ctx, "cp-cross-a")
       b = create_note(ctx, "cp-cross-b")
       relate!(a, b, "related")
-      :ok = Dran.Graph.refresh_communities(ctx.id)
+      :ok = Dran.Graph.refresh_clusters(ctx.id)
 
-      cid = Knowledge.get_page!(a.id).meta["community_id"]
+      cid = Knowledge.get_page!(a.id).meta["cluster_id"]
 
-      # Same community_id value, but in a different context — must return [].
+      # Same cluster_id value, but in a different context — must return [].
       {:ok, other_ctx} =
         Knowledge.create_workspace(%{
           name: "Other CP",
           slug: "cp-other-#{:erlang.unique_integer([:positive])}"
         })
 
-      # Manually stamp the same community_id on a page in the other context
+      # Manually stamp the same cluster_id on a page in the other context
       # to verify the workspace_id filter works.
       other_page = create_note(other_ctx, "cp-cross-other")
-      {:ok, _} = Knowledge.update_page(other_page, %{meta: %{"community_id" => cid}})
+      {:ok, _} = Knowledge.update_page(other_page, %{meta: %{"cluster_id" => cid}})
 
-      pages = Knowledge.community_pages(ctx.id, cid)
+      pages = Knowledge.cluster_pages(ctx.id, cid)
       slugs = Enum.map(pages, & &1.slug)
 
       assert "cp-cross-a" in slugs

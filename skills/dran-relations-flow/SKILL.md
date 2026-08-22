@@ -13,7 +13,7 @@ metadata:
 # dran-relations-flow — Connecting pages in Dran
 
 Relations are the heart of the graph: they feed PageRank, semantic search,
-and communities. **Link liberally** — a well-connected page ranks better and
+and clusters. **Link liberally** — a well-connected page ranks better and
 gets found on its own.
 
 ## Entry router
@@ -90,7 +90,7 @@ lists children in its meta.
 ### Materialized by props (automatic)
 
 These 5 keys in `meta.props` create edges on their own during augmentation
-(weight 0.7, they enter community detection):
+(weight 0.7, they enter cluster detection):
 
 | Prop key | Relation | Target page | Example |
 |----------|----------|-------------|---------|
@@ -102,7 +102,7 @@ These 5 keys in `meta.props` create edges on their own during augmentation
 
 **Any other key is stored without an edge** — it is passive metadata: you can
 filter on it when searching, but the graph doesn't see it (neither PageRank
-nor communities).
+nor clusters).
 
 **Materializer limits** (verified in `lib/dran/props_materializer.ex`):
 - Max **10 props** per page — the rest are ignored when materializing.

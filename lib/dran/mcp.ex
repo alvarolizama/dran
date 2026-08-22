@@ -29,7 +29,7 @@ defmodule Dran.MCP do
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
   - `dran_start_agent` — start an autonomous agent (curator, link_gardener, graph_rag)
   - `dran_get_agent_session` — poll an agent session for status and steps
-  - `dran_generate_community_summaries` — generate LLM summaries for all communities in a context
+  - `dran_generate_cluster_summaries` — generate LLM summaries for all clusters in a context
 
   ## Embeds
   Embeds are auto-resolved into embeds relations on create and update; stale ones
@@ -783,15 +783,15 @@ defmodule Dran.MCP do
       }
     },
     %{
-      "name" => "dran_generate_community_summaries",
+      "name" => "dran_generate_cluster_summaries",
       "description" =>
-        "Generate or regenerate LLM-powered summaries for all knowledge communities detected via Label Propagation. Requires inference to be configured. Communities are clusters of related pages grouped by relation types (part_of, embeds, related, supersedes). Each community gets a 2-3 sentence summary that captures its main theme. Returns the count of summaries generated.",
+        "Generate or regenerate LLM-powered summaries for all knowledge clusters detected via Label Propagation. Requires inference to be configured. Clusters are clusters of related pages grouped by relation types (part_of, embeds, related, supersedes). Each cluster gets a 2-3 sentence summary that captures its main theme. Returns the count of summaries generated.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
           "workspace" => %{
             "type" => "string",
-            "description" => "Context slug to generate community summaries for."
+            "description" => "Context slug to generate cluster summaries for."
           }
         },
         "required" => ["workspace"]
@@ -1101,7 +1101,7 @@ defmodule Dran.MCP do
                  "dran_rename_slug",
                  "dran_reaugment_page",
                  "dran_start_agent",
-                 "dran_generate_community_summaries"
+                 "dran_generate_cluster_summaries"
                ])
 
   defp write_tool?(name) when is_binary(name), do: MapSet.member?(@write_tools, name)
@@ -1855,17 +1855,17 @@ defmodule Dran.MCP do
     end
   end
 
-  defp execute_tool("dran_generate_community_summaries", %{"workspace" => workspace_slug}, _user) do
+  defp execute_tool("dran_generate_cluster_summaries", %{"workspace" => workspace_slug}, _user) do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      case Dran.Graph.CommunitySummaries.generate_all(context.id) do
+      case Dran.Graph.ClusterSummaries.generate_all(context.id) do
         :ok ->
-          summaries = Dran.Graph.CommunitySummaries.list_summaries(context.id)
-          "Generated #{length(summaries)} community summaries for context '#{workspace_slug}'"
+          summaries = Dran.Graph.ClusterSummaries.list_summaries(context.id)
+          "Generated #{length(summaries)} cluster summaries for context '#{workspace_slug}'"
 
         {:error, reason} ->
-          "Error generating community summaries: #{inspect(reason)}"
+          "Error generating cluster summaries: #{inspect(reason)}"
       end
     else
       "Error: context '#{workspace_slug}' not found"

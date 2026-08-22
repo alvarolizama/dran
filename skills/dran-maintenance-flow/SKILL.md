@@ -1,6 +1,6 @@
 ---
 name: dran-maintenance-flow
-description: "Use when maintaining the Dran brain — lint orphans/stale, run autonomous agents, community summaries, archive, stats. Triggers on limpia, higiene, mantenimiento del brain (Spanish: cleaning, hygiene, brain maintenance)."
+description: "Use when maintaining the Dran brain — lint orphans/stale, run autonomous agents, cluster summaries, archive, stats. Triggers on limpia, higiene, mantenimiento del brain (Spanish: cleaning, hygiene, brain maintenance)."
 version: 1.0.0
 author: Álvaro Lizama
 license: MIT
@@ -13,7 +13,7 @@ metadata:
 # dran-maintenance-flow — Keeping the brain healthy
 
 Brain hygiene: detect orphans and stale pages, launch autonomous agents,
-regenerate community summaries, archive what no longer applies.
+regenerate cluster summaries, archive what no longer applies.
 **Mother rule: present, do not auto-fix** — clean-up decisions belong to
 Álvaro.
 
@@ -70,7 +70,7 @@ flowchart TD
 | 1 | Lint report presented to Álvaro | Informed decision, without touching anything |
 | 2 | Completed agent sessions | Link proposals, duplicate reports, query pages |
 | 3 | Archived pages (recoverable) | Clean brain with no irreversible loss |
-| 4 | Regenerated community summaries | Sharper global search |
+| 4 | Regenerated cluster summaries | Sharper global search |
 
 **Auto-fixing without presenting is forbidden** — the agent proposes, Álvaro
 disposes.
@@ -81,7 +81,7 @@ disposes.
 |-------|---------|----------------|----------------|
 | `curator` | Near-duplicates (embedding < 0.05), disputed knowledge, writes report | Periodic / after mass capture | 20 flags |
 | `link_gardener` | Proposes typed relations for orphans and under-linked pages (incl. transitive `part_of` A→C via B) | When there are orphans | 10 proposals |
-| `graph_rag` | Answers questions with GraphRAG (local = neighbors, global = community summaries, drift = hybrid) and creates query pages with citations | A question whose answer is worth saving | 10 searches, 5 expands, 3 communities, 1 query |
+| `graph_rag` | Answers questions with GraphRAG (local = neighbors, global = cluster summaries, drift = hybrid) and creates query pages with citations | A question whose answer is worth saving | 10 searches, 5 expands, 3 clusters, 1 query |
 
 ### Lifecycle
 
@@ -154,7 +154,7 @@ dran_reaugment_page({ slug: "<slug>" })
 
 ```
 dran_generate_community_summaries({ context: "personal" })
-# Regenerates LLM summaries per community — run after significant capture
+# Regenerates LLM summaries per cluster — run after significant capture
 ```
 
 ### Recipe — answering with the graph (graph_rag)
@@ -174,7 +174,7 @@ dran_generate_community_summaries({ context: "personal" })
   goal per `input`.
 - **Not waiting for the poll** — the agent runs async; without `completed`
   there is no result to report.
-- **Running community summaries daily** — after significant capture or when
+- **Running cluster summaries daily** — after significant capture or when
   global search feels weak, not out of routine (the crons already run).
 - **Re-augmenting pages without changes** — only when the content changed
   significantly.
@@ -189,7 +189,7 @@ dran_generate_community_summaries({ context: "personal" })
 | `dran_lint_brain` | `context` | Orphans, stale, contested |
 | `dran_start_agent` | `agent_type`, `context`, `input` | `session_id` |
 | `dran_get_agent_session` | `session_id` | status + steps + summary |
-| `dran_generate_community_summaries` | `context` | Summaries per community |
+| `dran_generate_community_summaries` | `context` | Summaries per cluster |
 | `dran_reaugment_page` | `slug` | Re-run augmentation |
 | `dran_update_page` | `slug`, `archived: true` | Archived |
 | `dran_delete_page` | `slug` (with confirmation) | Deleted (irreversible) |

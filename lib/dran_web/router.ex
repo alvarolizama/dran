@@ -539,8 +539,8 @@ defmodule DranWeb.Router do
     live "/:workspace_slug/collections/new", SmartCollectionLive, :new
     live "/:workspace_slug/collections/:slug", SmartCollectionLive, :show
 
-    live "/:workspace_slug/communities", CommunityLive, :index
-    live "/:workspace_slug/communities/:id", CommunityLive, :show
+    live "/:workspace_slug/clusters", ClusterLive, :index
+    live "/:workspace_slug/clusters/:id", ClusterLive, :show
 
     live "/:workspace_slug/reports/:slug", ReportLive, :show
 

@@ -55,6 +55,7 @@ defmodule DranWeb.HomeLive do
 
     {:ok,
      assign(socket,
+       active_nav: "home",
        graph_data: %{nodes: [], edges: []},
        search_query: "",
        search_results: nil,
@@ -92,6 +93,7 @@ defmodule DranWeb.HomeLive do
 
     socket
     |> assign(
+      active_nav: nil,
       contexts: contexts,
       workspace: nil,
       page_title: gettext("Wiki"),
@@ -122,6 +124,7 @@ defmodule DranWeb.HomeLive do
 
         socket
         |> assign(
+          active_nav: "home",
           workspace: workspace,
           collections: collections,
           pinned_pages: pinned,
@@ -170,6 +173,7 @@ defmodule DranWeb.HomeLive do
 
         socket
         |> assign(
+          active_nav: nil,
           workspace: workspace,
           page_type: page_type,
           pages: pages,
@@ -209,6 +213,7 @@ defmodule DranWeb.HomeLive do
 
             socket
             |> assign(
+              active_nav: nil,
               workspace: workspace,
               page: page,
               rendered_body: rendered_body,
@@ -248,6 +253,7 @@ defmodule DranWeb.HomeLive do
 
             socket
             |> assign(
+              active_nav: nil,
               workspace: workspace,
               collection: collection,
               results: results,
@@ -279,6 +285,7 @@ defmodule DranWeb.HomeLive do
 
         socket
         |> assign(
+          active_nav: "graph",
           workspace: workspace,
           graph_data: %{nodes: [], edges: []},
           page_title: "#{workspace.name} · Graph",
@@ -317,6 +324,7 @@ defmodule DranWeb.HomeLive do
 
         socket
         |> assign(
+          active_nav: "kanban",
           workspace: workspace,
           todos: todos,
           kanban_columns: @kanban_columns,
@@ -351,6 +359,7 @@ defmodule DranWeb.HomeLive do
 
         socket
         |> assign(
+          active_nav: "home",
           workspace: workspace,
           letter: letter,
           pages: pages,
@@ -413,11 +422,13 @@ defmodule DranWeb.HomeLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.home
+    <Layouts.app
       flash={@flash}
+      current_scope={@current_scope}
       current_user={@current_user}
-      is_owner={@is_owner}
       workspace_slug={@workspace && @workspace.slug}
+      workspaces={@contexts}
+      active_nav={@active_nav}
     >
       <%= if @search_results do %>
         <.search_results_view
@@ -482,7 +493,7 @@ defmodule DranWeb.HomeLive do
             <.letter_view workspace={@workspace} letter={@letter} pages={@pages} alphabet={@alphabet} />
         <% end %>
       <% end %>
-    </Layouts.home>
+    </Layouts.app>
     """
   end
 

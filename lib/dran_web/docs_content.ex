@@ -26,7 +26,7 @@ defmodule DranWeb.DocsContent do
 
   ## Graph intelligence
 
-  PageRank (weighted by relation type), Label Propagation communities, and
+  PageRank (weighted by relation type), Label Propagation clusters, and
   transitive `part_of` candidates are documented in `graph_intelligence_doc/0`.
   These algorithms are implemented in `Dran.Graph` and refreshed nightly by the
   `pagerank_nightly` Quantum job.
@@ -156,41 +156,41 @@ defmodule DranWeb.DocsContent do
     disable the boost entirely.
 
   ─────────────────────────────────────────────────────────────────────
-  2. Communities (Label Propagation)
+  2. Clusters (Label Propagation)
   ─────────────────────────────────────────────────────────────────────
 
-  Community detection via Label Propagation over typed edges, up to 30
+  Cluster detection via Label Propagation over typed edges, up to 30
   iterations with early-stop after iteration 3 if labels converge.
-  Edges are treated as undirected for community purposes (each edge
+  Edges are treated as undirected for cluster purposes (each edge
   contributes its weight in both directions).
 
   IMPORTANT — which edges participate:
     Only `part_of`, `embeds`, `supersedes`, and `related` edges are
     used. `semantic` and `contradicts` edges are EXCLUDED:
       - `semantic` is high-volume auto-generated noise that would smear
-        communities together.
+        clusters together.
       - `contradicts` links pages that disagree, which is the opposite
         of "belongs to the same cluster".
     So two pages that only share a `semantic` or `contradicts` edge
-    will NOT end up in the same community.
+    will NOT end up in the same cluster.
 
   Persistence:
-    `Dran.Graph.refresh_communities/1` writes the detected community id
-    into `meta.community_id` (an integer 1..k) using the same jsonb
+    `Dran.Graph.refresh_clusters/1` writes the detected cluster id
+    into `meta.cluster_id` (an integer 1..k) using the same jsonb
     merge as PageRank.
 
-  community_id is OPAQUE and NOT STABLE between refreshes:
+  cluster_id is OPAQUE and NOT STABLE between refreshes:
     Label Propagation is non-deterministic — the node update order is
-    shuffled each iteration, so a page's `community_id` integer can
+    shuffled each iteration, so a page's `cluster_id` integer can
     change between nightly runs even if the graph itself didn't.
-    Consumers MUST treat `community_id` as an opaque grouping key
-    (use it to check "are A and B in the same community?"), NEVER as
+    Consumers MUST treat `cluster_id` as an opaque grouping key
+    (use it to check "are A and B in the same cluster?"), NEVER as
     a stable identity. Do not display it to users or link to it.
 
-  Reading a community's pages:
-    `Knowledge.community_pages(workspace_id, community_id)` returns the
+  Reading a cluster's pages:
+    `Knowledge.cluster_pages(workspace_id, cluster_id)` returns the
     lightweight list `%{id, slug, title, page_type}` of pages in a
-    given community — no body, no embeddings. The Curator agent uses
+    given cluster — no body, no embeddings. The Curator agent uses
     this to gather evidence when evaluating duplicate candidates.
 
   ─────────────────────────────────────────────────────────────────────
@@ -228,14 +228,14 @@ defmodule DranWeb.DocsContent do
   job at `0 3 * * *` (03:00 daily). It resolves the default context,
   then runs:
     1. refresh_pagerank/1    (writes meta.pagerank)
-    2. refresh_communities/1 (writes meta.community_id)
+    2. refresh_clusters/1 (writes meta.cluster_id)
 
   All scheduled jobs route through `Dran.Jobs.run_scheduled/1`, which
   honors the per-job toggles in Settings → Brain and writes a
   `Dran.Report` record per run:
     curator_daily                06:00  daily
     pagerank_nightly             03:00  daily  (this pipeline)
-    community_summaries_nightly  03:30  daily  (LLM summary per community)
+    cluster_summaries_nightly  03:30  daily  (LLM summary per cluster)
     graph_maintenance_nightly    03:45  daily  (prunes stale derived relations)
     link_gardener_weekly         07:00  Sundays
 

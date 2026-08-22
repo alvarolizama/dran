@@ -5,7 +5,7 @@ defmodule Dran.GraphTest do
   #
   # Covers:
   #   - edge_weight/1: typed weights
-  #   - community_edge?/1: excludes semantic / contradicts
+  #   - cluster_edge?/1: excludes semantic / contradicts
   #   - pagerank/1: hub page ranks higher than leaves (ordering only)
   #   - refresh_pagerank/1: scores persisted into Page.meta as floats
   #
@@ -100,28 +100,28 @@ defmodule Dran.GraphTest do
     end
   end
 
-  # ── Task 1.2: community_edge?/1 ────────────────────────────────────────────
+  # ── Task 1.2: cluster_edge?/1 ────────────────────────────────────────────
 
-  describe "community_edge?/1" do
+  describe "cluster_edge?/1" do
     test "includes structural types" do
-      assert Graph.community_edge?("part_of")
-      assert Graph.community_edge?("embeds")
-      assert Graph.community_edge?("supersedes")
-      assert Graph.community_edge?("related")
+      assert Graph.cluster_edge?("part_of")
+      assert Graph.cluster_edge?("embeds")
+      assert Graph.cluster_edge?("supersedes")
+      assert Graph.cluster_edge?("related")
     end
 
     test "excludes semantic and contradicts" do
-      refute Graph.community_edge?("semantic")
-      refute Graph.community_edge?("contradicts")
+      refute Graph.cluster_edge?("semantic")
+      refute Graph.cluster_edge?("contradicts")
     end
 
     test "excludes unknown types" do
-      refute Graph.community_edge?("unknown")
+      refute Graph.cluster_edge?("unknown")
     end
 
     test "accepts atoms" do
-      assert Graph.community_edge?(:part_of)
-      refute Graph.community_edge?(:semantic)
+      assert Graph.cluster_edge?(:part_of)
+      refute Graph.cluster_edge?(:semantic)
     end
   end
 
@@ -305,7 +305,7 @@ defmodule Dran.GraphTest do
       assert pr > 0
     end
 
-    test "refreshes both pagerank and community_id for the default context" do
+    test "refreshes both pagerank and cluster_id for the default context" do
       ctx =
         Knowledge.get_workspace_by_slug("personal") ||
           elem(Knowledge.create_workspace(%{name: "Personal", slug: "personal"}), 1)
@@ -324,22 +324,22 @@ defmodule Dran.GraphTest do
       assert is_float(a_reloaded.meta["pagerank"])
       assert is_float(b_reloaded.meta["pagerank"])
 
-      # Two pages linked by a single community edge share a community_id.
-      assert is_integer(a_reloaded.meta["community_id"])
-      assert is_integer(b_reloaded.meta["community_id"])
-      assert a_reloaded.meta["community_id"] == b_reloaded.meta["community_id"]
+      # Two pages linked by a single cluster edge share a cluster_id.
+      assert is_integer(a_reloaded.meta["cluster_id"])
+      assert is_integer(b_reloaded.meta["cluster_id"])
+      assert a_reloaded.meta["cluster_id"] == b_reloaded.meta["cluster_id"]
     end
   end
 
-  # ── Task 4.1: communities/2 ──────────────────────────────────────────────────
+  # ── Task 4.1: clusters/2 ──────────────────────────────────────────────────
 
-  describe "communities/2" do
+  describe "clusters/2" do
     test "returns empty map for context with no relations" do
       ctx = fresh_context("lp-empty")
-      assert Graph.communities(ctx.id) == %{}
+      assert Graph.clusters(ctx.id) == %{}
     end
 
-    test "clusters densely connected pages into the same community" do
+    test "clusters densely connected pages into the same cluster" do
       ctx = fresh_context("lp-cluster")
 
       # Cluster 1: a-b-c fully linked (triangle).
@@ -356,7 +356,7 @@ defmodule Dran.GraphTest do
       relate(a, c, "related")
       relate(x, y, "related")
 
-      comms = Graph.communities(ctx.id, seed: {1, 2, 3})
+      comms = Graph.clusters(ctx.id, seed: {1, 2, 3})
 
       # Cluster 1: a, b, c share the same label.
       assert comms[a.id] == comms[b.id]
@@ -380,48 +380,48 @@ defmodule Dran.GraphTest do
       relate(a, b, "related")
       relate(x, y, "related")
 
-      comms = Graph.communities(ctx.id, seed: {42, 7, 99})
+      comms = Graph.clusters(ctx.id, seed: {42, 7, 99})
 
       labels = comms |> Map.values() |> Enum.uniq() |> Enum.sort()
 
-      # Exactly two communities, labeled 1 and 2.
+      # Exactly two clusters, labeled 1 and 2.
       assert labels == [1, 2]
     end
 
-    test "excludes semantic and contradicts edges from community detection" do
+    test "excludes semantic and contradicts edges from cluster detection" do
       ctx = fresh_context("lp-filter")
 
       # a and b connected only via semantic — must NOT be clustered together
-      # (no community edge between them). Since the only edge is filtered out,
-      # neither node appears in the community graph at all.
+      # (no cluster edge between them). Since the only edge is filtered out,
+      # neither node appears in the cluster graph at all.
       a = create_page(ctx, "g-lp-f-a")
       b = create_page(ctx, "g-lp-f-b")
 
       relate(a, b, "semantic")
 
-      comms = Graph.communities(ctx.id, seed: {5, 5, 5})
+      comms = Graph.clusters(ctx.id, seed: {5, 5, 5})
 
-      # With no community edges, the result is empty — neither node gets a label.
+      # With no cluster edges, the result is empty — neither node gets a label.
       refute Map.has_key?(comms, a.id)
       refute Map.has_key?(comms, b.id)
     end
 
-    test "isolated nodes each form their own community" do
+    test "isolated nodes each form their own cluster" do
       ctx = fresh_context("lp-iso")
 
       # Two connected nodes + one isolated node with no edges at all.
       # The isolated node won't even appear in load_edges, so it's absent
-      # from the result (it has no community). The two connected nodes
-      # share a community.
+      # from the result (it has no cluster). The two connected nodes
+      # share a cluster.
       a = create_page(ctx, "g-lp-iso-a")
       b = create_page(ctx, "g-lp-iso-b")
       isolated = create_page(ctx, "g-lp-iso-alone")
 
       relate(a, b, "part_of")
 
-      comms = Graph.communities(ctx.id, seed: {1, 1, 1})
+      comms = Graph.clusters(ctx.id, seed: {1, 1, 1})
 
-      # a and b share a community.
+      # a and b share a cluster.
       assert comms[a.id] == comms[b.id]
       # The isolated page is not in the result (no edges to propagate).
       refute Map.has_key?(comms, isolated.id)
@@ -439,36 +439,36 @@ defmodule Dran.GraphTest do
       relate(c, b, "part_of")
       relate(a, c, "part_of")
 
-      comms = Graph.communities(ctx.id, seed: {9, 9, 9})
+      comms = Graph.clusters(ctx.id, seed: {9, 9, 9})
 
       assert comms[a.id] == comms[b.id]
       assert comms[b.id] == comms[c.id]
     end
   end
 
-  # ── Task 4.2: refresh_communities/1 ─────────────────────────────────────────
+  # ── Task 4.2: refresh_clusters/1 ─────────────────────────────────────────
 
-  describe "refresh_communities/1" do
-    test "persists community_id into Page.meta as an integer" do
+  describe "refresh_clusters/1" do
+    test "persists cluster_id into Page.meta as an integer" do
       ctx = fresh_context("rc")
       a = create_page(ctx, "g-rc-a")
       b = create_page(ctx, "g-rc-b")
       relate(a, b, "part_of")
 
-      assert :ok = Graph.refresh_communities(ctx.id)
+      assert :ok = Graph.refresh_clusters(ctx.id)
 
       a_reloaded = Knowledge.get_page!(a.id)
       b_reloaded = Knowledge.get_page!(b.id)
 
-      cid_a = a_reloaded.meta["community_id"]
-      cid_b = b_reloaded.meta["community_id"]
+      cid_a = a_reloaded.meta["cluster_id"]
+      cid_b = b_reloaded.meta["cluster_id"]
 
       assert is_integer(cid_a)
       assert is_integer(cid_b)
       assert cid_a == cid_b
     end
 
-    test "two pages in the same cluster share an integer community_id" do
+    test "two pages in the same cluster share an integer cluster_id" do
       ctx = fresh_context("rc-cluster")
 
       # Cluster 1: a-b-c triangle.
@@ -484,9 +484,9 @@ defmodule Dran.GraphTest do
       y = create_page(ctx, "g-rc-c-y")
       relate(x, y, "related")
 
-      :ok = Graph.refresh_communities(ctx.id)
+      :ok = Graph.refresh_clusters(ctx.id)
 
-      reload = fn page -> Knowledge.get_page!(page.id).meta["community_id"] end
+      reload = fn page -> Knowledge.get_page!(page.id).meta["cluster_id"] end
 
       cid_a = reload.(a)
       cid_b = reload.(b)
@@ -494,18 +494,18 @@ defmodule Dran.GraphTest do
       cid_x = reload.(x)
       cid_y = reload.(y)
 
-      # All cluster-1 pages share the same integer community_id.
+      # All cluster-1 pages share the same integer cluster_id.
       assert is_integer(cid_a)
       assert cid_a == cid_b
       assert cid_b == cid_c
 
-      # Cluster-2 pages share a different integer community_id.
+      # Cluster-2 pages share a different integer cluster_id.
       assert is_integer(cid_x)
       assert cid_x == cid_y
       assert cid_a != cid_x
     end
 
-    test "preserves existing meta keys when writing community_id" do
+    test "preserves existing meta keys when writing cluster_id" do
       ctx = fresh_context("rc-preserve")
       a = create_page(ctx, "g-rc-p-a")
       b = create_page(ctx, "g-rc-p-b")
@@ -513,18 +513,18 @@ defmodule Dran.GraphTest do
 
       {:ok, _} = Knowledge.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
 
-      :ok = Graph.refresh_communities(ctx.id)
+      :ok = Graph.refresh_clusters(ctx.id)
 
       b_reloaded = Knowledge.get_page!(b.id)
 
       assert b_reloaded.meta["author"] == "tester"
       assert b_reloaded.meta["kind"] == "thought"
-      assert is_integer(b_reloaded.meta["community_id"])
+      assert is_integer(b_reloaded.meta["cluster_id"])
     end
 
     test "returns :ok on empty context" do
       ctx = fresh_context("rc-empty")
-      assert :ok = Graph.refresh_communities(ctx.id)
+      assert :ok = Graph.refresh_clusters(ctx.id)
     end
   end
 end

@@ -26,8 +26,8 @@ defmodule Dran.Graph do
     "semantic" => 0.1
   }
 
-  # Edge types that participate in community detection.
-  @community_types ~w(part_of embeds supersedes related mentions works_in has_tier based_in written_in built_with)
+  # Edge types that participate in cluster detection.
+  @cluster_types ~w(part_of embeds supersedes related mentions works_in has_tier based_in written_in built_with)
 
   @damping 0.85
   @iterations 20
@@ -39,10 +39,10 @@ defmodule Dran.Graph do
   def edge_weight(type) when is_atom(type), do: edge_weight(Atom.to_string(type))
   def edge_weight(type), do: Map.get(@edge_weights, type, 0.5)
 
-  @doc "Whether an edge type participates in community detection."
-  @spec community_edge?(String.t() | atom()) :: boolean()
-  def community_edge?(type) when is_atom(type), do: community_edge?(Atom.to_string(type))
-  def community_edge?(type), do: type in @community_types
+  @doc "Whether an edge type participates in cluster detection."
+  @spec cluster_edge?(String.t() | atom()) :: boolean()
+  def cluster_edge?(type) when is_atom(type), do: cluster_edge?(Atom.to_string(type))
+  def cluster_edge?(type), do: type in @cluster_types
 
   @doc """
   Load all edges for a context as a list of
@@ -171,15 +171,15 @@ defmodule Dran.Graph do
   end
 
   @doc """
-  Detect communities via Label Propagation over typed edges.
+  Detect clusters via Label Propagation over typed edges.
 
-  Treats edges as undirected for community purposes: each edge contributes
-  its weight in both directions. Returns `%{page_id => community_label}`
-  where labels are integers in `1..k` (k = number of detected communities).
+  Treats edges as undirected for cluster purposes: each edge contributes
+  its weight in both directions. Returns `%{page_id => cluster_label}`
+  where labels are integers in `1..k` (k = number of detected clusters).
 
   ## Algorithm
 
-    1. Filter edges to community types (`community_edge?/1` excludes
+    1. Filter edges to cluster types (`cluster_edge?/1` excludes
        `semantic` and `contradicts`).
     2. Build undirected weighted adjacency: `adj[node][neighbor] = weight`,
        accumulating weight when multiple edges connect the same pair.
@@ -192,9 +192,9 @@ defmodule Dran.Graph do
     6. Compress the final labels to consecutive integers `1..k` so the
        output is stable and small regardless of the raw label ids.
 
-  Isolated nodes (no community edges) are not present in the adjacency
+  Isolated nodes (no cluster edges) are not present in the adjacency
   map and therefore keep their initial self-label — each forms its own
-  singleton community.
+  singleton cluster.
 
   ## Options
 
@@ -205,18 +205,18 @@ defmodule Dran.Graph do
   ## Notes
 
   Label Propagation is non-deterministic across runs because the node
-  update order is shuffled each iteration. Community *ids* are therefore
-  unstable between refreshes — consumers must treat `community_id` as an
+  update order is shuffled each iteration. Cluster *ids* are therefore
+  unstable between refreshes — consumers must treat `cluster_id` as an
   opaque grouping key, never as a stable identity.
   """
-  @spec communities(binary(), keyword()) :: %{binary() => integer()}
-  def communities(workspace_id, opts \\ []) do
+  @spec clusters(binary(), keyword()) :: %{binary() => integer()}
+  def clusters(workspace_id, opts \\ []) do
     if seed = Keyword.get(opts, :seed), do: :rand.seed(:exsss, seed)
 
     edges =
       workspace_id
       |> load_edges()
-      |> Enum.filter(&community_edge?(&1.type))
+      |> Enum.filter(&cluster_edge?(&1.type))
 
     nodes = edges |> Enum.flat_map(&[&1.source, &1.target]) |> Enum.uniq()
 
@@ -229,7 +229,7 @@ defmodule Dran.Graph do
         |> update_in([Access.key(e.target, %{}), Access.key(e.source, 0.0)], &(&1 + e.weight))
       end)
 
-    # Initial labels: each node is its own community.
+    # Initial labels: each node is its own cluster.
     labels = Map.new(nodes, &{&1, &1})
 
     final =
@@ -270,19 +270,19 @@ defmodule Dran.Graph do
   end
 
   @doc """
-  Recompute communities for a context and persist `community_id` into each
+  Recompute clusters for a context and persist `cluster_id` into each
   page's meta.
 
   Mirrors `refresh_pagerank/1`: uses `Repo.update_all` with a jsonb merge
   (`COALESCE(meta, '{}'::jsonb) || ?::jsonb`) to avoid triggering the
   augmenter, embeddings, broadcasts, and other update side effects.
   """
-  @spec refresh_communities(binary()) :: :ok
-  def refresh_communities(workspace_id) do
+  @spec refresh_clusters(binary()) :: :ok
+  def refresh_clusters(workspace_id) do
     workspace_id
-    |> communities()
+    |> clusters()
     |> Enum.each(fn {page_id, cid} ->
-      new_meta = %{"community_id" => cid}
+      new_meta = %{"cluster_id" => cid}
 
       query =
         from(p in Dran.Page,
@@ -301,8 +301,8 @@ defmodule Dran.Graph do
 
   Resolves the default context slug via `Dran.Auth.default_workspace_slug/0`,
   looks it up with `Knowledge.get_workspace_by_slug/1`, and runs both
-  `refresh_pagerank/1` and `refresh_communities/1` on the same context.
-  PageRank runs first so community detection can reuse any future
+  `refresh_pagerank/1` and `refresh_clusters/1` on the same context.
+  PageRank runs first so cluster detection can reuse any future
   cross-signal logic; both share the same edge load. Same pattern as
   `Dran.Agent.Curator.run_scheduled/0`.
   """
@@ -316,7 +316,7 @@ defmodule Dran.Graph do
 
       ctx ->
         :ok = refresh_pagerank(ctx.id)
-        :ok = refresh_communities(ctx.id)
+        :ok = refresh_clusters(ctx.id)
         :ok
     end
   end

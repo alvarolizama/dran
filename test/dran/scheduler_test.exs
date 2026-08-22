@@ -49,7 +49,7 @@ defmodule Dran.SchedulerTest do
       for {key, cron} <- [
             {:curator_daily, "0 6 * * *"},
             {:pagerank_nightly, "0 3 * * *"},
-            {:community_summaries_nightly, "30 3 * * *"},
+            {:cluster_summaries_nightly, "30 3 * * *"},
             {:graph_maintenance_nightly, "45 3 * * *"},
             {:link_gardener_weekly, "0 7 * * 0"}
           ] do

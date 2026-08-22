@@ -150,16 +150,16 @@ defmodule Dran.Agent.CuratorTest do
       assert new_state.duplicate_pairs == []
     end
 
-    test "enriches pairs with same_community flag when both pages share a community_id", %{
+    test "enriches pairs with same_cluster flag when both pages share a cluster_id", %{
       context: ctx
     } do
-      # Two pages with close embeddings AND the same community_id in meta.
+      # Two pages with close embeddings AND the same cluster_id in meta.
       _page_a =
         insert_page!(ctx.id,
           title: "Page A",
           slug: "comm-a",
           embedding: Pgvector.new(close_vector_a()),
-          meta: %{"community_id" => 7}
+          meta: %{"cluster_id" => 7}
         )
 
       _page_b =
@@ -167,7 +167,7 @@ defmodule Dran.Agent.CuratorTest do
           title: "Page B",
           slug: "comm-b",
           embedding: Pgvector.new(close_vector_b()),
-          meta: %{"community_id" => 7}
+          meta: %{"cluster_id" => 7}
         )
 
       state = build_state(ctx.id)
@@ -176,20 +176,20 @@ defmodule Dran.Agent.CuratorTest do
       assert length(pairs) == 1
       pair = hd(pairs)
 
-      # The pair must carry the same_community flag set to true.
-      assert pair.same_community == true
+      # The pair must carry the same_cluster flag set to true.
+      assert pair.same_cluster == true
       # And the meta must NOT be leaked into the pair payload.
       refute Map.has_key?(pair.a, :meta)
       refute Map.has_key?(pair.b, :meta)
     end
 
-    test "sets same_community to false when pages are in different communities", %{context: ctx} do
+    test "sets same_cluster to false when pages are in different clusters", %{context: ctx} do
       _page_a =
         insert_page!(ctx.id,
           title: "Page A",
           slug: "diff-comm-a",
           embedding: Pgvector.new(close_vector_a()),
-          meta: %{"community_id" => 1}
+          meta: %{"cluster_id" => 1}
         )
 
       _page_b =
@@ -197,7 +197,7 @@ defmodule Dran.Agent.CuratorTest do
           title: "Page B",
           slug: "diff-comm-b",
           embedding: Pgvector.new(close_vector_b()),
-          meta: %{"community_id" => 2}
+          meta: %{"cluster_id" => 2}
         )
 
       state = build_state(ctx.id)
@@ -205,12 +205,12 @@ defmodule Dran.Agent.CuratorTest do
 
       assert length(pairs) == 1
       pair = hd(pairs)
-      assert pair.same_community == false
+      assert pair.same_cluster == false
     end
 
-    test "sets same_community to false when community_id is missing", %{context: ctx} do
-      # Pages with close embeddings but no community_id in meta (communities
-      # not yet refreshed). same_community must be false, not crash.
+    test "sets same_cluster to false when cluster_id is missing", %{context: ctx} do
+      # Pages with close embeddings but no cluster_id in meta (clusters
+      # not yet refreshed). same_cluster must be false, not crash.
       _page_a =
         insert_page!(ctx.id,
           title: "Page A",
@@ -230,7 +230,7 @@ defmodule Dran.Agent.CuratorTest do
 
       assert length(pairs) == 1
       pair = hd(pairs)
-      assert pair.same_community == false
+      assert pair.same_cluster == false
     end
   end
 

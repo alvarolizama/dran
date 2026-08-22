@@ -2,7 +2,7 @@ defmodule Dran.Jobs do
   @moduledoc """
   Registry and control plane for Dran's scheduled jobs (Quantum crons).
 
-  Every recurring task the brain runs (curator, pagerank, community
+  Every recurring task the brain runs (curator, pagerank, cluster
   summaries, graph maintenance, link gardener) is declared once in the
   `@jobs` registry below. The Quantum scheduler in `config/config.exs`
   does NOT call the job modules directly — it calls
@@ -63,14 +63,14 @@ defmodule Dran.Jobs do
       label: "PageRank",
       mfa: {Dran.Graph, :refresh_all_scheduled, []},
       description:
-        "Nightly graph recompute: PageRank scores, communities and related graph " <>
+        "Nightly graph recompute: PageRank scores, clusters and related graph " <>
           "materializations for the default context."
     },
     %{
-      key: :community_summaries_nightly,
-      label: "Community summaries",
-      mfa: {Dran.Graph.CommunitySummaries, :generate_all_scheduled, []},
-      description: "Nightly LLM summaries for every graph community in the default context."
+      key: :cluster_summaries_nightly,
+      label: "Cluster summaries",
+      mfa: {Dran.Graph.ClusterSummaries, :generate_all_scheduled, []},
+      description: "Nightly LLM summaries for every graph cluster in the default context."
     },
     %{
       key: :graph_maintenance_nightly,

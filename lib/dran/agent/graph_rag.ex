@@ -1,7 +1,7 @@
 defmodule Dran.Agent.GraphRag do
   @moduledoc """
   GraphRAG agent: answers questions using GraphRAG patterns — local search
-  (fan-out to neighbors), global search (community summaries), or drift
+  (fan-out to neighbors), global search (cluster summaries), or drift
   search (hybrid).
 
   ## Search Modes
@@ -10,26 +10,26 @@ defmodule Dran.Agent.GraphRag do
     `hybrid_search`, fan-out via `expand_neighbors`, read via
     `get_page_content`, then `synthesize_answer`.
   - **Global** — holistic questions ("what are the main themes?").
-    `list_communities` → `synthesize_answer`.
-  - **Drift** — hybrid: local seed + community context → `synthesize_answer`.
+    `list_clusters` → `synthesize_answer`.
+  - **Drift** — hybrid: local seed + cluster context → `synthesize_answer`.
 
   ## Limits
 
   - Max 10 `hybrid_search` calls per session
   - Max 5 `expand_neighbors` calls per session
-  - Max 3 `get_community_context` calls per session
+  - Max 3 `get_cluster_context` calls per session
   - Max 1 answer page per session
   """
 
   @behaviour Dran.Agent.Engine.Behaviour
 
   alias Dran.Knowledge
-  alias Dran.Graph.CommunitySummaries
+  alias Dran.Graph.ClusterSummaries
 
   @agent_type "graph_rag"
   @max_searches 10
   @max_expands 5
-  @max_community_context 3
+  @max_cluster_context 3
 
   defmodule State do
     @moduledoc false
@@ -46,7 +46,7 @@ defmodule Dran.Agent.GraphRag do
               sources: [],
               searches_done: 0,
               expands_done: 0,
-              community_contexts_done: 0
+              cluster_contexts_done: 0
   end
 
   @doc "Start a graph_rag session."
@@ -64,8 +64,8 @@ defmodule Dran.Agent.GraphRag do
   @doc "Maximum number of expand_neighbors calls per session."
   def max_expands, do: @max_expands
 
-  @doc "Maximum number of get_community_context calls per session."
-  def max_community_context, do: @max_community_context
+  @doc "Maximum number of get_cluster_context calls per session."
+  def max_cluster_context, do: @max_cluster_context
 
   @impl true
   def tools do
@@ -139,17 +139,17 @@ defmodule Dran.Agent.GraphRag do
       %{
         "type" => "function",
         "function" => %{
-          "name" => "get_community_context",
+          "name" => "get_cluster_context",
           "description" =>
-            "Get the community summary for a page's detected community. " <>
-              "Returns community_id, summary, page_count, and top_pages. " <>
-              "Maximum #{max_community_context()} calls per session.",
+            "Get the cluster summary for a page's detected cluster. " <>
+              "Returns cluster_id, summary, page_count, and top_pages. " <>
+              "Maximum #{max_cluster_context()} calls per session.",
           "parameters" => %{
             "type" => "object",
             "properties" => %{
               "slug" => %{
                 "type" => "string",
-                "description" => "Slug of the page to get community context for"
+                "description" => "Slug of the page to get cluster context for"
               }
             },
             "required" => ["slug"]
@@ -159,10 +159,10 @@ defmodule Dran.Agent.GraphRag do
       %{
         "type" => "function",
         "function" => %{
-          "name" => "list_communities",
+          "name" => "list_clusters",
           "description" =>
-            "List all community summaries for this context. " <>
-              "Returns a list of %{community_id, summary, page_count, top_pages}.",
+            "List all cluster summaries for this context. " <>
+              "Returns a list of %{cluster_id, summary, page_count, top_pages}.",
           "parameters" => %{
             "type" => "object",
             "properties" => %{},
@@ -251,9 +251,9 @@ defmodule Dran.Agent.GraphRag do
 
     1. LOCAL SEARCH — for specific questions about entities/topics. Use hybrid_search to find seed pages, expand_neighbors to fan out, get_page_content to read relevant pages, then synthesize_answer.
 
-    2. GLOBAL SEARCH — for holistic questions about the entire knowledge base ("what are the main themes?", "what do I know about X broadly?"). Use list_communities to get community summaries, then synthesize_answer.
+    2. GLOBAL SEARCH — for holistic questions about the entire knowledge base ("what are the main themes?", "what do I know about X broadly?"). Use list_clusters to get cluster summaries, then synthesize_answer.
 
-    3. DRIFT SEARCH — hybrid: start with local search to find relevant pages, then get_community_context to understand the broader context, then synthesize_answer with both levels.
+    3. DRIFT SEARCH — hybrid: start with local search to find relevant pages, then get_cluster_context to understand the broader context, then synthesize_answer with both levels.
 
     Choose the mode based on the question:
     - Specific entity/topic → LOCAL
@@ -401,10 +401,10 @@ defmodule Dran.Agent.GraphRag do
     end
   end
 
-  def execute_tool("get_community_context", args, %State{} = state) do
+  def execute_tool("get_cluster_context", args, %State{} = state) do
     cond do
-      state.community_contexts_done >= @max_community_context ->
-        {{:error, "community_context limit reached (#{@max_community_context} per session)"},
+      state.cluster_contexts_done >= @max_cluster_context ->
+        {{:error, "cluster_context limit reached (#{@max_cluster_context} per session)"},
          state}
 
       true ->
@@ -420,15 +420,15 @@ defmodule Dran.Agent.GraphRag do
               {{:error, "page '#{slug}' not found"}, state}
 
             page ->
-              community_id = parse_community_id(page.meta["community_id"])
+              cluster_id = parse_cluster_id(page.meta["cluster_id"])
 
               result =
-                if Code.ensure_loaded?(Dran.Graph.CommunitySummaries) do
-                  case CommunitySummaries.get_summary(workspace_id, community_id) do
+                if Code.ensure_loaded?(Dran.Graph.ClusterSummaries) do
+                  case ClusterSummaries.get_summary(workspace_id, cluster_id) do
                     {:ok, cs} ->
                       {:ok,
                        %{
-                         community_id: cs.community_id,
+                         cluster_id: cs.cluster_id,
                          summary: cs.summary,
                          page_count: cs.page_count,
                          top_pages: cs.top_pages
@@ -437,8 +437,8 @@ defmodule Dran.Agent.GraphRag do
                     {:error, :not_found} ->
                       {:ok,
                        %{
-                         community_id: community_id,
-                         summary: "No summary available for this community yet.",
+                         cluster_id: cluster_id,
+                         summary: "No summary available for this cluster yet.",
                          page_count: 0,
                          top_pages: []
                        }}
@@ -446,30 +446,30 @@ defmodule Dran.Agent.GraphRag do
                 else
                   {:ok,
                    %{
-                     community_id: community_id,
-                     summary: "Community summaries not yet generated.",
+                     cluster_id: cluster_id,
+                     summary: "Cluster summaries not yet generated.",
                      page_count: 0,
                      top_pages: []
                    }}
                 end
 
-              {result, %{state | community_contexts_done: state.community_contexts_done + 1}}
+              {result, %{state | cluster_contexts_done: state.cluster_contexts_done + 1}}
           end
         end
     end
   end
 
-  def execute_tool("list_communities", _args, %State{} = state) do
+  def execute_tool("list_clusters", _args, %State{} = state) do
     workspace_id = state.session.workspace_id
 
     result =
-      if Code.ensure_loaded?(Dran.Graph.CommunitySummaries) do
-        summaries = CommunitySummaries.list_summaries(workspace_id)
+      if Code.ensure_loaded?(Dran.Graph.ClusterSummaries) do
+        summaries = ClusterSummaries.list_summaries(workspace_id)
 
         {:ok,
          Enum.map(summaries, fn cs ->
            %{
-             community_id: cs.community_id,
+             cluster_id: cs.cluster_id,
              summary: cs.summary,
              page_count: cs.page_count,
              top_pages: cs.top_pages
@@ -661,19 +661,19 @@ defmodule Dran.Agent.GraphRag do
     :ok
   end
 
-  @spec parse_community_id(term()) :: integer() | nil
-  defp parse_community_id(nil), do: nil
-  defp parse_community_id(v) when is_integer(v), do: v
-  defp parse_community_id(v) when is_float(v), do: round(v)
+  @spec parse_cluster_id(term()) :: integer() | nil
+  defp parse_cluster_id(nil), do: nil
+  defp parse_cluster_id(v) when is_integer(v), do: v
+  defp parse_cluster_id(v) when is_float(v), do: round(v)
 
-  defp parse_community_id(v) when is_binary(v) do
+  defp parse_cluster_id(v) when is_binary(v) do
     case Integer.parse(v) do
       {i, _rest} -> i
       :error -> nil
     end
   end
 
-  defp parse_community_id(_), do: nil
+  defp parse_cluster_id(_), do: nil
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

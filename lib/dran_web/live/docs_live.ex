@@ -449,7 +449,7 @@ defmodule DranWeb.DocsLive do
         Dran runs pure-Elixir structural algorithms over the relations
         table (<code>Dran.Graph</code>) — weighted <strong>PageRank</strong>,
         <strong>Label Propagation</strong>
-        communities, and transitive <code>part_of</code>
+        clusters, and transitive <code>part_of</code>
         inference used by the
         Link Gardener. Results are persisted into each page's <code>meta</code>
         and refreshed nightly by the <code>pagerank_nightly</code>
@@ -909,7 +909,7 @@ defmodule DranWeb.DocsLive do
         schedule: nil,
         description:
           "Answers a question using ONLY knowledge already in the brain — local/global/drift search over the graph. Persists the answer as a note page (kind: answer) citing sources.",
-        limits: "Max 10 searches, 5 expands, 3 community contexts; one answer note per session."
+        limits: "Max 10 searches, 5 expands, 3 cluster contexts; one answer note per session."
       },
       %{
         label: "Curator",
@@ -1559,8 +1559,8 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="dran_generate_community_summaries"
-          desc="Generate or regenerate LLM summaries for all detected graph communities (Label Propagation clusters). Requires inference configured."
+          name="dran_generate_cluster_summaries"
+          desc="Generate or regenerate LLM summaries for all detected graph clusters (Label Propagation clusters). Requires inference configured."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>

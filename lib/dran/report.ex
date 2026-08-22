@@ -1,6 +1,6 @@
 defmodule Dran.Report do
   @moduledoc """
-  System-created report entity — lint outputs, community summaries,
+  System-created report entity — lint outputs, cluster summaries,
   job results, etc.
 
   Reports live in their own table. They are second-citizen entities
@@ -27,7 +27,7 @@ defmodule Dran.Report do
              :updated_at
            ]}
 
-  @report_types ~w(log lint community_summary agent_output)
+  @report_types ~w(log lint cluster_summary agent_output)
 
   schema "reports" do
     field :title, :string

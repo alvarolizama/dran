@@ -75,20 +75,20 @@ defmodule DranWeb.PagesLive do
 
           <:insights>
             <div class="space-y-4">
-              <div :if={@community_summary} class="surface-2 rounded-lg p-4">
-                <h3 class="text-sm font-semibold mb-2">{gettext("Community Context")}</h3>
-                <p class="text-sm text-base-content/70">{@community_summary.summary}</p>
+              <div :if={@cluster_summary} class="surface-2 rounded-lg p-4">
+                <h3 class="text-sm font-semibold mb-2">{gettext("Cluster Context")}</h3>
+                <p class="text-sm text-base-content/70">{@cluster_summary.summary}</p>
                 <p class="text-xs text-base-content/40 mt-1">
-                  {gettext("Community")} {@community_summary.community_id} · {@community_summary.page_count} {gettext(
+                  {gettext("Cluster")} {@cluster_summary.cluster_id} · {@cluster_summary.page_count} {gettext(
                     "pages"
                   )}
                 </p>
               </div>
               <div
-                :if={!@community_summary}
+                :if={!@cluster_summary}
                 class="text-sm text-base-content/40 text-center py-8"
               >
-                {gettext("No community data yet. Run community summaries first.")}
+                {gettext("No cluster data yet. Run cluster summaries first.")}
               </div>
             </div>
           </:insights>

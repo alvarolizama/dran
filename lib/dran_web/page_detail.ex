@@ -5,7 +5,7 @@ defmodule DranWeb.PageDetail do
 
   Those LiveViews all follow the same shape: an index list at `/notes` and a
   detail view at `/notes/:slug` with relations, versions, activity log,
-  community summary and a rendered markdown body. This module holds the
+  cluster summary and a rendered markdown body. This module holds the
   duplicated plumbing so each LiveView only keeps its template and its
   type-specific index logic.
 
@@ -17,7 +17,7 @@ defmodule DranWeb.PageDetail do
         PageDetail.mount_page_viewer(socket, session,
           page_type: @page_type,
           active_nav: "notes",
-          extra_assigns: [community_summary: nil]
+          extra_assigns: [cluster_summary: nil]
         )
       end
 
@@ -41,7 +41,7 @@ defmodule DranWeb.PageDetail do
   topic, enables the `:file` upload (with `progress: &handle_progress/3` —
   the LiveView must keep defining that callback) and assigns the base keys
   every viewer uses (`context`, `page_type`, `active_tab`, `editing`,
-  `save_status`, `active_nav`, `community_summary`) plus any
+  `save_status`, `active_nav`, `cluster_summary`) plus any
   `:extra_assigns`.
 
   ## Options
@@ -83,7 +83,7 @@ defmodule DranWeb.PageDetail do
         editing: false,
         save_status: "idle",
         active_nav: active_nav,
-        community_summary: nil
+        cluster_summary: nil
       ]
       |> Keyword.merge(extra_assigns)
 
@@ -98,7 +98,7 @@ defmodule DranWeb.PageDetail do
 
   @doc """
   Load the detail view for `slug`: page, relations, versions, recent log,
-  community summary, edit form and rendered markdown body.
+  cluster summary, edit form and rendered markdown body.
 
   Redirects to `redirect_to` when the context is missing or the page does
   not exist.
@@ -124,7 +124,7 @@ defmodule DranWeb.PageDetail do
          logs: Knowledge.list_log(workspace_id: context.id, limit: 10),
          page_title: page.title,
          active_tab: active_tab,
-         community_summary: load_community_summary(page),
+         cluster_summary: load_cluster_summary(page),
          editing: Map.get(params, "edit") == "true",
          form: Knowledge.change_page(page) |> to_form(as: :page),
          workspace_id: context.id,
@@ -137,11 +137,11 @@ defmodule DranWeb.PageDetail do
   end
 
   @doc """
-  Fetch the GraphRAG community summary for a page, swallowing any error
-  (communities may not be computed yet, inference may be off, etc.).
+  Fetch the GraphRAG cluster summary for a page, swallowing any error
+  (clusters may not be computed yet, inference may be off, etc.).
   """
-  def load_community_summary(%Dran.Page{} = page) do
-    case Dran.Graph.CommunitySummaries.get_summary_for_page(page.id) do
+  def load_cluster_summary(%Dran.Page{} = page) do
+    case Dran.Graph.ClusterSummaries.get_summary_for_page(page.id) do
       {:ok, summary} -> summary
       _ -> nil
     end

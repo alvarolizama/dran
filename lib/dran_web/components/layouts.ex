@@ -184,10 +184,10 @@ defmodule DranWeb.Layouts do
             _ -> 0
           end
 
-        communities_count =
+        clusters_count =
           try do
             Dran.Repo.aggregate(
-              from(cs in Dran.Graph.CommunitySummary,
+              from(cs in Dran.Graph.ClusterSummary,
                 where: cs.workspace_id == ^context.id,
                 select: cs.id
               ),
@@ -203,7 +203,7 @@ defmodule DranWeb.Layouts do
           concepts: safe_count.("concept"),
           entities: safe_count.("entity"),
           references: safe_count.("reference"),
-          communities: communities_count,
+          clusters: clusters_count,
           collections: collection_count,
           projects:
             length(
@@ -242,16 +242,25 @@ defmodule DranWeb.Layouts do
     doc: "whether to show admin-only links (e.g. Settings)"
 
   def sidebar_nav(assigns) do
-    # Unified sidebar: empty — all links live in the header icons and the
-    # footer (Workspace config + Dashboard/Admin/Account/Docs icons).
-    groups = []
+    # Unified workspace sidebar: when a workspace_slug is present the nav shows
+    # the workspace sections grouped (Inicio, Conocimiento, Planificación,
+    # Graph); without a workspace (dashboard/admin/account) the nav is empty
+    # and only the footer icons show.
+    ws = resolve_workspace(assigns[:workspace_slug])
+
+    groups =
+      if ws do
+        workspace_groups(ws, assigns[:workspace_slug], assigns[:counts])
+      else
+        []
+      end
 
     assigns = assign(assigns, :groups, groups)
 
     ~H"""
     <div
       :for={{group, idx} <- Enum.with_index(@groups)}
-      class={idx == length(@groups) - 1 && "mt-auto"}
+      class={if idx == length(@groups) - 1, do: "mt-auto", else: nil}
     >
       <div :if={!group.label} class="space-y-1">
         <.nav_link
@@ -284,6 +293,39 @@ defmodule DranWeb.Layouts do
       </details>
     </div>
     """
+  end
+
+  # Resolves the %Workspace{} behind a slug; nil-safe (no workspace → nil).
+  defp resolve_workspace(nil), do: nil
+
+  defp resolve_workspace(slug) when is_binary(slug) do
+    try do
+      Dran.Knowledge.get_workspace_by_slug(slug)
+    rescue
+      _ -> nil
+    end
+  end
+
+  defp resolve_workspace(_), do: nil
+
+  # Builds the workspace nav as a flat list of 6 items, gated by feature
+  # flags. No group headers — just direct links.
+  defp workspace_groups(ws, slug, _counts) do
+    enabled? = fn feature -> Dran.Workspace.feature_enabled?(ws, feature) end
+    base = "/#{slug}"
+
+    items =
+      [
+        %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
+        enabled?.("goals") && %{key: "goals", label: gettext("Objetivos"), icon: "hero-flag", path: base <> "/goals"},
+        enabled?.("kanban") && %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: base <> "/kanban"},
+        enabled?.("clusters") && %{key: "clusters", label: gettext("Clusters"), icon: "hero-squares-2x2", path: base <> "/clusters"},
+        enabled?.("graph") && %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
+        enabled?.("journey") && %{key: "journey", label: gettext("Journey"), icon: "hero-clock", path: base <> "/journey"}
+      ]
+      |> Enum.reject(&(!&1))
+
+    [%{label: nil, items: items}]
   end
 
   attr :label, :string, required: true
@@ -346,6 +388,19 @@ defmodule DranWeb.Layouts do
         title={gettext("Workspace")}
       >
         <.icon name="hero-cog-6-tooth" class="size-4" />
+      </a>
+      <a
+        :if={@workspace_slug}
+        href={~p"/#{@workspace_slug}/activity"}
+        class={[
+          "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
+          @active == "activity" && "bg-primary/10 text-primary",
+          @active != "activity" &&
+            "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+        ]}
+        title={gettext("Activity")}
+      >
+        <.icon name="hero-pulse" class="size-4" />
       </a>
       <a
         :if={@is_owner}
@@ -482,93 +537,6 @@ defmodule DranWeb.Layouts do
           <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
         </button>
       </form>
-    </div>
-    """
-  end
-
-  # ── Wiki layout ──────────────────────────────────────────────────────────
-  # Sidebar + main shell, mirroring `app/1` for the read-only wiki. The
-  # sidebar is the SAME unified sidebar as every other page: Dashboard +
-  # Cuenta + Administración.
-
-  attr :flash, :map, required: true
-  attr :current_user, :string, default: nil
-  attr :is_owner, :boolean, default: false
-  attr :workspace_slug, :string, default: nil
-
-  slot :inner_block, required: true
-
-  def home(assigns) do
-    # Resolve admin/editor from the DB — same as app/1. The wiki layout must
-    # not depend on the caller passing correct flags; it should resolve them
-    # independently so the Dashboard button always shows, even if the
-    # LiveView's socket assigns are stale or incomplete.
-    is_owner =
-      if is_binary(assigns[:current_user]) do
-        case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
-          nil -> true
-          user -> user.is_owner == true
-        end
-      else
-        assigns[:is_owner] || false
-      end
-
-    assigns =
-      assign(assigns,
-        is_owner: is_owner
-      )
-
-    ~H"""
-    <div class="flex h-screen bg-base-100 text-base-content">
-      <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
-        <div class="p-4 border-b border-base-300">
-          <div class="flex items-center gap-2">
-            <a
-              href={~p"/"}
-              class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
-            >
-              <.icon name="hero-cube-transparent" class="size-5 text-primary" />
-              <span class="text-lg font-bold tracking-tight">Dran</span>
-            </a>
-          </div>
-        </div>
-
-        <div :if={@workspace_slug} class="p-3 border-b border-base-300">
-          <form action={~p"/#{@workspace_slug}/search"} method="get" class="relative">
-            <.icon
-              name="hero-magnifying-glass"
-              class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
-            />
-            <input
-              type="text"
-              name="q"
-              placeholder={gettext("Search...")}
-              class="w-full pl-8 pr-12 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
-            />
-            <kbd class="absolute right-2.5 top-2 text-[10px] font-mono text-base-content/40 border border-base-300 rounded px-1">
-              ⌘K
-            </kbd>
-          </form>
-        </div>
-
-        <nav class="flex-1 overflow-y-auto p-2 space-y-4 flex flex-col">
-          <.sidebar_nav
-            workspace_slug={@workspace_slug}
-            is_owner={@is_owner}
-          />
-          <.sidebar_footer_icons is_owner={@is_owner} workspace_slug={@workspace_slug} />
-        </nav>
-
-        <div class="p-3 border-t border-base-300">
-          <.user_footer current_user={@current_user} />
-        </div>
-      </aside>
-
-      <div class="flex-1 overflow-y-auto flex flex-col w-full">
-        {render_slot(@inner_block)}
-      </div>
-
-      <.flash_group flash={@flash} />
     </div>
     """
   end

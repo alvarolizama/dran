@@ -8,7 +8,7 @@ defmodule Dran.EntityLinker do
   1. **Get-or-create** an `entity` page in the same context (deduped by slug).
   2. **Create a `mentions` relation** from the source page to the entity page.
 
-  Entity pages act as natural hubs in the graph — community detection and
+  Entity pages act as natural hubs in the graph — cluster detection and
   PageRank both benefit because `mentions` edges carry real weight
   (`Dran.Graph.edge_weight("mentions") == 0.6`).
 

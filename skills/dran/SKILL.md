@@ -200,7 +200,7 @@ flowchart TD
 | --- | --- | --- |
 | `note` | Thoughts, journal, ideas, meetings, questions, quotes, reminders | thought, journal, idea, meeting, question, quote, reminder, fleeting, permanent, moc, comparison, code, snippet, recipe, debug, checklist, outline, summary, decision, draft, template, log, brainstorm |
 | `concept` | Techniques, patterns, disciplines, theories | technique, pattern, discipline, theory, principle, framework, method, model, law, heuristic, strategy, convention |
-| `entity` | People, companies, products, tools, places, events | person, company, product, tool, place, event, language, framework, service, hardware, protocol, course, community, asset, brand |
+| `entity` | People, companies, products, tools, places, events | person, company, product, tool, place, event, language, framework, service, hardware, protocol, course, cluster, asset, brand |
 | `reference` | External sources | article, paper, video, podcast, book, document, code, design, deliverable, file, tweet, docs, course, newsletter, forum, spec, release, website, repo, api, guide, interview, talk |
 | `project` | Larger initiatives grouping goals/plans/todos | — |
 | `goal` | Objectives with a measurable target | personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel |
@@ -270,7 +270,7 @@ auto-create edges during augmentation (Dran.PropsMaterializer):
 | `framework` | `built_with` | entity | `framework: "phoenix"` |
 
 Any other key is stored but generates no edge. Edge weight 0.7, joins
-community detection. Materialization runs on create/update (augmenter) and
+cluster detection. Materialization runs on create/update (augmenter) and
 is inference-independent — works even with the LLM off.
 
 **Backfill**: Settings → Brain → "Run backfill" re-materializes props for
@@ -338,7 +338,7 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 | `dran_get_stats` | Totals, pages by type, todos by status, orphans, relations |
 | `dran_lint_brain` | Orphans, stale pages (>90d), contested knowledge. Surface results — don't auto-fix |
 | `dran_reaugment_page` | Re-run augmentation (summary/tags/embedding/relations) for a page. ⚠️ **Write tool** |
-| `dran_generate_community_summaries` | Generate LLM summaries for all detected graph communities |
+| `dran_generate_community_summaries` | Generate LLM summaries for all detected graph clusters |
 
 ### Automate
 

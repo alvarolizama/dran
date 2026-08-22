@@ -28,7 +28,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
   # Ordered feature keys shown in the Features tab. All are stored in the
   # `enabled_features` map; an empty map means "all on" (see
   # `Workspace.feature_enabled?/2`).
-  @features ~w(goals collections communities kanban graph journey activity search reports chat agents)
+  @features ~w(goals collections clusters kanban graph journey activity search reports chat agents)
 
   # Brain tuning keys: agent limits + advanced semantic thresholds.
   @brain_keys ~w(agent_max_pages entity_linker_enabled)
@@ -847,7 +847,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   defp feature_label("goals"), do: gettext("Goals")
   defp feature_label("collections"), do: gettext("Collections")
-  defp feature_label("communities"), do: gettext("Communities")
+  defp feature_label("clusters"), do: gettext("Clusters")
   defp feature_label("kanban"), do: gettext("Kanban")
   defp feature_label("graph"), do: gettext("Graph")
   defp feature_label("journey"), do: gettext("Journey")

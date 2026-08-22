@@ -1122,22 +1122,22 @@ defmodule Dran.Knowledge do
   end
 
   @doc """
-  List pages belonging to a detected community.
+  List pages belonging to a detected cluster.
 
-  Queries pages by the `community_id` value stored in their `meta` JSONB
-  (written by `Dran.Graph.refresh_communities/1`). Returns lightweight
+  Queries pages by the `cluster_id` value stored in their `meta` JSONB
+  (written by `Dran.Graph.refresh_clusters/1`). Returns lightweight
   maps `%{id, slug, title, page_type}` — no body, no embeddings.
 
-  The filter uses `(meta->>'community_id')::int = ?` so it works against
+  The filter uses `(meta->>'cluster_id')::int = ?` so it works against
   the text representation of the JSONB value cast to an integer, matching
-  how `refresh_communities/1` writes the value.
+  how `refresh_clusters/1` writes the value.
   """
-  @spec community_pages(binary(), integer()) :: [map()]
-  def community_pages(workspace_id, community_id) do
+  @spec cluster_pages(binary(), integer()) :: [map()]
+  def cluster_pages(workspace_id, cluster_id) do
     Repo.all(
       from p in Page,
         where: p.workspace_id == ^workspace_id,
-        where: fragment("(meta->>'community_id')::int = ?", ^community_id),
+        where: fragment("(meta->>'cluster_id')::int = ?", ^cluster_id),
         select: %{id: p.id, slug: p.slug, title: p.title, page_type: p.page_type}
     )
   end

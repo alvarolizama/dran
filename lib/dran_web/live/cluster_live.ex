@@ -1,18 +1,18 @@
-defmodule DranWeb.CommunityLive do
+defmodule DranWeb.ClusterLive do
   @moduledoc """
-  LiveView for knowledge communities: clusters of related pages
+  LiveView for knowledge clusters: clusters of related pages
   detected via Label Propagation, with optional LLM summaries.
 
   Views:
-  - `:index` — `/communities` — grid of all community summaries
-  - `:show`  — `/communities/:id` — detail view with summary + member pages
+  - `:index` — `/clusters` — grid of all cluster summaries
+  - `:show`  — `/clusters/:id` — detail view with summary + member pages
   """
 
   use DranWeb, :live_view
 
   alias Dran.Knowledge
   alias Dran.Graph
-  alias Dran.Graph.CommunitySummaries
+  alias Dran.Graph.ClusterSummaries
   alias DranWeb.Plugs.Auth
   alias DranWeb.PageTypes
 
@@ -38,7 +38,7 @@ defmodule DranWeb.CommunityLive do
       <div :if={@live_action == :show} class="p-6 overflow-y-auto w-full">
         <.show_view
           summary={@summary}
-          community_pages={@community_pages}
+          cluster_pages={@cluster_pages}
         />
       </div>
     </Layouts.app>
@@ -51,7 +51,7 @@ defmodule DranWeb.CommunityLive do
     ~H"""
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-title">{gettext("Comunidades")}</h1>
+        <h1 class="text-title">{gettext("Clusters")}</h1>
         <p class="text-caption mt-1">
           {gettext("Clusters de páginas relacionadas en tu cerebro")}
         </p>
@@ -79,15 +79,15 @@ defmodule DranWeb.CommunityLive do
       <div
         :for={summary <- @summaries}
         class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer"
-        phx-click="show_community"
-        phx-value-id={summary.community_id}
+        phx-click="show_cluster"
+        phx-value-id={summary.cluster_id}
       >
         <div class="card-body p-5">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
               <.icon name="hero-squares-2x2" class="w-5 h-5 text-primary/70" />
               <h2 class="card-title text-base">
-                {gettext("Comunidad")} #{summary.community_id}
+                {gettext("Cluster")} #{summary.cluster_id}
               </h2>
             </div>
             <span class="text-xs text-base-content/50 bg-base-200 px-2 py-0.5 rounded-full">
@@ -124,7 +124,7 @@ defmodule DranWeb.CommunityLive do
     <.empty_state
       :if={@summaries == []}
       icon="hero-squares-2x2"
-      title={gettext("No community summaries yet.")}
+      title={gettext("No cluster summaries yet.")}
     >
       <button
         :if={@workspace}
@@ -132,7 +132,7 @@ defmodule DranWeb.CommunityLive do
         disabled={@generating}
         class="btn btn-primary btn-sm mt-4"
       >
-        <.icon name="hero-sparkles" class="w-4 h-4" /> {gettext("Generate community summaries")}
+        <.icon name="hero-sparkles" class="w-4 h-4" /> {gettext("Generate cluster summaries")}
       </button>
     </.empty_state>
     """
@@ -148,7 +148,7 @@ defmodule DranWeb.CommunityLive do
           <div class="flex items-center gap-2 mb-1">
             <.icon name="hero-squares-2x2" class="w-6 h-6 text-primary/70" />
             <h1 class="text-title">
-              {gettext("Comunidad")} #{@summary.community_id}
+              {gettext("Cluster")} #{@summary.cluster_id}
             </h1>
           </div>
           <p class="text-caption">
@@ -158,7 +158,7 @@ defmodule DranWeb.CommunityLive do
             </span>
           </p>
         </div>
-        <.link navigate={~p"/#{@workspace_slug}/communities"} class="btn btn-ghost btn-sm">
+        <.link navigate={~p"/#{@workspace_slug}/clusters"} class="btn btn-ghost btn-sm">
           <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
         </.link>
       </div>
@@ -188,11 +188,11 @@ defmodule DranWeb.CommunityLive do
 
       <div>
         <h3 class="text-sm font-semibold text-base-content/70 mb-3">
-          {gettext("Todas las páginas")} ({length(@community_pages)})
+          {gettext("Todas las páginas")} ({length(@cluster_pages)})
         </h3>
         <div class="space-y-2">
           <div
-            :for={page <- @community_pages}
+            :for={page <- @cluster_pages}
             class="flex items-center gap-3 p-3 rounded-lg border border-base-300 hover:bg-base-200 cursor-pointer transition"
             phx-click="show_page"
             phx-value-slug={page.slug}
@@ -213,8 +213,8 @@ defmodule DranWeb.CommunityLive do
 
     <div :if={!@summary} class="text-center py-16">
       <.icon name="hero-squares-2x2" class="size-12 text-base-content/30 mx-auto mb-4" />
-      <h2 class="text-title">{gettext("Community not found")}</h2>
-      <.link navigate={~p"/#{@workspace_slug}/communities"} class="btn btn-ghost btn-sm mt-4">
+      <h2 class="text-title">{gettext("Cluster not found")}</h2>
+      <.link navigate={~p"/#{@workspace_slug}/clusters"} class="btn btn-ghost btn-sm mt-4">
         <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
       </.link>
     </div>
@@ -236,9 +236,9 @@ defmodule DranWeb.CommunityLive do
        context: context,
        summaries: [],
        summary: nil,
-       community_pages: [],
+       cluster_pages: [],
        generating: false,
-       active_nav: "communities"
+       active_nav: "clusters"
      )}
   end
 
@@ -249,17 +249,17 @@ defmodule DranWeb.CommunityLive do
 
   defp apply_action(socket, :index, _params) do
     summaries = load_summaries(socket.assigns.context)
-    assign(socket, summaries: summaries, page_title: gettext("Comunidades"))
+    assign(socket, summaries: summaries, page_title: gettext("Clusters"))
   end
 
   defp apply_action(socket, :show, %{"id" => id}) do
     context = socket.assigns.context
 
-    {summary, community_pages} =
+    {summary, cluster_pages} =
       if context do
-        with {community_id, ""} <- Integer.parse(id),
-             {:ok, raw} <- CommunitySummaries.get_summary(context.id, community_id) do
-          pages = Knowledge.community_pages(context.id, community_id)
+        with {cluster_id, ""} <- Integer.parse(id),
+             {:ok, raw} <- ClusterSummaries.get_summary(context.id, cluster_id) do
+          pages = Knowledge.cluster_pages(context.id, cluster_id)
           {normalize_summary(raw), pages}
         else
           _ -> {nil, []}
@@ -270,11 +270,11 @@ defmodule DranWeb.CommunityLive do
 
     assign(socket,
       summary: summary,
-      community_pages: community_pages,
+      cluster_pages: cluster_pages,
       page_title:
         if(summary,
-          do: gettext("Comunidad") <> " ##{summary.community_id}",
-          else: gettext("Comunidad")
+          do: gettext("Cluster") <> " ##{summary.cluster_id}",
+          else: gettext("Cluster")
         )
     )
   end
@@ -282,9 +282,9 @@ defmodule DranWeb.CommunityLive do
   # ── Events ───────────────────────────────────────────────────────────────
 
   @impl true
-  def handle_event("show_community", %{"id" => id}, socket) do
+  def handle_event("show_cluster", %{"id" => id}, socket) do
     {:noreply,
-     push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/communities/#{id}")}
+     push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/clusters/#{id}")}
   end
 
   def handle_event("show_page", %{"slug" => slug} = params, socket) do
@@ -310,17 +310,17 @@ defmodule DranWeb.CommunityLive do
     if context do
       # Run detection + summary generation in background
       Task.start(fn ->
-        # 1. Run Label Propagation community detection
-        Graph.refresh_communities(context.id)
+        # 1. Run Label Propagation cluster detection
+        Graph.refresh_clusters(context.id)
 
         # 2. Generate LLM summaries
-        CommunitySummaries.generate_all(context.id)
+        ClusterSummaries.generate_all(context.id)
 
         # 3. Notify the LiveView
         Phoenix.PubSub.broadcast(
           Dran.PubSub,
           "brain:#{context.id}",
-          {:community_summaries_updated}
+          {:cluster_summaries_updated}
         )
       end)
 
@@ -333,15 +333,15 @@ defmodule DranWeb.CommunityLive do
   # ── PubSub ───────────────────────────────────────────────────────────────
 
   @impl true
-  def handle_info({:community_summaries_updated}, socket) do
+  def handle_info({:cluster_summaries_updated}, socket) do
     summaries = load_summaries(socket.assigns.context)
 
     # If we're on a show page, refresh it too
     summary =
       if socket.assigns.summary do
-        case CommunitySummaries.get_summary(
+        case ClusterSummaries.get_summary(
                socket.assigns.context.id,
-               socket.assigns.summary.community_id
+               socket.assigns.summary.cluster_id
              ) do
           {:ok, s} -> normalize_summary(s)
           _ -> socket.assigns.summary
@@ -360,8 +360,8 @@ defmodule DranWeb.CommunityLive do
 
       if context do
         summary = socket.assigns.summary
-        pages = Knowledge.community_pages(context.id, summary.community_id)
-        {:noreply, assign(socket, community_pages: pages)}
+        pages = Knowledge.cluster_pages(context.id, summary.cluster_id)
+        {:noreply, assign(socket, cluster_pages: pages)}
       else
         {:noreply, socket}
       end
@@ -378,7 +378,7 @@ defmodule DranWeb.CommunityLive do
 
   defp load_summaries(context) do
     context.id
-    |> CommunitySummaries.list_summaries()
+    |> ClusterSummaries.list_summaries()
     |> Enum.map(&normalize_summary/1)
   end
 

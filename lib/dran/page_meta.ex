@@ -24,7 +24,7 @@ defmodule Dran.PageMeta do
 
     # graph signals (computed by Dran.Graph)
     field :pagerank, :float
-    field :community_id, :integer
+    field :cluster_id, :integer
 
     # note sub-types
     field :date, :date
@@ -58,7 +58,7 @@ defmodule Dran.PageMeta do
   end
 
   @note_kinds ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code snippet recipe debug checklist outline summary decision draft template log brainstorm todo plan project)
-  @entity_kinds ~w(person company product tool place event language framework service hardware protocol course community asset brand)
+  @entity_kinds ~w(person company product tool place event language framework service hardware protocol course cluster asset brand)
   @concept_kinds ~w(technique pattern discipline theory principle framework method model law heuristic strategy convention)
   @reference_kinds ~w(article paper video podcast book document code design deliverable file tweet docs course newsletter forum spec release website repo api guide interview talk)
 
@@ -73,7 +73,7 @@ defmodule Dran.PageMeta do
     [
       :kind,
       :pagerank,
-      :community_id,
+      :cluster_id,
       :date,
       :feasibility,
       :impact,
@@ -246,7 +246,7 @@ defmodule Dran.PageMeta do
       "hardware" => gettext("Hardware"),
       "protocol" => gettext("Protocol"),
       "course" => gettext("Course"),
-      "community" => gettext("Community"),
+      "cluster" => gettext("Cluster"),
       "asset" => gettext("Asset"),
       "brand" => gettext("Brand"),
       # ── concept kinds ──────────────────────────────────────────────────

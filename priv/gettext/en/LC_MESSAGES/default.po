@@ -2103,13 +2103,17 @@ msgstr ""
 
 #: lib/dran/page_meta.ex:249
 #: lib/dran_web/live/pages_live.ex:82
+#: lib/dran_web/live/community_live.ex:90
+#: lib/dran_web/live/community_live.ex:151
+#: lib/dran_web/live/community_live.ex:276
+#: lib/dran_web/live/community_live.ex:277
 #, elixir-autogen, elixir-format
-msgid "Community"
+msgid "Cluster"
 msgstr ""
 
 #: lib/dran_web/live/pages_live.ex:79
 #, elixir-autogen, elixir-format
-msgid "Community Context"
+msgid "Cluster Context"
 msgstr ""
 
 #: lib/dran_web/components/page_components.ex:1089
@@ -2127,7 +2131,7 @@ msgstr ""
 
 #: lib/dran_web/live/pages_live.ex:91
 #, elixir-autogen, elixir-format
-msgid "No community data yet. Run community summaries first."
+msgid "No cluster data yet. Run cluster summaries first."
 msgstr ""
 
 #: lib/dran_web/live/search_live.ex:192
@@ -2563,7 +2567,7 @@ msgstr ""
 
 #: lib/dran_web/live/report_live.ex:57
 #, elixir-autogen, elixir-format
-msgid "Reports are system-generated and do not participate in communities."
+msgid "Reports are system-generated and do not participate in clusters."
 msgstr ""
 
 #: lib/dran_web/live/admin_jobs_live.ex:151
@@ -2619,22 +2623,15 @@ msgstr ""
 
 #: lib/dran_web/live/community_live.ex:216
 #, elixir-autogen, elixir-format, fuzzy
-msgid "Community not found"
-msgstr ""
-
-#: lib/dran_web/live/community_live.ex:90
-#: lib/dran_web/live/community_live.ex:151
-#: lib/dran_web/live/community_live.ex:276
-#: lib/dran_web/live/community_live.ex:277
-#, elixir-autogen, elixir-format
-msgid "Comunidad"
+msgid "Cluster not found"
 msgstr ""
 
 #: lib/dran_web/components/layouts.ex:356
 #: lib/dran_web/live/community_live.ex:54
 #: lib/dran_web/live/community_live.ex:252
-#, elixir-autogen, elixir-format
-msgid "Comunidades"
+#: lib/dran_web/live/workspace_settings_live.ex:430
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Clusters"
 msgstr ""
 
 #: lib/dran_web/page_edit.ex:338
@@ -2659,7 +2656,7 @@ msgstr ""
 
 #: lib/dran_web/live/community_live.ex:135
 #, elixir-autogen, elixir-format
-msgid "Generate community summaries"
+msgid "Generate cluster summaries"
 msgstr ""
 
 #: lib/dran_web/live/admin_users_live.ex:241
@@ -2683,7 +2680,7 @@ msgstr ""
 
 #: lib/dran_web/live/community_live.ex:127
 #, elixir-autogen, elixir-format
-msgid "No community summaries yet."
+msgid "No cluster summaries yet."
 msgstr ""
 
 #: lib/dran_web/live/home_live.ex:579
@@ -3040,11 +3037,6 @@ msgstr ""
 #: lib/dran_web/live/workspace_settings_live.ex:437
 #, elixir-autogen, elixir-format
 msgid "Chat"
-msgstr ""
-
-#: lib/dran_web/live/workspace_settings_live.ex:430
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Communities"
 msgstr ""
 
 #: lib/dran_web/live/admin_workspaces_live.ex:305
