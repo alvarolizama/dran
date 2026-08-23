@@ -404,8 +404,7 @@ defmodule Dran.Agent.GraphRag do
   def execute_tool("get_cluster_context", args, %State{} = state) do
     cond do
       state.cluster_contexts_done >= @max_cluster_context ->
-        {{:error, "cluster_context limit reached (#{@max_cluster_context} per session)"},
-         state}
+        {{:error, "cluster_context limit reached (#{@max_cluster_context} per session)"}, state}
 
       true ->
         slug = String.trim(args["slug"] || "")

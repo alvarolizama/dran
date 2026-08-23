@@ -1218,7 +1218,7 @@ defmodule Dran.Knowledge do
     goal_nodes =
       Repo.all(
         from g in Dran.Goal,
-          where: g.workspace_id == ^workspace_id and is_nil(g.archived) or g.archived == false,
+          where: (g.workspace_id == ^workspace_id and is_nil(g.archived)) or g.archived == false,
           select: %{id: g.id, title: g.title, slug: g.slug, type: fragment("'goal'")}
       )
 

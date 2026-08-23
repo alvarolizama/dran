@@ -283,8 +283,7 @@ defmodule DranWeb.ClusterLive do
 
   @impl true
   def handle_event("show_cluster", %{"id" => id}, socket) do
-    {:noreply,
-     push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/clusters/#{id}")}
+    {:noreply, push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/clusters/#{id}")}
   end
 
   def handle_event("show_page", %{"slug" => slug} = params, socket) do

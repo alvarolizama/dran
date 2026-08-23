@@ -7,8 +7,12 @@ defmodule DranWeb.GraphGoalIntegrationTest do
 
   test "graph_data includes goal nodes and page→goal edges" do
     unique = System.unique_integer([:positive])
+
     {:ok, ws} =
-      Knowledge.create_workspace(%{name: "GraphGoal Test #{unique}", slug: "graph-goal-test-#{unique}"})
+      Knowledge.create_workspace(%{
+        name: "GraphGoal Test #{unique}",
+        slug: "graph-goal-test-#{unique}"
+      })
 
     {:ok, page} =
       Knowledge.create_page(%{
