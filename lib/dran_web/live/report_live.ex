@@ -54,7 +54,7 @@ defmodule DranWeb.ReportLive do
           </div>
 
           <p class="text-xs text-base-content/40">
-            {gettext("Reports are system-generated and do not participate in communities.")}
+            {gettext("Reports are system-generated and do not participate in clusters.")}
           </p>
         </div>
       </div>

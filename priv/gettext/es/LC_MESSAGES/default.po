@@ -2110,7 +2110,7 @@ msgstr "Cluster"
 #: lib/dran_web/live/pages_live.ex:79
 #, elixir-autogen, elixir-format
 msgid "Cluster Context"
-msgstr "Contexto de la comunidad"
+msgstr "Contexto del cluster"
 
 #: lib/dran_web/components/page_components.ex:1089
 #: lib/dran_web/live/admin_users_live.ex:330
@@ -2128,7 +2128,7 @@ msgstr "Perspectivas"
 #: lib/dran_web/live/pages_live.ex:91
 #, elixir-autogen, elixir-format
 msgid "No cluster data yet. Run cluster summaries first."
-msgstr "Aún no hay datos de comunidad. Ejecuta primero los resúmenes de comunidad."
+msgstr "Aún no hay datos de cluster. Ejecuta primero los resúmenes de cluster."
 
 #: lib/dran_web/live/search_live.ex:192
 #, elixir-autogen, elixir-format
@@ -2564,7 +2564,7 @@ msgstr "Nunca"
 #: lib/dran_web/live/report_live.ex:57
 #, elixir-autogen, elixir-format
 msgid "Reports are system-generated and do not participate in clusters."
-msgstr "Los reportes son generados por el sistema y no participan en comunidades."
+msgstr "Los reportes son generados por el sistema y no participan en clusters."
 
 #: lib/dran_web/live/admin_jobs_live.ex:151
 #, elixir-autogen, elixir-format
@@ -2620,7 +2620,7 @@ msgstr "Colecciones"
 #: lib/dran_web/live/community_live.ex:216
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Cluster not found"
-msgstr "Cluster no encontrada"
+msgstr "Cluster no encontrado"
 
 #: lib/dran_web/components/layouts.ex:356
 #: lib/dran_web/live/community_live.ex:54
@@ -2653,7 +2653,7 @@ msgstr "Generada"
 #: lib/dran_web/live/community_live.ex:135
 #, elixir-autogen, elixir-format
 msgid "Generate cluster summaries"
-msgstr "Generar resúmenes de comunidades"
+msgstr "Generar resúmenes de clusters"
 
 #: lib/dran_web/live/admin_users_live.ex:241
 #, elixir-autogen, elixir-format
@@ -2677,7 +2677,7 @@ msgstr "No autorizado."
 #: lib/dran_web/live/community_live.ex:127
 #, elixir-autogen, elixir-format
 msgid "No cluster summaries yet."
-msgstr "Aún no hay resúmenes de comunidades."
+msgstr "Aún no hay resúmenes de clusters."
 
 #: lib/dran_web/live/home_live.ex:579
 #, elixir-autogen, elixir-format, fuzzy

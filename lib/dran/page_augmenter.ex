@@ -156,7 +156,7 @@ defmodule Dran.PageAugmenter do
   end
 
   # Props materialization: turn meta.props custom properties into typed
-  # relations so PageRank/communities/GraphRAG can see them. Same
+  # relations so PageRank/clusters/GraphRAG can see them. Same
   # best-effort pattern as link_entities — a crash never breaks the pipeline.
   defp materialize_props(page) do
     case Dran.PropsMaterializer.materialize(page) do

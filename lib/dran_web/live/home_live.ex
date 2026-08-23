@@ -426,7 +426,7 @@ defmodule DranWeb.HomeLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      workspace_slug={@workspace && @workspace.slug}
+      workspace_slug={@workspace_slug}
       workspaces={@contexts}
       active_nav={@active_nav}
     >
@@ -1043,10 +1043,10 @@ defmodule DranWeb.HomeLive do
         {gettext("Kanban")}
       </h1>
 
-      <div class="flex gap-4 overflow-x-auto pb-4">
+      <div class="flex gap-4 pb-4">
         <div
           :for={{status, label, badge_class} <- @kanban_columns}
-          class="w-72 shrink-0 flex flex-col rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
+          class="flex-1 min-w-0 flex flex-col rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
         >
           <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300">
             <div class="flex items-center gap-2">

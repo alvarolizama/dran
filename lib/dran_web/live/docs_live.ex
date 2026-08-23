@@ -28,6 +28,38 @@ defmodule DranWeb.DocsLive do
     Enum.map(@tabs, fn {key, _} -> {key, tab_label(key)} end)
   end
 
+  # ── Page type table helpers ────────────────────────────────────────
+  #
+  # Purpose descriptions and meta-field summaries for the docs page table.
+  # The kind list and meta fields are read from Dran.PageRegistry so the
+  # table never drifts from the registry. Purpose text is still here
+  # because it's documentation prose, not structured config.
+
+  @page_type_purposes %{
+    "note" => "Ephemeral thoughts, journal, ideas",
+    "concept" => "Abstract ideas, techniques, theories",
+    "entity" => "Concrete things (people, companies, tools)",
+    "reference" => "External sources (articles, papers, videos)"
+  }
+
+  defp page_type_purpose(type), do: Map.get(@page_type_purposes, type, "—")
+
+  defp page_type_meta_summary(type) do
+    fields =
+      Dran.PageRegistry.meta_fields(type)
+      |> Enum.map(fn
+        {:select, key, _label, _opts} -> key
+        {:text, key, _label, _opts} -> key
+        {:date, key, _label, _opts} -> key
+        {:date, key, _label} -> key
+        {:text, key, _label} -> key
+        {:props, _key, _label} -> nil
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    Enum.join(fields, ", ")
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.app
@@ -1208,29 +1240,16 @@ defmodule DranWeb.DocsLive do
             </tr>
           </thead>
           <tbody class="divide-y divide-base-300">
-            <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">note</td>
-              <td class="px-4 py-2">Ephemeral thoughts, journal, ideas</td>
-              <td class="px-4 py-2 text-xs">thought, journal, idea, meeting, question, quote</td>
-              <td class="px-4 py-2 text-xs">kind, date, attendees, author</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">concept</td>
-              <td class="px-4 py-2">Abstract ideas, techniques, theories</td>
-              <td class="px-4 py-2 text-xs">technique, pattern, discipline, theory</td>
-              <td class="px-4 py-2 text-xs">kind, domain, parent_concept</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">entity</td>
-              <td class="px-4 py-2">Concrete things (people, companies, tools)</td>
-              <td class="px-4 py-2 text-xs">person, company, product, tool, place, event</td>
-              <td class="px-4 py-2 text-xs">kind, aliases, external_url, location</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">reference</td>
-              <td class="px-4 py-2">External sources (articles, papers, videos)</td>
-              <td class="px-4 py-2 text-xs">article, paper, video, podcast, book</td>
-              <td class="px-4 py-2 text-xs">kind, source_url, published_at</td>
+            <tr
+              :for={type <- Dran.PageRegistry.types()}
+              class="hover:bg-base-200/50 transition-colors"
+            >
+              <td class="px-4 py-2 font-mono text-primary">{type}</td>
+              <td class="px-4 py-2">{page_type_purpose(type)}</td>
+              <td class="px-4 py-2 text-xs">
+                {Enum.join(Dran.PageRegistry.kinds(type) || [], ", ")}
+              </td>
+              <td class="px-4 py-2 text-xs">{page_type_meta_summary(type)}</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">goal</td>

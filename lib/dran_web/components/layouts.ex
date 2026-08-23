@@ -305,25 +305,52 @@ defmodule DranWeb.Layouts do
 
   defp resolve_workspace(_), do: nil
 
-  # Builds the workspace nav as a flat list of 6 items, gated by feature
+  # Builds the workspace nav as a flat list of items, gated by feature
   # flags. No group headers — just direct links.
-  defp workspace_groups(ws, slug, _counts) do
+  defp workspace_groups(ws, slug, counts) do
     enabled? = fn feature -> Dran.Workspace.feature_enabled?(ws, feature) end
     base = "/#{slug}"
+
+    disabled = ws.disabled_page_types || []
+
+    page_type_items =
+      for type <- Dran.PageRegistry.types(), type not in disabled do
+        %{
+          key: Dran.PageRegistry.path(type),
+          label: Dran.PageRegistry.plural(type),
+          icon: Dran.PageRegistry.icon(type),
+          path: "#{base}/#{Dran.PageRegistry.path(type)}",
+          badge: counts[type_atom(type)] || 0
+        }
+      end
 
     items =
       [
         %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
         enabled?.("goals") && %{key: "goals", label: gettext("Objetivos"), icon: "hero-flag", path: base <> "/goals"},
-        enabled?.("kanban") && %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: base <> "/kanban"},
-        enabled?.("clusters") && %{key: "clusters", label: gettext("Clusters"), icon: "hero-squares-2x2", path: base <> "/clusters"},
-        enabled?.("graph") && %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
-        enabled?.("journey") && %{key: "journey", label: gettext("Journey"), icon: "hero-clock", path: base <> "/journey"}
+        enabled?.("kanban") && %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: base <> "/kanban"}
       ]
       |> Enum.reject(&(!&1))
 
-    [%{label: nil, items: items}]
+    knowledge_items =
+      (page_type_items ++
+         [
+           enabled?.("clusters") && %{key: "clusters", label: gettext("Clusters"), icon: "hero-squares-2x2", path: base <> "/clusters"},
+           enabled?.("graph") && %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
+           enabled?.("journey") && %{key: "journey", label: gettext("Journey"), icon: "hero-clock", path: base <> "/journey"}
+         ])
+      |> Enum.reject(&(!&1))
+
+    [
+      %{label: nil, items: items},
+      %{label: gettext("Conocimiento"), items: knowledge_items}
+    ]
   end
+
+  defp type_atom("note"), do: :notes
+  defp type_atom("entity"), do: :entities
+  defp type_atom("concept"), do: :concepts
+  defp type_atom("reference"), do: :references
 
   attr :label, :string, required: true
   attr :icon, :string, required: true

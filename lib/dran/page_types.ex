@@ -1,7 +1,11 @@
 defmodule Dran.PageTypes do
   @moduledoc """
-  Canonical page type registry — the single source of truth for the list of
-  page types and what each type can do (its *capabilities*).
+  Canonical page type registry — delegates to `Dran.PageRegistry`.
+
+  This module preserves the public API that consumers call directly
+  (`types/0`, `graph?/1`, `journey?/1`, etc.). The data now lives in
+  `Dran.PageRegistry`, which is the single source of truth for all page
+  type configuration (capabilities, kinds, meta fields, UI attrs).
 
   ## Page types
 
@@ -35,50 +39,24 @@ defmodule Dran.PageTypes do
   so adding a type here propagates to changeset validation automatically.
   """
 
-  @capabilities %{
-    "note" => %{graph: true, journey: true, embeddings: true, mcp_create: true},
-    "entity" => %{graph: true, journey: true, embeddings: true, mcp_create: true},
-    "concept" => %{graph: true, journey: true, embeddings: true, mcp_create: true},
-    "reference" => %{graph: true, journey: true, embeddings: true, mcp_create: true}
-  }
-
-  # Canonical ordering — preserves the historical `Page.all_types()` order so
-  # UI surfaces that iterate the list (e.g. the Settings page-types modal)
-  # keep their existing ordering.
-  @types ~w(note entity concept reference)
-
   @doc "Ordered list of all valid page types."
-  def types, do: @types
+  defdelegate types, to: Dran.PageRegistry
 
   @doc "True if pages of this type appear in the global graph."
-  def graph?(type), do: capability(type, :graph)
+  defdelegate graph?(type), to: Dran.PageRegistry
 
   @doc "True if pages of this type are counted in the Journey timeline."
-  def journey?(type), do: capability(type, :journey)
+  defdelegate journey?(type), to: Dran.PageRegistry
 
   @doc "True if pages of this type get embeddings and semantic relations."
-  def embeddings?(type), do: capability(type, :embeddings)
+  defdelegate embeddings?(type), to: Dran.PageRegistry
 
   @doc "True if pages of this type can be created via the MCP `dran_create_page` tool."
-  def mcp_create?(type), do: capability(type, :mcp_create)
+  defdelegate mcp_create?(type), to: Dran.PageRegistry
 
   @doc "List of page types excluded from the global graph by default."
-  def hidden_from_graph do
-    for {type, %{graph: false}} <- @capabilities, do: type
-  end
+  defdelegate hidden_from_graph, to: Dran.PageRegistry
 
   @doc "List of page types excluded from the Journey timeline."
-  def excluded_from_journey do
-    for {type, %{journey: false}} <- @capabilities, do: type
-  end
-
-  # Unknown types default to `true` (permissive) — every type that exists is
-  # in this registry by construction (`Page.@page_types` derives from it), so
-  # the default only guards hypothetical future callers.
-  defp capability(type, key) do
-    case Map.get(@capabilities, type) do
-      nil -> true
-      caps -> Map.fetch!(caps, key)
-    end
-  end
+  defdelegate excluded_from_journey, to: Dran.PageRegistry
 end

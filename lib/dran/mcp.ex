@@ -149,10 +149,7 @@ defmodule Dran.MCP do
       Use for notes, concepts, entities, and references (page types only). Goals are first-class entities — use `dran_create_goal` for those. Projects are notes with `meta.kind: "project"`, created with this same tool. Notes with todo-style kanban tracking use `dran_create_note` instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
 
       Page types and subtypes (set `meta.kind`):
-      - note: thought, journal, idea, meeting, question, quote, reminder
-      - concept: technique, pattern, discipline, theory
-      - entity: person, company, product, tool, place, event
-      - reference: article, paper, video, podcast, book
+      #{Dran.PageRegistry.mcp_description()}
 
       The `report` page type is system-only: reports are created by Dran itself (jobs, system output) and CANNOT be created via this tool — they live outside the graph, journey and embeddings, and are visible in the activity log and at /reports/:slug in the web UI.
       """,
@@ -182,12 +179,7 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" =>
               "Page type determining purpose and accepted meta fields. Only note, concept, entity, and reference are available. Use dran_create_goal for goals, dran_create_note for todo-style notes.",
-            "enum" => [
-              "note",
-              "concept",
-              "entity",
-              "reference"
-            ]
+            "enum" => Dran.PageRegistry.mcp_enum()
           },
           "tags" => %{
             "type" => "array",
@@ -196,8 +188,7 @@ defmodule Dran.MCP do
           },
           "meta" => %{
             "type" => "object",
-            "description" =>
-              "Type-specific metadata. Key fields by type: note→{kind, date}, reference→{source_url, kind}, entity→{kind, aliases, external_url}, concept→{kind, domain, parent_concept}. **Custom properties**: use `meta.props` as a namespaced key-value bag for free-form metadata (e.g. `props: %{\\\"role\\\" => \\\"sales\\\", \\\"tier\\\" => \\\"vip\\\"}`). Props survive round-trips and are indexed by the existing meta GIN index."
+            "description" => Dran.PageRegistry.mcp_meta_description()
           },
           "summary" => %{
             "type" => "string",
