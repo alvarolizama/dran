@@ -258,10 +258,7 @@ defmodule DranWeb.Layouts do
     assigns = assign(assigns, :groups, groups)
 
     ~H"""
-    <div
-      :for={{group, idx} <- Enum.with_index(@groups)}
-      class={if idx == length(@groups) - 1, do: "mt-auto", else: nil}
-    >
+    <div :for={group <- @groups} class="flex-1 flex flex-col">
       <div :if={!group.label} class="space-y-1">
         <.nav_link
           :for={item <- group.items}
@@ -400,7 +397,7 @@ defmodule DranWeb.Layouts do
         ]}
         title={gettext("Activity")}
       >
-        <.icon name="hero-pulse" class="size-4" />
+        <.icon name="hero-signal" class="size-4" />
       </a>
       <a
         :if={@is_owner}

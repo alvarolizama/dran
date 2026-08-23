@@ -3098,9 +3098,9 @@ msgid "Jobs"
 msgstr "Trabajos"
 
 #: lib/dran_web/live/workspace_settings_live.ex:433
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Journey"
-msgstr "Diario"
+msgstr "Journey"
 
 #: lib/dran_web/live/admin_users_live.ex:224
 #, elixir-autogen, elixir-format
