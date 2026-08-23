@@ -13,7 +13,8 @@ defmodule DranWeb.GraphHelpers do
     "note" => "#60A5FA",
     "entity" => "#FB7185",
     "concept" => "#FBBF24",
-    "reference" => "#60A5FA"
+    "reference" => "#60A5FA",
+    "goal" => "#22C55E"
   }
 
   @edge_colors %{

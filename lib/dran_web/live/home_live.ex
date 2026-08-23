@@ -924,7 +924,7 @@ defmodule DranWeb.HomeLive do
 
   defp graph_view(assigns) do
     ~H"""
-    <div class="h-[calc(100vh-4rem)] flex flex-col">
+    <div class="h-full flex flex-col">
       <div class="px-6 pt-4 pb-2">
         <div class="flex items-center gap-2 text-sm text-base-content/50 mb-1">
           <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
@@ -1232,7 +1232,10 @@ defmodule DranWeb.HomeLive do
     workspace = socket.assigns[:workspace]
 
     if workspace do
-      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{type}/#{slug}")}
+      # Goals are first-class entities with a plural route (/:ws/goals/:slug),
+      # not page types (/:ws/notes/:slug). Map "goal" to "goals" for the route.
+      route_type = if type == "goal", do: "goals", else: type
+      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{route_type}/#{slug}")}
     else
       {:noreply, socket}
     end
