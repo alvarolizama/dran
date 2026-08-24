@@ -1024,6 +1024,114 @@ defmodule DranWeb.PageComponents do
     """
   end
 
+  @doc """
+  Creation form for a brand-new page — same visual language as the edit form
+  (title + markdown editor + attributes) but with a proper submit flow:
+  `phx-change` validates, `phx-submit` creates the page via `save_page`.
+  The editor runs with `autosave={false}` (nothing exists to autosave yet);
+  its hook syncs the markdown into the hidden `page[body]` field on submit.
+  """
+  attr :form, :any, required: true
+  attr :page_type, :string, required: true
+  attr :workspace_id, :any, required: true
+  attr :editor_id, :string, required: true
+  attr :tag_suggestions, :list, default: nil
+  attr :cancel_path, :string, default: nil
+
+  def page_new_form(assigns) do
+    suggestions =
+      case assigns.tag_suggestions do
+        nil ->
+          case assigns.workspace_id do
+            nil -> []
+            id -> Dran.Knowledge.list_tags(id)
+          end
+
+        list ->
+          list
+      end
+
+    assigns = assign(assigns, :tag_suggestions, suggestions)
+
+    ~H"""
+    <div class="p-6 max-w-3xl">
+      <div class="flex items-center justify-between mb-4">
+        <h1 class="text-title">
+          {new_title(@page_type)}
+        </h1>
+        <div class="flex gap-2">
+          <.link :if={@cancel_path} navigate={@cancel_path} class="btn btn-ghost btn-sm">
+            {gettext("Cancel")}
+          </.link>
+        </div>
+      </div>
+
+      <.form
+        for={@form}
+        id={"page-new-form-#{@page_type}"}
+        phx-change="validate_page"
+        phx-submit="save_page"
+        class="space-y-5"
+      >
+        <.input
+          field={@form[:title]}
+          type="text"
+          label={gettext("Title")}
+          placeholder={gettext("Enter a title…")}
+          class="text-lg font-medium"
+          autofocus
+        />
+
+        <.input
+          field={@form[:summary]}
+          type="text"
+          label={gettext("Summary")}
+          placeholder={gettext("One-line description")}
+          class="text-sm"
+        />
+
+        <div>
+          <span class="label mb-1 block text-sm font-medium text-base-content/70">
+            {gettext("Tags")}
+          </span>
+          <.tag_input
+            id={"#{@editor_id}-new-tags"}
+            name="page[tags]"
+            value={Phoenix.HTML.Form.input_value(@form, :tags)}
+            suggestions={@tag_suggestions}
+          />
+        </div>
+
+        <div>
+          <span class="label mb-1 block text-sm font-medium text-base-content/70">
+            {gettext("Content")}
+          </span>
+          <.markdown_editor
+            id={@editor_id}
+            body=""
+            workspace_id={@workspace_id}
+            autosave={false}
+          />
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="submit" class="btn btn-primary btn-sm" data-testid="create-page-submit">
+            <.icon name="hero-check" class="size-4" /> {new_title(@page_type)}
+          </button>
+        </div>
+      </.form>
+    </div>
+    """
+  end
+
+  # Creation form title per page type — reuses the empty-state CTAs, which
+  # carry correct gender per type ("Crear nota", "Añadir referencia", …).
+  defp new_title("note"), do: gettext("Create Note")
+  defp new_title("concept"), do: gettext("Create Concept")
+  defp new_title("entity"), do: gettext("Create Entity")
+  defp new_title("reference"), do: gettext("Add Reference")
+  defp new_title(_), do: gettext("Create Page")
+
   @doc "Renders a horizontal stats bar with metric badges."
   attr :stats, :list,
     required: true,

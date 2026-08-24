@@ -10,10 +10,12 @@ defmodule DranWeb.PagesLive do
   use DranWeb, :live_view
 
   alias Dran.Knowledge
+  alias Dran.Page
   alias DranWeb.PageDetail
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
   alias DranWeb.ListPagination
+  alias DranWeb.Plugs.Auth
 
   @impl true
   def render(assigns) do
@@ -104,7 +106,19 @@ defmodule DranWeb.PagesLive do
             />
           </:tabs>
         </.page_detail>
-      </div><div :if={@live_action != :show}>
+      </div>
+
+      <div :if={@live_action == :new}>
+        <.page_new_form
+          form={@form}
+          page_type={@page_type}
+          workspace_id={@workspace_id}
+          editor_id={"#{@page_type}-new-editor"}
+          cancel_path={@back_path}
+        />
+      </div>
+
+      <div :if={@live_action == :index}>
         <.page_list
           pages={Enum.take(@pages, @visible_count)}
           archived_pages={
@@ -129,7 +143,7 @@ defmodule DranWeb.PagesLive do
     if page_type not in PageTypes.keys() do
       {:ok, push_navigate(socket, to: ~p"/")}
     else
-      PageDetail.mount_page_viewer(socket, session,
+      PageDetail.mount_page_viewer(socket, params, session,
         page_type: page_type,
         active_nav: PageTypes.path(page_type)
       )
@@ -149,6 +163,28 @@ defmodule DranWeb.PagesLive do
     socket = assign(socket, back_path: back_path, page_path: page_path)
 
     PageDetail.load_page_detail(socket, params, slug, redirect_to: back_path)
+  end
+
+  # :new — build a fresh changeset for the creation form. The context comes
+  # from the URL slug (resolve_workspace keeps socket assigns in sync).
+  def handle_params(params, _url, %{assigns: %{live_action: :new}} = socket) do
+    page_type = socket.assigns[:page_type] || page_type_from_params(params)
+    workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
+    back_path = build_back_path(workspace_slug, page_type)
+
+    params = Map.put(params, "workspace", workspace_slug)
+    {socket, _context} = Auth.resolve_workspace(socket, params)
+
+    changeset = Knowledge.change_page(%Page{page_type: page_type})
+
+    {:noreply,
+     assign(socket,
+       form: to_form(changeset, as: :page),
+       page: nil,
+       workspace_id: socket.assigns[:workspace] && socket.assigns.workspace.id,
+       page_title: PageTypes.plural(page_type),
+       back_path: back_path
+     )}
   end
 
   def handle_params(params, _url, socket) do

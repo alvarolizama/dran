@@ -48,7 +48,7 @@ defmodule DranWeb.PageEdit do
   """
   def handle_event("toggle_edit", _params, %{assigns: %{page: page, page_type: type}} = socket) do
     editing = Map.get(socket.assigns, :editing, false)
-    path = page_path(type, page.slug)
+    path = page_path(type, page.slug, socket.assigns[:workspace_slug])
 
     socket = ensure_tag_suggestions(socket)
 
@@ -64,11 +64,12 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("cancel_edit", _params, %{assigns: %{page: page, page_type: type}} = socket) do
-    {:noreply, push_patch(socket, to: page_path(type, page.slug))}
+    {:noreply,
+     push_patch(socket, to: page_path(type, page.slug, socket.assigns[:workspace_slug]))}
   end
 
   def handle_event("cancel_edit", _params, socket) do
-    {:noreply, push_navigate(socket, to: "/notes")}
+    {:noreply, push_navigate(socket, to: index_path(socket))}
   end
 
   def handle_event("suggest_summary", _params, %{assigns: %{page: %Page{}}} = socket) do
@@ -149,7 +150,11 @@ defmodule DranWeb.PageEdit do
             {:noreply,
              socket
              |> assign(page: updated_page, save_status: "saved")
-             |> push_patch(to: page_path(updated_page.page_type, final_slug) <> "?edit=true")}
+             |> push_patch(
+               to:
+                 page_path(updated_page.page_type, final_slug, socket.assigns[:workspace_slug]) <>
+                   "?edit=true"
+             )}
 
           {:error, changeset} ->
             {:noreply, assign(socket, form: to_form(changeset, as: :page))}
@@ -218,7 +223,7 @@ defmodule DranWeb.PageEdit do
         {:noreply,
          socket
          |> put_flash(:info, gettext("Page deleted."))
-         |> push_navigate(to: ~p"/")}
+         |> push_navigate(to: index_path(socket))}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, gettext("Could not delete page."))}
@@ -403,7 +408,9 @@ defmodule DranWeb.PageEdit do
         {:noreply,
          socket
          |> put_flash(:info, gettext("Page created."))
-         |> push_navigate(to: page_path(type, page.slug) <> "?edit=true")}
+         |> push_navigate(
+           to: page_path(type, page.slug, socket.assigns[:workspace_slug]) <> "?edit=true"
+         )}
 
       {:error, changeset} ->
         {:noreply, assign(socket, form: to_form(changeset, as: :page))}
@@ -419,8 +426,11 @@ defmodule DranWeb.PageEdit do
           |> put_flash(:info, gettext("Saved."))
 
         {:noreply,
-         push_patch(socket,
-           to: page_path(updated_page.page_type, updated_page.slug) <> "?edit=true"
+         push_patch(
+           socket,
+           to:
+             page_path(updated_page.page_type, updated_page.slug, socket.assigns[:workspace_slug]) <>
+               "?edit=true"
          )}
 
       {:error, changeset} ->
@@ -528,8 +538,23 @@ defmodule DranWeb.PageEdit do
     |> String.replace(~r/^-+|-+$/, "")
   end
 
-  defp page_path(type, slug) do
-    "/#{DranWeb.PageTypes.path(type)}/#{slug}"
+  defp page_path(type, slug, workspace_slug)
+
+  defp page_path(type, slug, nil), do: "/#{DranWeb.PageTypes.path(type)}/#{slug}"
+
+  defp page_path(type, slug, workspace_slug),
+    do: "/#{workspace_slug}/#{DranWeb.PageTypes.path(type)}/#{slug}"
+
+  # Index path for the current page type — workspace-scoped when a slug is
+  # assigned (e.g. "/test/notes"), bare otherwise ("/notes").
+  defp index_path(socket) do
+    type = socket.assigns[:page_type]
+    base = "/#{DranWeb.PageTypes.path(type)}"
+
+    case socket.assigns[:workspace_slug] do
+      slug when is_binary(slug) and slug != "" -> "/" <> slug <> base
+      _ -> base
+    end
   end
 
   defp store_file_and_create_page(socket, workspace_id, binary, filename, client_type) do

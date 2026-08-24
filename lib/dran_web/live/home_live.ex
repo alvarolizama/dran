@@ -36,8 +36,9 @@ defmodule DranWeb.HomeLive do
   # ── Mount ─────────────────────────────────────────────────────────────────
 
   @impl true
-  def mount(_params, session, socket) do
-    {socket, workspace} = Auth.assign_to_socket(socket, session)
+  def mount(params, session, socket) do
+    # The URL slug wins over the session (see Plugs.Auth.assign_to_socket/3).
+    {socket, workspace} = Auth.assign_to_socket(socket, session, params)
 
     # The wiki is browsable by ALL logged-in users (including wiki-only
     # auto-registered accounts with no contexts assigned). The sidebar
@@ -426,7 +427,7 @@ defmodule DranWeb.HomeLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
-      workspace_slug={@workspace_slug}
+      workspace_slug={@workspace && @workspace.slug}
       workspaces={@contexts}
       active_nav={@active_nav}
     >

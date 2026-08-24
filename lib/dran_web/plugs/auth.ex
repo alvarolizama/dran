@@ -134,11 +134,24 @@ defmodule DranWeb.Plugs.Auth do
 
   Returns `{socket, context}` where `context` is the loaded Knowledge.Context.
   """
-  def assign_to_socket(socket, session) when is_map(session) do
+  def assign_to_socket(socket, session, params \\ nil) when is_map(session) do
     %{
       current_user: current_user,
-      workspace_slug: workspace_slug
+      workspace_slug: session_slug
     } = from_session(session)
+
+    # The URL wins over the session: a LiveView mounted at
+    # /:workspace_slug/... must always show THAT workspace, even when the
+    # session still points elsewhere (e.g. login defaulted to "personal").
+    # Falls back to the session slug for mounts without params.
+    workspace_slug =
+      case params do
+        %{"workspace_slug" => url_slug} when is_binary(url_slug) and url_slug != "" ->
+          url_slug
+
+        _ ->
+          session_slug
+      end
 
     context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
     page_counts = Dran.Knowledge.page_counts_by_workspace()
@@ -261,7 +274,12 @@ defmodule DranWeb.Plugs.Auth do
   in a specific context regardless of the session's active context.
   """
   def resolve_workspace(socket, params) do
-    case params["workspace"] do
+    # Routes deliver the slug under "workspace_slug" (/:workspace_slug/...).
+    # "workspace" is kept as a legacy alias (PagesLive used to set it).
+    slug =
+      params["workspace_slug"] || params["workspace"]
+
+    case slug do
       slug when is_binary(slug) and slug != "" ->
         case Dran.Knowledge.get_workspace_by_slug(slug) do
           nil ->

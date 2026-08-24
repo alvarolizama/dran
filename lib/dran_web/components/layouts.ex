@@ -243,14 +243,18 @@ defmodule DranWeb.Layouts do
 
   def sidebar_nav(assigns) do
     # Unified workspace sidebar: when a workspace_slug is present the nav shows
-    # the workspace sections grouped (Inicio, Conocimiento, Planificación,
+    # the workspace sections as a flat list (Inicio, Objetivos, Kanban,
     # Graph); without a workspace (dashboard/admin/account) the nav is empty
     # and only the footer icons show.
-    ws = resolve_workspace(assigns[:workspace_slug])
+    slug = assigns[:workspace_slug]
 
     groups =
-      if ws do
-        workspace_groups(ws, assigns[:workspace_slug], assigns[:counts])
+      if is_binary(slug) and slug != "" do
+        # resolve_workspace may return nil if the DB lookup fails — but we
+        # still have the slug from the URL, which is all we need to build
+        # nav paths. workspace_groups handles ws=nil gracefully.
+        ws = resolve_workspace(slug)
+        workspace_groups(ws, slug, assigns[:counts])
       else
         []
       end
@@ -258,7 +262,7 @@ defmodule DranWeb.Layouts do
     assigns = assign(assigns, :groups, groups)
 
     ~H"""
-    <div :for={group <- @groups} class="flex-1 flex flex-col">
+    <div :for={group <- @groups} class="flex flex-col">
       <div :if={!group.label} class="space-y-1">
         <.nav_link
           :for={item <- group.items}
@@ -292,9 +296,7 @@ defmodule DranWeb.Layouts do
     """
   end
 
-  # Resolves the %Workspace{} behind a slug; nil-safe (no workspace → nil).
-  defp resolve_workspace(nil), do: nil
-
+  # Resolves the %Workspace{} behind a slug; nil-safe (not found → nil).
   defp resolve_workspace(slug) when is_binary(slug) do
     try do
       Dran.Knowledge.get_workspace_by_slug(slug)
@@ -303,15 +305,19 @@ defmodule DranWeb.Layouts do
     end
   end
 
-  defp resolve_workspace(_), do: nil
-
   # Builds the workspace nav as a flat list of items, gated by feature
   # flags. No group headers — just direct links.
   defp workspace_groups(ws, slug, counts) do
-    enabled? = fn feature -> Dran.Workspace.feature_enabled?(ws, feature) end
+    enabled? = fn feature ->
+      case ws do
+        nil -> true
+        ws -> Dran.Workspace.feature_enabled?(ws, feature)
+      end
+    end
+
     base = "/#{slug}"
 
-    disabled = ws.disabled_page_types || []
+    disabled = (ws && ws.disabled_page_types) || []
 
     page_type_items =
       for type <- Dran.PageRegistry.types(), type not in disabled do
@@ -327,23 +333,42 @@ defmodule DranWeb.Layouts do
     items =
       [
         %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
-        enabled?.("goals") && %{key: "goals", label: gettext("Objetivos"), icon: "hero-flag", path: base <> "/goals"},
-        enabled?.("kanban") && %{key: "kanban", label: gettext("Kanban"), icon: "hero-view-columns", path: base <> "/kanban"}
+        enabled?.("goals") &&
+          %{key: "goals", label: gettext("Objetivos"), icon: "hero-flag", path: base <> "/goals"},
+        enabled?.("kanban") &&
+          %{
+            key: "kanban",
+            label: gettext("Kanban"),
+            icon: "hero-view-columns",
+            path: base <> "/kanban"
+          }
       ]
       |> Enum.reject(&(!&1))
 
-    knowledge_items =
-      (page_type_items ++
-         [
-           enabled?.("clusters") && %{key: "clusters", label: gettext("Clusters"), icon: "hero-squares-2x2", path: base <> "/clusters"},
-           enabled?.("graph") && %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
-           enabled?.("journey") && %{key: "journey", label: gettext("Journey"), icon: "hero-clock", path: base <> "/journey"}
-         ])
+    view_items =
+      [
+        enabled?.("clusters") &&
+          %{
+            key: "clusters",
+            label: gettext("Clusters"),
+            icon: "hero-squares-2x2",
+            path: base <> "/clusters"
+          },
+        enabled?.("graph") &&
+          %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
+        enabled?.("journey") &&
+          %{
+            key: "journey",
+            label: gettext("Journey"),
+            icon: "hero-clock",
+            path: base <> "/journey"
+          }
+      ]
       |> Enum.reject(&(!&1))
 
     [
-      %{label: nil, items: items},
-      %{label: gettext("Conocimiento"), items: knowledge_items}
+      %{label: nil, items: items ++ view_items},
+      %{label: gettext("Knowledge base"), items: page_type_items}
     ]
   end
 

@@ -224,8 +224,9 @@ defmodule DranWeb.ClusterLive do
   # ── Lifecycle ────────────────────────────────────────────────────────────
 
   @impl true
-  def mount(_params, session, socket) do
-    {socket, context} = Auth.assign_to_socket(socket, session)
+  def mount(params, session, socket) do
+    # The URL slug wins over the session (see Plugs.Auth.assign_to_socket/3).
+    {socket, context} = Auth.assign_to_socket(socket, session, params)
 
     if context do
       Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")

@@ -98,7 +98,11 @@ defmodule DranWeb.PageListComponents do
         <div class="flex gap-2">
           <.link
             :if={@page_type}
-            navigate={"/collections/new?type=#{@page_type}&title=#{gettext("All")} #{PageTypes.plural(@page_type)}"}
+            navigate={
+              "/#{@workspace_slug}/collections/new?type=#{@page_type}&title=#{gettext("All")} #{
+                PageTypes.plural(@page_type)
+              }"
+            }
             class="btn btn-ghost btn-sm"
             title={gettext("Save as smart collection")}
           >
@@ -122,7 +126,10 @@ defmodule DranWeb.PageListComponents do
               do: if(@page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")),
               else: gettext("Archived")} ({if @show_archived, do: @total_count, else: @total_archived})
           </button>
-          <.link navigate={"/#{PageTypes.path(@page_type)}/new"} class="btn btn-primary btn-sm">
+          <.link
+            navigate={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}/new"}
+            class="btn btn-primary btn-sm"
+          >
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}
           </.link>
         </div>
@@ -170,7 +177,7 @@ defmodule DranWeb.PageListComponents do
                 class="size-4 text-base-content/40 shrink-0"
               />
               <.link
-                navigate={PageTypes.page_show_path(page)}
+                navigate={PageTypes.page_show_path(page, @workspace_slug)}
                 class="text-sm flex-1 truncate hover:text-primary transition-colors"
               >
                 {page.title}
@@ -229,7 +236,7 @@ defmodule DranWeb.PageListComponents do
             <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
           </div>
           <.link
-            navigate={"/#{PageTypes.path(@page_type)}/new"}
+            navigate={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}/new"}
             class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
           >
             <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
@@ -237,7 +244,12 @@ defmodule DranWeb.PageListComponents do
         </div>
 
         <div class="space-y-2">
-          <.page_card :for={page <- @pages} page={page} page_type={@page_type} />
+          <.page_card
+            :for={page <- @pages}
+            page={page}
+            page_type={@page_type}
+            workspace_slug={@workspace_slug}
+          />
         </div>
 
         <button
@@ -258,6 +270,7 @@ defmodule DranWeb.PageListComponents do
 
   attr :page, :map, required: true
   attr :page_type, :string, default: nil
+  attr :workspace_slug, :string, default: "personal"
 
   defp page_card(assigns) do
     ~H"""
@@ -270,7 +283,7 @@ defmodule DranWeb.PageListComponents do
           <.icon name={PageTypes.icon(@page.page_type)} class="size-4 text-primary" />
         </span>
         <.link
-          navigate={PageTypes.page_show_path(@page)}
+          navigate={PageTypes.page_show_path(@page, @workspace_slug)}
           class="font-medium leading-snug flex-1 hover:text-primary transition-colors"
         >
           {@page.title}
@@ -287,7 +300,7 @@ defmodule DranWeb.PageListComponents do
           <div class="flex gap-1">
             <.link
               :for={tag <- Enum.take(@page.tags || [], 5)}
-              navigate={"/tags/#{URI.encode_www_form(tag)}"}
+              navigate={"/#{@workspace_slug}/search?q=#{URI.encode_www_form(tag)}"}
               class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
             >
               {tag}

@@ -50,12 +50,13 @@ defmodule DranWeb.PageDetail do
   * `:active_nav` (required) — sidebar nav key, e.g. `"notes"`.
   * `:extra_assigns` — keyword list merged into the base assigns.
   """
-  def mount_page_viewer(socket, session, opts) do
+  def mount_page_viewer(socket, params, session, opts) do
     page_type = Keyword.fetch!(opts, :page_type)
     active_nav = Keyword.fetch!(opts, :active_nav)
     extra_assigns = Keyword.get(opts, :extra_assigns, [])
 
-    {socket, context} = Auth.assign_to_socket(socket, session)
+    # The URL slug wins over the session (see Plugs.Auth.assign_to_socket/3).
+    {socket, context} = Auth.assign_to_socket(socket, session, params)
 
     socket =
       if context do
