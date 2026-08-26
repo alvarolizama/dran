@@ -310,22 +310,12 @@ defmodule DranWeb.MarkdownEditorComponents do
           label={@label}
         />
       <% :props -> %>
-        <% json_value =
-          case @value do
-            v when is_map(v) and map_size(v) > 0 -> Jason.encode!(v, pretty: true)
-            _ -> ""
-          end %>
         <div class="form-control">
           <label class="label">
             <span class="label-text">{@label}</span>
-            <span class="label-text-alt text-base-content/50">JSON</span>
+            <span class="label-text-alt text-base-content/50">key / value</span>
           </label>
-          <textarea
-            name={"page[meta][#{@key}]"}
-            rows="3"
-            class="textarea textarea-bordered font-mono text-sm"
-            placeholder='{"role": "sales", "tier": "vip"}'
-          ><%= json_value %></textarea>
+          <.props_editor id={"page-meta-props-#{@key}"} name={"page[meta][#{@key}]"} value={@value} />
           <label class="label">
             <span class="label-text-alt text-base-content/50">
               {gettext("Key-value custom metadata. Empty = none.")}
@@ -335,6 +325,239 @@ defmodule DranWeb.MarkdownEditorComponents do
     <% end %>
     """
   end
+
+  # ── Props key/value editor ────────────────────────────────────────────
+  #
+  # Replaces the raw JSON textarea for `:props` meta fields: rows of key/value
+  # inputs plus an add button. A hidden input carries the canonical JSON object,
+  # so form submits keep working unchanged — the server receives the same JSON
+  # string under `page[meta][props]` and normalises it to a map in
+  # `Dran.Knowledge` (create/update). Non-string values (numbers, booleans,
+  # nested objects) survive round-trips untouched: the hook only stringifies
+  # values the user actually edits.
+  #
+  # Purely client-side via a colocated hook — no server round-trips.
+
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :value, :any, default: ""
+
+  def props_editor(assigns) do
+    rows = props_rows(assigns.value)
+    json = if rows == [], do: "", else: assigns.value |> props_map() |> Jason.encode!()
+
+    assigns =
+      assigns
+      |> assign(:rows, rows)
+      |> assign(:json, json)
+
+    ~H"""
+    <div id={@id} phx-hook=".PropsEditor" data-props-editor>
+      <div class="flex flex-col gap-1.5" data-props-rows>
+        <div :for={{key, value} <- @rows} class="flex items-center gap-1.5" data-prop-row>
+          <input
+            type="text"
+            data-prop-key
+            value={key}
+            placeholder={gettext("Key")}
+            autocomplete="off"
+            spellcheck="false"
+            class="min-w-0 flex-1 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <span class="select-none text-base-content/30" aria-hidden="true">=</span>
+          <input
+            type="text"
+            data-prop-value
+            value={value}
+            placeholder={gettext("Value")}
+            autocomplete="off"
+            spellcheck="false"
+            class="min-w-0 flex-[1.4] rounded-lg border border-base-300 bg-base-100 px-2.5 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button
+            type="button"
+            data-prop-remove
+            aria-label={gettext("Remove property")}
+            class="btn btn-ghost btn-xs btn-square shrink-0 text-base-content/40 hover:text-error"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      <button
+        type="button"
+        data-prop-add
+        class="mt-1.5 w-full rounded-lg border border-dashed border-base-300 py-1.5 text-sm text-base-content/50 transition-colors hover:border-primary hover:text-primary"
+      >
+        + {gettext("Add property")}
+      </button>
+      <input type="hidden" name={@name} value={@json} data-props-value />
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".PropsEditor">
+        export default {
+          mounted() {
+            const root = this.el;
+            const hidden = root.querySelector("[data-props-value]");
+            const rowsEl = root.querySelector("[data-props-rows]");
+
+            // Rows the user never touched keep their original typed value
+            // (number, boolean, nested object) instead of being stringified.
+            const typed = new WeakMap();
+
+            let initial = {};
+            try {
+              initial = JSON.parse(hidden.value || "{}");
+            } catch (_e) {
+              initial = {};
+            }
+
+            rowsEl.querySelectorAll("[data-prop-row]").forEach((row) => {
+              const key = row.querySelector("[data-prop-key]").value;
+              if (Object.prototype.hasOwnProperty.call(initial, key)) {
+                typed.set(row, { key: key, value: initial[key] });
+              }
+            });
+
+            const renderValue = (v) =>
+              typeof v === "string" ? v : JSON.stringify(v);
+
+            const entries = () => {
+              const out = [];
+              rowsEl.querySelectorAll("[data-prop-row]").forEach((row) => {
+                const key = row.querySelector("[data-prop-key]").value.trim();
+                if (key.length === 0) return;
+                const valueInput = row.querySelector("[data-prop-value]");
+                const orig = typed.get(row);
+                let value = valueInput.value;
+                if (orig && orig.key === key && renderValue(orig.value) === valueInput.value) {
+                  value = orig.value;
+                }
+                out.push([key, value]);
+              });
+              return out;
+            };
+
+            const sync = () => {
+              const obj = {};
+              entries().forEach(([k, v]) => {
+                obj[k] = v;
+              });
+              hidden.value = Object.keys(obj).length > 0 ? JSON.stringify(obj) : "";
+            };
+
+            const buildRow = (key = "", value = "") => {
+              const div = document.createElement("div");
+              div.className = "flex items-center gap-1.5";
+              div.dataset.propRow = "";
+
+              const keyInput = document.createElement("input");
+              keyInput.type = "text";
+              keyInput.dataset.propKey = "";
+              keyInput.value = key;
+              keyInput.placeholder = keyInput.dataset.placeholder || "";
+              keyInput.autocomplete = "off";
+              keyInput.spellcheck = false;
+              keyInput.className =
+                "min-w-0 flex-1 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary";
+
+              const sep = document.createElement("span");
+              sep.className = "select-none text-base-content/30";
+              sep.setAttribute("aria-hidden", "true");
+              sep.textContent = "=";
+
+              const valueInput = document.createElement("input");
+              valueInput.type = "text";
+              valueInput.dataset.propValue = "";
+              valueInput.value = value;
+              valueInput.placeholder = valueInput.dataset.placeholder || "";
+              valueInput.autocomplete = "off";
+              valueInput.spellcheck = false;
+              valueInput.className =
+                "min-w-0 flex-[1.4] rounded-lg border border-base-300 bg-base-100 px-2.5 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary";
+
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.dataset.propRemove = "";
+              btn.className =
+                "btn btn-ghost btn-xs btn-square shrink-0 text-base-content/40 hover:text-error";
+              btn.textContent = "×";
+
+              div.appendChild(keyInput);
+              div.appendChild(sep);
+              div.appendChild(valueInput);
+              div.appendChild(btn);
+              return div;
+            };
+
+            // Copy placeholders from the server-rendered rows so dynamically
+            // added rows speak the same language as the initial ones.
+            const firstKey = rowsEl.querySelector("[data-prop-key]");
+            const firstValue = rowsEl.querySelector("[data-prop-value]");
+            if (firstKey) buildRow.keyPlaceholder = firstKey.placeholder;
+            if (firstValue) buildRow.valuePlaceholder = firstValue.placeholder;
+            const placeholders = {
+              key: firstKey ? firstKey.placeholder : "Key",
+              value: firstValue ? firstValue.placeholder : "Value",
+            };
+
+            const addRow = (key = "", value = "") => {
+              const row = buildRow(key, value);
+              row.querySelector("[data-prop-key]").placeholder = placeholders.key;
+              row.querySelector("[data-prop-value]").placeholder = placeholders.value;
+              rowsEl.appendChild(row);
+              row.querySelector("[data-prop-key]").focus();
+              sync();
+            };
+
+            rowsEl.addEventListener("input", sync);
+
+            rowsEl.addEventListener("keydown", (e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              const row = e.target.closest("[data-prop-row]");
+              if (e.target.matches("[data-prop-key]")) {
+                row.querySelector("[data-prop-value]").focus();
+              } else {
+                addRow();
+              }
+            });
+
+            rowsEl.addEventListener("click", (e) => {
+              const btn = e.target.closest("[data-prop-remove]");
+              if (btn) {
+                btn.closest("[data-prop-row]").remove();
+                sync();
+              }
+            });
+
+            root.querySelector("[data-prop-add]").addEventListener("click", () => addRow());
+          }
+        };
+      </script>
+    </div>
+    """
+  end
+
+  # Rows for the initial server render. Accepts the persisted map, a JSON
+  # string (live form value mid-edit), or anything else (→ no rows). Nested or
+  # non-string values are JSON-encoded for display; the hidden input keeps the
+  # original map so types survive unless the user edits them.
+  defp props_rows(value), do: value |> props_map() |> Enum.map(&format_prop_row/1)
+
+  defp props_map(value) when is_map(value) and not is_struct(value) do
+    value |> Enum.take(50) |> Map.new()
+  end
+
+  defp props_map(value) when is_binary(value) do
+    case Jason.decode(value) do
+      {:ok, decoded} when is_map(decoded) -> props_map(decoded)
+      _ -> %{}
+    end
+  end
+
+  defp props_map(_), do: %{}
+
+  defp format_prop_row({key, value}) when is_binary(value), do: {to_string(key), value}
+  defp format_prop_row({key, value}), do: {to_string(key), Jason.encode!(value)}
 
   # ── Tuple normalisation ───────────────────────────────────────────────────
   #

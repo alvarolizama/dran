@@ -14,8 +14,8 @@ msgstr ""
 msgid "Actions"
 msgstr "Acciones"
 
-#: lib/dran_web/components/layouts.ex:557
-#: lib/dran_web/components/layouts.ex:572
+#: lib/dran_web/components/layouts.ex:507
+#: lib/dran_web/components/layouts.ex:522
 #, elixir-autogen, elixir-format
 msgid "Attempting to reconnect"
 msgstr "Intentando reconectar"
@@ -36,18 +36,18 @@ msgid "Hybrid"
 msgstr "Híbrido"
 
 #: lib/dran_web/components/command_palette.ex:99
-#: lib/dran_web/live/search_live.ex:218
-#: lib/dran_web/live/workspace_settings_live.ex:435
+#: lib/dran_web/live/search_live.ex:219
+#: lib/dran_web/live/workspace_settings_live.ex:855
 #, elixir-autogen, elixir-format
 msgid "Search"
 msgstr "Buscar"
 
-#: lib/dran_web/live/search_live.ex:128
+#: lib/dran_web/live/search_live.ex:129
 #, elixir-autogen, elixir-format
 msgid "Search pages..."
 msgstr "Buscar páginas..."
 
-#: lib/dran_web/live/search_live.ex:137
+#: lib/dran_web/live/search_live.ex:138
 #, elixir-autogen, elixir-format
 msgid "Search strategy"
 msgstr "Estrategia de búsqueda"
@@ -57,12 +57,12 @@ msgstr "Estrategia de búsqueda"
 msgid "Semantic"
 msgstr "Semántica"
 
-#: lib/dran_web/components/layouts.ex:564
+#: lib/dran_web/components/layouts.ex:514
 #, elixir-autogen, elixir-format
 msgid "Something went wrong!"
 msgstr "¡Algo salió mal!"
 
-#: lib/dran_web/components/layouts.ex:549
+#: lib/dran_web/components/layouts.ex:499
 #, elixir-autogen, elixir-format
 msgid "We can't find the internet"
 msgstr "No podemos encontrar la conexión a internet"
@@ -72,28 +72,29 @@ msgstr "No podemos encontrar la conexión a internet"
 msgid "close"
 msgstr "cerrar"
 
+#: lib/dran_web/components/layouts.ex:450
 #: lib/dran_web/components/page_components.ex:339
-#: lib/dran_web/live/activity_live.ex:36
-#: lib/dran_web/live/activity_live.ex:96
-#: lib/dran_web/live/workspace_settings_live.ex:434
+#: lib/dran_web/live/activity_live.ex:37
+#: lib/dran_web/live/activity_live.ex:97
+#: lib/dran_web/live/workspace_settings_live.ex:854
 #, elixir-autogen, elixir-format
 msgid "Activity"
 msgstr "Actividad"
 
 #: lib/dran_web/live/admin_system_live.ex:218
-#: lib/dran_web/live/workspace_settings_live.ex:438
+#: lib/dran_web/live/workspace_settings_live.ex:858
 #, elixir-autogen, elixir-format
 msgid "Agents"
 msgstr "Agentes"
 
-#: lib/dran_web/components/page_list_components.ex:101
-#: lib/dran_web/components/page_list_components.ex:159
+#: lib/dran_web/components/page_list_components.ex:102
+#: lib/dran_web/components/page_list_components.ex:166
 #, elixir-autogen, elixir-format
 msgid "All"
 msgstr "Todos"
 
 #: lib/dran_web/components/page_list_components.ex:96
-#: lib/dran_web/components/page_list_components.ex:122
+#: lib/dran_web/components/page_list_components.ex:126
 #, elixir-autogen, elixir-format
 msgid "All Pages"
 msgstr "Todas las páginas"
@@ -103,34 +104,35 @@ msgstr "Todas las páginas"
 msgid "Are you sure? This cannot be undone."
 msgstr "¿Estás seguro? No se puede deshacer."
 
-#: lib/dran_web/components/page_components.ex:1076
-#: lib/dran_web/live/community_live.ex:162
-#: lib/dran_web/live/community_live.ex:218
+#: lib/dran_web/components/page_components.ex:1184
+#: lib/dran_web/live/cluster_live.ex:162
+#: lib/dran_web/live/cluster_live.ex:218
 #: lib/dran_web/live/goal_live.ex:51
-#: lib/dran_web/live/pages_live.ex:45
+#: lib/dran_web/live/pages_live.ex:47
 #: lib/dran_web/live/report_live.ex:47
 #: lib/dran_web/live/smart_collection_live.ex:99
 #, elixir-autogen, elixir-format
 msgid "Back"
 msgstr "Volver"
 
-#: lib/dran_web/live/home_live.ex:1365
-#: lib/dran_web/live/smart_collection_live.ex:281
+#: lib/dran_web/live/home_live.ex:1371
+#: lib/dran_web/live/smart_collection_live.ex:282
 #, elixir-autogen, elixir-format
 msgid "Backlog"
 msgstr "Pendientes"
 
-#: lib/dran_web/live/dashboard_live.ex:160
+#: lib/dran_web/components/page_components.ex:1064
+#: lib/dran_web/live/dashboard_live.ex:150
 #: lib/dran_web/live/goal_live.ex:187
 #: lib/dran_web/live/goal_live.ex:235
-#: lib/dran_web/live/settings_live.ex:489
+#: lib/dran_web/live/settings_live.ex:715
 #: lib/dran_web/live/smart_collection_live.ex:247
 #, elixir-autogen, elixir-format
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: lib/dran_web/live/home_live.ex:1370
-#: lib/dran_web/live/smart_collection_live.ex:286
+#: lib/dran_web/live/home_live.ex:1376
+#: lib/dran_web/live/smart_collection_live.ex:287
 #, elixir-autogen, elixir-format
 msgid "Cancelled"
 msgstr "Cancelado"
@@ -140,10 +142,9 @@ msgstr "Cancelado"
 msgid "Changelog"
 msgstr "Historial de cambios"
 
-#: lib/dran_web/components/layouts.ex:335
+#: lib/dran/page_registry.ex:413
 #: lib/dran_web/live/docs_live.ex:20
-#: lib/dran_web/live/docs_live.ex:282
-#: lib/dran_web/page_types.ex:122
+#: lib/dran_web/live/docs_live.ex:314
 #, elixir-autogen, elixir-format
 msgid "Concepts"
 msgstr "Conceptos"
@@ -151,6 +152,7 @@ msgstr "Conceptos"
 #: lib/dran_web/components/page_components.ex:179
 #: lib/dran_web/components/page_components.ex:366
 #: lib/dran_web/components/page_components.ex:1013
+#: lib/dran_web/components/page_components.ex:1107
 #: lib/dran_web/live/goal_live.ex:176
 #, elixir-autogen, elixir-format
 msgid "Content"
@@ -162,19 +164,20 @@ msgstr "Contenido"
 msgid "Contexts"
 msgstr "Contextos"
 
-#: lib/dran_web/live/dashboard_live.ex:168
+#: lib/dran_web/live/dashboard_live.ex:158
 #, elixir-autogen, elixir-format
 msgid "Create"
 msgstr "Crear"
 
+#: lib/dran_web/components/page_components.ex:1133
 #: lib/dran_web/components/page_list_components.ex:59
 #, elixir-autogen, elixir-format
 msgid "Create Page"
 msgstr "Crear página"
 
 #: lib/dran_web/components/page_components.ex:107
-#: lib/dran_web/live/activity_live.ex:235
-#: lib/dran_web/live/settings_live.ex:314
+#: lib/dran_web/live/activity_live.ex:236
+#: lib/dran_web/live/settings_live.ex:540
 #, elixir-autogen, elixir-format
 msgid "Created"
 msgstr "Creado"
@@ -184,53 +187,50 @@ msgstr "Creado"
 msgid "Created by"
 msgstr "Creado por"
 
-#: lib/dran_web/components/layouts.ex:377
-#: lib/dran_web/components/layouts.ex:740
-#: lib/dran_web/components/layouts.ex:743
-#: lib/dran_web/live/dashboard_live.ex:195
+#: lib/dran_web/components/layouts.ex:424
+#: lib/dran_web/live/dashboard_live.ex:185
 #, elixir-autogen, elixir-format
 msgid "Dashboard"
 msgstr "Dashboard"
 
 #: lib/dran_web/components/page_components.ex:158
-#: lib/dran_web/live/settings_live.ex:422
+#: lib/dran_web/live/settings_live.ex:648
 #: lib/dran_web/live/smart_collection_live.ex:108
 #, elixir-autogen, elixir-format
 msgid "Delete"
 msgstr "Eliminar"
 
-#: lib/dran/page_meta.ex:275
-#: lib/dran_web/live/docs_live.ex:129
+#: lib/dran_web/live/docs_live.ex:161
 #, elixir-autogen, elixir-format
 msgid "Docs"
 msgstr "Documentación"
 
-#: lib/dran_web/components/layouts.ex:494
-#: lib/dran_web/live/docs_live.ex:42
+#: lib/dran_web/components/layouts.ex:472
+#: lib/dran_web/live/docs_live.ex:74
 #, elixir-autogen, elixir-format
 msgid "Documentation"
 msgstr "Documentación"
 
-#: lib/dran_web/live/home_live.ex:1369
-#: lib/dran_web/live/smart_collection_live.ex:285
+#: lib/dran_web/live/home_live.ex:1375
+#: lib/dran_web/live/smart_collection_live.ex:286
 #, elixir-autogen, elixir-format
 msgid "Done"
 msgstr "Hecho"
 
-#: lib/dran/page_meta.ex:152
+#: lib/dran/page_registry.ex:225
 #, elixir-autogen, elixir-format
 msgid "Due date"
 msgstr "Fecha límite"
 
 #: lib/dran_web/components/page_components.ex:1007
+#: lib/dran_web/components/page_components.ex:1080
 #: lib/dran_web/live/goal_live.ex:215
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
 msgid "Enter a title…"
 msgstr "Introduce un título…"
 
-#: lib/dran_web/components/layouts.ex:342
-#: lib/dran_web/page_types.ex:123
+#: lib/dran/page_registry.ex:414
 #, elixir-autogen, elixir-format
 msgid "Entities"
 msgstr "Entidades"
@@ -242,34 +242,29 @@ msgid "Goal"
 msgstr "Objetivo"
 
 #: lib/dran_web/live/goal_live.ex:251
-#: lib/dran_web/live/goal_live.ex:333
-#: lib/dran_web/live/workspace_settings_live.ex:428
+#: lib/dran_web/live/goal_live.ex:334
+#: lib/dran_web/live/workspace_settings_live.ex:848
 #, elixir-autogen, elixir-format
 msgid "Goals"
 msgstr "Objetivos"
 
 #: lib/dran_web/components/page_components.ex:367
-#: lib/dran_web/live/home_live.ex:932
-#: lib/dran_web/live/pages_live.ex:52
+#: lib/dran_web/live/home_live.ex:935
+#: lib/dran_web/live/pages_live.ex:54
 #: lib/dran_web/live/search_live.ex:23
-#: lib/dran_web/live/search_live.ex:182
-#: lib/dran_web/live/workspace_settings_live.ex:432
+#: lib/dran_web/live/search_live.ex:183
+#: lib/dran_web/live/workspace_settings_live.ex:852
 #, elixir-autogen, elixir-format
 msgid "Graph"
 msgstr "Grafo"
 
-#: lib/dran_web/live/home_live.ex:1368
-#: lib/dran_web/live/smart_collection_live.ex:284
+#: lib/dran_web/live/home_live.ex:1374
+#: lib/dran_web/live/smart_collection_live.ex:285
 #, elixir-autogen, elixir-format
 msgid "In Progress"
 msgstr "En progreso"
 
-#: lib/dran_web/components/layouts.ex:386
-#, elixir-autogen, elixir-format
-msgid "Knowledge"
-msgstr "Conocimiento"
-
-#: lib/dran_web/components/layouts.ex:630
+#: lib/dran_web/components/layouts.ex:584
 #, elixir-autogen, elixir-format
 msgid "Logout"
 msgstr "Cerrar sesión"
@@ -280,7 +275,7 @@ msgstr "Cerrar sesión"
 msgid "Metadata"
 msgstr "Metadatos"
 
-#: lib/dran_web/components/page_list_components.ex:126
+#: lib/dran_web/components/page_list_components.ex:133
 #, elixir-autogen, elixir-format
 msgid "New"
 msgstr "Nuevo"
@@ -290,8 +285,8 @@ msgstr "Nuevo"
 msgid "No activity recorded."
 msgstr "Sin actividad registrada."
 
-#: lib/dran_web/live/goal_live.ex:432
-#: lib/dran_web/live/smart_collection_live.ex:398
+#: lib/dran_web/live/goal_live.ex:433
+#: lib/dran_web/live/smart_collection_live.ex:399
 #, elixir-autogen, elixir-format
 msgid "No context available."
 msgstr "No hay contexto disponible."
@@ -306,13 +301,13 @@ msgstr "Aún no hay páginas"
 msgid "No version history yet."
 msgstr "Aún no hay historial de versiones."
 
-#: lib/dran_web/components/layouts.ex:328
-#: lib/dran_web/page_types.ex:121
+#: lib/dran/page_registry.ex:412
 #, elixir-autogen, elixir-format
 msgid "Notes"
 msgstr "Notas"
 
 #: lib/dran_web/components/page_components.ex:951
+#: lib/dran_web/components/page_components.ex:1089
 #: lib/dran_web/live/smart_collection_live.ex:205
 #, elixir-autogen, elixir-format
 msgid "One-line description"
@@ -324,37 +319,34 @@ msgstr "Descripción de una línea"
 msgid "Owner"
 msgstr "Propietario"
 
-#: lib/dran_web/components/layouts.ex:382
-#, elixir-autogen, elixir-format
-msgid "Planning"
-msgstr "Planificación"
-
-#: lib/dran_web/components/layouts.ex:349
-#: lib/dran_web/live/home_live.ex:807
-#: lib/dran_web/page_types.ex:124
+#: lib/dran/page_registry.ex:415
+#: lib/dran_web/live/home_live.ex:810
 #, elixir-autogen, elixir-format
 msgid "References"
 msgstr "Referencias"
 
-#: lib/dran_web/live/home_live.ex:804
+#: lib/dran_web/live/home_live.ex:807
 #, elixir-autogen, elixir-format
 msgid "Relations"
 msgstr "Relaciones"
 
 #: lib/dran_web/live/admin_models_live.ex:313
 #: lib/dran_web/live/goal_live.ex:190
-#: lib/dran_web/live/workspace_settings_live.ex:359
+#: lib/dran_web/live/settings_live.ex:331
+#: lib/dran_web/live/workspace_settings_live.ex:385
+#: lib/dran_web/live/workspace_settings_live.ex:478
+#: lib/dran_web/live/workspace_settings_live.ex:597
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
 msgid "Save"
 msgstr "Guardar"
 
-#: lib/dran_web/components/page_list_components.ex:105
+#: lib/dran_web/components/page_list_components.ex:109
 #, elixir-autogen, elixir-format
 msgid "Save as Smart Collection"
 msgstr "Guardar como colección inteligente"
 
-#: lib/dran_web/components/page_list_components.ex:103
+#: lib/dran_web/components/page_list_components.ex:107
 #, elixir-autogen, elixir-format
 msgid "Save as smart collection"
 msgstr "Guardar como colección inteligente"
@@ -371,46 +363,49 @@ msgstr "Buscar..."
 msgid "Slug"
 msgstr "Slug"
 
-#: lib/dran/page_meta.ex:227
+#: lib/dran/page_registry.ex:343
 #: lib/dran_web/components/page_components.ex:950
+#: lib/dran_web/components/page_components.ex:1088
 #, elixir-autogen, elixir-format
 msgid "Summary"
 msgstr "Resumen"
 
-#: lib/dran_web/components/markdown_editor_components.ex:486
+#: lib/dran_web/components/markdown_editor_components.ex:709
 #: lib/dran_web/components/page_components.ex:959
+#: lib/dran_web/components/page_components.ex:1095
 #, elixir-autogen, elixir-format
 msgid "Tags"
 msgstr "Etiquetas"
 
-#: lib/dran_web/live/home_live.ex:1366
-#: lib/dran_web/live/smart_collection_live.ex:282
+#: lib/dran_web/live/home_live.ex:1372
+#: lib/dran_web/live/smart_collection_live.ex:283
 #, elixir-autogen, elixir-format
 msgid "This Week"
 msgstr "Esta semana"
 
 #: lib/dran_web/components/page_components.ex:1006
+#: lib/dran_web/components/page_components.ex:1079
 #: lib/dran_web/live/goal_live.ex:126
 #: lib/dran_web/live/goal_live.ex:214
 #, elixir-autogen, elixir-format
 msgid "Title"
 msgstr "Título"
 
-#: lib/dran_web/live/home_live.ex:1367
-#: lib/dran_web/live/smart_collection_live.ex:283
+#: lib/dran_web/live/home_live.ex:1373
+#: lib/dran_web/live/smart_collection_live.ex:284
 #, elixir-autogen, elixir-format
 msgid "Today"
 msgstr "Hoy"
 
 #: lib/dran_web/components/page_components.ex:257
-#: lib/dran_web/live/docs_live.ex:1204
-#: lib/dran_web/live/docs_live.ex:1698
+#: lib/dran_web/live/docs_live.ex:1236
+#: lib/dran_web/live/docs_live.ex:1717
 #, elixir-autogen, elixir-format
 msgid "Type"
 msgstr "Tipo"
 
 #: lib/dran_web/components/page_components.ex:112
-#: lib/dran_web/live/activity_live.ex:236
+#: lib/dran_web/live/activity_live.ex:237
 #, elixir-autogen, elixir-format
 msgid "Updated"
 msgstr "Actualizado"
@@ -425,8 +420,8 @@ msgstr "Actualizado por"
 msgid "Version"
 msgstr "Versión"
 
-#: lib/dran_web/live/dashboard_live.ex:462
-#: lib/dran_web/live/pages_live.ex:82
+#: lib/dran_web/live/dashboard_live.ex:393
+#: lib/dran_web/live/pages_live.ex:84
 #, elixir-autogen, elixir-format
 msgid "pages"
 msgstr "páginas"
@@ -441,6 +436,7 @@ msgstr "sistema"
 msgid "v%{version} — %{date} by %{author}"
 msgstr "v%{version} — %{date} por %{author}"
 
+#: lib/dran_web/components/page_components.ex:1132
 #: lib/dran_web/components/page_list_components.ex:40
 #, elixir-autogen, elixir-format
 msgid "Add Reference"
@@ -456,11 +452,13 @@ msgstr "Añade elementos accionables y muévelos por el tablero."
 msgid "Capture your first thought, idea or journal entry."
 msgstr "Captura tu primer pensamiento, idea o entrada de diario."
 
+#: lib/dran_web/components/page_components.ex:1130
 #: lib/dran_web/components/page_list_components.ex:25
 #, elixir-autogen, elixir-format
 msgid "Create Concept"
 msgstr "Crear concepto"
 
+#: lib/dran_web/components/page_components.ex:1131
 #: lib/dran_web/components/page_list_components.ex:30
 #, elixir-autogen, elixir-format
 msgid "Create Entity"
@@ -472,6 +470,7 @@ msgstr "Crear entidad"
 msgid "Create Goal"
 msgstr "Crear objetivo"
 
+#: lib/dran_web/components/page_components.ex:1129
 #: lib/dran_web/components/page_list_components.ex:20
 #, elixir-autogen, elixir-format
 msgid "Create Note"
@@ -552,42 +551,43 @@ msgstr "Registra personas, empresas, herramientas y lugares relevantes."
 msgid "Your second brain is empty. Capture your first page."
 msgstr "Tu segundo cerebro está vacío. Captura tu primera página."
 
-#: lib/dran_web/live/activity_live.ex:331
+#: lib/dran_web/live/activity_live.ex:332
 #: lib/dran_web/live/admin_jobs_live.ex:267
 #, elixir-autogen, elixir-format
 msgid "%{n}d ago"
 msgstr "hace %{n}d"
 
-#: lib/dran_web/live/activity_live.ex:328
+#: lib/dran_web/live/activity_live.ex:329
 #: lib/dran_web/live/admin_jobs_live.ex:264
 #, elixir-autogen, elixir-format
 msgid "%{n}h ago"
 msgstr "hace %{n}h"
 
-#: lib/dran_web/live/activity_live.ex:325
+#: lib/dran_web/live/activity_live.ex:326
 #: lib/dran_web/live/admin_jobs_live.ex:261
 #, elixir-autogen, elixir-format
 msgid "%{n}m ago"
 msgstr "hace %{n}m"
 
-#: lib/dran_web/live/activity_live.ex:337
+#: lib/dran_web/live/activity_live.ex:338
 #: lib/dran_web/live/admin_jobs_live.ex:273
 #, elixir-autogen, elixir-format
 msgid "%{n}mo ago"
 msgstr "hace %{n}m"
 
-#: lib/dran_web/live/activity_live.ex:334
+#: lib/dran_web/live/activity_live.ex:335
 #: lib/dran_web/live/admin_jobs_live.ex:270
 #, elixir-autogen, elixir-format
 msgid "%{n}w ago"
 msgstr "hace %{n}sem"
 
-#: lib/dran_web/live/workspace_settings_live.ex:260
+#: lib/dran_web/live/workspace_settings_live.ex:135
+#: lib/dran_web/live/workspace_settings_live.ex:498
 #, elixir-autogen, elixir-format
 msgid "Brain tuning"
 msgstr "Ajuste del cerebro"
 
-#: lib/dran_web/live/search_live.ex:284
+#: lib/dran_web/live/search_live.ex:285
 #, elixir-autogen, elixir-format
 msgid "Check the spelling or try a different strategy above."
 msgstr "Revisa la ortografía o prueba una estrategia diferente arriba."
@@ -597,7 +597,7 @@ msgstr "Revisa la ortografía o prueba una estrategia diferente arriba."
 msgid "Command palette"
 msgstr "Paleta de comandos"
 
-#: lib/dran_web/live/activity_live.ex:237
+#: lib/dran_web/live/activity_live.ex:238
 #, elixir-autogen, elixir-format
 msgid "Deleted"
 msgstr "Eliminado"
@@ -612,7 +612,7 @@ msgstr "Enlazado desde"
 msgid "Links to"
 msgstr "Enlaza a"
 
-#: lib/dran_web/live/activity_live.ex:103
+#: lib/dran_web/live/activity_live.ex:104
 #: lib/dran_web/live/smart_collection_live.ex:131
 #, elixir-autogen, elixir-format
 msgid "Live"
@@ -628,7 +628,7 @@ msgstr "Aún no hay enlaces entrantes"
 msgid "No results"
 msgstr "Sin resultados"
 
-#: lib/dran_web/live/search_live.ex:282
+#: lib/dran_web/live/search_live.ex:283
 #, elixir-autogen, elixir-format
 msgid "No results for '%{query}'"
 msgstr "Sin resultados para '%{query}'"
@@ -638,7 +638,7 @@ msgstr "Sin resultados para '%{query}'"
 msgid "Quick actions"
 msgstr "Acciones rápidas"
 
-#: lib/dran_web/live/activity_live.ex:98
+#: lib/dran_web/live/activity_live.ex:99
 #, elixir-autogen, elixir-format
 msgid "Recent changes in %{name}"
 msgstr "Cambios recientes en %{name}"
@@ -649,29 +649,29 @@ msgid "Search pages, actions..."
 msgstr "Buscar páginas, acciones..."
 
 #: lib/dran_web/live/admin_models_live.ex:102
-#: lib/dran_web/live/workspace_settings_live.ex:157
+#: lib/dran_web/live/workspace_settings_live.ex:248
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
 msgid "Settings saved"
 msgstr "Ajustes guardados"
 
-#: lib/dran_web/live/activity_live.ex:322
+#: lib/dran_web/live/activity_live.ex:323
 #: lib/dran_web/live/admin_jobs_live.ex:258
 #, elixir-autogen, elixir-format
 msgid "just now"
 msgstr "justo ahora"
 
-#: lib/dran_web/live/activity_live.ex:206
+#: lib/dran_web/live/activity_live.ex:207
 #, elixir-autogen, elixir-format
 msgid "this context"
 msgstr "este contexto"
 
-#: lib/dran_web/live/activity_live.ex:273
+#: lib/dran_web/live/activity_live.ex:274
 #, elixir-autogen, elixir-format
 msgid "type: %{type}"
 msgstr "tipo: %{type}"
 
-#: lib/dran_web/live/activity_live.ex:277
+#: lib/dran_web/live/activity_live.ex:278
 #, elixir-autogen, elixir-format
 msgid "v%{version}"
 msgstr "v%{version}"
@@ -681,7 +681,7 @@ msgstr "v%{version}"
 msgid "Create your first collection"
 msgstr "Crea tu primera colección"
 
-#: lib/dran_web/live/dashboard_live.ex:165
+#: lib/dran_web/live/dashboard_live.ex:155
 #: lib/dran_web/live/goal_live.ex:241
 #: lib/dran_web/live/smart_collection_live.ex:253
 #, elixir-autogen, elixir-format
@@ -698,7 +698,7 @@ msgstr "Ninguna página coincide con los filtros de esta colección."
 msgid "No smart collections yet."
 msgstr "Aún no hay colecciones inteligentes."
 
-#: lib/dran/page_meta.ex:214
+#: lib/dran/page_registry.ex:332
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
 msgid "Question"
@@ -714,7 +714,7 @@ msgstr "Guardar colección"
 msgid "Save a set of filters from search or any page list to create one."
 msgstr "Guarda un conjunto de filtros desde la búsqueda o cualquier lista de páginas para crear una."
 
-#: lib/dran/page_meta.ex:282
+#: lib/dran/page_registry.ex:394
 #: lib/dran_web/live/docs_live.ex:22
 #, elixir-autogen, elixir-format
 msgid "API"
@@ -730,8 +730,8 @@ msgstr "Clave API"
 msgid "API URL"
 msgstr "URL de API"
 
-#: lib/dran_web/live/activity_live.ex:240
 #: lib/dran_web/live/activity_live.ex:241
+#: lib/dran_web/live/activity_live.ex:242
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
 msgid "Agent"
@@ -748,13 +748,13 @@ msgid "Chat model"
 msgstr "Modelo de chat"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:246
-#: lib/dran_web/live/docs_live.ex:663
+#: lib/dran_web/live/docs_live.ex:695
 #, elixir-autogen, elixir-format
 msgid "Default"
 msgstr "Predeterminado"
 
-#: lib/dran_web/live/docs_live.ex:879
-#: lib/dran_web/live/docs_live.ex:1700
+#: lib/dran_web/live/docs_live.ex:911
+#: lib/dran_web/live/docs_live.ex:1719
 #: lib/dran_web/live/goal_live.ex:131
 #: lib/dran_web/live/goal_live.ex:218
 #: lib/dran_web/live/smart_collection_live.ex:203
@@ -773,12 +773,12 @@ msgstr "Directorio"
 msgid "Disabled"
 msgstr "Desactivado"
 
-#: lib/dran_web/live/docs_live.ex:140
+#: lib/dran_web/live/docs_live.ex:172
 #, elixir-autogen, elixir-format
 msgid "Docs · %{tab}"
 msgstr "Documentación · %{tab}"
 
-#: lib/dran_web/live/home_live.ex:979
+#: lib/dran_web/live/home_live.ex:982
 #, elixir-autogen, elixir-format
 msgid "Edges"
 msgstr "Aristas"
@@ -813,7 +813,7 @@ msgstr "Almacenamiento de archivos adjuntos"
 msgid "Inference API"
 msgstr "API de inferencia"
 
-#: lib/dran_web/live/docs_live.ex:1207
+#: lib/dran_web/live/docs_live.ex:1239
 #, elixir-autogen, elixir-format
 msgid "Key meta fields"
 msgstr "Campos meta clave"
@@ -824,7 +824,7 @@ msgid "LLM, embeddings, and reranking"
 msgstr "LLM, embeddings y reranking"
 
 #: lib/dran_web/live/docs_live.ex:23
-#: lib/dran_web/live/docs_live.ex:306
+#: lib/dran_web/live/docs_live.ex:338
 #, elixir-autogen, elixir-format
 msgid "MCP"
 msgstr "MCP"
@@ -840,12 +840,12 @@ msgstr "Tamaño máximo de archivo"
 msgid "Max steps"
 msgstr "Pasos máximos"
 
-#: lib/dran_web/live/home_live.ex:975
+#: lib/dran_web/live/home_live.ex:978
 #, elixir-autogen, elixir-format
 msgid "Nodes"
 msgstr "Nodos"
 
-#: lib/dran_web/live/docs_live.ex:1697
+#: lib/dran_web/live/docs_live.ex:1716
 #, elixir-autogen, elixir-format
 msgid "Parameter"
 msgstr "Parámetro"
@@ -855,8 +855,8 @@ msgstr "Parámetro"
 msgid "Per-step timeout"
 msgstr "Tiempo límite por paso"
 
-#: lib/dran_web/live/docs_live.ex:664
-#: lib/dran_web/live/docs_live.ex:1205
+#: lib/dran_web/live/docs_live.ex:696
+#: lib/dran_web/live/docs_live.ex:1237
 #, elixir-autogen, elixir-format
 msgid "Purpose"
 msgstr "Propósito"
@@ -866,7 +866,7 @@ msgstr "Propósito"
 msgid "Request timeout"
 msgstr "Tiempo límite de petición"
 
-#: lib/dran_web/live/docs_live.ex:1699
+#: lib/dran_web/live/docs_live.ex:1718
 #, elixir-autogen, elixir-format
 msgid "Required"
 msgstr "Requerido"
@@ -882,29 +882,33 @@ msgid "Rerank model"
 msgstr "Modelo de rerank"
 
 #: lib/dran_web/live/admin_models_live.ex:310
-#: lib/dran_web/live/workspace_settings_live.ex:356
+#: lib/dran_web/live/settings_live.ex:329
+#: lib/dran_web/live/settings_live.ex:363
+#: lib/dran_web/live/workspace_settings_live.ex:382
+#: lib/dran_web/live/workspace_settings_live.ex:475
+#: lib/dran_web/live/workspace_settings_live.ex:594
 #, elixir-autogen, elixir-format
 msgid "Saving…"
 msgstr "Guardando…"
 
 #: lib/dran_web/live/admin_system_live.ex:72
 #: lib/dran_web/live/goal_live.ex:151
-#: lib/dran_web/live/settings_live.ex:312
+#: lib/dran_web/live/settings_live.ex:538
 #, elixir-autogen, elixir-format
 msgid "Status"
 msgstr "Estado"
 
-#: lib/dran_web/live/docs_live.ex:1206
+#: lib/dran_web/live/docs_live.ex:1238
 #, elixir-autogen, elixir-format
 msgid "Subtypes (meta.kind)"
 msgstr "Subtipos (meta.kind)"
 
-#: lib/dran_web/live/home_live.ex:972
+#: lib/dran_web/live/home_live.ex:975
 #, elixir-autogen, elixir-format
 msgid "Totals"
 msgstr "Totales"
 
-#: lib/dran_web/live/home_live.ex:945
+#: lib/dran_web/live/home_live.ex:948
 #, elixir-autogen, elixir-format
 msgid "Types"
 msgstr "Tipos"
@@ -915,7 +919,7 @@ msgstr "Tipos"
 msgid "Uploads"
 msgstr "Subidas"
 
-#: lib/dran_web/live/docs_live.ex:662
+#: lib/dran_web/live/docs_live.ex:694
 #, elixir-autogen, elixir-format
 msgid "Variable"
 msgstr "Variable"
@@ -931,13 +935,13 @@ msgstr "caracteres"
 msgid "ms"
 msgstr "ms"
 
-#: lib/dran_web/live/docs_live.ex:210
-#: lib/dran_web/live/settings_live.ex:288
+#: lib/dran_web/live/docs_live.ex:242
+#: lib/dran_web/live/settings_live.ex:514
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr "Copiar"
 
-#: lib/dran_web/live/docs_live.ex:878
+#: lib/dran_web/live/docs_live.ex:910
 #, elixir-autogen, elixir-format
 msgid "Endpoint"
 msgstr "Endpoint"
@@ -948,18 +952,18 @@ msgid "Getting started"
 msgstr "Comenzando"
 
 #: lib/dran_web/live/docs_live.ex:21
-#: lib/dran_web/live/docs_live.ex:294
+#: lib/dran_web/live/docs_live.ex:326
 #, elixir-autogen, elixir-format
 msgid "Guides"
 msgstr "Guías"
 
-#: lib/dran/page_meta.ex:258
-#: lib/dran_web/live/docs_live.ex:877
+#: lib/dran/page_registry.ex:372
+#: lib/dran_web/live/docs_live.ex:909
 #, elixir-autogen, elixir-format
 msgid "Method"
 msgstr "Método"
 
-#: lib/dran_web/live/docs_live.ex:156
+#: lib/dran_web/live/docs_live.ex:188
 #, elixir-autogen, elixir-format
 msgid "On this page"
 msgstr "En esta página"
@@ -974,11 +978,10 @@ msgstr "Crear proyecto"
 msgid "Group goals, plans and todos under a shared initiative."
 msgstr "Agrupa objetivos, planes y tareas bajo una iniciativa compartida."
 
-#: lib/dran_web/components/layouts.ex:267
-#: lib/dran_web/components/layouts.ex:841
-#: lib/dran_web/live/home_live.ex:1036
-#: lib/dran_web/live/home_live.ex:1041
-#: lib/dran_web/live/workspace_settings_live.ex:431
+#: lib/dran_web/components/layouts.ex:341
+#: lib/dran_web/live/home_live.ex:1039
+#: lib/dran_web/live/home_live.ex:1044
+#: lib/dran_web/live/workspace_settings_live.ex:851
 #, elixir-autogen, elixir-format
 msgid "Kanban"
 msgstr "Kanban"
@@ -988,30 +991,25 @@ msgstr "Kanban"
 msgid "No projects yet"
 msgstr "Aún no hay proyectos"
 
-#: lib/dran_web/components/layouts.ex:313
-#, elixir-autogen, elixir-format
-msgid "Projects"
-msgstr "Proyectos"
-
-#: lib/dran_web/live/search_live.ex:184
-#: lib/dran_web/live/search_live.ex:221
+#: lib/dran_web/live/search_live.ex:185
+#: lib/dran_web/live/search_live.ex:222
 #, elixir-autogen, elixir-format
 msgid "%{count} results for '%{query}'"
 msgstr "%{count} resultados para '%{query}'"
 
-#: lib/dran_web/live/activity_live.ex:134
+#: lib/dran_web/live/activity_live.ex:135
 #, elixir-autogen, elixir-format
 msgid "Activity timeline"
 msgstr "Cronología de actividad"
 
-#: lib/dran_web/live/workspace_settings_live.ex:277
+#: lib/dran_web/live/workspace_settings_live.ex:515
 #, elixir-autogen, elixir-format
 msgid "Agent limits"
 msgstr "Límites del agente"
 
 #: lib/dran_web/components/page_components.ex:134
-#: lib/dran_web/components/page_components.ex:1095
-#: lib/dran_web/components/page_list_components.ex:306
+#: lib/dran_web/components/page_components.ex:1203
+#: lib/dran_web/components/page_list_components.ex:319
 #, elixir-autogen, elixir-format
 msgid "Archive"
 msgstr "Archivar"
@@ -1022,71 +1020,71 @@ msgid "Archive this page? It will be hidden from lists."
 msgstr "¿Archivar esta página? Se ocultará de las listas."
 
 #: lib/dran_web/components/page_components.ex:88
-#: lib/dran_web/components/page_list_components.ex:123
-#: lib/dran_web/components/page_list_components.ex:137
-#: lib/dran_web/live/activity_live.ex:238
+#: lib/dran_web/components/page_list_components.ex:127
+#: lib/dran_web/components/page_list_components.ex:144
+#: lib/dran_web/live/activity_live.ex:239
 #, elixir-autogen, elixir-format
 msgid "Archived"
 msgstr "Archivada"
 
-#: lib/dran_web/page_edit.ex:275
+#: lib/dran_web/page_edit.ex:280
 #, elixir-autogen, elixir-format
 msgid "Cannot archive: no page loaded."
 msgstr "No se puede archivar: no hay página cargada."
 
-#: lib/dran_web/page_edit.ex:321
+#: lib/dran_web/page_edit.ex:326
 #, elixir-autogen, elixir-format
 msgid "Cannot unarchive: no page loaded."
 msgstr "No se puede desarchivar: no hay página cargada."
 
-#: lib/dran_web/live/search_live.ex:444
+#: lib/dran_web/live/search_live.ex:445
 #, elixir-autogen, elixir-format
 msgid "Concepts about AI"
 msgstr "Conceptos sobre IA"
 
-#: lib/dran_web/page_edit.ex:256
-#: lib/dran_web/page_edit.ex:270
+#: lib/dran_web/page_edit.ex:261
+#: lib/dran_web/page_edit.ex:275
 #, elixir-autogen, elixir-format
 msgid "Could not archive page."
 msgstr "No se pudo archivar la página."
 
-#: lib/dran_web/page_edit.ex:302
-#: lib/dran_web/page_edit.ex:316
+#: lib/dran_web/page_edit.ex:307
+#: lib/dran_web/page_edit.ex:321
 #, elixir-autogen, elixir-format
 msgid "Could not unarchive page."
 msgstr "No se pudo desarchivar la página."
 
-#: lib/dran_web/live/activity_live.ex:79
+#: lib/dran_web/live/activity_live.ex:80
 #, elixir-autogen, elixir-format
 msgid "Create or edit a page to see it here."
 msgstr "Crea o edita una página para verla aquí."
 
-#: lib/dran_web/live/home_live.ex:1075
+#: lib/dran_web/live/home_live.ex:1078
 #, elixir-autogen, elixir-format
 msgid "Empty"
 msgstr "Vacío"
 
-#: lib/dran_web/live/search_live.ex:235
+#: lib/dran_web/live/search_live.ex:236
 #, elixir-autogen, elixir-format
 msgid "Find pages, concepts, and notes by content, tags, or meaning."
 msgstr "Encuentra páginas, conceptos y notas por contenido, etiquetas o significado."
 
-#: lib/dran_web/live/dashboard_live.ex:505
+#: lib/dran_web/live/dashboard_live.ex:436
 #, elixir-autogen, elixir-format
 msgid "Good afternoon"
 msgstr "Buenas tardes"
 
-#: lib/dran_web/live/dashboard_live.ex:506
+#: lib/dran_web/live/dashboard_live.ex:437
 #, elixir-autogen, elixir-format
 msgid "Good evening"
 msgstr "Buenas noches"
 
-#: lib/dran_web/live/dashboard_live.ex:504
+#: lib/dran_web/live/dashboard_live.ex:435
 #, elixir-autogen, elixir-format
 msgid "Good morning"
 msgstr "Buenos días"
 
-#: lib/dran_web/live/dashboard_live.ex:503
+#: lib/dran_web/live/dashboard_live.ex:434
 #, elixir-autogen, elixir-format
 msgid "Good night"
 msgstr "Buenas noches"
@@ -1096,59 +1094,61 @@ msgstr "Buenas noches"
 msgid "Hide this page from lists without deleting it"
 msgstr "Oculta esta página de las listas sin eliminarla"
 
-#: lib/dran_web/live/workspace_settings_live.ex:340
+#: lib/dran_web/live/workspace_settings_live.ex:578
 #, elixir-autogen, elixir-format
 msgid "Long"
 msgstr "Largo"
 
-#: lib/dran_web/live/workspace_settings_live.ex:284
+#: lib/dran_web/live/workspace_settings_live.ex:522
 #, elixir-autogen, elixir-format
 msgid "Max pages per run"
 msgstr "Máximo de páginas por ejecución"
 
-#: lib/dran_web/live/search_live.ex:442
-#: lib/dran_web/live/search_live.ex:453
+#: lib/dran_web/live/search_live.ex:443
+#: lib/dran_web/live/search_live.ex:454
 #, elixir-autogen, elixir-format
 msgid "Meeting notes"
 msgstr "Notas de reunión"
 
-#: lib/dran_web/live/workspace_settings_live.ex:334
+#: lib/dran_web/live/workspace_settings_live.ex:572
 #, elixir-autogen, elixir-format
 msgid "Mid"
 msgstr "Medio"
 
-#: lib/dran_web/live/dashboard_live.ex:147
-#: lib/dran_web/live/settings_live.ex:309
-#: lib/dran_web/live/settings_live.ex:448
+#: lib/dran_web/live/dashboard_live.ex:137
+#: lib/dran_web/live/settings_live.ex:323
+#: lib/dran_web/live/settings_live.ex:535
+#: lib/dran_web/live/settings_live.ex:674
 #: lib/dran_web/live/smart_collection_live.ex:183
+#: lib/dran_web/live/workspace_settings_live.ex:347
 #, elixir-autogen, elixir-format
 msgid "Name"
 msgstr "Nombre"
 
-#: lib/dran_web/live/activity_live.ex:78
+#: lib/dran_web/live/activity_live.ex:79
 #, elixir-autogen, elixir-format
 msgid "No activity yet"
 msgstr "Sin actividad registrada."
 
-#: lib/dran_web/live/search_live.ex:441
-#: lib/dran_web/live/search_live.ex:452
+#: lib/dran_web/live/search_live.ex:442
+#: lib/dran_web/live/search_live.ex:453
 #, elixir-autogen, elixir-format
 msgid "Notes about elixir"
 msgstr "Notas sobre elixir"
 
-#: lib/dran_web/page_edit.ex:253
-#: lib/dran_web/page_edit.ex:267
+#: lib/dran_web/page_edit.ex:258
+#: lib/dran_web/page_edit.ex:272
 #, elixir-autogen, elixir-format
 msgid "Page archived."
 msgstr "Página archivada."
 
-#: lib/dran_web/page_edit.ex:405
+#: lib/dran_web/page_edit.ex:410
 #, elixir-autogen, elixir-format
 msgid "Page created."
 msgstr "Página creada."
 
-#: lib/dran_web/page_edit.ex:299
-#: lib/dran_web/page_edit.ex:313
+#: lib/dran_web/page_edit.ex:304
+#: lib/dran_web/page_edit.ex:318
 #, elixir-autogen, elixir-format
 msgid "Page restored from archive."
 msgstr "Página restaurada del archivo."
@@ -1159,7 +1159,7 @@ msgstr "Página restaurada del archivo."
 msgid "Page sections"
 msgstr "Secciones de página"
 
-#: lib/dran_web/live/search_live.ex:240
+#: lib/dran_web/live/search_live.ex:241
 #, elixir-autogen, elixir-format
 msgid "Press"
 msgstr "Pulsa"
@@ -1169,54 +1169,54 @@ msgstr "Pulsa"
 msgid "Restore this page from the archive"
 msgstr "Restaura esta página del archivo"
 
-#: lib/dran_web/live/search_live.ex:233
+#: lib/dran_web/live/search_live.ex:234
 #, elixir-autogen, elixir-format
 msgid "Search your second brain"
 msgstr "Busca en tu segundo cerebro"
 
-#: lib/dran_web/live/workspace_settings_live.ex:321
+#: lib/dran_web/live/workspace_settings_live.ex:559
 #, elixir-autogen, elixir-format
 msgid "Semantic thresholds"
 msgstr "Umbrales semánticos"
 
-#: lib/dran_web/live/workspace_settings_live.ex:328
+#: lib/dran_web/live/workspace_settings_live.ex:566
 #, elixir-autogen, elixir-format
 msgid "Short"
 msgstr "Corto"
 
-#: lib/dran_web/live/search_live.ex:443
-#: lib/dran_web/live/search_live.ex:454
+#: lib/dran_web/live/search_live.ex:444
+#: lib/dran_web/live/search_live.ex:455
 #, elixir-autogen, elixir-format
 msgid "Tagged programming"
 msgstr "Etiquetadas como programming"
 
-#: lib/dran_web/live/search_live.ex:248
+#: lib/dran_web/live/search_live.ex:249
 #, elixir-autogen, elixir-format
 msgid "Try one of these:"
 msgstr "Prueba una de estas:"
 
-#: lib/dran_web/live/activity_live.ex:114
+#: lib/dran_web/live/activity_live.ex:115
 #, elixir-autogen, elixir-format
 msgid "Types:"
 msgstr "Tipos:"
 
 #: lib/dran_web/components/page_components.ex:125
-#: lib/dran_web/components/page_list_components.ex:188
+#: lib/dran_web/components/page_list_components.ex:195
 #, elixir-autogen, elixir-format
 msgid "Unarchive"
 msgstr "Desarchivar"
 
-#: lib/dran_web/live/activity_live.ex:239
+#: lib/dran_web/live/activity_live.ex:240
 #, elixir-autogen, elixir-format
 msgid "Unarchived"
 msgstr "Desarchivada"
 
-#: lib/dran_web/live/dashboard_live.ex:148
+#: lib/dran_web/live/dashboard_live.ex:138
 #, elixir-autogen, elixir-format
 msgid "e.g. Personal"
 msgstr "ej. Personal"
 
-#: lib/dran_web/live/search_live.ex:244
+#: lib/dran_web/live/search_live.ex:245
 #, elixir-autogen, elixir-format
 msgid "from anywhere to open the command palette."
 msgstr "desde cualquier sitio para abrir la paleta de comandos."
@@ -1231,22 +1231,22 @@ msgstr "esta página está oculta de las listas y los tableros."
 msgid "All pages"
 msgstr "Todas las páginas"
 
-#: lib/dran_web/live/smart_collection_live.ex:276
+#: lib/dran_web/live/smart_collection_live.ex:277
 #, elixir-autogen, elixir-format
 msgid "All types"
 msgstr "Todos los tipos"
 
-#: lib/dran_web/live/smart_collection_live.ex:280
+#: lib/dran_web/live/smart_collection_live.ex:281
 #, elixir-autogen, elixir-format
 msgid "Any status"
 msgstr "Cualquier estado"
 
-#: lib/dran_web/live/workspace_settings_live.ex:316
+#: lib/dran_web/live/workspace_settings_live.ex:554
 #, elixir-autogen, elixir-format
 msgid "Avanzado"
 msgstr "Avanzado"
 
-#: lib/dran_web/page_edit.ex:229
+#: lib/dran_web/page_edit.ex:234
 #, elixir-autogen, elixir-format
 msgid "Cannot delete: no page loaded."
 msgstr "No se puede eliminar: no hay página cargada."
@@ -1256,38 +1256,37 @@ msgstr "No se puede eliminar: no hay página cargada."
 msgid "Cannot edit: no page loaded."
 msgstr "No se puede editar: no hay página cargada."
 
-#: lib/dran_web/page_edit.ex:79
+#: lib/dran_web/page_edit.ex:80
 #, elixir-autogen, elixir-format
 msgid "Cannot suggest summary: no page loaded."
 msgstr "No se puede sugerir el resumen: no hay página cargada."
 
-#: lib/dran_web/page_edit.ex:87
+#: lib/dran_web/page_edit.ex:88
 #, elixir-autogen, elixir-format
 msgid "Cannot suggest tags: no page loaded."
 msgstr "No se pueden sugerir etiquetas: no hay página cargada."
 
-#: lib/dran_web/components/layouts.ex:363
-#: lib/dran_web/live/workspace_settings_live.ex:429
+#: lib/dran_web/live/workspace_settings_live.ex:849
 #, elixir-autogen, elixir-format
 msgid "Collections"
 msgstr "Colecciones"
 
-#: lib/dran_web/live/smart_collection_live.ex:439
+#: lib/dran_web/live/smart_collection_live.ex:440
 #, elixir-autogen, elixir-format
 msgid "Could not create collection. Slug may already exist."
 msgstr "No se pudo crear la colección. Es posible que el slug ya exista."
 
-#: lib/dran_web/live/smart_collection_live.ex:386
+#: lib/dran_web/live/smart_collection_live.ex:387
 #, elixir-autogen, elixir-format
 msgid "Could not delete collection."
 msgstr "No se pudo eliminar la colección."
 
-#: lib/dran_web/page_edit.ex:224
+#: lib/dran_web/page_edit.ex:229
 #, elixir-autogen, elixir-format
 msgid "Could not delete page."
 msgstr "No se pudo eliminar la página."
 
-#: lib/dran_web/page_edit.ex:588
+#: lib/dran_web/page_edit.ex:613
 #, elixir-autogen, elixir-format
 msgid "Could not suggest %{field}: %{reason}"
 msgstr "No se pudo sugerir %{field}: %{reason}"
@@ -1297,12 +1296,7 @@ msgstr "No se pudo sugerir %{field}: %{reason}"
 msgid "Delete this smart collection? The pages it references will not be affected."
 msgstr "¿Eliminar esta colección inteligente? Las páginas a las que hace referencia no se verán afectadas."
 
-#: lib/dran/page_meta.ex:273
-#, elixir-autogen, elixir-format
-msgid "File"
-msgstr "Archivo"
-
-#: lib/dran_web/page_edit.ex:539
+#: lib/dran_web/page_edit.ex:564
 #, elixir-autogen, elixir-format
 msgid "File too large (max %{max} bytes)."
 msgstr "Archivo demasiado grande (máx. %{max} bytes)."
@@ -1312,7 +1306,7 @@ msgstr "Archivo demasiado grande (máx. %{max} bytes)."
 msgid "Filters"
 msgstr "Filtros"
 
-#: lib/dran_web/page_edit.ex:584
+#: lib/dran_web/page_edit.ex:609
 #, elixir-autogen, elixir-format
 msgid "Inference is not configured."
 msgstr "La inferencia no está configurada."
@@ -1323,12 +1317,12 @@ msgid "New Collection"
 msgstr "Nueva colección"
 
 #: lib/dran_web/live/smart_collection_live.ex:172
-#: lib/dran_web/live/smart_collection_live.ex:357
+#: lib/dran_web/live/smart_collection_live.ex:358
 #, elixir-autogen, elixir-format
 msgid "New Smart Collection"
 msgstr "Nueva colección inteligente"
 
-#: lib/dran_web/page_edit.ex:134
+#: lib/dran_web/page_edit.ex:135
 #, elixir-autogen, elixir-format
 msgid "No context available for slug rename."
 msgstr "No hay contexto disponible para renombrar el slug."
@@ -1338,13 +1332,13 @@ msgstr "No hay contexto disponible para renombrar el slug."
 msgid "No filters — showing all pages in this context"
 msgstr "Sin filtros — mostrando todas las páginas de este contexto"
 
-#: lib/dran_web/live/workspace_settings_live.ex:416
-#: lib/dran_web/page_types.ex:117
+#: lib/dran/page_registry.ex:408
+#: lib/dran_web/live/workspace_settings_live.ex:836
 #, elixir-autogen, elixir-format
 msgid "Note"
 msgstr "Nota"
 
-#: lib/dran_web/page_edit.ex:220
+#: lib/dran_web/page_edit.ex:225
 #, elixir-autogen, elixir-format
 msgid "Page deleted."
 msgstr "Página eliminada."
@@ -1354,8 +1348,8 @@ msgstr "Página eliminada."
 msgid "Page type"
 msgstr "Tipo de página"
 
-#: lib/dran_web/live/workspace_settings_live.ex:419
-#: lib/dran_web/page_types.ex:120
+#: lib/dran/page_registry.ex:411
+#: lib/dran_web/live/workspace_settings_live.ex:839
 #, elixir-autogen, elixir-format
 msgid "Reference"
 msgstr "Referencia"
@@ -1365,23 +1359,23 @@ msgstr "Referencia"
 msgid "Save a set of filters as a live-updating collection."
 msgstr "Guarda un conjunto de filtros como colección que se actualiza en vivo."
 
-#: lib/dran_web/page_edit.ex:419
+#: lib/dran_web/page_edit.ex:426
 #, elixir-autogen, elixir-format
 msgid "Saved."
 msgstr "Guardado."
 
 #: lib/dran_web/live/smart_collection_live.ex:33
-#: lib/dran_web/live/smart_collection_live.ex:317
+#: lib/dran_web/live/smart_collection_live.ex:318
 #, elixir-autogen, elixir-format
 msgid "Smart Collections"
 msgstr "Colecciones inteligentes"
 
-#: lib/dran_web/live/smart_collection_live.ex:429
+#: lib/dran_web/live/smart_collection_live.ex:430
 #, elixir-autogen, elixir-format
 msgid "Smart collection created."
 msgstr "Colección inteligente creada."
 
-#: lib/dran_web/live/smart_collection_live.ex:382
+#: lib/dran_web/live/smart_collection_live.ex:383
 #, elixir-autogen, elixir-format
 msgid "Smart collection deleted."
 msgstr "Colección inteligente eliminada."
@@ -1396,7 +1390,7 @@ msgstr "Estado (kanban)"
 msgid "Tag"
 msgstr "Etiqueta"
 
-#: lib/dran_web/page_edit.ex:353
+#: lib/dran_web/page_edit.ex:358
 #, elixir-autogen, elixir-format
 msgid "Uploads are not configured."
 msgstr "Las subidas no están configuradas."
@@ -1416,17 +1410,17 @@ msgstr "cualquier propietario"
 msgid "any tag"
 msgstr "cualquier etiqueta"
 
-#: lib/dran_web/live/smart_collection_live.ex:494
+#: lib/dran_web/live/smart_collection_live.ex:495
 #, elixir-autogen, elixir-format
 msgid "created by"
 msgstr "creado por"
 
-#: lib/dran_web/live/smart_collection_live.ex:493
+#: lib/dran_web/live/smart_collection_live.ex:494
 #, elixir-autogen, elixir-format
 msgid "due after"
 msgstr "fecha límite"
 
-#: lib/dran_web/live/smart_collection_live.ex:492
+#: lib/dran_web/live/smart_collection_live.ex:493
 #, elixir-autogen, elixir-format
 msgid "due before"
 msgstr "vence antes del"
@@ -1436,7 +1430,7 @@ msgstr "vence antes del"
 msgid "e.g. Urgent Todos This Week"
 msgstr "ej. Tareas urgentes de esta semana"
 
-#: lib/dran_web/live/home_live.ex:869
+#: lib/dran_web/live/home_live.ex:872
 #: lib/dran_web/live/smart_collection_live.ex:128
 #, elixir-autogen, elixir-format
 msgid "page"
@@ -1444,104 +1438,104 @@ msgid_plural "pages"
 msgstr[0] "página"
 msgstr[1] "páginas"
 
-#: lib/dran/page_meta.ex:234
+#: lib/dran/page_registry.ex:349
 #, elixir-autogen, elixir-format
 msgid "Plan"
 msgstr "Plan"
 
-#: lib/dran/page_meta.ex:235
+#: lib/dran/page_registry.ex:350
 #, elixir-autogen, elixir-format
 msgid "Project"
 msgstr "Proyecto"
 
-#: lib/dran_web/live/workspace_settings_live.ex:417
-#: lib/dran_web/page_types.ex:118
+#: lib/dran/page_registry.ex:409
+#: lib/dran_web/live/workspace_settings_live.ex:837
 #, elixir-autogen, elixir-format
 msgid "Concept"
 msgstr "Concepto"
 
-#: lib/dran_web/live/workspace_settings_live.ex:418
-#: lib/dran_web/page_types.ex:119
+#: lib/dran/page_registry.ex:410
+#: lib/dran_web/live/workspace_settings_live.ex:838
 #, elixir-autogen, elixir-format
 msgid "Entity"
 msgstr "Entidad"
 
-#: lib/dran/page_meta.ex:233
+#: lib/dran/page_registry.ex:348
 #, elixir-autogen, elixir-format
 msgid "Todo"
 msgstr "Tarea"
 
-#: lib/dran_web/live/settings_live.ex:347
+#: lib/dran_web/live/settings_live.ex:573
 #, elixir-autogen, elixir-format
 msgid "Active"
 msgstr "Activo"
 
-#: lib/dran/page_meta.ex:265
+#: lib/dran/page_registry.ex:379
 #, elixir-autogen, elixir-format
 msgid "Article"
 msgstr "Artículo"
 
-#: lib/dran/page_meta.ex:151
+#: lib/dran/page_registry.ex:224
 #, elixir-autogen, elixir-format
 msgid "Author"
 msgstr "Autor"
 
-#: lib/dran/page_meta.ex:269
+#: lib/dran/page_registry.ex:383
 #, elixir-autogen, elixir-format
 msgid "Book"
 msgstr "Libro"
 
-#: lib/dran/page_meta.ex:221
+#: lib/dran/page_registry.ex:339
 #, elixir-autogen, elixir-format
 msgid "Code"
 msgstr "Código"
 
-#: lib/dran/page_meta.ex:238
+#: lib/dran/page_registry.ex:353
 #, elixir-autogen, elixir-format
 msgid "Company"
 msgstr "Empresa"
 
-#: lib/dran/page_meta.ex:150
+#: lib/dran/page_registry.ex:223
 #, elixir-autogen, elixir-format
 msgid "Date"
 msgstr "Fecha"
 
-#: lib/dran/page_meta.ex:272
+#: lib/dran/page_registry.ex:386
 #, elixir-autogen, elixir-format
 msgid "Deliverable"
 msgstr "Entregable"
 
-#: lib/dran/page_meta.ex:271
+#: lib/dran/page_registry.ex:385
 #, elixir-autogen, elixir-format
 msgid "Design"
 msgstr "Diseño"
 
-#: lib/dran/page_meta.ex:255
+#: lib/dran/page_registry.ex:369
 #, elixir-autogen, elixir-format
 msgid "Discipline"
 msgstr "Disciplina"
 
-#: lib/dran/page_meta.ex:270
+#: lib/dran/page_registry.ex:384
 #, elixir-autogen, elixir-format
 msgid "Document"
 msgstr "Documento"
 
-#: lib/dran/page_meta.ex:161
+#: lib/dran/page_registry.ex:233
 #, elixir-autogen, elixir-format
 msgid "Domain"
 msgstr "Dominio"
 
-#: lib/dran/page_meta.ex:229
+#: lib/dran/page_registry.ex:345
 #, elixir-autogen, elixir-format
 msgid "Draft"
 msgstr "Borrador"
 
-#: lib/dran/page_meta.ex:242
+#: lib/dran/page_registry.ex:357
 #, elixir-autogen, elixir-format
 msgid "Event"
 msgstr "Evento"
 
-#: lib/dran/page_meta.ex:172
+#: lib/dran/page_registry.ex:243
 #, elixir-autogen, elixir-format
 msgid "External URL"
 msgstr "URL externa"
@@ -1552,20 +1546,20 @@ msgstr "URL externa"
 msgid "Health"
 msgstr "Salud"
 
-#: lib/dran/page_meta.ex:212
+#: lib/dran/page_registry.ex:330
 #, elixir-autogen, elixir-format
 msgid "Idea"
 msgstr "Idea"
 
-#: lib/dran/page_meta.ex:211
+#: lib/dran/page_registry.ex:329
 #, elixir-autogen, elixir-format
 msgid "Journal"
 msgstr "Diario"
 
-#: lib/dran/page_meta.ex:146
-#: lib/dran/page_meta.ex:159
-#: lib/dran/page_meta.ex:169
-#: lib/dran/page_meta.ex:179
+#: lib/dran/page_registry.ex:220
+#: lib/dran/page_registry.ex:232
+#: lib/dran/page_registry.ex:241
+#: lib/dran/page_registry.ex:250
 #: lib/dran_web/live/goal_live.ex:76
 #: lib/dran_web/live/goal_live.ex:139
 #: lib/dran_web/live/goal_live.ex:222
@@ -1573,12 +1567,12 @@ msgstr "Diario"
 msgid "Kind"
 msgstr "Tipo"
 
-#: lib/dran/page_meta.ex:171
+#: lib/dran/page_registry.ex:242
 #, elixir-autogen, elixir-format
 msgid "Location"
 msgstr "Ubicación"
 
-#: lib/dran/page_meta.ex:213
+#: lib/dran/page_registry.ex:331
 #, elixir-autogen, elixir-format
 msgid "Meeting"
 msgstr "Reunión"
@@ -1596,52 +1590,52 @@ msgstr "Métrica"
 msgid "Ninguno"
 msgstr "Ninguno"
 
-#: lib/dran/page_meta.ex:266
+#: lib/dran/page_registry.ex:380
 #, elixir-autogen, elixir-format
 msgid "Paper"
 msgstr "Paper"
 
-#: lib/dran/page_meta.ex:162
+#: lib/dran/page_registry.ex:234
 #, elixir-autogen, elixir-format
 msgid "Parent concept"
 msgstr "Concepto padre"
 
-#: lib/dran/page_meta.ex:254
+#: lib/dran/page_registry.ex:368
 #, elixir-autogen, elixir-format
 msgid "Pattern"
 msgstr "Patrón"
 
-#: lib/dran/page_meta.ex:237
+#: lib/dran/page_registry.ex:352
 #, elixir-autogen, elixir-format
 msgid "Person"
 msgstr "Persona"
 
-#: lib/dran/page_meta.ex:241
+#: lib/dran/page_registry.ex:356
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr "Lugar"
 
-#: lib/dran/page_meta.ex:268
+#: lib/dran/page_registry.ex:382
 #, elixir-autogen, elixir-format
 msgid "Podcast"
 msgstr "Podcast"
 
-#: lib/dran/page_meta.ex:239
+#: lib/dran/page_registry.ex:354
 #, elixir-autogen, elixir-format
 msgid "Product"
 msgstr "Producto"
 
-#: lib/dran/page_meta.ex:182
+#: lib/dran/page_registry.ex:252
 #, elixir-autogen, elixir-format
 msgid "Published at"
 msgstr "Publicado el"
 
-#: lib/dran/page_meta.ex:215
+#: lib/dran/page_registry.ex:333
 #, elixir-autogen, elixir-format
 msgid "Quote"
 msgstr "Cita"
 
-#: lib/dran/page_meta.ex:216
+#: lib/dran/page_registry.ex:334
 #, elixir-autogen, elixir-format
 msgid "Reminder"
 msgstr "Recordatorio"
@@ -1661,27 +1655,27 @@ msgstr "Sin plan"
 msgid "Sin proyecto"
 msgstr "Sin proyecto"
 
-#: lib/dran/page_meta.ex:181
+#: lib/dran/page_registry.ex:251
 #, elixir-autogen, elixir-format
 msgid "Source URL"
 msgstr "URL de origen"
 
-#: lib/dran/page_meta.ex:253
+#: lib/dran/page_registry.ex:367
 #, elixir-autogen, elixir-format
 msgid "Technique"
 msgstr "Técnica"
 
-#: lib/dran/page_meta.ex:256
+#: lib/dran/page_registry.ex:370
 #, elixir-autogen, elixir-format
 msgid "Theory"
 msgstr "Teoría"
 
-#: lib/dran/page_meta.ex:210
+#: lib/dran/page_registry.ex:328
 #, elixir-autogen, elixir-format
 msgid "Thought"
 msgstr "Pensamiento"
 
-#: lib/dran/page_meta.ex:240
+#: lib/dran/page_registry.ex:355
 #, elixir-autogen, elixir-format
 msgid "Tool"
 msgstr "Herramienta"
@@ -1691,12 +1685,12 @@ msgstr "Herramienta"
 msgid "Unit"
 msgstr "Unidad"
 
-#: lib/dran/page_meta.ex:267
+#: lib/dran/page_registry.ex:381
 #, elixir-autogen, elixir-format
 msgid "Video"
 msgstr "Video"
 
-#: lib/dran_web/components/markdown_editor_components.ex:485
+#: lib/dran_web/components/markdown_editor_components.ex:708
 #, elixir-autogen, elixir-format
 msgid "Add tag…"
 msgstr "Agregar etiqueta…"
@@ -1706,7 +1700,7 @@ msgstr "Agregar etiqueta…"
 msgid "Read-only — loaded from environment variables at startup."
 msgstr "Solo lectura — cargado de variables de entorno al arrancar."
 
-#: lib/dran_web/components/markdown_editor_components.ex:503
+#: lib/dran_web/components/markdown_editor_components.ex:726
 #, elixir-autogen, elixir-format
 msgid "Remove tag %{tag}"
 msgstr "Quitar etiqueta %{tag}"
@@ -1904,11 +1898,6 @@ msgstr "Modelos"
 msgid "API Token"
 msgstr "API Token"
 
-#: lib/dran_web/components/layouts.ex:286
-#, elixir-autogen, elixir-format
-msgid "Actividad"
-msgstr "Actividad"
-
 #: lib/dran_web/live/admin_users_live.ex:29
 #: lib/dran_web/live/admin_users_live.ex:61
 #: lib/dran_web/live/admin_users_live.ex:228
@@ -1916,6 +1905,7 @@ msgstr "Actividad"
 msgid "Add User"
 msgstr "Agregar usuario"
 
+#: lib/dran_web/components/layouts.ex:458
 #: lib/dran_web/live/admin_live.ex:18
 #: lib/dran_web/live/admin_live.ex:37
 #: lib/dran_web/live/admin_users_live.ex:266
@@ -1945,17 +1935,17 @@ msgid "Could not delete context"
 msgstr "No se pudo eliminar el contexto."
 
 #: lib/dran_web/live/admin_workspaces_live.ex:180
-#: lib/dran_web/live/workspace_settings_live.ex:138
+#: lib/dran_web/live/workspace_settings_live.ex:229
 #, elixir-autogen, elixir-format
 msgid "Could not update page types"
 msgstr "No se pudieron actualizar los tipos de página."
 
-#: lib/dran_web/live/journey_live.ex:295
+#: lib/dran_web/live/journey_live.ex:296
 #, elixir-autogen, elixir-format
 msgid "Crea algunas páginas para ver la trayectoria de tu cerebro."
 msgstr "Crea algunas páginas para ver la trayectoria de tu cerebro."
 
-#: lib/dran_web/live/journey_live.ex:270
+#: lib/dran_web/live/journey_live.ex:271
 #, elixir-autogen, elixir-format
 msgid "Creadores:"
 msgstr "Creadores:"
@@ -1965,7 +1955,7 @@ msgstr "Creadores:"
 msgid "Create contexts and manage context access per user."
 msgstr "Crea contextos y administra el acceso a contextos por usuario."
 
-#: lib/dran_web/live/journey_live.ex:77
+#: lib/dran_web/live/journey_live.ex:78
 #, elixir-autogen, elixir-format
 msgid "Crecimiento de tu segundo cerebro en el tiempo"
 msgstr "Crecimiento de tu segundo cerebro en el tiempo"
@@ -1986,8 +1976,7 @@ msgstr "Los tipos deshabilitados se ocultan en la interfaz web y se rechazan en 
 msgid "Email"
 msgstr "Correo"
 
-#: lib/dran_web/components/layouts.ex:274
-#: lib/dran_web/components/layouts.ex:876
+#: lib/dran_web/components/layouts.ex:358
 #, elixir-autogen, elixir-format
 msgid "Grafo"
 msgstr "Grafo"
@@ -1997,8 +1986,8 @@ msgstr "Grafo"
 msgid "Links"
 msgstr "Enlaces"
 
-#: lib/dran_web/components/page_list_components.ex:208
-#: lib/dran_web/components/page_list_components.ex:250
+#: lib/dran_web/components/page_list_components.ex:215
+#: lib/dran_web/components/page_list_components.ex:262
 #, elixir-autogen, elixir-format
 msgid "Load more"
 msgstr "Cargar más"
@@ -2008,45 +1997,40 @@ msgstr "Cargar más"
 msgid "Models"
 msgstr "Modelos"
 
-#: lib/dran_web/components/page_list_components.ex:199
+#: lib/dran_web/components/page_list_components.ex:206
 #, elixir-autogen, elixir-format
 msgid "No archived pages"
 msgstr "No hay páginas archivadas"
 
-#: lib/dran_web/components/layouts.ex:306
-#: lib/dran_web/components/layouts.ex:860
+#: lib/dran_web/components/layouts.ex:337
 #, elixir-autogen, elixir-format
 msgid "Objetivos"
 msgstr "Objetivos"
 
-#: lib/dran_web/page_edit.ex:238
-#: lib/dran_web/page_edit.ex:284
+#: lib/dran_web/page_edit.ex:243
+#: lib/dran_web/page_edit.ex:289
 #, elixir-autogen, elixir-format
 msgid "Page not found."
 msgstr "Página no encontrada."
 
 #: lib/dran_web/live/admin_workspaces_live.ex:401
-#: lib/dran_web/live/workspace_settings_live.ex:179
+#: lib/dran_web/live/workspace_settings_live.ex:125
+#: lib/dran_web/live/workspace_settings_live.ex:404
 #, elixir-autogen, elixir-format
 msgid "Page types"
 msgstr "Tipos de página"
 
-#: lib/dran_web/live/journey_live.ex:102
+#: lib/dran_web/live/journey_live.ex:103
 #, elixir-autogen, elixir-format
 msgid "Período pico"
 msgstr "Período pico"
 
-#: lib/dran_web/components/layouts.ex:908
-#, elixir-autogen, elixir-format
-msgid "Planes"
-msgstr "Planes"
-
-#: lib/dran_web/live/journey_live.ex:109
+#: lib/dran_web/live/journey_live.ex:110
 #, elixir-autogen, elixir-format
 msgid "Páginas pico"
 msgstr "Páginas pico"
 
-#: lib/dran_web/live/journey_live.ex:293
+#: lib/dran_web/live/journey_live.ex:294
 #, elixir-autogen, elixir-format
 msgid "Sin páginas aún"
 msgstr "Sin páginas aún"
@@ -2056,18 +2040,13 @@ msgstr "Sin páginas aún"
 msgid "System"
 msgstr "Sistema"
 
-#: lib/dran_web/components/layouts.ex:919
-#, elixir-autogen, elixir-format
-msgid "Tareas"
-msgstr "Tareas"
-
 #: lib/dran_web/live/admin_workspaces_live.ex:297
-#: lib/dran_web/live/journey_live.ex:96
+#: lib/dran_web/live/journey_live.ex:97
 #, elixir-autogen, elixir-format
 msgid "Tipos"
 msgstr "Tipos"
 
-#: lib/dran_web/live/journey_live.ex:249
+#: lib/dran_web/live/journey_live.ex:250
 #, elixir-autogen, elixir-format
 msgid "Tipos:"
 msgstr "Tipos:"
@@ -2077,14 +2056,13 @@ msgstr "Tipos:"
 msgid "Toggle WYSIWYG / Markdown"
 msgstr "Alternar WYSIWYG / Markdown"
 
-#: lib/dran_web/live/journey_live.ex:90
+#: lib/dran_web/live/journey_live.ex:91
 #, elixir-autogen, elixir-format
 msgid "Total páginas"
 msgstr "Total de páginas"
 
-#: lib/dran_web/components/layouts.ex:280
-#: lib/dran_web/live/journey_live.ex:30
-#: lib/dran_web/live/journey_live.ex:75
+#: lib/dran_web/live/journey_live.ex:31
+#: lib/dran_web/live/journey_live.ex:76
 #, elixir-autogen, elixir-format
 msgid "Trayectoria"
 msgstr "Trayectoria"
@@ -2092,30 +2070,31 @@ msgstr "Trayectoria"
 #: lib/dran_web/live/admin_live.ex:47
 #: lib/dran_web/live/admin_users_live.ex:223
 #: lib/dran_web/live/admin_workspaces_live.ex:447
-#: lib/dran_web/live/dashboard_live.ex:316
+#: lib/dran_web/live/workspace_settings_live.ex:138
+#: lib/dran_web/live/workspace_settings_live.ex:619
 #, elixir-autogen, elixir-format
 msgid "Users"
 msgstr "Usuarios"
 
-#: lib/dran/page_meta.ex:249
-#: lib/dran_web/live/pages_live.ex:82
-#: lib/dran_web/live/community_live.ex:90
-#: lib/dran_web/live/community_live.ex:151
-#: lib/dran_web/live/community_live.ex:276
-#: lib/dran_web/live/community_live.ex:277
+#: lib/dran/page_registry.ex:364
+#: lib/dran_web/live/cluster_live.ex:90
+#: lib/dran_web/live/cluster_live.ex:151
+#: lib/dran_web/live/cluster_live.ex:277
+#: lib/dran_web/live/cluster_live.ex:278
+#: lib/dran_web/live/pages_live.ex:84
 #, elixir-autogen, elixir-format
 msgid "Cluster"
 msgstr "Cluster"
 
-#: lib/dran_web/live/pages_live.ex:79
+#: lib/dran_web/live/pages_live.ex:81
 #, elixir-autogen, elixir-format
 msgid "Cluster Context"
 msgstr "Contexto del cluster"
 
-#: lib/dran_web/components/page_components.ex:1089
+#: lib/dran_web/components/page_components.ex:1197
 #: lib/dran_web/live/admin_users_live.ex:330
 #: lib/dran_web/live/goal_live.ex:58
-#: lib/dran_web/live/pages_live.ex:62
+#: lib/dran_web/live/pages_live.ex:64
 #, elixir-autogen, elixir-format
 msgid "Edit"
 msgstr "Editar"
@@ -2125,105 +2104,101 @@ msgstr "Editar"
 msgid "Insights"
 msgstr "Perspectivas"
 
-#: lib/dran_web/live/pages_live.ex:91
+#: lib/dran_web/live/pages_live.ex:93
 #, elixir-autogen, elixir-format
 msgid "No cluster data yet. Run cluster summaries first."
 msgstr "Aún no hay datos de cluster. Ejecuta primero los resúmenes de cluster."
 
-#: lib/dran_web/live/search_live.ex:192
+#: lib/dran_web/live/search_live.ex:193
 #, elixir-autogen, elixir-format
 msgid "No results to graph. Try a different query."
 msgstr "No hay resultados para graficar. Prueba otra búsqueda."
 
-#: lib/dran_web/components/layouts.ex:488
-#: lib/dran_web/live/settings_live.ex:39
-#: lib/dran_web/live/settings_live.ex:235
+#: lib/dran_web/live/settings_live.ex:74
+#: lib/dran_web/live/settings_live.ex:79
+#: lib/dran_web/live/settings_live.ex:304
+#: lib/dran_web/live/settings_live.ex:461
 #, elixir-autogen, elixir-format
 msgid "API Keys"
 msgstr "Claves API"
 
-#: lib/dran_web/live/settings_live.ex:109
+#: lib/dran_web/live/settings_live.ex:140
 #, elixir-autogen, elixir-format
 msgid "API key created — copy it now, it won't be shown again"
 msgstr "API key creada — cópiala ahora, no se mostrará de nuevo"
 
-#: lib/dran_web/live/settings_live.ex:180
+#: lib/dran_web/live/settings_live.ex:211
 #, elixir-autogen, elixir-format
 msgid "API key deleted"
 msgstr "API key eliminada"
 
-#: lib/dran_web/live/settings_live.ex:167
+#: lib/dran_web/live/settings_live.ex:198
 #, elixir-autogen, elixir-format
 msgid "API key regenerated — copy the new token now"
 msgstr "API key regenerada — copia el nuevo token ahora"
 
-#: lib/dran_web/live/settings_live.ex:151
+#: lib/dran_web/live/settings_live.ex:182
 #, elixir-autogen, elixir-format
 msgid "API key restored"
 msgstr "API key restaurada"
 
-#: lib/dran_web/live/settings_live.ex:138
+#: lib/dran_web/live/settings_live.ex:169
 #, elixir-autogen, elixir-format
 msgid "API key revoked"
 msgstr "API key revocada"
 
-#: lib/dran/page_meta.ex:250
+#: lib/dran/page_registry.ex:365
 #, elixir-autogen, elixir-format
 msgid "Asset"
 msgstr "Activo"
 
-#: lib/dran/page_meta.ex:232
+#: lib/dran/page_registry.ex:347
 #, elixir-autogen, elixir-format
 msgid "Brainstorm"
 msgstr "Lluvia de ideas"
 
-#: lib/dran/page_meta.ex:251
-#, elixir-autogen, elixir-format
-msgid "Brand"
-msgstr "Marca"
-
-#: lib/dran/page_meta.ex:225
+#: lib/dran/page_registry.ex:342
 #, elixir-autogen, elixir-format
 msgid "Checklist"
 msgstr "Lista de verificación"
 
-#: lib/dran/page_meta.ex:220
+#: lib/dran/page_registry.ex:338
 #, elixir-autogen, elixir-format
 msgid "Comparison"
 msgstr "Comparación"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:511
-#: lib/dran_web/live/workspace_settings_live.ex:423
+#: lib/dran_web/live/workspace_settings_live.ex:843
 #, elixir-autogen, elixir-format
 msgid "Concepts, concepts list"
 msgstr "Conceptos, lista de conceptos"
 
-#: lib/dran_web/live/settings_live.ex:310
+#: lib/dran_web/live/settings_live.ex:536
 #, elixir-autogen, elixir-format
 msgid "Context"
 msgstr "Contexto"
 
-#: lib/dran_web/live/settings_live.ex:237
+#: lib/dran_web/live/settings_live.ex:463
 #, elixir-autogen, elixir-format
 msgid "Context-scoped keys for integrations and MCP clients. A key grants access to one context only — no user account needed."
 msgstr "Claves con ámbito de contexto para integraciones y clientes MCP. Una clave otorga acceso a un solo contexto — no se necesita cuenta de usuario."
 
-#: lib/dran/page_meta.ex:263
+#: lib/dran/page_registry.ex:377
 #, elixir-autogen, elixir-format
 msgid "Convention"
 msgstr "Convención"
 
-#: lib/dran_web/live/settings_live.ex:292
+#: lib/dran_web/live/settings_live.ex:518
 #, elixir-autogen, elixir-format
 msgid "Copied!"
 msgstr "¡Copiado!"
 
-#: lib/dran_web/live/settings_live.ex:261
+#: lib/dran_web/live/settings_live.ex:487
 #, elixir-autogen, elixir-format
 msgid "Copy your new API key now — it won't be shown again"
 msgstr "Copia tu nueva API key ahora — no se mostrará de nuevo"
 
-#: lib/dran_web/live/settings_live.ex:117
+#: lib/dran_web/live/settings_live.ex:148
 #, elixir-autogen, elixir-format
 msgid "Could not create the API key"
 msgstr "No se pudo crear la API key"
@@ -2233,27 +2208,27 @@ msgstr "No se pudo crear la API key"
 msgid "Could not update default context"
 msgstr "No se pudo actualizar el contexto por defecto."
 
-#: lib/dran/page_meta.ex:248
+#: lib/dran/page_registry.ex:363
 #, elixir-autogen, elixir-format
 msgid "Course"
 msgstr "Curso"
 
-#: lib/dran_web/live/settings_live.ex:442
+#: lib/dran_web/live/settings_live.ex:668
 #, elixir-autogen, elixir-format
 msgid "Create API Key"
 msgstr "Crear API Key"
 
-#: lib/dran_web/live/settings_live.ex:493
+#: lib/dran_web/live/settings_live.ex:722
 #, elixir-autogen, elixir-format
 msgid "Create Key"
 msgstr "Crear clave"
 
-#: lib/dran/page_meta.ex:224
+#: lib/dran/page_registry.ex:341
 #, elixir-autogen, elixir-format
 msgid "Debug"
 msgstr "Depurar"
 
-#: lib/dran/page_meta.ex:228
+#: lib/dran/page_registry.ex:344
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Decision"
 msgstr "Descripción"
@@ -2268,141 +2243,131 @@ msgstr "Contexto predeterminado"
 msgid "Default context updated"
 msgstr "Contexto predeterminado actualizado"
 
-#: lib/dran_web/live/settings_live.ex:420
+#: lib/dran_web/live/settings_live.ex:646
 #, elixir-autogen, elixir-format
 msgid "Delete this key permanently?"
 msgstr "¿Eliminar esta clave permanentemente?"
 
-#: lib/dran_web/live/settings_live.ex:267
+#: lib/dran_web/live/settings_live.ex:493
 #, elixir-autogen, elixir-format
 msgid "Dismiss"
 msgstr "Descartar"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:512
-#: lib/dran_web/live/workspace_settings_live.ex:424
+#: lib/dran_web/live/workspace_settings_live.ex:844
 #, elixir-autogen, elixir-format
 msgid "Entities, entities list"
 msgstr "Entidades, lista de entidades"
 
-#: lib/dran_web/live/settings_live.ex:302
+#: lib/dran_web/live/settings_live.ex:528
 #, elixir-autogen, elixir-format
 msgid "Existing Keys"
 msgstr "Claves existentes"
 
-#: lib/dran/page_meta.ex:217
+#: lib/dran/page_registry.ex:335
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Fleeting"
 msgstr "Reunión"
 
-#: lib/dran/page_meta.ex:277
+#: lib/dran/page_registry.ex:389
 #, elixir-autogen, elixir-format
 msgid "Forum"
 msgstr "Foro"
 
-#: lib/dran/page_meta.ex:244
+#: lib/dran/page_registry.ex:359
 #, elixir-autogen, elixir-format
 msgid "Framework"
 msgstr "Framework"
 
-#: lib/dran/page_meta.ex:283
+#: lib/dran/page_registry.ex:395
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Guide"
 msgstr "Guías"
 
-#: lib/dran/page_meta.ex:246
+#: lib/dran/page_registry.ex:361
 #, elixir-autogen, elixir-format
 msgid "Hardware"
 msgstr "Hardware"
 
-#: lib/dran/page_meta.ex:261
+#: lib/dran/page_registry.ex:375
 #, elixir-autogen, elixir-format
 msgid "Heuristic"
 msgstr "Heurística"
 
-#: lib/dran/page_meta.ex:284
+#: lib/dran/page_registry.ex:396
 #, elixir-autogen, elixir-format
 msgid "Interview"
 msgstr "Entrevista"
 
-#: lib/dran/page_meta.ex:148
-#: lib/dran/page_meta.ex:243
+#: lib/dran/page_registry.ex:221
+#: lib/dran/page_registry.ex:358
 #, elixir-autogen, elixir-format
 msgid "Language"
 msgstr "Idioma"
 
-#: lib/dran/page_meta.ex:260
+#: lib/dran/page_registry.ex:374
 #, elixir-autogen, elixir-format
 msgid "Law"
 msgstr "Derecho"
 
-#: lib/dran/page_meta.ex:231
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Log"
-msgstr "Largo"
-
-#: lib/dran/page_meta.ex:219
+#: lib/dran/page_registry.ex:337
 #, elixir-autogen, elixir-format
 msgid "Map of Content"
 msgstr "Mapa de contenido"
 
-#: lib/dran/page_meta.ex:259
+#: lib/dran/page_registry.ex:373
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Model"
 msgstr "Modelos"
 
-#: lib/dran/page_meta.ex:276
+#: lib/dran/page_registry.ex:388
 #, elixir-autogen, elixir-format
 msgid "Newsletter"
 msgstr "Newsletter"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:510
-#: lib/dran_web/live/workspace_settings_live.ex:422
+#: lib/dran_web/live/workspace_settings_live.ex:842
 #, elixir-autogen, elixir-format
 msgid "Notes, notes list"
 msgstr "Notas, lista de notas"
 
-#: lib/dran/page_meta.ex:226
-#, elixir-autogen, elixir-format
-msgid "Outline"
-msgstr "Esquema"
-
-#: lib/dran/page_meta.ex:218
+#: lib/dran/page_registry.ex:336
 #, elixir-autogen, elixir-format
 msgid "Permanent"
 msgstr "Permanente"
 
-#: lib/dran/page_meta.ex:257
+#: lib/dran/page_registry.ex:371
 #, elixir-autogen, elixir-format
 msgid "Principle"
 msgstr "Principio"
 
-#: lib/dran/page_meta.ex:247
+#: lib/dran/page_registry.ex:362
 #, elixir-autogen, elixir-format
 msgid "Protocol"
 msgstr "Protocolo"
 
-#: lib/dran/page_meta.ex:223
+#: lib/dran/page_registry.ex:340
 #, elixir-autogen, elixir-format
 msgid "Recipe"
 msgstr "Receta"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:513
-#: lib/dran_web/live/workspace_settings_live.ex:425
+#: lib/dran_web/live/workspace_settings_live.ex:845
 #, elixir-autogen, elixir-format
 msgid "References, references list"
 msgstr "Referencias, lista de referencias"
 
-#: lib/dran_web/live/settings_live.ex:412
+#: lib/dran_web/live/settings_live.ex:638
 #, elixir-autogen, elixir-format
 msgid "Regenerate"
 msgstr "Regenerar"
 
-#: lib/dran_web/live/settings_live.ex:407
+#: lib/dran_web/live/settings_live.ex:633
 #, elixir-autogen, elixir-format
 msgid "Regenerate this key? The current token stops working immediately and you'll get a new one."
 msgstr "¿Regenerar esta clave? El token actual deja de funcionar de inmediato y obtendrás uno nuevo."
 
-#: lib/dran/page_meta.ex:279
+#: lib/dran/page_registry.ex:391
 #, elixir-autogen, elixir-format
 msgid "Release"
 msgstr "Lanzamiento"
@@ -2412,77 +2377,67 @@ msgstr "Lanzamiento"
 msgid "Report"
 msgstr "Reporte"
 
-#: lib/dran/page_meta.ex:281
+#: lib/dran/page_registry.ex:393
 #, elixir-autogen, elixir-format
 msgid "Repository"
 msgstr "Repositorio"
 
-#: lib/dran_web/live/settings_live.ex:398
+#: lib/dran_web/live/settings_live.ex:624
 #, elixir-autogen, elixir-format
 msgid "Restore"
 msgstr "Restaurar"
 
-#: lib/dran_web/live/settings_live.ex:388
+#: lib/dran_web/live/settings_live.ex:614
 #, elixir-autogen, elixir-format
 msgid "Revoke"
 msgstr "Revocar"
 
-#: lib/dran_web/live/settings_live.ex:386
+#: lib/dran_web/live/settings_live.ex:612
 #, elixir-autogen, elixir-format
 msgid "Revoke this key? It will stop working immediately."
 msgstr "¿Revocar esta clave? Dejará de funcionar de inmediato."
 
-#: lib/dran_web/live/settings_live.ex:344
+#: lib/dran_web/live/settings_live.ex:570
 #, elixir-autogen, elixir-format
 msgid "Revoked"
 msgstr "Revocada"
 
-#: lib/dran/page_meta.ex:245
+#: lib/dran/page_registry.ex:360
 #, elixir-autogen, elixir-format
 msgid "Service"
 msgstr "Servicio"
 
-#: lib/dran/page_meta.ex:222
-#, elixir-autogen, elixir-format
-msgid "Snippet"
-msgstr "Fragmento"
-
-#: lib/dran/page_meta.ex:278
+#: lib/dran/page_registry.ex:390
 #, elixir-autogen, elixir-format
 msgid "Spec"
 msgstr "Especificación"
 
-#: lib/dran/page_meta.ex:262
+#: lib/dran/page_registry.ex:376
 #, elixir-autogen, elixir-format
 msgid "Strategy"
 msgstr "Estrategia"
 
-#: lib/dran/page_meta.ex:285
-#, elixir-autogen, elixir-format
-msgid "Talk"
-msgstr "Charla"
-
-#: lib/dran/page_meta.ex:230
+#: lib/dran/page_registry.ex:346
 #, elixir-autogen, elixir-format
 msgid "Template"
 msgstr "Plantilla"
 
-#: lib/dran_web/live/settings_live.ex:311
+#: lib/dran_web/live/settings_live.ex:537
 #, elixir-autogen, elixir-format
 msgid "Token"
 msgstr "Token"
 
-#: lib/dran/page_meta.ex:274
+#: lib/dran/page_registry.ex:387
 #, elixir-autogen, elixir-format
 msgid "Tweet"
 msgstr "Tweet"
 
-#: lib/dran/page_meta.ex:280
+#: lib/dran/page_registry.ex:392
 #, elixir-autogen, elixir-format
 msgid "Website"
 msgstr "Sitio web"
 
-#: lib/dran_web/live/settings_live.ex:450
+#: lib/dran_web/live/settings_live.ex:676
 #, elixir-autogen, elixir-format
 msgid "e.g. Hermes agent, backup script"
 msgstr "ej. agente Hermes, script de respaldo"
@@ -2492,15 +2447,15 @@ msgstr "ej. agente Hermes, script de respaldo"
 msgid "— Global default —"
 msgstr "— Predeterminado global —"
 
-#: lib/dran/page_meta.ex:153
-#: lib/dran/page_meta.ex:163
-#: lib/dran/page_meta.ex:173
-#: lib/dran/page_meta.ex:183
+#: lib/dran/page_registry.ex:226
+#: lib/dran/page_registry.ex:235
+#: lib/dran/page_registry.ex:244
+#: lib/dran/page_registry.ex:253
 #, elixir-autogen, elixir-format
 msgid "Custom properties"
 msgstr "Propiedades personalizadas"
 
-#: lib/dran_web/components/markdown_editor_components.ex:331
+#: lib/dran_web/components/markdown_editor_components.ex:321
 #, elixir-autogen, elixir-format
 msgid "Key-value custom metadata. Empty = none."
 msgstr "Metadatos personalizados clave-valor. Vacío = ninguno."
@@ -2526,7 +2481,7 @@ msgstr "Correr ahora"
 msgid "Corriendo…"
 msgstr "Corriendo…"
 
-#: lib/dran_web/live/home_live.ex:1014
+#: lib/dran_web/live/home_live.ex:1017
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Drag to rotate · Scroll to zoom · Hover to highlight · Click to navigate"
 msgstr "Arrastra para rotar · Desplaza para acercar · Clic derecho para mover"
@@ -2551,7 +2506,7 @@ msgstr "Job falló: %{label}"
 msgid "Jobs programados"
 msgstr "Jobs programados"
 
-#: lib/dran_web/live/home_live.ex:991
+#: lib/dran_web/live/home_live.ex:994
 #, elixir-autogen, elixir-format
 msgid "Loading graph..."
 msgstr "Cargando grafo..."
@@ -2571,18 +2526,18 @@ msgstr "Los reportes son generados por el sistema y no participan en clusters."
 msgid "Schedule"
 msgstr "Schedule"
 
-#: lib/dran_web/live/home_live.ex:998
+#: lib/dran_web/live/home_live.ex:1001
 #, elixir-autogen, elixir-format
 msgid "Showing the %{shown} most-connected nodes of %{total} — search for a page to explore its subgraph."
 msgstr "Mostrando los %{shown} nodos más conectados de %{total} — busca una página para explorar su subgrafo."
 
 #: lib/dran_web/live/goal_live.ex:65
-#: lib/dran_web/live/pages_live.ex:55
+#: lib/dran_web/live/pages_live.ex:57
 #, elixir-autogen, elixir-format, fuzzy
 msgid "View"
 msgstr "Ver todo"
 
-#: lib/dran_web/live/home_live.ex:935
+#: lib/dran_web/live/home_live.ex:938
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Visualize how your pages connect. Drag to rotate, hover a node to reveal labels, click a node to navigate."
 msgstr "Visualiza cómo se conectan tus páginas. Arrastra los nodos para reorganizar, haz clic para navegar."
@@ -2602,40 +2557,40 @@ msgstr "API token copiado al portapapeles."
 msgid "Allow anyone with a Google account to sign up and browse wikis. Users are created without context access."
 msgstr "Permite que cualquiera con una cuenta de Google se registre y navegue por las wikis. Los usuarios se crean sin acceso a contextos."
 
-#: lib/dran_web/page_edit.ex:343
+#: lib/dran_web/page_edit.ex:348
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Cannot pin: no page loaded."
 msgstr "No se puede editar: no hay página cargada."
 
-#: lib/dran_web/live/community_live.ex:56
+#: lib/dran_web/live/cluster_live.ex:56
 #, elixir-autogen, elixir-format
 msgid "Clusters de páginas relacionadas en tu cerebro"
 msgstr "Clusters de páginas relacionadas en tu cerebro"
 
-#: lib/dran_web/live/home_live.ex:859
+#: lib/dran_web/live/home_live.ex:862
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Collection"
 msgstr "Colecciones"
 
-#: lib/dran_web/live/community_live.ex:216
+#: lib/dran_web/live/cluster_live.ex:216
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Cluster not found"
 msgstr "Cluster no encontrado"
 
-#: lib/dran_web/components/layouts.ex:356
-#: lib/dran_web/live/community_live.ex:54
-#: lib/dran_web/live/community_live.ex:252
-#: lib/dran_web/live/workspace_settings_live.ex:430
+#: lib/dran_web/components/layouts.ex:353
+#: lib/dran_web/live/cluster_live.ex:54
+#: lib/dran_web/live/cluster_live.ex:253
+#: lib/dran_web/live/workspace_settings_live.ex:850
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Clusters"
 msgstr "Cluster"
 
-#: lib/dran_web/page_edit.ex:338
+#: lib/dran_web/page_edit.ex:343
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Could not update pin status"
 msgstr "No se pudo actualizar la tarea."
 
-#: lib/dran_web/live/workspace_settings_live.ex:296
+#: lib/dran_web/live/workspace_settings_live.ex:534
 #, elixir-autogen, elixir-format
 msgid "Entity linker (auto-create entities from page mentions)"
 msgstr "Enlazador de entidades (crea entidades automáticamente a partir de menciones en páginas)"
@@ -2645,12 +2600,12 @@ msgstr "Enlazador de entidades (crea entidades automáticamente a partir de menc
 msgid "Error: %{reason}"
 msgstr "Error: %{reason}"
 
-#: lib/dran_web/live/community_live.ex:157
+#: lib/dran_web/live/cluster_live.ex:157
 #, elixir-autogen, elixir-format
 msgid "Generada"
 msgstr "Generada"
 
-#: lib/dran_web/live/community_live.ex:135
+#: lib/dran_web/live/cluster_live.ex:135
 #, elixir-autogen, elixir-format
 msgid "Generate cluster summaries"
 msgstr "Generar resúmenes de clusters"
@@ -2660,36 +2615,36 @@ msgstr "Generar resúmenes de clusters"
 msgid "Google auto-signup"
 msgstr "Registro automático con Google"
 
-#: lib/dran_web/live/home_live.ex:647
+#: lib/dran_web/live/home_live.ex:650
 #, elixir-autogen, elixir-format
 msgid "Index"
 msgstr "Índice"
 
-#: lib/dran_web/live/settings_live.ex:140
-#: lib/dran_web/live/settings_live.ex:153
-#: lib/dran_web/live/settings_live.ex:169
-#: lib/dran_web/live/settings_live.ex:182
-#: lib/dran_web/live/workspace_settings_live.ex:69
+#: lib/dran_web/live/settings_live.ex:171
+#: lib/dran_web/live/settings_live.ex:184
+#: lib/dran_web/live/settings_live.ex:200
+#: lib/dran_web/live/settings_live.ex:213
+#: lib/dran_web/live/workspace_settings_live.ex:79
 #, elixir-autogen, elixir-format
 msgid "No autorizado."
 msgstr "No autorizado."
 
-#: lib/dran_web/live/community_live.ex:127
+#: lib/dran_web/live/cluster_live.ex:127
 #, elixir-autogen, elixir-format
 msgid "No cluster summaries yet."
 msgstr "Aún no hay resúmenes de clusters."
 
-#: lib/dran_web/live/home_live.ex:579
+#: lib/dran_web/live/home_live.ex:582
 #, elixir-autogen, elixir-format, fuzzy
 msgid "No description"
 msgstr "Descripción"
 
-#: lib/dran_web/live/home_live.ex:878
+#: lib/dran_web/live/home_live.ex:881
 #, elixir-autogen, elixir-format, fuzzy
 msgid "No pages match this collection."
 msgstr "Ninguna página coincide con los filtros de esta colección."
 
-#: lib/dran_web/live/home_live.ex:709
+#: lib/dran_web/live/home_live.ex:712
 #, elixir-autogen, elixir-format, fuzzy
 msgid "No pages of this type."
 msgstr "Aún no hay páginas"
@@ -2715,13 +2670,12 @@ msgstr "Fijar"
 msgid "Pin this page in the wiki home"
 msgstr "Fija esta página en la portada de la wiki"
 
-#: lib/dran_web/components/layouts.ex:883
-#: lib/dran_web/live/home_live.ex:600
+#: lib/dran_web/live/home_live.ex:603
 #, elixir-autogen, elixir-format
 msgid "Pinned"
 msgstr "Fijada"
 
-#: lib/dran_web/page_edit.ex:334
+#: lib/dran_web/page_edit.ex:339
 #, elixir-autogen, elixir-format
 msgid "Pinned to wiki"
 msgstr "Fijada a la wiki"
@@ -2731,22 +2685,22 @@ msgstr "Fijada a la wiki"
 msgid "Probar"
 msgstr "Probar"
 
-#: lib/dran_web/live/community_live.ex:175
+#: lib/dran_web/live/cluster_live.ex:175
 #, elixir-autogen, elixir-format
 msgid "Páginas principales"
 msgstr "Páginas principales"
 
-#: lib/dran_web/live/home_live.ex:827
+#: lib/dran_web/live/home_live.ex:830
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Referenced by"
 msgstr "Referencia"
 
-#: lib/dran_web/live/community_live.ex:71
+#: lib/dran_web/live/cluster_live.ex:71
 #, elixir-autogen, elixir-format
 msgid "Regenerar"
 msgstr "Regenerar"
 
-#: lib/dran_web/live/community_live.ex:167
+#: lib/dran_web/live/cluster_live.ex:167
 #, elixir-autogen, elixir-format
 msgid "Resumen"
 msgstr "Resumen"
@@ -2756,7 +2710,7 @@ msgstr "Resumen"
 msgid "Selecciona un modelo"
 msgstr "Selecciona un modelo"
 
-#: lib/dran_web/live/community_live.ex:191
+#: lib/dran_web/live/cluster_live.ex:191
 #, elixir-autogen, elixir-format
 msgid "Todas las páginas"
 msgstr "Todas las páginas"
@@ -2766,67 +2720,55 @@ msgstr "Todas las páginas"
 msgid "Unpin"
 msgstr "Desfijar"
 
-#: lib/dran_web/page_edit.ex:334
+#: lib/dran_web/page_edit.ex:339
 #, elixir-autogen, elixir-format
 msgid "Unpinned from wiki"
 msgstr "Desfijada de la wiki"
 
-#: lib/dran_web/components/layouts.ex:292
-#: lib/dran_web/live/home_live.ex:97
+#: lib/dran_web/live/home_live.ex:100
 #, elixir-autogen, elixir-format
 msgid "Wiki"
 msgstr "Wiki"
 
-#: lib/dran_web/live/community_live.ex:113
+#: lib/dran_web/live/cluster_live.ex:113
 #, elixir-autogen, elixir-format
 msgid "más"
 msgstr "más"
 
-#: lib/dran_web/live/community_live.ex:94
-#: lib/dran_web/live/community_live.ex:155
+#: lib/dran_web/live/cluster_live.ex:94
+#: lib/dran_web/live/cluster_live.ex:155
 #, elixir-autogen, elixir-format
 msgid "página"
 msgid_plural "páginas"
 msgstr[0] "página"
 msgstr[1] "páginas"
 
-#: lib/dran_web/live/settings_live.ex:247
+#: lib/dran_web/live/settings_live.ex:473
 #, elixir-autogen, elixir-format
 msgid "Add Key"
 msgstr "Agregar clave"
 
-#: lib/dran_web/components/layouts.ex:775
-#, elixir-autogen, elixir-format
-msgid "All contexts"
-msgstr "Contextos"
-
-#: lib/dran_web/live/home_live.ex:553
+#: lib/dran_web/live/home_live.ex:556
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Browse knowledge bases. Pick a workspace to start exploring."
 msgstr "Navega por las bases de conocimiento. Elige un contexto para empezar a explorar."
 
-#: lib/dran_web/components/layouts.ex:929
-#: lib/dran_web/live/home_live.ex:625
+#: lib/dran_web/live/home_live.ex:628
 #, elixir-autogen, elixir-format
 msgid "Categorias"
 msgstr "Categorias"
 
-#: lib/dran_web/live/settings_live.ex:359
+#: lib/dran_web/live/settings_live.ex:585
 #, elixir-autogen, elixir-format
 msgid "Click to enable write access"
 msgstr ""
 
-#: lib/dran_web/live/settings_live.ex:358
+#: lib/dran_web/live/settings_live.ex:584
 #, elixir-autogen, elixir-format
 msgid "Click to make read-only"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:951
-#, elixir-autogen, elixir-format
-msgid "Contenido"
-msgstr "Contenido"
-
-#: lib/dran_web/live/settings_live.ex:336
+#: lib/dran_web/live/settings_live.ex:562
 #, elixir-autogen, elixir-format
 msgid "Copy prefix"
 msgstr ""
@@ -2836,7 +2778,7 @@ msgstr ""
 msgid "Copy token"
 msgstr "Copy token"
 
-#: lib/dran_web/live/goal_live.ex:447
+#: lib/dran_web/live/goal_live.ex:448
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Could not delete goal."
 msgstr "No se pudo eliminar la página."
@@ -2851,40 +2793,34 @@ msgstr ""
 msgid "Current Value"
 msgstr "Valor actual"
 
-#: lib/dran_web/live/goal_live.ex:425
+#: lib/dran_web/live/goal_live.ex:426
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Goal created."
 msgstr "Tarea creada."
 
-#: lib/dran_web/live/goal_live.ex:443
+#: lib/dran_web/live/goal_live.ex:444
 #, elixir-autogen, elixir-format
 msgid "Goal deleted."
 msgstr ""
 
-#: lib/dran_web/live/goal_live.ex:405
+#: lib/dran_web/live/goal_live.ex:406
 #, elixir-autogen, elixir-format
 msgid "Goal updated."
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:809
-#: lib/dran_web/components/layouts.ex:827
-#, elixir-autogen, elixir-format
-msgid "Home"
-msgstr "Home"
-
-#: lib/dran_web/live/smart_collection_live.ex:401
+#: lib/dran_web/live/smart_collection_live.ex:402
 #, elixir-autogen, elixir-format
 msgid "Name is required."
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:206
 #: lib/dran_web/live/goal_live.ex:253
-#: lib/dran_web/live/goal_live.ex:365
+#: lib/dran_web/live/goal_live.ex:366
 #, elixir-autogen, elixir-format
 msgid "New Goal"
 msgstr ""
 
-#: lib/dran_web/live/settings_live.ex:435
+#: lib/dran_web/live/settings_live.ex:661
 #, elixir-autogen, elixir-format
 msgid "No API keys yet — create one with the button above."
 msgstr "Aún no hay API keys — crea una arriba."
@@ -2894,30 +2830,26 @@ msgstr "Aún no hay API keys — crea una arriba."
 msgid "No goals yet."
 msgstr "Aún no hay objetivos"
 
-#: lib/dran_web/live/home_live.ex:515
+#: lib/dran_web/live/home_live.ex:518
 #, elixir-autogen, elixir-format, fuzzy
 msgid "No pages found."
 msgstr "No se encontraron páginas con esta etiqueta."
 
-#: lib/dran_web/live/home_live.ex:1173
+#: lib/dran_web/live/home_live.ex:1176
 #, elixir-autogen, elixir-format
 msgid "No pages start with this letter."
 msgstr ""
 
 #: lib/dran_web/live/admin_workspaces_live.ex:499
+#: lib/dran_web/live/workspace_settings_live.ex:718
 #, elixir-autogen, elixir-format
 msgid "No users match your search."
 msgstr "No users match your search."
 
-#: lib/dran_web/live/home_live.ex:560
+#: lib/dran_web/live/home_live.ex:563
 #, elixir-autogen, elixir-format, fuzzy
 msgid "No wikis available yet. An admin needs to enable the wiki on a workspace."
 msgstr "Aún no hay wikis disponibles. Un administrador debe habilitar la wiki en un contexto."
-
-#: lib/dran_web/components/layouts.ex:899
-#, elixir-autogen, elixir-format
-msgid "Planificacion"
-msgstr "Planificacion"
 
 #: lib/dran_web/live/goal_live.ex:105
 #, elixir-autogen, elixir-format, fuzzy
@@ -2929,22 +2861,17 @@ msgstr "En progreso"
 msgid "Progress (0-1)"
 msgstr "Progreso (0.0-1.0)"
 
-#: lib/dran_web/components/layouts.ex:849
-#, elixir-autogen, elixir-format
-msgid "Proyectos"
-msgstr "Proyectos"
-
-#: lib/dran_web/live/settings_live.ex:372
+#: lib/dran_web/live/settings_live.ex:598
 #, elixir-autogen, elixir-format
 msgid "R/O"
 msgstr ""
 
-#: lib/dran_web/live/settings_live.ex:366
+#: lib/dran_web/live/settings_live.ex:592
 #, elixir-autogen, elixir-format
 msgid "R/W"
 msgstr ""
 
-#: lib/dran_web/live/home_live.ex:506
+#: lib/dran_web/live/home_live.ex:509
 #, elixir-autogen, elixir-format
 msgid "Results for"
 msgstr ""
@@ -2954,7 +2881,7 @@ msgstr ""
 msgid "Saved queries that auto-update as your brain changes"
 msgstr ""
 
-#: lib/dran_web/live/home_live.ex:504
+#: lib/dran_web/live/home_live.ex:507
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Search results"
 msgstr "Buscar"
@@ -2963,11 +2890,6 @@ msgstr "Buscar"
 #, elixir-autogen, elixir-format
 msgid "Search users..."
 msgstr "Buscar usuarios..."
-
-#: lib/dran_web/components/layouts.ex:720
-#, elixir-autogen, elixir-format
-msgid "Search wiki..."
-msgstr "Buscar..."
 
 #: lib/dran_web/live/goal_live.ex:171
 #, elixir-autogen, elixir-format, fuzzy
@@ -2996,7 +2918,7 @@ msgstr "Valor objetivo"
 msgid "User has no API token."
 msgstr "User has no API token."
 
-#: lib/dran_web/live/settings_live.ex:313
+#: lib/dran_web/live/settings_live.ex:539
 #, elixir-autogen, elixir-format
 msgid "Write"
 msgstr ""
@@ -3025,12 +2947,12 @@ msgid_plural "%{count} workspaces"
 msgstr[0] "%{count} espacio de trabajo"
 msgstr[1] "%{count} espacios de trabajo"
 
-#: lib/dran_web/live/dashboard_live.ex:93
+#: lib/dran_web/live/dashboard_live.ex:83
 #, elixir-autogen, elixir-format
 msgid "Ask the instance owner to add you to a workspace, or browse public workspaces from the Wiki."
 msgstr "Pide al administrador de la instancia que te añada a un espacio de trabajo, o explora los espacios públicos desde la Wiki."
 
-#: lib/dran_web/live/workspace_settings_live.ex:437
+#: lib/dran_web/live/workspace_settings_live.ex:857
 #, elixir-autogen, elixir-format
 msgid "Chat"
 msgstr ""
@@ -3040,12 +2962,12 @@ msgstr ""
 msgid "Config"
 msgstr "Configuración"
 
-#: lib/dran_web/live/workspace_settings_live.ex:163
+#: lib/dran_web/live/workspace_settings_live.ex:254
 #, elixir-autogen, elixir-format
 msgid "Could not save settings"
 msgstr ""
 
-#: lib/dran_web/live/dashboard_live.ex:91
+#: lib/dran_web/live/dashboard_live.ex:81
 #, elixir-autogen, elixir-format
 msgid "Create the first workspace to start building your second brain."
 msgstr "Crea el primer espacio de trabajo para empezar a construir tu segundo cerebro."
@@ -3055,7 +2977,7 @@ msgstr "Crea el primer espacio de trabajo para empezar a construir tu segundo ce
 msgid "Create, delete, set default, toggle visibility."
 msgstr "Create, delete, set default, toggle visibility."
 
-#: lib/dran_web/live/workspace_settings_live.ex:222
+#: lib/dran_web/live/workspace_settings_live.ex:447
 #, elixir-autogen, elixir-format
 msgid "Enable or disable workspace features. Disabled features hide their entry points."
 msgstr ""
@@ -3065,7 +2987,8 @@ msgstr ""
 msgid "Estás impersonando a"
 msgstr ""
 
-#: lib/dran_web/live/workspace_settings_live.ex:220
+#: lib/dran_web/live/workspace_settings_live.ex:128
+#: lib/dran_web/live/workspace_settings_live.ex:445
 #, elixir-autogen, elixir-format
 msgid "Features"
 msgstr ""
@@ -3085,7 +3008,7 @@ msgstr "Impersonate this user?"
 msgid "Instance-level administration — users, workspaces, models, system, and jobs."
 msgstr "Instance-level administration — users, workspaces, models, system, and jobs."
 
-#: lib/dran_web/live/dashboard_live.ex:265
+#: lib/dran_web/live/dashboard_live.ex:255
 #, elixir-autogen, elixir-format
 msgid "Insufficient permissions"
 msgstr "Permisos insuficientes"
@@ -3097,7 +3020,8 @@ msgstr "Permisos insuficientes"
 msgid "Jobs"
 msgstr "Trabajos"
 
-#: lib/dran_web/live/workspace_settings_live.ex:433
+#: lib/dran_web/components/layouts.ex:362
+#: lib/dran_web/live/workspace_settings_live.ex:853
 #, elixir-autogen, elixir-format
 msgid "Journey"
 msgstr "Journey"
@@ -3112,19 +3036,19 @@ msgstr "Administra usuarios y su acceso a contextos."
 msgid "Manage users, assign workspaces, copy tokens."
 msgstr "Manage users, assign workspaces, copy tokens."
 
-#: lib/dran_web/live/workspace_settings_live.ex:287
+#: lib/dran_web/live/workspace_settings_live.ex:525
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Maximum number of pages the autonomous agents will create in a single run. Blank uses the global default."
 msgstr "Número máximo de páginas que los agentes autónomos crearán en una sola ejecución. Valores más altos significan ejecuciones más largas y más contenido por ejecución. Predeterminado: 10."
 
-#: lib/dran_web/live/workspace_settings_live.ex:344
+#: lib/dran_web/live/workspace_settings_live.ex:582
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Minimum cosine similarity (0.0–1.0) required for a semantic relation between pages. Blank uses the global default."
 msgstr "Similitud de coseno mínima (0.0–1.0) requerida para que una relación semántica entre páginas se cree o se mantenga. Valores más altos producen menos relaciones, pero más fuertes. Se aplica por longitud del texto (cuerpo corto/medio/largo)."
 
 #: lib/dran_web/live/dashboard_live.ex:54
-#: lib/dran_web/live/dashboard_live.ex:104
-#: lib/dran_web/live/dashboard_live.ex:131
+#: lib/dran_web/live/dashboard_live.ex:94
+#: lib/dran_web/live/dashboard_live.ex:121
 #, elixir-autogen, elixir-format
 msgid "New workspace"
 msgstr "Nuevo espacio de trabajo"
@@ -3134,51 +3058,48 @@ msgstr "Nuevo espacio de trabajo"
 msgid "No users yet — create one in the Users section."
 msgstr "Aún no hay usuarios — crea uno en la pestaña Usuarios."
 
-#: lib/dran_web/live/workspace_settings_live.ex:95
+#: lib/dran_web/live/workspace_settings_live.ex:105
 #, elixir-autogen, elixir-format
 msgid "No workspace"
 msgstr ""
 
-#: lib/dran_web/live/dashboard_live.ex:87
+#: lib/dran_web/live/dashboard_live.ex:77
 #, elixir-autogen, elixir-format
 msgid "No workspaces assigned"
 msgstr "No tienes espacios de trabajo asignados"
 
-#: lib/dran_web/live/dashboard_live.ex:86
+#: lib/dran_web/live/dashboard_live.ex:76
 #, elixir-autogen, elixir-format
 msgid "No workspaces yet"
 msgstr "Aún no hay espacios de trabajo"
 
-#: lib/dran_web/live/dashboard_live.ex:453
+#: lib/dran_web/live/dashboard_live.ex:384
 #, elixir-autogen, elixir-format
 msgid "Open"
 msgstr "Abrir"
 
-#: lib/dran_web/live/dashboard_live.ex:307
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Pages"
-msgstr "páginas"
-
 #: lib/dran_web/live/admin_workspaces_live.ex:264
 #: lib/dran_web/live/admin_workspaces_live.ex:377
-#: lib/dran_web/live/dashboard_live.ex:439
+#: lib/dran_web/live/dashboard_live.ex:370
+#: lib/dran_web/live/workspace_settings_live.ex:362
 #, elixir-autogen, elixir-format
 msgid "Private"
 msgstr "Privado"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:263
 #: lib/dran_web/live/admin_workspaces_live.ex:371
-#: lib/dran_web/live/dashboard_live.ex:439
+#: lib/dran_web/live/dashboard_live.ex:370
+#: lib/dran_web/live/workspace_settings_live.ex:359
 #, elixir-autogen, elixir-format
 msgid "Public"
 msgstr "Público"
 
-#: lib/dran_web/live/settings_live.ex:474
+#: lib/dran_web/live/settings_live.ex:700
 #, elixir-autogen, elixir-format
 msgid "Read + write"
 msgstr ""
 
-#: lib/dran_web/live/settings_live.ex:473
+#: lib/dran_web/live/settings_live.ex:699
 #, elixir-autogen, elixir-format
 msgid "Read only"
 msgstr ""
@@ -3188,7 +3109,7 @@ msgstr ""
 msgid "Read-only environment: inference, agents, uploads."
 msgstr "Read-only environment: inference, agents, uploads."
 
-#: lib/dran_web/live/workspace_settings_live.ex:436
+#: lib/dran_web/live/workspace_settings_live.ex:856
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Reports"
 msgstr "Reporte"
@@ -3203,7 +3124,7 @@ msgstr ""
 msgid "Select models for chat, embeddings, and reranking."
 msgstr "Select models for chat, embeddings, and reranking."
 
-#: lib/dran_web/live/workspace_settings_live.ex:262
+#: lib/dran_web/live/workspace_settings_live.ex:500
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Semantic thresholds and agent limits for this workspace."
 msgstr "Umbrales semánticos"
@@ -3214,7 +3135,7 @@ msgstr "Umbrales semánticos"
 msgid "Sistema"
 msgstr "Sistema"
 
-#: lib/dran_web/live/dashboard_live.ex:154
+#: lib/dran_web/live/dashboard_live.ex:144
 #, elixir-autogen, elixir-format
 msgid "Slug is generated automatically from the name:"
 msgstr "El slug se genera automáticamente desde el nombre:"
@@ -3229,7 +3150,7 @@ msgstr ""
 msgid "Toggle scheduled crons, run now, view last run."
 msgstr "Toggle scheduled crons, run now, view last run."
 
-#: lib/dran_web/live/workspace_settings_live.ex:181
+#: lib/dran_web/live/workspace_settings_live.ex:406
 #, elixir-autogen, elixir-format
 msgid "Toggle which page types can be created in this workspace."
 msgstr ""
@@ -3241,24 +3162,24 @@ msgstr ""
 msgid "Usuarios"
 msgstr "Usuarios"
 
-#: lib/dran_web/live/workspace_settings_live.ex:299
+#: lib/dran_web/live/workspace_settings_live.ex:537
 #, elixir-autogen, elixir-format, fuzzy
 msgid "When enabled, the augmenter auto-creates entity pages for named things mentioned in page bodies."
 msgstr "Cuando está habilitado, el augmenter crea automáticamente páginas de entidades para cosas nombradas (personas, empresas, herramientas) mencionadas en los cuerpos de las páginas. Deshabilítalo para creación manual de entidades."
 
-#: lib/dran_web/live/dashboard_live.ex:259
+#: lib/dran_web/live/dashboard_live.ex:249
 #, elixir-autogen, elixir-format
 msgid "Workspace created"
 msgstr "Espacio de trabajo creado"
 
-#: lib/dran_web/live/workspace_settings_live.ex:101
+#: lib/dran_web/live/workspace_settings_live.ex:111
 #, elixir-autogen, elixir-format
 msgid "Workspace not found."
 msgstr ""
 
-#: lib/dran_web/live/dashboard_live.ex:448
-#: lib/dran_web/live/workspace_settings_live.ex:54
-#: lib/dran_web/live/workspace_settings_live.ex:91
+#: lib/dran_web/live/dashboard_live.ex:379
+#: lib/dran_web/live/workspace_settings_live.ex:58
+#: lib/dran_web/live/workspace_settings_live.ex:101
 #, elixir-autogen, elixir-format
 msgid "Workspace settings"
 msgstr "Configuración del espacio de trabajo"
@@ -3267,45 +3188,44 @@ msgstr "Configuración del espacio de trabajo"
 #: lib/dran_web/live/admin_workspaces_live.ex:21
 #: lib/dran_web/live/admin_workspaces_live.ex:222
 #: lib/dran_web/live/admin_workspaces_live.ex:236
-#: lib/dran_web/live/dashboard_live.ex:70
-#: lib/dran_web/live/dashboard_live.ex:301
-#: lib/dran_web/live/settings_live.ex:456
+#: lib/dran_web/live/dashboard_live.ex:60
+#: lib/dran_web/live/settings_live.ex:682
 #, elixir-autogen, elixir-format
 msgid "Workspaces"
 msgstr "Espacios de trabajo"
 
-#: lib/dran_web/live/settings_live.ex:479
+#: lib/dran_web/live/settings_live.ex:705
 #, elixir-autogen, elixir-format
 msgid "You are not a member of any workspace yet."
 msgstr "Aún no eres miembro de ningún espacio de trabajo."
 
-#: lib/dran_web/live/settings_live.ex:122
+#: lib/dran_web/live/settings_live.ex:153
 #, elixir-autogen, elixir-format
 msgid "You can only grant access to your own workspaces"
 msgstr ""
 
-#: lib/dran_web/live/dashboard_live.ex:70
+#: lib/dran_web/live/dashboard_live.ex:60
 #, elixir-autogen, elixir-format
 msgid "Your workspaces"
 msgstr "Tus espacios de trabajo"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:270
-#: lib/dran_web/live/dashboard_live.ex:429
+#: lib/dran_web/live/dashboard_live.ex:360
 #, elixir-autogen, elixir-format
 msgid "default"
 msgstr "Predeterminado"
 
-#: lib/dran_web/live/settings_live.ex:456
+#: lib/dran_web/live/settings_live.ex:682
 #, elixir-autogen, elixir-format
 msgid "tick the ones this key may access"
 msgstr "marca los que esta clave puede acceder"
 
-#: lib/dran_web/live/dashboard_live.ex:466
+#: lib/dran_web/live/dashboard_live.ex:397
 #, elixir-autogen, elixir-format, fuzzy
 msgid "todos"
 msgstr "Tareas"
 
-#: lib/dran_web/live/dashboard_live.ex:472
+#: lib/dran_web/live/dashboard_live.ex:403
 #, elixir-autogen, elixir-format, fuzzy
 msgid "updated"
 msgstr "Actualizado"
@@ -3353,7 +3273,7 @@ msgstr "Eliminar"
 
 #: lib/dran_web/live/admin_users_live.ex:436
 #: lib/dran_web/live/admin_workspaces_live.ex:389
-#: lib/dran_web/live/settings_live.ex:492
+#: lib/dran_web/live/settings_live.ex:720
 #, elixir-autogen, elixir-format
 msgid "Guardando…"
 msgstr "Guardando…"
@@ -3404,7 +3324,7 @@ msgstr "Usuario guardado: %{email}"
 msgid "Visibilidad"
 msgstr "Visibilidad"
 
-#: lib/dran_web/components/layouts.ex:460
+#: lib/dran_web/components/layouts.ex:437
 #: lib/dran_web/live/admin_workspaces_live.ex:243
 #, elixir-autogen, elixir-format
 msgid "Workspace"
@@ -3421,6 +3341,7 @@ msgid "Workspace por defecto"
 msgstr "Workspace por defecto"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:346
+#: lib/dran_web/live/workspace_settings_live.ex:348
 #, elixir-autogen, elixir-format
 msgid "p.ej. Personal"
 msgstr "p.ej. Personal"
@@ -3429,16 +3350,6 @@ msgstr "p.ej. Personal"
 #, elixir-autogen, elixir-format
 msgid "¿Eliminar este workspace?"
 msgstr "¿Eliminar este workspace?"
-
-#: lib/dran_web/components/layouts.ex:479
-#, elixir-autogen, elixir-format
-msgid "Administración"
-msgstr "Administración"
-
-#: lib/dran_web/components/layouts.ex:484
-#, elixir-autogen, elixir-format
-msgid "Cuenta"
-msgstr "Cuenta"
 
 #: lib/dran_web/live/admin_users_live.ex:371
 #, elixir-autogen, elixir-format
@@ -3450,7 +3361,230 @@ msgstr "Aún no hay usuarios — crea uno con el botón de arriba."
 msgid "No workspaces yet — create one with the button above."
 msgstr "Aún no hay espacios de trabajo — crea uno con el botón de arriba."
 
-#: lib/dran_web/components/layouts.ex:471
+#: lib/dran_web/components/layouts.ex:465
+#: lib/dran_web/live/settings_live.ex:69
+#: lib/dran_web/live/settings_live.ex:301
 #, elixir-autogen, elixir-format
-msgid "Instancia"
-msgstr "Instancia"
+msgid "Account"
+msgstr ""
+
+#: lib/dran_web/components/layouts.ex:571
+#, elixir-autogen, elixir-format
+msgid "Account settings"
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:742
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Add"
+msgstr "Agregar clave"
+
+#: lib/dran_web/components/markdown_editor_components.ex:392
+#, elixir-autogen, elixir-format
+msgid "Add property"
+msgstr "Añadir propiedad"
+
+#: lib/dran_web/live/workspace_settings_live.ex:683
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Add users"
+msgstr "Agregar usuario"
+
+#: lib/dran_web/live/settings_live.ex:392
+#, elixir-autogen, elixir-format
+msgid "Are you sure you want to unlink your Google account?"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:365
+#, elixir-autogen, elixir-format
+msgid "Change password"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:312
+#, elixir-autogen, elixir-format
+msgid "Change your display name."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:338
+#, elixir-autogen, elixir-format
+msgid "Change your password."
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:208
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Could not save workspace"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:282
+#, elixir-autogen, elixir-format
+msgid "Could not unlink Google account"
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:295
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Could not update role"
+msgstr "No se pudo actualizar el contexto por defecto."
+
+#: lib/dran_web/live/settings_live.ex:351
+#, elixir-autogen, elixir-format
+msgid "Current password"
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:375
+#, elixir-autogen, elixir-format
+msgid "Default workspace (forces public visibility)"
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:118
+#: lib/dran_web/live/workspace_settings_live.ex:335
+#, elixir-autogen, elixir-format, fuzzy
+msgid "General"
+msgstr "Generada"
+
+#: lib/dran_web/live/settings_live.ex:371
+#, elixir-autogen, elixir-format
+msgid "Google Account"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:382
+#, elixir-autogen, elixir-format
+msgid "Google account linked"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:276
+#, elixir-autogen, elixir-format
+msgid "Google account unlinked"
+msgstr ""
+
+#: lib/dran_web/components/layouts.ex:335
+#, elixir-autogen, elixir-format
+msgid "Inicio"
+msgstr ""
+
+#: lib/dran_web/components/markdown_editor_components.ex:362
+#, elixir-autogen, elixir-format
+msgid "Key"
+msgstr "Clave"
+
+#: lib/dran_web/components/layouts.ex:371
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Knowledge base"
+msgstr "Conocimiento"
+
+#: lib/dran_web/live/settings_live.ex:402
+#, elixir-autogen, elixir-format
+msgid "Link Google account"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:372
+#, elixir-autogen, elixir-format
+msgid "Link or unlink your Google account."
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:621
+#, elixir-autogen, elixir-format
+msgid "Manage which instance users have access to this workspace."
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:630
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Members"
+msgstr "Miembros"
+
+#: lib/dran_web/live/workspace_settings_live.ex:278
+#, elixir-autogen, elixir-format
+msgid "Membership updated"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:357
+#, elixir-autogen, elixir-format
+msgid "New password"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:383
+#, elixir-autogen, elixir-format
+msgid "No Google account linked"
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:634
+#, elixir-autogen, elixir-format
+msgid "No users have access to this workspace yet."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:337
+#, elixir-autogen, elixir-format
+msgid "Password"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:251
+#, elixir-autogen, elixir-format
+msgid "Password changed"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:311
+#, elixir-autogen, elixir-format
+msgid "Profile"
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:231
+#, elixir-autogen, elixir-format
+msgid "Profile updated"
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:671
+#, elixir-autogen, elixir-format
+msgid "Remove from workspace"
+msgstr ""
+
+#: lib/dran_web/components/markdown_editor_components.ex:380
+#, elixir-autogen, elixir-format
+msgid "Remove property"
+msgstr "Eliminar propiedad"
+
+#: lib/dran_web/live/workspace_settings_live.ex:292
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Role updated"
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:695
+#, elixir-autogen, elixir-format
+msgid "Search users by email or name..."
+msgstr ""
+
+#: lib/dran_web/live/settings_live.ex:43
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Settings"
+msgstr "Ajustes guardados"
+
+#: lib/dran_web/live/settings_live.ex:397
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Unlink"
+msgstr "Desfijar"
+
+#: lib/dran_web/live/settings_live.ex:394
+#, elixir-autogen, elixir-format
+msgid "Unlinking…"
+msgstr ""
+
+#: lib/dran_web/components/markdown_editor_components.ex:372
+#, elixir-autogen, elixir-format
+msgid "Value"
+msgstr "Valor"
+
+#: lib/dran_web/live/workspace_settings_live.ex:353
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Visibility"
+msgstr "Visibilidad"
+
+#: lib/dran_web/live/workspace_settings_live.ex:337
+#, elixir-autogen, elixir-format
+msgid "Workspace name, visibility, and default status."
+msgstr ""
+
+#: lib/dran_web/live/workspace_settings_live.ex:202
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Workspace saved"
+msgstr "Espacios de trabajo"
+
+#: lib/dran_web/live/settings_live.ex:324
+#, elixir-autogen, elixir-format
+msgid "Your name"
+msgstr ""

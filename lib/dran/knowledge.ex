@@ -495,6 +495,7 @@ defmodule Dran.Knowledge do
     attrs =
       attrs
       |> normalize_attrs()
+      |> normalize_meta_props()
       |> default_owner_field("owner", "system")
       |> default_owner_field("created_by", "system")
       |> ensure_title_and_slug()
@@ -585,6 +586,41 @@ defmodule Dran.Knowledge do
     Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
   end
 
+  # The props editor (and any string form input) submits `meta["props"]` as a
+  # JSON string. The `meta` column is jsonb, so a raw string would be stored
+  # as `props: "{\"role\": …}"` — a scalar the PropsMaterializer and the
+  # `meta->'props'` query filters can't see. Decode valid JSON objects into a
+  # map here; anything else (invalid JSON, non-object JSON) is dropped so the
+  # changeset never receives a string for a map field.
+  defp normalize_meta_props(attrs) when is_map(attrs) do
+    # Preserve whichever key shape the caller used (`"meta"` from form params,
+    # `:meta` from internal callers) — only transform the value. Injecting a
+    # string key next to an atom key would produce a mixed-key map that
+    # `Ecto.Changeset.cast` rejects.
+    Enum.reduce(["meta", :meta], attrs, fn key, acc ->
+      case Map.fetch(acc, key) do
+        {:ok, meta} -> Map.put(acc, key, decode_props(meta))
+        :error -> acc
+      end
+    end)
+  end
+
+  defp normalize_meta_props(attrs), do: attrs
+
+  defp decode_props(%{"props" => props} = meta) when is_binary(props) do
+    case Jason.decode(props) do
+      {:ok, decoded} when is_map(decoded) -> Map.put(meta, "props", decoded)
+      _ -> Map.delete(meta, "props")
+    end
+  end
+
+  # Drop empty strings so clearing the editor removes props instead of
+  # persisting an empty-string scalar.
+  defp decode_props(%{"props" => ""} = meta), do: Map.delete(meta, "props")
+
+  defp decode_props(meta) when is_map(meta), do: meta
+  defp decode_props(other), do: other
+
   @doc """
   Update an existing page. Automatically:
   - Increments version
@@ -595,10 +631,11 @@ defmodule Dran.Knowledge do
   """
   def update_page(%Page{} = page, attrs) do
     # Save current version snapshot before updating
-    if Map.has_key?(attrs, :body) || Map.has_key?(attrs, "body") do
+    if Map.has_key?(attrs, :body) or Map.has_key?(attrs, "body") do
       save_page_version(page)
     end
 
+    attrs = normalize_meta_props(attrs)
     changeset = Page.update_changeset(page, attrs)
 
     case Repo.update(changeset) do
