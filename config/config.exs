@@ -97,9 +97,9 @@ if config_env() != :test do
         schedule: "0 3 * * *",
         task: {Dran.Jobs, :run_scheduled, [:pagerank_nightly]}
       ],
-      community_summaries_nightly: [
+      cluster_summaries_nightly: [
         schedule: "30 3 * * *",
-        task: {Dran.Jobs, :run_scheduled, [:community_summaries_nightly]}
+        task: {Dran.Jobs, :run_scheduled, [:cluster_summaries_nightly]}
       ],
       graph_maintenance_nightly: [
         schedule: "45 3 * * *",

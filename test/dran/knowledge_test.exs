@@ -492,10 +492,15 @@ defmodule Dran.KnowledgeTest do
       assert Knowledge.graph_type_counts(ctx.id) == %{
                "note" => 2,
                "reference" => 1,
-               "concept" => 1
+               "concept" => 1,
+               "goal" => 0
              }
 
-      assert Knowledge.graph_type_counts(ctx.id, ~w(reference)) == %{"note" => 2, "concept" => 1}
+      assert Knowledge.graph_type_counts(ctx.id, ~w(reference)) == %{
+               "note" => 2,
+               "concept" => 1,
+               "goal" => 0
+             }
     end
   end
 
