@@ -7,6 +7,7 @@ defmodule DranWeb.PageListComponents do
   use Gettext, backend: DranWeb.Gettext
   import DranWeb.CoreComponents, only: [icon: 1]
 
+  alias Dran.PageRegistry
   alias DranWeb.PageTypes
 
   # Returns the empty-state metadata (title, description, cta) for a page type.
@@ -87,6 +88,10 @@ defmodule DranWeb.PageListComponents do
   attr :show_archived, :boolean, default: false
   attr :total_count, :integer, default: 0
   attr :total_archived, :integer, default: 0
+  # Active kind filters (meta.kind slugs) — [] = unfiltered.
+  attr :kind_filters, :list, default: []
+  # Dropdown open state (parent owns it so patching the URL keeps it open).
+  attr :kind_menu_open, :boolean, default: false
 
   def page_list(assigns) do
     ~H"""
@@ -99,9 +104,13 @@ defmodule DranWeb.PageListComponents do
           <.link
             :if={@page_type}
             navigate={
-              "/#{@workspace_slug}/collections/new?type=#{@page_type}&title=#{gettext("All")} #{
-                PageTypes.plural(@page_type)
-              }"
+              "/#{@workspace_slug}/collections/new?type=#{@page_type}" <>
+                if(@kind_filters != [],
+                  do: "&kind=" <> URI.encode_www_form(Enum.join(@kind_filters, ",")),
+                  else: ""
+                ) <>
+                "&title=" <>
+                URI.encode_www_form("#{gettext("All")} #{kind_title(@kind_filters, @page_type)}")
             }
             class="btn btn-ghost btn-sm"
             title={gettext("Save as smart collection")}
@@ -132,6 +141,83 @@ defmodule DranWeb.PageListComponents do
           >
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}
           </.link>
+        </div>
+      </div>
+
+      <div
+        :if={not @show_archived and kind_options(@page_type) != []}
+        class="mb-4"
+        data-testid="kind-filters"
+      >
+        <div class="relative" id="kind-filter-root">
+          <button
+            type="button"
+            phx-click="toggle_kind_menu"
+            class={[
+              "inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors",
+              if(@kind_filters == [],
+                do: "border-base-300 text-base-content/70 hover:border-primary/40",
+                else: "border-primary bg-primary/10 text-primary font-medium"
+              )
+            ]}
+            data-testid="kind-filter-toggle"
+          >
+            <.icon name="hero-funnel" class="size-3.5" />
+            {gettext("Kind")}
+            <span
+              :if={@kind_filters != []}
+              class="px-1.5 py-0.5 text-[11px] font-semibold rounded-full bg-primary/15"
+            >
+              {length(@kind_filters)}
+            </span>
+            <.icon
+              name={if @kind_menu_open, do: "hero-chevron-up", else: "hero-chevron-down"}
+              class="size-3.5 opacity-60"
+            />
+          </button>
+
+          <div
+            :if={@kind_menu_open}
+            class="absolute z-20 mt-1.5 w-64 max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-lg p-2"
+            data-testid="kind-filter-menu"
+          >
+            <button
+              :for={{slug, label} <- kind_options(@page_type)}
+              type="button"
+              phx-click="toggle_kind"
+              phx-value-kind={slug || ""}
+              class={[
+                "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm text-left transition-colors",
+                if(slug in @kind_filters,
+                  do: "bg-primary/10 text-primary",
+                  else: "hover:bg-base-200 text-base-content/80"
+                )
+              ]}
+              data-testid={"kind-option-#{slug || "all"}"}
+            >
+              <span class={[
+                "size-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                if(slug in @kind_filters,
+                  do: "border-primary bg-primary text-primary-content",
+                  else: "border-base-300"
+                )
+              ]}>
+                <.icon :if={slug in @kind_filters} name="hero-check" class="size-3" />
+              </span>
+              <span class="flex-1 truncate">{label}</span>
+            </button>
+
+            <div class="border-t border-base-300 mt-1.5 pt-1.5">
+              <button
+                type="button"
+                phx-click="clear_kinds"
+                class="w-full px-2.5 py-1.5 rounded-lg text-xs text-base-content/50 hover:text-error hover:bg-error/10 transition-colors text-left"
+                data-testid="kind-clear"
+              >
+                {gettext("Clear filters")}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -267,6 +353,31 @@ defmodule DranWeb.PageListComponents do
   end
 
   # ── Page card (extracted for reuse in grouped + flat layouts) ──
+
+  # ── Kind filter options ──
+  #
+  # One option per registered kind of the type. `nil` slug marks the "All"
+  # pseudo-option (sent as empty string to toggle_kind, which... is never
+  # rendered as an option — see the menu markup: only real kinds appear;
+  # "Clear filters" resets the selection). Kinds the workspace disabled
+  # (disabled_page_types) don't apply here — kinds are orthogonal to the
+  # type-level enable/disable switch.
+  defp kind_options(nil), do: []
+
+  defp kind_options(page_type) do
+    Enum.map(PageRegistry.kinds(page_type) || [], fn slug ->
+      {slug, PageRegistry.kind_label(slug)}
+    end)
+  end
+
+  # Title for the "Save as Smart Collection" CTA — names the filtered subset.
+  # With several kinds picked we fall back to the type plural (the collection
+  # still stores the full kind list; the title is just a suggested name).
+  defp kind_title([], page_type), do: PageTypes.plural(page_type)
+
+  defp kind_title([kind], _page_type), do: PageRegistry.kind_label(kind)
+
+  defp kind_title([_ | _], page_type), do: PageTypes.plural(page_type)
 
   attr :page, :map, required: true
   attr :page_type, :string, default: nil

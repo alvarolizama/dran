@@ -119,7 +119,7 @@ defmodule Dran.PropsMaterializerTest do
           slug: "plain",
           page_type: "note",
           body: "no props",
-          meta: %{"kind" => "thought"}
+          meta: %{"kind" => "idea"}
         })
 
       assert {:ok, 0} = PropsMaterializer.materialize(page)

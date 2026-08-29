@@ -108,6 +108,10 @@ if config_env() != :test do
       link_gardener_weekly: [
         schedule: "0 7 * * 0",
         task: {Dran.Jobs, :run_scheduled, [:link_gardener_weekly]}
+      ],
+      task_automation_daily: [
+        schedule: "30 6 * * *",
+        task: {Dran.Jobs, :run_scheduled, [:task_automation_daily]}
       ]
     ]
 end

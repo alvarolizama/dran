@@ -51,7 +51,8 @@ defmodule Dran.SchedulerTest do
             {:pagerank_nightly, "0 3 * * *"},
             {:cluster_summaries_nightly, "30 3 * * *"},
             {:graph_maintenance_nightly, "45 3 * * *"},
-            {:link_gardener_weekly, "0 7 * * 0"}
+            {:link_gardener_weekly, "0 7 * * 0"},
+            {:task_automation_daily, "30 6 * * *"}
           ] do
         assert source =~ "#{key}:"
         assert source =~ ~s(schedule: "#{cron}")

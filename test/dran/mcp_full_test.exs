@@ -83,12 +83,12 @@ defmodule Dran.MCPFullTest do
   # ── Protocol: tools/list ────────────────────────────────────────────────────
 
   describe "tools/list" do
-    test "returns exactly 19 tools" do
+    test "returns exactly 22 tools" do
       resp =
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 19
+      assert length(tools) == 22
     end
 
     test "all tools carry the dran_ prefix" do
@@ -284,7 +284,7 @@ defmodule Dran.MCPFullTest do
           "slug" => "create-page-test-note",
           "body" => "A test note",
           "tags" => ["test"],
-          "meta" => %{"kind" => "thought"}
+          "meta" => %{"kind" => "idea"}
         })
 
       assert result =~ "Created page: Test Note"
@@ -395,7 +395,7 @@ defmodule Dran.MCPFullTest do
           slug: "meta-test-page",
           page_type: "note",
           body: "x",
-          meta: %{"kind" => "thought", "date" => "2026-01-01"}
+          meta: %{"kind" => "idea", "date" => "2026-01-01"}
         })
 
       # Update with only `kind` — `date` should be gone.
@@ -504,78 +504,47 @@ defmodule Dran.MCPFullTest do
   # ── Tool: dran_create_note ─────────────────────────────────────────────────
 
   describe "dran_create_note" do
-    test "creates a todo-style note with kanban status", %{context: ctx} do
+    test "creates a plain note with default journal kind", %{context: ctx} do
       result =
         call_tool("dran_create_note", %{
           "workspace" => "personal",
-          "title" => "Test Todo",
-          "slug" => "create-todo-test",
-          "kanban_status" => "today",
-          "priority" => "high"
+          "title" => "Test Note",
+          "slug" => "create-note-test",
+          "kind" => "meeting"
         })
 
-      assert result =~ "Created note: Test Todo"
-      assert result =~ "status: today"
+      assert result =~ "Created note: Test Note"
 
-      note = Knowledge.get_page_by_slug("create-todo-test", ctx.id)
+      note = Knowledge.get_page_by_slug("create-note-test", ctx.id)
       assert note.page_type == "note"
-      assert note.meta["kind"] == "todo"
-      assert note.meta["kanban_status"] == "today"
-      assert note.meta["priority"] == "high"
+      assert note.meta["kind"] == "meeting"
     end
 
-    test "sets assignee in meta", %{context: ctx} do
-      result =
-        call_tool("dran_create_note", %{
-          "workspace" => "personal",
-          "title" => "Assigned Todo",
-          "slug" => "assigned-todo-test",
-          "assignee" => "hermes"
-        })
-
-      assert result =~ "Created note"
-      note = Knowledge.get_page_by_slug("assigned-todo-test", ctx.id)
-      assert note.meta["assignee"] == "hermes"
-    end
-
-    test "without assignee leaves it absent", %{context: ctx} do
+    test "kind defaults to journal", %{context: ctx} do
       call_tool("dran_create_note", %{
         "workspace" => "personal",
-        "title" => "Unassigned Todo",
-        "slug" => "unassigned-todo-test"
+        "title" => "Default Note",
+        "slug" => "default-note-test"
       })
 
-      note = Knowledge.get_page_by_slug("unassigned-todo-test", ctx.id)
-      refute Map.has_key?(note.meta, "assignee")
-    end
-
-    test "defaults to backlog status", %{context: ctx} do
-      call_tool("dran_create_note", %{
-        "workspace" => "personal",
-        "title" => "Default Todo",
-        "slug" => "default-todo-test"
-      })
-
-      note = Knowledge.get_page_by_slug("default-todo-test", ctx.id)
-      assert note.meta["kind"] == "todo"
-      assert note.meta["kanban_status"] == "backlog"
+      note = Knowledge.get_page_by_slug("default-note-test", ctx.id)
+      assert note.meta["kind"] == "journal"
     end
 
     test "errors on duplicate slug", %{context: ctx} do
       {:ok, _} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Existing Todo",
-          slug: "dup-todo-test",
-          page_type: "note",
-          meta: %{"kind" => "todo"}
+          title: "Existing Note",
+          slug: "dup-note-test",
+          page_type: "note"
         })
 
       result =
         call_tool("dran_create_note", %{
           "workspace" => "personal",
           "title" => "Another",
-          "slug" => "dup-todo-test"
+          "slug" => "dup-note-test"
         })
 
       assert result =~ "Error:"
@@ -589,12 +558,11 @@ defmodule Dran.MCPFullTest do
       {:ok, note} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Merge Todo",
-          slug: "merge-todo-test",
+          title: "Merge Note",
+          slug: "merge-note-test",
           page_type: "note",
           meta: %{
-            "kind" => "todo",
-            "kanban_status" => "backlog",
+            "kind" => "meeting",
             "priority" => "low",
             "due_date" => "2026-01-01"
           }
@@ -603,27 +571,25 @@ defmodule Dran.MCPFullTest do
       result =
         call_tool("dran_update_note", %{
           "workspace" => "personal",
-          "slug" => "merge-todo-test",
-          "kanban_status" => "today"
+          "slug" => "merge-note-test",
+          "due_date" => "2026-02-02"
         })
 
       assert result =~ "Updated note"
-      assert result =~ "status: today"
 
       refreshed = Knowledge.get_page!(note.id)
-      assert refreshed.meta["kanban_status"] == "today"
+      assert refreshed.meta["due_date"] == "2026-02-02"
       assert refreshed.meta["priority"] == "low"
-      assert refreshed.meta["due_date"] == "2026-01-01"
     end
 
     test "updates assignee via merge", %{context: ctx} do
       {:ok, note} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Assign Todo",
+          title: "Assign Note",
           slug: "assign-update-test",
           page_type: "note",
-          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "alvaro"}
+          meta: %{"kind" => "meeting", "assignee" => "alvaro"}
         })
 
       result =
@@ -636,19 +602,19 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Updated note"
       refreshed = Knowledge.get_page!(note.id)
       assert refreshed.meta["assignee"] == "hermes"
-      # kanban_status preserved by merge
-      assert refreshed.meta["kanban_status"] == "backlog"
+      # kind preserved by merge
+      assert refreshed.meta["kind"] == "meeting"
     end
 
     test "errors when note not found" do
       result =
         call_tool("dran_update_note", %{
           "workspace" => "personal",
-          "slug" => "no-such-todo",
-          "kanban_status" => "done"
+          "slug" => "no-such-note",
+          "due_date" => "2026-03-03"
         })
 
-      assert result =~ "Error: note 'no-such-todo' not found"
+      assert result =~ "Error: note 'no-such-note' not found"
     end
   end
 

@@ -33,7 +33,8 @@ defmodule Dran.JobsTest do
     :pagerank_nightly,
     :cluster_summaries_nightly,
     :graph_maintenance_nightly,
-    :link_gardener_weekly
+    :link_gardener_weekly,
+    :task_automation_daily
   ]
 
   setup do
@@ -51,7 +52,7 @@ defmodule Dran.JobsTest do
   # ── Registry ──────────────────────────────────────────────────────────────
 
   describe "registry" do
-    test "lists the 5 known jobs in order" do
+    test "lists the 6 known jobs in order" do
       assert Jobs.list_keys() == @expected_keys
     end
 

@@ -13,6 +13,7 @@ defmodule DranWeb.PageComponents do
 
   alias Dran.Knowledge
   alias Dran.Page
+  alias Dran.PageRegistry
   alias DranWeb.PageTypes
   alias Phoenix.LiveView.JS
 
@@ -1090,10 +1091,16 @@ defmodule DranWeb.PageComponents do
           class="text-sm"
         />
 
+        <.input
+          type="select"
+          name="page[meta][kind]"
+          value={Phoenix.HTML.Form.input_value(@form, :meta) |> meta_kind()}
+          options={kind_options_for(@page_type)}
+          prompt={gettext("Ninguno")}
+          label={gettext("Kind")}
+        />
+
         <div>
-          <span class="label mb-1 block text-sm font-medium text-base-content/70">
-            {gettext("Tags")}
-          </span>
           <.tag_input
             id={"#{@editor_id}-new-tags"}
             name="page[tags]"
@@ -1126,6 +1133,19 @@ defmodule DranWeb.PageComponents do
 
   # Creation form title per page type — reuses the empty-state CTAs, which
   # carry correct gender per type ("Crear nota", "Añadir referencia", …).
+  # Kind options for the creation-form select — registry labels, raw slugs.
+  defp kind_options_for(page_type) do
+    (PageRegistry.kinds(page_type) || [])
+    |> Enum.map(&{PageRegistry.kind_label(&1), &1})
+  end
+
+  # Current meta.kind from the form (live params) or the persisted struct.
+  defp meta_kind(%Phoenix.HTML.Form{params: %{"meta" => %{"kind" => kind}}}), do: kind
+  defp meta_kind(%{params: %{"meta" => %{"kind" => kind}}}), do: kind
+  defp meta_kind(%{"kind" => kind}) when is_binary(kind), do: kind
+  defp meta_kind(%{kind: kind}) when is_binary(kind), do: kind
+  defp meta_kind(_), do: nil
+
   defp new_title("note"), do: gettext("Create Note")
   defp new_title("concept"), do: gettext("Create Concept")
   defp new_title("entity"), do: gettext("Create Entity")

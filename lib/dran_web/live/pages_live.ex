@@ -11,6 +11,7 @@ defmodule DranWeb.PagesLive do
 
   alias Dran.Knowledge
   alias Dran.Page
+  alias Dran.PageRegistry
   alias DranWeb.PageDetail
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
@@ -43,7 +44,7 @@ defmodule DranWeb.PagesLive do
           active_tab={@active_tab}
         >
           <:actions>
-            <.link navigate={@back_path} class="btn btn-primary btn-sm">
+            <.link navigate={@back_path} class="btn btn-ghost btn-sm">
               <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
             </.link>
             <.link
@@ -130,6 +131,8 @@ defmodule DranWeb.PagesLive do
           show_archived={@show_archived}
           total_count={length(@pages)}
           total_archived={length(@archived_pages)}
+          kind_filters={@kind_filters}
+          kind_menu_open={@kind_menu_open}
         />
       </div>
     </Layouts.app>
@@ -191,12 +194,23 @@ defmodule DranWeb.PagesLive do
     page_type = socket.assigns[:page_type] || page_type_from_params(params)
     workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
 
+    # Kind filter comes from the URL (?kind=slug1,slug2) so filtered views
+    # are shareable. Unknown slugs are dropped rather than rejecting the
+    # request — an empty selection means no filter.
+    kind_filters = valid_kinds(params["kind"], page_type)
+
     {pages, archived_pages} =
       if socket.assigns.context do
-        {Knowledge.list_pages(workspace_id: socket.assigns.context.id, type: page_type),
+        {Knowledge.list_pages(
+           workspace_id: socket.assigns.context.id,
+           type: page_type,
+           kind: kind_filters,
+           limit: 500
+         ),
          Knowledge.list_pages(
            workspace_id: socket.assigns.context.id,
            type: page_type,
+           kind: kind_filters,
            archived: true,
            limit: 200
          )}
@@ -212,6 +226,8 @@ defmodule DranWeb.PagesLive do
        visible_count: 30,
        show_archived: false,
        archived_visible_count: 30,
+       kind_filters: kind_filters,
+       kind_menu_open: socket.assigns[:kind_menu_open] || false,
        page_title: PageTypes.plural(page_type),
        back_path: build_back_path(workspace_slug, page_type)
      )}
@@ -219,7 +235,31 @@ defmodule DranWeb.PagesLive do
 
   # ── Pagination + filter events ──
 
+  # Multi-select toggle: add or remove one kind from the URL selection and
+  # push_patch — handle_params re-runs the filtered query.
   @impl true
+  def handle_event("toggle_kind", %{"kind" => kind}, socket) do
+    current = socket.assigns[:kind_filters] || []
+    kind_filters = if kind in current, do: List.delete(current, kind), else: current ++ [kind]
+
+    query = if kind_filters == [], do: "", else: "?kind=" <> Enum.join(kind_filters, ",")
+    type_path = PageTypes.path(socket.assigns[:page_type])
+    workspace_slug = socket.assigns[:workspace_slug]
+
+    {:noreply, push_patch(socket, to: "/#{workspace_slug}/#{type_path}#{query}")}
+  end
+
+  def handle_event("clear_kinds", _params, socket) do
+    type_path = PageTypes.path(socket.assigns[:page_type])
+    workspace_slug = socket.assigns[:workspace_slug]
+
+    {:noreply, push_patch(socket, to: "/#{workspace_slug}/#{type_path}")}
+  end
+
+  def handle_event("toggle_kind_menu", _params, socket) do
+    {:noreply, assign(socket, kind_menu_open: not socket.assigns[:kind_menu_open])}
+  end
+
   def handle_event("filter_archived", %{"type" => type}, socket) do
     {:noreply, assign(socket, archived_filter: type)}
   end
@@ -325,6 +365,25 @@ defmodule DranWeb.PagesLive do
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # ── Helpers ──
+
+  # A ?kind= value may be a single slug or a comma list. Only slugs
+  # registered for this page type are accepted — unknown ones are dropped
+  # (they only affect which subset loads, but validating keeps URLs honest).
+  # Returns [] when nothing valid remains (no filter).
+  defp valid_kinds(nil, _page_type), do: []
+
+  defp valid_kinds(raw, page_type) when is_binary(raw) do
+    valid = PageRegistry.kinds(page_type) || []
+
+    raw
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    |> Enum.filter(&(&1 in valid))
+  end
+
+  defp valid_kinds(_, _page_type), do: []
 
   defp page_type_from_params(%{"type" => type_path}) when is_binary(type_path) do
     PageTypes.type_from_path(type_path)

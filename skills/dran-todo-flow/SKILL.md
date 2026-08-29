@@ -102,16 +102,16 @@ flowchart TD
   START[Álvaro's request] --> PROTO["OPEN riel-protocol\nanchored opening\nfrom the request"]
   PROTO --> SEARCH["SEARCH 2-3 variants\ndran_search"]
   SEARCH --> EXISTS{Does the\ntodo exist?}
-  EXISTS -->|Yes| UPDATE["UPDATE\ndran_update_todo\n(merge meta)"]
+  EXISTS -->|Yes| UPDATE["UPDATE\ndran_update_task\n(merge meta)"]
   EXISTS -->|No| ASSIGNEE["CLARIFY assignee\nalvaro / chaos manager / other\nALWAYS ask"]
   ASSIGNEE --> LEVEL{Detail level\nof the phases?}
   LEVEL -->|"1 · prose\ndraft"| N1["Level 1\nphases in prose"]
   LEVEL -->|"2 · agent\nnon-code"| N2["Level 2\nverb DAG"]
   LEVEL -->|"3 · code"| N3["Level 3\nScope + context + DAG"]
-  N1 --> CREATE["CREATE\ndran_create_todo\nkanban_status: backlog"]
+  N1 --> CREATE["CREATE\ndran_create_task\nstatus: backlog"]
   N2 --> CREATE
   N3 --> CREATE
-  CREATE --> MOVE["AUTO-MOVE to in_progress\ndran_update_todo"]
+  CREATE --> MOVE["AUTO-MOVE to in_progress\ndran_update_task"]
   UPDATE --> MOVE
   MOVE --> LINKS["Independent LINKS\nproject/goal/plan slug\n0, 1, 2, or all 3"]
   LINKS --> DONE[End — executing is dran-coder-flow\nor manual work]
@@ -122,7 +122,7 @@ flowchart TD
 ```
 
 Every node is mandatory: search before creating, **ALWAYS clarify assignee**,
-correct detail level, `dran_create_todo` (never `dran_create_page`), auto-move
+correct detail level, `dran_create_task` (never `dran_create_page`), auto-move
 to `in_progress`, and links only if they apply (orphans are legitimate).
 
 ## Parse contract
@@ -419,7 +419,7 @@ even if it seems obvious.
 | Field | Values | Note |
 |-------|---------|------|
 | `kind` | personal / coding / business / learning / health / finance / other / investing / marketing / product / writing / career / relationship / travel | |
-| `kanban_status` | backlog / this_week / today / in_progress / done / cancelled | See kanban |
+| `status` | backlog / this_week / today / in_progress / done / cancelled | Board column |
 | `priority` | low / medium / high / urgent | |
 | `assignee` | alvaro / chaos manager / other | ALWAYS clarify |
 | `due_date` | ISO date | Optional |
@@ -430,7 +430,7 @@ even if it seems obvious.
 ```
 1. clarify assignee → alvaro / chaos manager / other        (ALWAYS)
 2. dran_search({ context: "personal", query: "<pending>" })   → exists? UPDATE
-3. dran_create_todo({
+3. dran_create_task({
      context: "personal",
      title: "<verb + object>",
      body: "<template per level>",
@@ -441,13 +441,13 @@ even if it seems obvious.
      goal_slug: "<goal>",         → optional, independent
      plan_slug: "<plan>"          → optional, independent
    })
-4. dran_update_todo({ slug: "<slug>", kanban_status: "in_progress" })   → auto-move
+4. dran_update_task({ slug: "<slug>", status: "in_progress" })   → auto-move
 ```
 
 ### Recipe — update status / checklist
 
 ```
-1. Status ALWAYS with dran_update_todo (MERGE meta)
+1. Status ALWAYS with dran_update_task (MERGE meta)
    → NEVER dran_update_page for todos (REPLACE meta, breaks fields)
 2. Body checkboxes: dran_update_page passing ONLY body
 3. done: mark ONLY when all criteria pass + real evidence
@@ -471,9 +471,9 @@ flowchart LR
 
 ## Pitfalls
 
-- **`dran_create_page` for todos** — ALWAYS `dran_create_todo`.
+- **`dran_create_page` for todos** — ALWAYS `dran_create_task`.
 - **`dran_update_page` for status** — REPLACES meta and breaks fields; status
-  ALWAYS with `dran_update_todo` (merge).
+  ALWAYS with `dran_update_task` (merge).
 - **Creating without clarify assignee** — even if it seems obvious, ask.
 - **Forgetting the auto-move** — creating in backlog and leaving it there.
 - **Micro-tasks as todos** — steps of an action go as phases.
@@ -492,8 +492,8 @@ flowchart LR
 
 | Tool | Minimal args | Returns |
 |------|--------------|---------|
-| `dran_create_todo` | `title`, `assignee`, `kanban_status` | Created todo + slug |
-| `dran_update_todo` | `slug` + fields (merge meta) | Updated todo |
+| `dran_create_task` | `title`, `assignee`, `status` | Created task + slug |
+| `dran_update_task` | `slug` + fields (merge meta) | Updated todo |
 | `dran_update_page` | `slug`, `body` (ONLY body, checkboxes) | Updated body |
 | `dran_search` | `query`, `type: "todo"` | Ranked list |
 | `dran_list_pages` | `type: "todo"`, `status` / `assignee` | Filtered list |

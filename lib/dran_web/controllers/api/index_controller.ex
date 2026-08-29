@@ -16,7 +16,6 @@ defmodule DranWeb.API.IndexController do
             type: page.page_type,
             tags: page.tags,
             status: page.meta["status"],
-            kanban_status: page.meta["kanban_status"],
             progress: page.meta["progress"],
             archived: page.archived
           }

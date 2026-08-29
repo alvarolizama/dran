@@ -217,6 +217,15 @@ defmodule DranWeb.SmartCollectionLive do
                 options={@type_options}
               />
               <.input
+                id="filter-kind"
+                name="kind[]"
+                type="select"
+                label={gettext("Kind")}
+                value={@form["kind"]}
+                options={@kind_options}
+                multiple
+              />
+              <.input
                 id="filter-status"
                 name="status"
                 type="select"
@@ -277,6 +286,17 @@ defmodule DranWeb.SmartCollectionLive do
       [{gettext("All types"), ""}] ++
         Enum.map(DranWeb.PageTypes.all(), fn {type, _} -> {String.capitalize(type), type} end)
 
+    # Kind options grouped by page type — optgroups keep the ~60 slugs
+    # scannable in one select. Values stay scoped by the type filter.
+    kind_options =
+      [{gettext("Any kind"), ""}] ++
+        for type <- Dran.PageRegistry.types() do
+          {Dran.PageRegistry.plural(type),
+           Enum.map(Dran.PageRegistry.kinds(type) || [], fn slug ->
+             {Dran.PageRegistry.kind_label(slug), slug}
+           end)}
+        end
+
     status_options = [
       {gettext("Any status"), ""},
       {gettext("Backlog"), "backlog"},
@@ -297,6 +317,7 @@ defmodule DranWeb.SmartCollectionLive do
        query_tags: [],
        collections: [],
        type_options: type_options,
+       kind_options: kind_options,
        status_options: status_options,
        form: %{}
      )}
@@ -346,10 +367,14 @@ defmodule DranWeb.SmartCollectionLive do
 
   defp apply_action(socket, :new, params) do
     form = %{
-      "name" => params["name"] || "",
+      # `title` is what the page-list CTA sends; `name` wins if both arrive.
+      # `kind` arrives as a comma list from the page-list CTA (?kind=a,b) or
+      # as a list from the multi-select — normalised to a list.
+      "name" => params["name"] || params["title"] || "",
       "slug" => "",
       "description" => params["description"] || "",
       "type" => params["type"] || "",
+      "kind" => normalize_kind_param(params["kind"]),
       "tag" => params["tag"] || "",
       "status" => params["status"] || "",
       "owner" => params["owner"] || ""
@@ -405,11 +430,12 @@ defmodule DranWeb.SmartCollectionLive do
         filters =
           %{
             "type" => params["type"],
+            "kind" => normalize_kind_param(params["kind"]),
             "status" => params["status"],
             "tag" => params["tag"],
             "owner" => params["owner"]
           }
-          |> Enum.reject(fn {_k, v} -> v in ["", nil] end)
+          |> Enum.reject(fn {_k, v} -> v in ["", nil, []] end)
           |> Map.new()
 
         slug = params["slug"]
@@ -468,9 +494,19 @@ defmodule DranWeb.SmartCollectionLive do
   defp execute_filters(filters, workspace_id) do
     opts = [workspace_id: workspace_id]
 
+    # Saved collections store kind as a list (multi-select). Tolerate a
+    # legacy single binary from collections saved before the multi-select.
+    kind =
+      case filters["kind"] do
+        k when is_list(k) -> k
+        k when is_binary(k) and k != "" -> [k]
+        _ -> nil
+      end
+
     opts =
       opts
       |> maybe_add_filter(:type, filters["type"])
+      |> maybe_add_filter(:kind, kind)
       |> maybe_add_filter(:status, filters["status"])
       |> maybe_add_filter(:tag, filters["tag"])
       |> maybe_add_filter(:owner, filters["owner"])
@@ -480,13 +516,29 @@ defmodule DranWeb.SmartCollectionLive do
 
   defp maybe_add_filter(opts, _key, nil), do: opts
   defp maybe_add_filter(opts, _key, ""), do: opts
+  defp maybe_add_filter(opts, _key, []), do: opts
   defp maybe_add_filter(opts, key, value), do: Keyword.put(opts, key, value)
+
+  # `kind` param normalisation: the page-list CTA sends a comma list
+  # (?kind=a,b), the form multi-select sends kind[] entries (already a list),
+  # and direct URLs may send a single slug. Any shape → list of slugs.
+  defp normalize_kind_param(nil), do: []
+
+  defp normalize_kind_param(kinds) when is_list(kinds) do
+    kinds |> Enum.reject(&(&1 in ["", nil])) |> Enum.uniq()
+  end
+
+  defp normalize_kind_param(kind) when is_binary(kind) do
+    kind |> String.split(",", trim: true) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  defp normalize_kind_param(_), do: []
 
   defp format_filters(collection) do
     (collection.filters || %{})
-    |> Enum.reject(fn {_k, v} -> v == nil or v == "" end)
+    |> Enum.reject(fn {_k, v} -> v == nil or v == "" or v == [] end)
     |> Enum.map(fn {k, v} ->
-      {format_label(k), v}
+      {format_label(k), format_value(k, v)}
     end)
   end
 
@@ -494,4 +546,22 @@ defmodule DranWeb.SmartCollectionLive do
   defp format_label("due_after"), do: gettext("due after")
   defp format_label("created_by"), do: gettext("created by")
   defp format_label(key), do: String.replace(key, "_", " ")
+
+  # Kind filter values display as localized labels (comma-joined when
+  # several), other filters display their raw value. Unknown slugs (e.g.
+  # kinds removed from the registry since the collection was saved) fall
+  # back to the raw slug instead of crashing on kind_label's fetch!.
+  defp format_value("kind", kinds) when is_list(kinds),
+    do: kinds |> Enum.map(&kind_display/1) |> Enum.join(", ")
+
+  defp format_value("kind", kind) when is_binary(kind), do: format_value("kind", [kind])
+  defp format_value(_key, value), do: value
+
+  defp kind_display(kind) when is_binary(kind) and kind != "" do
+    Dran.PageRegistry.kind_label(kind)
+  rescue
+    KeyError -> kind
+  end
+
+  defp kind_display(other), do: other
 end

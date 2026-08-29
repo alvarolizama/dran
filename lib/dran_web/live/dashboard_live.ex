@@ -317,10 +317,10 @@ defmodule DranWeb.DashboardLive do
       |> Map.new()
 
     todo_counts =
-      from(p in Dran.Page,
-        where: p.workspace_id in ^ids and p.archived == false and not is_nil(p.kanban_status),
-        group_by: p.workspace_id,
-        select: {p.workspace_id, count(p.id)}
+      from(t in Dran.Task,
+        where: t.workspace_id in ^ids and t.archived == false,
+        group_by: t.workspace_id,
+        select: {t.workspace_id, count(t.id)}
       )
       |> Dran.Repo.all()
       |> Map.new()

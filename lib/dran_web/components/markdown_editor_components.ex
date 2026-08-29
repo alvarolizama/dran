@@ -173,7 +173,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   `Dran.PageMeta.meta_fields_for/1` returns tuples of variable arity:
 
       {:date, "due_date", "Due date"}
-      {:select, "kind", "Kind", [{"Thought", "thought"}, ...]}
+      {:select, "kind", "Kind", [{"Idea", "idea"}, ...]}
       {:date, "due_date", "Due date", condition: {:kind, "reminder"}}
       {:select, "kind", "Kind", options, placeholder: "…", condition: {:kind, "reminder"}}
 
@@ -316,11 +316,9 @@ defmodule DranWeb.MarkdownEditorComponents do
             <span class="label-text-alt text-base-content/50">key / value</span>
           </label>
           <.props_editor id={"page-meta-props-#{@key}"} name={"page[meta][#{@key}]"} value={@value} />
-          <label class="label">
-            <span class="label-text-alt text-base-content/50">
-              {gettext("Key-value custom metadata. Empty = none.")}
-            </span>
-          </label>
+          <p class="mt-1.5 text-xs leading-snug text-base-content/50">
+            {gettext("Key-value custom metadata. Empty = none.")}
+          </p>
         </div>
     <% end %>
     """

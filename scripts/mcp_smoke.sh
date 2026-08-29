@@ -23,10 +23,10 @@ d = json.load(open('/tmp/mcp_tools.json'))
 tools = {t['name']: t for t in d['result']['tools']}
 print(f"tool count: {len(tools)}")
 expected = ["dran_search","dran_create_page","dran_update_page","dran_get_page","dran_delete_page",
-            "dran_create_todo","dran_update_todo","dran_create_relation","dran_delete_relation",
+            "dran_create_task","dran_update_task","dran_list_tasks","dran_create_note","dran_update_note",
+            "dran_create_goal","dran_create_relation","dran_delete_relation",
             "dran_get_links","dran_list_pages","dran_get_stats","dran_lint_brain",
-            "dran_rename_slug","dran_reaugment_page","dran_ingest_url",
-            "dran_start_agent","dran_get_agent_session"]
+            "dran_rename_slug","dran_reaugment_page","dran_start_agent","dran_get_agent_session"]
 missing = [t for t in expected if t not in tools]
 extra = [t for t in tools if t not in expected]
 if missing: print("MISSING:", missing); sys.exit(1)
@@ -49,7 +49,7 @@ checks = {
     'dran_search': 'first',
     'dran_get_page': 'dran_search` or `dran_list_pages',
     'dran_update_page': 'replac',
-    'dran_update_todo': 'merg',
+    'dran_update_note': 'merg',
 }
 for name, needle in checks.items():
     if needle not in tools[name]['description'].lower():

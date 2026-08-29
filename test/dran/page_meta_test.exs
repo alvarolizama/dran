@@ -23,7 +23,7 @@ defmodule Dran.PageMetaTest do
     end
 
     test "accepts empty props map" do
-      attrs = %{"kind" => "thought", "props" => %{}}
+      attrs = %{"kind" => "idea", "props" => %{}}
       cs = PageMeta.changeset(%PageMeta{}, attrs, "note")
 
       assert cs.valid?
@@ -45,7 +45,7 @@ defmodule Dran.PageMetaTest do
     end
 
     test "rejects non-map props" do
-      attrs = %{"kind" => "thought", "props" => "not-a-map"}
+      attrs = %{"kind" => "idea", "props" => "not-a-map"}
       cs = PageMeta.changeset(%PageMeta{}, attrs, "note")
 
       refute cs.valid?
@@ -53,7 +53,7 @@ defmodule Dran.PageMetaTest do
     end
 
     test "rejects list props" do
-      attrs = %{"kind" => "thought", "props" => ["a", "b"]}
+      attrs = %{"kind" => "idea", "props" => ["a", "b"]}
       cs = PageMeta.changeset(%PageMeta{}, attrs, "note")
 
       refute cs.valid?

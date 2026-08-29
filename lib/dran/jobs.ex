@@ -87,6 +87,14 @@ defmodule Dran.Jobs do
       description:
         "Weekly gardener pass: reviews relation suggestions and proposes new links " <>
           "between pages."
+    },
+    %{
+      key: :task_automation_daily,
+      label: "Task SLA/WIP sweep",
+      mfa: {Dran.Tasks.Automation, :run_scheduled, []},
+      description:
+        "Daily task hygiene: lists overdue tasks, stale in_progress (7d+) and " <>
+          "workspaces over their WIP limit."
     }
   ]
 

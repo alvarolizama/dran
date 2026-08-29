@@ -160,57 +160,40 @@ defmodule Dran.IntegrationTest do
       assert stats.orphan_count >= 0
     end
 
-    test "stats with todos groups by kanban_status via SQL", %{context: ctx} do
-      # Create todo-notes with different kanban statuses
-      {:ok, _todo1} =
-        Knowledge.create_page(%{
-          workspace_id: ctx.id,
-          title: "Task A",
-          slug: "task-a",
-          page_type: "note",
-          body: "Do thing A",
-          meta: %{"kind" => "todo"},
-          kanban_status: "doing"
+    test "stats with tasks groups by status via SQL", %{context: ctx} do
+      # Create tasks with different statuses
+      {:ok, _t1} =
+        Dran.Tasks.create_task(%{
+          "workspace_id" => ctx.id,
+          "title" => "Task A",
+          "status" => "in_progress"
         })
 
-      {:ok, _todo2} =
-        Knowledge.create_page(%{
-          workspace_id: ctx.id,
-          title: "Task B",
-          slug: "task-b",
-          page_type: "note",
-          body: "Do thing B",
-          meta: %{"kind" => "todo"},
-          kanban_status: "done"
+      {:ok, _t2} =
+        Dran.Tasks.create_task(%{
+          "workspace_id" => ctx.id,
+          "title" => "Task B",
+          "status" => "done"
         })
 
-      {:ok, _todo3} =
-        Knowledge.create_page(%{
-          workspace_id: ctx.id,
-          title: "Task C",
-          slug: "task-c",
-          page_type: "note",
-          body: "Do thing C",
-          meta: %{"kind" => "todo"},
-          kanban_status: "backlog"
+      {:ok, _t3} =
+        Dran.Tasks.create_task(%{
+          "workspace_id" => ctx.id,
+          "title" => "Task C",
+          "status" => "backlog"
         })
 
-      {:ok, _todo4} =
-        Knowledge.create_page(%{
-          workspace_id: ctx.id,
-          title: "Task D",
-          slug: "task-d",
-          page_type: "note",
-          body: "Do thing D",
-          meta: %{"kind" => "todo"}
-          # no kanban_status → should default to "backlog"
+      {:ok, _t4} =
+        Dran.Tasks.create_task(%{
+          "workspace_id" => ctx.id,
+          "title" => "Task D"
+          # no status → schema default is "backlog"
         })
 
       stats = Knowledge.stats(ctx.id)
 
-      assert stats.total_pages == 4
-      assert stats.by_type["note"] == 4
-      assert stats.todos_by_status["doing"] == 1
+      assert stats.by_type == %{}
+      assert stats.todos_by_status["in_progress"] == 1
       assert stats.todos_by_status["done"] == 1
       assert stats.todos_by_status["backlog"] == 2
     end

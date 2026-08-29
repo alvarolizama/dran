@@ -218,4 +218,81 @@ defmodule Dran.MCPTest do
       refute result =~ "agent-owned"
     end
   end
+
+  describe "dran_create_task / dran_update_task / dran_list_tasks" do
+    test "creates, updates, and lists tasks via MCP", %{context: ctx} do
+      result =
+        call_tool("dran_create_task", %{
+          "workspace" => "personal",
+          "title" => "MCP task",
+          "status" => "today",
+          "priority" => "high",
+          "due_date" => "2026-09-15",
+          "recurrence" => "weekly",
+          "checklist" => ["first step", "second step"]
+        })
+
+      assert result =~ "Created task: MCP task"
+      assert result =~ "status: today"
+
+      slug =
+        case Regex.run(~r/\(([\w-]+), id:/, result) do
+          [_, s] -> s
+          nil -> flunk("could not extract slug from: #{result}")
+        end
+
+      task = Dran.Tasks.get_task_by_slug(slug, ctx.id)
+      assert task.priority == "high"
+      assert task.recurrence == "weekly"
+      assert length(task.meta["checklist"]) == 2
+
+      # Update status to done
+      result =
+        call_tool("dran_update_task", %{
+          "workspace" => "personal",
+          "slug" => slug,
+          "status" => "done"
+        })
+
+      assert result =~ "Updated task: MCP task"
+      assert result =~ "status: done"
+
+      # Recurrence auto-cloned the next occurrence
+      clone = Dran.Tasks.get_task_by_slug("#{slug}-2", ctx.id)
+      assert clone != nil
+      assert clone.status == "backlog"
+
+      # List tasks
+      result = call_tool("dran_list_tasks", %{"workspace" => "personal", "status" => "backlog"})
+
+      assert result =~ "Tasks in 'personal'"
+      assert result =~ clone.title
+    end
+
+    test "update of unknown task errors cleanly" do
+      result =
+        call_tool("dran_update_task", %{
+          "workspace" => "personal",
+          "slug" => "no-existe"
+        })
+
+      assert result =~ "Error: task 'no-existe' not found"
+    end
+
+    test "create_task appears in tools list and write enforcement" do
+      %{"result" => %{"tools" => tools}} =
+        MCP.process_message(%{
+          "jsonrpc" => "2.0",
+          "method" => "tools/list",
+          "id" => 1,
+          "params" => %{}
+        })
+
+      names = Enum.map(tools, & &1["name"])
+
+      assert "dran_create_task" in names
+      assert "dran_update_task" in names
+      assert "dran_list_tasks" in names
+    end
+  end
 end

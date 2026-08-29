@@ -28,6 +28,7 @@ import "../vendor/svg-pan-zoom.min.js"
 import MarkdownEditor from "./hooks/markdown_editor.js"
 import Mermaid from "./hooks/mermaid.js"
 import Graph3D from "./hooks/graph_3d.js"
+import TaskDnD from "./hooks/task_dnd.js"
 
 const GraphPanZoom = {
   mounted() {
@@ -280,7 +281,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Mermaid, Graph3D, CommandPalette, ScrollBottom},
+  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Mermaid, Graph3D, CommandPalette, ScrollBottom, TaskDnD},
 })
 
 // Show progress bar on live navigation and form submits

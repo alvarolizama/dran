@@ -10,9 +10,11 @@ defmodule DranWeb.DocsContent do
   Dran uses a split model:
 
     - **Pages** — the knowledge graph (4 types: note, concept, entity,
-    reference). Pages carry kanban fields (kanban_status, priority, due_date,
-    assignee) directly on the table — no meta overhead.
+    reference).
   - **Goals** — first-class OKR entities (own table, not pages).
+  - **Tasks** — first-class kanban action items (own table): status,
+    priority, due_date, recurrence, checklist. Linked to goals/pages
+    via optional part_of relations.
   - **Projects** — first-class grouping entities (own table, not pages).
   - **Collections** — saved filter queries (own table, replaces the old
     Smart Collection pattern).
@@ -88,18 +90,22 @@ defmodule DranWeb.DocsContent do
 
     GOAL  →  part_of project "acme"        (source_type="goal",  target_type="project")
 
-  Kanban columns on pages:
-    kanban_status   backlog | this_week | today | in_progress | done | cancelled
+  Tasks (first-class entity, own table):
+    status          backlog | this_week | today | in_progress | done | cancelled
     priority        low | medium | high | urgent
-    due_date        date (nullable — nil means not on kanban board)
-    assignee        string (nullable)
+    due_date        date (nullable)
+    recurrence      none | daily | weekly | monthly (auto-clones on completion)
+    checklist       meta.checklist = [%{text, done}] — lightweight subtasks
+    assignee_id     FK to users (nullable)
+    Linked to goals/pages via optional part_of relations
+    (source_type="task").
 
   Collections (first-class entity):
     Saved filter queries live in their own table with `filters` JSONB.
     They replace the old Smart Collection pattern.
 
   Sidebar:
-    Top: Dashboard, Kanban, Projects, Goals, Graph, Journey,
+    Top: Dashboard, Tasks, Projects, Goals, Graph, Journey,
     Activity. Knowledge: Notes, Concepts, Entities, References,
     Collections. System: Reports. Config: Settings
     (admin only), Documentation.

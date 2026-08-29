@@ -14,11 +14,10 @@ defmodule DranWeb.CommandPalette do
 
   @quick_actions [
     %{label: "New Note", icon: "hero-plus", path: "/notes/new"},
-    %{label: "New Todo", icon: "hero-check-circle", path: "/kanban"},
+    %{label: "New Task", icon: "hero-check-circle", path: "/tasks"},
     %{label: "New Project", icon: "hero-rocket-launch", path: "/projects/new"},
-    %{label: "Go to Kanban", icon: "hero-view-columns", path: "/kanban"},
+    %{label: "Go to Tasks", icon: "hero-view-columns", path: "/tasks"},
     %{label: "Go to Graph", icon: "hero-share", path: "/graph"},
-    %{label: "Go to Todos", icon: "hero-list-bullet", path: "/kanban"},
     %{label: "Go to Dashboard", icon: "hero-home", path: "/"}
   ]
 
@@ -41,18 +40,16 @@ defmodule DranWeb.CommandPalette do
         _ -> []
       end
 
-    # Map quick action keys to page types for filtering
-    action_page_types = %{
+    # Map quick action keys to feature flags for filtering. Task actions are
+    # always available (tasks are not a page type).
+    action_features = %{
       "New Note" => "note",
-      "New Todo" => "todo",
-      "New Project" => "project",
-      "Go to Kanban" => "todo",
-      "Go to Todos" => "todo"
+      "New Project" => "project"
     }
 
     filtered_actions =
       Enum.reject(@quick_actions, fn action ->
-        page_type = Map.get(action_page_types, action.label)
+        page_type = Map.get(action_features, action.label)
         page_type && page_type in disabled_types
       end)
 

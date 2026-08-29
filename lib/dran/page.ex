@@ -19,9 +19,11 @@ defmodule Dran.Page do
   ## Meta JSONB
 
   The `meta` field stores type-specific data, validated via `Dran.PageMeta`:
-  - `todo`: `%{kanban_status: "backlog", goal_slug: "dran"}`
   - `note`: `%{kind: "journal", date: ~D[2026-06-19]}`
   - `reference`: `%{source_url: "https://...", kind: "article"}`
+
+  Kanban/action-item data no longer lives here — tasks are first-class
+  (`Dran.Task` in their own table) since the tasks migration.
 
   ## Owner tracking
 
@@ -62,10 +64,6 @@ defmodule Dran.Page do
              :version,
              :archived,
              :pinned,
-             :kanban_status,
-             :priority,
-             :due_date,
-             :assignee,
              :owner,
              :created_by,
              :updated_by,
@@ -94,12 +92,6 @@ defmodule Dran.Page do
     field :version, :integer, default: 1
     field :archived, :boolean, default: false
     field :pinned, :boolean, default: false
-
-    # Kanban columns (nullable — nil means not on kanban board)
-    field :kanban_status, :string
-    field :priority, :string
-    field :due_date, :date
-    field :assignee, :string
 
     # Embeddings
     field :embedding_hash, :string
@@ -139,11 +131,7 @@ defmodule Dran.Page do
       :updated_by,
       :on_behalf_of,
       :archived,
-      :pinned,
-      :kanban_status,
-      :priority,
-      :due_date,
-      :assignee
+      :pinned
     ])
     |> validate_required([:workspace_id, :title, :slug, :page_type])
     |> validate_length(:title, max: 500)

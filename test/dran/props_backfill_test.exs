@@ -67,7 +67,7 @@ defmodule Dran.PropsBackfillTest do
           slug: "no-props",
           page_type: "note",
           body: "Nothing here",
-          meta: %{"kind" => "thought"}
+          meta: %{"kind" => "idea"}
         })
 
       assert {:ok, stats} = PropsBackfill.run()

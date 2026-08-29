@@ -40,7 +40,7 @@ defmodule Dran.Relation do
              :inserted_at
            ]}
   @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with)
-  @node_types ~w(page goal collection)
+  @node_types ~w(page goal task collection)
 
   schema "relations" do
     field :source_id, :binary_id
@@ -124,6 +124,7 @@ defmodule Dran.Relation do
 
   defp endpoint_module("page"), do: Dran.Page
   defp endpoint_module("goal"), do: Dran.Goal
+  defp endpoint_module("task"), do: Dran.Task
   defp endpoint_module("collection"), do: Dran.Collection
   defp endpoint_module(_), do: nil
 end

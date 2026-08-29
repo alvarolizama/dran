@@ -51,6 +51,11 @@ ctx_id = context.id
 # ──────────────────────────────────────────────────────────────────────────
 
 defmodule Seeder do
+  @moduledoc """
+  Idempotent seed helpers. Each creator checks existence by slug within the
+  workspace before inserting.
+  """
+
   @doc "Create a page only if it doesn't already exist (by slug within context)."
   def page!(workspace_id, attrs) do
     slug = attrs["slug"] || attrs[:slug]
@@ -63,6 +68,40 @@ defmodule Seeder do
 
       existing ->
         IO.puts("  · Exists   #{existing.page_type}: #{existing.slug}")
+        existing
+    end
+  end
+
+  @doc "Create a goal only if it doesn't already exist (by slug within context)."
+  def goal!(workspace_id, attrs) do
+    slug = attrs["slug"] || attrs[:slug]
+
+    case Dran.Goals.get_goal_by_slug(slug, workspace_id) do
+      nil ->
+        # Goals have no owner fields — drop them before the changeset.
+        attrs = Map.drop(attrs, ["owner", "created_by", :owner, :created_by])
+        {:ok, goal} = Dran.Goals.create_goal(Map.put(attrs, "workspace_id", workspace_id))
+        IO.puts("  ✓ Created goal: #{goal.slug}")
+        goal
+
+      existing ->
+        IO.puts("  · Exists   goal: #{existing.slug}")
+        existing
+    end
+  end
+
+  @doc "Create a task only if it doesn't already exist (by slug within context)."
+  def task!(workspace_id, attrs) do
+    slug = attrs["slug"] || attrs[:slug]
+
+    case Dran.Tasks.get_task_by_slug(slug, workspace_id) do
+      nil ->
+        {:ok, task} = Dran.Tasks.create_task(Map.put(attrs, "workspace_id", workspace_id))
+        IO.puts("  ✓ Created task: #{task.slug}")
+        task
+
+      existing ->
+        IO.puts("  · Exists   task: #{existing.slug}")
         existing
     end
   end
@@ -82,10 +121,9 @@ IO.puts("\nSeeding context '#{workspace_slug}' with realistic content...\n")
 IO.puts("Goals:")
 
 goal_aprender_elixir =
-  Seeder.page!(ctx_id, %{
+  Seeder.goal!(ctx_id, %{
     "slug" => "goal-aprender-elixir-phoenix",
     "title" => "Aprender Elixir y Phoenix",
-    "page_type" => "goal",
     "body" => """
     # Aprender Elixir y Phoenix
 
@@ -102,11 +140,8 @@ goal_aprender_elixir =
     - Elixir in Action (Saša Jurić)
     - Hexdocs oficial
     """,
-    "summary" =>
-      "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes en tiempo real.",
-    "tags" => ["programacion", "elixir", "phoenix", "aprendizaje"],
+    "description" => "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes.",
     "meta" => %{
-      "kanban_status" => "in_progress",
       "target_date" => "2026-09-30",
       "health" => "green"
     },
@@ -115,10 +150,9 @@ goal_aprender_elixir =
   })
 
 goal_escribir_libro =
-  Seeder.page!(ctx_id, %{
+  Seeder.goal!(ctx_id, %{
     "slug" => "goal-escribir-libro-segundo-cerebro",
     "title" => "Escribir libro sobre Segundo Cerebro",
-    "page_type" => "goal",
     "body" => """
     # Escribir libro: Construyendo tu Segundo Cerebro
 
@@ -135,11 +169,9 @@ goal_escribir_libro =
     ## Estado
     Borrador del capítulo 1 completo. Trabajando en capítulo 2.
     """,
-    "summary" =>
-      "Libro práctico sobre sistemas de gestión de conocimiento personal (Zettelkasten, PARA).",
-    "tags" => ["escritura", "libro", "conocimiento", "zettelkasten"],
+    "description" =>
+      "Libro práctico sobre gestión de conocimiento personal (Zettelkasten, PARA).",
     "meta" => %{
-      "kanban_status" => "in_progress",
       "target_date" => "2026-12-31",
       "health" => "yellow"
     },
@@ -148,10 +180,9 @@ goal_escribir_libro =
   })
 
 goal_mejorar_salud_fisica =
-  Seeder.page!(ctx_id, %{
+  Seeder.goal!(ctx_id, %{
     "slug" => "goal-mejorar-salud-fisica",
     "title" => "Mejorar salud física",
-    "page_type" => "goal",
     "body" => """
     # Mejorar salud física
 
@@ -166,11 +197,8 @@ goal_mejorar_salud_fisica =
     ## Progreso
     Actualmente corriendo 3K. Mejorando la consistencia.
     """,
-    "summary" =>
-      "Rutina sostenible de ejercicio, alimentación y descanso para mejorar la salud física.",
-    "tags" => ["salud", "fitness", "bienestar"],
+    "description" => "Rutina sostenible de ejercicio, alimentación y descanso.",
     "meta" => %{
-      "kanban_status" => "backlog",
       "target_date" => "2026-10-15",
       "health" => "green"
     },
@@ -179,94 +207,104 @@ goal_mejorar_salud_fisica =
   })
 
 # ──────────────────────────────────────────────────────────────────────────
-# 2. Todos (nested under goals via meta.goal_slug)
+# 2. Tasks (first-class, linked to goals via opt-in part_of relations)
 # ──────────────────────────────────────────────────────────────────────────
 
-IO.puts("\nTodos:")
+IO.puts("\nTasks:")
 
-Seeder.page!(ctx_id, %{
-  "slug" => "todo-completar-curso-elixir-school",
-  "title" => "Completar curso de Elixir School",
-  "page_type" => "todo",
-  "body" =>
-    "Avanzar en las lecciones de https://elixirschool.com/es/ hasta completar el módulo de GenServer.",
-  "tags" => ["elixir", "aprendizaje"],
-  "meta" => %{"kanban_status" => "done", "goal_slug" => "goal-aprender-elixir-phoenix"},
-  "owner" => "alvaro",
-  "created_by" => "alvaro"
-})
+task_completar_curso =
+  Seeder.task!(ctx_id, %{
+    "slug" => "todo-completar-curso-elixir-school",
+    "title" => "Completar curso de Elixir School",
+    "body" =>
+      "Avanzar en las lecciones de https://elixirschool.com/es/ hasta completar el módulo de GenServer.",
+    "status" => "done",
+    "owner" => "alvaro",
+    "created_by" => "alvaro"
+  })
 
-Seeder.page!(ctx_id, %{
-  "slug" => "todo-construir-app-liveview-tareas",
-  "title" => "Construir app LiveView de tareas",
-  "page_type" => "todo",
-  "body" =>
-    "Crear una pequeña aplicación de gestión de tareas con Phoenix LiveView para practicar pubsub y assigns.",
-  "tags" => ["elixir", "phoenix", "proyecto"],
-  "meta" => %{"kanban_status" => "in_progress", "goal_slug" => "goal-aprender-elixir-phoenix"},
-  "owner" => "alvaro",
-  "created_by" => "alvaro"
-})
+task_construir_app =
+  Seeder.task!(ctx_id, %{
+    "slug" => "todo-construir-app-liveview-tareas",
+    "title" => "Construir app LiveView de tareas",
+    "body" =>
+      "Crear una pequeña aplicación de gestión de tareas con Phoenix LiveView para practicar pubsub y assigns.",
+    "status" => "in_progress",
+    "owner" => "alvaro",
+    "created_by" => "alvaro"
+  })
 
-Seeder.page!(ctx_id, %{
-  "slug" => "todo-leer-programming-phoenix-liveview",
-  "title" => "Leer Programming Phoenix LiveView",
-  "page_type" => "todo",
-  "body" => "Terminar de leer el libro de Bruce Tate. Capítulos pendientes: 7, 8, 9.",
-  "tags" => ["lectura", "elixir", "phoenix"],
-  "meta" => %{"kanban_status" => "pending", "goal_slug" => "goal-aprender-elixir-phoenix"},
-  "owner" => "alvaro",
-  "created_by" => "alvaro"
-})
+task_leer_libro =
+  Seeder.task!(ctx_id, %{
+    "slug" => "todo-leer-programming-phoenix-liveview",
+    "title" => "Leer Programming Phoenix LiveView",
+    "body" => "Terminar de leer el libro de Bruce Tate. Capítulos pendientes: 7, 8, 9.",
+    "status" => "backlog",
+    "owner" => "alvaro",
+    "created_by" => "alvaro"
+  })
 
-Seeder.page!(ctx_id, %{
-  "slug" => "todo-borrador-capitulo-1-libro",
-  "title" => "Borrador capítulo 1 del libro",
-  "page_type" => "todo",
-  "body" =>
-    "Escribir el primer borrador del capítulo introductorio del libro sobre segundo cerebro.",
-  "tags" => ["escritura", "libro"],
-  "meta" => %{"kanban_status" => "done", "goal_slug" => "goal-escribir-libro-segundo-cerebro"},
-  "owner" => "alvaro",
-  "created_by" => "alvaro"
-})
+task_borrador_cap1 =
+  Seeder.task!(ctx_id, %{
+    "slug" => "todo-borrador-capitulo-1-libro",
+    "title" => "Borrador capítulo 1 del libro",
+    "body" =>
+      "Escribir el primer borrador del capítulo introductorio del libro sobre segundo cerebro.",
+    "status" => "done",
+    "owner" => "alvaro",
+    "created_by" => "alvaro"
+  })
 
-Seeder.page!(ctx_id, %{
-  "slug" => "todo-esquema-capitulo-2",
-  "title" => "Esquema del capítulo 2: Capturar",
-  "page_type" => "todo",
-  "body" => "Definir la estructura y puntos clave del capítulo sobre captura de información.",
-  "tags" => ["escritura", "libro"],
-  "meta" => %{
-    "kanban_status" => "in_progress",
-    "goal_slug" => "goal-escribir-libro-segundo-cerebro"
-  },
-  "owner" => "alvaro",
-  "created_by" => "alvaro"
-})
+task_esquema_cap2 =
+  Seeder.task!(ctx_id, %{
+    "slug" => "todo-esquema-capitulo-2",
+    "title" => "Esquema del capítulo 2: Capturar",
+    "body" => "Definir la estructura y puntos clave del capítulo sobre captura de información.",
+    "status" => "in_progress",
+    "owner" => "alvaro",
+    "created_by" => "alvaro"
+  })
 
-Seeder.page!(ctx_id, %{
-  "slug" => "todo-rutina-correr-3x-semana",
-  "title" => "Correr 3 veces por semana",
-  "page_type" => "todo",
-  "body" =>
-    "Establecer rutina de carrera: martes, jueves y sábado. Empezar con 3K y aumentar gradualmente.",
-  "tags" => ["salud", "fitness"],
-  "meta" => %{"kanban_status" => "pending", "goal_slug" => "goal-mejorar-salud-fisica"},
-  "owner" => "alvaro",
-  "created_by" => "alvaro"
-})
+task_correr_3x =
+  Seeder.task!(ctx_id, %{
+    "slug" => "todo-rutina-correr-3x-semana",
+    "title" => "Correr 3 veces por semana",
+    "body" =>
+      "Establecer rutina de carrera: martes, jueves y sábado. Empezar con 3K y aumentar gradualmente.",
+    "status" => "backlog",
+    "recurrence" => "weekly",
+    "owner" => "alvaro",
+    "created_by" => "alvaro"
+  })
 
-Seeder.page!(ctx_id, %{
-  "slug" => "todo-ajustar-dieta-reducir-azucar",
-  "title" => "Ajustar dieta: reducir azúcar procesado",
-  "page_type" => "todo",
-  "body" => "Eliminar refrescos y reducir postres. Sustituir por frutas y snacks saludables.",
-  "tags" => ["salud", "nutricion"],
-  "meta" => %{"kanban_status" => "backlog", "goal_slug" => "goal-mejorar-salud-fisica"},
-  "owner" => "alvaro",
-  "created_by" => "alvaro"
-})
+task_ajustar_dieta =
+  Seeder.task!(ctx_id, %{
+    "slug" => "todo-ajustar-dieta-reducir-azucar",
+    "title" => "Ajustar dieta: reducir azúcar procesado",
+    "body" => "Eliminar refrescos y reducir postres. Sustituir por frutas y snacks saludables.",
+    "status" => "backlog",
+    "owner" => "alvaro",
+    "created_by" => "alvaro"
+  })
+
+# Opt-in goal links (part_of task→goal relations) + derived progress
+IO.puts("\nTask→Goal links:")
+
+goal_aprender_elixir_task_ids = [task_completar_curso, task_construir_app, task_leer_libro]
+goal_escribir_libro_task_ids = [task_borrador_cap1, task_esquema_cap2]
+goal_mejorar_salud_task_ids = [task_correr_3x, task_ajustar_dieta]
+
+for task <- goal_aprender_elixir_task_ids do
+  Dran.Tasks.link_to_goal(task, goal_aprender_elixir)
+end
+
+for task <- goal_escribir_libro_task_ids do
+  Dran.Tasks.link_to_goal(task, goal_escribir_libro)
+end
+
+for task <- goal_mejorar_salud_task_ids do
+  Dran.Tasks.link_to_goal(task, goal_mejorar_salud_fisica)
+end
 
 # ──────────────────────────────────────────────────────────────────────────
 # 3. Notes (5+) with embeds ![[slug]] between them
@@ -614,13 +652,19 @@ IO.puts("  ✓ Relations created (related, semantic, part_of, embeds)")
 
 total_pages =
   Repo.aggregate(
-    from(p in Page, where: p.workspace_id == ^ctx_id),
+    from(p in Dran.Page, where: p.workspace_id == ^ctx_id),
+    :count
+  )
+
+total_tasks =
+  Repo.aggregate(
+    from(t in Dran.Task, where: t.workspace_id == ^ctx_id),
     :count
   )
 
 total_relations =
   Repo.aggregate(
-    from(r in Relation, join: p in assoc(r, :source), where: p.workspace_id == ^ctx_id),
+    from(r in Dran.Relation, join: p in assoc(r, :source), where: p.workspace_id == ^ctx_id),
     :count
   )
 
@@ -630,6 +674,7 @@ IO.puts("""
 ║  Seeds completados ✓                         ║
 ║  Contexto: #{context_name} (#{workspace_slug})           ║
 ║  Páginas totales: #{total_pages}                          ║
+║  Tareas totales: #{total_tasks}                          ║
 ║  Relaciones totales: #{total_relations}                       ║
 ╚══════════════════════════════════════════════╝
 """)

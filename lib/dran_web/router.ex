@@ -550,7 +550,13 @@ defmodule DranWeb.Router do
     live "/:workspace_slug/journey", JourneyLive, :index
     live "/:workspace_slug/graph", HomeLive, :graph
     get "/:workspace_slug/graph/json", HomeGraphController, :show
-    live "/:workspace_slug/kanban", HomeLive, :kanban
+
+    # Task board — the interactive kanban (first-class tasks).
+    live "/:workspace_slug/tasks", TaskBoardLive, :index
+
+    # Legacy kanban URL redirects to the task board.
+    get "/:workspace_slug/kanban", KanbanRedirectController, :redirect_to_tasks
+
     live "/:workspace_slug/collection/:slug", HomeLive, :collection
     live "/:workspace_slug/letter/:letter", HomeLive, :letter
 

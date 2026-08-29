@@ -60,7 +60,7 @@ defmodule Dran.GraphTest do
         slug: slug,
         page_type: "note",
         body: "",
-        meta: %{"kind" => "thought"}
+        meta: %{"kind" => "idea"}
       })
 
     page
@@ -242,14 +242,14 @@ defmodule Dran.GraphTest do
       relate(a, b, "part_of")
 
       # Manually set an existing meta key (kind was set on create).
-      {:ok, _} = Knowledge.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
+      {:ok, _} = Knowledge.update_page(b, %{meta: %{"kind" => "idea", "author" => "tester"}})
 
       :ok = Graph.refresh_pagerank(ctx.id)
 
       b_reloaded = Knowledge.get_page!(b.id)
       # Existing keys must survive the jsonb merge.
       assert b_reloaded.meta["author"] == "tester"
-      assert b_reloaded.meta["kind"] == "thought"
+      assert b_reloaded.meta["kind"] == "idea"
       # And pagerank was added.
       assert is_float(b_reloaded.meta["pagerank"])
       assert b_reloaded.meta["pagerank"] > 0
@@ -511,14 +511,14 @@ defmodule Dran.GraphTest do
       b = create_page(ctx, "g-rc-p-b")
       relate(a, b, "part_of")
 
-      {:ok, _} = Knowledge.update_page(b, %{meta: %{"kind" => "thought", "author" => "tester"}})
+      {:ok, _} = Knowledge.update_page(b, %{meta: %{"kind" => "idea", "author" => "tester"}})
 
       :ok = Graph.refresh_clusters(ctx.id)
 
       b_reloaded = Knowledge.get_page!(b.id)
 
       assert b_reloaded.meta["author"] == "tester"
-      assert b_reloaded.meta["kind"] == "thought"
+      assert b_reloaded.meta["kind"] == "idea"
       assert is_integer(b_reloaded.meta["cluster_id"])
     end
 

@@ -54,25 +54,22 @@ defmodule Dran.PageRegistry do
     "note" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds:
-        ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code recipe debug checklist summary decision draft template brainstorm todo plan project),
+        ~w(journal idea meeting question quote reminder code recipe debug summary decision template plan project),
       ui: %{path: "notes", label: "Note", icon: "hero-document-text", plural: "Notes"}
     },
     "entity" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
-      kinds:
-        ~w(person company product tool place event language framework service hardware protocol course cluster asset),
+      kinds: ~w(person company product tool place event language framework hardware protocol),
       ui: %{path: "entities", label: "Entity", icon: "hero-user", plural: "Entities"}
     },
     "concept" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
-      kinds:
-        ~w(technique pattern discipline theory principle method model law heuristic strategy convention),
+      kinds: ~w(technique pattern discipline theory principle method model law),
       ui: %{path: "concepts", label: "Concept", icon: "hero-light-bulb", plural: "Concepts"}
     },
     "reference" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
-      kinds:
-        ~w(article paper video podcast book document code design deliverable tweet course newsletter forum spec release website repo api guide interview),
+      kinds: ~w(article paper video podcast book newsletter spec code release website repo api),
       ui: %{path: "references", label: "Reference", icon: "hero-bookmark", plural: "References"}
     }
   }
@@ -325,27 +322,18 @@ defmodule Dran.PageRegistry do
   defp kind_labels do
     %{
       # ── note kinds ──────────────────────────────────────────────────────
-      "thought" => gettext("Thought"),
       "journal" => gettext("Journal"),
       "idea" => gettext("Idea"),
       "meeting" => gettext("Meeting"),
       "question" => gettext("Question"),
       "quote" => gettext("Quote"),
       "reminder" => gettext("Reminder"),
-      "fleeting" => gettext("Fleeting"),
-      "permanent" => gettext("Permanent"),
-      "moc" => gettext("Map of Content"),
-      "comparison" => gettext("Comparison"),
       "code" => gettext("Code"),
       "recipe" => gettext("Recipe"),
       "debug" => gettext("Debug"),
-      "checklist" => gettext("Checklist"),
       "summary" => gettext("Summary"),
       "decision" => gettext("Decision"),
-      "draft" => gettext("Draft"),
       "template" => gettext("Template"),
-      "brainstorm" => gettext("Brainstorm"),
-      "todo" => gettext("Todo"),
       "plan" => gettext("Plan"),
       "project" => gettext("Project"),
       # ── entity kinds ───────────────────────────────────────────────────
@@ -357,13 +345,9 @@ defmodule Dran.PageRegistry do
       "event" => gettext("Event"),
       "language" => gettext("Language"),
       "framework" => gettext("Framework"),
-      "service" => gettext("Service"),
       "hardware" => gettext("Hardware"),
-      "protocol" => gettext("Protocol"),
-      "course" => gettext("Course"),
-      "cluster" => gettext("Cluster"),
-      "asset" => gettext("Asset"),
       # ── concept kinds ──────────────────────────────────────────────────
+      "protocol" => gettext("Protocol"),
       "technique" => gettext("Technique"),
       "pattern" => gettext("Pattern"),
       "discipline" => gettext("Discipline"),
@@ -372,28 +356,18 @@ defmodule Dran.PageRegistry do
       "method" => gettext("Method"),
       "model" => gettext("Model"),
       "law" => gettext("Law"),
-      "heuristic" => gettext("Heuristic"),
-      "strategy" => gettext("Strategy"),
-      "convention" => gettext("Convention"),
       # ── reference kinds ────────────────────────────────────────────────
       "article" => gettext("Article"),
       "paper" => gettext("Paper"),
       "video" => gettext("Video"),
       "podcast" => gettext("Podcast"),
       "book" => gettext("Book"),
-      "document" => gettext("Document"),
-      "design" => gettext("Design"),
-      "deliverable" => gettext("Deliverable"),
-      "tweet" => gettext("Tweet"),
       "newsletter" => gettext("Newsletter"),
-      "forum" => gettext("Forum"),
       "spec" => gettext("Spec"),
       "release" => gettext("Release"),
       "website" => gettext("Website"),
       "repo" => gettext("Repository"),
-      "api" => gettext("API"),
-      "guide" => gettext("Guide"),
-      "interview" => gettext("Interview")
+      "api" => gettext("API")
     }
   end
 

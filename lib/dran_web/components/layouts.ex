@@ -338,9 +338,9 @@ defmodule DranWeb.Layouts do
         enabled?.("kanban") &&
           %{
             key: "kanban",
-            label: gettext("Kanban"),
+            label: gettext("Tareas"),
             icon: "hero-view-columns",
-            path: base <> "/kanban"
+            path: base <> "/tasks"
           }
       ]
       |> Enum.reject(&(!&1))

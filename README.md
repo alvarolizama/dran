@@ -27,7 +27,7 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 ### Views
 - **Wiki at the root** (`/`, `/:context_slug`, …) — read-only knowledge browser per wiki-enabled context; the first thing a logged-in user sees. Sidebar with search, type index, pinned pages, collections, kanban, graph, and a context-aware link to the admin panel (visible to admins and editors). All data administration lives under **`/panel`**
 - **Dashboard** (`/panel`) — context overview; accessible to admins and editors
-- **Kanban board** (`/panel/kanban`, `/:context_slug/kanban` in wiki) — all todos, columns `backlog → this_week → today → in_progress → done → cancelled`, drag-drop between columns, combinable filters (project / goal / plan)
+- **Task board** (`/:workspace_slug/tasks`) — first-class tasks with columns `backlog → this_week → today → in_progress → done → cancelled`, native drag & drop between columns, quick-add per column, due dates, priority badges, recurrence. Optional `part_of` links to goals and project/plan notes (via relations). Legacy `/kanban` redirects here
 - **3D knowledge graph** (`/panel/graph`, `/panel/graph/:slug`, `/:context_slug/graph` in wiki) — force-directed 3D; hover highlights a node and its neighbors, click navigates (context-aware URLs in wiki via `data-base-path`)
 - **Clusters** (`/panel/clusters`, `/panel/clusters/:id`) — graph clusters (clusters of related pages) detected via modularity; each cluster gets an LLM-generated summary. Re-generated nightly or on demand
 - **Hybrid search** (`/panel/search`) — full-text, fuzzy, semantic, or hybrid fusion
@@ -43,7 +43,7 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **Graph intelligence** — PageRank authority scoring, cluster detection with LLM summaries, graph maintenance sweeps; all scheduled nightly
 
 ### Integration & admin
-- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 18 tools + 3 agents + 3 resources + 2 prompts. `owner` is derived from the API key name (not client-settable); `created_by` defaults to the authenticated identity but can be overridden. API keys with `write_access: false` are read-only — write tools (`dran_create_page`, `dran_update_page`, `dran_delete_page`, `dran_create_todo`, `dran_update_todo`, `dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`, `dran_reaugment_page`, `dran_start_agent`) return `403`
+- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 22 tools + 3 agents + 3 resources + 2 prompts. `owner` is derived from the API key name (not client-settable); `created_by` defaults to the authenticated identity but can be overridden. API keys with `write_access: false` are read-only — write tools (`dran_create_page`, `dran_update_page`, `dran_delete_page`, `dran_create_note`, `dran_update_note`, `dran_create_task`, `dran_update_task`, `dran_create_goal`, `dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`, `dran_reaugment_page`, `dran_start_agent`) return `403`
 - **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`). Owner/created_by injected from auth identity on create. Write routes (`POST`, `PUT`, `DELETE`) require `write_access: true` on API keys — read routes (`GET`) are always allowed
 - **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users). Three roles: **admin** (`is_admin`, full access + all contexts), **editor** (`is_editor`, panel + dashboard access, assigned contexts), regular user (wiki-only). Panel routes gated by `admin_or_editor` pipeline; wiki open to all logged-in users
 - **Settings panel** (admin) — users, contexts, API keys (with per-key `write_access` toggle — read-only by default), brain tuning, models, system, danger zone (`/panel/settings/:tab`)
@@ -124,12 +124,15 @@ Get your token from **Settings → Users** (per-user token, scoped to your conte
 | `concept` | Techniques, patterns, theories |
 | `entity` | People, companies, tools, places |
 | `reference` | External sources (articles, papers, videos) |
-| `project` | Initiatives grouping goals/plans/todos |
+| `project` | Initiatives grouping goals/plans/tasks |
 | `goal` | Objectives with measurable targets |
 | `plan` | Time-horizoned plans (weekly/quarterly/yearly) |
-| `todo` | Actionable items with kanban status |
 | `query` | Questions with answers |
 | `report` | System-created agent run logs (detail view only, `/panel/reports/:slug`) |
+
+**Tasks** are NOT page types — they live in their own `tasks` table with
+kanban status, priority, due dates, recurrence and checklists, optionally
+linked to goals/pages via `part_of` relations.
 
 ## Production
 

@@ -135,7 +135,7 @@ defmodule Dran.PageMetaGettextTest do
     test "note: kind values are raw slugs (lowercase)" do
       values = Enum.map(select_pairs("note"), &elem(&1, 1))
 
-      for expected <- ~w(thought journal idea meeting question quote reminder) do
+      for expected <- ~w(journal idea meeting question quote reminder) do
         assert expected in values
       end
     end
@@ -182,13 +182,16 @@ defmodule Dran.PageMetaGettextTest do
   describe "regression — note kind list has no bogus 'Hecho' option" do
     # The original "Hecho" bug came from fuzzy .po pollution (msgid "None"
     # had msgstr "Hecho"). This guards the note kind list itself: it must
-    # contain exactly the 23 expected slugs and no 'Hecho' (which was never
-    # a real note kind, only a translation artefact).
+    # contain exactly the curated slugs (pruned 2026: thought→idea,
+    # fleeting/permanent/moc/comparison→summary+tags, brainstorm→idea,
+    # draft is a state not a kind) and no 'Hecho' (which was never a real
+    # note kind, only a translation artefact).
     #
-    # Removed kinds: snippet (→code), outline (→template), log (→journal)
-    test "note_kinds/0 returns exactly 23 expected slugs" do
+    # Removed kinds: snippet (→code), outline (→template), log (→journal),
+    # todo (→ first-class Dran.Task since the tasks-table migration)
+    test "note_kinds/0 returns exactly the curated slugs" do
       assert PageMeta.note_kinds() ==
-               ~w(thought journal idea meeting question quote reminder fleeting permanent moc comparison code recipe debug checklist summary decision draft template brainstorm todo plan project)
+               ~w(journal idea meeting question quote reminder code recipe debug summary decision template plan project)
     end
 
     test "note kinds are all lowercase slugs (never display labels)" do

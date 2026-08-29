@@ -312,7 +312,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_note",
       "description" =>
-        "Create a note with todo-style kanban tracking (kind=\"todo\"). This creates a normal `note` page whose meta is set to `kind: \"todo\"` plus the given kanban fields (`kanban_status`, `priority`, `due_date`, `assignee`). Link it to goals/projects/plans separately via dran_create_relation (relations are created independently now — use `dran_create_relation` with relation_type `part_of` to link this note to a goal or project). kanban_status progression: backlog → this_week → today → in_progress → done | cancelled. `priority` is one of low, medium, high, urgent. Creation fails if the slug already exists in the context. Returns the created note's slug and status.",
+        "Create a plain note page (journal, idea, meeting…). DEPRECATED for todo-style tracking: use `dran_create_task` instead — tasks are first-class kanban items with status/priority/due_date/recurrence, and `kind:\"todo\"` no longer exists on notes. Link notes to goals/projects via dran_create_relation (relation_type `part_of`). Returns the created note's slug.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -336,7 +336,7 @@ defmodule Dran.MCP do
           "kind" => %{
             "type" => "string",
             "description" =>
-              "Meta kind for the note. Defaults to \"todo\" for todo-style notes. Accepts any note kind (thought, journal, idea, meeting, question, quote, reminder, todo, ...)."
+              "Meta kind for the note. Defaults to \"todo\" for todo-style notes. Accepts any note kind (journal, idea, meeting, question, quote, reminder, code, recipe, debug, summary, decision, template, todo, plan, project)."
           },
           "priority" => %{
             "type" => "string",
@@ -469,6 +469,135 @@ defmodule Dran.MCP do
           }
         },
         "required" => ["workspace", "title"]
+      }
+    },
+    %{
+      "name" => "dran_create_task",
+      "description" =>
+        "Create a first-class task (stored in its own `tasks` table, NOT a page). Tasks are the kanban action items: status backlog → this_week → today → in_progress → done | cancelled, priority, due_date, recurrence (none/daily/weekly/monthly — completing a recurring task auto-clones the next occurrence) and a checklist in meta. Link the task to a goal or project/plan note OPTIONALLY via dran_create_relation (relation_type `part_of`, source_type `task`, source_id = the task id) — tasks exist standalone by default. Returns the created task's slug and id.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the task will be created."
+          },
+          "title" => %{
+            "type" => "string",
+            "description" => "Task title (human-readable)."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" =>
+              "URL-friendly kebab-case slug, unique per context. Auto-generated from the title when omitted."
+          },
+          "body" => %{
+            "type" => "string",
+            "description" => "Task description in Markdown (optional)."
+          },
+          "status" => %{
+            "type" => "string",
+            "description" =>
+              "Board column: backlog, this_week, today, in_progress, done, or cancelled (default: backlog).",
+            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+          },
+          "priority" => %{
+            "type" => "string",
+            "description" => "Priority level: low, medium, high, or urgent (optional).",
+            "enum" => ["low", "medium", "high", "urgent"]
+          },
+          "due_date" => %{
+            "type" => "string",
+            "description" => "Due date in YYYY-MM-DD format (optional)."
+          },
+          "recurrence" => %{
+            "type" => "string",
+            "description" =>
+              "Recurrence: none, daily, weekly, or monthly (default: none). Completing a recurring task auto-creates the next occurrence in backlog with the next due date.",
+            "enum" => ["none", "daily", "weekly", "monthly"]
+          },
+          "checklist" => %{
+            "type" => "array",
+            "items" => %{"type" => "string"},
+            "description" =>
+              "Subtask checklist (optional): list of item texts. Stored in meta; toggling done happens via the UI or dran_update_task meta."
+          },
+          "created_by" => %{
+            "type" => "string",
+            "description" =>
+              "Who created this task, for provenance. Defaults to the authenticated identity (API key name or user email)."
+          },
+          "on_behalf_of" => %{
+            "type" => "string",
+            "description" => "Who an agent is acting on behalf of (optional)."
+          }
+        },
+        "required" => ["workspace", "title"]
+      }
+    },
+    %{
+      "name" => "dran_update_task",
+      "description" =>
+        "Update a task by slug: status, priority, due_date, recurrence, title, body, or checklist. Setting status to done/cancelled on a recurring task auto-clones the next occurrence. Goal/page links are managed with dran_create_relation / dran_delete_relation (source_type `task`). Returns the updated task.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug containing the task."
+          },
+          "slug" => %{
+            "type" => "string",
+            "description" => "Task slug."
+          },
+          "title" => %{"type" => "string", "description" => "New title (optional)."},
+          "body" => %{"type" => "string", "description" => "New body (optional)."},
+          "status" => %{
+            "type" => "string",
+            "description" => "New board column (optional).",
+            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+          },
+          "priority" => %{
+            "type" => "string",
+            "description" => "New priority (optional).",
+            "enum" => ["low", "medium", "high", "urgent"]
+          },
+          "due_date" => %{
+            "type" => "string",
+            "description" => "New due date YYYY-MM-DD, or empty string to clear (optional)."
+          },
+          "recurrence" => %{
+            "type" => "string",
+            "description" => "New recurrence (optional).",
+            "enum" => ["none", "daily", "weekly", "monthly"]
+          },
+          "checklist" => %{
+            "type" => "array",
+            "items" => %{"type" => "string"},
+            "description" => "Replaces the subtask checklist (optional)."
+          }
+        },
+        "required" => ["workspace", "slug"]
+      }
+    },
+    %{
+      "name" => "dran_list_tasks",
+      "description" =>
+        "List tasks in a context, optionally filtered by status. Returns id, slug, title, status, priority, due_date, recurrence per task. Read-only.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug to list tasks from."
+          },
+          "status" => %{
+            "type" => "string",
+            "description" => "Filter by board column (optional).",
+            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+          }
+        },
+        "required" => ["workspace"]
       }
     },
     %{
@@ -1087,6 +1216,8 @@ defmodule Dran.MCP do
                  "dran_create_note",
                  "dran_update_note",
                  "dran_create_goal",
+                 "dran_create_task",
+                 "dran_update_task",
                  "dran_create_relation",
                  "dran_delete_relation",
                  "dran_rename_slug",
@@ -1347,6 +1478,144 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool(
+         "dran_create_task",
+         %{"workspace" => workspace_slug, "title" => title} = args,
+         user
+       ) do
+    context = workspace_cache_get(workspace_slug)
+
+    if context do
+      meta =
+        case args["checklist"] do
+          nil ->
+            %{}
+
+          items when is_list(items) ->
+            %{"checklist" => Enum.map(items, &%{"text" => &1, "done" => false})}
+
+          _ ->
+            %{}
+        end
+
+      attrs =
+        %{
+          "workspace_id" => context.id,
+          "title" => title,
+          "body" => Map.get(args, "body", ""),
+          "status" => Map.get(args, "status", "backlog"),
+          "recurrence" => Map.get(args, "recurrence", "none"),
+          "meta" => meta,
+          "created_by" => Map.get(args, "created_by", Auth.resolve_created_by(user)),
+          "owner" => Auth.resolve_owner(user)
+        }
+        |> maybe_put("slug", args["slug"])
+        |> maybe_put("priority", args["priority"])
+        |> maybe_put_str("due_date", args["due_date"])
+        |> maybe_put("on_behalf_of", args["on_behalf_of"])
+
+      case Dran.Tasks.create_task(attrs) do
+        {:ok, task} ->
+          "Created task: #{task.title} (#{task.slug}, id: #{task.id}) — status: #{task.status}"
+
+        {:error, changeset} ->
+          "Error: #{format_changeset_errors(changeset)}"
+      end
+    else
+      "Error: context '#{workspace_slug}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "dran_update_task",
+         %{"workspace" => workspace_slug, "slug" => slug} = args,
+         _user
+       ) do
+    context = workspace_cache_get(workspace_slug)
+
+    if context do
+      case Dran.Tasks.get_task_by_slug(slug, context.id) do
+        nil ->
+          "Error: task '#{slug}' not found"
+
+        task ->
+          attrs = %{"updated_by" => Map.get(args, "updated_by", "agent")}
+          attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
+          attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
+          attrs = maybe_put(attrs, "status", args["status"])
+          attrs = maybe_put(attrs, "priority", args["priority"])
+          attrs = maybe_put_str(attrs, "due_date", args["due_date"])
+          attrs = maybe_put(attrs, "recurrence", args["recurrence"])
+
+          attrs =
+            case args["checklist"] do
+              nil ->
+                attrs
+
+              items when is_list(items) ->
+                Map.put(
+                  attrs,
+                  "meta",
+                  Map.merge(task.meta || %{}, %{
+                    "checklist" => Enum.map(items, &%{"text" => &1, "done" => false})
+                  })
+                )
+
+              _ ->
+                attrs
+            end
+
+          case Dran.Tasks.update_task(task, attrs) do
+            {:ok, updated} ->
+              "Updated task: #{updated.title} (#{updated.slug}) — status: #{updated.status}"
+
+            {:error, changeset} ->
+              "Error: #{format_changeset_errors(changeset)}"
+          end
+      end
+    else
+      "Error: context '#{workspace_slug}' not found"
+    end
+  end
+
+  defp execute_tool("dran_list_tasks", %{"workspace" => workspace_slug} = args, _user) do
+    context = workspace_cache_get(workspace_slug)
+
+    if context do
+      opts = [workspace_id: context.id, limit: 200]
+
+      opts =
+        if args["status"] do
+          Keyword.put(opts, :status, args["status"])
+        else
+          opts
+        end
+
+      tasks = Dran.Tasks.list_tasks(opts)
+
+      if tasks == [] do
+        "No tasks found in context '#{workspace_slug}'."
+      else
+        lines =
+          for task <- tasks do
+            parts = [
+              "- #{task.title} (#{task.slug}, id: #{task.id})",
+              "status: #{task.status}",
+              task.priority && "priority: #{task.priority}",
+              task.due_date && "due: #{task.due_date}",
+              task.recurrence != "none" && "recurrence: #{task.recurrence}"
+            ]
+
+            Enum.reject(parts, &is_nil(&1)) |> Enum.join(" | ")
+          end
+
+        "Tasks in '#{workspace_slug}' (#{length(tasks)}):\n" <> Enum.join(lines, "\n")
+      end
+    else
+      "Error: context '#{workspace_slug}' not found"
+    end
+  end
+
+  defp execute_tool(
          "dran_create_note",
          %{"workspace" => workspace_slug, "title" => title, "slug" => slug} = args,
          user
@@ -1356,11 +1625,8 @@ defmodule Dran.MCP do
     if context do
       meta =
         %{}
-        |> Map.put("kind", Map.get(args, "kind", "todo"))
-        |> Map.put("kanban_status", Map.get(args, "kanban_status", "backlog"))
-        |> maybe_put_meta("priority", args["priority"])
+        |> Map.put("kind", Map.get(args, "kind", "journal"))
         |> maybe_put_meta("due_date", args["due_date"])
-        |> maybe_put_meta("assignee", args["assignee"])
 
       attrs =
         %{
@@ -2071,6 +2337,12 @@ defmodule Dran.MCP do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  # Like maybe_put, but also skips empty strings (lets callers clear a value
+  # with "" for meta-style keys while ignoring absent ones).
+  defp maybe_put_str(map, _key, nil), do: map
+  defp maybe_put_str(map, _key, ""), do: map
+  defp maybe_put_str(map, key, value), do: Map.put(map, key, value)
 
   defp maybe_put_meta(map, _key, nil), do: map
   defp maybe_put_meta(map, _key, ""), do: map

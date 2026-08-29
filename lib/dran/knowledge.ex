@@ -283,12 +283,20 @@ defmodule Dran.Knowledge do
     where(query, [p], p.page_type == ^type)
   end
 
-  # kind filters on meta.kind — used for note sub-kinds like "todo"/"plan"
+  # kind filters on meta.kind — used for note sub-kinds like "todo"/"plan".
+  # Accepts a single binary or a list (multi-select OR semantics: meta->>'kind'
+  # = ANY(list)). Empty list applies no filter.
   defp maybe_filter_kind(query, nil), do: query
 
-  defp maybe_filter_kind(query, kind) do
-    where(query, [p], fragment("?->>'kind' = ?", p.meta, ^kind))
+  defp maybe_filter_kind(query, kinds) when is_list(kinds) and kinds != [] do
+    where(query, [p], fragment("?->>'kind' = ANY(?)", p.meta, ^kinds))
   end
+
+  defp maybe_filter_kind(query, kinds) when is_binary(kinds) do
+    where(query, [p], fragment("?->>'kind' = ?", p.meta, ^kinds))
+  end
+
+  defp maybe_filter_kind(query, _), do: query
 
   defp maybe_filter_tag(query, nil), do: query
 
@@ -365,43 +373,8 @@ defmodule Dran.Knowledge do
     end
   end
 
-  @doc "List notes with kind:todo in a context, optionally filtered by kanban_status"
-  def list_todos(workspace_id) when is_binary(workspace_id) do
-    list_todos(workspace_id: workspace_id)
-  end
-
-  def list_todos(opts) when is_list(opts) do
-    workspace_id = Keyword.get(opts, :workspace_id)
-    status = Keyword.get(opts, :status)
-    limit = Keyword.get(opts, :limit, 500)
-    archived = Keyword.get(opts, :archived, false)
-
-    query =
-      from(p in Page,
-        where:
-          p.page_type == "note" and
-            p.archived == ^archived and
-            fragment("?->>'kind' = 'todo'", p.meta),
-        order_by: [asc: p.title],
-        limit: ^limit
-      )
-
-    query =
-      if status do
-        where(query, [p], p.kanban_status == ^status)
-      else
-        query
-      end
-
-    query =
-      if workspace_id do
-        where(query, [p], p.workspace_id == ^workspace_id)
-      else
-        query
-      end
-
-    Repo.all(query)
-  end
+  # NOTE: list_todos was removed — todos are first-class tasks now.
+  # Use Dran.Tasks.list_tasks/1 (or list_board/1) instead.
 
   @doc """
   All distinct tags used in a context, sorted alphabetically. Used for
@@ -2184,15 +2157,13 @@ defmodule Dran.Knowledge do
       )
       |> Map.new()
 
-    # todos_by_status: group_by on the kanban_status column for notes kind:"todo"
+    # todos_by_status: group_by on the tasks table
     todos_by_status =
       Repo.all(
-        from p in Page,
-          where:
-            p.workspace_id == ^workspace_id and p.page_type == "note" and p.archived == false and
-              fragment("?->>'kind' = 'todo'", p.meta),
-          group_by: fragment("coalesce(kanban_status, 'backlog')"),
-          select: {fragment("coalesce(kanban_status, 'backlog')"), count(p.id)}
+        from t in Dran.Task,
+          where: t.workspace_id == ^workspace_id and t.archived == false,
+          group_by: t.status,
+          select: {t.status, count(t.id)}
       )
       |> Map.new()
 

@@ -149,23 +149,13 @@ defmodule DranWeb.HomeLive do
     case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
         pages =
-          if page_type == "todo" do
-            Knowledge.list_todos(workspace_id: workspace.id, limit: 500)
-          else
-            Knowledge.list_pages(
-              workspace_id: workspace.id,
-              type: page_type,
-              limit: 500
-            )
-          end
+          Knowledge.list_pages(
+            workspace_id: workspace.id,
+            type: page_type,
+            limit: 500
+          )
 
-        # Todos group by kanban status; everything else by first letter (A-Z)
-        grouped =
-          if page_type == "todo" do
-            group_by_kanban_status(pages)
-          else
-            group_alphabetically(pages)
-          end
+        grouped = group_alphabetically(pages)
 
         # Sidebar data
         collections = Collections.list_collections(workspace.id)
@@ -295,45 +285,6 @@ defmodule DranWeb.HomeLive do
           type_index: type_index,
           search_results: nil,
           loading: true
-        )
-
-      nil ->
-        push_navigate(socket, to: ~p"/")
-    end
-  end
-
-  # ── :kanban — read-only kanban board for todos ────────────────────────────
-
-  @kanban_columns [
-    {"backlog", "Backlog", "bg-base-300"},
-    {"this_week", "This Week", "bg-blue-500/20 text-blue-700"},
-    {"today", "Today", "bg-amber-500/20 text-amber-700"},
-    {"in_progress", "In Progress", "bg-purple-500/20 text-purple-700"},
-    {"done", "Done", "bg-green-500/20 text-green-700"},
-    {"cancelled", "Cancelled", "bg-red-500/20 text-red-700"}
-  ]
-
-  defp apply_action(socket, :kanban, %{"workspace_slug" => workspace_slug}) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
-      %Workspace{} = workspace ->
-        todos = Knowledge.list_todos(workspace_id: workspace.id, limit: 500)
-
-        # Sidebar data
-        collections = Collections.list_collections(workspace.id)
-        pinned = Knowledge.list_pinned_pages(workspace.id)
-        type_index = build_type_index(workspace)
-
-        socket
-        |> assign(
-          active_nav: "kanban",
-          workspace: workspace,
-          todos: todos,
-          kanban_columns: @kanban_columns,
-          page_title: "#{workspace.name} · Kanban",
-          collections: collections,
-          pinned_pages: pinned,
-          type_index: type_index,
-          search_results: nil
         )
 
       nil ->
@@ -483,12 +434,6 @@ defmodule DranWeb.HomeLive do
               nodes={@nodes}
               edges={@edges}
               loading={@loading}
-            />
-          <% :kanban -> %>
-            <.kanban_view
-              workspace={@workspace}
-              todos={@todos}
-              kanban_columns={@kanban_columns}
             />
           <% :letter -> %>
             <.letter_view workspace={@workspace} letter={@letter} pages={@pages} alphabet={@alphabet} />
@@ -714,12 +659,7 @@ defmodule DranWeb.HomeLive do
 
       <div :for={{group_key, pages} <- @grouped_pages} class="mb-6">
         <h2 class="text-sm font-semibold text-base-content/40 uppercase tracking-wider mb-2 border-b border-base-300 pb-1 flex items-center gap-2">
-          <span :if={@page_type == "todo"} class={kanban_dot(group_key)}></span>
-          <span>
-            {if @page_type == "todo",
-              do: kanban_status_label(group_key),
-              else: group_key}
-          </span>
+          <span>{group_key}</span>
           <span class="ml-auto text-base-content/30 normal-case tracking-normal">
             {length(pages)}
           </span>
@@ -734,13 +674,6 @@ defmodule DranWeb.HomeLive do
               <span class="font-medium group-hover:text-primary transition-colors">{page.title}</span>
               <span :if={page.pinned} class="text-amber-500">
                 <.icon name="hero-bookmark" class="size-3" />
-              </span>
-              <span
-                :if={@page_type == "todo" && kanban_due(page)}
-                class={kanban_due_class(kanban_overdue?(page))}
-              >
-                <.icon name="hero-calendar-days" class="size-3.5" />
-                {kanban_format_due(kanban_due(page))}
               </span>
             </div>
             <p :if={page.summary} class="text-sm text-base-content/50 line-clamp-1 mt-0.5">
@@ -1022,119 +955,6 @@ defmodule DranWeb.HomeLive do
     """
   end
 
-  # ── Kanban view (read-only) ───────────────────────────────────────────────
-
-  attr :workspace, :map, required: true
-  attr :todos, :list, default: []
-  attr :kanban_columns, :list, default: []
-
-  defp kanban_view(assigns) do
-    ~H"""
-    <div class="px-6 py-8">
-      <div class="flex items-center gap-2 text-sm text-base-content/50 mb-2">
-        <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
-          {@workspace.name}
-        </.link>
-        <span>/</span>
-        <span>{gettext("Kanban")}</span>
-      </div>
-
-      <h1 class="text-2xl font-bold mb-6 flex items-center gap-2">
-        <.icon name="hero-view-columns" class="size-6 text-primary" />
-        {gettext("Kanban")}
-      </h1>
-
-      <div class="flex gap-4 pb-4">
-        <div
-          :for={{status, label, badge_class} <- @kanban_columns}
-          class="flex-1 min-w-0 flex flex-col rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
-        >
-          <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300">
-            <div class="flex items-center gap-2">
-              <span class={kanban_dot(status)}></span>
-              <span class="text-sm font-semibold">{label}</span>
-            </div>
-            <span class={kanban_badge(badge_class)}>
-              {kanban_count(@todos, status)}
-            </span>
-          </div>
-          <div class="p-2 space-y-2">
-            <a
-              :for={todo <- kanban_items(@todos, status)}
-              href={~p"/#{@workspace.slug}/notes/#{todo.slug}"}
-              class="block p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition"
-            >
-              <div class="font-medium text-sm break-words">{todo.title}</div>
-
-              <div :if={kanban_due(todo)} class={kanban_due_class(kanban_overdue?(todo))}>
-                <.icon name="hero-calendar-days" class="size-3.5" />
-                {kanban_format_due(kanban_due(todo))}
-              </div>
-            </a>
-            <p
-              :if={kanban_items(@todos, status) == []}
-              class="text-xs text-base-content/30 text-center py-4"
-            >
-              {gettext("Empty")}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-    """
-  end
-
-  defp kanban_status(page) do
-    case page.kanban_status do
-      s when is_binary(s) and s != "" -> s
-      _ -> "backlog"
-    end
-  end
-
-  defp kanban_items(todos, status), do: Enum.filter(todos, fn t -> kanban_status(t) == status end)
-  defp kanban_count(todos, status), do: Enum.count(todos, fn t -> kanban_status(t) == status end)
-
-  defp kanban_dot("backlog"), do: "size-2 rounded-full bg-base-content/30"
-  defp kanban_dot("this_week"), do: "size-2 rounded-full bg-blue-500"
-  defp kanban_dot("today"), do: "size-2 rounded-full bg-amber-500"
-  defp kanban_dot("in_progress"), do: "size-2 rounded-full bg-purple-500"
-  defp kanban_dot("done"), do: "size-2 rounded-full bg-green-500"
-  defp kanban_dot("cancelled"), do: "size-2 rounded-full bg-red-500"
-  defp kanban_dot(_), do: "size-2 rounded-full bg-base-content/30"
-
-  defp kanban_badge(class), do: "px-2 py-0.5 text-xs rounded-full " <> class
-
-  defp kanban_due(page), do: (page.meta || %{})["due_date"]
-
-  defp kanban_overdue?(page) do
-    case kanban_due(page) do
-      s when is_binary(s) and s != "" ->
-        case Date.from_iso8601(s) do
-          {:ok, d} -> Date.compare(d, Date.utc_today()) == :lt
-          _ -> false
-        end
-
-      _ ->
-        false
-    end
-  end
-
-  defp kanban_format_due(nil), do: ""
-  defp kanban_format_due(""), do: ""
-
-  defp kanban_format_due(s) when is_binary(s) do
-    case Date.from_iso8601(s) do
-      {:ok, d} -> Calendar.strftime(d, "%b %d")
-      _ -> s
-    end
-  end
-
-  defp kanban_due_class(true),
-    do: "flex items-center gap-1 mt-1.5 text-[11px] text-red-600 font-medium"
-
-  defp kanban_due_class(false),
-    do: "flex items-center gap-1 mt-1.5 text-[11px] text-base-content/60"
-
   # ── Letter view (read-only) ───────────────────────────────────────────────
 
   attr :workspace, :map, required: true
@@ -1353,28 +1173,6 @@ defmodule DranWeb.HomeLive do
     end)
     |> Enum.sort_by(fn {letter, _} -> letter end)
   end
-
-  @kanban_order ~w(backlog this_week today in_progress done cancelled)
-
-  defp group_by_kanban_status(pages) do
-    pages
-    |> Enum.group_by(fn page -> kanban_status(page) end)
-    |> Enum.map(fn {status, items} ->
-      {status, Enum.sort_by(items, fn item -> String.downcase(item.title) end)}
-    end)
-    |> Enum.sort_by(fn {status, _} ->
-      idx = Enum.find_index(@kanban_order, &(&1 == status))
-      idx || 99
-    end)
-  end
-
-  defp kanban_status_label("backlog"), do: gettext("Backlog")
-  defp kanban_status_label("this_week"), do: gettext("This Week")
-  defp kanban_status_label("today"), do: gettext("Today")
-  defp kanban_status_label("in_progress"), do: gettext("In Progress")
-  defp kanban_status_label("done"), do: gettext("Done")
-  defp kanban_status_label("cancelled"), do: gettext("Cancelled")
-  defp kanban_status_label(other), do: String.capitalize(other)
 
   defp build_alphabet(pages) do
     pages

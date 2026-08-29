@@ -50,6 +50,137 @@ defmodule DranWeb.PagesLiveTest do
       # Tag chips link to workspace search, not the dead /tags/:tag route
       assert html =~ ~s(href="/#{ws.slug}/search?q=elixir")
     end
+
+    test "renders the kind filter dropdown (collapsed)", %{conn: conn, ws: ws} do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes")
+
+      assert html =~ ~s(data-testid="kind-filters")
+      assert html =~ ~s(data-testid="kind-filter-toggle")
+      # Collapsed by default — options only render when open
+      refute html =~ ~s(data-testid="kind-filter-menu")
+    end
+
+    test "filters the list by ?kind= (single)", %{conn: conn, ws: ws} do
+      {:ok, _journal} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Entrada de journal",
+          body: "...",
+          page_type: "note",
+          meta: %{"kind" => "journal"}
+        })
+
+      {:ok, _idea} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Idea suelta",
+          body: "...",
+          page_type: "note",
+          meta: %{"kind" => "idea"}
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?kind=journal")
+
+      assert html =~ "Entrada de journal"
+      refute html =~ "Idea suelta"
+    end
+
+    test "filters the list by ?kind=a,b (multi)", %{conn: conn, ws: ws} do
+      {:ok, _journal} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Entrada de journal",
+          body: "...",
+          page_type: "note",
+          meta: %{"kind" => "journal"}
+        })
+
+      {:ok, _idea} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Idea suelta",
+          body: "...",
+          page_type: "note",
+          meta: %{"kind" => "idea"}
+        })
+
+      {:ok, _quote} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Cita célebre",
+          body: "...",
+          page_type: "note",
+          meta: %{"kind" => "quote"}
+        })
+
+      # Two of three kinds selected — the third must not appear
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?kind=journal,idea")
+
+      assert html =~ "Entrada de journal"
+      assert html =~ "Idea suelta"
+      refute html =~ "Cita célebre"
+    end
+
+    test "unknown kinds in the list are dropped", %{conn: conn, ws: ws} do
+      Knowledge.create_page(%{
+        workspace_id: ws.id,
+        title: "Visible igual",
+        body: "...",
+        page_type: "note"
+      })
+
+      # "no-existe" is dropped; empty valid remainder = no filter
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?kind=no-existe")
+
+      assert html =~ "Visible igual"
+    end
+
+    test "opening the menu and toggling kinds patches the URL and refilters", %{
+      conn: conn,
+      ws: ws
+    } do
+      Knowledge.create_page(%{
+        workspace_id: ws.id,
+        title: "Solo journal",
+        body: "...",
+        page_type: "note",
+        meta: %{"kind" => "journal"}
+      })
+
+      Knowledge.create_page(%{
+        workspace_id: ws.id,
+        title: "Solo idea",
+        body: "...",
+        page_type: "note",
+        meta: %{"kind" => "idea"}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes")
+
+      # Open the dropdown
+      view |> element(~s([data-testid="kind-filter-toggle"])) |> render_click()
+      assert render(view) =~ ~s(data-testid="kind-filter-menu")
+
+      # Select journal — the other page disappears, URL carries the filter
+      view |> element(~s([data-testid="kind-option-journal"])) |> render_click()
+
+      assert_patch view, "/#{ws.slug}/notes?kind=journal"
+      html = render(view)
+      assert html =~ "Solo journal"
+      refute html =~ "Solo idea"
+
+      # Add idea to the selection — both appear
+      view |> element(~s([data-testid="kind-option-idea"])) |> render_click()
+
+      assert_patch view, "/#{ws.slug}/notes?kind=journal,idea"
+      html = render(view)
+      assert html =~ "Solo journal"
+      assert html =~ "Solo idea"
+
+      # Clear resets everything
+      view |> element(~s([data-testid="kind-clear"])) |> render_click()
+      assert_patch view, "/#{ws.slug}/notes"
+    end
   end
 
   describe "show — view a page" do
@@ -76,6 +207,40 @@ defmodule DranWeb.PagesLiveTest do
       assert html =~ "page-new-form-note"
       assert html =~ t("Create Note")
       refute html =~ t("No notes yet")
+    end
+
+    test "kind select offers the type's registered kinds, no duplicate Tags label", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/new")
+
+      # kind select posts to page[meta][kind] with raw slugs as values
+      assert html =~ ~s(name="page[meta][kind]")
+      assert html =~ ~s(value="journal")
+
+      # the Tags label renders exactly once (component label, not duplicated)
+      tags_labels = Regex.scan(~r/Etiquetas/, html)
+      # locale-dependent: fall back to counting label-text occurrences in any locale
+      label_count =
+        Regex.scan(~r/label mb-1 block[^>]*>\s*<\/span>/, html) |> length()
+
+      assert label_count == 0,
+             "expected no leftover manual Tags label above tag_input, got #{label_count}"
+    end
+
+    test "creation form renders per type with its kinds", %{conn: conn, ws: ws} do
+      for {type_path, kind_sample} <- [
+            {"notes", "journal"},
+            {"entities", "person"},
+            {"concepts", "technique"},
+            {"references", "article"}
+          ] do
+        {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/#{type_path}/new")
+
+        assert html =~ ~s(name="page[meta][kind]")
+        assert html =~ ~s(value="#{kind_sample}"), "missing kind #{kind_sample} for #{type_path}"
+      end
     end
 
     test "submitting the form creates the page and redirects to its editor", %{
