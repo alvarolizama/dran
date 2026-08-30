@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict XXdwaTVJm5p8H1ZNdmRKpFXJVH0b2jcjocsf7ObaXd7iTNpmPUG5Y8XBtN27Pjg
+\restrict deHIutEbcUmD5Duvy0fSgvTlGbeDMXhM1G6MHb0V9pcu4BbrpExqM9KFYw2L6Om
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -230,6 +230,28 @@ CREATE TABLE public.goals (
     workspace_id uuid NOT NULL,
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
+-- Name: memories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.memories (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    content text NOT NULL,
+    content_hash character varying(255) NOT NULL,
+    embedding public.vector(1024),
+    trust_score real DEFAULT 0.5 NOT NULL,
+    helpful_count integer DEFAULT 0 NOT NULL,
+    retrieval_count integer DEFAULT 0 NOT NULL,
+    status character varying(255) DEFAULT 'active'::character varying NOT NULL,
+    source_session character varying(255),
+    created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL,
+    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('spanish'::regconfig, public.immutable_unaccent(COALESCE(content, ''::text)))) STORED
 );
 
 
@@ -540,6 +562,14 @@ ALTER TABLE ONLY public.goals
 
 
 --
+-- Name: memories memories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.memories
+    ADD CONSTRAINT memories_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: page_versions page_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -736,6 +766,34 @@ CREATE INDEX community_summaries_workspace_id_index ON public.cluster_summaries 
 --
 
 CREATE UNIQUE INDEX goals_workspace_id_slug_index ON public.goals USING btree (workspace_id, slug);
+
+
+--
+-- Name: memories_embedding_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX memories_embedding_idx ON public.memories USING hnsw (embedding public.vector_cosine_ops);
+
+
+--
+-- Name: memories_search_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX memories_search_idx ON public.memories USING gin (search_vector);
+
+
+--
+-- Name: memories_workspace_content_hash_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX memories_workspace_content_hash_idx ON public.memories USING btree (workspace_id, content_hash);
+
+
+--
+-- Name: memories_workspace_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX memories_workspace_status_idx ON public.memories USING btree (workspace_id, status);
 
 
 --
@@ -1099,6 +1157,14 @@ ALTER TABLE ONLY public.goals
 
 
 --
+-- Name: memories memories_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.memories
+    ADD CONSTRAINT memories_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
 -- Name: page_versions page_versions_page_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1158,7 +1224,7 @@ ALTER TABLE ONLY public.user_workspaces
 -- PostgreSQL database dump complete
 --
 
-\unrestrict XXdwaTVJm5p8H1ZNdmRKpFXJVH0b2jcjocsf7ObaXd7iTNpmPUG5Y8XBtN27Pjg
+\unrestrict deHIutEbcUmD5Duvy0fSgvTlGbeDMXhM1G6MHb0V9pcu4BbrpExqM9KFYw2L6Om
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1209,3 +1275,4 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260826060202);
 INSERT INTO public."schema_migrations" (version) VALUES (20260826061747);
 INSERT INTO public."schema_migrations" (version) VALUES (20260826063500);
 INSERT INTO public."schema_migrations" (version) VALUES (20260826072217);
+INSERT INTO public."schema_migrations" (version) VALUES (20260829232922);
