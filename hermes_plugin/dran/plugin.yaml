@@ -1,0 +1,5 @@
+name: dran
+version: 0.1.0
+description: "Dran memory — shared multi-agent memory store backed by your Dran workspace (REST, per-agent API key attribution)."
+hooks:
+  - on_session_end
