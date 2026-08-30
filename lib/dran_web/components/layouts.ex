@@ -212,7 +212,13 @@ defmodule DranWeb.Layouts do
           goals: length(Dran.Goals.list_goals(workspace_id: context.id, limit: 500)),
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
-          activity: Dran.Knowledge.count_log(context.id)
+          activity: Dran.Knowledge.count_log(context.id),
+          memory:
+            try do
+              Dran.Memory.count_memories(context.id)
+            rescue
+              _ -> 0
+            end
         }
       else
         %{}
@@ -341,7 +347,14 @@ defmodule DranWeb.Layouts do
             label: gettext("Tareas"),
             icon: "hero-view-columns",
             path: base <> "/tasks"
-          }
+          },
+        %{
+          key: "memory",
+          label: gettext("Memory"),
+          icon: "hero-cpu-chip",
+          path: base <> "/memory",
+          badge: counts[:memory] || 0
+        }
       ]
       |> Enum.reject(&(!&1))
 

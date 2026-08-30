@@ -1235,6 +1235,26 @@ defmodule Dran.Knowledge do
     nodes = page_nodes ++ goal_nodes
     total_nodes = total_pages + length(goal_nodes)
 
+    # Memories are first-class too (own table, multi-agent shared memory).
+    # Like goals they're ADDITIVE — they don't compete with pages for the
+    # max_nodes cap — but capped at the newest 100 so a write-hot memory
+    # store can't flood the 3D view. slug stays nil: the graph hook only
+    # navigates nodes with a slug, so memory nodes are hover-only.
+    memory_nodes =
+      Repo.all(
+        from m in Dran.Memory,
+          where: m.workspace_id == ^workspace_id and m.status == "active",
+          order_by: [desc: m.inserted_at],
+          limit: 100,
+          select: %{id: m.id, content: m.content, type: fragment("'memory'")}
+      )
+      |> Enum.map(fn m ->
+        %{id: m.id, title: truncate_memory_label(m.content), slug: nil, type: m.type}
+      end)
+
+    nodes = nodes ++ memory_nodes
+    total_nodes = total_nodes + length(memory_nodes)
+
     node_ids = Enum.map(page_nodes, & &1.id)
     goal_ids = Enum.map(goal_nodes, & &1.id)
 
@@ -1316,6 +1336,18 @@ defmodule Dran.Knowledge do
     end
   end
 
+  # Memory nodes show the fact itself as the hover label — first line,
+  # capped, so a long fact doesn't produce a monster tooltip.
+  defp truncate_memory_label(content) do
+    first_line = content |> String.split("\n", parts: 2) |> hd()
+
+    if String.length(first_line) <= 80 do
+      first_line
+    else
+      String.slice(first_line, 0, 77) <> "..."
+    end
+  end
+
   # The N most-connected page ids in the context, ranked by total degree
   # (inbound + outbound relations), excluding the given types. Uses two
   # SQL GROUP-BY queries instead of loading every (source,target) pair into
@@ -1392,6 +1424,7 @@ defmodule Dran.Knowledge do
       )
 
     Map.put(page_counts, "goal", goal_count || 0)
+    |> Map.put("memory", Dran.Memory.count_memories(workspace_id))
   end
 
   # ──────────────────────────────────────────────────────────────────────────

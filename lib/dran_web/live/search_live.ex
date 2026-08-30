@@ -10,6 +10,7 @@ defmodule DranWeb.SearchLive do
   use DranWeb, :live_view
 
   alias Dran.Knowledge
+  alias Dran.Memory
   alias DranWeb.GraphHelpers
   alias DranWeb.HTMLSanitizer
   alias DranWeb.PageTypes
@@ -39,7 +40,8 @@ defmodule DranWeb.SearchLive do
        graph_nodes: [],
        graph_edges: [],
        search_mode: "auto",
-       search_modes: @search_modes
+       search_modes: @search_modes,
+       memory_results: []
      )}
   end
 
@@ -56,16 +58,26 @@ defmodule DranWeb.SearchLive do
 
         %{nodes: graph_nodes, edges: graph_edges} = graph_data(socket, results)
 
+        memory_results = search_memories(socket, q)
+
         {:noreply,
          assign(socket,
            query: q,
            results: results,
+           memory_results: memory_results,
            graph_nodes: graph_nodes,
            graph_edges: graph_edges
          )}
 
       _ ->
-        {:noreply, assign(socket, query: "", results: [], graph_nodes: [], graph_edges: [])}
+        {:noreply,
+         assign(socket,
+           query: "",
+           results: [],
+           memory_results: [],
+           graph_nodes: [],
+           graph_edges: []
+         )}
     end
   end
 
@@ -89,10 +101,13 @@ defmodule DranWeb.SearchLive do
 
     %{nodes: graph_nodes, edges: graph_edges} = graph_data(socket, results)
 
+    memory_results = search_memories(socket, q)
+
     {:noreply,
      assign(socket,
        query: q,
        results: results,
+       memory_results: memory_results,
        graph_nodes: graph_nodes,
        graph_edges: graph_edges
      )}
@@ -102,6 +117,18 @@ defmodule DranWeb.SearchLive do
   def handle_event("set_mode", %{"mode" => mode}, socket) do
     {:noreply, assign(socket, search_mode: mode)}
   end
+
+  # Memory facts are part of the global search surface. bump_retrieval: false
+  # — typing in the UI must not inflate the agents' usage counter.
+  defp search_memories(%{assigns: %{context: %{id: _workspace_id}}} = socket, q) do
+    Memory.search(socket.assigns.context.id, q, limit: 5, bump_retrieval: false)
+  rescue
+    _ -> []
+  end
+
+  # No workspace in scope (dashboard-level mount) — memory search is
+  # workspace-scoped, so there is nothing to search.
+  defp search_memories(_socket, _q), do: []
 
   @impl true
   def render(assigns) do
@@ -161,7 +188,7 @@ defmodule DranWeb.SearchLive do
           <.empty_hero :if={@query == ""} />
 
           <.no_results
-            :if={@query != "" && @results == [] && @search_mode != "graph"}
+            :if={@query != "" && @results == [] && @memory_results == [] && @search_mode != "graph"}
             query={@query}
           />
 
@@ -172,6 +199,11 @@ defmodule DranWeb.SearchLive do
               <.result_card :for={result <- @results} result={result} />
             </div>
           </div>
+
+          <.memory_results_section
+            :if={@query != "" && @memory_results != [] && @search_mode != "graph"}
+            memory_results={@memory_results}
+          />
         </div>
 
         <div
@@ -221,6 +253,48 @@ defmodule DranWeb.SearchLive do
       <p class="text-caption">
         {gettext("%{count} results for '%{query}'", count: @count, query: @query)}
       </p>
+    </div>
+    """
+  end
+
+  attr :memory_results, :list, required: true
+
+  defp memory_results_section(assigns) do
+    ~H"""
+    <div class="mt-6" data-testid="memory-results">
+      <div class="flex items-baseline justify-between border-b border-base-300 pb-2 mb-3">
+        <h2 class="text-lg font-semibold flex items-center gap-2">
+          <.icon name="hero-cpu-chip" class="size-5 text-primary" />
+          {gettext("Memory de agentes")}
+        </h2>
+        <p class="text-caption">
+          {gettext("%{count} facts de memoria", count: length(@memory_results))}
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <.memory_result_card :for={entry <- @memory_results} entry={entry} />
+      </div>
+    </div>
+    """
+  end
+
+  attr :entry, :map, required: true
+
+  defp memory_result_card(assigns) do
+    ~H"""
+    <div class="surface-2 rounded-xl p-3 text-sm">
+      <p class="leading-relaxed">{@entry.memory.content}</p>
+      <div class="mt-2 flex items-center gap-3 text-xs text-base-content/60">
+        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-base-200">
+          <.icon name="hero-cpu-chip" class="size-3" />
+          {@entry.memory.created_by}
+        </span>
+        <span>{Calendar.strftime(@entry.memory.inserted_at, "%d %b %Y")}</span>
+        <span class="ml-auto px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
+          {gettext("score")} {Float.round(@entry.score * 1.0, 3)}
+        </span>
+      </div>
     </div>
     """
   end

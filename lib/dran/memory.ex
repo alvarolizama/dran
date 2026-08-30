@@ -140,6 +140,7 @@ defmodule Dran.Memory do
         |> Repo.insert()
         |> case do
           {:ok, memory} ->
+            broadcast_memory_change(memory.workspace_id, :created, memory)
             {:ok, memory, :created}
 
           {:error, %Ecto.Changeset{errors: [{:content_hash, _} | _]}} ->
@@ -197,6 +198,7 @@ defmodule Dran.Memory do
   """
   def search(workspace_id, query, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
+    bump? = Keyword.get(opts, :bump_retrieval, true)
     fts = fts_candidates(workspace_id, query, limit)
     semantic = semantic_candidates(workspace_id, query, limit)
 
@@ -212,7 +214,7 @@ defmodule Dran.Memory do
 
     ids = Enum.map(fused, fn {id, _} -> id end)
 
-    bump_retrieval(ids)
+    if bump?, do: bump_retrieval(ids)
 
     by_id = Map.new(fused, fn {id, %{score: score}} -> {id, score} end)
 
@@ -275,25 +277,50 @@ defmodule Dran.Memory do
 
   @doc "List memories of a workspace, newest first. Opts: :status, :limit, :offset."
   def list_memories(workspace_id, opts \\ []) do
+    # limit/offset push down to SQL (LIMIT/OFFSET) — paginating in memory
+    # would load the workspace's whole memories table on every call.
     from(m in __MODULE__, where: m.workspace_id == ^workspace_id)
     |> maybe_filter_status(Keyword.get(opts, :status))
-    |> order_by(desc: :inserted_at)
+    # Tiebreak by id so offset pagination is deterministic even when two
+    # facts land in the same second (multi-agent REST ingest).
+    |> order_by(desc: :inserted_at, desc: :id)
+    |> limit(^Keyword.get(opts, :limit))
+    |> offset(^Keyword.get(opts, :offset))
     |> Repo.all()
-    |> maybe_paginate(Keyword.get(opts, :limit), Keyword.get(opts, :offset))
   end
 
   defp maybe_filter_status(query, nil), do: query
   defp maybe_filter_status(query, status), do: where(query, [m], m.status == ^status)
 
-  defp maybe_paginate(memo, nil, nil), do: memo
+  def get_memory!(id), do: Repo.get!(__MODULE__, id)
 
-  defp maybe_paginate(memo, limit, offset) do
-    memo
-    |> Enum.drop(offset || 0)
-    |> Enum.take(limit || 10_000)
+  @doc "Count active memories of a workspace (sidebar badge)."
+  def count_memories(workspace_id) do
+    from(m in __MODULE__, where: m.workspace_id == ^workspace_id and m.status == "active")
+    |> Repo.aggregate(:count)
   end
 
-  def get_memory!(id), do: Repo.get!(__MODULE__, id)
+  # UI notification: MemoryLive refreshes on {:memory_changed, action, memory}.
+  # Dedicated topic (NOT brain:<workspace_id>): that shared topic is received
+  # by older LiveViews whose handle_info has no catch-all, so an unexpected
+  # message type would crash them. One topic per message family is the safe
+  # contract. GraphCache invalidation keeps the workspace graph in sync —
+  # memories are additive graph nodes.
+  defp broadcast_memory_change(workspace_id, action, memory) do
+    Phoenix.PubSub.broadcast(
+      Dran.PubSub,
+      "memory:#{workspace_id}",
+      {:memory_changed, action, memory}
+    )
+
+    Dran.GraphCache.invalidate_context(workspace_id)
+    :ok
+  rescue
+    # PubSub/ETS may not be running during release tasks (bin/dran eval, seeds)
+    # where only the repo is started — the broadcast is a UI notification and
+    # must never fail the write (same rescue as Knowledge.broadcast_page_change).
+    _ -> :ok
+  end
 
   def get_memory(id), do: Repo.get(__MODULE__, id)
 
@@ -316,5 +343,9 @@ defmodule Dran.Memory do
     memory
     |> change(status: "superseded")
     |> Repo.update()
+    |> tap(fn
+      {:ok, updated} -> broadcast_memory_change(memory.workspace_id, :deleted, updated)
+      _ -> :ok
+    end)
   end
 end

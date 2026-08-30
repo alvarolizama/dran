@@ -460,6 +460,10 @@ defmodule DranWeb.Router do
     get "/index", IndexController, :index
     get "/graph", GraphController, :graph
     get "/log", LogController, :index
+
+    # Shared multi-agent memory (read)
+    get "/memory", MemoryController, :index
+    get "/memory/search", MemoryController, :search
   end
 
   # ── REST API — write routes (requires write_access on API keys) ────────────
@@ -498,6 +502,18 @@ defmodule DranWeb.Router do
     post "/mcp", MCPController, :handle_post
     get "/mcp", MCPController, :handle_get
     delete "/mcp", MCPController, :handle_delete
+  end
+
+  # ── REST API — memory write routes (requires write_access on API keys) ─────
+  # Agents store facts, rate them, ingest transcripts and soft-delete via the
+  # same write-scoped gate as pages/relations (DranWeb.API.MemoryController).
+  scope "/api/memory", DranWeb.API do
+    pipe_through [:api, :api_auth, :require_write_access]
+
+    post "/", MemoryController, :create
+    post "/feedback", MemoryController, :feedback
+    post "/ingest", MemoryController, :ingest
+    delete "/:id", MemoryController, :delete
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
@@ -563,6 +579,9 @@ defmodule DranWeb.Router do
 
     # Task board — the interactive kanban (first-class tasks).
     live "/:workspace_slug/tasks", TaskBoardLive, :index
+
+    # Shared multi-agent memory (first-class, own table — not page types).
+    live "/:workspace_slug/memory", MemoryLive, :index
 
     # Legacy kanban URL redirects to the task board.
     get "/:workspace_slug/kanban", KanbanRedirectController, :redirect_to_tasks
