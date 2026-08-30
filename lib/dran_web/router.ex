@@ -326,12 +326,22 @@ defmodule DranWeb.Router do
   end
 
   defp get_requested_workspace_id(conn) do
-    # Extract workspace_id from params or path
+    # Extract workspace_id from params or path.
+    # The access_levels map is keyed by workspace UUID, so a slug in
+    # params["workspace"] must be resolved to its ID before the check,
+    # otherwise every write with a slug would 403 for API keys.
     cond do
-      conn.params["workspace_id"] -> conn.params["workspace_id"]
-      # slug lookup would need extra query
-      conn.params["workspace"] -> conn.params["workspace"]
-      true -> nil
+      ws_id = conn.params["workspace_id"] ->
+        ws_id
+
+      slug = conn.params["workspace"] ->
+        case Dran.Knowledge.get_workspace_by_slug(slug) do
+          %{id: id} -> id
+          _ -> slug
+        end
+
+      true ->
+        nil
     end
   end
 
