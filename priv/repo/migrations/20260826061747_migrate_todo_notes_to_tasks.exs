@@ -38,6 +38,13 @@ defmodule Dran.Repo.Migrations.MigrateTodoNotesToTasks do
   @doc "Ordered SQL statements of up/0 — public for sandbox tests."
   def up_statements do
     [
+      # 0. Widen tasks.summary: it receives pages.summary (text) but was
+      #    created as varchar(255) — a long legacy summary aborts the copy
+      #    with 22001. varchar→text is metadata-only; no-op on fresh DBs
+      #    that never stored >255 summaries.
+      """
+      ALTER TABLE tasks ALTER COLUMN summary TYPE text
+      """,
       # 1. Copy todo-notes into tasks (id preserved so relations keep
       #    pointing at the same uuid through the copy phase).
       #    Status comes from meta — the kanban COLUMNS were never synced
@@ -53,10 +60,10 @@ defmodule Dran.Repo.Migrations.MigrateTodoNotesToTasks do
       SELECT
         p.id,
         p.workspace_id,
-        p.title,
-        p.slug,
+        left(p.title, 255),
+        left(p.slug, 255),
         p.body,
-        p.summary,
+        left(p.summary, 255),
         CASE COALESCE(NULLIF(p.meta->>'kanban_status', ''), 'backlog')
           WHEN 'pending' THEN 'backlog'   -- legacy seed status
           ELSE COALESCE(NULLIF(p.meta->>'kanban_status', ''), 'backlog')

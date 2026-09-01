@@ -2,6 +2,21 @@ defmodule Dran.Repo.Migrations.MigrateModel do
   use Ecto.Migration
 
   def up do
+    # ── Phase 0: widen columns that receive unbounded page data ──────────────
+    # The receiver tables were created with :string (varchar 255) for columns
+    # that get pages.title/slug (varchar 500) and pages.summary/body (text).
+    # A legacy page with a long title/summary/body aborted this migration with
+    # 22001 string_data_right_truncation. varchar→text is a metadata-only
+    # change (no table rewrite); on fresh databases this is a redundant no-op.
+    # title/slug stay varchar(255) and are truncated with left() instead, so
+    # the resulting schema matches a fresh bootstrap exactly.
+    execute "ALTER TABLE goals ALTER COLUMN description TYPE text"
+    execute "ALTER TABLE goals ALTER COLUMN body TYPE text"
+    execute "ALTER TABLE projects ALTER COLUMN description TYPE text"
+    execute "ALTER TABLE projects ALTER COLUMN body TYPE text"
+    execute "ALTER TABLE collections ALTER COLUMN description TYPE text"
+    execute "ALTER TABLE reports ALTER COLUMN body TYPE text"
+
     # ── Phase 1: goals → goals table ──────────────────────────────────────────
     execute """
     INSERT INTO goals (id, title, slug, description, body, kind, health, status,
@@ -9,9 +24,9 @@ defmodule Dran.Repo.Migrations.MigrateModel do
       team, meta, archived, workspace_id, inserted_at, updated_at)
     SELECT
       p.id,
-      p.title,
-      p.slug,
-      p.summary,
+      left(p.title, 255),
+      left(p.slug, 255),
+      left(p.summary, 255),
       COALESCE(p.body, ''),
       p.meta->>'kind',
       p.meta->>'health',
@@ -34,17 +49,22 @@ defmodule Dran.Repo.Migrations.MigrateModel do
     ON CONFLICT DO NOTHING
     """
 
+    # Column widths: the goals table predates the fix and uses varchar(255)
+    # for title/slug/description while pages keeps title/slug at varchar(500)
+    # and summary as unbounded text — truncate defensively so a legacy page
+    # with a long title/summary can't abort the migration (22001).
+
     # ── Phase 2: projects → projects table ────────────────────────────────────
     execute """
     INSERT INTO projects (id, title, slug, description, body, status, health, priority,
       start_date, target_date, meta, archived, workspace_id, inserted_at, updated_at)
     SELECT
       p.id,
-      p.title,
-      p.slug,
-      p.summary,
+      left(p.title, 255),
+      left(p.slug, 255),
+      left(p.summary, 255),
       COALESCE(p.body, ''),
-      COALESCE(p.meta->>'status', 'active'),
+      left(COALESCE(p.meta->>'status', 'active'), 255),
       p.meta->>'health',
       p.meta->>'priority',
       (p.meta->>'start_date')::date,
@@ -64,9 +84,9 @@ defmodule Dran.Repo.Migrations.MigrateModel do
     INSERT INTO collections (id, name, slug, description, filters, workspace_id, inserted_at, updated_at)
     SELECT
       p.id,
-      p.title,
-      p.slug,
-      p.summary,
+      left(p.title, 255),
+      left(p.slug, 255),
+      left(p.summary, 255),
       p.meta->'query',
       p.workspace_id,
       p.inserted_at,
@@ -82,10 +102,10 @@ defmodule Dran.Repo.Migrations.MigrateModel do
     INSERT INTO reports (id, title, slug, body, report_type, meta, workspace_id, inserted_at, updated_at)
     SELECT
       p.id,
-      p.title,
-      p.slug,
+      left(p.title, 255),
+      left(p.slug, 255),
       COALESCE(p.body, ''),
-      COALESCE(p.meta->>'report_type', 'log'),
+      left(COALESCE(p.meta->>'report_type', 'log'), 255),
       p.meta,
       p.workspace_id,
       p.inserted_at,
