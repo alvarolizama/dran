@@ -363,6 +363,8 @@ defmodule DranWeb.Layouts do
 
     view_items =
       [
+        enabled?.("graph") &&
+          %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
         enabled?.("clusters") &&
           %{
             key: "clusters",
@@ -370,8 +372,6 @@ defmodule DranWeb.Layouts do
             icon: "hero-squares-2x2",
             path: base <> "/clusters"
           },
-        enabled?.("graph") &&
-          %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
         enabled?.("journey") &&
           %{
             key: "journey",
