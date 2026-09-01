@@ -347,16 +347,19 @@ defmodule DranWeb.Layouts do
             label: gettext("Tareas"),
             icon: "hero-view-columns",
             path: base <> "/tasks"
-          },
-        %{
-          key: "memory",
-          label: gettext("Memory"),
-          icon: "hero-cpu-chip",
-          path: base <> "/memory",
-          badge: counts[:memory] || 0
-        }
+          }
       ]
       |> Enum.reject(&(!&1))
+
+    memory_items = [
+      %{
+        key: "memory",
+        label: gettext("Memory"),
+        icon: "hero-cpu-chip",
+        path: base <> "/memory",
+        badge: counts[:memory] || 0
+      }
+    ]
 
     view_items =
       [
@@ -381,7 +384,8 @@ defmodule DranWeb.Layouts do
 
     [
       %{label: nil, items: items ++ view_items},
-      %{label: gettext("Knowledge base"), items: page_type_items}
+      %{label: gettext("Knowledge base"), items: page_type_items},
+      %{label: gettext("Memory"), items: memory_items}
     ]
   end
 
