@@ -383,9 +383,10 @@ defmodule DranWeb.Layouts do
       |> Enum.reject(&(!&1))
 
     [
-      %{label: nil, items: items ++ view_items},
+      %{label: nil, items: items},
       %{label: gettext("Knowledge base"), items: page_type_items},
-      %{label: gettext("Memory"), items: memory_items}
+      %{label: gettext("Memory"), items: memory_items},
+      %{label: gettext("Insights"), items: view_items}
     ]
   end
 
