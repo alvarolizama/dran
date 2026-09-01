@@ -386,7 +386,7 @@ defmodule DranWeb.Layouts do
       %{label: nil, items: items},
       %{label: gettext("Knowledge base"), items: page_type_items},
       %{label: gettext("Memory"), items: memory_items},
-      %{label: gettext("Insights"), items: view_items}
+      %{label: "Insights", items: view_items}
     ]
   end
 
