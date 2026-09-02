@@ -136,8 +136,9 @@ defmodule DranWeb.PageListComponents do
               else: gettext("Archived")} ({if @show_archived, do: @total_count, else: @total_archived})
           </button>
           <.link
-            navigate={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}/new"}
+            patch={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}?new=true"}
             class="btn btn-primary btn-sm"
+            data-testid="new-page-button"
           >
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}
           </.link>
@@ -322,7 +323,7 @@ defmodule DranWeb.PageListComponents do
             <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
           </div>
           <.link
-            navigate={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}/new"}
+            patch={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}?new=true"}
             class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
           >
             <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}

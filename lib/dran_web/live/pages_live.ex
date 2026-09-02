@@ -16,10 +16,13 @@ defmodule DranWeb.PagesLive do
   alias DranWeb.PageEdit
   alias DranWeb.PageTypes
   alias DranWeb.ListPagination
-  alias DranWeb.Plugs.Auth
 
   @impl true
   def render(assigns) do
+    # The modal flag is only assigned when handle_params ran a branch that
+    # manages the create modal — normalize so show/index always render.
+    assigns = assign(assigns, modal_open: Map.get(assigns, :modal_open, false))
+
     ~H"""
     <Layouts.app
       flash={@flash}
@@ -109,16 +112,6 @@ defmodule DranWeb.PagesLive do
         </.page_detail>
       </div>
 
-      <div :if={@live_action == :new}>
-        <.page_new_form
-          form={@form}
-          page_type={@page_type}
-          workspace_id={@workspace_id}
-          editor_id={"#{@page_type}-new-editor"}
-          cancel_path={@back_path}
-        />
-      </div>
-
       <div :if={@live_action == :index}>
         <.page_list
           pages={Enum.take(@pages, @visible_count)}
@@ -135,6 +128,25 @@ defmodule DranWeb.PagesLive do
           kind_menu_open={@kind_menu_open}
         />
       </div>
+
+      <.resource_modal
+        :if={@modal_open || false}
+        id="page-resource-modal"
+        title={gettext("New Page")}
+        pill={(@page_type && String.upcase(@page_type)) || "PAGE"}
+        pill_class="bg-primary/10 text-primary"
+        on_close="close_page_modal"
+        form_id="page-new-form-#{@page_type}"
+        submit_label={gettext("Create")}
+      >
+        <.page_new_form
+          form={@form}
+          page_type={@page_type}
+          workspace_id={@workspace_id}
+          editor_id={"#{@page_type}-new-editor"}
+          cancel_path={@back_path}
+        />
+      </.resource_modal>
     </Layouts.app>
     """
   end
@@ -155,40 +167,32 @@ defmodule DranWeb.PagesLive do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    page_type = socket.assigns[:page_type] || page_type_from_params(params)
-    workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
-    back_path = build_back_path(workspace_slug, page_type)
-    page_path = build_page_path(workspace_slug, page_type, slug)
+    # `?new=true` overrides — the slug clause only handles show; a
+    # `?new=true` on a show URL opens the create modal (handled by the
+    # generic clause below, which sets modal_open + a fresh form).
+    if params["new"] == "true" do
+      params =
+        Map.put(params, "workspace", socket.assigns[:workspace_slug] || params["workspace_slug"])
 
-    # Alias workspace_slug → workspace so Auth.resolve_workspace finds it
-    params = Map.put(params, "workspace", workspace_slug)
+      handle_params(params, nil, socket)
+    else
+      page_type = socket.assigns[:page_type] || page_type_from_params(params)
+      workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
+      back_path = build_back_path(workspace_slug, page_type)
+      page_path = build_page_path(workspace_slug, page_type, slug)
 
-    socket = assign(socket, back_path: back_path, page_path: page_path)
+      # Alias workspace_slug → workspace so Auth.resolve_workspace finds it
+      params = Map.put(params, "workspace", workspace_slug)
 
-    PageDetail.load_page_detail(socket, params, slug, redirect_to: back_path)
+      socket = assign(socket, back_path: back_path, page_path: page_path)
+
+      PageDetail.load_page_detail(socket, params, slug, redirect_to: back_path)
+    end
   end
 
-  # :new — build a fresh changeset for the creation form. The context comes
-  # from the URL slug (resolve_workspace keeps socket assigns in sync).
-  def handle_params(params, _url, %{assigns: %{live_action: :new}} = socket) do
-    page_type = socket.assigns[:page_type] || page_type_from_params(params)
-    workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
-    back_path = build_back_path(workspace_slug, page_type)
-
-    params = Map.put(params, "workspace", workspace_slug)
-    {socket, _context} = Auth.resolve_workspace(socket, params)
-
-    changeset = Knowledge.change_page(%Page{page_type: page_type})
-
-    {:noreply,
-     assign(socket,
-       form: to_form(changeset, as: :page),
-       page: nil,
-       workspace_id: socket.assigns[:workspace] && socket.assigns.workspace.id,
-       page_title: PageTypes.plural(page_type),
-       back_path: back_path
-     )}
-  end
+  # `?new=true` forwards to the create-modal action (the slug clause and the
+  # generic index clause both route here). The `/new` ROUTE is gone — the
+  # create modal is URL state, not a page.
 
   def handle_params(params, _url, socket) do
     page_type = socket.assigns[:page_type] || page_type_from_params(params)
@@ -229,7 +233,16 @@ defmodule DranWeb.PagesLive do
        kind_filters: kind_filters,
        kind_menu_open: socket.assigns[:kind_menu_open] || false,
        page_title: PageTypes.plural(page_type),
-       back_path: build_back_path(workspace_slug, page_type)
+       back_path: build_back_path(workspace_slug, page_type),
+       # Create-modal state (?new=true) — form + workspace for the editor
+       modal_open: params["new"] == "true",
+       workspace_id: socket.assigns.context && socket.assigns.context.id,
+       form:
+         if params["new"] == "true" do
+           to_form(Knowledge.change_page(%Page{page_type: page_type}), as: :page)
+         else
+           socket.assigns[:form]
+         end
      )}
   end
 
@@ -289,7 +302,22 @@ defmodule DranWeb.PagesLive do
     page_type = socket.assigns[:page_type]
     workspace_slug = socket.assigns[:workspace_slug]
     type_path = PageTypes.path(page_type)
-    {:noreply, push_navigate(socket, to: ~p"/#{workspace_slug}/#{type_path}/new")}
+    {:noreply, push_patch(socket, to: ~p"/#{workspace_slug}/#{type_path}?new=true")}
+  end
+
+  def handle_event("close_page_modal", _params, socket) do
+    page_type = socket.assigns[:page_type]
+    workspace_slug = socket.assigns[:workspace_slug]
+    type_path = PageTypes.path(page_type)
+
+    # Preserve active kind filters when closing back to the list
+    to =
+      case socket.assigns[:kind_filters] do
+        [] -> ~p"/#{workspace_slug}/#{type_path}"
+        kinds -> "/#{workspace_slug}/#{type_path}?kind=" <> Enum.join(kinds, ",")
+      end
+
+    {:noreply, push_patch(socket, to: to)}
   end
 
   # ── Editing (delegated to PageEdit) ──

@@ -29,8 +29,8 @@ defmodule DranWeb.PagesLiveTest do
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes")
 
       assert html =~ t("No notes yet")
-      # The CTA must point inside the workspace (not /notes/new)
-      assert html =~ ~s(href="/#{ws.slug}/notes/new")
+      # The CTA opens the create modal inside the workspace (patch, not navigate)
+      assert html =~ ~s(href="/#{ws.slug}/notes?new=true")
     end
 
     test "lists created pages with workspace-scoped links", %{conn: conn, ws: ws} do
@@ -200,20 +200,22 @@ defmodule DranWeb.PagesLiveTest do
     end
   end
 
-  describe "new — create a page" do
-    test "renders the creation form (not the list)", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/new")
+  describe "new — create a page (resource modal)" do
+    test "renders the creation modal (over the list)", %{conn: conn, ws: ws} do
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
 
+      assert html =~ "page-resource-modal"
       assert html =~ "page-new-form-note"
       assert html =~ t("Create Note")
-      refute html =~ t("No notes yet")
+      # The modal overlays the list — the empty state stays in the DOM
+      assert has_element?(view, "[data-testid='kind-filters']")
     end
 
     test "kind select offers the type's registered kinds, no duplicate Tags label", %{
       conn: conn,
       ws: ws
     } do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/new")
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
 
       # kind select posts to page[meta][kind] with raw slugs as values
       assert html =~ ~s(name="page[meta][kind]")
@@ -236,7 +238,7 @@ defmodule DranWeb.PagesLiveTest do
             {"concepts", "technique"},
             {"references", "article"}
           ] do
-        {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/#{type_path}/new")
+        {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/#{type_path}?new=true")
 
         assert html =~ ~s(name="page[meta][kind]")
         assert html =~ ~s(value="#{kind_sample}"), "missing kind #{kind_sample} for #{type_path}"
@@ -247,7 +249,7 @@ defmodule DranWeb.PagesLiveTest do
       conn: conn,
       ws: ws
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/new")
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
 
       view
       |> form("#page-new-form-note", %{
@@ -261,8 +263,12 @@ defmodule DranWeb.PagesLiveTest do
       assert_redirect(view, "/#{ws.slug}/notes/nota-desde-form?edit=true")
     end
 
-    test "invalid type falls back to the workspace home", %{conn: conn, ws: ws} do
-      assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, ~p"/#{ws.slug}/nonsense/new")
+    test "close_page_modal patches back to the list", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+
+      render_click(view, "close_page_modal", %{})
+
+      refute has_element?(view, "#page-resource-modal")
     end
   end
 
@@ -308,7 +314,7 @@ defmodule DranWeb.PagesLiveTest do
       conn: conn,
       ws: ws
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/new")
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
 
       view
       |> form("#page-new-form-note", %{page: %{"title" => "Nota atribuida"}})

@@ -568,7 +568,6 @@ defmodule DranWeb.Router do
     # defined BEFORE the generic /:workspace_slug/:type route, otherwise
     # /:workspace_slug/:type would swallow /:workspace_slug/goals etc.
     live "/:workspace_slug/goals", GoalLive, :index
-    live "/:workspace_slug/goals/new", GoalLive, :new
     live "/:workspace_slug/goals/:slug", GoalLive, :show
 
     live "/:workspace_slug/collections", SmartCollectionLive, :index
@@ -603,7 +602,6 @@ defmodule DranWeb.Router do
     # Generic page type routes — PagesLive handles note/concept/entity/reference.
     # MUST be defined LAST so first-class entity routes above win.
     live "/:workspace_slug/:type", PagesLive, :index
-    live "/:workspace_slug/:type/new", PagesLive, :new
     live "/:workspace_slug/:type/:slug", PagesLive, :show
   end
 end
