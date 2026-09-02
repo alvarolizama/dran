@@ -9,7 +9,9 @@ defmodule DranWeb.PageComponents do
   import DranWeb.CoreComponents, only: [icon: 1, input: 1]
 
   import DranWeb.MarkdownEditorComponents,
-    only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
+    only: [meta_fields: 1, tag_input: 1]
+
+  import DranWeb.ResourceComponents, only: [markdown_body_field: 1, form_actions: 1]
 
   alias Dran.Knowledge
   alias Dran.Page
@@ -1005,17 +1007,13 @@ defmodule DranWeb.PageComponents do
           class="text-lg font-medium"
         />
 
-        <div>
-          <span class="label mb-1 block text-sm font-medium text-base-content/70">
-            {gettext("Content")}
-          </span>
-          <.markdown_editor
-            id={@editor_id}
-            body={@page.body}
-            workspace_id={@workspace_id}
-            save_status={@save_status}
-          />
-        </div>
+        <.markdown_body_field
+          id={@editor_id}
+          body={@page.body}
+          workspace_id={@workspace_id}
+          save_status={@save_status}
+          label={gettext("Content")}
+        />
       </div>
     </.form>
     """
@@ -1056,11 +1054,6 @@ defmodule DranWeb.PageComponents do
         <h1 class="text-title">
           {new_title(@page_type)}
         </h1>
-        <div class="flex gap-2">
-          <.link :if={@cancel_path} navigate={@cancel_path} class="btn btn-ghost btn-sm">
-            {gettext("Cancel")}
-          </.link>
-        </div>
       </div>
 
       <.form
@@ -1105,23 +1098,20 @@ defmodule DranWeb.PageComponents do
           />
         </div>
 
-        <div>
-          <span class="label mb-1 block text-sm font-medium text-base-content/70">
-            {gettext("Content")}
-          </span>
-          <.markdown_editor
-            id={@editor_id}
-            body=""
-            workspace_id={@workspace_id}
-            autosave={false}
-          />
-        </div>
+        <.markdown_body_field
+          id={@editor_id}
+          body=""
+          workspace_id={@workspace_id}
+          autosave={false}
+          label={gettext("Content")}
+        />
 
-        <div class="flex items-center justify-end gap-2 pt-2">
-          <button type="submit" class="btn btn-primary btn-sm" data-testid="create-page-submit">
-            <.icon name="hero-check" class="size-4" /> {new_title(@page_type)}
-          </button>
-        </div>
+        <.form_actions
+          submit_label={new_title(@page_type)}
+          submit_icon="hero-check"
+          submit_testid="create-page-submit"
+          cancel_path={@cancel_path}
+        />
       </.form>
     </div>
     """

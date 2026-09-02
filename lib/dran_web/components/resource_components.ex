@@ -62,6 +62,7 @@ defmodule DranWeb.ResourceComponents do
   """
   attr :submit_label, :string, required: true
   attr :submit_icon, :string, default: nil
+  attr :submit_testid, :string, default: nil
   attr :submit_disabled, :boolean, default: false
   attr :cancel_path, :string, default: nil
   attr :cancel_event, :string, default: nil
@@ -83,7 +84,12 @@ defmodule DranWeb.ResourceComponents do
             {@cancel_label || gettext("Cancel")}
           </.link>
         <% end %>
-        <button type="submit" class="btn btn-primary btn-sm" disabled={@submit_disabled}>
+        <button
+          type="submit"
+          class="btn btn-primary btn-sm"
+          disabled={@submit_disabled}
+          data-testid={@submit_testid}
+        >
           <.icon :if={@submit_icon} name={@submit_icon} class="size-4" />
           {@submit_label}
         </button>
@@ -104,8 +110,9 @@ defmodule DranWeb.ResourceComponents do
   attr :hidden_field, :string, default: "page[body]"
   attr :label, :string, default: nil
   attr :autosave, :boolean, default: false
+  attr :save_status, :string, default: "idle"
   attr :toolbar, :boolean, default: true
-  attr :min_height, :string, default: "220px"
+  attr :min_height, :string, default: nil
 
   def markdown_body_field(assigns) do
     ~H"""
@@ -118,6 +125,7 @@ defmodule DranWeb.ResourceComponents do
         body={@body}
         workspace_id={@workspace_id}
         autosave={@autosave}
+        save_status={@save_status}
         toolbar={@toolbar}
         hidden_field={@hidden_field}
         min_height={@min_height}
