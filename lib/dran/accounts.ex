@@ -36,6 +36,8 @@ defmodule Dran.Accounts do
   end
 
   def create_user(attrs) do
+    attrs = Map.put(attrs, :actor_id, resolve_or_create_user_actor(attrs[:email]))
+
     %User{}
     |> User.changeset(attrs)
     |> Ecto.Changeset.put_change(:api_token, User.generate_api_token())
@@ -43,6 +45,8 @@ defmodule Dran.Accounts do
   end
 
   def create_user_with_password(%{email: _email, password: _pass} = attrs) do
+    attrs = Map.put(attrs, :actor_id, resolve_or_create_user_actor(attrs[:email]))
+
     %User{}
     |> User.registration_changeset(attrs)
     |> Ecto.Changeset.put_change(:api_token, User.generate_api_token())
@@ -282,7 +286,7 @@ defmodule Dran.Accounts do
     ApiKey
     |> order_by([k], desc: k.inserted_at)
     |> Repo.all()
-    |> Repo.preload([:created_by_user, api_key_workspaces: :workspace])
+    |> Repo.preload([:created_by_user, :actor, api_key_workspaces: :workspace])
   end
 
   @doc """
@@ -303,7 +307,7 @@ defmodule Dran.Accounts do
     |> where([k], k.created_by_user_id == ^user_id)
     |> order_by([k], desc: k.inserted_at)
     |> Repo.all()
-    |> Repo.preload([:created_by_user, api_key_workspaces: :workspace])
+    |> Repo.preload([:created_by_user, :actor, api_key_workspaces: :workspace])
   end
 
   @doc """
@@ -336,6 +340,7 @@ defmodule Dran.Accounts do
     case validate_workspace_access(attrs[:created_by_user_id], workspace_ids) do
       :ok ->
         token = ApiKey.generate_token()
+        actor_id = attrs[:actor_id] || ApiKey.ensure_actor_for_key_name(attrs.name).id
 
         Ecto.Multi.new()
         |> Ecto.Multi.insert(
@@ -344,6 +349,7 @@ defmodule Dran.Accounts do
           |> ApiKey.changeset(%{
             name: attrs.name,
             created_by_user_id: attrs[:created_by_user_id],
+            actor_id: actor_id,
             token_hash: ApiKey.hash_token(token),
             token_prefix: ApiKey.prefix_of(token)
           })
@@ -502,9 +508,11 @@ defmodule Dran.Accounts do
   def valid_api_key?(token) when is_binary(token) do
     case Repo.get_by(ApiKey, token_hash: ApiKey.hash_token(token)) do
       %ApiKey{} = key ->
-        if ApiKey.active?(key),
-          do: {:ok, Repo.preload(key, api_key_workspaces: :workspace, created_by_user: [])},
-          else: :error
+        if ApiKey.active?(key) do
+          {:ok, Repo.preload(key, api_key_workspaces: :workspace, created_by_user: [], actor: [])}
+        else
+          :error
+        end
 
       nil ->
         :error
@@ -590,4 +598,27 @@ defmodule Dran.Accounts do
     |> Ecto.Changeset.change(default_workspace_slug: slug)
     |> Repo.update()
   end
+
+  # ── Actor linkage ──
+
+  # Resolve (or lazily create) the kind=user actor for an email, used when
+  # a user row is created. Never nil for a valid email — the actors table
+  # is the instance-wide identity registry.
+  defp resolve_or_create_user_actor(email) when is_binary(email) and email != "" do
+    case Dran.Actors.get_actor_by_name(email) do
+      nil ->
+        case Dran.Actors.create_actor(%{name: email, kind: "user"}) do
+          {:ok, actor} -> actor.id
+          {:error, _} -> Dran.Actors.get_actor_by_name(email) |> actor_id()
+        end
+
+      %Dran.Actors.Actor{id: id} ->
+        id
+    end
+  end
+
+  defp resolve_or_create_user_actor(_), do: nil
+
+  defp actor_id(%Dran.Actors.Actor{id: id}), do: id
+  defp actor_id(_), do: nil
 end

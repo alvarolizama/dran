@@ -58,8 +58,9 @@ defmodule DranWeb.API.MCPController do
             {:ok,
              %{
                is_owner: false,
-               email: "api-key:***",
+               email: "api-key:#{key.token_prefix}...",
                key_name: key.name,
+               actor: key.actor,
                workspaces: workspaces,
                access_levels: access_levels,
                created_by_user_id: key.created_by_user_id

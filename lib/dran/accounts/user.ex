@@ -12,12 +12,17 @@ defmodule Dran.Accounts.User do
     field :password_hash, :string
     field :default_workspace_slug, :string
 
+    # The user's global identity actor (kind: user). Backfilled 1:1 from
+    # email; nullable until the actor row exists (see actors migration).
+    field :actor_id, :binary_id
+
     # Virtual — consumed by changeset, never persisted
     field :password, :string, virtual: true
     field :current_password, :string, virtual: true
 
     has_many :user_workspaces, Dran.Accounts.UserWorkspace
     has_many :workspaces, through: [:user_workspaces, :workspace]
+    belongs_to :actor, Dran.Actors.Actor, define_field: false, foreign_key: :actor_id
 
     timestamps()
   end

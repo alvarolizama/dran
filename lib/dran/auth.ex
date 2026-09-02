@@ -48,17 +48,27 @@ defmodule Dran.Auth do
 
   # ── Owner / created_by resolution ──
 
+  # The synthetic user map built by the API auth pipelines carries the key's
+  # :actor (a Dran.Actors.Actor) since the actors migration; keys created
+  # before that (or without preload) fall back to :key_name. Legacy admin
+  # token maps to "system" for owner and "admin" for created_by.
+  defp actor_name(user) do
+    case Map.get(user, :actor) do
+      %Dran.Actors.Actor{name: name} when is_binary(name) -> name
+      _ -> Map.get(user, :key_name)
+    end
+  end
+
   @doc """
   Resolve the owner identity for a page being created.
 
-  Prefers the API key name; otherwise falls back to the authenticated
+  Prefers the API key's actor name; otherwise falls back to the authenticated
   user's email (the literal `"admin"` email maps to `"system"`), then
   `"system"` when no identity is available. Not client-settable.
   """
   def resolve_owner(user) when is_map(user) do
-    Map.get(user, :key_name) ||
+    actor_name(user) ||
       case Map.get(user, :email) do
-        "api-key:" <> _ = email -> email
         "admin" -> "system"
         email when is_binary(email) -> email
         _ -> "system"
@@ -70,13 +80,12 @@ defmodule Dran.Auth do
   @doc """
   Resolve the created_by identity for a page being created.
 
-  For API key auth, uses the key name. For user auth, uses the user email.
-  Falls back to "system" when no identity is available.
+  For API key auth, uses the key's actor name. For user auth, uses the user
+  email. Falls back to "system" when no identity is available.
   """
   def resolve_created_by(user) when is_map(user) do
-    Map.get(user, :key_name) ||
+    actor_name(user) ||
       case Map.get(user, :email) do
-        "api-key:" <> _ = email -> email
         "admin" -> "admin"
         email when is_binary(email) -> email
         _ -> "system"

@@ -34,6 +34,10 @@ defmodule Dran.Accounts.ApiKey do
       type: :integer,
       foreign_key: :created_by_user_id
 
+    # The actor this key is a credential FOR (kind: agent, normally).
+    # Attribution (owner/created_by) resolves server-side from this actor.
+    belongs_to :actor, Dran.Actors.Actor, type: :binary_id
+
     has_many :api_key_workspaces, Dran.Accounts.ApiKeyWorkspace
 
     timestamps(type: :utc_datetime, updated_at: false)
@@ -42,10 +46,28 @@ defmodule Dran.Accounts.ApiKey do
   @doc "Changeset for creating an API key"
   def changeset(api_key, attrs) do
     api_key
-    |> cast(attrs, [:name, :token_hash, :token_prefix, :created_by_user_id])
+    |> cast(attrs, [:name, :token_hash, :token_prefix, :created_by_user_id, :actor_id])
     |> validate_required([:name, :token_hash, :token_prefix])
     |> unique_constraint(:token_hash)
     |> foreign_key_constraint(:created_by_user_id)
+    |> foreign_key_constraint(:actor_id)
+  end
+
+  @doc """
+  Resolve the actor for a key name, creating a kind=agent actor on first
+  sight (the old convention: key name IS the agent identity). Idempotent.
+  """
+  def ensure_actor_for_key_name(name) when is_binary(name) and name != "" do
+    case Dran.Actors.get_actor_by_name(name) do
+      nil ->
+        case Dran.Actors.create_actor(%{name: name, kind: "agent"}) do
+          {:ok, actor} -> actor
+          {:error, _} -> Dran.Actors.get_actor_by_name(name)
+        end
+
+      %Dran.Actors.Actor{} = actor ->
+        actor
+    end
   end
 
   @doc "Generate a new random token (URL-safe, 43 chars)."
