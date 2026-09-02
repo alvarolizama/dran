@@ -10,6 +10,13 @@ defmodule Dran.Application do
     children = [
       DranWeb.Telemetry,
       Dran.Repo,
+      # System actors are code-managed: upsert idempotently on every boot,
+      # after the Repo is up. Task exits normally when done (temporary).
+      %{
+        id: Dran.SystemActorsBoot,
+        start: {Task, :start_link, [&Dran.Actors.ensure_system_actors!/0]},
+        restart: :temporary
+      },
       {DNSCluster, query: Application.get_env(:dran, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Dran.PubSub},
       {Registry, keys: :unique, name: Dran.Agent.SessionRegistry},
