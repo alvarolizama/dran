@@ -73,7 +73,6 @@ defmodule Dran.PageFactory do
       slug: slug,
       page_type: page_type,
       body: "",
-      owner: source_page.owner || "system",
       created_by: created_by,
       meta: %{"auto" => true, "created_from" => created_by}
     }

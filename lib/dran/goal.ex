@@ -43,6 +43,8 @@ defmodule Dran.Goal do
              :team,
              :meta,
              :archived,
+             :created_by,
+             :updated_by,
              :inserted_at,
              :updated_at
            ]}
@@ -69,6 +71,10 @@ defmodule Dran.Goal do
     field :team, {:array, :string}, default: []
     field :meta, :map, default: %{}
     field :archived, :boolean, default: false
+
+    # Attribution — resolves server-side from the actor (Dran.Actors)
+    field :created_by, :string, default: "system"
+    field :updated_by, :string
 
     belongs_to :parent_goal, Dran.Goal
     belongs_to :workspace, Dran.Workspace
@@ -98,6 +104,8 @@ defmodule Dran.Goal do
       :team,
       :meta,
       :archived,
+      :created_by,
+      :updated_by,
       :parent_goal_id
     ])
     |> validate_required([:workspace_id, :title, :slug])

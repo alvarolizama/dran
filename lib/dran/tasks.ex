@@ -78,6 +78,7 @@ defmodule Dran.Tasks do
         order_by: [asc: t.position]
       )
       |> Repo.all()
+      |> Repo.preload(:assignee_actor)
 
     Task.statuses()
     |> Map.new(fn status ->
@@ -449,7 +450,6 @@ defmodule Dran.Tasks do
 
   defp default_owner_fields(attrs) do
     attrs
-    |> Map.put_new("owner", "system")
     |> Map.put_new("created_by", "system")
   end
 end

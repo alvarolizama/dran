@@ -1400,8 +1400,8 @@ defmodule Dran.MCP do
             tags: Map.get(args, "tags", []),
             summary: Map.get(args, "summary"),
             meta: Map.get(args, "meta", %{}),
-            created_by: Auth.resolve_created_by(user),
-            owner: Auth.resolve_owner(user)
+            # server-side attribution — not client-settable
+            created_by: Auth.resolve_created_by(user)
           }
           |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
@@ -1505,13 +1505,13 @@ defmodule Dran.MCP do
           "recurrence" => Map.get(args, "recurrence", "none"),
           "meta" => meta,
           # server-side attribution — not client-settable
-          "created_by" => Auth.resolve_created_by(user),
-          "owner" => Auth.resolve_owner(user)
+          "created_by" => Auth.resolve_created_by(user)
         }
         |> maybe_put("slug", args["slug"])
         |> maybe_put("priority", args["priority"])
         |> maybe_put_str("due_date", args["due_date"])
         |> maybe_put("on_behalf_of", args["on_behalf_of"])
+        |> maybe_put_assignee_actor(args["assignee"])
 
       case Dran.Tasks.create_task(attrs) do
         {:ok, task} ->
@@ -1637,8 +1637,7 @@ defmodule Dran.MCP do
           body: Map.get(args, "body", ""),
           meta: meta,
           # server-side attribution — not client-settable
-          created_by: Auth.resolve_created_by(user),
-          owner: Auth.resolve_owner(user)
+          created_by: Auth.resolve_created_by(user)
         }
         |> maybe_put(:on_behalf_of, args["on_behalf_of"])
 
@@ -1661,7 +1660,7 @@ defmodule Dran.MCP do
   defp execute_tool(
          "dran_create_goal",
          %{"workspace" => workspace_slug, "title" => title} = args,
-         _user
+         user
        ) do
     context = workspace_cache_get(workspace_slug)
 
@@ -1684,7 +1683,9 @@ defmodule Dran.MCP do
           unit: args["unit"],
           start_date: parse_date(args["start_date"]),
           target_date: parse_date(args["target_date"]),
-          team: args["team"] || []
+          team: args["team"] || [],
+          # server-side attribution — not client-settable
+          created_by: Auth.resolve_created_by(user)
         }
 
       case Goals.create_goal(attrs) do
@@ -2347,6 +2348,18 @@ defmodule Dran.MCP do
   defp maybe_put_meta(map, _key, nil), do: map
   defp maybe_put_meta(map, _key, ""), do: map
   defp maybe_put_meta(map, key, value), do: Map.put(map, key, value)
+
+  # Resolve an assignee by actor name ("coder", "alvaro") to assignee_actor_id.
+  # Unknown names are ignored (the task is created unassigned) — same lenient
+  # contract as the other optional args.
+  defp maybe_put_assignee_actor(map, name) when is_binary(name) and name != "" do
+    case Dran.Actors.get_actor_by_name(String.trim(name)) do
+      %Dran.Actors.Actor{id: id} -> Map.put(map, "assignee_actor_id", id)
+      nil -> map
+    end
+  end
+
+  defp maybe_put_assignee_actor(map, _), do: map
 
   defp parse_date(nil), do: nil
   defp parse_date(<<_::binary-10>> = str), do: Date.from_iso8601!(str)

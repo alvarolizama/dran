@@ -192,26 +192,27 @@ defmodule Dran.MCPTest do
       refute result =~ "bob-note"
     end
 
-    test "filters by owner", %{context: ctx} do
+    test "filters by created_by (owner dropped, same use case)", %{context: ctx} do
       {:ok, _} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Owned by team",
+          title: "Created by team",
           slug: "team-owned",
           page_type: "note",
-          owner: "team"
+          created_by: "team"
         })
 
       {:ok, _} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Owned by agent",
+          title: "Created by agent",
           slug: "agent-owned",
           page_type: "note",
-          owner: "agent"
+          created_by: "agent"
         })
 
-      result = call_tool("dran_list_pages", %{"workspace" => "personal", "owner" => "team"})
+      result =
+        call_tool("dran_list_pages", %{"workspace" => "personal", "created_by" => "team"})
 
       assert result =~ "Found 1 pages"
       assert result =~ "team-owned"

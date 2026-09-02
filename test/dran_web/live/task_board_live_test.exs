@@ -147,7 +147,6 @@ defmodule DranWeb.TaskBoardLiveTest do
       task = Tasks.get_task_by_slug("atributed-task", ws.id)
       assert task, "task should have been created"
       assert task.created_by == "test_user"
-      assert task.owner == "system"
     end
   end
 end

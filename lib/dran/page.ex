@@ -64,7 +64,6 @@ defmodule Dran.Page do
              :version,
              :archived,
              :pinned,
-             :owner,
              :created_by,
              :updated_by,
              :on_behalf_of,
@@ -97,8 +96,9 @@ defmodule Dran.Page do
     field :embedding_hash, :string
     field :embedding, Pgvector.Ecto.Vector
 
-    # Owner tracking
-    field :owner, :string, default: "system"
+    # Owner tracking — attribution resolves server-side from the actor
+    # (see Dran.Actors). `owner` was dropped in the phase-2 migration:
+    # it duplicated created_by with weaker guarantees.
     field :created_by, :string, default: "system"
     field :updated_by, :string
     field :on_behalf_of, :string
@@ -126,7 +126,6 @@ defmodule Dran.Page do
       :kb_confidence,
       :kb_source_url,
       :kb_contested,
-      :owner,
       :created_by,
       :updated_by,
       :on_behalf_of,

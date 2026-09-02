@@ -54,7 +54,7 @@ defmodule Dran.Repo.Migrations.MigrateTodoNotesToTasks do
       INSERT INTO tasks (
         id, workspace_id, title, slug, body, summary, status, priority,
         position, due_date, meta, recurrence, lock_version, completed_at,
-        archived, owner, created_by, updated_by, on_behalf_of,
+        archived, created_by, updated_by, on_behalf_of,
         inserted_at, updated_at
       )
       SELECT
@@ -88,7 +88,6 @@ defmodule Dran.Repo.Migrations.MigrateTodoNotesToTasks do
           ELSE NULL
         END,
         p.archived,
-        p.owner,
         p.created_by,
         p.updated_by,
         p.on_behalf_of,
@@ -159,7 +158,7 @@ defmodule Dran.Repo.Migrations.MigrateTodoNotesToTasks do
       """
       INSERT INTO pages (
         id, workspace_id, title, slug, body, summary, page_type, tags, meta,
-        kanban_status, priority, due_date, archived, owner, created_by,
+        kanban_status, priority, due_date, archived, created_by,
         updated_by, on_behalf_of, version, inserted_at, updated_at
       )
       SELECT
@@ -176,7 +175,6 @@ defmodule Dran.Repo.Migrations.MigrateTodoNotesToTasks do
         t.priority,
         t.due_date,
         t.archived,
-        t.owner,
         t.created_by,
         t.updated_by,
         t.on_behalf_of,

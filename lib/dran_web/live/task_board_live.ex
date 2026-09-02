@@ -95,13 +95,22 @@ defmodule DranWeb.TaskBoardLive do
     end
   end
 
-  def handle_event("quick_add", %{"task" => %{"title" => title, "status" => status}}, socket) do
+  def handle_event("quick_add", %{"task" => params}, socket) do
+    %{"title" => title, "status" => status} = params
+
     attrs = %{
       "workspace_id" => socket.assigns.workspace.id,
       "title" => String.trim(title),
       "status" => status,
       "created_by" => session_identity(socket)
     }
+
+    # Assignee: actor id from the board's select (empty = unassigned).
+    attrs =
+      case params[:assignee_actor_id] || params["assignee_actor_id"] do
+        aid when is_binary(aid) and aid != "" -> Map.put(attrs, "assignee_actor_id", aid)
+        _ -> attrs
+      end
 
     if attrs["title"] == "" do
       {:noreply, socket}
@@ -137,6 +146,7 @@ defmodule DranWeb.TaskBoardLive do
     |> assign(
       board: board,
       counts: counts,
+      managed_actors: Dran.Actors.list_managed_actors(),
       page_title: "#{socket.assigns.workspace.name} · #{gettext("Tasks")}"
     )
   end
@@ -208,6 +218,18 @@ defmodule DranWeb.TaskBoardLive do
               placeholder={gettext("+ Add task")}
               class="w-full text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none placeholder:text-base-content/30 transition"
             />
+            <select
+              name="task[assignee_actor_id]"
+              class="mt-1 w-full text-xs px-1.5 py-1 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none text-base-content/60"
+            >
+              <option value="">{gettext("unassigned")}</option>
+              <option
+                :for={actor <- @managed_actors}
+                value={actor.id}
+              >
+                {Dran.Actors.Actor.label(actor)}
+              </option>
+            </select>
           </form>
         </div>
       </div>
@@ -234,6 +256,15 @@ defmodule DranWeb.TaskBoardLive do
         <span :if={@task.priority} class={priority_badge(@task.priority)}>
           {@task.priority}
         </span>
+      </div>
+
+      <div
+        :if={@task.assignee_actor}
+        class="mt-2 flex items-center gap-1 text-xs text-base-content/60"
+        title={gettext("Assignee")}
+      >
+        <.icon name="hero-user-circle" class="size-3.5" />
+        {Dran.Actors.Actor.label(@task.assignee_actor)}
       </div>
 
       <div class="flex items-center gap-3 mt-2 text-xs text-base-content/50">

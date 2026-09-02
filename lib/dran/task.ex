@@ -57,11 +57,11 @@ defmodule Dran.Task do
              :position,
              :due_date,
              :assignee_id,
+             :assignee_actor_id,
              :meta,
              :recurrence,
              :completed_at,
              :archived,
-             :owner,
              :created_by,
              :updated_by,
              :on_behalf_of,
@@ -87,6 +87,11 @@ defmodule Dran.Task do
     # assignee FK to users — users uses serial PK, so we override the FK type
     belongs_to :assignee, Dran.Accounts.User, foreign_key: :assignee_id, type: :id
 
+    # Actor assignee — humans AND agents (the actor model); new writes go here.
+    belongs_to :assignee_actor, Dran.Actors.Actor,
+      foreign_key: :assignee_actor_id,
+      type: :binary_id
+
     field :meta, :map, default: %{}
     field :recurrence, :string, default: "none"
 
@@ -95,7 +100,8 @@ defmodule Dran.Task do
 
     field :archived, :boolean, default: false
 
-    field :owner, :string, default: "system"
+    # Attribution — resolves server-side from the actor (Dran.Actors).
+    # `owner` was dropped in the phase-2 migration.
     field :created_by, :string, default: "system"
     field :updated_by, :string
     field :on_behalf_of, :string
@@ -139,11 +145,11 @@ defmodule Dran.Task do
       :position,
       :due_date,
       :assignee_id,
+      :assignee_actor_id,
       :meta,
       :recurrence,
       :completed_at,
       :archived,
-      :owner,
       :created_by,
       :updated_by,
       :on_behalf_of
@@ -154,6 +160,7 @@ defmodule Dran.Task do
     |> validate_inclusion(:status, @statuses)
     |> validate_inclusion(:priority, @priorities)
     |> validate_inclusion(:recurrence, @recurrences)
+    |> foreign_key_constraint(:assignee_actor_id)
     |> unique_constraint([:workspace_id, :slug], name: :tasks_workspace_id_slug_index)
   end
 

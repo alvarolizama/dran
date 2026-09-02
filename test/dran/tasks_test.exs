@@ -18,7 +18,6 @@ defmodule Dran.TasksTest do
       assert task.recurrence == "none"
       assert task.position >= 100
       assert task.slug =~ "review-pr"
-      assert task.owner == "system"
       assert task.created_by == "system"
     end
 

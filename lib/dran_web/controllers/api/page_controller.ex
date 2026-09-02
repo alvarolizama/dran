@@ -59,14 +59,13 @@ defmodule DranWeb.API.PageController do
     # Resolve context slug to ID if needed
     params = resolve_workspace_id(conn, params)
 
-    # Inject owner/created_by from the authenticated identity.
-    # owner and created_by are derived server-side from the actor — never
-    # client-settable (same guarantee as MCP; fixes the old put_new gap).
+    # Inject attribution from the authenticated identity.
+    # created_by is derived server-side from the actor — never client-settable.
+    # owner was dropped with the actor model (phase 2).
     user = conn.assigns[:user]
 
     params =
       params
-      |> Map.put("owner", Dran.Auth.resolve_owner(user))
       |> Map.put("created_by", Dran.Auth.resolve_created_by(user))
 
     case Knowledge.create_page(params) do
@@ -214,7 +213,6 @@ defmodule DranWeb.API.PageController do
       tags: page.tags,
       meta: page.meta,
       version: page.version,
-      owner: page.owner,
       created_by: page.created_by,
       archived: page.archived,
       updated_at: page.updated_at

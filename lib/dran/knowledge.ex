@@ -180,7 +180,8 @@ defmodule Dran.Knowledge do
     kind = Keyword.get(opts, :kind)
     tag = Keyword.get(opts, :tag)
     status = Keyword.get(opts, :status)
-    owner = Keyword.get(opts, :owner)
+    # `owner` was dropped with the actor model — the opt stays for backward
+    # compat with old saved filters but no longer matches any row.
     created_by = Keyword.get(opts, :created_by)
     assignee = Keyword.get(opts, :assignee)
     props = Keyword.get(opts, :props)
@@ -214,7 +215,6 @@ defmodule Dran.Knowledge do
             kb_contested: p.kb_contested,
             body_hash: p.body_hash,
             version: p.version,
-            owner: p.owner,
             created_by: p.created_by,
             updated_by: p.updated_by,
             on_behalf_of: p.on_behalf_of,
@@ -233,7 +233,7 @@ defmodule Dran.Knowledge do
       |> maybe_filter_kind(kind)
       |> maybe_filter_tag(tag)
       |> maybe_filter_status(status)
-      |> maybe_filter_owner(owner)
+      |> maybe_filter_owner(Keyword.get(opts, :owner))
       |> maybe_filter_created_by(created_by)
       |> maybe_filter_assignee(assignee)
       |> maybe_filter_props(props)
@@ -310,11 +310,9 @@ defmodule Dran.Knowledge do
     where(query, [p], fragment("?->>'kanban_status' = ?", p.meta, ^status))
   end
 
-  defp maybe_filter_owner(query, nil), do: query
-
-  defp maybe_filter_owner(query, owner) do
-    where(query, [p], p.owner == ^owner)
-  end
+  # `owner` column was dropped — the filter is a no-op kept for backward
+  # compat with saved smart-collection queries and old MCP clients.
+  defp maybe_filter_owner(query, _owner), do: query
 
   defp maybe_filter_pinned(query, nil), do: query
 
@@ -469,7 +467,6 @@ defmodule Dran.Knowledge do
       attrs
       |> normalize_attrs()
       |> normalize_meta_props()
-      |> default_owner_field("owner", "system")
       |> default_owner_field("created_by", "system")
       |> ensure_title_and_slug()
 
@@ -481,7 +478,6 @@ defmodule Dran.Knowledge do
           log_action(page.workspace_id, "page.create", page.slug, %{
             page_id: page.id,
             page_type: page.page_type,
-            owner: page.owner,
             created_by: page.created_by
           })
 
@@ -2222,7 +2218,6 @@ defmodule Dran.Knowledge do
             kb_contested: p.kb_contested,
             body_hash: p.body_hash,
             version: p.version,
-            owner: p.owner,
             created_by: p.created_by,
             updated_by: p.updated_by,
             on_behalf_of: p.on_behalf_of,

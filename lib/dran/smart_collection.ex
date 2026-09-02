@@ -133,7 +133,6 @@ defmodule Dran.SmartCollection do
   - `:slug` — URL slug (derived from title if omitted)
   - `:query` — the filter map (see `build_query/1`)
   - `:workspace_id` — the brain context (required)
-  - `:owner` — owner field (default "system")
   - `:created_by` — created_by field (default "system")
   """
   def create(attrs) when is_map(attrs) do
@@ -155,7 +154,6 @@ defmodule Dran.SmartCollection do
       "summary" => attrs["summary"] || attrs[:summary] || query_summary(query),
       "tags" => attrs["tags"] || attrs[:tags] || [],
       "meta" => meta,
-      "owner" => attrs["owner"] || attrs[:owner] || "system",
       "created_by" => attrs["created_by"] || attrs[:created_by] || "system"
     }
 

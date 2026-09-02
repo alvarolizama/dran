@@ -924,14 +924,14 @@ defmodule Dran.MCPFullTest do
       assert result =~ "tag-filter-test"
     end
 
-    test "filters by owner", %{context: ctx} do
+    test "owner filter is a no-op after the owner column was dropped", %{context: ctx} do
       {:ok, _} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Owner Test",
           slug: "owner-filter-test",
           page_type: "note",
-          owner: "alice"
+          created_by: "alice"
         })
 
       result =
@@ -940,7 +940,17 @@ defmodule Dran.MCPFullTest do
           "owner" => "alice"
         })
 
+      # The owner filter no longer excludes rows (no-op for backward compat);
+      # created_by is the supported filter since the actor model.
       assert result =~ "owner-filter-test"
+
+      by_creator =
+        call_tool("dran_list_pages", %{
+          "workspace" => "personal",
+          "created_by" => "alice"
+        })
+
+      assert by_creator =~ "owner-filter-test"
     end
 
     test "filters by created_by", %{context: ctx} do

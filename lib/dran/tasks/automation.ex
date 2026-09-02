@@ -76,7 +76,7 @@ defmodule Dran.Tasks.Automation do
       "due_date" => next_due,
       "recurrence" => task.recurrence,
       "meta" => task.meta,
-      "owner" => task.owner,
+      "assignee_actor_id" => task.assignee_actor_id,
       "created_by" => "automation:recurrence"
     }
 

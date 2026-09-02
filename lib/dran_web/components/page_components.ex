@@ -263,10 +263,6 @@ defmodule DranWeb.PageComponents do
                   <span class="font-mono">v{@page.version}</span>
                 </div>
                 <div class="flex justify-between gap-2 py-2 text-sm">
-                  <span class="text-base-content/60">{gettext("Owner")}</span>
-                  <span>{@page.owner}</span>
-                </div>
-                <div class="flex justify-between gap-2 py-2 text-sm">
                   <span class="text-base-content/60">{gettext("Created by")}</span>
                   <span>{@page.created_by}</span>
                 </div>

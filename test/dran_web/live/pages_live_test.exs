@@ -317,7 +317,6 @@ defmodule DranWeb.PagesLiveTest do
       page = Knowledge.get_page_by_slug("nota-atribuida", ws.id)
       assert page, "page should have been created"
       assert page.created_by == "test_user"
-      assert page.owner == "system"
     end
 
     test "saving an existing page stamps updated_by with the session user", %{
