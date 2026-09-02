@@ -4,8 +4,10 @@ defmodule DranWeb.TaskLive do
 
   Same resource pattern as goals and pages: view mode renders badges +
   the markdown body (Mermaid included), Edit switches to an in-page form
-  (Tiptap body, assignee/priority/goal/due selects). Replaces the board's
-  slide-in panel; the board keeps quick-add as the fast creation path.
+  (Tiptap body, assignee/priority/goal/due selects). The board now opens
+  the edit modal (`/tasks?task=<id>`) as the primary edit surface; this
+  page stays as the deep-link fallback for old URLs, bookmarks and links
+  that land directly on `/tasks/:id`.
   """
 
   use DranWeb, :live_view
@@ -288,33 +290,11 @@ defmodule DranWeb.TaskLive do
   def handle_event("save", %{"task" => params}, socket) do
     task = socket.assigns.task
 
-    attrs = %{
-      "title" => String.trim(params["title"] || ""),
-      "body" => params["body"] || "",
-      "updated_by" => session_identity(socket)
-    }
-
-    # Empty select = clear (unassign / no priority).
-    attrs =
-      case params["assignee_actor_id"] do
-        aid when is_binary(aid) and aid != "" -> Map.put(attrs, "assignee_actor_id", aid)
-        _ -> Map.put(attrs, "assignee_actor_id", nil)
-      end
-
-    attrs =
-      case params["priority"] do
-        p when p in ~w(low medium high urgent) -> Map.put(attrs, "priority", p)
-        _ -> Map.put(attrs, "priority", nil)
-      end
-
-    attrs =
-      case params["due_date"] do
-        date when is_binary(date) and date != "" -> Map.put(attrs, "due_date", date)
-        _ -> Map.put(attrs, "due_date", nil)
-      end
+    %{attrs: attrs, goal_id: goal_id} = DranWeb.ResourceComponents.task_attrs_from_params(params)
+    attrs = Map.put(attrs, "updated_by", session_identity(socket))
 
     with {:ok, updated} <- Tasks.update_task(task, attrs),
-         {:ok, updated} <- Tasks.set_goal(updated, params["goal_id"]) do
+         {:ok, updated} <- Tasks.set_goal(updated, goal_id) do
       {:noreply,
        socket
        |> put_flash(:info, gettext("Task updated"))

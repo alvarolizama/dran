@@ -50,7 +50,13 @@ defmodule DranWeb.TaskBoardLive do
          current_user: session["user"],
          filter_actor_id: nil,
          filter_goal_id: nil,
-         managed_actors: Dran.Actors.list_managed_actors()
+         managed_actors: Dran.Actors.list_managed_actors(),
+         # Resource modal state — `?task=<id>` opens edit, `?new=true`
+         # opens create. Both render `<.resource_modal>` over the board.
+         modal_task: nil,
+         modal_new_status: nil,
+         modal_form: nil,
+         modal_goal_id: nil
        )
        |> load_board()}
     else
@@ -58,8 +64,73 @@ defmodule DranWeb.TaskBoardLive do
     end
   end
 
-  def handle_params(_params, _url, socket) do
-    {:noreply, socket}
+  # Deep-links drive the modal through URL params — the modal is a URL
+  # state, not a transient DOM overlay. `?task=<id>` (UUID, scoped to this
+  # workspace via fetch_board_task) opens edit; `?new=true&status=<col>`
+  # opens create in that column.
+  def handle_params(params, _url, socket) do
+    {:noreply, open_modal_from_params(socket, params)}
+  end
+
+  defp open_modal_from_params(socket, %{"task" => id}) when is_binary(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        case fetch_board_task(uuid, socket) do
+          {:ok, task} ->
+            current_goal =
+              case Tasks.list_linked_goals(task) do
+                [goal | _] -> goal
+                [] -> nil
+              end
+
+            socket
+            |> assign(
+              modal_task: task,
+              modal_new_status: nil,
+              modal_form: to_form(Task.update_changeset(task, %{}), as: :task),
+              modal_goal_id: current_goal && current_goal.id
+            )
+
+          {:error, :not_found} ->
+            # Foreign / missing task — drop the modal, stay on the board.
+            clear_modal(socket)
+        end
+
+      :error ->
+        clear_modal(socket)
+    end
+  end
+
+  defp open_modal_from_params(socket, %{"new" => "true"} = params) do
+    status =
+      case params["status"] do
+        s when is_binary(s) ->
+          if s in Task.statuses(), do: s, else: "backlog"
+
+        _ ->
+          "backlog"
+      end
+
+    changeset =
+      Task.create_changeset(%{
+        "workspace_id" => socket.assigns.workspace.id,
+        "status" => status
+      })
+
+    socket
+    |> assign(
+      modal_task: nil,
+      modal_new_status: status,
+      modal_form: to_form(changeset, as: :task),
+      modal_goal_id: nil
+    )
+  end
+
+  defp open_modal_from_params(socket, _params), do: clear_modal(socket)
+
+  defp clear_modal(socket) do
+    socket
+    |> assign(modal_task: nil, modal_new_status: nil, modal_form: nil, modal_goal_id: nil)
   end
 
   def handle_event("filter_actor", %{"actor_id" => actor_id}, socket) do
@@ -161,6 +232,79 @@ defmodule DranWeb.TaskBoardLive do
   # (stale client, future autosave), ignore it instead of crashing.
   def handle_event("body_change", _params, socket) do
     {:noreply, socket}
+  end
+
+  # ── Resource modal events ───────────────────────────────────────────────
+
+  # The form phx-change fires on every keystroke — sync the changeset back
+  # so field errors surface live. The body comes through the hidden field
+  # (MarkdownEditor hook keeps it in sync).
+  def handle_event("validate_task", %{"task" => params}, socket) do
+    task = socket.assigns.modal_task || %Task{}
+    changeset = Task.update_changeset(task, params) |> Map.put(:action, :validate)
+    {:noreply, assign(socket, modal_form: to_form(changeset, as: :task))}
+  end
+
+  def handle_event("save_task", %{"task" => params}, socket) do
+    workspace = socket.assigns.workspace
+    identity = session_identity(socket)
+    %{attrs: attrs, goal_id: goal_id} = DranWeb.ResourceComponents.task_attrs_from_params(params)
+
+    attrs = Map.put(attrs, "workspace_id", workspace.id)
+
+    result =
+      case socket.assigns.modal_task do
+        nil ->
+          attrs = Map.put(attrs, "created_by", identity)
+          create_task_with_goal(attrs, goal_id)
+
+        task ->
+          attrs = Map.put(attrs, "updated_by", identity)
+          update_task_with_goal(task, attrs, goal_id)
+      end
+
+    case result do
+      {:ok, _task} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Task saved"))
+         |> push_patch(to: ~p"/#{workspace.slug}/tasks")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, modal_form: to_form(changeset, as: :task))}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not save task"))}
+    end
+  end
+
+  # If the goal link fails before the update (goal belongs to another
+  # workspace → :goal_not_found) the task is NOT persisted, so a retry
+  # cannot duplicate (reviewer finding 3 — no partial commits). Validate
+  # the goal link FIRST, then apply the update.
+  defp update_task_with_goal(task, attrs, goal_id) do
+    case maybe_set_goal(task, goal_id) do
+      {:ok, _} ->
+        Tasks.update_task(task, attrs)
+
+      {:error, _reason} = err ->
+        err
+    end
+  end
+
+  defp create_task_with_goal(attrs, goal_id) do
+    with {:ok, task} <- Tasks.create_task(attrs),
+         {:ok, task} <- maybe_set_goal(task, goal_id) do
+      {:ok, task}
+    end
+  end
+
+  defp maybe_set_goal(task, nil), do: {:ok, task}
+  defp maybe_set_goal(task, goal_id), do: Tasks.set_goal(task, goal_id)
+
+  @impl true
+  def handle_event("close_modal", _params, socket) do
+    {:noreply, push_patch(socket, to: ~p"/#{socket.assigns.workspace.slug}/tasks")}
   end
 
   # PubSub: refresh the board when tasks change anywhere (other tabs, MCP, API).
@@ -301,6 +445,13 @@ defmodule DranWeb.TaskBoardLive do
           {gettext("Tasks")}
         </h1>
         <div class="flex items-center gap-3">
+          <.link
+            patch={~p"/#{@workspace.slug}/tasks?new=true"}
+            class="btn btn-primary btn-sm"
+            data-testid="board-new-task"
+          >
+            <.icon name="hero-plus" class="size-4" /> {gettext("New task")}
+          </.link>
           <label class="flex items-center gap-2 text-xs text-base-content/60">
             <.icon name="hero-funnel" class="size-3.5" />
             <select
@@ -385,6 +536,27 @@ defmodule DranWeb.TaskBoardLive do
           </form>
         </div>
       </div>
+
+      <.resource_modal
+        :if={@modal_form}
+        id="task-resource-modal"
+        title={(@modal_task && @modal_task.title) || gettext("New Task")}
+        pill={(@modal_task && "TASK") || "NEW TASK"}
+        pill_class={(@modal_task && "bg-primary/10 text-primary") || "bg-green-500/15 text-green-600"}
+        on_close="close_modal"
+        form_id="task-modal-form"
+        submit_label={(@modal_task && gettext("Save changes")) || gettext("Create task")}
+      >
+        <.task_form_fields
+          id="task-modal-form"
+          task={@modal_task || %Task{status: @modal_new_status || "backlog"}}
+          changeset={@modal_form}
+          workspace_id={@workspace.id}
+          goal_tree={@goal_tree}
+          actors={@managed_actors}
+          goal_id={@modal_goal_id}
+        />
+      </.resource_modal>
     </div>
     """
   end
@@ -411,7 +583,7 @@ defmodule DranWeb.TaskBoardLive do
   defp task_card(assigns) do
     ~H"""
     <.link
-      navigate={~p"/#{@workspace_slug}/tasks/#{@task.id}"}
+      patch={~p"/#{@workspace_slug}/tasks?task=#{@task.id}"}
       data-task-id={@task.id}
       draggable="true"
       title={gettext("Open task")}

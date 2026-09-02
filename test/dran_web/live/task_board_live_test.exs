@@ -168,10 +168,10 @@ defmodule DranWeb.TaskBoardLiveTest do
   end
 
   describe "detail page navigation" do
-    test "cards link to the task detail page", %{conn: conn, ws: ws, task: task} do
+    test "cards link to the task edit modal (board ?task=)", %{conn: conn, ws: ws, task: task} do
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      assert html =~ ~p"/#{ws.slug}/tasks/#{task.id}"
+      assert html =~ ~p"/#{ws.slug}/tasks?task=#{task.id}"
     end
 
     test "quick_add creates the task without opening any panel", %{conn: conn, ws: ws} do
@@ -289,7 +289,7 @@ defmodule DranWeb.TaskBoardLiveTest do
       assert task.created_by == "test_user"
     end
 
-    test "the card links to the task page after quick add", %{conn: conn, ws: ws} do
+    test "the card links to the task modal after quick add", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
 
       view
@@ -298,7 +298,7 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       created = Tasks.get_task_by_slug("fresh-task", ws.id)
       assert created, "task should have been created"
-      assert render(view) =~ ~p"/#{ws.slug}/tasks/#{created.id}"
+      assert render(view) =~ ~p"/#{ws.slug}/tasks?task=#{created.id}"
     end
   end
 
@@ -513,6 +513,170 @@ defmodule DranWeb.TaskBoardLiveTest do
       assert html =~ "Flat Root"
       assert html =~ "Flat Child"
       assert html =~ "—— Flat Child"
+    end
+  end
+
+  describe "resource modal (create + edit over the board)" do
+    test "?new=true opens the create modal with the status select", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?new=true")
+
+      assert has_element?(view, "#task-resource-modal")
+      assert has_element?(view, "#task-modal-form")
+      assert has_element?(view, "select[name='task[status]']")
+      # Editor without toolbar (approved mockup)
+      refute has_element?(view, "#task-resource-modal [data-testid='editor-toolbar']")
+      # The footer Save button targets the form via form= attribute
+      assert has_element?(view, "#task-resource-modal button[form='task-modal-form']")
+    end
+
+    test "?new=true&status=todo preselects the todo column", %{conn: conn, ws: ws} do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks?new=true&status=todo")
+
+      assert html =~ ~s(value="todo" selected)
+    end
+
+    test "?task=<id> opens the edit modal with the task loaded", %{conn: conn, ws: ws, task: task} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      assert has_element?(view, "#task-resource-modal")
+      assert has_element?(view, "#task-modal-form")
+      assert has_element?(view, "#task-modal-form input[name='task[title]']")
+    end
+
+    test "saving from the create modal persists the task and closes", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?new=true&status=todo")
+
+      view
+      |> form("#task-modal-form")
+      |> render_submit(%{"task" => %{"title" => "Modal child", "status" => "todo"}})
+
+      created = Tasks.get_task_by_slug("modal-child", ws.id)
+      assert created, "modal create should persist"
+      assert created.status == "todo"
+      assert created.created_by == "test_user"
+
+      refute has_element?(view, "#task-resource-modal")
+    end
+
+    test "saving from the edit modal updates title/body and closes", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      view
+      |> form("#task-modal-form")
+      |> render_submit(%{"task" => %{"title" => "Renamed from modal", "body" => "modal body"}})
+
+      updated = Repo.reload!(task)
+      assert updated.title == "Renamed from modal"
+      assert updated.body == "modal body"
+
+      refute has_element?(view, "#task-resource-modal")
+    end
+
+    test "saving without an explicit body param persists the editor body (regression: duplicated hidden inputs)", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      # The MarkdownEditor hook syncs the markdown into the editor's OWN
+      # hidden field on every update and before submit. The modal form must
+      # NOT render a second manual hidden field, or the browser submits
+      # both and the LAST (stale, original) wins — silently discarding the
+      # edited body (reviewer finding 1). This test submits WITHOUT a body
+      # param, exercising the real hidden-sync path.
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      hidden_count =
+        view |> render() |> then(&Regex.scan(~r/<input[^>]*name="task\[body\]"/, &1) |> length())
+
+      assert hidden_count == 1, "expected exactly one hidden task[body] input, got #{hidden_count}"
+
+      view
+      |> form("#task-modal-form")
+      |> render_submit(%{"task" => %{"title" => "Body from hook"}})
+
+      updated = Repo.reload!(task)
+      assert updated.title == "Body from hook"
+      assert updated.body == task.body
+    end
+
+    test "edit modal save clears assignee and priority when empty", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, agent} = Dran.Actors.create_actor(%{"name" => "modal-agent", "kind" => "agent"})
+      {:ok, _} = Tasks.update_task(task, %{"assignee_actor_id" => agent.id, "priority" => "high"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      view
+      |> form("#task-modal-form")
+      |> render_submit(%{
+        "task" => %{"title" => task.title, "assignee_actor_id" => "", "priority" => ""}
+      })
+
+      updated = Repo.reload!(task)
+      assert updated.assignee_actor_id == nil
+      assert updated.priority == nil
+    end
+
+    test "edit modal save links the task to a goal", %{conn: conn, ws: ws, task: task} do
+      {:ok, goal} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Modal goal",
+          "slug" => "modal-goal"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      view
+      |> form("#task-modal-form")
+      |> render_submit(%{"task" => %{"title" => task.title, "goal_id" => goal.id}})
+
+      linked_ids = Tasks.list_linked_goals(Tasks.get_task(task.id)) |> Enum.map(& &1.id)
+      assert goal.id in linked_ids
+    end
+
+    test "a foreign task id in ?task= renders the board with no modal", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, other} =
+        Dran.Knowledge.create_workspace(%{
+          name: "Other Modal #{System.unique_integer([:positive])}",
+          slug: "other-modal-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, foreign} = Tasks.create_task(%{"workspace_id" => other.id, "title" => "Foreign"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{foreign.id}")
+
+      refute has_element?(view, "#task-resource-modal")
+      assert render(view) =~ "Review PR"
+    end
+
+    test "close_modal patches back to the plain board URL", %{conn: conn, ws: ws, task: task} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      render_click(view, "close_modal", %{})
+
+      refute has_element?(view, "#task-resource-modal")
+    end
+
+    test "empty title keeps the modal open with a validation error", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?new=true")
+
+      view
+      |> form("#task-modal-form")
+      |> render_submit(%{"task" => %{"title" => ""}})
+
+      assert has_element?(view, "#task-resource-modal")
+      assert has_element?(view, "#task-modal-form")
     end
   end
 end
