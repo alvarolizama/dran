@@ -10,13 +10,127 @@ defmodule DranWeb.ResourceComponents do
     - `form_actions` — the cancel/submit row
     - `markdown_body_field` — labelled Tiptap body editor (Mermaid included)
     - `goal_options` / `actor_options` — flattened option lists for selects
+    - `resource_modal` — near-full-screen create/edit modal shell
+    - `task_form_fields` — task create/edit form for the modal
   """
 
   use Phoenix.Component
   use Gettext, backend: DranWeb.Gettext
 
-  import DranWeb.CoreComponents, only: [icon: 1]
+  import DranWeb.CoreComponents, only: [icon: 1, input: 1]
   import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1]
+  import Phoenix.HTML.Form, only: [input_value: 2]
+
+  alias Dran.Task
+
+  @doc """
+  Full-screen-ish modal shell for resource create & edit.
+
+  Layout (approved mockup): header (type pill + title + ✕), a two-column
+  body — main content (default slot) + right metadata sidebar (`sidebar`
+  slot) — and a footer with destructive actions on the left (`left` slot)
+  and Cancel + Save on the right.
+
+  Closes via the ✕ button, ESC or click-away, all firing `on_close`
+  (typically a `push_patch` back to the base URL). The save button lives
+  OUTSIDE the `<.form>` (in the footer) and targets it via the standard
+  HTML `form=` attribute, so `form_id` must match the form's DOM id.
+
+  The overlay is fixed and near-full-screen (small inset) — the underlying
+  page stays mounted underneath.
+  """
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :pill, :string, default: nil
+  attr :pill_class, :string, default: "bg-primary/10 text-primary"
+  attr :on_close, :string, required: true
+  attr :form_id, :string, default: nil
+  attr :submit_label, :string, default: nil
+  attr :submit_disabled, :boolean, default: false
+  attr :cancel_label, :string, default: nil
+  attr :max_w, :string, default: "max-w-5xl"
+  slot :sidebar
+  slot :left
+  slot :inner_block, required: true
+
+  def resource_modal(assigns) do
+    ~H"""
+    <div
+      id={"#{@id}-overlay"}
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 sm:p-6"
+      phx-window-keydown={@on_close}
+      phx-key="Escape"
+    >
+      <div
+        id={@id}
+        role="dialog"
+        aria-modal="true"
+        phx-click-away={@on_close}
+        class={[
+          "card bg-base-100 border border-base-300 shadow-2xl w-full flex flex-col overflow-hidden",
+          "h-[calc(100vh-3rem)] sm:h-[calc(100vh-4rem)]",
+          @max_w
+        ]}
+      >
+        <%!-- Header --%>
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-base-300 shrink-0">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span
+              :if={@pill}
+              class={["text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0", @pill_class]}
+            >
+              {@pill}
+            </span>
+            <h3 class="text-base font-semibold truncate">{@title}</h3>
+          </div>
+          <button
+            type="button"
+            phx-click={@on_close}
+            class="btn btn-ghost btn-xs btn-circle shrink-0"
+            aria-label={gettext("Close")}
+          >
+            <.icon name="hero-x-mark" class="size-4" />
+          </button>
+        </div>
+
+        <%!-- Body: main + sidebar --%>
+        <div class="flex-1 min-h-0 flex overflow-hidden">
+          <div class="flex-1 min-w-0 overflow-y-auto p-6">
+            {render_slot(@inner_block)}
+          </div>
+          <aside
+            :if={@sidebar != []}
+            class="hidden md:flex md:flex-col w-80 lg:w-96 shrink-0 border-l border-base-300 bg-base-200/40 overflow-y-auto p-5 gap-4"
+          >
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+              {gettext("Details")}
+            </h4>
+            {render_slot(@sidebar)}
+          </aside>
+        </div>
+
+        <%!-- Footer --%>
+        <div class="flex items-center justify-between px-5 py-3 border-t border-base-300 shrink-0">
+          <div class="flex items-center gap-2">{render_slot(@left)}</div>
+          <div class="flex items-center gap-2">
+            <button type="button" phx-click={@on_close} class="btn btn-ghost btn-sm">
+              {@cancel_label || gettext("Cancel")}
+            </button>
+            <button
+              :if={@form_id}
+              type="submit"
+              form={@form_id}
+              class="btn btn-primary btn-sm"
+              disabled={@submit_disabled}
+            >
+              {@submit_label || gettext("Save")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
 
   @doc """
   Header shell for a resource page: optional back link, icon + title,
@@ -163,5 +277,329 @@ defmodule DranWeb.ResourceComponents do
       {Dran.Actors.Actor.label(actor)}
     </option>
     """
+  end
+
+  @doc """
+  Task form for the resource modal — main column (title + body editor) and
+  the metadata sidebar (status / assignee / priority / goal / due date).
+
+  One `<.form>` spans BOTH columns (title/body in main, the sidebar fields
+  are its selects too) — a single submit carries everything. The editor
+  runs WITHOUT toolbar (approved mockup): markdown syntax + shortcuts,
+  autosave off, hidden field synced on submit via the MarkdownEditor hook.
+
+  - `task` — the struct (new tasks pass `%Task{}` with defaults applied)
+  - `changeset` — form source; `form_id` must match the modal footer button
+  - `goal_tree` / `actors` — flattened goal tree + managed actors
+  """
+  attr :id, :string, required: true
+  attr :task, :map, required: true
+  attr :changeset, :any, required: true
+  attr :workspace_id, :string, required: true
+  attr :goal_tree, :list, required: true
+  attr :actors, :list, required: true
+  attr :goal_id, :string, required: true
+  attr :editor_min_height, :string, default: "320px"
+
+  def task_form_fields(assigns) do
+    %Task{} = task = assigns.task
+    editor_id = "task-editor-modal-#{task.id || "new"}"
+
+    assigns =
+      assigns
+      |> assign(:editor_id, editor_id)
+      |> assign(:form, to_form(assigns.changeset, as: :task))
+
+    ~H"""
+    <.form
+      id={@id}
+      for={@form}
+      phx-change="validate_task"
+      phx-submit="save_task"
+      class="grid grid-cols-1 lg:grid-cols-[1fr_20rem] lg:gap-6"
+    >
+      <div class="min-w-0 space-y-4">
+        <.input
+          field={@form[:title]}
+          type="text"
+          label={gettext("Title")}
+          placeholder={gettext("Task title…")}
+          class="text-lg font-medium"
+          autofocus
+        />
+
+        <div>
+          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Content")}</span>
+          <.markdown_editor
+            id={@editor_id}
+            body={@task.body || ""}
+            workspace_id={@workspace_id}
+            autosave={false}
+            toolbar={false}
+            hidden_field="task[body]"
+            min_height={@editor_min_height}
+          />
+        </div>
+      </div>
+
+      <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+          {gettext("Details")}
+        </h4>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Status")}</span>
+          <select
+            name="task[status]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <%= for s <- Task.statuses() do %>
+              <option value={s} selected={status_selected(@form, s)}>{status_label(s)}</option>
+            <% end %>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Assignee")}</span>
+          <select
+            name="task[assignee_actor_id]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <option value="" selected={is_nil(input_value(@form, :assignee_actor_id))}>
+              {gettext("unassigned")}
+            </option>
+            <.actor_options actors={@actors} selected_id={input_value(@form, :assignee_actor_id)} />
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Priority")}</span>
+          <select
+            name="task[priority]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <option value="" selected={is_nil(input_value(@form, :priority))}>
+              {gettext("none")}
+            </option>
+            <%= for p <- Task.priorities() do %>
+              <option value={p} selected={input_value(@form, :priority) == p}>{p}</option>
+            <% end %>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Goal")}</span>
+          <select
+            name="task[goal_id]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <option value="" selected={is_nil(@goal_id)}>{gettext("no goal")}</option>
+            <.goal_options tree={@goal_tree} selected_id={@goal_id} />
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Due date")}</span>
+          <input
+            type="date"
+            name="task[due_date]"
+            value={due_date_value(@task)}
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          />
+        </label>
+      </aside>
+    </.form>
+    """
+  end
+
+  defp status_selected(form, status) do
+    case Phoenix.HTML.Form.input_value(form, :status) do
+      nil -> status == "backlog"
+      val -> to_string(val) == status
+    end
+  end
+
+  defp status_label("backlog"), do: gettext("Backlog")
+  defp status_label("todo"), do: gettext("To Do")
+  defp status_label("in_progress"), do: gettext("In Progress")
+  defp status_label("done"), do: gettext("Done")
+  defp status_label("cancelled"), do: gettext("Cancelled")
+  defp status_label(other), do: other
+
+  defp due_date_value(%Task{due_date: %Date{} = d}), do: Date.to_iso8601(d)
+  defp due_date_value(_), do: ""
+
+  @doc """
+  Goal form for the resource modal — same two-column contract as
+  `task_form_fields`: main column (title, description, body editor) and
+  metadata sidebar (kind / health / status / metric fields / dates).
+
+  - `goal` — the struct (`%Goal{}` for create)
+  - `changeset` — form source; id must match the modal footer button
+  """
+  attr :id, :string, required: true
+  attr :goal, :map, required: true
+  attr :changeset, :any, required: true
+  attr :workspace_id, :string, required: true
+  attr :goal_kinds, :list, required: true
+  attr :editor_min_height, :string, default: "320px"
+
+  def goal_form_fields(assigns) do
+    editor_id = "goal-editor-modal-#{assigns.goal.id || "new"}"
+
+    assigns =
+      assigns
+      |> assign(:editor_id, editor_id)
+      |> assign(:form, to_form(assigns.changeset, as: :goal))
+
+    ~H"""
+    <.form
+      id={@id}
+      for={@form}
+      phx-change="validate_goal"
+      phx-submit="save_goal"
+      class="grid grid-cols-1 lg:grid-cols-[1fr_20rem] lg:gap-6"
+    >
+      <div class="min-w-0 space-y-4">
+        <.input
+          field={@form[:title]}
+          type="text"
+          label={gettext("Title")}
+          placeholder={gettext("Goal title…")}
+          class="text-lg font-medium"
+          autofocus
+        />
+
+        <.input
+          field={@form[:description]}
+          type="textarea"
+          label={gettext("Description")}
+          rows={2}
+        />
+
+        <div>
+          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Content")}</span>
+          <.markdown_editor
+            id={@editor_id}
+            body={@goal.body || ""}
+            workspace_id={@workspace_id}
+            autosave={false}
+            toolbar={false}
+            hidden_field="goal[body]"
+            min_height={@editor_min_height}
+          />
+        </div>
+      </div>
+
+      <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+          {gettext("Details")}
+        </h4>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Kind")}</span>
+          <select
+            name="goal[kind]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <option value="" selected={is_nil(input_value(@form, :kind))}>{gettext("none")}</option>
+            <%= for k <- @goal_kinds do %>
+              <option value={k} selected={input_value(@form, :kind) == k}>
+                {String.capitalize(k)}
+              </option>
+            <% end %>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Health")}</span>
+          <select
+            name="goal[health]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <option value="" selected={is_nil(input_value(@form, :health))}>—</option>
+            <option value="green" selected={input_value(@form, :health) == "green"}>Green</option>
+            <option value="yellow" selected={input_value(@form, :health) == "yellow"}>Yellow</option>
+            <option value="red" selected={input_value(@form, :health) == "red"}>Red</option>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Status")}</span>
+          <select
+            name="goal[status]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <option value="active" selected={input_value(@form, :status) == "active"}>Active</option>
+            <option value="draft" selected={input_value(@form, :status) == "draft"}>Draft</option>
+            <option value="on_hold" selected={input_value(@form, :status) == "on_hold"}>
+              On Hold
+            </option>
+            <option value="done" selected={input_value(@form, :status) == "done"}>Done</option>
+          </select>
+        </label>
+
+        <.input field={@form[:metric]} type="text" label={gettext("Metric")} />
+        <.input field={@form[:target_value]} type="number" label={gettext("Target Value")} />
+        <.input field={@form[:current_value]} type="number" label={gettext("Current Value")} />
+        <.input field={@form[:unit]} type="text" label={gettext("Unit")} />
+        <.input field={@form[:start_date]} type="date" label={gettext("Start Date")} />
+        <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
+      </aside>
+    </.form>
+    """
+  end
+
+  @doc """
+  Build task attrs from modal form params — THE single mapping shared by
+  create and edit (board modal, TaskLive, anywhere else). Empty selects =
+  clear (unassign / no priority / no due date / detach goal via
+  `Tasks.set_goal/2`).
+
+  Returns `%{attrs: attrs, goal_id: goal_id | nil}` — call
+  `Tasks.create_task/1` (or `update_task`) with `attrs`, then
+  `Tasks.set_goal/2` when `goal_id` is present. Callers inject identity
+  fields themselves (`created_by` / `updated_by` / `workspace_id`).
+  """
+  def task_attrs_from_params(params) when is_map(params) do
+    attrs = %{
+      "title" => String.trim(params["title"] || ""),
+      "body" => params["body"] || ""
+    }
+
+    attrs =
+      case params["status"] do
+        s when is_binary(s) ->
+          if s in Task.statuses(), do: Map.put(attrs, "status", s), else: attrs
+
+        _ ->
+          attrs
+      end
+
+    attrs =
+      case params["assignee_actor_id"] do
+        aid when is_binary(aid) and aid != "" -> Map.put(attrs, "assignee_actor_id", aid)
+        _ -> Map.put(attrs, "assignee_actor_id", nil)
+      end
+
+    attrs =
+      case params["priority"] do
+        p when p in ~w(low medium high urgent) -> Map.put(attrs, "priority", p)
+        _ -> Map.put(attrs, "priority", nil)
+      end
+
+    attrs =
+      case params["due_date"] do
+        date when is_binary(date) and date != "" -> Map.put(attrs, "due_date", date)
+        _ -> Map.put(attrs, "due_date", nil)
+      end
+
+    goal_id =
+      case params["goal_id"] do
+        g when is_binary(g) and g != "" -> g
+        _ -> nil
+      end
+
+    %{attrs: attrs, goal_id: goal_id}
   end
 end
