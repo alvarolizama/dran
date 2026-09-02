@@ -42,12 +42,12 @@ defmodule DranWeb.TaskBoardLiveTest do
   end
 
   describe "board rendering" do
-    test "renders all six columns with counts", %{conn: conn, ws: ws, task: task} do
+    test "renders all five columns with counts", %{conn: conn, ws: ws, task: task} do
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
 
       # Column labels come from gettext — match by data-column attributes
       # and the localized labels (es locale in tests).
-      for status <- ~w(backlog this_week today in_progress done cancelled) do
+      for status <- ~w(backlog todo in_progress done cancelled) do
         assert html =~ ~s(data-column="#{status}")
       end
 
@@ -57,6 +57,282 @@ defmodule DranWeb.TaskBoardLiveTest do
     test "legacy kanban URL redirects to tasks", %{conn: conn, ws: ws} do
       conn = get(conn, ~p"/#{ws.slug}/kanban")
       assert redirected_to(conn) == ~p"/#{ws.slug}/tasks"
+    end
+
+    test "renders agent badge on cards assigned to agent actors", %{conn: conn, ws: ws} do
+      {:ok, agent} =
+        Dran.Actors.create_actor(%{"name" => "board-agent", "kind" => "agent"})
+
+      {:ok, human} =
+        Dran.Actors.create_actor(%{"name" => "board-human", "kind" => "user"})
+
+      {:ok, _} =
+        Tasks.create_task(%{
+          "workspace_id" => ws.id,
+          "title" => "Agent task",
+          "assignee_actor_id" => agent.id
+        })
+
+      {:ok, _} =
+        Tasks.create_task(%{
+          "workspace_id" => ws.id,
+          "title" => "Human task",
+          "assignee_actor_id" => human.id
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+      assert html =~ "board-agent"
+      assert html =~ "board-human"
+      # The agent chip (cpu icon + localized "agent" label) appears for the
+      # agent card only.
+      assert html =~ "hero-cpu-chip"
+      assert html =~ "Agente"
+    end
+  end
+
+  describe "assignee filter" do
+    test "filter matches tasks by creator attribution when unassigned", %{conn: conn, ws: ws} do
+      {:ok, agent} =
+        Dran.Actors.create_actor(%{"name" => "test_user", "kind" => "agent"})
+
+      {:ok, _} =
+        Tasks.create_task(%{
+          "workspace_id" => ws.id,
+          "title" => "Made by test_user",
+          "created_by" => "test_user"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      # Filtering by the actor whose name matches the creator attribution
+      render_change(view, "filter_actor", %{"actor_id" => agent.id})
+      html = render(view)
+      assert html =~ "Made by test_user"
+      refute html =~ "Review PR"
+
+      # Unassigned = no assignee AND no real creator → shows only the seed
+      # task that has neither (Review PR has created_by "system"... no: it
+      # was created without created_by → default "system").
+      render_change(view, "filter_actor", %{"actor_id" => "unassigned"})
+      html = render(view)
+      assert html =~ "Review PR"
+      refute html =~ "Made by test_user"
+    end
+
+    test "groups filter options by actor kind", %{conn: conn, ws: ws} do
+      {:ok, _} = Dran.Actors.create_actor(%{"name" => "group-agent", "kind" => "agent"})
+      {:ok, _} = Dran.Actors.create_actor(%{"name" => "group-human", "kind" => "user"})
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      assert html =~ ~s(label="Agentes")
+      assert html =~ ~s(label="Usuarios")
+      assert html =~ "group-agent"
+      assert html =~ "group-human"
+    end
+
+    test "filters cards by actor and unassigned", %{conn: conn, ws: ws} do
+      {:ok, agent} =
+        Dran.Actors.create_actor(%{"name" => "filter-agent", "kind" => "agent"})
+
+      {:ok, mine} =
+        Tasks.create_task(%{
+          "workspace_id" => ws.id,
+          "title" => "Assigned task",
+          "assignee_actor_id" => agent.id
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+      assert html =~ "Assigned task"
+      assert html =~ "Review PR"
+
+      view = live(conn, ~p"/#{ws.slug}/tasks") |> elem(1)
+
+      render_change(view, "filter_actor", %{"actor_id" => agent.id})
+      html = render(view)
+      assert html =~ "Assigned task"
+      refute html =~ "Review PR"
+
+      render_change(view, "filter_actor", %{"actor_id" => "unassigned"})
+      html = render(view)
+      refute html =~ "Assigned task"
+      assert html =~ "Review PR"
+
+      render_change(view, "filter_actor", %{"actor_id" => ""})
+      html = render(view)
+      assert html =~ "Assigned task"
+      assert html =~ "Review PR"
+
+      assert Repo.reload!(mine).status == "backlog"
+    end
+  end
+
+  describe "detail panel" do
+    test "select_task opens the panel with the task body", %{conn: conn, ws: ws} do
+      {:ok, task} =
+        Tasks.create_task(%{
+          "workspace_id" => ws.id,
+          "title" => "With body",
+          "body" => "Detailed instructions here"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "select_task", %{"id" => task.id})
+
+      assert has_element?(view, "#task-detail-form")
+      assert render(view) =~ "Detailed instructions here"
+    end
+
+    test "save_detail updates title and body", %{conn: conn, ws: ws, task: task} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{"task" => %{"title" => "Renamed PR", "body" => "New body text"}})
+
+      updated = Repo.reload!(task)
+      assert updated.title == "Renamed PR"
+      assert updated.body == "New body text"
+      assert has_element?(view, "#task-detail-form")
+      assert render(view) =~ "New body text"
+    end
+
+    test "save_detail reassigns and unassigns the actor", %{conn: conn, ws: ws, task: task} do
+      {:ok, agent} = Dran.Actors.create_actor(%{"name" => "panel-agent", "kind" => "agent"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{
+        "task" => %{"title" => task.title, "assignee_actor_id" => agent.id}
+      })
+
+      assert Repo.reload!(task).assignee_actor_id == agent.id
+
+      # Same panel: switching to "unassigned" clears the actor
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{
+        "task" => %{"title" => task.title, "assignee_actor_id" => ""}
+      })
+
+      assert Repo.reload!(task).assignee_actor_id == nil
+    end
+
+    test "save_detail sets and clears due_date and priority", %{conn: conn, ws: ws, task: task} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{
+        "task" => %{
+          "title" => task.title,
+          "due_date" => "2026-12-24",
+          "priority" => "high"
+        }
+      })
+
+      updated = Repo.reload!(task)
+      assert updated.due_date == ~D[2026-12-24]
+      assert updated.priority == "high"
+
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{"task" => %{"title" => task.title, "due_date" => "", "priority" => ""}})
+
+      updated = Repo.reload!(task)
+      assert updated.due_date == nil
+      assert updated.priority == nil
+    end
+
+    test "save_detail with an empty title shows a validation error", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{"task" => %{"title" => "", "body" => "x"}})
+
+      assert Repo.reload!(task).title == "Review PR"
+    end
+
+    test "close_detail hides the panel", %{conn: conn, ws: ws, task: task} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "select_task", %{"id" => task.id})
+      assert has_element?(view, "#task-detail-form")
+
+      render_click(view, "close_detail", %{})
+      refute has_element?(view, "#task-detail-form")
+    end
+
+    test "toggle_archive archives the task and removes it from the board", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "select_task", %{"id" => task.id})
+      render_click(view, "toggle_archive", %{"id" => task.id})
+
+      assert Repo.reload!(task).archived == true
+      refute render(view) =~ "Review PR"
+      refute has_element?(view, "#task-detail-form")
+    end
+
+    test "rejects tasks from other workspaces (no select, no save, no archive)", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, other_ws} =
+        Dran.Knowledge.create_workspace(%{name: "Other Board", slug: "other-board"})
+
+      {:ok, other_task} =
+        Tasks.create_task(%{"workspace_id" => other_ws.id, "title" => "Foreign task"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      # select_task is rejected — the panel never opens
+      render_click(view, "select_task", %{"id" => other_task.id})
+      refute has_element?(view, "#task-detail-form")
+      refute render(view) =~ "Foreign task"
+
+      # save_detail is rejected — the foreign task is untouched
+      render_click(view, "save_detail", %{
+        "task" => %{"title" => "Hacked", "body" => "hacked"}
+      })
+
+      refute Repo.reload!(other_task).title == "Hacked"
+
+      # toggle_archive is rejected — the foreign task stays unarchived
+      render_click(view, "toggle_archive", %{"id" => other_task.id})
+      assert Repo.reload!(other_task).archived == false
+    end
+
+    test "save_detail with no task selected flashes instead of crashing", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      # No select_task beforehand — the socket has selected_task: nil
+      render_click(view, "save_detail", %{"task" => %{"title" => "x", "body" => "y"}})
+
+      # The LiveView is still alive and rendering
+      assert render(view) =~ "Pendientes"
     end
   end
 
@@ -104,11 +380,11 @@ defmodule DranWeb.TaskBoardLiveTest do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
 
       # First move succeeds
-      render_hook(view, "move", %{"id" => task.id, "to_status" => "today", "before_id" => nil})
+      render_hook(view, "move", %{"id" => task.id, "to_status" => "todo", "before_id" => nil})
 
       # Simulate a stale lock_version by moving directly and NOT re-rendering
       fresh = Repo.reload!(task)
-      {:ok, _} = Tasks.move_task(fresh, "this_week")
+      {:ok, _} = Tasks.move_task(fresh, "backlog")
 
       # Now the LiveView task struct is two versions stale — but the board
       # reloads after each move, so the hook always sends the fresh version.
@@ -131,10 +407,10 @@ defmodule DranWeb.TaskBoardLiveTest do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
 
       view
-      |> element("#quick-add-today")
-      |> render_submit(%{"task" => %{"title" => "New today task", "status" => "today"}})
+      |> element("#quick-add-todo")
+      |> render_submit(%{"task" => %{"title" => "New todo task", "status" => "todo"}})
 
-      assert Tasks.get_task_by_slug("new-today-task", ws.id).status == "today"
+      assert Tasks.get_task_by_slug("new-todo-task", ws.id).status == "todo"
     end
 
     test "attributes created_by to the session user", %{conn: conn, ws: ws} do
@@ -147,6 +423,19 @@ defmodule DranWeb.TaskBoardLiveTest do
       task = Tasks.get_task_by_slug("atributed-task", ws.id)
       assert task, "task should have been created"
       assert task.created_by == "test_user"
+    end
+
+    test "opens the detail panel with the freshly created task", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      view
+      |> element("#quick-add-backlog")
+      |> render_submit(%{"task" => %{"title" => "Fresh task", "status" => "backlog"}})
+
+      created = Tasks.get_task_by_slug("fresh-task", ws.id)
+      assert created, "task should have been created"
+      assert has_element?(view, "#task-detail-form")
+      assert render(view) =~ "Fresh task"
     end
   end
 end

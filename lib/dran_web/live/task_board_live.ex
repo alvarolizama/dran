@@ -6,6 +6,12 @@ defmodule DranWeb.TaskBoardLive do
   `Dran.Tasks.move_task/3` (optimistic locking + position renumbering).
   A stale lock shows a flash and reloads the board from the server — the
   losing client sees the winner's state instead of silently overwriting it.
+
+  The board also has:
+
+    - an assignee filter (all / unassigned / a specific actor)
+    - an agent badge on cards assigned to `kind: "agent"` actors
+    - a detail panel (click a card) to edit title/body and archive
   """
 
   use DranWeb, :live_view
@@ -20,9 +26,8 @@ defmodule DranWeb.TaskBoardLive do
   end
 
   @column_meta [
-    {"backlog", "hero-archive-box", "bg-base-300"},
-    {"this_week", "hero-calendar", "bg-blue-500/20 text-blue-700"},
-    {"today", "hero-sun", "bg-amber-500/20 text-amber-700"},
+    {"backlog", "hero-inbox", "bg-base-300"},
+    {"todo", "hero-list-bullet", "bg-sky-500/20 text-sky-700"},
     {"in_progress", "hero-bolt", "bg-purple-500/20 text-purple-700"},
     {"done", "hero-check-circle", "bg-green-500/20 text-green-700"},
     {"cancelled", "hero-x-circle", "bg-red-500/20 text-red-700"}
@@ -42,7 +47,11 @@ defmodule DranWeb.TaskBoardLive do
        |> assign(
          workspace: workspace,
          columns: @column_meta,
-         current_user: session["user"]
+         current_user: session["user"],
+         filter_actor_id: nil,
+         selected_task: nil,
+         detail_form: nil,
+         managed_actors: Dran.Actors.list_managed_actors()
        )
        |> load_board()}
     else
@@ -54,14 +63,115 @@ defmodule DranWeb.TaskBoardLive do
     {:noreply, socket}
   end
 
-  def handle_event("move", %{"id" => id, "to_status" => to_status} = params, socket) do
-    task = Tasks.get_task(id)
+  def handle_event("filter_actor", %{"actor_id" => actor_id}, socket) do
+    filter =
+      case actor_id do
+        "" -> nil
+        "unassigned" -> "unassigned"
+        id when is_binary(id) -> id
+        _ -> nil
+      end
 
-    case task do
-      nil ->
+    {:noreply, socket |> assign(filter_actor_id: filter) |> load_board()}
+  end
+
+  def handle_event("select_task", %{"id" => id}, socket) do
+    case fetch_board_task(id, socket) do
+      {:error, :not_found} ->
         {:noreply, put_flash(socket, :error, gettext("Task not found"))}
 
-      %Task{} = task ->
+      {:ok, task} ->
+        {:noreply,
+         socket
+         |> assign(selected_task: task)
+         |> assign(detail_form: to_form(Task.update_changeset(task, %{})))}
+    end
+  end
+
+  def handle_event("close_detail", _params, socket) do
+    {:noreply, assign(socket, selected_task: nil, detail_form: nil)}
+  end
+
+  def handle_event("save_detail", %{"task" => params}, socket) do
+    case socket.assigns.selected_task do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("No task selected"))}
+
+      task ->
+        attrs = %{
+          "title" => String.trim(params["title"] || ""),
+          "body" => params["body"] || "",
+          "updated_by" => session_identity(socket)
+        }
+
+        # Empty select = unassign.
+        attrs =
+          case params["assignee_actor_id"] do
+            aid when is_binary(aid) and aid != "" -> Map.put(attrs, "assignee_actor_id", aid)
+            _ -> Map.put(attrs, "assignee_actor_id", nil)
+          end
+
+        # Empty date = clear due_date.
+        attrs =
+          case params["due_date"] do
+            date when is_binary(date) and date != "" -> Map.put(attrs, "due_date", date)
+            _ -> Map.put(attrs, "due_date", nil)
+          end
+
+        # Empty select = no priority.
+        attrs =
+          case params["priority"] do
+            p when p in ~w(low medium high urgent) -> Map.put(attrs, "priority", p)
+            _ -> Map.put(attrs, "priority", nil)
+          end
+
+        case Tasks.update_task(task, attrs) do
+          {:ok, updated} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, gettext("Task updated"))
+             |> assign(selected_task: updated)
+             |> assign(detail_form: to_form(Task.update_changeset(updated, %{})))
+             |> load_board()}
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            {:noreply, assign(socket, detail_form: to_form(changeset))}
+        end
+    end
+  end
+
+  def handle_event("save_detail", _params, socket) do
+    {:noreply, put_flash(socket, :error, gettext("No task selected"))}
+  end
+
+  def handle_event("toggle_archive", %{"id" => id}, socket) do
+    case fetch_board_task(id, socket) do
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, gettext("Task not found"))}
+
+      {:ok, task} ->
+        attrs = %{"archived" => not task.archived, "updated_by" => session_identity(socket)}
+
+        case Tasks.update_task(task, attrs) do
+          {:ok, _updated} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, gettext("Task archived"))
+             |> assign(selected_task: nil, detail_form: nil)
+             |> load_board()}
+
+          {:error, %Ecto.Changeset{}} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not archive task"))}
+        end
+    end
+  end
+
+  def handle_event("move", %{"id" => id, "to_status" => to_status} = params, socket) do
+    case fetch_board_task(id, socket) do
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, gettext("Task not found"))}
+
+      {:ok, task} ->
         opts =
           case params["before_id"] do
             nil -> []
@@ -116,13 +226,27 @@ defmodule DranWeb.TaskBoardLive do
       {:noreply, socket}
     else
       case Tasks.create_task(attrs) do
-        {:ok, _task} ->
-          {:noreply, load_board(socket)}
+        {:ok, task} ->
+          # Re-fetch to get :assignee_actor preloaded for the detail panel.
+          task = Tasks.get_task(task.id)
+
+          {:noreply,
+           socket
+           |> put_flash(:info, gettext("Task created"))
+           |> assign(selected_task: task)
+           |> assign(detail_form: to_form(Task.update_changeset(task, %{})))
+           |> load_board()}
 
         {:error, %Ecto.Changeset{} = _changeset} ->
           {:noreply, put_flash(socket, :error, gettext("Could not create task"))}
       end
     end
+  end
+
+  # The task editor runs with autosave off; if a body_change ever arrives
+  # (stale client, future autosave), ignore it instead of crashing.
+  def handle_event("body_change", _params, socket) do
+    {:noreply, socket}
   end
 
   # PubSub: refresh the board when tasks change anywhere (other tabs, MCP, API).
@@ -137,7 +261,15 @@ defmodule DranWeb.TaskBoardLive do
   end
 
   defp load_board(socket) do
-    board = Tasks.list_board(socket.assigns.workspace.id)
+    filter = socket.assigns.filter_actor_id
+    actors = socket.assigns.managed_actors
+
+    board =
+      socket.assigns.workspace.id
+      |> Tasks.list_board()
+      |> Map.new(fn {status, tasks} ->
+        {status, Enum.filter(tasks, &visible?(&1, filter, actors))}
+      end)
 
     counts =
       Map.new(board, fn {status, tasks} -> {status, length(tasks)} end)
@@ -149,6 +281,51 @@ defmodule DranWeb.TaskBoardLive do
       managed_actors: Dran.Actors.list_managed_actors(),
       page_title: "#{socket.assigns.workspace.name} · #{gettext("Tasks")}"
     )
+  end
+
+  # Assignee filter: nil shows everything. An actor matches tasks assigned
+  # to them, plus tasks they created with no assignee (attribution name ==
+  # actor name — the actor model's join convention). "Unassigned" shows
+  # cards with no assignee AND no real creator (orphaned work).
+  defp visible?(_task, nil, _actors), do: true
+
+  defp visible?(%Task{assignee_actor_id: nil, created_by: cb}, "unassigned", _actors) do
+    is_nil(cb) or cb == "system"
+  end
+
+  defp visible?(%Task{assignee_actor_id: nil}, "unassigned", _actors), do: false
+
+  defp visible?(%Task{assignee_actor_id: nil, created_by: cb}, actor_id, actors) do
+    case Enum.find(actors, &(&1.id == actor_id)) do
+      %{name: name} -> cb == name
+      _ -> false
+    end
+  end
+
+  defp visible?(%Task{assignee_actor_id: assignee_id}, actor_id, _actors) do
+    assignee_id == actor_id
+  end
+
+  defp priority_options, do: ~w(low medium high urgent)
+
+  defp agent_groups, do: [{"agent", gettext("Agents")}, {"user", gettext("Users")}]
+
+  attr :label, :string, required: true
+  attr :actors, :list, required: true
+  attr :filter_actor_id, :string, required: true
+
+  defp optgroup(assigns) do
+    ~H"""
+    <optgroup :if={@actors != []} label={@label}>
+      <option
+        :for={actor <- @actors}
+        value={actor.id}
+        selected={@filter_actor_id == actor.id}
+      >
+        {Dran.Actors.Actor.label(actor)}
+      </option>
+    </optgroup>
+    """
   end
 
   def render(assigns) do
@@ -167,9 +344,30 @@ defmodule DranWeb.TaskBoardLive do
           <.icon name="hero-view-columns" class="size-6 text-primary" />
           {gettext("Tasks")}
         </h1>
-        <p class="text-xs text-base-content/40 hidden md:block">
-          {gettext("Drag cards between columns")}
-        </p>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-xs text-base-content/60">
+            <.icon name="hero-funnel" class="size-3.5" />
+            <select
+              name="actor_id"
+              phx-change="filter_actor"
+              id="assignee-filter"
+              class="text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+            >
+              <option value="" selected={is_nil(@filter_actor_id)}>
+                {gettext("All assignees")}
+              </option>
+              <option value="unassigned" selected={@filter_actor_id == "unassigned"}>
+                {gettext("Unassigned")}
+              </option>
+              <.optgroup
+                :for={{kind, label} <- agent_groups()}
+                label={label}
+                actors={Enum.filter(@managed_actors, &(&1.kind == kind))}
+                filter_actor_id={@filter_actor_id}
+              />
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="flex gap-4 pb-4 items-start">
@@ -218,26 +416,34 @@ defmodule DranWeb.TaskBoardLive do
               placeholder={gettext("+ Add task")}
               class="w-full text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none placeholder:text-base-content/30 transition"
             />
-            <select
-              name="task[assignee_actor_id]"
-              class="mt-1 w-full text-xs px-1.5 py-1 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none text-base-content/60"
-            >
-              <option value="">{gettext("unassigned")}</option>
-              <option
-                :for={actor <- @managed_actors}
-                value={actor.id}
-              >
-                {Dran.Actors.Actor.label(actor)}
-              </option>
-            </select>
           </form>
         </div>
       </div>
+
+      <.task_detail
+        :if={@selected_task}
+        task={@selected_task}
+        form={@detail_form}
+        managed_actors={@managed_actors}
+      />
     </div>
     """
   end
 
   # ── Components ──────────────────────────────────────────────────────────
+
+  # Tasks of other workspaces must be invisible to this LiveView: event
+  # params are client-side and forgeable, so every lookup is scoped to the
+  # mounted workspace.
+  defp fetch_board_task(id, socket) do
+    case Tasks.get_task(id) do
+      %Task{workspace_id: ws_id} = task ->
+        if ws_id == socket.assigns.workspace.id, do: {:ok, task}, else: {:error, :not_found}
+
+      nil ->
+        {:error, :not_found}
+    end
+  end
 
   attr :task, Task, required: true
   attr :workspace_slug, :string, required: true
@@ -247,6 +453,9 @@ defmodule DranWeb.TaskBoardLive do
     <div
       data-task-id={@task.id}
       draggable="true"
+      phx-click="select_task"
+      phx-value-id={@task.id}
+      title={gettext("Click to edit")}
       class="group p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition cursor-grab active:cursor-grabbing"
     >
       <div class="flex items-start justify-between gap-2">
@@ -263,8 +472,20 @@ defmodule DranWeb.TaskBoardLive do
         class="mt-2 flex items-center gap-1 text-xs text-base-content/60"
         title={gettext("Assignee")}
       >
-        <.icon name="hero-user-circle" class="size-3.5" />
+        <.icon
+          name={
+            if @task.assignee_actor.kind == "agent", do: "hero-cpu-chip", else: "hero-user-circle"
+          }
+          class="size-3.5"
+        />
         {Dran.Actors.Actor.label(@task.assignee_actor)}
+        <span
+          :if={@task.assignee_actor.kind == "agent"}
+          class="badge badge-ghost badge-xs gap-0.5"
+        >
+          <.icon name="hero-bolt" class="size-2.5" />
+          {gettext("agent")}
+        </span>
       </div>
 
       <div class="flex items-center gap-3 mt-2 text-xs text-base-content/50">
@@ -296,6 +517,132 @@ defmodule DranWeb.TaskBoardLive do
     """
   end
 
+  attr :task, Task, required: true
+  attr :form, Phoenix.HTML.Form, required: true
+  attr :managed_actors, :list, required: true
+
+  defp task_detail(assigns) do
+    ~H"""
+    <div class="fixed inset-y-0 right-0 w-full max-w-md bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-base-300">
+        <h2 class="font-semibold flex items-center gap-2">
+          <.icon name="hero-pencil-square" class="size-4 text-primary" />
+          {gettext("Edit task")}
+        </h2>
+        <button
+          type="button"
+          phx-click="close_detail"
+          class="btn btn-ghost btn-xs btn-circle"
+          aria-label={gettext("Close")}
+        >
+          <.icon name="hero-x-mark" class="size-4" />
+        </button>
+      </div>
+
+      <.form
+        for={@form}
+        id="task-detail-form"
+        phx-submit="save_detail"
+        class="flex-1 overflow-y-auto p-4 space-y-4"
+      >
+        <div>
+          <label class="text-xs text-base-content/60">{gettext("Status")}</label>
+          <div class="mt-1 flex items-center gap-2 text-sm">
+            <span class={"badge badge-sm #{status_badge(@task.status)}"}>{column_label(@task.status)}</span>
+            <span :if={@task.priority} class={priority_badge(@task.priority)}>{@task.priority}</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block">
+            <span class="text-xs text-base-content/60">{gettext("Assignee")}</span>
+            <select
+              name="task[assignee_actor_id]"
+              class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+            >
+              <option value="" selected={is_nil(@task.assignee_actor_id)}>
+                {gettext("unassigned")}
+              </option>
+              <option
+                :for={actor <- @managed_actors}
+                value={actor.id}
+                selected={@task.assignee_actor_id == actor.id}
+              >
+                {Dran.Actors.Actor.label(actor)}
+              </option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-xs text-base-content/60">{gettext("Priority")}</span>
+            <select
+              name="task[priority]"
+              class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+            >
+              <option value="" selected={is_nil(@task.priority)}>
+                {gettext("none")}
+              </option>
+              <option
+                :for={p <- priority_options()}
+                value={p}
+                selected={@task.priority == p}
+              >
+                {p}
+              </option>
+            </select>
+          </label>
+        </div>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Due date")}</span>
+          <input
+            type="date"
+            name="task[due_date]"
+            value={@task.due_date && Date.to_iso8601(@task.due_date)}
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          />
+        </label>
+
+        <.input field={@form[:title]} type="text" label={gettext("Title")} />
+
+        <div>
+          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Body")}</span>
+          <.markdown_editor
+            id={"task-editor-#{@task.id}"}
+            body={@task.body || ""}
+            workspace_id=""
+            autosave={false}
+            toolbar={false}
+            hidden_field="task[body]"
+            min_height="220px"
+          />
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button
+            type="button"
+            phx-click="toggle_archive"
+            phx-value-id={@task.id}
+            class="btn btn-ghost btn-sm text-base-content/60"
+          >
+            <.icon name="hero-archive-box-arrow-down" class="size-4" />
+            {gettext("Archive")}
+          </button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <.icon name="hero-check" class="size-4" />
+            {gettext("Save")}
+          </button>
+        </div>
+      </.form>
+    </div>
+    """
+  end
+
+  defp status_badge("backlog"), do: "bg-base-300"
+  defp status_badge("todo"), do: "bg-sky-500/20 text-sky-700"
+  defp status_badge("in_progress"), do: "bg-purple-500/20 text-purple-700"
+  defp status_badge("done"), do: "bg-green-500/20 text-green-700"
+  defp status_badge(_), do: "bg-red-500/20 text-red-700"
+
   defp priority_badge("urgent"), do: "badge badge-error badge-sm shrink-0"
   defp priority_badge("high"), do: "badge badge-warning badge-sm shrink-0"
 
@@ -310,8 +657,7 @@ defmodule DranWeb.TaskBoardLive do
   defp recurrence_title(_), do: gettext("Repeats")
 
   defp column_label("backlog"), do: gettext("Backlog")
-  defp column_label("this_week"), do: gettext("This Week")
-  defp column_label("today"), do: gettext("Today")
+  defp column_label("todo"), do: gettext("To Do")
   defp column_label("in_progress"), do: gettext("In Progress")
   defp column_label("done"), do: gettext("Done")
   defp column_label("cancelled"), do: gettext("Cancelled")

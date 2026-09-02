@@ -257,9 +257,12 @@ const MarkdownEditor = {
       },
     })
 
-    // Debounced body change → autosave (only when the page already exists)
+    // Debounced body change → autosave (only when the page already exists).
+    // The hidden field is synced on every update regardless, so a submit
+    // that fires between debounces still carries the current markdown.
     this.saveTimer = null
     this.editor.on("update", () => {
+      this.syncHiddenField()
       if (!this.autosave) return
       this.pushSaveStatus("saving")
       if (this.saveTimer) clearTimeout(this.saveTimer)
@@ -270,21 +273,15 @@ const MarkdownEditor = {
       }, 1000)
     })
 
-    // Force sync body before form submit — update a hidden field
+    // Force sync body before form submit — update a hidden field. The field
+    // name comes from data-hidden-field (default page[body]) so non-page
+    // forms (e.g. the task detail panel) can reuse the hook.
     const form = el.closest("form")
+    this.hiddenFieldName = el.dataset.hiddenField || "page[body]"
     if (form) {
       this.submitHandler = () => {
         if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = null }
-        const md = this.editor.getMarkdown ? this.editor.getMarkdown() : ""
-        // Find or create a hidden input for body
-        let hidden = form.querySelector('input[name="page[body]"]')
-        if (!hidden) {
-          hidden = document.createElement("input")
-          hidden.type = "hidden"
-          hidden.name = "page[body]"
-          form.appendChild(hidden)
-        }
-        hidden.value = md
+        this.syncHiddenField()
       }
       form.addEventListener("submit", this.submitHandler)
     }
@@ -320,6 +317,21 @@ const MarkdownEditor = {
   },
 
   // ── Helpers ──
+
+  // Write the current markdown into the form's hidden body field.
+  syncHiddenField() {
+    const form = this.el.closest("form")
+    if (!form || !this.editor) return
+    const md = this.editor.getMarkdown ? this.editor.getMarkdown() : ""
+    let hidden = form.querySelector(`input[name="${this.hiddenFieldName}"]`)
+    if (!hidden) {
+      hidden = document.createElement("input")
+      hidden.type = "hidden"
+      hidden.name = this.hiddenFieldName
+      form.appendChild(hidden)
+    }
+    hidden.value = md
+  },
 
   pushSaveStatus(status) {
     // Update the status indicator via DOM (cheaper than a round-trip)

@@ -341,6 +341,15 @@ defmodule DranWeb.Router do
           _ -> slug
         end
 
+      # /api/todos/:id — no workspace in params; it comes from the task.
+      # Without this branch every API-key write to a todo 403s (SEC-002
+      # false negative), even with write access to the owning workspace.
+      conn.request_path =~ "/api/todos/" and is_binary(conn.params["id"]) ->
+        case Dran.Tasks.get_task(conn.params["id"]) do
+          %{workspace_id: ws_id} -> ws_id
+          _ -> nil
+        end
+
       true ->
         nil
     end

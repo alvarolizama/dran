@@ -226,7 +226,7 @@ defmodule Dran.MCPTest do
         call_tool("dran_create_task", %{
           "workspace" => "personal",
           "title" => "MCP task",
-          "status" => "today",
+          "status" => "todo",
           "priority" => "high",
           "due_date" => "2026-09-15",
           "recurrence" => "weekly",
@@ -234,7 +234,7 @@ defmodule Dran.MCPTest do
         })
 
       assert result =~ "Created task: MCP task"
-      assert result =~ "status: today"
+      assert result =~ "status: todo"
 
       slug =
         case Regex.run(~r/\(([\w-]+), id:/, result) do
@@ -278,6 +278,40 @@ defmodule Dran.MCPTest do
         })
 
       assert result =~ "Error: task 'no-existe' not found"
+    end
+
+    test "archives and unarchives a task via dran_update_task", %{context: ctx} do
+      result =
+        call_tool("dran_create_task", %{
+          "workspace" => "personal",
+          "title" => "Archive me"
+        })
+
+      slug =
+        case Regex.run(~r/\(([\w-]+), id:/, result) do
+          [_, s] -> s
+          nil -> flunk("could not extract slug from: #{result}")
+        end
+
+      result =
+        call_tool("dran_update_task", %{
+          "workspace" => "personal",
+          "slug" => slug,
+          "archived" => true
+        })
+
+      assert result =~ "Updated task"
+      assert Dran.Tasks.get_task_by_slug(slug, ctx.id).archived == true
+
+      result =
+        call_tool("dran_update_task", %{
+          "workspace" => "personal",
+          "slug" => slug,
+          "archived" => false
+        })
+
+      assert result =~ "Updated task"
+      assert Dran.Tasks.get_task_by_slug(slug, ctx.id).archived == false
     end
 
     test "create_task appears in tools list and write enforcement" do

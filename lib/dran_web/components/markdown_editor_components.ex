@@ -24,6 +24,14 @@ defmodule DranWeb.MarkdownEditorComponents do
   - `:autosave` (optional, default `true`) — when `false`, the editor does not
     emit debounced `body_change` autosave events and the status indicator is
     hidden. Use `false` for new-page forms (nothing exists to autosave yet).
+  - `:toolbar` (optional, default `true`) — render the formatting toolbar.
+    Use `false` for compact embeds (e.g. the task detail panel): the editor
+    stays fully functional, formatting is just keyboard/markdown-driven.
+  - `:hidden_field` (optional, default `"page[body]"`) — name of the hidden
+    input the hook syncs the markdown into on submit. Change it for forms
+    that are not `page[...]` (e.g. `"task[body]"`).
+  - `:min_height` (optional, default `nil`) — CSS min-height for the mount
+    (e.g. `"220px"`). Defaults to the class-level `min-h-[300px]`.
   - `class` (optional) — extra classes for the outer container.
   """
   attr :id, :string, required: true
@@ -31,6 +39,9 @@ defmodule DranWeb.MarkdownEditorComponents do
   attr :workspace_id, :string, required: true
   attr :save_status, :string, default: "idle"
   attr :autosave, :boolean, default: true
+  attr :toolbar, :boolean, default: true
+  attr :hidden_field, :string, default: "page[body]"
+  attr :min_height, :string, default: nil
   attr :class, :string, default: ""
 
   def markdown_editor(assigns) do
@@ -39,7 +50,7 @@ defmodule DranWeb.MarkdownEditorComponents do
       id={"editor-wrapper-#{@id}"}
       class={["md-editor flex flex-col rounded-lg border border-base-300 overflow-hidden", @class]}
     >
-      <.editor_toolbar id={@id} />
+      <.editor_toolbar :if={@toolbar} id={@id} />
       <.editor_status :if={@autosave} status={@save_status} />
 
       <div
@@ -47,9 +58,11 @@ defmodule DranWeb.MarkdownEditorComponents do
         phx-hook="MarkdownEditor"
         phx-update="ignore"
         class="md-editor-mount flex-1 min-h-[300px] bg-base-100 overflow-y-auto"
+        style={@min_height && "min-height: #{@min_height};"}
         data-body={@body}
         data-context-id={@workspace_id}
-        data-autosave={@autosave}
+        data-autosave={to_string(@autosave)}
+        data-hidden-field={@hidden_field}
       >
         <div
           class="tiptap-content prose prose-base dark:prose-invert max-w-none"
@@ -57,6 +70,7 @@ defmodule DranWeb.MarkdownEditorComponents do
         >
         </div>
       </div>
+      <input type="hidden" name={@hidden_field} value={@body} />
     </div>
     """
   end
