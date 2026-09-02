@@ -354,6 +354,21 @@ defmodule Dran.Tasks do
     |> Enum.group_by(fn {task_id, _goal} -> task_id end, fn {_task_id, goal} -> goal end)
   end
 
+  @doc """
+  Creator actor ids for a batch of tasks — `%{task_id => actor_id}` (missing
+  keys mean "no id-attributed creator"). Backs the board's assignee filter
+  (F7): same batch mechanic as `list_linked_goals_by_ids/2`, no N+1, and
+  identity by FK instead of the legacy name-matching convention.
+  """
+  def list_creator_actor_ids_by_ids(task_ids) when is_list(task_ids) do
+    from(t in Task,
+      where: t.id in ^task_ids and not is_nil(t.creator_actor_id),
+      select: {t.id, t.creator_actor_id}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
   # Recompute derived progress for every goal linked to this task.
   # Called after any status change (move_task/update_task).
   defp recompute_linked_goals(%Task{} = task) do

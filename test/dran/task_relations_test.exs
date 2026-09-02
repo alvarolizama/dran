@@ -347,6 +347,23 @@ defmodule Dran.TaskRelationsTest do
 
       assert task.creator_actor_id == agent.id
     end
+
+    test "list_creator_actor_ids_by_ids batches creator lookups (F7 filter mechanic)" do
+      {:ok, agent} = Dran.Actors.create_actor(%{"name" => "batch-actor", "kind" => "agent"})
+
+      workspace = ensure_workspace!()
+
+      {:ok, t1} =
+        Tasks.create_task(%{
+          "workspace_id" => workspace.id,
+          "title" => "With creator id",
+          "created_by" => "batch-actor"
+        })
+
+      {:ok, t2} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "Without"})
+
+      assert Tasks.list_creator_actor_ids_by_ids([t1.id, t2.id]) == %{t1.id => agent.id}
+    end
   end
 
   describe "task ↔ page links (opt-in)" do

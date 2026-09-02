@@ -202,11 +202,21 @@ defmodule DranWeb.TaskBoardLive do
       |> Enum.map(& &1.id)
       |> Tasks.list_linked_goals_by_ids(socket.assigns.workspace.id)
 
+    # Creator actor lookup for the assignee filter (F7) — batch, by id.
+    task_ids = board_all |> Map.values() |> List.flatten() |> Enum.map(& &1.id)
+    creators_by_task = Tasks.list_creator_actor_ids_by_ids(task_ids)
+
+    # %{actor_id => name} — one-time fallback for legacy rows whose creator
+    # has no id-attribution (name mirror kept for display).
+    actor_names = Map.new(actors, &{&1.id, &1.name})
+
+    filter_ctx = %{creators: creators_by_task, names: actor_names}
+
     board =
       Map.new(board_all, fn {status, tasks} ->
         {status,
          Enum.filter(tasks, fn task ->
-           visible_actor?(task, actor_filter, actors) and
+           visible_actor?(task, actor_filter, filter_ctx) and
              visible_goal?(task, visible_goal_ids, goals_by_task)
          end)}
       end)
@@ -225,26 +235,30 @@ defmodule DranWeb.TaskBoardLive do
     )
   end
 
-  # Assignee filter: nil shows everything. An actor matches tasks assigned
-  # to them, plus tasks they created with no assignee (attribution name ==
-  # actor name — the actor model's join convention). "Unassigned" shows
-  # cards with no assignee AND no real creator (orphaned work).
-  defp visible_actor?(_task, nil, _actors), do: true
+  # Assignee filter (F7) — same batch-by-id mechanic as the goal filter.
+  # `nil` shows everything. An actor id matches tasks ASSIGNED to them plus
+  # tasks they CREATED with no assignee (via creator_actor_id). "Unassigned"
+  # shows cards with no assignee AND no attributed creator (orphaned work).
+  defp visible_actor?(_task, nil, _filter_ctx), do: true
 
-  defp visible_actor?(%Task{assignee_actor_id: nil, created_by: cb}, "unassigned", _actors) do
-    is_nil(cb) or cb == "system"
+  defp visible_actor?(%Task{assignee_actor_id: nil, id: id}, "unassigned", %{
+         creators: creators
+       }) do
+    not Map.has_key?(creators, id)
   end
 
-  defp visible_actor?(%Task{assignee_actor_id: nil}, "unassigned", _actors), do: false
-
-  defp visible_actor?(%Task{assignee_actor_id: nil, created_by: cb}, actor_id, actors) do
-    case Enum.find(actors, &(&1.id == actor_id)) do
-      %{name: name} -> cb == name
-      _ -> false
-    end
+  defp visible_actor?(
+         %Task{assignee_actor_id: nil, id: id, created_by: cb},
+         actor_id,
+         %{creators: creators, names: names}
+       ) do
+    # Match by id-attribution, or by the name mirror for legacy rows whose
+    # creator never got an id (created before F6 / actor deleted).
+    Map.get(creators, id) == actor_id or Map.get(names, actor_id) == cb
   end
 
-  defp visible_actor?(%Task{assignee_actor_id: assignee_id}, actor_id, _actors) do
+  defp visible_actor?(%Task{assignee_actor_id: assignee_id}, actor_id, _filter_ctx)
+       when is_binary(assignee_id) do
     assignee_id == actor_id
   end
 
