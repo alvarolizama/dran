@@ -173,23 +173,15 @@ defmodule DranWeb.GoalLive do
                 <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
               </div>
 
-              <div>
-                <span class="label mb-1 block text-sm font-medium text-base-content/70">{gettext(
-                  "Content"
-                )}</span>
-                <textarea
-                  name="goal[body]"
-                  rows={8}
-                  class="w-full px-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                >{@goal.body}</textarea>
-              </div>
+              <.markdown_body_field
+                id={"goal-editor-#{@goal.id}"}
+                body={@goal.body || ""}
+                workspace_id={@goal.workspace_id}
+                hidden_field="goal[body]"
+                label={gettext("Content")}
+              />
 
-              <div class="flex justify-end gap-2 pt-2">
-                <button type="button" phx-click="toggle_edit" class="btn btn-ghost btn-sm">{gettext(
-                  "Cancel"
-                )}</button>
-                <button type="submit" class="btn btn-primary btn-sm">{gettext("Save")}</button>
-              </div>
+              <.form_actions submit_label={gettext("Save")} cancel_event="toggle_edit" />
             </.form>
           </div>
 
@@ -269,18 +261,19 @@ defmodule DranWeb.GoalLive do
           <.input field={@form[:target_value]} type="number" label={gettext("Target Value")} />
           <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
 
-          <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">{gettext(
-              "Cancel"
-            )}</.link>
-            <button
-              type="submit"
-              class="btn btn-primary btn-sm"
-              phx-disable-with={gettext("Creating…")}
-            >
-              <.icon name="hero-plus" class="w-4 h-4" /> {gettext("Create Goal")}
-            </button>
-          </div>
+          <.markdown_body_field
+            id="goal-new-editor"
+            body=""
+            workspace_id={@workspace_id}
+            hidden_field="goal[body]"
+            label={gettext("Content")}
+          />
+
+          <.form_actions
+            submit_label={gettext("Create Goal")}
+            submit_icon="hero-plus"
+            cancel_path={~p"/#{@workspace_slug}/goals"}
+          />
         </.form>
       </div>
 
@@ -405,6 +398,7 @@ defmodule DranWeb.GoalLive do
     assign(socket,
       form: to_form(changeset, as: :goal),
       editing: false,
+      workspace_id: socket.assigns[:workspace] && socket.assigns.workspace.id,
       page_title: gettext("New Goal")
     )
   end

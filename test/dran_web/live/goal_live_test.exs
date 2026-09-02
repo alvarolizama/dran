@@ -101,4 +101,38 @@ defmodule DranWeb.GoalLiveTest do
       assert render(view) =~ "Live added"
     end
   end
+
+  describe "tiptap body editor (shared resource pattern)" do
+    test "edit form renders the Tiptap editor mount for the goal body", %{
+      conn: conn,
+      ws: ws,
+      goal: goal
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}?edit=true")
+
+      assert has_element?(view, "#goal-editor-#{goal.id}[phx-hook='MarkdownEditor']")
+    end
+
+    test "new form renders the Tiptap editor for the goal body", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/new")
+
+      assert has_element?(view, "#goal-new-editor[phx-hook='MarkdownEditor']")
+    end
+
+    test "creating a goal with a body persists it", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/new")
+
+      view
+      |> form("#goal-new-form")
+      |> render_submit(%{
+        "goal" => %{
+          "title" => "Goal with body",
+          "body" => "# Hola\n\n```mermaid\ngraph TD\nA-->B\n```"
+        }
+      })
+
+      goal = Dran.Goals.get_goal_by_slug("goal-with-body", ws.id)
+      assert goal.body =~ "mermaid"
+    end
+  end
 end
