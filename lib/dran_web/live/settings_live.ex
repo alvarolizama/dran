@@ -50,6 +50,11 @@ defmodule DranWeb.SettingsLive do
         new_api_key_form: to_form(%{}, as: :api_key),
         revealed_api_key: nil,
         show_api_key_modal: false,
+        managed_actors: [],
+        create_actor_form: to_form(%{}, as: :actor, id: "create-actor"),
+        edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor"),
+        editing_actor_id: nil,
+        actor_delete_confirmation: nil,
         profile_form: to_form(Dran.Accounts.User.profile_changeset(user, %{}), as: :profile),
         password_form:
           to_form(Dran.Accounts.User.update_password_changeset(user, %{}), as: :password),
@@ -72,6 +77,19 @@ defmodule DranWeb.SettingsLive do
   defp apply_tab(socket, :api_keys, _params) do
     socket
     |> assign(active_tab: :api_keys, page_title: gettext("API Keys"))
+    |> assign(managed_actors: managed_actors_with_key_counts())
+  end
+
+  defp apply_tab(socket, :actors, _params) do
+    socket
+    |> assign(active_tab: :actors, page_title: gettext("Actors"))
+    |> assign(
+      managed_actors: managed_actors_with_key_counts(),
+      create_actor_form: to_form(%{}, as: :actor, id: "create-actor"),
+      edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor"),
+      editing_actor_id: nil,
+      actor_delete_confirmation: nil
+    )
   end
 
   defp apply_tab(socket, _action, _params) do
@@ -121,10 +139,17 @@ defmodule DranWeb.SettingsLive do
 
     user = socket.assigns[:current_user_struct] || session_user_via_assigns(socket)
 
+    actor_id =
+      case Map.get(params, "actor_id", "") do
+        "" -> nil
+        aid -> aid
+      end
+
     attrs = %{
       name: name,
       workspace_ids: workspace_ids,
-      created_by_user_id: user && user.id
+      created_by_user_id: user && user.id,
+      actor_id: actor_id
     }
 
     case Dran.Accounts.create_api_key(attrs) do
@@ -135,7 +160,8 @@ defmodule DranWeb.SettingsLive do
             api_keys: Dran.Accounts.list_api_keys(user),
             new_api_key_form: to_form(%{}, as: :api_key),
             revealed_api_key: %{id: key.id, token: key.token},
-            show_api_key_modal: false
+            show_api_key_modal: false,
+            managed_actors: managed_actors_with_key_counts()
           )
           |> put_flash(:info, gettext("API key created — copy it now, it won't be shown again"))
 
@@ -220,7 +246,134 @@ defmodule DranWeb.SettingsLive do
     {:noreply, push_event(socket, "copy_to_clipboard", %{text: key.token_prefix})}
   end
 
-  # ── Account tab ──
+  # ── Actors tab ──────────────────────────────────────────────────────────────
+
+  @impl true
+  def handle_event("create_actor", %{"actor" => params}, socket) do
+    attrs = %{
+      "name" => params["name"] |> to_string() |> String.trim(),
+      "kind" => params["kind"] || "agent",
+      "display_name" => normalize_optional(params["display_name"]),
+      "host" => normalize_optional(params["host"])
+    }
+
+    case Dran.Actors.create_actor(attrs) do
+      {:ok, _actor} ->
+        {:noreply,
+         socket
+         |> assign(
+           managed_actors: managed_actors_with_key_counts(),
+           create_actor_form: to_form(%{}, as: :actor, id: "create-actor")
+         )
+         |> put_flash(:info, gettext("Actor created"))}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply,
+         socket
+         |> assign(create_actor_form: to_form(changeset, as: :actor, id: "create-actor"))
+         |> put_flash(:error, gettext("Could not create the actor"))}
+    end
+  end
+
+  @impl true
+  def handle_event("edit_actor", %{"id" => id}, socket) do
+    actor = Dran.Repo.get!(Dran.Actors.Actor, id)
+
+    {:noreply,
+     socket
+     |> assign(editing_actor_id: actor.id)
+     |> assign(
+       edit_actor_form:
+         to_form(
+           %{"display_name" => actor.display_name || "", "host" => actor.host || ""},
+           as: :actor,
+           id: "edit-actor"
+         )
+     )}
+  end
+
+  @impl true
+  def handle_event("cancel_edit_actor", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(
+       editing_actor_id: nil,
+       edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor")
+     )}
+  end
+
+  @impl true
+  def handle_event("update_actor", %{"actor" => params}, socket) do
+    actor = Dran.Repo.get!(Dran.Actors.Actor, socket.assigns.editing_actor_id)
+
+    attrs = %{
+      "display_name" => normalize_optional(params["display_name"]),
+      "host" => normalize_optional(params["host"])
+    }
+
+    case Dran.Actors.update_actor(actor, attrs) do
+      {:ok, _actor} ->
+        {:noreply,
+         socket
+         |> assign(
+           managed_actors: managed_actors_with_key_counts(),
+           editing_actor_id: nil,
+           edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor")
+         )
+         |> put_flash(:info, gettext("Actor updated"))}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update the actor"))}
+    end
+  end
+
+  @impl true
+  def handle_event("confirm_delete_actor", %{"id" => id}, socket) do
+    actor = Dran.Repo.get!(Dran.Actors.Actor, id)
+    counts = Dran.Actors.attribution_count(actor)
+
+    {:noreply, assign(socket, actor_delete_confirmation: %{actor_id: actor.id, counts: counts})}
+  end
+
+  @impl true
+  def handle_event("cancel_delete_actor", _params, socket) do
+    {:noreply, assign(socket, actor_delete_confirmation: nil)}
+  end
+
+  @impl true
+  def handle_event("delete_actor", %{"id" => id}, socket) do
+    actor = Dran.Repo.get!(Dran.Actors.Actor, id)
+
+    case Dran.Actors.delete_actor(actor) do
+      {:ok, _actor} ->
+        {:noreply,
+         socket
+         |> assign(
+           managed_actors: managed_actors_with_key_counts(),
+           actor_delete_confirmation: nil
+         )
+         |> put_flash(:info, gettext("Actor deleted"))}
+
+      {:error, :actor_has_api_keys} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("This actor still has API keys — revoke or delete them first")
+         )}
+
+      {:error, :system_actor} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("System actors are code-managed and cannot be deleted")
+         )}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not delete the actor"))}
+    end
+  end
 
   @impl true
   def handle_event("save_profile", %{"profile" => profile_params}, socket) do
@@ -283,6 +436,23 @@ defmodule DranWeb.SettingsLive do
     end
   end
 
+  # Managed actors with their api_keys preloaded, so the Actors tab can show
+  # how many keys each one has without touching the Actors context.
+  defp managed_actors_with_key_counts do
+    Dran.Actors.list_managed_actors()
+    |> Dran.Repo.preload(:api_keys)
+  end
+
+  # Empty string -> nil for optional text fields.
+  defp normalize_optional(nil), do: nil
+
+  defp normalize_optional(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -302,6 +472,9 @@ defmodule DranWeb.SettingsLive do
             </.tab_link>
             <.tab_link active={@active_tab == :api_keys} to={~p"/settings/api_keys"}>
               {gettext("API Keys")}
+            </.tab_link>
+            <.tab_link active={@active_tab == :actors} to={~p"/settings/actors"}>
+              {gettext("Actors")}
             </.tab_link>
           </div>
 
@@ -406,16 +579,27 @@ defmodule DranWeb.SettingsLive do
               </.section>
             </div>
           <% else %>
-            <div id="api-keys-tab" phx-hook=".CopyUserToken">
-              <.api_keys_section
-                api_keys={@api_keys}
-                all_workspaces={@api_key_workspaces}
-                api_key_workspaces={@api_key_workspaces}
-                form={@new_api_key_form}
-                revealed_api_key={@revealed_api_key}
-                show_api_key_modal={@show_api_key_modal}
+            <%= if @active_tab == :actors do %>
+              <.actors_tab
+                managed_actors={@managed_actors}
+                create_actor_form={@create_actor_form}
+                edit_actor_form={@edit_actor_form}
+                editing_actor_id={@editing_actor_id}
+                actor_delete_confirmation={@actor_delete_confirmation}
               />
-            </div>
+            <% else %>
+              <div id="api-keys-tab" phx-hook=".CopyUserToken">
+                <.api_keys_section
+                  api_keys={@api_keys}
+                  all_workspaces={@api_key_workspaces}
+                  api_key_workspaces={@api_key_workspaces}
+                  form={@new_api_key_form}
+                  revealed_api_key={@revealed_api_key}
+                  show_api_key_modal={@show_api_key_modal}
+                  managed_actors={@managed_actors}
+                />
+              </div>
+            <% end %>
           <% end %>
         </div>
       </div>
@@ -444,6 +628,195 @@ defmodule DranWeb.SettingsLive do
     """
   end
 
+  attr :managed_actors, :list, required: true
+  attr :create_actor_form, :map, required: true
+  attr :edit_actor_form, :map, required: true
+  attr :editing_actor_id, :any, default: nil
+  attr :actor_delete_confirmation, :map, default: nil
+
+  defp actors_tab(assigns) do
+    ~H"""
+    <div id="actors-tab" class="space-y-6">
+      <div>
+        <h1 class="text-title">{gettext("Actors")}</h1>
+        <p class="text-caption mt-1">
+          {gettext(
+            "Identities that own work in Dran — humans (user) and agents (agent). API keys attach to an actor."
+          )}
+        </p>
+      </div>
+
+      <.section title={gettext("Create actor")} icon="hero-user-plus">
+        <.form
+          for={@create_actor_form}
+          id="create-actor-form"
+          phx-submit="create_actor"
+          class="space-y-4"
+        >
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <.input
+              field={@create_actor_form[:name]}
+              label={gettext("Name")}
+              placeholder={gettext("e.g. alvaro or hermes-agent")}
+              required
+            />
+            <.input
+              field={@create_actor_form[:kind]}
+              label={gettext("Kind")}
+              type="select"
+              options={Enum.map(Dran.Actors.Actor.kinds() -- ["system"], &{kind_label(&1), &1})}
+            />
+            <.input
+              field={@create_actor_form[:display_name]}
+              label={gettext("Display name")}
+              placeholder={gettext("Optional — shown instead of the name")}
+            />
+            <.input
+              field={@create_actor_form[:host]}
+              label={gettext("Host")}
+              placeholder={gettext("Optional — e.g. laptop or ci-runner")}
+            />
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Saving…")}>
+            {gettext("Create actor")}
+          </button>
+        </.form>
+      </.section>
+
+      <.section :if={@managed_actors != []} title={gettext("Existing actors")} icon="hero-users">
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>{gettext("Name")}</th>
+                <th>{gettext("Kind")}</th>
+                <th>{gettext("Display name")}</th>
+                <th>{gettext("Host")}</th>
+                <th>{gettext("API keys")}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={actor <- @managed_actors} id={"actor-#{actor.id}"}>
+                <td class="font-medium">{actor.name}</td>
+                <td>
+                  <span class="badge badge-ghost badge-sm">{kind_label(actor.kind)}</span>
+                </td>
+                <td>{actor.display_name || "—"}</td>
+                <td>{actor.host || "—"}</td>
+                <td>{length(actor.api_keys)}</td>
+                <td>
+                  <div class="flex items-center gap-1 justify-end">
+                    <button
+                      type="button"
+                      phx-click="edit_actor"
+                      phx-value-id={actor.id}
+                      class="btn btn-ghost btn-xs p-1"
+                      title={gettext("Edit")}
+                    >
+                      <.icon name="hero-pencil-square" class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="confirm_delete_actor"
+                      phx-value-id={actor.id}
+                      class="btn btn-ghost btn-xs p-1 text-error"
+                      title={gettext("Delete")}
+                    >
+                      <.icon name="hero-trash" class="size-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </.section>
+
+      <div :if={@managed_actors == []} class="text-center text-base-content/50 py-6">
+        {gettext("No actors yet — create one with the form above.")}
+      </div>
+
+      <%!-- Inline edit (display_name / host) --%>
+      <.modal
+        id="edit-actor-modal"
+        show={@editing_actor_id != nil}
+        title={gettext("Edit actor")}
+        on_close="cancel_edit_actor"
+      >
+        <.form for={@edit_actor_form} id="edit-actor-form" phx-submit="update_actor" class="space-y-4">
+          <.input
+            field={@edit_actor_form[:display_name]}
+            label={gettext("Display name")}
+            placeholder={gettext("Optional — shown instead of the name")}
+          />
+          <.input
+            field={@edit_actor_form[:host]}
+            label={gettext("Host")}
+            placeholder={gettext("Optional — e.g. laptop or ci-runner")}
+          />
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" phx-click="cancel_edit_actor" class="btn btn-ghost btn-sm">
+              {gettext("Cancel")}
+            </button>
+            <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Saving…")}>
+              {gettext("Save")}
+            </button>
+          </div>
+        </.form>
+      </.modal>
+
+      <%!-- Inline delete confirmation with attribution impact --%>
+      <div
+        :if={@actor_delete_confirmation}
+        class="card bg-error/10 border border-error/40"
+        id="actor-delete-confirmation"
+      >
+        <div class="card-body py-4 space-y-3">
+          <h3 class="font-semibold text-error flex items-center gap-2">
+            <.icon name="hero-exclamation-triangle" class="size-5" />
+            {gettext("Delete this actor?")}
+          </h3>
+          <p class="text-sm text-base-content/80">
+            {gettext("Work attributed to this actor:")}
+
+            {ngettext(
+              "%{count} page",
+              "%{count} pages",
+              @actor_delete_confirmation.counts.pages
+            )} · {ngettext(
+              "%{count} task",
+              "%{count} tasks",
+              @actor_delete_confirmation.counts.tasks
+            )} · {ngettext(
+              "%{count} memory",
+              "%{count} memories",
+              @actor_delete_confirmation.counts.memories
+            )}
+          </p>
+          <div class="flex justify-end gap-2">
+            <button type="button" phx-click="cancel_delete_actor" class="btn btn-ghost btn-sm">
+              {gettext("Cancel")}
+            </button>
+            <button
+              type="button"
+              phx-click="delete_actor"
+              phx-value-id={@actor_delete_confirmation.actor_id}
+              class="btn btn-error btn-sm"
+            >
+              {gettext("Delete actor")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp kind_label("user"), do: gettext("User")
+  defp kind_label("agent"), do: gettext("Agent")
+  defp kind_label("system"), do: gettext("System")
+
   # ── API Keys section ──────────────────────────────────────────────────────
 
   attr :api_keys, :list, required: true
@@ -452,6 +825,7 @@ defmodule DranWeb.SettingsLive do
   attr :form, :map, required: true
   attr :revealed_api_key, :map, default: nil
   attr :show_api_key_modal, :boolean, default: false
+  attr :managed_actors, :list, default: []
 
   def api_keys_section(assigns) do
     ~H"""
@@ -534,6 +908,7 @@ defmodule DranWeb.SettingsLive do
               <tr>
                 <th>{gettext("Name")}</th>
                 <th>{gettext("Context")}</th>
+                <th>{gettext("Actor")}</th>
                 <th>{gettext("Token")}</th>
                 <th>{gettext("Status")}</th>
                 <th>{gettext("Write")}</th>
@@ -549,6 +924,15 @@ defmodule DranWeb.SettingsLive do
                     {if Enum.any?(key.api_key_workspaces),
                       do: hd(key.api_key_workspaces).workspace.name,
                       else: "—"}
+                  </span>
+                </td>
+                <td>
+                  <span
+                    :if={key.actor}
+                    class="badge badge-outline badge-sm"
+                    title={gettext("Actor kind")}
+                  >
+                    {kind_label(key.actor.kind)}
                   </span>
                 </td>
                 <td>
@@ -676,6 +1060,18 @@ defmodule DranWeb.SettingsLive do
             placeholder={gettext("e.g. Hermes agent, backup script")}
             required
           />
+
+          <div>
+            <p class="text-sm font-medium mb-2">
+              {gettext("Actor")} — {gettext("optional: the identity this key belongs to")}
+            </p>
+            <select name="api_key[actor_id]" class="select select-bordered select-sm w-full">
+              <option value="">{gettext("— none (resolved from the key name) —")}</option>
+              <option :for={actor <- @managed_actors} value={actor.id}>
+                {Dran.Actors.Actor.label(actor)} ({kind_label(actor.kind)})
+              </option>
+            </select>
+          </div>
 
           <div>
             <p class="text-sm font-medium mb-2">

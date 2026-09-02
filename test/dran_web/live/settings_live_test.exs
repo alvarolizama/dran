@@ -102,6 +102,138 @@ defmodule DranWeb.SettingsLiveTest do
     assert Accounts.valid_api_key?(key.token) == :error
   end
 
+  # ── Actors tab ──────────────────────────────────────────────────────────────
+
+  describe "actors tab" do
+    test "renders the actors tab with the create form and existing actors", %{conn: conn} do
+      {:ok, _actor} = Dran.Actors.create_actor(%{name: "visible-actor", kind: "agent"})
+
+      {:ok, view, html} = live(conn, ~p"/settings/actors")
+
+      assert html =~ t("Actors")
+      assert html =~ ~s(id="create-actor-form")
+      assert html =~ "visible-actor"
+      assert html =~ t("User")
+      assert html =~ t("Agent")
+      # System actors are never listed
+      refute html =~ ~s(>system<)
+
+      # The tab is reachable by patching from the api_keys tab
+      html = view |> element("a", t("Actors")) |> render_click()
+      assert html =~ t("Existing actors")
+    end
+
+    test "creating an actor with kind agent persists it and refreshes the list", %{conn: conn} do
+      unique = System.unique_integer([:positive])
+      name = "agent-#{unique}"
+
+      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+
+      html =
+        view
+        |> form("#create-actor-form", %{
+          "actor" => %{
+            "name" => name,
+            "kind" => "agent",
+            "display_name" => "Test Agent #{unique}",
+            "host" => "ci-runner"
+          }
+        })
+        |> render_submit()
+
+      assert html =~ t("Actor created")
+      assert html =~ name
+
+      actor = Dran.Actors.get_actor_by_name(name)
+      assert actor
+      assert actor.kind == "agent"
+      assert actor.display_name == "Test Agent #{unique}"
+      assert actor.host == "ci-runner"
+    end
+
+    test "creating an actor with kind system is rejected with an error", %{conn: conn} do
+      unique = System.unique_integer([:positive])
+      name = "evil-system-#{unique}"
+
+      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+
+      # The select only offers user|agent, so a system attempt arrives via a
+      # hand-crafted submit (what a tampered client would send).
+      html =
+        render_submit(view, "create_actor", %{
+          "actor" => %{"name" => name, "kind" => "system"}
+        })
+
+      assert html =~ t("Could not create the actor")
+      refute Dran.Actors.get_actor_by_name(name)
+    end
+
+    test "editing an actor updates display_name and host only", %{conn: conn} do
+      {:ok, actor} =
+        Dran.Actors.create_actor(%{
+          name: "editable-#{System.unique_integer([:positive])}",
+          kind: "user"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+
+      _ = view |> element("#actor-#{actor.id} button[phx-click='edit_actor']") |> render_click()
+      assert has_element?(view, "#edit-actor-modal")
+
+      html =
+        view
+        |> form("#edit-actor-form", %{
+          "actor" => %{"display_name" => "Renamed", "host" => "laptop"}
+        })
+        |> render_submit()
+
+      assert html =~ t("Actor updated")
+
+      reloaded = Dran.Actors.get_actor_by_name(actor.name)
+      assert reloaded.display_name == "Renamed"
+      assert reloaded.host == "laptop"
+      assert reloaded.kind == "user"
+    end
+
+    test "deleting an actor with API keys is blocked with a flash error", %{conn: conn} do
+      unique = System.unique_integer([:positive])
+
+      {:ok, ctx} =
+        Knowledge.create_workspace(%{name: "ActorDel #{unique}", slug: "actor-del-#{unique}"})
+
+      {:ok, actor} = Dran.Actors.create_actor(%{name: "keyed-#{unique}", kind: "agent"})
+
+      user = Accounts.get_user_by_email("test_user")
+
+      {:ok, _key} =
+        Accounts.create_api_key(%{
+          name: "keyed-key-#{unique}",
+          workspace_ids: [{ctx.id, "read"}],
+          created_by_user_id: user.id,
+          actor_id: actor.id
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+
+      # Inline confirmation shows the attribution impact (0 pages/tasks/memories)
+      html =
+        view
+        |> element("#actor-#{actor.id} button[phx-click='confirm_delete_actor']")
+        |> render_click()
+
+      assert html =~ t("Delete this actor?")
+      assert html =~ "0"
+
+      # The actual delete is refused: the actor still has API keys
+      html = view |> element("button[phx-click='delete_actor']") |> render_click()
+
+      assert html =~
+               t("This actor still has API keys — revoke or delete them first")
+
+      assert Dran.Actors.get_actor_by_name(actor.name)
+    end
+  end
+
   # Tests L104, L128 → /admin/users
   describe "google open signup toggle" do
     setup do
