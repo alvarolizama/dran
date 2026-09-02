@@ -104,6 +104,193 @@ defmodule Dran.TaskRelationsTest do
     end
   end
 
+  describe "list_tasks_for_goal/1" do
+    test "returns tasks linked to the goal in board order, skipping archived" do
+      workspace = ensure_workspace!()
+
+      {:ok, goal} =
+        Goals.create_goal(%{
+          "workspace_id" => workspace.id,
+          "title" => "List me",
+          "slug" => "list-me"
+        })
+
+      {:ok, other_goal} =
+        Goals.create_goal(%{
+          "workspace_id" => workspace.id,
+          "title" => "Other",
+          "slug" => "other"
+        })
+
+      {:ok, t1} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "First"})
+      {:ok, t2} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "Second"})
+      {:ok, t3} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "Third"})
+
+      Tasks.link_to_goal(t3, goal)
+      Tasks.link_to_goal(t1, goal)
+      Tasks.link_to_goal(t2, other_goal)
+
+      {:ok, _} = Tasks.update_task(t3, %{"archived" => true})
+
+      result = Tasks.list_tasks_for_goal(goal)
+
+      assert [%{title: "First"}] = result
+      assert %{assignee_actor: nil} = hd(result)
+    end
+  end
+
+  describe "set_goal/3" do
+    test "links a task to a goal" do
+      workspace = ensure_workspace!()
+
+      {:ok, goal} =
+        Goals.create_goal(%{
+          "workspace_id" => workspace.id,
+          "title" => "Set goal",
+          "slug" => "set-goal"
+        })
+
+      {:ok, task} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "T1"})
+
+      assert {:ok, _} = Tasks.set_goal(task, goal.id)
+      assert [%{id: goal_id}] = Tasks.list_linked_goals(task)
+      assert goal_id == goal.id
+    end
+
+    test "is idempotent when the task already points at the goal" do
+      workspace = ensure_workspace!()
+
+      {:ok, goal} =
+        Goals.create_goal(%{
+          "workspace_id" => workspace.id,
+          "title" => "Idem",
+          "slug" => "idem"
+        })
+
+      {:ok, task} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "T2"})
+
+      {:ok, _} = Tasks.set_goal(task, goal.id)
+      assert {:ok, _} = Tasks.set_goal(task, goal.id)
+      assert Tasks.list_linked_goals(task) |> length() == 1
+    end
+
+    test "switching goals replaces the previous link and recomputes the new goal" do
+      workspace = ensure_workspace!()
+
+      {:ok, g1} =
+        Goals.create_goal(%{"workspace_id" => workspace.id, "title" => "G1", "slug" => "g1"})
+
+      {:ok, g2} =
+        Goals.create_goal(%{"workspace_id" => workspace.id, "title" => "G2", "slug" => "g2"})
+
+      {:ok, task} =
+        Tasks.create_task(%{
+          "workspace_id" => workspace.id,
+          "title" => "Switch",
+          "status" => "done"
+        })
+
+      {:ok, _} = Tasks.set_goal(task, g1.id)
+      assert Goals.get_goal(g1.id).progress == 1.0
+
+      {:ok, _} = Tasks.set_goal(task, g2.id)
+      assert Tasks.list_linked_goals(task) |> Enum.map(& &1.id) == [g2.id]
+      # The old goal keeps its derived progress (recompute with 0 tasks is a no-op)
+      assert Goals.get_goal(g1.id).progress == 1.0
+      assert Goals.get_goal(g2.id).progress == 1.0
+    end
+
+    test "empty goal_id detaches the task from its goal" do
+      workspace = ensure_workspace!()
+
+      {:ok, goal} =
+        Goals.create_goal(%{
+          "workspace_id" => workspace.id,
+          "title" => "Empty",
+          "slug" => "empty"
+        })
+
+      {:ok, task} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "T3"})
+      {:ok, _} = Tasks.set_goal(task, goal.id)
+
+      assert {:ok, _} = Tasks.set_goal(task, "")
+      assert Tasks.list_linked_goals(task) == []
+    end
+
+    test "rejects goals from another workspace" do
+      workspace = ensure_workspace!()
+
+      {:ok, other_ws} =
+        Knowledge.create_workspace(%{
+          name: "Other #{System.unique_integer([:positive])}",
+          slug: "other-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, goal} =
+        Goals.create_goal(%{"workspace_id" => other_ws.id, "title" => "Alien", "slug" => "alien"})
+
+      {:ok, task} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "T4"})
+
+      assert {:error, :goal_not_found} = Tasks.set_goal(task, goal.id)
+      assert Tasks.list_linked_goals(task) == []
+    end
+
+    test "rejects unknown goal ids" do
+      workspace = ensure_workspace!()
+
+      {:ok, task} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "T5"})
+
+      assert {:error, :goal_not_found} = Tasks.set_goal(task, Ecto.UUID.generate())
+    end
+
+    test "rejects malformed goal ids without raising" do
+      workspace = ensure_workspace!()
+
+      {:ok, task} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "T6"})
+
+      # Forged params: a non-UUID binary must not raise Ecto.Query.CastError
+      assert {:error, :goal_not_found} = Tasks.set_goal(task, "'; DROP TABLE goals; --")
+      assert {:error, :goal_not_found} = Tasks.set_goal(task, "not-a-uuid")
+      assert Tasks.list_linked_goals(task) == []
+    end
+  end
+
+  describe "descendant_ids/2" do
+    test "returns all descendants at any depth, cycle-safe" do
+      ws =
+        ensure_workspace!(
+          "desc-#{System.unique_integer([:positive])}",
+          "Desc #{System.unique_integer([:positive])}"
+        )
+
+      {:ok, root} = Goals.create_goal(%{"workspace_id" => ws.id, "title" => "R", "slug" => "r"})
+
+      {:ok, child} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "C",
+          "slug" => "c",
+          "parent_goal_id" => root.id
+        })
+
+      {:ok, grandchild} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "GC",
+          "slug" => "gc",
+          "parent_goal_id" => child.id
+        })
+
+      goals = Goals.list_goals(ws.id)
+
+      assert Goals.descendant_ids(root.id, goals) |> Enum.sort() ==
+               Enum.sort([child.id, grandchild.id])
+
+      assert Goals.descendant_ids(child.id, goals) == [grandchild.id]
+      assert Goals.descendant_ids(grandchild.id, goals) == []
+    end
+  end
+
   describe "task ↔ page links (opt-in)" do
     test "link_to_page creates a part_of relation to a project note" do
       workspace = ensure_workspace!()
@@ -146,9 +333,9 @@ defmodule Dran.TaskRelationsTest do
                  relation_type: "part_of"
                })
 
-      assert ("does not exist" in errors_on(changeset).target_id)
+      assert errors_on(changeset).target_id
              |> List.wrap()
-             |> Enum.map(&to_string/1)
+             |> Enum.any?(&(to_string(&1) =~ "does not exist"))
     end
   end
 end

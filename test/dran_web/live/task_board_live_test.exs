@@ -1,7 +1,7 @@
 defmodule DranWeb.TaskBoardLiveTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Tasks, Repo}
+  alias Dran.{Goals, Tasks, Repo}
 
   setup %{conn: conn} do
     original = Application.get_env(:dran, :inference)
@@ -436,6 +436,305 @@ defmodule DranWeb.TaskBoardLiveTest do
       assert created, "task should have been created"
       assert has_element?(view, "#task-detail-form")
       assert render(view) =~ "Fresh task"
+    end
+  end
+
+  describe "goal select" do
+    test "card shows a goal chip once the task is linked", %{conn: conn, ws: ws, task: task} do
+      {:ok, goal} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Chip goal",
+          "slug" => "chip-goal"
+        })
+
+      {:ok, _} = Tasks.set_goal(task, goal.id)
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      assert html =~ "hero-flag"
+      assert html =~ "Chip goal"
+    end
+
+    test "detail panel renders the grouped goal select", %{conn: conn, ws: ws, task: task} do
+      {:ok, root} =
+        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "Root G", "slug" => "root-g"})
+
+      {:ok, child} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Child G",
+          "slug" => "child-g",
+          "parent_goal_id" => root.id
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+      render_click(view, "select_task", %{"id" => task.id})
+
+      assert has_element?(view, "#task-detail-form")
+
+      # Flattened indented options — works at any hierarchy depth
+      assert has_element?(
+               view,
+               "select[name='task[goal_id]'] option[value='#{child.id}']"
+             )
+
+      assert has_element?(view, "select[name='task[goal_id]'] option[value='#{root.id}']")
+      assert has_element?(view, "select[name='task[goal_id]'] option[value='']")
+    end
+
+    test "save_detail links the task to the selected goal", %{conn: conn, ws: ws, task: task} do
+      {:ok, goal} =
+        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "Linked", "slug" => "linked"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{
+        "task" => %{"title" => task.title, "goal_id" => goal.id}
+      })
+
+      assert [%{id: linked_goal_id}] = Tasks.list_linked_goals(Tasks.get_task(task.id))
+      assert linked_goal_id == goal.id
+    end
+
+    test "save_detail detaches the task when the goal select is empty", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, goal} =
+        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "Gone", "slug" => "gone"})
+
+      {:ok, _} = Tasks.set_goal(task, goal.id)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{"task" => %{"title" => task.title, "goal_id" => ""}})
+
+      assert Tasks.list_linked_goals(Tasks.get_task(task.id)) == []
+    end
+
+    test "switching goals from the panel moves the link", %{conn: conn, ws: ws, task: task} do
+      {:ok, g1} =
+        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "G One", "slug" => "g-one"})
+
+      {:ok, g2} =
+        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "G Two", "slug" => "g-two"})
+
+      {:ok, _} = Tasks.set_goal(task, g1.id)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+      render_click(view, "select_task", %{"id" => task.id})
+
+      view
+      |> form("#task-detail-form")
+      |> render_submit(%{"task" => %{"title" => task.title, "goal_id" => g2.id}})
+
+      task = Tasks.get_task(task.id)
+      assert [%{id: g2_id}] = Tasks.list_linked_goals(task)
+      assert g2_id == g2.id
+    end
+  end
+
+  describe "goal filter" do
+    test "renders the grouped goal filter with a root and its sub-goal", %{conn: conn, ws: ws} do
+      {:ok, root} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Filter Root",
+          "slug" => "filter-root"
+        })
+
+      {:ok, child} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Filter Child",
+          "slug" => "filter-child",
+          "parent_goal_id" => root.id
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      assert html =~ ~s(id="goal-filter")
+      assert html =~ "Filter Root"
+      assert html =~ "Filter Child"
+      assert is_binary(child.id)
+    end
+
+    test "filtering by root shows tasks of the root AND its sub-goals", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, root} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Roll Root",
+          "slug" => "roll-root"
+        })
+
+      {:ok, child} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Roll Child",
+          "slug" => "roll-child",
+          "parent_goal_id" => root.id
+        })
+
+      {:ok, _} = Tasks.set_goal(task, root.id)
+
+      {:ok, child_task} =
+        Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Child task"})
+
+      {:ok, _} = Tasks.set_goal(child_task, child.id)
+
+      {:ok, other_task} =
+        Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Orphan task"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "filter_goal", %{"goal_id" => root.id})
+      html = render(view)
+
+      assert html =~ "Review PR"
+      assert html =~ "Child task"
+      refute html =~ "Orphan task"
+    end
+
+    test "filtering by sub-goal shows only its own tasks", %{conn: conn, ws: ws, task: task} do
+      {:ok, root} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Solo Root",
+          "slug" => "solo-root"
+        })
+
+      {:ok, child} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Solo Child",
+          "slug" => "solo-child",
+          "parent_goal_id" => root.id
+        })
+
+      {:ok, _} = Tasks.set_goal(task, root.id)
+
+      {:ok, child_task} =
+        Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Child task"})
+
+      {:ok, _} = Tasks.set_goal(child_task, child.id)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "filter_goal", %{"goal_id" => child.id})
+      html = render(view)
+
+      assert html =~ "Child task"
+      refute html =~ "Review PR"
+    end
+
+    test "filtering by unknown goal id shows nothing", %{conn: conn, ws: ws, task: task} do
+      {:ok, goal} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Empty goal",
+          "slug" => "empty-goal"
+        })
+
+      {:ok, _} = Tasks.set_goal(task, goal.id)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      render_click(view, "filter_goal", %{"goal_id" => Ecto.UUID.generate()})
+      html = render(view)
+
+      refute html =~ "Review PR"
+    end
+
+    test "filtering by a goal includes grandchild goals (any depth)", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, root} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Deep Root",
+          "slug" => "deep-root"
+        })
+
+      {:ok, child} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Deep Child",
+          "slug" => "deep-child",
+          "parent_goal_id" => root.id
+        })
+
+      {:ok, grandchild} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Deep Grandchild",
+          "slug" => "deep-grandchild",
+          "parent_goal_id" => child.id
+        })
+
+      {:ok, _} = Tasks.set_goal(task, grandchild.id)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      # From the root, the grandchild's task rolls up (depth 2)
+      render_click(view, "filter_goal", %{"goal_id" => root.id})
+      assert render(view) =~ "Review PR"
+
+      # From the child, still rolls up (depth 1)
+      render_click(view, "filter_goal", %{"goal_id" => child.id})
+      assert render(view) =~ "Review PR"
+
+      # From the grandchild itself, direct match
+      render_click(view, "filter_goal", %{"goal_id" => grandchild.id})
+      assert render(view) =~ "Review PR"
+
+      # Unrelated goal → hidden
+      {:ok, other} =
+        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "Other", "slug" => "other-x"})
+
+      render_click(view, "filter_goal", %{"goal_id" => other.id})
+      refute render(view) =~ "Review PR"
+    end
+
+    test "goal selects render indented flattened options, no optgroups", %{
+      conn: conn,
+      ws: ws,
+      task: _task
+    } do
+      {:ok, root} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Flat Root",
+          "slug" => "flat-root"
+        })
+
+      {:ok, _child} =
+        Goals.create_goal(%{
+          "workspace_id" => ws.id,
+          "title" => "Flat Child",
+          "slug" => "flat-child",
+          "parent_goal_id" => root.id
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      refute html =~ "<optgroup"
+      assert html =~ "Flat Root"
+      assert html =~ "Flat Child"
+      assert html =~ "—— Flat Child"
     end
   end
 end

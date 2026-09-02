@@ -16,7 +16,7 @@ defmodule DranWeb.TaskBoardLive do
 
   use DranWeb, :live_view
 
-  alias Dran.{Tasks, Task}
+  alias Dran.{Goals, Tasks, Task}
 
   # Web session identity for attribution: the logged-in user's email
   # (sessions carry the email as `current_user`), resolved through
@@ -49,6 +49,7 @@ defmodule DranWeb.TaskBoardLive do
          columns: @column_meta,
          current_user: session["user"],
          filter_actor_id: nil,
+         filter_goal_id: nil,
          selected_task: nil,
          detail_form: nil,
          managed_actors: Dran.Actors.list_managed_actors()
@@ -73,6 +74,17 @@ defmodule DranWeb.TaskBoardLive do
       end
 
     {:noreply, socket |> assign(filter_actor_id: filter) |> load_board()}
+  end
+
+  def handle_event("filter_goal", %{"goal_id" => goal_id}, socket) do
+    filter =
+      case goal_id do
+        "" -> nil
+        id when is_binary(id) -> id
+        _ -> nil
+      end
+
+    {:noreply, socket |> assign(filter_goal_id: filter) |> load_board()}
   end
 
   def handle_event("select_task", %{"id" => id}, socket) do
@@ -127,12 +139,20 @@ defmodule DranWeb.TaskBoardLive do
 
         case Tasks.update_task(task, attrs) do
           {:ok, updated} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, gettext("Task updated"))
-             |> assign(selected_task: updated)
-             |> assign(detail_form: to_form(Task.update_changeset(updated, %{})))
-             |> load_board()}
+            # Goal comes through the grouped select; empty = detach.
+            goal_id = params["goal_id"]
+
+            with {:ok, updated} <- Tasks.set_goal(updated, goal_id) do
+              {:noreply,
+               socket
+               |> put_flash(:info, gettext("Task updated"))
+               |> assign(selected_task: updated)
+               |> assign(detail_form: to_form(Task.update_changeset(updated, %{})))
+               |> load_board()}
+            else
+              {:error, _reason} ->
+                {:noreply, put_flash(socket, :error, gettext("Could not set goal"))}
+            end
 
           {:error, %Ecto.Changeset{} = changeset} ->
             {:noreply, assign(socket, detail_form: to_form(changeset))}
@@ -261,14 +281,40 @@ defmodule DranWeb.TaskBoardLive do
   end
 
   defp load_board(socket) do
-    filter = socket.assigns.filter_actor_id
+    actor_filter = socket.assigns.filter_actor_id
+    goal_filter = socket.assigns.filter_goal_id
     actors = socket.assigns.managed_actors
+    tree = goal_tree(socket.assigns.workspace.id)
 
-    board =
+    # Roll-up: a selected goal matches itself plus ALL its descendants at
+    # any depth (work rolls up the goal hierarchy).
+    visible_goal_ids =
+      if goal_filter do
+        goal_filter
+        |> Goals.descendant_ids(Enum.map(tree, &elem(&1, 0)))
+        |> MapSet.new()
+        |> MapSet.put(goal_filter)
+      end
+
+    board_all =
       socket.assigns.workspace.id
       |> Tasks.list_board()
-      |> Map.new(fn {status, tasks} ->
-        {status, Enum.filter(tasks, &visible?(&1, filter, actors))}
+
+    # Goal lookup for the whole board (badges + goal filter share this map).
+    goals_by_task =
+      board_all
+      |> Map.values()
+      |> List.flatten()
+      |> Enum.map(& &1.id)
+      |> Tasks.list_linked_goals_by_ids(socket.assigns.workspace.id)
+
+    board =
+      Map.new(board_all, fn {status, tasks} ->
+        {status,
+         Enum.filter(tasks, fn task ->
+           visible_actor?(task, actor_filter, actors) and
+             visible_goal?(task, visible_goal_ids, goals_by_task)
+         end)}
       end)
 
     counts =
@@ -279,31 +325,62 @@ defmodule DranWeb.TaskBoardLive do
       board: board,
       counts: counts,
       managed_actors: Dran.Actors.list_managed_actors(),
+      goal_tree: tree,
+      goals_by_task: goals_by_task,
       page_title: "#{socket.assigns.workspace.name} · #{gettext("Tasks")}"
     )
+  end
+
+  # Depth-first preorder of the workspace's goals with depth per node
+  # (root → children → grandchildren …). Backs the indented goal selects
+  # and the filter's roll-up (via Dran.Goals.descendant_ids/2).
+  defp goal_tree(workspace_id) do
+    goals = Goals.list_goals(workspace_id)
+    by_parent = Enum.group_by(goals, & &1.parent_goal_id, & &1)
+
+    Map.get(by_parent, nil, [])
+    |> Enum.flat_map(&subtree(&1, by_parent, 0))
+  end
+
+  defp subtree(goal, by_parent, depth) do
+    [
+      {goal, depth}
+      | Enum.flat_map(Map.get(by_parent, goal.id, []), &subtree(&1, by_parent, depth + 1))
+    ]
   end
 
   # Assignee filter: nil shows everything. An actor matches tasks assigned
   # to them, plus tasks they created with no assignee (attribution name ==
   # actor name — the actor model's join convention). "Unassigned" shows
   # cards with no assignee AND no real creator (orphaned work).
-  defp visible?(_task, nil, _actors), do: true
+  defp visible_actor?(_task, nil, _actors), do: true
 
-  defp visible?(%Task{assignee_actor_id: nil, created_by: cb}, "unassigned", _actors) do
+  defp visible_actor?(%Task{assignee_actor_id: nil, created_by: cb}, "unassigned", _actors) do
     is_nil(cb) or cb == "system"
   end
 
-  defp visible?(%Task{assignee_actor_id: nil}, "unassigned", _actors), do: false
+  defp visible_actor?(%Task{assignee_actor_id: nil}, "unassigned", _actors), do: false
 
-  defp visible?(%Task{assignee_actor_id: nil, created_by: cb}, actor_id, actors) do
+  defp visible_actor?(%Task{assignee_actor_id: nil, created_by: cb}, actor_id, actors) do
     case Enum.find(actors, &(&1.id == actor_id)) do
       %{name: name} -> cb == name
       _ -> false
     end
   end
 
-  defp visible?(%Task{assignee_actor_id: assignee_id}, actor_id, _actors) do
+  defp visible_actor?(%Task{assignee_actor_id: assignee_id}, actor_id, _actors) do
     assignee_id == actor_id
+  end
+
+  # Goal filter. `nil` shows everything. When a goal is selected, a task is
+  # visible if ANY of its linked goals is in the visible set (the selected
+  # goal + all its descendants — precomputed in load_board).
+  defp visible_goal?(_task, nil, _goals_by_task), do: true
+
+  defp visible_goal?(task, %MapSet{} = visible_ids, goals_by_task) do
+    task_goals = Map.get(goals_by_task, task.id, [])
+
+    Enum.any?(task_goals, &MapSet.member?(visible_ids, &1.id))
   end
 
   defp priority_options, do: ~w(low medium high urgent)
@@ -327,6 +404,35 @@ defmodule DranWeb.TaskBoardLive do
     </optgroup>
     """
   end
+
+  # The task's current goal (first link wins — set_goal/3 enforces a single
+  # goal per task from the UI). Used by card chip and the select's selected
+  # option; empty map → nil.
+  defp task_goal(_goals_by_task, nil), do: nil
+
+  defp task_goal(goals_by_task, task_id) do
+    case Map.get(goals_by_task, task_id, []) do
+      [goal | _] -> goal
+      [] -> nil
+    end
+  end
+
+  attr :goal, :map, required: true
+  attr :depth, :integer, required: true
+  attr :selected_id, :string, required: true
+
+  # One flattened, indented option for the goal selects — works at any
+  # hierarchy depth (a native <optgroup> cannot nest).
+  defp goal_option(assigns) do
+    ~H"""
+    <option value={@goal.id} selected={@selected_id == @goal.id}>
+      {String.duplicate("—", @depth + 1)} {@goal.title}
+    </option>
+    """
+  end
+
+  defp goal_id(nil), do: nil
+  defp goal_id(goal), do: goal.id
 
   def render(assigns) do
     ~H"""
@@ -367,6 +473,25 @@ defmodule DranWeb.TaskBoardLive do
               />
             </select>
           </label>
+          <label class="flex items-center gap-2 text-xs text-base-content/60">
+            <.icon name="hero-flag" class="size-3.5" />
+            <select
+              name="goal_id"
+              phx-change="filter_goal"
+              id="goal-filter"
+              class="text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+            >
+              <option value="" selected={is_nil(@filter_goal_id)}>
+                {gettext("All goals")}
+              </option>
+              <.goal_option
+                :for={{goal, depth} <- @goal_tree}
+                goal={goal}
+                depth={depth}
+                selected_id={@filter_goal_id}
+              />
+            </select>
+          </label>
         </div>
       </div>
 
@@ -391,6 +516,7 @@ defmodule DranWeb.TaskBoardLive do
               :for={task <- Map.get(@board, status, [])}
               task={task}
               workspace_slug={@workspace.slug}
+              goals_by_task={@goals_by_task}
             />
             <p
               :if={Map.get(@board, status, []) == []}
@@ -425,6 +551,8 @@ defmodule DranWeb.TaskBoardLive do
         task={@selected_task}
         form={@detail_form}
         managed_actors={@managed_actors}
+        goals_by_task={@goals_by_task}
+        goal_tree={@goal_tree}
       />
     </div>
     """
@@ -447,6 +575,7 @@ defmodule DranWeb.TaskBoardLive do
 
   attr :task, Task, required: true
   attr :workspace_slug, :string, required: true
+  attr :goals_by_task, :map, required: true
 
   defp task_card(assigns) do
     ~H"""
@@ -512,6 +641,15 @@ defmodule DranWeb.TaskBoardLive do
           <.icon name="hero-list-bullet" class="size-3.5" />
           {checklist_progress(@task)}
         </span>
+
+        <span
+          :if={goal = task_goal(@goals_by_task, @task.id)}
+          class="flex items-center gap-1 min-w-0"
+          title={goal.title}
+        >
+          <.icon name="hero-flag" class="size-3.5 text-green-600 shrink-0" />
+          <span class="truncate max-w-[120px]">{goal.title}</span>
+        </span>
       </div>
     </div>
     """
@@ -520,6 +658,8 @@ defmodule DranWeb.TaskBoardLive do
   attr :task, Task, required: true
   attr :form, Phoenix.HTML.Form, required: true
   attr :managed_actors, :list, required: true
+  attr :goals_by_task, :map, required: true
+  attr :goal_tree, :list, required: true
 
   defp task_detail(assigns) do
     ~H"""
@@ -591,6 +731,24 @@ defmodule DranWeb.TaskBoardLive do
             </select>
           </label>
         </div>
+
+        <label class="block">
+          <span class="text-xs text-base-content/60">{gettext("Goal")}</span>
+          <select
+            name="task[goal_id]"
+            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+          >
+            <option value="" selected={is_nil(task_goal(@goals_by_task, @task.id))}>
+              {gettext("no goal")}
+            </option>
+            <.goal_option
+              :for={{goal, depth} <- @goal_tree}
+              goal={goal}
+              depth={depth}
+              selected_id={goal_id(task_goal(@goals_by_task, @task.id))}
+            />
+          </select>
+        </label>
 
         <label class="block">
           <span class="text-xs text-base-content/60">{gettext("Due date")}</span>

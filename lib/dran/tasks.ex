@@ -188,6 +188,9 @@ defmodule Dran.Tasks do
       })
 
     :ok = Dran.Goals.recompute_progress(goal)
+    # Linked goals are part of the task's UI state — notify open views
+    # (goal detail shows this task under the goal; board shows the chip).
+    broadcast_task_change(task, :linked)
     result
   end
 
@@ -221,6 +224,7 @@ defmodule Dran.Tasks do
     )
 
     :ok = Dran.Goals.recompute_progress(goal)
+    broadcast_task_change(task, :unlinked)
     {:ok, :unlinked}
   end
 
@@ -237,6 +241,117 @@ defmodule Dran.Tasks do
             r.relation_type == "part_of" and r.source_id == ^task.id and
             r.source_type == "task"
     )
+  end
+
+  @doc """
+  List tasks linked to a goal via `part_of` relations — the inverse of
+  `list_linked_goals/1`. Non-archived tasks only, in board order
+  (position), with the assignee preloaded for card rendering.
+  """
+  def list_tasks_for_goal(%Dran.Goal{} = goal) do
+    from(t in Task,
+      join: r in Dran.Relation,
+      on:
+        r.source_id == t.id and r.source_type == "task" and
+          r.relation_type == "part_of" and r.target_id == ^goal.id and
+          r.target_type == "goal",
+      where: t.archived == false,
+      order_by: [asc: t.position]
+    )
+    |> Repo.all()
+    |> Repo.preload(:assignee_actor)
+  end
+
+  @doc """
+  Point a task at a goal (or detach it) in one operation — backs the
+  detail-panel "Goal" select.
+
+  Switching goals unlinks the previous one(s) first, so a task lives under
+  a single goal at a time from the UI's perspective. Both the old and the
+  new goal get their derived progress recomputed. `nil` / `""` detaches.
+
+  `current_goals` may carry the task's already-loaded links to avoid a
+  redundant query (see `list_linked_goals/1`) — that is `set_goal/3`;
+  `set_goal/2` loads them for you.
+
+  The goal must belong to the same workspace as the task; anything else
+  returns `{:error, :goal_not_found}`. Idempotent: setting the goal the
+  task already has is a no-op that returns the reloaded task.
+  """
+  def set_goal(%Task{} = task, goal_id) do
+    set_goal(task, goal_id, list_linked_goals(task))
+  end
+
+  def set_goal(%Task{} = task, goal_id, current_goals) when goal_id in [nil, ""] do
+    current_goals = current_goals || list_linked_goals(task)
+    :ok = detach_all_goals(task, current_goals)
+
+    {:ok, get_task(task.id)}
+  end
+
+  def set_goal(%Task{} = task, goal_id, current_goals) when is_binary(goal_id) do
+    current_goals = current_goals || list_linked_goals(task)
+
+    cond do
+      not valid_uuid?(goal_id) ->
+        {:error, :goal_not_found}
+
+      Enum.any?(current_goals, &(&1.id == goal_id)) ->
+        {:ok, get_task(task.id)}
+
+      true ->
+        with %Dran.Goal{} = goal <- Dran.Goals.get_goal(goal_id),
+             true <- goal.workspace_id == task.workspace_id,
+             :ok <- detach_all_goals(task, current_goals),
+             {:ok, _relation} <- link_to_goal(task, goal) do
+          {:ok, get_task(task.id)}
+        else
+          nil -> {:error, :goal_not_found}
+          false -> {:error, :goal_not_found}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  # Forged event params may carry arbitrary binaries; Ecto raises
+  # Ecto.Query.CastError on Repo.get/2 with a non-UUID string.
+  defp valid_uuid?(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, _} -> true
+      :error -> false
+    end
+  end
+
+  # Unlink a task from every goal in the list, recomputing each goal's
+  # progress on the way. A failed unlink is an invariant breach — crash.
+  defp detach_all_goals(_task, []), do: :ok
+
+  defp detach_all_goals(task, [goal | rest]) do
+    {:ok, :unlinked} = unlink_from_goal(task, goal)
+    detach_all_goals(task, rest)
+  end
+
+  @doc """
+  Goals linked to any of the given task ids, in one query — returns
+  `%{task_id => [goal, ...]}` (missing keys mean "no linked goals"). Used
+  by the board to badge cards without N+1 queries.
+
+  Scoped to `workspace_id`: relations are not FK-enforced to a workspace,
+  so an explicit filter guarantees no goal titles leak across workspaces
+  (SEC-002 lesson).
+  """
+  def list_linked_goals_by_ids(task_ids, workspace_id) when is_list(task_ids) do
+    from(r in Dran.Relation,
+      join: g in Dran.Goal,
+      on: g.id == r.target_id,
+      where:
+        r.source_type == "task" and r.relation_type == "part_of" and
+          r.target_type == "goal" and r.source_id in ^task_ids and
+          g.workspace_id == ^workspace_id,
+      select: {r.source_id, g}
+    )
+    |> Repo.all()
+    |> Enum.group_by(fn {task_id, _goal} -> task_id end, fn {_task_id, goal} -> goal end)
   end
 
   # Recompute derived progress for every goal linked to this task.

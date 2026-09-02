@@ -5,6 +5,7 @@ defmodule DranWeb.GoalLive do
 
   alias Dran.Goals
   alias Dran.Goal
+  alias Dran.Tasks
   alias DranWeb.Plugs.Auth
 
   @goal_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
@@ -198,6 +199,43 @@ defmodule DranWeb.GoalLive do
           >
             {render_markdown(@goal.body, [])}
           </div>
+
+          <%!-- Linked tasks --%>
+          <div :if={@tasks != []} class="surface-2 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-semibold flex items-center gap-2">
+                <.icon name="hero-check-circle" class="size-4 text-primary" />
+                {gettext("Linked tasks")}
+                <span class="badge badge-sm badge-ghost">{length(@tasks)}</span>
+              </h3>
+              <.link
+                navigate={~p"/#{@workspace_slug}/tasks"}
+                class="text-xs text-base-content/60 hover:underline"
+              >
+                {gettext("Open board")}
+              </.link>
+            </div>
+            <ul class="space-y-1.5">
+              <li
+                :for={task <- @tasks}
+                class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+              >
+                <span class={["shrink-0 size-2 rounded-full", dot_class(task.status)]} />
+                <span class={[
+                  "flex-1 min-w-0 truncate",
+                  task.status in ~w(done cancelled) && "line-through text-base-content/40"
+                ]}>
+                  {task.title}
+                </span>
+                <span :if={task.due_date} class="shrink-0 text-xs text-base-content/50">
+                  {Calendar.strftime(task.due_date, "%d %b")}
+                </span>
+                <span :if={task.assignee_actor} class="shrink-0 text-xs text-base-content/50">
+                  {Dran.Actors.Actor.label(task.assignee_actor)}
+                </span>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -301,6 +339,8 @@ defmodule DranWeb.GoalLive do
 
     if context && connected?(socket) do
       Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
+      # Task changes broadcast on the workspace topic (Dran.Tasks.broadcast_task_change/3)
+      Phoenix.PubSub.subscribe(Dran.PubSub, "workspace:#{context.id}")
     end
 
     {:ok,
@@ -309,7 +349,8 @@ defmodule DranWeb.GoalLive do
        editing: false,
        save_status: "idle",
        active_nav: "goals",
-       goal_kinds: @goal_kinds
+       goal_kinds: @goal_kinds,
+       tasks: []
      )}
   end
 
@@ -348,6 +389,7 @@ defmodule DranWeb.GoalLive do
           assign(socket,
             goal: goal,
             form: form,
+            tasks: Tasks.list_tasks_for_goal(goal),
             editing: Map.get(params, "edit") == "true",
             page_title: goal.title
           )
@@ -464,6 +506,13 @@ defmodule DranWeb.GoalLive do
   defp health_class(%{health: "red"}), do: "bg-red-100 text-red-700"
   defp health_class(_), do: "bg-base-300 text-base-content/60"
 
+  defp dot_class("backlog"), do: "bg-base-300"
+  defp dot_class("todo"), do: "bg-sky-500"
+  defp dot_class("in_progress"), do: "bg-purple-500"
+  defp dot_class("done"), do: "bg-green-500"
+  defp dot_class("cancelled"), do: "bg-red-400"
+  defp dot_class(_), do: "bg-base-300"
+
   # ── PubSub: real-time update when a goal changes ──
 
   @impl true
@@ -479,6 +528,19 @@ defmodule DranWeb.GoalLive do
       end
     else
       {:noreply, socket}
+    end
+  end
+
+  # Tasks linked to the shown goal changed (board, MCP, API) — refresh the
+  # linked-tasks section.
+  @impl true
+  def handle_info({:task_changed, _action, _task}, socket) do
+    case socket.assigns[:goal] do
+      nil ->
+        {:noreply, socket}
+
+      goal ->
+        {:noreply, assign(socket, tasks: Tasks.list_tasks_for_goal(goal))}
     end
   end
 

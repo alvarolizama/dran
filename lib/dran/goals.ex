@@ -133,6 +133,28 @@ defmodule Dran.Goals do
   end
 
   @doc """
+  All descendant goal ids of `goal_id` within the given goal list, at any
+  depth. Walks `parent_goal_id` (self-referencing) in memory — the same
+  data the goal selects consume, so there is no extra query. Cycle-safe:
+  a goal that (wrongly) descends from itself terminates.
+  """
+  def descendant_ids(goal_id, goals) when is_list(goals) do
+    by_parent = Enum.group_by(goals, & &1.parent_goal_id, & &1)
+    do_descendants(Map.get(by_parent, goal_id, []), by_parent, MapSet.new())
+  end
+
+  defp do_descendants([], _by_parent, acc), do: MapSet.to_list(acc)
+
+  defp do_descendants([goal | rest], by_parent, acc) do
+    if MapSet.member?(acc, goal.id) do
+      do_descendants(rest, by_parent, acc)
+    else
+      children = Map.get(by_parent, goal.id, [])
+      do_descendants(rest ++ children, by_parent, MapSet.put(acc, goal.id))
+    end
+  end
+
+  @doc """
   Recompute derived progress for all goals in a workspace. Used by the
   task-migration backfill and after bulk task operations.
   """
