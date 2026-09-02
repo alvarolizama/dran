@@ -305,9 +305,8 @@ defmodule DranWeb.Router do
     if user && Map.has_key?(user, :access_levels) do
       # API key user - check if they have write access to the requested workspace
       workspace_id = get_requested_workspace_id(conn)
-      access_level = Map.get(user.access_levels, workspace_id)
 
-      if access_level == "write" do
+      if DranWeb.ResourceAuthorization.authorize(user, :write, workspace_id) == :ok do
         conn
       else
         conn

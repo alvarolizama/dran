@@ -46,8 +46,9 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Accounts, Agent, Auth, Goals, Knowledge, Repo}
+  alias Dran.{Agent, Auth, Goals, Knowledge, Repo}
   alias Dran.PageTypes
+  alias DranWeb.ResourceAuthorization
   alias Dran.Goals
   import Ecto.Query, warn: false
 
@@ -1147,26 +1148,45 @@ defmodule Dran.MCP do
     end
   end
 
-  # SEC-001: Validate that the user has access to the context requested in tool args
-  defp validate_tool_context_access(args, user) when is_map(args) do
-    workspace_slug = args["workspace"]
+  # ── Authorization (single policy: DranWeb.ResourceAuthorization) ───────────
+  #
+  # SEC-001 (read access) and SEC-002 (write access) both route through
+  # authorize/3. The user shapes accepted there mirror exactly what the
+  # API auth pipelines produce; `nil` stays fail-open for tests.
 
-    if workspace_slug do
-      validate_context_access(workspace_slug, user)
-    else
-      :ok
+  defp can_write?(user, args) do
+    case workspace_from_args(args) do
+      nil ->
+        # No workspace in args — nothing to enforce here; the context access
+        # check below rejects inaccessible workspaces anyway.
+        true
+
+      workspace ->
+        ResourceAuthorization.authorize(user, :write, workspace) == :ok
+    end
+  end
+
+  defp validate_tool_context_access(args, user) when is_map(args) do
+    case workspace_from_args(args) do
+      nil -> :ok
+      workspace -> ResourceAuthorization.authorize(user, :read, workspace)
     end
   end
 
   defp validate_tool_context_access(_, _), do: :ok
+
+  defp workspace_from_args(args), do: args["workspace"]
 
   # SEC-001: Validate context access for resource URIs like page://context/slug
   defp validate_resource_context_access(uri, user) when is_binary(uri) do
     case String.split(uri, "://", parts: 2) do
       [_scheme, rest] ->
         case String.split(rest, "/", parts: 2) do
-          [workspace_slug, _path] -> validate_context_access(workspace_slug, user)
-          _ -> :ok
+          [workspace_slug, _path] ->
+            ResourceAuthorization.authorize(user, :read, workspace_slug)
+
+          _ ->
+            :ok
         end
 
       _ ->
@@ -1175,43 +1195,6 @@ defmodule Dran.MCP do
   end
 
   defp validate_resource_context_access(_, _), do: :ok
-
-  defp validate_context_access(workspace_slug, user) do
-    cond do
-      is_nil(user) ->
-        :ok
-
-      user.is_owner ->
-        :ok
-
-      user_has_context_access?(user, workspace_slug) ->
-        :ok
-
-      true ->
-        {:error, :forbidden}
-    end
-  end
-
-  # F2: a per-user token's access is members ∪ public workspaces (the plain
-  # membership list would wrongly deny public workspaces the user can reach).
-  defp user_has_context_access?(%Dran.Accounts.User{} = user, workspace_slug) do
-    Enum.any?(Accounts.accessible_workspaces(user), &(&1.slug == workspace_slug))
-  end
-
-  defp user_has_context_access?(%{workspaces: :all}, _workspace_slug), do: true
-
-  defp user_has_context_access?(%{workspaces: workspace_list}, workspace_slug)
-       when is_list(workspace_list) do
-    Enum.any?(workspace_list, &(&1.slug == workspace_slug))
-  end
-
-  defp user_has_context_access?(%{contexts: :all}, _workspace_slug), do: true
-
-  defp user_has_context_access?(%{contexts: contexts}, workspace_slug) when is_list(contexts) do
-    Enum.any?(contexts, &(&1.slug == workspace_slug))
-  end
-
-  defp user_has_context_access?(_, _), do: false
 
   # SEC-002: Read-only API key enforcement
   @write_tools MapSet.new([
@@ -1233,42 +1216,6 @@ defmodule Dran.MCP do
 
   defp write_tool?(name) when is_binary(name), do: MapSet.member?(@write_tools, name)
   defp write_tool?(_), do: false
-
-  # SEC-002: per-workspace write enforcement via access_levels (API keys).
-  # access_levels is keyed by workspace_id (allocation id chain in controller) —
-  # resolve the tool's workspace slug to its id via the user's workspaces list.
-  defp can_write?(%{access_levels: levels, workspaces: workspace_list}, args)
-       when is_map(levels) and is_list(workspace_list) do
-    slug = args["workspace"]
-
-    case slug do
-      nil ->
-        # No workspace in args — the key must target a workspace to write.
-        false
-
-      _ ->
-        ws_id = Enum.find_value(workspace_list, nil, &(&1.slug == slug && &1.id))
-        ws_id != nil and Map.get(levels, ws_id) == "write"
-    end
-  end
-
-  defp can_write?(%{access_levels: levels}, args) when is_map(levels) do
-    slug = args["workspace"]
-
-    case slug do
-      nil -> false
-      _ -> Map.get(levels, slug) == "write"
-    end
-  end
-
-  defp can_write?(%{write_access: true}, _args), do: true
-  defp can_write?(%{write_access: false}, _args), do: false
-
-  # nil user — always allow (e.g. process_message tests without user context).
-  defp can_write?(nil, _args), do: true
-
-  # real users (User struct) and owner-like maps — allow (workspace validation happens in validate_tool_context_access).
-  defp can_write?(%{}, _args), do: true
 
   defp inject_user_context(msg, nil), do: msg
 

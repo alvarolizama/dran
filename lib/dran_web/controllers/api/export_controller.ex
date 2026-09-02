@@ -48,11 +48,8 @@ defmodule DranWeb.API.ExportController do
     end
   end
 
-  defp user_has_context_access?(%{contexts: :all}, _workspace_id), do: true
-
-  defp user_has_context_access?(%{contexts: contexts}, workspace_id) when is_list(contexts) do
-    Enum.any?(contexts, &(&1.id == workspace_id))
+  # Single authorization policy (SEC-001 read access).
+  defp user_has_context_access?(user, workspace_id) do
+    DranWeb.ResourceAuthorization.authorize(user, :read, workspace_id) == :ok
   end
-
-  defp user_has_context_access?(_, _), do: false
 end
