@@ -58,6 +58,7 @@ defmodule DranWeb do
       # Shared function components for LiveViews
       import DranWeb.PageComponents
       import DranWeb.PageListComponents
+      import DranWeb.ResourceComponents
 
       import DranWeb.MarkdownEditorComponents,
         only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]

@@ -119,14 +119,14 @@ defmodule DranWeb.TaskBoardLiveTest do
       refute html =~ "Made by test_user"
     end
 
-    test "groups filter options by actor kind", %{conn: conn, ws: ws} do
+    test "lists all managed actors as flat filter options", %{conn: conn, ws: ws} do
       {:ok, _} = Dran.Actors.create_actor(%{"name" => "group-agent", "kind" => "agent"})
       {:ok, _} = Dran.Actors.create_actor(%{"name" => "group-human", "kind" => "user"})
 
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      assert html =~ ~s(label="Agentes")
-      assert html =~ ~s(label="Usuarios")
+      # Shared actor_options: flat options (no optgroup grouping)
+      refute html =~ "<optgroup"
       assert html =~ "group-agent"
       assert html =~ "group-human"
     end

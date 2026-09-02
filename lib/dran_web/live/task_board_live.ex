@@ -284,7 +284,7 @@ defmodule DranWeb.TaskBoardLive do
     actor_filter = socket.assigns.filter_actor_id
     goal_filter = socket.assigns.filter_goal_id
     actors = socket.assigns.managed_actors
-    tree = goal_tree(socket.assigns.workspace.id)
+    tree = Goals.flattened_tree(socket.assigns.workspace.id)
 
     # Roll-up: a selected goal matches itself plus ALL its descendants at
     # any depth (work rolls up the goal hierarchy).
@@ -331,24 +331,6 @@ defmodule DranWeb.TaskBoardLive do
     )
   end
 
-  # Depth-first preorder of the workspace's goals with depth per node
-  # (root → children → grandchildren …). Backs the indented goal selects
-  # and the filter's roll-up (via Dran.Goals.descendant_ids/2).
-  defp goal_tree(workspace_id) do
-    goals = Goals.list_goals(workspace_id)
-    by_parent = Enum.group_by(goals, & &1.parent_goal_id, & &1)
-
-    Map.get(by_parent, nil, [])
-    |> Enum.flat_map(&subtree(&1, by_parent, 0))
-  end
-
-  defp subtree(goal, by_parent, depth) do
-    [
-      {goal, depth}
-      | Enum.flat_map(Map.get(by_parent, goal.id, []), &subtree(&1, by_parent, depth + 1))
-    ]
-  end
-
   # Assignee filter: nil shows everything. An actor matches tasks assigned
   # to them, plus tasks they created with no assignee (attribution name ==
   # actor name — the actor model's join convention). "Unassigned" shows
@@ -385,26 +367,6 @@ defmodule DranWeb.TaskBoardLive do
 
   defp priority_options, do: ~w(low medium high urgent)
 
-  defp agent_groups, do: [{"agent", gettext("Agents")}, {"user", gettext("Users")}]
-
-  attr :label, :string, required: true
-  attr :actors, :list, required: true
-  attr :filter_actor_id, :string, required: true
-
-  defp optgroup(assigns) do
-    ~H"""
-    <optgroup :if={@actors != []} label={@label}>
-      <option
-        :for={actor <- @actors}
-        value={actor.id}
-        selected={@filter_actor_id == actor.id}
-      >
-        {Dran.Actors.Actor.label(actor)}
-      </option>
-    </optgroup>
-    """
-  end
-
   # The task's current goal (first link wins — set_goal/3 enforces a single
   # goal per task from the UI). Used by card chip and the select's selected
   # option; empty map → nil.
@@ -415,20 +377,6 @@ defmodule DranWeb.TaskBoardLive do
       [goal | _] -> goal
       [] -> nil
     end
-  end
-
-  attr :goal, :map, required: true
-  attr :depth, :integer, required: true
-  attr :selected_id, :string, required: true
-
-  # One flattened, indented option for the goal selects — works at any
-  # hierarchy depth (a native <optgroup> cannot nest).
-  defp goal_option(assigns) do
-    ~H"""
-    <option value={@goal.id} selected={@selected_id == @goal.id}>
-      {String.duplicate("—", @depth + 1)} {@goal.title}
-    </option>
-    """
   end
 
   defp goal_id(nil), do: nil
@@ -465,12 +413,7 @@ defmodule DranWeb.TaskBoardLive do
               <option value="unassigned" selected={@filter_actor_id == "unassigned"}>
                 {gettext("Unassigned")}
               </option>
-              <.optgroup
-                :for={{kind, label} <- agent_groups()}
-                label={label}
-                actors={Enum.filter(@managed_actors, &(&1.kind == kind))}
-                filter_actor_id={@filter_actor_id}
-              />
+              <.actor_options actors={@managed_actors} selected_id={@filter_actor_id} />
             </select>
           </label>
           <label class="flex items-center gap-2 text-xs text-base-content/60">
@@ -484,12 +427,7 @@ defmodule DranWeb.TaskBoardLive do
               <option value="" selected={is_nil(@filter_goal_id)}>
                 {gettext("All goals")}
               </option>
-              <.goal_option
-                :for={{goal, depth} <- @goal_tree}
-                goal={goal}
-                depth={depth}
-                selected_id={@filter_goal_id}
-              />
+              <.goal_options tree={@goal_tree} selected_id={@filter_goal_id} />
             </select>
           </label>
         </div>
@@ -703,13 +641,7 @@ defmodule DranWeb.TaskBoardLive do
               <option value="" selected={is_nil(@task.assignee_actor_id)}>
                 {gettext("unassigned")}
               </option>
-              <option
-                :for={actor <- @managed_actors}
-                value={actor.id}
-                selected={@task.assignee_actor_id == actor.id}
-              >
-                {Dran.Actors.Actor.label(actor)}
-              </option>
+              <.actor_options actors={@managed_actors} selected_id={@task.assignee_actor_id} />
             </select>
           </label>
           <label class="block">
@@ -741,10 +673,8 @@ defmodule DranWeb.TaskBoardLive do
             <option value="" selected={is_nil(task_goal(@goals_by_task, @task.id))}>
               {gettext("no goal")}
             </option>
-            <.goal_option
-              :for={{goal, depth} <- @goal_tree}
-              goal={goal}
-              depth={depth}
+            <.goal_options
+              tree={@goal_tree}
               selected_id={goal_id(task_goal(@goals_by_task, @task.id))}
             />
           </select>

@@ -133,6 +133,25 @@ defmodule Dran.Goals do
   end
 
   @doc """
+  Depth-first preorder of the workspace's goals with depth per node
+  (root → children → grandchildren …) — `[{goal, depth}]`. Backs the
+  indented goal selects (`DranWeb.ResourceComponents.goal_options/1`) and
+  the board filter's roll-up (via `descendant_ids/2`).
+  """
+  def flattened_tree(workspace_id) do
+    by_parent = Enum.group_by(list_goals(workspace_id), & &1.parent_goal_id, & &1)
+
+    Enum.flat_map(Map.get(by_parent, nil, []), &subtree(&1, by_parent, 0))
+  end
+
+  defp subtree(goal, by_parent, depth) do
+    [
+      {goal, depth}
+      | Enum.flat_map(Map.get(by_parent, goal.id, []), &subtree(&1, by_parent, depth + 1))
+    ]
+  end
+
+  @doc """
   All descendant goal ids of `goal_id` within the given goal list, at any
   depth. Walks `parent_goal_id` (self-referencing) in memory — the same
   data the goal selects consume, so there is no extra query. Cycle-safe:
