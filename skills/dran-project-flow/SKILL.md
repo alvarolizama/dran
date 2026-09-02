@@ -171,8 +171,8 @@ relations, operated by agents via MCP. For Álvaro and his agents.
        start_date: "2026-08-01",
        target_date: "2026-12-31"
      },
-     owner: "alvaro",  # from API key, not settable
-     created_by: "chaos manager"  # overrideable
+     owner: "alvaro",  # from the key's actor, not settable
+     created_by: "chaos manager"  # derived server-side, not settable
    })
 ```
 

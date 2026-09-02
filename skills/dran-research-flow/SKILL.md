@@ -119,7 +119,7 @@ dran_create_page({
   body: "## Why\n\n<why I'm saving it, what it adds>\n\n## Key findings\n\n- ...",
   meta: { kind: "article", source_url: "https://...",
           props: { language: "elixir" } },
-  owner: "alvaro", created_by: "chaos manager"  # owner from API key, created_by overrideable
+  owner: "alvaro", created_by: "chaos manager"  # derived server-side from the key's actor, not settable
 })
 ```
 

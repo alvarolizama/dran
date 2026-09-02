@@ -226,8 +226,8 @@ in the plan — it goes in each phase's todo (see `dran-todo-flow` and `dran-cod
        project_slug: "<project>",   → optional, independent
        goal_slug: "<goal>"          → optional, independent
      },
-     owner: "alvaro",  # from API key, not settable
-     created_by: "chaos manager"  # overrideable
+     owner: "alvaro",  # from the key's actor, not settable
+     created_by: "chaos manager"  # derived server-side, not settable
    })
 4. Create the listed todos (via dran-todo-flow) with plan_slug pointing here
 ```

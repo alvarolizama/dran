@@ -159,11 +159,11 @@ dashboard access, assigned contexts), regular user (wiki-only). The panel
 (`/panel/*`) is gated by the `admin_or_editor` pipeline; the wiki is open to
 all logged-in users.
 
-**Owner / created_by** — `owner` is derived from the API key name and is NOT
-client-settable. `created_by` defaults to the authenticated identity (API
-key name or user email) but can be overridden via the `created_by` parameter.
-On the web (no API key), `owner` is `"system"` and `created_by` is the
-logged-in user's email.
+**Owner / created_by** — both are derived server-side from the API key's
+**actor** (identity registry; the key is just a credential) and are NOT
+client-settable on any write tool. On the web (no API key), attribution
+uses the logged-in user's identity; unauthenticated/system flows fall back
+to `"system"`.
 
 **`write_access`** — API keys are **read-only by default**. A key with
 `write_access: false` (the default) can call all read tools but write tools
@@ -308,7 +308,7 @@ Grouped by workflow: capture → read/find → organize → maintain → automat
 
 | Tool | Purpose |
 | --- | --- |
-| `dran_create_page` | Create any page type **except todos**. `owner` is derived from the API key (not client-settable); `created_by` defaults to auth identity, overrideable. ⚠️ **Write tool** — requires `write_access: true` on API keys |
+| `dran_create_page` | Create any page type **except todos**. `owner`/`created_by` are derived server-side from the API key's actor (not client-settable). ⚠️ **Write tool** — requires `write_access: true` on API keys |
 | `dran_create_todo` | Create a todo with kanban status, priority, due date, and independent project/goal/plan links. Same owner/created_by behavior as `dran_create_page`. ⚠️ **Write tool** |
 
 ### Read & find

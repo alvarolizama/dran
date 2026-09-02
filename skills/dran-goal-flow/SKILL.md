@@ -180,8 +180,8 @@ memory to operate Dran.
        target_date: "2026-09-30",
        project_slug: "<project>"        → optional
      },
-     owner: "alvaro",  # from API key, not settable
-     created_by: "chaos manager"  # overrideable
+     owner: "alvaro",  # from the key's actor, not settable
+     created_by: "chaos manager"  # derived server-side, not settable
    })
 ```
 

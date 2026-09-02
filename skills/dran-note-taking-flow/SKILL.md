@@ -117,7 +117,7 @@ The full list of kinds lives in the `dran` skill (§3).
      body: "Today I learned...",
      meta: { kind: "thought" },
      tags: ["elixir"],
-     owner: "alvaro", created_by: "chaos manager"  # owner from API key, created_by overrideable
+     owner: "alvaro", created_by: "chaos manager"  # derived server-side from the key's actor, not settable
    })
 ```
 
