@@ -51,20 +51,13 @@ defmodule DranWeb.GoalLive do
               <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">
                 <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
               </.link>
-              <button
+              <.link
                 :if={not @editing}
-                phx-click="toggle_edit"
+                patch={~p"/#{@workspace_slug}/goals/#{@goal.slug}?edit=true"}
                 class="btn btn-ghost btn-sm"
               >
                 <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
-              </button>
-              <button
-                :if={@editing}
-                phx-click="toggle_edit"
-                class="btn btn-ghost btn-sm"
-              >
-                <.icon name="hero-eye" class="size-4" /> {gettext("View")}
-              </button>
+              </.link>
             </div>
           </div>
 
@@ -115,78 +108,9 @@ defmodule DranWeb.GoalLive do
             </div>
           </div>
 
-          <%!-- Edit form or body --%>
-          <div :if={@editing} class="surface-2 rounded-xl p-6">
-            <.form
-              for={@form}
-              id="goal-edit-form"
-              phx-change="validate"
-              phx-submit="save"
-              class="space-y-4"
-            >
-              <.input field={@form[:title]} type="text" label={gettext("Title")} />
-              <.input field={@form[:slug]} type="text" label={gettext("Slug")} />
-              <.input
-                field={@form[:description]}
-                type="textarea"
-                label={gettext("Description")}
-                rows={2}
-              />
-
-              <div class="grid grid-cols-2 gap-4">
-                <.input
-                  field={@form[:kind]}
-                  type="select"
-                  label={gettext("Kind")}
-                  options={Enum.map(@goal_kinds, &{String.capitalize(&1), &1})}
-                />
-                <.input
-                  field={@form[:health]}
-                  type="select"
-                  label={gettext("Health")}
-                  options={[{"—", ""}, {"Green", "green"}, {"Yellow", "yellow"}, {"Red", "red"}]}
-                />
-                <.input
-                  field={@form[:status]}
-                  type="select"
-                  label={gettext("Status")}
-                  options={[
-                    {"Active", "active"},
-                    {"Draft", "draft"},
-                    {"On Hold", "on_hold"},
-                    {"Done", "done"}
-                  ]}
-                />
-                <.input field={@form[:metric]} type="text" label={gettext("Metric")} />
-                <.input field={@form[:target_value]} type="number" label={gettext("Target Value")} />
-                <.input field={@form[:current_value]} type="number" label={gettext("Current Value")} />
-                <.input field={@form[:unit]} type="text" label={gettext("Unit")} />
-                <.input
-                  field={@form[:progress]}
-                  type="number"
-                  label={gettext("Progress (0-1)")}
-                  step={0.01}
-                  min={0}
-                  max={1}
-                />
-                <.input field={@form[:start_date]} type="date" label={gettext("Start Date")} />
-                <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
-              </div>
-
-              <.markdown_body_field
-                id={"goal-editor-#{@goal.id}"}
-                body={@goal.body || ""}
-                workspace_id={@goal.workspace_id}
-                hidden_field="goal[body]"
-                label={gettext("Content")}
-              />
-
-              <.form_actions submit_label={gettext("Save")} cancel_event="toggle_edit" />
-            </.form>
-          </div>
-
+          <%!-- Body (edit happens in the modal overlay) --%>
           <div
-            :if={not @editing and @goal.body != nil and @goal.body != ""}
+            :if={@goal.body != nil and @goal.body != ""}
             class="prose prose-base dark:prose-invert"
           >
             {render_markdown(@goal.body, [])}
@@ -231,56 +155,14 @@ defmodule DranWeb.GoalLive do
         </div>
       </div>
 
-      <div :if={@live_action == :new} class="p-6 overflow-y-auto w-full max-w-2xl mx-auto">
-        <div class="mb-6">
-          <h1 class="text-title">{gettext("New Goal")}</h1>
-          <p class="text-caption mt-1">{gettext("Create a new goal to track progress.")}</p>
-        </div>
-
-        <.form for={@form} id="goal-new-form" phx-submit="create" class="space-y-4">
-          <.input
-            field={@form[:title]}
-            type="text"
-            label={gettext("Title")}
-            placeholder={gettext("Enter a title…")}
-            required
-          />
-          <.input field={@form[:description]} type="textarea" label={gettext("Description")} rows={2} />
-          <.input
-            field={@form[:kind]}
-            type="select"
-            label={gettext("Kind")}
-            options={Enum.map(@goal_kinds, &{String.capitalize(&1), &1})}
-          />
-          <.input
-            field={@form[:metric]}
-            type="text"
-            label={gettext("Metric")}
-            placeholder={gettext("e.g. revenue, weight, completion %")}
-          />
-          <.input field={@form[:target_value]} type="number" label={gettext("Target Value")} />
-          <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
-
-          <.markdown_body_field
-            id="goal-new-editor"
-            body=""
-            workspace_id={@workspace_id}
-            hidden_field="goal[body]"
-            label={gettext("Content")}
-          />
-
-          <.form_actions
-            submit_label={gettext("Create Goal")}
-            submit_icon="hero-plus"
-            cancel_path={~p"/#{@workspace_slug}/goals"}
-          />
-        </.form>
-      </div>
-
       <div :if={@live_action == :index} class="p-6 overflow-y-auto w-full">
         <div class="flex items-center justify-between mb-4">
           <h1 class="text-title">{gettext("Goals")}</h1>
-          <.link navigate={~p"/#{@workspace_slug}/goals/new"} class="btn btn-primary btn-sm">
+          <.link
+            patch={~p"/#{@workspace_slug}/goals?new=true"}
+            class="btn btn-primary btn-sm"
+            data-testid="goals-new-goal"
+          >
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Goal")}
           </.link>
         </div>
@@ -317,6 +199,27 @@ defmodule DranWeb.GoalLive do
           </.link>
         </div>
       </div>
+
+      <.resource_modal
+        :if={@modal_form}
+        id="goal-resource-modal"
+        title={(@modal_goal && @modal_goal.title) || gettext("New Goal")}
+        pill={(@modal_goal && "GOAL") || "NEW GOAL"}
+        pill_class={
+          (@modal_goal && "bg-green-100 text-green-700") || "bg-green-500/15 text-green-600"
+        }
+        on_close="close_goal_modal"
+        form_id="goal-modal-form"
+        submit_label={(@modal_goal && gettext("Save changes")) || gettext("Create Goal")}
+      >
+        <.goal_form_fields
+          id="goal-modal-form"
+          goal={@modal_goal || %Goal{}}
+          changeset={@modal_form}
+          workspace_id={(@modal_goal && @modal_goal.workspace_id) || (@context && @context.id)}
+          goal_kinds={@goal_kinds}
+        />
+      </.resource_modal>
     </Layouts.app>
     """
   end
@@ -343,7 +246,12 @@ defmodule DranWeb.GoalLive do
        save_status: "idle",
        active_nav: "goals",
        goal_kinds: @goal_kinds,
-       tasks: []
+       tasks: [],
+       # Resource modal state — `?new=true` on the index opens create,
+       # `?edit=true` on the show opens edit. Rendered via
+       # `<.resource_modal>` (DranWeb.ResourceComponents).
+       modal_goal: nil,
+       modal_form: nil
      )}
   end
 
@@ -351,10 +259,35 @@ defmodule DranWeb.GoalLive do
   def handle_params(params, _url, socket) do
     {socket, context} = Auth.resolve_workspace(socket, params)
 
-    # Preserve editing state across patches (e.g. when toggling edit mode)
     socket = assign(socket, params: params, context: context)
+    socket = apply_action(socket, socket.assigns.live_action, params)
 
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+    {:noreply, open_modal_from_params(socket, params)}
+  end
+
+  # `?edit=true` on the show page opens the edit modal over the detail.
+  defp open_modal_from_params(%{assigns: %{live_action: :show, goal: %Goal{} = goal}} = socket, %{
+         "edit" => "true"
+       }) do
+    assign(socket,
+      editing: true,
+      modal_goal: goal,
+      modal_form: to_form(Goals.change_goal(goal), as: :goal)
+    )
+  end
+
+  # `?new=true` (index or any action) opens the create modal.
+  defp open_modal_from_params(socket, %{"new" => "true"}) do
+    assign(socket,
+      modal_goal: nil,
+      modal_form: to_form(Goals.change_goal(%Goal{}), as: :goal)
+    )
+  end
+
+  defp open_modal_from_params(socket, _params), do: clear_modal(socket)
+
+  defp clear_modal(socket) do
+    assign(socket, modal_goal: nil, modal_form: nil)
   end
 
   defp apply_action(socket, :index, _params) do
@@ -392,82 +325,93 @@ defmodule DranWeb.GoalLive do
     end
   end
 
-  defp apply_action(socket, :new, _params) do
-    changeset = Goals.change_goal(%Goal{})
-
-    assign(socket,
-      form: to_form(changeset, as: :goal),
-      editing: false,
-      workspace_id: socket.assigns[:workspace] && socket.assigns.workspace.id,
-      page_title: gettext("New Goal")
-    )
-  end
-
   # ──────────────────────────────────────────────────────────────────────────
-  # Events
+  # Events — goal resource modal (create + edit)
   # ──────────────────────────────────────────────────────────────────────────
 
   @impl true
-  def handle_event("toggle_edit", _params, socket) do
-    goal = socket.assigns.goal
-    editing = !socket.assigns.editing
-
-    if editing do
-      {:noreply,
-       push_patch(socket,
-         to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}?edit=true"
-       )}
-    else
-      {:noreply,
-       push_patch(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}")}
-    end
+  def handle_event("validate_goal", %{"goal" => params}, socket) do
+    goal = socket.assigns.modal_goal || %Goal{}
+    changeset = Goals.change_goal(goal, params) |> Map.put(:action, :validate)
+    {:noreply, assign(socket, modal_form: to_form(changeset, as: :goal))}
   end
 
-  def handle_event("validate", %{"goal" => goal_params}, socket) do
-    goal = socket.assigns[:goal] || %Goal{}
-    changeset = Goals.change_goal(goal, goal_params) |> Map.put(:action, :validate)
-    {:noreply, assign(socket, form: to_form(changeset, as: :goal))}
-  end
+  def handle_event("save_goal", %{"goal" => params}, socket) do
+    context = socket.assigns.context
+    ws_slug = socket.assigns[:workspace_slug]
 
-  def handle_event("save", %{"goal" => goal_params}, socket) do
-    goal = socket.assigns.goal
+    # Whitelist + server-side identity — mirror of task_attrs_from_params.
+    # Raw params NEVER reach the changeset: fields like workspace_id,
+    # created_by, updated_by, archived, parent_goal_id are forgeable and
+    # must be owned by the server (SEC-006 pattern).
+    attrs = %{
+      "title" => String.trim(params["title"] || ""),
+      "description" => params["description"],
+      "body" => params["body"] || "",
+      "kind" => params["kind"],
+      "health" => params["health"],
+      "status" => params["status"],
+      "metric" => params["metric"],
+      "target_value" => params["target_value"],
+      "current_value" => params["current_value"],
+      "unit" => params["unit"],
+      "start_date" => params["start_date"],
+      "target_date" => params["target_date"]
+    }
 
-    case Goals.update_goal(goal, goal_params) do
-      {:ok, updated} ->
-        form = Goals.change_goal(updated) |> to_form(as: :goal)
+    result =
+      case socket.assigns.modal_goal do
+        nil ->
+          if context do
+            attrs =
+              attrs
+              |> Map.put("workspace_id", context.id)
+              |> Map.put("created_by", session_identity_goal(socket))
+              |> ensure_slug()
+
+            Goals.create_goal(attrs)
+          else
+            {:error, :no_context}
+          end
+
+        goal ->
+          attrs = Map.put(attrs, "updated_by", session_identity_goal(socket))
+          Goals.update_goal(goal, attrs)
+      end
+
+    case result do
+      {:ok, _goal} ->
+        # Create → close back to the list (the new goal is already there).
+        # Update → close back to the detail page (without ?edit=true).
+        to =
+          case socket.assigns do
+            %{live_action: :show, goal: %Goal{slug: slug}} -> ~p"/#{ws_slug}/goals/#{slug}"
+            _ -> ~p"/#{ws_slug}/goals"
+          end
 
         {:noreply,
          socket
-         |> assign(goal: updated, form: form, editing: false)
-         |> put_flash(:info, gettext("Goal updated."))}
+         |> put_flash(:info, gettext("Goal saved."))
+         |> push_patch(to: to)}
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, form: to_form(changeset, as: :goal))}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, modal_form: to_form(changeset, as: :goal))}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not save goal."))}
     end
   end
 
-  def handle_event("create", %{"goal" => goal_params}, socket) do
-    context = socket.assigns.context
+  def handle_event("close_goal_modal", _params, socket) do
+    ws_slug = socket.assigns[:workspace_slug]
 
-    if context do
-      attrs =
-        goal_params
-        |> Map.put("workspace_id", context.id)
-        |> ensure_slug()
-
-      case Goals.create_goal(attrs) do
-        {:ok, goal} ->
-          {:noreply,
-           socket
-           |> put_flash(:info, gettext("Goal created."))
-           |> push_navigate(to: ~p"/#{socket.assigns[:workspace_slug]}/goals/#{goal.slug}")}
-
-        {:error, changeset} ->
-          {:noreply, assign(socket, form: to_form(changeset, as: :goal))}
+    to =
+      case socket.assigns do
+        %{live_action: :show, goal: %Goal{slug: slug}} -> ~p"/#{ws_slug}/goals/#{slug}"
+        _ -> ~p"/#{ws_slug}/goals"
       end
-    else
-      {:noreply, put_flash(socket, :error, gettext("No context available."))}
-    end
+
+    {:noreply, push_patch(socket, to: to)}
   end
 
   def handle_event("delete", _params, socket) do
@@ -486,6 +430,13 @@ defmodule DranWeb.GoalLive do
   end
 
   # ── Helpers ──
+
+  # Web session identity for attribution: the logged-in user's email,
+  # resolved through Dran.Auth.resolve_created_by/1 (same contract as the
+  # task board; falls back to "system" when no user).
+  defp session_identity_goal(socket) do
+    Dran.Auth.resolve_created_by(%{email: socket.assigns[:current_user]})
+  end
 
   defp ensure_slug(%{"slug" => slug} = params) when is_binary(slug) and slug != "", do: params
 

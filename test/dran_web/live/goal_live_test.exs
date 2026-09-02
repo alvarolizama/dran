@@ -103,27 +103,27 @@ defmodule DranWeb.GoalLiveTest do
   end
 
   describe "tiptap body editor (shared resource pattern)" do
-    test "edit form renders the Tiptap editor mount for the goal body", %{
+    test "edit modal renders the Tiptap editor mount for the goal body", %{
       conn: conn,
       ws: ws,
       goal: goal
     } do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}?edit=true")
 
-      assert has_element?(view, "#goal-editor-#{goal.id}[phx-hook='MarkdownEditor']")
+      assert has_element?(view, "#goal-editor-modal-#{goal.id}[phx-hook='MarkdownEditor']")
     end
 
-    test "new form renders the Tiptap editor for the goal body", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/new")
+    test "new modal renders the Tiptap editor for the goal body", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals?new=true")
 
-      assert has_element?(view, "#goal-new-editor[phx-hook='MarkdownEditor']")
+      assert has_element?(view, "#goal-editor-modal-new[phx-hook='MarkdownEditor']")
     end
 
     test "creating a goal with a body persists it", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/new")
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals?new=true")
 
       view
-      |> form("#goal-new-form")
+      |> form("#goal-modal-form")
       |> render_submit(%{
         "goal" => %{
           "title" => "Goal with body",
@@ -133,6 +133,108 @@ defmodule DranWeb.GoalLiveTest do
 
       goal = Dran.Goals.get_goal_by_slug("goal-with-body", ws.id)
       assert goal.body =~ "mermaid"
+    end
+  end
+
+  describe "goal resource modal" do
+    test "?new=true opens the create modal over the index", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals?new=true")
+
+      assert has_element?(view, "#goal-resource-modal")
+      assert has_element?(view, "#goal-modal-form")
+      assert has_element?(view, "#goal-resource-modal button[form='goal-modal-form']")
+      # Editor without toolbar (approved mockup)
+      refute has_element?(view, "#goal-resource-modal [data-testid='editor-toolbar']")
+    end
+
+    test "?edit=true opens the edit modal over the detail", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}?edit=true")
+
+      assert has_element?(view, "#goal-resource-modal")
+      assert has_element?(view, "#goal-modal-form input[name='goal[title]']")
+    end
+
+    test "saving from the create modal persists and closes to the list", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals?new=true")
+
+      view
+      |> form("#goal-modal-form")
+      |> render_submit(%{"goal" => %{"title" => "Modal created goal", "kind" => "business"}})
+
+      created = Dran.Goals.get_goal_by_slug("modal-created-goal", ws.id)
+      assert created
+      assert created.kind == "business"
+      assert created.workspace_id == ws.id
+
+      refute has_element?(view, "#goal-resource-modal")
+    end
+
+    test "saving from the edit modal updates fields and closes to the detail", %{
+      conn: conn,
+      ws: ws,
+      goal: goal
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}?edit=true")
+
+      view
+      |> form("#goal-modal-form")
+      |> render_submit(%{"goal" => %{"title" => "Renamed goal", "health" => "red"}})
+
+      updated = Dran.Goals.get_goal_by_slug(goal.slug, ws.id)
+      assert updated.title == "Renamed goal"
+      assert updated.health == "red"
+
+      refute has_element?(view, "#goal-resource-modal")
+    end
+
+    test "close_goal_modal patches back to the detail page", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}?edit=true")
+
+      render_click(view, "close_goal_modal", %{})
+
+      refute has_element?(view, "#goal-resource-modal")
+    end
+
+    test "empty title keeps the modal open", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals?new=true")
+
+      view
+      |> form("#goal-modal-form")
+      |> render_submit(%{"goal" => %{"title" => ""}})
+
+      assert has_element?(view, "#goal-resource-modal")
+    end
+
+    test "forged workspace_id/created_by in params is ignored (server-owned whitelist)", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, other} =
+        Dran.Knowledge.create_workspace(%{
+          name: "Other Goal #{System.unique_integer([:positive])}",
+          slug: "other-goal-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals?new=true")
+
+      view
+      |> form("#goal-modal-form")
+      |> render_submit(%{
+        "goal" => %{
+          "title" => "Goal no forgeable",
+          # Forge attempts — must be ignored (server owns them)
+          "workspace_id" => other.id,
+          "created_by" => "evil_agent",
+          "parent_goal_id" => other.id,
+          "archived" => "true"
+        }
+      })
+
+      created = Dran.Goals.get_goal_by_slug("goal-no-forgeable", ws.id)
+      assert created, "goal should have been created in the REAL workspace"
+      assert created.workspace_id == ws.id
+      assert created.created_by == "test_user"
+      refute created.archived
     end
   end
 end
