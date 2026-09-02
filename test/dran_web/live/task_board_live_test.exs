@@ -167,172 +167,36 @@ defmodule DranWeb.TaskBoardLiveTest do
     end
   end
 
-  describe "detail panel" do
-    test "select_task opens the panel with the task body", %{conn: conn, ws: ws} do
-      {:ok, task} =
-        Tasks.create_task(%{
-          "workspace_id" => ws.id,
-          "title" => "With body",
-          "body" => "Detailed instructions here"
-        })
+  describe "detail page navigation" do
+    test "cards link to the task detail page", %{conn: conn, ws: ws, task: task} do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-
-      render_click(view, "select_task", %{"id" => task.id})
-
-      assert has_element?(view, "#task-detail-form")
-      assert render(view) =~ "Detailed instructions here"
+      assert html =~ ~p"/#{ws.slug}/tasks/#{task.id}"
     end
 
-    test "save_detail updates title and body", %{conn: conn, ws: ws, task: task} do
+    test "quick_add creates the task without opening any panel", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      render_click(view, "select_task", %{"id" => task.id})
-
       view
-      |> form("#task-detail-form")
-      |> render_submit(%{"task" => %{"title" => "Renamed PR", "body" => "New body text"}})
+      |> form("#quick-add-backlog")
+      |> render_submit(%{"task" => %{"title" => "Fresh task", "status" => "backlog"}})
 
-      updated = Repo.reload!(task)
-      assert updated.title == "Renamed PR"
-      assert updated.body == "New body text"
-      assert has_element?(view, "#task-detail-form")
-      assert render(view) =~ "New body text"
-    end
-
-    test "save_detail reassigns and unassigns the actor", %{conn: conn, ws: ws, task: task} do
-      {:ok, agent} = Dran.Actors.create_actor(%{"name" => "panel-agent", "kind" => "agent"})
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{
-        "task" => %{"title" => task.title, "assignee_actor_id" => agent.id}
-      })
-
-      assert Repo.reload!(task).assignee_actor_id == agent.id
-
-      # Same panel: switching to "unassigned" clears the actor
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{
-        "task" => %{"title" => task.title, "assignee_actor_id" => ""}
-      })
-
-      assert Repo.reload!(task).assignee_actor_id == nil
-    end
-
-    test "save_detail sets and clears due_date and priority", %{conn: conn, ws: ws, task: task} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{
-        "task" => %{
-          "title" => task.title,
-          "due_date" => "2026-12-24",
-          "priority" => "high"
-        }
-      })
-
-      updated = Repo.reload!(task)
-      assert updated.due_date == ~D[2026-12-24]
-      assert updated.priority == "high"
-
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{"task" => %{"title" => task.title, "due_date" => "", "priority" => ""}})
-
-      updated = Repo.reload!(task)
-      assert updated.due_date == nil
-      assert updated.priority == nil
-    end
-
-    test "save_detail with an empty title shows a validation error", %{
-      conn: conn,
-      ws: ws,
-      task: task
-    } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{"task" => %{"title" => "", "body" => "x"}})
-
-      assert Repo.reload!(task).title == "Review PR"
-    end
-
-    test "close_detail hides the panel", %{conn: conn, ws: ws, task: task} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-
-      render_click(view, "select_task", %{"id" => task.id})
-      assert has_element?(view, "#task-detail-form")
-
-      render_click(view, "close_detail", %{})
+      assert Repo.get_by(Dran.Task, title: "Fresh task")
       refute has_element?(view, "#task-detail-form")
     end
+  end
 
-    test "toggle_archive archives the task and removes it from the board", %{
-      conn: conn,
-      ws: ws,
-      task: task
-    } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-
-      render_click(view, "select_task", %{"id" => task.id})
-      render_click(view, "toggle_archive", %{"id" => task.id})
-
-      assert Repo.reload!(task).archived == true
-      refute render(view) =~ "Review PR"
-      refute has_element?(view, "#task-detail-form")
-    end
-
-    test "rejects tasks from other workspaces (no select, no save, no archive)", %{
-      conn: conn,
-      ws: ws
-    } do
+  describe "workspace scoping (migrated to TaskLive)" do
+    test "a foreign task never renders on this board", %{conn: conn, ws: ws} do
       {:ok, other_ws} =
-        Dran.Knowledge.create_workspace(%{name: "Other Board", slug: "other-board"})
+        Dran.Knowledge.create_workspace(%{name: "Other Board", slug: "other-board-2"})
 
-      {:ok, other_task} =
+      {:ok, _other_task} =
         Tasks.create_task(%{"workspace_id" => other_ws.id, "title" => "Foreign task"})
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      # select_task is rejected — the panel never opens
-      render_click(view, "select_task", %{"id" => other_task.id})
-      refute has_element?(view, "#task-detail-form")
-      refute render(view) =~ "Foreign task"
-
-      # save_detail is rejected — the foreign task is untouched
-      render_click(view, "save_detail", %{
-        "task" => %{"title" => "Hacked", "body" => "hacked"}
-      })
-
-      refute Repo.reload!(other_task).title == "Hacked"
-
-      # toggle_archive is rejected — the foreign task stays unarchived
-      render_click(view, "toggle_archive", %{"id" => other_task.id})
-      assert Repo.reload!(other_task).archived == false
-    end
-
-    test "save_detail with no task selected flashes instead of crashing", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-
-      # No select_task beforehand — the socket has selected_task: nil
-      render_click(view, "save_detail", %{"task" => %{"title" => "x", "body" => "y"}})
-
-      # The LiveView is still alive and rendering
-      assert render(view) =~ "Pendientes"
+      refute html =~ "Foreign task"
     end
   end
 
@@ -425,7 +289,7 @@ defmodule DranWeb.TaskBoardLiveTest do
       assert task.created_by == "test_user"
     end
 
-    test "opens the detail panel with the freshly created task", %{conn: conn, ws: ws} do
+    test "the card links to the task page after quick add", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
 
       view
@@ -434,8 +298,7 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       created = Tasks.get_task_by_slug("fresh-task", ws.id)
       assert created, "task should have been created"
-      assert has_element?(view, "#task-detail-form")
-      assert render(view) =~ "Fresh task"
+      assert render(view) =~ ~p"/#{ws.slug}/tasks/#{created.id}"
     end
   end
 
@@ -454,91 +317,6 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       assert html =~ "hero-flag"
       assert html =~ "Chip goal"
-    end
-
-    test "detail panel renders the grouped goal select", %{conn: conn, ws: ws, task: task} do
-      {:ok, root} =
-        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "Root G", "slug" => "root-g"})
-
-      {:ok, child} =
-        Goals.create_goal(%{
-          "workspace_id" => ws.id,
-          "title" => "Child G",
-          "slug" => "child-g",
-          "parent_goal_id" => root.id
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-      render_click(view, "select_task", %{"id" => task.id})
-
-      assert has_element?(view, "#task-detail-form")
-
-      # Flattened indented options — works at any hierarchy depth
-      assert has_element?(
-               view,
-               "select[name='task[goal_id]'] option[value='#{child.id}']"
-             )
-
-      assert has_element?(view, "select[name='task[goal_id]'] option[value='#{root.id}']")
-      assert has_element?(view, "select[name='task[goal_id]'] option[value='']")
-    end
-
-    test "save_detail links the task to the selected goal", %{conn: conn, ws: ws, task: task} do
-      {:ok, goal} =
-        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "Linked", "slug" => "linked"})
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{
-        "task" => %{"title" => task.title, "goal_id" => goal.id}
-      })
-
-      assert [%{id: linked_goal_id}] = Tasks.list_linked_goals(Tasks.get_task(task.id))
-      assert linked_goal_id == goal.id
-    end
-
-    test "save_detail detaches the task when the goal select is empty", %{
-      conn: conn,
-      ws: ws,
-      task: task
-    } do
-      {:ok, goal} =
-        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "Gone", "slug" => "gone"})
-
-      {:ok, _} = Tasks.set_goal(task, goal.id)
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{"task" => %{"title" => task.title, "goal_id" => ""}})
-
-      assert Tasks.list_linked_goals(Tasks.get_task(task.id)) == []
-    end
-
-    test "switching goals from the panel moves the link", %{conn: conn, ws: ws, task: task} do
-      {:ok, g1} =
-        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "G One", "slug" => "g-one"})
-
-      {:ok, g2} =
-        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "G Two", "slug" => "g-two"})
-
-      {:ok, _} = Tasks.set_goal(task, g1.id)
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
-      render_click(view, "select_task", %{"id" => task.id})
-
-      view
-      |> form("#task-detail-form")
-      |> render_submit(%{"task" => %{"title" => task.title, "goal_id" => g2.id}})
-
-      task = Tasks.get_task(task.id)
-      assert [%{id: g2_id}] = Tasks.list_linked_goals(task)
-      assert g2_id == g2.id
     end
   end
 

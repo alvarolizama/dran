@@ -590,6 +590,7 @@ defmodule DranWeb.Router do
 
     # Task board — the interactive kanban (first-class tasks).
     live "/:workspace_slug/tasks", TaskBoardLive, :index
+    live "/:workspace_slug/tasks/:id", TaskLive, :show
 
     # Shared multi-agent memory (first-class, own table — not page types).
     live "/:workspace_slug/memory", MemoryLive, :index

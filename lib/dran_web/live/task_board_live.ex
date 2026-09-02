@@ -50,8 +50,6 @@ defmodule DranWeb.TaskBoardLive do
          current_user: session["user"],
          filter_actor_id: nil,
          filter_goal_id: nil,
-         selected_task: nil,
-         detail_form: nil,
          managed_actors: Dran.Actors.list_managed_actors()
        )
        |> load_board()}
@@ -85,105 +83,6 @@ defmodule DranWeb.TaskBoardLive do
       end
 
     {:noreply, socket |> assign(filter_goal_id: filter) |> load_board()}
-  end
-
-  def handle_event("select_task", %{"id" => id}, socket) do
-    case fetch_board_task(id, socket) do
-      {:error, :not_found} ->
-        {:noreply, put_flash(socket, :error, gettext("Task not found"))}
-
-      {:ok, task} ->
-        {:noreply,
-         socket
-         |> assign(selected_task: task)
-         |> assign(detail_form: to_form(Task.update_changeset(task, %{})))}
-    end
-  end
-
-  def handle_event("close_detail", _params, socket) do
-    {:noreply, assign(socket, selected_task: nil, detail_form: nil)}
-  end
-
-  def handle_event("save_detail", %{"task" => params}, socket) do
-    case socket.assigns.selected_task do
-      nil ->
-        {:noreply, put_flash(socket, :error, gettext("No task selected"))}
-
-      task ->
-        attrs = %{
-          "title" => String.trim(params["title"] || ""),
-          "body" => params["body"] || "",
-          "updated_by" => session_identity(socket)
-        }
-
-        # Empty select = unassign.
-        attrs =
-          case params["assignee_actor_id"] do
-            aid when is_binary(aid) and aid != "" -> Map.put(attrs, "assignee_actor_id", aid)
-            _ -> Map.put(attrs, "assignee_actor_id", nil)
-          end
-
-        # Empty date = clear due_date.
-        attrs =
-          case params["due_date"] do
-            date when is_binary(date) and date != "" -> Map.put(attrs, "due_date", date)
-            _ -> Map.put(attrs, "due_date", nil)
-          end
-
-        # Empty select = no priority.
-        attrs =
-          case params["priority"] do
-            p when p in ~w(low medium high urgent) -> Map.put(attrs, "priority", p)
-            _ -> Map.put(attrs, "priority", nil)
-          end
-
-        case Tasks.update_task(task, attrs) do
-          {:ok, updated} ->
-            # Goal comes through the grouped select; empty = detach.
-            goal_id = params["goal_id"]
-
-            with {:ok, updated} <- Tasks.set_goal(updated, goal_id) do
-              {:noreply,
-               socket
-               |> put_flash(:info, gettext("Task updated"))
-               |> assign(selected_task: updated)
-               |> assign(detail_form: to_form(Task.update_changeset(updated, %{})))
-               |> load_board()}
-            else
-              {:error, _reason} ->
-                {:noreply, put_flash(socket, :error, gettext("Could not set goal"))}
-            end
-
-          {:error, %Ecto.Changeset{} = changeset} ->
-            {:noreply, assign(socket, detail_form: to_form(changeset))}
-        end
-    end
-  end
-
-  def handle_event("save_detail", _params, socket) do
-    {:noreply, put_flash(socket, :error, gettext("No task selected"))}
-  end
-
-  def handle_event("toggle_archive", %{"id" => id}, socket) do
-    case fetch_board_task(id, socket) do
-      {:error, :not_found} ->
-        {:noreply, put_flash(socket, :error, gettext("Task not found"))}
-
-      {:ok, task} ->
-        attrs = %{"archived" => not task.archived, "updated_by" => session_identity(socket)}
-
-        case Tasks.update_task(task, attrs) do
-          {:ok, _updated} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, gettext("Task archived"))
-             |> assign(selected_task: nil, detail_form: nil)
-             |> load_board()}
-
-          {:error, %Ecto.Changeset{}} ->
-            {:noreply, put_flash(socket, :error, gettext("Could not archive task"))}
-        end
-    end
   end
 
   def handle_event("move", %{"id" => id, "to_status" => to_status} = params, socket) do
@@ -246,15 +145,10 @@ defmodule DranWeb.TaskBoardLive do
       {:noreply, socket}
     else
       case Tasks.create_task(attrs) do
-        {:ok, task} ->
-          # Re-fetch to get :assignee_actor preloaded for the detail panel.
-          task = Tasks.get_task(task.id)
-
+        {:ok, _task} ->
           {:noreply,
            socket
            |> put_flash(:info, gettext("Task created"))
-           |> assign(selected_task: task)
-           |> assign(detail_form: to_form(Task.update_changeset(task, %{})))
            |> load_board()}
 
         {:error, %Ecto.Changeset{} = _changeset} ->
@@ -365,11 +259,8 @@ defmodule DranWeb.TaskBoardLive do
     Enum.any?(task_goals, &MapSet.member?(visible_ids, &1.id))
   end
 
-  defp priority_options, do: ~w(low medium high urgent)
-
   # The task's current goal (first link wins — set_goal/3 enforces a single
-  # goal per task from the UI). Used by card chip and the select's selected
-  # option; empty map → nil.
+  # goal per task from the UI). Used by the card chip; empty map → nil.
   defp task_goal(_goals_by_task, nil), do: nil
 
   defp task_goal(goals_by_task, task_id) do
@@ -378,9 +269,6 @@ defmodule DranWeb.TaskBoardLive do
       [] -> nil
     end
   end
-
-  defp goal_id(nil), do: nil
-  defp goal_id(goal), do: goal.id
 
   def render(assigns) do
     ~H"""
@@ -483,15 +371,6 @@ defmodule DranWeb.TaskBoardLive do
           </form>
         </div>
       </div>
-
-      <.task_detail
-        :if={@selected_task}
-        task={@selected_task}
-        form={@detail_form}
-        managed_actors={@managed_actors}
-        goals_by_task={@goals_by_task}
-        goal_tree={@goal_tree}
-      />
     </div>
     """
   end
@@ -517,13 +396,12 @@ defmodule DranWeb.TaskBoardLive do
 
   defp task_card(assigns) do
     ~H"""
-    <div
+    <.link
+      navigate={~p"/#{@workspace_slug}/tasks/#{@task.id}"}
       data-task-id={@task.id}
       draggable="true"
-      phx-click="select_task"
-      phx-value-id={@task.id}
-      title={gettext("Click to edit")}
-      class="group p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition cursor-grab active:cursor-grabbing"
+      title={gettext("Open task")}
+      class="block group p-3 rounded-xl bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:border-primary/40 transition cursor-grab active:cursor-grabbing"
     >
       <div class="flex items-start justify-between gap-2">
         <div class="font-medium text-sm break-words min-w-0">
@@ -589,147 +467,9 @@ defmodule DranWeb.TaskBoardLive do
           <span class="truncate max-w-[120px]">{goal.title}</span>
         </span>
       </div>
-    </div>
+    </.link>
     """
   end
-
-  attr :task, Task, required: true
-  attr :form, Phoenix.HTML.Form, required: true
-  attr :managed_actors, :list, required: true
-  attr :goals_by_task, :map, required: true
-  attr :goal_tree, :list, required: true
-
-  defp task_detail(assigns) do
-    ~H"""
-    <div class="fixed inset-y-0 right-0 w-full max-w-md bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-base-300">
-        <h2 class="font-semibold flex items-center gap-2">
-          <.icon name="hero-pencil-square" class="size-4 text-primary" />
-          {gettext("Edit task")}
-        </h2>
-        <button
-          type="button"
-          phx-click="close_detail"
-          class="btn btn-ghost btn-xs btn-circle"
-          aria-label={gettext("Close")}
-        >
-          <.icon name="hero-x-mark" class="size-4" />
-        </button>
-      </div>
-
-      <.form
-        for={@form}
-        id="task-detail-form"
-        phx-submit="save_detail"
-        class="flex-1 overflow-y-auto p-4 space-y-4"
-      >
-        <div>
-          <label class="text-xs text-base-content/60">{gettext("Status")}</label>
-          <div class="mt-1 flex items-center gap-2 text-sm">
-            <span class={"badge badge-sm #{status_badge(@task.status)}"}>{column_label(@task.status)}</span>
-            <span :if={@task.priority} class={priority_badge(@task.priority)}>{@task.priority}</span>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block">
-            <span class="text-xs text-base-content/60">{gettext("Assignee")}</span>
-            <select
-              name="task[assignee_actor_id]"
-              class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-            >
-              <option value="" selected={is_nil(@task.assignee_actor_id)}>
-                {gettext("unassigned")}
-              </option>
-              <.actor_options actors={@managed_actors} selected_id={@task.assignee_actor_id} />
-            </select>
-          </label>
-          <label class="block">
-            <span class="text-xs text-base-content/60">{gettext("Priority")}</span>
-            <select
-              name="task[priority]"
-              class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-            >
-              <option value="" selected={is_nil(@task.priority)}>
-                {gettext("none")}
-              </option>
-              <option
-                :for={p <- priority_options()}
-                value={p}
-                selected={@task.priority == p}
-              >
-                {p}
-              </option>
-            </select>
-          </label>
-        </div>
-
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Goal")}</span>
-          <select
-            name="task[goal_id]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <option value="" selected={is_nil(task_goal(@goals_by_task, @task.id))}>
-              {gettext("no goal")}
-            </option>
-            <.goal_options
-              tree={@goal_tree}
-              selected_id={goal_id(task_goal(@goals_by_task, @task.id))}
-            />
-          </select>
-        </label>
-
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Due date")}</span>
-          <input
-            type="date"
-            name="task[due_date]"
-            value={@task.due_date && Date.to_iso8601(@task.due_date)}
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          />
-        </label>
-
-        <.input field={@form[:title]} type="text" label={gettext("Title")} />
-
-        <div>
-          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Body")}</span>
-          <.markdown_editor
-            id={"task-editor-#{@task.id}"}
-            body={@task.body || ""}
-            workspace_id=""
-            autosave={false}
-            toolbar={false}
-            hidden_field="task[body]"
-            min_height="220px"
-          />
-        </div>
-
-        <div class="flex items-center justify-between pt-2">
-          <button
-            type="button"
-            phx-click="toggle_archive"
-            phx-value-id={@task.id}
-            class="btn btn-ghost btn-sm text-base-content/60"
-          >
-            <.icon name="hero-archive-box-arrow-down" class="size-4" />
-            {gettext("Archive")}
-          </button>
-          <button type="submit" class="btn btn-primary btn-sm">
-            <.icon name="hero-check" class="size-4" />
-            {gettext("Save")}
-          </button>
-        </div>
-      </.form>
-    </div>
-    """
-  end
-
-  defp status_badge("backlog"), do: "bg-base-300"
-  defp status_badge("todo"), do: "bg-sky-500/20 text-sky-700"
-  defp status_badge("in_progress"), do: "bg-purple-500/20 text-purple-700"
-  defp status_badge("done"), do: "bg-green-500/20 text-green-700"
-  defp status_badge(_), do: "bg-red-500/20 text-red-700"
 
   defp priority_badge("urgent"), do: "badge badge-error badge-sm shrink-0"
   defp priority_badge("high"), do: "badge badge-warning badge-sm shrink-0"
