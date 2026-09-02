@@ -436,10 +436,11 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      # Workspace-scoped page: admin sees the workspace Config link + API Keys in the sidebar
+      # Workspace-scoped page: admin sees the workspace Config link + Account (entry
+      # point of the personal settings tabs, incl. API Keys) in the sidebar
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
       assert html =~ ~p"/#{ctx1.slug}/settings"
-      assert html =~ ~p"/settings/api_keys"
+      assert html =~ ~p"/settings/account"
       assert html =~ ~p"/admin"
       assert html =~ ctx1.slug
 

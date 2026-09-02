@@ -443,6 +443,10 @@ defmodule DranWeb.SettingsLiveTest do
       clear_disabled_jobs!()
 
       on_exit(fn ->
+        # The OnExitHandler process owns no sandbox connection — check one out
+        # or the delete_all below dies with an OwnershipError and fails the test.
+        Ecto.Adapters.SQL.Sandbox.checkout(Dran.Repo)
+
         clear_disabled_jobs!()
         delete_job_reports!(context.id)
       end)
