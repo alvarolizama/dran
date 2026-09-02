@@ -38,32 +38,42 @@ defmodule DranWeb.TaskLive do
         {:noreply, push_navigate(socket, to: ~p"/")}
 
       {%{id: ws_id, slug: slug} = _context, id} when is_binary(id) ->
-        case Tasks.get_task(id) do
-          %Task{workspace_id: ^ws_id} = task ->
-            current_goal =
-              case Tasks.list_linked_goals(task) do
-                [goal | _] -> goal
-                [] -> nil
-              end
-
-            {:noreply,
-             socket
-             |> assign(
-               task: task,
-               goal: current_goal,
-               goal_tree: Goals.flattened_tree(ws_id),
-               editing: params["edit"] == "true",
-               form: to_form(Task.update_changeset(task, %{}), as: :task),
-               page_title: task.title
-             )}
-
-          _ ->
-            # Not found or belongs to another workspace — back to the board.
-            {:noreply, push_navigate(socket, to: ~p"/#{slug}/tasks")}
+        # The id comes from the URL — anything non-UUID (scanners, typos)
+        # must redirect to the board, not crash the LiveView with an
+        # Ecto.Query.CastError (binary_id cast).
+        case Ecto.UUID.cast(id) do
+          {:ok, uuid} -> load_task(socket, uuid, ws_id, slug, params)
+          :error -> {:noreply, push_navigate(socket, to: ~p"/#{slug}/tasks")}
         end
 
       _ ->
         {:noreply, push_navigate(socket, to: ~p"/")}
+    end
+  end
+
+  defp load_task(socket, id, ws_id, slug, params) do
+    case Tasks.get_task(id) do
+      %Task{workspace_id: ^ws_id} = task ->
+        current_goal =
+          case Tasks.list_linked_goals(task) do
+            [goal | _] -> goal
+            [] -> nil
+          end
+
+        {:noreply,
+         socket
+         |> assign(
+           task: task,
+           goal: current_goal,
+           goal_tree: Goals.flattened_tree(ws_id),
+           editing: params["edit"] == "true",
+           form: to_form(Task.update_changeset(task, %{}), as: :task),
+           page_title: task.title
+         )}
+
+      _ ->
+        # Not found or belongs to another workspace — back to the board.
+        {:noreply, push_navigate(socket, to: ~p"/#{slug}/tasks")}
     end
   end
 

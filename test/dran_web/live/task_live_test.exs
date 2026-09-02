@@ -97,6 +97,13 @@ defmodule DranWeb.TaskLiveTest do
 
       assert to == "/#{ws.slug}/tasks"
     end
+
+    test "a non-UUID id redirects to the board instead of crashing", %{conn: conn, ws: ws} do
+      assert {:error, {:live_redirect, %{to: to}}} =
+               live(conn, ~p"/#{ws.slug}/tasks/not-a-uuid")
+
+      assert to == "/#{ws.slug}/tasks"
+    end
   end
 
   describe "edit" do
