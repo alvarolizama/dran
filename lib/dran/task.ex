@@ -104,12 +104,18 @@ defmodule Dran.Task do
     field :archived, :boolean, default: false
 
     # Attribution — resolves server-side from the actor (Dran.Actors).
-    # `owner` was dropped in the phase-2 migration.
+    # `owner` was dropped in the phase-2 migration. `creator_actor_id` is
+    # the id-based attribution of the acting actor (F6); `created_by` is the
+    # human-readable mirror (actor name / email) kept for display and API.
     field :created_by, :string, default: "system"
     field :updated_by, :string
     field :on_behalf_of, :string
 
     belongs_to :workspace, Dran.Workspace
+
+    belongs_to :creator_actor, Dran.Actors.Actor,
+      foreign_key: :creator_actor_id,
+      type: :binary_id
 
     timestamps(type: :utc_datetime)
   end
@@ -154,6 +160,7 @@ defmodule Dran.Task do
       :completed_at,
       :archived,
       :created_by,
+      :creator_actor_id,
       :updated_by,
       :on_behalf_of
     ])

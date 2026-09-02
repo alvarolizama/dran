@@ -1457,7 +1457,8 @@ defmodule Dran.MCP do
           "recurrence" => Map.get(args, "recurrence", "none"),
           "meta" => meta,
           # server-side attribution — not client-settable
-          "created_by" => Auth.resolve_created_by(user)
+          "created_by" => Auth.resolve_created_by(user),
+          "creator_actor_id" => Auth.resolve_acting_actor(user)
         }
         |> maybe_put("slug", args["slug"])
         |> maybe_put("priority", args["priority"])

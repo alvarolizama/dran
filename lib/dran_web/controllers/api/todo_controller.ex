@@ -57,12 +57,14 @@ defmodule DranWeb.API.TodoController do
 
         # Inject attribution from the authenticated identity.
         # created_by is derived server-side — never client-settable.
-        # owner was dropped with the actor model (phase 2).
+        # creator_actor_id is the acting actor's id (F6); owner was dropped
+        # with the actor model (phase 2).
         user = conn.assigns[:user]
 
         attrs =
           attrs
           |> Map.put("created_by", Dran.Auth.resolve_created_by(user))
+          |> Map.put("creator_actor_id", Dran.Auth.resolve_acting_actor(user))
 
         case Tasks.create_task(attrs) do
           {:ok, todo} ->

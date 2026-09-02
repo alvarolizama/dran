@@ -291,6 +291,64 @@ defmodule Dran.TaskRelationsTest do
     end
   end
 
+  describe "actor-id attribution (F6)" do
+    test "create_task resolves creator_actor_id from created_by (actor name)" do
+      {:ok, agent} = Dran.Actors.create_actor(%{"name" => "attribution-agent", "kind" => "agent"})
+
+      workspace = ensure_workspace!()
+
+      {:ok, task} =
+        Tasks.create_task(%{
+          "workspace_id" => workspace.id,
+          "title" => "Created by agent",
+          "created_by" => "attribution-agent"
+        })
+
+      assert task.creator_actor_id == agent.id
+      assert task.created_by == "attribution-agent"
+    end
+
+    test "create_task with an unknown identity carries no actor id" do
+      workspace = ensure_workspace!()
+
+      {:ok, task} =
+        Tasks.create_task(%{
+          "workspace_id" => workspace.id,
+          "title" => "Unknown creator",
+          "created_by" => "nobody-#{System.unique_integer([:positive])}"
+        })
+
+      assert task.creator_actor_id == nil
+      assert task.created_by =~ "nobody-"
+    end
+
+    test "create_task with no created_by defaults to system without actor id" do
+      workspace = ensure_workspace!()
+
+      {:ok, task} = Tasks.create_task(%{"workspace_id" => workspace.id, "title" => "System"})
+
+      assert task.created_by == "system"
+      assert task.creator_actor_id == nil
+    end
+
+    test "create_task honours an explicitly passed creator_actor_id" do
+      {:ok, agent} =
+        Dran.Actors.create_actor(%{"name" => "explicit-actor", "kind" => "agent"})
+
+      workspace = ensure_workspace!()
+
+      {:ok, task} =
+        Tasks.create_task(%{
+          "workspace_id" => workspace.id,
+          "title" => "Explicit actor",
+          "created_by" => "system",
+          "creator_actor_id" => agent.id
+        })
+
+      assert task.creator_actor_id == agent.id
+    end
+  end
+
   describe "task ↔ page links (opt-in)" do
     test "link_to_page creates a part_of relation to a project note" do
       workspace = ensure_workspace!()

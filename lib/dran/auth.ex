@@ -93,4 +93,35 @@ defmodule Dran.Auth do
   end
 
   def resolve_created_by(_), do: "system"
+
+  @doc """
+  Resolve the ACTING actor of a write by id — the F6 standard attribution.
+
+  Priority: the API key's own actor (agent identity) → the user row's linked
+  actor (kind=user, resolved by email) → `nil` (caller decides the fallback,
+  usually no column value at all). This is identity by FK, replacing the
+  legacy name-matching convention (`created_by == actor.name`).
+  """
+  def resolve_acting_actor(nil), do: nil
+
+  def resolve_acting_actor(user) when is_map(user) do
+    case Map.get(user, :actor) do
+      %Dran.Actors.Actor{id: id} ->
+        id
+
+      _ ->
+        case Map.get(user, :email) do
+          email when is_binary(email) and email != "" ->
+            case Dran.Actors.get_actor_by_name(email) do
+              %Dran.Actors.Actor{id: id} -> id
+              _ -> nil
+            end
+
+          _ ->
+            nil
+        end
+    end
+  end
+
+  def resolve_acting_actor(_), do: nil
 end

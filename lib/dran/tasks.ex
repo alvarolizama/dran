@@ -568,5 +568,23 @@ defmodule Dran.Tasks do
   defp default_owner_fields(attrs) do
     attrs
     |> Map.put_new("created_by", "system")
+    |> put_creator_actor()
   end
+
+  # F6: the acting actor is attributed BY ID. Callers may pass
+  # "creator_actor_id" explicitly (server-resolved); otherwise it is derived
+  # from "created_by" — which for API keys is the key's actor name and for
+  # users the email (user actors are named by email) — via the actors
+  # registry. One lookup per create; unknown identities simply carry no id.
+  defp put_creator_actor(%{"creator_actor_id" => id} = attrs) when is_binary(id), do: attrs
+
+  defp put_creator_actor(%{"created_by" => name} = attrs)
+       when is_binary(name) and name != "system" do
+    case Dran.Actors.get_actor_by_name(name) do
+      %Dran.Actors.Actor{id: id} -> Map.put(attrs, "creator_actor_id", id)
+      _ -> attrs
+    end
+  end
+
+  defp put_creator_actor(attrs), do: attrs
 end
