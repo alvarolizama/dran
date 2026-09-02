@@ -137,18 +137,30 @@ defmodule Dran.Goals do
   (root → children → grandchildren …) — `[{goal, depth}]`. Backs the
   indented goal selects (`DranWeb.ResourceComponents.goal_options/1`) and
   the board filter's roll-up (via `descendant_ids/2`).
+
+  Cycle-safe: a goal that (wrongly) descends from itself is visited once
+  and its subtree is cut there.
   """
   def flattened_tree(workspace_id) do
-    by_parent = Enum.group_by(list_goals(workspace_id), & &1.parent_goal_id, & &1)
+    goals = list_goals(workspace_id)
+    by_parent = Enum.group_by(goals, & &1.parent_goal_id, & &1)
 
-    Enum.flat_map(Map.get(by_parent, nil, []), &subtree(&1, by_parent, 0))
+    Enum.flat_map(Map.get(by_parent, nil, []), &subtree(&1, by_parent, 0, MapSet.new()))
   end
 
-  defp subtree(goal, by_parent, depth) do
-    [
-      {goal, depth}
-      | Enum.flat_map(Map.get(by_parent, goal.id, []), &subtree(&1, by_parent, depth + 1))
-    ]
+  defp subtree(goal, by_parent, depth, visited) do
+    if MapSet.member?(visited, goal.id) do
+      []
+    else
+      visited = MapSet.put(visited, goal.id)
+
+      children =
+        by_parent
+        |> Map.get(goal.id, [])
+        |> Enum.flat_map(&subtree(&1, by_parent, depth + 1, visited))
+
+      [{goal, depth} | children]
+    end
   end
 
   @doc """

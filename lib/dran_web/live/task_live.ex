@@ -24,6 +24,10 @@ defmodule DranWeb.TaskLive do
 
     if context && connected?(socket) do
       Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
+      # task_changed broadcasts live on the workspace topic (see
+      # Dran.Tasks.broadcast_task_change) — without this the live-refresh
+      # handler below is unreachable.
+      Phoenix.PubSub.subscribe(Dran.PubSub, "workspace:#{context.id}")
     end
 
     {:ok, assign(socket, active_nav: "tasks")}

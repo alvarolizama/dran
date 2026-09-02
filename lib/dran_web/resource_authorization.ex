@@ -63,14 +63,12 @@ defmodule DranWeb.ResourceAuthorization do
 
   # ── API key: per-workspace access levels ──────────────────────────────────
 
-  defp do_authorize(%{access_levels: levels} = user, mode, ws_id) when is_map(levels) do
+  defp do_authorize(%{access_levels: levels}, mode, ws_id) when is_map(levels) do
     level = Map.get(levels, ws_id)
-    key_workspaces = Map.get(user, :workspaces, [])
-    known? = ws_id in Enum.map(List.wrap(key_workspaces), & &1.id)
 
-    case {level, known?} do
-      {nil, _} -> {:error, :forbidden}
-      {level, _} -> if level_allowed?(level, mode), do: :ok, else: {:error, :forbidden}
+    case level do
+      nil -> {:error, :forbidden}
+      level -> if level_allowed?(level, mode), do: :ok, else: {:error, :forbidden}
     end
   end
 

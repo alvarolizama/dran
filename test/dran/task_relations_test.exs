@@ -366,6 +366,35 @@ defmodule Dran.TaskRelationsTest do
     end
   end
 
+  describe "flattened_tree/1" do
+    test "is cycle-safe and preserves depth ordering" do
+      ws =
+        ensure_workspace!(
+          "flat-#{System.unique_integer([:positive])}",
+          "Flat #{System.unique_integer([:positive])}"
+        )
+
+      {:ok, root} = Goals.create_goal(%{"workspace_id" => ws.id, "title" => "R", "slug" => "r"})
+      {:ok, child} = Goals.create_goal(%{"workspace_id" => ws.id, "title" => "C", "slug" => "c"})
+
+      {:ok, grandchild} =
+        Goals.create_goal(%{"workspace_id" => ws.id, "title" => "GC", "slug" => "gc"})
+
+      {:ok, _} = Dran.Repo.update(Ecto.Changeset.change(child, parent_goal_id: root.id))
+      {:ok, _} = Dran.Repo.update(Ecto.Changeset.change(grandchild, parent_goal_id: child.id))
+
+      # Malformed data: close a cycle back to the root. An ingenuous walk
+      # would loop forever; the cycle-safe version visits each goal once.
+      {:ok, _} = Dran.Repo.update(Ecto.Changeset.change(root, parent_goal_id: grandchild.id))
+
+      tree = Goals.flattened_tree(ws.id)
+
+      # Returns without hanging; no goal appears twice.
+      ids = Enum.map(tree, fn {g, _d} -> g.id end)
+      assert length(ids) == length(Enum.uniq(ids))
+    end
+  end
+
   describe "task ↔ page links (opt-in)" do
     test "link_to_page creates a part_of relation to a project note" do
       workspace = ensure_workspace!()

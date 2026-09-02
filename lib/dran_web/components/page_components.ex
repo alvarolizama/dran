@@ -1011,6 +1011,7 @@ defmodule DranWeb.PageComponents do
           id={@editor_id}
           body={@page.body}
           workspace_id={@workspace_id}
+          autosave={true}
           save_status={@save_status}
           label={gettext("Content")}
         />

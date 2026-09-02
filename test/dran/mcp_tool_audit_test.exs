@@ -118,6 +118,40 @@ defmodule Dran.MCP.ToolAuditTest do
 
       assert %{"result" => %{"content" => _}} = resp
     end
+
+    test "read-gate: a workspace the key cannot access is denied (SEC-001)" do
+      {:ok, other} = Knowledge.create_workspace(%{name: "Other", slug: "audit-other"})
+
+      alien_key = fn levels ->
+        %{
+          is_owner: false,
+          email: "api-key:foreign",
+          key_name: "foreign key",
+          workspaces: [],
+          access_levels: levels,
+          created_by_user_id: nil
+        }
+      end
+
+      # No entry for `other` in access_levels → denied
+      resp =
+        MCP.process_message(
+          call("dran_list_pages", %{"workspace" => other.slug}),
+          user: alien_key.(%{})
+        )
+
+      assert %{"error" => %{"message" => message}} = resp
+      assert message =~ "denied"
+
+      # Sanity: the same call with read access to `other` succeeds
+      resp =
+        MCP.process_message(
+          call("dran_list_pages", %{"workspace" => other.slug}),
+          user: alien_key.(%{other.id => "read"})
+        )
+
+      assert %{"result" => %{"content" => _}} = resp
+    end
   end
 
   describe "unknown tools" do
