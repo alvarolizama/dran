@@ -302,4 +302,45 @@ defmodule DranWeb.PagesLiveTest do
       assert updated.title == "Después del rename"
     end
   end
+
+  describe "attribution — session user stamped on create/update" do
+    test "submitting the creation form attributes created_by to the session user", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/new")
+
+      view
+      |> form("#page-new-form-note", %{page: %{"title" => "Nota atribuida"}})
+      |> render_submit()
+
+      page = Knowledge.get_page_by_slug("nota-atribuida", ws.id)
+      assert page, "page should have been created"
+      assert page.created_by == "test_user"
+      assert page.owner == "system"
+    end
+
+    test "saving an existing page stamps updated_by with the session user", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Editable con atribución",
+          body: "cuerpo",
+          page_type: "note"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
+
+      view
+      |> form("#page-edit-form", %{page: %{"title" => "Editable con atribución v2"}})
+      |> render_change()
+
+      updated = Knowledge.get_page_by_slug(page.slug, ws.id)
+      assert updated.title == "Editable con atribución v2"
+      assert updated.updated_by == "test_user"
+    end
+  end
 end

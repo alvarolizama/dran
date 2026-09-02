@@ -12,6 +12,13 @@ defmodule DranWeb.TaskBoardLive do
 
   alias Dran.{Tasks, Task}
 
+  # Web session identity for attribution: the logged-in user's email
+  # (sessions carry the email as `current_user`), resolved through
+  # Dran.Auth.resolve_created_by/1 — falls back to "system" when no user.
+  defp session_identity(socket) do
+    Dran.Auth.resolve_created_by(%{email: socket.assigns[:current_user]})
+  end
+
   @column_meta [
     {"backlog", "hero-archive-box", "bg-base-300"},
     {"this_week", "hero-calendar", "bg-blue-500/20 text-blue-700"},
@@ -21,7 +28,7 @@ defmodule DranWeb.TaskBoardLive do
     {"cancelled", "hero-x-circle", "bg-red-500/20 text-red-700"}
   ]
 
-  def mount(%{"workspace_slug" => workspace_slug}, _session, socket) do
+  def mount(%{"workspace_slug" => workspace_slug}, session, socket) do
     workspace = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
 
     if workspace do
@@ -32,7 +39,11 @@ defmodule DranWeb.TaskBoardLive do
 
       {:ok,
        socket
-       |> assign(workspace: workspace, columns: @column_meta)
+       |> assign(
+         workspace: workspace,
+         columns: @column_meta,
+         current_user: session["user"]
+       )
        |> load_board()}
     else
       {:ok, push_navigate(socket, to: ~p"/")}
@@ -88,7 +99,8 @@ defmodule DranWeb.TaskBoardLive do
     attrs = %{
       "workspace_id" => socket.assigns.workspace.id,
       "title" => String.trim(title),
-      "status" => status
+      "status" => status,
+      "created_by" => session_identity(socket)
     }
 
     if attrs["title"] == "" do

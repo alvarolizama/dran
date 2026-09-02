@@ -136,5 +136,18 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       assert Tasks.get_task_by_slug("new-today-task", ws.id).status == "today"
     end
+
+    test "attributes created_by to the session user", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      view
+      |> element("#quick-add-backlog")
+      |> render_submit(%{"task" => %{"title" => "Atributed task", "status" => "backlog"}})
+
+      task = Tasks.get_task_by_slug("atributed-task", ws.id)
+      assert task, "task should have been created"
+      assert task.created_by == "test_user"
+      assert task.owner == "system"
+    end
   end
 end

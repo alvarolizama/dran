@@ -37,6 +37,7 @@ defmodule DranWeb.PageEdit do
   import Phoenix.Component, only: [to_form: 2, assign: 2]
   alias Phoenix.LiveView.Upload, as: Upload
 
+  alias Dran.Auth
   alias Dran.Knowledge
   alias Dran.Page
   alias Dran.Summaries
@@ -145,7 +146,7 @@ defmodule DranWeb.PageEdit do
         # Ensure uniqueness
         final_slug = ensure_unique_slug(new_slug, workspace_id, page.slug, 0)
 
-        case Knowledge.update_page(page, %{slug: final_slug}) do
+        case Knowledge.update_page(page, %{slug: final_slug, updated_by: session_identity(socket)}) do
           {:ok, updated_page} ->
             {:noreply,
              socket
@@ -181,6 +182,7 @@ defmodule DranWeb.PageEdit do
       |> ensure_slug(workspace_id, page)
 
     if page do
+      page_params = Map.put(page_params, "updated_by", session_identity(socket))
       update_page_with_relink(socket, page, page_params, workspace_id)
     else
       create_page(socket, page_params)
@@ -195,7 +197,7 @@ defmodule DranWeb.PageEdit do
     if body == page.body do
       {:noreply, assign(socket, save_status: "saved")}
     else
-      case Knowledge.update_page(page, %{body: body}) do
+      case Knowledge.update_page(page, %{body: body, updated_by: session_identity(socket)}) do
         {:ok, updated_page} ->
           rendered_body =
             DranWeb.PageComponents.render_markdown(updated_page.body,
@@ -329,7 +331,10 @@ defmodule DranWeb.PageEdit do
   def handle_event("toggle_pinned", _params, %{assigns: %{page: %Page{} = page}} = socket) do
     new_pinned = !page.pinned
 
-    case Knowledge.update_page(page, %{"pinned" => new_pinned}) do
+    case Knowledge.update_page(page, %{
+           "pinned" => new_pinned,
+           "updated_by" => session_identity(socket)
+         }) do
       {:ok, updated} ->
         {:noreply,
          socket
@@ -393,13 +398,10 @@ defmodule DranWeb.PageEdit do
 
   defp create_page(socket, page_params) do
     # Web: owner is always "system" (no API key). created_by is the logged-in user.
-    current_user = socket.assigns[:current_user]
-    user_identity = if is_binary(current_user), do: current_user, else: "system"
-
     page_params =
       page_params
       |> Map.put_new("owner", "system")
-      |> Map.put_new("created_by", user_identity)
+      |> Map.put_new("created_by", session_identity(socket))
 
     case Knowledge.create_page(page_params) do
       {:ok, page} ->
@@ -459,7 +461,10 @@ defmodule DranWeb.PageEdit do
         end)
 
       if changed do
-        case Knowledge.update_page(page, save_params) do
+        case Knowledge.update_page(
+               page,
+               Map.put(save_params, "updated_by", session_identity(socket))
+             ) do
           {:ok, updated_page} ->
             socket
             |> assign(page: updated_page, save_status: "saved")
@@ -470,6 +475,19 @@ defmodule DranWeb.PageEdit do
       else
         socket
       end
+    end
+  end
+
+  # ── Identity helpers ──
+
+  # Web session identity for attribution: the logged-in user's email (web
+  # sessions carry the email as `current_user`), resolved through
+  # Dran.Auth.resolve_created_by/1 — falls back to "system" when no user is
+  # present (same contract as the API/MCP attribution).
+  defp session_identity(socket) do
+    case socket.assigns[:current_user] do
+      email when is_binary(email) -> Auth.resolve_created_by(%{email: email})
+      _ -> "system"
     end
   end
 
