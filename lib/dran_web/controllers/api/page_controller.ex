@@ -60,14 +60,14 @@ defmodule DranWeb.API.PageController do
     params = resolve_workspace_id(conn, params)
 
     # Inject owner/created_by from the authenticated identity.
-    # owner is derived from the API key — not client-settable.
-    # created_by is client-settable (falls back to the auth identity).
+    # owner and created_by are derived server-side from the actor — never
+    # client-settable (same guarantee as MCP; fixes the old put_new gap).
     user = conn.assigns[:user]
 
     params =
       params
-      |> Map.put_new("owner", Dran.Auth.resolve_owner(user))
-      |> Map.put_new("created_by", Dran.Auth.resolve_created_by(user))
+      |> Map.put("owner", Dran.Auth.resolve_owner(user))
+      |> Map.put("created_by", Dran.Auth.resolve_created_by(user))
 
     case Knowledge.create_page(params) do
       {:ok, page} ->
@@ -94,7 +94,8 @@ defmodule DranWeb.API.PageController do
         page ->
           # SEC-006: whitelist instead of blacklist — only these fields are
           # client-settable. Prevents mass assignment of workspace_id, owner,
-          # created_by, updated_by, etc.
+          # created_by, etc. updated_by is injected server-side from the
+          # authenticated actor (never taken from the client).
           params =
             Map.take(params, [
               "title",
@@ -107,6 +108,7 @@ defmodule DranWeb.API.PageController do
               "kb_source_url",
               "kb_contested"
             ])
+            |> Map.put("updated_by", Dran.Auth.resolve_created_by(conn.assigns[:user]))
 
           case Knowledge.update_page(page, params) do
             {:ok, updated} ->

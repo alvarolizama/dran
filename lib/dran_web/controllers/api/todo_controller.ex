@@ -55,13 +55,14 @@ defmodule DranWeb.API.TodoController do
           |> Map.take(["title", "slug", "body", "status", "priority", "due_date", "recurrence"])
           |> Map.put("workspace_id", context.id)
 
-        # Inject owner/created_by from the authenticated identity.
+        # Inject attribution from the authenticated identity.
+        # owner/created_by are derived server-side — never client-settable.
         user = conn.assigns[:user]
 
         attrs =
           attrs
-          |> Map.put_new("owner", Dran.Auth.resolve_owner(user))
-          |> Map.put_new("created_by", Dran.Auth.resolve_created_by(user))
+          |> Map.put("created_by", Dran.Auth.resolve_created_by(user))
+          |> Map.put("owner", Dran.Auth.resolve_owner(user))
 
         case Tasks.create_task(attrs) do
           {:ok, todo} ->

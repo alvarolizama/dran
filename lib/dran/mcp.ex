@@ -1400,7 +1400,7 @@ defmodule Dran.MCP do
             tags: Map.get(args, "tags", []),
             summary: Map.get(args, "summary"),
             meta: Map.get(args, "meta", %{}),
-            created_by: Map.get(args, "created_by", Auth.resolve_created_by(user)),
+            created_by: Auth.resolve_created_by(user),
             owner: Auth.resolve_owner(user)
           }
           |> maybe_put(:on_behalf_of, args["on_behalf_of"])
@@ -1421,7 +1421,7 @@ defmodule Dran.MCP do
   defp execute_tool(
          "dran_update_page",
          %{"workspace" => workspace_slug, "slug" => slug} = args,
-         _user
+         user
        ) do
     context = workspace_cache_get(workspace_slug)
 
@@ -1431,6 +1431,7 @@ defmodule Dran.MCP do
           "Error: page '#{slug}' not found in context '#{workspace_slug}'"
 
         page ->
+          # owner/created_by are NOT client-settable — server-side attribution
           attrs =
             Map.take(args, [
               "title",
@@ -1439,14 +1440,12 @@ defmodule Dran.MCP do
               "meta",
               "summary",
               "archived",
-              "owner",
-              "created_by",
               "on_behalf_of",
               "kb_confidence",
               "kb_source_url",
               "kb_contested"
             ])
-            |> Map.put("updated_by", Map.get(args, "updated_by", "agent"))
+            |> Map.put("updated_by", Auth.resolve_created_by(user))
 
           case Knowledge.update_page(page, attrs) do
             {:ok, updated} ->
@@ -1505,7 +1504,8 @@ defmodule Dran.MCP do
           "status" => Map.get(args, "status", "backlog"),
           "recurrence" => Map.get(args, "recurrence", "none"),
           "meta" => meta,
-          "created_by" => Map.get(args, "created_by", Auth.resolve_created_by(user)),
+          # server-side attribution — not client-settable
+          "created_by" => Auth.resolve_created_by(user),
           "owner" => Auth.resolve_owner(user)
         }
         |> maybe_put("slug", args["slug"])
@@ -1528,7 +1528,7 @@ defmodule Dran.MCP do
   defp execute_tool(
          "dran_update_task",
          %{"workspace" => workspace_slug, "slug" => slug} = args,
-         _user
+         user
        ) do
     context = workspace_cache_get(workspace_slug)
 
@@ -1538,7 +1538,7 @@ defmodule Dran.MCP do
           "Error: task '#{slug}' not found"
 
         task ->
-          attrs = %{"updated_by" => Map.get(args, "updated_by", "agent")}
+          attrs = %{"updated_by" => Auth.resolve_created_by(user)}
           attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
           attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
           attrs = maybe_put(attrs, "status", args["status"])
@@ -1636,7 +1636,8 @@ defmodule Dran.MCP do
           page_type: "note",
           body: Map.get(args, "body", ""),
           meta: meta,
-          created_by: Map.get(args, "created_by", Auth.resolve_created_by(user)),
+          # server-side attribution — not client-settable
+          created_by: Auth.resolve_created_by(user),
           owner: Auth.resolve_owner(user)
         }
         |> maybe_put(:on_behalf_of, args["on_behalf_of"])
@@ -1875,7 +1876,7 @@ defmodule Dran.MCP do
   defp execute_tool(
          "dran_update_note",
          %{"workspace" => workspace_slug, "slug" => slug} = args,
-         _user
+         user
        ) do
     context = workspace_cache_get(workspace_slug)
 
@@ -1896,15 +1897,14 @@ defmodule Dran.MCP do
             |> maybe_put_meta("assignee", args["assignee"])
 
           attrs = %{"meta" => new_meta}
-          attrs = Map.put(attrs, "updated_by", Map.get(args, "updated_by", "agent"))
+          attrs = Map.put(attrs, "updated_by", Auth.resolve_created_by(user))
           attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
           attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
           attrs = if args["tags"], do: Map.put(attrs, "tags", args["tags"]), else: attrs
 
+          # owner/created_by NOT client-settable; on_behalf_of stays informative
           attrs =
             attrs
-            |> maybe_put("owner", args["owner"])
-            |> maybe_put("created_by", args["created_by"])
             |> maybe_put("on_behalf_of", args["on_behalf_of"])
 
           case Knowledge.update_page(note, attrs) do
