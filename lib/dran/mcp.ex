@@ -1040,7 +1040,7 @@ defmodule Dran.MCP do
         args = params["arguments"] || %{}
 
         cond do
-          # SEC-002: write enforcement — per-workspace via access_levels (API keys)
+          # SEC-002: write enforcement — per-workspace via authorize/3
           write_tool?(tool_name) and not can_write?(user, args) ->
             %{
               "jsonrpc" => "2.0",
@@ -1216,6 +1216,14 @@ defmodule Dran.MCP do
 
   defp write_tool?(name) when is_binary(name), do: MapSet.member?(@write_tools, name)
   defp write_tool?(_), do: false
+
+  @doc """
+  The set of write tools — exported for the F8 permission-matrix test, which
+  asserts EVERY write tool is denied for a read-only key and allowed for a
+  write-enabled one (a new tool registered in @write_tools without a matrix
+  row fails the audit).
+  """
+  def write_tools, do: MapSet.to_list(@write_tools)
 
   defp inject_user_context(msg, nil), do: msg
 
