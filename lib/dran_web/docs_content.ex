@@ -91,7 +91,7 @@ defmodule DranWeb.DocsContent do
     GOAL  →  part_of project "acme"        (source_type="goal",  target_type="project")
 
   Tasks (first-class entity, own table):
-    status          backlog | this_week | today | in_progress | done | cancelled
+    status          backlog | todo | in_progress | done | cancelled
     priority        low | medium | high | urgent
     due_date        date (nullable)
     recurrence      none | daily | weekly | monthly (auto-clones on completion)

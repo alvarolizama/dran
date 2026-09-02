@@ -67,7 +67,7 @@ defmodule Dran.Tasks do
   @doc """
   List tasks grouped by status for board rendering.
 
-  Returns a map: `%{"backlog" => [task, ...], "this_week" => [...], ...}`.
+  Returns a map: `%{"backlog" => [task, ...], "todo" => [...], ...}`.
   Only non-archived tasks in the given workspace. Every status key is
   present even when empty (the board always renders all columns).
   """
@@ -86,8 +86,10 @@ defmodule Dran.Tasks do
     end)
   end
 
-  @doc "Get a task by id, returns nil if not found."
-  def get_task(id), do: Repo.get(Task, id)
+  @doc "Get a task by id with its assignee preloaded, returns nil if not found."
+  def get_task(id) do
+    Repo.get(Task, id) |> Repo.preload(:assignee_actor)
+  end
 
   @doc "Get a task by slug within a workspace."
   def get_task_by_slug(slug, workspace_id) when is_binary(slug) and is_binary(workspace_id) do

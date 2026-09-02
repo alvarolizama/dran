@@ -99,7 +99,15 @@ defmodule DranWeb.API.TodoController do
           end
 
         attrs =
-          Map.take(attrs, ["title", "body", "status", "priority", "due_date", "recurrence"])
+          Map.take(attrs, [
+            "title",
+            "body",
+            "status",
+            "priority",
+            "due_date",
+            "recurrence",
+            "archived"
+          ])
 
         case Tasks.update_task(task, attrs) do
           {:ok, updated} ->

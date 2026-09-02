@@ -346,8 +346,8 @@ defmodule Dran.MCP do
           "kanban_status" => %{
             "type" => "string",
             "description" =>
-              "Kanban board column: backlog, this_week, today, in_progress, done, or cancelled (default: backlog). Typical progression: backlog → this_week → today → in_progress → done.",
-            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+              "Kanban board column: backlog, todo, in_progress, done, or cancelled (default: backlog). Typical progression: backlog → todo → in_progress → done.",
+            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
           },
           "due_date" => %{
             "type" => "string",
@@ -474,7 +474,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_task",
       "description" =>
-        "Create a first-class task (stored in its own `tasks` table, NOT a page). Tasks are the kanban action items: status backlog → this_week → today → in_progress → done | cancelled, priority, due_date, recurrence (none/daily/weekly/monthly — completing a recurring task auto-clones the next occurrence) and a checklist in meta. Link the task to a goal or project/plan note OPTIONALLY via dran_create_relation (relation_type `part_of`, source_type `task`, source_id = the task id) — tasks exist standalone by default. Returns the created task's slug and id.",
+        "Create a first-class task (stored in its own `tasks` table, NOT a page). Tasks are the kanban action items: status backlog → todo → in_progress → done | cancelled, priority, due_date, recurrence (none/daily/weekly/monthly — completing a recurring task auto-clones the next occurrence) and a checklist in meta. Link the task to a goal or project/plan note OPTIONALLY via dran_create_relation (relation_type `part_of`, source_type `task`, source_id = the task id) — tasks exist standalone by default. Returns the created task's slug and id.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -498,8 +498,8 @@ defmodule Dran.MCP do
           "status" => %{
             "type" => "string",
             "description" =>
-              "Board column: backlog, this_week, today, in_progress, done, or cancelled (default: backlog).",
-            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+              "Board column: backlog, todo, in_progress, done, or cancelled (default: backlog).",
+            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
           },
           "priority" => %{
             "type" => "string",
@@ -538,7 +538,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_update_task",
       "description" =>
-        "Update a task by slug: status, priority, due_date, recurrence, title, body, or checklist. Setting status to done/cancelled on a recurring task auto-clones the next occurrence. Goal/page links are managed with dran_create_relation / dran_delete_relation (source_type `task`). Returns the updated task.",
+        "Update a task by slug: status, priority, due_date, recurrence, title, body, checklist, or archived. Setting status to done/cancelled on a recurring task auto-clones the next occurrence. Goal/page links are managed with dran_create_relation / dran_delete_relation (source_type `task`). Returns the updated task.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -555,7 +555,7 @@ defmodule Dran.MCP do
           "status" => %{
             "type" => "string",
             "description" => "New board column (optional).",
-            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
           },
           "priority" => %{
             "type" => "string",
@@ -575,6 +575,11 @@ defmodule Dran.MCP do
             "type" => "array",
             "items" => %{"type" => "string"},
             "description" => "Replaces the subtask checklist (optional)."
+          },
+          "archived" => %{
+            "type" => "boolean",
+            "description" =>
+              "Archive (true) or unarchive (false) the task (optional). Archived tasks leave the board but keep their data."
           }
         },
         "required" => ["workspace", "slug"]
@@ -594,7 +599,7 @@ defmodule Dran.MCP do
           "status" => %{
             "type" => "string",
             "description" => "Filter by board column (optional).",
-            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
           }
         },
         "required" => ["workspace"]
@@ -711,8 +716,8 @@ defmodule Dran.MCP do
           "status" => %{
             "type" => "string",
             "description" =>
-              "Optional filter for todo-style notes by kanban_status: backlog, this_week, today, in_progress, done, or cancelled.",
-            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+              "Optional filter for todo-style notes by kanban_status: backlog, todo, in_progress, done, or cancelled.",
+            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
           },
           "limit" => %{
             "type" => "integer",
@@ -764,8 +769,8 @@ defmodule Dran.MCP do
           "kanban_status" => %{
             "type" => "string",
             "description" =>
-              "New kanban status: backlog, this_week, today, in_progress, done, or cancelled (optional). Typical progression: backlog → this_week → today → in_progress → done.",
-            "enum" => ["backlog", "this_week", "today", "in_progress", "done", "cancelled"]
+              "New kanban status: backlog, todo, in_progress, done, or cancelled (optional). Typical progression: backlog → todo → in_progress → done.",
+            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
           },
           "priority" => %{
             "type" => "string",
@@ -1541,6 +1546,12 @@ defmodule Dran.MCP do
           attrs = %{"updated_by" => Auth.resolve_created_by(user)}
           attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
           attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
+
+          attrs =
+            if is_boolean(args["archived"]),
+              do: Map.put(attrs, "archived", args["archived"]),
+              else: attrs
+
           attrs = maybe_put(attrs, "status", args["status"])
           attrs = maybe_put(attrs, "priority", args["priority"])
           attrs = maybe_put_str(attrs, "due_date", args["due_date"])

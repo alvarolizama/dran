@@ -9,8 +9,11 @@ defmodule Dran.Task do
 
   ## Board columns (status)
 
-      backlog → this_week → today → in_progress → done
-                                                    ↘ cancelled
+      backlog → todo → in_progress → done
+                                    ↘ cancelled
+
+  Time scoping lives in `due_date` ("today" / "this week" are views over it,
+  not columns).
 
   `position` orders tasks within a column (gap-based, default 100).
 
@@ -69,7 +72,7 @@ defmodule Dran.Task do
              :updated_at
            ]}
 
-  @statuses ~w(backlog this_week today in_progress done cancelled)
+  @statuses ~w(backlog todo in_progress done cancelled)
   @priorities ~w(low medium high urgent)
   @recurrences ~w(none daily weekly monthly)
 

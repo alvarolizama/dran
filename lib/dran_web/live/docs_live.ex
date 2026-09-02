@@ -613,8 +613,8 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="kanban-board" icon="hero-view-columns" label="Kanban board" />
       <p>
-        The <code>/kanban</code> page is a global full-viewport kanban board with 6 columns
-        (backlog, this_week, today, in_progress, done, cancelled) covering every todo in the
+        The <code>/kanban</code> page is a global full-viewport kanban board with 5 columns
+        (backlog, todo, in_progress, done, cancelled) covering every todo in the
         context. You can drag and drop cards between columns to update their <code>kanban_status</code>, and combine the Project / Goal / Plan filters
         (each with All / None — orphans — / &lt;slug&gt;). Cards show link badges; click a
         badge to filter the board by that link. The board updates in real
@@ -1278,7 +1278,7 @@ defmodule DranWeb.DocsLive do
                 personal, coding, business, learning, health, finance, other
               </td>
               <td class="px-4 py-2 text-xs">
-                kanban_status (backlog/this_week/today/in_progress/done/cancelled), priority (low/medium/high/urgent), assignee, goal_slug, plan_slug, due_date
+                kanban_status (backlog/todo/in_progress/done/cancelled), priority (low/medium/high/urgent), assignee, goal_slug, plan_slug, due_date
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
@@ -1492,7 +1492,7 @@ defmodule DranWeb.DocsLive do
             name="kanban_status"
             type="string"
             required="no"
-            desc="backlog, this_week, today, in_progress, done, cancelled"
+            desc="backlog, todo, in_progress, done, cancelled"
           />
           <:param name="priority" type="string" required="no" desc="low, medium, high, urgent" />
           <:param name="due_date" type="string" required="no" desc="YYYY-MM-DD" />

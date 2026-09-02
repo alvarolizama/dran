@@ -300,8 +300,7 @@ defmodule DranWeb.SmartCollectionLive do
     status_options = [
       {gettext("Any status"), ""},
       {gettext("Backlog"), "backlog"},
-      {gettext("This Week"), "this_week"},
-      {gettext("Today"), "today"},
+      {gettext("To Do"), "todo"},
       {gettext("In Progress"), "in_progress"},
       {gettext("Done"), "done"},
       {gettext("Cancelled"), "cancelled"}
