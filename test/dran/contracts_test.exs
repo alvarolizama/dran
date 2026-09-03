@@ -182,6 +182,12 @@ defmodule Dran.ContractsTest do
             ~w(# Task: ## Objective ## Claims ## Verification gates ## Execution graph ## Context ## Constraints ## Pre-registered claims ## Deliverable ## DO NOT) do
         assert brief =~ section
       end
+
+      # Las secciones y sus ítems van en líneas separadas — nunca pegados
+      # (regresión del join de listas anidadas en sections).
+      assert brief =~ "\n## Claims\n"
+      assert brief =~ "\n- **P1**"
+      refute brief =~ "Claims- **"
     end
 
     test "returns error for a task without contract", %{ws: ws} do

@@ -411,7 +411,7 @@ defmodule Dran.Contracts do
           "Do not edit other tasks, goals or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
         ]
 
-        {:ok, Enum.join(sections, "\n")}
+        {:ok, Enum.join(List.flatten(sections), "\n")}
 
       _ ->
         {:error, :no_contract}
