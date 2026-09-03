@@ -11,8 +11,11 @@ defmodule Dran.Repo.Migrations.RenameAgentsToWorkers do
   * `agent_steps` → `worker_steps`
 
   NOT renamed: `actors.kind = "agent"` (the actor identity kind — a global
-  identity concept, deliberately kept) and `workspaces.agent_max_pages`
-  (per-workspace tuning key, kept for settings compatibility).
+  identity concept, deliberately kept).
+
+  `workspaces.agent_max_pages` IS renamed to `worker_max_pages`, but by its
+  own migration `20260903035725` (same wave, runs earlier — smaller
+  timestamp), not here.
 
   Related renames done in the SAME wave (context for deployers):
   `config :agent_max_steps` → `:worker_max_steps` and env vars

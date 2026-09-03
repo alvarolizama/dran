@@ -278,14 +278,18 @@ defmodule Dran.Contracts do
 
   @doc """
   depends_on edges among the given task ids: `[{source_id, target_id}]`.
-  Backs the workflow graph view.
+  Both endpoints must belong to the set — a dependency pointing outside the
+  goal (cross-goal prereq) is not part of this workflow's DAG and is
+  excluded. Backs the workflow graph view. For readiness semantics (where
+  external prereqs DO block), see `dependency_states/1`.
   """
   def dependency_edges(task_ids) when is_list(task_ids) and task_ids != [] do
     Repo.all(
       from r in Relation,
         where:
           r.source_id in ^task_ids and r.source_type == "task" and
-            r.relation_type == "depends_on" and r.target_type == "task",
+            r.relation_type == "depends_on" and r.target_type == "task" and
+            r.target_id in ^task_ids,
         select: {r.source_id, r.target_id}
     )
   end
@@ -298,9 +302,22 @@ defmodule Dran.Contracts do
 
   Two queries total (edges + statuses of prerequisites) instead of two per
   task — backs the workflows index and show views.
+
+  Readiness semantics: a task is blocked by ALL its depends_on prereqs,
+  including those held by tasks outside the given set (cross-goal). This
+  matches `ready?/1` — the pull queue must not offer a task whose external
+  prereq is still open, even when that edge is not drawn in the DAG
+  (see `dependency_edges/1`).
   """
   def dependency_states(task_ids) when is_list(task_ids) and task_ids != [] do
-    edges = dependency_edges(task_ids)
+    edges =
+      Repo.all(
+        from r in Relation,
+          where:
+            r.source_id in ^task_ids and r.source_type == "task" and
+              r.relation_type == "depends_on" and r.target_type == "task",
+          select: {r.source_id, r.target_id}
+      )
 
     prereq_ids = edges |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
 

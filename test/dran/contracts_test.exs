@@ -104,6 +104,33 @@ defmodule Dran.ContractsTest do
       assert {:error, :invalid} = Contracts.add_dependency(a, b)
     end
 
+    test "dependency_edges excludes cross-goal edges (both endpoints in the set)", %{ws: ws} do
+      {:ok, a} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "A"})
+      {:ok, b} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "B"})
+      {:ok, outside} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "outside"})
+
+      # b depends on a (intra-goal) and on outside (target fuera del conjunto)
+      {:ok, _} = Contracts.add_dependency(b, a)
+      {:ok, _} = Contracts.add_dependency(b, outside)
+
+      edges = Contracts.dependency_edges([a.id, b.id])
+      assert {b.id, a.id} in edges
+      # La arista hacia una tarea fuera del goal no entra al DAG del workflow
+      refute {b.id, outside.id} in edges
+
+      # Readiness SÍ cuenta el prereq externo — b no está ready aunque la
+      # arista no se dibuje en el DAG de este goal.
+      states = Contracts.dependency_states([a.id, b.id])
+      assert states[a.id][:ready] == true
+      assert states[b.id][:ready] == false
+      assert states[b.id][:blocked_count] == 2
+
+      {:ok, _} = Tasks.update_task(a, %{"status" => "done"})
+      {:ok, _} = Tasks.update_task(outside, %{"status" => "done"})
+      states2 = Contracts.dependency_states([a.id, b.id])
+      assert states2[b.id][:ready] == true
+    end
+
     test "creating a dependency that would close a cycle is rejected", %{ws: ws} do
       {:ok, a} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "A"})
       {:ok, b} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "B"})
