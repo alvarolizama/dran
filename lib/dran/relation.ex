@@ -42,8 +42,8 @@ defmodule Dran.Relation do
              :weight,
              :inserted_at
            ]}
-  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with depends_on)
-  @node_types ~w(page goal task collection)
+  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with depends_on serves instance_of)
+  @node_types ~w(page goal task collection plan step)
 
   schema "relations" do
     field :source_id, :binary_id
@@ -129,5 +129,7 @@ defmodule Dran.Relation do
   defp endpoint_module("goal"), do: Dran.Goal
   defp endpoint_module("task"), do: Dran.Task
   defp endpoint_module("collection"), do: Dran.Collection
+  defp endpoint_module("plan"), do: Dran.Plan
+  defp endpoint_module("step"), do: Dran.Step
   defp endpoint_module(_), do: nil
 end
