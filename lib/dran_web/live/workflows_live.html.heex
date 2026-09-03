@@ -1,0 +1,429 @@
+<Layouts.app
+  flash={@flash}
+  current_scope={@current_scope}
+  current_user={@current_user}
+  workspace_slug={@workspace_slug}
+  workspaces={@workspaces}
+  active_nav={@active_nav}
+>
+  <div class="p-6 w-full">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">{gettext("Workflows")}</h1>
+        <p class="text-sm text-base-content/50">
+          {gettext("Goals, contracts and their execution")}
+        </p>
+      </div>
+    </div>
+
+    <%= if @live_action == :index do %>
+      <!-- Tabs (keep ?goal= when switching tabs) -->
+      <div class="flex gap-1 mb-4 border-b border-base-300">
+        <%= for tab <- ~w(resumen ejecucion cola) do %>
+          <.link
+            patch={
+              if @goal_filter,
+                do: ~p"/#{@context.slug}/workflows?tab=#{tab}&goal=#{@goal_filter}",
+                else: ~p"/#{@context.slug}/workflows?tab=#{tab}"
+            }
+            class={[
+              "px-3 py-2 text-sm rounded-t-lg border-b-2 transition",
+              @tab == tab && "border-primary text-base-content font-medium",
+              @tab != tab && "border-transparent text-base-content/50 hover:text-base-content/80"
+            ]}
+          >
+            {tab_label(tab)}
+          </.link>
+        <% end %>
+      </div>
+
+      <!-- Goal filter (ejecucion + cola) -->
+      <div
+        :if={@tab in ~w(ejecucion cola) and @goal_options != []}
+        class="flex items-center justify-end gap-3 mb-4"
+      >
+        <select
+          id="workflow-goal-filter"
+          name="goal"
+          class="select select-sm select-bordered max-w-xs"
+          phx-change="set_goal_filter"
+        >
+          <option value="" selected={@goal_filter == nil}>{gettext("Todos los goals")}</option>
+          <.goal_options tree={@goal_options} selected_id={@goal_filter} />
+        </select>
+        <.link
+          :if={@goal_filter}
+          patch={~p"/#{@context.slug}/workflows?tab=#{@tab}"}
+          class="text-xs text-primary hover:underline shrink-0"
+        >
+          {gettext("Quitar filtro")} ✕
+        </.link>
+      </div>
+
+      <%= case @tab do %>
+        <% "resumen" -> %>
+          <div class="grid gap-4 md:grid-cols-2">
+            <%= for wf <- @workflows do %>
+              <div class="rounded-2xl bg-base-100 border border-base-300 p-4 flex flex-col gap-2 transition hover:border-primary/40">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold truncate">{wf.goal.title}</p>
+                    <p class="text-xs text-base-content/50">
+                      {wf.total} {gettext("contracts")} · {wf.running} {gettext("running")} · {wf.ready} {gettext(
+                        "ready"
+                      )}
+                    </p>
+                  </div>
+                  <span :if={wf.goal.health} class="badge badge-ghost badge-sm">{wf.goal.health}</span>
+                </div>
+                <div class="flex flex-wrap gap-1">
+                  <span :if={wf.running > 0} class="badge badge-primary badge-sm">{gettext(
+                    "running"
+                  )}</span>
+                  <span :if={wf.ready > 0} class="badge badge-info badge-sm">{gettext("ready")}</span>
+                  <span :if={wf.drafts > 0} class="badge badge-ghost badge-sm">{gettext("drafts")}</span>
+                  <span :if={wf.stale > 0} class="badge badge-warning badge-sm">{gettext("stale")}</span>
+                </div>
+                <.link
+                  :if={wf.goal.id}
+                  patch={~p"/#{@context.slug}/workflows/#{wf.goal.slug}"}
+                  class="text-xs text-primary hover:underline self-end"
+                >
+                  {gettext("Ver flujo")} →
+                </.link>
+              </div>
+            <% end %>
+          </div>
+          <p :if={@workflows == []} class="text-sm text-base-content/40 py-8 text-center">
+            {gettext(
+              "No contract tasks yet — assign a task to an agent and generate its contract."
+            )}
+          </p>
+        <% "ejecucion" -> %>
+          <div class="space-y-2">
+            <%= for task <- @running do %>
+              <div class="rounded-xl bg-base-100 border border-base-300 p-3 flex items-center gap-3">
+                <span class="badge badge-primary badge-sm">{gettext("in progress")}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium truncate">{task.title}</p>
+                  <p class="text-xs text-base-content/50">
+                    {task.goal_title || gettext("Sin goal")}
+                    <span :if={task.assignee_actor}> · {Dran.Actors.Actor.label(
+                      task.assignee_actor
+                    )}</span>
+                  </p>
+                </div>
+                <.link
+                  patch={~p"/#{@context.slug}/tasks?task=#{task.id}"}
+                  class="text-xs text-primary hover:underline shrink-0"
+                >
+                  {gettext("Ver task")}
+                </.link>
+              </div>
+            <% end %>
+          </div>
+          <p :if={@running == []} class="text-sm text-base-content/40 py-8 text-center">
+            {gettext("Nothing running right now.")}
+          </p>
+        <% "cola" -> %>
+          <div class="space-y-2">
+            <%= for task <- @queue do %>
+              <div class="rounded-xl bg-base-100 border border-base-300 p-3 flex items-center gap-3">
+                <span class="badge badge-info badge-sm">{gettext("ready")}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium truncate">{task.title}</p>
+                  <p class="text-xs text-base-content/50">
+                    {task.goal_title || gettext("Sin goal")}
+                    <span :if={task.assignee_actor}> · {Dran.Actors.Actor.label(
+                      task.assignee_actor
+                    )}</span>
+                  </p>
+                </div>
+                <.link
+                  patch={~p"/#{@context.slug}/tasks?task=#{task.id}"}
+                  class="text-xs text-primary hover:underline shrink-0"
+                >
+                  {gettext("Ver task")}
+                </.link>
+              </div>
+            <% end %>
+          </div>
+          <p :if={@queue == []} class="text-sm text-base-content/40 py-8 text-center">
+            {gettext("Nothing ready to pull.")}
+          </p>
+      <% end %>
+    <% else %>
+      <!-- Show: goal DAG -->
+      <div class="flex items-center gap-3 mb-4">
+        <.link
+          patch={~p"/#{@context.slug}/workflows"}
+          class="text-sm text-base-content/50 hover:text-base-content"
+        >
+          ← {gettext("Workflows")}
+        </.link>
+        <h2 class="text-xl font-bold tracking-tight truncate">{@goal.title}</h2>
+        <span :if={@goal.health} class="badge badge-ghost badge-sm">{@goal.health}</span>
+      </div>
+
+      <div
+        id="wfe-canvas"
+        phx-hook="WfPanZoom"
+        class="relative rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden select-none h-[560px] max-h-[72vh]"
+      >
+        <div
+          data-wf-stage
+          class="absolute top-0 left-0 will-change-transform"
+          style="transform-origin: 0 0"
+        >
+          <% {graph_nodes, tasks_by_id} = graph_tasks(@levels, @tasks) %>
+          <% edges = graph_edges(@edges, @levels, tasks_by_id) %>
+          <% graph_ports = graph_ports(edges, @levels) %>
+          <div
+            class="relative"
+            style={"width: #{graph_width(@levels)}px; height: #{graph_height(@levels)}px"}
+          >
+            <!-- Aristas (SVG) -->
+            <svg
+              class="absolute inset-0 pointer-events-none"
+              style={"width: #{graph_width(@levels)}px; height: #{graph_height(@levels)}px"}
+              viewBox={"0 0 #{graph_width(@levels)} #{graph_height(@levels)}"}
+              fill="none"
+            >
+              <%= for {_src_id, edge} <- edges do %>
+                <path
+                  d={edge.path}
+                  class={[
+                    "wfe-edge",
+                    edge.done && "wfe-edge-done",
+                    !edge.done && "wfe-edge-pending"
+                  ]}
+                />
+              <% end %>
+            </svg>
+
+            <!-- Nodos (HTML cards) -->
+            <%= for {task, x, y} <- graph_nodes do %>
+              <div
+                class={[
+                  "absolute rounded-xl bg-base-100 border border-base-300 p-3 shadow-sm transition-all duration-300",
+                  "cursor-pointer hover:border-primary/60 hover:shadow-md",
+                  task.status == "in_progress" && "border-primary/60 wfe-node-running"
+                ]}
+                style={"left: #{x}px; top: #{y}px; width: #{node_w()}px"}
+                phx-click="show_contract"
+                phx-value-task-id={task.id}
+              >
+                <div class="flex items-center gap-1.5 text-xs text-base-content/50">
+                  <span class={["w-2 h-2 rounded-full", status_dot(task.status)]} />
+                  <span class="truncate">{status_label(task.status)}</span>
+                  <span
+                    :if={chip = contract_chip(task)}
+                    class="badge badge-ghost badge-xs ml-auto"
+                  >
+                    {chip}
+                  </span>
+                </div>
+                <p class="text-sm font-medium mt-1 leading-snug line-clamp-2">{task.title}</p>
+                <div class="flex items-center gap-2 mt-2 text-xs text-base-content/50">
+                  <span :if={task.assignee_actor} class="flex items-center gap-1 min-w-0">
+                    <.icon name="hero-user-circle" class="size-3.5 shrink-0" />
+                    <span class="truncate">{Dran.Actors.Actor.label(task.assignee_actor)}</span>
+                  </span>
+                </div>
+              </div>
+            <% end %>
+
+            <!-- Port dots (on top of card borders): input left-center, output right-center -->
+            <%= for {task, _x, _y} <- graph_nodes do %>
+              <% port = Map.get(graph_ports, task.id) %>
+              <span
+                :if={port && port.in}
+                class="absolute w-3 h-3 rounded-full border-2 border-base-100"
+                style={[
+                  "left: #{port.in.x - 6}px; top: #{port.in.y - 6}px;",
+                  if(port.in.done,
+                    do: "background: var(--color-success);",
+                    else: "background: var(--color-base-content); opacity: .35;"
+                  )
+                ]}
+              />
+              <span
+                :if={port && port.out}
+                class="absolute w-3 h-3 rounded-full border-2 border-base-100"
+                style={[
+                  "left: #{port.out.x - 6}px; top: #{port.out.y - 6}px;",
+                  if(port.out.done,
+                    do: "background: var(--color-success);",
+                    else: "background: var(--color-base-content); opacity: .35;"
+                  )
+                ]}
+              />
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Zoom controls -->
+        <div
+          data-wf-controls
+          class="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg bg-base-100 border border-base-300 shadow-sm p-1 z-10"
+        >
+          <button
+            type="button"
+            data-wf-zoom="out"
+            aria-label="Zoom out"
+            class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-base-200 text-base-content/70"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            data-wf-fit
+            aria-label="Fit graph"
+            class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-base-200 text-base-content/70"
+          >
+            ⤢
+          </button>
+          <button
+            type="button"
+            data-wf-zoom="in"
+            aria-label="Zoom in"
+            class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-base-200 text-base-content/70"
+          >
+            +
+          </button>
+        </div>
+      </div>
+      <div class="grid gap-4 md:grid-cols-3 mt-4">
+        <div class="rounded-2xl bg-base-100 border border-base-300 p-4">
+          <h3 class="text-xs uppercase tracking-wider text-info mb-2">
+            {gettext("Sigue (ready)")}
+          </h3>
+          <div class="space-y-2">
+            <%= for task <- ready_tasks(@tasks, @dep_info) do %>
+              <p class="text-sm"><span class="font-medium">{task.title}</span></p>
+            <% end %>
+            <p
+              :if={ready_tasks(@tasks, @dep_info) == []}
+              class="text-xs text-base-content/40"
+            >
+              {gettext("Nada listo.")}
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-base-100 border border-base-300 p-4">
+          <h3 class="text-xs uppercase tracking-wider text-primary mb-2">
+            {gettext("En ejecución")}
+          </h3>
+          <div class="space-y-2">
+            <%= for task <- running_tasks(@tasks) do %>
+              <p class="text-sm"><span class="font-medium">{task.title}</span></p>
+            <% end %>
+            <p
+              :if={Enum.filter(@tasks, &(&1.status == "in_progress")) == []}
+              class="text-xs text-base-content/40"
+            >
+              {gettext("Nada corriendo.")}
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-base-100 border border-base-300 p-4">
+          <h3 class="text-xs uppercase tracking-wider text-warning mb-2">
+            {gettext("Bloqueadas")}
+          </h3>
+          <div class="space-y-2">
+            <%= for task <- blocked_tasks(@tasks, @dep_info) do %>
+              <p class="text-sm">
+                <span class="font-medium">{task.title}</span>
+                <span class="text-xs text-base-content/40"> · {blocked_label(task, assigns)}</span>
+              </p>
+            <% end %>
+            <p
+              :if={blocked_tasks(@tasks, @dep_info) == []}
+              class="text-xs text-base-content/40"
+            >
+              {gettext("Nada bloqueado.")}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <%!-- Contract viewer modal (?contract=<task_id>) --%>
+      <.resource_modal
+        :if={@modal_task}
+        id="contract-modal"
+        title={@modal_task.title}
+        pill={"v" <> to_string(@modal_contract["version"] || "?")}
+        on_close="close_contract"
+        max_w="max-w-3xl"
+      >
+        <div class="space-y-5">
+          <div class="flex items-center gap-2">
+            <span class={[
+              "badge badge-sm",
+              @modal_contract["status"] == "active" && "badge-success",
+              @modal_contract["status"] == "draft" && "badge-warning",
+              @modal_contract["status"] == "superseded" && "badge-ghost"
+            ]}>
+              {@modal_contract["status"]}
+            </span>
+            <span
+              :if={@modal_contract["fingerprint"]}
+              class="text-xs text-base-content/40 font-mono truncate"
+            >
+              {@modal_contract["fingerprint"]}
+            </span>
+          </div>
+
+          <div>
+            <h4 class="text-xs uppercase tracking-wider text-base-content/50 mb-1">Intent</h4>
+            <p class="text-sm leading-relaxed">{@modal_contract["intent"]}</p>
+          </div>
+
+          <div :if={length(@modal_contract["claims"] || []) > 0}>
+            <h4 class="text-xs uppercase tracking-wider text-base-content/50 mb-2">Claims</h4>
+            <div class="space-y-1.5">
+              <%= for claim <- @modal_contract["claims"] || [] do %>
+                <div class="flex items-start gap-2 text-sm">
+                  <span class="badge badge-ghost badge-xs font-mono mt-0.5">{claim["id"]}</span>
+                  <span class="flex-1">{claim["claim"]}</span>
+                  <span :if={claim["verify"]} class="text-xs text-base-content/40 font-mono">{claim[
+                    "verify"
+                  ]}</span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <div :if={length(@modal_contract["gates"] || []) > 0}>
+            <h4 class="text-xs uppercase tracking-wider text-base-content/50 mb-2">Gates</h4>
+            <div class="space-y-1.5">
+              <%= for gate <- @modal_contract["gates"] || [] do %>
+                <div class="flex items-center gap-2 text-sm">
+                  <span class="font-medium">{gate["name"]}</span>
+                  <span class="text-xs text-base-content/40 font-mono truncate">
+                    {gate["cmd"]} → {gate["expect"]}
+                  </span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <div :if={length(@modal_contract["context_snapshot"] || []) > 0}>
+            <h4 class="text-xs uppercase tracking-wider text-base-content/50 mb-2">Contexto</h4>
+            <div class="space-y-1.5">
+              <%= for snap <- @modal_contract["context_snapshot"] || [] do %>
+                <div class="text-sm">
+                  <span class="badge badge-ghost badge-xs">{snap["type"]}</span>
+                  <span class="ml-1 font-medium">{snap["id"]}</span>
+                  <span :if={snap["why"]} class="text-xs text-base-content/40"> — {snap["why"]}</span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      </.resource_modal>
+    <% end %>
+  </div>
+</Layouts.app>

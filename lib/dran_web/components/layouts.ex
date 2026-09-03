@@ -347,6 +347,13 @@ defmodule DranWeb.Layouts do
             label: gettext("Tareas"),
             icon: "hero-view-columns",
             path: base <> "/tasks"
+          },
+        enabled?.("workflows") &&
+          %{
+            key: "workflows",
+            label: gettext("Workflows"),
+            icon: "hero-queue-list",
+            path: base <> "/workflows"
           }
       ]
       |> Enum.reject(&(!&1))
@@ -564,7 +571,7 @@ defmodule DranWeb.Layouts do
           id="context-selector"
           name="context_slug"
           onchange="this.form.submit()"
-          class="w-full px-2 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
+          class="select select-bordered select-sm w-full"
         >
           <option :for={ctx <- @workspaces} value={ctx.slug} selected={ctx.slug == @workspace_slug}>
             {ctx.name} ({Map.get(@page_counts, ctx.id, 0)})

@@ -33,8 +33,14 @@ defmodule DranWeb.TaskBoardLive do
     {"cancelled", "hero-x-circle", "bg-red-500/20 text-red-700"}
   ]
 
+  @impl true
   def mount(%{"workspace_slug" => workspace_slug}, session, socket) do
-    workspace = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
+    {socket, context} =
+      DranWeb.Plugs.Auth.assign_to_socket(socket, session, %{
+        "workspace_slug" => workspace_slug
+      })
+
+    workspace = context || Dran.Knowledge.get_workspace_by_slug(workspace_slug)
 
     if workspace do
       if connected?(socket) do
@@ -56,7 +62,8 @@ defmodule DranWeb.TaskBoardLive do
          modal_task: nil,
          modal_new_status: nil,
          modal_form: nil,
-         modal_goal_id: nil
+         modal_goal_id: nil,
+         active_nav: "kanban"
        )
        |> load_board()}
     else
@@ -68,6 +75,7 @@ defmodule DranWeb.TaskBoardLive do
   # state, not a transient DOM overlay. `?task=<id>` (UUID, scoped to this
   # workspace via fetch_board_task) opens edit; `?new=true&status=<col>`
   # opens create in that column.
+  @impl true
   def handle_params(params, _url, socket) do
     {:noreply, open_modal_from_params(socket, params)}
   end
@@ -133,6 +141,7 @@ defmodule DranWeb.TaskBoardLive do
     |> assign(modal_task: nil, modal_new_status: nil, modal_form: nil, modal_goal_id: nil)
   end
 
+  @impl true
   def handle_event("filter_actor", %{"actor_id" => actor_id}, socket) do
     filter =
       case actor_id do
@@ -239,6 +248,7 @@ defmodule DranWeb.TaskBoardLive do
   # The form phx-change fires on every keystroke — sync the changeset back
   # so field errors surface live. The body comes through the hidden field
   # (MarkdownEditor hook keeps it in sync).
+  @impl true
   def handle_event("validate_task", %{"task" => params}, socket) do
     task = socket.assigns.modal_task || %Task{}
     changeset = Task.update_changeset(task, params) |> Map.put(:action, :validate)
@@ -278,6 +288,11 @@ defmodule DranWeb.TaskBoardLive do
     end
   end
 
+  @impl true
+  def handle_event("close_modal", _params, socket) do
+    {:noreply, push_patch(socket, to: ~p"/#{socket.assigns.workspace.slug}/tasks")}
+  end
+
   # If the goal link fails before the update (goal belongs to another
   # workspace → :goal_not_found) the task is NOT persisted, so a retry
   # cannot duplicate (reviewer finding 3 — no partial commits). Validate
@@ -302,12 +317,8 @@ defmodule DranWeb.TaskBoardLive do
   defp maybe_set_goal(task, nil), do: {:ok, task}
   defp maybe_set_goal(task, goal_id), do: Tasks.set_goal(task, goal_id)
 
-  @impl true
-  def handle_event("close_modal", _params, socket) do
-    {:noreply, push_patch(socket, to: ~p"/#{socket.assigns.workspace.slug}/tasks")}
-  end
-
   # PubSub: refresh the board when tasks change anywhere (other tabs, MCP, API).
+  @impl true
   def handle_info({:task_changed, _action, _task}, socket) do
     {:noreply, load_board(socket)}
   end
@@ -330,8 +341,8 @@ defmodule DranWeb.TaskBoardLive do
       if goal_filter do
         goal_filter
         |> Goals.descendant_ids(Enum.map(tree, &elem(&1, 0)))
-        |> MapSet.new()
-        |> MapSet.put(goal_filter)
+        |> MapSet.new(&to_string/1)
+        |> MapSet.put(to_string(goal_filter))
       end
 
     board_all =
@@ -349,6 +360,21 @@ defmodule DranWeb.TaskBoardLive do
     # Creator actor lookup for the assignee filter (F7) — batch, by id.
     task_ids = board_all |> Map.values() |> List.flatten() |> Enum.map(& &1.id)
     creators_by_task = Tasks.list_creator_actor_ids_by_ids(task_ids)
+
+    # Contract chip per task ("v2" | "draft" | "stale") — only tasks that
+    # carry meta.contract get an entry. stale? hits one goal query per
+    # contract task; contract tasks are the minority of a board.
+    contracts_by_task =
+      board_all
+      |> Map.values()
+      |> List.flatten()
+      |> Enum.filter(&Dran.Contracts.contract?/1)
+      |> Map.new(fn task ->
+        cond do
+          Dran.Contracts.stale?(task) -> {task.id, "stale"}
+          true -> {task.id, contract_chip_label(task)}
+        end
+      end)
 
     # %{actor_id => name} — one-time fallback for legacy rows whose creator
     # has no id-attribution (name mirror kept for display).
@@ -375,6 +401,7 @@ defmodule DranWeb.TaskBoardLive do
       managed_actors: Dran.Actors.list_managed_actors(),
       goal_tree: tree,
       goals_by_task: goals_by_task,
+      contracts_by_task: contracts_by_task,
       page_title: "#{socket.assigns.workspace.name} · #{gettext("Tasks")}"
     )
   end
@@ -428,136 +455,149 @@ defmodule DranWeb.TaskBoardLive do
     end
   end
 
+  @impl true
   def render(assigns) do
     ~H"""
-    <div id="task-board" class="px-6 py-8 h-full overflow-x-auto" phx-hook="TaskDnD">
-      <div class="flex items-center gap-2 text-sm text-base-content/50 mb-2">
-        <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
-          {@workspace.name}
-        </.link>
-        <span>/</span>
-        <span>{gettext("Tasks")}</span>
-      </div>
-
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold flex items-center gap-2">
-          <.icon name="hero-view-columns" class="size-6 text-primary" />
-          {gettext("Tasks")}
-        </h1>
-        <div class="flex items-center gap-3">
-          <.link
-            patch={~p"/#{@workspace.slug}/tasks?new=true"}
-            class="btn btn-primary btn-sm"
-            data-testid="board-new-task"
-          >
-            <.icon name="hero-plus" class="size-4" /> {gettext("New task")}
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      current_user={@current_user}
+      workspace_slug={@workspace_slug}
+      workspaces={@workspaces}
+      active_nav={@active_nav}
+    >
+      <div id="task-board" class="p-6 w-full" phx-hook="TaskDnD">
+        <div class="flex items-center gap-2 text-sm text-base-content/50 mb-2">
+          <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
+            {@workspace.name}
           </.link>
-          <label class="flex items-center gap-2 text-xs text-base-content/60">
-            <.icon name="hero-funnel" class="size-3.5" />
-            <select
-              name="actor_id"
-              phx-change="filter_actor"
-              id="assignee-filter"
-              class="text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-            >
-              <option value="" selected={is_nil(@filter_actor_id)}>
-                {gettext("All assignees")}
-              </option>
-              <option value="unassigned" selected={@filter_actor_id == "unassigned"}>
-                {gettext("Unassigned")}
-              </option>
-              <.actor_options actors={@managed_actors} selected_id={@filter_actor_id} />
-            </select>
-          </label>
-          <label class="flex items-center gap-2 text-xs text-base-content/60">
-            <.icon name="hero-flag" class="size-3.5" />
-            <select
-              name="goal_id"
-              phx-change="filter_goal"
-              id="goal-filter"
-              class="text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-            >
-              <option value="" selected={is_nil(@filter_goal_id)}>
-                {gettext("All goals")}
-              </option>
-              <.goal_options tree={@goal_tree} selected_id={@filter_goal_id} />
-            </select>
-          </label>
+          <span>/</span>
+          <span>{gettext("Tasks")}</span>
         </div>
-      </div>
 
-      <div class="flex gap-4 pb-4 items-start">
-        <div
-          :for={{status, icon, badge_class} <- @columns}
-          data-column={status}
-          class="flex-1 min-w-[240px] flex flex-col rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
-        >
-          <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300">
-            <div class="flex items-center gap-2">
-              <.icon name={icon} class="size-4 text-base-content/60" />
-              <span class="text-sm font-semibold">{column_label(status)}</span>
-            </div>
-            <span class={"badge badge-sm #{badge_class}"}>
-              {Map.get(@counts, status, 0)}
-            </span>
-          </div>
-
-          <div data-drop-zone class="p-2 space-y-2 min-h-[80px] flex-1">
-            <.task_card
-              :for={task <- Map.get(@board, status, [])}
-              task={task}
-              workspace_slug={@workspace.slug}
-              goals_by_task={@goals_by_task}
-            />
-            <p
-              :if={Map.get(@board, status, []) == []}
-              class="text-xs text-base-content/30 text-center py-4"
+        <div class="flex items-center justify-between mb-6">
+          <h1 class="text-2xl font-bold flex items-center gap-2">
+            <.icon name="hero-view-columns" class="size-6 text-primary" />
+            {gettext("Tasks")}
+          </h1>
+          <div class="flex items-center gap-3 flex-wrap">
+            <label class="flex items-center gap-2 text-xs text-base-content/60">
+              <.icon name="hero-funnel" class="size-3.5" />
+              <select
+                name="actor_id"
+                phx-change="filter_actor"
+                id="assignee-filter"
+                class="select select-xs select-bordered"
+              >
+                <option value="" selected={is_nil(@filter_actor_id)}>
+                  {gettext("All assignees")}
+                </option>
+                <option value="unassigned" selected={@filter_actor_id == "unassigned"}>
+                  {gettext("Unassigned")}
+                </option>
+                <.actor_options actors={@managed_actors} selected_id={@filter_actor_id} />
+              </select>
+            </label>
+            <label class="flex items-center gap-2 text-xs text-base-content/60">
+              <.icon name="hero-flag" class="size-3.5" />
+              <select
+                name="goal_id"
+                phx-change="filter_goal"
+                id="goal-filter"
+                class="select select-xs select-bordered"
+              >
+                <option value="" selected={is_nil(@filter_goal_id)}>
+                  {gettext("All goals")}
+                </option>
+                <.goal_options tree={@goal_tree} selected_id={@filter_goal_id} />
+              </select>
+            </label>
+            <.link
+              patch={~p"/#{@workspace.slug}/tasks?new=true"}
+              class="btn btn-primary btn-sm"
+              data-testid="board-new-task"
             >
-              {gettext("Empty")}
-            </p>
+              <.icon name="hero-plus" class="size-4" /> {gettext("New task")}
+            </.link>
           </div>
+        </div>
 
-          <form
-            phx-submit="quick_add"
-            class="px-2 pb-2"
-            id={"quick-add-#{status}"}
+        <div class="flex gap-4 pb-4 items-start">
+          <div
+            :for={{status, icon, badge_class} <- @columns}
+            data-column={status}
+            class="flex-1 min-w-[240px] flex flex-col rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden"
           >
-            <input
-              type="hidden"
-              name="task[status]"
-              value={status}
-            />
-            <input
-              type="text"
-              name="task[title]"
-              placeholder={gettext("+ Add task")}
-              class="w-full text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none placeholder:text-base-content/30 transition"
-            />
-          </form>
-        </div>
-      </div>
+            <div class="flex items-center justify-between px-3 py-2.5 border-b border-base-300">
+              <div class="flex items-center gap-2">
+                <.icon name={icon} class="size-4 text-base-content/60" />
+                <span class="text-sm font-semibold">{column_label(status)}</span>
+              </div>
+              <span class={"badge badge-sm #{badge_class}"}>
+                {Map.get(@counts, status, 0)}
+              </span>
+            </div>
 
-      <.resource_modal
-        :if={@modal_form}
-        id="task-resource-modal"
-        title={(@modal_task && @modal_task.title) || gettext("New Task")}
-        pill={(@modal_task && "TASK") || "NEW TASK"}
-        pill_class={(@modal_task && "bg-primary/10 text-primary") || "bg-green-500/15 text-green-600"}
-        on_close="close_modal"
-        form_id="task-modal-form"
-        submit_label={(@modal_task && gettext("Save changes")) || gettext("Create task")}
-      >
-        <.task_form_fields
-          id="task-modal-form"
-          task={@modal_task || %Task{status: @modal_new_status || "backlog"}}
-          changeset={@modal_form}
-          workspace_id={@workspace.id}
-          goal_tree={@goal_tree}
-          actors={@managed_actors}
-          goal_id={@modal_goal_id}
-        />
-      </.resource_modal>
-    </div>
+            <div data-drop-zone class="p-2 space-y-2 min-h-[80px] flex-1">
+              <.task_card
+                :for={task <- Map.get(@board, status, [])}
+                task={task}
+                workspace_slug={@workspace.slug}
+                goals_by_task={@goals_by_task}
+                contracts_by_task={@contracts_by_task}
+              />
+              <p
+                :if={Map.get(@board, status, []) == []}
+                class="text-xs text-base-content/30 text-center py-4"
+              >
+                {gettext("Empty")}
+              </p>
+            </div>
+
+            <form
+              phx-submit="quick_add"
+              class="px-2 pb-2"
+              id={"quick-add-#{status}"}
+            >
+              <input
+                type="hidden"
+                name="task[status]"
+                value={status}
+              />
+              <input
+                type="text"
+                name="task[title]"
+                placeholder={gettext("+ Add task")}
+                class="w-full text-xs px-2 py-1.5 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none placeholder:text-base-content/30 transition"
+              />
+            </form>
+          </div>
+        </div>
+
+        <.resource_modal
+          :if={@modal_form}
+          id="task-resource-modal"
+          title={(@modal_task && @modal_task.title) || gettext("New Task")}
+          pill={(@modal_task && "TASK") || "NEW TASK"}
+          pill_class={
+            (@modal_task && "bg-primary/10 text-primary") || "bg-green-500/15 text-green-600"
+          }
+          on_close="close_modal"
+          form_id="task-modal-form"
+          submit_label={(@modal_task && gettext("Save changes")) || gettext("Create task")}
+        >
+          <.task_form_fields
+            id="task-modal-form"
+            task={@modal_task || %Task{status: @modal_new_status || "backlog"}}
+            changeset={@modal_form}
+            workspace_id={@workspace.id}
+            goal_tree={@goal_tree}
+            actors={@managed_actors}
+            goal_id={@modal_goal_id}
+          />
+        </.resource_modal>
+      </div>
+    </Layouts.app>
     """
   end
 
@@ -579,6 +619,7 @@ defmodule DranWeb.TaskBoardLive do
   attr :task, Task, required: true
   attr :workspace_slug, :string, required: true
   attr :goals_by_task, :map, required: true
+  attr :contracts_by_task, :map, default: %{}
 
   defp task_card(assigns) do
     ~H"""
@@ -652,10 +693,46 @@ defmodule DranWeb.TaskBoardLive do
           <.icon name="hero-flag" class="size-3.5 text-green-600 shrink-0" />
           <span class="truncate max-w-[120px]">{goal.title}</span>
         </span>
+
+        <span
+          :if={chip = contract_chip(@contracts_by_task, @task.id)}
+          class={contract_chip_class(chip)}
+          title={contract_chip_title(chip)}
+        >
+          <.icon name="hero-document-check" class="size-3.5 shrink-0" />
+          {chip}
+        </span>
       </div>
     </.link>
     """
   end
+
+  # ── Contract chip ("v2" | "draft" | "stale") ──────────────────────────────
+
+  defp contract_chip(contracts_by_task, task_id) do
+    case Map.get(contracts_by_task || %{}, task_id) do
+      nil -> nil
+      chip -> chip
+    end
+  end
+
+  defp contract_chip_label(%Task{meta: %{"contract" => %{"status" => "draft"}}}), do: "draft"
+
+  defp contract_chip_label(%Task{meta: %{"contract" => %{"version" => v}}}) when is_integer(v),
+    do: "v#{v}"
+
+  defp contract_chip_label(%Task{meta: %{"contract" => %{"version" => v}}}) when is_binary(v),
+    do: "v#{v}"
+
+  defp contract_chip_label(_), do: "contract"
+
+  defp contract_chip_class("stale"), do: "badge badge-warning badge-xs gap-0.5"
+  defp contract_chip_class("draft"), do: "badge badge-ghost badge-xs gap-0.5"
+  defp contract_chip_class(_), do: "badge badge-ghost badge-xs gap-0.5"
+
+  defp contract_chip_title("stale"), do: gettext("Contract context changed — regenerate")
+  defp contract_chip_title("draft"), do: gettext("Contract draft — not active")
+  defp contract_chip_title(_), do: gettext("Active contract")
 
   defp priority_badge("urgent"), do: "badge badge-error badge-sm shrink-0"
   defp priority_badge("high"), do: "badge badge-warning badge-sm shrink-0"

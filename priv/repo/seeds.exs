@@ -140,7 +140,7 @@ goal_aprender_elixir =
     - Elixir in Action (Saša Jurić)
     - Hexdocs oficial
     """,
-    "description" => "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes.",
+    "summary" => "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes.",
     "meta" => %{
       "target_date" => "2026-09-30",
       "health" => "green"
@@ -169,8 +169,7 @@ goal_escribir_libro =
     ## Estado
     Borrador del capítulo 1 completo. Trabajando en capítulo 2.
     """,
-    "description" =>
-      "Libro práctico sobre gestión de conocimiento personal (Zettelkasten, PARA).",
+    "summary" => "Libro práctico sobre gestión de conocimiento personal (Zettelkasten, PARA).",
     "meta" => %{
       "target_date" => "2026-12-31",
       "health" => "yellow"
@@ -197,7 +196,7 @@ goal_mejorar_salud_fisica =
     ## Progreso
     Actualmente corriendo 3K. Mejorando la consistencia.
     """,
-    "description" => "Rutina sostenible de ejercicio, alimentación y descanso.",
+    "summary" => "Rutina sostenible de ejercicio, alimentación y descanso.",
     "meta" => %{
       "target_date" => "2026-10-15",
       "health" => "green"

@@ -593,6 +593,11 @@ defmodule DranWeb.Router do
     # Shared multi-agent memory (first-class, own table — not page types).
     live "/:workspace_slug/memory", MemoryLive, :index
 
+    # Workflows — goals with contracts and their execution (index tabs +
+    # goal DAG show).
+    live "/:workspace_slug/workflows", WorkflowsLive, :index
+    live "/:workspace_slug/workflows/:slug", WorkflowsLive, :show
+
     # Legacy kanban URL redirects to the task board.
     get "/:workspace_slug/kanban", KanbanRedirectController, :redirect_to_tasks
 

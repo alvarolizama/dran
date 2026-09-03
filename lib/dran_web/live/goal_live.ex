@@ -43,8 +43,8 @@ defmodule DranWeb.GoalLive do
                 </span>
               </div>
               <h1 class="text-title break-words">{@goal.title}</h1>
-              <p :if={@goal.description} class="text-sm text-base-content/60 mt-1">
-                {@goal.description}
+              <p :if={@goal.summary} class="text-sm text-base-content/60 mt-1">
+                {@goal.summary}
               </p>
             </div>
             <div class="flex gap-2 shrink-0">
@@ -130,6 +130,13 @@ defmodule DranWeb.GoalLive do
               >
                 {gettext("Open board")}
               </.link>
+              <span class="text-base-content/20">·</span>
+              <.link
+                navigate={~p"/#{@workspace_slug}/workflows/#{@goal.slug}"}
+                class="text-xs text-base-content/60 hover:underline"
+              >
+                {gettext("Ver flujo")}
+              </.link>
             </div>
             <ul class="space-y-1.5">
               <li
@@ -183,8 +190,8 @@ defmodule DranWeb.GoalLive do
             <.icon name="hero-flag" class="size-5 text-green-500 shrink-0" />
             <div class="min-w-0 flex-1">
               <div class="font-medium text-sm truncate">{goal.title}</div>
-              <div :if={goal.description} class="text-xs text-base-content/60 mt-0.5 truncate">
-                {goal.description}
+              <div :if={goal.summary} class="text-xs text-base-content/60 mt-0.5 truncate">
+                {goal.summary}
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -346,7 +353,7 @@ defmodule DranWeb.GoalLive do
     # must be owned by the server (SEC-006 pattern).
     attrs = %{
       "title" => String.trim(params["title"] || ""),
-      "description" => params["description"],
+      "summary" => params["summary"],
       "body" => params["body"] || "",
       "kind" => params["kind"],
       "health" => params["health"],
