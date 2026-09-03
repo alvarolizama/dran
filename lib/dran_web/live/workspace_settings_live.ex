@@ -28,10 +28,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
   # Ordered feature keys shown in the Features tab. All are stored in the
   # `enabled_features` map; an empty map means "all on" (see
   # `Workspace.feature_enabled?/2`).
-  @features ~w(goals collections clusters kanban graph journey activity search reports chat agents)
+  @features ~w(goals collections clusters kanban graph journey activity search reports chat workers)
 
-  # Brain tuning keys: agent limits + advanced semantic thresholds.
-  @brain_keys ~w(agent_max_pages entity_linker_enabled)
+  # Brain tuning keys: worker limits + advanced semantic thresholds.
+  @brain_keys ~w(worker_max_pages entity_linker_enabled)
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
   @impl true
@@ -497,7 +497,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Brain tuning")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Semantic thresholds and agent limits for this workspace.")}
+            {gettext("Semantic thresholds and worker limits for this workspace.")}
           </p>
         </div>
       </header>
@@ -509,21 +509,21 @@ defmodule DranWeb.WorkspaceSettingsLive do
           phx-submit="save"
           class="space-y-6"
         >
-          <%!-- Agent limits --%>
+          <%!-- Worker limits --%>
           <div class="space-y-2">
             <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-              {gettext("Agent limits")}
+              {gettext("Worker limits")}
             </h3>
             <div class="space-y-4">
               <div>
                 <.input
-                  field={@form[:agent_max_pages]}
+                  field={@form[:worker_max_pages]}
                   type="number"
                   label={gettext("Max pages per run")}
                 />
                 <p class="text-xs text-base-content/60 mt-1.5">
                   {gettext(
-                    "Maximum number of pages the autonomous agents will create in a single run. Blank uses the global default."
+                    "Maximum number of pages the autonomous workers will create in a single run. Blank uses the global default."
                   )}
                 </p>
               </div>
@@ -816,7 +816,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
     |> Map.update("semantic_threshold_short", nil, &blank_to_nil/1)
     |> Map.update("semantic_threshold_mid", nil, &blank_to_nil/1)
     |> Map.update("semantic_threshold_long", nil, &blank_to_nil/1)
-    |> Map.update("agent_max_pages", nil, &blank_to_nil/1)
+    |> Map.update("worker_max_pages", nil, &blank_to_nil/1)
     |> Map.put("entity_linker_enabled", Map.get(ws_params, "entity_linker_enabled") == "true")
   end
 
@@ -855,6 +855,6 @@ defmodule DranWeb.WorkspaceSettingsLive do
   defp feature_label("search"), do: gettext("Search")
   defp feature_label("reports"), do: gettext("Reports")
   defp feature_label("chat"), do: gettext("Chat")
-  defp feature_label("agents"), do: gettext("Agents")
+  defp feature_label("workers"), do: gettext("Workers")
   defp feature_label(other), do: other
 end

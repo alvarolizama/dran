@@ -119,7 +119,7 @@ defmodule DranWeb.SearchLive do
   end
 
   # Memory facts are part of the global search surface. bump_retrieval: false
-  # — typing in the UI must not inflate the agents' usage counter.
+  # — typing in the UI must not inflate the workers' usage counter.
   defp search_memories(%{assigns: %{context: %{id: _workspace_id}}} = socket, q) do
     Memory.search(socket.assigns.context.id, q, limit: 5, bump_retrieval: false)
   rescue
@@ -265,7 +265,7 @@ defmodule DranWeb.SearchLive do
       <div class="flex items-baseline justify-between border-b border-base-300 pb-2 mb-3">
         <h2 class="text-lg font-semibold flex items-center gap-2">
           <.icon name="hero-cpu-chip" class="size-5 text-primary" />
-          {gettext("Memory de agentes")}
+          {gettext("Memory de workers")}
         </h2>
         <p class="text-caption">
           {gettext("%{count} facts de memoria", count: length(@memory_results))}

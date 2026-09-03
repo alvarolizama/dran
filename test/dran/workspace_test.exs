@@ -50,7 +50,7 @@ defmodule Dran.WorkspaceTest do
   describe "settings_changeset/2 — brain tuning validations" do
     test "valid changeset with all brain tuning fields" do
       attrs = %{
-        agent_max_pages: 25,
+        worker_max_pages: 25,
         semantic_threshold_short: 0.15,
         semantic_threshold_mid: 0.22,
         semantic_threshold_long: 0.28
@@ -60,17 +60,17 @@ defmodule Dran.WorkspaceTest do
       assert changeset.valid?
     end
 
-    test "agent_max_pages must be > 0 when present" do
-      changeset = Workspace.settings_changeset(%Workspace{}, %{agent_max_pages: 0})
+    test "worker_max_pages must be > 0 when present" do
+      changeset = Workspace.settings_changeset(%Workspace{}, %{worker_max_pages: 0})
       refute changeset.valid?
-      assert %{agent_max_pages: _} = errors_on(changeset)
+      assert %{worker_max_pages: _} = errors_on(changeset)
 
-      changeset = Workspace.settings_changeset(%Workspace{}, %{agent_max_pages: -5})
+      changeset = Workspace.settings_changeset(%Workspace{}, %{worker_max_pages: -5})
       refute changeset.valid?
-      assert %{agent_max_pages: _} = errors_on(changeset)
+      assert %{worker_max_pages: _} = errors_on(changeset)
     end
 
-    test "agent_max_pages nil is allowed (use global default)" do
+    test "worker_max_pages nil is allowed (use global default)" do
       changeset = Workspace.settings_changeset(%Workspace{}, %{})
       assert changeset.valid?
     end
@@ -135,14 +135,14 @@ defmodule Dran.WorkspaceTest do
 
   describe "get_tuning/2 — per-workspace with fallback" do
     test "returns workspace value when set" do
-      ws = %Workspace{agent_max_pages: 25, semantic_threshold_short: 0.15}
-      assert Workspace.get_tuning(ws, :agent_max_pages) == 25
+      ws = %Workspace{worker_max_pages: 25, semantic_threshold_short: 0.15}
+      assert Workspace.get_tuning(ws, :worker_max_pages) == 25
       assert Workspace.get_tuning(ws, :semantic_threshold_short) == 0.15
     end
 
     test "falls back to Dran.Settings default when field is nil" do
-      ws = %Workspace{agent_max_pages: nil, semantic_threshold_mid: nil}
-      assert Workspace.get_tuning(ws, :agent_max_pages) == Settings.get("agent_max_pages")
+      ws = %Workspace{worker_max_pages: nil, semantic_threshold_mid: nil}
+      assert Workspace.get_tuning(ws, :worker_max_pages) == Settings.get("worker_max_pages")
 
       assert Workspace.get_tuning(ws, :semantic_threshold_mid) ==
                Settings.get("semantic_threshold_mid")
@@ -150,14 +150,14 @@ defmodule Dran.WorkspaceTest do
 
     test "global settings override is picked up when workspace value is nil" do
       # Temporarily override the global setting
-      original = Settings.get("agent_max_pages")
-      Settings.put("agent_max_pages", 99)
+      original = Settings.get("worker_max_pages")
+      Settings.put("worker_max_pages", 99)
 
-      ws = %Workspace{agent_max_pages: nil}
-      assert Workspace.get_tuning(ws, :agent_max_pages) == 99
+      ws = %Workspace{worker_max_pages: nil}
+      assert Workspace.get_tuning(ws, :worker_max_pages) == 99
 
       # Restore
-      Settings.put("agent_max_pages", original)
+      Settings.put("worker_max_pages", original)
     end
   end
 
@@ -172,7 +172,7 @@ defmodule Dran.WorkspaceTest do
       refute ws.semantic_threshold_mid
       refute ws.semantic_threshold_long
       refute ws.entity_linker_enabled
-      refute ws.agent_max_pages
+      refute ws.worker_max_pages
     end
   end
 
@@ -189,7 +189,7 @@ defmodule Dran.WorkspaceTest do
       Dran.Settings.put("semantic_threshold_mid", 0.25)
       Dran.Settings.put("semantic_threshold_long", 0.30)
       Dran.Settings.put("entity_linker_enabled", false)
-      Dran.Settings.put("agent_max_pages", 42)
+      Dran.Settings.put("worker_max_pages", 42)
 
       # Same UPDATE as the migration (per-workspace copy of global values).
       Dran.Repo.query!("""
@@ -207,9 +207,9 @@ defmodule Dran.WorkspaceTest do
         entity_linker_enabled = COALESCE(
           (SELECT (value->>'value')::boolean FROM settings WHERE key = 'entity_linker_enabled'),
           ws.entity_linker_enabled),
-        agent_max_pages = COALESCE(
-          (SELECT (value->>'value')::integer FROM settings WHERE key = 'agent_max_pages'),
-          ws.agent_max_pages)
+        worker_max_pages = COALESCE(
+          (SELECT (value->>'value')::integer FROM settings WHERE key = 'worker_max_pages'),
+          ws.worker_max_pages)
       """)
 
       reloaded = Dran.Repo.get!(Workspace, ws.id)
@@ -217,7 +217,7 @@ defmodule Dran.WorkspaceTest do
       assert reloaded.semantic_threshold_mid == 0.25
       assert reloaded.semantic_threshold_long == 0.30
       assert reloaded.entity_linker_enabled == false
-      assert reloaded.agent_max_pages == 42
+      assert reloaded.worker_max_pages == 42
     end
 
     @tag :no_default_workspace
@@ -227,7 +227,7 @@ defmodule Dran.WorkspaceTest do
 
       # No settings rows for these keys in this sandbox → backfill leaves NULL
       reloaded = Dran.Repo.get!(Workspace, ws.id)
-      refute reloaded.agent_max_pages
+      refute reloaded.worker_max_pages
     end
   end
 end

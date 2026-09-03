@@ -41,7 +41,7 @@ defmodule Dran.Jobs do
   import Ecto.Query
 
   alias Dran.{Knowledge, Repo, Reports, Settings}
-  alias Dran.Agent.Session
+  alias Dran.Worker.Session
   alias Dran.Report
 
   require Logger
@@ -53,7 +53,7 @@ defmodule Dran.Jobs do
     %{
       key: :curator_daily,
       label: "Curator",
-      mfa: {Dran.Agent.Curator, :run_scheduled, []},
+      mfa: {Dran.Worker.Curator, :run_scheduled, []},
       description:
         "Daily janitor pass: finds embedding-duplicate pages, flags contested ones " <>
           "and writes a curator report."
@@ -83,7 +83,7 @@ defmodule Dran.Jobs do
     %{
       key: :link_gardener_weekly,
       label: "Link gardener",
-      mfa: {Dran.Agent.LinkGardener, :run_scheduled, []},
+      mfa: {Dran.Worker.LinkGardener, :run_scheduled, []},
       description:
         "Weekly gardener pass: reviews relation suggestions and proposes new links " <>
           "between pages."
@@ -388,14 +388,14 @@ defmodule Dran.Jobs do
   end
 
   defp result_section({:ok, %Session{} = session}) do
-    "Agent session `#{session.id}` started (status: **#{session.status}**)."
+    "Worker session `#{session.id}` started (status: **#{session.status}**)."
   end
 
   defp result_section(result) do
     "**Result:** `#{truncate_inspect(result)}`"
   end
 
-  defp ok_summary({:ok, %Session{} = session}), do: "Agent session #{session.id} started"
+  defp ok_summary({:ok, %Session{} = session}), do: "Worker session #{session.id} started"
   defp ok_summary(_result), do: "Completed successfully"
 
   defp truncate_inspect(term, limit \\ 500) do

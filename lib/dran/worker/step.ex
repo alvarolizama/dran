@@ -1,20 +1,20 @@
-defmodule Dran.Agent.Step do
+defmodule Dran.Worker.Step do
   @moduledoc """
-  Generic step schema for every Dran agent run.
+  Generic step schema for every Dran worker run.
 
   Each step records one tool invocation, its arguments, the result,
-  and optional reasoning produced by the agent.
+  and optional reasoning produced by the worker.
   """
 
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Dran.Agent.Session
+  alias Dran.Worker.Session
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "agent_steps" do
+  schema "worker_steps" do
     field :step_number, :integer
     field :tool_name, :string
     field :tool_args, :map, default: %{}

@@ -36,11 +36,11 @@ config :dran, :uploads,
 # Inference API configuration. Disabled when DRAN_INFERENCE_API_URL is not set.
 config :dran, :inference, Dran.Inference.Config.load_from_env()
 
-config :dran, :agent_max_steps, String.to_integer(System.get_env("AGENT_MAX_STEPS", "150"))
+config :dran, :worker_max_steps, String.to_integer(System.get_env("WORKER_MAX_STEPS", "150"))
 
 config :dran,
-       :agent_per_step_timeout,
-       String.to_integer(System.get_env("AGENT_PER_STEP_TIMEOUT", "120000"))
+       :worker_per_step_timeout,
+       String.to_integer(System.get_env("WORKER_PER_STEP_TIMEOUT", "120000"))
 
 if config_env() == :prod do
   database_url =
@@ -166,54 +166,4 @@ if config_env() == :prod do
       (System.get_env("GOOGLE_OAUTH_ALLOWED_DOMAINS") || "")
       |> String.split(",", trim: true)
       |> Enum.map(&String.trim/1)
-
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :dran, DranWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://plug.hexdocs.pm/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :dran, DranWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
-
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :dran, Dran.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://swoosh.hexdocs.pm/Swoosh.html#module-installation for details.
 end

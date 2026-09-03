@@ -19,6 +19,9 @@ defmodule Dran.Relation do
   Additionally, `semantic` is created automatically by the augmenter and
   `works_in` / `has_tier` / `based_in` / `written_in` / `built_with` are
   materialized from `meta.props` — none of them are set manually.
+
+  `depends_on` (task→task) is the workflow edge: target is a prerequisite of
+  source. See `Dran.Contracts` for the ready/blocked semantics it enables.
   """
 
   use Ecto.Schema
@@ -39,7 +42,7 @@ defmodule Dran.Relation do
              :weight,
              :inserted_at
            ]}
-  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with)
+  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with depends_on)
   @node_types ~w(page goal task collection)
 
   schema "relations" do

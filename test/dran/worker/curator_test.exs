@@ -1,5 +1,5 @@
-defmodule Dran.Agent.CuratorTest do
-  # Tests for Dran.Agent.Curator.
+defmodule Dran.Worker.CuratorTest do
+  # Tests for Dran.Worker.Curator.
   #
   # Three layers:
   #   1. Unit test for find_duplicates — seeds pages with synthetic embeddings
@@ -10,7 +10,7 @@ defmodule Dran.Agent.CuratorTest do
   #      created and the flags were applied.
   use Dran.DataCase, async: false
 
-  alias Dran.Agent.{Curator, Session}
+  alias Dran.Worker.{Curator, Session}
   alias Dran.{Knowledge, Repo, Reports}
   alias Dran.Page
 
@@ -20,7 +20,7 @@ defmodule Dran.Agent.CuratorTest do
     struct(%Session{
       id: Ecto.UUID.generate(),
       workspace_id: workspace_id,
-      agent_type: "curator",
+      worker_type: "curator",
       input: "test curator run",
       status: "running"
     })
@@ -459,7 +459,7 @@ defmodule Dran.Agent.CuratorTest do
       assert report.report_type == "log"
       assert report.body =~ "Curator Report"
       assert report.meta["kind"] == "log"
-      assert report.meta["agent_session_id"] == session.id
+      assert report.meta["worker_session_id"] == session.id
 
       # Verify the pages were flagged as contested
       page_a = Knowledge.get_page_by_slug("dup-a", ctx.id)

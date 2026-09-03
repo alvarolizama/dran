@@ -1,6 +1,6 @@
-defmodule Dran.Agent.GraphRag do
+defmodule Dran.Worker.GraphRag do
   @moduledoc """
-  GraphRAG agent: answers questions using GraphRAG patterns — local search
+  GraphRAG worker: answers questions using GraphRAG patterns — local search
   (fan-out to neighbors), global search (cluster summaries), or drift
   search (hybrid).
 
@@ -21,12 +21,12 @@ defmodule Dran.Agent.GraphRag do
   - Max 1 answer page per session
   """
 
-  @behaviour Dran.Agent.Engine.Behaviour
+  @behaviour Dran.Worker.Engine.Behaviour
 
   alias Dran.Knowledge
   alias Dran.Graph.ClusterSummaries
 
-  @agent_type "graph_rag"
+  @worker_type "graph_rag"
   @max_searches 10
   @max_expands 5
   @max_cluster_context 3
@@ -50,13 +50,13 @@ defmodule Dran.Agent.GraphRag do
   end
 
   @doc "Start a graph_rag session."
-  @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Agent.Session.t()}
+  @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Worker.Session.t()}
   def run(input, workspace_id, opts \\ []) do
-    Dran.Agent.Engine.run(__MODULE__, input, workspace_id, opts)
+    Dran.Worker.Engine.run(__MODULE__, input, workspace_id, opts)
   end
 
   @impl true
-  def agent_type, do: @agent_type
+  def worker_type, do: @worker_type
 
   @doc "Maximum number of search queries per session."
   def max_searches, do: @max_searches
@@ -245,7 +245,7 @@ defmodule Dran.Agent.GraphRag do
   @impl true
   def system_prompt(_opts \\ []) do
     """
-    You are a GraphRAG agent for a personal knowledge base. You answer questions by combining graph-based retrieval with LLM synthesis.
+    You are a GraphRAG worker for a personal knowledge base. You answer questions by combining graph-based retrieval with LLM synthesis.
 
     You have three search modes:
 
@@ -522,7 +522,7 @@ defmodule Dran.Agent.GraphRag do
             meta: %{
               "mode" => state.mode,
               "kind" => "answer",
-              "agent_session_id" => state.session.id,
+              "worker_session_id" => state.session.id,
               "sources" => sources
             }
           }
@@ -533,7 +533,7 @@ defmodule Dran.Agent.GraphRag do
 
               Phoenix.PubSub.broadcast(
                 Dran.PubSub,
-                "agents:#{state.session.id}",
+                "workers:#{state.session.id}",
                 {:page_created, page}
               )
 

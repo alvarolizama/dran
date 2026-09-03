@@ -285,7 +285,7 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ t("Admin")
 
     # Brain tuning is NOT on the landing (lives in /:ws/settings)
-    refute html =~ "agent_max_pages"
+    refute html =~ "worker_max_pages"
   end
 
   # Tests L148, L176, L215 → /:ws/settings (reescribir a per-ws)
@@ -322,7 +322,7 @@ defmodule DranWeb.SettingsLiveTest do
       assert html =~ t("Brain tuning")
 
       # Primary fields visible
-      for name <- ~w(agent_max_pages) do
+      for name <- ~w(worker_max_pages) do
         assert html =~ name
       end
 
@@ -334,11 +334,11 @@ defmodule DranWeb.SettingsLiveTest do
       end
 
       # Removed knobs are gone from the form
-      refute html =~ "agent_max_sources"
+      refute html =~ "worker_max_sources"
 
       # Default values come from Workspace.get_tuning/2
       assert html =~ to_string(Dran.Workspace.get_tuning(ws, :semantic_threshold_short))
-      assert html =~ to_string(Dran.Workspace.get_tuning(ws, :agent_max_pages))
+      assert html =~ to_string(Dran.Workspace.get_tuning(ws, :worker_max_pages))
       assert html =~ t("Save")
     end
 
@@ -358,7 +358,7 @@ defmodule DranWeb.SettingsLiveTest do
             "semantic_threshold_short" => "0.10",
             "semantic_threshold_mid" => "0.25",
             "semantic_threshold_long" => "0.30",
-            "agent_max_pages" => "42"
+            "worker_max_pages" => "42"
           }
         })
         |> render_submit()
@@ -368,11 +368,11 @@ defmodule DranWeb.SettingsLiveTest do
 
       # The new values are persisted and readable via Workspace.get_tuning/2
       reloaded = Knowledge.get_workspace!(ws.id)
-      assert Dran.Workspace.get_tuning(reloaded, :agent_max_pages) == 42
+      assert Dran.Workspace.get_tuning(reloaded, :worker_max_pages) == 42
       assert Dran.Workspace.get_tuning(reloaded, :semantic_threshold_short) == 0.10
     end
 
-    test "the brain tuning form still renders the agent_max_pages input", %{conn: conn, ws: ws} do
+    test "the brain tuning form still renders the worker_max_pages input", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
 
       # Navigate to the Brain tuning tab
@@ -381,7 +381,7 @@ defmodule DranWeb.SettingsLiveTest do
         |> element("button[phx-click='select_tab'][phx-value-tab='brain_tuning']")
         |> render_click()
 
-      assert html =~ "agent_max_pages"
+      assert html =~ "worker_max_pages"
       assert html =~ t("Max pages per run")
     end
   end

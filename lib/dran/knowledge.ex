@@ -2268,7 +2268,7 @@ defmodule Dran.Knowledge do
   - `:embedding_coverage` — fraction of pages with an embedding (0.0–1.0)
   - `:relations_by_type` — map of relation_type => count
   - `:contested_count` — number of contested pages
-  - `:agents` — `%{sessions_this_week, tokens_this_week, total_sessions}`
+  - `:workers` — `%{sessions_this_week, tokens_this_week, total_sessions}`
   """
   def metrics(workspace_id) when is_binary(workspace_id) do
     now = DateTime.utc_now()
@@ -2282,7 +2282,7 @@ defmodule Dran.Knowledge do
       embedding_coverage: embedding_coverage(workspace_id),
       relations_by_type: relations_by_type(workspace_id),
       contested_count: length(contested_pages(workspace_id)),
-      agents: agent_metrics(workspace_id)
+      workers: worker_metrics(workspace_id)
     }
   end
 
@@ -2324,12 +2324,12 @@ defmodule Dran.Knowledge do
     |> Map.new()
   end
 
-  defp agent_metrics(workspace_id) do
+  defp worker_metrics(workspace_id) do
     week_ago = DateTime.add(DateTime.utc_now(), -7 * 86400, :second)
 
     sessions_this_week =
       Repo.aggregate(
-        from(s in Dran.Agent.Session,
+        from(s in Dran.Worker.Session,
           where: s.workspace_id == ^workspace_id and s.inserted_at >= ^week_ago
         ),
         :count
@@ -2337,7 +2337,7 @@ defmodule Dran.Knowledge do
 
     tokens_this_week =
       Repo.one(
-        from s in Dran.Agent.Session,
+        from s in Dran.Worker.Session,
           where: s.workspace_id == ^workspace_id and s.inserted_at >= ^week_ago,
           select: coalesce(sum(fragment("(meta->>'tokens_used')::bigint")), 0)
       )
@@ -2346,7 +2346,7 @@ defmodule Dran.Knowledge do
 
     total_sessions =
       Repo.aggregate(
-        from(s in Dran.Agent.Session, where: s.workspace_id == ^workspace_id),
+        from(s in Dran.Worker.Session, where: s.workspace_id == ^workspace_id),
         :count
       )
 

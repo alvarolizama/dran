@@ -1,10 +1,10 @@
-defmodule Dran.Agent.Engine.Behaviour do
+defmodule Dran.Worker.Engine.Behaviour do
   @moduledoc """
-  Behaviour contract for agent modules that run on `Dran.Agent.Engine`.
+  Behaviour contract for worker modules that run on `Dran.Worker.Engine`.
   """
 
-  @doc "Returns the agent type string (e.g. \"ask\")."
-  @callback agent_type() :: String.t()
+  @doc "Returns the worker type string (e.g. \"ask\")."
+  @callback worker_type() :: String.t()
 
   @doc "Returns a list of OpenAI-compatible function tool schemas."
   @callback tools() :: list(map())
@@ -13,16 +13,16 @@ defmodule Dran.Agent.Engine.Behaviour do
   @callback system_prompt() :: String.t()
 
   @doc "Builds the initial messages list from the user input and session."
-  @callback build_messages(String.t(), Dran.Agent.Session.t()) :: list(map())
+  @callback build_messages(String.t(), Dran.Worker.Session.t()) :: list(map())
 
   @doc """
-  Optionally builds the initial agent state.
+  Optionally builds the initial worker state.
 
   Default is a plain map `%{session: session, module: module, messages: ...,
-  step: 0, pages_created: 0, opts: opts}`. Agents that need extra tracking
+  step: 0, pages_created: 0, opts: opts}`. Workers that need extra tracking
   fields (e.g. scraped URLs) can return a custom struct.
   """
-  @callback init_state(Dran.Agent.Session.t(), module(), keyword()) :: term()
+  @callback init_state(Dran.Worker.Session.t(), module(), keyword()) :: term()
 
   @doc "Executes a tool call. Must return `{result, new_state}`."
   @callback execute_tool(String.t(), map(), term()) :: {term(), term()}
@@ -31,7 +31,7 @@ defmodule Dran.Agent.Engine.Behaviour do
   @callback summarize_result(term()) :: map()
 
   @doc """
-  Optionally returns a human-readable summary of what the agent has gathered
+  Optionally returns a human-readable summary of what the worker has gathered
   so far. Used by the engine when nudging the LLM toward synthesis after
   repeated tool errors.
   """

@@ -304,7 +304,7 @@ defmodule Dran.Graph do
   `refresh_pagerank/1` and `refresh_clusters/1` on the same context.
   PageRank runs first so cluster detection can reuse any future
   cross-signal logic; both share the same edge load. Same pattern as
-  `Dran.Agent.Curator.run_scheduled/0`.
+  `Dran.Worker.Curator.run_scheduled/0`.
   """
   @spec refresh_all_scheduled() :: :ok | {:error, :workspace_not_found}
   def refresh_all_scheduled do

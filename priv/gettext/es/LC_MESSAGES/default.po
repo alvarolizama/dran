@@ -85,8 +85,8 @@ msgstr "Actividad"
 #: lib/dran_web/live/task_board_live.ex:311
 #: lib/dran_web/live/workspace_settings_live.ex:858
 #, elixir-autogen, elixir-format
-msgid "Agents"
-msgstr "Agentes"
+msgid "Workers"
+msgstr "Workers"
 
 #: lib/dran_web/components/page_list_components.ex:113
 #: lib/dran_web/components/page_list_components.ex:252
@@ -317,6 +317,9 @@ msgstr "Notas"
 #, elixir-autogen, elixir-format
 msgid "One-line description"
 msgstr "Descripción de una línea"
+
+msgid "One-line summary"
+msgstr "Resumen de una línea"
 
 #: lib/dran_web/live/smart_collection_live.ex:248
 #, elixir-autogen, elixir-format
@@ -733,8 +736,11 @@ msgstr "URL de API"
 
 #: lib/dran_web/live/activity_live.ex:241
 #: lib/dran_web/live/activity_live.ex:242
-#: lib/dran_web/live/settings_live.ex:817
 #, elixir-autogen, elixir-format
+msgid "Worker"
+msgstr "Worker"
+
+#: lib/dran_web/live/settings_live.ex:817
 #, elixir-autogen, elixir-format
 msgid "Agent"
 msgstr "Agente"
@@ -1006,8 +1012,8 @@ msgstr "Cronología de actividad"
 
 #: lib/dran_web/live/workspace_settings_live.ex:515
 #, elixir-autogen, elixir-format
-msgid "Agent limits"
-msgstr "Límites del agente"
+msgid "Worker limits"
+msgstr "Límites del worker"
 
 #: lib/dran_web/components/page_components.ex:135
 #: lib/dran_web/components/page_components.ex:1219
@@ -1700,13 +1706,12 @@ msgstr "API no disponible — los modelos no pueden listarse. Aún puedes escrib
 
 #: lib/dran_web/live/admin_models_live.ex:24
 #, elixir-autogen, elixir-format
-msgid "Chat / agentes"
-msgstr "Chat / agentes"
+msgid "Chat / workers"
+msgstr "Chat / workers"
 
-#: lib/dran_web/live/admin_models_live.ex:26
 #, elixir-autogen, elixir-format
-msgid "Model used for chat completions, agent reasoning, and title generation."
-msgstr "Modelo usado para completions de chat, razonamiento de agentes y generación de títulos."
+msgid "Model used for chat completions, worker reasoning, and title generation."
+msgstr "Modelo usado para completions de chat, razonamiento de workers y generación de títulos."
 
 #: lib/dran_web/live/admin_models_live.ex:28
 #, elixir-autogen, elixir-format
@@ -1751,8 +1756,8 @@ msgstr "Bearer token enviado a la API de inferencia. Solo lectura — se define 
 
 #: lib/dran_web/live/admin_system_live.ex:134
 #, elixir-autogen, elixir-format
-msgid "Effective model for chat and agents (web override or env default). See “Modelos” above to override."
-msgstr "Modelo efectivo para chat y agentes (override web o default de env). Ver “Modelos” arriba para sobreescribir."
+msgid "Effective model for chat and workers (web override or env default). See “Modelos” above to override."
+msgstr "Modelo efectivo para chat y workers (override web o default de env). Ver “Modelos” arriba para sobreescribir."
 
 #: lib/dran_web/live/admin_system_live.ex:147
 #, elixir-autogen, elixir-format
@@ -1789,13 +1794,13 @@ msgstr "Timeout HTTP para requests a la API de inferencia, en milisegundos. Solo
 
 #: lib/dran_web/live/admin_system_live.ex:225
 #, elixir-autogen, elixir-format
-msgid "Maximum number of steps an autonomous agent can take in a single run. Read-only — set via environment variable."
-msgstr "Número máximo de pasos que un agente autónomo puede dar en una sola corrida. Solo lectura — se define vía variable de entorno."
+msgid "Maximum number of steps an autonomous worker can take in a single run. Read-only — set via environment variable."
+msgstr "Número máximo de pasos que un worker autónomo puede dar en una sola corrida. Solo lectura — se define vía variable de entorno."
 
 #: lib/dran_web/live/admin_system_live.ex:238
 #, elixir-autogen, elixir-format
-msgid "Maximum wall-clock time per agent step, in milliseconds. Read-only — set via environment variable."
-msgstr "Tiempo máximo de reloj por paso de agente, en milisegundos. Solo lectura — se define vía variable de entorno."
+msgid "Maximum wall-clock time per worker step, in milliseconds. Read-only — set via environment variable."
+msgstr "Tiempo máximo de reloj por paso de worker, en milisegundos. Solo lectura — se define vía variable de entorno."
 
 #: lib/dran_web/live/admin_system_live.ex:258
 #, elixir-autogen, elixir-format
@@ -1902,8 +1907,8 @@ msgstr "Atributos"
 
 #: lib/dran_web/live/admin_system_live.ex:219
 #, elixir-autogen, elixir-format
-msgid "Autonomous agents"
-msgstr "Agentes autónomos"
+msgid "Autonomous workers"
+msgstr "Workers autónomos"
 
 #: lib/dran_web/live/admin_workspaces_live.ex:132
 #, elixir-autogen, elixir-format
@@ -2942,8 +2947,8 @@ msgstr "Manage users, assign workspaces, copy tokens."
 
 #: lib/dran_web/live/workspace_settings_live.ex:525
 #, elixir-autogen, elixir-format, fuzzy
-msgid "Maximum number of pages the autonomous agents will create in a single run. Blank uses the global default."
-msgstr "Número máximo de páginas que los agentes autónomos crearán en una sola ejecución. Valores más altos significan ejecuciones más largas y más contenido por ejecución. Predeterminado: 10."
+msgid "Maximum number of pages the autonomous workers will create in a single run. Blank uses the global default."
+msgstr "Número máximo de páginas que los workers autónomos crearán en una sola ejecución. Valores más altos significan ejecuciones más largas y más contenido por ejecución. Predeterminado: 10."
 
 #: lib/dran_web/live/workspace_settings_live.ex:582
 #, elixir-autogen, elixir-format, fuzzy
@@ -3010,8 +3015,8 @@ msgstr ""
 
 #: lib/dran_web/live/admin_live.ex:69
 #, elixir-autogen, elixir-format
-msgid "Read-only environment: inference, agents, uploads."
-msgstr "Read-only environment: inference, agents, uploads."
+msgid "Read-only environment: inference, workers, uploads."
+msgstr "Read-only environment: inference, workers, uploads."
 
 #: lib/dran_web/live/workspace_settings_live.ex:856
 #, elixir-autogen, elixir-format, fuzzy
@@ -3030,7 +3035,7 @@ msgstr "Select models for chat, embeddings, and reranking."
 
 #: lib/dran_web/live/workspace_settings_live.ex:500
 #, elixir-autogen, elixir-format, fuzzy
-msgid "Semantic thresholds and agent limits for this workspace."
+msgid "Semantic thresholds and worker limits for this workspace."
 msgstr "Umbrales semánticos"
 
 #: lib/dran_web/live/admin_system_live.ex:23
@@ -3593,7 +3598,7 @@ msgstr ""
 
 #: lib/dran_web/live/memory_live.ex:134
 #, elixir-autogen, elixir-format
-msgid "Buscar en la memoria de los agentes..."
+msgid "Buscar en la memoria de los workers..."
 msgstr ""
 
 #: lib/dran_web/live/memory_live.ex:190
@@ -3691,7 +3696,7 @@ msgstr ""
 
 #: lib/dran_web/live/memory_live.ex:294
 #, elixir-autogen, elixir-format
-msgid "Hechos atómicos compartidos por los agentes de %{name}."
+msgid "Hechos atómicos compartidos por los workers de %{name}."
 msgstr ""
 
 #: lib/dran_web/live/settings_live.ex:676
@@ -3708,7 +3713,7 @@ msgstr ""
 
 #: lib/dran_web/live/memory_live.ex:180
 #, elixir-autogen, elixir-format
-msgid "Los agentes almacenan hechos aquí vía la API /api/memory; aparecerán en vivo."
+msgid "Los workers almacenan hechos aquí vía la API /api/memory; aparecerán en vivo."
 msgstr ""
 
 #: lib/dran_web/live/memory_live.ex:433
@@ -3726,7 +3731,7 @@ msgstr ""
 
 #: lib/dran_web/live/search_live.ex:268
 #, elixir-autogen, elixir-format
-msgid "Memory de agentes"
+msgid "Memory de workers"
 msgstr ""
 
 #: lib/dran_web/live/memory_live.ex:76

@@ -101,13 +101,13 @@ defmodule Dran.MCPFullTest do
       end
     end
 
-    test "dran_start_agent enum has all 3 agent types" do
+    test "dran_start_worker enum has all 3 agent types" do
       resp =
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      start_agent = Enum.find(tools, &(&1["name"] == "dran_start_agent"))
-      enum = start_agent["inputSchema"]["properties"]["agent_type"]["enum"]
+      start_agent = Enum.find(tools, &(&1["name"] == "dran_start_worker"))
+      enum = start_agent["inputSchema"]["properties"]["worker_type"]["enum"]
 
       assert MapSet.new(enum) ==
                MapSet.new(~w(curator link_gardener graph_rag))
@@ -627,7 +627,7 @@ defmodule Dran.MCPFullTest do
           "workspace" => "personal",
           "title" => "Ship v1",
           "slug" => "ship-v1-goal",
-          "description" => "Launch the product",
+          "summary" => "Launch the product",
           "kind" => "business",
           "health" => "green",
           "status" => "active",
@@ -1130,13 +1130,13 @@ defmodule Dran.MCPFullTest do
     end
   end
 
-  # ── Tool: dran_start_agent ──────────────────────────────────────────────────
+  # ── Tool: dran_start_worker ──────────────────────────────────────────────────
 
-  describe "dran_start_agent" do
+  describe "dran_start_worker" do
     test "errors on unknown agent type" do
       result =
-        call_tool("dran_start_agent", %{
-          "agent_type" => "nonexistent",
+        call_tool("dran_start_worker", %{
+          "worker_type" => "nonexistent",
           "workspace" => "personal",
           "input" => "test"
         })
@@ -1146,8 +1146,8 @@ defmodule Dran.MCPFullTest do
 
     test "errors on non-existent context" do
       result =
-        call_tool("dran_start_agent", %{
-          "agent_type" => "ask",
+        call_tool("dran_start_worker", %{
+          "worker_type" => "ask",
           "workspace" => "no-such",
           "input" => "test"
         })
@@ -1156,17 +1156,17 @@ defmodule Dran.MCPFullTest do
     end
   end
 
-  # ── Tool: dran_get_agent_session ────────────────────────────────────────────
+  # ── Tool: dran_get_worker_session ────────────────────────────────────────────
 
-  describe "dran_get_agent_session" do
+  describe "dran_get_worker_session" do
     test "errors on invalid UUID" do
-      result = call_tool("dran_get_agent_session", %{"session_id" => "not-a-uuid"})
+      result = call_tool("dran_get_worker_session", %{"session_id" => "not-a-uuid"})
       assert result =~ "Error: invalid session_id"
     end
 
     test "errors on non-existent session" do
       result =
-        call_tool("dran_get_agent_session", %{
+        call_tool("dran_get_worker_session", %{
           "session_id" => "00000000-0000-0000-0000-000000000000"
         })
 

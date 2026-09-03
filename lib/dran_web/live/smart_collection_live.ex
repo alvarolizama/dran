@@ -66,8 +66,8 @@ defmodule DranWeb.SmartCollectionLive do
                 <.icon name="hero-funnel" class="w-5 h-5 text-primary/70" />
                 <h2 class="card-title text-lg">{collection.name}</h2>
               </div>
-              <p :if={collection.description} class="text-sm text-base-content/60">
-                {collection.description}
+              <p :if={collection.summary} class="text-sm text-base-content/60">
+                {collection.summary}
               </p>
               <div class="flex flex-wrap gap-1.5 mt-3">
                 <span
@@ -92,7 +92,7 @@ defmodule DranWeb.SmartCollectionLive do
               <.icon name="hero-funnel" class="w-6 h-6 text-primary/70" />
               <h1 class="text-title">{@collection.name}</h1>
             </div>
-            <p :if={@collection.description} class="text-caption">{@collection.description}</p>
+            <p :if={@collection.summary} class="text-caption">{@collection.summary}</p>
           </div>
           <div class="flex gap-2">
             <.link navigate={~p"/#{@workspace_slug}/collections"} class="btn btn-ghost btn-sm">
@@ -197,12 +197,12 @@ defmodule DranWeb.SmartCollectionLive do
           />
 
           <.input
-            id="collection-description"
-            name="description"
+            id="collection-summary"
+            name="summary"
             type="text"
-            label={gettext("Description")}
-            value={@form["description"]}
-            placeholder={gettext("One-line description")}
+            label={gettext("Summary")}
+            value={@form["summary"]}
+            placeholder={gettext("One-line summary")}
           />
 
           <div class="border-t border-base-300 pt-5">
@@ -371,7 +371,7 @@ defmodule DranWeb.SmartCollectionLive do
       # as a list from the multi-select — normalised to a list.
       "name" => params["name"] || params["title"] || "",
       "slug" => "",
-      "description" => params["description"] || "",
+      "summary" => params["summary"] || "",
       "type" => params["type"] || "",
       "kind" => normalize_kind_param(params["kind"]),
       "tag" => params["tag"] || "",
@@ -444,7 +444,7 @@ defmodule DranWeb.SmartCollectionLive do
           "workspace_id" => context.id,
           "name" => params["name"],
           "slug" => slug,
-          "description" => params["description"],
+          "summary" => params["summary"],
           "filters" => filters
         }
 

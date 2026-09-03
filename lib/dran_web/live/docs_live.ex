@@ -325,7 +325,7 @@ defmodule DranWeb.DocsLive do
           <.icon name="hero-chat-bubble-left-right" class="w-8 h-8 text-primary mb-2" />
           <h3 class="font-semibold">{gettext("Guides")}</h3>
           <p class="text-sm text-base-content/60">
-            AI chat, autonomous agents, kanban board, and settings.
+            AI chat, autonomous workers, kanban board, and settings.
           </p>
         </a>
         <a
@@ -388,7 +388,7 @@ defmodule DranWeb.DocsLive do
         <li><strong>project</strong> — initiatives grouping goals, plans and todos</li>
         <li>
           <strong>report</strong>
-          — system-created run logs (jobs and agent runs); detail view only at
+          — system-created run logs (jobs and worker runs); detail view only at
           <code>/reports/:slug</code>
           — outside the graph, journey and embeddings
         </li>
@@ -559,41 +559,41 @@ defmodule DranWeb.DocsLive do
     ~H"""
     <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
       <.toc items={[
-        {"autonomous-agents", "Autonomous agents"},
+        {"autonomous-workers", "Autonomous workers"},
         {"kanban-board", "Kanban board"},
         {"using-dran-from-agents", "Using Dran from agents"},
         {"settings", "Settings"}
       ]} />
 
-      <.h2_heading id="autonomous-agents" icon="hero-cpu-chip" label="Autonomous agents" />
+      <.h2_heading id="autonomous-workers" icon="hero-cpu-chip" label="Autonomous workers" />
       <p>
-        Dran runs three autonomous ReAct agents that plan, act, and log every step. Some are
+        Dran runs three autonomous ReAct workers that plan, act, and log every step. Some are
         triggered on demand; others run on a fixed schedule.
       </p>
       <div class="not-prose grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
-        <%= for agent <- agents_data() do %>
+        <%= for worker <- workers_data() do %>
           <div class="surface-1 lift rounded-lg p-4 border border-base-300/60 transition">
             <div class="flex items-start justify-between gap-3 mb-2">
               <div class="flex items-center gap-2.5">
-                <.icon name={agent.icon} class={["w-7 h-7", agent.color]} />
-                <h3 class="font-semibold text-base-content">{agent.label}</h3>
+                <.icon name={worker.icon} class={["w-7 h-7", worker.color]} />
+                <h3 class="font-semibold text-base-content">{worker.label}</h3>
               </div>
-              <%= if agent.trigger == :manual do %>
+              <%= if worker.trigger == :manual do %>
                 <span class="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-0.5 border border-primary/20">
                   <.icon name="hero-hand-raised" class="w-3 h-3" />Manual
                 </span>
               <% else %>
                 <span class="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium px-2.5 py-0.5 border border-emerald-500/20">
-                  <.icon name="hero-clock" class="w-3 h-3" />{agent.schedule}
+                  <.icon name="hero-clock" class="w-3 h-3" />{worker.schedule}
                 </span>
               <% end %>
             </div>
             <p class="text-sm text-base-content/70 leading-relaxed mb-3">
-              {agent.description}
+              {worker.description}
             </p>
             <p class="text-xs text-base-content/50 flex items-center gap-1.5">
               <.icon name="hero-adjustments-horizontal" class="w-3.5 h-3.5" />
-              {agent.limits}
+              {worker.limits}
             </p>
           </div>
         <% end %>
@@ -601,11 +601,11 @@ defmodule DranWeb.DocsLive do
       <.callout variant={:info}>
         <p>
           <strong>Dispatch &amp; tracking:</strong>
-          Agents run asynchronously under a <code>DynamicSupervisor</code>, persist every step
-          to <code>agent_sessions</code>
-          / <code>agent_steps</code>, and broadcast live updates
-          via PubSub (<code>agents:&lt;session_id&gt;</code>). Use <code>dran_start_agent</code>
-          to launch and <code>dran_get_agent_session</code>
+          Workers run asynchronously under a <code>DynamicSupervisor</code>, persist every step
+          to <code>worker_sessions</code>
+          / <code>worker_steps</code>, and broadcast live updates
+          via PubSub (<code>workers:&lt;session_id&gt;</code>). Use <code>dran_start_worker</code>
+          to launch and <code>dran_get_worker_session</code>
           to poll
           for status, summary, and step-by-step progress.
         </p>
@@ -618,7 +618,7 @@ defmodule DranWeb.DocsLive do
         context. You can drag and drop cards between columns to update their <code>kanban_status</code>, and combine the Project / Goal / Plan filters
         (each with All / None — orphans — / &lt;slug&gt;). Cards show link badges; click a
         badge to filter the board by that link. The board updates in real
-        time — when an autonomous agent creates or moves a todo, the change is pushed to all
+        time — when an autonomous worker creates or moves a todo, the change is pushed to all
         connected clients via PubSub. The <code>/todos</code> page offers the same board
         scoped to the todo page type.
       </p>
@@ -630,9 +630,7 @@ defmodule DranWeb.DocsLive do
       />
       <p>
         AI agents can connect to Dran via the MCP endpoint at <code>/api/mcp</code> using the
-        Streamable HTTP transport. The repository includes a <code>skills/</code> directory with the
-        full operational manual suite for agent integration (<code>skills/dran/SKILL.md</code> plus
-        per-flow skills). To verify your MCP schema is live and
+        Streamable HTTP transport. To verify your MCP schema is live and
         correct, run <code>scripts/mcp_smoke.sh</code> — it exercises the tools list and validates
         the response schema.
       </p>
@@ -648,7 +646,7 @@ defmodule DranWeb.DocsLive do
         (accounts and per-user API tokens), <strong>Contexts</strong>
         (context CRUD, member management, per-context page-type toggles), <strong>API keys</strong>
         (context-scoped keys for REST/MCP), <strong>Brain</strong>
-        (runtime tuning — semantic thresholds, agent limits, entity-linker toggle, props
+        (runtime tuning — semantic thresholds, worker limits, entity-linker toggle, props
         backfill, and the scheduled-jobs panel with per-job toggles and "run now" buttons),
         <strong>Models</strong>
         (inference model overrides), <strong>System</strong>
@@ -751,17 +749,19 @@ defmodule DranWeb.DocsLive do
               </td>
               <td class="px-4 py-2 font-mono text-base-content/60">(unset)</td>
               <td class="px-4 py-2">
-                OpenAI-compatible inference endpoint — powers embeddings, summaries, agents, semantic search
+                OpenAI-compatible inference endpoint — powers embeddings, summaries, workers, semantic search
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">
-                DRAN_INFERENCE_CHAT_MODEL / DRAN_INFERENCE_EMBEDDING_MODEL / DRAN_INFERENCE_RERANK_MODEL
+              <td class="px-4 py-2 font-mono text-base-content/60">
+                (Admin → Models)
               </td>
               <td class="px-4 py-2 font-mono text-base-content/60">
                 Ornith-1.0-9B / Qwen3-Embedding / Qwen3-Reranker
               </td>
-              <td class="px-4 py-2">Optional model overrides per capability</td>
+              <td class="px-4 py-2">
+                Model overrides per capability — configured in the admin UI (DB), not env vars
+              </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">
@@ -851,8 +851,8 @@ defmodule DranWeb.DocsLive do
         <code>semantic_threshold_short</code>
         (0.15), <code>semantic_threshold_mid</code>
         (0.22), <code>semantic_threshold_long</code>
-        (0.28), <code>agent_max_pages</code>
-        (10), <code>agent_max_sources</code>
+        (0.28), <code>worker_max_pages</code>
+        (10), <code>worker_max_sources</code>
         (10), <code>pagerank_boost</code>
         (0.15) and <code>entity_linker_enabled</code>
         (true).
@@ -931,7 +931,7 @@ defmodule DranWeb.DocsLive do
     """
   end
 
-  defp agents_data do
+  defp workers_data do
     [
       %{
         label: "GraphRAG (Q&A)",
@@ -960,7 +960,7 @@ defmodule DranWeb.DocsLive do
         trigger: :scheduled,
         schedule: "Weekly Sun 07:00",
         description:
-          "Reads orphaned and under-linked pages, proposes typed relations with justifications. Also startable manually via dran_start_agent.",
+          "Reads orphaned and under-linked pages, proposes typed relations with justifications. Also startable manually via dran_start_worker.",
         limits: "Max 10 proposals per session; semantic type forbidden."
       }
     ]
@@ -1199,10 +1199,10 @@ defmodule DranWeb.DocsLive do
           embeds in the context are rewritten automatically.
         </li>
         <li>
-          <strong>Agents</strong>
-          — use <code>dran_start_agent</code>
-          to delegate tasks to autonomous agents (curator, link_gardener, graph_rag).
-          Poll <code>dran_get_agent_session</code>
+          <strong>Workers</strong>
+          — use <code>dran_start_worker</code>
+          to delegate tasks to autonomous workers (curator, link_gardener, graph_rag).
+          Poll <code>dran_get_worker_session</code>
           for progress and results.
         </li>
         <li>
@@ -1291,7 +1291,7 @@ defmodule DranWeb.DocsLive do
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">report</td>
-              <td class="px-4 py-2">System-created run logs (jobs and agent runs)</td>
+              <td class="px-4 py-2">System-created run logs (jobs and worker runs)</td>
               <td class="px-4 py-2 text-xs">log</td>
               <td class="px-4 py-2 text-xs">
                 kind — not creatable via MCP; outside the graph, journey and embeddings
@@ -1602,11 +1602,11 @@ defmodule DranWeb.DocsLive do
         </.mcp_tool>
 
         <.mcp_tool
-          name="dran_start_agent"
-          desc="Start an autonomous agent session. Returns immediately; poll dran_get_agent_session for progress."
+          name="dran_start_worker"
+          desc="Start an autonomous worker session. Returns immediately; poll dran_get_worker_session for progress."
         >
           <:param
-            name="agent_type"
+            name="worker_type"
             type="string"
             required="yes"
             desc="curator, link_gardener, graph_rag"
@@ -1618,14 +1618,14 @@ defmodule DranWeb.DocsLive do
             required="yes"
             desc="Question for graph_rag; focus or instructions for curator / link_gardener"
           />
-          <:param name="opts" type="object" required="no" desc="Optional agent options" />
+          <:param name="opts" type="object" required="no" desc="Optional worker options" />
         </.mcp_tool>
 
         <.mcp_tool
-          name="dran_get_agent_session"
-          desc="Poll an agent session for status, summary, and steps."
+          name="dran_get_worker_session"
+          desc="Poll a worker session for status, summary, and steps."
         >
-          <:param name="session_id" type="string" required="yes" desc="Agent session UUID" />
+          <:param name="session_id" type="string" required="yes" desc="Worker session UUID" />
         </.mcp_tool>
       </div>
 

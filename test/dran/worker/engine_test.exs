@@ -1,12 +1,12 @@
-defmodule Dran.Agent.EngineTest do
+defmodule Dran.Worker.EngineTest do
   use Dran.DataCase, async: false
 
   alias Dran.{Knowledge, Repo}
-  alias Dran.Agent.{Engine, Session}
+  alias Dran.Worker.{Engine, Session}
 
   defmodule CrashingAgent do
     @moduledoc "Agent that raises before the first step"
-    def agent_type, do: "crasher"
+    def worker_type, do: "crasher"
     def tools, do: []
 
     def build_messages(_input, _session, _opts) do
@@ -16,7 +16,7 @@ defmodule Dran.Agent.EngineTest do
 
   defmodule SmartTruncateProbe do
     @moduledoc false
-    defdelegate smart_truncate(str, max), to: Dran.Agent.Engine
+    defdelegate smart_truncate(str, max), to: Dran.Worker.Engine
   end
 
   setup do
@@ -58,14 +58,14 @@ defmodule Dran.Agent.EngineTest do
              end)
 
       session = Repo.get(Session, session.id)
-      assert session.summary =~ "Agent crashed"
+      assert session.summary =~ "Worker crashed"
     end
   end
 
   describe "smart_truncate/2" do
     test "truncates plain text at line boundary with marker" do
       long = Enum.map_join(1..500, "\n", &"line #{&1} with some content here")
-      truncated = Dran.Agent.Engine.smart_truncate(long, 500)
+      truncated = Dran.Worker.Engine.smart_truncate(long, 500)
 
       assert String.length(truncated) < 600
       assert truncated =~ "…[truncated]"
@@ -75,12 +75,12 @@ defmodule Dran.Agent.EngineTest do
     end
 
     test "returns short strings untouched" do
-      assert Dran.Agent.Engine.smart_truncate("short", 500) == "short"
+      assert Dran.Worker.Engine.smart_truncate("short", 500) == "short"
     end
 
     test "truncates JSON at a parseable boundary" do
       json = Jason.encode!(%{items: Enum.map(1..200, &%{id: &1, name: "item-#{&1}"})})
-      truncated = Dran.Agent.Engine.smart_truncate(json, 500)
+      truncated = Dran.Worker.Engine.smart_truncate(json, 500)
 
       assert truncated =~ "…[truncated]"
     end

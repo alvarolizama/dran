@@ -27,8 +27,8 @@ defmodule Dran.MCP do
   - `dran_lint_brain` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
-  - `dran_start_agent` — start an autonomous agent (curator, link_gardener, graph_rag)
-  - `dran_get_agent_session` — poll an agent session for status and steps
+  - `dran_start_worker` — start an autonomous worker (curator, link_gardener, graph_rag)
+  - `dran_get_worker_session` — poll a worker session for status and steps
   - `dran_generate_cluster_summaries` — generate LLM summaries for all clusters in a context
 
   ## Embeds
@@ -46,7 +46,7 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Agent, Auth, Goals, Knowledge, Repo}
+  alias Dran.{Auth, Goals, Knowledge, Repo, Worker}
   alias Dran.PageTypes
   alias DranWeb.ResourceAuthorization
   alias Dran.Goals
@@ -397,9 +397,9 @@ defmodule Dran.MCP do
             "description" =>
               "URL-friendly kebab-case slug, unique per context. If omitted, derived from the title. Creation fails if it already exists."
           },
-          "description" => %{
+          "summary" => %{
             "type" => "string",
-            "description" => "Short one-line description of the goal (optional)."
+            "description" => "Short one-line summary of the goal (optional)."
           },
           "body" => %{
             "type" => "string",
@@ -924,46 +924,46 @@ defmodule Dran.MCP do
       }
     },
     %{
-      "name" => "dran_start_agent",
+      "name" => "dran_start_worker",
       "description" =>
-        "Start an autonomous agent session and return immediately. Returns a session_id and track_url — poll `dran_get_agent_session` with that session_id to check progress, steps, and summary. The agent runs asynchronously in the background. Choose the agent_type that matches your goal: 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages.",
+        "Start an autonomous worker session and return immediately. Returns a session_id and track_url — poll `dran_get_worker_session` with that session_id to check progress, steps, and summary. The worker runs asynchronously in the background. Choose the worker_type that matches your goal: 'curator' detects duplicate/conflicting pages via embeddings and writes a report; 'link_gardener' proposes relations for orphan pages.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
-          "agent_type" => %{
+          "worker_type" => %{
             "type" => "string",
             "enum" => ["curator", "link_gardener", "graph_rag"],
             "description" =>
-              "Type of agent to run. 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'graph_rag' = answer questions using GraphRAG (local/global/drift search over the knowledge graph)."
+              "Type of worker to run. 'curator' = detect duplicates/conflicts by embeddings and write a report. 'link_gardener' = propose relations for orphan pages. 'graph_rag' = answer questions using GraphRAG (local/global/drift search over the knowledge graph)."
           },
           "workspace" => %{
             "type" => "string",
-            "description" => "Context slug where the agent will create pages."
+            "description" => "Context slug where the worker will create pages."
           },
           "input" => %{
             "type" => "string",
             "description" =>
-              "Agent input. For curator/link_gardener: typically the context focus or instructions. For graph_rag: the question to answer."
+              "Worker input. For curator/link_gardener: typically the context focus or instructions. For graph_rag: the question to answer."
           },
           "opts" => %{
             "type" => "object",
             "description" =>
-              "Optional agent configuration options (e.g. max pages, tags). Passed through to the agent."
+              "Optional worker configuration options (e.g. max pages, tags). Passed through to the worker."
           }
         },
-        "required" => ["agent_type", "workspace", "input"]
+        "required" => ["worker_type", "workspace", "input"]
       }
     },
     %{
-      "name" => "dran_get_agent_session",
+      "name" => "dran_get_worker_session",
       "description" =>
-        "Poll an autonomous agent session for status, summary, and step-by-step progress. Returns the session's type, input, status (pending/running/done/failed), summary, pages_created count, and an ordered list of steps with tool name and result status. Poll periodically until status is 'done' or 'failed'. Returns an error if the session_id is invalid or not found.",
+        "Poll an autonomous worker session for status, summary, and step-by-step progress. Returns the session's type, input, status (pending/running/done/failed), summary, pages_created count, and an ordered list of steps with tool name and result status. Poll periodically until status is 'done' or 'failed'. Returns an error if the session_id is invalid or not found.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
           "session_id" => %{
             "type" => "string",
-            "description" => "UUID of the agent session to poll (returned by dran_start_agent)."
+            "description" => "UUID of the worker session to poll (returned by dran_start_worker)."
           }
         },
         "required" => ["session_id"]
@@ -1210,7 +1210,7 @@ defmodule Dran.MCP do
                  "dran_delete_relation",
                  "dran_rename_slug",
                  "dran_reaugment_page",
-                 "dran_start_agent",
+                 "dran_start_worker",
                  "dran_generate_cluster_summaries"
                ])
 
@@ -1639,7 +1639,7 @@ defmodule Dran.MCP do
           workspace_id: context.id,
           title: title,
           slug: slug,
-          description: Map.get(args, "description"),
+          summary: Map.get(args, "summary"),
           body: Map.get(args, "body", ""),
           kind: args["kind"],
           health: args["health"],
@@ -2008,8 +2008,8 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool(
-         "dran_start_agent",
-         %{"agent_type" => agent_type, "workspace" => workspace_slug, "input" => input} = args,
+         "dran_start_worker",
+         %{"worker_type" => worker_type, "workspace" => workspace_slug, "input" => input} = args,
          _user
        ) do
     context = workspace_cache_get(workspace_slug)
@@ -2017,31 +2017,31 @@ defmodule Dran.MCP do
     if context do
       opts = Map.get(args, "opts", [])
 
-      case start_agent_by_type(agent_type, input, context.id, opts) do
+      case start_worker_by_type(worker_type, input, context.id, opts) do
         {:ok, session} ->
           """
-          Started #{agent_type} agent session.
+          Started #{worker_type} worker session.
 
           - session_id: #{session.id}
           - status: #{session.status}
-          - track_url: /agents/#{agent_type}/#{session.id}
+          - track_url: /workers/#{worker_type}/#{session.id}
 
-          Poll `dran_get_agent_session` with session_id for updates.
+          Poll `dran_get_worker_session` with session_id for updates.
           """
 
         {:error, reason} ->
-          "Error: failed to start agent: #{inspect(reason)}"
+          "Error: failed to start worker: #{inspect(reason)}"
       end
     else
       "Error: context '#{workspace_slug}' not found"
     end
   end
 
-  defp execute_tool("dran_get_agent_session", %{"session_id" => session_id}, _user) do
+  defp execute_tool("dran_get_worker_session", %{"session_id" => session_id}, _user) do
     case Ecto.UUID.cast(session_id) do
       {:ok, id} ->
         # P-04: preload steps in one query instead of N+1
-        case Repo.get(Agent.Session, id) |> Repo.preload(:steps) do
+        case Repo.get(Worker.Session, id) |> Repo.preload(:steps) do
           nil ->
             "Error: session not found"
 
@@ -2099,19 +2099,19 @@ defmodule Dran.MCP do
 
   defp execute_tool(tool_name, _args, _user), do: "Error: unknown tool '#{tool_name}'"
 
-  # ── Agent helpers ─────────────────────────────────────────────────────────
+  # ── Worker helpers ─────────────────────────────────────────────────────────
 
-  defp start_agent_by_type("link_gardener", input, workspace_id, opts),
-    do: Agent.LinkGardener.run(input, workspace_id, opts)
+  defp start_worker_by_type("link_gardener", input, workspace_id, opts),
+    do: Worker.LinkGardener.run(input, workspace_id, opts)
 
-  defp start_agent_by_type("curator", input, workspace_id, opts),
-    do: Agent.Curator.run(input, workspace_id, opts)
+  defp start_worker_by_type("curator", input, workspace_id, opts),
+    do: Worker.Curator.run(input, workspace_id, opts)
 
-  defp start_agent_by_type("graph_rag", input, workspace_id, opts),
-    do: Agent.GraphRag.run(input, workspace_id, opts)
+  defp start_worker_by_type("graph_rag", input, workspace_id, opts),
+    do: Worker.GraphRag.run(input, workspace_id, opts)
 
-  defp start_agent_by_type(_type, _input, _workspace_id, _opts),
-    do: {:error, :unknown_agent_type}
+  defp start_worker_by_type(_type, _input, _workspace_id, _opts),
+    do: {:error, :unknown_worker_type}
 
   defp render_session(session, steps) do
     steps_text =
@@ -2121,9 +2121,9 @@ defmodule Dran.MCP do
       |> Enum.join("\n")
 
     """
-    # Agent session
+    # Worker session
 
-    - type: #{session.agent_type}
+    - type: #{session.worker_type}
     - input: #{session.input}
     - status: #{session.status}
     - summary: #{session.summary || "(pending)"}

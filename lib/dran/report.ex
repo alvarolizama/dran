@@ -27,7 +27,7 @@ defmodule Dran.Report do
              :updated_at
            ]}
 
-  @report_types ~w(log lint cluster_summary agent_output)
+  @report_types ~w(log lint cluster_summary worker_output)
 
   schema "reports" do
     field :title, :string

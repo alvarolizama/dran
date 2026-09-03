@@ -1,17 +1,17 @@
-defmodule Dran.Agent.GraphRagTest do
+defmodule Dran.Worker.GraphRagTest do
   use Dran.DataCase, async: false
 
-  alias Dran.Agent.GraphRag
+  alias Dran.Worker.GraphRag
   alias Dran.{Knowledge, Repo}
   alias Dran.Page
 
   #  Helpers 
 
   defp build_session(workspace_id) do
-    struct(%Dran.Agent.Session{
+    struct(%Dran.Worker.Session{
       id: Ecto.UUID.generate(),
       workspace_id: workspace_id,
-      agent_type: "graph_rag",
+      worker_type: "graph_rag",
       input: "test graph_rag query",
       status: "running"
     })
@@ -63,10 +63,10 @@ defmodule Dran.Agent.GraphRagTest do
     |> Repo.insert!()
   end
 
-  #  agent_type 
+  #  worker_type 
 
-  test "agent_type/0 returns graph_rag" do
-    assert GraphRag.agent_type() == "graph_rag"
+  test "worker_type/0 returns graph_rag" do
+    assert GraphRag.worker_type() == "graph_rag"
   end
 
   #  tools 

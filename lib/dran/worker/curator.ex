@@ -1,6 +1,6 @@
-defmodule Dran.Agent.Curator do
+defmodule Dran.Worker.Curator do
   @moduledoc """
-  Curator agent: the "conserje" (janitor) of the brain.
+  Curator worker: the "conserje" (janitor) of the brain.
 
   Reviews pairs of pages with very similar embeddings, decides which are
   genuine duplicates vs. distinct content, flags contested pages, and
@@ -18,15 +18,15 @@ defmodule Dran.Agent.Curator do
     * `done` — finishes the session.
   """
 
-  @behaviour Dran.Agent.Engine.Behaviour
-  use Dran.Agent.Schedulable, input: "scheduled run"
+  @behaviour Dran.Worker.Engine.Behaviour
+  use Dran.Worker.Schedulable, input: "scheduled run"
 
   import Ecto.Query
 
   alias Dran.{Knowledge, Repo, Reports}
   alias Dran.Page
 
-  @agent_type "curator"
+  @worker_type "curator"
   @max_flags 20
   @duplicate_threshold 0.05
 
@@ -45,13 +45,13 @@ defmodule Dran.Agent.Curator do
   @doc """
   Start a curator session.
   """
-  @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Agent.Session.t()}
+  @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Worker.Session.t()}
   def run(input, workspace_id, opts \\ []) do
-    Dran.Agent.Engine.run(__MODULE__, input, workspace_id, opts)
+    Dran.Worker.Engine.run(__MODULE__, input, workspace_id, opts)
   end
 
   @impl true
-  def agent_type, do: @agent_type
+  def worker_type, do: @worker_type
 
   @doc "Maximum number of contested flags per session."
   def max_flags, do: @max_flags
@@ -325,7 +325,7 @@ defmodule Dran.Agent.Curator do
         slug: slug,
         body: body,
         report_type: "log",
-        meta: %{"kind" => "log", "agent_session_id" => state.session.id}
+        meta: %{"kind" => "log", "worker_session_id" => state.session.id}
       }
 
       case Reports.create_report(report_attrs) do

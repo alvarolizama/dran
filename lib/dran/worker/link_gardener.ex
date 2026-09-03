@@ -1,6 +1,6 @@
-defmodule Dran.Agent.LinkGardener do
+defmodule Dran.Worker.LinkGardener do
   @moduledoc """
-  Link Gardener agent: reads orphaned or under-linked pages, searches for
+  Link Gardener worker: reads orphaned or under-linked pages, searches for
   candidates, and proposes typed relations between pages with a one-line
   justification.
 
@@ -17,15 +17,15 @@ defmodule Dran.Agent.LinkGardener do
 
   Each proposed relation is created with a `meta` map carrying the
   justification and the `proposed_by` marker so downstream consumers can
-  distinguish agent-suggested relations from manual or auto ones.
+  distinguish worker-suggested relations from manual or auto ones.
   """
 
-  @behaviour Dran.Agent.Engine.Behaviour
-  use Dran.Agent.Schedulable, input: "scheduled weekly run"
+  @behaviour Dran.Worker.Engine.Behaviour
+  use Dran.Worker.Schedulable, input: "scheduled weekly run"
 
   alias Dran.Knowledge
 
-  @agent_type "link_gardener"
+  @worker_type "link_gardener"
   @max_proposals 10
 
   @allowed_relation_types ~w(part_of supersedes contradicts related)
@@ -44,18 +44,18 @@ defmodule Dran.Agent.LinkGardener do
   @doc """
   Start a link gardener session for a topic/context.
   """
-  @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Agent.Session.t()}
+  @spec run(String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Dran.Worker.Session.t()}
   def run(topic, workspace_id, opts \\ []) do
-    Dran.Agent.Engine.run(__MODULE__, topic, workspace_id, opts)
+    Dran.Worker.Engine.run(__MODULE__, topic, workspace_id, opts)
   end
 
   @impl true
-  def agent_type, do: @agent_type
+  def worker_type, do: @worker_type
 
   @doc "Maximum number of relations a single session may propose."
   def max_proposals, do: @max_proposals
 
-  @doc "List of relation types this agent is allowed to propose."
+  @doc "List of relation types this worker is allowed to propose."
   def allowed_relation_types, do: @allowed_relation_types
 
   @impl true

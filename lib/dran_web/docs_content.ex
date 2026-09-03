@@ -18,7 +18,7 @@ defmodule DranWeb.DocsContent do
   - **Projects** — first-class grouping entities (own table, not pages).
   - **Collections** — saved filter queries (own table, replaces the old
     Smart Collection pattern).
-  - **Reports** — system-created logs, lint outputs, agent output (own table).
+  - **Reports** — system-created logs, lint outputs, worker output (own table).
 
   ## Polymorphic relations
 
@@ -196,14 +196,14 @@ defmodule DranWeb.DocsContent do
   Reading a cluster's pages:
     `Knowledge.cluster_pages(workspace_id, cluster_id)` returns the
     lightweight list `%{id, slug, title, page_type}` of pages in a
-    given cluster — no body, no embeddings. The Curator agent uses
+    given cluster — no body, no embeddings. The Curator worker uses
     this to gather evidence when evaluating duplicate candidates.
 
   ─────────────────────────────────────────────────────────────────────
   3. Transitive part_of (Link Gardener — transitive_candidates)
   ─────────────────────────────────────────────────────────────────────
 
-  The `link_gardener` agent has a tool `transitive_candidates` that
+  The `link_gardener` worker has a tool `transitive_candidates` that
   finds inferred `part_of` relations via an intermediate page:
 
     If  A part_of B  and  B part_of C  exist,
@@ -216,7 +216,7 @@ defmodule DranWeb.DocsContent do
     the relations table, limited to 50 candidates per context.
 
   Workflow:
-    1. The agent calls `transitive_candidates` to get the list.
+    1. The worker calls `transitive_candidates` to get the list.
     2. For each candidate, it MUST call `get_page` on A and C to
        verify the inference makes sense before proposing the relation.
     3. It proposes the direct `A part_of C` relation citing the
@@ -224,7 +224,7 @@ defmodule DranWeb.DocsContent do
        de B, y B es parte de C").
 
   The gardener never auto-creates these — it only proposes them with
-  evidence. A human (or the agent's own verification step) decides.
+  evidence. A human (or the worker's own verification step) decides.
 
   ─────────────────────────────────────────────────────────────────────
   Nightly refresh (Quantum)

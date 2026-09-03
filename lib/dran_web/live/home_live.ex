@@ -580,8 +580,8 @@ defmodule DranWeb.HomeLive do
           >
             <div class="card-body p-5">
               <h3 class="card-title text-base">{coll.name}</h3>
-              <p :if={coll.description} class="text-sm text-base-content/60 line-clamp-2">
-                {coll.description}
+              <p :if={coll.summary} class="text-sm text-base-content/60 line-clamp-2">
+                {coll.summary}
               </p>
             </div>
           </.link>
@@ -795,8 +795,8 @@ defmodule DranWeb.HomeLive do
           <span>{gettext("Collection")}</span>
         </div>
         <h1 class="text-2xl font-bold">{@collection.name}</h1>
-        <p :if={@collection.description} class="text-base-content/60 mt-2">
-          {@collection.description}
+        <p :if={@collection.summary} class="text-base-content/60 mt-2">
+          {@collection.summary}
         </p>
       </div>
 

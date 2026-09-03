@@ -1,7 +1,7 @@
 defmodule DranWeb.AdminSystemLive do
   @moduledoc """
   Read-only system information (owner-only): the "Entorno" section showing
-  inference, agents, and uploads configuration loaded from env vars at
+  inference, workers, and uploads configuration loaded from env vars at
   startup, plus an inference connection test button. Moved verbatim from the
   old SettingsLive "system" tab.
   """
@@ -129,11 +129,8 @@ defmodule DranWeb.AdminSystemLive do
             </.config_row>
             <.config_row
               label={gettext("Chat model")}
-              env="DRAN_INFERENCE_CHAT_MODEL"
               description={
-                gettext(
-                  "Effective model for chat and agents (web override or env default). See “Modelos” above to override."
-                )
+                gettext("Effective model for chat and workers. Configure in Admin → Models.")
               }
             >
               <code class="text-sm font-mono text-primary">
@@ -142,12 +139,7 @@ defmodule DranWeb.AdminSystemLive do
             </.config_row>
             <.config_row
               label={gettext("Embedding model")}
-              env="DRAN_INFERENCE_EMBEDDING_MODEL"
-              description={
-                gettext(
-                  "Effective model for embeddings (web override or env default). See “Modelos” above to override."
-                )
-              }
+              description={gettext("Effective model for embeddings. Configure in Admin → Models.")}
             >
               <code class="text-sm font-mono text-primary">
                 {Config.embedding_model() || "—"}
@@ -178,11 +170,8 @@ defmodule DranWeb.AdminSystemLive do
             </.config_row>
             <.config_row
               label={gettext("Rerank model")}
-              env="DRAN_INFERENCE_RERANK_MODEL"
               description={
-                gettext(
-                  "Effective model for re-ranking search results (web override or env default). See “Modelos” above to override."
-                )
+                gettext("Effective model for re-ranking search results. Configure in Admin → Models.")
               }
             >
               <code class="text-sm font-mono text-primary">
@@ -215,33 +204,33 @@ defmodule DranWeb.AdminSystemLive do
 
           <.config_section
             icon="hero-bolt"
-            title={gettext("Agents")}
-            subtitle={gettext("Autonomous agents")}
+            title={gettext("Workers")}
+            subtitle={gettext("Autonomous workers")}
           >
             <.config_row
               label={gettext("Max steps")}
-              env="AGENT_MAX_STEPS"
+              env="WORKER_MAX_STEPS"
               description={
                 gettext(
-                  "Maximum number of steps an autonomous agent can take in a single run. Read-only — set via environment variable."
+                  "Maximum number of steps an autonomous worker can take in a single run. Read-only — set via environment variable."
                 )
               }
             >
               <span class="text-sm text-base-content/60">
-                {Application.get_env(:dran, :agent_max_steps, 150)}
+                {Application.get_env(:dran, :worker_max_steps, 150)}
               </span>
             </.config_row>
             <.config_row
               label={gettext("Per-step timeout")}
-              env="AGENT_PER_STEP_TIMEOUT"
+              env="WORKER_PER_STEP_TIMEOUT"
               description={
                 gettext(
-                  "Maximum wall-clock time per agent step, in milliseconds. Read-only — set via environment variable."
+                  "Maximum wall-clock time per worker step, in milliseconds. Read-only — set via environment variable."
                 )
               }
             >
               <span class="text-sm text-base-content/60">
-                {Application.get_env(:dran, :agent_per_step_timeout, 120_000)} {gettext("ms")}
+                {Application.get_env(:dran, :worker_per_step_timeout, 120_000)} {gettext("ms")}
               </span>
             </.config_row>
           </.config_section>

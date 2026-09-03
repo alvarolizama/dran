@@ -28,7 +28,7 @@ defmodule Dran.Goal do
              :workspace_id,
              :title,
              :slug,
-             :description,
+             :summary,
              :body,
              :kind,
              :health,
@@ -56,7 +56,7 @@ defmodule Dran.Goal do
   schema "goals" do
     field :title, :string
     field :slug, :string
-    field :description, :string
+    field :summary, :string
     field :body, :string, default: ""
     field :kind, :string
     field :health, :string
@@ -89,7 +89,7 @@ defmodule Dran.Goal do
       :workspace_id,
       :title,
       :slug,
-      :description,
+      :summary,
       :body,
       :kind,
       :health,

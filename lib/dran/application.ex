@@ -19,7 +19,7 @@ defmodule Dran.Application do
       },
       {DNSCluster, query: Application.get_env(:dran, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Dran.PubSub},
-      {Registry, keys: :unique, name: Dran.Agent.SessionRegistry},
+      {Registry, keys: :unique, name: Dran.Worker.SessionRegistry},
       Dran.Inference.QueueSupervisor,
       Dran.Embeddings.Supervisor,
       Dran.Relations.Supervisor,

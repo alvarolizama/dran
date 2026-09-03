@@ -147,6 +147,12 @@ defmodule Dran.TasksMigrationTest do
 
   # Runs the real migration SQL inside the test sandbox.
   defp run_migration_up! do
+    # The historical migration copies pages.summary into tasks.summary, but
+    # tasks.summary was dropped later (dead column cleanup — migration
+    # 20260903012228). Re-add it inside the sandbox transaction so the
+    # replay works; the per-test rollback removes it again.
+    Repo.query!("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS summary varchar(255)")
+
     Enum.each(
       Dran.Repo.Migrations.MigrateTodoNotesToTasks.up_statements(),
       &Repo.query!/1

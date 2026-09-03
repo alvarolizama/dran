@@ -26,7 +26,7 @@ expected = ["dran_search","dran_create_page","dran_update_page","dran_get_page",
             "dran_create_task","dran_update_task","dran_list_tasks","dran_create_note","dran_update_note",
             "dran_create_goal","dran_create_relation","dran_delete_relation",
             "dran_get_links","dran_list_pages","dran_get_stats","dran_lint_brain",
-            "dran_rename_slug","dran_reaugment_page","dran_start_agent","dran_get_agent_session"]
+            "dran_rename_slug","dran_reaugment_page","dran_start_worker","dran_get_worker_session"]
 missing = [t for t in expected if t not in tools]
 extra = [t for t in tools if t not in expected]
 if missing: print("MISSING:", missing); sys.exit(1)
@@ -38,8 +38,8 @@ if unprefixed:
     print("FAIL: tools without dran_ prefix:", unprefixed); sys.exit(1)
 
 # Check start_agent enum has the expected agent types
-enum = tools['dran_start_agent']['inputSchema']['properties']['agent_type'].get('enum', [])
-print("dran_start_agent enum:", enum)
+enum = tools['dran_start_worker']['inputSchema']['properties']['worker_type'].get('enum', [])
+print("dran_start_worker enum:", enum)
 want = {"curator","link_gardener"}
 if set(enum) != want:
     print("FAIL: enum mismatch, want", sorted(want)); sys.exit(1)

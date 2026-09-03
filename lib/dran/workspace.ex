@@ -32,7 +32,7 @@ defmodule Dran.Workspace do
     field :semantic_threshold_mid, :float
     field :semantic_threshold_long, :float
     field :entity_linker_enabled, :boolean
-    field :agent_max_pages, :integer
+    field :worker_max_pages, :integer
     timestamps(type: :utc_datetime, updated_at: false)
   end
 
@@ -62,12 +62,12 @@ defmodule Dran.Workspace do
       :semantic_threshold_mid,
       :semantic_threshold_long,
       :entity_linker_enabled,
-      :agent_max_pages
+      :worker_max_pages
     ])
     |> validate_subset(:disabled_page_types, Dran.Page.all_types())
     |> validate_inclusion(:visibility, ~w(public private))
     |> force_public_when_default()
-    |> validate_number(:agent_max_pages, greater_than: 0)
+    |> validate_number(:worker_max_pages, greater_than: 0)
     |> validate_threshold(:semantic_threshold_short)
     |> validate_threshold(:semantic_threshold_mid)
     |> validate_threshold(:semantic_threshold_long)

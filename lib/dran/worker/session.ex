@@ -1,22 +1,22 @@
-defmodule Dran.Agent.Session do
+defmodule Dran.Worker.Session do
   @moduledoc """
-  Generic session schema for every Dran agent run.
+  Generic session schema for every Dran worker run.
 
-  A session tracks the agent type, input, current status, summary,
-  counters, and metadata. It owns a collection of `Dran.Agent.Step`.
+  A session tracks the worker type, input, current status, summary,
+  counters, and metadata. It owns a collection of `Dran.Worker.Step`.
   """
 
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Dran.Agent.Step
+  alias Dran.Worker.Step
   alias Dran.Workspace
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  schema "agent_sessions" do
-    field :agent_type, :string
+  schema "worker_sessions" do
+    field :worker_type, :string
     field :input, :string
     field :status, :string, default: "pending"
     field :summary, :string
@@ -36,7 +36,7 @@ defmodule Dran.Agent.Session do
   def changeset(session, attrs) do
     session
     |> cast(attrs, [
-      :agent_type,
+      :worker_type,
       :input,
       :status,
       :summary,
@@ -47,7 +47,7 @@ defmodule Dran.Agent.Session do
       :meta,
       :workspace_id
     ])
-    |> validate_required([:agent_type, :input, :workspace_id])
+    |> validate_required([:worker_type, :input, :workspace_id])
     |> validate_inclusion(:status, ~w(pending running done failed cancelled))
   end
 end

@@ -249,6 +249,38 @@ defmodule DranWeb.ResourceComponents do
   end
 
   @doc """
+  Labelled `<select>` — the canonical select for the app: daisyUI `.select`
+  styling, small size, required `<label>` wrapper so the whole control is
+  clickable. Use this for every bare `<select>` in templates.
+
+  Options come pre-rendered (use `<.goal_options>` / `<.actor_options>` for
+  hierarchical and actor lists); `selected` must already be set on each
+  option. `phx-change` etc. go through `{@rest}`.
+  """
+  attr :id, :string, default: nil
+  attr :name, :string, required: true
+  attr :label, :string, required: true
+  attr :class, :string, default: nil
+  attr :rest, :global, include: ~w(phx-change phx-value-* data-*)
+  slot :inner_block, required: true
+
+  def resource_select(assigns) do
+    ~H"""
+    <label class="block">
+      <span class="text-xs text-base-content/60">{@label}</span>
+      <select
+        id={@id}
+        name={@name}
+        class={["select select-sm select-bordered w-full mt-1", @class]}
+        {@rest}
+      >
+        {render_slot(@inner_block)}
+      </select>
+    </label>
+    """
+  end
+
+  @doc """
   Flattened, indented `<option>` list for goal selects — works at any
   hierarchy depth (a native `<optgroup>` cannot nest). `tree` comes from
   `Dran.Goals.flattened_tree/1` (`[{goal, depth}]`).
@@ -347,56 +379,32 @@ defmodule DranWeb.ResourceComponents do
           {gettext("Details")}
         </h4>
 
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Status")}</span>
-          <select
-            name="task[status]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <%= for s <- Task.statuses() do %>
-              <option value={s} selected={status_selected(@form, s)}>{status_label(s)}</option>
-            <% end %>
-          </select>
-        </label>
+        <.resource_select name="task[status]" label={gettext("Status")}>
+          <%= for s <- Task.statuses() do %>
+            <option value={s} selected={status_selected(@form, s)}>{status_label(s)}</option>
+          <% end %>
+        </.resource_select>
 
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Assignee")}</span>
-          <select
-            name="task[assignee_actor_id]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <option value="" selected={is_nil(input_value(@form, :assignee_actor_id))}>
-              {gettext("unassigned")}
-            </option>
-            <.actor_options actors={@actors} selected_id={input_value(@form, :assignee_actor_id)} />
-          </select>
-        </label>
+        <.resource_select name="task[assignee_actor_id]" label={gettext("Assignee")}>
+          <option value="" selected={is_nil(input_value(@form, :assignee_actor_id))}>
+            {gettext("unassigned")}
+          </option>
+          <.actor_options actors={@actors} selected_id={input_value(@form, :assignee_actor_id)} />
+        </.resource_select>
 
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Priority")}</span>
-          <select
-            name="task[priority]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <option value="" selected={is_nil(input_value(@form, :priority))}>
-              {gettext("none")}
-            </option>
-            <%= for p <- Task.priorities() do %>
-              <option value={p} selected={input_value(@form, :priority) == p}>{p}</option>
-            <% end %>
-          </select>
-        </label>
+        <.resource_select name="task[priority]" label={gettext("Priority")}>
+          <option value="" selected={is_nil(input_value(@form, :priority))}>
+            {gettext("none")}
+          </option>
+          <%= for p <- Task.priorities() do %>
+            <option value={p} selected={input_value(@form, :priority) == p}>{p}</option>
+          <% end %>
+        </.resource_select>
 
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Goal")}</span>
-          <select
-            name="task[goal_id]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <option value="" selected={is_nil(@goal_id)}>{gettext("no goal")}</option>
-            <.goal_options tree={@goal_tree} selected_id={@goal_id} />
-          </select>
-        </label>
+        <.resource_select name="task[goal_id]" label={gettext("Goal")}>
+          <option value="" selected={is_nil(@goal_id)}>{gettext("no goal")}</option>
+          <.goal_options tree={@goal_tree} selected_id={@goal_id} />
+        </.resource_select>
 
         <label class="block">
           <span class="text-xs text-base-content/60">{gettext("Due date")}</span>
@@ -471,9 +479,9 @@ defmodule DranWeb.ResourceComponents do
         />
 
         <.input
-          field={@form[:description]}
+          field={@form[:summary]}
           type="textarea"
-          label={gettext("Description")}
+          label={gettext("Summary")}
           rows={2}
         />
 
@@ -496,48 +504,30 @@ defmodule DranWeb.ResourceComponents do
           {gettext("Details")}
         </h4>
 
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Kind")}</span>
-          <select
-            name="goal[kind]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <option value="" selected={is_nil(input_value(@form, :kind))}>{gettext("none")}</option>
-            <%= for k <- @goal_kinds do %>
-              <option value={k} selected={input_value(@form, :kind) == k}>
-                {String.capitalize(k)}
-              </option>
-            <% end %>
-          </select>
-        </label>
-
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Health")}</span>
-          <select
-            name="goal[health]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <option value="" selected={is_nil(input_value(@form, :health))}>—</option>
-            <option value="green" selected={input_value(@form, :health) == "green"}>Green</option>
-            <option value="yellow" selected={input_value(@form, :health) == "yellow"}>Yellow</option>
-            <option value="red" selected={input_value(@form, :health) == "red"}>Red</option>
-          </select>
-        </label>
-
-        <label class="block">
-          <span class="text-xs text-base-content/60">{gettext("Status")}</span>
-          <select
-            name="goal[status]"
-            class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
-          >
-            <option value="active" selected={input_value(@form, :status) == "active"}>Active</option>
-            <option value="draft" selected={input_value(@form, :status) == "draft"}>Draft</option>
-            <option value="on_hold" selected={input_value(@form, :status) == "on_hold"}>
-              On Hold
+        <.resource_select name="goal[kind]" label={gettext("Kind")}>
+          <option value="" selected={is_nil(input_value(@form, :kind))}>{gettext("none")}</option>
+          <%= for k <- @goal_kinds do %>
+            <option value={k} selected={input_value(@form, :kind) == k}>
+              {String.capitalize(k)}
             </option>
-            <option value="done" selected={input_value(@form, :status) == "done"}>Done</option>
-          </select>
-        </label>
+          <% end %>
+        </.resource_select>
+
+        <.resource_select name="goal[health]" label={gettext("Health")}>
+          <option value="" selected={is_nil(input_value(@form, :health))}>—</option>
+          <option value="green" selected={input_value(@form, :health) == "green"}>Green</option>
+          <option value="yellow" selected={input_value(@form, :health) == "yellow"}>Yellow</option>
+          <option value="red" selected={input_value(@form, :health) == "red"}>Red</option>
+        </.resource_select>
+
+        <.resource_select name="goal[status]" label={gettext("Status")}>
+          <option value="active" selected={input_value(@form, :status) == "active"}>Active</option>
+          <option value="draft" selected={input_value(@form, :status) == "draft"}>Draft</option>
+          <option value="on_hold" selected={input_value(@form, :status) == "on_hold"}>
+            On Hold
+          </option>
+          <option value="done" selected={input_value(@form, :status) == "done"}>Done</option>
+        </.resource_select>
 
         <.input field={@form[:metric]} type="text" label={gettext("Metric")} />
         <.input field={@form[:target_value]} type="number" label={gettext("Target Value")} />

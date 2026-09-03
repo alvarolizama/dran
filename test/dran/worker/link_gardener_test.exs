@@ -1,9 +1,9 @@
-defmodule Dran.Agent.LinkGardenerTest do
+defmodule Dran.Worker.LinkGardenerTest do
   use Dran.DataCase, async: false
 
   alias Dran.{Knowledge, Repo}
-  alias Dran.Agent.{LinkGardener, Session}
-  alias Dran.Agent.LinkGardener.State
+  alias Dran.Worker.{LinkGardener, Session}
+  alias Dran.Worker.LinkGardener.State
   alias Dran.Relation
 
   # ── Helpers ───────────────────────────────────────────────────────────────
@@ -13,7 +13,7 @@ defmodule Dran.Agent.LinkGardenerTest do
       %Session{
         id: Ecto.UUID.generate(),
         workspace_id: Ecto.UUID.generate(),
-        agent_type: "link_gardener",
+        worker_type: "link_gardener",
         input: "tend the graph",
         status: "running"
       },
@@ -64,9 +64,9 @@ defmodule Dran.Agent.LinkGardenerTest do
 
   # ── Unit tests (guard logic, no engine/LLM) ─────────────────────────────
 
-  describe "agent_type/0" do
+  describe "worker_type/0" do
     test "returns link_gardener" do
-      assert LinkGardener.agent_type() == "link_gardener"
+      assert LinkGardener.worker_type() == "link_gardener"
     end
   end
 
@@ -502,7 +502,7 @@ defmodule Dran.Agent.LinkGardenerTest do
           struct!(Session, %{
             id: Ecto.UUID.generate(),
             workspace_id: ctx.id,
-            agent_type: "link_gardener",
+            worker_type: "link_gardener",
             input: "tend links",
             status: "running"
           }),

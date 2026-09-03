@@ -5,7 +5,7 @@ defmodule Dran.JobsTest.FakeJob do
   def ok, do: {:ok, %{ran: true}}
 
   def ok_session do
-    {:ok, %Dran.Agent.Session{id: Ecto.UUID.generate(), status: "running"}}
+    {:ok, %Dran.Worker.Session{id: Ecto.UUID.generate(), status: "running"}}
   end
 
   def error_tuple, do: {:error, :boom}
@@ -60,7 +60,7 @@ defmodule Dran.JobsTest do
       assert %{
                key: :curator_daily,
                label: "Curator",
-               mfa: {Dran.Agent.Curator, :run_scheduled, []}
+               mfa: {Dran.Worker.Curator, :run_scheduled, []}
              } =
                Jobs.get(:curator_daily)
 
@@ -72,7 +72,7 @@ defmodule Dran.JobsTest do
       assert %{mfa: {Dran.Graph.Maintenance, :sweep_scheduled, []}} =
                Jobs.get(:graph_maintenance_nightly)
 
-      assert %{mfa: {Dran.Agent.LinkGardener, :run_scheduled, []}} =
+      assert %{mfa: {Dran.Worker.LinkGardener, :run_scheduled, []}} =
                Jobs.get(:link_gardener_weekly)
 
       assert Jobs.get(:nonexistent) == nil
@@ -169,8 +169,8 @@ defmodule Dran.JobsTest do
     test "session results include the session id in body and summary" do
       assert {:ok, report} = Jobs.execute(:curator_daily, "scheduled", {FakeJob, :ok_session, []})
 
-      assert report.meta["summary"] =~ ~r/^Agent session .+ started$/
-      assert report.body =~ "Agent session"
+      assert report.meta["summary"] =~ ~r/^Worker session .+ started$/
+      assert report.body =~ "Worker session"
       assert report.body =~ "status: **running**"
     end
 

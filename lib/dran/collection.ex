@@ -19,7 +19,7 @@ defmodule Dran.Collection do
              :workspace_id,
              :name,
              :slug,
-             :description,
+             :summary,
              :filters,
              :inserted_at,
              :updated_at
@@ -28,7 +28,7 @@ defmodule Dran.Collection do
   schema "collections" do
     field :name, :string
     field :slug, :string
-    field :description, :string
+    field :summary, :string
     field :filters, :map, default: %{}
 
     belongs_to :workspace, Dran.Workspace
@@ -39,7 +39,7 @@ defmodule Dran.Collection do
   @doc "Changeset for creating or updating a collection"
   def changeset(collection, attrs) do
     collection
-    |> cast(attrs, [:workspace_id, :name, :slug, :description, :filters])
+    |> cast(attrs, [:workspace_id, :name, :slug, :summary, :filters])
     |> validate_required([:workspace_id, :name, :slug])
     |> validate_length(:name, max: 500)
     |> validate_length(:slug, max: 500)

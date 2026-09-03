@@ -37,13 +37,13 @@ A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledg
 - **Pinned pages** — toggle pin on any page type; pinned pages surface in the wiki sidebar and context home
 
 ### Automation
-- **3 autonomous agents** — `curator` (duplicates/contested cleanup, daily cron), `link_gardener` (proposes relations for orphans, weekly cron + manual), `graph_rag` (GraphRAG search with citations, manual)
+- **3 autonomous workers** — `curator` (duplicates/contested cleanup, daily cron), `link_gardener` (proposes relations for orphans, weekly cron + manual), `graph_rag` (GraphRAG search with citations, manual)
 - **5 scheduled jobs** — `curator_daily`, `pagerank_nightly`, `community_summaries_nightly`, `graph_maintenance_nightly`, `link_gardener_weekly`. Controlled from **Settings → Brain** — per-job toggles, "run now" buttons, and a `report` page per run
 - **Entity linker** — auto-creates entity pages from real-world names detected in bodies (people, companies, tools); noise-filtered (no file paths, modules, or generic terms) and toggleable from Settings → Brain
 - **Graph intelligence** — PageRank authority scoring, cluster detection with LLM summaries, graph maintenance sweeps; all scheduled nightly
 
 ### Integration & admin
-- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 22 tools + 3 agents + 3 resources + 2 prompts. attribution (`owner`/`created_by`) is derived server-side from the key's actor — never client-settable. API keys with `write_access: false` are read-only — write tools (`dran_create_page`, `dran_update_page`, `dran_delete_page`, `dran_create_note`, `dran_update_note`, `dran_create_task`, `dran_update_task`, `dran_create_goal`, `dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`, `dran_reaugment_page`, `dran_start_agent`) return `403`
+- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 22 tools + 3 workers + 3 resources + 2 prompts. attribution (`owner`/`created_by`) is derived server-side from the key's actor — never client-settable. API keys with `write_access: false` are read-only — write tools (`dran_create_page`, `dran_update_page`, `dran_delete_page`, `dran_create_note`, `dran_update_note`, `dran_create_task`, `dran_update_task`, `dran_create_goal`, `dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`, `dran_reaugment_page`, `dran_start_worker`) return `403`
 - **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`). Owner/created_by injected from auth identity on create. Write routes (`POST`, `PUT`, `DELETE`) require `write_access: true` on API keys — read routes (`GET`) are always allowed
 - **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users). Three roles: **admin** (`is_admin`, full access + all contexts), **editor** (`is_editor`, panel + dashboard access, assigned contexts), regular user (wiki-only). Panel routes gated by `admin_or_editor` pipeline; wiki open to all logged-in users
 - **Settings panel** (admin) — users, contexts, API keys (with per-key `write_access` toggle — read-only by default), brain tuning, models, system, danger zone (`/panel/settings/:tab`)
@@ -71,50 +71,15 @@ All configuration is via environment variables — see [`.env.example`](.env.exa
 | `DATABASE_URL` | Ecto URL, e.g. `ecto://postgres:postgres@localhost/dran_dev` |
 | `PHX_HOST` / `PHX_PORT` / `PHX_SCHEME` | Public host/port/scheme for URL generation |
 | `DRAN_API_TOKEN` | Legacy admin bearer token for REST/MCP |
-| `DRAN_CONTEXT_SLUG` / `DRAN_CONTEXT_NAME` | Default context created on seed |
+| `DRAN_WORKSPACE_SLUG` / `DRAN_WORKSPACE_NAME` | Default context created on seed |
 | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Optional — enables "Sign in with Google" |
 | `GOOGLE_OAUTH_ALLOWED_DOMAINS` | Domains allowed to auto-register via Google |
-| `DRAN_INFERENCE_API_URL` / `DRAN_INFERENCE_API_KEY` | OpenAI-compatible inference endpoint (`/v1/embeddings`, `/v1/rerank`, `/v1/chat/completions`) — powers embeddings, summaries, agents, semantic search |
-| `DRAN_INFERENCE_CHAT_MODEL` / `DRAN_INFERENCE_EMBEDDING_MODEL` / `DRAN_INFERENCE_RERANK_MODEL` | Optional model overrides per capability |
+| `DRAN_INFERENCE_API_URL` / `DRAN_INFERENCE_API_KEY` | OpenAI-compatible inference endpoint (`/v1/embeddings`, `/v1/rerank`, `/v1/chat/completions`) — powers embeddings, summaries, workers, semantic search |
 | `SESSION_SIGNING_SALT` / `SESSION_ENCRYPTION_SALT` | Required in production (`mix phx.gen.secret 32`) |
 | `UPLOADS_DIR` | File upload storage path |
 | `DISABLE_FORCE_SSL` | Set to `1` **at build time** when serving over plain HTTP (VPN tunnels) |
 
-Inference is optional: without it, Dran still works — you lose embeddings, semantic search, auto-summaries, and agents.
-
-## Using the skills
-
-The [`skills/`](skills/) directory ships **agent operating manuals** — install them into your AI agent (Hermes, Claude Code, or any MCP-capable agent) so it knows how to operate Dran correctly instead of guessing.
-
-| Skill | Use it for |
-| --- | --- |
-| [`dran`](skills/dran/SKILL.md) | **Start here** — MCP tools reference, page types, props, relations, common recipes and pitfalls |
-| [`note-taking-flow`](skills/note-taking-flow/SKILL.md) | Capturing notes, concepts, entities, references |
-| [`research-flow`](skills/research-flow/SKILL.md) | Online research stored into the brain |
-| [`project-flow`](skills/project-flow/SKILL.md) | Creating/managing projects (strategy layer) |
-| [`goal-flow`](skills/goal-flow/SKILL.md) | Measurable objectives under projects |
-| [`planning-flow`](skills/planning-flow/SKILL.md) | Tactical plans with roadmaps and todos |
-| [`todo-flow`](skills/todo-flow/SKILL.md) | Creating todos (dev or general) with execution steps |
-| [`coder-flow`](skills/coder-flow/SKILL.md) | Executing dev todos — phases, gates, evidence |
-| [`relations-flow`](skills/relations-flow/SKILL.md) | Connecting pages with typed relations |
-| [`maintenance-flow`](skills/maintenance-flow/SKILL.md) | Brain hygiene — orphans, duplicates, stale pages |
-
-**Install (Hermes):** copy the skill folders into `~/.hermes/skills/` (or symlink them) and restart the agent. Each `SKILL.md` has portable frontmatter — other agents can load them the same way.
-
-**Connect the agent to Dran via MCP:**
-
-```json
-{
-  "mcpServers": {
-    "dran": {
-      "url": "http://localhost:4000/api/mcp",
-      "headers": { "Authorization": "Bearer <your-api-token>" }
-    }
-  }
-}
-```
-
-Get your token from **Settings → Users** (per-user token, scoped to your contexts) or use `DRAN_API_TOKEN` for admin access. MCP returns `401` for invalid tokens, `403` for contexts the user can't access.
+Inference is optional: without it, Dran still works — you lose embeddings, semantic search, auto-summaries, and workers.
 
 ## Page types
 
@@ -128,7 +93,7 @@ Get your token from **Settings → Users** (per-user token, scoped to your conte
 | `goal` | Objectives with measurable targets |
 | `plan` | Time-horizoned plans (weekly/quarterly/yearly) |
 | `query` | Questions with answers |
-| `report` | System-created agent run logs (detail view only, `/panel/reports/:slug`) |
+| `report` | System-created worker run logs (detail view only, `/panel/reports/:slug`) |
 
 **Tasks** are NOT page types — they live in their own `tasks` table with
 kanban status, priority, due dates, recurrence and checklists, optionally

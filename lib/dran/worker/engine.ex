@@ -1,15 +1,15 @@
-defmodule Dran.Agent.Engine do
+defmodule Dran.Worker.Engine do
   @moduledoc """
-  Generic ReAct engine for Dran agents.
+  Generic ReAct engine for Dran workers.
 
   `run(module, input, workspace_id, opts)` creates a session, then spawns the
   loop on `Dran.Relations.TaskSupervisor`. The supplied `module` must implement
-  the `Dran.Agent.Engine.Behaviour` callbacks.
+  the `Dran.Worker.Engine.Behaviour` callbacks.
 
   Each step is persisted and broadcasted via `Dran.PubSub` on
-  `agents:<session_id>` and `agents:all`.
+  `workers:<session_id>` and `workers:all`.
 
-  Running tasks are registered in `Dran.Agent.SessionRegistry` under the
+  Running tasks are registered in `Dran.Worker.SessionRegistry` under the
   session id so they can be cancelled with `cancel/1`.
   """
 
@@ -17,25 +17,25 @@ defmodule Dran.Agent.Engine do
   import Ecto.Query
 
   alias Dran.{Inference, Repo}
-  alias Dran.Agent.{Session, Step}
+  alias Dran.Worker.{Session, Step}
 
   @max_tool_result_chars 2_000
   @max_completion_tokens 4_096
   @max_consecutive_errors 5
   @max_synthesis_nudges 2
 
-  defp max_steps, do: Application.get_env(:dran, :agent_max_steps, 150)
-  defp per_step_timeout, do: Application.get_env(:dran, :agent_per_step_timeout, 120_000)
+  defp max_steps, do: Application.get_env(:dran, :worker_max_steps, 150)
+  defp per_step_timeout, do: Application.get_env(:dran, :worker_per_step_timeout, 120_000)
 
   @doc """
-  Start an agent session and spawn the ReAct loop asynchronously.
+  Start an worker session and spawn the ReAct loop asynchronously.
 
   Returns `{:ok, session}` immediately. The caller can subscribe to
   `Dran.PubSub` topics or poll the session in the database.
   """
   @spec run(module(), String.t(), Ecto.UUID.t(), keyword()) :: {:ok, Session.t()}
   def run(module, input, workspace_id, opts \\ []) do
-    # Wire agent_max_pages (per-workspace tuning) into the session as a
+    # Wire worker_max_pages (per-workspace tuning) into the session as a
     # per-session limit on pages_created. The limit is resolved once here so
     # the loop doesn't re-query the workspace on every step.
     opts = Keyword.put_new(opts, :max_pages, resolve_max_pages(workspace_id))
@@ -55,14 +55,14 @@ defmodule Dran.Agent.Engine do
   end
 
   @doc """
-  Cancel a running agent session.
+  Cancel a running worker session.
 
   Sends a graceful shutdown to the task and marks the session `"cancelled"`;
   when the runner is already gone, it only marks sessions still `"running"`.
   """
   @spec cancel(Ecto.UUID.t()) :: :ok | {:error, :not_found}
   def cancel(session_id) do
-    case Registry.lookup(Dran.Agent.SessionRegistry, session_id) do
+    case Registry.lookup(Dran.Worker.SessionRegistry, session_id) do
       [{pid, _} | _] ->
         Process.exit(pid, :shutdown)
         mark_cancelled!(session_id)
@@ -84,18 +84,18 @@ defmodule Dran.Agent.Engine do
   end
 
   defp register_runner(session_id) do
-    Registry.register(Dran.Agent.SessionRegistry, session_id, nil)
+    Registry.register(Dran.Worker.SessionRegistry, session_id, nil)
   end
 
   defp unregister_runner(session_id) do
-    Registry.unregister(Dran.Agent.SessionRegistry, session_id)
+    Registry.unregister(Dran.Worker.SessionRegistry, session_id)
   end
 
   defp mark_cancelled!(session_id) do
     Repo.get!(Session, session_id)
     |> Session.changeset(%{
       status: "cancelled",
-      summary: "Agent session was cancelled by the user.",
+      summary: "Worker session was cancelled by the user.",
       completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
     |> Repo.update!()
@@ -105,7 +105,7 @@ defmodule Dran.Agent.Engine do
     {:ok, session} =
       %Session{}
       |> Session.changeset(%{
-        agent_type: module.agent_type(),
+        worker_type: module.worker_type(),
         input: input,
         workspace_id: workspace_id,
         status: "running",
@@ -156,21 +156,21 @@ defmodule Dran.Agent.Engine do
     rescue
       reason ->
         Logger.error(
-          "Agent.Engine: fatal crash: #{inspect(reason)}\n#{Exception.format_stacktrace(__STACKTRACE__)}"
+          "Worker.Engine: fatal crash: #{inspect(reason)}\n#{Exception.format_stacktrace(__STACKTRACE__)}"
         )
 
         finish_session(
           %{session: session, pages_created: 0},
-          %{"summary" => "Agent crashed: #{Exception.format(:error, reason, __STACKTRACE__)}"},
+          %{"summary" => "Worker crashed: #{Exception.format(:error, reason, __STACKTRACE__)}"},
           "failed"
         )
     catch
       kind, reason ->
-        Logger.error("Agent.Engine: fatal crash (#{kind}): #{inspect(reason)}")
+        Logger.error("Worker.Engine: fatal crash (#{kind}): #{inspect(reason)}")
 
         finish_session(
           %{session: session, pages_created: 0},
-          %{"summary" => "Agent crashed: #{kind}: #{inspect(reason)}"},
+          %{"summary" => "Worker crashed: #{kind}: #{inspect(reason)}"},
           "failed"
         )
     end
@@ -179,15 +179,15 @@ defmodule Dran.Agent.Engine do
   defp loop(%{step: step} = state) do
     cond do
       step >= max_steps() ->
-        finish_session(state, %{"summary" => "Agent reached max steps (#{max_steps()})"})
+        finish_session(state, %{"summary" => "Worker reached max steps (#{max_steps()})"})
         :ok
 
       max_pages_reached?(state) ->
         # Per-session pages_created limit from the workspace tuning
-        # (agent_max_pages). Same hard stop as max_steps: synthesize and quit.
+        # (worker_max_pages). Same hard stop as max_steps: synthesize and quit.
         finish_session(state, %{
           "summary" =>
-            "Agent reached max pages created (#{session_max_pages(state)}). " <>
+            "Worker reached max pages created (#{session_max_pages(state)}). " <>
               "Synthesize what you have."
         })
 
@@ -204,7 +204,7 @@ defmodule Dran.Agent.Engine do
             Task.shutdown(task)
 
             finish_session(state, %{
-              "summary" => "Agent step timed out after #{per_step_timeout()}ms"
+              "summary" => "Worker step timed out after #{per_step_timeout()}ms"
             })
 
           {:ok, {:continue, state}} ->
@@ -214,16 +214,16 @@ defmodule Dran.Agent.Engine do
             :ok
 
           {:ok, {:error, state, reason}} ->
-            Logger.warning("Agent.Engine: step failed: #{inspect(reason)}")
-            finish_session(state, %{"summary" => "Agent step failed: #{inspect(reason)}"})
+            Logger.warning("Worker.Engine: step failed: #{inspect(reason)}")
+            finish_session(state, %{"summary" => "Worker step failed: #{inspect(reason)}"})
 
           {:ok, result} ->
-            Logger.warning("Agent.Engine: unexpected step result: #{inspect(result)}")
-            finish_session(state, %{"summary" => "Agent step returned unexpected result"})
+            Logger.warning("Worker.Engine: unexpected step result: #{inspect(result)}")
+            finish_session(state, %{"summary" => "Worker step returned unexpected result"})
 
           {:exit, reason} ->
-            Logger.warning("Agent.Engine: step crashed: #{inspect(reason)}")
-            finish_session(state, %{"summary" => "Agent step crashed: #{inspect(reason)}"})
+            Logger.warning("Worker.Engine: step crashed: #{inspect(reason)}")
+            finish_session(state, %{"summary" => "Worker step crashed: #{inspect(reason)}"})
         end
     end
   end
@@ -266,7 +266,7 @@ defmodule Dran.Agent.Engine do
           if Map.get(state, :synthesis_nudges, 0) >= @max_synthesis_nudges do
             finish_session(state, %{
               "summary" =>
-                "Agent stopped after #{@max_consecutive_errors} consecutive tool errors " <>
+                "Worker stopped after #{@max_consecutive_errors} consecutive tool errors " <>
                   "and #{@max_synthesis_nudges} recovery attempts. The LLM kept repeating " <>
                   "failed actions instead of synthesizing."
             })
@@ -291,7 +291,7 @@ defmodule Dran.Agent.Engine do
   rescue
     reason ->
       Logger.error(
-        "Agent.Engine single_turn crash: #{Exception.format(:error, reason, __STACKTRACE__)}"
+        "Worker.Engine single_turn crash: #{Exception.format(:error, reason, __STACKTRACE__)}"
       )
 
       {:error, state, reason}
@@ -323,7 +323,7 @@ defmodule Dran.Agent.Engine do
         backoff = trunc(:math.pow(2, attempt) * 500)
 
         Logger.warning(
-          "Agent.Engine: LLM call failed (HTTP #{status}), retrying in #{backoff}ms (attempt #{attempt + 1}/#{@max_llm_retries})"
+          "Worker.Engine: LLM call failed (HTTP #{status}), retrying in #{backoff}ms (attempt #{attempt + 1}/#{@max_llm_retries})"
         )
 
         Process.sleep(backoff)
@@ -445,7 +445,7 @@ defmodule Dran.Agent.Engine do
   Summarize a tool result for DB storage and future messages.
 
   The default implementation works for lists, maps, `:done`, and errors.
-  Agent modules can export `summarize_result/1` to override.
+  Worker modules can export `summarize_result/1` to override.
   """
   @spec summarize_result(term(), module() | nil) :: map()
   def summarize_result(result, module \\ nil)
@@ -472,7 +472,7 @@ defmodule Dran.Agent.Engine do
   # ── Session lifecycle ──
 
   defp finish_session(state, args, status \\ "done") do
-    summary = args["summary"] || "Agent completed"
+    summary = args["summary"] || "Worker completed"
 
     existing_meta =
       case Repo.get(Session, state.session.id) do
@@ -501,8 +501,8 @@ defmodule Dran.Agent.Engine do
   # ── PubSub ──
 
   defp broadcast(state, message) do
-    Phoenix.PubSub.broadcast(Dran.PubSub, "agents:#{state.session.id}", message)
-    Phoenix.PubSub.broadcast(Dran.PubSub, "agents:all", {:agent, state.session.id, message})
+    Phoenix.PubSub.broadcast(Dran.PubSub, "workers:#{state.session.id}", message)
+    Phoenix.PubSub.broadcast(Dran.PubSub, "workers:all", {:worker, state.session.id, message})
   end
 
   # ── Helpers ──
@@ -534,7 +534,7 @@ defmodule Dran.Agent.Engine do
     nudge_count = Map.get(state, :synthesis_nudges, 0) + 1
     state = Map.put(state, :synthesis_nudges, nudge_count)
 
-    # Build a summary of what the agent has gathered so far
+    # Build a summary of what the worker has gathered so far
     sources_summary = gather_sources_summary(state)
 
     nudge_msg = %{
@@ -591,15 +591,15 @@ defmodule Dran.Agent.Engine do
 
   @truncation_marker "\n…[truncated]"
 
-  # ── Per-workspace agent_max_pages ──
+  # ── Per-workspace worker_max_pages ──
   # Resolve the per-session pages_created limit from the workspace tuning.
   # The limit is per-session (not cumulative across sessions), matching
   # the design decision in the plan. Falls back to the global settings
   # default (10) when workspace has no override.
   defp resolve_max_pages(workspace_id) do
     case load_workspace(workspace_id) do
-      %Dran.Workspace{} = ws -> Dran.Workspace.get_tuning(ws, :agent_max_pages)
-      nil -> Dran.Settings.get("agent_max_pages")
+      %Dran.Workspace{} = ws -> Dran.Workspace.get_tuning(ws, :worker_max_pages)
+      nil -> Dran.Settings.get("worker_max_pages")
     end
   end
 
@@ -609,10 +609,10 @@ defmodule Dran.Agent.Engine do
   defp load_workspace(workspace_id), do: Repo.get(Dran.Workspace, workspace_id)
 
   defp session_max_pages(%{opts: opts}) when is_list(opts) do
-    opts[:max_pages] || Dran.Settings.get("agent_max_pages")
+    opts[:max_pages] || Dran.Settings.get("worker_max_pages")
   end
 
-  defp session_max_pages(_), do: Dran.Settings.get("agent_max_pages")
+  defp session_max_pages(_), do: Dran.Settings.get("worker_max_pages")
 
   defp max_pages_reached?(state) do
     state.pages_created >= session_max_pages(state)

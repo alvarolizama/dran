@@ -189,7 +189,7 @@ defmodule DranWeb.TaskLive do
                   <span class="text-xs text-base-content/60">{gettext("Assignee")}</span>
                   <select
                     name="task[assignee_actor_id]"
-                    class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+                    class="select select-sm select-bordered w-full mt-1"
                   >
                     <option value="" selected={is_nil(@task.assignee_actor_id)}>
                       {gettext("unassigned")}
@@ -204,7 +204,7 @@ defmodule DranWeb.TaskLive do
                   <span class="text-xs text-base-content/60">{gettext("Priority")}</span>
                   <select
                     name="task[priority]"
-                    class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+                    class="select select-sm select-bordered w-full mt-1"
                   >
                     <option value="" selected={is_nil(@task.priority)}>{gettext("none")}</option>
                     <option
@@ -220,7 +220,7 @@ defmodule DranWeb.TaskLive do
                   <span class="text-xs text-base-content/60">{gettext("Goal")}</span>
                   <select
                     name="task[goal_id]"
-                    class="mt-1 w-full text-sm px-2 py-2 rounded-lg bg-base-100 border border-base-300 focus:border-primary/50 focus:outline-none"
+                    class="select select-sm select-bordered w-full mt-1"
                   >
                     <option value="" selected={is_nil(@goal)}>{gettext("no goal")}</option>
                     <.goal_options tree={@goal_tree} selected_id={@goal && @goal.id} />

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict deHIutEbcUmD5Duvy0fSgvTlGbeDMXhM1G6MHb0V9pcu4BbrpExqM9KFYw2L6Om
+\restrict 7aLBpJbpqsHiLfZARK6CEodOmniMdvks42Fub0fHLAeNX8QqB5ga2mrbhBMgnq0
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -91,40 +91,16 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: agent_sessions; Type: TABLE; Schema: public; Owner: -
+-- Name: actors; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.agent_sessions (
+CREATE TABLE public.actors (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    workspace_id uuid NOT NULL,
-    agent_type character varying(255) NOT NULL,
-    input character varying(255) NOT NULL,
-    status character varying(255) DEFAULT 'pending'::character varying NOT NULL,
-    summary text,
-    pages_created integer DEFAULT 0,
-    steps_count integer DEFAULT 0,
-    started_at timestamp(0) without time zone,
-    completed_at timestamp(0) without time zone,
-    meta jsonb DEFAULT '{}'::jsonb,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
-);
-
-
---
--- Name: agent_steps; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.agent_steps (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    session_id uuid NOT NULL,
-    step_number integer NOT NULL,
-    tool_name character varying(255) NOT NULL,
-    tool_args jsonb DEFAULT '{}'::jsonb,
-    tool_result jsonb DEFAULT '{}'::jsonb,
-    reasoning text,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
+    name character varying(255) NOT NULL,
+    kind character varying(255) DEFAULT 'agent'::character varying NOT NULL,
+    display_name character varying(255),
+    host character varying(255),
+    inserted_at timestamp(0) without time zone NOT NULL
 );
 
 
@@ -152,7 +128,8 @@ CREATE TABLE public.api_keys (
     token_prefix character varying(255) NOT NULL,
     revoked_at timestamp(0) without time zone,
     inserted_at timestamp(0) without time zone NOT NULL,
-    created_by_user_id bigint
+    created_by_user_id bigint,
+    actor_id uuid NOT NULL
 );
 
 
@@ -195,7 +172,7 @@ CREATE TABLE public.collections (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name character varying(255) NOT NULL,
     slug character varying(255) NOT NULL,
-    description character varying(255),
+    summary character varying(255),
     filters jsonb DEFAULT '{}'::jsonb,
     workspace_id uuid NOT NULL,
     inserted_at timestamp(0) without time zone NOT NULL,
@@ -211,7 +188,7 @@ CREATE TABLE public.goals (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     title character varying(255) NOT NULL,
     slug character varying(255) NOT NULL,
-    description character varying(255),
+    summary character varying(255),
     body text DEFAULT ''::character varying,
     kind character varying(255),
     health character varying(255),
@@ -229,7 +206,9 @@ CREATE TABLE public.goals (
     parent_goal_id uuid,
     workspace_id uuid NOT NULL,
     inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
+    updated_at timestamp(0) without time zone NOT NULL,
+    created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
+    updated_by character varying(255)
 );
 
 
@@ -292,7 +271,6 @@ CREATE TABLE public.pages (
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
     search_vector tsvector GENERATED ALWAYS AS (to_tsvector('spanish'::regconfig, ((public.immutable_unaccent((COALESCE(title, ''::character varying))::text) || ' '::text) || public.immutable_unaccent(COALESCE(body, ''::text))))) STORED,
-    owner character varying(255) DEFAULT 'system'::character varying NOT NULL,
     created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
     updated_by character varying(255),
     on_behalf_of character varying(255),
@@ -371,7 +349,6 @@ CREATE TABLE public.tasks (
     title character varying(255) NOT NULL,
     slug character varying(255) NOT NULL,
     body text DEFAULT ''::text,
-    summary character varying(255),
     status character varying(255) DEFAULT 'backlog'::character varying NOT NULL,
     priority character varying(255),
     "position" integer DEFAULT 0 NOT NULL,
@@ -382,12 +359,13 @@ CREATE TABLE public.tasks (
     lock_version integer DEFAULT 1 NOT NULL,
     completed_at timestamp(0) without time zone,
     archived boolean DEFAULT false NOT NULL,
-    owner character varying(255) DEFAULT 'system'::character varying,
     created_by character varying(255) DEFAULT 'system'::character varying,
     updated_by character varying(255),
     on_behalf_of character varying(255),
     inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
+    updated_at timestamp(0) without time zone NOT NULL,
+    assignee_actor_id uuid,
+    creator_actor_id uuid
 );
 
 
@@ -439,7 +417,8 @@ CREATE TABLE public.users (
     updated_at timestamp(0) without time zone NOT NULL,
     password_hash character varying(255),
     default_workspace_slug character varying(255),
-    is_owner boolean DEFAULT false NOT NULL
+    is_owner boolean DEFAULT false NOT NULL,
+    actor_id uuid
 );
 
 
@@ -463,6 +442,44 @@ ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
+-- Name: worker_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.worker_sessions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    worker_type character varying(255) NOT NULL,
+    input character varying(255) NOT NULL,
+    status character varying(255) DEFAULT 'pending'::character varying NOT NULL,
+    summary text,
+    pages_created integer DEFAULT 0,
+    steps_count integer DEFAULT 0,
+    started_at timestamp(0) without time zone,
+    completed_at timestamp(0) without time zone,
+    meta jsonb DEFAULT '{}'::jsonb,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
+-- Name: worker_steps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.worker_steps (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    session_id uuid NOT NULL,
+    step_number integer NOT NULL,
+    tool_name character varying(255) NOT NULL,
+    tool_args jsonb DEFAULT '{}'::jsonb,
+    tool_result jsonb DEFAULT '{}'::jsonb,
+    reasoning text,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
 -- Name: workspaces; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -479,7 +496,7 @@ CREATE TABLE public.workspaces (
     semantic_threshold_mid double precision,
     semantic_threshold_long double precision,
     entity_linker_enabled boolean,
-    agent_max_pages integer
+    worker_max_pages integer
 );
 
 
@@ -498,19 +515,11 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
--- Name: agent_sessions agent_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: actors actors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.agent_sessions
-    ADD CONSTRAINT agent_sessions_pkey PRIMARY KEY (id);
-
-
---
--- Name: agent_steps agent_steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_steps
-    ADD CONSTRAINT agent_steps_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.actors
+    ADD CONSTRAINT actors_pkey PRIMARY KEY (id);
 
 
 --
@@ -642,6 +651,22 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: worker_sessions worker_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.worker_sessions
+    ADD CONSTRAINT worker_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: worker_steps worker_steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.worker_steps
+    ADD CONSTRAINT worker_steps_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: workspaces workspaces_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -650,38 +675,17 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
--- Name: agent_sessions_agent_type_index; Type: INDEX; Schema: public; Owner: -
+-- Name: actors_kind_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX agent_sessions_agent_type_index ON public.agent_sessions USING btree (agent_type);
-
-
---
--- Name: agent_sessions_status_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX agent_sessions_status_index ON public.agent_sessions USING btree (status);
+CREATE INDEX actors_kind_index ON public.actors USING btree (kind);
 
 
 --
--- Name: agent_sessions_workspace_id_index; Type: INDEX; Schema: public; Owner: -
+-- Name: actors_name_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX agent_sessions_workspace_id_index ON public.agent_sessions USING btree (workspace_id);
-
-
---
--- Name: agent_steps_session_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX agent_steps_session_id_index ON public.agent_steps USING btree (session_id);
-
-
---
--- Name: agent_steps_session_id_step_number_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX agent_steps_session_id_step_number_index ON public.agent_steps USING btree (session_id, step_number);
+CREATE UNIQUE INDEX actors_name_index ON public.actors USING btree (name);
 
 
 --
@@ -696,6 +700,13 @@ CREATE UNIQUE INDEX api_key_workspaces_api_key_id_workspace_id_index ON public.a
 --
 
 CREATE INDEX api_key_workspaces_workspace_id_index ON public.api_key_workspaces USING btree (workspace_id);
+
+
+--
+-- Name: api_keys_actor_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX api_keys_actor_id_index ON public.api_keys USING btree (actor_id);
 
 
 --
@@ -986,6 +997,13 @@ CREATE UNIQUE INDEX settings_key_workspace_id_index ON public.settings USING btr
 
 
 --
+-- Name: tasks_assignee_actor_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tasks_assignee_actor_id_index ON public.tasks USING btree (assignee_actor_id);
+
+
+--
 -- Name: tasks_assignee_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -997,6 +1015,13 @@ CREATE INDEX tasks_assignee_index ON public.tasks USING btree (workspace_id, ass
 --
 
 CREATE INDEX tasks_board_index ON public.tasks USING btree (workspace_id, status, "position");
+
+
+--
+-- Name: tasks_creator_actor_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tasks_creator_actor_id_index ON public.tasks USING btree (creator_actor_id);
 
 
 --
@@ -1035,6 +1060,13 @@ CREATE UNIQUE INDEX user_workspaces_user_id_workspace_id_index ON public.user_wo
 
 
 --
+-- Name: users_actor_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX users_actor_id_index ON public.users USING btree (actor_id);
+
+
+--
 -- Name: users_api_token_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1053,6 +1085,41 @@ CREATE UNIQUE INDEX users_email_index ON public.users USING btree (email);
 --
 
 CREATE UNIQUE INDEX users_google_id_index ON public.users USING btree (google_id);
+
+
+--
+-- Name: worker_sessions_status_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX worker_sessions_status_index ON public.worker_sessions USING btree (status);
+
+
+--
+-- Name: worker_sessions_worker_type_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX worker_sessions_worker_type_index ON public.worker_sessions USING btree (worker_type);
+
+
+--
+-- Name: worker_sessions_workspace_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX worker_sessions_workspace_id_index ON public.worker_sessions USING btree (workspace_id);
+
+
+--
+-- Name: worker_steps_session_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX worker_steps_session_id_index ON public.worker_steps USING btree (session_id);
+
+
+--
+-- Name: worker_steps_session_id_step_number_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX worker_steps_session_id_step_number_index ON public.worker_steps USING btree (session_id, step_number);
 
 
 --
@@ -1077,22 +1144,6 @@ CREATE UNIQUE INDEX workspaces_slug_index ON public.workspaces USING btree (slug
 
 
 --
--- Name: agent_sessions agent_sessions_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_sessions
-    ADD CONSTRAINT agent_sessions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
--- Name: agent_steps agent_steps_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_steps
-    ADD CONSTRAINT agent_steps_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.agent_sessions(id) ON DELETE CASCADE;
-
-
---
 -- Name: api_key_workspaces api_key_workspaces_api_key_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1106,6 +1157,14 @@ ALTER TABLE ONLY public.api_key_workspaces
 
 ALTER TABLE ONLY public.api_key_workspaces
     ADD CONSTRAINT api_key_workspaces_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
+-- Name: api_keys api_keys_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_keys
+    ADD CONSTRAINT api_keys_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.actors(id) ON DELETE RESTRICT;
 
 
 --
@@ -1189,11 +1248,27 @@ ALTER TABLE ONLY public.reports
 
 
 --
+-- Name: tasks tasks_assignee_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT tasks_assignee_actor_id_fkey FOREIGN KEY (assignee_actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
+
+
+--
 -- Name: tasks tasks_assignee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.tasks
     ADD CONSTRAINT tasks_assignee_id_fkey FOREIGN KEY (assignee_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: tasks tasks_creator_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT tasks_creator_actor_id_fkey FOREIGN KEY (creator_actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
 
 
 --
@@ -1221,10 +1296,34 @@ ALTER TABLE ONLY public.user_workspaces
 
 
 --
+-- Name: users users_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
+
+
+--
+-- Name: worker_sessions worker_sessions_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.worker_sessions
+    ADD CONSTRAINT worker_sessions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
+-- Name: worker_steps worker_steps_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.worker_steps
+    ADD CONSTRAINT worker_steps_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.worker_sessions(id) ON DELETE CASCADE;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict deHIutEbcUmD5Duvy0fSgvTlGbeDMXhM1G6MHb0V9pcu4BbrpExqM9KFYw2L6Om
+\unrestrict 7aLBpJbpqsHiLfZARK6CEodOmniMdvks42Fub0fHLAeNX8QqB5ga2mrbhBMgnq0
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1254,6 +1353,7 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260808061633);
 INSERT INTO public."schema_migrations" (version) VALUES (20260811053234);
 INSERT INTO public."schema_migrations" (version) VALUES (20260811220711);
 INSERT INTO public."schema_migrations" (version) VALUES (20260812000001);
+INSERT INTO public."schema_migrations" (version) VALUES (20260813000000);
 INSERT INTO public."schema_migrations" (version) VALUES (20260819165200);
 INSERT INTO public."schema_migrations" (version) VALUES (20260820034206);
 INSERT INTO public."schema_migrations" (version) VALUES (20260820034235);
@@ -1276,3 +1376,11 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260826061747);
 INSERT INTO public."schema_migrations" (version) VALUES (20260826063500);
 INSERT INTO public."schema_migrations" (version) VALUES (20260826072217);
 INSERT INTO public."schema_migrations" (version) VALUES (20260829232922);
+INSERT INTO public."schema_migrations" (version) VALUES (20260901062734);
+INSERT INTO public."schema_migrations" (version) VALUES (20260902014536);
+INSERT INTO public."schema_migrations" (version) VALUES (20260902032520);
+INSERT INTO public."schema_migrations" (version) VALUES (20260902071734);
+INSERT INTO public."schema_migrations" (version) VALUES (20260903012226);
+INSERT INTO public."schema_migrations" (version) VALUES (20260903012228);
+INSERT INTO public."schema_migrations" (version) VALUES (20260903035725);
+INSERT INTO public."schema_migrations" (version) VALUES (20260903200000);

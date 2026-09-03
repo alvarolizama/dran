@@ -5,13 +5,13 @@ defmodule DranWeb.MemoryLive do
   Shows every stored fact with full attribution (who stored it via
   `created_by`, when via `inserted_at`, and from which session), its trust
   score, and live updates: the view subscribes to the dedicated
-  "memory:<workspace_id>" PubSub topic, so facts stored by agents through
+  "memory:<workspace_id>" PubSub topic, so facts stored by workers through
   the REST API appear without a reload (`Dran.Memory` broadcasts
   `{:memory_changed, ...}`).
 
   The search box runs the trust-weighted hybrid search (`Dran.Memory.search/3`)
   with `bump_retrieval: false` — typing in the UI must not inflate the
-  retrieval counters that the agents' API path uses as a usage signal.
+  retrieval counters that the workers' API path uses as a usage signal.
   Search always covers active memories, regardless of the status filter
   (superseded facts are excluded from search by design).
   """
@@ -93,7 +93,7 @@ defmodule DranWeb.MemoryLive do
 
   @impl true
   def handle_info({:memory_changed, _action, _memory}, socket) do
-    # A fact was created/deleted (by an agent via the REST API, or by this
+    # A fact was created/deleted (by a worker via the REST API, or by this
     # view) — reload from the DB and refresh the sidebar badge count.
     {:noreply,
      socket
@@ -131,7 +131,7 @@ defmodule DranWeb.MemoryLive do
                 name="q"
                 value={@query}
                 phx-debounce="300"
-                placeholder={gettext("Buscar en la memoria de los agentes...")}
+                placeholder={gettext("Buscar en la memoria de los workers...")}
                 class="w-full py-2 pl-9 pr-3 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </form>
@@ -178,7 +178,7 @@ defmodule DranWeb.MemoryLive do
               title={gettext("Sin memorias")}
               caption={
                 gettext(
-                  "Los agentes almacenan hechos aquí vía la API /api/memory; aparecerán en vivo."
+                  "Los workers almacenan hechos aquí vía la API /api/memory; aparecerán en vivo."
                 )
               }
               class="surface-2 rounded-2xl"
@@ -291,7 +291,7 @@ defmodule DranWeb.MemoryLive do
       <div>
         <h1 class="text-title">{gettext("Memory")}</h1>
         <p class="text-caption mt-1">
-          {gettext("Hechos atómicos compartidos por los agentes de %{name}.",
+          {gettext("Hechos atómicos compartidos por los workers de %{name}.",
             name: workspace_name(@workspace)
           )}
         </p>

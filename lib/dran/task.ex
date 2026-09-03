@@ -54,7 +54,6 @@ defmodule Dran.Task do
              :title,
              :slug,
              :body,
-             :summary,
              :status,
              :priority,
              :position,
@@ -80,7 +79,6 @@ defmodule Dran.Task do
     field :title, :string
     field :slug, :string
     field :body, :string, default: ""
-    field :summary, :string
 
     field :status, :string, default: "backlog"
     field :priority, :string
@@ -148,7 +146,6 @@ defmodule Dran.Task do
       :title,
       :slug,
       :body,
-      :summary,
       :status,
       :priority,
       :position,

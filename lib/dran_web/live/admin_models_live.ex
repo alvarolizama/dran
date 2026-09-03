@@ -21,9 +21,9 @@ defmodule DranWeb.AdminModelsLive do
   # no env-var model defaults anymore.
   defp model_purposes do
     [
-      {"model_chat", fn -> gettext("Chat / agentes") end,
+      {"model_chat", fn -> gettext("Chat / workers") end,
        fn ->
-         gettext("Model used for chat completions, agent reasoning, and title generation.")
+         gettext("Model used for chat completions, worker reasoning, and title generation.")
        end},
       {"model_embedding", fn -> gettext("Embeddings") end,
        fn -> gettext("Model used to vectorize page bodies for semantic search and relations.") end},

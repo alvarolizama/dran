@@ -211,8 +211,8 @@ defmodule DranWeb.ActivityLive do
   defp action_icon("page.delete"), do: "hero-trash"
   defp action_icon("page.archive"), do: "hero-archive-box"
   defp action_icon("page.unarchive"), do: "hero-arrow-up-on-square"
-  defp action_icon("agent"), do: "hero-cpu-chip"
-  defp action_icon("agent." <> _), do: "hero-cpu-chip"
+  defp action_icon("worker"), do: "hero-cpu-chip"
+  defp action_icon("worker." <> _), do: "hero-cpu-chip"
   defp action_icon(_), do: "hero-bolt"
 
   defp icon_bg("page.create"), do: "bg-success/15"
@@ -220,8 +220,8 @@ defmodule DranWeb.ActivityLive do
   defp icon_bg("page.delete"), do: "bg-error/15"
   defp icon_bg("page.archive"), do: "bg-warning/15"
   defp icon_bg("page.unarchive"), do: "bg-success/15"
-  defp icon_bg("agent"), do: "bg-accent/15"
-  defp icon_bg("agent." <> _), do: "bg-accent/15"
+  defp icon_bg("worker"), do: "bg-accent/15"
+  defp icon_bg("worker." <> _), do: "bg-accent/15"
   defp icon_bg(_), do: "bg-base-content/10"
 
   defp icon_color("page.create"), do: "text-success"
@@ -229,8 +229,8 @@ defmodule DranWeb.ActivityLive do
   defp icon_color("page.delete"), do: "text-error"
   defp icon_color("page.archive"), do: "text-warning"
   defp icon_color("page.unarchive"), do: "text-success"
-  defp icon_color("agent"), do: "text-accent"
-  defp icon_color("agent." <> _), do: "text-accent"
+  defp icon_color("worker"), do: "text-accent"
+  defp icon_color("worker." <> _), do: "text-accent"
   defp icon_color(_), do: "text-base-content/60"
 
   defp action_label("page.create"), do: gettext("Created")
@@ -238,8 +238,8 @@ defmodule DranWeb.ActivityLive do
   defp action_label("page.delete"), do: gettext("Deleted")
   defp action_label("page.archive"), do: gettext("Archived")
   defp action_label("page.unarchive"), do: gettext("Unarchived")
-  defp action_label("agent"), do: gettext("Agent")
-  defp action_label("agent." <> _rest), do: gettext("Agent")
+  defp action_label("worker"), do: gettext("Worker")
+  defp action_label("worker." <> _rest), do: gettext("Worker")
   defp action_label(other), do: humanize_action(other)
 
   defp humanize_action(action) when is_binary(action) do
@@ -296,9 +296,9 @@ defmodule DranWeb.ActivityLive do
     Enum.map(order, fn action -> {action, Map.get(counts, action, 0)} end)
   end
 
-  # Group agent.* actions under a single "agent" legend entry so the legend
-  # stays compact even if many distinct agent sub-actions appear.
-  defp normalize_action_for_legend("agent." <> _), do: "agent"
+  # Group worker.* actions under a single "worker" legend entry so the legend
+  # stays compact even if many distinct worker sub-actions appear.
+  defp normalize_action_for_legend("worker." <> _), do: "worker"
   defp normalize_action_for_legend(other), do: other
 
   # Absolute ISO-8601 timestamp used for the `title` tooltip on relative times.

@@ -768,7 +768,7 @@ defmodule Dran.KnowledgeTest do
       assert Map.has_key?(metrics, :embedding_coverage)
       assert Map.has_key?(metrics, :relations_by_type)
       assert Map.has_key?(metrics, :contested_count)
-      assert Map.has_key?(metrics, :agents)
+      assert Map.has_key?(metrics, :workers)
 
       # Pages created this week (just created)
       assert metrics.pages_this_week >= 2
@@ -787,9 +787,9 @@ defmodule Dran.KnowledgeTest do
       assert metrics.contested_count >= 0
 
       # Agents map has expected keys
-      assert Map.has_key?(metrics.agents, :sessions_this_week)
-      assert Map.has_key?(metrics.agents, :tokens_this_week)
-      assert Map.has_key?(metrics.agents, :total_sessions)
+      assert Map.has_key?(metrics.workers, :sessions_this_week)
+      assert Map.has_key?(metrics.workers, :tokens_this_week)
+      assert Map.has_key?(metrics.workers, :total_sessions)
     end
 
     test "embedding_coverage is 0.0 when context has no pages" do
@@ -802,18 +802,18 @@ defmodule Dran.KnowledgeTest do
       assert metrics.pages_this_week == 0
       assert metrics.relations_by_type == %{}
       assert metrics.contested_count == 0
-      assert metrics.agents.sessions_this_week == 0
-      assert metrics.agents.tokens_this_week == 0
-      assert metrics.agents.total_sessions == 0
+      assert metrics.workers.sessions_this_week == 0
+      assert metrics.workers.tokens_this_week == 0
+      assert metrics.workers.total_sessions == 0
     end
 
-    test "agents metrics counts sessions and tokens from agent_sessions", %{context: ctx} do
+    test "agents metrics counts sessions and tokens from worker_sessions", %{context: ctx} do
       # Insert an agent session with tokens_used in meta
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      Dran.Repo.insert!(%Dran.Agent.Session{
+      Dran.Repo.insert!(%Dran.Worker.Session{
         workspace_id: ctx.id,
-        agent_type: "ask",
+        worker_type: "ask",
         input: "test query",
         status: "done",
         started_at: now,
@@ -822,9 +822,9 @@ defmodule Dran.KnowledgeTest do
 
       metrics = Knowledge.metrics(ctx.id)
 
-      assert metrics.agents.sessions_this_week >= 1
-      assert metrics.agents.tokens_this_week >= 1500
-      assert metrics.agents.total_sessions >= 1
+      assert metrics.workers.sessions_this_week >= 1
+      assert metrics.workers.tokens_this_week >= 1500
+      assert metrics.workers.total_sessions >= 1
     end
   end
 

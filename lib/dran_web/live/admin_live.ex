@@ -66,7 +66,7 @@ defmodule DranWeb.AdminLive do
               href={~p"/admin/system"}
               icon="hero-server-stack"
               title={gettext("System")}
-              description={gettext("Read-only environment: inference, agents, uploads.")}
+              description={gettext("Read-only environment: inference, workers, uploads.")}
             />
 
             <.admin_card

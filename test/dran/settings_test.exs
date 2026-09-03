@@ -11,8 +11,8 @@ defmodule Dran.SettingsTest do
       assert Settings.get("semantic_threshold_short") == 0.15
       assert Settings.get("semantic_threshold_mid") == 0.22
       assert Settings.get("semantic_threshold_long") == 0.28
-      assert Settings.get("agent_max_pages") == 10
-      assert Settings.get("agent_max_sources") == 10
+      assert Settings.get("worker_max_pages") == 10
+      assert Settings.get("worker_max_sources") == 10
     end
 
     test "returns nil for unknown key without default" do
@@ -25,16 +25,16 @@ defmodule Dran.SettingsTest do
     end
 
     test "put twice updates the same row (upsert)" do
-      Settings.put("agent_max_pages", 5)
-      assert Settings.get("agent_max_pages") == 5
+      Settings.put("worker_max_pages", 5)
+      assert Settings.get("worker_max_pages") == 5
 
-      Settings.put("agent_max_pages", 25)
-      assert Settings.get("agent_max_pages") == 25
+      Settings.put("worker_max_pages", 25)
+      assert Settings.get("worker_max_pages") == 25
 
       # Only one row exists for this key
       count =
         Dran.Repo.aggregate(
-          Ecto.Query.from(s in "settings", where: s.key == "agent_max_pages"),
+          Ecto.Query.from(s in "settings", where: s.key == "worker_max_pages"),
           :count
         )
 
@@ -49,7 +49,7 @@ defmodule Dran.SettingsTest do
 
   describe "all/0" do
     test "merges defaults with DB overrides" do
-      Settings.put("agent_max_pages", 42)
+      Settings.put("worker_max_pages", 42)
 
       all = Settings.all()
 
@@ -57,10 +57,10 @@ defmodule Dran.SettingsTest do
       assert all["semantic_threshold_short"] == 0.15
       assert all["semantic_threshold_mid"] == 0.22
       assert all["semantic_threshold_long"] == 0.28
-      assert all["agent_max_sources"] == 10
+      assert all["worker_max_sources"] == 10
 
       # DB overrides win
-      assert all["agent_max_pages"] == 42
+      assert all["worker_max_pages"] == 42
     end
 
     test "returns defaults when DB empty" do
@@ -76,8 +76,8 @@ defmodule Dran.SettingsTest do
       assert defaults["semantic_threshold_short"] == 0.15
       assert defaults["semantic_threshold_mid"] == 0.22
       assert defaults["semantic_threshold_long"] == 0.28
-      assert defaults["agent_max_pages"] == 10
-      assert defaults["agent_max_sources"] == 10
+      assert defaults["worker_max_pages"] == 10
+      assert defaults["worker_max_sources"] == 10
     end
   end
 end
