@@ -206,46 +206,58 @@ defmodule DranWeb.WorkflowsLive do
         _ -> nil
       end
 
-    workflow = Workflows.get_workflow!(workflow_id)
+    workflow = fetch_workspace_workflow(workflow_id, socket.assigns.context)
 
-    case Executions.open_session(workflow, label: label) do
-      {:ok, session} ->
-        socket =
-          socket
-          |> put_flash(:info, gettext("Sesión abierta."))
-          |> reload_after_change(workflow, session.id)
+    case workflow do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Workflow no encontrado."))}
 
-        {:noreply, socket}
+      %Dran.Workflow{} = workflow ->
+        case Executions.open_session(workflow, label: label) do
+          {:ok, session} ->
+            socket =
+              socket
+              |> put_flash(:info, gettext("Sesión abierta."))
+              |> reload_after_change(workflow, session.id)
 
-      {:error, :workflow_has_no_steps} ->
-        {:noreply,
-         put_flash(socket, :error, gettext("El workflow no tiene steps: añade al menos uno."))}
+            {:noreply, socket}
 
-      {:error, :workflow_archived} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("El workflow está archivado: no puede abrir sesiones.")
-         )}
+          {:error, :workflow_has_no_steps} ->
+            {:noreply,
+             put_flash(socket, :error, gettext("El workflow no tiene steps: añade al menos uno."))}
 
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, gettext("No se pudo abrir la sesión."))}
+          {:error, :workflow_archived} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               gettext("El workflow está archivado: no puede abrir sesiones.")
+             )}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, gettext("No se pudo abrir la sesión."))}
+        end
     end
   end
 
   def handle_event("abort_session", %{"session-id" => session_id}, socket) do
-    case Executions.abort_session(Executions.get_session!(session_id)) do
-      {:ok, _closed} ->
-        socket =
-          socket
-          |> put_flash(:info, gettext("Sesión abortada."))
-          |> reload_current()
+    case fetch_workspace_session(session_id, socket.assigns.context) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Sesión no encontrada."))}
 
-        {:noreply, socket}
+      session ->
+        case Executions.abort_session(session) do
+          {:ok, _closed} ->
+            socket =
+              socket
+              |> put_flash(:info, gettext("Sesión abortada."))
+              |> reload_current()
 
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, gettext("No se pudo abortar la sesión."))}
+            {:noreply, socket}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, gettext("No se pudo abortar la sesión."))}
+        end
     end
   end
 
@@ -259,6 +271,39 @@ defmodule DranWeb.WorkflowsLive do
        socket,
        to: ~p"/#{ws}/workflows/#{socket.assigns.workflow.slug}?session=#{session_id}"
      )}
+  end
+
+  # Row-level workspace authorization (review finding #2): phx-value ids
+  # are client-forgeable — the board already rejects foreign workspaces
+  # this way (fetch_board_task pattern); executions must not reincide.
+  defp fetch_workspace_workflow(id, %Dran.Workspace{} = context) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        case Workflows.get_workflow!(uuid) do
+          %Dran.Workflow{workspace_id: ws_id} = wf when ws_id == context.id -> wf
+          _other -> nil
+        end
+
+      :error ->
+        nil
+    end
+  rescue
+    Ecto.NoResultsError -> nil
+  end
+
+  defp fetch_workspace_session(id, %Dran.Workspace{} = context) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        case Executions.get_session!(uuid) do
+          %Dran.WorkflowSession{workspace_id: ws_id} = s when ws_id == context.id -> s
+          _other -> nil
+        end
+
+      :error ->
+        nil
+    end
+  rescue
+    Ecto.NoResultsError -> nil
   end
 
   defp reload_after_change(socket, workflow, session_id) do

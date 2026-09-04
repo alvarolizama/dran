@@ -144,6 +144,11 @@ defmodule DranWeb.API.ExecutionControllerTest do
       conn = get(conn, "/api/pending_runs?workspace=no-such-workspace")
       assert %{"errors" => _} = json_response(conn, 404)
     end
+
+    test "400 for a non-UUID workflow param (regression #6)", %{conn: conn, workspace: workspace} do
+      conn = get(conn, "/api/pending_runs?workspace=#{workspace.slug}&workflow=not-a-uuid")
+      assert %{"errors" => _} = json_response(conn, 400)
+    end
   end
 
   describe "POST /api/runs/:id/start" do
@@ -315,6 +320,31 @@ defmodule DranWeb.API.ExecutionControllerTest do
 
     test "404 for unknown session", %{conn: conn} do
       conn = get(conn, "/api/workflow_sessions/#{Ecto.UUID.generate()}")
+      assert %{"errors" => _} = json_response(conn, 404)
+    end
+
+    @tag :capture_log
+    test "404 for a session of ANOTHER workspace (cross-workspace read, regression #3)", %{
+      workspace: workspace,
+      key: key
+    } do
+      # A key scoped to `workspace` must not read a session that lives in a
+      # different workspace — even with a valid UUID (enumeration guard).
+      {:ok, other_ws} =
+        Dran.Knowledge.create_workspace(%{
+          name: "other #{System.unique_integer([:positive])}",
+          slug: "other-#{System.unique_integer([:positive])}"
+        })
+
+      {workflow, _} = new_workflow(other_ws, ["A"])
+      {:ok, session} = Executions.open_session(workflow)
+
+      conn =
+        Phoenix.ConnTest.build_conn()
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> get("/api/workflow_sessions/#{session.id}")
+
       assert %{"errors" => _} = json_response(conn, 404)
     end
   end

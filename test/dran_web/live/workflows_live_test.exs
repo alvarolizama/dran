@@ -136,6 +136,73 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert has_element?(view, "#workflow-card-#{workflow.id}")
       refute has_element?(view, "#workflow-card-#{workflow.id} form")
     end
+
+    test "open_session with a foreign-workflow id is rejected (regression #2)", %{
+      conn: conn,
+      ws: ws
+    } do
+      # phx-value ids are client-forgeable: an authenticated user of ws must
+      # not be able to open a session on a workflow of ANOTHER workspace by
+      # sending the event with a foreign id.
+      {:ok, other_ws} =
+        Dran.Knowledge.create_workspace(%{
+          name: "foreign #{System.unique_integer([:positive])}",
+          slug: "foreign-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, foreign} =
+        Workflows.create_workflow(%{
+          "workspace_id" => other_ws.id,
+          "title" => "F",
+          "slug" => "f-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, _} = Workflows.create_step(foreign, %{"title" => "S", "slug" => "fs"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
+
+      render_hook(view, "open_session", %{"workflow-id" => foreign.id, "label" => "intrusion"})
+
+      # No session was created on the foreign workflow.
+      assert Executions.list_sessions(foreign) == []
+    end
+
+    test "abort_session with a foreign-workspace id is rejected (regression #2)", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, other_ws} =
+        Dran.Knowledge.create_workspace(%{
+          name: "foreign #{System.unique_integer([:positive])}",
+          slug: "foreign-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, foreign_wf} =
+        Workflows.create_workflow(%{
+          "workspace_id" => other_ws.id,
+          "title" => "F2",
+          "slug" => "f2-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, _} = Workflows.create_step(foreign_wf, %{"title" => "S", "slug" => "fs2"})
+      {:ok, foreign_session} = Executions.open_session(foreign_wf)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
+
+      render_hook(view, "abort_session", %{"session-id" => foreign_session.id})
+
+      # The foreign session was NOT aborted.
+      assert Executions.get_session!(foreign_session.id).status == "in_flight"
+      # Sanity: the same event with OUR session still works (guarded above).
+      {:ok, mine} = Executions.open_session(workflow)
+
+      view
+      |> element("#workflow-card-#{workflow.id} button[phx-value-session-id='#{mine.id}']")
+      |> render_click()
+
+      assert Executions.get_session!(mine.id).status == "aborted"
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────────────

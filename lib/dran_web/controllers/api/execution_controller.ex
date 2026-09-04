@@ -66,18 +66,36 @@ defmodule DranWeb.API.ExecutionController do
         end
 
       workspace_id ->
-        opts =
+        # UUID-guard the workflow param (review finding #6): a garbage
+        # value would hit the query as ^workflow_id and raise CastError →
+        # 500. Everything else in this controller UUID-casts — the query
+        # param must too.
+        {bad_workflow, workflow_param} =
           case params["workflow"] do
-            nil -> []
-            workflow_id -> [workflow_id: workflow_id]
+            nil ->
+              {false, nil}
+
+            value ->
+              case Ecto.UUID.cast(value) do
+                {:ok, uuid} -> {false, uuid}
+                :error -> {true, value}
+              end
           end
 
-        runs =
-          workspace_id
-          |> Executions.list_pending_runs(opts)
-          |> Repo.preload(step: [], session: [])
+        if bad_workflow do
+          conn
+          |> put_status(:bad_request)
+          |> json(%{errors: %{detail: "workflow must be a UUID"}})
+        else
+          opts = if workflow_param, do: [workflow_id: workflow_param], else: []
 
-        json(conn, %{data: Enum.map(runs, &render_pending_run/1)})
+          runs =
+            workspace_id
+            |> Executions.list_pending_runs(opts)
+            |> Repo.preload(step: [], session: [])
+
+          json(conn, %{data: Enum.map(runs, &render_pending_run/1)})
+        end
     end
   end
 
@@ -90,8 +108,23 @@ defmodule DranWeb.API.ExecutionController do
         |> json(%{errors: %{detail: "session not found"}})
 
       session ->
-        runs = Executions.list_runs(session)
-        json(conn, %{data: render_session(session, runs)})
+        # Cross-workspace read guard (review finding #3): read routes only
+        # pass :api_auth — without a check a key scoped to workspace A
+        # could read any workspace's session (snapshot/contracts/gates) by
+        # enumerating UUIDs. Writes are already guarded by
+        # require_write_access resolving the workspace from the run.
+        if DranWeb.ResourceAuthorization.authorize(
+             conn.assigns[:user],
+             :read,
+             session.workspace_id
+           ) == :ok do
+          runs = Executions.list_runs(session)
+          json(conn, %{data: render_session(session, runs)})
+        else
+          conn
+          |> put_status(:not_found)
+          |> json(%{errors: %{detail: "session not found"}})
+        end
     end
   end
 

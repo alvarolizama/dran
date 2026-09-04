@@ -599,8 +599,17 @@ defmodule Dran.Executions do
   # it reopens to `in_flight` so the new pending attempt can start. `aborted`
   # is a deliberate human stop and `passed` has no failed latest attempt —
   # both stay terminal.
+  #
+  # The session row is locked FOR UPDATE (review finding #4): retry reopens
+  # a closed session while a concurrent close_run may be committing the
+  # final auto-close — without the lock both decide on stale state and the
+  # session can end terminal-with-open-runs or reopened-after-passed.
   defp reopen_session_if_closed(session_id) do
-    case Repo.get(WorkflowSession, session_id) do
+    case Repo.one(
+           from s in WorkflowSession,
+             where: s.id == ^session_id,
+             lock: "FOR UPDATE"
+         ) do
       %WorkflowSession{status: "in_flight"} ->
         :ok
 
