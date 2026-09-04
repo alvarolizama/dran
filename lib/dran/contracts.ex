@@ -25,9 +25,15 @@ defmodule Dran.Contracts do
 
   The `graph` is stored as structured JSON (source of truth); mermaid and
   the SVG DAG view are renders from it.
+
+  Since the plans/steps model (wave A) the same machinery also operates on
+  `%Dran.Step{}` (contract in `step.meta["contract"]`, `depends_on` edges
+  step→step) — dual with the task API until F3. Run-scoped sequencing over
+  steps lives in `Dran.Executions`; step readiness here is definitional
+  (steps have no board status).
   """
 
-  alias Dran.{Relation, Repo, Task}
+  alias Dran.{Relation, Repo, Step, Task}
   import Ecto.Query
 
   @verbs ~w(READ EDIT CREATE RUN VERIFY ASK)
@@ -47,6 +53,13 @@ defmodule Dran.Contracts do
     match?({:ok, _}, lint(task))
   end
 
+  # Same predicate as the task clause: intent present AND the contract
+  # passes lint (structural validity), not just the presence of intent.
+  def contract?(%Step{meta: %{"contract" => %{"intent" => intent}}} = step)
+      when is_binary(intent) and intent != "" do
+    match?({:ok, _}, lint(step))
+  end
+
   def contract?(_), do: false
 
   @doc """
@@ -59,6 +72,15 @@ defmodule Dran.Contracts do
   """
   def lint(%Task{} = task) do
     case task.meta do
+      %{"contract" => contract} when is_map(contract) -> lint_contract(contract)
+      _ -> {:error, [:no_contract]}
+    end
+  end
+
+  # Step lint shares lint_contract/1 with the task clause — same shape,
+  # same structural rules.
+  def lint(%Step{} = step) do
+    case step.meta do
       %{"contract" => contract} when is_map(contract) -> lint_contract(contract)
       _ -> {:error, [:no_contract]}
     end
@@ -189,6 +211,21 @@ defmodule Dran.Contracts do
   A self-dependency is rejected. Both tasks must belong to the same
   workspace.
   """
+  def add_dependency(%Step{} = step, %Step{} = prerequisite) do
+    with :ok <- same_workspace?(step, prerequisite),
+         :ok <- reject_cycle(step, prerequisite) do
+      %Relation{}
+      |> Relation.changeset(%{
+        source_id: step.id,
+        source_type: "step",
+        target_id: prerequisite.id,
+        target_type: "step",
+        relation_type: "depends_on"
+      })
+      |> Repo.insert(on_conflict: :nothing)
+    end
+  end
+
   def add_dependency(task, prerequisite) do
     with :ok <- same_workspace?(task, prerequisite),
          :ok <- reject_cycle(task, prerequisite) do
@@ -204,18 +241,18 @@ defmodule Dran.Contracts do
     end
   end
 
-  defp same_workspace?(%Task{workspace_id: wid}, %Task{workspace_id: wid2})
+  defp same_workspace?(%{workspace_id: wid}, %{workspace_id: wid2})
        when wid == wid2 and not is_nil(wid),
        do: :ok
 
   defp same_workspace?(_, _), do: {:error, :invalid}
 
-  defp reject_cycle(%Task{id: id}, %Task{id: id2}) when id == id2, do: {:error, :cycle}
+  defp reject_cycle(%{id: id}, %{id: id2}) when id == id2, do: {:error, :cycle}
 
-  defp reject_cycle(task, prerequisite) do
-    # Adding task→prerequisite creates a cycle if prerequisite transitively
-    # depends on task.
-    if task.id in transitive_prereqs(prerequisite) do
+  defp reject_cycle(step_or_task, prerequisite) do
+    # Adding step→prerequisite creates a cycle if prerequisite transitively
+    # depends on step.
+    if step_or_task.id in transitive_prereqs(prerequisite) do
       {:error, :cycle}
     else
       :ok
@@ -228,6 +265,13 @@ defmodule Dran.Contracts do
   """
   def transitive_prereqs(%Task{} = task) do
     do_transitive(prerequisite_ids(task), MapSet.new())
+  end
+
+  # Step variant shares do_transitive/2 — the BFS/`seen` discipline that
+  # keeps diamonds (and the historical base-case bug) dead — with
+  # step-typed edge lookups.
+  def transitive_prereqs(%Step{} = step) do
+    do_transitive_steps(step_prerequisite_ids(step), MapSet.new())
   end
 
   # BFS with a queue of nodes to expand and a `seen` set of nodes that have
@@ -255,6 +299,27 @@ defmodule Dran.Contracts do
     end
   end
 
+  defp do_transitive_steps([], seen), do: MapSet.to_list(seen)
+
+  defp do_transitive_steps(queue, seen) do
+    {id, rest} = {hd(queue), tl(queue)}
+
+    cond do
+      MapSet.member?(seen, id) ->
+        do_transitive_steps(rest, seen)
+
+      true ->
+        nexts = step_prerequisite_ids_by_ids([id])
+
+        new =
+          Enum.reject(nexts, fn n ->
+            MapSet.member?(seen, n) or n == id
+          end)
+
+        do_transitive_steps(rest ++ new, MapSet.put(seen, id))
+    end
+  end
+
   @doc "Direct prerequisite task ids of a task (its `depends_on` targets)."
   def prerequisite_ids(%Task{id: id}) do
     Repo.all(
@@ -262,6 +327,34 @@ defmodule Dran.Contracts do
         where:
           r.source_id == ^id and r.source_type == "task" and
             r.relation_type == "depends_on" and r.target_type == "task",
+        select: r.target_id
+    )
+  end
+
+  # Step variant queries the same edge type scoped to step endpoints.
+  def prerequisite_ids(%Step{id: id}) do
+    Repo.all(
+      from r in Relation,
+        where:
+          r.source_id == ^id and r.source_type == "step" and
+            r.relation_type == "depends_on" and r.target_type == "step",
+        select: r.target_id
+    )
+  end
+
+  defp step_prerequisite_ids(step_or_task) do
+    case step_or_task do
+      %Step{} = step -> prerequisite_ids(step)
+      %Task{} = task -> prerequisite_ids(task)
+    end
+  end
+
+  defp step_prerequisite_ids_by_ids(ids) when is_list(ids) and ids != [] do
+    Repo.all(
+      from r in Relation,
+        where:
+          r.source_id in ^ids and r.source_type == "step" and
+            r.relation_type == "depends_on" and r.target_type == "step",
         select: r.target_id
     )
   end
@@ -295,6 +388,25 @@ defmodule Dran.Contracts do
   end
 
   def dependency_edges(_), do: []
+
+  @doc """
+  Step analogue of `dependency_edges/1`: depends_on edges among the given
+  step ids (step→step), `[{source_id, target_id}]`. Same both-endpoints
+  rule: an edge pointing outside the set is not part of this plan's DAG
+  and is excluded. For readiness semantics see `dependency_states/2`.
+  """
+  def dependency_edges(step_ids, :step) when is_list(step_ids) and step_ids != [] do
+    Repo.all(
+      from r in Relation,
+        where:
+          r.source_id in ^step_ids and r.source_type == "step" and
+            r.relation_type == "depends_on" and r.target_type == "step" and
+            r.target_id in ^step_ids,
+        select: {r.source_id, r.target_id}
+    )
+  end
+
+  def dependency_edges(_, :step), do: []
 
   @doc """
   Batch dependency state for a set of task ids:
@@ -345,30 +457,76 @@ defmodule Dran.Contracts do
   def dependency_states(_), do: %{}
 
   @doc """
+  Step analogue of `dependency_states/1`: batch readiness for a set of
+  step ids, `%{step_id => %{ready: boolean, blocked_count: non_neg_integer}}`.
+  Two queries total (edges + terminal states of prerequisites).
+
+  ⚠️ Steps have NO board status (definition nodes): a step prereq can only
+  be open (never "done") at the definition layer, so only a step with zero
+  direct prerequisites is ready here. Where prereq runs (attempts) matter,
+  that is session-scoped readiness — `Dran.Executions.run_ready?/1` (wave B).
+  Like its task twin, this query does NOT filter prereqs to the given set
+  (external prereqs DO block readiness) — deliberately different from
+  `dependency_edges/2`.
+  """
+  def dependency_states(step_ids, :step) when is_list(step_ids) and step_ids != [] do
+    edges =
+      Repo.all(
+        from r in Relation,
+          where:
+            r.source_id in ^step_ids and r.source_type == "step" and
+              r.relation_type == "depends_on" and r.target_type == "step",
+          select: {r.source_id, r.target_id}
+      )
+
+    by_source = Enum.group_by(edges, &elem(&1, 0), &elem(&1, 1))
+
+    Map.new(step_ids, fn id ->
+      targets = Map.get(by_source, id, [])
+      # Steps cannot be terminal at the definition layer (no board status),
+      # so every direct prereq blocks: blocked_count = number of edges.
+      blocked = length(targets)
+      {id, %{ready: blocked == 0, blocked_count: blocked}}
+    end)
+  end
+
+  def dependency_states(_, :step), do: %{}
+
+  @doc """
   Is the task ready to execute? True when all its direct prerequisites are
   in a terminal state (`done` or `cancelled`).
   """
   def ready?(%Task{} = task) do
     ids = prerequisite_ids(task)
-    ready_ids?(ids)
-  end
 
-  defp ready_ids?([]), do: true
+    cond do
+      ids == [] ->
+        true
 
-  defp ready_ids?(ids) do
-    done =
+      # ready only when ALL prerequisites are done/cancelled — a single
+      # pending dep blocks it.
       Repo.exists?(
         from t in Task,
           where: t.id in ^ids and t.status in ^~w(done cancelled)
-      )
+      ) and
+        not Repo.exists?(
+          from t in Task,
+            where: t.id in ^ids and t.status not in ^~w(done cancelled)
+        ) ->
+        true
 
-    # ready only when ALL prerequisites are done/cancelled — a single
-    # pending dep blocks it.
-    done and
-      not Repo.exists?(
-        from t in Task,
-          where: t.id in ^ids and t.status not in ^~w(done cancelled)
-      )
+      true ->
+        false
+    end
+  end
+
+  # Definition-layer analogue of the task ready?/1: steps have no board
+  # status, so there is no terminal state a prerequisite could reach at
+  # this layer — only a step without prerequisites is ready here.
+  # Attempt-based readiness ("all prereq runs passed in this session") is
+  # Dran.Executions.run_ready?/1 (wave B).
+  def ready?(%Step{} = step) do
+    step_prerequisite_ids(step) == []
   end
 
   @doc "Ids of direct prerequisites that are NOT in a terminal state (blocking this task)."
@@ -426,6 +584,49 @@ defmodule Dran.Contracts do
           "",
           "## DO NOT",
           "Do not edit other tasks, goals or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
+        ]
+
+        {:ok, Enum.join(List.flatten(sections), "\n")}
+
+      _ ->
+        {:error, :no_contract}
+    end
+  end
+
+  # Step analogue of the task renderer: same sections, same structure —
+  # the interchange format a pulling agent reads.
+  def render_brief(%Step{} = step) do
+    case step.meta do
+      %{"contract" => %{"intent" => intent} = contract} when is_binary(intent) ->
+        sections = [
+          "# Task: #{step.title}",
+          "",
+          "## Objective",
+          "We need #{intent}",
+          "",
+          brief_claims(step, contract),
+          "",
+          brief_gates(contract),
+          "",
+          brief_graph(contract),
+          "",
+          "## Context",
+          "Pulled from #{step.workspace_id} — see step #{step.id} (plan #{step.plan_id}).",
+          "",
+          "## Constraints",
+          "Follow the closed verb vocabulary and the verification funnel (riel-contract).",
+          "",
+          "## Pre-registered claims",
+          "The P-ids above are declared before execution; a failed claim is refuted, never reinterpreted.",
+          "",
+          "## Execution graph",
+          "The mermaid above is the execution plan; follow it textually.",
+          "",
+          "## Deliverable",
+          "Move the task status to done when all gates pass; report ✓NN checkpoints to memory (source: step:<id>).",
+          "",
+          "## DO NOT",
+          "Do not edit other steps, plans, tasks or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
         ]
 
         {:ok, Enum.join(List.flatten(sections), "\n")}
@@ -499,14 +700,18 @@ defmodule Dran.Contracts do
 
   Cycle-safe: in the pathological case of a cycle it still terminates by
   not depending on a topological order being acyclic.
+
+  Accepts `%Dran.Step{}` structs as well as tasks — steps are ordered by
+  their step→step `depends_on` edges (plan DAG).
   """
   def levels(tasks) do
     ids = Enum.map(tasks, & &1.id)
     id_set = MapSet.new(ids)
 
     edges =
-      for %Task{id: id} = t <- tasks,
-          prereq <- prerequisite_ids(t),
+      for t <- tasks,
+          id = t.id,
+          prereq <- step_prerequisite_ids(t),
           MapSet.member?(id_set, prereq) do
         {prereq, id}
       end
@@ -556,12 +761,20 @@ defmodule Dran.Contracts do
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  Content fingerprint of the inputs a contract was generated from: task
-  title + body + goal context. Stored on the contract at generation time;
-  `stale?/1` recomputes and compares.
+  Content fingerprint of the inputs a contract was generated from. For a
+  task: title + body + goal context. For a step: step.id + contract + the
+  step's `depends_on` edges (plan topology) — steps are never cloned, so
+  the task clone-stale artifact does not apply. Stored on the contract at
+  generation time; `stale?/1` recomputes and compares.
   """
-  def fingerprint(%Task{} = task, goal \\ nil) do
-    :crypto.hash(:sha256, fingerprint_input(task, goal))
+  def fingerprint(node, goal \\ nil)
+
+  def fingerprint(%Task{} = task, goal), do: do_fingerprint(fingerprint_input(task, goal))
+
+  def fingerprint(%Step{} = step, _goal), do: do_fingerprint(step_fingerprint_input(step))
+
+  defp do_fingerprint(input) do
+    :crypto.hash(:sha256, input)
     |> Base.encode16(case: :lower)
     |> binary_part(0, 16)
   end
@@ -574,6 +787,22 @@ defmodule Dran.Contracts do
       end
 
     "#{task.id}|#{task.title}|#{task.body}|#{goal_part}"
+  end
+
+  defp step_fingerprint_input(%Step{} = step) do
+    edges =
+      step
+      |> step_prerequisite_ids()
+      |> Enum.sort()
+      |> Enum.join(",")
+
+    contract =
+      case step.meta do
+        %{"contract" => contract} when is_map(contract) -> inspect(contract)
+        _ -> ""
+      end
+
+    "#{step.id}|#{step.title}|#{step.body}|#{contract}|#{edges}"
   end
 
   @doc """
