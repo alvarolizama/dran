@@ -1,7 +1,15 @@
 defmodule DranWeb.WorkflowsLiveTest do
+  @moduledoc """
+  LiveView tests for the workflows model (post-pivot 2026-09): index of
+  workflows with session actions, show with the steps DAG + sessions +
+  runs with phase progress.
+  """
+
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Contracts, Goals, Tasks}
+  import Phoenix.LiveViewTest
+
+  alias Dran.{Contracts, Executions, Knowledge, Workflows}
 
   setup %{conn: conn} do
     original = Application.get_env(:dran, :inference)
@@ -24,19 +32,21 @@ defmodule DranWeb.WorkflowsLiveTest do
     end)
 
     {:ok, ws} =
-      Dran.Knowledge.create_workspace(%{name: "Workflows Test", slug: "workflows-test"})
+      Knowledge.create_workspace(%{name: "Workflows Test", slug: "workflows-test"})
 
-    {:ok, goal} =
-      Goals.create_goal(%{
+    {:ok, workflow} =
+      Workflows.create_workflow(%{
         "workspace_id" => ws.id,
-        "title" => "Goal with workflow",
-        "slug" => "goal-with-workflow"
+        "title" => "Deploy pipeline",
+        "slug" => "deploy-pipeline"
       })
 
-    {:ok, task} =
-      Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Contract task"})
+    {:ok, build} = Workflows.create_step(workflow, %{"title" => "Build", "slug" => "build"})
+    {:ok, test} = Workflows.create_step(workflow, %{"title" => "Test", "slug" => "test-step"})
+    {:ok, _deploy} = Workflows.create_step(workflow, %{"title" => "Deploy", "slug" => "deploy"})
 
-    {:ok, _} = Tasks.set_goal(task, goal.id)
+    # Build → Test (Test depends on Build)
+    {:ok, _} = Contracts.add_dependency(test, build)
 
     conn =
       conn
@@ -45,267 +55,298 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> Plug.Conn.put_session(:workspace_slug, ws.slug)
       |> Plug.Conn.put_session(:is_owner, true)
 
-    {:ok, conn: conn, ws: ws, goal: goal, task: task}
+    {:ok, conn: conn, ws: ws, workflow: workflow}
   end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Index
+  # ──────────────────────────────────────────────────────────────────────────
 
   describe "index" do
-    test "renders the three tabs", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/workflows")
+    test "renders one card per workflow with status and kind", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows")
 
-      assert html =~ "Resumen"
-      assert html =~ "En ejecución"
-      assert html =~ "Cola"
+      assert html =~ "Deploy pipeline"
+      assert html =~ "Nueva sesión"
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      assert has_element?(view, "#workflow-card-#{workflow.id}", "evergreen")
+      assert has_element?(view, "#workflow-card-#{workflow.id}", "Draft")
     end
 
-    test "resumen lists the goal that has a contract task", %{conn: conn, ws: ws, task: task} do
-      {:ok, _} = Tasks.update_task(task, %{"meta" => %{"contract" => valid_contract()}})
+    test "nueva sesión opens an in-flight session with the label", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
+
+      view
+      |> form("#workflow-session-form-#{workflow.id}")
+      |> render_submit(%{"label" => "release 1"})
+
+      assert has_element?(view, "#workflow-card-#{workflow.id}", "In Flight")
+
+      sessions = Executions.list_sessions(workflow)
+      assert [session] = sessions
+      assert session.status == "in_flight"
+      assert session.label == "release 1"
+    end
+
+    test "index shows in-flight sessions with progress", %{conn: conn, ws: ws, workflow: workflow} do
+      {:ok, _session} = Executions.open_session(workflow, label: "live one")
 
       {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows")
-      assert html =~ "Goal with workflow"
 
-      assert has_element?(view, "a[href*='workflows/goal-with-workflow']")
+      assert html =~ "live one"
+      assert html =~ "0/3"
+      assert has_element?(view, "#workflow-card-#{workflow.id} progress")
     end
 
-    test "ejecucion tab shows the in-progress contract task", %{conn: conn, ws: ws, task: task} do
-      {:ok, _} =
-        Tasks.update_task(task, %{
-          "status" => "in_progress",
-          "meta" => %{"contract" => valid_contract()}
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/workflows?tab=ejecucion")
-      assert html =~ "Contract task"
-    end
-
-    test "cola tab shows a ready contract task", %{conn: conn, ws: ws, task: task} do
-      {:ok, _} =
-        Tasks.update_task(task, %{
-          "status" => "todo",
-          "meta" => %{"contract" => valid_contract()}
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/workflows?tab=cola")
-      assert html =~ "Contract task"
-    end
-
-    test "cola excludes a blocked task (unmet dependency)", %{
+    test "abort button aborts an in-flight session from the index", %{
       conn: conn,
       ws: ws,
-      goal: goal,
-      task: task
+      workflow: workflow
     } do
-      {:ok, prereq} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Prereq"})
-      {:ok, _} = Tasks.set_goal(prereq, goal.id)
-      {:ok, _} = Contracts.add_dependency(task, prereq)
+      {:ok, session} = Executions.open_session(workflow, label: "to abort")
 
-      {:ok, _} =
-        Tasks.update_task(task, %{
-          "status" => "todo",
-          "meta" => %{"contract" => valid_contract()}
-        })
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/workflows?tab=cola")
-      refute html =~ "Contract task"
+      view
+      |> element("#workflow-card-#{workflow.id} button[phx-value-session-id='#{session.id}']")
+      |> render_click()
+
+      session = Executions.get_session!(session.id)
+      assert session.status == "aborted"
+      assert session.finished_at
     end
 
-    test "goal filter appears on ejecucion/cola and filters by goal", %{
+    test "archived workflow renders no nueva sesión form", %{
       conn: conn,
       ws: ws,
-      goal: goal,
-      task: task
+      workflow: workflow
     } do
-      {:ok, _} = Tasks.update_task(task, %{"meta" => %{"contract" => valid_contract()}})
-      {:ok, _} = Tasks.update_task(task, %{"status" => "in_progress"})
-      {:ok, other} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Other goal task"})
+      {:ok, _} = Workflows.update_workflow(workflow, %{"status" => "archived"})
 
-      {:ok, other_goal} =
-        Dran.Goals.create_goal(%{
-          "workspace_id" => ws.id,
-          "title" => "Other goal",
-          "slug" => "other-goal"
-        })
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
 
-      {:ok, _} = Tasks.set_goal(other, other_goal.id)
-      {:ok, _} = Tasks.update_task(other, %{"meta" => %{"contract" => valid_contract()}})
-      {:ok, _} = Tasks.update_task(other, %{"status" => "in_progress"})
-
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows?tab=ejecucion")
-      assert has_element?(view, "#workflow-goal-filter")
-      assert html =~ "Contract task"
-      assert html =~ "Other goal task"
-
-      # select a goal → only its tasks remain
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows?tab=ejecucion&goal=#{goal.id}")
-      assert html =~ "Contract task"
-      refute html =~ "Other goal task"
-
-      # clear the goal → all back, selector still visible
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows?tab=ejecucion")
-      assert html =~ "Other goal task"
-      assert has_element?(view, "#workflow-goal-filter")
-    end
-
-    test "goal filter rolls up to sub-goals (parent matches descendants)", %{
-      conn: conn,
-      ws: ws,
-      goal: goal,
-      task: task
-    } do
-      {:ok, _} = Tasks.update_task(task, %{"meta" => %{"contract" => valid_contract()}})
-      {:ok, _} = Tasks.update_task(task, %{"status" => "in_progress"})
-
-      {:ok, sub} =
-        Dran.Goals.create_goal(%{
-          "workspace_id" => ws.id,
-          "title" => "Sub goal",
-          "slug" => "sub-goal",
-          "parent_goal_id" => goal.id
-        })
-
-      {:ok, subtask} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Sub goal task"})
-      {:ok, _} = Tasks.set_goal(subtask, sub.id)
-      {:ok, _} = Tasks.update_task(subtask, %{"meta" => %{"contract" => valid_contract()}})
-      {:ok, _} = Tasks.update_task(subtask, %{"status" => "in_progress"})
-
-      # filtering by the parent shows BOTH the parent's and the sub-goal's tasks
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows?tab=ejecucion&goal=#{goal.id}")
-      assert html =~ "Contract task"
-      assert html =~ "Sub goal task"
-
-      # the sub-goal appears indented in the filter options
-      assert has_element?(view, "#workflow-goal-filter option[value='#{sub.id}']")
-      assert html =~ ~s(— Sub goal)
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      refute has_element?(view, "#workflow-card-#{workflow.id} form")
     end
   end
 
-  describe "show (goal DAG)" do
-    test "invalid goal slug redirects back to the index without crashing", %{conn: conn, ws: ws} do
-      # Regression guard: an unknown slug must cleanly live_redirect to the
-      # index (Phoenix resolves the handle_params push_patch on first render —
-      # no render with ghost assigns).
+  # ──────────────────────────────────────────────────────────────────────────
+  # Show — steps DAG + sessions + runs
+  # ──────────────────────────────────────────────────────────────────────────
+
+  describe "show" do
+    test "invalid workflow slug redirects back to the index without crashing", %{
+      conn: conn,
+      ws: ws
+    } do
       assert {:error, {:live_redirect, %{to: to}}} =
-               live(conn, ~p"/#{ws.slug}/workflows/not-a-real-goal")
+               live(conn, ~p"/#{ws.slug}/workflows/not-a-real-workflow")
 
       assert to == ~p"/#{ws.slug}/workflows"
     end
 
-    test "renders the goal title and the task card", %{conn: conn, ws: ws, task: task} do
-      {:ok, _} = Tasks.update_task(task, %{"meta" => %{"contract" => valid_contract()}})
-
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows/goal-with-workflow")
-      assert html =~ "Goal with workflow"
-      assert html =~ "Contract task"
-      assert has_element?(view, "[data-column], .rounded-2xl")
-    end
-
-    test "dag canvas exposes pan/zoom controls and stage", %{
+    test "renders the steps DAG with pan/zoom controls and topological columns", %{
       conn: conn,
-      ws: ws,
-      task: task
+      ws: ws
     } do
-      {:ok, _} = Tasks.update_task(task, %{"meta" => %{"contract" => valid_contract()}})
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/goal-with-workflow")
       assert has_element?(view, "#wfe-canvas[phx-hook='WfPanZoom']")
       assert has_element?(view, "#wfe-canvas [data-wf-stage]")
       assert has_element?(view, "#wfe-canvas [data-wf-zoom='in']")
       assert has_element?(view, "#wfe-canvas [data-wf-zoom='out']")
       assert has_element?(view, "#wfe-canvas [data-wf-fit]")
-    end
 
-    test "levels order: prereq first, dependent second", %{
-      conn: conn,
-      ws: ws,
-      goal: goal,
-      task: task
-    } do
-      {:ok, prereq} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Prereq first"})
-      {:ok, _} = Tasks.set_goal(prereq, goal.id)
-      {:ok, _} = Contracts.add_dependency(task, prereq)
+      # Prereq (Build) appears before its dependent (Test) in the columns
+      assert html =~ "Build"
+      assert html =~ "Test"
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/workflows/goal-with-workflow")
+      assert byte_size(hd(String.split(html, "Build"))) <
+               byte_size(hd(String.split(html, "Test")))
 
-      first_pos = byte_size(hd(String.split(html, "Prereq first")))
-      # Prereq appears before the dependent task in the rendered columns
-      assert html =~ "Prereq first"
-      assert first_pos < byte_size(hd(String.split(html, "Contract task")))
-
-      # One pending edge renders with its card ports (input + output dots)
+      # A pending edge renders with its ports
       assert html =~ "wfe-edge-pending"
       assert html =~ "rounded-full border-2 border-base-100"
-
-      # Status labels are capitalized without underscores
-      assert html =~ "Backlog"
     end
 
-    test "status_label capitalizes and strips underscores" do
-      alias DranWeb.WorkflowsLive
-      assert WorkflowsLive.status_label("in_progress") == "In Progress"
-      assert WorkflowsLive.status_label("done") == "Done"
-      assert WorkflowsLive.status_label("backlog") == "Backlog"
-    end
-
-    test "blocked panel shows the dependency count", %{conn: conn, ws: ws, goal: goal, task: task} do
-      {:ok, prereq} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Prereq"})
-      {:ok, _} = Tasks.set_goal(prereq, goal.id)
-      {:ok, _} = Contracts.add_dependency(task, prereq)
-
-      {:ok, _} =
-        Tasks.update_task(task, %{
-          "status" => "todo",
-          "meta" => %{"contract" => valid_contract()}
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/goal-with-workflow")
-      # The blocked task appears in the "Bloqueadas" panel.
-      assert has_element?(view, "div", "Contract task")
-    end
-
-    test "click on a DAG card opens the contract modal", %{conn: conn, ws: ws, task: task} do
-      {:ok, task} = Tasks.update_task(task, %{"meta" => %{"contract" => valid_contract()}})
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/goal-with-workflow")
-
-      refute has_element?(view, "#contract-modal")
-
-      view
-      |> element("[phx-value-task-id='#{task.id}']")
-      |> render_click()
-
-      assert has_element?(view, "#contract-modal")
-      assert has_element?(view, "#contract-modal", "implement the workflow")
-      assert has_element?(view, "#contract-modal", "active")
-      assert has_element?(view, "#contract-modal", "P1")
-    end
-
-    test "?contract=<id> opens the modal directly; closing pops the param", %{
+    test "nueva sesión from the sessions panel opens a session and shows runs", %{
       conn: conn,
       ws: ws,
-      task: task
+      workflow: workflow
     } do
-      {:ok, task} = Tasks.update_task(task, %{"meta" => %{"contract" => valid_contract()}})
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
+
+      view
+      |> form("#workflow-session-form")
+      |> render_submit(%{"label" => "first pass"})
+
+      assert [session] = Executions.list_sessions(workflow)
+      assert session.label == "first pass"
+      assert session.workflow_id == workflow.id
+
+      html = render(view)
+      assert html =~ "first pass"
+      assert html =~ "0/3"
+      # The runs panel lists one pending run per step
+      runs = Executions.list_runs(session)
+      assert length(runs) == 3
+
+      Enum.each(runs, fn run ->
+        assert has_element?(view, "#run-row-#{run.id}", "Pending")
+      end)
+    end
+
+    test "sessions panel lists sessions; clicking selects and shows its runs", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, s1} = Executions.open_session(workflow, label: "pass one")
+      {:ok, s2} = Executions.open_session(workflow, label: "pass two")
 
       {:ok, view, _html} =
-        live(conn, ~p"/#{ws.slug}/workflows/goal-with-workflow?contract=#{task.id}")
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?session=#{s2.id}")
 
-      assert has_element?(view, "#contract-modal")
+      assert has_element?(view, "#session-row-#{s1.id}")
+      assert has_element?(view, "#session-row-#{s2.id}")
+      assert render(view) =~ "pass two"
 
-      # Popping the ?contract param closes the modal (URL state)
-      render_patch(view, ~p"/#{ws.slug}/workflows/goal-with-workflow")
+      # Deep-linked session is the selected one
+      assert has_element?(view, "#session-row-#{s2.id}.border-primary")
+      refute has_element?(view, "#session-row-#{s1.id}.border-primary")
 
-      refute has_element?(view, "#contract-modal")
+      view |> element("#session-row-#{s1.id}") |> render_click()
+
+      assert has_element?(view, "#session-row-#{s1.id}.border-primary")
+      refute has_element?(view, "#session-row-#{s2.id}.border-primary")
+
+      # The selected session's runs are visible
+      runs = Executions.list_runs(s1)
+      assert Enum.any?(runs, fn run -> has_element?(view, "#run-row-#{run.id}") end)
+    end
+
+    test "run lifecycle: start, phase progress and close turn chips and edges", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, session} = Executions.open_session(workflow)
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?session=#{session.id}")
+
+      [build, test, _deploy] = runs = Executions.list_runs(session)
+
+      Enum.each(runs, fn run ->
+        assert has_element?(view, "#run-row-#{run.id}", "Pending")
+      end)
+
+      {:ok, _} = Executions.start_run(build)
+      assert render(view) =~ "In Flight"
+
+      # Phase progress reported by the agent (update_progress broadcast)
+      {:ok, _} = Executions.update_progress(build.id, %{"phase" => "compiling"})
+      assert render(view) =~ "compiling"
+
+      {:ok, _} = Executions.close_run(build, status: "passed")
+
+      html = render(view)
+      assert has_element?(view, "#run-row-#{build.id}", "Passed")
+      # The Build→Test edge turns done (prereq passed in the session)
+      assert html =~ "wfe-edge-done"
+
+      # Progress tally reflects the passed run
+      assert html =~ "1/3"
+
+      # ...and the dependent run (Test) — still pending — is NOT ready per
+      # the frozen snapshot until its prereq passed (display only here).
+      assert has_element?(view, "#run-row-#{test.id}", "Pending")
+    end
+
+    test "abort button aborts the session from the show panel", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, session} = Executions.open_session(workflow, label: "abort me")
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
+
+      view
+      |> element("button[phx-value-session-id='#{session.id}']")
+      |> render_click()
+
+      assert Executions.get_session!(session.id).status == "aborted"
+      assert render(view) =~ "Aborted"
+      # Its runs are shown as skipped
+      runs = Executions.list_runs(session)
+
+      Enum.each(runs, fn run ->
+        assert has_element?(view, "#run-row-#{run.id}", "Skipped")
+      end)
     end
   end
 
-  test "graph_edges draws prereq output -> dependent input" do
+  # ──────────────────────────────────────────────────────────────────────────
+  # Pure helpers
+  # ──────────────────────────────────────────────────────────────────────────
+
+  test "status_label capitalizes and strips underscores" do
+    alias DranWeb.WorkflowsLive
+    assert WorkflowsLive.status_label("in_flight") == "In Flight"
+    assert WorkflowsLive.status_label("passed") == "Passed"
+    assert WorkflowsLive.status_label("evergreen") == "Evergreen"
+    assert WorkflowsLive.status_label(nil) == ""
+  end
+
+  test "session_pct and progress_label compute over finished runs" do
     alias DranWeb.WorkflowsLive
 
-    # levels are lists of task ids: prereq on level 0, dependent on level 1
+    progress = %{total: 4, pending: 1, in_flight: 1, passed: 1, failed: 1, skipped: 0}
+    assert WorkflowsLive.session_pct(progress) == 50
+    assert WorkflowsLive.progress_label(progress) == "2/4"
+
+    empty = %{total: 0, pending: 0, in_flight: 0, passed: 0, failed: 0, skipped: 0}
+    assert WorkflowsLive.session_pct(empty) == 0
+    assert WorkflowsLive.progress_label(empty) == "0/0"
+  end
+
+  test "status chips map to badge classes" do
+    alias DranWeb.WorkflowsLive
+
+    assert WorkflowsLive.workflow_chip("active") == "badge-success"
+    assert WorkflowsLive.workflow_chip("draft") == "badge-ghost"
+    assert WorkflowsLive.workflow_chip("archived") == "badge-warning"
+
+    assert WorkflowsLive.session_chip("in_flight") == "badge-primary"
+    assert WorkflowsLive.session_chip("passed") == "badge-success"
+    assert WorkflowsLive.session_chip("failed") == "badge-error"
+    assert WorkflowsLive.session_chip("aborted") == "badge-warning"
+
+    assert WorkflowsLive.run_chip("pending") == "badge-ghost"
+    assert WorkflowsLive.run_chip("in_flight") == "badge-primary"
+    assert WorkflowsLive.run_chip("passed") == "badge-success"
+    assert WorkflowsLive.run_chip("failed") == "badge-error"
+    assert WorkflowsLive.run_chip("skipped") == "badge-warning"
+  end
+
+  test "graph_edges draws prereq output -> dependent input, done when prereq passed" do
+    alias DranWeb.WorkflowsLive
+
+    # levels are lists of step ids: prereq on level 0, dependent on level 1
     levels = [["p1"], ["d1"]]
-    tasks_by_id = %{"p1" => %{id: "p1", status: "done"}, "d1" => %{id: "d1", status: "todo"}}
+    passed = MapSet.new(["p1"])
 
     # relation tuple as stored in the DB: {dependent, prereq}
-    [{_dep, edge}] = WorkflowsLive.graph_edges([{"d1", "p1"}], levels, tasks_by_id)
+    [{_dep, edge}] = WorkflowsLive.graph_edges([{"d1", "p1"}], levels, passed)
 
     # flows left to right: starts at the prereq output (right edge)
     {px, _py} = WorkflowsLive.node_position(levels, "p1")
@@ -313,27 +354,15 @@ defmodule DranWeb.WorkflowsLiveTest do
     assert edge.x1 == px + WorkflowsLive.node_w()
     assert edge.x2 == dx
     assert edge.x1 < edge.x2
+    assert edge.done
+
+    # without a passed run the edge stays pending
+    [{_dep, pending_edge}] = WorkflowsLive.graph_edges([{"d1", "p1"}], levels, MapSet.new())
+    refute pending_edge.done
 
     # ports agree: prereq owns the output dot, dependent owns the input dot
     ports = WorkflowsLive.graph_ports([{"d1", edge}], levels)
     assert ports["p1"].out.x == edge.x1
     assert ports["d1"].in.x == edge.x2
-  end
-
-  defp valid_contract do
-    %{
-      "version" => 1,
-      "status" => "active",
-      "intent" => "implement the workflow",
-      "claims" => [%{"id" => "P1", "claim" => "done", "verify" => "mix test"}],
-      "gates" => [%{"name" => "g", "cmd" => "mix test", "expect" => "green"}],
-      "graph" => %{
-        "nodes" => [
-          %{"id" => "S1", "verb" => "RUN", "label" => "mix test"},
-          %{"id" => "G1", "verb" => "VERIFY", "label" => "green?"}
-        ],
-        "edges" => [%{"from" => "S1", "to" => "G1", "guard" => "yes"}]
-      }
-    }
   end
 end

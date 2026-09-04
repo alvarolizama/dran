@@ -6,6 +6,7 @@ defmodule DranWeb.GoalLive do
   alias Dran.Goals
   alias Dran.Goal
   alias Dran.Tasks
+  alias Dran.Workflows
   alias DranWeb.Plugs.Auth
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -67,6 +68,30 @@ defmodule DranWeb.GoalLive do
             {render_markdown(@goal.body, [])}
           </div>
 
+          <%!-- Linked workflows (read-only list, execution layer) --%>
+          <div :if={@workflows != []} id="goal-workflows" class="surface-2 rounded-xl p-4">
+            <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
+              <.icon name="hero-bolt" class="size-4 text-primary" />
+              {gettext("Workflows vinculados")}
+              <span class="badge badge-sm badge-ghost">{length(@workflows)}</span>
+            </h3>
+            <ul class="space-y-1.5">
+              <li :for={workflow <- @workflows}>
+                <.link
+                  navigate={~p"/#{@workspace_slug}/workflows/#{workflow.slug}"}
+                  class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+                >
+                  <.icon name="hero-bolt" class="size-4 shrink-0 text-base-content/40" />
+                  <span class="flex-1 min-w-0 truncate">{workflow.title}</span>
+                  <span class={["badge badge-xs shrink-0", workflow_badge_class(workflow)]}>
+                    {String.capitalize(workflow.status)}
+                  </span>
+                  <span class="badge badge-ghost badge-xs shrink-0">{workflow.kind}</span>
+                </.link>
+              </li>
+            </ul>
+          </div>
+
           <%!-- Linked tasks --%>
           <div :if={@tasks != []} class="surface-2 rounded-xl p-4">
             <div class="flex items-center justify-between mb-3">
@@ -80,13 +105,6 @@ defmodule DranWeb.GoalLive do
                 class="text-xs text-base-content/60 hover:underline"
               >
                 {gettext("Open board")}
-              </.link>
-              <span class="text-base-content/20">·</span>
-              <.link
-                navigate={~p"/#{@workspace_slug}/workflows/#{@goal.slug}"}
-                class="text-xs text-base-content/60 hover:underline"
-              >
-                {gettext("Ver flujo")}
               </.link>
             </div>
             <ul class="space-y-1.5">
@@ -194,6 +212,7 @@ defmodule DranWeb.GoalLive do
        save_status: "idle",
        active_nav: "goals",
        tasks: [],
+       workflows: [],
        # Resource modal state — `?new=true` on the index opens create,
        # `?edit=true` on the show opens edit. Rendered via
        # `<.resource_modal>` (DranWeb.ResourceComponents).
@@ -263,6 +282,7 @@ defmodule DranWeb.GoalLive do
             goal: goal,
             form: form,
             tasks: Tasks.list_tasks_for_goal(goal),
+            workflows: Workflows.list_by_goal(goal),
             editing: Map.get(params, "edit") == "true",
             page_title: goal.title
           )
@@ -391,6 +411,11 @@ defmodule DranWeb.GoalLive do
   defp goal_status_class(%Goal{status: "done"}), do: "bg-green-100 text-green-700"
   defp goal_status_class(_), do: "bg-base-300 text-base-content/60"
 
+  defp workflow_badge_class(%{status: "active"}), do: "bg-green-100 text-green-700"
+  defp workflow_badge_class(%{status: "draft"}), do: "bg-base-200 text-base-content/70"
+  defp workflow_badge_class(%{status: "archived"}), do: "bg-yellow-100 text-yellow-700"
+  defp workflow_badge_class(_), do: "bg-base-300 text-base-content/60"
+
   defp dot_class("backlog"), do: "bg-base-300"
   defp dot_class("todo"), do: "bg-sky-500"
   defp dot_class("in_progress"), do: "bg-purple-500"
@@ -426,6 +451,16 @@ defmodule DranWeb.GoalLive do
 
       goal ->
         {:noreply, assign(socket, tasks: Tasks.list_tasks_for_goal(goal))}
+    end
+  end
+
+  # Sessions/runs of a workflow linked to the shown goal changed — keep the
+  # linked-workflows list in sync (list is read-only; only membership/status
+  # can change → full reload).
+  def handle_info({:session_changed, _action, _session}, socket) do
+    case socket.assigns[:goal] do
+      nil -> {:noreply, socket}
+      goal -> {:noreply, assign(socket, workflows: Workflows.list_by_goal(goal))}
     end
   end
 

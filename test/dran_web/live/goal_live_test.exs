@@ -3,7 +3,7 @@ defmodule DranWeb.GoalLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.{Goals, Knowledge, Tasks}
+  alias Dran.{Executions, Goals, Knowledge, Tasks, Workflows}
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
@@ -99,6 +99,62 @@ defmodule DranWeb.GoalLiveTest do
       {:ok, _} = Tasks.link_to_goal(task, goal)
 
       assert render(view) =~ "Live added"
+    end
+  end
+
+  describe "linked workflows" do
+    test "lists workflows whose goal_id points at the goal, with links", %{
+      conn: conn,
+      ws: ws,
+      goal: goal
+    } do
+      {:ok, workflow} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "goal_id" => goal.id,
+          "title" => "Deploy pipeline",
+          "slug" => "deploy-pipeline"
+        })
+
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      assert html =~ t("Workflows vinculados")
+      assert html =~ "Deploy pipeline"
+      assert has_element?(view, "#goal-workflows")
+      assert html =~ ~s(href="/#{ws.slug}/workflows/#{workflow.slug}")
+    end
+
+    test "renders no linked-workflows section when the goal has none", %{
+      conn: conn,
+      ws: ws,
+      goal: goal
+    } do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      refute html =~ t("Workflows vinculados")
+    end
+
+    test "refreshes the list on a session_changed broadcast", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      # Created AFTER mount — invisible until a broadcast forces a re-query.
+      {:ok, workflow} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "goal_id" => goal.id,
+          "title" => "Late workflow",
+          "slug" => "late-workflow"
+        })
+
+      {:ok, _} = Workflows.create_step(workflow, %{"title" => "Only", "slug" => "only"})
+
+      refute render(view) =~ "Late workflow"
+
+      # open_session broadcasts {:session_changed, :opened, session} on the
+      # workspace topic — the exact production path.
+      {:ok, _} = Executions.open_session(workflow)
+
+      assert render(view) =~ "Late workflow"
     end
   end
 

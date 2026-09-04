@@ -1,25 +1,22 @@
 defmodule DranWeb.WorkflowsLive do
   @moduledoc """
-  Workflows — goal-level execution view.
+  Workflows — index + execution view over the workflows model (2026-09).
 
-  Index (`/workflows`): three tabs.
-  - Resumen: one card per goal that has at least one contract task
-    (contracts count, running, ready, stale).
-  - En ejecución: live list of in_progress contract tasks.
-  - Cola: contract tasks that are ready (deps satisfied) — the pull queue.
+  Index (`/workflows`): one card per workflow — title, status
+  (draft/active/archived), kind (evergreen/one_shot), steps count and its
+  in-flight sessions (progress + abort). Each card has a "Nueva sesión"
+  form that opens a session (`Dran.Executions.open_session/2`) with an
+  optional label.
 
-  Show (`/workflows/:goal_slug`): the DAG of the goal's tasks laid out in
-  topological columns (`Dran.Contracts.levels/1`) plus the
-  Sigue / En ejecución / Bloqueadas panels.
+  Show (`/workflows/:slug`): the DAG of the workflow's steps laid out in
+  topological columns (`Dran.Contracts.levels/1`), the sessions panel
+  (status, label, started/finished, progress) and the runs of the
+  selected session with status chip and `progress["phase"]`.
   """
 
   use DranWeb, :live_view
 
-  alias Dran.{Contracts, Goals, Task, Tasks}
-
-  defp list_all_tasks(workspace_id), do: Tasks.list_tasks(workspace_id: workspace_id)
-
-  @tabs ~w(resumen ejecucion cola)
+  alias Dran.{Contracts, Executions, Workflows}
 
   @impl true
   def mount(params, session, socket) do
@@ -33,8 +30,9 @@ defmodule DranWeb.WorkflowsLive do
 
       context ->
         if connected?(socket) do
+          # Session/run changes broadcast on the workspace topic
+          # (Dran.Executions.broadcast_session_change/broadcast_run_change).
           Phoenix.PubSub.subscribe(Dran.PubSub, "workspace:#{context.id}")
-          Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
         end
 
         {:ok,
@@ -42,9 +40,8 @@ defmodule DranWeb.WorkflowsLive do
          |> assign(
            context: context,
            active_nav: "workflows",
-           tab: "resumen",
-           goal: nil,
-           tasks: []
+           workflow: nil,
+           selected_session: nil
          )}
     end
   end
@@ -55,339 +52,339 @@ defmodule DranWeb.WorkflowsLive do
 
     socket =
       case socket.assigns.live_action do
-        :index -> apply_index(socket, socket.assigns.context, params)
+        :index -> apply_index(socket, socket.assigns.context)
         :show -> apply_show(socket, socket.assigns.context, params)
       end
 
     {:noreply, socket}
   end
 
-  defp apply_index(socket, nil, _params), do: socket
+  # ── Loaders ───────────────────────────────────────────────────────────────
 
-  defp apply_index(socket, context, params) do
-    tab =
-      case params["tab"] do
-        t when t in @tabs -> t
-        _ -> "resumen"
-      end
+  defp apply_index(socket, nil), do: socket
 
-    goal_filter =
-      case params["goal"] do
-        g when is_binary(g) and g != "" -> g
-        _ -> nil
-      end
+  defp apply_index(socket, context) do
+    workflows =
+      context.id
+      |> Workflows.list_workflows()
+      |> Enum.map(&workflow_summary/1)
 
-    socket
-    |> assign(goal_filter: goal_filter, page_title: gettext("Workflows"))
-    |> load_index(context)
-    |> assign(tab: tab)
+    assign(socket, workflows: workflows, page_title: gettext("Workflows"))
+  end
+
+  # One card payload: definition slice (workflow + steps count) and live
+  # slice (in-flight sessions with their run progress).
+  defp workflow_summary(workflow) do
+    active_sessions =
+      workflow
+      |> Executions.list_sessions()
+      |> Enum.filter(&(&1.status == "in_flight"))
+      |> Enum.map(fn session -> {session, Executions.session_progress(session)} end)
+
+    %{
+      workflow: workflow,
+      steps_count: length(Workflows.list_steps(workflow)),
+      active_sessions: active_sessions
+    }
   end
 
   defp apply_show(socket, nil, _params), do: socket
 
   defp apply_show(socket, context, %{"slug" => slug} = params) do
-    case Goals.get_goal_by_slug(slug, context.id) do
+    case Workflows.get_workflow_by_slug(slug, context.id) do
       nil ->
         socket
         |> assign(page_title: gettext("Workflows"))
         |> push_patch(to: ~p"/#{socket.assigns[:workspace_slug]}/workflows")
 
-      goal ->
+      workflow ->
         socket
-        |> assign(goal: goal, page_title: goal.title)
-        |> load_show(goal)
-        |> open_contract_modal(params["contract"])
+        |> assign(workflow: workflow, page_title: workflow.title)
+        |> load_show(workflow, params)
     end
   end
 
-  # ── Loaders ───────────────────────────────────────────────────────────────
+  defp load_show(socket, workflow, params) do
+    steps = Workflows.list_steps(workflow)
+    levels = Contracts.levels(steps)
+    steps_by_id = Map.new(steps, &{&1.id, &1})
+    step_ids = Enum.map(steps, & &1.id)
 
-  defp load_index(socket, context) do
-    all = list_all_tasks(context.id)
-    dep_info = Contracts.dependency_states(Enum.map(all, & &1.id))
+    # Graph edges for the SVG view — {dependent_id, prereq_id}.
+    edges = Contracts.dependency_edges(step_ids, :step)
 
-    workflows = workflow_summaries(context.id, dep_info)
+    # Definition-layer readiness: only steps with zero prerequisites are
+    # ready here (steps have no board status).
+    dep_info = Contracts.dependency_states(step_ids, :step)
 
-    running =
-      all
-      |> Enum.filter(&(&1.status == "in_progress" and Contracts.contract?(&1)))
-      |> preload_actors()
-      |> add_goal_badge(context.id)
+    # Newest first — `{session, progress}` pairs, one progress query each.
+    sessions =
+      workflow
+      |> Executions.list_sessions()
+      |> Enum.map(fn session -> {session, Executions.session_progress(session)} end)
 
-    queue =
-      all
-      |> Enum.filter(fn t ->
-        t.status == "todo" and Contracts.contract?(t) and dep_info[t.id][:ready]
-      end)
-      |> preload_actors()
-      |> add_goal_badge(context.id)
+    selected =
+      case params["session"] do
+        id when is_binary(id) and id != "" ->
+          Enum.find(sessions, fn {session, _progress} -> session.id == id end)
 
-    # Roll-up set computed once — descendants of the selected goal (same
-    # semantics as the board's goal filter).
-    visible_goal_ids = visible_goal_ids(socket.assigns[:goal_filter], context.id)
+        _ ->
+          nil
+      end || List.first(sessions)
+
+    {selected_session, selected_progress} =
+      case selected do
+        {session, progress} -> {session, progress}
+        nil -> {nil, nil}
+      end
+
+    runs =
+      case selected_session do
+        nil -> []
+        session -> Executions.list_runs(session)
+      end
+
+    # Steps of the selected session with a PASSED run — colors DAG edges.
+    passed_step_ids =
+      runs
+      |> Enum.filter(&(&1.status == "passed"))
+      |> MapSet.new(& &1.step_id)
+
+    # Run titles: frozen snapshot first (the session's truth), live step
+    # as fallback.
+    snap_titles =
+      case selected_session do
+        %{snapshot: snapshot} ->
+          snapshot
+          |> Map.get("steps", [])
+          |> List.wrap()
+          |> Map.new(fn s -> {s["id"], s["title"]} end)
+
+        _ ->
+          %{}
+      end
 
     assign(socket,
-      workflows: workflows,
-      running: filter_by_goal(running, visible_goal_ids),
-      queue: filter_by_goal(queue, visible_goal_ids),
-      goal_options: Goals.flattened_tree(context.id),
-      dep_info: dep_info,
-      page_title: gettext("Workflows")
-    )
-  end
-
-  defp load_show(socket, goal) do
-    tasks = Tasks.list_tasks_for_goal(goal)
-    contract_tasks = Enum.filter(tasks, &Contracts.contract?/1)
-    task_ids = Enum.map(tasks, & &1.id)
-    goals_by_task = Tasks.list_linked_goals_by_ids(task_ids, goal.workspace_id)
-
-    levels = Contracts.levels(tasks)
-
-    # Batch dependency state — 2 queries for the whole goal, no per-task
-    # queries in template panels.
-    dep_info = Contracts.dependency_states(task_ids)
-
-    # Graph edges for the SVG view — {source_id, target_id}.
-    edges = Contracts.dependency_edges(task_ids)
-
-    socket
-    |> assign(
-      tasks: tasks,
-      contract_tasks: contract_tasks,
-      goals_by_task: goals_by_task,
+      steps: steps,
       levels: levels,
-      dep_info: dep_info,
+      steps_by_id: steps_by_id,
       edges: edges,
-      modal_task: nil,
-      modal_contract: nil,
-      page_title: goal.title
+      dep_info: dep_info,
+      sessions: sessions,
+      selected_session: selected_session,
+      session_progress: selected_progress,
+      run_views: run_views(snap_titles, steps_by_id, runs),
+      passed_step_ids: passed_step_ids
     )
   end
 
-  # ── Contract viewer modal ──────────────────────────────────────────────────
-  # Click on a DAG card patches `?contract=<task_id>`; handle_params opens the
-  # modal. Closing pops the param. Modal state is URL state — deep-linkable.
+  defp run_views(_snap_titles, _steps_by_id, []), do: []
 
-  @impl true
-  def handle_event("show_contract", %{"task-id" => task_id}, socket) do
-    ws = socket.assigns[:workspace_slug]
-
-    {:noreply,
-     push_patch(socket, to: ~p"/#{ws}/workflows/#{socket.assigns.goal.slug}?contract=#{task_id}")}
-  end
-
-  def handle_event("set_goal_filter", %{"goal" => goal_id}, socket) do
-    tab = socket.assigns.tab
-    ws = socket.assigns.context.slug
-
-    patch =
-      if goal_id in [nil, ""],
-        do: ~p"/#{ws}/workflows?tab=#{tab}",
-        else: ~p"/#{ws}/workflows?tab=#{tab}&goal=#{goal_id}"
-
-    {:noreply, push_patch(socket, to: patch)}
-  end
-
-  def handle_event("close_contract", _params, socket) do
-    ws = socket.assigns[:workspace_slug]
-    {:noreply, push_patch(socket, to: ~p"/#{ws}/workflows/#{socket.assigns.goal.slug}")}
-  end
-
-  defp open_contract_modal(socket, task_id) when is_binary(task_id) do
-    task = Enum.find(socket.assigns.tasks, &(&1.id == task_id))
-    contract = if task, do: task.meta["contract"], else: nil
-    assign(socket, modal_task: task, modal_contract: contract)
-  end
-
-  defp open_contract_modal(socket, _), do: assign(socket, modal_task: nil, modal_contract: nil)
-
-  # ── Summary computation ───────────────────────────────────────────────────
-
-  @doc false
-  def workflow_summaries(workspace_id, dep_info \\ %{}) do
-    # All non-archived tasks of the workspace with a contract (in-memory
-    # filter over the jsonb meta — contract tasks are the minority).
-    all =
-      workspace_id
-      |> list_all_tasks()
-      |> Enum.filter(&Contracts.contract?/1)
-
-    tasks_by_goal = group_tasks_by_goal(all, workspace_id)
-
-    Enum.map(tasks_by_goal, fn {goal, tasks} ->
-      %{
-        goal: goal,
-        total: length(tasks),
-        running: length(Enum.filter(tasks, &(&1.status == "in_progress"))),
-        ready:
-          Enum.count(tasks, fn t ->
-            case Map.get(dep_info, t.id) do
-              %{ready: r} -> r
-              nil -> true
-            end
-          end),
-        drafts: length(Enum.filter(tasks, &(&1.meta["contract"]["status"] == "draft"))),
-        stale: length(Enum.filter(tasks, &Contracts.stale?/1))
-      }
-    end)
-    |> Enum.sort_by(fn %{goal: g} -> g.title end)
-  end
-
-  defp group_tasks_by_goal(tasks, workspace_id) do
-    goals_by_task =
-      tasks
-      |> Enum.map(& &1.id)
-      |> Tasks.list_linked_goals_by_ids(workspace_id)
-
-    # Tasks with no linked goal fall into a synthetic bucket so they are
-    # still visible in the summary ("Sin goal").
-    by_goal =
-      Enum.reduce(tasks, %{}, fn task, acc ->
-        goal =
-          case goals_by_task[task.id] do
-            [%Dran.Goal{} = g | _] -> g
-            _ -> nil
+  defp run_views(snap_titles, steps_by_id, runs) do
+    Enum.map(runs, fn run ->
+      title =
+        Map.get(snap_titles, run.step_id) ||
+          case Map.get(steps_by_id, run.step_id) do
+            %{title: title} -> title
+            _ -> gettext("Step")
           end
 
-        key = goal || :no_goal
-        Map.update(acc, key, [task], &[task | &1])
-      end)
-
-    Enum.map(by_goal, fn
-      {goal, ts} when is_struct(goal) -> {goal, ts}
-      {:no_goal, ts} -> {%{title: gettext("Sin goal"), id: nil}, ts}
+      %{run: run, title: title}
     end)
   end
-
-  defp add_goal_badge(tasks, workspace_id) do
-    goals_by_task = Tasks.list_linked_goals_by_ids(Enum.map(tasks, & &1.id), workspace_id)
-
-    Enum.map(tasks, fn task ->
-      goal =
-        case Map.get(goals_by_task, task.id, []) do
-          [goal | _] -> Map.take(goal, [:id, :title, :slug])
-          [] -> nil
-        end
-
-      task
-      |> Map.put(:goal_badge, goal)
-      |> Map.put(:goal_title, goal && goal.title)
-    end)
-  end
-
-  # Goal filter for the "En ejecución" and "Cola" tabs. `visible_goal_ids` holds
-  # the selected goal id PLUS all its descendants (roll-up, board semantics);
-  # nil = no filter.
-  defp filter_by_goal(tasks, nil), do: tasks
-
-  defp filter_by_goal(tasks, %MapSet{} = visible_goal_ids) do
-    Enum.filter(tasks, fn t ->
-      case t.goal_badge do
-        %{id: id} -> MapSet.member?(visible_goal_ids, to_string(id))
-        _ -> false
-      end
-    end)
-  end
-
-  # Selected goal + ALL its descendants at any depth, as strings (option ids
-  # and relation ids both come as strings). Cycle-safe via
-  # `Goals.descendant_ids/2`; the goal itself is included by the caller.
-  defp visible_goal_ids(nil, _workspace_id), do: nil
-
-  defp visible_goal_ids(goal_id, workspace_id) do
-    workspace_id
-    |> Goals.flattened_tree()
-    |> Enum.map(&elem(&1, 0))
-    |> then(&Goals.descendant_ids(goal_id, &1))
-    |> MapSet.new(&to_string/1)
-    |> MapSet.put(to_string(goal_id))
-  end
-
-  defp preload_actors(tasks), do: Dran.Repo.preload(tasks, :assignee_actor)
 
   # ── Events ────────────────────────────────────────────────────────────────
 
+  # "Nueva sesión" — opens a session with an optional label. The workflow
+  # id arrives via phx-value on the form (server-rendered, not forgeable
+  # params from the input).
   @impl true
-  def handle_info({:task_changed, _action, _task}, socket) do
-    reload(socket)
+  def handle_event("open_session", %{"workflow-id" => workflow_id} = params, socket) do
+    label =
+      case params["label"] do
+        label when is_binary(label) and label != "" -> label
+        _ -> nil
+      end
+
+    workflow = Workflows.get_workflow!(workflow_id)
+
+    case Executions.open_session(workflow, label: label) do
+      {:ok, session} ->
+        socket =
+          socket
+          |> put_flash(:info, gettext("Sesión abierta."))
+          |> reload_after_change(workflow, session.id)
+
+        {:noreply, socket}
+
+      {:error, :workflow_has_no_steps} ->
+        {:noreply,
+         put_flash(socket, :error, gettext("El workflow no tiene steps: añade al menos uno."))}
+
+      {:error, :workflow_archived} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("El workflow está archivado: no puede abrir sesiones.")
+         )}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo abrir la sesión."))}
+    end
   end
+
+  def handle_event("abort_session", %{"session-id" => session_id}, socket) do
+    case Executions.abort_session(Executions.get_session!(session_id)) do
+      {:ok, _closed} ->
+        socket =
+          socket
+          |> put_flash(:info, gettext("Sesión abortada."))
+          |> reload_current()
+
+        {:noreply, socket}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo abortar la sesión."))}
+    end
+  end
+
+  # Click on a session row patches `?session=<id>` — selection is URL
+  # state, deep-linkable.
+  def handle_event("select_session", %{"session-id" => session_id}, socket) do
+    ws = socket.assigns[:workspace_slug]
+
+    {:noreply,
+     push_patch(
+       socket,
+       to: ~p"/#{ws}/workflows/#{socket.assigns.workflow.slug}?session=#{session_id}"
+     )}
+  end
+
+  defp reload_after_change(socket, workflow, session_id) do
+    case socket.assigns.live_action do
+      :index -> apply_index(socket, socket.assigns.context)
+      :show -> load_show(socket, workflow, %{"session" => session_id})
+    end
+  end
+
+  defp reload_current(socket) do
+    case socket.assigns.live_action do
+      :index ->
+        if socket.assigns.context, do: apply_index(socket, socket.assigns.context), else: socket
+
+      :show ->
+        if socket.assigns.workflow do
+          selected_id =
+            case socket.assigns[:selected_session] do
+              %{id: id} -> id
+              _ -> nil
+            end
+
+          load_show(socket, socket.assigns.workflow, %{"session" => selected_id})
+        else
+          socket
+        end
+    end
+  end
+
+  # ── PubSub: sessions/runs changed elsewhere (MCP, API, other tab) ─────────
+
+  @impl true
+  def handle_info({:session_changed, _action, _session}, socket),
+    do: {:noreply, reload_current(socket)}
+
+  def handle_info({:run_changed, _action, _run}, socket),
+    do: {:noreply, reload_current(socket)}
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
-  defp reload(socket) do
-    if socket.assigns.context do
-      socket =
-        case socket.assigns.live_action do
-          :index ->
-            load_index(socket, socket.assigns.context)
+  # ── Chips and labels ──────────────────────────────────────────────────────
 
-          :show ->
-            if socket.assigns.goal, do: load_show(socket, socket.assigns.goal), else: socket
-        end
+  @doc false
+  def workflow_chip("active"), do: "badge-success"
+  def workflow_chip("draft"), do: "badge-ghost"
+  def workflow_chip("archived"), do: "badge-warning"
+  def workflow_chip(_), do: "badge-ghost"
 
-      {:noreply, socket}
-    else
-      {:noreply, socket}
-    end
+  @doc false
+  def session_chip("in_flight"), do: "badge-primary"
+  def session_chip("passed"), do: "badge-success"
+  def session_chip("failed"), do: "badge-error"
+  def session_chip("aborted"), do: "badge-warning"
+  def session_chip(_), do: "badge-ghost"
+
+  @doc false
+  def run_chip("pending"), do: "badge-ghost"
+  def run_chip("in_flight"), do: "badge-primary"
+  def run_chip("passed"), do: "badge-success"
+  def run_chip("failed"), do: "badge-error"
+  def run_chip("skipped"), do: "badge-warning"
+  def run_chip(_), do: "badge-ghost"
+
+  @doc false
+  def status_label(nil), do: ""
+
+  def status_label(status) when is_binary(status) do
+    status
+    |> String.replace("_", " ")
+    |> String.split()
+    |> Enum.map_join(" ", &String.capitalize/1)
   end
 
-  # ── Helpers for the DAG view ──────────────────────────────────────────────
+  # Finished runs (passed + failed + skipped) over total.
+  @doc false
+  def session_pct(%{total: total}) when total in [0, nil], do: 0
+
+  def session_pct(%{total: total, passed: passed, failed: failed, skipped: skipped}) do
+    div((passed + failed + skipped) * 100, total)
+  end
 
   @doc false
-  def status_dot("done"), do: "bg-green-500"
-  def status_dot("cancelled"), do: "bg-red-400"
-  def status_dot("in_progress"), do: "bg-primary"
-  def status_dot("todo"), do: "bg-sky-500"
-  def status_dot(_), do: "bg-base-content/30"
+  def progress_label(%{total: total, passed: passed, failed: failed, skipped: skipped}),
+    do: "#{passed + failed + skipped}/#{total}"
 
-  @doc false
-  def edge_class(%{status: s}) when s in ~w(done cancelled), do: "border-success"
-  def edge_class(_), do: "border-base-content/20 border-dashed"
+  def progress_label(_), do: "0/0"
 
   # ── Template helpers ──────────────────────────────────────────────────────
 
-  defp tab_label("resumen"), do: gettext("Resumen")
-  defp tab_label("ejecucion"), do: gettext("En ejecución")
-  defp tab_label("cola"), do: gettext("Cola")
+  defp ready_steps(steps, dep_info) do
+    Enum.filter(steps, fn step ->
+      match?(%{ready: true}, Map.get(dep_info, step.id))
+    end)
+  end
 
-  defp contract_chip(%Task{meta: %{"contract" => %{"status" => "draft"}}}), do: "draft"
+  defp blocked_steps(steps, dep_info) do
+    Enum.filter(steps, fn step ->
+      match?(%{ready: false}, Map.get(dep_info, step.id))
+    end)
+  end
 
-  defp contract_chip(%Task{meta: %{"contract" => %{"version" => v}}}) when is_integer(v),
-    do: "v#{v}"
-
-  defp contract_chip(%Task{meta: %{"contract" => %{"version" => v}}}) when is_binary(v),
-    do: "v#{v}"
-
-  defp contract_chip(_), do: nil
-
-  defp blocked_label(%Task{id: id}, %{dep_info: dep_info}) do
-    case Map.get(dep_info, id) do
-      %{ready: true} -> nil
-      %{blocked_count: n} -> gettext("espera %{count} dep(s)", count: n)
-      nil -> nil
+  defp blocked_count(step, %{dep_info: dep_info}) do
+    case Map.get(dep_info, step.id) do
+      %{blocked_count: n} -> n
+      _ -> 0
     end
   end
 
-  defp ready_tasks(tasks, dep_info) do
-    Enum.filter(tasks, fn t ->
-      t.status == "todo" and match?(%{ready: true}, Map.get(dep_info, t.id))
-    end)
-  end
+  defp step_has_passed?(passed_step_ids, step_id), do: MapSet.member?(passed_step_ids, step_id)
 
-  defp running_tasks(tasks), do: Enum.filter(tasks, &(&1.status == "in_progress"))
+  defp run_phase(%{progress: %{"phase" => phase}}) when is_binary(phase) and phase != "",
+    do: phase
 
-  defp blocked_tasks(tasks, dep_info) do
-    Enum.filter(tasks, fn t ->
-      t.status == "todo" and match?(%{ready: false}, Map.get(dep_info, t.id))
-    end)
-  end
+  defp run_phase(_), do: nil
+
+  defp format_dt(nil), do: ""
+
+  defp format_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%d %b %H:%M")
+
+  defp format_dt(_), do: ""
 
   # ── Graph layout (pure helpers for the SVG DAG) ─────────────────────────
   #
-  # Levels → columns. Every task is positioned in a virtual grid:
+  # Levels → columns. Every step is positioned in a virtual grid:
   #   column = level index, row = index within the level.
-  # Node cards are ~220px wide × ~92px tall with 28px gaps; the SVG is
+  # Node cards are ~220px wide × ~96px tall with fixed gaps; the SVG is
   # drawn inset by one node so edges run between card edges.
 
   @node_w 220
@@ -413,9 +410,9 @@ defmodule DranWeb.WorkflowsLive do
   end
 
   @doc false
-  def node_position(levels, task_id) do
+  def node_position(levels, step_id) do
     Enum.with_index(levels, fn level, level_idx ->
-      case Enum.find_index(level, &(&1 == task_id)) do
+      case Enum.find_index(level, &(&1 == step_id)) do
         nil -> nil
         row_idx -> {level_idx, row_idx}
       end
@@ -426,18 +423,20 @@ defmodule DranWeb.WorkflowsLive do
         {0, 0}
 
       {level_idx, row_idx} ->
-        x = level_idx * (@node_w + @gap_x) + @gap_x
-        y = row_idx * (@node_h + @gap_y) + @gap_y
-        {x, y}
+        {node_x(level_idx), node_y(row_idx)}
     end
   end
 
+  defp node_x(level_idx), do: level_idx * (@node_w + @gap_x) + @gap_x
+  defp node_y(row_idx), do: row_idx * (@node_h + @gap_y) + @gap_y
+
   @doc false
-  def graph_edges(edges, levels, tasks_by_id) do
-    # `edges` come from `dependency_edges/1` as `{dependent_id, prereq_id}`
-    # (a task depends_on its prereq). For an execution DAG the arrow must flow
-    # prereq → dependent, so we draw the edge with the prereq as source/output
-    # and the dependent as target/input.
+  def graph_edges(edges, levels, passed_step_ids \\ MapSet.new()) do
+    # `edges` come from `dependency_edges(step_ids, :step)` as
+    # `{dependent_id, prereq_id}` (a step depends_on its prereq). The arrow
+    # flows prereq → dependent: the prereq is the source/output, the
+    # dependent the target/input. An edge is "done" (solid/success) when
+    # the selected session has a PASSED run of the prereq step.
     Enum.map(edges, fn {dependent_id, prereq_id} ->
       {px, py} = node_position(levels, prereq_id)
       {dx, dy} = node_position(levels, dependent_id)
@@ -466,13 +465,6 @@ defmodule DranWeb.WorkflowsLive do
 
       path = "M #{x1} #{y1} C #{c1x} #{c1y}, #{c2x} #{c2y}, #{x2} #{y2}"
 
-      prereq = Map.get(tasks_by_id, prereq_id)
-      dependent = Map.get(tasks_by_id, dependent_id)
-
-      done? =
-        match?(%{status: s} when s in ~w(done cancelled), prereq) and
-          (dependent == nil or dependent.status in ~w(done cancelled))
-
       {dependent_id,
        %{
          path: path,
@@ -482,23 +474,13 @@ defmodule DranWeb.WorkflowsLive do
          y1: y1,
          x2: x2,
          y2: y2,
-         done: done?
+         done: MapSet.member?(passed_step_ids, prereq_id)
        }}
     end)
   end
 
-  @doc false
-  def status_label(nil), do: ""
-
-  def status_label(status) when is_binary(status) do
-    status
-    |> String.replace("_", " ")
-    |> String.split()
-    |> Enum.map_join(" ", &String.capitalize/1)
-  end
-
   @doc """
-  One input port and one output port per card: `%{task_id => %{out: | in: %{x, y, done}}}`.
+  One input port and one output port per card: `%{step_id => %{out: | in: %{x, y, done}}}`.
   Out = right edge center, In = left edge center. Since every edge from a source
   shares the same right-center point and every edge into a target shares the same
   left-center point, the ports are deduplicated per card (not per edge).
@@ -523,19 +505,19 @@ defmodule DranWeb.WorkflowsLive do
   end
 
   @doc false
-  def graph_tasks(levels, tasks) do
-    tasks_by_id = Map.new(tasks, &{&1.id, &1})
+  def graph_tasks(levels, steps) do
+    steps_by_id = Map.new(steps, &{&1.id, &1})
 
     nodes =
       Enum.flat_map(levels, fn level ->
-        Enum.map(level, fn task_id ->
-          task = Map.get(tasks_by_id, task_id)
-          {x, y} = node_position(levels, task_id)
-          {task, x, y}
+        Enum.map(level, fn step_id ->
+          step = Map.get(steps_by_id, step_id)
+          {x, y} = node_position(levels, step_id)
+          {step, x, y}
         end)
       end)
-      |> Enum.reject(fn {task, _, _} -> is_nil(task) end)
+      |> Enum.reject(fn {step, _, _} -> is_nil(step) end)
 
-    {nodes, tasks_by_id}
+    {nodes, steps_by_id}
   end
 end
