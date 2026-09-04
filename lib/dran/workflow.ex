@@ -22,6 +22,9 @@ defmodule Dran.Workflow do
   @statuses ~w(draft active archived)
   @kinds ~w(evergreen one_shot)
 
+  def statuses, do: @statuses
+  def kinds, do: @kinds
+
   @derive {Jason.Encoder,
            only: [
              :id,
@@ -29,7 +32,6 @@ defmodule Dran.Workflow do
              :goal_id,
              :title,
              :slug,
-             :summary,
              :body,
              :status,
              :kind,
@@ -41,7 +43,6 @@ defmodule Dran.Workflow do
   schema "workflows" do
     field :title, :string
     field :slug, :string
-    field :summary, :string
     field :body, :string, default: ""
     field :status, :string, default: "draft"
     field :kind, :string, default: "evergreen"
@@ -62,7 +63,6 @@ defmodule Dran.Workflow do
       :goal_id,
       :title,
       :slug,
-      :summary,
       :body,
       :status,
       :kind,

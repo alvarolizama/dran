@@ -104,8 +104,14 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      # Filtering by the actor whose name matches the creator attribution
-      render_change(view, "filter_actor", %{"actor_id" => agent.id})
+      # Real DOM path: open the menu, click the option (exercises the
+      # phx-value wiring a bare render_change would skip).
+      render_click(view, "toggle_assignee_menu", %{})
+
+      view
+      |> element("[data-testid='assignee-option-#{agent.id}']")
+      |> render_click()
+
       html = render(view)
       assert html =~ "Made by test_user"
       refute html =~ "Review PR"
@@ -113,7 +119,12 @@ defmodule DranWeb.TaskBoardLiveTest do
       # Unassigned = no assignee AND no real creator → shows only the seed
       # task that has neither (Review PR has created_by "system"... no: it
       # was created without created_by → default "system").
-      render_change(view, "filter_actor", %{"actor_id" => "unassigned"})
+      render_click(view, "toggle_assignee_menu", %{})
+
+      view
+      |> element("[data-testid='assignee-option-unassigned']")
+      |> render_click()
+
       html = render(view)
       assert html =~ "Review PR"
       refute html =~ "Made by test_user"
@@ -123,9 +134,15 @@ defmodule DranWeb.TaskBoardLiveTest do
       {:ok, _} = Dran.Actors.create_actor(%{"name" => "group-agent", "kind" => "agent"})
       {:ok, _} = Dran.Actors.create_actor(%{"name" => "group-human", "kind" => "user"})
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      # Shared actor_options: flat options (no optgroup grouping)
+      # Dropdown chip (workflows filter pattern) — menu starts closed; open
+      # it before asserting on the options. Flat, no optgroups.
+      assert has_element?(view, "[data-testid='assignee-filter-toggle']")
+
+      render_click(view, "toggle_assignee_menu", %{})
+      html = render(view)
+
       refute html =~ "<optgroup"
       assert html =~ "group-agent"
       assert html =~ "group-human"
@@ -148,17 +165,32 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       view = live(conn, ~p"/#{ws.slug}/tasks") |> elem(1)
 
-      render_change(view, "filter_actor", %{"actor_id" => agent.id})
+      render_click(view, "toggle_assignee_menu", %{})
+
+      view
+      |> element("[data-testid='assignee-option-#{agent.id}']")
+      |> render_click()
+
       html = render(view)
       assert html =~ "Assigned task"
       refute html =~ "Review PR"
 
-      render_change(view, "filter_actor", %{"actor_id" => "unassigned"})
+      render_click(view, "toggle_assignee_menu", %{})
+
+      view
+      |> element("[data-testid='assignee-option-unassigned']")
+      |> render_click()
+
       html = render(view)
       refute html =~ "Assigned task"
       assert html =~ "Review PR"
 
-      render_change(view, "filter_actor", %{"actor_id" => ""})
+      render_click(view, "toggle_assignee_menu", %{})
+
+      view
+      |> element("[data-testid='assignee-option-all']")
+      |> render_click()
+
       html = render(view)
       assert html =~ "Assigned task"
       assert html =~ "Review PR"
@@ -337,9 +369,16 @@ defmodule DranWeb.TaskBoardLiveTest do
           "parent_goal_id" => root.id
         })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      assert html =~ ~s(id="goal-filter")
+      # Dropdown chip (workflows filter pattern) — menu starts closed; open
+      # it before asserting on the options. Flat indented list, no optgroups.
+      assert has_element?(view, "[data-testid='goal-filter-toggle']")
+
+      render_click(view, "toggle_goal_menu", %{})
+      html = render(view)
+
+      refute html =~ "<optgroup"
       assert html =~ "Filter Root"
       assert html =~ "Filter Child"
       assert is_binary(child.id)
@@ -377,7 +416,14 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks")
 
-      render_click(view, "filter_goal", %{"goal_id" => root.id})
+      # Real DOM path for the first selection (covers the phx-value wiring);
+      # the depth variants below reuse the event directly.
+      render_click(view, "toggle_goal_menu", %{})
+
+      view
+      |> element("[data-testid='goal-option-#{root.id}']")
+      |> render_click()
+
       html = render(view)
 
       assert html =~ "Review PR"
@@ -507,7 +553,14 @@ defmodule DranWeb.TaskBoardLiveTest do
           "parent_goal_id" => root.id
         })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/tasks")
+
+      # Dropdown chip (workflows filter pattern) — menu starts closed; open
+      # it before asserting on the indented flattened options.
+      assert has_element?(view, "[data-testid='goal-filter-toggle']")
+
+      render_click(view, "toggle_goal_menu", %{})
+      html = render(view)
 
       refute html =~ "<optgroup"
       assert html =~ "Flat Root"

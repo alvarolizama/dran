@@ -16,7 +16,13 @@ defmodule DranWeb.WorkflowsLive do
 
   use DranWeb, :live_view
 
-  alias Dran.{Contracts, Executions, Workflows}
+  alias Dran.{Contracts, Executions, Goals, Workflows}
+  alias DranWeb.ListPagination
+
+  # The create-workflow modal's selects/`selected` options read the current
+  # form values via Phoenix.HTML.Form.input_value/2 (pages/task/goal modals
+  # import it through their form components — this LiveView builds its own).
+  import Phoenix.HTML.Form, only: [input_value: 2]
 
   @impl true
   def mount(params, session, socket) do
@@ -41,7 +47,11 @@ defmodule DranWeb.WorkflowsLive do
            context: context,
            active_nav: "workflows",
            workflow: nil,
-           selected_session: nil
+           selected_session: nil,
+           # Resource modal state — `?new=true` on the index opens the
+           # create modal (pages/goals pattern: URL state, not a page).
+           modal_open: false,
+           form: nil
          )}
     end
   end
@@ -64,13 +74,78 @@ defmodule DranWeb.WorkflowsLive do
   defp apply_index(socket, nil), do: socket
 
   defp apply_index(socket, context) do
+    params = Map.get(socket.assigns, :params, %{})
+    kind_filters = kinds_from_params(params)
+    status_filters = statuses_from_params(params)
+
     workflows =
       context.id
-      |> Workflows.list_workflows()
+      |> Workflows.list_workflows(kind: kind_filters, status: status_filters)
       |> Enum.map(&workflow_summary/1)
 
-    assign(socket, workflows: workflows, page_title: gettext("Workflows"))
+    # Archived list always loaded — the "Archived" toggle only renders when
+    # there is something archived (pages pattern). The status filter does not
+    # apply here: the archived view owns archived items exclusively.
+    archived_workflows =
+      context.id
+      |> Workflows.list_workflows(kind: kind_filters, archived: true)
+      |> Enum.map(&workflow_summary/1)
+
+    # Create-modal state — `?new=true` opens the modal (pages/goals pattern).
+    modal_open = params["new"] == "true"
+
+    form =
+      if modal_open do
+        to_form(Workflows.change_workflow(%Dran.Workflow{}), as: :workflow)
+      else
+        socket.assigns[:form]
+      end
+
+    assign(
+      socket,
+      Map.merge(
+        %{
+          workflows: workflows,
+          archived_workflows: archived_workflows,
+          kind_filters: kind_filters,
+          status_filters: status_filters,
+          workflow_kinds: Dran.Workflow.kinds(),
+          status_options: List.delete(Dran.Workflow.statuses(), "archived"),
+          kind_menu_open: socket.assigns[:kind_menu_open] || false,
+          status_menu_open: socket.assigns[:status_menu_open] || false,
+          modal_open: modal_open,
+          form: form,
+          goal_tree: Goals.flattened_tree(context.id),
+          page_title: gettext("Workflows")
+        },
+        ListPagination.default_assigns()
+      )
+    )
   end
+
+  # `?kind=evergreen,one_shot` URL-state filter (comma list, pages pattern) —
+  # unknown values are dropped; an empty result means no filter.
+  defp kinds_from_params(%{"kind" => raw}) when is_binary(raw) do
+    raw
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.uniq()
+    |> Enum.filter(&(&1 in ["evergreen", "one_shot"]))
+  end
+
+  defp kinds_from_params(_params), do: []
+
+  # `?status=draft,active` URL-state filter (comma list, pages pattern) —
+  # unknown values dropped; empty means no filter.
+  defp statuses_from_params(%{"status" => raw}) when is_binary(raw) do
+    raw
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.uniq()
+    |> Enum.filter(&(&1 in ["draft", "active"]))
+  end
+
+  defp statuses_from_params(_params), do: []
 
   # One card payload: definition slice (workflow + steps count) and live
   # slice (in-flight sessions with their run progress).
@@ -100,6 +175,17 @@ defmodule DranWeb.WorkflowsLive do
       workflow ->
         socket
         |> assign(workflow: workflow, page_title: workflow.title)
+        |> assign(
+          kind_filters: kinds_from_params(params),
+          status_filters: statuses_from_params(params),
+          show_archived: false,
+          kind_menu_open: false,
+          status_menu_open: false,
+          modal_open: false,
+          form: nil,
+          visible_count: 12,
+          archived_visible_count: 12
+        )
         |> load_show(workflow, params)
     end
   end
@@ -273,6 +359,219 @@ defmodule DranWeb.WorkflowsLive do
      )}
   end
 
+  # ── Workflow lifecycle (archive / unarchive / create) ─────────────────────
+
+  # Archive from the index or the show header — refuses workflows with
+  # in-flight sessions (guard in the context, surfaces a flash).
+  def handle_event("archive_workflow", %{"workflow-id" => workflow_id}, socket) do
+    workflow = fetch_workspace_workflow(workflow_id, socket.assigns.context)
+
+    case workflow do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Workflow no encontrado."))}
+
+      workflow ->
+        case Workflows.archive_workflow(workflow) do
+          {:ok, _} ->
+            socket =
+              socket
+              |> put_flash(:info, gettext("Workflow archivado."))
+              |> reload_after_change(workflow, nil)
+
+            {:noreply, socket}
+
+          {:error, :has_open_sessions} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               gettext("No se puede archivar: tiene sesiones en ejecución.")
+             )}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, gettext("No se pudo archivar el workflow."))}
+        end
+    end
+  end
+
+  # Unarchive from the archived list (or the show header of an archived
+  # workflow) — status returns to draft.
+  def handle_event("unarchive_workflow", %{"workflow-id" => workflow_id}, socket) do
+    workflow = fetch_workspace_workflow(workflow_id, socket.assigns.context)
+
+    case workflow do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Workflow no encontrado."))}
+
+      workflow ->
+        case Workflows.unarchive_workflow(workflow) do
+          {:ok, _} ->
+            socket =
+              socket
+              |> put_flash(:info, gettext("Workflow restaurado."))
+              |> reload_after_change(workflow, nil)
+
+            {:noreply, socket}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, gettext("No se pudo restaurar el workflow."))}
+        end
+    end
+  end
+
+  # ── Kind filter + archived toggle + pagination (pages pattern) ──────────
+
+  # Multi-select: add or remove one kind from the URL selection and
+  # push_patch — handle_params re-runs the filtered query.
+  def handle_event("toggle_kind", %{"kind" => kind}, socket) do
+    current = socket.assigns[:kind_filters] || []
+    kind_filters = if kind in current, do: List.delete(current, kind), else: current ++ [kind]
+
+    {:noreply,
+     push_patch(socket,
+       to:
+         filters_path(
+           socket.assigns[:workspace_slug],
+           kind_filters,
+           socket.assigns[:status_filters]
+         )
+     )}
+  end
+
+  def handle_event("toggle_status", %{"status" => status}, socket) do
+    current = socket.assigns[:status_filters] || []
+
+    status_filters =
+      if status in current, do: List.delete(current, status), else: current ++ [status]
+
+    {:noreply,
+     push_patch(socket,
+       to:
+         filters_path(
+           socket.assigns[:workspace_slug],
+           socket.assigns[:kind_filters],
+           status_filters
+         )
+     )}
+  end
+
+  def handle_event("clear_filters", _params, socket),
+    do: {:noreply, push_patch(socket, to: filters_path(socket.assigns[:workspace_slug], [], []))}
+
+  def handle_event("toggle_kind_menu", _params, socket),
+    do: {:noreply, assign(socket, kind_menu_open: not socket.assigns[:kind_menu_open])}
+
+  def handle_event("toggle_status_menu", _params, socket),
+    do: {:noreply, assign(socket, status_menu_open: not socket.assigns[:status_menu_open])}
+
+  # Archived view — pagination state, not URL (pages pattern): the toggle
+  # only flips which list the template renders. Filter menus are closed here
+  # so they don't resurface open when returning to the active view (the
+  # dropdowns only render there).
+  def handle_event("toggle_archived", _params, socket) do
+    socket =
+      socket
+      |> ListPagination.handle_toggle_archived()
+      |> assign(kind_menu_open: false, status_menu_open: false)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("load_more", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more(socket)}
+
+  def handle_event("load_more_archived", _params, socket),
+    do: {:noreply, ListPagination.handle_load_more_archived(socket)}
+
+  # ── Create-workflow modal (?new=true) ────────────────────────────────────
+
+  def handle_event("validate_workflow", %{"workflow" => params}, socket) do
+    changeset =
+      %Dran.Workflow{workspace_id: socket.assigns.context.id}
+      |> Workflows.change_workflow(params)
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, form: to_form(changeset, as: :workflow))}
+  end
+
+  def handle_event("save_workflow", %{"workflow" => params}, socket) do
+    context = socket.assigns.context
+
+    # Slug auto-derives from title when absent (goal_live pattern).
+    attrs =
+      %{
+        "title" => String.trim(params["title"] || ""),
+        "body" => params["body"] || "",
+        "kind" => params["kind"],
+        "status" => params["status"] || "active",
+        "goal_id" => goal_id_or_nil(params["goal_id"]),
+        "workspace_id" => context.id
+      }
+      |> ensure_workflow_slug()
+
+    case Workflows.create_workflow(attrs) do
+      {:ok, workflow} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Workflow creado."))
+         |> push_patch(to: ~p"/#{socket.assigns[:workspace_slug]}/workflows/#{workflow.slug}")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, form: to_form(changeset, as: :workflow))}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo crear el workflow."))}
+    end
+  end
+
+  def handle_event("close_workflow_modal", _params, socket) do
+    # Preserve active kind filters when closing back to the list (pages).
+    {:noreply,
+     push_patch(
+       socket,
+       to:
+         filters_path(
+           socket.assigns[:workspace_slug],
+           socket.assigns[:kind_filters] || [],
+           socket.assigns[:status_filters] || []
+         )
+     )}
+  end
+
+  defp goal_id_or_nil(id) when is_binary(id) and id != "", do: id
+  defp goal_id_or_nil(_), do: nil
+
+  # Slug auto-derives from title when the user didn't provide one (goal_live
+  # pattern with Dran.Slug).
+  defp ensure_workflow_slug(%{"slug" => slug} = attrs) when is_binary(slug) and slug != "",
+    do: attrs
+
+  defp ensure_workflow_slug(%{"title" => title} = attrs) when is_binary(title) and title != "",
+    do: Map.put(attrs, "slug", Dran.Slug.slugify(title))
+
+  defp ensure_workflow_slug(attrs), do: attrs
+
+  # Index list path with both filters preserved (pages pattern): shareable,
+  # deep-linkable filtered views. `suffix` appends "?new=true" for the modal;
+  # joins segments with "&" so no second "?" ever leaks into the query.
+  defp filters_path(workspace_slug, kind_filters, status_filters, suffix \\ "") do
+    path = "/#{workspace_slug}/workflows"
+
+    params =
+      [
+        if(kind_filters == [], do: nil, else: "kind=#{Enum.join(kind_filters, ",")}"),
+        if(status_filters == [], do: nil, else: "status=#{Enum.join(status_filters, ",")}")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    case {params, suffix} do
+      {[], ""} -> path
+      {[], "?" <> _} -> path <> suffix
+      {_, ""} -> path <> "?" <> Enum.join(params, "&")
+      {_, "?" <> rest} -> path <> "?" <> Enum.join(params, "&") <> "&" <> rest
+    end
+  end
+
   # Row-level workspace authorization (review finding #2): phx-value ids
   # are client-forgeable — the board already rejects foreign workspaces
   # this way (fetch_board_task pattern); executions must not reincide.
@@ -342,6 +641,11 @@ defmodule DranWeb.WorkflowsLive do
   def handle_info({:session_changed, _action, _session}, socket),
     do: {:noreply, reload_current(socket)}
 
+  # Workflow archived/unarchived elsewhere (other tab, MCP future) — index
+  # reloads lists, show reloads the workflow (status badge changes).
+  def handle_info({:workflow_changed, _action, _workflow}, socket),
+    do: {:noreply, reload_current(socket)}
+
   def handle_info({:run_changed, action, _run}, socket)
       when action in [:started, :closed, :created],
       do: {:noreply, reload_current(socket)}
@@ -380,6 +684,11 @@ defmodule DranWeb.WorkflowsLive do
     |> String.split()
     |> Enum.map_join(" ", &String.capitalize/1)
   end
+
+  @doc false
+  def kind_label("evergreen"), do: gettext("Evergreen")
+  def kind_label("one_shot"), do: gettext("One shot")
+  def kind_label(_), do: ""
 
   # Finished runs (passed + failed + skipped) over total.
   @doc false

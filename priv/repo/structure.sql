@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict KWNKiiBfqekK9RvLoVFcxHgq2OBliuOpCRxHAQ0kRPVklmJqt9dfD3rnNfChnjJ
+\restrict PnZkRDyJvLBrWgvMY7kAblfbzVcLxI4fOwl4FbaLubS4iWe6pp0v1gYd3YI90Fi
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -540,7 +540,6 @@ CREATE TABLE public.workflows (
     workspace_id uuid CONSTRAINT plans_workspace_id_not_null NOT NULL,
     title character varying(255) CONSTRAINT plans_title_not_null NOT NULL,
     slug character varying(255) CONSTRAINT plans_slug_not_null NOT NULL,
-    summary character varying(255),
     body text DEFAULT ''::text,
     meta jsonb DEFAULT '{}'::jsonb,
     inserted_at timestamp(0) without time zone CONSTRAINT plans_inserted_at_not_null NOT NULL,
@@ -1595,7 +1594,7 @@ ALTER TABLE ONLY public.workflows
 -- PostgreSQL database dump complete
 --
 
-\unrestrict KWNKiiBfqekK9RvLoVFcxHgq2OBliuOpCRxHAQ0kRPVklmJqt9dfD3rnNfChnjJ
+\unrestrict PnZkRDyJvLBrWgvMY7kAblfbzVcLxI4fOwl4FbaLubS4iWe6pp0v1gYd3YI90Fi
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1663,3 +1662,4 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260903231529);
 INSERT INTO public."schema_migrations" (version) VALUES (20260904003233);
 INSERT INTO public."schema_migrations" (version) VALUES (20260904013000);
 INSERT INTO public."schema_migrations" (version) VALUES (20260904120000);
+INSERT INTO public."schema_migrations" (version) VALUES (20260904130000);

@@ -23,14 +23,63 @@ defmodule Dran.Workflows do
   # Workflow CRUD
   # ──────────────────────────────────────────────────────────────────────────
 
-  @doc "List workflows of a workspace, unarchived first, then by title"
-  def list_workflows(workspace_id) when is_binary(workspace_id) do
-    Repo.all(
-      from w in Workflow,
-        where: w.workspace_id == ^workspace_id,
-        order_by: [asc: w.status, asc: w.title]
-    )
+  @doc """
+  List workflows of a workspace.
+
+  By default lists unarchived workflows (status `draft` + `active`).
+  Options:
+
+    * `:archived` — `true` lists ONLY archived workflows (default `false`)
+    * `:kind` — kind filter: a list of slugs (`["evergreen", "one_shot"]`)
+      or a single slug string; `[]`/nil lists every kind
+    * `:status` — status filter for the non-archived list (`["draft"]`,
+      `["active"]` or both); `[]`/nil lists both
+
+  The WorkflowsLive index drives both filters from URL state, so filtered
+  views are shareable (same convention as pages kind filters).
+  """
+  def list_workflows(workspace_id, opts \\ []) when is_binary(workspace_id) do
+    archived = Keyword.get(opts, :archived, false)
+    kinds = kinds_filter(Keyword.get(opts, :kind, []))
+    statuses = statuses_filter(Keyword.get(opts, :status, []))
+
+    query = from w in Workflow, where: w.workspace_id == ^workspace_id
+
+    query =
+      if archived do
+        from w in query, where: w.status == "archived"
+      else
+        base = from w in query, where: w.status != "archived"
+
+        case statuses do
+          [] -> base
+          statuses -> from w in base, where: w.status in ^statuses
+        end
+      end
+
+    query =
+      case kinds do
+        [] -> query
+        kinds -> from w in query, where: w.kind in ^kinds
+      end
+
+    Repo.all(from w in query, order_by: [asc: w.status, asc: w.title])
   end
+
+  # Keep queries honest: only the two registered kinds ever reach the SQL.
+  defp kinds_filter(kinds) when is_list(kinds),
+    do: Enum.filter(kinds, &(&1 in ["evergreen", "one_shot"]))
+
+  defp kinds_filter(kind) when kind in ["evergreen", "one_shot"], do: [kind]
+  defp kinds_filter(_), do: []
+
+  # Status filter for the non-archived list: valid statuses minus "archived"
+  # (the archived view is orthogonal — `archived: true` owns that).
+  defp statuses_filter(statuses) when is_list(statuses),
+    do: Enum.filter(statuses, &(&1 in ["draft", "active"]))
+
+  defp statuses_filter(status) when status in ["draft", "active"], do: [status]
+  defp statuses_filter(_), do: []
 
   @doc "List workflows optionally linked to a goal (GoalLive section)"
   def list_by_goal(%Dran.Goal{} = goal) do
@@ -67,6 +116,66 @@ defmodule Dran.Workflows do
     workflow
     |> Workflow.changeset(attrs)
     |> Repo.update()
+  end
+
+  @doc """
+  Archive a workflow — `status: \"archived\"`. Evergreen workflows with
+  open in-flight sessions are REFUSED (`{:error, :has_open_sessions}`):
+  archiving is for definitions that stopped being used and leaving a live
+  session under an archived definition is a contradiction (executions run
+  on the snapshot, but the definition is gone from the active lists).
+
+  Broadcasts `{:workflow_changed, :archived, workflow}` on the workspace
+  topic so other open tabs update (cards, linked-goals section).
+  """
+  def archive_workflow(%Workflow{status: "archived"} = workflow),
+    do: {:ok, workflow}
+
+  def archive_workflow(%Workflow{} = workflow) do
+    if has_open_sessions?(workflow) do
+      {:error, :has_open_sessions}
+    else
+      with {:ok, workflow} <- update_workflow(workflow, %{"status" => "archived"}) do
+        broadcast_workflow_change(workflow, :archived)
+        {:ok, workflow}
+      end
+    end
+  end
+
+  @doc """
+  Unarchive a workflow — `status` back to `\"draft\"` (never auto-active:
+  activation is an explicit decision). No-op when already unarchived.
+  """
+  def unarchive_workflow(%Workflow{status: "archived"} = workflow) do
+    with {:ok, workflow} <- update_workflow(workflow, %{"status" => "draft"}) do
+      broadcast_workflow_change(workflow, :unarchived)
+      {:ok, workflow}
+    end
+  end
+
+  def unarchive_workflow(%Workflow{} = workflow), do: {:ok, workflow}
+
+  @doc "True when the workflow has at least one session still in flight."
+  def has_open_sessions?(%Workflow{} = workflow) do
+    Repo.exists?(
+      from s in Dran.WorkflowSession,
+        where: s.workflow_id == ^workflow.id and s.status == "in_flight"
+    )
+  end
+
+  @doc false
+  def broadcast_workflow_change(%Workflow{workspace_id: nil}, _action), do: :ok
+
+  def broadcast_workflow_change(%Workflow{} = workflow, action) do
+    Phoenix.PubSub.broadcast(
+      Dran.PubSub,
+      "workspace:#{workflow.workspace_id}",
+      {:workflow_changed, action, workflow}
+    )
+  rescue
+    # PubSub may not be running during release tasks / seeds — the broadcast
+    # is a UI notification, not a data-integrity concern.
+    ArgumentError -> :ok
   end
 
   @doc """

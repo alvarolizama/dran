@@ -8,104 +8,368 @@
 >
   <div class="p-6 w-full">
     <%= if @live_action == :index do %>
-      <%!-- Index: one card per workflow --%>
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight">{gettext("Workflows")}</h1>
-          <p class="text-sm text-base-content/50">
-            {gettext("Workflows, sesiones y su ejecución")}
-          </p>
+      <%!-- Header: title + toggle archivados + New — patrón pages --%>
+      <div class="flex flex-wrap items-center justify-between gap-y-2 mb-4">
+        <h1 class="text-2xl font-bold tracking-tight">{gettext("Workflows")}</h1>
+        <div class="flex gap-2 shrink-0">
+          <button
+            :if={length(@archived_workflows) > 0}
+            type="button"
+            phx-click="toggle_archived"
+            class={[
+              "btn btn-ghost btn-sm",
+              @show_archived && "btn-active border-primary/40"
+            ]}
+            data-testid="toggle-archived"
+          >
+            <.icon
+              name={if @show_archived, do: "hero-document-text", else: "hero-archive-box"}
+              class="w-4 h-4"
+            />
+            {if @show_archived,
+              do: gettext("Workflows"),
+              else: gettext("Archived")} ({if @show_archived,
+              do: length(@workflows),
+              else: length(@archived_workflows)})
+          </button>
+          <%!-- Filtros Kind/Estado alineados con el botón New Workflow --%>
+          <div
+            :if={not @show_archived}
+            class="flex items-center gap-2 mr-2"
+            data-testid="kind-filters"
+          >
+            <%!-- Kind filter dropdown (multi-select, URL state) --%>
+            <div class="relative" id="kind-filter-root">
+              <button
+                type="button"
+                phx-click="toggle_kind_menu"
+                class={[
+                  "inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors",
+                  if(@kind_filters == [],
+                    do: "border-base-300 text-base-content/70 hover:border-primary/40",
+                    else: "border-primary bg-primary/10 text-primary font-medium"
+                  )
+                ]}
+                data-testid="kind-filter-toggle"
+              >
+                <.icon name="hero-funnel" class="size-3.5" />
+                {gettext("Kind")}
+                <span
+                  :if={@kind_filters != []}
+                  class="px-1.5 py-0.5 text-[11px] font-semibold rounded-full bg-primary/15"
+                >
+                  {length(@kind_filters)}
+                </span>
+                <.icon
+                  name={if @kind_menu_open, do: "hero-chevron-up", else: "hero-chevron-down"}
+                  class="size-3.5 opacity-60"
+                />
+              </button>
+
+              <div
+                :if={@kind_menu_open}
+                class="absolute z-20 mt-1.5 w-64 max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-lg p-2"
+                data-testid="kind-filter-menu"
+              >
+                <button
+                  :for={kind <- @workflow_kinds}
+                  type="button"
+                  phx-click="toggle_kind"
+                  phx-value-kind={kind}
+                  class={[
+                    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm text-left transition-colors",
+                    if(kind in @kind_filters,
+                      do: "bg-primary/10 text-primary",
+                      else: "hover:bg-base-200 text-base-content/80"
+                    )
+                  ]}
+                  data-testid={"kind-option-" <> kind}
+                >
+                  <span class={[
+                    "size-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                    if(kind in @kind_filters,
+                      do: "border-primary bg-primary text-primary-content",
+                      else: "border-base-300"
+                    )
+                  ]}>
+                    <.icon :if={kind in @kind_filters} name="hero-check" class="size-3" />
+                  </span>
+                  <span class="flex-1 truncate">{kind_label(kind)}</span>
+                </button>
+
+                <div class="border-t border-base-300 mt-1.5 pt-1.5">
+                  <button
+                    type="button"
+                    phx-click="clear_filters"
+                    class="w-full px-2.5 py-1.5 rounded-lg text-xs text-base-content/50 hover:text-error hover:bg-error/10 transition-colors text-left"
+                    data-testid="kind-clear"
+                  >
+                    {gettext("Clear filters")}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <%!-- Status filter dropdown (multi-select, URL state) --%>
+            <div class="relative" id="status-filter-root">
+              <button
+                type="button"
+                phx-click="toggle_status_menu"
+                class={[
+                  "inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors",
+                  if(@status_filters == [],
+                    do: "border-base-300 text-base-content/70 hover:border-primary/40",
+                    else: "border-primary bg-primary/10 text-primary font-medium"
+                  )
+                ]}
+                data-testid="status-filter-toggle"
+              >
+                <.icon name="hero-adjustments-horizontal" class="size-3.5" />
+                {gettext("Estado")}
+                <span
+                  :if={@status_filters != []}
+                  class="px-1.5 py-0.5 text-[11px] font-semibold rounded-full bg-primary/15"
+                >
+                  {length(@status_filters)}
+                </span>
+                <.icon
+                  name={if @status_menu_open, do: "hero-chevron-up", else: "hero-chevron-down"}
+                  class="size-3.5 opacity-60"
+                />
+              </button>
+
+              <div
+                :if={@status_menu_open}
+                class="absolute z-20 mt-1.5 w-56 max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-lg p-2"
+                data-testid="status-filter-menu"
+              >
+                <button
+                  :for={status <- @status_options}
+                  type="button"
+                  phx-click="toggle_status"
+                  phx-value-status={status}
+                  class={[
+                    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm text-left transition-colors",
+                    if(status in @status_filters,
+                      do: "bg-primary/10 text-primary",
+                      else: "hover:bg-base-200 text-base-content/80"
+                    )
+                  ]}
+                  data-testid={"status-option-" <> status}
+                >
+                  <span class={[
+                    "size-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                    if(status in @status_filters,
+                      do: "border-primary bg-primary text-primary-content",
+                      else: "border-base-300"
+                    )
+                  ]}>
+                    <.icon :if={status in @status_filters} name="hero-check" class="size-3" />
+                  </span>
+                  <span class="flex-1 truncate">{status_label(status)}</span>
+                </button>
+
+                <div class="border-t border-base-300 mt-1.5 pt-1.5">
+                  <button
+                    type="button"
+                    phx-click="clear_filters"
+                    class="w-full px-2.5 py-1.5 rounded-lg text-xs text-base-content/50 hover:text-error hover:bg-error/10 transition-colors text-left"
+                    data-testid="status-clear"
+                  >
+                    {gettext("Clear filters")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <.link
+            patch={filters_path(@workspace_slug, @kind_filters, @status_filters, "?new=true")}
+            class="btn btn-primary btn-sm"
+            data-testid="new-workflow-button"
+          >
+            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Workflow")}
+          </.link>
         </div>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <%= for item <- @workflows do %>
-          <% wf = item.workflow %>
-          <div
-            id={"workflow-card-#{wf.id}"}
-            class="rounded-2xl bg-base-100 border border-base-300 p-4 flex flex-col gap-2 transition hover:border-primary/40"
-          >
-            <div class="flex items-center justify-between gap-2">
-              <div class="min-w-0 flex-1">
+      <%= if @show_archived do %>
+        <%!-- Switch ON: archivados — patrón pages --%>
+        <div
+          class="rounded-xl border border-base-300 bg-base-200/30"
+          data-testid="archived-section"
+        >
+          <div class="flex items-center justify-between px-4 py-3 border-b border-base-300">
+            <div class="flex items-center gap-2 text-sm font-semibold text-base-content/60">
+              <.icon name="hero-archive-box" class="size-4" />
+              {gettext("Archived")}
+              <span class="px-1.5 py-0.5 text-xs rounded-md bg-base-300 text-base-content/60">
+                {length(@archived_workflows)}
+              </span>
+            </div>
+          </div>
+          <div class="px-4 py-2 space-y-1">
+            <%= for item <- Enum.take(@archived_workflows, @archived_visible_count) do %>
+              <% wf = item.workflow %>
+              <div
+                class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-base-200 transition-colors opacity-70 hover:opacity-100"
+                data-testid={"archived-workflow-" <> wf.slug}
+              >
+                <.icon name="hero-bolt" class="size-4 text-base-content/40 shrink-0" />
                 <.link
                   navigate={~p"/#{@context.slug}/workflows/#{wf.slug}"}
-                  class="text-sm font-semibold truncate hover:underline"
+                  class="text-sm flex-1 truncate hover:text-primary transition-colors"
                 >
                   {wf.title}
                 </.link>
-                <p class="text-xs text-base-content/50">
-                  {item.steps_count} {gettext("steps")}
-                </p>
-              </div>
-              <div class="flex flex-wrap gap-1 shrink-0">
-                <span class={["badge badge-sm", workflow_chip(wf.status)]}>
-                  {status_label(wf.status)}
+                <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/50">
+                  {kind_label(wf.kind)}
                 </span>
-                <span class="badge badge-ghost badge-sm">{wf.kind}</span>
+                <span :if={wf.updated_at} class="text-caption shrink-0">
+                  {Calendar.strftime(wf.updated_at, "%b %d")}
+                </span>
+                <button
+                  type="button"
+                  phx-click="unarchive_workflow"
+                  phx-value-workflow-id={wf.id}
+                  title={gettext("Unarchive")}
+                  class="p-1 rounded-lg text-base-content/40 hover:text-success hover:bg-success/10 transition-colors shrink-0"
+                  data-testid={"unarchive-btn-" <> wf.slug}
+                >
+                  <.icon name="hero-arrow-up-on-square" class="size-4" />
+                </button>
+              </div>
+            <% end %>
+            <p
+              :if={@archived_workflows == []}
+              class="text-xs text-base-content/30 text-center py-2"
+            >
+              {gettext("No archived workflows")}
+            </p>
+            <button
+              :if={length(@archived_workflows) > @archived_visible_count}
+              type="button"
+              phx-click="load_more_archived"
+              class="w-full mt-1 py-2 rounded-lg border border-dashed border-base-300 text-sm text-base-content/50 hover:text-primary hover:border-primary/40 transition-colors"
+              data-testid="load-more-archived"
+            >
+              {gettext("Load more")} ({length(@archived_workflows) - @archived_visible_count})
+            </button>
+          </div>
+        </div>
+      <% else %>
+        <%!-- Switch OFF: workflows activos — cards --%>
+        <div class="grid gap-4 md:grid-cols-2">
+          <%= for item <- Enum.take(@workflows, @visible_count) do %>
+            <% wf = item.workflow %>
+            <div
+              id={"workflow-card-#{wf.id}"}
+              class="rounded-2xl bg-base-100 border border-base-300 p-4 flex flex-col gap-2 transition hover:border-primary/40"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <.link
+                    navigate={~p"/#{@context.slug}/workflows/#{wf.slug}"}
+                    class="text-sm font-semibold truncate hover:underline"
+                  >
+                    {wf.title}
+                  </.link>
+                  <p class="text-xs text-base-content/50">
+                    {item.steps_count} {gettext("steps")}
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-1 shrink-0">
+                  <span class={["badge badge-sm", workflow_chip(wf.status)]}>
+                    {status_label(wf.status)}
+                  </span>
+                  <span class="badge badge-ghost badge-sm">{kind_label(wf.kind)}</span>
+                </div>
+              </div>
+
+              <%!-- In-flight sessions on the index card --%>
+              <div :if={item.active_sessions != []} class="space-y-1.5">
+                <%= for {session, progress} <- item.active_sessions do %>
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2 text-xs">
+                      <span class={["badge badge-xs", session_chip(session.status)]}>
+                        {status_label(session.status)}
+                      </span>
+                      <span class="truncate flex-1 text-base-content/60">
+                        {session.label || gettext("Sesión")}
+                      </span>
+                      <span class="shrink-0 font-mono">{progress_label(progress)}</span>
+                      <button
+                        type="button"
+                        phx-click="abort_session"
+                        phx-value-session-id={session.id}
+                        class="btn btn-xs btn-ghost text-error shrink-0"
+                      >
+                        {gettext("Abortar")}
+                      </button>
+                    </div>
+                    <progress
+                      class="progress progress-primary w-full"
+                      value={session_pct(progress)}
+                      max="100"
+                    ></progress>
+                  </div>
+                <% end %>
+              </div>
+
+              <%!-- Nueva sesión + Archive --%>
+              <div class="flex items-center gap-2 mt-1">
+                <.form
+                  :if={wf.status != "archived"}
+                  id={"workflow-session-form-#{wf.id}"}
+                  for={%{}}
+                  phx-submit="open_session"
+                  phx-value-workflow-id={wf.id}
+                  class="flex items-center gap-2 flex-1 min-w-0"
+                >
+                  <.input
+                    type="text"
+                    name="label"
+                    value=""
+                    placeholder={gettext("Etiqueta (opcional)")}
+                    class="input-sm"
+                  />
+                  <button type="submit" class="btn btn-primary btn-sm shrink-0">
+                    <.icon name="hero-play" class="size-3.5" /> {gettext("Nueva sesión")}
+                  </button>
+                </.form>
+                <button
+                  type="button"
+                  phx-click="archive_workflow"
+                  phx-value-workflow-id={wf.id}
+                  title={gettext("Archive")}
+                  class="p-1.5 rounded-lg text-base-content/40 hover:text-warning hover:bg-warning/10 transition-colors shrink-0"
+                  data-testid={"archive-btn-" <> wf.slug}
+                >
+                  <.icon name="hero-archive-box" class="size-4" />
+                </button>
               </div>
             </div>
+          <% end %>
+        </div>
 
-            <%!-- In-flight sessions on the index card --%>
-            <div :if={item.active_sessions != []} class="space-y-1.5">
-              <%= for {session, progress} <- item.active_sessions do %>
-                <div class="space-y-1">
-                  <div class="flex items-center gap-2 text-xs">
-                    <span class={["badge badge-xs", session_chip(session.status)]}>
-                      {status_label(session.status)}
-                    </span>
-                    <span class="truncate flex-1 text-base-content/60">
-                      {session.label || gettext("Sesión")}
-                    </span>
-                    <span class="shrink-0 font-mono">{progress_label(progress)}</span>
-                    <button
-                      type="button"
-                      phx-click="abort_session"
-                      phx-value-session-id={session.id}
-                      class="btn btn-xs btn-ghost text-error shrink-0"
-                    >
-                      {gettext("Abortar")}
-                    </button>
-                  </div>
-                  <progress
-                    class="progress progress-primary w-full"
-                    value={session_pct(progress)}
-                    max="100"
-                  ></progress>
-                </div>
-              <% end %>
-            </div>
+        <button
+          :if={length(@workflows) > @visible_count}
+          type="button"
+          phx-click="load_more"
+          class="w-full mt-4 py-2 rounded-lg border border-dashed border-base-300 text-sm text-base-content/50 hover:text-primary hover:border-primary/40 transition-colors"
+          data-testid="load-more"
+        >
+          {gettext("Load more")} ({length(@workflows) - @visible_count})
+        </button>
 
-            <.form
-              :if={wf.status != "archived"}
-              id={"workflow-session-form-#{wf.id}"}
-              for={%{}}
-              phx-submit="open_session"
-              phx-value-workflow-id={wf.id}
-              class="flex items-center gap-2 mt-1"
-            >
-              <.input
-                type="text"
-                name="label"
-                value=""
-                placeholder={gettext("Etiqueta (opcional)")}
-                class="input-sm"
-              />
-              <button type="submit" class="btn btn-primary btn-sm shrink-0">
-                <.icon name="hero-play" class="size-3.5" /> {gettext("Nueva sesión")}
-              </button>
-            </.form>
-          </div>
-        <% end %>
-      </div>
-
-      <p :if={@workflows == []} class="text-sm text-base-content/40 py-8 text-center">
-        {gettext("No hay workflows todavía.")}
-      </p>
+        <p :if={@workflows == []} class="text-sm text-base-content/40 py-8 text-center">
+          {gettext("No hay workflows todavía.")}
+        </p>
+      <% end %>
     <% else %>
       <%!-- Show: steps DAG + sessions + runs --%>
       <div class="flex items-center gap-3 mb-4">
         <.link
-          patch={~p"/#{@context.slug}/workflows"}
+          patch={filters_path(@workspace_slug, @kind_filters, @status_filters)}
           class="text-sm text-base-content/50 hover:text-base-content"
         >
           ← {gettext("Workflows")}
@@ -114,7 +378,28 @@
         <span class={["badge badge-sm", workflow_chip(@workflow.status)]}>
           {status_label(@workflow.status)}
         </span>
-        <span class="badge badge-ghost badge-sm">{@workflow.kind}</span>
+        <span class="badge badge-ghost badge-sm">{kind_label(@workflow.kind)}</span>
+        <div class="ml-auto flex gap-1 shrink-0">
+          <button
+            :if={@workflow.status != "archived"}
+            type="button"
+            phx-click="archive_workflow"
+            phx-value-workflow-id={@workflow.id}
+            class="btn btn-ghost btn-xs text-base-content/50 hover:text-warning"
+            title={gettext("Archive")}
+          >
+            <.icon name="hero-archive-box" class="size-3.5" />
+          </button>
+          <button
+            :if={@workflow.status == "archived"}
+            type="button"
+            phx-click="unarchive_workflow"
+            phx-value-workflow-id={@workflow.id}
+            class="btn btn-ghost btn-xs text-base-content/50 hover:text-success"
+          >
+            <.icon name="hero-arrow-up-on-square" class="size-3.5" /> {gettext("Restaurar")}
+          </button>
+        </div>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-3">
@@ -416,4 +701,93 @@
       </div>
     <% end %>
   </div>
+
+  <%!-- Create-workflow modal (?new=true) — pages/goals resource pattern --%>
+  <.resource_modal
+    :if={@modal_open}
+    id="workflow-resource-modal"
+    title={gettext("New Workflow")}
+    pill="WORKFLOW"
+    pill_class="bg-primary/10 text-primary"
+    on_close="close_workflow_modal"
+    form_id="workflow-modal-form"
+    submit_label={gettext("Create Workflow")}
+  >
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-base-content/60">
+        {gettext("Define the plan, its kind and who it runs for.")}
+      </p>
+      <.link
+        navigate={~p"/#{@workspace_slug}/docs"}
+        class="text-xs text-base-content/50 hover:text-primary"
+      >
+        {gettext("Docs de workflows →")}
+      </.link>
+    </div>
+
+    <%!-- One `<.form>` spans BOTH columns — a single submit carries
+         everything (task/goal modal pattern). --%>
+    <.form
+      id="workflow-modal-form"
+      for={@form}
+      phx-change="validate_workflow"
+      phx-submit="save_workflow"
+      class="grid grid-cols-1 lg:grid-cols-[1fr_20rem] lg:gap-6"
+    >
+      <div class="min-w-0 space-y-4">
+        <.input
+          field={@form[:title]}
+          type="text"
+          label={gettext("Title")}
+          placeholder={gettext("Workflow title…")}
+          class="text-lg font-medium"
+          autofocus
+        />
+
+        <div>
+          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Content")}</span>
+          <.markdown_editor
+            id="workflow-editor-modal-new"
+            body=""
+            workspace_id={@context && @context.id}
+            autosave={false}
+            toolbar={false}
+            hidden_field="workflow[body]"
+            min_height="240px"
+          />
+        </div>
+      </div>
+
+      <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+          {gettext("Details")}
+        </h4>
+
+        <.resource_select name="workflow[kind]" label={gettext("Kind")}>
+          <option value="evergreen" selected={input_value(@form, :kind) not in ["one_shot"]}>
+            {gettext("Evergreen")} — {gettext("re-runnable, N sesiones")}
+          </option>
+          <option value="one_shot" selected={input_value(@form, :kind) == "one_shot"}>
+            {gettext("One shot")} — {gettext("single pass")}
+          </option>
+        </.resource_select>
+
+        <.resource_select name="workflow[status]" label={gettext("Status")}>
+          <option value="draft" selected={input_value(@form, :status) == "draft"}>
+            {gettext("Draft")}
+          </option>
+          <option value="active" selected={input_value(@form, :status) in [nil, "active"]}>
+            {gettext("Active")}
+          </option>
+        </.resource_select>
+
+        <.resource_select name="workflow[goal_id]" label={gettext("Goal")}>
+          <option value="" selected={is_nil(input_value(@form, :goal_id))}>
+            {gettext("no goal")}
+          </option>
+          <.goal_options tree={@goal_tree} selected_id={input_value(@form, :goal_id)} />
+        </.resource_select>
+      </aside>
+    </.form>
+  </.resource_modal>
 </Layouts.app>

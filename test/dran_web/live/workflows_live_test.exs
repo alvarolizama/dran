@@ -73,7 +73,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert html =~ "Deploy pipeline"
       assert html =~ "Nueva sesión"
       assert has_element?(view, "#workflow-card-#{workflow.id}")
-      assert has_element?(view, "#workflow-card-#{workflow.id}", "evergreen")
+      assert has_element?(view, "#workflow-card-#{workflow.id}", "Evergreen")
       assert has_element?(view, "#workflow-card-#{workflow.id}", "Draft")
     end
 
@@ -124,7 +124,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert session.finished_at
     end
 
-    test "archived workflow renders no nueva sesión form", %{
+    test "archived workflow leaves the main grid and renders no form in the archived section", %{
       conn: conn,
       ws: ws,
       workflow: workflow
@@ -133,8 +133,15 @@ defmodule DranWeb.WorkflowsLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
 
-      assert has_element?(view, "#workflow-card-#{workflow.id}")
-      refute has_element?(view, "#workflow-card-#{workflow.id} form")
+      # Archivados fuera de la grid principal (patrón pages)
+      refute has_element?(view, "#workflow-card-#{workflow.id}")
+
+      view
+      |> element("[data-testid='toggle-archived']")
+      |> render_click()
+
+      assert has_element?(view, "[data-testid='archived-workflow-#{workflow.slug}']")
+      refute has_element?(view, "[data-testid='archived-workflow-#{workflow.slug}'] form")
     end
 
     test "open_session with a foreign-workflow id is rejected (regression #2)", %{
@@ -202,6 +209,190 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> render_click()
 
       assert Executions.get_session!(mine.id).status == "aborted"
+    end
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Index — kind filters (multi-select URL), archived toggle, create modal
+  # ──────────────────────────────────────────────────────────────────────────
+
+  describe "index filters and archiving" do
+    test "kind filter via URL shows only matching kinds", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, one_shot} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "title" => "One Shot Flow",
+          "slug" => "one-shot-flow",
+          "kind" => "one_shot"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?kind=evergreen")
+
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      refute has_element?(view, "#workflow-card-#{one_shot.id}")
+
+      # Multi-select: both kinds selected shows both.
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?kind=evergreen,one_shot")
+
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      assert has_element?(view, "#workflow-card-#{one_shot.id}")
+
+      # Unknown values are dropped — only the valid kind filters.
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?kind=bogus,evergreen")
+
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      refute has_element?(view, "#workflow-card-#{one_shot.id}")
+    end
+
+    test "toggle_kind event pushes a patch with the URL filter state", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, one_shot} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "title" => "One Shot Flow",
+          "slug" => "one-shot-flow",
+          "kind" => "one_shot"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
+
+      # Open the kind menu first, then toggle one_shot on.
+      view
+      |> element("[data-testid='kind-filter-toggle']")
+      |> render_click()
+
+      view
+      |> element("[data-testid='kind-option-one_shot']")
+      |> render_click()
+
+      assert has_element?(view, "#workflow-card-#{one_shot.id}")
+      refute has_element?(view, "#workflow-card-#{workflow.id}")
+
+      # Toggling again clears it back to the unfiltered list (menu stays open
+      # across patches, so no re-open needed).
+      view
+      |> element("[data-testid='kind-option-one_shot']")
+      |> render_click()
+
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+    end
+
+    test "archive_workflow moves the card to the archived section; unarchive restores it", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
+
+      view
+      |> element("[data-testid='archive-btn-#{workflow.slug}']")
+      |> render_click()
+
+      refute has_element?(view, "#workflow-card-#{workflow.id}")
+
+      view
+      |> element("[data-testid='toggle-archived']")
+      |> render_click()
+
+      assert has_element?(view, "[data-testid='archived-workflow-#{workflow.slug}']")
+
+      view
+      |> element("[data-testid='unarchive-btn-#{workflow.slug}']")
+      |> render_click()
+
+      refute has_element?(view, "[data-testid='archived-workflow-#{workflow.slug}']")
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+    end
+
+    test "status filter via URL and toggle_status event (draft vs active)", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, active} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "title" => "Active Flow",
+          "slug" => "active-flow",
+          "status" => "active"
+        })
+
+      # ?status=draft hides the active one; ?status=active hides the draft one.
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?status=draft")
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      refute has_element?(view, "#workflow-card-#{active.id}")
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?status=active")
+      assert has_element?(view, "#workflow-card-#{active.id}")
+      refute has_element?(view, "#workflow-card-#{workflow.id}")
+
+      # Combined filters compose: Active Flow (evergreen+active) survives,
+      # the draft fixture does not.
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?kind=evergreen&status=active")
+      refute has_element?(view, "#workflow-card-#{workflow.id}")
+      assert has_element?(view, "#workflow-card-#{active.id}")
+
+      # UI toggle: open menu, click draft, assert active hidden and patch state.
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
+
+      view
+      |> element("[data-testid='status-filter-toggle']")
+      |> render_click()
+
+      view
+      |> element("[data-testid='status-option-draft']")
+      |> render_click()
+
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      refute has_element?(view, "#workflow-card-#{active.id}")
+    end
+
+    test "create modal opens via ?new=true, validates and saves a new workflow", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?new=true")
+
+      assert has_element?(view, "#workflow-resource-modal")
+      assert has_element?(view, "#workflow-modal-form")
+
+      view
+      |> form("#workflow-modal-form", workflow: %{"title" => "Nuevo flujo", "kind" => "one_shot"})
+      |> render_change()
+
+      assert has_element?(view, "#workflow-resource-modal")
+
+      view
+      |> form("#workflow-modal-form")
+      |> render_submit(workflow: %{"title" => "Nuevo flujo", "kind" => "one_shot"})
+
+      assert workflow = Workflows.get_workflow_by_slug("nuevo-flujo", ws.id)
+      assert workflow.kind == "one_shot"
+
+      # Modal closed — save lands on the new workflow's show page.
+      refute has_element?(view, "#workflow-resource-modal")
+      assert render(view) =~ "Nuevo flujo"
+
+      # And the new workflow is on the index grid.
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows")
+      assert has_element?(view, "#workflow-card-#{workflow.id}")
+    end
+
+    test "create modal submit without title shows validation error", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?new=true")
+
+      view
+      |> form("#workflow-modal-form")
+      |> render_submit(workflow: %{"title" => ""})
+
+      assert has_element?(view, "#workflow-resource-modal")
     end
   end
 

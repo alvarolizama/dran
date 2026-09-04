@@ -56,6 +56,8 @@ defmodule DranWeb.TaskBoardLive do
          current_user: session["user"],
          filter_actor_id: nil,
          filter_goal_id: nil,
+         assignee_menu_open: false,
+         goal_menu_open: false,
          managed_actors: Dran.Actors.list_managed_actors(),
          # Resource modal state — `?task=<id>` opens edit, `?new=true`
          # opens create. Both render `<.resource_modal>` over the board.
@@ -77,6 +79,11 @@ defmodule DranWeb.TaskBoardLive do
   # opens create in that column.
   @impl true
   def handle_params(params, _url, socket) do
+    # Menus are transient UI state — close them on any navigation (deep-link
+    # to the modal, back to the board), mirroring the workflows pattern
+    # where apply_show resets menu state on patch.
+    socket = assign(socket, assignee_menu_open: false, goal_menu_open: false)
+
     {:noreply, open_modal_from_params(socket, params)}
   end
 
@@ -151,7 +158,11 @@ defmodule DranWeb.TaskBoardLive do
         _ -> nil
       end
 
-    {:noreply, socket |> assign(filter_actor_id: filter) |> load_board()}
+    # Selecting an option closes the menu (workflows filter pattern).
+    {:noreply,
+     socket
+     |> assign(filter_actor_id: filter, assignee_menu_open: false)
+     |> load_board()}
   end
 
   def handle_event("filter_goal", %{"goal_id" => goal_id}, socket) do
@@ -162,8 +173,20 @@ defmodule DranWeb.TaskBoardLive do
         _ -> nil
       end
 
-    {:noreply, socket |> assign(filter_goal_id: filter) |> load_board()}
+    {:noreply,
+     socket
+     |> assign(filter_goal_id: filter, goal_menu_open: false)
+     |> load_board()}
   end
+
+  # ── Filter dropdowns (workflows/pages pattern: chip + checkbox menu) ────
+  # Menu open state is local, NOT URL — reopening across a patch is not a
+  # feature here (the board filters are in-memory assigns).
+  def handle_event("toggle_assignee_menu", _params, socket),
+    do: {:noreply, assign(socket, assignee_menu_open: not socket.assigns[:assignee_menu_open])}
+
+  def handle_event("toggle_goal_menu", _params, socket),
+    do: {:noreply, assign(socket, goal_menu_open: not socket.assigns[:goal_menu_open])}
 
   def handle_event("move", %{"id" => id, "to_status" => to_status} = params, socket) do
     case fetch_board_task(id, socket) do
@@ -439,6 +462,58 @@ defmodule DranWeb.TaskBoardLive do
     end
   end
 
+  # ── Filter dropdown helpers (workflows/pages chip pattern) ──────────────
+
+  # Chip label for the assignee filter: the selected option's label, or
+  # "All assignees" when unfiltered. Falls back to the raw id when the
+  # actor row disappeared (filter would match nothing anyway).
+  defp assignee_label(nil, _actors), do: gettext("All assignees")
+
+  defp assignee_label("unassigned", _actors), do: gettext("Unassigned")
+
+  defp assignee_label(actor_id, actors) do
+    case Enum.find(actors, &(&1.id == actor_id)) do
+      nil -> actor_id
+      actor -> Dran.Actors.Actor.label(actor)
+    end
+  end
+
+  # Menu options: [{value, label}] — "All assignees", "Unassigned", then the
+  # managed actors flat (Actor.label, no optgroups — test-pinned).
+  defp assignee_options(actors) do
+    [
+      {"", gettext("All assignees")},
+      {"unassigned", gettext("Unassigned")}
+      | Enum.map(actors, &{&1.id, Dran.Actors.Actor.label(&1)})
+    ]
+  end
+
+  defp filter_actor_active?(filter, value), do: to_string(filter) == value
+
+  # Chip label for the goal filter: the selected goal's title, "All goals"
+  # when unfiltered, or the raw id when the goal vanished from the tree
+  # (deleted elsewhere → board shows nothing, per the unknown-id spec).
+  # Mirrors assignee_label/2: unknown selection → raw value on the chip.
+  defp goal_label(nil, _tree), do: gettext("All goals")
+
+  defp goal_label(goal_id, tree) do
+    case Enum.find(tree, fn {goal, _depth} -> goal.id == goal_id end) do
+      {goal, _depth} -> goal.title
+      nil -> goal_id
+    end
+  end
+
+  # Menu options: [{"", "All goals"}] + flattened indented tree
+  # ("—— Child" — depth markers survive; no optgroups — test-pinned).
+  defp goal_options_list(tree) do
+    [{"", gettext("All goals")}] ++
+      Enum.map(tree, fn {goal, depth} ->
+        {goal.id, "#{String.duplicate("—", depth + 1)} #{goal.title}"}
+      end)
+  end
+
+  defp filter_goal_active?(filter, value), do: to_string(filter) == value
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -465,37 +540,121 @@ defmodule DranWeb.TaskBoardLive do
             {gettext("Tasks")}
           </h1>
           <div class="flex items-center gap-3 flex-wrap">
-            <label class="flex items-center gap-2 text-xs text-base-content/60">
-              <.icon name="hero-funnel" class="size-3.5" />
-              <select
-                name="actor_id"
-                phx-change="filter_actor"
-                id="assignee-filter"
-                class="select select-xs select-bordered"
+            <%!-- Assignee filter — workflows/pages chip dropdown (single-select) --%>
+            <div class="relative" id="assignee-filter-root">
+              <button
+                type="button"
+                phx-click="toggle_assignee_menu"
+                class={[
+                  "inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors",
+                  if(is_nil(@filter_actor_id),
+                    do: "border-base-300 text-base-content/70 hover:border-primary/40",
+                    else: "border-primary bg-primary/10 text-primary font-medium"
+                  )
+                ]}
+                data-testid="assignee-filter-toggle"
               >
-                <option value="" selected={is_nil(@filter_actor_id)}>
-                  {gettext("All assignees")}
-                </option>
-                <option value="unassigned" selected={@filter_actor_id == "unassigned"}>
-                  {gettext("Unassigned")}
-                </option>
-                <.actor_options actors={@managed_actors} selected_id={@filter_actor_id} />
-              </select>
-            </label>
-            <label class="flex items-center gap-2 text-xs text-base-content/60">
-              <.icon name="hero-flag" class="size-3.5" />
-              <select
-                name="goal_id"
-                phx-change="filter_goal"
-                id="goal-filter"
-                class="select select-xs select-bordered"
+                <.icon name="hero-funnel" class="size-3.5" />
+                {assignee_label(@filter_actor_id, @managed_actors)}
+                <.icon
+                  name={if @assignee_menu_open, do: "hero-chevron-up", else: "hero-chevron-down"}
+                  class="size-3.5 opacity-60"
+                />
+              </button>
+
+              <div
+                :if={@assignee_menu_open}
+                class="absolute z-20 mt-1.5 w-64 max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-lg p-2"
+                data-testid="assignee-filter-menu"
               >
-                <option value="" selected={is_nil(@filter_goal_id)}>
-                  {gettext("All goals")}
-                </option>
-                <.goal_options tree={@goal_tree} selected_id={@filter_goal_id} />
-              </select>
-            </label>
+                <button
+                  :for={{value, label} <- assignee_options(@managed_actors)}
+                  type="button"
+                  phx-click="filter_actor"
+                  phx-value-actor_id={value}
+                  class={[
+                    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm text-left transition-colors",
+                    if(filter_actor_active?(@filter_actor_id, value),
+                      do: "bg-primary/10 text-primary",
+                      else: "hover:bg-base-200 text-base-content/80"
+                    )
+                  ]}
+                  data-testid={"assignee-option-" <> (value == "" && "all" || value)}
+                >
+                  <span class={[
+                    "size-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                    if(filter_actor_active?(@filter_actor_id, value),
+                      do: "border-primary",
+                      else: "border-base-300"
+                    )
+                  ]}>
+                    <span
+                      :if={filter_actor_active?(@filter_actor_id, value)}
+                      class="size-2 rounded-full bg-primary"
+                    ></span>
+                  </span>
+                  <span class="flex-1 truncate">{label}</span>
+                </button>
+              </div>
+            </div>
+
+            <%!-- Goal filter — workflows/pages chip dropdown (single-select, roll-up) --%>
+            <div class="relative" id="goal-filter-root">
+              <button
+                type="button"
+                phx-click="toggle_goal_menu"
+                class={[
+                  "inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors",
+                  if(is_nil(@filter_goal_id),
+                    do: "border-base-300 text-base-content/70 hover:border-primary/40",
+                    else: "border-primary bg-primary/10 text-primary font-medium"
+                  )
+                ]}
+                data-testid="goal-filter-toggle"
+              >
+                <.icon name="hero-flag" class="size-3.5" />
+                {goal_label(@filter_goal_id, @goal_tree)}
+                <.icon
+                  name={if @goal_menu_open, do: "hero-chevron-up", else: "hero-chevron-down"}
+                  class="size-3.5 opacity-60"
+                />
+              </button>
+
+              <div
+                :if={@goal_menu_open}
+                class="absolute z-20 mt-1.5 w-64 max-h-72 overflow-y-auto rounded-xl border border-base-300 bg-base-100 shadow-lg p-2"
+                data-testid="goal-filter-menu"
+              >
+                <button
+                  :for={{id, label} <- goal_options_list(@goal_tree)}
+                  type="button"
+                  phx-click="filter_goal"
+                  phx-value-goal_id={id}
+                  class={[
+                    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm text-left transition-colors",
+                    if(filter_goal_active?(@filter_goal_id, id),
+                      do: "bg-primary/10 text-primary",
+                      else: "hover:bg-base-200 text-base-content/80"
+                    )
+                  ]}
+                  data-testid={"goal-option-" <> (id == "" && "all" || id)}
+                >
+                  <span class={[
+                    "size-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                    if(filter_goal_active?(@filter_goal_id, id),
+                      do: "border-primary",
+                      else: "border-base-300"
+                    )
+                  ]}>
+                    <span
+                      :if={filter_goal_active?(@filter_goal_id, id)}
+                      class="size-2 rounded-full bg-primary"
+                    ></span>
+                  </span>
+                  <span class="flex-1 truncate">{label}</span>
+                </button>
+              </div>
+            </div>
             <.link
               patch={~p"/#{@workspace.slug}/tasks?new=true"}
               class="btn btn-primary btn-sm"

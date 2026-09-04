@@ -25,12 +25,10 @@ defmodule Dran.WorkflowsTest do
                  workspace_id: ws.id,
                  title: "Plan A",
                  slug: "plan-a",
-                 summary: "short",
                  body: "long"
                })
 
       assert plan.title == "Plan A"
-      assert plan.summary == "short"
       assert plan.body == "long"
 
       assert Workflows.get_workflow_by_slug("plan-a", ws.id).id == plan.id
@@ -39,9 +37,9 @@ defmodule Dran.WorkflowsTest do
     test "update_workflow/2 updates fields", %{workspace: ws} do
       {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "A", slug: "a"})
 
-      assert {:ok, updated} = Workflows.update_workflow(plan, %{title: "B", summary: "s"})
+      assert {:ok, updated} = Workflows.update_workflow(plan, %{title: "B", body: "b"})
       assert updated.title == "B"
-      assert updated.summary == "s"
+      assert updated.body == "b"
       assert updated.slug == "a"
     end
 
@@ -59,6 +57,78 @@ defmodule Dran.WorkflowsTest do
                Workflows.create_workflow(%{workspace_id: ws.id, title: "B", slug: "dup"})
 
       assert "has already been taken" in changeset_errors(changeset)
+    end
+
+    test "list_workflows/2 filters by kind (list) and archived", %{workspace: ws} do
+      {:ok, _} =
+        Workflows.create_workflow(%{
+          workspace_id: ws.id,
+          title: "A",
+          slug: "a",
+          kind: "evergreen"
+        })
+
+      {:ok, one_shot} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "B", slug: "b", kind: "one_shot"})
+
+      assert length(Workflows.list_workflows(ws.id)) == 2
+      assert [%Workflow{}] = flows = Workflows.list_workflows(ws.id, kind: ["evergreen"])
+      assert hd(flows).kind == "evergreen"
+
+      assert [%Workflow{}] = one_shots = Workflows.list_workflows(ws.id, kind: ["one_shot"])
+      assert hd(one_shots).id == one_shot.id
+
+      # Both kinds selected returns both.
+      assert length(Workflows.list_workflows(ws.id, kind: ["evergreen", "one_shot"])) == 2
+
+      # Archive one — leaves the default list, appears with archived: true.
+      {:ok, one_shot} = Workflows.archive_workflow(one_shot)
+
+      assert length(Workflows.list_workflows(ws.id)) == 1
+      assert [%Workflow{}] = archived = Workflows.list_workflows(ws.id, archived: true)
+      assert hd(archived).id == one_shot.id
+
+      # Unarchive restores it to the default list.
+      {:ok, _} = Workflows.unarchive_workflow(one_shot)
+      assert length(Workflows.list_workflows(ws.id)) == 2
+      assert Workflows.list_workflows(ws.id, archived: true) == []
+    end
+
+    test "list_workflows/2 filters by status (draft/active)", %{workspace: ws} do
+      {:ok, _} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "A", slug: "a", status: "draft"})
+
+      {:ok, active} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "B", slug: "b", status: "active"})
+
+      assert length(Workflows.list_workflows(ws.id)) == 2
+      assert [%Workflow{}] = drafts = Workflows.list_workflows(ws.id, status: ["draft"])
+      assert hd(drafts).status == "draft"
+
+      assert [%Workflow{}] = actives = Workflows.list_workflows(ws.id, status: ["active"])
+      assert hd(actives).id == active.id
+
+      # Both selected → both returned; bogus values are dropped.
+      assert length(Workflows.list_workflows(ws.id, status: ["draft", "active"])) == 2
+      assert length(Workflows.list_workflows(ws.id, status: ["bogus"])) == 2
+      assert length(Workflows.list_workflows(ws.id, status: ["archived"])) == 2
+
+      # Status filter composes with kind filter.
+      assert Workflows.list_workflows(ws.id, kind: ["one_shot"], status: ["active"]) == []
+
+      {:ok, _} =
+        Workflows.create_workflow(%{
+          workspace_id: ws.id,
+          title: "C",
+          slug: "c",
+          status: "active",
+          kind: "one_shot"
+        })
+
+      assert [%Workflow{}] =
+               both = Workflows.list_workflows(ws.id, kind: ["one_shot"], status: ["active"])
+
+      assert hd(both).slug == "c"
     end
 
     test "same slug allowed in different workspaces", %{workspace: ws} do
