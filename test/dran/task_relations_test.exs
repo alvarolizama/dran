@@ -13,7 +13,7 @@ defmodule Dran.TaskRelationsTest do
       assert Tasks.list_linked_goals(task) == []
     end
 
-    test "link_to_goal creates a part_of relation and derives progress" do
+    test "link_to_goal creates a part_of relation" do
       workspace = ensure_workspace!()
 
       {:ok, goal} =
@@ -28,14 +28,10 @@ defmodule Dran.TaskRelationsTest do
 
       {:ok, _rel} = Tasks.link_to_goal(task, goal)
 
-      # 0 done / 1 total = 0.0
-      updated_goal = Goals.get_goal(goal.id)
-      assert updated_goal.progress == 0.0
-      assert updated_goal.meta["progress_derived"] == true
       assert Tasks.list_linked_goals(task) |> length() == 1
     end
 
-    test "progress updates when a linked task moves to done" do
+    test "linked task moves to done without touching the goal" do
       workspace = ensure_workspace!()
 
       {:ok, goal} =
@@ -53,33 +49,9 @@ defmodule Dran.TaskRelationsTest do
 
       Tasks.link_to_goal(t1, goal)
       Tasks.link_to_goal(t2, goal)
-
-      # Complete one task via move (status change → recompute hook)
-      {:ok, _} = Tasks.move_task(t1, "done")
-
-      goal = Goals.get_goal(goal.id)
-      assert_in_delta goal.progress, 0.5, 0.001
     end
 
-    test "goal with no tasks keeps manual progress untouched" do
-      workspace = ensure_workspace!()
-
-      {:ok, goal} =
-        Goals.create_goal(%{
-          "workspace_id" => workspace.id,
-          "title" => "Manual goal",
-          "slug" => "manual-goal",
-          "progress" => 0.7
-        })
-
-      :ok = Goals.recompute_progress(goal)
-
-      goal = Goals.get_goal(goal.id)
-      assert goal.progress == 0.7
-      assert goal.meta["progress_derived"] == nil
-    end
-
-    test "unlink_from_goal removes the relation and recomputes" do
+    test "unlink_from_goal removes the relation" do
       workspace = ensure_workspace!()
 
       {:ok, goal} =
@@ -174,7 +146,7 @@ defmodule Dran.TaskRelationsTest do
       assert Tasks.list_linked_goals(task) |> length() == 1
     end
 
-    test "switching goals replaces the previous link and recomputes the new goal" do
+    test "switching goals replaces the previous link" do
       workspace = ensure_workspace!()
 
       {:ok, g1} =
@@ -191,13 +163,10 @@ defmodule Dran.TaskRelationsTest do
         })
 
       {:ok, _} = Tasks.set_goal(task, g1.id)
-      assert Goals.get_goal(g1.id).progress == 1.0
+      assert Tasks.list_linked_goals(task) |> Enum.map(& &1.id) == [g1.id]
 
       {:ok, _} = Tasks.set_goal(task, g2.id)
       assert Tasks.list_linked_goals(task) |> Enum.map(& &1.id) == [g2.id]
-      # The old goal keeps its derived progress (recompute with 0 tasks is a no-op)
-      assert Goals.get_goal(g1.id).progress == 1.0
-      assert Goals.get_goal(g2.id).progress == 1.0
     end
 
     test "empty goal_id detaches the task from its goal" do

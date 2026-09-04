@@ -59,21 +59,6 @@ defmodule DranWeb.GoalLive do
             </div>
           </div>
 
-          <%!-- Progress bar --%>
-          <div :if={@goal.progress != nil} class="surface-2 rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-sm font-medium">{gettext("Progress")}</span>
-              <span class="text-sm font-semibold">{trunc((@goal.progress || 0) * 100)}%</span>
-            </div>
-            <div class="h-2 rounded-full bg-base-300 overflow-hidden">
-              <div
-                class="h-full rounded-full bg-primary transition-all"
-                style={"width: #{trunc((@goal.progress || 0) * 100)}%"}
-              >
-              </div>
-            </div>
-          </div>
-
           <%!-- Body (edit happens in the modal overlay) --%>
           <div
             :if={@goal.body != nil and @goal.body != ""}

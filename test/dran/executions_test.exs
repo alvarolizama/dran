@@ -1,15 +1,15 @@
 defmodule Dran.ExecutionsTest do
   @moduledoc """
-  Wave B — executions re-pointed to plans: open_session(plan) with frozen
-  plan_snapshot, runs per step, task spawn in start_run (instance_of step +
-  part_of goal), dual closure converging (close_run agent-side +
-  reconcile_task_closure board-side), spawned tasks archived on session
-  close, abort cancels in-flight spawned tasks.
+  Executions sobre workflows (post-pivot 2026-09): open_session(workflow)
+  con snapshot congelado, runs upfront por step, run_ready? por sesión
+  (topología congelada), start_run/close_run/runREADY sin spawn (el run
+  es el único runtime), update_progress por fase, retry superseded,
+  abort_session.
 
-  Full port of every F1 case, re-keyed from tasks to steps, plus the new
-  wave-B surface (spawn, snapshot, reconcile, archive). Concurrency
-  guarantees preserved: conditional claims, transactional close, retry
-  superseded.
+  Port de los casos wave B re-keyed al modelo workflows: toda la
+  superficie spawn/cierre-dual/reconcile/archivo muere con el pivot
+  (P7 del plan). Concurrency guarantees preserved: conditional claims,
+  transactional close, retry superseded.
   """
 
   use Dran.DataCase, async: true
@@ -19,15 +19,13 @@ defmodule Dran.ExecutionsTest do
   alias Dran.{
     Contracts,
     Executions,
-    GoalSession,
     Goals,
     Knowledge,
-    Plan,
-    Plans,
     Relation,
     Repo,
-    TaskRun,
-    Tasks
+    Run,
+    WorkflowSession,
+    Workflows
   }
 
   setup do
@@ -41,44 +39,42 @@ defmodule Dran.ExecutionsTest do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # P1 — open_session(plan) con runs upfront + snapshot congelado
+  # P1 — open_session(workflow): runs upfront + snapshot congelado
   # ──────────────────────────────────────────────────────────────────────────
 
-  test "P1: open_session(plan) creates pending runs upfront for every step of the plan", %{
+  test "P1: open_session(workflow) creates pending runs upfront for every step", %{
     ws: ws
   } do
-    {goal, plan, steps} = new_plan(ws, ["Step 1", "Step 2"])
+    {workflow, steps} = new_workflow(ws, ["Step 1", "Step 2"])
 
-    {:ok, session} = Executions.open_session(plan, label: "release 1")
+    {:ok, session} = Executions.open_session(workflow, label: "release 1")
 
     session = Repo.preload(session, :runs)
     assert session.status == "in_flight"
     assert session.label == "release 1"
-    assert session.plan_id == plan.id
-    # goal_id denormalizado = el goal que el plan sirve.
-    assert session.goal_id == goal.id
+    assert session.workflow_id == workflow.id
+    # goal_id denormalizado desde el link opcional del workflow.
+    assert session.goal_id == nil
 
     run_step_ids = Enum.map(session.runs, & &1.step_id) |> MapSet.new()
     assert run_step_ids == MapSet.new(Enum.map(steps, & &1.id))
     assert Enum.all?(session.runs, &(&1.status == "pending"))
     assert Enum.all?(session.runs, &(&1.attempt == 1))
-    # Sin contrato en los steps → nil (decisión 2).
+    # Sin contrato en los steps → nil.
     assert Enum.all?(session.runs, &(&1.contract_version == nil))
-    # Sin spawn todavía: task_id nil hasta start_run.
-    assert Enum.all?(session.runs, &(&1.task_id == nil))
+    # El run es el runtime: nada de tasks.
+    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
   end
 
-  test "P1: open_session(plan) freezes the plan_snapshot with steps and depends_on edges", %{
-    ws: ws
-  } do
-    {_goal, plan, [a, b, c]} = new_plan(ws, ["A", "B", "C"])
+  test "P1: open_session freezes the snapshot with steps and depends_on edges", %{ws: ws} do
+    {workflow, [a, b, c]} = new_workflow(ws, ["A", "B", "C"])
 
     {:ok, _} = Contracts.add_dependency(b, a)
     {:ok, _} = Contracts.add_dependency(c, b)
 
-    {:ok, session} = Executions.open_session(plan)
+    {:ok, session} = Executions.open_session(workflow)
 
-    snapshot = session.plan_snapshot
+    snapshot = session.snapshot
 
     assert snapshot["edges"] |> Enum.map(&List.to_tuple/1) |> MapSet.new() ==
              MapSet.new([{b.id, a.id}, {c.id, b.id}])
@@ -91,62 +87,69 @@ defmodule Dran.ExecutionsTest do
     assert Enum.all?(snapshot["steps"], &is_binary(&1["title"]))
   end
 
-  test "P1: plan_snapshot and contract_version stay frozen when the plan is edited after open", %{
-    ws: ws
-  } do
+  test "P1: snapshot and contract_version stay frozen when the workflow is edited after open",
+       %{ws: ws} do
     contract = %{
       "intent" => "Ship the login flow",
       "claims" => [%{"id" => "P1", "text" => "form validates", "verify" => "mix test"}],
       "gates" => [%{"id" => "G1", "cmd" => "mix test"}]
     }
 
-    {_goal, plan, [step1]} = new_plan(ws, [%{title: "Contracted step", contract: contract}])
+    {workflow, [step1]} =
+      new_workflow(ws, [%{title: "Contracted step", contract: contract}])
 
-    {:ok, session} = Executions.open_session(plan)
+    {:ok, session} = Executions.open_session(workflow)
     session = Repo.preload(session, :runs)
     [run] = session.runs
     assert run.contract_version == contract
 
-    assert session.plan_snapshot["steps"] == [
+    assert session.snapshot["steps"] == [
              %{"id" => step1.id, "title" => "Contracted step", "contract" => contract}
            ]
 
-    # El plan muta DESPUÉS de abrir: título del step, contrato del step y un
-    # step nuevo — el snapshot de la sesión queda intacto.
-    {:ok, _} = Plans.update_step(step1, %{"title" => "Renamed"})
+    # El workflow muta DESPUÉS de abrir: título del step, contrato del step
+    # y un step nuevo — el snapshot de la sesión queda intacto.
+    {:ok, _} = Workflows.update_step(step1, %{"title" => "Renamed"})
 
     {:ok, _} =
-      Plans.update_step(step1, %{
+      Workflows.update_step(step1, %{
         "meta" => %{"contract" => Map.put(contract, "intent", "Changed")}
       })
 
-    {:ok, _} = Plans.create_step(plan, %{"title" => "Late", "slug" => "late-step"})
+    {:ok, _} = Workflows.create_step(workflow, %{"title" => "Late", "slug" => "late-step"})
 
     session = Repo.reload!(session)
 
-    assert session.plan_snapshot["steps"] == [
+    assert session.snapshot["steps"] == [
              %{"id" => step1.id, "title" => "Contracted step", "contract" => contract}
            ]
 
     # El run conserva el contract_version congelado.
-    assert Repo.get!(TaskRun, run.id).contract_version == contract
+    assert Repo.get!(Run, run.id).contract_version == contract
   end
 
-  test "P1: open_session refuses a plan without a serves goal", %{ws: ws} do
-    {:ok, plan} =
-      Plans.create_plan(%{
+  test "P1: open_session refuses a workflow without steps and an archived workflow", %{ws: ws} do
+    {:ok, empty} =
+      Workflows.create_workflow(%{
         workspace_id: ws.id,
-        title: "Lonely plan",
-        slug: "lonely-plan-#{System.unique_integer([:positive])}"
+        title: "Empty",
+        slug: "empty-#{System.unique_integer([:positive])}"
       })
 
-    assert {:error, :plan_serves_no_goal} = Executions.open_session(plan)
+    assert {:error, :workflow_has_no_steps} = Executions.open_session(empty)
+
+    {workflow, [_step]} = new_workflow(ws, ["S"])
+
+    {:ok, archived} =
+      Workflows.update_workflow(workflow, %{"status" => "archived"})
+
+    assert {:error, :workflow_archived} = Executions.open_session(archived)
   end
 
   test "P1: open_session with actor_id records the driver; label and context are stored", %{
     ws: ws
   } do
-    {_goal, plan, _steps} = new_plan(ws, ["Step"])
+    {workflow, _steps} = new_workflow(ws, ["Step"])
 
     {:ok, actor} =
       Dran.Actors.create_actor(%{
@@ -155,7 +158,7 @@ defmodule Dran.ExecutionsTest do
       })
 
     {:ok, session} =
-      Executions.open_session(plan,
+      Executions.open_session(workflow,
         label: "lead Acme",
         context: %{"client" => "Acme"},
         actor_id: actor.id
@@ -168,16 +171,38 @@ defmodule Dran.ExecutionsTest do
     assert Enum.all?(session.runs, &(&1.actor_id == actor.id))
   end
 
+  test "P1: the workflow's optional goal link is denormalized into the session", %{ws: ws} do
+    {:ok, goal} =
+      Goals.create_goal(%{
+        "workspace_id" => ws.id,
+        "title" => "G #{System.unique_integer([:positive])}",
+        "slug" => "g-#{System.unique_integer([:positive])}"
+      })
+
+    {:ok, workflow} =
+      Workflows.create_workflow(%{
+        workspace_id: ws.id,
+        title: "W",
+        slug: "w-#{System.unique_integer([:positive])}",
+        goal_id: goal.id
+      })
+
+    {:ok, _} = Workflows.create_step(workflow, %{"title" => "S", "slug" => "s"})
+
+    {:ok, session} = Executions.open_session(workflow)
+    assert session.goal_id == goal.id
+  end
+
   # ──────────────────────────────────────────────────────────────────────────
-  # P3 — run_ready? exige prereqs passed EN ESA sesión (ALL)
+  # P6 — run_ready? exige prereqs passed EN ESA sesión (ALL)
   # ──────────────────────────────────────────────────────────────────────────
 
-  test "P3: run_ready? requires prerequisites passed in the same session", %{ws: ws} do
-    {_goal, plan, [prereq_step, step]} = new_plan(ws, ["Prereq", "Step"])
+  test "P6: run_ready? requires prerequisites passed in the same session", %{ws: ws} do
+    {workflow, [prereq_step, step]} = new_workflow(ws, ["Prereq", "Step"])
     {:ok, _} = Contracts.add_dependency(step, prereq_step)
 
-    {:ok, s1} = Executions.open_session(plan)
-    {:ok, s2} = Executions.open_session(plan)
+    {:ok, s1} = Executions.open_session(workflow)
+    {:ok, s2} = Executions.open_session(workflow)
 
     [step_run_s1, prereq_run_s1] = runs_by_step(s1, [step.id, prereq_step.id])
     [step_run_s2, prereq_run_s2] = runs_by_step(s2, [step.id, prereq_step.id])
@@ -200,13 +225,13 @@ defmodule Dran.ExecutionsTest do
     assert Executions.run_ready?(step_run_s2)
   end
 
-  test "P3: run_ready? requires ALL prerequisites passed — one of two is not enough", %{ws: ws} do
-    {_goal, plan, [pa, pb, final]} = new_plan(ws, ["Prereq A", "Prereq B", "Final step"])
+  test "P6: run_ready? requires ALL prerequisites passed — one of two is not enough", %{ws: ws} do
+    {workflow, [pa, pb, final]} = new_workflow(ws, ["Prereq A", "Prereq B", "Final step"])
 
     {:ok, _} = Contracts.add_dependency(final, pa)
     {:ok, _} = Contracts.add_dependency(final, pb)
 
-    {:ok, session} = Executions.open_session(plan)
+    {:ok, session} = Executions.open_session(workflow)
     [run_pa, run_pb, run_final] = runs_by_step(session, [pa.id, pb.id, final.id])
 
     refute Executions.run_ready?(run_final)
@@ -222,358 +247,279 @@ defmodule Dran.ExecutionsTest do
     assert Executions.run_ready?(run_final)
   end
 
-  test "P3: cross-plan edges never sequence a session (advisory at definition time)",
-       %{ws: ws} do
-    {_goal_a, plan_a, [step_a]} = new_plan(ws, ["Step A"])
-    {_goal_b, _plan_b, [external]} = new_plan(ws, ["External step"])
+  test "P6: cross-workflow edges never sequence a session", %{ws: ws} do
+    {workflow_a, [step_a]} = new_workflow(ws, ["Step A"])
+    {_workflow_b, [external]} = new_workflow(ws, ["External step"])
 
-    # Edge cross-plan creada ANTES de abrir: la sesión secuencía SOLO los
-    # steps de su plan (dependency_edges exige ambos extremos en el
-    # conjunto — decisión wave C). La edge es metadata de definición: no
-    # bloquea la pasada ni antes ni después de abrir.
+    # Edge cross-workflow creada ANTES de abrir: la sesión secuencía SOLO
+    # los steps de su workflow (dependency_edges exige ambos extremos en el
+    # conjunto). La edge es metadata de definición: no bloquea la pasada.
     {:ok, _} = Contracts.add_dependency(step_a, external)
 
-    {:ok, session} = Executions.open_session(plan_a)
+    {:ok, session} = Executions.open_session(workflow_a)
     [run_step] = runs_by_step(session, [step_a.id])
 
     assert Executions.run_ready?(run_step)
   end
 
-  test "P3: a cross-plan edge added AFTER open does NOT re-sequence the session (frozen topology)",
+  test "P6: a cross-workflow edge added AFTER open does NOT re-sequence (frozen topology)",
        %{ws: ws} do
-    {_goal_a, plan_a, [step_a]} = new_plan(ws, ["Step A"])
-    {_goal_b, _plan_b, [external]} = new_plan(ws, ["External step"])
+    {workflow_a, [step_a]} = new_workflow(ws, ["Step A"])
+    {_workflow_b, [external]} = new_workflow(ws, ["External step"])
 
-    {:ok, session} = Executions.open_session(plan_a)
+    {:ok, session} = Executions.open_session(workflow_a)
     [run_step] = runs_by_step(session, [step_a.id])
 
-    # El paso estaba ready con la topología con la que se abrió la sesión...
     assert Executions.run_ready?(run_step)
 
-    # ...y una edge NUEVA en el plan vivo no re-secuencia la sesión abierta:
-    # run_ready? lee el plan_snapshot congelado, no las relations live.
+    # Una edge NUEVA en el workflow vivo no re-secuencia la sesión abierta:
+    # run_ready? lee el snapshot congelado, no las relations live.
     {:ok, _} = Contracts.add_dependency(step_a, external)
     assert Executions.run_ready?(run_step)
   end
 
-  test "P3: an in-plan edge added mid-session does NOT re-sequence (frozen topology, review MAJOR)",
+  test "P6: an in-workflow edge added mid-session does NOT re-sequence (frozen topology)",
        %{ws: ws} do
-    {_goal, plan, [first, second, third]} = new_plan(ws, ["First", "Second", "Third"])
+    {workflow, [first, second, third]} = new_workflow(ws, ["First", "Second", "Third"])
 
-    {:ok, session} = Executions.open_session(plan)
-    [run_first, run_second, run_third] = runs_by_step(session, [first.id, second.id, third.id])
+    {:ok, session} = Executions.open_session(workflow)
+    [run_first, _run_second, run_third] = runs_by_step(session, [first.id, second.id, third.id])
 
     # Sin edges al abrir: todo ready.
     assert Executions.run_ready?(run_third)
 
-    # Se agrega second→third al plan VIVO a mitad de sesión: la sesión
+    # Se agrega second→third al workflow VIVO a mitad de sesión: la sesión
     # abierta NO se re-secuencia (el snapshot no cambió).
     {:ok, _} = Contracts.add_dependency(third, second)
     assert Executions.run_ready?(run_third)
 
-    # Pero una sesión NUEVA sobre el mismo plan SÍ ve la edge nueva.
-    {:ok, session2} = Executions.open_session(plan)
+    # Pero una sesión NUEVA sobre el mismo workflow SÍ ve la edge nueva.
+    {:ok, session2} = Executions.open_session(workflow)
     [run_third_s2] = runs_by_step(session2, [third.id])
     refute Executions.run_ready?(run_third_s2)
     assert Executions.run_ready?(run_first)
-    assert Executions.run_ready?(run_second)
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # P2 — spawn de task en start_run (instance_of + part_of, idempotente)
+  # P4 — progreso por fase (overwrite) sin cerrar el run
   # ──────────────────────────────────────────────────────────────────────────
 
-  test "P2: start_run spawns the task (instance_of step + part_of goal) from the frozen contract",
-       %{
-         ws: ws
-       } do
-    contract = %{"intent" => "Build X", "claims" => [], "gates" => []}
+  test "P4: update_progress overwrites the phase map on an in_flight run without closing it",
+       %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
 
-    {goal, plan, [step]} =
-      new_plan(ws, [%{title: "Contracted step", body: "brief", contract: contract}])
-
-    {:ok, session} = Executions.open_session(plan)
+    {:ok, session} = Executions.open_session(workflow)
     [run] = runs_by_step(session, [step.id])
-    assert run.task_id == nil
 
-    {:ok, started} = Executions.start_run(run)
-    assert started.status == "in_flight"
-    assert started.task_id != nil
+    # Un run pending no reporta progreso.
+    assert {:error, :not_in_flight} =
+             Executions.update_progress(run.id, %{"phase" => "early"})
 
-    task = Repo.get!(Dran.Task, started.task_id)
-    assert task.title == "Contracted step"
-    assert task.body == "brief"
-    assert task.status == "todo"
-    assert task.workspace_id == ws.id
-    # El contrato viene del snapshot congelado del run, no del step vivo.
-    assert task.meta["contract"] == contract
+    {:ok, run} = Executions.start_run(run)
 
-    # instance_of task→step y part_of task→goal (las spawned cuentan en el
-    # recompute del goal — Snippet 2).
-    assert Repo.exists?(
-             from r in Relation,
-               where:
-                 r.source_id == ^task.id and r.source_type == "task" and
-                   r.target_id == ^step.id and r.target_type == "step" and
-                   r.relation_type == "instance_of"
-           )
+    {:ok, r1} =
+      Executions.update_progress(run.id, %{
+        "phase" => "implementing",
+        "gates" => %{"compile" => "ok"}
+      })
 
-    assert Repo.exists?(
-             from r in Relation,
-               where:
-                 r.source_id == ^task.id and r.target_id == ^goal.id and
-                   r.relation_type == "part_of"
-           )
+    assert r1.progress == %{"phase" => "implementing", "gates" => %{"compile" => "ok"}}
+    assert r1.status == "in_flight"
+
+    # Overwrite: la segunda actualización REEMPLAZA (decisión ?02).
+    {:ok, r2} =
+      Executions.update_progress(run.id, %{"phase" => "verifying", "gates" => %{}})
+
+    assert r2.progress == %{"phase" => "verifying", "gates" => %{}}
+
+    # El run sigue abierto: no cerró la sesión ni cambió status.
+    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+    assert Repo.get!(Run, run.id).status == "in_flight"
+
+    # Un run cerrado ya no acepta progreso.
+    {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
+    assert {:error, :not_in_flight} = Executions.update_progress(run.id, %{"phase" => "x"})
   end
 
-  test "P2: spawn is idempotent — a run that already has a task is never re-spawned", %{ws: ws} do
-    {_goal, plan, [step]} = new_plan(ws, ["Step"])
-    {:ok, session} = Executions.open_session(plan)
+  test "P4: update_progress on a missing run returns run_not_found", %{ws: ws} do
+    assert {:error, :run_not_found} =
+             Executions.update_progress(Ecto.UUID.generate(), %{"phase" => "x"})
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # P3 — start_run claim condicional (P7/claim ?07) + close sin writeback
+  # ──────────────────────────────────────────────────────────────────────────
+
+  test "start_run claims pending → in_flight; a stale struct loses; no task is ever spawned",
+       %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow)
     [run] = runs_by_step(session, [step.id])
 
-    {:ok, started} = Executions.start_run(run)
-    assert started.task_id != nil
+    {:ok, claimed} = Executions.start_run(run)
+    assert claimed.status == "in_flight"
 
-    # Doble start con el MISMO struct pending: pierde el claim condicional.
+    # Dos agentes sosteniendo el MISMO struct pending: el update condicional
+    # deja pasar a uno solo.
     assert {:error, {:wrong_status, "in_flight", "pending"}} = Executions.start_run(run)
 
-    # Re-intento con el run REAL de la BD (in_flight): el claim condicional
-    # vuelve a fallar. El spawn nunca puede dispararse dos veces porque sólo
-    # corre DESPUÉS de un claim exitoso (guard F1 preservado).
-    assert {:error, {:wrong_status, "in_flight", "pending"}} =
-             Executions.start_run(Repo.get!(TaskRun, started.id))
+    # El run es el runtime: NINGUNA task fue creada.
+    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
+  end
 
-    # Sólo UNA task se creó y el run conserva la misma spawned.
-    assert Repo.aggregate(from(t in Dran.Task, where: t.title == "Step"), :count) == 1
-    assert Repo.get!(TaskRun, started.id).task_id == started.task_id
+  test "start_run with actor_id stamps the claimer", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, actor} =
+      Dran.Actors.create_actor(%{
+        "name" => "claimer-#{System.unique_integer([:positive])}",
+        "kind" => "agent"
+      })
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
+
+    {:ok, claimed} = Executions.start_run(run, actor_id: actor.id)
+    assert claimed.actor_id == actor.id
+  end
+
+  test "start_run on a closed session is rejected", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
+    {:ok, run} = Executions.start_run(run)
+    {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
+
+    # La sesión auto-cerró passed. Una segunda sesión abortada deja un run
+    # pending fantasma: un start tardío no puede arrancarlo.
+    {:ok, session2} = Executions.open_session(workflow, label: "second pass")
+    [run2] = runs_by_step(session2, [step.id])
+    {:ok, _} = Executions.abort_session(session2)
+
+    stale = %Run{run2 | status: "pending"}
+    assert {:error, :session_closed} = Executions.start_run(stale)
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # P4 + P3 — cierre agente (close_run) con writeback sobre la spawned
+  # P5 — close_run persiste outcome+gates; último run cierra sesión
   # ──────────────────────────────────────────────────────────────────────────
 
-  test "P4: closing the last run closes the session (passed), archives the spawned and recomputes the goal",
+  test "P5: close_run persists outcome and gate_results; the last run closes the session",
        %{ws: ws} do
-    {_goal, plan, [step1, step2]} = new_plan(ws, ["Step 1", "Step 2"])
-    # Una task MANUAL part_of del goal (no spawn): el recompute del cierre
-    # la cuenta — spawned archivadas salen del denominador.
-    {:ok, manual} =
-      Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Manual board task"})
+    gates = %{"G1" => %{"cmd" => "mix test", "exit" => 0}}
 
-    goal = Goals.get_goal(plan_goal_id(plan))
-    Tasks.link_to_goal(manual, goal)
-    {:ok, _} = Tasks.update_task(manual, %{"status" => "done"})
+    {workflow, [step]} =
+      new_workflow(ws, [%{title: "Step", contract: %{"intent" => "i"}}])
 
-    {:ok, session} = Executions.open_session(plan)
-    [run_s1, run_s2] = runs_by_step(session, [step1.id, step2.id])
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
 
-    # La sesión sigue abierta tras el primer cierre (queda un run pending).
-    {:ok, run_s1} = Executions.start_run(run_s1)
-    {:ok, _} = Executions.close_run(run_s1, status: "passed", outcome: "ok")
-    assert Repo.get(GoalSession, session.id).status == "in_flight"
+    {:ok, run} = Executions.start_run(run)
 
-    # Run passed → writeback done a la task SPAWNED (decisión ?03).
-    task1 = Repo.get!(Dran.Task, run_s1.task_id)
-    assert task1.status == "done"
+    {:ok, closed} =
+      Executions.close_run(run, status: "passed", outcome: "shipped", gate_results: gates)
 
-    {:ok, run_s2} = Executions.start_run(run_s2)
-    {:ok, _} = Executions.close_run(run_s2, status: "passed", outcome: "ok")
-    closed = Repo.get!(GoalSession, session.id)
     assert closed.status == "passed"
-    assert closed.finished_at != nil
+    assert closed.outcome == "shipped"
+    assert closed.gate_results == gates
 
-    # Todas las spawned de la sesión quedan archivadas (?07) — con status
-    # terminal intacto.
-    assert Repo.get!(Dran.Task, run_s1.task_id).archived
-    task2 = Repo.get!(Dran.Task, run_s2.task_id)
-    assert task2.status == "done"
-    assert task2.archived
-
-    # El recompute del cierre corre sobre goal_id denormalizado: la manual
-    # done (1/1) da progreso 1.0 — las spawned archivadas no cuentan.
-    goal = Goals.get_goal(goal.id)
-    assert goal.progress == 1.0
-    assert goal.meta["progress_derived"] == true
+    # Último run → sesión passed con finished_at. Sin writeback a goals.
+    session = Repo.get!(WorkflowSession, session.id)
+    assert session.status == "passed"
+    assert session.finished_at != nil
+    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
   end
 
-  test "P4: a failed run closes the session as failed and never touches the spawned task status",
-       %{
-         ws: ws
-       } do
-    {_goal, plan, [_step]} = new_plan(ws, ["Only step"])
+  test "P5: a skipped run still closes the session as passed", %{ws: ws} do
+    {workflow, [do_step, skip_step]} = new_workflow(ws, ["Do", "Skip me"])
 
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [first_step_id(plan)])
-
-    {:ok, run} = Executions.start_run(run)
-    {:ok, _run} = Executions.close_run(run, status: "failed", outcome: "gate G2 fell")
-
-    closed = Repo.get!(GoalSession, session.id)
-    assert closed.status == "failed"
-    assert closed.finished_at != nil
-
-    # failed NO toca task.status (decisión ?03 — el retry la cancela).
-    task = Repo.get!(Dran.Task, run.task_id)
-    assert task.status == "todo"
-    # El auto-cierre archiva también las spawned de una sesión failed.
-    assert task.archived
-  end
-
-  test "P4: writeback is idempotent — a task already done by the board is not re-triggered", %{
-    ws: ws
-  } do
-    {_goal, plan, [_step]} = new_plan(ws, ["Step"])
-
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [first_step_id(plan)])
-    {:ok, run} = Executions.start_run(run)
-
-    # El humano marca done a la spawned ANTES de que el agente cierre — el
-    # wiring del board reconcilia DENTRO de update_task: el run ya pasó.
-    spawn_task = Repo.get!(Dran.Task, run.task_id)
-    {:ok, _} = Tasks.update_task(spawn_task, %{"status" => "done"})
-
-    run_after = Repo.get!(Dran.TaskRun, run.id)
-    assert run_after.status == "passed"
-    assert run_after.outcome == "manual"
-    assert Repo.get!(Dran.Task, run.task_id).status == "done"
-
-    # Cerrar por agente un run ya reconciliado: rechazado limpio (no in_flight).
-    assert {:error, :not_in_flight} = Executions.close_run(run, status: "passed", outcome: "ok")
-  end
-
-  test "P4: a skipped run cancels the spawned task and still closes the session as passed", %{
-    ws: ws
-  } do
-    {_goal, plan, [do_step, skip_step]} = new_plan(ws, ["Do", "Skip me"])
-
-    {:ok, session} = Executions.open_session(plan)
+    {:ok, session} = Executions.open_session(workflow)
     [run_do, run_skip] = runs_by_step(session, [do_step.id, skip_step.id])
 
     {:ok, run_do} = Executions.start_run(run_do)
     {:ok, _} = Executions.close_run(run_do, status: "passed", outcome: "ok")
 
     {:ok, run_skip} = Executions.start_run(run_skip)
-    spawned_skip = Repo.get!(Dran.Task, run_skip.task_id)
-    assert spawned_skip.status == "todo"
-
     {:ok, _} = Executions.close_run(run_skip, status: "skipped", outcome: "fuera de alcance")
 
-    # skipped → la spawned se CANCELA (wave B), no queda en el board.
-    assert Repo.get!(Dran.Task, run_skip.task_id).status == "cancelled"
-
-    # ...y cuenta como cierre válido: sesión passed.
-    closed = Repo.get!(GoalSession, session.id)
+    closed = Repo.get!(WorkflowSession, session.id)
     assert closed.status == "passed"
     assert closed.finished_at != nil
   end
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # P3 — cierre dual converge (reconcile_task_closure humano)
+  test "P5: a failed run closes the session as failed", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
+
+    {:ok, run} = Executions.start_run(run)
+    {:ok, _} = Executions.close_run(run, status: "failed", outcome: "gate rojo")
+
+    assert Repo.get!(WorkflowSession, session.id).status == "failed"
+  end
+
+  test "P5: close_run on a pending/stale run is rejected without side effects", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
+
+    # close_run sobre un run pending: {:error, :not_in_flight}, sin efectos.
+    assert {:error, :not_in_flight} = Executions.close_run(run, status: "passed")
+    assert Repo.get!(Run, run.id).status == "pending"
+    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+
+    # Doble cierre con el MISMO struct in_flight: el segundo pierde.
+    {:ok, run} = Executions.start_run(run)
+    {:ok, _} = Executions.close_run(run, status: "passed", outcome: "first")
+
+    stale = %Run{run | status: "in_flight"}
+
+    assert {:error, :not_in_flight} =
+             Executions.close_run(stale, status: "failed", outcome: "second")
+
+    assert Repo.get!(Run, run.id).status == "passed"
+  end
+
+  test "invalid close status is rejected without side effects", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
+    {:ok, _} = Executions.start_run(run)
+
+    assert {:error, :invalid_status} = Executions.close_run(run, status: "banana")
+    assert Repo.get!(Run, run.id).status == "in_flight"
+    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+  end
+
+  # ───────────────────────────────────────────────────────── working ─────────
+  # Retry semantics (superseded)
   # ──────────────────────────────────────────────────────────────────────────
 
-  test "P3: reconcile_task_closure closes the run when the human marks the spawned task done (board path)",
+  test "retry_run creates a new attempt for the same (session, step) and reopens a failed session",
        %{ws: ws} do
-    {_goal, plan, [step1, step2]} = new_plan(ws, ["Step 1", "Step 2"])
+    {workflow, [step]} = new_workflow(ws, ["Step"])
 
-    {:ok, session} = Executions.open_session(plan)
-    [run_s1, run_s2] = runs_by_step(session, [step1.id, step2.id])
-
-    # Camino agente: close_run terminaliza la spawned.
-    {:ok, run_s1} = Executions.start_run(run_s1)
-    {:ok, _} = Executions.close_run(run_s1, status: "passed", outcome: "ok")
-    assert Repo.get!(Dran.Task, run_s1.task_id).status == "done"
-
-    # Camino humano: la spawned de s2 llega a done por el BOARD — el wiring
-    # de update_task reconcilia DENTRO (run passed, outcome manual, gates {}).
-    {:ok, run_s2} = Executions.start_run(run_s2)
-    spawned2 = Repo.get!(Dran.Task, run_s2.task_id)
-    {:ok, _} = Tasks.update_task(spawned2, %{"status" => "done"})
-
-    reconciled = Repo.get!(Dran.TaskRun, run_s2.id)
-    assert reconciled.status == "passed"
-    assert reconciled.outcome == "manual"
-    assert reconciled.gate_results == %{}
-
-    # Ambos caminos convergen: último run cerrado → sesión passed y las
-    # spawned (de ambos caminos) archivadas.
-    closed = Repo.get!(GoalSession, session.id)
-    assert closed.status == "passed"
-    assert closed.finished_at != nil
-    assert Repo.get!(Dran.Task, run_s1.task_id).archived
-    assert Repo.get!(Dran.Task, run_s2.task_id).archived
-  end
-
-  test "P3: reconcile_task_closure closes the run as skipped when the human cancels the spawned task",
-       %{
-         ws: ws
-       } do
-    {_goal, plan, [_step]} = new_plan(ws, ["Step"])
-
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [first_step_id(plan)])
-    {:ok, run} = Executions.start_run(run)
-
-    spawned = Repo.get!(Dran.Task, run.task_id)
-    {:ok, _} = Tasks.update_task(spawned, %{"status" => "cancelled"})
-
-    # El wiring de update_task ya reconcilió: run skipped con outcome manual.
-    reconciled = Repo.get!(Dran.TaskRun, run.id)
-    assert reconciled.status == "skipped"
-    assert reconciled.outcome == "manual"
-
-    closed = Repo.get!(GoalSession, session.id)
-    assert closed.status == "passed"
-    assert Repo.get!(Dran.Task, run.task_id).archived
-  end
-
-  test "P3: reconcile_task_closure is a no-op without an in_flight run for the task", %{ws: ws} do
-    # Task que nunca se spawneó (board puro).
-    {:ok, plain} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Plain board task"})
-    assert {:ok, :noop} = Executions.reconcile_task_closure(plain)
-
-    # Spawned cuyo run ya cerró el agente.
-    {_goal, plan, [_step]} = new_plan(ws, ["Step"])
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [first_step_id(plan)])
-    {:ok, run} = Executions.start_run(run)
-    {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
-
-    assert {:ok, :noop} = Executions.reconcile_task_closure(Repo.get!(Dran.Task, run.task_id))
-  end
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Retry semantics (superseded + cancel de la task del intento fallido)
-  # ──────────────────────────────────────────────────────────────────────────
-
-  test "retry_run creates a new attempt for the same (session, step), cancels the failed task and reopens a failed session",
-       %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
-
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [step1.id])
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
 
     {:ok, run} = Executions.start_run(run)
-    task1 = Repo.get!(Dran.Task, run.task_id)
     {:ok, failed_run} = Executions.close_run(run, status: "failed", outcome: "flaky")
 
     # Auto-cierre failed (un solo step).
-    assert Repo.get!(GoalSession, session.id).status == "failed"
+    assert Repo.get!(WorkflowSession, session.id).status == "failed"
 
-    # Retry legítimo: reabre la sesión y crea attempt 2 (sin spawn aún).
+    # Retry legítimo: reabre la sesión y crea attempt 2.
     {:ok, retry} = Executions.retry_run(failed_run)
     assert retry.session_id == session.id
-    assert retry.step_id == step1.id
-    assert retry.task_id == nil
+    assert retry.step_id == step.id
     assert retry.attempt == 2
     assert retry.status == "pending"
-    assert Repo.get!(GoalSession, session.id).status == "in_flight"
-
-    # La task del intento fallido se CANCELA (decisión ?05) — sigue
-    # archivada por el auto-cierre que la precedió.
-    task1 = Repo.get!(Dran.Task, task1.id)
-    assert task1.status == "cancelled"
-    assert task1.archived
+    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
 
     runs = Executions.list_runs(session)
     assert length(runs) == 2
@@ -582,10 +528,10 @@ defmodule Dran.ExecutionsTest do
   end
 
   test "retry of a superseded attempt is rejected and never corrupts a closed session", %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
+    {workflow, [step]} = new_workflow(ws, ["Step"])
 
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [step1.id])
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
 
     {:ok, run} = Executions.start_run(run)
     {:ok, failed_run} = Executions.close_run(run, status: "failed", outcome: "flaky")
@@ -594,106 +540,42 @@ defmodule Dran.ExecutionsTest do
     {:ok, retry} = Executions.start_run(retry)
     {:ok, _} = Executions.close_run(retry, status: "passed", outcome: "ok")
 
-    closed = Repo.get!(GoalSession, session.id)
+    closed = Repo.get!(WorkflowSession, session.id)
     assert closed.status == "passed"
     assert closed.finished_at != nil
 
-    # Un retry del attempt 1 VIEJO (struct failed en mano del caller):
-    # rechazado SIN reabrir ni corromper la sesión cerrada.
+    # Un retry del attempt 1 VIEJO: rechazado SIN reabrir ni corromper.
     assert {:error, {:superseded, "passed"}} = Executions.retry_run(failed_run)
-    still_closed = Repo.get!(GoalSession, session.id)
+    still_closed = Repo.get!(WorkflowSession, session.id)
     assert still_closed.status == "passed"
     assert still_closed.finished_at == closed.finished_at
   end
 
-  test "retry after a failed auto-close reopens the session (decision 6, happy path)", %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
+  test "retry after a failed auto-close reopens the session", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
 
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [step1.id])
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
 
     {:ok, run} = Executions.start_run(run)
     {:ok, run} = Executions.close_run(run, status: "failed", outcome: "gate rojo")
 
-    assert Repo.get!(GoalSession, session.id).status == "failed"
+    assert Repo.get!(WorkflowSession, session.id).status == "failed"
 
     {:ok, retry} = Executions.retry_run(run)
     assert retry.status == "pending"
-    assert Repo.get!(GoalSession, session.id).status == "in_flight"
-    assert Repo.get!(GoalSession, session.id).finished_at == nil
+    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+    assert Repo.get!(WorkflowSession, session.id).finished_at == nil
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Concurrency guards (claims condicionales, port F1)
-  # ──────────────────────────────────────────────────────────────────────────
-
-  test "start_run on a stale struct loses: only one claim wins (no double spawn)", %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
-
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [step1.id])
-
-    # Dos dispatchers sostienen el MISMO struct pending; el update
-    # condicional (WHERE status='pending') deja pasar a uno solo.
-    {:ok, claimed} = Executions.start_run(run)
-    assert claimed.status == "in_flight"
-
-    assert {:error, {:wrong_status, "in_flight", "pending"}} = Executions.start_run(run)
-    assert Repo.get!(TaskRun, run.id).status == "in_flight"
-    assert Repo.aggregate(from(t in Dran.Task, where: t.title == "Step"), :count) == 1
-  end
-
-  test "close_run on a stale/pending run is rejected without side effects", %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
-
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [step1.id])
-
-    # close_run sobre un run pending: {:error, :not_in_flight}, sin efectos.
-    assert {:error, :not_in_flight} = Executions.close_run(run, status: "passed")
-    assert Repo.get!(TaskRun, run.id).status == "pending"
-    assert Repo.get!(GoalSession, session.id).status == "in_flight"
-
-    # Doble cierre con el MISMO struct in_flight: el segundo pierde.
-    {:ok, run} = Executions.start_run(run)
-    task_id = run.task_id
-    {:ok, _} = Executions.close_run(run, status: "passed", outcome: "first")
-
-    stale = %TaskRun{run | status: "in_flight"}
-
-    assert {:error, :not_in_flight} =
-             Executions.close_run(stale, status: "failed", outcome: "second")
-
-    assert Repo.get!(TaskRun, run.id).status == "passed"
-    assert Repo.get!(Dran.Task, task_id).status == "done"
-  end
-
-  test "start_run on a closed session is rejected", %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
-
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [step1.id])
-    {:ok, run} = Executions.start_run(run)
-    {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
-
-    # La sesión auto-cerró passed. Una segunda sesión abortada deja un run
-    # pending fantasma: un start tardío no puede arrancarlo.
-    {:ok, session2} = Executions.open_session(plan, label: "second pass")
-    [%TaskRun{} = run2] = runs_by_step(session2, [step1.id])
-    {:ok, _} = Executions.abort_session(session2)
-
-    stale = %TaskRun{run2 | status: "pending"}
-    assert {:error, :session_closed} = Executions.start_run(stale)
-  end
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # Misc API (progress, invalid status)
+  # Concurrency guards (claims condicionales)
   # ──────────────────────────────────────────────────────────────────────────
 
   test "session_progress counts runs by status and retries count too", %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
+    {workflow, [step]} = new_workflow(ws, ["Step"])
 
-    {:ok, session} = Executions.open_session(plan)
+    {:ok, session} = Executions.open_session(workflow)
 
     assert Executions.session_progress(session) == %{
              total: 1,
@@ -704,7 +586,7 @@ defmodule Dran.ExecutionsTest do
              skipped: 0
            }
 
-    [run] = runs_by_step(session, [step1.id])
+    [run] = runs_by_step(session, [step.id])
     {:ok, run} = Executions.start_run(run)
     {:ok, run} = Executions.close_run(run, status: "failed", outcome: "nope")
     {:ok, retry} = Executions.retry_run(run)
@@ -723,96 +605,99 @@ defmodule Dran.ExecutionsTest do
     assert retry.status == "passed"
 
     # El cierre pasa la sesión: todos los runs terminales, ninguno failed.
-    assert Repo.get!(GoalSession, session.id).status == "passed"
-    assert Repo.get!(Dran.Task, retry.task_id).status == "done"
-  end
-
-  test "invalid close status is rejected without side effects", %{ws: ws} do
-    {_goal, plan, [step1]} = new_plan(ws, ["Step"])
-
-    {:ok, session} = Executions.open_session(plan)
-    [run] = runs_by_step(session, [step1.id])
-    {:ok, _} = Executions.start_run(run)
-
-    assert {:error, :invalid_status} = Executions.close_run(run, status: "banana")
-    assert Repo.get!(TaskRun, run.id).status == "in_flight"
-    assert Repo.get!(GoalSession, session.id).status == "in_flight"
+    assert Repo.get!(WorkflowSession, session.id).status == "passed"
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # abort_session — cancela in-flight spawned + archiva todo + recompute
+  # list_pending_runs — el pull de agentes (F3 surface)
   # ──────────────────────────────────────────────────────────────────────────
 
-  test "abort_session cancels the in-flight spawned task, archives every spawned, skips open runs and recomputes",
-       %{ws: ws} do
-    {_goal, plan, [step1, step2]} = new_plan(ws, ["Step 1", "Step 2"])
+  test "list_pending_runs offers only ready runs of open sessions, scoped by workflow", %{
+    ws: ws
+  } do
+    {workflow, [a, b]} = new_workflow(ws, ["A", "B"])
+    {:ok, _} = Contracts.add_dependency(b, a)
 
-    {:ok, session} = Executions.open_session(plan)
+    {other, [other_step]} = new_workflow(ws, ["Other"])
+
+    {:ok, session} = Executions.open_session(workflow)
+    {:ok, other_session} = Executions.open_session(other)
+
+    # b depende de a: solo a está ready.
+    pending = Executions.list_pending_runs(ws.id)
+
+    assert Enum.map(pending, & &1.step_id) |> MapSet.new() ==
+             MapSet.new([a.id, other_step.id])
+
+    # Filtro por workflow.
+    pending_wf = Executions.list_pending_runs(ws.id, workflow_id: workflow.id)
+    assert Enum.map(pending_wf, & &1.step_id) == [a.id]
+
+    # a pasa → b queda offered.
+    [run_a] = runs_by_step(session, [a.id])
+    {:ok, run_a} = Executions.start_run(run_a)
+    {:ok, _} = Executions.close_run(run_a, status: "passed", outcome: "ok")
+
+    pending_wf = Executions.list_pending_runs(ws.id, workflow_id: workflow.id)
+    assert Enum.map(pending_wf, & &1.step_id) == [b.id]
+
+    # Una sesión cerrada no ofrece runs.
+    {:ok, _} = Executions.abort_session(other_session)
+    pending_wf = Executions.list_pending_runs(ws.id, workflow_id: other.id)
+    assert pending_wf == []
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # abort_session
+  # ──────────────────────────────────────────────────────────────────────────
+
+  test "abort_session skips open runs and closes the session; refusing a closed one", %{
+    ws: ws
+  } do
+    {workflow, [step1, step2]} = new_workflow(ws, ["Step 1", "Step 2"])
+
+    {:ok, session} = Executions.open_session(workflow)
     [run_s1, _run_s2] = runs_by_step(session, [step1.id, step2.id])
 
-    # run_s1 en vuelo (spawned todo); run_s2 pendiente sin spawn.
+    # run_s1 en vuelo; run_s2 pendiente.
     {:ok, run_s1} = Executions.start_run(run_s1)
-    spawned1 = Repo.get!(Dran.Task, run_s1.task_id)
-    assert spawned1.status == "todo"
 
-    {:ok, aborted} = Executions.abort_session(Repo.get!(GoalSession, session.id))
+    {:ok, aborted} = Executions.abort_session(Repo.get!(WorkflowSession, session.id))
     assert aborted.status == "aborted"
     assert aborted.finished_at != nil
 
-    # El run en vuelo fue skipped con outcome de abort.
+    # Los runs abiertos quedan skipped con outcome de abort.
     runs = Executions.list_runs(session)
     skipped = Enum.find(runs, &(&1.status == "skipped"))
     assert skipped.outcome == "session aborted"
 
-    # La spawned in-flight se CANCELA y TODAS las spawned se archivan
-    # (decisión ?05 + ?07).
-    spawned1 = Repo.get!(Dran.Task, spawned1.id)
-    assert spawned1.status == "cancelled"
-    assert spawned1.archived
-
-    # El run pendiente (sin spawn) no deja tasks huérfanas.
-    refute Repo.exists?(from t in Dran.Task, where: t.title == "Step 2")
+    # Ninguna task existe — nada que cancelar ni archivar (P7).
+    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
 
     # Abortar una sesión cerrada: rechazado.
     assert {:error, :session_closed} =
-             Executions.abort_session(Repo.get!(GoalSession, session.id))
+             Executions.abort_session(Repo.get!(WorkflowSession, session.id))
   end
 
   # ──────────────────────────────────────────────────────────────────────────
   # Helpers
   # ──────────────────────────────────────────────────────────────────────────
 
-  # Crea goal + plan (serves) + steps; specs pueden ser binarios (título) o
-  # mapas con :title/:body/:contract. Devuelve {goal, plan, steps}.
-  defp new_plan(ws, step_specs) do
-    {:ok, goal} =
-      Goals.create_goal(%{
+  # Crea workflow + steps; specs pueden ser binarios (título) o mapas con
+  # :title/:body/:contract. Devuelve {workflow, steps}.
+  defp new_workflow(ws, step_specs) do
+    {:ok, workflow} =
+      Workflows.create_workflow(%{
         "workspace_id" => ws.id,
-        "title" => "Goal #{System.unique_integer([:positive])}",
-        "slug" => "goal-#{System.unique_integer([:positive])}"
-      })
-
-    {:ok, plan} =
-      Plans.create_plan(%{
-        "workspace_id" => ws.id,
-        "title" => "Plan #{System.unique_integer([:positive])}",
-        "slug" => "plan-#{System.unique_integer([:positive])}"
-      })
-
-    {:ok, _} =
-      Knowledge.create_relation(%{
-        source_id: plan.id,
-        source_type: "plan",
-        target_id: goal.id,
-        target_type: "goal",
-        relation_type: "serves"
+        "title" => "W #{System.unique_integer([:positive])}",
+        "slug" => "w-#{System.unique_integer([:positive])}"
       })
 
     steps =
       Enum.map(step_specs, fn
         title when is_binary(title) ->
           {:ok, step} =
-            Plans.create_step(plan, %{
+            Workflows.create_step(workflow, %{
               "title" => title,
               "slug" => "step-#{System.unique_integer([:positive])}"
             })
@@ -832,26 +717,11 @@ defmodule Dran.ExecutionsTest do
               contract -> Map.put(attrs, "meta", %{"contract" => contract})
             end
 
-          {:ok, step} = Plans.create_step(plan, attrs)
+          {:ok, step} = Workflows.create_step(workflow, attrs)
           step
       end)
 
-    {goal, plan, steps}
-  end
-
-  defp first_step_id(%Plan{} = plan) do
-    [%{id: id} | _] = Dran.Plans.list_steps(plan)
-    id
-  end
-
-  defp plan_goal_id(%Plan{} = plan) do
-    Repo.one(
-      from r in Relation,
-        where:
-          r.source_id == ^plan.id and r.source_type == "plan" and
-            r.target_type == "goal" and r.relation_type == "serves",
-        select: r.target_id
-    )
+    {workflow, steps}
   end
 
   defp runs_by_step(session, step_ids) do

@@ -1,14 +1,12 @@
 defmodule Dran.Goal do
   @moduledoc """
-  First-class goal entity — the PARA QUÉ: outcome, hierarchy, and progress.
+  First-class goal entity — the PARA QUÉ: outcome and hierarchy.
 
   Goals live in their own table (not as pages). Pages can link to goals
   via polymorphic `part_of` relations (`source_type: "page"`,
-  `target_type: "goal"`). A plan serves a goal via `serves` relations.
-
-  ## Progress
-  - `progress` — derived (0.0–1.0) from linked tasks (`part_of`), or
-    manually set when `meta["progress_manual"]` is true.
+  `target_type: "goal"`); tasks link the same way. Goals carry NO
+  derived progress — the execution layer (workflows/sessions/runs)
+  never writes back here.
   """
 
   use Ecto.Schema
@@ -26,7 +24,6 @@ defmodule Dran.Goal do
              :summary,
              :body,
              :status,
-             :progress,
              :team,
              :meta,
              :archived,
@@ -44,7 +41,6 @@ defmodule Dran.Goal do
     field :summary, :string
     field :body, :string, default: ""
     field :status, :string, default: "active"
-    field :progress, :float
     field :team, {:array, :string}, default: []
     field :meta, :map, default: %{}
     field :archived, :boolean, default: false
@@ -69,7 +65,6 @@ defmodule Dran.Goal do
       :summary,
       :body,
       :status,
-      :progress,
       :team,
       :meta,
       :archived,
@@ -81,20 +76,6 @@ defmodule Dran.Goal do
     |> validate_length(:title, max: 500)
     |> validate_length(:slug, max: 500)
     |> validate_inclusion(:status, @statuses)
-    |> validate_progress_range()
     |> unique_constraint([:workspace_id, :slug], name: :goals_workspace_id_slug_index)
-  end
-
-  defp validate_progress_range(changeset) do
-    case get_change(changeset, :progress) do
-      nil ->
-        changeset
-
-      val when is_number(val) and val >= 0.0 and val <= 1.0 ->
-        changeset
-
-      _ ->
-        add_error(changeset, :progress, "must be between 0.0 and 1.0")
-    end
   end
 end

@@ -9,7 +9,7 @@ defmodule Dran.ContractsStepsTest do
 
   use Dran.DataCase, async: true
 
-  alias Dran.{Contracts, Knowledge, Plans, Relation}
+  alias Dran.{Contracts, Knowledge, Workflows, Relation}
 
   setup do
     {:ok, ws} =
@@ -18,66 +18,66 @@ defmodule Dran.ContractsStepsTest do
         slug: "contracts-steps-ws-#{System.unique_integer([:positive])}"
       })
 
-    {:ok, plan} =
-      Plans.create_plan(%{
+    {:ok, workflow} =
+      Workflows.create_workflow(%{
         workspace_id: ws.id,
-        title: "Plan Contracts Steps",
+        title: "Workflow Contracts Steps",
         slug: "plan-contracts-steps-#{System.unique_integer([:positive])}"
       })
 
-    %{ws: ws, plan: plan}
+    %{ws: ws, workflow: workflow}
   end
 
   describe "contract?/1 and lint/1 (steps)" do
-    test "a step without meta.contract is not a contract", %{plan: plan} do
-      step = create_step(plan, "Plain step")
+    test "a step without meta.contract is not a contract", %{workflow: workflow} do
+      step = create_step(workflow, "Plain step")
       refute Contracts.contract?(step)
       assert {:error, [:no_contract]} = Contracts.lint(step)
     end
 
-    test "a fully valid contract passes lint and contract?", %{plan: plan} do
-      step = step_with_contract(plan, valid_contract())
+    test "a fully valid contract passes lint and contract?", %{workflow: workflow} do
+      step = step_with_contract(workflow, valid_contract())
       assert {:ok, []} = Contracts.lint(step)
       assert Contracts.contract?(step)
     end
 
-    test "missing intent is rejected", %{plan: plan} do
-      step = step_with_contract(plan, valid_contract() |> Map.delete("intent"))
+    test "missing intent is rejected", %{workflow: workflow} do
+      step = step_with_contract(workflow, valid_contract() |> Map.delete("intent"))
       assert {:error, errors} = Contracts.lint(step)
       assert :intent in errors
       refute Contracts.contract?(step)
     end
 
-    test "claims without verify are rejected", %{plan: plan} do
+    test "claims without verify are rejected", %{workflow: workflow} do
       contract =
         put_in(valid_contract()["claims"], [%{"id" => "P1", "claim" => "x", "verify" => ""}])
 
-      step = step_with_contract(plan, contract)
+      step = step_with_contract(workflow, contract)
       assert {:error, errors} = Contracts.lint(step)
       assert :claims in errors
     end
 
-    test "gates without cmd are rejected", %{plan: plan} do
+    test "gates without cmd are rejected", %{workflow: workflow} do
       contract =
         put_in(valid_contract()["gates"], [%{"name" => "g", "cmd" => "", "expect" => "ok"}])
 
-      step = step_with_contract(plan, contract)
+      step = step_with_contract(workflow, contract)
       assert {:error, errors} = Contracts.lint(step)
       assert :gates in errors
     end
 
-    test "graph with a non-verb node is rejected", %{plan: plan} do
+    test "graph with a non-verb node is rejected", %{workflow: workflow} do
       contract =
         put_in(valid_contract()["graph"]["nodes"], [
           %{"id" => "S1", "verb" => "WRITE", "label" => "x"}
         ])
 
-      step = step_with_contract(plan, contract)
+      step = step_with_contract(workflow, contract)
       assert {:error, errors} = Contracts.lint(step)
       assert :graph_verbs in errors
     end
 
-    test "graph without a VERIFY reachable node is rejected (funnel)", %{plan: plan} do
+    test "graph without a VERIFY reachable node is rejected (funnel)", %{workflow: workflow} do
       contract =
         put_in(valid_contract()["graph"]["nodes"], [
           %{"id" => "S1", "verb" => "RUN", "label" => "x"},
@@ -87,16 +87,18 @@ defmodule Dran.ContractsStepsTest do
       contract =
         put_in(contract["graph"]["edges"], [%{"from" => "S1", "to" => "S2", "guard" => "yes"}])
 
-      step = step_with_contract(plan, contract)
+      step = step_with_contract(workflow, contract)
       assert {:error, errors} = Contracts.lint(step)
       assert :graph_funnel in errors
     end
   end
 
   describe "dependencies (step depends_on step)" do
-    test "add_dependency creates a step→step edge with the step as dependent", %{plan: plan} do
-      a = create_step(plan, "A")
-      b = create_step(plan, "B")
+    test "add_dependency creates a step→step edge with the step as dependent", %{
+      workflow: workflow
+    } do
+      a = create_step(workflow, "A")
+      b = create_step(workflow, "B")
 
       assert {:ok, %Relation{} = rel} = Contracts.add_dependency(b, a)
       assert rel.source_id == b.id
@@ -114,12 +116,12 @@ defmodule Dran.ContractsStepsTest do
       assert Contracts.ready?(b) == false
     end
 
-    test "self-dependency is rejected as a cycle", %{plan: plan} do
-      a = create_step(plan, "A")
+    test "self-dependency is rejected as a cycle", %{workflow: workflow} do
+      a = create_step(workflow, "A")
       assert {:error, :cycle} = Contracts.add_dependency(a, a)
     end
 
-    test "cross-workspace dependency is rejected", %{ws: ws, plan: plan} do
+    test "cross-workspace dependency is rejected", %{ws: ws, workflow: workflow} do
       {:ok, ws2} =
         Knowledge.create_workspace(%{
           name: "Other Steps #{System.unique_integer([:positive])}",
@@ -127,22 +129,22 @@ defmodule Dran.ContractsStepsTest do
         })
 
       {:ok, plan2} =
-        Plans.create_plan(%{
+        Workflows.create_workflow(%{
           workspace_id: ws2.id,
           title: "Plan 2",
           slug: "plan-2-steps-#{System.unique_integer([:positive])}"
         })
 
-      a = create_step(plan, "A")
+      a = create_step(workflow, "A")
       b = create_step(plan2, "B")
       assert a.workspace_id == ws.id
       assert {:error, :invalid} = Contracts.add_dependency(b, a)
     end
 
-    test "creating a dependency that would close a cycle is rejected", %{plan: plan} do
-      a = create_step(plan, "A")
-      b = create_step(plan, "B")
-      c = create_step(plan, "C")
+    test "creating a dependency that would close a cycle is rejected", %{workflow: workflow} do
+      a = create_step(workflow, "A")
+      b = create_step(workflow, "B")
+      c = create_step(workflow, "C")
 
       {:ok, _} = Contracts.add_dependency(b, a)
       {:ok, _} = Contracts.add_dependency(c, b)
@@ -151,11 +153,11 @@ defmodule Dran.ContractsStepsTest do
       assert {:error, :cycle} = Contracts.add_dependency(a, c)
     end
 
-    test "transitive_prereqs handles diamonds (shared prereq)", %{plan: plan} do
-      root = create_step(plan, "root")
-      x = create_step(plan, "x")
-      y = create_step(plan, "y")
-      z = create_step(plan, "z")
+    test "transitive_prereqs handles diamonds (shared prereq)", %{workflow: workflow} do
+      root = create_step(workflow, "root")
+      x = create_step(workflow, "x")
+      y = create_step(workflow, "y")
+      z = create_step(workflow, "z")
 
       {:ok, _} = Contracts.add_dependency(x, root)
       {:ok, _} = Contracts.add_dependency(y, root)
@@ -167,11 +169,11 @@ defmodule Dran.ContractsStepsTest do
     end
 
     test "dependency_edges/2 excludes cross-plan edges (both endpoints in the set)", %{
-      plan: plan
+      workflow: workflow
     } do
-      a = create_step(plan, "A")
-      b = create_step(plan, "B")
-      outside = create_step(plan, "outside")
+      a = create_step(workflow, "A")
+      b = create_step(workflow, "B")
+      outside = create_step(workflow, "outside")
 
       # b depends on a (in-set) and on outside (target fuera del conjunto)
       {:ok, _} = Contracts.add_dependency(b, a)
@@ -188,10 +190,10 @@ defmodule Dran.ContractsStepsTest do
       assert Contracts.dependency_edges(nil, :step) == []
     end
 
-    test "dependency_states/2 counts external open prereqs as blocking", %{plan: plan} do
-      a = create_step(plan, "A")
-      b = create_step(plan, "B")
-      outside = create_step(plan, "outside")
+    test "dependency_states/2 counts external open prereqs as blocking", %{workflow: workflow} do
+      a = create_step(workflow, "A")
+      b = create_step(workflow, "B")
+      outside = create_step(workflow, "outside")
 
       {:ok, _} = Contracts.add_dependency(b, a)
       {:ok, _} = Contracts.add_dependency(b, outside)
@@ -216,10 +218,10 @@ defmodule Dran.ContractsStepsTest do
   end
 
   describe "levels/1 (topological columns over steps)" do
-    test "linear chain produces increasing levels", %{plan: plan} do
-      a = create_step(plan, "A")
-      b = create_step(plan, "B")
-      c = create_step(plan, "C")
+    test "linear chain produces increasing levels", %{workflow: workflow} do
+      a = create_step(workflow, "A")
+      b = create_step(workflow, "B")
+      c = create_step(workflow, "C")
 
       {:ok, _} = Contracts.add_dependency(b, a)
       {:ok, _} = Contracts.add_dependency(c, b)
@@ -235,11 +237,11 @@ defmodule Dran.ContractsStepsTest do
       assert c_level == 2
     end
 
-    test "diamond yields two levels", %{plan: plan} do
-      root = create_step(plan, "root")
-      x = create_step(plan, "x")
-      y = create_step(plan, "y")
-      z = create_step(plan, "z")
+    test "diamond yields two levels", %{workflow: workflow} do
+      root = create_step(workflow, "root")
+      x = create_step(workflow, "x")
+      y = create_step(workflow, "y")
+      z = create_step(workflow, "z")
 
       {:ok, _} = Contracts.add_dependency(x, root)
       {:ok, _} = Contracts.add_dependency(y, root)
@@ -256,8 +258,8 @@ defmodule Dran.ContractsStepsTest do
   end
 
   describe "render_brief/1 (steps)" do
-    test "renders a riel-brief packet with the 9 sections", %{plan: plan} do
-      step = step_with_contract(plan, valid_contract())
+    test "renders a riel-brief packet with the 9 sections", %{workflow: workflow} do
+      step = step_with_contract(workflow, valid_contract())
       {:ok, brief} = Contracts.render_brief(step)
 
       for section <-
@@ -273,26 +275,28 @@ defmodule Dran.ContractsStepsTest do
 
       # El contexto apunta al step y su plan, no a una task
       assert brief =~ "see step #{step.id}"
-      assert brief =~ "plan #{step.plan_id}"
+      assert brief =~ "workflow #{step.workflow_id}"
       assert brief =~ "source: step:<id>"
     end
 
-    test "returns error for a step without contract", %{plan: plan} do
-      step = create_step(plan, "x")
+    test "returns error for a step without contract", %{workflow: workflow} do
+      step = create_step(workflow, "x")
       assert {:error, :no_contract} = Contracts.render_brief(step)
     end
   end
 
   describe "fingerprint/2 (steps)" do
-    test "stable for an unchanged step, changes when contract or edges change", %{plan: plan} do
-      step = step_with_contract(plan, valid_contract())
+    test "stable for an unchanged step, changes when contract or edges change", %{
+      workflow: workflow
+    } do
+      step = step_with_contract(workflow, valid_contract())
       fp = Contracts.fingerprint(step)
       assert is_binary(fp)
       assert fp == Contracts.fingerprint(step)
 
       # el contrato cambia → fingerprint cambia
       {:ok, step} =
-        Plans.update_step(step, %{
+        Workflows.update_step(step, %{
           "meta" => %{"contract" => valid_contract() |> Map.put("intent", "Other intent")}
         })
 
@@ -300,7 +304,7 @@ defmodule Dran.ContractsStepsTest do
 
       # una arista nueva (topologia del plan) → fingerprint cambia
       fp2 = Contracts.fingerprint(step)
-      prereq = create_step(plan, "prereq")
+      prereq = create_step(workflow, "prereq")
       {:ok, _} = Contracts.add_dependency(step, prereq)
       refute Contracts.fingerprint(step) == fp2
     end
@@ -308,16 +312,16 @@ defmodule Dran.ContractsStepsTest do
 
   # ── helpers ──────────────────────────────────────────────────────────────
 
-  defp create_step(plan, title) do
+  defp create_step(workflow, title) do
     slug = "#{String.downcase(title)}-#{System.unique_integer([:positive])}"
 
-    {:ok, step} = Plans.create_step(plan, %{"title" => title, "slug" => slug})
+    {:ok, step} = Workflows.create_step(workflow, %{"title" => title, "slug" => slug})
     step
   end
 
-  defp step_with_contract(plan, contract) do
-    step = create_step(plan, "Contract step")
-    {:ok, step} = Plans.update_step(step, %{"meta" => %{"contract" => contract}})
+  defp step_with_contract(workflow, contract) do
+    step = create_step(workflow, "Contract step")
+    {:ok, step} = Workflows.update_step(step, %{"meta" => %{"contract" => contract}})
     step
   end
 

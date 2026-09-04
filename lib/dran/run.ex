@@ -1,14 +1,19 @@
-defmodule Dran.TaskRun do
+defmodule Dran.Run do
   @moduledoc """
-  One execution attempt of a task step WITHIN a session.
+  One execution attempt of a STEP within a session — the ONLY runtime.
 
-  The run is the record, not the requirement: a task does not need a run to
-  be done (simple human tasks live on the board as today). When a task runs
-  inside a session, the execution leaves a `TaskRun` — `pending` is created
-  upfront when the session opens, and the executor moves it through
-  `in_flight → passed | failed | skipped` via
-  `Dran.Executions.start_run/1` / `close_run/2`. A retry is a new run of the
-  same `(session_id, task_id)` with `attempt: n + 1`.
+  Runs are created upfront (all `pending`) when the session opens, keyed
+  by `(session_id, step_id, attempt)`. A retry is a new run of the same
+  `(session_id, step_id)` with `attempt: n + 1`. No task is ever spawned:
+  the manual layer (board) and the execution layer never mix.
+
+  - `contract_version` — the step's `meta[\"contract\"]` frozen at open
+    time (nil when the step has no contract).
+  - `progress` — phase-level progress reported by the agent (overwrite,
+    not append): `%{\"phase\" => \"…\", \"gates\" => %{…}}`. The history
+    lives in `gate_results` at close (decisión ?02).
+  - `outcome` + `gate_results` — the executor's terminal report (DATA,
+    never enforced server-side).
 
   Statuses: `pending / in_flight / passed / failed / skipped`.
   """
@@ -21,20 +26,17 @@ defmodule Dran.TaskRun do
 
   @run_statuses ~w(pending in_flight passed failed skipped)
 
-  schema "task_runs" do
+  schema "runs" do
     field :contract_version, :map
     field :status, :string, default: "pending"
     field :outcome, :string
     field :gate_results, :map, default: %{}
     field :checkpoints, :map, default: %{}
+    field :progress, :map, default: %{}
     field :attempt, :integer, default: 1
 
-    belongs_to :session, Dran.GoalSession, foreign_key: :session_id
+    belongs_to :session, Dran.WorkflowSession, foreign_key: :session_id
     belongs_to :step, Dran.Step
-
-    # The SPAWNED task (wave B): nil until start_run/1 spawns it, kept after
-    # (the dual closure reconciles by task_id).
-    belongs_to :task, Dran.Task
     belongs_to :workspace, Dran.Workspace
     belongs_to :actor, Dran.Actors.Actor
 
@@ -44,19 +46,19 @@ defmodule Dran.TaskRun do
   @doc "List of valid run statuses"
   def run_statuses, do: @run_statuses
 
-  @doc "Build a changeset for a task run"
+  @doc "Build a changeset for a run"
   def changeset(run, attrs) do
     run
     |> cast(attrs, [
       :session_id,
       :step_id,
-      :task_id,
       :workspace_id,
       :contract_version,
       :status,
       :outcome,
       :gate_results,
       :checkpoints,
+      :progress,
       :actor_id,
       :attempt
     ])
@@ -66,11 +68,10 @@ defmodule Dran.TaskRun do
     |> validate_number(:attempt, greater_than: 0)
     |> foreign_key_constraint(:session_id)
     |> foreign_key_constraint(:step_id)
-    |> foreign_key_constraint(:task_id)
     |> foreign_key_constraint(:workspace_id)
     |> foreign_key_constraint(:actor_id)
     |> unique_constraint([:session_id, :step_id, :attempt],
-      name: :task_runs_session_id_step_id_attempt_index
+      name: :runs_session_id_step_id_attempt_index
     )
   end
 

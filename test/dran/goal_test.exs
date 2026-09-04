@@ -37,13 +37,11 @@ defmodule Dran.GoalTest do
       attrs = %{
         workspace_id: ctx.id,
         title: "Test Goal",
-        slug: "test-goal",
-        progress: 0.25
+        slug: "test-goal"
       }
 
       assert {:ok, %Dran.Goal{} = goal} = Goals.create_goal(attrs)
       assert goal.title == "Test Goal"
-      assert goal.progress == 0.25
     end
   end
 

@@ -128,16 +128,8 @@ defmodule Dran.Tasks do
     |> tap(fn
       {:ok, updated} ->
         if status_changed?(task, updated) do
-          recompute_linked_goals(updated)
           # Recurring tasks clone themselves on completion.
           Dran.Tasks.Automation.handle_completion(updated)
-        end
-
-        # Dual closure: a spawned task reaching terminal via ANY path (modal,
-        # quick actions) closes its in_flight run (done→passed, cancelled→
-        # skipped). No-op when the task has no open run.
-        if updated.status in ~w(done cancelled) do
-          Dran.Executions.reconcile_task_closure(updated)
         end
 
         broadcast_task_change(updated, :updated)
@@ -194,7 +186,6 @@ defmodule Dran.Tasks do
         relation_type: "part_of"
       })
 
-    :ok = Dran.Goals.recompute_progress(goal)
     # Linked goals are part of the task's UI state — notify open views
     # (goal detail shows this task under the goal; board shows the chip).
     broadcast_task_change(task, :linked)
@@ -217,8 +208,7 @@ defmodule Dran.Tasks do
   end
 
   @doc """
-  Unlink a task from a goal — deletes the `part_of` relation and recomputes
-  the goal's progress.
+  Unlink a task from a goal — deletes the `part_of` relation.
   """
   def unlink_from_goal(%Task{} = task, %Dran.Goal{} = goal) do
     Repo.delete_all(
@@ -230,7 +220,6 @@ defmodule Dran.Tasks do
       )
     )
 
-    :ok = Dran.Goals.recompute_progress(goal)
     broadcast_task_change(task, :unlinked)
     {:ok, :unlinked}
   end
@@ -376,16 +365,6 @@ defmodule Dran.Tasks do
     |> Map.new()
   end
 
-  # Recompute derived progress for every goal linked to this task.
-  # Called after any status change (move_task/update_task).
-  defp recompute_linked_goals(%Task{} = task) do
-    for goal <- list_linked_goals(task) do
-      Dran.Goals.recompute_progress(goal)
-    end
-
-    :ok
-  end
-
   # ──────────────────────────────────────────────────────────────────────────
   # Board move — optimistic lock + position renumber
   # ──────────────────────────────────────────────────────────────────────────
@@ -422,16 +401,8 @@ defmodule Dran.Tasks do
          |> Repo.update(stale_error_field: :lock_version) do
       {:ok, updated} ->
         renumber_column(workspace_id, new_status)
-        # Goal progress derives from linked task statuses — recompute when
-        # the status changed (moving within the same column does not affect it).
-        if task.status != new_status, do: recompute_linked_goals(updated)
         # Recurring tasks clone themselves on completion.
         Dran.Tasks.Automation.handle_completion(updated)
-        # Dual closure: a spawned task reaching terminal via the board (DnD)
-        # closes its in_flight run (done→passed, cancelled→skipped).
-        if updated.status in ~w(done cancelled) and task.status != new_status do
-          Dran.Executions.reconcile_task_closure(updated)
-        end
 
         broadcast_task_change(updated, :moved)
         {:ok, updated}

@@ -1,16 +1,17 @@
 defmodule Dran.Step do
   @moduledoc """
-  First-class step entity — a DEFINITION node of a plan (plans/steps/tasks
-  model, wave A).
+  First-class step entity — a DEFINITION node of a workflow.
 
   The step defines WHAT, in what order, and how it is verified: `title`,
-  `body` (the brief) and the contract in `meta["contract"]` (same shape as
-  `task.meta["contract"]` today). It is never executed itself — no board
-  status, no due_date, no assignee: that is the task/run layer (wave B+).
+  `body` (the brief) and the contract in `meta[\"contract\"]` (same shape
+  as `task.meta[\"contract\"]` today). It is never executed itself — no
+  board status, no due_date, no assignee: execution lives in sessions
+  and runs (`Dran.Executions`).
 
-  The plan of a step is structural (one and only one) → direct `plan_id` FK,
-  not a polymorphic relation. Step→step `depends_on` edges live in
-  `relations`. `position` orders steps within the plan (manual, gap-based).
+  The workflow of a step is structural (one and only one) → direct
+  `workflow_id` FK, not a polymorphic relation. Step→step `depends_on`
+  edges live in `relations`. `position` orders steps within the workflow
+  (manual, gap-based).
   """
 
   use Ecto.Schema
@@ -23,7 +24,7 @@ defmodule Dran.Step do
            only: [
              :id,
              :workspace_id,
-             :plan_id,
+             :workflow_id,
              :title,
              :slug,
              :body,
@@ -41,7 +42,7 @@ defmodule Dran.Step do
     field :meta, :map, default: %{}
 
     belongs_to :workspace, Dran.Workspace
-    belongs_to :plan, Dran.Plan
+    belongs_to :workflow, Dran.Workflow
 
     timestamps(type: :utc_datetime)
   end
@@ -49,8 +50,8 @@ defmodule Dran.Step do
   @doc "Changeset for creating or updating a step"
   def changeset(step, attrs) do
     step
-    |> cast(attrs, [:workspace_id, :plan_id, :title, :slug, :body, :position, :meta])
-    |> validate_required([:workspace_id, :plan_id, :title, :slug])
+    |> cast(attrs, [:workspace_id, :workflow_id, :title, :slug, :body, :position, :meta])
+    |> validate_required([:workspace_id, :workflow_id, :title, :slug])
     |> validate_length(:title, max: 500)
     |> validate_length(:slug, max: 500)
     |> validate_number(:position, greater_than_or_equal_to: 0)

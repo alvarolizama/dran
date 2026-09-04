@@ -628,7 +628,6 @@ defmodule Dran.MCPFullTest do
           "slug" => "ship-v1-goal",
           "summary" => "Launch the product",
           "status" => "active",
-          "progress" => 0.4,
           "team" => ["alvaro", "hermes"]
         })
 
@@ -637,7 +636,6 @@ defmodule Dran.MCPFullTest do
       assert result =~ "status: active"
 
       goal = Goals.get_goal_by_slug("ship-v1-goal", ctx.id)
-      assert goal.progress == 0.4
       assert goal.team == ["alvaro", "hermes"]
     end
 

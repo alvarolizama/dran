@@ -611,7 +611,7 @@ defmodule Dran.Contracts do
           brief_graph(contract),
           "",
           "## Context",
-          "Pulled from #{step.workspace_id} — see step #{step.id} (plan #{step.plan_id}).",
+          "Pulled from #{step.workspace_id} — see step #{step.id} (workflow #{step.workflow_id}).",
           "",
           "## Constraints",
           "Follow the closed verb vocabulary and the verification funnel (riel-contract).",
