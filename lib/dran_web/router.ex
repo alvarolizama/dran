@@ -349,6 +349,34 @@ defmodule DranWeb.Router do
           _ -> nil
         end
 
+      # /api/workflows/:workflow_id/sessions — workspace from the workflow
+      # (same SEC-002 pattern as /api/todos/:id; UUID-guarded so a garbage
+      # id 403s instead of raising a CastError).
+      conn.request_path =~ "/api/workflows/" and is_binary(conn.params["workflow_id"]) ->
+        case Ecto.UUID.cast(conn.params["workflow_id"]) do
+          {:ok, uuid} ->
+            case Dran.Repo.get(Dran.Workflow, uuid) do
+              %{workspace_id: ws_id} -> ws_id
+              _ -> nil
+            end
+
+          :error ->
+            nil
+        end
+
+      # /api/runs/:id/* — workspace from the run (start/progress/close/retry).
+      conn.request_path =~ "/api/runs/" and is_binary(conn.params["id"]) ->
+        case Ecto.UUID.cast(conn.params["id"]) do
+          {:ok, uuid} ->
+            case Dran.Repo.get(Dran.Run, uuid) do
+              %{workspace_id: ws_id} -> ws_id
+              _ -> nil
+            end
+
+          :error ->
+            nil
+        end
+
       true ->
         nil
     end
@@ -474,6 +502,11 @@ defmodule DranWeb.Router do
     # Shared multi-agent memory (read)
     get "/memory", MemoryController, :index
     get "/memory/search", MemoryController, :search
+
+    # Workflow executions (read): session inspection + the agent pull
+    # endpoint (DranWeb.API.ExecutionController)
+    get "/workflow_sessions/:id", ExecutionController, :show_session
+    get "/pending_runs", ExecutionController, :pending
   end
 
   # ── REST API — write routes (requires write_access on API keys) ────────────
@@ -498,6 +531,16 @@ defmodule DranWeb.Router do
     # Todos (write)
     post "/todos", TodoController, :create
     put "/todos/:id", TodoController, :update
+
+    # Workflow executions (write) — the agent loop over Dran.Executions:
+    # open a session, claim a run, report progress, close, retry.
+    # require_write_access resolves the workspace from params["workspace"]
+    # (all routes carry it; /api/todos-style body lookup is not needed).
+    post "/workflows/:workflow_id/sessions", ExecutionController, :open
+    post "/runs/:id/start", ExecutionController, :start
+    put "/runs/:id/progress", ExecutionController, :progress
+    post "/runs/:id/close", ExecutionController, :close
+    post "/runs/:id/retry", ExecutionController, :retry
   end
 
   # ── MCP Streamable HTTP endpoint (self-authenticating) ────────────────────
