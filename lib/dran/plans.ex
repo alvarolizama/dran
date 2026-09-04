@@ -142,15 +142,8 @@ defmodule Dran.Plans do
   end
 
   defp session_count(%Plan{} = plan) do
-    # goal_sessions are goal-keyed since F1 (goal_id, no plan_id yet — F2
-    # re-points sessions to plans). The guard queries plan_id when the
-    # column exists; until then no plan can be referenced by a session and
-    # deletion is allowed (held open as an explicit branch, per the packet).
-    if Enum.member?(Dran.GoalSession.__schema__(:fields), :plan_id) do
-      Repo.aggregate(from(s in Dran.GoalSession, where: s.plan_id == ^plan.id), :count)
-    else
-      0
-    end
+    # Wave B: goal_sessions llevan plan_id — el guard es directo.
+    Repo.aggregate(from(s in Dran.GoalSession, where: s.plan_id == ^plan.id), :count)
   end
 
   defp open_run_count(%Step{} = step) do
@@ -158,7 +151,9 @@ defmodule Dran.Plans do
     # re-point to steps). Same pattern: query step_id when the column exists.
     if Enum.member?(Dran.TaskRun.__schema__(:fields), :step_id) do
       Repo.aggregate(
-        from(r in Dran.TaskRun, where: r.step_id == ^step.id and r.status in ^~w(pending in_flight)),
+        from(r in Dran.TaskRun,
+          where: r.step_id == ^step.id and r.status in ^~w(pending in_flight)
+        ),
         :count
       )
     else

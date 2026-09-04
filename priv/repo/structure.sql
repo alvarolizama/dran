@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict DzVndcsMZiqeJ8WNhOdGtmpVsG7mpBaXWAwWMLBrJCtq9Lmfb1x7zu009SzDf1c
+\restrict OaHflMfLLOvPr8CsiK9lhBGkLQgklquscf5CtmhwRk6Yy1ozR7RNyz3C4vrI0Sf
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -195,7 +195,9 @@ CREATE TABLE public.goal_sessions (
     started_at timestamp(0) without time zone,
     finished_at timestamp(0) without time zone,
     inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
+    updated_at timestamp(0) without time zone NOT NULL,
+    plan_id uuid NOT NULL,
+    plan_snapshot jsonb DEFAULT '{}'::jsonb
 );
 
 
@@ -301,6 +303,23 @@ CREATE TABLE public.pages (
 
 
 --
+-- Name: plans; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.plans (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    title character varying(255) NOT NULL,
+    slug character varying(255) NOT NULL,
+    summary character varying(255),
+    body text DEFAULT ''::text,
+    meta jsonb DEFAULT '{}'::jsonb,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
 -- Name: relations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -359,13 +378,31 @@ CREATE TABLE public.settings (
 
 
 --
+-- Name: steps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.steps (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    workspace_id uuid NOT NULL,
+    plan_id uuid NOT NULL,
+    title character varying(255) NOT NULL,
+    slug character varying(255) NOT NULL,
+    body text DEFAULT ''::text,
+    "position" integer DEFAULT 0 NOT NULL,
+    meta jsonb DEFAULT '{}'::jsonb,
+    inserted_at timestamp(0) without time zone NOT NULL,
+    updated_at timestamp(0) without time zone NOT NULL
+);
+
+
+--
 -- Name: task_runs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.task_runs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     session_id uuid NOT NULL,
-    task_id uuid NOT NULL,
+    task_id uuid,
     workspace_id uuid NOT NULL,
     contract_version jsonb,
     status character varying(255) DEFAULT 'pending'::character varying NOT NULL,
@@ -375,7 +412,8 @@ CREATE TABLE public.task_runs (
     actor_id uuid,
     attempt integer DEFAULT 1 NOT NULL,
     inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
+    updated_at timestamp(0) without time zone NOT NULL,
+    step_id uuid
 );
 
 
@@ -643,6 +681,14 @@ ALTER TABLE ONLY public.pages
 
 
 --
+-- Name: plans plans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plans
+    ADD CONSTRAINT plans_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: relations relations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -672,6 +718,14 @@ ALTER TABLE ONLY public.schema_migrations
 
 ALTER TABLE ONLY public.settings
     ADD CONSTRAINT settings_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: steps steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.steps
+    ADD CONSTRAINT steps_pkey PRIMARY KEY (id);
 
 
 --
@@ -833,6 +887,13 @@ CREATE INDEX community_summaries_workspace_id_index ON public.cluster_summaries 
 --
 
 CREATE INDEX goal_sessions_goal_id_index ON public.goal_sessions USING btree (goal_id);
+
+
+--
+-- Name: goal_sessions_plan_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX goal_sessions_plan_id_index ON public.goal_sessions USING btree (plan_id);
 
 
 --
@@ -1018,6 +1079,20 @@ CREATE UNIQUE INDEX pages_workspace_id_slug_index ON public.pages USING btree (w
 
 
 --
+-- Name: plans_workspace_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX plans_workspace_id_index ON public.plans USING btree (workspace_id);
+
+
+--
+-- Name: plans_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX plans_workspace_id_slug_index ON public.plans USING btree (workspace_id, slug);
+
+
+--
 -- Name: relations_source_id_source_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1067,10 +1142,31 @@ CREATE UNIQUE INDEX settings_key_workspace_id_index ON public.settings USING btr
 
 
 --
--- Name: task_runs_session_id_task_id_attempt_index; Type: INDEX; Schema: public; Owner: -
+-- Name: steps_plan_id_position_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX task_runs_session_id_task_id_attempt_index ON public.task_runs USING btree (session_id, task_id, attempt);
+CREATE INDEX steps_plan_id_position_index ON public.steps USING btree (plan_id, "position");
+
+
+--
+-- Name: steps_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX steps_workspace_id_slug_index ON public.steps USING btree (workspace_id, slug);
+
+
+--
+-- Name: task_runs_session_id_step_id_attempt_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX task_runs_session_id_step_id_attempt_index ON public.task_runs USING btree (session_id, step_id, attempt);
+
+
+--
+-- Name: task_runs_step_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX task_runs_step_id_index ON public.task_runs USING btree (step_id);
 
 
 --
@@ -1307,6 +1403,14 @@ ALTER TABLE ONLY public.goal_sessions
 
 
 --
+-- Name: goal_sessions goal_sessions_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.goal_sessions
+    ADD CONSTRAINT goal_sessions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.plans(id) ON DELETE CASCADE;
+
+
+--
 -- Name: goal_sessions goal_sessions_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1355,11 +1459,35 @@ ALTER TABLE ONLY public.pages
 
 
 --
+-- Name: plans plans_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plans
+    ADD CONSTRAINT plans_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
 -- Name: reports reports_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.reports
     ADD CONSTRAINT reports_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
+-- Name: steps steps_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.steps
+    ADD CONSTRAINT steps_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.plans(id) ON DELETE CASCADE;
+
+
+--
+-- Name: steps steps_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.steps
+    ADD CONSTRAINT steps_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 
 --
@@ -1376,6 +1504,14 @@ ALTER TABLE ONLY public.task_runs
 
 ALTER TABLE ONLY public.task_runs
     ADD CONSTRAINT task_runs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.goal_sessions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: task_runs task_runs_step_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_runs
+    ADD CONSTRAINT task_runs_step_id_fkey FOREIGN KEY (step_id) REFERENCES public.steps(id) ON DELETE CASCADE;
 
 
 --
@@ -1470,7 +1606,7 @@ ALTER TABLE ONLY public.worker_steps
 -- PostgreSQL database dump complete
 --
 
-\unrestrict DzVndcsMZiqeJ8WNhOdGtmpVsG7mpBaXWAwWMLBrJCtq9Lmfb1x7zu009SzDf1c
+\unrestrict OaHflMfLLOvPr8CsiK9lhBGkLQgklquscf5CtmhwRk6Yy1ozR7RNyz3C4vrI0Sf
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1533,3 +1669,6 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260903035725);
 INSERT INTO public."schema_migrations" (version) VALUES (20260903200000);
 INSERT INTO public."schema_migrations" (version) VALUES (20260903213244);
 INSERT INTO public."schema_migrations" (version) VALUES (20260903213245);
+INSERT INTO public."schema_migrations" (version) VALUES (20260903231528);
+INSERT INTO public."schema_migrations" (version) VALUES (20260903231529);
+INSERT INTO public."schema_migrations" (version) VALUES (20260904003233);

@@ -509,10 +509,10 @@ defmodule Dran.Contracts do
         from t in Task,
           where: t.id in ^ids and t.status in ^~w(done cancelled)
       ) and
-        not Repo.exists?(
-          from t in Task,
-            where: t.id in ^ids and t.status not in ^~w(done cancelled)
-        ) ->
+          not Repo.exists?(
+            from t in Task,
+              where: t.id in ^ids and t.status not in ^~w(done cancelled)
+          ) ->
         true
 
       true ->

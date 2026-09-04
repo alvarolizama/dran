@@ -30,6 +30,10 @@ defmodule Dran.TaskRun do
     field :attempt, :integer, default: 1
 
     belongs_to :session, Dran.GoalSession, foreign_key: :session_id
+    belongs_to :step, Dran.Step
+
+    # The SPAWNED task (wave B): nil until start_run/1 spawns it, kept after
+    # (the dual closure reconciles by task_id).
     belongs_to :task, Dran.Task
     belongs_to :workspace, Dran.Workspace
     belongs_to :actor, Dran.Actors.Actor
@@ -45,6 +49,7 @@ defmodule Dran.TaskRun do
     run
     |> cast(attrs, [
       :session_id,
+      :step_id,
       :task_id,
       :workspace_id,
       :contract_version,
@@ -55,16 +60,17 @@ defmodule Dran.TaskRun do
       :actor_id,
       :attempt
     ])
-    |> validate_required([:session_id, :task_id, :workspace_id])
+    |> validate_required([:session_id, :step_id, :workspace_id])
     |> validate_required([:status])
     |> validate_inclusion(:status, @run_statuses)
     |> validate_number(:attempt, greater_than: 0)
     |> foreign_key_constraint(:session_id)
+    |> foreign_key_constraint(:step_id)
     |> foreign_key_constraint(:task_id)
     |> foreign_key_constraint(:workspace_id)
     |> foreign_key_constraint(:actor_id)
-    |> unique_constraint([:session_id, :task_id, :attempt],
-      name: :task_runs_session_id_task_id_attempt_index
+    |> unique_constraint([:session_id, :step_id, :attempt],
+      name: :task_runs_session_id_step_id_attempt_index
     )
   end
 

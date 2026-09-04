@@ -26,6 +26,11 @@ defmodule Dran.GoalSession do
     field :started_at, :utc_datetime
     field :finished_at, :utc_datetime
 
+    # Frozen definition the session runs against (wave B):
+    # %{"steps" => [%{"id", "title", "contract"}], "edges" => [[from, to]]}.
+    field :plan_snapshot, :map, default: %{}
+
+    belongs_to :plan, Dran.Plan
     belongs_to :goal, Dran.Goal
     belongs_to :workspace, Dran.Workspace
     belongs_to :actor, Dran.Actors.Actor
@@ -42,8 +47,10 @@ defmodule Dran.GoalSession do
   def changeset(session, attrs) do
     session
     |> cast(attrs, [
+      :plan_id,
       :goal_id,
       :workspace_id,
+      :plan_snapshot,
       :label,
       :context,
       :status,
@@ -51,8 +58,9 @@ defmodule Dran.GoalSession do
       :started_at,
       :finished_at
     ])
-    |> validate_required([:goal_id, :workspace_id, :status])
+    |> validate_required([:plan_id, :goal_id, :workspace_id, :status])
     |> validate_inclusion(:status, @session_statuses)
+    |> foreign_key_constraint(:plan_id)
     |> foreign_key_constraint(:goal_id)
     |> foreign_key_constraint(:workspace_id)
     |> foreign_key_constraint(:actor_id)

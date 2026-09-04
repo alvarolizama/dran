@@ -133,6 +133,13 @@ defmodule Dran.Tasks do
           Dran.Tasks.Automation.handle_completion(updated)
         end
 
+        # Dual closure: a spawned task reaching terminal via ANY path (modal,
+        # quick actions) closes its in_flight run (done→passed, cancelled→
+        # skipped). No-op when the task has no open run.
+        if updated.status in ~w(done cancelled) do
+          Dran.Executions.reconcile_task_closure(updated)
+        end
+
         broadcast_task_change(updated, :updated)
 
       _ ->
@@ -420,6 +427,12 @@ defmodule Dran.Tasks do
         if task.status != new_status, do: recompute_linked_goals(updated)
         # Recurring tasks clone themselves on completion.
         Dran.Tasks.Automation.handle_completion(updated)
+        # Dual closure: a spawned task reaching terminal via the board (DnD)
+        # closes its in_flight run (done→passed, cancelled→skipped).
+        if updated.status in ~w(done cancelled) and task.status != new_status do
+          Dran.Executions.reconcile_task_closure(updated)
+        end
+
         broadcast_task_change(updated, :moved)
         {:ok, updated}
 
