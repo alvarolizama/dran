@@ -159,11 +159,11 @@ defmodule DranWeb.GoalLiveTest do
 
       view
       |> form("#goal-modal-form")
-      |> render_submit(%{"goal" => %{"title" => "Modal created goal", "kind" => "business"}})
+      |> render_submit(%{"goal" => %{"title" => "Modal created goal", "status" => "draft"}})
 
       created = Dran.Goals.get_goal_by_slug("modal-created-goal", ws.id)
       assert created
-      assert created.kind == "business"
+      assert created.status == "draft"
       assert created.workspace_id == ws.id
 
       refute has_element?(view, "#goal-resource-modal")
@@ -178,11 +178,11 @@ defmodule DranWeb.GoalLiveTest do
 
       view
       |> form("#goal-modal-form")
-      |> render_submit(%{"goal" => %{"title" => "Renamed goal", "health" => "red"}})
+      |> render_submit(%{"goal" => %{"title" => "Renamed goal", "status" => "on_hold"}})
 
       updated = Dran.Goals.get_goal_by_slug(goal.slug, ws.id)
       assert updated.title == "Renamed goal"
-      assert updated.health == "red"
+      assert updated.status == "on_hold"
 
       refute has_element?(view, "#goal-resource-modal")
     end

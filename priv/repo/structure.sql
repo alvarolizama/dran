@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict OaHflMfLLOvPr8CsiK9lhBGkLQgklquscf5CtmhwRk6Yy1ozR7RNyz3C4vrI0Sf
+\restrict A3Rv5bodi6XxkG2foEIlblIz7eK1UyWGmtu1B2YSHmPeYBzzXFlNKm2LKKbOTXl
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -211,16 +211,8 @@ CREATE TABLE public.goals (
     slug character varying(255) NOT NULL,
     summary character varying(255),
     body text DEFAULT ''::character varying,
-    kind character varying(255),
-    health character varying(255),
     status character varying(255) DEFAULT 'active'::character varying,
-    metric character varying(255),
-    target_value double precision,
-    current_value double precision,
-    unit character varying(255),
     progress double precision,
-    start_date date,
-    target_date date,
     team character varying(255)[] DEFAULT ARRAY[]::character varying[],
     meta jsonb DEFAULT '{}'::jsonb,
     archived boolean DEFAULT false,
@@ -1606,7 +1598,7 @@ ALTER TABLE ONLY public.worker_steps
 -- PostgreSQL database dump complete
 --
 
-\unrestrict OaHflMfLLOvPr8CsiK9lhBGkLQgklquscf5CtmhwRk6Yy1ozR7RNyz3C4vrI0Sf
+\unrestrict A3Rv5bodi6XxkG2foEIlblIz7eK1UyWGmtu1B2YSHmPeYBzzXFlNKm2LKKbOTXl
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1672,3 +1664,4 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260903213245);
 INSERT INTO public."schema_migrations" (version) VALUES (20260903231528);
 INSERT INTO public."schema_migrations" (version) VALUES (20260903231529);
 INSERT INTO public."schema_migrations" (version) VALUES (20260904003233);
+INSERT INTO public."schema_migrations" (version) VALUES (20260904013000);

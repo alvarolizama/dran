@@ -256,7 +256,7 @@ defmodule DranWeb.WorkflowsLive do
 
     Enum.map(by_goal, fn
       {goal, ts} when is_struct(goal) -> {goal, ts}
-      {:no_goal, ts} -> {%{title: gettext("Sin goal"), id: nil, health: nil}, ts}
+      {:no_goal, ts} -> {%{title: gettext("Sin goal"), id: nil}, ts}
     end)
   end
 

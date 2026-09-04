@@ -8,8 +8,6 @@ defmodule DranWeb.GoalLive do
   alias Dran.Tasks
   alias DranWeb.Plugs.Auth
 
-  @goal_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
-
   # ──────────────────────────────────────────────────────────────────────────
   # Render
   # ──────────────────────────────────────────────────────────────────────────
@@ -37,7 +35,7 @@ defmodule DranWeb.GoalLive do
                 <code class="font-mono text-caption text-base-content/60">{@goal.slug}</code>
                 <span
                   :if={@goal.status}
-                  class={"px-2 py-0.5 text-xs rounded-full " <> health_class(@goal)}
+                  class={"px-2 py-0.5 text-xs rounded-full " <> goal_status_class(@goal)}
                 >
                   {String.capitalize(@goal.status)}
                 </span>
@@ -58,38 +56,6 @@ defmodule DranWeb.GoalLive do
               >
                 <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
               </.link>
-            </div>
-          </div>
-
-          <%!-- Metrics row --%>
-          <div class="flex flex-wrap gap-3">
-            <div
-              :if={@goal.kind}
-              class="px-3 py-1.5 text-sm rounded-lg bg-base-200 border border-base-300"
-            >
-              <span class="text-base-content/50">{gettext("Kind")}:</span>
-              <span class="font-medium">{String.capitalize(@goal.kind)}</span>
-            </div>
-            <div
-              :if={@goal.health}
-              class={"px-3 py-1.5 text-sm rounded-lg border " <> health_class(@goal)}
-            >
-              <span class="text-base-content/50">{gettext("Health")}:</span>
-              <span class="font-medium">{String.capitalize(@goal.health)}</span>
-            </div>
-            <div
-              :if={@goal.target_date}
-              class="px-3 py-1.5 text-sm rounded-lg bg-base-200 border border-base-300"
-            >
-              <span class="text-base-content/50">{gettext("Target")}:</span>
-              <span class="font-medium">{@goal.target_date}</span>
-            </div>
-            <div
-              :if={@goal.metric}
-              class="px-3 py-1.5 text-sm rounded-lg bg-base-200 border border-base-300"
-            >
-              <span class="text-base-content/50">{gettext("Metric")}:</span>
-              <span class="font-medium">{@goal.metric}</span>
             </div>
           </div>
 
@@ -194,15 +160,6 @@ defmodule DranWeb.GoalLive do
                 {goal.summary}
               </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <span
-                :if={goal.health}
-                class={"px-2 py-0.5 text-xs rounded-full " <> health_class(goal)}
-              >
-                {String.capitalize(goal.health)}
-              </span>
-              <span :if={goal.target_date} class="text-xs text-base-content/50">{goal.target_date}</span>
-            </div>
           </.link>
         </div>
       </div>
@@ -224,7 +181,6 @@ defmodule DranWeb.GoalLive do
           goal={@modal_goal || %Goal{}}
           changeset={@modal_form}
           workspace_id={(@modal_goal && @modal_goal.workspace_id) || (@context && @context.id)}
-          goal_kinds={@goal_kinds}
         />
       </.resource_modal>
     </Layouts.app>
@@ -252,7 +208,6 @@ defmodule DranWeb.GoalLive do
        editing: false,
        save_status: "idle",
        active_nav: "goals",
-       goal_kinds: @goal_kinds,
        tasks: [],
        # Resource modal state — `?new=true` on the index opens create,
        # `?edit=true` on the show opens edit. Rendered via
@@ -355,15 +310,7 @@ defmodule DranWeb.GoalLive do
       "title" => String.trim(params["title"] || ""),
       "summary" => params["summary"],
       "body" => params["body"] || "",
-      "kind" => params["kind"],
-      "health" => params["health"],
-      "status" => params["status"],
-      "metric" => params["metric"],
-      "target_value" => params["target_value"],
-      "current_value" => params["current_value"],
-      "unit" => params["unit"],
-      "start_date" => params["start_date"],
-      "target_date" => params["target_date"]
+      "status" => params["status"]
     }
 
     result =
@@ -453,10 +400,11 @@ defmodule DranWeb.GoalLive do
 
   defp ensure_slug(params), do: params
 
-  defp health_class(%{health: "green"}), do: "bg-green-100 text-green-700"
-  defp health_class(%{health: "yellow"}), do: "bg-yellow-100 text-yellow-700"
-  defp health_class(%{health: "red"}), do: "bg-red-100 text-red-700"
-  defp health_class(_), do: "bg-base-300 text-base-content/60"
+  defp goal_status_class(%Goal{status: "active"}), do: "bg-green-100 text-green-700"
+  defp goal_status_class(%Goal{status: "draft"}), do: "bg-base-200 text-base-content/70"
+  defp goal_status_class(%Goal{status: "on_hold"}), do: "bg-yellow-100 text-yellow-700"
+  defp goal_status_class(%Goal{status: "done"}), do: "bg-green-100 text-green-700"
+  defp goal_status_class(_), do: "bg-base-300 text-base-content/60"
 
   defp dot_class("backlog"), do: "bg-base-300"
   defp dot_class("todo"), do: "bg-sky-500"

@@ -1253,12 +1253,10 @@ defmodule DranWeb.DocsLive do
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">goal</td>
-              <td class="px-4 py-2">Objectives with target dates and health</td>
+              <td class="px-4 py-2">Objectives with derived progress and hierarchy</td>
+              <td class="px-4 py-2 text-xs">—</td>
               <td class="px-4 py-2 text-xs">
-                personal, coding, business, learning, health, finance, other
-              </td>
-              <td class="px-4 py-2 text-xs">
-                health (green/yellow/red), target_date, start_date, team
+                status (draft/active/on_hold/done/archived), progress, team
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">

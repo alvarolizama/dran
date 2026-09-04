@@ -1,19 +1,14 @@
 defmodule Dran.Goal do
   @moduledoc """
-  First-class goal entity — OKR hierarchy, metrics, health, and progress.
+  First-class goal entity — the PARA QUÉ: outcome, hierarchy, and progress.
 
   Goals live in their own table (not as pages). Pages can link to goals
   via polymorphic `part_of` relations (`source_type: "page"`,
-  `target_type: "goal"`).
-
-  ## Health
-  - `green` — on track
-  - `yellow` — needs attention
-  - `red` — at risk
+  `target_type: "goal"`). A plan serves a goal via `serves` relations.
 
   ## Progress
-  - `progress` — derived (0.0–1.0) from linked notes with `kind: "todo"`,
-    or manually set when `meta["progress_manual"]` is true.
+  - `progress` — derived (0.0–1.0) from linked tasks (`part_of`), or
+    manually set when `meta["progress_manual"]` is true.
   """
 
   use Ecto.Schema
@@ -30,16 +25,8 @@ defmodule Dran.Goal do
              :slug,
              :summary,
              :body,
-             :kind,
-             :health,
              :status,
-             :metric,
-             :target_value,
-             :current_value,
-             :unit,
              :progress,
-             :start_date,
-             :target_date,
              :team,
              :meta,
              :archived,
@@ -49,8 +36,6 @@ defmodule Dran.Goal do
              :updated_at
            ]}
 
-  @goal_kinds ~w(personal coding business learning health finance other investing marketing product writing career relationship travel)
-  @healths ~w(green yellow red)
   @statuses ~w(draft active on_hold done archived)
 
   schema "goals" do
@@ -58,16 +43,8 @@ defmodule Dran.Goal do
     field :slug, :string
     field :summary, :string
     field :body, :string, default: ""
-    field :kind, :string
-    field :health, :string
     field :status, :string, default: "active"
-    field :metric, :string
-    field :target_value, :float
-    field :current_value, :float
-    field :unit, :string
     field :progress, :float
-    field :start_date, :date
-    field :target_date, :date
     field :team, {:array, :string}, default: []
     field :meta, :map, default: %{}
     field :archived, :boolean, default: false
@@ -91,16 +68,8 @@ defmodule Dran.Goal do
       :slug,
       :summary,
       :body,
-      :kind,
-      :health,
       :status,
-      :metric,
-      :target_value,
-      :current_value,
-      :unit,
       :progress,
-      :start_date,
-      :target_date,
       :team,
       :meta,
       :archived,
@@ -111,8 +80,6 @@ defmodule Dran.Goal do
     |> validate_required([:workspace_id, :title, :slug])
     |> validate_length(:title, max: 500)
     |> validate_length(:slug, max: 500)
-    |> validate_inclusion(:kind, @goal_kinds)
-    |> validate_inclusion(:health, @healths)
     |> validate_inclusion(:status, @statuses)
     |> validate_progress_range()
     |> unique_constraint([:workspace_id, :slug], name: :goals_workspace_id_slug_index)

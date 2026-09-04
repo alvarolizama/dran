@@ -440,7 +440,7 @@ defmodule DranWeb.ResourceComponents do
   @doc """
   Goal form for the resource modal — same two-column contract as
   `task_form_fields`: main column (title, description, body editor) and
-  metadata sidebar (kind / health / status / metric fields / dates).
+  metadata sidebar (status).
 
   - `goal` — the struct (`%Goal{}` for create)
   - `changeset` — form source; id must match the modal footer button
@@ -449,7 +449,6 @@ defmodule DranWeb.ResourceComponents do
   attr :goal, :map, required: true
   attr :changeset, :any, required: true
   attr :workspace_id, :string, required: true
-  attr :goal_kinds, :list, required: true
   attr :editor_min_height, :string, default: "320px"
 
   def goal_form_fields(assigns) do
@@ -504,22 +503,6 @@ defmodule DranWeb.ResourceComponents do
           {gettext("Details")}
         </h4>
 
-        <.resource_select name="goal[kind]" label={gettext("Kind")}>
-          <option value="" selected={is_nil(input_value(@form, :kind))}>{gettext("none")}</option>
-          <%= for k <- @goal_kinds do %>
-            <option value={k} selected={input_value(@form, :kind) == k}>
-              {String.capitalize(k)}
-            </option>
-          <% end %>
-        </.resource_select>
-
-        <.resource_select name="goal[health]" label={gettext("Health")}>
-          <option value="" selected={is_nil(input_value(@form, :health))}>—</option>
-          <option value="green" selected={input_value(@form, :health) == "green"}>Green</option>
-          <option value="yellow" selected={input_value(@form, :health) == "yellow"}>Yellow</option>
-          <option value="red" selected={input_value(@form, :health) == "red"}>Red</option>
-        </.resource_select>
-
         <.resource_select name="goal[status]" label={gettext("Status")}>
           <option value="active" selected={input_value(@form, :status) == "active"}>Active</option>
           <option value="draft" selected={input_value(@form, :status) == "draft"}>Draft</option>
@@ -528,13 +511,6 @@ defmodule DranWeb.ResourceComponents do
           </option>
           <option value="done" selected={input_value(@form, :status) == "done"}>Done</option>
         </.resource_select>
-
-        <.input field={@form[:metric]} type="text" label={gettext("Metric")} />
-        <.input field={@form[:target_value]} type="number" label={gettext("Target Value")} />
-        <.input field={@form[:current_value]} type="number" label={gettext("Current Value")} />
-        <.input field={@form[:unit]} type="text" label={gettext("Unit")} />
-        <.input field={@form[:start_date]} type="date" label={gettext("Start Date")} />
-        <.input field={@form[:target_date]} type="date" label={gettext("Target Date")} />
       </aside>
     </.form>
     """

@@ -380,7 +380,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_goal",
       "description" =>
-        "Create a first-class goal (stored in its own table, NOT a page). Goals carry an OKR-style shape: kind, health (green/yellow/red), status, an optional metric with target_value/current_value/unit, start_date, target_date, and a team list. Link pages to the goal later with dran_create_relation (relation_type `part_of`, target_slug = the goal's slug). Creation fails if the slug already exists in the context. Returns the created goal's slug and status.",
+        "Create a first-class goal (stored in its own table, NOT a page). Goals carry outcome, hierarchy (parent_goal), derived progress from linked tasks, and a team list. Link pages to the goal later with dran_create_relation (relation_type `part_of`, target_slug = the goal's slug). Creation fails if the slug already exists in the context. Returns the created goal's slug and status.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -405,63 +405,16 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" => "Goal body in Markdown (optional)."
           },
-          "kind" => %{
-            "type" => "string",
-            "description" =>
-              "Goal kind: personal, coding, business, learning, health, finance, other, investing, marketing, product, writing, career, relationship, travel (optional).",
-            "enum" => [
-              "personal",
-              "coding",
-              "business",
-              "learning",
-              "health",
-              "finance",
-              "other",
-              "investing",
-              "marketing",
-              "product",
-              "writing",
-              "career",
-              "relationship",
-              "travel"
-            ]
-          },
-          "health" => %{
-            "type" => "string",
-            "description" =>
-              "Goal health: green (on track), yellow (needs attention), or red (at risk).",
-            "enum" => ["green", "yellow", "red"]
-          },
           "status" => %{
             "type" => "string",
             "description" =>
               "Goal status: draft, active, on_hold, done, or archived (default: active).",
             "enum" => ["draft", "active", "on_hold", "done", "archived"]
           },
-          "metric" => %{
-            "type" => "string",
+          "progress" => %{
+            "type" => "number",
             "description" =>
-              "Metric name the goal is measured by (optional), e.g. 'monthly revenue'."
-          },
-          "target_value" => %{
-            "type" => "number",
-            "description" => "Target value for the metric (optional)."
-          },
-          "current_value" => %{
-            "type" => "number",
-            "description" => "Current value of the metric (optional)."
-          },
-          "unit" => %{
-            "type" => "string",
-            "description" => "Unit for the metric values (optional), e.g. 'USD', 'hours'."
-          },
-          "start_date" => %{
-            "type" => "string",
-            "description" => "Start date in YYYY-MM-DD format (optional)."
-          },
-          "target_date" => %{
-            "type" => "string",
-            "description" => "Target/end date in YYYY-MM-DD format (optional)."
+              "Progress between 0.0 and 1.0 (optional). Derived automatically from linked tasks when they exist."
           },
           "team" => %{
             "type" => "array",
@@ -1641,19 +1594,12 @@ defmodule Dran.MCP do
           slug: slug,
           summary: Map.get(args, "summary"),
           body: Map.get(args, "body", ""),
-          kind: args["kind"],
-          health: args["health"],
           status: Map.get(args, "status", "active"),
-          metric: args["metric"],
-          target_value: args["target_value"],
-          current_value: args["current_value"],
-          unit: args["unit"],
-          start_date: parse_date(args["start_date"]),
-          target_date: parse_date(args["target_date"]),
           team: args["team"] || [],
           # server-side attribution — not client-settable
           created_by: Auth.resolve_created_by(user)
         }
+        |> maybe_put_goal_progress(args)
 
       case Goals.create_goal(attrs) do
         {:ok, goal} ->
@@ -2328,7 +2274,14 @@ defmodule Dran.MCP do
 
   defp maybe_put_assignee_actor(map, _), do: map
 
-  defp parse_date(nil), do: nil
-  defp parse_date(<<_::binary-10>> = str), do: Date.from_iso8601!(str)
-  defp parse_date(_), do: nil
+  # Goals no longer carry the OKR cosmetic fields (kind/health/metric/
+  # target_value/current_value/unit/start_date/target_date were dropped in
+  # 20260904013000). `progress` stays: a number 0.0..1.0, only applied when
+  # present and in range — out-of-range values are ignored silently (the
+  # changeset would reject the whole create otherwise).
+  defp maybe_put_goal_progress(attrs, %{"progress" => p})
+       when is_number(p) and p >= 0.0 and p <= 1.0,
+       do: Map.put(attrs, :progress, p * 1.0)
+
+  defp maybe_put_goal_progress(attrs, _args), do: attrs
 end

@@ -41,8 +41,7 @@ defmodule DranWeb.PageListComponents do
            gettext("Add Reference")}
 
         "goal" ->
-          {gettext("No goals yet"),
-           gettext("Set objectives with target dates and track their health."),
+          {gettext("No goals yet"), gettext("Set objectives and track their progress."),
            gettext("Create Goal")}
 
         "plan" ->

@@ -74,7 +74,6 @@
                       )}
                     </p>
                   </div>
-                  <span :if={wf.goal.health} class="badge badge-ghost badge-sm">{wf.goal.health}</span>
                 </div>
                 <div class="flex flex-wrap gap-1">
                   <span :if={wf.running > 0} class="badge badge-primary badge-sm">{gettext(
@@ -162,7 +161,6 @@
           ← {gettext("Workflows")}
         </.link>
         <h2 class="text-xl font-bold tracking-tight truncate">{@goal.title}</h2>
-        <span :if={@goal.health} class="badge badge-ghost badge-sm">{@goal.health}</span>
       </div>
 
       <div

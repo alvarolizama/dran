@@ -27,8 +27,7 @@ defmodule DranWeb.GraphGoalIntegrationTest do
       Goals.create_goal(%{
         workspace_id: ws.id,
         title: "My Goal",
-        slug: "my-goal-gt",
-        kind: "personal"
+        slug: "my-goal-gt"
       })
 
     # Create a page→goal relation

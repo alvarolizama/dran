@@ -38,15 +38,12 @@ defmodule Dran.GoalTest do
         workspace_id: ctx.id,
         title: "Test Goal",
         slug: "test-goal",
-        metric: "completion %",
-        target_value: 100.0,
-        current_value: 0.0,
-        unit: "%"
+        progress: 0.25
       }
 
       assert {:ok, %Dran.Goal{} = goal} = Goals.create_goal(attrs)
       assert goal.title == "Test Goal"
-      assert goal.metric == "completion %"
+      assert goal.progress == 0.25
     end
   end
 
@@ -56,8 +53,7 @@ defmodule Dran.GoalTest do
         Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "Findable Goal",
-          slug: "findable-goal",
-          metric: "score"
+          slug: "findable-goal"
         })
 
       found = Goals.get_goal_by_slug("findable-goal", ctx.id)
@@ -71,16 +67,14 @@ defmodule Dran.GoalTest do
         Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "Goal A",
-          slug: "goal-a",
-          metric: "score"
+          slug: "goal-a"
         })
 
       {:ok, _} =
         Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "Goal B",
-          slug: "goal-b",
-          metric: "score"
+          slug: "goal-b"
         })
 
       goals = Goals.list_goals(workspace_id: ctx.id)

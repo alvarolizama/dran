@@ -7,7 +7,7 @@ defmodule Dran.Page do
   - `note` — ephemeral thought, quick note, journal entry, meeting, idea
   - `plan` — a plan with a horizon (weekly, monthly, quarterly, yearly)
   - `todo` — action with kanban status (backlog → done)
-  - `goal` — a goal with target date, team, and health
+  - `goal` — a first-class goal (own table) with derived progress and hierarchy
   - `entity` — something concrete (person, company, product, tool, place, event)
   - `concept` — abstract idea, technique, pattern, discipline, theory
   - `reference` — immutable external source (article, paper, video, podcast, book)

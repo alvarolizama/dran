@@ -176,8 +176,7 @@ defmodule Dran.MCPFullTest do
         Goals.create_goal(%{
           workspace_id: ctx.id,
           title: "My Goal",
-          slug: "my-goal-page",
-          health: "green"
+          slug: "my-goal-page"
         })
 
       {:ok, note} =
@@ -628,15 +627,8 @@ defmodule Dran.MCPFullTest do
           "title" => "Ship v1",
           "slug" => "ship-v1-goal",
           "summary" => "Launch the product",
-          "kind" => "business",
-          "health" => "green",
           "status" => "active",
-          "metric" => "revenue",
-          "target_value" => 100_000,
-          "current_value" => 40_000,
-          "unit" => "USD",
-          "start_date" => "2026-01-01",
-          "target_date" => "2026-12-31",
+          "progress" => 0.4,
           "team" => ["alvaro", "hermes"]
         })
 
@@ -645,10 +637,7 @@ defmodule Dran.MCPFullTest do
       assert result =~ "status: active"
 
       goal = Goals.get_goal_by_slug("ship-v1-goal", ctx.id)
-      assert goal.kind == "business"
-      assert goal.health == "green"
-      assert goal.metric == "revenue"
-      assert goal.target_value == 100_000
+      assert goal.progress == 0.4
       assert goal.team == ["alvaro", "hermes"]
     end
 

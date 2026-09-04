@@ -141,10 +141,7 @@ goal_aprender_elixir =
     - Hexdocs oficial
     """,
     "summary" => "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes.",
-    "meta" => %{
-      "target_date" => "2026-09-30",
-      "health" => "green"
-    },
+    "meta" => %{},
     "owner" => "alvaro",
     "created_by" => "alvaro"
   })
@@ -170,10 +167,7 @@ goal_escribir_libro =
     Borrador del capítulo 1 completo. Trabajando en capítulo 2.
     """,
     "summary" => "Libro práctico sobre gestión de conocimiento personal (Zettelkasten, PARA).",
-    "meta" => %{
-      "target_date" => "2026-12-31",
-      "health" => "yellow"
-    },
+    "meta" => %{},
     "owner" => "alvaro",
     "created_by" => "alvaro"
   })
@@ -197,10 +191,7 @@ goal_mejorar_salud_fisica =
     Actualmente corriendo 3K. Mejorando la consistencia.
     """,
     "summary" => "Rutina sostenible de ejercicio, alimentación y descanso.",
-    "meta" => %{
-      "target_date" => "2026-10-15",
-      "health" => "green"
-    },
+    "meta" => %{},
     "owner" => "alvaro",
     "created_by" => "alvaro"
   })
