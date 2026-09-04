@@ -313,6 +313,11 @@ defmodule DranWeb.API.ExecutionController do
   defp translate_error(:workflow_not_found), do: {404, "workflow not found"}
   defp translate_error(:workflow_has_no_steps), do: {422, "workflow has no steps"}
   defp translate_error(:workflow_archived), do: {422, "workflow is archived"}
+
+  defp translate_error(:workflow_already_ran),
+    do: {409, "one_shot workflow already has a session"}
+
+  defp translate_error(:workflow_changed), do: {409, "workflow changed while opening — retry"}
   defp translate_error(:run_not_found), do: {404, "run not found"}
   defp translate_error(:not_in_flight), do: {409, "run is not in_flight"}
   defp translate_error(:session_closed), do: {409, "session is closed"}

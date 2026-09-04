@@ -319,10 +319,10 @@ defmodule DranWeb.WorkflowsLiveTest do
       {:ok, _} = Executions.start_run(build)
       assert render(view) =~ "In Flight"
 
-      # Phase progress reported by the agent (update_progress broadcast)
+      # Phase progress reported by the agent. The :progress broadcast does
+      # NOT reload the view (stop-the-world guard, review #8) — the phase
+      # shows on the next structural refresh (start/close/select).
       {:ok, _} = Executions.update_progress(build.id, %{"phase" => "compiling"})
-      assert render(view) =~ "compiling"
-
       {:ok, _} = Executions.close_run(build, status: "passed")
 
       html = render(view)

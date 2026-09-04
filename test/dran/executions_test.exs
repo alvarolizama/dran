@@ -146,6 +146,18 @@ defmodule Dran.ExecutionsTest do
     assert {:error, :workflow_archived} = Executions.open_session(archived)
   end
 
+  test "P1: one_shot refuses a second pass after the first session exists (review #7)", %{
+    ws: ws
+  } do
+    {workflow, [_step]} = new_workflow(ws, ["S"])
+
+    {:ok, workflow} =
+      Workflows.update_workflow(workflow, %{"kind" => "one_shot"})
+
+    assert {:ok, _session} = Executions.open_session(workflow)
+    assert {:error, :workflow_already_ran} = Executions.open_session(workflow)
+  end
+
   test "P1: open_session with actor_id records the driver; label and context are stored", %{
     ws: ws
   } do

@@ -334,13 +334,17 @@ defmodule DranWeb.WorkflowsLive do
   end
 
   # ── PubSub: sessions/runs changed elsewhere (MCP, API, other tab) ─────────
-
+  # Progress reports (:run_changed :progress) are NOT handled — agents
+  # report phase progress every few seconds and a full reload per report
+  # is stop-the-world (review finding #8). The runs panel refreshes on
+  # selection change and on start/close events.
   @impl true
   def handle_info({:session_changed, _action, _session}, socket),
     do: {:noreply, reload_current(socket)}
 
-  def handle_info({:run_changed, _action, _run}, socket),
-    do: {:noreply, reload_current(socket)}
+  def handle_info({:run_changed, action, _run}, socket)
+      when action in [:started, :closed, :created],
+      do: {:noreply, reload_current(socket)}
 
   def handle_info(_message, socket), do: {:noreply, socket}
 

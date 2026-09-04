@@ -113,6 +113,15 @@ defmodule Dran.Executions do
           broadcast_session_change(session, :opened)
           {:ok, session}
 
+        # TOCTOU (review finding #9): a step deleted between the pre-check
+        # and the run inserts violates the runs_step_id_fkey — the txn
+        # rolls back cleanly; surface it as a typed error, not a 500.
+        {:error, %Ecto.StaleEntryError{}} ->
+          {:error, :workflow_changed}
+
+        {:error, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}} ->
+          {:error, :workflow_changed}
+
         {:error, reason} ->
           {:error, reason}
       end
@@ -177,8 +186,36 @@ defmodule Dran.Executions do
         base
       end
 
-    Repo.all(base)
-    |> Enum.filter(&run_ready?/1)
+    pending = Repo.all(base)
+
+    # Batch readiness (review finding #5): one query per SNAPSHOT (not per
+    # run) + one query for all passed runs of the candidate sessions. The
+    # per-run path would make the agent pull endpoint 1 + 2N queries.
+    sessions =
+      pending
+      |> Enum.map(& &1.session_id)
+      |> Enum.uniq()
+      |> then(&Repo.all(from s in WorkflowSession, where: s.id in ^&1))
+      |> Map.new(&{&1.id, &1})
+
+    passed_by_session =
+      Repo.all(
+        from r in Run,
+          where: r.session_id in ^Map.keys(sessions) and r.status == "passed",
+          select: {r.session_id, r.step_id}
+      )
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      |> Map.new(fn {k, v} -> {k, MapSet.new(v)} end)
+
+    Enum.filter(pending, fn run ->
+      prereqs = snapshot_prerequisite_ids(Map.get(sessions, run.session_id), run.step_id)
+
+      prereqs == [] or
+        MapSet.subset?(
+          MapSet.new(prereqs),
+          Map.get(passed_by_session, run.session_id, MapSet.new())
+        )
+    end)
   end
 
   @doc """
@@ -202,7 +239,15 @@ defmodule Dran.Executions do
 
   # Direct prerequisites of the run's step per the FROZEN snapshot edges.
   # Snapshot edges are [from=dependiente, to=prereq] pairs — a prereq of X
-  # is any edge whose first element is X.
+  # is any edge whose first element is X. The session is passed in (batch
+  # callers preload it); the single-run variant keeps loading on demand.
+  defp snapshot_prerequisite_ids(%WorkflowSession{} = session, step_id) do
+    session.snapshot
+    |> Map.get("edges", [])
+    |> Enum.filter(fn [from, _to] -> from == step_id end)
+    |> Enum.map(fn [_from, to] -> to end)
+  end
+
   defp snapshot_prerequisite_ids(%Run{} = run) do
     session =
       case run.session do
@@ -210,10 +255,7 @@ defmodule Dran.Executions do
         _not_loaded -> Repo.get!(WorkflowSession, run.session_id)
       end
 
-    session.snapshot
-    |> Map.get("edges", [])
-    |> Enum.filter(fn [from, _to] -> from == run.step_id end)
-    |> Enum.map(fn [_from, to] -> to end)
+    snapshot_prerequisite_ids(session, run.step_id)
   end
 
   # ALL prerequisites must be satisfied, each by a passed run IN THIS
@@ -468,6 +510,21 @@ defmodule Dran.Executions do
   # iterate on drafts) — status only gates archived.
   defp ensure_workflow_runnable(%Dran.Workflow{status: "archived"}),
     do: {:error, :workflow_archived}
+
+  # one_shot (review finding #7): the enum claims "one pass" — enforce it
+  # for FUTURE passes, not the concurrent-creation race (two simultaneous
+  # opens both see zero sessions without a lock; evergreen is the default
+  # and the pass-count check happens BEFORE insert).
+  defp ensure_workflow_runnable(%Dran.Workflow{kind: "one_shot"} = workflow) do
+    if Repo.aggregate(
+         from(s in WorkflowSession, where: s.workflow_id == ^workflow.id),
+         :count
+       ) > 0 do
+      {:error, :workflow_already_ran}
+    else
+      :ok
+    end
+  end
 
   defp ensure_workflow_runnable(%Dran.Workflow{}), do: :ok
 
