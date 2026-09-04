@@ -380,7 +380,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_goal",
       "description" =>
-        "Create a first-class goal (stored in its own table, NOT a page). Goals carry outcome, hierarchy (parent_goal), derived progress from linked tasks, and a team list. Link pages to the goal later with dran_create_relation (relation_type `part_of`, target_slug = the goal's slug). Creation fails if the slug already exists in the context. Returns the created goal's slug and status.",
+        "Create a first-class goal (stored in its own table, NOT a page). Goals carry outcome, hierarchy (parent_goal), and a team list. Link pages to the goal later with dran_create_relation (relation_type `part_of`, target_slug = the goal's slug). Creation fails if the slug already exists in the context. Returns the created goal's slug and status.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -410,11 +410,6 @@ defmodule Dran.MCP do
             "description" =>
               "Goal status: draft, active, on_hold, done, or archived (default: active).",
             "enum" => ["draft", "active", "on_hold", "done", "archived"]
-          },
-          "progress" => %{
-            "type" => "number",
-            "description" =>
-              "Progress between 0.0 and 1.0 (optional). Derived automatically from linked tasks when they exist."
           },
           "team" => %{
             "type" => "array",
@@ -1599,7 +1594,6 @@ defmodule Dran.MCP do
           # server-side attribution — not client-settable
           created_by: Auth.resolve_created_by(user)
         }
-        |> maybe_put_goal_progress(args)
 
       case Goals.create_goal(attrs) do
         {:ok, goal} ->
@@ -2273,15 +2267,4 @@ defmodule Dran.MCP do
   end
 
   defp maybe_put_assignee_actor(map, _), do: map
-
-  # Goals no longer carry the OKR cosmetic fields (kind/health/metric/
-  # target_value/current_value/unit/start_date/target_date were dropped in
-  # 20260904013000). `progress` stays: a number 0.0..1.0, only applied when
-  # present and in range — out-of-range values are ignored silently (the
-  # changeset would reject the whole create otherwise).
-  defp maybe_put_goal_progress(attrs, %{"progress" => p})
-       when is_number(p) and p >= 0.0 and p <= 1.0,
-       do: Map.put(attrs, :progress, p * 1.0)
-
-  defp maybe_put_goal_progress(attrs, _args), do: attrs
 end

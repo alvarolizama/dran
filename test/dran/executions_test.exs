@@ -406,6 +406,41 @@ defmodule Dran.ExecutionsTest do
   # P5 — close_run persiste outcome+gates; último run cierra sesión
   # ──────────────────────────────────────────────────────────────────────────
 
+  # NOTE: the Ecto SQL sandbox serializes the two Tasks on one shared
+  # connection, so this cannot actually reproduce the interleaving the
+  # FOR UPDATE lock in maybe_close_session/1 defends against (two real
+  # DB transactions each seeing the other's run open). It covers the
+  # concurrent-call path end to end; the lock itself is verified by
+  # construction (session row locked inside the close transaction).
+  test "P5: concurrent closes of the last two runs both succeed and the session closes",
+       %{ws: ws} do
+    {workflow, [step1, step2]} = new_workflow(ws, ["S1", "S2"])
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run1, run2] = runs_by_step(session, [step1.id, step2.id])
+    {:ok, run1} = Executions.start_run(run1)
+    {:ok, run2} = Executions.start_run(run2)
+
+    # Two agents close the last two open runs CONCURRENTLY.
+    parent = self()
+
+    tasks =
+      for run <- [run1, run2] do
+        Task.async(fn ->
+          result = Executions.close_run(run, status: "passed", outcome: "concurrent")
+          send(parent, {:closed, result})
+          result
+        end)
+      end
+
+    results = Task.await_many(tasks, 5_000)
+    assert Enum.all?(results, &match?({:ok, _}, &1))
+
+    session = Repo.get!(WorkflowSession, session.id)
+    assert session.status == "passed"
+    assert session.finished_at != nil
+  end
+
   test "P5: close_run persists outcome and gate_results; the last run closes the session",
        %{ws: ws} do
     gates = %{"G1" => %{"cmd" => "mix test", "exit" => 0}}

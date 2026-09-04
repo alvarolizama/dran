@@ -621,7 +621,17 @@ defmodule Dran.Executions do
   end
 
   defp maybe_close_session(%Run{} = run) do
-    session = run.session || Repo.get(WorkflowSession, run.session_id)
+    # LOCK the session row FOR UPDATE inside the close transaction: two
+    # transactions closing the last two runs concurrently both see
+    # remaining=1 without it (each holds the OTHER's run open) and the
+    # session stays in_flight forever. The lock serializes them — the
+    # second committer re-reads remaining AFTER the first committed.
+    session =
+      Repo.one(
+        from s in WorkflowSession,
+          where: s.id == ^run.session_id,
+          lock: "FOR UPDATE"
+      )
 
     # Only an open session can close — retry after auto-close keeps the
     # session in its terminal state.
