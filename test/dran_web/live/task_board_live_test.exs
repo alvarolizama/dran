@@ -685,59 +685,9 @@ defmodule DranWeb.TaskBoardLiveTest do
   end
 
   describe "contract chip on cards" do
-    test "shows version chip for a task with an active contract", %{
-      conn: conn,
-      ws: ws,
-      task: task
-    } do
-      {:ok, _} =
-        Tasks.update_task(task, %{
-          "meta" => %{
-            "contract" => valid_board_contract(%{"status" => "active", "version" => 2})
-          }
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
-
-      assert html =~ ~s(hero-document-check)
-      assert html =~ "v2"
-    end
-
-    test "shows draft chip for a draft contract", %{conn: conn, ws: ws, task: task} do
-      {:ok, _} =
-        Tasks.update_task(task, %{
-          "meta" => %{
-            "contract" => valid_board_contract(%{"status" => "draft", "version" => 1})
-          }
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
-      assert html =~ "draft"
-    end
-
     test "plain tasks render no contract chip", %{conn: conn, ws: ws} do
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/tasks")
       refute html =~ "hero-document-check"
     end
-  end
-
-  defp valid_board_contract(overrides) do
-    Map.merge(
-      %{
-        "status" => "active",
-        "version" => 1,
-        "intent" => "do the thing",
-        "claims" => [%{"id" => "P1", "claim" => "done", "verify" => "mix test"}],
-        "gates" => [%{"name" => "g", "cmd" => "mix test", "expect" => "green"}],
-        "graph" => %{
-          "nodes" => [
-            %{"id" => "S1", "verb" => "RUN", "label" => "mix test"},
-            %{"id" => "G1", "verb" => "VERIFY", "label" => "green?"}
-          ],
-          "edges" => [%{"from" => "S1", "to" => "G1", "guard" => "yes"}]
-        }
-      },
-      overrides
-    )
   end
 end

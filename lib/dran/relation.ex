@@ -42,7 +42,7 @@ defmodule Dran.Relation do
              :weight,
              :inserted_at
            ]}
-  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with depends_on serves instance_of)
+  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with depends_on)
   @node_types ~w(page goal task collection step)
 
   schema "relations" do

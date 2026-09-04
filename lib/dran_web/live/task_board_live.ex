@@ -361,21 +361,6 @@ defmodule DranWeb.TaskBoardLive do
     task_ids = board_all |> Map.values() |> List.flatten() |> Enum.map(& &1.id)
     creators_by_task = Tasks.list_creator_actor_ids_by_ids(task_ids)
 
-    # Contract chip per task ("v2" | "draft" | "stale") — only tasks that
-    # carry meta.contract get an entry. stale? hits one goal query per
-    # contract task; contract tasks are the minority of a board.
-    contracts_by_task =
-      board_all
-      |> Map.values()
-      |> List.flatten()
-      |> Enum.filter(&Dran.Contracts.contract?/1)
-      |> Map.new(fn task ->
-        cond do
-          Dran.Contracts.stale?(task) -> {task.id, "stale"}
-          true -> {task.id, contract_chip_label(task)}
-        end
-      end)
-
     # %{actor_id => name} — one-time fallback for legacy rows whose creator
     # has no id-attribution (name mirror kept for display).
     actor_names = Map.new(actors, &{&1.id, &1.name})
@@ -401,7 +386,6 @@ defmodule DranWeb.TaskBoardLive do
       managed_actors: Dran.Actors.list_managed_actors(),
       goal_tree: tree,
       goals_by_task: goals_by_task,
-      contracts_by_task: contracts_by_task,
       page_title: "#{socket.assigns.workspace.name} · #{gettext("Tasks")}"
     )
   end
@@ -544,7 +528,6 @@ defmodule DranWeb.TaskBoardLive do
                 task={task}
                 workspace_slug={@workspace.slug}
                 goals_by_task={@goals_by_task}
-                contracts_by_task={@contracts_by_task}
               />
               <p
                 :if={Map.get(@board, status, []) == []}
@@ -619,7 +602,6 @@ defmodule DranWeb.TaskBoardLive do
   attr :task, Task, required: true
   attr :workspace_slug, :string, required: true
   attr :goals_by_task, :map, required: true
-  attr :contracts_by_task, :map, default: %{}
 
   defp task_card(assigns) do
     ~H"""
@@ -693,46 +675,10 @@ defmodule DranWeb.TaskBoardLive do
           <.icon name="hero-flag" class="size-3.5 text-green-600 shrink-0" />
           <span class="truncate max-w-[120px]">{goal.title}</span>
         </span>
-
-        <span
-          :if={chip = contract_chip(@contracts_by_task, @task.id)}
-          class={contract_chip_class(chip)}
-          title={contract_chip_title(chip)}
-        >
-          <.icon name="hero-document-check" class="size-3.5 shrink-0" />
-          {chip}
-        </span>
       </div>
     </.link>
     """
   end
-
-  # ── Contract chip ("v2" | "draft" | "stale") ──────────────────────────────
-
-  defp contract_chip(contracts_by_task, task_id) do
-    case Map.get(contracts_by_task || %{}, task_id) do
-      nil -> nil
-      chip -> chip
-    end
-  end
-
-  defp contract_chip_label(%Task{meta: %{"contract" => %{"status" => "draft"}}}), do: "draft"
-
-  defp contract_chip_label(%Task{meta: %{"contract" => %{"version" => v}}}) when is_integer(v),
-    do: "v#{v}"
-
-  defp contract_chip_label(%Task{meta: %{"contract" => %{"version" => v}}}) when is_binary(v),
-    do: "v#{v}"
-
-  defp contract_chip_label(_), do: "contract"
-
-  defp contract_chip_class("stale"), do: "badge badge-warning badge-xs gap-0.5"
-  defp contract_chip_class("draft"), do: "badge badge-ghost badge-xs gap-0.5"
-  defp contract_chip_class(_), do: "badge badge-ghost badge-xs gap-0.5"
-
-  defp contract_chip_title("stale"), do: gettext("Contract context changed — regenerate")
-  defp contract_chip_title("draft"), do: gettext("Contract draft — not active")
-  defp contract_chip_title(_), do: gettext("Active contract")
 
   defp priority_badge("urgent"), do: "badge badge-error badge-sm shrink-0"
   defp priority_badge("high"), do: "badge badge-warning badge-sm shrink-0"

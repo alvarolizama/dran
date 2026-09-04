@@ -33,7 +33,7 @@ defmodule Dran.Contracts do
   (steps have no board status).
   """
 
-  alias Dran.{Relation, Repo, Step, Task}
+  alias Dran.{Relation, Repo, Step}
   import Ecto.Query
 
   @verbs ~w(READ EDIT CREATE RUN VERIFY ASK)
@@ -44,17 +44,10 @@ defmodule Dran.Contracts do
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  True when the task carries a structurally valid contract (`meta.contract`
-  that passes `lint/1` with an intent). A task without a contract is a
-  regular task — this is the "is it a contract?" predicate.
+  True when the step carries a structurally valid contract (`meta.contract`
+  that passes `lint/1` with an intent). A step without a contract is a
+  regular step — this is the "is it a contract?" predicate.
   """
-  def contract?(%Task{meta: %{"contract" => %{"intent" => intent}}} = task)
-      when is_binary(intent) and intent != "" do
-    match?({:ok, _}, lint(task))
-  end
-
-  # Same predicate as the task clause: intent present AND the contract
-  # passes lint (structural validity), not just the presence of intent.
   def contract?(%Step{meta: %{"contract" => %{"intent" => intent}}} = step)
       when is_binary(intent) and intent != "" do
     match?({:ok, _}, lint(step))
@@ -70,15 +63,6 @@ defmodule Dran.Contracts do
   verification funnel (a graph must reach a VERIFY before END), claim/gate
   shape, and required fields.
   """
-  def lint(%Task{} = task) do
-    case task.meta do
-      %{"contract" => contract} when is_map(contract) -> lint_contract(contract)
-      _ -> {:error, [:no_contract]}
-    end
-  end
-
-  # Step lint shares lint_contract/1 with the task clause — same shape,
-  # same structural rules.
   def lint(%Step{} = step) do
     case step.meta do
       %{"contract" => contract} when is_map(contract) -> lint_contract(contract)
@@ -260,16 +244,9 @@ defmodule Dran.Contracts do
   end
 
   @doc """
-  All task ids that are prerequisites (direct or transitive) of `task`.
-  `depends_on` edges only; DFS from the task's direct prerequisites.
+  All step ids that are prerequisites (direct or transitive) of `step`.
+  `depends_on` edges only; BFS from the step's direct prerequisites.
   """
-  def transitive_prereqs(%Task{} = task) do
-    do_transitive(prerequisite_ids(task), MapSet.new())
-  end
-
-  # Step variant shares do_transitive/2 — the BFS/`seen` discipline that
-  # keeps diamonds (and the historical base-case bug) dead — with
-  # step-typed edge lookups.
   def transitive_prereqs(%Step{} = step) do
     do_transitive_steps(step_prerequisite_ids(step), MapSet.new())
   end
@@ -278,27 +255,6 @@ defmodule Dran.Contracts do
   # ALREADY been expanded. A node can be enqueued multiple times; it is
   # expanded only once. Handles diamond shapes (two tasks sharing a prereq)
   # without infinite loops.
-  defp do_transitive([], seen), do: MapSet.to_list(seen)
-
-  defp do_transitive(queue, seen) do
-    {id, rest} = {hd(queue), tl(queue)}
-
-    cond do
-      MapSet.member?(seen, id) ->
-        do_transitive(rest, seen)
-
-      true ->
-        nexts = prerequisite_ids_by_ids([id])
-
-        new =
-          Enum.reject(nexts, fn n ->
-            MapSet.member?(seen, n) or n == id
-          end)
-
-        do_transitive(rest ++ new, MapSet.put(seen, id))
-    end
-  end
-
   defp do_transitive_steps([], seen), do: MapSet.to_list(seen)
 
   defp do_transitive_steps(queue, seen) do
@@ -320,18 +276,7 @@ defmodule Dran.Contracts do
     end
   end
 
-  @doc "Direct prerequisite task ids of a task (its `depends_on` targets)."
-  def prerequisite_ids(%Task{id: id}) do
-    Repo.all(
-      from r in Relation,
-        where:
-          r.source_id == ^id and r.source_type == "task" and
-            r.relation_type == "depends_on" and r.target_type == "task",
-        select: r.target_id
-    )
-  end
-
-  # Step variant queries the same edge type scoped to step endpoints.
+  @doc "Direct prerequisite step ids of a step (its `depends_on` targets)."
   def prerequisite_ids(%Step{id: id}) do
     Repo.all(
       from r in Relation,
@@ -342,12 +287,7 @@ defmodule Dran.Contracts do
     )
   end
 
-  defp step_prerequisite_ids(step_or_task) do
-    case step_or_task do
-      %Step{} = step -> prerequisite_ids(step)
-      %Task{} = task -> prerequisite_ids(task)
-    end
-  end
+  defp step_prerequisite_ids(%Step{} = step), do: prerequisite_ids(step)
 
   defp step_prerequisite_ids_by_ids(ids) when is_list(ids) and ids != [] do
     Repo.all(
@@ -358,36 +298,6 @@ defmodule Dran.Contracts do
         select: r.target_id
     )
   end
-
-  defp prerequisite_ids_by_ids(ids) when is_list(ids) and ids != [] do
-    Repo.all(
-      from r in Relation,
-        where:
-          r.source_id in ^ids and r.source_type == "task" and
-            r.relation_type == "depends_on" and r.target_type == "task",
-        select: r.target_id
-    )
-  end
-
-  @doc """
-  depends_on edges among the given task ids: `[{source_id, target_id}]`.
-  Both endpoints must belong to the set — a dependency pointing outside the
-  goal (cross-goal prereq) is not part of this workflow's DAG and is
-  excluded. Backs the workflow graph view. For readiness semantics (where
-  external prereqs DO block), see `dependency_states/1`.
-  """
-  def dependency_edges(task_ids) when is_list(task_ids) and task_ids != [] do
-    Repo.all(
-      from r in Relation,
-        where:
-          r.source_id in ^task_ids and r.source_type == "task" and
-            r.relation_type == "depends_on" and r.target_type == "task" and
-            r.target_id in ^task_ids,
-        select: {r.source_id, r.target_id}
-    )
-  end
-
-  def dependency_edges(_), do: []
 
   @doc """
   Step analogue of `dependency_edges/1`: depends_on edges among the given
@@ -407,54 +317,6 @@ defmodule Dran.Contracts do
   end
 
   def dependency_edges(_, :step), do: []
-
-  @doc """
-  Batch dependency state for a set of task ids:
-  `%{task_id => %{ready: boolean, blocked_count: non_neg_integer}}`.
-
-  Two queries total (edges + statuses of prerequisites) instead of two per
-  task — backs the workflows index and show views.
-
-  Readiness semantics: a task is blocked by ALL its depends_on prereqs,
-  including those held by tasks outside the given set (cross-goal). This
-  matches `ready?/1` — the pull queue must not offer a task whose external
-  prereq is still open, even when that edge is not drawn in the DAG
-  (see `dependency_edges/1`).
-  """
-  def dependency_states(task_ids) when is_list(task_ids) and task_ids != [] do
-    edges =
-      Repo.all(
-        from r in Relation,
-          where:
-            r.source_id in ^task_ids and r.source_type == "task" and
-              r.relation_type == "depends_on" and r.target_type == "task",
-          select: {r.source_id, r.target_id}
-      )
-
-    prereq_ids = edges |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
-
-    done_ids =
-      if prereq_ids == [] do
-        MapSet.new()
-      else
-        Repo.all(
-          from t in Task,
-            where: t.id in ^prereq_ids and t.status in ^~w(done cancelled),
-            select: t.id
-        )
-        |> MapSet.new()
-      end
-
-    by_source = Enum.group_by(edges, &elem(&1, 0), &elem(&1, 1))
-
-    Map.new(task_ids, fn id ->
-      targets = Map.get(by_source, id, [])
-      blocked = Enum.count(targets, &(&1 not in done_ids))
-      {id, %{ready: blocked == 0, blocked_count: blocked}}
-    end)
-  end
-
-  def dependency_states(_), do: %{}
 
   @doc """
   Step analogue of `dependency_states/1`: batch readiness for a set of
@@ -493,204 +355,17 @@ defmodule Dran.Contracts do
   def dependency_states(_, :step), do: %{}
 
   @doc """
-  Is the task ready to execute? True when all its direct prerequisites are
-  in a terminal state (`done` or `cancelled`).
+  Is the step ready at the definition layer? Steps have no board status,
+  so there is no terminal state a prerequisite could reach here — only a
+  step without prerequisites is ready. Attempt-based readiness ("all
+  prereq runs passed in this session") is `Dran.Executions.run_ready?/1`.
   """
-  def ready?(%Task{} = task) do
-    ids = prerequisite_ids(task)
-
-    cond do
-      ids == [] ->
-        true
-
-      # ready only when ALL prerequisites are done/cancelled — a single
-      # pending dep blocks it.
-      Repo.exists?(
-        from t in Task,
-          where: t.id in ^ids and t.status in ^~w(done cancelled)
-      ) and
-          not Repo.exists?(
-            from t in Task,
-              where: t.id in ^ids and t.status not in ^~w(done cancelled)
-          ) ->
-        true
-
-      true ->
-        false
-    end
-  end
-
-  # Definition-layer analogue of the task ready?/1: steps have no board
-  # status, so there is no terminal state a prerequisite could reach at
-  # this layer — only a step without prerequisites is ready here.
-  # Attempt-based readiness ("all prereq runs passed in this session") is
-  # Dran.Executions.run_ready?/1 (wave B).
   def ready?(%Step{} = step) do
     step_prerequisite_ids(step) == []
   end
 
-  @doc "Ids of direct prerequisites that are NOT in a terminal state (blocking this task)."
-  def blocking_prereqs(%Task{} = task) do
-    ids = prerequisite_ids(task)
-
-    if ids == [] do
-      []
-    else
-      Repo.all(
-        from t in Task,
-          where: t.id in ^ids and t.status not in ^~w(done cancelled),
-          select: t.id
-      )
-    end
-  end
-
   # ──────────────────────────────────────────────────────────────────────────
   # Rendering
-  # ──────────────────────────────────────────────────────────────────────────
-
-  @doc """
-  Render `task.meta.contract` as a riel-brief packet (9 sections). This is
-  the interchange format a pulling agent reads; it also feeds `task.body`.
-  """
-  def render_brief(%Task{} = task) do
-    case task.meta do
-      %{"contract" => %{"intent" => intent} = contract} when is_binary(intent) ->
-        sections = [
-          "# Task: #{task.title}",
-          "",
-          "## Objective",
-          "We need #{intent}",
-          "",
-          brief_claims(task, contract),
-          "",
-          brief_gates(contract),
-          "",
-          brief_graph(contract),
-          "",
-          "## Context",
-          "Pulled from #{task.workspace_id} — see task #{task.id}.",
-          "",
-          "## Constraints",
-          "Follow the closed verb vocabulary and the verification funnel (riel-contract).",
-          "",
-          "## Pre-registered claims",
-          "The P-ids above are declared before execution; a failed claim is refuted, never reinterpreted.",
-          "",
-          "## Execution graph",
-          "The mermaid above is the execution plan; follow it textually.",
-          "",
-          "## Deliverable",
-          "Move the task status to done when all gates pass; report ✓NN checkpoints to memory (source: task:<id>).",
-          "",
-          "## DO NOT",
-          "Do not edit other tasks, goals or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
-        ]
-
-        {:ok, Enum.join(List.flatten(sections), "\n")}
-
-      _ ->
-        {:error, :no_contract}
-    end
-  end
-
-  # Step analogue of the task renderer: same sections, same structure —
-  # the interchange format a pulling agent reads.
-  def render_brief(%Step{} = step) do
-    case step.meta do
-      %{"contract" => %{"intent" => intent} = contract} when is_binary(intent) ->
-        sections = [
-          "# Task: #{step.title}",
-          "",
-          "## Objective",
-          "We need #{intent}",
-          "",
-          brief_claims(step, contract),
-          "",
-          brief_gates(contract),
-          "",
-          brief_graph(contract),
-          "",
-          "## Context",
-          "Pulled from #{step.workspace_id} — see step #{step.id} (workflow #{step.workflow_id}).",
-          "",
-          "## Constraints",
-          "Follow the closed verb vocabulary and the verification funnel (riel-contract).",
-          "",
-          "## Pre-registered claims",
-          "The P-ids above are declared before execution; a failed claim is refuted, never reinterpreted.",
-          "",
-          "## Execution graph",
-          "The mermaid above is the execution plan; follow it textually.",
-          "",
-          "## Deliverable",
-          "Move the task status to done when all gates pass; report ✓NN checkpoints to memory (source: step:<id>).",
-          "",
-          "## DO NOT",
-          "Do not edit other steps, plans, tasks or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
-        ]
-
-        {:ok, Enum.join(List.flatten(sections), "\n")}
-
-      _ ->
-        {:error, :no_contract}
-    end
-  end
-
-  defp brief_claims(_task, contract) do
-    claims =
-      case contract["claims"] do
-        list when is_list(list) -> list
-        _ -> []
-      end
-
-    lines =
-      for %{"id" => id, "claim" => claim, "verify" => verify} <- claims do
-        "- **#{id}** — #{claim} — verify with: #{verify}"
-      end
-
-    ["## Claims"] ++ lines
-  end
-
-  defp brief_gates(contract) do
-    gates =
-      case contract["gates"] do
-        list when is_list(list) -> list
-        _ -> []
-      end
-
-    lines =
-      for gate <- gates do
-        "- **#{gate["name"]}** — `#{gate["cmd"]}` — expected: #{gate["expect"]}" <>
-          if(gate["on_failure"], do: " — on failure: #{gate["on_failure"]}", else: "")
-      end
-
-    ["## Verification gates"] ++ lines
-  end
-
-  defp brief_graph(contract) do
-    case contract["graph"] do
-      %{"nodes" => nodes, "edges" => edges} ->
-        graph_lines =
-          ["## Execution graph (mermaid)", "", "```mermaid", "flowchart TD"] ++
-            for %{"id" => id, "verb" => verb, "label" => label} <- nodes do
-              label = label || id
-              "  #{id}[\"#{verb} #{label}\"]"
-            end ++
-            for %{"from" => from, "to" => to, "guard" => guard} <- edges do
-              edge = if guard, do: " -->|#{guard}| ", else: " --> "
-              "  #{from}#{edge}#{to}"
-            end ++
-            ["```"]
-
-        graph_lines
-
-      _ ->
-        ["## Execution graph", "No graph defined."]
-    end
-  end
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # DAG layout (server-side topological levels → columns)
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
@@ -757,36 +432,122 @@ defmodule Dran.Contracts do
   def verbs, do: @verbs
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Rendering
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Render `step.meta.contract` as a riel-brief packet (9 sections). This is
+  the interchange format a pulling agent reads.
+  """
+  def render_brief(%Step{} = step) do
+    case step.meta do
+      %{"contract" => %{"intent" => intent} = contract} when is_binary(intent) ->
+        sections = [
+          "# Task: #{step.title}",
+          "",
+          "## Objective",
+          "We need #{intent}",
+          "",
+          brief_claims(step, contract),
+          "",
+          brief_gates(contract),
+          "",
+          brief_graph(contract),
+          "",
+          "## Context",
+          "Pulled from #{step.workspace_id} — see step #{step.id} (workflow #{step.workflow_id}).",
+          "",
+          "## Constraints",
+          "Follow the closed verb vocabulary and the verification funnel (riel-contract).",
+          "",
+          "## Pre-registered claims",
+          "The P-ids above are declared before execution; a failed claim is refuted, never reinterpreted.",
+          "",
+          "## Execution graph",
+          "The mermaid above is the execution plan; follow it textually.",
+          "",
+          "## Deliverable",
+          "Report the run outcome via the executions API; report ✓NN checkpoints to memory (source: step:<id>).",
+          "",
+          "## DO NOT",
+          "Do not edit other steps, workflows, tasks or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
+        ]
+
+        {:ok, Enum.join(List.flatten(sections), "\n")}
+
+      _ ->
+        {:error, :no_contract}
+    end
+  end
+
+  defp brief_claims(_task, contract) do
+    claims =
+      case contract["claims"] do
+        list when is_list(list) -> list
+        _ -> []
+      end
+
+    lines =
+      for %{"id" => id, "claim" => claim, "verify" => verify} <- claims do
+        "- **#{id}** — #{claim} — verify with: #{verify}"
+      end
+
+    ["## Claims"] ++ lines
+  end
+
+  defp brief_gates(contract) do
+    gates =
+      case contract["gates"] do
+        list when is_list(list) -> list
+        _ -> []
+      end
+
+    lines =
+      for gate <- gates do
+        "- **#{gate["name"]}** — `#{gate["cmd"]}` — expected: #{gate["expect"]}" <>
+          if(gate["on_failure"], do: " — on failure: #{gate["on_failure"]}", else: "")
+      end
+
+    ["## Verification gates"] ++ lines
+  end
+
+  defp brief_graph(contract) do
+    case contract["graph"] do
+      %{"nodes" => nodes, "edges" => edges} ->
+        graph_lines =
+          ["## Execution graph (mermaid)", "", "```mermaid", "flowchart TD"] ++
+            for %{"id" => id, "verb" => verb, "label" => label} <- nodes do
+              label = label || id
+              "  #{id}[\"#{verb} #{label}\"]"
+            end ++
+            for %{"from" => from, "to" => to, "guard" => guard} <- edges do
+              edge = if guard, do: " -->|#{guard}| ", else: " --> "
+              "  #{from}#{edge}#{to}"
+            end ++
+            ["```"]
+
+        graph_lines
+
+      _ ->
+        ["## Execution graph", "No graph defined."]
+    end
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Freshness (fingerprint + stale detection)
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  Content fingerprint of the inputs a contract was generated from. For a
-  task: title + body + goal context. For a step: step.id + contract + the
-  step's `depends_on` edges (plan topology) — steps are never cloned, so
-  the task clone-stale artifact does not apply. Stored on the contract at
-  generation time; `stale?/1` recomputes and compares.
+  Content fingerprint of the inputs a step contract was generated from:
+  step.id + contract + the step's `depends_on` edges (workflow topology).
+  Stored on the contract at generation time.
   """
-  def fingerprint(node, goal \\ nil)
-
-  def fingerprint(%Task{} = task, goal), do: do_fingerprint(fingerprint_input(task, goal))
-
-  def fingerprint(%Step{} = step, _goal), do: do_fingerprint(step_fingerprint_input(step))
+  def fingerprint(%Step{} = step), do: do_fingerprint(step_fingerprint_input(step))
 
   defp do_fingerprint(input) do
     :crypto.hash(:sha256, input)
     |> Base.encode16(case: :lower)
     |> binary_part(0, 16)
-  end
-
-  defp fingerprint_input(%Task{} = task, goal) do
-    goal_part =
-      case goal do
-        %Dran.Goal{} = g -> "#{g.id}:#{g.title}:#{g.updated_at}"
-        _ -> "no-goal"
-      end
-
-    "#{task.id}|#{task.title}|#{task.body}|#{goal_part}"
   end
 
   defp step_fingerprint_input(%Step{} = step) do
@@ -803,35 +564,5 @@ defmodule Dran.Contracts do
       end
 
     "#{step.id}|#{step.title}|#{step.body}|#{contract}|#{edges}"
-  end
-
-  @doc """
-  Is the contract stale? True when the stored fingerprint differs from the
-  current one (task title/body or linked goal changed after generation).
-  Contracts without a stored fingerprint are never stale (hand-written).
-  """
-  def stale?(%Task{} = task) do
-    case task.meta do
-      %{"contract" => %{"fingerprint" => stored}} when is_binary(stored) and stored != "" ->
-        stored != fingerprint(task, linked_goal(task))
-
-      _ ->
-        false
-    end
-  end
-
-  defp linked_goal(%Task{id: id, workspace_id: workspace_id}) do
-    import Ecto.Query
-
-    Repo.one(
-      from g in Dran.Goal,
-        join: r in Relation,
-        on:
-          r.target_id == g.id and r.target_type == "goal" and
-            r.relation_type == "part_of" and r.source_id == ^id and
-            r.source_type == "task",
-        where: g.workspace_id == ^workspace_id,
-        limit: 1
-    )
   end
 end
