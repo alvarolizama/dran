@@ -222,19 +222,61 @@ defmodule Dran.ExecutionsTest do
     assert Executions.run_ready?(run_final)
   end
 
-  test "P3: a prerequisite step from another plan has no run in the session — never ready (no board fallback)",
+  test "P3: cross-plan edges never sequence a session (advisory at definition time)",
        %{ws: ws} do
     {_goal_a, plan_a, [step_a]} = new_plan(ws, ["Step A"])
     {_goal_b, _plan_b, [external]} = new_plan(ws, ["External step"])
 
+    # Edge cross-plan creada ANTES de abrir: la sesión secuencía SOLO los
+    # steps de su plan (dependency_edges exige ambos extremos en el
+    # conjunto — decisión wave C). La edge es metadata de definición: no
+    # bloquea la pasada ni antes ni después de abrir.
     {:ok, _} = Contracts.add_dependency(step_a, external)
 
     {:ok, session} = Executions.open_session(plan_a)
     [run_step] = runs_by_step(session, [step_a.id])
 
-    # El prereq externo NO tiene run en la sesión, y los steps no tienen
-    # board status al que caer (wave B, sin fallback F1): nunca listo.
-    refute Executions.run_ready?(run_step)
+    assert Executions.run_ready?(run_step)
+  end
+
+  test "P3: a cross-plan edge added AFTER open does NOT re-sequence the session (frozen topology)",
+       %{ws: ws} do
+    {_goal_a, plan_a, [step_a]} = new_plan(ws, ["Step A"])
+    {_goal_b, _plan_b, [external]} = new_plan(ws, ["External step"])
+
+    {:ok, session} = Executions.open_session(plan_a)
+    [run_step] = runs_by_step(session, [step_a.id])
+
+    # El paso estaba ready con la topología con la que se abrió la sesión...
+    assert Executions.run_ready?(run_step)
+
+    # ...y una edge NUEVA en el plan vivo no re-secuencia la sesión abierta:
+    # run_ready? lee el plan_snapshot congelado, no las relations live.
+    {:ok, _} = Contracts.add_dependency(step_a, external)
+    assert Executions.run_ready?(run_step)
+  end
+
+  test "P3: an in-plan edge added mid-session does NOT re-sequence (frozen topology, review MAJOR)",
+       %{ws: ws} do
+    {_goal, plan, [first, second, third]} = new_plan(ws, ["First", "Second", "Third"])
+
+    {:ok, session} = Executions.open_session(plan)
+    [run_first, run_second, run_third] = runs_by_step(session, [first.id, second.id, third.id])
+
+    # Sin edges al abrir: todo ready.
+    assert Executions.run_ready?(run_third)
+
+    # Se agrega second→third al plan VIVO a mitad de sesión: la sesión
+    # abierta NO se re-secuencia (el snapshot no cambió).
+    {:ok, _} = Contracts.add_dependency(third, second)
+    assert Executions.run_ready?(run_third)
+
+    # Pero una sesión NUEVA sobre el mismo plan SÍ ve la edge nueva.
+    {:ok, session2} = Executions.open_session(plan)
+    [run_third_s2] = runs_by_step(session2, [third.id])
+    refute Executions.run_ready?(run_third_s2)
+    assert Executions.run_ready?(run_first)
+    assert Executions.run_ready?(run_second)
   end
 
   # ──────────────────────────────────────────────────────────────────────────

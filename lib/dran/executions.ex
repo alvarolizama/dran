@@ -75,7 +75,8 @@ defmodule Dran.Executions do
     actor_id = Keyword.get(opts, :actor_id)
     started_at = DateTime.utc_now()
 
-    with {:ok, goal} <- served_goal(plan) do
+    with {:ok, goal} <- served_goal(plan),
+         :ok <- ensure_plan_has_steps(plan) do
       Repo.transaction(fn ->
         steps = Dran.Plans.list_steps(plan)
         snapshot = plan_snapshot(steps)
@@ -147,21 +148,36 @@ defmodule Dran.Executions do
   @doc """
   Is the run ready to execute?
 
-  A run is ready when every direct prerequisite of its step (`step→step
-  depends_on` edges, `Dran.Contracts.prerequisite_ids/1`) has a `passed`
-  run IN THE SESSION of this run. If the step has no prerequisites, it is
-  ready. This is deliberately session-scoped: two simultaneous sessions over
-  the same plan never block each other (P3). Every step of the plan has a
-  run in its session, so a prerequisite either has a passed run (ready),
-  has a non-passed run (blocked), or — an edge pointing outside the plan,
-  which wave C's `prerequisite_ids/1` semantics already surface — has no run
-  and can never be satisfied here (steps have no board status to fall back
-  to; the old F1 board fallback does not exist in the steps model).
+  Prerequisites are resolved from the session's FROZEN `plan_snapshot`
+  edges — NOT from live step→step relations. The snapshot is the topology
+  that pass was opened with: editing the plan mid-session (adding/removing
+  edges) never re-sequences an open session (design decision, review MAJOR).
+
+  A run is ready when every direct prerequisite of its step (per the
+  snapshot) has a `passed` run IN THE SESSION of this run. No prerequisites
+  → ready. Deliberately session-scoped: two simultaneous sessions over the
+  same plan never block each other.
   """
   def run_ready?(%TaskRun{} = run) do
-    prerequisite_ids = Dran.Contracts.prerequisite_ids(%Dran.Step{id: run.step_id})
+    prerequisite_ids = snapshot_prerequisite_ids(run)
 
     prerequisite_ids == [] or prereqs_satisfied?(run.session_id, prerequisite_ids)
+  end
+
+  # Direct prerequisites of the run's step per the FROZEN snapshot edges.
+  # Snapshot edges are [from=dependiente, to=prereq] pairs — a prereq of X
+  # is any edge whose first element is X.
+  defp snapshot_prerequisite_ids(%TaskRun{} = run) do
+    session =
+      case run.session do
+        %GoalSession{} = loaded -> loaded
+        _not_loaded -> Repo.get!(GoalSession, run.session_id)
+      end
+
+    session.plan_snapshot
+    |> Map.get("edges", [])
+    |> Enum.filter(fn [from, _to] -> from == run.step_id end)
+    |> Enum.map(fn [_from, to] -> to end)
   end
 
   # ALL prerequisites must be satisfied, each by a passed run IN THIS
@@ -509,16 +525,29 @@ defmodule Dran.Executions do
   # ──────────────────────────────────────────────────────────────────────────
 
   # The goal a plan serves (wave A `serves` relation, plan → goal).
+  # Ambiguity is an explicit error, not a crash: nothing structurally
+  # prevents two serves rows from one plan (review finding).
   defp served_goal(%Dran.Plan{} = plan) do
-    case Repo.one(
+    case Repo.all(
            from r in Dran.Relation,
              where:
                r.source_id == ^plan.id and r.source_type == "plan" and
                  r.target_type == "goal" and r.relation_type == "serves",
              select: r.target_id
          ) do
-      nil -> {:error, :plan_serves_no_goal}
-      goal_id -> {:ok, Repo.get!(Dran.Goal, goal_id)}
+      [] -> {:error, :plan_serves_no_goal}
+      [goal_id] -> {:ok, Repo.get!(Dran.Goal, goal_id)}
+      _many -> {:error, :ambiguous_goal}
+    end
+  end
+
+  # A plan with no steps would open a zombie session: no runs means no
+  # close_run can ever fire the auto-close (review finding).
+  defp ensure_plan_has_steps(%Dran.Plan{} = plan) do
+    if Dran.Plans.list_steps(plan) == [] do
+      {:error, :plan_has_no_steps}
+    else
+      :ok
     end
   end
 
@@ -563,7 +592,7 @@ defmodule Dran.Executions do
     do: {:ok, run}
 
   defp ensure_spawned(%TaskRun{} = run) do
-    with {:ok, session} <- fetch_session(run.session_id),
+    with {:ok, session} <- fetch_open_session(run.session_id),
          {:ok, step} <- fetch_step(run.step_id),
          {:ok, task} <- create_spawned_task(run, step),
          {:ok, _} <- link_part_of(task, session),
@@ -573,9 +602,13 @@ defmodule Dran.Executions do
     end
   end
 
-  defp fetch_session(session_id) do
+  # Re-read of the session status AFTER the claim: closes the TOCTOU window
+  # where the last other run's close commits between our claim and the spawn
+  # (review finding — the session must still be open when we materialize).
+  defp fetch_open_session(session_id) do
     case Repo.get(GoalSession, session_id) do
-      %GoalSession{} = session -> {:ok, session}
+      %GoalSession{status: "in_flight"} = session -> {:ok, session}
+      %GoalSession{} -> {:error, :session_closed}
       nil -> {:error, :session_not_found}
     end
   end
@@ -670,17 +703,23 @@ defmodule Dran.Executions do
 
   # Wave B effects on the SPAWNED task, inside the close transaction:
   # passed → done, skipped → cancelled, failed → untouched (a retry cancels
-  # the failed attempt's task). Idempotent per terminal state.
+  # the failed attempt's task). Idempotent per terminal state — and a task
+  # already terminal (e.g. cancelled by a human mid-race) is NEVER
+  # resurrected: the agent's passed does not override the board (review
+  # finding).
   defp apply_task_effects(%TaskRun{task_id: nil}, _status), do: :ok
 
   defp apply_task_effects(%TaskRun{task_id: task_id}, status) do
     case Repo.get(Dran.Task, task_id) do
       %Dran.Task{status: current} = task ->
         cond do
-          status == "passed" and current != "done" ->
+          current in ~w(done cancelled) ->
+            :ok
+
+          status == "passed" ->
             Dran.Tasks.update_task(task, %{"status" => "done"})
 
-          status == "skipped" and current != "cancelled" ->
+          status == "skipped" ->
             Dran.Tasks.update_task(task, %{"status" => "cancelled"})
 
           true ->
@@ -745,19 +784,15 @@ defmodule Dran.Executions do
     status = session_outcome(session.id)
     archive_session_tasks(session.id)
 
-    updated =
+    # Repo.update! — a failed close inside the close_run transaction must
+    # ROLLBACK, not silently leave a zombie open session (review finding).
+    closed =
       session
       |> GoalSession.changeset(%{status: status, finished_at: DateTime.utc_now()})
-      |> Repo.update()
+      |> Repo.update!()
 
-    case updated do
-      {:ok, %GoalSession{} = closed} ->
-        Dran.Goals.recompute_progress(Repo.get(Dran.Goal, closed.goal_id))
-        broadcast_session_change(closed, :closed)
-
-      _ ->
-        :ok
-    end
+    Dran.Goals.recompute_progress(Repo.get(Dran.Goal, closed.goal_id))
+    broadcast_session_change(closed, :closed)
   end
 
   # Decision ?07: every task spawned by the session (any run carrying a

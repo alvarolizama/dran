@@ -128,8 +128,7 @@ defmodule Dran.PlansTest do
     test "delete_step/1 deletes a step without open runs", %{plan: plan} do
       {:ok, step} = Plans.create_step(plan, %{title: "S", slug: "s"})
 
-      assert {:ok, deleted} = Plans.delete_step(step)
-      assert deleted.id == step.id
+      assert {:ok, %Dran.Step{}} = Plans.delete_step(step)
       assert Plans.list_steps(plan) == []
     end
   end

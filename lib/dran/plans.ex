@@ -116,16 +116,50 @@ defmodule Dran.Plans do
   end
 
   @doc """
-  Delete a step. Refuses (and returns `{:error, :has_open_runs}`) when the
-  step has open runs — an in-flight run materializing this step (wave B)
-  must not lose its definition mid-execution.
+  Delete a step. Refuses when:
+  - `{:error, :has_open_runs}` — the step has open runs (an in-flight run
+    materializing this step must not lose its definition mid-execution);
+  - `{:error, :referenced_by_open_session}` — the step appears in the frozen
+    `plan_snapshot` of an OPEN session: deleting it would cascade its runs
+    away via FK and permanently block the dependents of that pass (review
+    finding — snapshots are the session's frozen truth).
+  Deletes its step→step `depends_on` edges (polymorphic relations have no
+  FK cascade) in the same transaction.
   """
   def delete_step(%Step{} = step) do
     if open_run_count(step) > 0 do
       {:error, :has_open_runs}
     else
-      Repo.delete(step)
+      if referenced_by_open_session?(step) do
+        {:error, :referenced_by_open_session}
+      else
+        Repo.transaction(fn ->
+          Repo.delete_all(
+            from r in Dran.Relation,
+              where:
+                (r.source_id == ^step.id and r.source_type == "step") or
+                  (r.target_id == ^step.id and r.target_type == "step")
+          )
+
+          Repo.delete!(step)
+        end)
+      end
     end
+  end
+
+  # The step's id appears in the frozen snapshot (steps or edges) of any
+  # OPEN session — the pass was opened against that topology.
+  defp referenced_by_open_session?(%Step{} = step) do
+    step_json = Jason.encode!(%{id: step.id})
+    edge_json = Jason.encode!([step.id])
+
+    Repo.exists?(
+      from s in Dran.GoalSession,
+        where: s.status == "in_flight",
+        where:
+          fragment("?->'steps' @> ?", s.plan_snapshot, ^step_json) or
+            fragment("?->'edges' @> ?", s.plan_snapshot, ^edge_json)
+    )
   end
 
   # ──────────────────────────────────────────────────────────────────────────
