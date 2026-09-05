@@ -8,7 +8,7 @@ defmodule Dran.WorkflowsTest do
 
   use Dran.DataCase, async: false
 
-  alias Dran.{Goals, Knowledge, Relation, Repo, Task, Workflow, Workflows}
+  alias Dran.{Contracts, Goals, Knowledge, Relation, Repo, Task, Workflow, Workflows}
 
   setup do
     %{workspace: ensure_workspace!()}
@@ -191,6 +191,102 @@ defmodule Dran.WorkflowsTest do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Edge menus: insert_step_between / link_step_between
+  # ──────────────────────────────────────────────────────────────────────────
+
+  describe "edge insertion (menú de arista)" do
+    test "insert_step_between creates a NEW middle step and splits the edge", %{workspace: ws} do
+      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-ins"})
+      {:ok, a} = Workflows.create_step(plan, %{title: "A", slug: "a-ins"})
+      {:ok, b} = Workflows.create_step(plan, %{title: "B", slug: "b-ins"})
+      {:ok, _} = Contracts.add_dependency(b, a)
+
+      assert {:ok, mid} =
+               Workflows.insert_step_between(plan, b, a, %{"title" => "Nuevo", "slug" => "nuevo"})
+
+      # A → nuevo → B: la arista original se partió y el nuevo está en medio.
+      assert mid.title == "Nuevo"
+      assert mid.id in Contracts.prerequisite_ids(Workflows.get_step!(b.id))
+      assert a.id in Contracts.prerequisite_ids(Workflows.get_step!(mid.id))
+      assert mid.id in Contracts.prerequisite_ids(Workflows.get_step!(b.id))
+    end
+
+    test "insert_step_between returns :missing_edge when the edge does not exist", %{
+      workspace: ws
+    } do
+      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-ins2"})
+      {:ok, a} = Workflows.create_step(plan, %{title: "A", slug: "a-ins2"})
+      {:ok, b} = Workflows.create_step(plan, %{title: "B", slug: "b-ins2"})
+
+      assert {:error, :missing_edge} =
+               Workflows.insert_step_between(plan, b, a, %{"title" => "N", "slug" => "n2"})
+    end
+
+    test "insert_step_between rolls back when the new step is invalid", %{workspace: ws} do
+      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-ins3"})
+      {:ok, a} = Workflows.create_step(plan, %{title: "A", slug: "a-ins3"})
+      {:ok, b} = Workflows.create_step(plan, %{title: "B", slug: "b-ins3"})
+      {:ok, _} = Contracts.add_dependency(b, a)
+
+      # Título >500 chars → changeset inválido → rollback de la transacción
+      # entera (la arista original sobrevive intacta).
+      assert {:error, %Ecto.Changeset{}} =
+               Workflows.insert_step_between(plan, b, a, %{
+                 "title" => String.duplicate("x", 501),
+                 "slug" => ""
+               })
+
+      assert a.id in Contracts.prerequisite_ids(Workflows.get_step!(b.id))
+      assert length(Workflows.list_steps(plan)) == 2
+    end
+
+    test "link_step_between places an EXISTING step in the middle of an edge", %{workspace: ws} do
+      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-link"})
+      {:ok, a} = Workflows.create_step(plan, %{title: "A", slug: "a-link"})
+      {:ok, b} = Workflows.create_step(plan, %{title: "B", slug: "b-link"})
+      {:ok, m} = Workflows.create_step(plan, %{title: "M", slug: "m-link"})
+      {:ok, _} = Contracts.add_dependency(b, a)
+
+      assert {:ok, _} = Workflows.link_step_between(b, a, m)
+
+      # A → M → B: M quedó entre ambos.
+      assert a.id in Contracts.prerequisite_ids(Workflows.get_step!(m.id))
+      assert m.id in Contracts.prerequisite_ids(Workflows.get_step!(b.id))
+      # Re-linkear tras el rewire: la arista a→b ya no existe → :missing_edge.
+      assert {:error, :missing_edge} = Workflows.link_step_between(b, a, m)
+    end
+
+    test "link_step_between rejects middle == endpoint (self-edge)", %{workspace: ws} do
+      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-link2"})
+      {:ok, a} = Workflows.create_step(plan, %{title: "A", slug: "a-link2"})
+      {:ok, b} = Workflows.create_step(plan, %{title: "B", slug: "b-link2"})
+      {:ok, _} = Contracts.add_dependency(b, a)
+
+      assert {:error, :invalid} = Workflows.link_step_between(b, a, a)
+      assert {:error, :invalid} = Workflows.link_step_between(b, a, b)
+    end
+
+    test "link_step_between with a PRE-EXISTING diamond edge (middle already depends on prereq)",
+         %{workspace: ws} do
+      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-link3"})
+      {:ok, a} = Workflows.create_step(plan, %{title: "A", slug: "a-link3"})
+      {:ok, b} = Workflows.create_step(plan, %{title: "B", slug: "b-link3"})
+      {:ok, m} = Workflows.create_step(plan, %{title: "M", slug: "m-link3"})
+      {:ok, _} = Contracts.add_dependency(b, a)
+      # Rombo: m ya depende de a. El rewire de b→a a b→m chocaría con el
+      # índice único — el estado final ya es el deseado, no debe crashear.
+      {:ok, _} = Contracts.add_dependency(m, a)
+
+      assert {:ok, _} = Workflows.link_step_between(b, a, m)
+
+      # Estado final: A → M → B, con UNA sola arista hacia B (sin duplicados
+      # ni fila huérfana del rombo).
+      assert Contracts.prerequisite_ids(Workflows.get_step!(m.id)) == [a.id]
+      assert Contracts.prerequisite_ids(Workflows.get_step!(b.id)) == [m.id]
+    end
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Delete guards
   # ──────────────────────────────────────────────────────────────────────────
 
@@ -262,6 +358,56 @@ defmodule Dran.WorkflowsTest do
                })
 
       assert dep.target_type == "step"
+    end
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Canvas positions (free layout in meta.pos)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  describe "canvas positions (move_step / repack_layout)" do
+    test "move_step persists meta.pos and preserves the contract", %{workspace: ws} do
+      {:ok, plan} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-canvas"})
+
+      {:ok, step} = Workflows.create_step(plan, %{title: "S", slug: "s-canvas"})
+
+      {:ok, _} =
+        Workflows.update_step(step, %{"meta" => %{"contract" => %{"intent" => "x"}}})
+
+      assert {:ok, moved} = Workflows.move_step(step, 120, 240)
+      assert moved.meta["pos"] == %{"x" => 120, "y" => 240}
+      assert moved.meta["contract"] == %{"intent" => "x"}
+    end
+
+    test "move_step rejects negative or non-integer coordinates", %{workspace: ws} do
+      {:ok, plan} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-canvas-2"})
+
+      {:ok, step} = Workflows.create_step(plan, %{title: "S", slug: "s-canvas-2"})
+
+      assert_raise FunctionClauseError, fn -> Workflows.move_step(step, -10, 0) end
+      assert_raise FunctionClauseError, fn -> Workflows.move_step(step, 1.5, 0) end
+    end
+
+    test "repack_layout clears meta.pos of every step and keeps contracts", %{workspace: ws} do
+      {:ok, plan} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-canvas-3"})
+
+      {:ok, s1} = Workflows.create_step(plan, %{title: "S1", slug: "s1-canvas"})
+      {:ok, s2} = Workflows.create_step(plan, %{title: "S2", slug: "s2-canvas"})
+
+      {:ok, _} = Workflows.update_step(s1, %{"meta" => %{"contract" => %{"intent" => "y"}}})
+      {:ok, s1} = Workflows.move_step(s1, 10, 20)
+      {:ok, _} = Workflows.move_step(s2, 30, 40)
+
+      assert {:ok, _} = Workflows.repack_layout(plan)
+
+      steps = Workflows.list_steps(plan)
+      assert Enum.all?(steps, &is_nil(&1.meta["pos"]))
+
+      by_id = Map.new(steps, &{&1.id, &1})
+      assert by_id[s1.id].meta["contract"] == %{"intent" => "y"}
     end
   end
 

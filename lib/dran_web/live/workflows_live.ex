@@ -51,7 +51,11 @@ defmodule DranWeb.WorkflowsLive do
            # Resource modal state — `?new=true` on the index opens the
            # create modal (pages/goals pattern: URL state, not a page).
            modal_open: false,
-           form: nil
+           form: nil,
+           # Step modal (show only) — same URL-state pattern (`?new_step=true`
+           # / `?step=<id>`); assigned in apply_show.
+           step_modal: nil,
+           step_form: nil
          )}
     end
   end
@@ -183,16 +187,35 @@ defmodule DranWeb.WorkflowsLive do
           status_menu_open: false,
           modal_open: false,
           form: nil,
+          # Reset on every URL navigation — errors that live INSIDE the modal
+          # (delete guard, contract JSON) must never leak to the next open.
+          step_delete_error: nil,
+          contract_lint: nil,
           visible_count: 12,
           archived_visible_count: 12
         )
-        |> load_show(workflow, params)
+        # One list_steps query shared by the modal state (after_step_id)
+        # and load_show (DAG/levels/edges) — loaded ONCE here.
+        |> then(fn socket ->
+          steps_preloaded = Workflows.list_steps(workflow)
+
+          socket
+          |> assign(step_modal_state(workflow, params, steps_preloaded))
+          |> load_show(workflow, params, steps_preloaded)
+        end)
     end
   end
 
-  defp load_show(socket, workflow, params) do
-    steps = Workflows.list_steps(workflow)
+  # Legacy callers (session events, reload_current) refetch fresh; the
+  # mount path passes the steps it already loaded for step_modal_state.
+  defp load_show(socket, workflow, params), do: load_show(socket, workflow, params, nil)
+
+  defp load_show(socket, workflow, params, nil),
+    do: load_show(socket, workflow, params, Workflows.list_steps(workflow))
+
+  defp load_show(socket, workflow, params, steps) do
     levels = Contracts.levels(steps)
+    positions = step_positions(steps, levels)
     steps_by_id = Map.new(steps, &{&1.id, &1})
     step_ids = Enum.map(steps, & &1.id)
 
@@ -250,9 +273,21 @@ defmodule DranWeb.WorkflowsLive do
           %{}
       end
 
+    # Live edges touching the step being edited (modal "Conexiones"
+    # section): {outgoing, incoming} step structs, workspace-preloaded.
+    {outgoing_deps, incoming_deps} =
+      case Map.get(socket.assigns, :step_modal) do
+        %{mode: :edit, step: %Dran.Step{} = step} ->
+          step_connections(steps, step)
+
+        _ ->
+          {[], []}
+      end
+
     assign(socket,
       steps: steps,
       levels: levels,
+      positions: positions,
       steps_by_id: steps_by_id,
       edges: edges,
       dep_info: dep_info,
@@ -260,8 +295,44 @@ defmodule DranWeb.WorkflowsLive do
       selected_session: selected_session,
       session_progress: selected_progress,
       run_views: run_views(snap_titles, steps_by_id, runs),
-      passed_step_ids: passed_step_ids
+      passed_step_ids: passed_step_ids,
+      outgoing_deps: outgoing_deps,
+      incoming_deps: incoming_deps
     )
+  end
+
+  # Live `depends_on` edges of `step` among THIS workflow's steps, resolved
+  # to structs for the modal's connections list: {prereqs, dependents}.
+  defp step_connections(steps, step) do
+    step_ids = Enum.map(steps, & &1.id)
+    ids = MapSet.new(step_ids)
+
+    # The FULL workflow id list, not [step.id]: dependency_edges resolves
+    # edges against the workspace's step graph and filters to ids present
+    # in the list — a one-element list drops every edge.
+    edges =
+      Contracts.dependency_edges(step_ids, :step)
+      |> Enum.filter(fn {dep, pre} -> MapSet.member?(ids, dep) and MapSet.member?(ids, pre) end)
+
+    steps_by_id = Map.new(steps, &{&1.id, &1})
+
+    # `s = Map.get(...)` doubles as a filter: nil (edge to a step outside
+    # this workflow) drops out of the comprehension.
+    outgoing =
+      for {dep_id, prereq_id} <- edges,
+          dep_id == step.id,
+          s = Map.get(steps_by_id, prereq_id) do
+        s
+      end
+
+    incoming =
+      for {dep_id, prereq_id} <- edges,
+          prereq_id == step.id,
+          s = Map.get(steps_by_id, dep_id) do
+        s
+      end
+
+    {outgoing, incoming}
   end
 
   defp run_views(_snap_titles, _steps_by_id, []), do: []
@@ -277,6 +348,80 @@ defmodule DranWeb.WorkflowsLive do
 
       %{run: run, title: title}
     end)
+  end
+
+  # ── Step modal (show) — URL state: `?new_step=true` / `?step=<id>` ────────
+
+  # Builds the modal state from URL params, pages/workflow-modal pattern:
+  # no live state to desync — the URL is the single source of truth. A step
+  # id that does not resolve (deleted elsewhere, forged id, bad UUID) simply
+  # renders no modal.
+  defp step_modal_state(%Dran.Workflow{} = workflow, params, steps) do
+    cond do
+      params["new_step"] == "true" ->
+        changeset =
+          %Dran.Step{workspace_id: workflow.workspace_id, workflow_id: workflow.id}
+          |> Workflows.change_step()
+
+        %{
+          step_modal: %{
+            mode: :new,
+            step: nil,
+            # "Después de" (create only): the workflow's last step by manual
+            # order (position); nil when the workflow has no steps yet.
+            after_step_id: last_step_id(steps),
+            # Canvas create-at-point (?new_step=true&pos_x=&pos_y=): the
+            # step is born with meta.pos at the double-clicked spot.
+            create_pos: create_pos_from_params(params)
+          },
+          step_form: to_form(changeset, as: :step)
+        }
+
+      step_id = step_id_or_nil(params["step"]) ->
+        case fetch_workflow_step(step_id, workflow.workspace_id) do
+          %Dran.Step{} = step ->
+            %{
+              step_modal: %{mode: :edit, step: step, after_step_id: nil},
+              step_form: to_form(Workflows.change_step(step), as: :step)
+            }
+
+          nil ->
+            %{step_modal: nil, step_form: nil}
+        end
+
+      true ->
+        %{step_modal: nil, step_form: nil}
+    end
+  end
+
+  defp step_id_or_nil(id) when is_binary(id) and id != "", do: id
+  defp step_id_or_nil(_), do: nil
+
+  # Last step by the manual order (position); ties/nils → last by insertion.
+  defp last_step_id([]), do: nil
+
+  defp last_step_id(steps) do
+    steps
+    |> Enum.max_by(fn s -> {s.position || 0, s.inserted_at} end)
+    |> Map.fetch!(:id)
+  end
+
+  # Row-level workspace authorization (fetch_workspace_workflow pattern):
+  # URL ids are client-forgeable — a step of another workspace must never
+  # open in the modal.
+  defp fetch_workflow_step(id, workspace_id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        case Workflows.get_step!(uuid) do
+          %Dran.Step{workspace_id: ^workspace_id} = step -> step
+          _other -> nil
+        end
+
+      :error ->
+        nil
+    end
+  rescue
+    Ecto.NoResultsError -> nil
   end
 
   # ── Events ────────────────────────────────────────────────────────────────
@@ -538,6 +683,568 @@ defmodule DranWeb.WorkflowsLive do
      )}
   end
 
+  # ── Step modal events (?new_step=true / ?step=<id>) ───────────────────────
+
+  # Opens the modal by patching the URL — URL state is the single source of
+  # truth (pages/goals/workflow-modal pattern).
+  def handle_event("open_step_modal", %{"mode" => "new"}, socket) do
+    {:noreply,
+     push_patch(socket,
+       to:
+         show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug) <>
+           "?new_step=true"
+     )}
+  end
+
+  def handle_event("open_step_modal", %{"mode" => "edit", "step-id" => step_id}, socket) do
+    {:noreply,
+     push_patch(
+       socket,
+       to:
+         show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug) <>
+           "?step=#{step_id}"
+     )}
+  end
+
+  def handle_event("validate_step", %{"step" => params}, socket) do
+    # Same whitelist as save (SEC-006): validate only form-owned fields —
+    # workspace_id/workflow_id/position are server-owned.
+    changeset =
+      step_for_mode(socket)
+      |> Workflows.change_step(Map.take(params, ["title", "slug", "body"]))
+      |> Map.put(:action, :validate)
+
+    {:noreply,
+     socket
+     |> assign(step_form: to_form(changeset, as: :step))
+     |> assign(contract_lint: contract_feedback(params))}
+  end
+
+  def handle_event("save_step", %{"step" => step_params} = all_params, socket) do
+    # A forged phx-submit (or a race with a patch that closed the modal)
+    # arrives with no modal open → flash, never a MatchError crash. Every
+    # other canvas handler authorizes ids via fetch_workflow_step; this one
+    # guards the modal state itself.
+    case Map.get(socket.assigns, :step_modal) do
+      %{mode: mode, step: step} ->
+        save_step(mode, step, step_params, all_params, socket)
+
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("No hay ningún step abierto para guardar."))}
+    end
+  end
+
+  def handle_event("delete_step", %{"step-id" => step_id}, socket) do
+    case fetch_workflow_step(step_id, socket.assigns.workflow.workspace_id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Step no encontrado."))}
+
+      step ->
+        case Workflows.delete_step(step) do
+          {:ok, _step} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, gettext("Step eliminado."))
+             |> push_patch(
+               to: show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug)
+             )}
+
+          {:error, reason} when reason in [:has_open_runs, :referenced_by_open_session] ->
+            # The modal stays open; it covers the page's flash group, so the
+            # guard error renders INSIDE the modal footer instead.
+            {:noreply,
+             assign(
+               socket,
+               step_delete_error:
+                 gettext(
+                   "No se puede eliminar: tiene runs abiertos o pertenece al snapshot de una sesión en curso."
+                 )
+             )}
+        end
+    end
+  end
+
+  def handle_event("close_step_modal", _params, socket) do
+    {:noreply,
+     push_patch(socket,
+       to: show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug)
+     )}
+  end
+
+  # ── Step modal (edit): connections — break a depends_on edge ─────────────
+
+  # Both ids arrive via phx-value (forgeable) → authorize against the
+  # workspace AND this workflow, same as the canvas remove path. The edge is
+  # whichever direction exists between the step and the other one.
+  def handle_event(
+        "remove_step_dependency",
+        %{"step-id" => step_id, "other-id" => other_id},
+        socket
+      ) do
+    ws_id = socket.assigns.workflow.workspace_id
+
+    with %Dran.Step{} = step <- fetch_workflow_step(step_id, ws_id),
+         %Dran.Step{} = other <- fetch_workflow_step(other_id, ws_id),
+         :ok <- ensure_same_workflow(step, other, socket.assigns.workflow),
+         # The edge is whichever direction exists (outgoing or incoming);
+         # remove_dependency deletes step→other only, so a 0-count on the
+         # first order falls back to the inverse edge other→step.
+         {:ok, _} <-
+           (case Contracts.remove_dependency(step, other) do
+              {:ok, 0} -> Contracts.remove_dependency(other, step)
+              ok -> ok
+            end) do
+      {:noreply, reload_current(socket)}
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo quitar la conexión."))}
+    end
+  end
+
+  # ── Canvas editor (free layout + port-to-port edges) ─────────────────────
+
+  # Drag-end of a card: persist `meta.pos`. Cosmetic by design — a failed
+  # save never aborts anything and is silent; the client already moved the
+  # card on its grid. The first drag materializes the whole workflow into
+  # the free layout so the canvas is all-or-nothing (positions or levels).
+  def handle_event("move_step", %{"step-id" => step_id, "x" => x, "y" => y}, socket) do
+    with %Dran.Step{} = step <-
+           fetch_workflow_step(step_id, socket.assigns.workflow.workspace_id),
+         {x, ""} <- Integer.parse(to_string(x)),
+         {y, ""} <- Integer.parse(to_string(y)),
+         true <- x >= 0 and y >= 0 do
+      # The rendered layout (levels or free) with the card moved — always
+      # complete, so the first drag materializes the whole workflow into
+      # the free layout. Assign is kept in sync so consecutive drags
+      # between reloads never write a stale position back.
+      positions = Map.put(socket.assigns.positions, step.id, {x, y})
+
+      case Workflows.persist_positions(socket.assigns.workflow, positions) do
+        {:ok, _} -> {:noreply, assign(socket, :positions, positions)}
+        {:error, _} -> {:noreply, socket}
+      end
+    else
+      _ -> :error
+    end
+
+    {:noreply, socket}
+  end
+
+  # Drop of a port-to-port connection: prereq → dependent `depends_on`.
+  # Cycle/self guards live in Contracts.add_dependency; both ids are
+  # authorized against the workspace AND this workflow (forgeable params).
+  def handle_event("connect_steps", %{"dependent-id" => dep_id, "prereq-id" => pre_id}, socket) do
+    with %Dran.Step{} = dependent <-
+           fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
+         %Dran.Step{} = prereq <-
+           fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
+         :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow) do
+      case Contracts.add_dependency(dependent, prereq) do
+        {:ok, _} ->
+          {:noreply, reload_current(socket)}
+
+        {:error, :cycle} ->
+          {:noreply,
+           put_flash(socket, :error, gettext("La conexión cerraría un ciclo de dependencias."))}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, gettext("No se pudo conectar los steps."))}
+      end
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("Step no encontrado."))}
+    end
+  end
+
+  # ✕ on an edge hover: delete the `depends_on` relation.
+  def handle_event(
+        "remove_dependency",
+        %{"dependent-id" => dep_id, "prereq-id" => pre_id},
+        socket
+      ) do
+    with %Dran.Step{} = dependent <-
+           fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
+         %Dran.Step{} = prereq <-
+           fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
+         :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow),
+         {:ok, _} <- Contracts.remove_dependency(dependent, prereq) do
+      {:noreply, reload_current(socket)}
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo quitar la dependencia."))}
+    end
+  end
+
+  # Menú de arista — "Agregar step": crea un step NUEVO en medio de la
+  # arista (A → nuevo → B) partiendo la conexión original en una transacción
+  # (rollback total si algo falla).
+  def handle_event(
+        "edge_add_step",
+        %{"dependent-id" => dep_id, "prereq-id" => pre_id},
+        socket
+      ) do
+    with %Dran.Step{} = dependent <-
+           fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
+         %Dran.Step{} = prereq <-
+           fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
+         :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow) do
+      case Workflows.insert_step_between(socket.assigns.workflow, dependent, prereq, %{
+             "title" => gettext("Nuevo paso")
+           }) do
+        {:ok, _} ->
+          {:noreply, reload_current(socket)}
+
+        {:error, :missing_edge} ->
+          {:noreply, put_flash(socket, :error, gettext("La conexión ya no existe."))}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, gettext("No se pudo crear el step."))}
+      end
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("Step no encontrado."))}
+    end
+  end
+
+  # Menú de arista — "Linkear step…": mete un step YA EXISTENTE del
+  # workflow en medio de la arista. Guard de self-edge en Workflows; el
+  # picker del hook solo ofrece steps del workflow, pero los params son
+  # forgeables → authorize ambos endpoints aquí.
+  def handle_event(
+        "link_step_between",
+        %{"dependent-id" => dep_id, "prereq-id" => pre_id, "middle-id" => mid_id},
+        socket
+      ) do
+    with %Dran.Step{} = dependent <-
+           fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
+         %Dran.Step{} = prereq <-
+           fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
+         %Dran.Step{} = middle <-
+           fetch_workflow_step(mid_id, socket.assigns.workflow.workspace_id),
+         :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow),
+         :ok <- ensure_same_workflow(middle, prereq, socket.assigns.workflow),
+         :ok <- ensure_same_workflow(middle, dependent, socket.assigns.workflow) do
+      case Workflows.link_step_between(dependent, prereq, middle) do
+        {:ok, _} ->
+          {:noreply, reload_current(socket)}
+
+        {:error, :invalid} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             gettext("El step intermedio no puede ser un extremo de la conexión.")
+           )}
+
+        {:error, :cycle} ->
+          {:noreply,
+           put_flash(socket, :error, gettext("La conexión cerraría un ciclo de dependencias."))}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, gettext("No se pudo linkear el step."))}
+      end
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("Step no encontrado."))}
+    end
+  end
+
+  # ⌗ control: drop every saved position → back to the topological layout.
+  def handle_event("repack_layout", _params, socket) do
+    case Workflows.repack_layout(socket.assigns.workflow) do
+      {:ok, _} ->
+        {:noreply, reload_current(socket)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo reordenar el canvas."))}
+    end
+  end
+
+  # Double-click on empty canvas: open the new-step modal carrying the
+  # clicked coordinates so the created step is born at that canvas spot.
+  def handle_event("new_step_at", %{"x" => x, "y" => y}, socket) do
+    with {x, ""} <- Integer.parse(to_string(x)),
+         {y, ""} <- Integer.parse(to_string(y)) do
+      # Center the card on the clicked point.
+      x = max(x - div(node_w(), 2), 0)
+      y = max(y - div(node_h(), 2), 0)
+
+      {:noreply,
+       push_patch(
+         socket,
+         to:
+           show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug) <>
+             "?new_step=true&pos_x=#{x}&pos_y=#{y}"
+       )}
+    else
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  # Create carries the "después de" edge inside the SAME transaction
+  # (create_step/3 `:after_step_id`) — a failed edge rolls the step back,
+  # so the UI never reports success for a placement that did not happen.
+  defp create_or_update(:new, _step, attrs, workflow, all_params) do
+    opts =
+      case after_step_id(all_params, workflow) do
+        {:ok, prereq_id} -> [after_step_id: prereq_id]
+        :error -> []
+      end
+
+    Workflows.create_step(workflow, attrs, opts)
+  end
+
+  defp create_or_update(:edit, step, attrs, _workflow, _all_params),
+    do: Workflows.update_step(step, attrs)
+
+  # Body of "save_step" — extracted so the handle_event can guard a forged
+  # submit with no modal open (step_modal: nil) without a MatchError crash.
+  defp save_step(mode, step, step_params, all_params, socket) do
+    attrs =
+      step_params
+      |> step_attrs_from_params(socket.assigns.workflow)
+      |> maybe_put_create_pos(socket.assigns[:step_modal])
+      |> maybe_put_contract(step_params, step)
+
+    with {:ok, _step} <-
+           create_or_update(mode, step, attrs, socket.assigns.workflow, all_params) do
+      {:noreply,
+       socket
+       |> put_flash(:info, step_flash(mode))
+       |> push_patch(to: show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug))}
+    else
+      {:error, %Ecto.Changeset{} = failed_cs} ->
+        # Errors from DB constraints arrive with a non-:validate action and,
+        # for the composite unique (workspace_id, slug), attached to
+        # :workspace_id — a field that is not on the form. Revalidate with
+        # the submitted params and re-attach the constraint error to the
+        # visible :slug field so used_input? exposes it in the modal.
+        constraint_errors =
+          failed_cs.errors
+          |> Keyword.take([:slug, :workspace_id])
+          |> Enum.map(fn
+            {:workspace_id, msg_opts} -> {:slug, msg_opts}
+            other -> other
+          end)
+
+        revalidated =
+          step_for_mode(socket)
+          |> Workflows.change_step(step_params)
+          |> Map.replace!(:action, :validate)
+          |> Map.update!(:errors, fn errors ->
+            Enum.uniq_by(constraint_errors ++ errors, &elem(&1, 0))
+          end)
+
+        {:noreply, assign(socket, step_form: to_form(revalidated, as: :step))}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo guardar el step."))}
+    end
+  end
+
+  # `?pos_x=&pos_y=` from the canvas double-click (new_step_at) — the spot
+  # where the new step will be born. Garbage or negative → nil (levels).
+  defp create_pos_from_params(%{"pos_x" => px, "pos_y" => py}) do
+    with {x, ""} <- Integer.parse(to_string(px)),
+         {y, ""} <- Integer.parse(to_string(py)),
+         true <- x >= 0 and y >= 0 do
+      {x, y}
+    else
+      _ -> nil
+    end
+  end
+
+  defp create_pos_from_params(_), do: nil
+
+  # Create with a canvas birth position: meta.pos rides along the same
+  # changeset (validate/save whitelist untouched — pos comes from modal
+  # state, not from form params).
+  defp maybe_put_create_pos(attrs, %{mode: :new, create_pos: {x, y}}) do
+    meta = Map.put(attrs["meta"] || %{}, "pos", %{"x" => x, "y" => y})
+    Map.put(attrs, "meta", meta)
+  end
+
+  defp maybe_put_create_pos(attrs, _), do: attrs
+
+  # Canvas connect/remove params are forgeable — both endpoints must belong
+  # to THIS workflow (workspace authorization already happened in
+  # fetch_workflow_step; cross-workspace is still rejected downstream).
+  defp ensure_same_workflow(
+         %Dran.Step{workflow_id: wid},
+         %Dran.Step{workflow_id: wid},
+         _workflow
+       ),
+       do: :ok
+
+  defp ensure_same_workflow(_, _, _), do: {:error, :cross_workflow}
+
+  # The checked "después de" prereq, authorized against BOTH workspace and
+  # workflow (the checkbox only offers this workflow's steps, but the param
+  # is forgeable — a cross-workflow edge would poison dependency_states).
+  defp after_step_id(all_params, %Dran.Workflow{} = workflow) do
+    case all_params["new_step"]["after"] do
+      after_id when is_binary(after_id) and after_id != "" ->
+        case fetch_workflow_step(after_id, workflow.workspace_id) do
+          %Dran.Step{workflow_id: step_workflow_id, id: step_id}
+          when step_workflow_id == workflow.id ->
+            {:ok, step_id}
+
+          _ ->
+            :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  # ── Step contract (`meta["contract"]`) — edit + lint feedback ─────────────
+
+  # JSON textarea params → `meta["contract"]`, merged over the step's
+  # CURRENT meta (Repo re-read: the modal's struct can be stale — canvas
+  # writes `meta.pos` after the modal opened). Merge-first keeps
+  # `meta.pos` alive. Blank textarea = drop the contract (explicit erasure).
+  # Unparseable JSON or a non-object NEVER touches the stored contract —
+  # validate_step already showed the error next to the textarea; saving
+  # must not silently destroy the previous brief.
+  defp maybe_put_contract(attrs, %{"contract_json" => raw}, step)
+       when is_binary(raw) do
+    # The step's meta as persisted NOW (the modal's struct predates any
+    # canvas move_step): merge over the live meta, not attrs["meta"] which
+    # starts empty on every save.
+    live_meta =
+      case Dran.Workflows.get_step!(step.id) do
+        %Dran.Step{meta: meta} -> meta || %{}
+        _ -> %{}
+      end
+
+    case String.trim(raw) do
+      "" ->
+        Map.put(attrs, "meta", Map.delete(live_meta, "contract"))
+
+      json ->
+        case Jason.decode(json) do
+          {:ok, contract} when is_map(contract) ->
+            Map.put(attrs, "meta", Map.put(live_meta, "contract", contract))
+
+          _other ->
+            attrs
+        end
+    end
+  end
+
+  defp maybe_put_contract(attrs, _params, _step), do: attrs
+
+  # Live JSON feedback while typing (validate_step): parse + lint. Never
+  # blocks the form — the error surfaces next to the textarea; a valid
+  # contract that fails lint (funnel, verbs) says why.
+  defp contract_feedback(params) do
+    raw = params["contract_json"] || ""
+
+    cond do
+      not is_binary(raw) -> :empty
+      String.trim(raw) == "" -> :empty
+      true -> decode_and_lint(raw)
+    end
+  end
+
+  defp decode_and_lint(raw) do
+    case Jason.decode(raw) do
+      {:ok, contract} when is_map(contract) ->
+        case Contracts.lint_contract(contract) do
+          {:ok, _warnings} ->
+            {:ok, gettext("Contrato válido.")}
+
+          {:error, errors} ->
+            # lint_contract prepends each check, so the list is
+            # reverse-checked (graph first, intent last). Reverse to report
+            # the most fundamental error (intent → status → claims → …).
+            {:invalid, lint_message(Enum.reverse(errors))}
+        end
+
+      {:ok, _other} ->
+        {:invalid, gettext("El JSON debe ser un objeto.")}
+
+      {:error, %Jason.DecodeError{} = e} ->
+        {:invalid, gettext("JSON inválido") <> " — #{Exception.message(e)}"}
+    end
+  end
+
+  # Human message for lint errors (closed vocabulary of Dran.Contracts).
+  defp lint_message([:intent | _]), do: gettext("Falta \"intent\".")
+  defp lint_message([:status | _]), do: gettext("\"status\" debe ser draft, active o superseded.")
+  defp lint_message([:claims | _]), do: gettext("Claims: lista de {id, claim, verify} no vacíos.")
+  defp lint_message([:gates | _]), do: gettext("Gates: lista de {name, cmd, expect} no vacíos.")
+  defp lint_message([:graph_nodes | _]), do: gettext("El graph necesita al menos un nodo.")
+
+  defp lint_message([:graph_verbs | _]),
+    do: gettext("Verbos válidos: READ, EDIT, CREATE, RUN, VERIFY, ASK.")
+
+  defp lint_message([:graph_funnel | _]),
+    do: gettext("El grafo debe alcanzar un nodo VERIFY (funnel de verificación).")
+
+  defp lint_message([:graph | _]), do: gettext("Graph inválido: {nodes: [], edges: []}.")
+  defp lint_message(_), do: gettext("El contrato no pasa el lint.")
+
+  defp contract_json(%Dran.Step{meta: %{"contract" => contract}}) when is_map(contract),
+    do: Jason.encode!(contract, pretty: true)
+
+  defp contract_json(_), do: ""
+
+  # The struct the form validates against: the existing step on edit, a
+  # scope-pinned new step on create.
+  defp step_for_mode(socket) do
+    case socket.assigns.step_modal do
+      %{mode: :edit, step: %Dran.Step{} = step} ->
+        step
+
+      _ ->
+        %Dran.Step{
+          workspace_id: socket.assigns.workflow.workspace_id,
+          workflow_id: socket.assigns.workflow.id
+        }
+    end
+  end
+
+  # Modal form params → step attrs. `meta` y `position` no son campos del
+  # modal: update los conserva (el changeset solo castea lo enviado), create
+  # los defaultea (%{} / max+100).
+  defp step_attrs_from_params(params, workflow) do
+    %{
+      "title" => String.trim(params["title"] || ""),
+      "body" => params["body"] || ""
+    }
+    |> maybe_put_step_slug(params, workflow)
+    |> Map.put("workspace_id", workflow.workspace_id)
+  end
+
+  # Slug auto-deriva del título cuando el usuario no lo escribe (goal_live
+  # pattern): en create Y en edit, campo vacío = slugify(title).
+  defp maybe_put_step_slug(attrs, params, %Dran.Workflow{} = _workflow) do
+    case String.trim(params["slug"] || "") do
+      "" -> Map.put(attrs, "slug", Dran.Slug.slugify(attrs["title"]))
+      slug -> Map.put(attrs, "slug", slug)
+    end
+  end
+
+  defp step_flash(:new), do: gettext("Step creado.")
+  defp step_flash(:edit), do: gettext("Step actualizado.")
+
+  # Title of a step for the "después de" checkbox label.
+  defp step_title(steps_by_id, step_id) when is_map(steps_by_id) and is_binary(step_id) do
+    case Map.fetch(steps_by_id, step_id) do
+      {:ok, %Dran.Step{title: title}} -> title
+      _ -> "?"
+    end
+  end
+
+  defp step_title(_, _), do: "?"
+
+  defp show_path(workspace_slug, workflow_slug) do
+    ~p"/#{workspace_slug}/workflows/#{workflow_slug}"
+  end
+
   defp goal_id_or_nil(id) when is_binary(id) and id != "", do: id
   defp goal_id_or_nil(_), do: nil
 
@@ -756,48 +1463,74 @@ defmodule DranWeb.WorkflowsLive do
   @doc false
   def node_h, do: @node_h
 
+  # `{step_id => {x, y}}` for the whole workflow: saved canvas positions
+  # (`meta["pos"]`) when every step has one, topological levels otherwise —
+  # all-or-nothing, so a partially dragged workflow never makes cards jump
+  # between the two layouts on reload.
   @doc false
-  def graph_width(levels) when is_list(levels) do
-    max(600, length(levels) * (@node_w + @gap_x) + @gap_x + @node_w)
-  end
+  def step_positions([], _levels), do: %{}
 
-  @doc false
-  def graph_height(levels) when is_list(levels) do
-    max_rows = levels |> Enum.map(&length/1) |> Enum.max(fn -> 1 end)
-    max_rows * (@node_h + @gap_y) + @gap_y + @node_h
-  end
-
-  @doc false
-  def node_position(levels, step_id) do
-    Enum.with_index(levels, fn level, level_idx ->
-      case Enum.find_index(level, &(&1 == step_id)) do
-        nil -> nil
-        row_idx -> {level_idx, row_idx}
-      end
-    end)
-    |> Enum.find(& &1)
-    |> case do
-      nil ->
-        {0, 0}
-
-      {level_idx, row_idx} ->
-        {node_x(level_idx), node_y(row_idx)}
+  def step_positions(steps, levels) do
+    if Enum.all?(steps, &free_position?/1) do
+      Map.new(steps, fn step ->
+        pos = step.meta["pos"]
+        {step.id, {pos["x"], pos["y"]}}
+      end)
+    else
+      layout_positions(levels)
     end
+  end
+
+  # `{step_id => {x, y}}` for the classic levels layout — also what a
+  # free-layout workflow materializes from on its first drag.
+  @doc false
+  def layout_positions(levels) when is_list(levels) do
+    levels
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {level, level_idx} ->
+      level
+      |> Enum.with_index()
+      |> Enum.map(fn {step_id, row_idx} -> {step_id, {node_x(level_idx), node_y(row_idx)}} end)
+    end)
+    |> Map.new()
+  end
+
+  defp free_position?(%{meta: %{"pos" => %{"x" => x, "y" => y}}})
+       when is_integer(x) and is_integer(y),
+       do: true
+
+  defp free_position?(_), do: false
+
+  @doc false
+  def graph_width(positions) when is_map(positions) do
+    max_x = positions |> Map.values() |> Enum.map(fn {x, _} -> x end) |> Enum.max(fn -> 0 end)
+    max(600, max_x + @node_w + @gap_x)
+  end
+
+  @doc false
+  def graph_height(positions) when is_map(positions) do
+    max_y = positions |> Map.values() |> Enum.map(fn {_, y} -> y end) |> Enum.max(fn -> 0 end)
+    max(240, max_y + @node_h + @gap_y)
+  end
+
+  @doc false
+  def node_position(positions, step_id) do
+    Map.get(positions, step_id, {0, 0})
   end
 
   defp node_x(level_idx), do: level_idx * (@node_w + @gap_x) + @gap_x
   defp node_y(row_idx), do: row_idx * (@node_h + @gap_y) + @gap_y
 
   @doc false
-  def graph_edges(edges, levels, passed_step_ids \\ MapSet.new()) do
+  def graph_edges(edges, positions, passed_step_ids \\ MapSet.new()) do
     # `edges` come from `dependency_edges(step_ids, :step)` as
     # `{dependent_id, prereq_id}` (a step depends_on its prereq). The arrow
     # flows prereq → dependent: the prereq is the source/output, the
     # dependent the target/input. An edge is "done" (solid/success) when
     # the selected session has a PASSED run of the prereq step.
     Enum.map(edges, fn {dependent_id, prereq_id} ->
-      {px, py} = node_position(levels, prereq_id)
-      {dx, dy} = node_position(levels, dependent_id)
+      {px, py} = node_position(positions, prereq_id)
+      {dx, dy} = node_position(positions, dependent_id)
 
       # Output port (prereq): right edge, vertically centered.
       x1 = px + @node_w
@@ -843,10 +1576,10 @@ defmodule DranWeb.WorkflowsLive do
   shares the same right-center point and every edge into a target shares the same
   left-center point, the ports are deduplicated per card (not per edge).
   """
-  def graph_ports(edges, levels) do
+  def graph_ports(edges, positions) do
     Enum.reduce(edges, %{}, fn {_dep_id, e}, acc ->
-      {px, py} = node_position(levels, e.prereq_id)
-      {dx, dy} = node_position(levels, e.dependent_id)
+      {px, py} = node_position(positions, e.prereq_id)
+      {dx, dy} = node_position(positions, e.dependent_id)
 
       acc
       |> Map.update(
@@ -863,19 +1596,7 @@ defmodule DranWeb.WorkflowsLive do
   end
 
   @doc false
-  def graph_tasks(levels, steps) do
-    steps_by_id = Map.new(steps, &{&1.id, &1})
-
-    nodes =
-      Enum.flat_map(levels, fn level ->
-        Enum.map(level, fn step_id ->
-          step = Map.get(steps_by_id, step_id)
-          {x, y} = node_position(levels, step_id)
-          {step, x, y}
-        end)
-      end)
-      |> Enum.reject(fn {step, _, _} -> is_nil(step) end)
-
-    {nodes, steps_by_id}
+  def graph_nodes(steps, positions) do
+    for step <- steps, {x, y} = Map.get(positions, step.id), do: {step, x, y}
   end
 end

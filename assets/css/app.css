@@ -589,6 +589,197 @@
   animation: wfe-pulse 2.2s ease-in-out infinite;
 }
 
+/* ── Canvas editor: drag de cards, puertos y menú de aristas ── */
+.wfe-node.wfe-dragging {
+  transition: none;
+  cursor: grabbing;
+  z-index: 30;
+  box-shadow: 0 10px 28px oklch(from var(--color-base-content) l c h / 22%);
+}
+
+/* ── Menú de arista (⋯ en el punto medio) ── */
+/* Puertos: escoltan la transición de su card (el patch que mueve cards con
+   transition-all desliza también los left/top inline de los puertos) — sin
+   esto saltan a su destino en el primer frame y las aristas, ancladas a los
+   puertos vivos, se quedan atrás. Durante el drag manual NO debe haber
+   transición (el puerto debe pegarse al cursor frame a frame). */
+span[data-wf-port] {
+  transition:
+    left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.wfe-node.wfe-dragging ~ span[data-wf-port],
+.wfe-node.wfe-dragging ~ * span[data-wf-port] {
+  transition: none;
+}
+
+/* ── Menú de arista (⋯ en el punto medio) ── */
+.wfe-edge-menu {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  z-index: 25;
+}
+
+.wfe-edge-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--color-base-100);
+  border: 1px solid oklch(from var(--color-base-content) l c h / 25%);
+  color: var(--color-base-content);
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  cursor: pointer;
+}
+
+.wfe-edge-menu:hover .wfe-edge-menu-btn,
+.wfe-edge-menu[data-edge-menu-open] .wfe-edge-menu-btn,
+.wfe-edge-menu:focus-within .wfe-edge-menu-btn {
+  opacity: 1;
+}
+
+.wfe-edge-menu-btn:hover {
+  transform: scale(1.15);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.wfe-edge-menu-pop {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%) translateY(-4px);
+  min-width: 190px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--color-base-100);
+  border: 1px solid oklch(from var(--color-base-content) l c h / 15%);
+  box-shadow: 0 12px 32px oklch(from var(--color-base-content) l c h / 18%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  z-index: 40;
+}
+
+.wfe-edge-menu[data-edge-menu-open] .wfe-edge-menu-pop {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.wfe-edge-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--color-base-content);
+  transition: background-color 0.12s ease;
+}
+
+.wfe-edge-menu-item:hover {
+  background: oklch(from var(--color-primary) l c h / 10%);
+}
+
+.wfe-edge-menu-danger {
+  color: var(--color-error);
+}
+
+.wfe-edge-menu-danger:hover {
+  background: oklch(from var(--color-error) l c h / 10%);
+}
+
+/* Picker del modo "linkear": lista client-side de candidatos */
+.wfe-edge-picker {
+  display: none;
+  margin-top: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.wfe-linking .wfe-edge-picker {
+  display: block;
+}
+
+.wfe-edge-picker-opt {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--color-base-content);
+  transition: background-color 0.12s ease;
+}
+
+.wfe-edge-picker-opt:hover {
+  background: oklch(from var(--color-primary) l c h / 10%);
+}
+
+.wfe-edge-picker-empty {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: oklch(from var(--color-base-content) l c h / 55%);
+}
+
+/* Arista objetivo durante el modo "linkear": punteada y atenuada */
+.wfe-edge-target {
+  stroke-dasharray: 5 5 !important;
+  opacity: 0.55;
+}
+
+/* Contenido del menú oculto salvo hover/open — pero SIEMPRE visible en el
+   modo linkear para que el picker siga usable durante el gesto */
+.wfe-linking .wfe-edge-menu-btn,
+.wfe-linking .wfe-edge-menu-pop {
+  opacity: 1;
+}
+
+/* Puerto destino válido durante una conexión */
+.wfe-port-target {
+  background: var(--color-primary) !important;
+  opacity: 1 !important;
+  box-shadow: 0 0 0 5px oklch(from var(--color-primary) l c h / 30%);
+}
+
+/* Puerto satisfecho (prereq pasado en la sesión seleccionada) */
+.wfe-port-done {
+  background: var(--color-success);
+  opacity: 1;
+}
+
+/* Capa fantasma de la conexión en curso (dentro del stage, hereda transform) */
+.wfe-ghost-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+  overflow: visible;
+}
+
+.wfe-ghost {
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  fill: none;
+}
+
 @keyframes wfe-pulse {
   0%,
   100% {

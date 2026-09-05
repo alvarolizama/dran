@@ -383,6 +383,16 @@
           <button
             :if={@workflow.status != "archived"}
             type="button"
+            phx-click="open_step_modal"
+            phx-value-mode="new"
+            class="btn btn-primary btn-xs"
+            data-testid="new-step"
+          >
+            <.icon name="hero-plus" class="size-3.5" /> {gettext("New step")}
+          </button>
+          <button
+            :if={@workflow.status != "archived"}
+            type="button"
             phx-click="archive_workflow"
             phx-value-workflow-id={@workflow.id}
             class="btn btn-ghost btn-xs text-base-content/50 hover:text-warning"
@@ -407,7 +417,7 @@
           <%!-- DAG of steps (topological columns) --%>
           <div
             id="wfe-canvas"
-            phx-hook="WfPanZoom"
+            phx-hook="WfCanvas"
             class="relative rounded-2xl bg-base-200/40 border border-base-300 overflow-hidden select-none h-[480px] max-h-[64vh]"
           >
             <div
@@ -415,23 +425,24 @@
               class="absolute top-0 left-0 will-change-transform"
               style="transform-origin: 0 0"
             >
-              <% {graph_nodes, _steps_by_id} = graph_tasks(@levels, @steps) %>
-              <% edges = graph_edges(@edges, @levels, @passed_step_ids) %>
-              <% graph_ports = graph_ports(edges, @levels) %>
+              <% graph_nodes = graph_nodes(@steps, @positions) %>
+              <% edges = graph_edges(@edges, @positions, @passed_step_ids) %>
+              <% graph_ports = graph_ports(edges, @positions) %>
               <div
                 class="relative"
-                style={"width: #{graph_width(@levels)}px; height: #{graph_height(@levels)}px"}
+                style={"width: #{graph_width(@positions)}px; height: #{graph_height(@positions)}px"}
               >
                 <%!-- Aristas (SVG) --%>
                 <svg
                   class="absolute inset-0 pointer-events-none"
-                  style={"width: #{graph_width(@levels)}px; height: #{graph_height(@levels)}px"}
-                  viewBox={"0 0 #{graph_width(@levels)} #{graph_height(@levels)}"}
+                  style={"width: #{graph_width(@positions)}px; height: #{graph_height(@positions)}px"}
+                  viewBox={"0 0 #{graph_width(@positions)} #{graph_height(@positions)}"}
                   fill="none"
                 >
                   <%= for {_src_id, edge} <- edges do %>
                     <path
                       d={edge.path}
+                      data-edge-key={edge.prereq_id <> "|" <> edge.dependent_id}
                       class={[
                         "wfe-edge",
                         edge.done && "wfe-edge-done",
@@ -441,14 +452,89 @@
                   <% end %>
                 </svg>
 
-                <%!-- Nodos (HTML cards) --%>
+                <%!-- Menú de arista (⋯ en el punto medio, HTML overlay — SVG
+                     no renderiza HTML): agregar step nuevo en medio, linkear
+                     un step existente, romper conexión. El toggle y el modo
+                     "linkear" viven en el hook WfCanvas; las acciones son
+                     eventos del LV. --%>
+                <div class="absolute inset-0 pointer-events-none">
+                  <%= for {_src_id, edge} <- edges do %>
+                    <div
+                      data-wf-edge-menu
+                      data-edge-key={edge.prereq_id <> "|" <> edge.dependent_id}
+                      data-prereq-id={edge.prereq_id}
+                      data-dependent-id={edge.dependent_id}
+                      class="wfe-edge-menu"
+                      style={
+                        "left: #{(edge.x1 + edge.x2) / 2 - 10}px; top: #{(edge.y1 + edge.y2) / 2 - 10}px"
+                      }
+                    >
+                      <button
+                        type="button"
+                        data-edge-menu-toggle
+                        title={gettext("Opciones de la conexión")}
+                        aria-label={gettext("Opciones de la conexión")}
+                        class="wfe-edge-menu-btn"
+                      >
+                        <.icon name="hero-ellipsis-horizontal" class="size-3.5" />
+                      </button>
+
+                      <div class="wfe-edge-menu-pop" role="menu">
+                        <button
+                          type="button"
+                          phx-click="edge_add_step"
+                          phx-value-prereq-id={edge.prereq_id}
+                          phx-value-dependent-id={edge.dependent_id}
+                          class="wfe-edge-menu-item"
+                          data-testid="edge-add-new"
+                        >
+                          <.icon name="hero-plus" class="size-3.5 shrink-0" />
+                          {gettext("Agregar step")}
+                        </button>
+                        <button
+                          type="button"
+                          data-edge-menu-link
+                          phx-value-prereq-id={edge.prereq_id}
+                          phx-value-dependent-id={edge.dependent_id}
+                          class="wfe-edge-menu-item"
+                          data-testid="edge-link-existing"
+                        >
+                          <.icon name="hero-link" class="size-3.5 shrink-0" />
+                          {gettext("Linkear step…")}
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="remove_dependency"
+                          phx-value-prereq-id={edge.prereq_id}
+                          phx-value-dependent-id={edge.dependent_id}
+                          class="wfe-edge-menu-item wfe-edge-menu-danger"
+                          data-testid="edge-remove"
+                        >
+                          <.icon name="hero-scissors" class="size-3.5 shrink-0" />
+                          {gettext("Romper conexión")}
+                        </button>
+                      </div>
+
+                      <%!-- Picker de step existente (modo "linkear"): llenado
+                           y mostrado por el hook WfCanvas; el click en una
+                           opción dispara "link_step_between". --%>
+                      <div class="wfe-edge-picker" data-edge-picker></div>
+                    </div>
+                  <% end %>
+                </div>
+
+                <%!-- Nodos (HTML cards) — arrastrables; el lápiz abre la
+                     edición (decisión de Álvaro: no click-en-toda-la-card) --%>
                 <%= for {step, x, y} <- graph_nodes do %>
                   <div
                     class={[
-                      "absolute rounded-xl bg-base-100 border border-base-300 p-3 shadow-sm transition-all duration-300",
+                      "wfe-node group absolute rounded-xl bg-base-100 border border-base-300 p-3 shadow-sm transition-all duration-300",
+                      "cursor-grab hover:border-primary/50 hover:shadow active:cursor-grabbing",
                       step_has_passed?(@passed_step_ids, step.id) && "border-success/60"
                     ]}
                     style={"left: #{x}px; top: #{y}px; width: #{node_w()}px"}
+                    data-step-id={step.id}
+                    data-testid="step-node"
                   >
                     <div class="flex items-center gap-1.5 text-xs text-base-content/50">
                       <span
@@ -460,35 +546,60 @@
                       <span class="ml-auto font-mono">
                         #{step.position}
                       </span>
+                      <button
+                        type="button"
+                        phx-click="open_step_modal"
+                        phx-value-mode="edit"
+                        phx-value-step-id={step.id}
+                        data-wf-no-drag
+                        data-testid="step-edit"
+                        title={gettext("Edit step")}
+                        aria-label={gettext("Edit step")}
+                        class="shrink-0 size-5 flex items-center justify-center rounded-md text-base-content/35 transition-colors duration-150 hover:text-primary hover:bg-base-200 focus-visible:text-primary"
+                      >
+                        <.icon name="hero-pencil" class="size-3.5" />
+                      </button>
                     </div>
-                    <p class="text-sm font-medium mt-1 leading-snug line-clamp-2">{step.title}</p>
+                    <p data-step-title class="text-sm font-medium mt-1 leading-snug line-clamp-2">
+                      {step.title}
+                    </p>
                   </div>
                 <% end %>
 
-                <%!-- Port dots --%>
-                <%= for {step, _x, _y} <- graph_nodes do %>
+                <%!-- Port dots — siempre presentes; drop targets de conexiones --%>
+                <%= for {step, x, y} <- graph_nodes do %>
                   <% port = Map.get(graph_ports, step.id) %>
                   <span
-                    :if={port && port.in}
-                    class="absolute w-3 h-3 rounded-full border-2 border-base-100"
-                    style={[
-                      "left: #{port.in.x - 6}px; top: #{port.in.y - 6}px;",
-                      if(port.in.done,
-                        do: "background: var(--color-success);",
-                        else: "background: var(--color-base-content); opacity: .35;"
-                      )
+                    data-wf-port="in"
+                    data-step-id={step.id}
+                    data-testid="port-in"
+                    class={[
+                      "absolute w-3 h-3 rounded-full border-2 border-base-100 cursor-crosshair",
+                      port && port.in && port.in.done && "wfe-port-done"
                     ]}
+                    style={
+                      "left: #{x - 6}px; top: #{y + node_h() / 2 - 6}px; " <>
+                        unless(port && port.in && port.in.done,
+                          do: "background: var(--color-base-content); opacity: .35;",
+                          else: ""
+                        )
+                    }
                   />
                   <span
-                    :if={port && port.out}
-                    class="absolute w-3 h-3 rounded-full border-2 border-base-100"
-                    style={[
-                      "left: #{port.out.x - 6}px; top: #{port.out.y - 6}px;",
-                      if(port.out.done,
-                        do: "background: var(--color-success);",
-                        else: "background: var(--color-base-content); opacity: .35;"
-                      )
+                    data-wf-port="out"
+                    data-step-id={step.id}
+                    data-testid="port-out"
+                    class={[
+                      "absolute w-3 h-3 rounded-full border-2 border-base-100 cursor-crosshair",
+                      port && port.out && port.out.done && "wfe-port-done"
                     ]}
+                    style={
+                      "left: #{x + node_w() - 6}px; top: #{y + node_h() / 2 - 6}px; " <>
+                        unless(port && port.out && port.out.done,
+                          do: "background: var(--color-base-content); opacity: .35;",
+                          else: ""
+                        )
+                    }
                   />
                 <% end %>
               </div>
@@ -522,6 +633,16 @@
                 class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-base-200 text-base-content/70"
               >
                 +
+              </button>
+              <span class="w-px h-5 bg-base-300"></span>
+              <button
+                type="button"
+                phx-click="repack_layout"
+                aria-label="Ordenar por nivel"
+                title={gettext("Ordenar por nivel")}
+                class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-base-200 text-base-content/70"
+              >
+                <.icon name="hero-square-3-stack-3d" class="size-4" />
               </button>
             </div>
 
@@ -789,5 +910,263 @@
         </.resource_select>
       </aside>
     </.form>
+  </.resource_modal>
+
+  <%!-- Step create/edit modal (show) — ?new_step=true / ?step=<id> --%>
+  <.resource_modal
+    :if={@step_modal}
+    id="step-resource-modal"
+    title={
+      if @step_modal.mode == :new,
+        do: gettext("New Step"),
+        else: gettext("Edit Step")
+    }
+    pill="STEP"
+    pill_class="bg-primary/10 text-primary"
+    on_close="close_step_modal"
+    form_id="step-modal-form"
+    submit_label={
+      if @step_modal.mode == :new,
+        do: gettext("Create Step"),
+        else: gettext("Save Step")
+    }
+  >
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-base-content/60">
+        {gettext("What this step does and the brief the agent reads.")}
+      </p>
+      <span
+        :if={@step_modal.mode == :edit and Contracts.contract?(@step_modal.step)}
+        class="badge badge-ghost badge-xs shrink-0"
+      >
+        contract
+      </span>
+    </div>
+
+    <%!-- One `<.form>` spans BOTH columns — a single submit carries
+         everything (task/goal modal pattern). --%>
+    <.form
+      id="step-modal-form"
+      for={@step_form}
+      phx-change="validate_step"
+      phx-submit="save_step"
+      class="grid grid-cols-1 lg:grid-cols-[1fr_20rem] lg:gap-6"
+    >
+      <div class="min-w-0 space-y-4">
+        <.input
+          field={@step_form[:title]}
+          type="text"
+          label={gettext("Title")}
+          placeholder={gettext("Step title…")}
+          class="text-lg font-medium"
+          autofocus
+        />
+
+        <div>
+          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Content")}</span>
+          <.markdown_editor
+            id={"step-editor-modal-#{@step_modal.step && @step_modal.step.id || "new"}"}
+            body={(@step_modal.step && @step_modal.step.body) || ""}
+            workspace_id={@context && @context.id}
+            autosave={false}
+            toolbar={false}
+            hidden_field="step[body]"
+            min_height="240px"
+          />
+        </div>
+      </div>
+
+      <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+          {gettext("Details")}
+        </h4>
+
+        <.input
+          field={@step_form[:slug]}
+          type="text"
+          label={gettext("Slug")}
+          placeholder={gettext("auto from title")}
+        />
+
+        <%!-- Create only: place the new step behind an existing one
+             (depends_on edge to the chosen step). --%>
+        <label
+          :if={@step_modal.mode == :new and @step_modal.after_step_id}
+          class="flex items-center gap-2 cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            name="new_step[after]"
+            value={@step_modal.after_step_id}
+            class="checkbox checkbox-sm checkbox-primary"
+          />
+          <span class="text-sm">
+            {gettext("Después de")}
+            <span class="font-medium">
+              {step_title(@steps_by_id, @step_modal.after_step_id)}
+            </span>
+          </span>
+        </label>
+
+        <p class="text-xs text-base-content/40">
+          {gettext("Unique per workspace. Empty = derived from the title.")}
+        </p>
+
+        <%!-- Conexiones del step (edit): romper aristas exists-on. Alta de
+             conexiones sigue siendo del canvas (puerto→puerto / menú de
+             arista) — decisión de producto. --%>
+        <div
+          :if={@step_modal.mode == :edit}
+          class="space-y-2"
+          data-testid="step-connections"
+        >
+          <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+            {gettext("Conexiones")}
+          </h4>
+
+          <p class="text-xs text-base-content/40">
+            {gettext("Dependencias directas del paso. Romper una conexión no borra steps.")}
+          </p>
+
+          <div :if={@outgoing_deps != []} class="space-y-1">
+            <p class="text-xs text-base-content/40">
+              {gettext("Depende de")}
+            </p>
+            <ul class="space-y-1">
+              <li :for={pre <- @outgoing_deps} class="flex items-center gap-1.5 text-sm">
+                <.icon name="hero-arrow-down-left" class="size-3.5 text-base-content/40 shrink-0" />
+                <span class="truncate flex-1" title={pre.title}>{pre.title}</span>
+                <button
+                  type="button"
+                  phx-click="remove_step_dependency"
+                  phx-value-step-id={@step_modal.step.id}
+                  phx-value-other-id={pre.id}
+                  data-confirm={gettext("¿Romper la conexión con este paso?")}
+                  title={gettext("Romper conexión")}
+                  class="shrink-0 size-5 flex items-center justify-center rounded-md text-base-content/35 transition-colors duration-150 hover:text-error hover:bg-base-200"
+                  data-testid={"unlink-out-#{pre.id}"}
+                >
+                  <.icon name="hero-scissors" class="size-3.5" />
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div :if={@incoming_deps != []} class="space-y-1">
+            <p class="text-xs text-base-content/40">
+              {gettext("Requerido por")}
+            </p>
+            <ul class="space-y-1">
+              <li :for={dep <- @incoming_deps} class="flex items-center gap-1.5 text-sm">
+                <.icon name="hero-arrow-up-right" class="size-3.5 text-base-content/40 shrink-0" />
+                <span class="truncate flex-1" title={dep.title}>{dep.title}</span>
+                <button
+                  type="button"
+                  phx-click="remove_step_dependency"
+                  phx-value-step-id={@step_modal.step.id}
+                  phx-value-other-id={dep.id}
+                  data-confirm={gettext("¿Romper la conexión con este paso?")}
+                  title={gettext("Romper conexión")}
+                  class="shrink-0 size-5 flex items-center justify-center rounded-md text-base-content/35 transition-colors duration-150 hover:text-error hover:bg-base-200"
+                  data-testid={"unlink-in-#{dep.id}"}
+                >
+                  <.icon name="hero-scissors" class="size-3.5" />
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <p
+            :if={@outgoing_deps == [] and @incoming_deps == []}
+            class="text-xs text-base-content/40"
+            data-testid="step-connections-empty"
+          >
+            {gettext("Sin conexiones. Conecta steps arrastrando entre puertos en el canvas.")}
+          </p>
+        </div>
+
+        <p class="text-xs text-base-content/40">
+          {gettext(
+            "La ejecución NO sigue position: la secuencia la definen las aristas depends_on entre steps (steps sin prereqs corren en paralelo)."
+          )}
+        </p>
+
+        <%!-- meta (incl. contract) y position no se editan aquí: el modal no
+             los envía, update los conserva tal cual. --%>
+        <%!-- Contrato del step (meta["contract"], edit): textarea JSON con
+             feedback de parseo+lint inline. phx-update="ignore" para que el
+             patch del LiveView no pise lo que el usuario está tecleando. --%>
+        <div :if={@step_modal.mode == :edit} class="space-y-1" data-testid="step-contract">
+          <label
+            for={"step-contract-json-#{@step_modal.step.id}"}
+            class="text-xs font-semibold uppercase tracking-wider text-base-content/50 block"
+          >
+            {gettext("Contrato (JSON)")}
+          </label>
+
+          <%!-- id único por step: phx-update="ignore" no reparchea contenido,
+               así que re-usar el id preservaría el JSON del step anterior. --%>
+          <textarea
+            id={"step-contract-json-#{@step_modal.step.id}"}
+            name="step[contract_json]"
+            rows="10"
+            phx-update="ignore"
+            phx-debounce="300"
+            class="textarea textarea-bordered w-full font-mono text-xs leading-relaxed bg-base-100"
+            placeholder={gettext("{\"intent\": \"...\"}")}
+          >{contract_json(@step_modal.step)}</textarea>
+
+          <p
+            :if={match?({:ok, _}, @contract_lint)}
+            class="text-xs text-success"
+            data-testid="contract-lint-ok"
+          >
+            <.icon name="hero-check-circle" class="size-3.5 inline-block align-text-bottom" />
+            {elem(@contract_lint, 1)}
+          </p>
+
+          <p
+            :if={match?({:invalid, _}, @contract_lint)}
+            class="text-xs text-error"
+            data-testid="contract-lint-error"
+          >
+            <.icon name="hero-exclamation-circle" class="size-3.5 inline-block align-text-bottom" />
+            {elem(@contract_lint, 1)}
+          </p>
+
+          <p class="text-xs text-base-content/40">
+            {gettext(
+              "Brief ejecutable del paso: intent, claims con verify, gates con cmd y graph con funnel de verificación. Vacío = sin contrato."
+            )}
+          </p>
+        </div>
+      </aside>
+    </.form>
+
+    <%!-- Destructive: delete with domain guards (has_open_runs /
+         referenced_by_open_session). The modal covers the page flash
+         group, so guard errors render here, inside the footer. --%>
+    <:left>
+      <p
+        :if={@step_delete_error}
+        class="text-sm text-error flex items-center gap-1.5"
+        data-testid="step-delete-error"
+      >
+        <.icon name="hero-exclamation-circle" class="size-4 shrink-0" /> {@step_delete_error}
+      </p>
+      <button
+        :if={@step_modal.mode == :edit}
+        type="button"
+        phx-click="delete_step"
+        phx-value-step-id={@step_modal.step.id}
+        data-confirm={
+          gettext("¿Eliminar este step? Borra también sus runs de sesiones cerradas.")
+        }
+        class="btn btn-ghost btn-sm text-error"
+        data-testid="delete-step"
+      >
+        <.icon name="hero-trash" class="size-4" /> {gettext("Delete")}
+      </button>
+    </:left>
   </.resource_modal>
 </Layouts.app>

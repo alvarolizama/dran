@@ -417,7 +417,12 @@ defmodule DranWeb.WorkflowsLiveTest do
     } do
       {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
 
-      assert has_element?(view, "#wfe-canvas[phx-hook='WfPanZoom']")
+      assert has_element?(view, "#wfe-canvas[phx-hook='WfCanvas']")
+      assert has_element?(view, "#wfe-canvas [data-wf-stage]")
+      assert has_element?(view, "#wfe-canvas [data-wf-zoom='in']")
+      assert has_element?(view, "#wfe-canvas [data-wf-zoom='out']")
+      assert has_element?(view, "#wfe-canvas [data-wf-fit]")
+      assert has_element?(view, "#wfe-canvas [aria-label='Ordenar por nivel']")
       assert has_element?(view, "#wfe-canvas [data-wf-stage]")
       assert has_element?(view, "#wfe-canvas [data-wf-zoom='in']")
       assert has_element?(view, "#wfe-canvas [data-wf-zoom='out']")
@@ -554,6 +559,500 @@ defmodule DranWeb.WorkflowsLiveTest do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Show — step modal (create / edit / delete) — ?new_step=true / ?step=<id>
+  # ──────────────────────────────────────────────────────────────────────────
+
+  describe "step modal" do
+    test "?new_step=true opens the create modal and saves a step with auto slug and position", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
+
+      assert has_element?(view, "#step-resource-modal")
+      assert has_element?(view, "#step-modal-form")
+
+      view
+      |> form("#step-modal-form", step: %{"title" => "Lint", "slug" => ""})
+      |> render_submit()
+
+      assert step = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "lint"))
+      assert step.title == "Lint"
+      # Appended at the end: position = max + 100. Setup already created
+      # 3 steps (100/200/300) → this one lands at 400 (gap convention).
+      assert step.position == 400
+
+      # Modal closed, flash confirms, and the node is on the DAG.
+      refute has_element?(view, "#step-resource-modal")
+      assert render(view) =~ "Lint"
+    end
+
+    test "create with 'después de' checked links the step behind the last step", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      deploy = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "deploy"))
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
+
+      # The checkbox is pre-set to the last step by position (deploy).
+      assert has_element?(
+               view,
+               "#step-resource-modal input[type='checkbox'][value='#{deploy.id}']"
+             )
+
+      view
+      |> form("#step-modal-form",
+        step: %{"title" => "Notify", "slug" => ""},
+        new_step: %{"after" => deploy.id}
+      )
+      |> render_submit()
+
+      notify = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "notify"))
+      assert notify
+
+      # The depends_on edge exists: notify depends_on deploy.
+      edges = Contracts.dependency_edges(Enum.map(Workflows.list_steps(workflow), & &1.id), :step)
+      assert {notify.id, deploy.id} in edges
+
+      # And the DAG places notify one level after deploy (levels/1 returns
+      # lists of step ids per level, 0 = leftmost).
+      levels = workflow |> Workflows.list_steps() |> Contracts.levels()
+
+      deploy_level = Enum.find_index(levels, &Enum.member?(&1, deploy.id))
+      notify_level = Enum.find_index(levels, &Enum.member?(&1, notify.id))
+
+      assert notify_level == deploy_level + 1
+    end
+
+    test "create with 'después de' unchecked creates the step WITHOUT an edge", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
+
+      view
+      |> form("#step-modal-form", step: %{"title" => "Loose", "slug" => ""})
+      |> render_submit()
+
+      loose = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "loose"))
+      assert loose
+
+      step_ids = Enum.map(Workflows.list_steps(workflow), & &1.id)
+      edges = Contracts.dependency_edges(step_ids, :step)
+      assert {loose.id, loose.id} not in edges
+      assert Enum.all?(edges, fn {src, _tgt} -> src != loose.id end)
+
+      # A root: level 0 in the DAG.
+      levels = workflow |> Workflows.list_steps() |> Contracts.levels()
+      assert Enum.member?(hd(levels), loose.id)
+    end
+
+    test "create with a forged 'after' step id from ANOTHER workflow ignores the edge", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, other_ws} =
+        Dran.Knowledge.create_workspace(%{
+          name: "after foreign #{System.unique_integer([:positive])}",
+          slug: "after-foreign-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, other_wf} =
+        Workflows.create_workflow(%{workspace_id: other_ws.id, title: "Other", slug: "other-wf"})
+
+      {:ok, other_step} = Workflows.create_step(other_wf, %{title: "Other step", slug: "other"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
+
+      # Hand-crafted submit: the checkbox only ever offers this workflow's
+      # steps, so a foreign id is what a tampered client would send.
+      render_submit(view, "save_step", %{
+        "step" => %{"title" => "Hijack", "slug" => ""},
+        "new_step" => %{"after" => other_step.id}
+      })
+
+      hijack = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "hijack"))
+      assert hijack
+
+      # The cross-workflow edge was NOT created; the step saved anyway.
+      step_ids = Enum.map(Workflows.list_steps(workflow), & &1.id)
+      assert {hijack.id, other_step.id} not in Contracts.dependency_edges(step_ids, :step)
+    end
+
+    test "create submit without title shows validation error and keeps the modal open", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
+
+      view
+      |> form("#step-modal-form")
+      |> render_submit(step: %{"title" => "", "slug" => "", "body" => ""})
+
+      assert has_element?(view, "#step-resource-modal")
+    end
+
+    test "save_step without an open modal is a flash, not a crash", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
+
+      # Forged phx-submit with no ?new_step/?step param → step_modal is nil.
+      render_submit(view, "save_step", %{"step" => %{"title" => "Ghost", "slug" => "ghost"}})
+
+      assert render(view) =~ "No hay ningún step abierto"
+
+      refute Enum.any?(Workflows.list_steps(workflow), &(&1.slug == "ghost"))
+    end
+
+    test "clicking a DAG node's pencil opens the edit modal prefilled; save updates the step", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
+
+      view
+      |> element(
+        "div[data-testid='step-node'][data-step-id='#{build.id}'] [data-testid='step-edit']"
+      )
+      |> render_click()
+
+      assert has_element?(view, "#step-resource-modal", "Edit Step")
+
+      # Prefilled with the existing step data.
+      input_html = view |> element("#step_title") |> render()
+      assert input_html =~ ~s(name="step[title]")
+      assert input_html =~ ~s(value="Build")
+
+      view
+      |> form("#step-modal-form", step: %{"title" => "Build image"})
+      |> render_submit()
+
+      assert Workflows.get_step!(build.id).title == "Build image"
+      refute has_element?(view, "#step-resource-modal")
+    end
+
+    test "duplicate slug in the workspace shows the changeset error", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      assert Enum.find(Workflows.list_steps(workflow), &(&1.slug == "test-step"))
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
+
+      view
+      |> form("#step-modal-form", step: %{"title" => "Clash", "slug" => "test-step"})
+      |> render_submit()
+
+      # Modal stays open: the unique-per-workspace slug error renders inline.
+      assert has_element?(view, "#step-resource-modal")
+      assert view |> element("#step-resource-modal") |> render() =~ "already been taken"
+    end
+
+    test "delete button removes the step and closes the modal", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      assert has_element?(view, "#step-resource-modal")
+
+      view
+      |> element("[data-testid='delete-step']")
+      |> render_click()
+
+      assert_raise Ecto.NoResultsError, fn -> Workflows.get_step!(build.id) end
+      refute has_element?(view, "#step-resource-modal")
+    end
+
+    test "delete blocked by domain guard shows the error INSIDE the modal", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      # A step referenced by an open session's snapshot cannot be deleted:
+      # open a session (snapshot freezes the steps) and start its run.
+      {:ok, session} = Executions.open_session(workflow, label: "guard")
+
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      [run] = Enum.filter(Executions.list_runs(session), &(&1.step_id == build.id))
+      {:ok, _claimed} = Executions.start_run(run)
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      assert has_element?(view, "#step-resource-modal")
+
+      view
+      |> element("[data-testid='delete-step']")
+      |> render_click()
+
+      # Modal stays open with the inline guard error; the step survives.
+      assert has_element?(view, "#step-resource-modal")
+      assert has_element?(view, "[data-testid='step-delete-error']")
+      assert Workflows.get_step!(build.id)
+    end
+
+    test "a step of ANOTHER workspace does not open in the modal (row-level auth)", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, other_ws} =
+        Dran.Knowledge.create_workspace(%{
+          name: "foreign #{System.unique_integer([:positive])}",
+          slug: "foreign-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, foreign_wf} =
+        Workflows.create_workflow(%{
+          "workspace_id" => other_ws.id,
+          "title" => "F3",
+          "slug" => "f3-#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, foreign_step} = Workflows.create_step(foreign_wf, %{"title" => "S", "slug" => "fs3"})
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{foreign_step.id}")
+
+      refute has_element?(view, "#step-resource-modal")
+    end
+
+    # ── Conexiones: listar y romper desde el modal (alta sigue en canvas) ──
+
+    test "edit modal lists the step's connections (outgoing and incoming)", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+      test_step = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "test-step"))
+      deploy = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "deploy"))
+
+      # Incoming: deploy depends on test-step (setup wires build→test only,
+      # so wire deploy→test here like the break test does). Both edges must
+      # exist BEFORE the view renders.
+      {:ok, _} = Contracts.add_dependency(deploy, test_step)
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{test_step.id}")
+
+      assert has_element?(view, "[data-testid='step-connections']")
+      # Outgoing: test-step depends on build.
+      assert has_element?(view, "[data-testid='unlink-out-#{build.id}']")
+
+      html = view |> element("[data-testid='step-connections']") |> render()
+      assert html =~ "Build"
+      assert html =~ "Deploy"
+    end
+
+    test "breaking an outgoing connection from the modal removes the depends_on edge", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+      test_step = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "test-step"))
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{test_step.id}")
+
+      view
+      |> element("[data-testid='unlink-out-#{build.id}']")
+      |> render_click()
+
+      step_ids = Enum.map(Workflows.list_steps(workflow), & &1.id)
+      assert {test_step.id, build.id} not in Contracts.dependency_edges(step_ids, :step)
+      # Both steps survive — breaking a connection never deletes steps.
+      assert Workflows.get_step!(build.id)
+      assert Workflows.get_step!(test_step.id)
+      # Modal stays open (URL unchanged) and the section refreshes: build
+      # left the outgoing list.
+      assert has_element?(view, "#step-resource-modal")
+      refute has_element?(view, "[data-testid='unlink-out-#{build.id}']")
+    end
+
+    test "breaking an incoming connection from the modal removes the edge", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      test_step = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "test-step"))
+      deploy = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "deploy"))
+
+      # The setup only wires build→test; give test an incoming edge too.
+      {:ok, _} = Contracts.add_dependency(deploy, test_step)
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{test_step.id}")
+
+      view
+      |> element("[data-testid='unlink-in-#{deploy.id}']")
+      |> render_click()
+
+      step_ids = Enum.map(Workflows.list_steps(workflow), & &1.id)
+      assert {deploy.id, test_step.id} not in Contracts.dependency_edges(step_ids, :step)
+      assert Workflows.get_step!(deploy.id)
+      assert Workflows.get_step!(test_step.id)
+    end
+
+    # ── Contrato: ver y editar meta["contract"] desde el modal ─────────────
+
+    test "edit modal shows the step's contract JSON in the textarea", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      contract = %{
+        "intent" => "Ship the login flow",
+        "claims" => [%{"id" => "P1", "text" => "form validates", "verify" => "mix test"}],
+        "gates" => [%{"id" => "G1", "cmd" => "mix test"}]
+      }
+
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"contract" => contract}})
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      assert has_element?(view, "[data-testid='step-contract']")
+      html = view |> element("[data-testid='step-contract']") |> render()
+      assert html =~ "Ship the login flow"
+      assert html =~ "mix test"
+    end
+
+    test "typing invalid JSON shows inline lint feedback without blocking the form", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      view
+      |> form("#step-modal-form", step: %{"contract_json" => "{\"intent\": "})
+      |> render_change()
+
+      assert has_element?(view, "[data-testid='contract-lint-error']")
+
+      # Typing a VALID contract flips the feedback to ok.
+      view
+      |> form("#step-modal-form", step: %{"contract_json" => valid_contract_json()})
+      |> render_change()
+
+      assert has_element?(view, "[data-testid='contract-lint-ok']")
+    end
+
+    test "saving the modal with a valid contract merges meta.contract keeping meta.pos", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      # The canvas materializes meta.pos on first drag; the modal save must
+      # not clobber it.
+      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"pos" => %{"x" => 40, "y" => 60}}})
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      view
+      |> form("#step-modal-form",
+        step: %{"title" => "Build", "contract_json" => valid_contract_json()}
+      )
+      |> render_submit()
+
+      saved = Workflows.get_step!(build.id)
+      assert saved.meta["contract"]["intent"] == "Ship the login flow"
+      assert saved.meta["pos"] == %{"x" => 40, "y" => 60}
+    end
+
+    test "saving with unparseable JSON leaves the stored contract untouched", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+      contract = %{"intent" => "Keep me"}
+
+      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"contract" => contract}})
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      view
+      |> form("#step-modal-form", step: %{"contract_json" => "not json"})
+      |> render_submit()
+
+      assert Workflows.get_step!(build.id).meta["contract"] == contract
+    end
+
+    test "clearing the textarea removes the contract from the step", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"contract" => %{"intent" => "x"}}})
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      view
+      |> form("#step-modal-form", step: %{"contract_json" => ""})
+      |> render_submit()
+
+      refute Workflows.get_step!(build.id).meta["contract"]
+    end
+
+    test "a lint-failing contract shows why (missing intent)", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      view
+      |> form("#step-modal-form", step: %{"contract_json" => ~s({"status": "draft"})})
+      |> render_change()
+
+      html = view |> element("[data-testid='contract-lint-error']") |> render()
+      assert html =~ "intent"
+    end
+  end
+
+  # Lint-passing fixture (same shape as the context tests' valid_contract):
+  # intent, claims with verify, gates with cmd/expect, graph with a VERIFY
+  # funnel.
+  defp valid_contract_json do
+    ~s({"intent": "Ship the login flow", "status": "active", "claims": [{"id": "P1", "claim": "form validates", "verify": "mix test"}], "gates": [{"name": "compile", "cmd": "mix compile --warnings-as-errors", "expect": "exit 0"}], "graph": {"nodes": [{"id": "S1", "verb": "READ", "label": "router.ex"}, {"id": "S2", "verb": "RUN", "label": "mix test"}, {"id": "G1", "verb": "VERIFY", "label": "tests green?"}], "edges": [{"from": "S1", "to": "S2", "guard": "yes"}, {"from": "S2", "to": "G1", "guard": "yes"}]}})
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Pure helpers
   # ──────────────────────────────────────────────────────────────────────────
 
@@ -596,31 +1095,257 @@ defmodule DranWeb.WorkflowsLiveTest do
     assert WorkflowsLive.run_chip("skipped") == "badge-warning"
   end
 
-  test "graph_edges draws prereq output -> dependent input, done when prereq passed" do
+  # ──────────────────────────────────────────────────────────────────────────
+  # Canvas editor (free layout + port-to-port edges)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  describe "canvas editor" do
+    test "move_step persists meta.pos for the dragged card", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("move_step", %{"step-id" => build.id, "x" => "320", "y" => "160"})
+
+      assert Workflows.get_step!(build.id).meta["pos"] == %{"x" => 320, "y" => 160}
+    end
+
+    test "move_step with a forged step id is a silent no-op", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("move_step", %{"step-id" => Ecto.UUID.generate(), "x" => "10", "y" => "10"})
+
+      assert Workflows.get_step!(build.id).meta["pos"] == nil
+    end
+
+    test "connect_steps creates the depends_on edge; self loop is rejected", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+      steps = Workflows.list_steps(workflow)
+      build = Enum.find(steps, &(&1.slug == "build"))
+      deploy = Enum.find(steps, &(&1.slug == "deploy"))
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("connect_steps", %{
+        "prereq-id" => build.id,
+        "dependent-id" => deploy.id
+      })
+
+      assert build.id in Contracts.prerequisite_ids(Workflows.get_step!(deploy.id))
+
+      # Self-dependency → cycle guard del contexto.
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("connect_steps", %{
+        "prereq-id" => build.id,
+        "dependent-id" => build.id
+      })
+
+      refute build.id in Contracts.prerequisite_ids(Workflows.get_step!(build.id))
+    end
+
+    test "remove_dependency deletes the edge", %{conn: conn, ws: ws, workflow: workflow} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+      steps = Workflows.list_steps(workflow)
+      build = Enum.find(steps, &(&1.slug == "build"))
+      test_step = Enum.find(steps, &(&1.slug == "test-step"))
+
+      assert build.id in Contracts.prerequisite_ids(Workflows.get_step!(test_step.id))
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("remove_dependency", %{
+        "dependent-id" => test_step.id,
+        "prereq-id" => build.id
+      })
+
+      assert Contracts.prerequisite_ids(Workflows.get_step!(test_step.id)) == []
+    end
+
+    test "edge_add_step inserts a NEW step in the middle of the edge", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+      steps = Workflows.list_steps(workflow)
+      build = Enum.find(steps, &(&1.slug == "build"))
+      test_step = Enum.find(steps, &(&1.slug == "test-step"))
+
+      assert build.id in Contracts.prerequisite_ids(Workflows.get_step!(test_step.id))
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("edge_add_step", %{
+        "dependent-id" => test_step.id,
+        "prereq-id" => build.id
+      })
+
+      # build → nuevo → test-step: el step nuevo nació en medio.
+      steps = Workflows.list_steps(workflow)
+      new_step = Enum.find(steps, &(&1.title == "Nuevo paso"))
+
+      assert new_step != nil
+      assert build.id in Contracts.prerequisite_ids(Workflows.get_step!(new_step.id))
+      assert new_step.id in Contracts.prerequisite_ids(Workflows.get_step!(test_step.id))
+    end
+
+    test "link_step_between places an EXISTING step in the middle of the edge", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+      steps = Workflows.list_steps(workflow)
+      build = Enum.find(steps, &(&1.slug == "build"))
+      deploy = Enum.find(steps, &(&1.slug == "deploy"))
+      test_step = Enum.find(steps, &(&1.slug == "test-step"))
+
+      # build → test-step ya existe; deploy queda entre ambos.
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("link_step_between", %{
+        "dependent-id" => test_step.id,
+        "prereq-id" => build.id,
+        "middle-id" => deploy.id
+      })
+
+      assert build.id in Contracts.prerequisite_ids(Workflows.get_step!(deploy.id))
+      assert deploy.id in Contracts.prerequisite_ids(Workflows.get_step!(test_step.id))
+    end
+
+    test "repack_layout clears every saved position", %{conn: conn, ws: ws, workflow: workflow} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+      deploy = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "deploy"))
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("move_step", %{"step-id" => build.id, "x" => "500", "y" => "400"})
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("move_step", %{"step-id" => deploy.id, "x" => "516", "y" => "416"})
+
+      assert Enum.any?(Workflows.list_steps(workflow), &(&1.meta["pos"] != nil))
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("repack_layout", %{})
+
+      assert Enum.all?(Workflows.list_steps(workflow), &is_nil(&1.meta["pos"]))
+    end
+
+    test "new_step_at patches the URL with pos params; save_step births the step there", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+
+      view
+      |> element("#wfe-canvas")
+      |> render_hook("new_step_at", %{"x" => "300", "y" => "240"})
+
+      assert_patch(view, 300)
+
+      view
+      |> form("#step-modal-form", step: %{"title" => "Creado en canvas", "slug" => "canvas-born"})
+      |> render_submit()
+
+      assert_patch(view, 300)
+
+      created = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "canvas-born"))
+      assert created.meta["pos"] == %{"x" => 190, "y" => 192}
+    end
+
+    test "renders edge ✕ buttons and always-present ports", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+
+      assert html =~ "data-testid=\"edge-remove\""
+      assert html =~ "data-testid=\"port-in\""
+      assert html =~ "data-testid=\"port-out\""
+    end
+
+    test "cards are drag-first: no phx-click on the node, a pencil per step", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+
+      # The card itself no longer carries the edit click (drag owns it).
+      refute html =~ ~s(data-testid="step-node" phx-click)
+
+      # One pencil per step, each wired to the edit modal.
+      steps = Workflows.list_steps(workflow)
+      assert length(Regex.scan(~r/data-testid="step-edit"/, html)) == length(steps)
+
+      for step <- steps do
+        assert html =~ ~s(phx-value-step-id="#{step.id}")
+      end
+    end
+  end
+
+  test "graph geometry: positions map drives edges/ports (levels layout default)" do
     alias DranWeb.WorkflowsLive
 
-    # levels are lists of step ids: prereq on level 0, dependent on level 1
     levels = [["p1"], ["d1"]]
+    positions = WorkflowsLive.layout_positions(levels)
     passed = MapSet.new(["p1"])
 
     # relation tuple as stored in the DB: {dependent, prereq}
-    [{_dep, edge}] = WorkflowsLive.graph_edges([{"d1", "p1"}], levels, passed)
+    [{_dep, edge}] = WorkflowsLive.graph_edges([{"d1", "p1"}], positions, passed)
 
     # flows left to right: starts at the prereq output (right edge)
-    {px, _py} = WorkflowsLive.node_position(levels, "p1")
-    {dx, _dy} = WorkflowsLive.node_position(levels, "d1")
+    {px, _py} = WorkflowsLive.node_position(positions, "p1")
+    {dx, _dy} = WorkflowsLive.node_position(positions, "d1")
     assert edge.x1 == px + WorkflowsLive.node_w()
     assert edge.x2 == dx
     assert edge.x1 < edge.x2
     assert edge.done
 
     # without a passed run the edge stays pending
-    [{_dep, pending_edge}] = WorkflowsLive.graph_edges([{"d1", "p1"}], levels, MapSet.new())
+    [{_dep, pending_edge}] = WorkflowsLive.graph_edges([{"d1", "p1"}], positions, MapSet.new())
     refute pending_edge.done
 
     # ports agree: prereq owns the output dot, dependent owns the input dot
-    ports = WorkflowsLive.graph_ports([{"d1", edge}], levels)
+    ports = WorkflowsLive.graph_ports([{"d1", edge}], positions)
     assert ports["p1"].out.x == edge.x1
     assert ports["d1"].in.x == edge.x2
+
+    # free layout: meta.pos wins over levels for every step (all-or-nothing)
+    free = [
+      %{id: "p1", meta: %{"pos" => %{"x" => 500, "y" => 40}}},
+      %{id: "d1", meta: %{"pos" => %{"x" => 500, "y" => 200}}}
+    ]
+
+    free_positions = WorkflowsLive.step_positions(free, levels)
+    assert free_positions["p1"] == {500, 40}
+    assert free_positions["d1"] == {500, 200}
+
+    # partial positions → full levels fallback (no jumps)
+    partial = [hd(free), %{id: "d1", meta: %{}}]
+    assert WorkflowsLive.step_positions(partial, levels) == positions
   end
 end

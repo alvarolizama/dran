@@ -225,6 +225,43 @@ defmodule Dran.Contracts do
     end
   end
 
+  @doc """
+  Delete a `depends_on` edge (dependent → prerequisite).
+
+  Returns `{:ok, deleted_count}` — `0` when the edge did not exist, so an
+  idempotent second delete is a no-op success. Both endpoints must belong
+  to the same workspace (ids are client-forgeable via the canvas).
+  """
+  def remove_dependency(%Step{} = step, %Step{} = prerequisite) do
+    with :ok <- same_workspace?(step, prerequisite) do
+      {count, _} =
+        from(r in Relation,
+          where:
+            r.source_id == ^step.id and r.source_type == "step" and
+              r.target_id == ^prerequisite.id and r.target_type == "step" and
+              r.relation_type == "depends_on"
+        )
+        |> Repo.delete_all()
+
+      {:ok, count}
+    end
+  end
+
+  def remove_dependency(task, prerequisite) do
+    with :ok <- same_workspace?(task, prerequisite) do
+      {count, _} =
+        from(r in Relation,
+          where:
+            r.source_id == ^task.id and r.source_type == "task" and
+              r.target_id == ^prerequisite.id and r.target_type == "task" and
+              r.relation_type == "depends_on"
+        )
+        |> Repo.delete_all()
+
+      {:ok, count}
+    end
+  end
+
   defp same_workspace?(%{workspace_id: wid}, %{workspace_id: wid2})
        when wid == wid2 and not is_nil(wid),
        do: :ok

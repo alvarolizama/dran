@@ -3,7 +3,8 @@ defmodule Dran.Workflows do
   The Workflows context — CRUD for workflows (`Dran.Workflow`) and steps
   (`Dran.Step`).
 
-  Leaf context: depends only on Repo + its schemas. Definition layer
+  Leaf context: depends only on Repo, its schemas and `Dran.Contracts`
+  (the cycle guard reused by `link_step_between/3`). Definition layer
   only: no sessions, no runs (that is `Dran.Executions`). The goal link
   is optional navigation (`goal_id` nullable FK) — `list_by_goal/1`
   powers the "Workflows vinculados" section of GoalLive.
@@ -16,6 +17,8 @@ defmodule Dran.Workflows do
   import Ecto.Changeset, only: [get_change: 2, put_change: 3]
 
   alias Dran.Repo
+  alias Dran.Relation
+  alias Dran.Contracts
   alias Dran.Workflow
   alias Dran.Step
 
@@ -230,18 +233,201 @@ defmodule Dran.Workflows do
   @doc """
   Create a step in a workflow, appended at the end: position = max+100
   (gap-based convention, same as the board).
+
+  ## Options
+
+  - `:after_step_id` — id of an existing step of the SAME workflow (already
+    authorized by the caller). When set, the new step gets a `depends_on`
+    edge to it in the SAME transaction: a failed edge rolls the step back,
+    so the UI never shows a step that ignored its requested placement.
   """
-  def create_step(%Workflow{} = workflow, attrs) do
+  def create_step(%Workflow{} = workflow, attrs, opts \\ []) do
     attrs = for {k, v} <- attrs, into: %{}, do: {to_string(k), v}
 
-    %Step{}
-    |> Step.changeset(
-      attrs
-      |> Map.put("workflow_id", workflow.id)
-      |> Map.put_new("workspace_id", workflow.workspace_id)
-    )
-    |> put_append_position(workflow)
-    |> Repo.insert()
+    changeset =
+      %Step{}
+      |> Step.changeset(
+        attrs
+        |> Map.put("workflow_id", workflow.id)
+        |> Map.put_new("workspace_id", workflow.workspace_id)
+      )
+      |> put_append_position(workflow)
+
+    Repo.transaction(fn ->
+      case Repo.insert(changeset) do
+        {:ok, step} ->
+          case Keyword.fetch(opts, :after_step_id) do
+            {:ok, prereq_id} ->
+              link_dependency!(step, Repo.get!(Step, prereq_id))
+              step
+
+            :error ->
+              step
+          end
+
+        # Rollback surfaces the changeset (constraint errors included) as
+        # {:error, changeset} — the same contract as a plain Repo.insert.
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  defp link_dependency!(step, prereq) do
+    %Relation{}
+    |> Relation.changeset(%{
+      source_id: step.id,
+      source_type: "step",
+      target_id: prereq.id,
+      target_type: "step",
+      relation_type: "depends_on"
+    })
+    |> Repo.insert!(on_conflict: :nothing)
+  end
+
+  # Swap `dependent → old_prereq` for `dependent → new_prereq` (the middle
+  # node). An update — not delete+insert — keeps the relation row id stable.
+  # A pre-existing `dependent → new_prereq` edge (diamond: the middle step
+  # already depends on the prereq) makes the UPDATE collide with the unique
+  # (source_id, target_id, relation_type) index — the end state is already
+  # what the caller wants, so the stale row is DELETED instead of rewired.
+  # The unique constraint stays as the race backstop.
+  defp replace_prereq(dependent, old_prereq, new_prereq) do
+    case Repo.one(relation_query(dependent, old_prereq)) do
+      nil ->
+        {:error, :missing_edge}
+
+      relation ->
+        if Repo.exists?(relation_query(dependent, new_prereq)) do
+          Repo.delete(relation)
+        else
+          relation
+          |> Relation.changeset(%{target_id: new_prereq.id})
+          |> Repo.update()
+        end
+    end
+  end
+
+  @doc """
+  Insert a NEW step in the middle of an edge: prereq → new → dependent.
+
+  Same transaction as `create_step/3` (`:after_step_id`): the new step is
+  created AND rewired atomically — the old `prereq → dependent` edge is
+  replaced by `dependent → new` and `new → prereq`. Any failure rolls the
+  whole insert back, so the graph never loses an edge without gaining the
+  step. The new step inherits the dependent's canvas position (slides into
+  its slot; the LV nudges the dependent aside afterwards).
+
+  Both endpoints must already be steps of THIS workflow (authorized by the
+  caller — canvas params are forgeable). `{:error, :missing_edge}` when the
+  `prereq → dependent` edge does not exist (forged or stale pair); the
+  graph is left untouched.
+  """
+  def insert_step_between(%Workflow{} = workflow, %Step{} = dependent, %Step{} = prereq, attrs) do
+    if edge_between?(dependent, prereq) do
+      attrs = put_unique_step_slug(attrs, workflow)
+
+      changeset =
+        %Step{}
+        |> Step.changeset(
+          attrs
+          |> Map.put("workflow_id", workflow.id)
+          |> Map.put_new("workspace_id", workflow.workspace_id)
+        )
+        |> put_append_position(workflow)
+
+      Repo.transaction(fn ->
+        case Repo.insert(changeset) do
+          {:ok, step} ->
+            link_dependency!(step, prereq)
+
+            case replace_prereq(dependent, prereq, step) do
+              {:ok, _} -> step
+              {:error, :missing_edge} -> Repo.rollback(:missing_edge)
+              # Unique-index race backstop (pre-checked above): typed error,
+              # never a CaseClause crash.
+              {:error, %Ecto.Changeset{}} -> Repo.rollback(:edge_taken)
+            end
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+    else
+      {:error, :missing_edge}
+    end
+  end
+
+  @doc """
+  Place an EXISTING step of the workflow in the middle of an edge:
+  prereq → existing → dependent.
+
+  Atomically rewires the old edge (a `Repo.update`, the relation row keeps
+  its id) and adds the `existing → prereq` edge (`on_conflict: :nothing`,
+  so a pre-existing edge is a no-op success). Returns `{:error, :invalid}`
+  when the middle step IS one of the endpoints (self-edge) and
+  `{:error, :cycle}` (via `Contracts.add_dependency`) with everything
+  rolled back.
+  """
+  def link_step_between(%Step{} = dependent, %Step{} = prereq, %Step{} = middle) do
+    if middle.id in [dependent.id, prereq.id] do
+      {:error, :invalid}
+    else
+      Repo.transaction(fn ->
+        case replace_prereq(dependent, prereq, middle) do
+          {:ok, _} -> :rewired
+          {:error, :missing_edge} -> Repo.rollback(:missing_edge)
+          # Unique-index race backstop (pre-checked above): typed error,
+          # never a CaseClause crash.
+          {:error, %Ecto.Changeset{}} -> Repo.rollback(:edge_taken)
+        end
+
+        case Contracts.add_dependency(middle, prereq) do
+          {:ok, _} -> :linked
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+      |> case do
+        {:ok, result} -> {:ok, result}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp edge_between?(dependent, prereq) do
+    Repo.exists?(relation_query(dependent, prereq))
+  end
+
+  # Steps need a workspace-unique slug — the changeset requires it and the
+  # DB enforces (workspace_id, slug). When the caller does not pass one,
+  # derive it from the title and suffix it while it collides within the
+  # workflow's steps. Called INSIDE no transaction: the candidate check and
+  # the insert race in theory, the unique constraint is the backstop.
+  defp put_unique_step_slug(attrs, workflow) do
+    attrs = for {k, v} <- attrs, into: %{}, do: {to_string(k), v}
+    base = attrs["slug"] || Dran.Slug.slugify(attrs["title"] || "paso")
+
+    taken =
+      from(s in Step,
+        where: s.workflow_id == ^workflow.id,
+        select: s.slug
+      )
+
+    taken = Repo.all(taken) |> MapSet.new()
+
+    if MapSet.member?(taken, base) do
+      Map.put(attrs, "slug", "#{base}-#{Ecto.UUID.generate() |> String.slice(0, 6)}")
+    else
+      Map.put(attrs, "slug", base)
+    end
+  end
+
+  defp relation_query(dependent, prereq) do
+    from r in Relation,
+      where:
+        r.source_id == ^dependent.id and r.source_type == "step" and
+          r.target_id == ^prereq.id and r.target_type == "step" and
+          r.relation_type == "depends_on"
   end
 
   @doc "Update an existing step"
@@ -249,6 +435,71 @@ defmodule Dran.Workflows do
     step
     |> Step.changeset(attrs)
     |> Repo.update()
+  end
+
+  @doc """
+  Persist the canvas position of a step: `meta["pos"] = %{"x" => x, "y" => y}`.
+
+  Coordinates are stage pixels (already grid-snapped by the client). The
+  position is presentation state only — execution truth stays in the
+  `depends_on` relations — so callers treat failures as cosmetic (the LV
+  event is silent by design).
+  """
+  def move_step(%Step{} = step, x, y)
+      when is_integer(x) and is_integer(y) and x >= 0 and y >= 0 do
+    # Re-read: the caller's struct may be stale (a contract edited after it
+    # was loaded) — meta.pos merges over the CURRENT meta, never replaces it.
+    step = Repo.get!(Step, step.id)
+    meta = step.meta || %{}
+
+    step
+    |> Step.changeset(%{"meta" => Map.put(meta, "pos", %{"x" => x, "y" => y})})
+    |> Repo.update()
+  end
+
+  @doc """
+  Persist canvas positions for many steps in one transaction:
+  `%{step_id => {x, y}}`.
+
+  Called after a card drag: the LV always sends the COMPLETE map (the
+  layout it currently renders, with the dragged card moved), which keeps
+  the free layout all-or-nothing even for the very first drag. Steps not
+  in the map are left untouched; other meta keys (contract) preserved.
+  """
+  def persist_positions(%Workflow{} = workflow, positions) when is_map(positions) do
+    Repo.transaction(fn ->
+      workflow
+      |> list_steps()
+      |> Enum.each(fn step ->
+        case Map.get(positions, step.id) do
+          {x, y} when is_integer(x) and is_integer(y) ->
+            meta = Map.put(step.meta || %{}, "pos", %{"x" => x, "y" => y})
+            step |> Step.changeset(%{"meta" => meta}) |> Repo.update!()
+
+          nil ->
+            :ok
+        end
+      end)
+    end)
+  end
+
+  @doc """
+  Clear every step's canvas position (`meta["pos"]`) so the workflow falls
+  back to the automatic topological layout (levels). Used by the canvas
+  "ordenar por nivel" action; `meta.contract` is preserved.
+  """
+  def repack_layout(%Workflow{} = workflow) do
+    Repo.transaction(fn ->
+      workflow
+      |> list_steps()
+      |> Enum.each(fn step ->
+        meta = Map.delete(step.meta || %{}, "pos")
+
+        step
+        |> Step.changeset(%{"meta" => meta})
+        |> Repo.update!()
+      end)
+    end)
   end
 
   @doc """

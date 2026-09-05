@@ -310,6 +310,26 @@ defmodule Dran.ContractsStepsTest do
     end
   end
 
+  describe "remove_dependency (step depends_on step)" do
+    test "removes an existing edge and reports the deleted count", %{workflow: workflow} do
+      a = create_step(workflow, "A")
+      b = create_step(workflow, "B")
+      {:ok, _} = Contracts.add_dependency(b, a)
+
+      assert {:ok, 1} = Contracts.remove_dependency(b, a)
+      assert Contracts.prerequisite_ids(b) == []
+
+      # Idempotente: una segunda eliminación es un no-op exitoso.
+      assert {:ok, 0} = Contracts.remove_dependency(b, a)
+    end
+
+    test "cross-workspace remove is rejected", %{workflow: workflow} do
+      a = create_step(workflow, "A")
+
+      assert {:error, :invalid} = Contracts.remove_dependency(a, %Dran.Step{workspace_id: nil})
+    end
+  end
+
   # ── helpers ──────────────────────────────────────────────────────────────
 
   defp create_step(workflow, title) do

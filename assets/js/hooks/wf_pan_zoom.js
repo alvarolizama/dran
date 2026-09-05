@@ -93,6 +93,12 @@ const WfPanZoom = {
   },
 
   _apply() {
+    // A server patch can REPLACE the stage node (not just strip its inline
+    // transform); re-query if the cached node left the document.
+    if (!this.stage || !this.stage.isConnected) {
+      this.stage = this.el.querySelector("[data-wf-stage]")
+      if (!this.stage) return
+    }
     this.stage.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`
   }
 }
