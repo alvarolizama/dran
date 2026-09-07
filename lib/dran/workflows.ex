@@ -102,23 +102,86 @@ defmodule Dran.Workflows do
     Repo.one(from w in Workflow, where: w.slug == ^slug and w.workspace_id == ^workspace_id)
   end
 
+  @doc """
+  Batch step count per workflow id — ONE COUNT query for ALL given ids.
+  Returns `%{workflow_id => count}` (missing ids → 0).
+  """
+  def steps_counts_by_ids(ids) when is_list(ids) do
+    if ids == [] do
+      %{}
+    else
+      Repo.all(
+        from s in Step,
+          where: s.workflow_id in ^ids,
+          group_by: s.workflow_id,
+          select: {s.workflow_id, count(s.id)}
+      )
+      |> Map.new()
+    end
+  end
+
   @doc "Build a changeset for a workflow (for LiveView forms)"
   def change_workflow(%Workflow{} = workflow, attrs \\ %{}) do
     Workflow.changeset(workflow, attrs)
   end
 
-  @doc "Create a new workflow"
+  @doc "Create a new workflow. The slug is auto-managed (derived from title)."
   def create_workflow(attrs) do
-    %Workflow{}
-    |> Workflow.changeset(attrs)
-    |> Repo.insert()
+    attrs
+    |> Dran.Slug.inject_create(
+      fallback: "workflow",
+      taken?: fn candidate ->
+        case Dran.Slug.fetch_attr(attrs, "workspace_id") do
+          workspace_id when is_binary(workspace_id) ->
+            get_workflow_by_slug(candidate, workspace_id) != nil
+
+          _ ->
+            false
+        end
+      end
+    )
+    |> then(&(%Workflow{} |> Workflow.changeset(&1) |> Repo.insert()))
   end
 
-  @doc "Update an existing workflow"
+  @doc """
+  Update an existing workflow. The slug is auto-managed: regenerated from
+  the title when it changes (unless attrs carry an explicit slug).
+
+  ## Kind is locked once the workflow runs
+
+  `kind` (`evergreen | one_shot`) is a pre-execution declaration: it says
+  how many passes the definition will ever have. Changing it after
+  sessions exist rewrites history (a `one_shot` that already ran becomes
+  re-runnable, an `evergreen`'s past passes become an invariant breach),
+  so a kind CHANGE is refused with `{:error, :kind_locked}` once the
+  workflow has any session. Same-kind writes (forms that always submit
+  the select) pass through. Race note: the check runs before the update,
+  mirroring `ensure_workflow_runnable/1`'s pass-count guard in
+  `Dran.Executions.open_session/2` (both are pre-checks, not locks).
+  """
   def update_workflow(%Workflow{} = workflow, attrs) do
-    workflow
-    |> Workflow.changeset(attrs)
-    |> Repo.update()
+    with :ok <- assert_kind_unlocked(workflow, attrs) do
+      attrs
+      |> Dran.Slug.inject_update(workflow,
+        fallback: "workflow",
+        lookup: &get_workflow_by_slug(&1, workflow.workspace_id)
+      )
+      |> then(&(workflow |> Workflow.changeset(&1) |> Repo.update()))
+    end
+  end
+
+  defp assert_kind_unlocked(%Workflow{} = workflow, attrs) do
+    case Dran.Slug.fetch_attr(attrs, "kind") do
+      kind when is_binary(kind) and kind != "" ->
+        if kind != workflow.kind and session_count(workflow) > 0 do
+          {:error, :kind_locked}
+        else
+          :ok
+        end
+
+      _ ->
+        :ok
+    end
   end
 
   @doc """
@@ -242,7 +305,10 @@ defmodule Dran.Workflows do
     so the UI never shows a step that ignored its requested placement.
   """
   def create_step(%Workflow{} = workflow, attrs, opts \\ []) do
-    attrs = for {k, v} <- attrs, into: %{}, do: {to_string(k), v}
+    attrs =
+      attrs
+      |> put_auto_step_slug(workflow)
+      |> Map.new(fn {k, v} -> {to_string(k), v} end)
 
     changeset =
       %Step{}
@@ -325,7 +391,10 @@ defmodule Dran.Workflows do
   """
   def insert_step_between(%Workflow{} = workflow, %Step{} = dependent, %Step{} = prereq, attrs) do
     if edge_between?(dependent, prereq) do
-      attrs = put_unique_step_slug(attrs, workflow)
+      attrs =
+        attrs
+        |> put_auto_step_slug(workflow)
+        |> Map.new(fn {k, v} -> {to_string(k), v} end)
 
       changeset =
         %Step{}
@@ -398,28 +467,24 @@ defmodule Dran.Workflows do
     Repo.exists?(relation_query(dependent, prereq))
   end
 
-  # Steps need a workspace-unique slug — the changeset requires it and the
-  # DB enforces (workspace_id, slug). When the caller does not pass one,
-  # derive it from the title and suffix it while it collides within the
-  # workflow's steps. Called INSIDE no transaction: the candidate check and
-  # the insert race in theory, the unique constraint is the backstop.
-  defp put_unique_step_slug(attrs, workflow) do
-    attrs = for {k, v} <- attrs, into: %{}, do: {to_string(k), v}
-    base = attrs["slug"] || Dran.Slug.slugify(attrs["title"] || "paso")
+  # Steps need a workflow-unique slug — the changeset requires it and the DB
+  # enforces (workflow_id, slug). Auto-managed (2026-09): an explicit slug in
+  # attrs wins; otherwise derive it from the title and suffix it while it
+  # collides within the workflow's steps. Called OUTSIDE the transaction: the
+  # candidate check and the insert race in theory, the unique constraint is
+  # the backstop.
+  defp put_auto_step_slug(attrs, workflow) do
+    Dran.Slug.inject_create(attrs,
+      fallback: "paso",
+      taken?: fn candidate -> step_slug_taken?(candidate, workflow) end
+    )
+  end
 
-    taken =
-      from(s in Step,
-        where: s.workflow_id == ^workflow.id,
-        select: s.slug
-      )
-
-    taken = Repo.all(taken) |> MapSet.new()
-
-    if MapSet.member?(taken, base) do
-      Map.put(attrs, "slug", "#{base}-#{Ecto.UUID.generate() |> String.slice(0, 6)}")
-    else
-      Map.put(attrs, "slug", base)
-    end
+  defp step_slug_taken?(slug, workflow) do
+    Repo.exists?(
+      from s in Step,
+        where: s.workflow_id == ^workflow.id and s.slug == ^slug
+    )
   end
 
   defp relation_query(dependent, prereq) do
@@ -430,42 +495,47 @@ defmodule Dran.Workflows do
           r.relation_type == "depends_on"
   end
 
-  @doc "Update an existing step"
+  @doc """
+  Update an existing step. The slug is auto-managed: regenerated from the
+  title when it changes (unless attrs carry an explicit slug), unique within
+  the step's workflow.
+  """
   def update_step(%Step{} = step, attrs) do
+    attrs =
+      Dran.Slug.inject_update(attrs, step,
+        fallback: "paso",
+        lookup: fn candidate ->
+          Repo.one(
+            from s in Step,
+              where: s.workflow_id == ^step.workflow_id and s.slug == ^candidate,
+              select: %{id: s.id}
+          )
+        end
+      )
+
     step
     |> Step.changeset(attrs)
     |> Repo.update()
   end
 
   @doc """
-  Persist the canvas position of a step: `meta["pos"] = %{"x" => x, "y" => y}`.
-
-  Coordinates are stage pixels (already grid-snapped by the client). The
-  position is presentation state only — execution truth stays in the
-  `depends_on` relations — so callers treat failures as cosmetic (the LV
-  event is silent by design).
-  """
-  def move_step(%Step{} = step, x, y)
-      when is_integer(x) and is_integer(y) and x >= 0 and y >= 0 do
-    # Re-read: the caller's struct may be stale (a contract edited after it
-    # was loaded) — meta.pos merges over the CURRENT meta, never replaces it.
-    step = Repo.get!(Step, step.id)
-    meta = step.meta || %{}
-
-    step
-    |> Step.changeset(%{"meta" => Map.put(meta, "pos", %{"x" => x, "y" => y})})
-    |> Repo.update()
-  end
-
-  @doc """
-  Persist canvas positions for many steps in one transaction:
+  Move a single step's canvas position (`pos_x`/`pos_y`). Thin wrapper around
+  `Step.position_changeset/2` — kept for test compatibility (tests call this
+  directly). The LiveView event handler uses `persist_positions/2` instead.
   `%{step_id => {x, y}}`.
 
   Called after a card drag: the LV always sends the COMPLETE map (the
   layout it currently renders, with the dragged card moved), which keeps
   the free layout all-or-nothing even for the very first drag. Steps not
-  in the map are left untouched; other meta keys (contract) preserved.
+  in the map are left untouched; contract columns are untouched too.
   """
+  def move_step(%Step{} = step, x, y)
+      when is_integer(x) and is_integer(y) and x >= 0 and y >= 0 do
+    step
+    |> Step.position_changeset(%{"pos_x" => x, "pos_y" => y})
+    |> Repo.update()
+  end
+
   def persist_positions(%Workflow{} = workflow, positions) when is_map(positions) do
     Repo.transaction(fn ->
       workflow
@@ -473,8 +543,9 @@ defmodule Dran.Workflows do
       |> Enum.each(fn step ->
         case Map.get(positions, step.id) do
           {x, y} when is_integer(x) and is_integer(y) ->
-            meta = Map.put(step.meta || %{}, "pos", %{"x" => x, "y" => y})
-            step |> Step.changeset(%{"meta" => meta}) |> Repo.update!()
+            step
+            |> Step.position_changeset(%{"pos_x" => x, "pos_y" => y})
+            |> Repo.update!()
 
           nil ->
             :ok
@@ -484,19 +555,17 @@ defmodule Dran.Workflows do
   end
 
   @doc """
-  Clear every step's canvas position (`meta["pos"]`) so the workflow falls
+  Clear every step's canvas position (`pos_x`/`pos_y`) so the workflow falls
   back to the automatic topological layout (levels). Used by the canvas
-  "ordenar por nivel" action; `meta.contract` is preserved.
+  "ordenar por nivel" action; the contract is untouched.
   """
   def repack_layout(%Workflow{} = workflow) do
     Repo.transaction(fn ->
       workflow
       |> list_steps()
       |> Enum.each(fn step ->
-        meta = Map.delete(step.meta || %{}, "pos")
-
         step
-        |> Step.changeset(%{"meta" => meta})
+        |> Step.position_changeset(%{"pos_x" => nil, "pos_y" => nil})
         |> Repo.update!()
       end)
     end)

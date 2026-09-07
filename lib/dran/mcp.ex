@@ -423,7 +423,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_task",
       "description" =>
-        "Create a first-class task (stored in its own `tasks` table, NOT a page). Tasks are the kanban action items: status backlog → todo → in_progress → done | cancelled, priority, due_date, recurrence (none/daily/weekly/monthly — completing a recurring task auto-clones the next occurrence) and a checklist in meta. Link the task to a goal or project/plan note OPTIONALLY via dran_create_relation (relation_type `part_of`, source_type `task`, source_id = the task id) — tasks exist standalone by default. Returns the created task's slug and id.",
+        "Create a first-class task (stored in its own `tasks` table, NOT a page). Tasks are the kanban action items: status backlog → todo → in_progress → done | cancelled, priority, due_date, recurrence (none/daily/weekly/monthly — completing a recurring task auto-clones the next occurrence) and a subtask checklist. Link the task to a goal or project/plan note OPTIONALLY via dran_create_relation (relation_type `part_of`, source_type `task`, source_id = the task id) — tasks exist standalone by default. Returns the created task's slug and id.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -469,7 +469,7 @@ defmodule Dran.MCP do
             "type" => "array",
             "items" => %{"type" => "string"},
             "description" =>
-              "Subtask checklist (optional): list of item texts. Stored in meta; toggling done happens via the UI or dran_update_task meta."
+              "Subtask checklist (optional): list of item texts. Stored on the task; toggling done happens via the UI or dran_update_task."
           },
           "created_by" => %{
             "type" => "string",
@@ -1392,18 +1392,6 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      meta =
-        case args["checklist"] do
-          nil ->
-            %{}
-
-          items when is_list(items) ->
-            %{"checklist" => Enum.map(items, &%{"text" => &1, "done" => false})}
-
-          _ ->
-            %{}
-        end
-
       attrs =
         %{
           "workspace_id" => context.id,
@@ -1411,7 +1399,6 @@ defmodule Dran.MCP do
           "body" => Map.get(args, "body", ""),
           "status" => Map.get(args, "status", "backlog"),
           "recurrence" => Map.get(args, "recurrence", "none"),
-          "meta" => meta,
           # server-side attribution — not client-settable
           "created_by" => Auth.resolve_created_by(user),
           "creator_actor_id" => Auth.resolve_acting_actor(user)
@@ -1421,6 +1408,7 @@ defmodule Dran.MCP do
         |> maybe_put_str("due_date", args["due_date"])
         |> maybe_put("on_behalf_of", args["on_behalf_of"])
         |> maybe_put_assignee_actor(args["assignee"])
+        |> maybe_put_checklist(args["checklist"])
 
       case Dran.Tasks.create_task(attrs) do
         {:ok, task} ->
@@ -1467,13 +1455,7 @@ defmodule Dran.MCP do
                 attrs
 
               items when is_list(items) ->
-                Map.put(
-                  attrs,
-                  "meta",
-                  Map.merge(task.meta || %{}, %{
-                    "checklist" => Enum.map(items, &%{"text" => &1, "done" => false})
-                  })
-                )
+                Map.put(attrs, "checklist", Enum.map(items, &%{"text" => &1, "done" => false}))
 
               _ ->
                 attrs
@@ -1580,13 +1562,12 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      slug = Map.get(args, "slug") || Dran.Slug.generate(title, context.id, "goal")
-
+      # Slug is auto-managed by Goals.create_goal (derived from the title,
+      # suffixed on collision); an explicit `slug` arg still wins.
       attrs =
         %{
           workspace_id: context.id,
           title: title,
-          slug: slug,
           summary: Map.get(args, "summary"),
           body: Map.get(args, "body", ""),
           status: Map.get(args, "status", "active"),
@@ -1594,6 +1575,12 @@ defmodule Dran.MCP do
           # server-side attribution — not client-settable
           created_by: Auth.resolve_created_by(user)
         }
+
+      attrs =
+        case args["slug"] do
+          slug when is_binary(slug) and slug != "" -> Map.put(attrs, :slug, slug)
+          _ -> attrs
+        end
 
       case Goals.create_goal(attrs) do
         {:ok, goal} ->
@@ -2267,4 +2254,10 @@ defmodule Dran.MCP do
   end
 
   defp maybe_put_assignee_actor(map, _), do: map
+
+  defp maybe_put_checklist(map, items) when is_list(items) do
+    Map.put(map, "checklist", Enum.map(items, &%{"text" => &1, "done" => false}))
+  end
+
+  defp maybe_put_checklist(map, _), do: map
 end

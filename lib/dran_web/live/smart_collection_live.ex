@@ -187,16 +187,6 @@ defmodule DranWeb.SmartCollectionLive do
           />
 
           <.input
-            id="collection-slug"
-            name="slug"
-            type="text"
-            label={gettext("Slug")}
-            value={@form["slug"]}
-            placeholder={gettext("auto-generated from name if blank")}
-            class="font-mono text-sm"
-          />
-
-          <.input
             id="collection-summary"
             name="summary"
             type="text"
@@ -437,13 +427,10 @@ defmodule DranWeb.SmartCollectionLive do
           |> Enum.reject(fn {_k, v} -> v in ["", nil, []] end)
           |> Map.new()
 
-        slug = params["slug"]
-        slug = if slug in ["", nil], do: Dran.Slug.slugify(params["name"]), else: slug
-
+        # Slug is auto-managed by the context (derived from name).
         attrs = %{
           "workspace_id" => context.id,
           "name" => params["name"],
-          "slug" => slug,
           "summary" => params["summary"],
           "filters" => filters
         }

@@ -16,7 +16,7 @@ defmodule DranWeb.WorkflowsLive do
 
   use DranWeb, :live_view
 
-  alias Dran.{Contracts, Executions, Goals, Workflows}
+  alias Dran.{Contracts, Executions, Goals, Knowledge, Memory, Workflows}
   alias DranWeb.ListPagination
 
   # The create-workflow modal's selects/`selected` options read the current
@@ -52,6 +52,8 @@ defmodule DranWeb.WorkflowsLive do
            # create modal (pages/goals pattern: URL state, not a page).
            modal_open: false,
            form: nil,
+           # Edit-workflow modal (`?edit=true` on show) + step modal state.
+           wf_edit: nil,
            # Step modal (show only) — same URL-state pattern (`?new_step=true`
            # / `?step=<id>`); assigned in apply_show.
            step_modal: nil,
@@ -82,18 +84,20 @@ defmodule DranWeb.WorkflowsLive do
     kind_filters = kinds_from_params(params)
     status_filters = statuses_from_params(params)
 
-    workflows =
+    # Batch: ONE query for steps count + ONE for sessions progress across ALL
+    # workflows (normal + archived combined). Replaces N×(list_sessions +
+    # session_progress + list_steps) calls.
+    all_workflows =
       context.id
       |> Workflows.list_workflows(kind: kind_filters, status: status_filters)
-      |> Enum.map(&workflow_summary/1)
 
-    # Archived list always loaded — the "Archived" toggle only renders when
-    # there is something archived (pages pattern). The status filter does not
-    # apply here: the archived view owns archived items exclusively.
-    archived_workflows =
+    normal_enriched = workflow_summaries(all_workflows)
+
+    archived_workflows_list =
       context.id
       |> Workflows.list_workflows(kind: kind_filters, archived: true)
-      |> Enum.map(&workflow_summary/1)
+
+    archived_enriched = workflow_summaries(archived_workflows_list)
 
     # Create-modal state — `?new=true` opens the modal (pages/goals pattern).
     modal_open = params["new"] == "true"
@@ -109,8 +113,8 @@ defmodule DranWeb.WorkflowsLive do
       socket,
       Map.merge(
         %{
-          workflows: workflows,
-          archived_workflows: archived_workflows,
+          workflows: normal_enriched,
+          archived_workflows: archived_enriched,
           kind_filters: kind_filters,
           status_filters: status_filters,
           workflow_kinds: Dran.Workflow.kinds(),
@@ -151,20 +155,28 @@ defmodule DranWeb.WorkflowsLive do
 
   defp statuses_from_params(_params), do: []
 
-  # One card payload: definition slice (workflow + steps count) and live
-  # slice (in-flight sessions with their run progress).
-  defp workflow_summary(workflow) do
-    active_sessions =
-      workflow
-      |> Executions.list_sessions()
-      |> Enum.filter(&(&1.status == "in_flight"))
-      |> Enum.map(fn session -> {session, Executions.session_progress(session)} end)
+  # ── Batched summary helpers (kill the N+1) ────────────────────────────────
 
-    %{
-      workflow: workflow,
-      steps_count: length(Workflows.list_steps(workflow)),
-      active_sessions: active_sessions
-    }
+  @doc """
+  Given a list of workflows, return the same list enriched with
+  `steps_count` and `active_sessions`. Uses ONE aggregate query per metric
+  instead of one query per workflow (the old `Enum.map(&workflow_summary/1)`).
+  Delegates to context batch functions — the LiveView stays thin.
+  """
+  def workflow_summaries(workflows) when is_list(workflows) do
+    ids = Enum.map(workflows, & &1.id)
+
+    steps_counts = Workflows.steps_counts_by_ids(ids)
+
+    active_sessions_map = Executions.active_sessions_by_workflow_id(ids)
+
+    Enum.map(workflows, fn w ->
+      %{
+        workflow: w,
+        steps_count: Map.get(steps_counts, w.id, 0),
+        active_sessions: Map.get(active_sessions_map, w.id, [])
+      }
+    end)
   end
 
   defp apply_show(socket, nil, _params), do: socket
@@ -187,6 +199,9 @@ defmodule DranWeb.WorkflowsLive do
           status_menu_open: false,
           modal_open: false,
           form: nil,
+          # Edit-workflow modal (`?edit=true`, show only): kind is editable
+          # ONLY while the workflow has no sessions (pre-execution decision).
+          wf_edit: wf_edit_state(workflow, params),
           # Reset on every URL navigation — errors that live INSIDE the modal
           # (delete guard, contract JSON) must never leak to the next open.
           step_delete_error: nil,
@@ -278,7 +293,7 @@ defmodule DranWeb.WorkflowsLive do
     {outgoing_deps, incoming_deps} =
       case Map.get(socket.assigns, :step_modal) do
         %{mode: :edit, step: %Dran.Step{} = step} ->
-          step_connections(steps, step)
+          step_connections(edges, step, steps_by_id)
 
         _ ->
           {[], []}
@@ -303,21 +318,8 @@ defmodule DranWeb.WorkflowsLive do
 
   # Live `depends_on` edges of `step` among THIS workflow's steps, resolved
   # to structs for the modal's connections list: {prereqs, dependents}.
-  defp step_connections(steps, step) do
-    step_ids = Enum.map(steps, & &1.id)
-    ids = MapSet.new(step_ids)
-
-    # The FULL workflow id list, not [step.id]: dependency_edges resolves
-    # edges against the workspace's step graph and filters to ids present
-    # in the list — a one-element list drops every edge.
-    edges =
-      Contracts.dependency_edges(step_ids, :step)
-      |> Enum.filter(fn {dep, pre} -> MapSet.member?(ids, dep) and MapSet.member?(ids, pre) end)
-
-    steps_by_id = Map.new(steps, &{&1.id, &1})
-
-    # `s = Map.get(...)` doubles as a filter: nil (edge to a step outside
-    # this workflow) drops out of the comprehension.
+  # Receives `edges` pre-computed by load_show to avoid a duplicate query.
+  defp step_connections(edges, step, steps_by_id) do
     outgoing =
       for {dep_id, prereq_id} <- edges,
           dep_id == step.id,
@@ -371,7 +373,7 @@ defmodule DranWeb.WorkflowsLive do
             # order (position); nil when the workflow has no steps yet.
             after_step_id: last_step_id(steps),
             # Canvas create-at-point (?new_step=true&pos_x=&pos_y=): the
-            # step is born with meta.pos at the double-clicked spot.
+            # step is born with pos_x/pos_y at the double-clicked spot.
             create_pos: create_pos_from_params(params)
           },
           step_form: to_form(changeset, as: :step)
@@ -396,6 +398,52 @@ defmodule DranWeb.WorkflowsLive do
 
   defp step_id_or_nil(id) when is_binary(id) and id != "", do: id
   defp step_id_or_nil(_), do: nil
+
+  # Edit-workflow modal state (`?edit=true` on show): mode kind is a
+  # pre-execution decision — when the workflow already has sessions the
+  # kind select renders DISABLED (and the context refuses any change with
+  # :kind_locked, defense in depth against a forged submit).
+  defp wf_edit_state(workflow, params) do
+    cond do
+      params["edit"] == "true" ->
+        kind_locked = Executions.count_sessions(workflow.id) > 0
+
+        %{
+          mode: :edit,
+          workflow: workflow,
+          kind_locked: kind_locked,
+          form: to_form(Workflows.change_workflow(workflow), as: :workflow)
+        }
+
+      true ->
+        nil
+    end
+  end
+
+  # Body of "save_workflow_edit" — extracted so the handle_event/3 clauses
+  # stay grouped together (compiler clause-grouping warning).
+  defp save_workflow_edit(workflow, attrs, socket) do
+    case Workflows.update_workflow(workflow, attrs) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Workflow actualizado."))
+         |> push_patch(to: show_path(socket.assigns[:workspace_slug], updated.slug))}
+
+      {:error, :kind_locked} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext(
+             "El kind no se puede cambiar: el workflow ya tiene sesiones. Es una decisión previa a la ejecución."
+           )
+         )}
+
+      {:error, %Ecto.Changeset{}} ->
+        {:noreply, put_flash(socket, :error, gettext("Revisa los campos del workflow."))}
+    end
+  end
 
   # Last step by the manual order (position); ties/nils → last by insertion.
   defp last_step_id([]), do: nil
@@ -426,17 +474,25 @@ defmodule DranWeb.WorkflowsLive do
 
   # ── Events ────────────────────────────────────────────────────────────────
 
-  # "Nueva sesión" — opens a session with an optional label. The workflow
-  # id arrives via phx-value on the form (server-rendered, not forgeable
-  # params from the input).
-  @impl true
-  def handle_event("open_session", %{"workflow-id" => workflow_id} = params, socket) do
-    label =
-      case params["label"] do
-        label when is_binary(label) and label != "" -> label
-        _ -> nil
-      end
+  # Ownership baked rule: la sesión que un humano abre desde la UI queda
+  # stampada con su actor (igual que la API), para que sus runs no sean
+  # cola abierta. Sin user row (o sin actor), sesión anónima = cola abierta.
+  defp open_session_actor_opts(socket) do
+    with email when is_binary(email) and email != "" <- socket.assigns[:current_user],
+         %{} = user <- Dran.Accounts.get_user_by_email(email),
+         actor_id when is_binary(actor_id) <- Dran.Auth.resolve_acting_actor(user) do
+      [actor_id: actor_id]
+    else
+      _ -> []
+    end
+  end
 
+  # "Nueva sesión" — opens a session with an auto-generated label (there is
+  # no label input anymore: "Sesión N" counting all sessions of the
+  # workflow). The workflow id arrives via phx-value on the form
+  # (server-rendered, not forgeable params).
+  @impl true
+  def handle_event("open_session", %{"workflow-id" => workflow_id}, socket) do
     workflow = fetch_workspace_workflow(workflow_id, socket.assigns.context)
 
     case workflow do
@@ -444,7 +500,10 @@ defmodule DranWeb.WorkflowsLive do
         {:noreply, put_flash(socket, :error, gettext("Workflow no encontrado."))}
 
       %Dran.Workflow{} = workflow ->
-        case Executions.open_session(workflow, label: label) do
+        label = generated_session_label(workflow.id)
+        opts = [label: label] ++ open_session_actor_opts(socket)
+
+        case Executions.open_session(workflow, opts) do
           {:ok, session} ->
             socket =
               socket
@@ -492,8 +551,37 @@ defmodule DranWeb.WorkflowsLive do
     end
   end
 
-  # Click on a session row patches `?session=<id>` — selection is URL
-  # state, deep-linkable.
+  # ── Delete session (closed passes only; runs cascade by FK) ───────────────
+
+  def handle_event("delete_session", %{"session-id" => session_id}, socket) do
+    case fetch_workspace_session(session_id, socket.assigns.context) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("Sesión no encontrada."))}
+
+      session ->
+        case Executions.delete_session(session) do
+          {:ok, _} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, gettext("Sesión eliminada."))
+             |> push_patch(
+               to: show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug)
+             )}
+
+          {:error, :session_open} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               gettext("Solo se pueden eliminar sesiones cerradas — abórtala primero.")
+             )}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, gettext("No se pudo eliminar la sesión."))}
+        end
+    end
+  end
+
   def handle_event("select_session", %{"session-id" => session_id}, socket) do
     ws = socket.assigns[:workspace_slug]
 
@@ -503,8 +591,6 @@ defmodule DranWeb.WorkflowsLive do
        to: ~p"/#{ws}/workflows/#{socket.assigns.workflow.slug}?session=#{session_id}"
      )}
   end
-
-  # ── Workflow lifecycle (archive / unarchive / create) ─────────────────────
 
   # Archive from the index or the show header — refuses workflows with
   # in-flight sessions (guard in the context, surfaces a flash).
@@ -642,17 +728,15 @@ defmodule DranWeb.WorkflowsLive do
   def handle_event("save_workflow", %{"workflow" => params}, socket) do
     context = socket.assigns.context
 
-    # Slug auto-derives from title when absent (goal_live pattern).
-    attrs =
-      %{
-        "title" => String.trim(params["title"] || ""),
-        "body" => params["body"] || "",
-        "kind" => params["kind"],
-        "status" => params["status"] || "active",
-        "goal_id" => goal_id_or_nil(params["goal_id"]),
-        "workspace_id" => context.id
-      }
-      |> ensure_workflow_slug()
+    # Slug is auto-managed by Workflows.create_workflow (derived from title).
+    attrs = %{
+      "title" => String.trim(params["title"] || ""),
+      "body" => params["body"] || "",
+      "kind" => params["kind"],
+      "status" => params["status"] || "active",
+      "goal_id" => goal_id_or_nil(params["goal_id"]),
+      "workspace_id" => context.id
+    }
 
     case Workflows.create_workflow(attrs) do
       {:ok, workflow} ->
@@ -683,6 +767,62 @@ defmodule DranWeb.WorkflowsLive do
      )}
   end
 
+  # ── Edit-workflow modal (show, `?edit=true`) — kind is a PRE-execution
+  # decision: editable only while the workflow has no sessions ───────────────
+
+  def handle_event("open_workflow_edit", _params, socket) do
+    {:noreply,
+     push_patch(
+       socket,
+       to:
+         show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug) <> "?edit=true"
+     )}
+  end
+
+  def handle_event("close_workflow_edit", _params, socket) do
+    {:noreply,
+     push_patch(
+       socket,
+       to: show_path(socket.assigns[:workspace_slug], socket.assigns.workflow.slug)
+     )}
+  end
+
+  def handle_event("validate_workflow_edit", %{"workflow" => params}, socket) do
+    case socket.assigns[:wf_edit] do
+      %{workflow: workflow} = edit ->
+        changeset =
+          workflow
+          |> Workflows.change_workflow(Map.take(params, ["title", "kind", "status"]))
+          |> Map.put(:action, :validate)
+
+        {:noreply, assign(socket, wf_edit: %{edit | form: to_form(changeset, as: :workflow)})}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("save_workflow_edit", %{"workflow" => params}, socket) do
+    case socket.assigns[:wf_edit] do
+      %{workflow: workflow, kind_locked: locked} ->
+        attrs = %{
+          "title" => String.trim(params["title"] || ""),
+          "status" => params["status"]
+        }
+
+        # A forged submit cannot smuggle a kind change past the lock: the
+        # field only travels when the UI considered it editable — the
+        # context refuses it again in any case (:kind_locked).
+        attrs = if locked, do: attrs, else: Map.put(attrs, "kind", params["kind"])
+
+        save_workflow_edit(workflow, attrs, socket)
+
+      _ ->
+        {:noreply,
+         put_flash(socket, :error, gettext("No hay ningún workflow abierto para guardar."))}
+    end
+  end
+
   # ── Step modal events (?new_step=true / ?step=<id>) ───────────────────────
 
   # Opens the modal by patching the URL — URL state is the single source of
@@ -708,10 +848,11 @@ defmodule DranWeb.WorkflowsLive do
 
   def handle_event("validate_step", %{"step" => params}, socket) do
     # Same whitelist as save (SEC-006): validate only form-owned fields —
-    # workspace_id/workflow_id/position are server-owned.
+    # workspace_id/workflow_id/position are server-owned, and the slug is
+    # auto-managed (no longer a form field).
     changeset =
       step_for_mode(socket)
-      |> Workflows.change_step(Map.take(params, ["title", "slug", "body"]))
+      |> Workflows.change_step(Map.take(params, ["title", "status"]))
       |> Map.put(:action, :validate)
 
     {:noreply,
@@ -732,6 +873,61 @@ defmodule DranWeb.WorkflowsLive do
       _ ->
         {:noreply, put_flash(socket, :error, gettext("No hay ningún step abierto para guardar."))}
     end
+  end
+
+  # Contexto tab: search pages + memories for the context_snapshot picker.
+  # Renders a fused {type, id, title, summary} list — the client fills the
+  # dropdown, and picking one writes a ctx row (type/id/why) into the
+  # visual form (serialized by the hook into contract.context_snapshot).
+  def handle_event("search_context", %{"q" => q}, socket) do
+    q = String.trim(q || "")
+
+    results =
+      if q == "" do
+        []
+      else
+        workspace_id = socket.assigns.context.id
+
+        pages =
+          case Knowledge.search(q,
+                 workspace_id: workspace_id,
+                 limit: 8,
+                 props: %{"limit" => 8}
+               ) do
+            {:ok, pages} ->
+              Enum.map(pages, fn p ->
+                %{
+                  type: "page",
+                  id: to_string(p.id),
+                  title: p.title,
+                  summary: p.excerpt || ""
+                }
+              end)
+
+            _ ->
+              []
+          end
+
+        memories =
+          case Memory.search(workspace_id, q, limit: 6, bump_retrieval: false) do
+            memories when is_list(memories) ->
+              Enum.map(memories, fn %{memory: m} ->
+                %{
+                  type: "memory",
+                  id: to_string(m.id),
+                  title: truncate_memory_label(m.content, 80),
+                  summary: ""
+                }
+              end)
+
+            _ ->
+              []
+          end
+
+        dedupe_by_id(pages ++ memories)
+      end
+
+    {:reply, %{results: results}, socket}
   end
 
   def handle_event("delete_step", %{"step-id" => step_id}, socket) do
@@ -824,10 +1020,8 @@ defmodule DranWeb.WorkflowsLive do
         {:error, _} -> {:noreply, socket}
       end
     else
-      _ -> :error
+      _ -> {:noreply, socket}
     end
-
-    {:noreply, socket}
   end
 
   # Drop of a port-to-port connection: prereq → dependent `depends_on`.
@@ -998,6 +1192,20 @@ defmodule DranWeb.WorkflowsLive do
   defp create_or_update(:edit, step, attrs, _workflow, _all_params),
     do: Workflows.update_step(step, attrs)
 
+  # Truncate a memory's content to a single-line label for the dropdown.
+  defp truncate_memory_label(content, max) when is_binary(content) do
+    if String.length(content) <= max do
+      content
+    else
+      String.slice(content, 0, max - 3) <> "…"
+    end
+  end
+
+  defp truncate_memory_label(_, _), do: ""
+
+  # Same id may appear as page and as memory — keep the first (page wins).
+  defp dedupe_by_id(items), do: Enum.uniq_by(items, &{&1.type, &1.id})
+
   # Body of "save_step" — extracted so the handle_event can guard a forged
   # submit with no modal open (step_modal: nil) without a MatchError crash.
   defp save_step(mode, step, step_params, all_params, socket) do
@@ -1016,17 +1224,15 @@ defmodule DranWeb.WorkflowsLive do
     else
       {:error, %Ecto.Changeset{} = failed_cs} ->
         # Errors from DB constraints arrive with a non-:validate action and,
-        # for the composite unique (workspace_id, slug), attached to
-        # :workspace_id — a field that is not on the form. Revalidate with
-        # the submitted params and re-attach the constraint error to the
-        # visible :slug field so used_input? exposes it in the modal.
+        # for the composite unique (workflow_id, slug), attached to
+        # :workflow_id — a field that is not on the form. The slug is now
+        # server-managed (hidden field), so re-attach slug/workflow_id
+        # constraint errors to the visible :title field so used_input?
+        # exposes them in the modal.
         constraint_errors =
           failed_cs.errors
-          |> Keyword.take([:slug, :workspace_id])
-          |> Enum.map(fn
-            {:workspace_id, msg_opts} -> {:slug, msg_opts}
-            other -> other
-          end)
+          |> Keyword.take([:slug, :workflow_id])
+          |> Enum.map(fn {_field, msg_opts} -> {:title, msg_opts} end)
 
         revalidated =
           step_for_mode(socket)
@@ -1057,12 +1263,13 @@ defmodule DranWeb.WorkflowsLive do
 
   defp create_pos_from_params(_), do: nil
 
-  # Create with a canvas birth position: meta.pos rides along the same
+  # Create with a canvas birth position: pos_x/pos_y ride along the same
   # changeset (validate/save whitelist untouched — pos comes from modal
   # state, not from form params).
   defp maybe_put_create_pos(attrs, %{mode: :new, create_pos: {x, y}}) do
-    meta = Map.put(attrs["meta"] || %{}, "pos", %{"x" => x, "y" => y})
-    Map.put(attrs, "meta", meta)
+    attrs
+    |> Map.put("pos_x", x)
+    |> Map.put("pos_y", y)
   end
 
   defp maybe_put_create_pos(attrs, _), do: attrs
@@ -1099,34 +1306,35 @@ defmodule DranWeb.WorkflowsLive do
     end
   end
 
-  # ── Step contract (`meta["contract"]`) — edit + lint feedback ─────────────
+  # ── Step contract (columns + embeds) — edit + lint feedback ──────────────
 
-  # JSON textarea params → `meta["contract"]`, merged over the step's
-  # CURRENT meta (Repo re-read: the modal's struct can be stale — canvas
-  # writes `meta.pos` after the modal opened). Merge-first keeps
-  # `meta.pos` alive. Blank textarea = drop the contract (explicit erasure).
-  # Unparseable JSON or a non-object NEVER touches the stored contract —
-  # validate_step already showed the error next to the textarea; saving
-  # must not silently destroy the previous brief.
-  defp maybe_put_contract(attrs, %{"contract_json" => raw}, step)
+  # JSON textarea params → contract attrs (intent/status/claims/gates/graph/
+  # context_snapshot as columns/embeds). Only the edited keys are produced:
+  # version/history/fingerprint/model/generated_by are SERVER-MANAGED (the
+  # hook can no longer echo them back, and a hand-written JSON cannot
+  # rewrite them). Blank textarea = drop the contract (explicit erasure:
+  # intent nil + lists emptied). Unparseable JSON or a non-object NEVER
+  # touches the stored contract — validate_step already showed the error
+  # next to the textarea; saving must not silently destroy the previous
+  # brief.
+  defp maybe_put_contract(attrs, %{"contract_json" => raw}, _step)
        when is_binary(raw) do
-    # The step's meta as persisted NOW (the modal's struct predates any
-    # canvas move_step): merge over the live meta, not attrs["meta"] which
-    # starts empty on every save.
-    live_meta =
-      case Dran.Workflows.get_step!(step.id) do
-        %Dran.Step{meta: meta} -> meta || %{}
-        _ -> %{}
-      end
-
     case String.trim(raw) do
       "" ->
-        Map.put(attrs, "meta", Map.delete(live_meta, "contract"))
+        # Explicit erasure: intent nil + lists emptied. `status` no va: es
+        # columna del sidebar, limpiar el contrato no la resetea.
+        Map.merge(attrs, %{
+          "intent" => nil,
+          "claims" => [],
+          "gates" => [],
+          "context_snapshot" => [],
+          "graph" => nil
+        })
 
       json ->
         case Jason.decode(json) do
           {:ok, contract} when is_map(contract) ->
-            Map.put(attrs, "meta", Map.put(live_meta, "contract", contract))
+            Map.merge(attrs, contract_attrs(contract))
 
           _other ->
             attrs
@@ -1135,6 +1343,31 @@ defmodule DranWeb.WorkflowsLive do
   end
 
   defp maybe_put_contract(attrs, _params, _step), do: attrs
+
+  # Contract JSON keys → step attrs. Unknown keys are dropped (server-
+  # managed: version/history/fingerprint/model/generated_by; también
+  # `status`: es columna del sidebar, el JSON no la pisa). `graph` only
+  # when it is a map with the nodes/edges shape; empty lists stay empty —
+  # cast_embed with on_replace: :delete wipes them.
+  defp contract_attrs(contract) do
+    %{}
+    |> maybe_put_key("intent", contract["intent"], &is_binary/1)
+    |> maybe_put_key("claims", contract["claims"], &is_list/1)
+    |> maybe_put_key("gates", contract["gates"], &is_list/1)
+    |> maybe_put_key("context_snapshot", contract["context_snapshot"], &is_list/1)
+    |> maybe_put_graph(contract["graph"])
+  end
+
+  defp maybe_put_key(attrs, key, value, check) do
+    if check.(value), do: Map.put(attrs, key, value), else: attrs
+  end
+
+  defp maybe_put_graph(attrs, %{"nodes" => nodes, "edges" => edges})
+       when is_list(nodes) and is_list(edges) do
+    Map.put(attrs, "graph", %{"nodes" => nodes, "edges" => edges})
+  end
+
+  defp maybe_put_graph(attrs, _), do: attrs
 
   # Live JSON feedback while typing (validate_step): parse + lint. Never
   # blocks the form — the error surfaces next to the textarea; a valid
@@ -1187,11 +1420,6 @@ defmodule DranWeb.WorkflowsLive do
   defp lint_message([:graph | _]), do: gettext("Graph inválido: {nodes: [], edges: []}.")
   defp lint_message(_), do: gettext("El contrato no pasa el lint.")
 
-  defp contract_json(%Dran.Step{meta: %{"contract" => contract}}) when is_map(contract),
-    do: Jason.encode!(contract, pretty: true)
-
-  defp contract_json(_), do: ""
-
   # The struct the form validates against: the existing step on edit, a
   # scope-pinned new step on create.
   defp step_for_mode(socket) do
@@ -1209,23 +1437,15 @@ defmodule DranWeb.WorkflowsLive do
 
   # Modal form params → step attrs. `meta` y `position` no son campos del
   # modal: update los conserva (el changeset solo castea lo enviado), create
-  # los defaultea (%{} / max+100).
+  # los defaultea (%{} / max+100). El brief vive en columnas+embeds —
+  # maybe_put_contract lo canaliza; no hay body. El slug es server-managed
+  # (Workflows.create_step/update_step lo deriva del título).
   defp step_attrs_from_params(params, workflow) do
     %{
       "title" => String.trim(params["title"] || ""),
-      "body" => params["body"] || ""
+      "status" => params["status"] || "draft"
     }
-    |> maybe_put_step_slug(params, workflow)
     |> Map.put("workspace_id", workflow.workspace_id)
-  end
-
-  # Slug auto-deriva del título cuando el usuario no lo escribe (goal_live
-  # pattern): en create Y en edit, campo vacío = slugify(title).
-  defp maybe_put_step_slug(attrs, params, %Dran.Workflow{} = _workflow) do
-    case String.trim(params["slug"] || "") do
-      "" -> Map.put(attrs, "slug", Dran.Slug.slugify(attrs["title"]))
-      slug -> Map.put(attrs, "slug", slug)
-    end
   end
 
   defp step_flash(:new), do: gettext("Step creado.")
@@ -1247,16 +1467,6 @@ defmodule DranWeb.WorkflowsLive do
 
   defp goal_id_or_nil(id) when is_binary(id) and id != "", do: id
   defp goal_id_or_nil(_), do: nil
-
-  # Slug auto-derives from title when the user didn't provide one (goal_live
-  # pattern with Dran.Slug).
-  defp ensure_workflow_slug(%{"slug" => slug} = attrs) when is_binary(slug) and slug != "",
-    do: attrs
-
-  defp ensure_workflow_slug(%{"title" => title} = attrs) when is_binary(title) and title != "",
-    do: Map.put(attrs, "slug", Dran.Slug.slugify(title))
-
-  defp ensure_workflow_slug(attrs), do: attrs
 
   # Index list path with both filters preserved (pages pattern): shareable,
   # deep-linkable filtered views. `suffix` appends "?new=true" for the modal;
@@ -1392,6 +1602,14 @@ defmodule DranWeb.WorkflowsLive do
     |> Enum.map_join(" ", &String.capitalize/1)
   end
 
+  # Auto-label for sessions opened without an explicit label: "Sesión N"
+  # counting every session ever opened for the workflow (closed included)
+  # so consecutive passes read as a sequence.
+  defp generated_session_label(workflow_id) do
+    count = Executions.count_sessions(workflow_id)
+    "Sesión #{count + 1}"
+  end
+
   @doc false
   def kind_label("evergreen"), do: gettext("Evergreen")
   def kind_label("one_shot"), do: gettext("One shot")
@@ -1464,18 +1682,15 @@ defmodule DranWeb.WorkflowsLive do
   def node_h, do: @node_h
 
   # `{step_id => {x, y}}` for the whole workflow: saved canvas positions
-  # (`meta["pos"]`) when every step has one, topological levels otherwise —
-  # all-or-nothing, so a partially dragged workflow never makes cards jump
-  # between the two layouts on reload.
+  # (`pos_x`/`pos_y` columns) when every step has one, topological levels
+  # otherwise — all-or-nothing, so a partially dragged workflow never makes
+  # cards jump between the two layouts on reload.
   @doc false
   def step_positions([], _levels), do: %{}
 
   def step_positions(steps, levels) do
     if Enum.all?(steps, &free_position?/1) do
-      Map.new(steps, fn step ->
-        pos = step.meta["pos"]
-        {step.id, {pos["x"], pos["y"]}}
-      end)
+      Map.new(steps, fn step -> {step.id, {step.pos_x, step.pos_y}} end)
     else
       layout_positions(levels)
     end
@@ -1495,9 +1710,8 @@ defmodule DranWeb.WorkflowsLive do
     |> Map.new()
   end
 
-  defp free_position?(%{meta: %{"pos" => %{"x" => x, "y" => y}}})
-       when is_integer(x) and is_integer(y),
-       do: true
+  defp free_position?(%{pos_x: x, pos_y: y}) when is_integer(x) and is_integer(y),
+    do: true
 
   defp free_position?(_), do: false
 

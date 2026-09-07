@@ -1457,6 +1457,11 @@ msgstr[1] ""
 msgid "Plan"
 msgstr ""
 
+#: lib/dran_web/components/layouts.ex:405
+#, elixir-autogen, elixir-format
+msgid "Planning"
+msgstr ""
+
 #: lib/dran/page_registry.ex:338
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Project"

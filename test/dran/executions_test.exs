@@ -91,8 +91,8 @@ defmodule Dran.ExecutionsTest do
        %{ws: ws} do
     contract = %{
       "intent" => "Ship the login flow",
-      "claims" => [%{"id" => "P1", "text" => "form validates", "verify" => "mix test"}],
-      "gates" => [%{"id" => "G1", "cmd" => "mix test"}]
+      "claims" => [%{"id" => "P1", "claim" => "form validates", "verify" => "mix test"}],
+      "gates" => [%{"name" => "test", "cmd" => "mix test", "expect" => "exit 0"}]
     }
 
     {workflow, [step1]} =
@@ -101,10 +101,12 @@ defmodule Dran.ExecutionsTest do
     {:ok, session} = Executions.open_session(workflow)
     session = Repo.preload(session, :runs)
     [run] = session.runs
-    assert run.contract_version == contract
+    frozen = run.contract_version
+    assert frozen["intent"] == "Ship the login flow"
+    assert frozen["claims"] == contract["claims"]
 
     assert session.snapshot["steps"] == [
-             %{"id" => step1.id, "title" => "Contracted step", "contract" => contract}
+             %{"id" => step1.id, "title" => "Contracted step", "contract" => frozen}
            ]
 
     # El workflow muta DESPUÉS de abrir: título del step, contrato del step
@@ -112,20 +114,18 @@ defmodule Dran.ExecutionsTest do
     {:ok, _} = Workflows.update_step(step1, %{"title" => "Renamed"})
 
     {:ok, _} =
-      Workflows.update_step(step1, %{
-        "meta" => %{"contract" => Map.put(contract, "intent", "Changed")}
-      })
+      Workflows.update_step(step1, contract_attrs(Map.put(contract, "intent", "Changed")))
 
     {:ok, _} = Workflows.create_step(workflow, %{"title" => "Late", "slug" => "late-step"})
 
     session = Repo.reload!(session)
 
     assert session.snapshot["steps"] == [
-             %{"id" => step1.id, "title" => "Contracted step", "contract" => contract}
+             %{"id" => step1.id, "title" => "Contracted step", "contract" => frozen}
            ]
 
     # El run conserva el contract_version congelado.
-    assert Repo.get!(Run, run.id).contract_version == contract
+    assert Repo.get!(Run, run.id).contract_version == frozen
   end
 
   test "P1: open_session refuses a workflow without steps and an archived workflow", %{ws: ws} do
@@ -566,6 +566,9 @@ defmodule Dran.ExecutionsTest do
     assert retry.step_id == step.id
     assert retry.attempt == 2
     assert retry.status == "pending"
+    # Ownership: el retry hereda el stamp — la nueva attempt sigue siendo
+    # del dueño original, nunca un claim abierto para otro actor.
+    assert retry.actor_id == run.actor_id
     assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
 
     runs = Executions.list_runs(session)
@@ -656,6 +659,120 @@ defmodule Dran.ExecutionsTest do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Ownership — un agente hereda el workflow completo (la sesión es SU pasada)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  defp make_actor(tag) do
+    {:ok, actor} =
+      Dran.Actors.create_actor(%{
+        "name" => "#{tag}-#{System.unique_integer([:positive])}",
+        "kind" => "agent"
+      })
+
+    actor
+  end
+
+  test "ownership: another actor cannot claim, progress or close a run of an owned session",
+       %{ws: ws} do
+    owner = make_actor("owner")
+    stranger = make_actor("stranger")
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow, actor_id: owner.id)
+    [run] = runs_by_step(session, [step.id])
+
+    # El no-dueño no puede ni arrancarlo.
+    assert {:error, :not_run_owner} = Executions.start_run(run, actor_id: stranger.id)
+    assert Repo.get!(Run, run.id).status == "pending"
+
+    # Dueño lo cierra (único step → la sesión auto-cierra passed).
+    {:ok, run} = Executions.start_run(run, actor_id: owner.id)
+    {:ok, _} = Executions.close_run(run, %{status: "passed", outcome: "ok"}, actor_id: owner.id)
+
+    # Start tardío de un stranger: rechazado (sesión cerrada).
+    assert {:error, :session_closed} = Executions.start_run(run, actor_id: stranger.id)
+  end
+
+  test "ownership: progress and close of an in_flight run reject the non-owner", %{ws: ws} do
+    owner = make_actor("owner")
+    stranger = make_actor("stranger")
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow, actor_id: owner.id)
+    [run] = runs_by_step(session, [step.id])
+    {:ok, run} = Executions.start_run(run, actor_id: owner.id)
+
+    assert {:error, :not_run_owner} =
+             Executions.update_progress(run.id, %{"phase" => "hijacked"}, actor_id: stranger.id)
+
+    assert {:error, :not_run_owner} =
+             Executions.close_run(run, %{status: "passed"}, actor_id: stranger.id)
+
+    # Sin efectos: el run sigue en vuelo con su dueño.
+    fresh = Repo.get!(Run, run.id)
+    assert fresh.status == "in_flight"
+    assert fresh.progress == %{}
+    assert fresh.actor_id == owner.id
+  end
+
+  test "ownership: list_pending_runs hides owned sessions from other actors", %{ws: ws} do
+    owner = make_actor("owner")
+    stranger = make_actor("stranger")
+    {workflow, [a, b]} = new_workflow(ws, ["A", "B"])
+    {:ok, _} = Contracts.add_dependency(b, a)
+    {open_wf, [open_step]} = new_workflow(ws, ["Open queue"])
+
+    {:ok, _owned} = Executions.open_session(workflow, actor_id: owner.id)
+    {:ok, unowned} = Executions.open_session(open_wf)
+
+    # El dueño ve lo ready de SU sesión MÁS la cola abierta (ordenado por
+    # inserted_at: la sesión stampada se abrió primero).
+    assert Enum.map(Executions.list_pending_runs(ws.id, actor_id: owner.id), & &1.step_id) ==
+             [a.id, open_step.id]
+
+    # El stranger solo ve la cola abierta (sesión sin actor).
+    stranger_steps = Executions.list_pending_runs(ws.id, actor_id: stranger.id)
+    assert Enum.map(stranger_steps, & &1.step_id) == [open_step.id]
+
+    # Un pull sin actor (anonymous) tampoco ve lo stampado — solo la cola abierta.
+    assert Enum.map(Executions.list_pending_runs(ws.id), & &1.step_id) == [open_step.id]
+
+    # El primer reclamante de un run sin dueño lo estampa y se lo queda.
+    [unowned_run] = runs_by_step(unowned, [open_step.id])
+    {:ok, claimed} = Executions.start_run(unowned_run, actor_id: stranger.id)
+    assert claimed.actor_id == stranger.id
+
+    # Y tras el claim, el pull anónimo ya no lo ve (quedó stampado).
+    assert Executions.list_pending_runs(ws.id) == []
+
+    # El otro actor tampoco lo ve (run en vuelo, y además suyo).
+    refute Enum.any?(
+             Executions.list_pending_runs(ws.id, actor_id: owner.id),
+             &(&1.id == claimed.id)
+           )
+  end
+
+  test "ownership: retry keeps the owner and the new attempt stays owner-bound", %{ws: ws} do
+    owner = make_actor("owner")
+    stranger = make_actor("stranger")
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow, actor_id: owner.id)
+    [run] = runs_by_step(session, [step.id])
+    {:ok, run} = Executions.start_run(run, actor_id: owner.id)
+
+    {:ok, failed} =
+      Executions.close_run(run, %{status: "failed", outcome: "flaky"}, actor_id: owner.id)
+
+    {:ok, retry} = Executions.retry_run(failed)
+    assert retry.actor_id == owner.id
+
+    assert {:error, :not_run_owner} = Executions.start_run(retry, actor_id: stranger.id)
+    {:ok, retry} = Executions.start_run(retry, actor_id: owner.id)
+    assert retry.actor_id == owner.id
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # list_pending_runs — el pull de agentes (F3 surface)
   # ──────────────────────────────────────────────────────────────────────────
 
@@ -695,6 +812,58 @@ defmodule Dran.ExecutionsTest do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
+  # delete_session — la historia cerrada es borrable (runs cascade por FK)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  test "delete_session removes a closed session and cascades its runs", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
+    {:ok, run} = Executions.start_run(run)
+    {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
+
+    # Sesión cerrada (passed) → borrable; sus runs caen con el cascade del FK.
+    session = Repo.get!(WorkflowSession, session.id)
+    assert {:ok, _} = Executions.delete_session(session)
+
+    assert Repo.get(WorkflowSession, session.id) == nil
+    assert Repo.all(from(r in Run, where: r.session_id == ^session.id)) == []
+  end
+
+  test "delete_session refuses an in_flight session; abort first", %{ws: ws} do
+    {workflow, [_]} = new_workflow(ws, ["Step"])
+    {:ok, session} = Executions.open_session(workflow)
+
+    assert {:error, :session_open} =
+             Executions.delete_session(Repo.get!(WorkflowSession, session.id))
+
+    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+
+    # Tras abortarla, ya es historia cerrada: borrable.
+    {:ok, _} = Executions.abort_session(Repo.get!(WorkflowSession, session.id))
+    assert {:ok, _} = Executions.delete_session(Repo.get!(WorkflowSession, session.id))
+    assert Repo.get(WorkflowSession, session.id) == nil
+  end
+
+  test "delete_session of the one_shot's failed pass clears the re-run block", %{ws: ws} do
+    {workflow, [step]} = new_workflow(ws, ["Step"])
+    {:ok, workflow} = Dran.Workflows.update_workflow(workflow, %{"kind" => "one_shot"})
+
+    {:ok, session} = Executions.open_session(workflow)
+    [run] = runs_by_step(session, [step.id])
+    {:ok, run} = Executions.start_run(run)
+    {:ok, _} = Executions.close_run(run, status: "failed", outcome: "rojo")
+
+    # one_shot con sesión → re-open bloqueado.
+    assert {:error, :workflow_already_ran} = Executions.open_session(workflow)
+
+    # Borrar la pasada fallida (historia cerrada) destraba una nueva pasada.
+    assert {:ok, _} = Executions.delete_session(Repo.get!(WorkflowSession, session.id))
+    assert {:ok, _second} = Executions.open_session(workflow)
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # abort_session
   # ──────────────────────────────────────────────────────────────────────────
 
@@ -731,7 +900,7 @@ defmodule Dran.ExecutionsTest do
   # ──────────────────────────────────────────────────────────────────────────
 
   # Crea workflow + steps; specs pueden ser binarios (título) o mapas con
-  # :title/:body/:contract. Devuelve {workflow, steps}.
+  # :title/:contract (el contrato va a columnas+embeds). Devuelve {workflow, steps}.
   defp new_workflow(ws, step_specs) do
     {:ok, workflow} =
       Workflows.create_workflow(%{
@@ -754,14 +923,13 @@ defmodule Dran.ExecutionsTest do
         %{title: title} = spec ->
           attrs = %{
             "title" => title,
-            "slug" => "step-#{System.unique_integer([:positive])}",
-            "body" => Map.get(spec, :body, "")
+            "slug" => "step-#{System.unique_integer([:positive])}"
           }
 
           attrs =
             case Map.get(spec, :contract) do
               nil -> attrs
-              contract -> Map.put(attrs, "meta", %{"contract" => contract})
+              contract -> Map.merge(attrs, contract_attrs(contract))
             end
 
           {:ok, step} = Workflows.create_step(workflow, attrs)
@@ -770,6 +938,47 @@ defmodule Dran.ExecutionsTest do
 
     {workflow, steps}
   end
+
+  # JSON contract map → step attrs (columns + embeds). Normaliza los campos
+  # del contrato al shape del schema: claim (no "text"), gates con name/
+  # cmd/expect, y solo claves editables (status/versión son columnas).
+  defp contract_attrs(contract) do
+    %{"intent" => contract["intent"]}
+    |> put_claims(contract["claims"])
+    |> put_gates(contract["gates"])
+    |> put_graph(contract["graph"])
+  end
+
+  defp put_claims(attrs, claims) when is_list(claims) do
+    Map.put(
+      attrs,
+      "claims",
+      Enum.map(claims, fn c ->
+        %{"id" => c["id"], "claim" => c["claim"] || c["text"], "verify" => c["verify"]}
+      end)
+    )
+  end
+
+  defp put_claims(attrs, _), do: attrs
+
+  defp put_gates(attrs, gates) when is_list(gates) do
+    Map.put(
+      attrs,
+      "gates",
+      Enum.map(gates, fn g ->
+        %{
+          "name" => g["name"] || g["id"] || "gate",
+          "cmd" => g["cmd"],
+          "expect" => g["expect"] || "exit 0"
+        }
+      end)
+    )
+  end
+
+  defp put_gates(attrs, _), do: attrs
+
+  defp put_graph(attrs, %{"nodes" => _} = graph), do: Map.put(attrs, "graph", graph)
+  defp put_graph(attrs, _), do: attrs
 
   defp runs_by_step(session, step_ids) do
     runs = Executions.list_runs(session)

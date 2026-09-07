@@ -4,7 +4,6 @@ defmodule DranWeb.SidebarNavTest do
   import Phoenix.LiveViewTest
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
-  defp idx(html, str), do: :binary.match(html, str)
 
   alias DranWeb.Layouts
 
@@ -50,6 +49,75 @@ defmodule DranWeb.SidebarNavTest do
 
       # sidebar_nav renders nothing; mt-auto lives in sidebar_footer_icons.
       assert html == ""
+    end
+  end
+
+  describe "sidebar_nav grouping" do
+    defp workspace_nav(active \\ "home") do
+      render_component(&Layouts.sidebar_nav/1, %{
+        active: active,
+        is_owner: true,
+        workspace_slug: "personal",
+        workspace_role: "owner"
+      })
+    end
+
+    defp pos(html, str) do
+      {p, _len} = :binary.match(html, str)
+      p
+    end
+
+    # Posiciones de cada header de grupo (`<summary>`) en orden de DOM.
+    defp summary_positions(html) do
+      Regex.scan(~r/<summary/, html, return: :index)
+      |> List.flatten()
+      |> Enum.map(fn {p, _len} -> p end)
+    end
+
+    # Etiquetas de grupo en orden, sin markup.
+    defp group_labels(html) do
+      Regex.scan(~r/<summary[^>]*>(.*?)<\/summary>/s, html, capture: :all_but_first)
+      |> List.flatten()
+      |> Enum.map(&(&1 |> String.replace(~r/<[^>]*>/, "") |> String.trim()))
+    end
+
+    test "goals and tasks live in the Planning group, workflows in its own" do
+      html = workspace_nav()
+
+      assert group_labels(html) == [
+               t("Planning"),
+               t("Workflows"),
+               t("Knowledge base"),
+               t("Memory"),
+               "Insights"
+             ]
+
+      [planning, workflows | _rest] = summary_positions(html)
+
+      # Objetivos y Tareas dentro del grupo Planning…
+      assert planning < pos(html, ~s(href="/personal/goals"))
+      assert planning < pos(html, ~s(href="/personal/tasks"))
+      assert pos(html, ~s(href="/personal/tasks")) < workflows
+
+      # …y Workflows en su propio grupo, después
+      assert workflows < pos(html, ~s(href="/personal/workflows"))
+    end
+
+    test "Inicio stays outside any group" do
+      html = workspace_nav()
+      [first_summary | _rest] = summary_positions(html)
+
+      home_pos = pos(html, ~s(href="/personal"))
+      assert home_pos < first_summary
+    end
+
+    test "active key highlights the right link" do
+      html = workspace_nav("workflows")
+
+      p = pos(html, ~s(href="/personal/workflows"))
+      {end_pos, _len} = :binary.match(html, "</a>", scope: {p, byte_size(html) - p})
+      anchor = binary_part(html, p, end_pos - p)
+      assert anchor =~ "bg-primary/10"
     end
   end
 

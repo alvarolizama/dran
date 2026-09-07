@@ -54,19 +54,17 @@ defmodule Dran.TasksTest do
       assert "is invalid" in errors_on(changeset).status
     end
 
-    test "accepts a checklist in meta" do
+    test "accepts a checklist column" do
       workspace = ensure_workspace!()
 
       {:ok, task} =
         Tasks.create_task(%{
           "workspace_id" => workspace.id,
           "title" => "Launch feature",
-          "meta" => %{
-            "checklist" => [%{"text" => "Write tests", "done" => false}]
-          }
+          "checklist" => [%{"text" => "Write tests", "done" => false}]
         })
 
-      assert task.meta["checklist"] == [%{"text" => "Write tests", "done" => false}]
+      assert task.checklist == [%{"text" => "Write tests", "done" => false}]
     end
   end
 

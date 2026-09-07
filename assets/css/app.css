@@ -25,10 +25,10 @@
 
 /* daisyUI theme plugin. You can update this file by fetching the latest version with:
   curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
-  We ship with a single theme, sunset. Build your own at:
+  We ship with a single theme, night. Build your own at:
   https://daisyui.com/theme-generator/ */
 @plugin "../vendor/daisyui-theme" {
-  name: "sunset";
+  name: "night";
   default: true;
 }
 
@@ -560,6 +560,30 @@
   fill: none;
 }
 
+/* Hover del alambre: hittable por su trazo (el svg padre es pointer-events
+   none, pero un hijo con pointer-events explícito vuelve a ser clicable) y
+   se aviva al pasar el cursor — igual que el mini-canvas. */
+.wfe-edge,
+.gc-edge {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.wfe-edge:hover,
+.gc-edge:hover {
+  stroke-width: 2.5;
+}
+
+.wfe-edge-pending:hover,
+.gc-edge-pending:hover {
+  stroke: oklch(from var(--color-base-content) l c h / 70%);
+}
+
+.wfe-edge-done:hover,
+.gc-edge-done:hover {
+  stroke: var(--color-primary);
+}
+
 .wfe-edge-pending {
   stroke-dasharray: 7 6;
   animation: wfe-flow 1.1s linear infinite;
@@ -570,6 +594,7 @@
   stroke-dasharray: 400;
   stroke-dashoffset: 400;
   animation: wfe-draw 0.8s ease forwards;
+  marker-end: url(#wfe-arrow-done);
 }
 
 @keyframes wfe-flow {
@@ -582,6 +607,49 @@
   to {
     stroke-dashoffset: 0;
   }
+}
+
+/* ── Step graph mini-canvas (SVG subgraph) ── */
+/* Mismas clases que .wfe-edge para que las aristas compartan estilo y animación
+   entre el grafo interno de un step y el canvas grande de workflow steps. */
+.gc-edge {
+  stroke: oklch(from var(--color-base-content) l c h / 30%);
+  stroke-width: 2;
+  fill: none;
+}
+
+.gc-edge-pending {
+  stroke-dasharray: 7 6;
+  animation: wfe-flow 1.1s linear infinite;
+}
+
+.gc-edge-done {
+  stroke: var(--color-success);
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: wfe-draw 0.8s ease forwards;
+}
+
+/* Puertos del mini-canvas: hover con escala + glow. El !important es necesario
+   porque el centrado vive en un transform inline (translateX(-50%)) que, siendo
+   inline, pisa cualquier transform de clase. */
+.gc-port {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gc-port:hover {
+  transform: translateX(-50%) scale(1.5) !important;
+  box-shadow: 0 0 0 5px oklch(from var(--color-primary) l c h / 25%);
+}
+
+/* Nodo del mini-canvas: hover sutil, mismo lenguaje que las cards grandes */
+.gc-node {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gc-node:hover {
+  border-color: oklch(from var(--color-primary) l c h / 50%);
+  box-shadow: 0 4px 14px oklch(from var(--color-base-content) l c h / 14%);
 }
 
 /* Nodo en ejecución: pulso del borde + glow suave */
@@ -606,7 +674,14 @@
 span[data-wf-port] {
   transition:
     left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.15s ease;
+}
+
+/* Hover del puerto (canvas grande): glow del color del propio puerto */
+span[data-wf-port]:hover {
+  box-shadow: 0 0 0 5px oklch(from var(--color-primary) l c h / 25%);
+  opacity: 1;
 }
 
 .wfe-node.wfe-dragging ~ span[data-wf-port],
@@ -676,6 +751,12 @@ span[data-wf-port] {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(-50%) translateY(0);
+}
+
+/* Menú anclado al clic cerca del borde inferior: abre hacia arriba */
+.wfe-edge-menu[data-menu-flip-up] .wfe-edge-menu-pop {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 
 .wfe-edge-menu-item {
@@ -756,10 +837,10 @@ span[data-wf-port] {
   box-shadow: 0 0 0 5px oklch(from var(--color-primary) l c h / 30%);
 }
 
-/* Puerto satisfecho (prereq pasado en la sesión seleccionada) */
+/* Puerto satisfecho (prereq pasado en la sesión seleccionada): anillo verde
+   que conserva el color de dirección (in=info, out=primary) */
 .wfe-port-done {
-  background: var(--color-success);
-  opacity: 1;
+  box-shadow: 0 0 0 3px var(--color-success);
 }
 
 /* Capa fantasma de la conexión en curso (dentro del stage, hereda transform) */

@@ -236,11 +236,14 @@ defmodule DranWeb.GoalLiveTest do
       |> form("#goal-modal-form")
       |> render_submit(%{"goal" => %{"title" => "Renamed goal", "status" => "on_hold"}})
 
-      updated = Dran.Goals.get_goal_by_slug(goal.slug, ws.id)
+      # Auto-managed slug: renaming the title regenerates the slug.
+      updated = Dran.Goals.get_goal_by_slug("renamed-goal", ws.id)
       assert updated.title == "Renamed goal"
       assert updated.status == "on_hold"
+      refute Dran.Goals.get_goal_by_slug(goal.slug, ws.id)
 
-      refute has_element?(view, "#goal-resource-modal")
+      # Renaming redirects (push_navigate) — the original view is dead, so we
+      # only assert the DB outcome, not elements on the terminated process.
     end
 
     test "close_goal_modal patches back to the detail page", %{conn: conn, ws: ws, goal: goal} do

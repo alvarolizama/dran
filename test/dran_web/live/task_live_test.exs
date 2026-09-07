@@ -83,6 +83,30 @@ defmodule DranWeb.TaskLiveTest do
       assert html =~ "Badge goal"
     end
 
+    test "view mode shows the checklist read-only with done/pending items", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, _} =
+        Tasks.update_task(task, %{
+          "checklist" => [
+            %{"text" => "done item", "done" => true},
+            %{"text" => "pending item", "done" => false}
+          ]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks/#{task.id}")
+
+      assert render(view) =~ "done item"
+      assert render(view) =~ "pending item"
+
+      # Read-only: no inputs or remove buttons, just the rendered list.
+      html = render(view)
+      refute html =~ "checklist-row-next"
+      refute html =~ "remove_checklist_item"
+    end
+
     test "a task from another workspace redirects back to the board", %{conn: conn, ws: ws} do
       {:ok, other} =
         Knowledge.create_workspace(%{

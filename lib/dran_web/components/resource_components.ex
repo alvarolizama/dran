@@ -341,6 +341,7 @@ defmodule DranWeb.ResourceComponents do
       assigns
       |> assign(:editor_id, editor_id)
       |> assign(:form, to_form(assigns.changeset, as: :task))
+      |> assign(:checklist_rows, checklist_rows(task, assigns.changeset))
 
     ~H"""
     <.form
@@ -372,6 +373,8 @@ defmodule DranWeb.ResourceComponents do
             min_height={@editor_min_height}
           />
         </div>
+
+        <.task_checklist rows={@checklist_rows} />
       </div>
 
       <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
@@ -419,6 +422,106 @@ defmodule DranWeb.ResourceComponents do
     </.form>
     """
   end
+
+  # ── Task checklist ──────────────────────────────────────────────────────
+
+  attr :rows, :list, required: true
+
+  def task_checklist(assigns) do
+    ~H"""
+    <div id="task-checklist" class="space-y-0.5">
+      <span class="label mb-1 block text-xs text-base-content/60">{gettext("Checklist")}</span>
+
+      <div :for={row <- @rows} class="flex items-center gap-2 group" id={row.id}>
+        <input
+          :if={row.persisted}
+          type="checkbox"
+          name={"task[checklist][#{row.index}][done]"}
+          checked={row.done}
+          class="checkbox checkbox-xs checkbox-primary shrink-0"
+        />
+        <input
+          type="text"
+          name={"task[checklist][#{row.index}][text]"}
+          value={row.text}
+          placeholder={gettext("Add subtask…")}
+          class="flex-1 min-w-0 bg-transparent border-0 border-b border-transparent focus:border-base-300 focus:outline-none text-sm py-1 transition-colors placeholder:text-base-content/25"
+        />
+        <button
+          :if={row.persisted}
+          type="button"
+          phx-click="remove_checklist_item"
+          phx-value-index={row.index}
+          class="btn btn-ghost btn-xs btn-circle opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          title={gettext("Remove")}
+          aria-label={gettext("Remove")}
+        >
+          <.icon name="hero-x-mark" class="size-3.5" />
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Current checklist in stored shape: the changeset's live `:checklist`
+  change when present (mid-edit state survives re-renders), else the
+  persisted items. Empty texts are dropped. Accepts an `Ecto.Changeset` or
+  a `Phoenix.HTML.Form` (whose `source` is one).
+  """
+  def current_checklist(%Task{} = task, %{source: %Ecto.Changeset{} = changeset}),
+    do: current_checklist(task, changeset)
+
+  def current_checklist(%Task{} = task, %Ecto.Changeset{} = changeset) do
+    list =
+      case Ecto.Changeset.get_change(changeset, :checklist) do
+        list when is_list(list) -> list
+        _ -> task.checklist || []
+      end
+
+    Enum.filter(list, &(is_map(&1) and is_binary(&1["text"]) and &1["text"] != ""))
+  end
+
+  def current_checklist(_task, _form_or_changeset), do: []
+
+  @doc """
+  Checklist rows for the task editor modal: persisted items (checkbox +
+  text) plus one trailing input row that doubles as the add affordance —
+  typing there and saving appends the subtask (parse drops empties; native
+  Enter submits). Indexes are contiguous (0..n), so HTML array params parse
+  cleanly and removing an item shifts the rest without holes.
+
+  Rows derive from `current_checklist/2`, so in-progress edits survive
+  `validate_task` re-renders.
+  """
+  def checklist_rows(%Task{} = task, form_or_changeset) do
+    persisted =
+      current_checklist(task, form_or_changeset)
+      |> Enum.with_index()
+      |> Enum.map(fn {item, index} ->
+        %{
+          id: "checklist-row-#{index}",
+          index: index,
+          text: item["text"],
+          done: item["done"] in [true, "on"],
+          persisted: true
+        }
+      end)
+
+    persisted ++
+      [
+        %{
+          id: "checklist-row-next",
+          index: length(persisted),
+          text: "",
+          done: false,
+          persisted: false
+        }
+      ]
+  end
+
+  def checklist_rows(_task, _form_or_changeset),
+    do: [%{id: "checklist-row-next", index: 0, text: "", done: false, persisted: false}]
 
   defp status_selected(form, status) do
     case Phoenix.HTML.Form.input_value(form, :status) do
@@ -566,6 +669,47 @@ defmodule DranWeb.ResourceComponents do
         _ -> nil
       end
 
+    attrs = Map.put(attrs, "checklist", parse_checklist_param(params["checklist"]))
+
     %{attrs: attrs, goal_id: goal_id}
+  end
+
+  # Normalize checklist params into the stored shape
+  # `[%{"text" => ..., "done" => boolean}]`. Accepts BOTH the HTML form
+  # submission (a map keyed by row index, where checked boxes send
+  # `"done" => "on"`) and the MCP/API shape (a list of
+  # `%{"text" => ..., "done" => bool}`). Unchecked HTML checkboxes are
+  # ABSENT from the submit, so `done` is only true when the param carries a
+  # truthy value. Empty-text rows (the trailing add row and cleared items)
+  # are dropped. Legacy atom keys are mapped defensively. `nil` → [].
+  def parse_checklist_param(list) when is_list(list) do
+    list
+    |> Enum.filter(fn item -> is_map(item) and text_of(item) != "" end)
+    |> Enum.map(fn item -> %{"text" => text_of(item), "done" => done_of(item)} end)
+  end
+
+  def parse_checklist_param(map) when is_map(map) do
+    map
+    |> Enum.sort_by(fn {key, _} -> String.to_integer(to_string(key)) end)
+    |> Enum.map(fn {_key, item} -> item end)
+    |> parse_checklist_param()
+  end
+
+  def parse_checklist_param(_), do: []
+
+  defp text_of(item) do
+    cond do
+      is_binary(item["text"]) -> String.trim(item["text"])
+      is_binary(item[:text]) -> String.trim(item[:text])
+      true -> ""
+    end
+  end
+
+  defp done_of(item) do
+    cond do
+      item["done"] in [true, "on", "true"] -> true
+      item[:done] in [true, "on", "true"] -> true
+      true -> false
+    end
   end
 end

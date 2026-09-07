@@ -13,8 +13,11 @@ defmodule Dran.Tasks do
 
   ## Slug generation
 
-  Uses `Dran.Slug.slugify/1` (pure) + an internal uniqueness check against
-  the tasks table (not `Knowledge.get_page_by_slug`, which checks pages).
+  Auto-managed (2026-09): on create the slug derives from the title, and on
+  update it is regenerated when the title changes (no explicit slug in
+  attrs). Uniqueness is checked against the TASKS table (not
+  `Knowledge.get_page_by_slug`, which checks pages) via the shared
+  `Dran.Slug.inject_create/2` / `inject_update/3` policy.
   """
 
   import Ecto.Query, warn: false
@@ -120,8 +123,14 @@ defmodule Dran.Tasks do
     end)
   end
 
-  @doc "Update a task."
+  @doc "Update a task. The slug is auto-managed: regenerated from the title when it changes (unless attrs carry an explicit slug)."
   def update_task(%Task{} = task, attrs) do
+    attrs =
+      Slug.inject_update(attrs, task,
+        fallback: "task",
+        lookup: &get_task_by_slug(&1, task.workspace_id)
+      )
+
     task
     |> Task.update_changeset(attrs)
     |> Repo.update()
@@ -527,41 +536,18 @@ defmodule Dran.Tasks do
   # ──────────────────────────────────────────────────────────────────────────
 
   defp ensure_slug(attrs) do
-    slug = Map.get(attrs, "slug") || Map.get(attrs, :slug)
-    title = Map.get(attrs, "title") || Map.get(attrs, :title)
-    workspace_id = Map.get(attrs, "workspace_id") || Map.get(attrs, :workspace_id)
+    workspace_id = Slug.fetch_attr(attrs, "workspace_id")
 
     # Without a workspace we cannot guarantee slug uniqueness — let
     # validate_required(:workspace_id) produce the error instead.
-    cond do
-      is_binary(slug) and String.trim(slug) != "" ->
-        attrs
-
-      is_binary(workspace_id) ->
-        generated = Slug.generate(title, workspace_id, "task")
-        generated = ensure_unique_task_slug(generated, workspace_id, 0)
-        key = if Map.has_key?(attrs, :title), do: :slug, else: "slug"
-        Map.put(attrs, key, generated)
-
-      true ->
-        attrs
-    end
-  end
-
-  # Slug.generate already calls Knowledge.get_page_by_slug for uniqueness.
-  # We need an additional check against the tasks table.
-  defp ensure_unique_task_slug(base, workspace_id, attempt) do
-    candidate = if attempt == 0, do: base, else: "#{base}-#{random_hex()}"
-
-    if get_task_by_slug(candidate, workspace_id) do
-      ensure_unique_task_slug(base, workspace_id, attempt + 1)
+    if is_binary(workspace_id) do
+      Slug.inject_create(attrs,
+        fallback: "task",
+        taken?: fn candidate -> get_task_by_slug(candidate, workspace_id) != nil end
+      )
     else
-      candidate
+      attrs
     end
-  end
-
-  defp random_hex do
-    :crypto.strong_rand_bytes(3) |> Base.encode16(case: :lower)
   end
 
   defp default_owner_fields(attrs) do

@@ -30,6 +30,8 @@ import Mermaid from "./hooks/mermaid.js"
 import Graph3D from "./hooks/graph_3d.js"
 import TaskDnD from "./hooks/task_dnd.js"
 import WfCanvas from "./hooks/wf_canvas.js"
+import StepModalTabs from "./hooks/step_modal_tabs.js"
+import GraphCanvas from "./hooks/graph_canvas_hook.js"
 
 const GraphPanZoom = {
   mounted() {
@@ -282,7 +284,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Mermaid, Graph3D, CommandPalette, ScrollBottom, TaskDnD, WfCanvas},
+  hooks: {...colocatedHooks, GraphPanZoom, MarkdownEditor, Mermaid, Graph3D, CommandPalette, ScrollBottom, TaskDnD, WfCanvas, StepModalTabs, GraphCanvas},
 })
 
 // Show progress bar on live navigation and form submits

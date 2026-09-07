@@ -28,6 +28,15 @@ defmodule Dran.Executions do
   - `start_run/1` — conditional claim (`WHERE status = 'pending'`):
     exactly one of two concurrent claimants wins; the loser gets
     `{:error, {:wrong_status, actual, \"pending\"}}` (decisión ?07).
+  - **Ownership (un agente hereda el workflow completo)** — el `actor_id`
+    que abre la sesión se estampa en la sesión y en todos sus runs
+    upfront: ese actor es el dueño de la pasada completa. Un run
+    `pending` con dueño solo se ofrece (`list_pending_runs/2`) y solo se
+    puede reclamar (`start_run/2`) por ese actor; un run sin dueño
+    (sesión abierta sin actor) es de cola abierta: el primer reclamante
+    lo estampa. `update_progress/3` rechaza al no-dueño
+    (`{:error, :not_run_owner}`); `retry_run/1` conserva el dueño en la
+    nueva attempt.
   - `close_run/2` — persists `outcome` + `gate_results` (+ optional
     `checkpoints`), conditional on `in_flight`. Closing the last open
     run closes the session (`passed` when every step's LATEST attempt
@@ -54,7 +63,7 @@ defmodule Dran.Executions do
   `goal_id` is denormalized from `workflow.goal_id` (optional link). The
   snapshot is `%{\"steps\" => [%{\"id\", \"title\", \"contract\"}],
   \"edges\" => [[from_id, to_id]]}` — the step→step `depends_on` edges at
-  open time. Each run freezes `step.meta[\"contract\"]` into
+  open time. Each run freezes the step's contract (columns + embeds, as
   `contract_version` (nil when the step has no contract).
 
   Refuses a workflow with no steps (`{:error, :workflow_has_no_steps}`)
@@ -97,7 +106,7 @@ defmodule Dran.Executions do
             session_id: session.id,
             step_id: step.id,
             workspace_id: workspace_id,
-            contract_version: step.meta["contract"],
+            contract_version: contract_snapshot(step),
             status: "pending",
             attempt: 1,
             actor_id: actor_id
@@ -142,6 +151,34 @@ defmodule Dran.Executions do
     )
   end
 
+  @doc """
+  Count every session ever opened for the workflow (any status) — used for
+  the auto-generated "Sesión N" labels.
+  """
+  def count_sessions(workflow_id) do
+    Repo.aggregate(
+      from(s in WorkflowSession, where: s.workflow_id == ^workflow_id),
+      :count
+    )
+  end
+
+  @doc """
+  Batch version of `list_sessions/1` — sessions of MANY workflows in one
+  query. Returns sessions most-recent-first, ungrouped (caller groups by
+  `workflow_id` as needed).
+  """
+  def list_sessions_batch(workflow_ids) when is_list(workflow_ids) do
+    if workflow_ids == [] do
+      []
+    else
+      Repo.all(
+        from s in WorkflowSession,
+          where: s.workflow_id in ^workflow_ids,
+          order_by: [desc: s.inserted_at]
+      )
+    end
+  end
+
   @doc "List the runs of a session, oldest first (attempt order)."
   def list_runs(%WorkflowSession{} = session) do
     Repo.all(
@@ -156,7 +193,10 @@ defmodule Dran.Executions do
   the agent pull endpoint (F3).
 
   A pending run is offered when it is READY (prerequisites passed in its
-  session) and its session is open. Order: oldest session first.
+  session), its session is open, and it is not owned by ANOTHER actor
+  (ownership baked rule: a run whose session/actor stamp is foreign only
+  shows up for its owner; unowned runs are open-queue). Order: oldest
+  session first.
   """
   def list_pending_runs(workspace_id, opts \\ []) do
     workflow_id = Keyword.get(opts, :workflow_id)
@@ -172,16 +212,23 @@ defmodule Dran.Executions do
             s.status == "in_flight",
         order_by: [asc: r.inserted_at]
 
+    # Ownership filter (baked rule): the owner of a run is its actor stamp,
+    # falling back to the session's (open_session stamps both). Unowned
+    # runs (both nil) stay in the open queue for anyone — and a pull with
+    # actor_id=nil sees ONLY the open queue (no nil-encoded uuid compare).
     base =
-      if workflow_id do
-        from [r, s] in base, where: s.workflow_id == ^workflow_id
+      if actor_id do
+        from [r, s] in base,
+          where:
+            is_nil(coalesce(r.actor_id, s.actor_id)) or
+              coalesce(r.actor_id, s.actor_id) == type(^actor_id, Ecto.UUID)
       else
-        base
+        from [r, s] in base, where: is_nil(r.actor_id) and is_nil(s.actor_id)
       end
 
     base =
-      if actor_id do
-        from [r, s] in base, where: r.actor_id == ^actor_id
+      if workflow_id do
+        from [r, s] in base, where: s.workflow_id == ^workflow_id
       else
         base
       end
@@ -294,12 +341,16 @@ defmodule Dran.Executions do
   The claim is a conditional UPDATE (`WHERE status = 'pending'`), so two
   concurrent agents can never both claim the same run — exactly one
   wins, the loser gets `{:error, {:wrong_status, actual, \"pending\"}}`
-  (decisión ?07). Refuses runs of a closed session. `opts`:
-  `:actor_id` stamps the claimer.
+  (decisión ?07). Refuses runs of a closed session. Ownership: a run
+  stamped with a session/run actor can only be claimed by that actor
+  (`{:error, :not_run_owner}`); unowned runs are open-queue and the
+  claimer's stamp becomes the owner. `opts`: `:actor_id` stamps the
+  claimer.
   """
   def start_run(%Run{} = run, opts \\ []) do
     Repo.transaction(fn ->
       with :ok <- assert_session_open(run),
+           :ok <- assert_run_owner(run, Keyword.get(opts, :actor_id)),
            {:ok, claimed} <- claim_pending(run, opts) do
         {:ok, claimed}
       else
@@ -324,18 +375,21 @@ defmodule Dran.Executions do
   `checkpoints` (map of ledger entries).
 
   The close is conditional on `in_flight`: two executors holding the
-  same struct cannot both close — exactly one wins. Closing the last
+  same struct cannot both close — exactly one wins. Ownership: a stamped
+  run only accepts a close from its owner (`{:error, :not_run_owner}`
+  when `opts[:actor_id]` is given and differs). Closing the last
   open run (`pending | in_flight`) of the session closes the session:
   `passed` when every step's LATEST attempt is `passed`/`skipped`,
   `failed` otherwise, `finished_at` stamped now.
 
   Returns `{:ok, run}` (with `:session` preloaded) or `{:error, reason}`.
   """
-  def close_run(%Run{} = run, attrs) do
+  def close_run(%Run{} = run, attrs, opts \\ []) do
     outcome_status = attrs[:status] || attrs["status"]
 
     Repo.transaction(fn ->
       with {:ok, status} <- validate_outcome_status(outcome_status),
+           :ok <- assert_run_owner(run, Keyword.get(opts, :actor_id)),
            {:ok, in_flight_run} <- claim_in_flight(run),
            {:ok, updated} <- persist_close(in_flight_run, attrs, status) do
         maybe_close_session(updated)
@@ -362,28 +416,46 @@ defmodule Dran.Executions do
 
   Overwrite semantics (decisión ?02): the map REPLACES the stored
   `progress`. Never changes `status` — a pending run cannot fake
-  progress, a closed run cannot be resurrected. Expected shape (free,
+  progress, a closed run cannot be resurrected. Ownership: a stamped
+  run only accepts progress from its owner
+  (`{:error, :not_run_owner}`). Expected shape (free,
   display-only): `%{\"phase\" => \"implementing\", \"gates\" =>
   %{\"compile\" => \"ok\"}}`.
 
-  Returns `{:ok, run}` or `{:error, :not_in_flight | :run_not_found}`.
+  Returns `{:ok, run}` or `{:error, :not_in_flight | :run_not_found | :not_run_owner}`.
   """
   def update_progress(run_id, progress, opts \\ []) when is_binary(run_id) do
     actor_id = Keyword.get(opts, :actor_id)
 
-    {count, _} =
-      from(r in Run, where: r.id == ^run_id and r.status == "in_flight")
-      |> Repo.update_all(
-        set: [progress: progress, updated_at: DateTime.utc_now()] ++ actor_set(actor_id)
-      )
+    with {:ok, run} <- fetch_in_flight_run(run_id),
+         :ok <- assert_run_owner(run, actor_id) do
+      {count, _} =
+        from(r in Run, where: r.id == ^run.id and r.status == "in_flight")
+        |> Repo.update_all(
+          set: [progress: progress, updated_at: DateTime.utc_now()] ++ actor_set(actor_id)
+        )
 
-    if count == 1 do
-      run = Repo.get!(Run, run_id)
-      broadcast_run_change(run, :progress)
-      {:ok, run}
-    else
-      actual = Repo.get(Run, run_id)
-      if is_nil(actual), do: {:error, :run_not_found}, else: {:error, :not_in_flight}
+      if count == 1 do
+        run = Repo.get!(Run, run_id)
+        broadcast_run_change(run, :progress)
+        {:ok, run}
+      else
+        # The run closed between the pre-check and the update: same
+        # conditional-claim semantics as before.
+        {:error, :not_in_flight}
+      end
+    end
+  end
+
+  defp fetch_in_flight_run(run_id) do
+    case Repo.get(Run, run_id) do
+      nil ->
+        {:error, :run_not_found}
+
+      run ->
+        if run.status == "in_flight",
+          do: {:ok, run},
+          else: {:error, :not_in_flight}
     end
   end
 
@@ -459,6 +531,40 @@ defmodule Dran.Executions do
   end
 
   @doc """
+  Delete a session for good: its runs cascade at the FK level
+  (`runs_session_id_fkey ON DELETE CASCADE`). Open sessions are refused
+  (`{:error, :session_open}`) — `abort_session/1` is the explicit stop;
+  deleting under a driving agent would orphan its loop. Closed passes
+  (passed/failed/aborted) are history, and history is deletable.
+
+  Broadcasts `{:session_changed, :deleted, session}` so other tabs drop
+  the row. Returns `{:ok, session}` or `{:error, reason}`.
+  """
+  def delete_session(%WorkflowSession{} = session) do
+    case assert_session_closed(session) do
+      :ok ->
+        # delete_all (not Repo.delete): the DB cascade takes the runs and
+        # a preloaded :runs association on the caller's struct cannot
+        # raise here.
+        {count, _} =
+          Repo.delete_all(from s in WorkflowSession, where: s.id == ^session.id)
+
+        if count == 1 do
+          broadcast_session_change(session, :deleted)
+          {:ok, session}
+        else
+          {:error, :session_not_found}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp assert_session_closed(%WorkflowSession{status: "in_flight"}), do: {:error, :session_open}
+  defp assert_session_closed(%WorkflowSession{}), do: :ok
+
+  @doc """
   Progress of a session as a map: `%{total, pending, in_flight, passed,
   failed, skipped}` — counts over all runs of the session (including
   retries).
@@ -499,6 +605,122 @@ defmodule Dran.Executions do
       )
 
     counts || %{total: 0, pending: 0, in_flight: 0, passed: 0, failed: 0, skipped: 0}
+  end
+
+  @doc """
+  Batch version of `session_progress/1`. Returns `%{session_id => progress}`
+  for ALL given sessions in a single SQL query (one aggregate over all runs).
+  Sessions with zero runs get zeroed progress.
+  """
+  def sessions_progress_batch(sessions) when is_list(sessions) do
+    ids = Enum.map(sessions, & &1.id)
+
+    results =
+      if ids == [] do
+        %{}
+      else
+        Repo.all(
+          from r in Run,
+            where: r.session_id in ^ids,
+            group_by: r.session_id,
+            select: {
+              r.session_id,
+              %{
+                total: count(r.id),
+                pending:
+                  coalesce(
+                    sum(fragment("CASE WHEN ? = 'pending' THEN 1 ELSE 0 END", r.status)),
+                    0
+                  ),
+                in_flight:
+                  coalesce(
+                    sum(fragment("CASE WHEN ? = 'in_flight' THEN 1 ELSE 0 END", r.status)),
+                    0
+                  ),
+                passed:
+                  coalesce(
+                    sum(fragment("CASE WHEN ? = 'passed' THEN 1 ELSE 0 END", r.status)),
+                    0
+                  ),
+                failed:
+                  coalesce(
+                    sum(fragment("CASE WHEN ? = 'failed' THEN 1 ELSE 0 END", r.status)),
+                    0
+                  ),
+                skipped:
+                  coalesce(
+                    sum(fragment("CASE WHEN ? = 'skipped' THEN 1 ELSE 0 END", r.status)),
+                    0
+                  )
+              }
+            }
+        )
+        |> Map.new()
+      end
+
+    zero = %{total: 0, pending: 0, in_flight: 0, passed: 0, failed: 0, skipped: 0}
+
+    Map.new(sessions, fn s ->
+      {s.id, Map.get(results, s.id, zero)}
+    end)
+  end
+
+  @doc """
+  In-flight sessions of a single workflow with their run progress — ONE query
+  for sessions + ONE batched query for progress. Used by the show-page path.
+  """
+  def active_sessions(%Dran.Workflow{id: wid}) do
+    sessions =
+      Repo.all(
+        from s in WorkflowSession,
+          where: s.workflow_id == ^wid and s.status == "in_flight",
+          order_by: [desc: s.inserted_at]
+      )
+
+    progress_map = sessions_progress_batch(sessions)
+
+    Enum.map(sessions, fn s ->
+      {s,
+       Map.get(progress_map, s.id, %{
+         total: 0,
+         pending: 0,
+         in_flight: 0,
+         passed: 0,
+         failed: 0,
+         skipped: 0
+       })}
+    end)
+  end
+
+  @doc """
+  Batch version: in-flight sessions grouped by workflow_id for MANY workflows
+  in TWO queries total (sessions + runs). Returns `%{workflow_id => [{session, progress}]}`.
+  """
+  def active_sessions_by_workflow_id(ids) when is_list(ids) do
+    if ids == [] do
+      %{}
+    else
+      sessions = list_sessions_batch(ids)
+
+      # Filter to in_flight only, then batch progress.
+      in_flight = Enum.filter(sessions, &(&1.status == "in_flight"))
+      progress_map = sessions_progress_batch(in_flight)
+
+      in_flight
+      |> Enum.map(fn s ->
+        {s,
+         Map.get(progress_map, s.id, %{
+           total: 0,
+           pending: 0,
+           in_flight: 0,
+           passed: 0,
+           failed: 0,
+           skipped: 0
+         })}
+      end)
+      |> Enum.group_by(fn {s, _} -> s.workflow_id end)
+      |> Map.new()
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -552,11 +774,21 @@ defmodule Dran.Executions do
           %{
             "id" => step.id,
             "title" => step.title,
-            "contract" => step.meta["contract"]
+            "contract" => contract_snapshot(step)
           }
         end),
       "edges" => Enum.map(edges, fn {from_id, to_id} -> [from_id, to_id] end)
     }
+  end
+
+  # The step's contract as the legacy string-keyed map (the snapshot/
+  # contract_version interchange shape), or nil when the step has no
+  # intent yet (no contract to freeze).
+  defp contract_snapshot(%Dran.Step{} = step) do
+    case Dran.Contracts.contract_map(step) do
+      nil -> nil
+      contract -> contract
+    end
   end
 
   defp claim_pending(%Run{} = run, opts) do
@@ -594,6 +826,42 @@ defmodule Dran.Executions do
 
   defp actor_set(nil), do: []
   defp actor_set(actor_id), do: [actor_id: actor_id]
+
+  # Ownership baked rule: the owner of a run is its actor stamp, falling
+  # back to the session's (open_session stamps BOTH). An unowned run
+  # (both nil — sessions opened without an actor) is open-queue: anyone
+  # (even an anonymous caller) may claim it and the claim stamp makes
+  # them the owner. An owned run refuses every other actor — including
+  # the anonymous caller, which mirrors the pull filter (a nil-actor pull
+  # only sees the open queue). Un agente hereda el workflow completo.
+  defp assert_run_owner(%Run{actor_id: nil} = run, nil) do
+    case session_owner_id(run.session_id) do
+      nil -> :ok
+      _owned -> {:error, :not_run_owner}
+    end
+  end
+
+  defp assert_run_owner(%Run{actor_id: actor_id} = _run, actor_id) when not is_nil(actor_id),
+    do: :ok
+
+  defp assert_run_owner(%Run{actor_id: nil, session_id: session_id} = _run, actor_id)
+       when is_binary(actor_id) do
+    case session_owner_id(session_id) do
+      nil -> :ok
+      ^actor_id -> :ok
+      _other -> {:error, :not_run_owner}
+    end
+  end
+
+  # The run carries a stamp that is not the caller's.
+  defp assert_run_owner(%Run{} = _run, _actor_id), do: {:error, :not_run_owner}
+
+  defp session_owner_id(session_id) do
+    case Repo.get(WorkflowSession, session_id) do
+      %WorkflowSession{actor_id: actor_id} -> actor_id
+      nil -> nil
+    end
+  end
 
   defp assert_run_status(%Run{status: expected}, expected), do: :ok
 

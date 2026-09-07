@@ -178,10 +178,12 @@ defmodule Dran.KnowledgeTest do
           body: "y"
         })
 
-      # Non-ASCII titles slugify to "untitled" — both should still succeed
-      # with dedup, not fail with a unique constraint error.
-      assert first.slug == "untitled"
-      assert second.slug =~ ~r/^untitled-[a-f0-9]{6}$/
+      # Non-ASCII titles produce no usable slug chars — the fallback is the
+      # page type ("note"), and both pages dedup with a random hex suffix
+      # instead of failing with a unique constraint error.
+      assert first.slug == "note"
+      assert second.slug =~ ~r/^note-[a-f0-9]{6}$/
+      refute second.slug == first.slug
     end
 
     test "respects explicit slug even if duplicate (returns error)", %{context: ctx} do
@@ -846,7 +848,8 @@ defmodule Dran.KnowledgeTest do
         })
 
       assert page.title == "Untitled"
-      assert page.slug == "untitled"
+      # No title from the body → the fallback slug is the page type.
+      assert page.slug == "note"
 
       # The embed itself is still resolved
       rels = Knowledge.list_relations_for_page(page.id).outbound

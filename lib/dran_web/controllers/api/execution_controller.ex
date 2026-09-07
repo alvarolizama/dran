@@ -87,7 +87,13 @@ defmodule DranWeb.API.ExecutionController do
           |> put_status(:bad_request)
           |> json(%{errors: %{detail: "workflow must be a UUID"}})
         else
-          opts = if workflow_param, do: [workflow_id: workflow_param], else: []
+          # Ownership baked rule: the pull answers "what is available to
+          # ME" — owned sessions only surface for their owner; unowned
+          # sessions stay in the open queue for everyone.
+          opts =
+            []
+            |> maybe_put(:workflow_id, workflow_param)
+            |> Keyword.put(:actor_id, acting_actor_id(conn))
 
           runs =
             workspace_id
@@ -187,7 +193,7 @@ defmodule DranWeb.API.ExecutionController do
           |> Enum.reject(fn {_k, v} -> is_nil(v) end)
           |> Map.new()
 
-        case Executions.close_run(run, attrs) do
+        case Executions.close_run(run, attrs, actor_id: acting_actor_id(conn)) do
           {:ok, closed} ->
             session = Repo.get!(WorkflowSession, closed.session_id)
 
@@ -321,6 +327,7 @@ defmodule DranWeb.API.ExecutionController do
   defp translate_error(:run_not_found), do: {404, "run not found"}
   defp translate_error(:not_in_flight), do: {409, "run is not in_flight"}
   defp translate_error(:session_closed), do: {409, "session is closed"}
+  defp translate_error(:not_run_owner), do: {403, "run belongs to another actor"}
 
   defp translate_error(:invalid_status),
     do: {422, "status must be one of: passed, failed, skipped"}
@@ -389,7 +396,6 @@ defmodule DranWeb.API.ExecutionController do
       workflow_id: session.workflow_id,
       session_label: session.label,
       step_title: step.title,
-      step_body: step.body,
       step_position: step.position
     })
   end

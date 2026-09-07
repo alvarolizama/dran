@@ -10,6 +10,7 @@ defmodule Dran.Goals do
 
   alias Dran.Repo
   alias Dran.Goal
+  alias Dran.Slug
 
   @doc "List goals from the goals table"
   def list_goals(workspace_id) when is_binary(workspace_id) do
@@ -55,18 +56,39 @@ defmodule Dran.Goals do
     Goal.changeset(goal, attrs)
   end
 
-  @doc "Create a new goal"
+  @doc "Create a new goal. The slug is auto-managed (derived from title)."
   def create_goal(attrs) do
-    %Goal{}
-    |> Goal.changeset(attrs)
-    |> Repo.insert()
+    attrs
+    |> Slug.inject_create(
+      fallback: "goal",
+      taken?: &slug_taken?(attrs, &1)
+    )
+    |> then(&(%Goal{} |> Goal.changeset(&1) |> Repo.insert()))
   end
 
-  @doc "Update an existing goal"
+  @doc """
+  Update an existing goal. The slug is auto-managed: when the title changes
+  and no explicit slug was provided, the slug is regenerated from the new
+  title (suffixed with a random hex if it collides). An explicit slug in
+  attrs always wins (API/MCP callers, seeds).
+  """
   def update_goal(%Goal{} = goal, attrs) do
-    goal
-    |> Goal.changeset(attrs)
-    |> Repo.update()
+    attrs
+    |> Slug.inject_update(goal,
+      fallback: "goal",
+      lookup: &get_goal_by_slug(&1, goal.workspace_id)
+    )
+    |> then(&(goal |> Goal.changeset(&1) |> Repo.update()))
+  end
+
+  defp slug_taken?(attrs, candidate) do
+    case Slug.fetch_attr(attrs, "workspace_id") do
+      workspace_id when is_binary(workspace_id) ->
+        get_goal_by_slug(candidate, workspace_id) != nil
+
+      _ ->
+        false
+    end
   end
 
   @doc "Delete a goal"

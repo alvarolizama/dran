@@ -7,9 +7,10 @@ defmodule DranWeb.WorkflowsLiveTest do
 
   use DranWeb.ConnCase, async: false
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
-  alias Dran.{Contracts, Executions, Knowledge, Workflows}
+  alias Dran.{Contracts, Executions, Knowledge, Repo, Workflows}
 
   setup %{conn: conn} do
     original = Application.get_env(:dran, :inference)
@@ -77,7 +78,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert has_element?(view, "#workflow-card-#{workflow.id}", "Draft")
     end
 
-    test "nueva sesión opens an in-flight session with the label", %{
+    test "nueva sesión opens an in-flight session with an auto-generated label", %{
       conn: conn,
       ws: ws,
       workflow: workflow
@@ -86,14 +87,14 @@ defmodule DranWeb.WorkflowsLiveTest do
 
       view
       |> form("#workflow-session-form-#{workflow.id}")
-      |> render_submit(%{"label" => "release 1"})
+      |> render_submit()
 
       assert has_element?(view, "#workflow-card-#{workflow.id}", "In Flight")
 
       sessions = Executions.list_sessions(workflow)
       assert [session] = sessions
       assert session.status == "in_flight"
-      assert session.label == "release 1"
+      assert session.label == "Sesión 1"
     end
 
     test "index shows in-flight sessions with progress", %{conn: conn, ws: ws, workflow: workflow} do
@@ -449,14 +450,14 @@ defmodule DranWeb.WorkflowsLiveTest do
 
       view
       |> form("#workflow-session-form")
-      |> render_submit(%{"label" => "first pass"})
+      |> render_submit()
 
       assert [session] = Executions.list_sessions(workflow)
-      assert session.label == "first pass"
+      assert session.label == "Sesión 1"
       assert session.workflow_id == workflow.id
 
       html = render(view)
-      assert html =~ "first pass"
+      assert html =~ "Sesión 1"
       assert html =~ "0/3"
       # The runs panel lists one pending run per step
       runs = Executions.list_runs(session)
@@ -556,6 +557,85 @@ defmodule DranWeb.WorkflowsLiveTest do
         assert has_element?(view, "#run-row-#{run.id}", "Skipped")
       end)
     end
+
+    test "delete_session removes a closed session with its runs from the show panel", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, session} = Executions.open_session(workflow, label: "dead pass")
+      {:ok, _} = Executions.abort_session(Repo.get!(Dran.WorkflowSession, session.id))
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
+
+      # The trash button exists only for closed sessions.
+      assert has_element?(view, "[data-testid='delete-session-#{session.id}']")
+
+      view
+      |> element("[data-testid='delete-session-#{session.id}']")
+      |> render_click()
+
+      assert Repo.get(Dran.WorkflowSession, session.id) == nil
+      assert Repo.all(from(r in Dran.Run, where: r.session_id == ^session.id)) == []
+      refute has_element?(view, "#session-row-#{session.id}")
+      assert render(view) =~ "Sesión eliminada"
+    end
+
+    test "edit-workflow modal changes kind while sessionless; kind locks once sessions exist", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, flow} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "title" => "Empty flow",
+          "slug" => "empty-flow"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/empty-flow?edit=true")
+
+      assert has_element?(view, "#workflow-edit-modal")
+
+      # Kind editable BEFORE any session exists (pre-execution decision).
+      view
+      |> element("#workflow-edit-form")
+      |> render_submit(%{workflow: %{"title" => "Empty flow", "kind" => "one_shot"}})
+
+      assert Repo.get!(Dran.Workflow, flow.id).kind == "one_shot"
+
+      # A session appears → the same modal renders the kind select disabled.
+      {:ok, _step} = Workflows.create_step(flow, %{"title" => "S", "slug" => "s"})
+      {:ok, session} = Executions.open_session(Repo.get!(Dran.Workflow, flow.id))
+      [run] = Executions.list_runs(Repo.get!(Dran.WorkflowSession, session.id))
+      {:ok, run} = Executions.start_run(run)
+      {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/empty-flow?edit=true")
+      assert has_element?(view, "#workflow-edit-modal select[name='workflow[kind]'][disabled]")
+
+      # Forged submit changing kind: refused (context guard, not just UI).
+      {:error, :kind_locked} =
+        Workflows.update_workflow(Repo.get!(Dran.Workflow, flow.id), %{"kind" => "evergreen"})
+
+      assert Repo.get!(Dran.Workflow, flow.id).kind == "one_shot"
+    end
+
+    test "delete_session is refused for an in_flight session (no button, guard flash)", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      {:ok, session} = Executions.open_session(workflow, label: "live pass")
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
+
+      # In-flight: no trash button rendered (only abort).
+      refute has_element?(view, "[data-testid='delete-session-#{session.id}']")
+
+      # A forged event is refused by the context anyway.
+      render_hook(view, "delete_session", %{"session-id" => session.id})
+      assert Repo.get!(Dran.WorkflowSession, session.id).status == "in_flight"
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -574,7 +654,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert has_element?(view, "#step-modal-form")
 
       view
-      |> form("#step-modal-form", step: %{"title" => "Lint", "slug" => ""})
+      |> form("#step-modal-form", step: %{"title" => "Lint"})
       |> render_submit()
 
       assert step = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "lint"))
@@ -605,7 +685,7 @@ defmodule DranWeb.WorkflowsLiveTest do
 
       view
       |> form("#step-modal-form",
-        step: %{"title" => "Notify", "slug" => ""},
+        step: %{"title" => "Notify"},
         new_step: %{"after" => deploy.id}
       )
       |> render_submit()
@@ -635,7 +715,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
 
       view
-      |> form("#step-modal-form", step: %{"title" => "Loose", "slug" => ""})
+      |> form("#step-modal-form", step: %{"title" => "Loose"})
       |> render_submit()
 
       loose = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "loose"))
@@ -672,7 +752,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       # Hand-crafted submit: the checkbox only ever offers this workflow's
       # steps, so a foreign id is what a tampered client would send.
       render_submit(view, "save_step", %{
-        "step" => %{"title" => "Hijack", "slug" => ""},
+        "step" => %{"title" => "Hijack"},
         "new_step" => %{"after" => other_step.id}
       })
 
@@ -692,7 +772,7 @@ defmodule DranWeb.WorkflowsLiveTest do
 
       view
       |> form("#step-modal-form")
-      |> render_submit(step: %{"title" => "", "slug" => "", "body" => ""})
+      |> render_submit(step: %{"title" => ""})
 
       assert has_element?(view, "#step-resource-modal")
     end
@@ -752,12 +832,15 @@ defmodule DranWeb.WorkflowsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?new_step=true")
 
       view
-      |> form("#step-modal-form", step: %{"title" => "Clash", "slug" => "test-step"})
+      |> form("#step-modal-form", step: %{"title" => "Test step"})
       |> render_submit()
 
-      # Modal stays open: the unique-per-workspace slug error renders inline.
-      assert has_element?(view, "#step-resource-modal")
-      assert view |> element("#step-resource-modal") |> render() =~ "already been taken"
+      # Auto-managed slug: a colliding title gets a random hex suffix, so the
+      # step is ALWAYS created — uniqueness never blocks the user anymore.
+      steps = Workflows.list_steps(workflow)
+      assert Enum.count(steps, &(&1.title == "Test step")) == 1
+      assert Enum.find(steps, &(&1.title == "Test step")).slug != "test-step"
+      refute has_element?(view, "#step-resource-modal")
     end
 
     test "delete button removes the step and closes the modal", %{
@@ -912,7 +995,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert Workflows.get_step!(test_step.id)
     end
 
-    # ── Contrato: ver y editar meta["contract"] desde el modal ─────────────
+    # ── Contrato: ver y editar (columnas + embeds) desde el modal ──────────────
 
     test "edit modal shows the step's contract JSON in the textarea", %{
       conn: conn,
@@ -921,13 +1004,13 @@ defmodule DranWeb.WorkflowsLiveTest do
     } do
       contract = %{
         "intent" => "Ship the login flow",
-        "claims" => [%{"id" => "P1", "text" => "form validates", "verify" => "mix test"}],
-        "gates" => [%{"id" => "G1", "cmd" => "mix test"}]
+        "claims" => [%{"id" => "P1", "claim" => "form validates", "verify" => "mix test"}],
+        "gates" => [%{"name" => "test", "cmd" => "mix test", "expect" => "exit 0"}]
       }
 
       build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
 
-      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"contract" => contract}})
+      {:ok, _} = Workflows.update_step(build, contract_attrs(contract))
 
       {:ok, view, _html} =
         live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
@@ -936,6 +1019,49 @@ defmodule DranWeb.WorkflowsLiveTest do
       html = view |> element("[data-testid='step-contract']") |> render()
       assert html =~ "Ship the login flow"
       assert html =~ "mix test"
+    end
+
+    test "grafo tab renders the canvas container and node positions (x/y) round-trip", %{
+      conn: conn,
+      ws: ws,
+      workflow: workflow
+    } do
+      contract = %{
+        "intent" => "Ship the login flow",
+        "graph" => %{
+          "nodes" => [
+            %{"id" => "S1", "verb" => "READ", "label" => "router.ex", "x" => 96, "y" => 48},
+            %{"id" => "G1", "verb" => "VERIFY", "label" => "tests green?"}
+          ],
+          "edges" => [%{"from" => "S1", "to" => "G1"}]
+        }
+      }
+
+      build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
+      {:ok, _} = Workflows.update_step(build, contract_attrs(contract))
+
+      {:ok, view, _html} =
+        live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
+
+      # Canvas container server-rendered dentro del panel grafo
+      assert has_element?(view, "[data-panel='grafo'] [data-graph-canvas]")
+      assert has_element?(view, "[data-panel='grafo'] [data-gc-empty]")
+
+      # x/y persistidos en el embed (el layout del canvas sobrevive al guardado)
+      build = Workflows.get_step!(build.id)
+      node = Enum.find(build.graph.nodes, &(&1.id == "S1"))
+      assert node.x == 96
+      assert node.y == 48
+
+      # Nodo sin x/y queda nil → auto-layout client-side
+      g1 = Enum.find(build.graph.nodes, &(&1.id == "G1"))
+      assert is_nil(g1.x) and is_nil(g1.y)
+
+      # El JSON del contrato que alimenta al canvas incluye las coords
+      # (el HTML escapa las comillas como &quot;)
+      html = view |> element("[data-testid='step-contract']") |> render()
+      assert html =~ "&quot;x&quot;: 96"
+      assert html =~ "&quot;y&quot;: 48"
     end
 
     test "typing invalid JSON shows inline lint feedback without blocking the form", %{
@@ -962,16 +1088,16 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert has_element?(view, "[data-testid='contract-lint-ok']")
     end
 
-    test "saving the modal with a valid contract merges meta.contract keeping meta.pos", %{
+    test "saving the modal with a valid contract keeps canvas position", %{
       conn: conn,
       ws: ws,
       workflow: workflow
     } do
       build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
 
-      # The canvas materializes meta.pos on first drag; the modal save must
+      # The canvas materializes pos_x/pos_y on first drag; the modal save must
       # not clobber it.
-      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"pos" => %{"x" => 40, "y" => 60}}})
+      {:ok, _} = Workflows.update_step(build, %{"pos_x" => 40, "pos_y" => 60})
 
       {:ok, view, _html} =
         live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
@@ -983,8 +1109,8 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> render_submit()
 
       saved = Workflows.get_step!(build.id)
-      assert saved.meta["contract"]["intent"] == "Ship the login flow"
-      assert saved.meta["pos"] == %{"x" => 40, "y" => 60}
+      assert saved.intent == "Ship the login flow"
+      assert saved.pos_x == 40 and saved.pos_y == 60
     end
 
     test "saving with unparseable JSON leaves the stored contract untouched", %{
@@ -995,7 +1121,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
       contract = %{"intent" => "Keep me"}
 
-      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"contract" => contract}})
+      {:ok, _} = Workflows.update_step(build, contract_attrs(contract))
 
       {:ok, view, _html} =
         live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
@@ -1004,7 +1130,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> form("#step-modal-form", step: %{"contract_json" => "not json"})
       |> render_submit()
 
-      assert Workflows.get_step!(build.id).meta["contract"] == contract
+      assert Workflows.get_step!(build.id).intent == "Keep me"
     end
 
     test "clearing the textarea removes the contract from the step", %{
@@ -1014,7 +1140,7 @@ defmodule DranWeb.WorkflowsLiveTest do
     } do
       build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
 
-      {:ok, _} = Workflows.update_step(build, %{"meta" => %{"contract" => %{"intent" => "x"}}})
+      {:ok, _} = Workflows.update_step(build, %{"intent" => "x"})
 
       {:ok, view, _html} =
         live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline?step=#{build.id}")
@@ -1023,7 +1149,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> form("#step-modal-form", step: %{"contract_json" => ""})
       |> render_submit()
 
-      refute Workflows.get_step!(build.id).meta["contract"]
+      refute Workflows.get_step!(build.id).intent
     end
 
     test "a lint-failing contract shows why (missing intent)", %{
@@ -1043,6 +1169,36 @@ defmodule DranWeb.WorkflowsLiveTest do
       html = view |> element("[data-testid='contract-lint-error']") |> render()
       assert html =~ "intent"
     end
+  end
+
+  # JSON contract string → step attrs (columns + embeds). Used to seed
+  # contracts directly in tests, bypassing the modal serialization.
+  defp contract_attrs(json) when is_map(json) do
+    %{"intent" => json["intent"]}
+    |> then(fn attrs ->
+      case json["claims"] do
+        nil -> attrs
+        claims -> Map.put(attrs, "claims", claims)
+      end
+    end)
+    |> then(fn attrs ->
+      case json["gates"] do
+        nil -> attrs
+        gates -> Map.put(attrs, "gates", gates)
+      end
+    end)
+    |> then(fn attrs ->
+      case json["graph"] do
+        nil -> attrs
+        graph -> Map.put(attrs, "graph", graph)
+      end
+    end)
+    |> then(fn attrs ->
+      case json["context_snapshot"] do
+        nil -> attrs
+        ctx -> Map.put(attrs, "context_snapshot", ctx)
+      end
+    end)
   end
 
   # Lint-passing fixture (same shape as the context tests' valid_contract):
@@ -1100,7 +1256,7 @@ defmodule DranWeb.WorkflowsLiveTest do
   # ──────────────────────────────────────────────────────────────────────────
 
   describe "canvas editor" do
-    test "move_step persists meta.pos for the dragged card", %{
+    test "move_step persists pos_x/pos_y for the dragged card", %{
       conn: conn,
       ws: ws,
       workflow: workflow
@@ -1112,7 +1268,8 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> element("#wfe-canvas")
       |> render_hook("move_step", %{"step-id" => build.id, "x" => "320", "y" => "160"})
 
-      assert Workflows.get_step!(build.id).meta["pos"] == %{"x" => 320, "y" => 160}
+      saved = Workflows.get_step!(build.id)
+      assert saved.pos_x == 320 and saved.pos_y == 160
     end
 
     test "move_step with a forged step id is a silent no-op", %{
@@ -1127,7 +1284,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> element("#wfe-canvas")
       |> render_hook("move_step", %{"step-id" => Ecto.UUID.generate(), "x" => "10", "y" => "10"})
 
-      assert Workflows.get_step!(build.id).meta["pos"] == nil
+      assert Workflows.get_step!(build.id).pos_x == nil
     end
 
     test "connect_steps creates the depends_on edge; self loop is rejected", %{
@@ -1243,13 +1400,13 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> element("#wfe-canvas")
       |> render_hook("move_step", %{"step-id" => deploy.id, "x" => "516", "y" => "416"})
 
-      assert Enum.any?(Workflows.list_steps(workflow), &(&1.meta["pos"] != nil))
+      assert Enum.any?(Workflows.list_steps(workflow), &(&1.pos_x != nil))
 
       view
       |> element("#wfe-canvas")
       |> render_hook("repack_layout", %{})
 
-      assert Enum.all?(Workflows.list_steps(workflow), &is_nil(&1.meta["pos"]))
+      assert Enum.all?(Workflows.list_steps(workflow), &is_nil(&1.pos_x))
     end
 
     test "new_step_at patches the URL with pos params; save_step births the step there", %{
@@ -1266,13 +1423,14 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert_patch(view, 300)
 
       view
-      |> form("#step-modal-form", step: %{"title" => "Creado en canvas", "slug" => "canvas-born"})
+      |> form("#step-modal-form", step: %{"title" => "Creado en canvas"})
       |> render_submit()
 
       assert_patch(view, 300)
 
-      created = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "canvas-born"))
-      assert created.meta["pos"] == %{"x" => 190, "y" => 192}
+      # Auto-managed slug: derived from the title.
+      created = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "creado-en-canvas"))
+      assert created.pos_x == 190 and created.pos_y == 192
     end
 
     test "renders edge ✕ buttons and always-present ports", %{
@@ -1334,10 +1492,10 @@ defmodule DranWeb.WorkflowsLiveTest do
     assert ports["p1"].out.x == edge.x1
     assert ports["d1"].in.x == edge.x2
 
-    # free layout: meta.pos wins over levels for every step (all-or-nothing)
+    # free layout: pos_x/pos_y win over levels for every step (all-or-nothing)
     free = [
-      %{id: "p1", meta: %{"pos" => %{"x" => 500, "y" => 40}}},
-      %{id: "d1", meta: %{"pos" => %{"x" => 500, "y" => 200}}}
+      %{id: "p1", pos_x: 500, pos_y: 40},
+      %{id: "d1", pos_x: 500, pos_y: 200}
     ]
 
     free_positions = WorkflowsLive.step_positions(free, levels)
@@ -1345,7 +1503,7 @@ defmodule DranWeb.WorkflowsLiveTest do
     assert free_positions["d1"] == {500, 200}
 
     # partial positions → full levels fallback (no jumps)
-    partial = [hd(free), %{id: "d1", meta: %{}}]
+    partial = [hd(free), %{id: "d1", pos_x: nil, pos_y: nil}]
     assert WorkflowsLive.step_positions(partial, levels) == positions
   end
 end

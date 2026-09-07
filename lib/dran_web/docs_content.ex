@@ -95,7 +95,7 @@ defmodule DranWeb.DocsContent do
     priority        low | medium | high | urgent
     due_date        date (nullable)
     recurrence      none | daily | weekly | monthly (auto-clones on completion)
-    checklist       meta.checklist = [%{text, done}] — lightweight subtasks
+    checklist       [%{text, done}] — lightweight subtasks
     assignee_id     FK to users (nullable)
     Linked to goals/pages via optional part_of relations
     (source_type="task").

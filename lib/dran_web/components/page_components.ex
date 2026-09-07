@@ -215,7 +215,7 @@ defmodule DranWeb.PageComponents do
 
               <div
                 :if={@tabs == [] and not @content_hidden}
-                class="prose prose-base dark:prose-invert"
+                class="prose prose-base dark:prose-invert max-w-none"
               >
                 {@rendered_body}
               </div>

@@ -29,7 +29,7 @@ defmodule Dran.ContractsStepsTest do
   end
 
   describe "contract?/1 and lint/1 (steps)" do
-    test "a step without meta.contract is not a contract", %{workflow: workflow} do
+    test "a step without intent is not a valid contract", %{workflow: workflow} do
       step = create_step(workflow, "Plain step")
       refute Contracts.contract?(step)
       assert {:error, [:no_contract]} = Contracts.lint(step)
@@ -41,40 +41,58 @@ defmodule Dran.ContractsStepsTest do
       assert Contracts.contract?(step)
     end
 
-    test "missing intent is rejected", %{workflow: workflow} do
-      step = step_with_contract(workflow, valid_contract() |> Map.delete("intent"))
+    test "missing intent keeps the step valid but not a contract", %{workflow: workflow} do
+      # Intent es columna, no JSON: se actualiza directo. Un step con solo
+      # intent es una fila válida (legacy/canvas-born) pero sin claims aún
+      # no es un contrato completo.
+      step = create_step(workflow, "Plain step")
+
+      assert {:ok, step} = Workflows.update_step(step, %{"intent" => "Ahora sí"})
+      assert step.intent == "Ahora sí"
       assert {:error, errors} = Contracts.lint(step)
-      assert :intent in errors
+      assert :claims in errors or :graph in errors
       refute Contracts.contract?(step)
     end
 
-    test "claims without verify are rejected", %{workflow: workflow} do
+    test "claims without verify are rejected by the embed changeset", %{workflow: workflow} do
       contract =
         put_in(valid_contract()["claims"], [%{"id" => "P1", "claim" => "x", "verify" => ""}])
 
-      step = step_with_contract(workflow, contract)
-      assert {:error, errors} = Contracts.lint(step)
-      assert :claims in errors
+      step = create_step(workflow, "Bad claims")
+
+      assert {:error, %Ecto.Changeset{} = cs} =
+               Workflows.update_step(step, contract_attrs(contract))
+
+      assert [%{errors: errors}] = cs.changes.claims
+      assert errors[:verify]
     end
 
-    test "gates without cmd are rejected", %{workflow: workflow} do
+    test "gates without cmd are rejected by the embed changeset", %{workflow: workflow} do
       contract =
         put_in(valid_contract()["gates"], [%{"name" => "g", "cmd" => "", "expect" => "ok"}])
 
-      step = step_with_contract(workflow, contract)
-      assert {:error, errors} = Contracts.lint(step)
-      assert :gates in errors
+      step = create_step(workflow, "Bad gates")
+
+      assert {:error, %Ecto.Changeset{} = cs} =
+               Workflows.update_step(step, contract_attrs(contract))
+
+      assert [%{errors: errors}] = cs.changes.gates
+      assert errors[:cmd]
     end
 
-    test "graph with a non-verb node is rejected", %{workflow: workflow} do
+    test "graph with a non-verb node is rejected by the embed changeset", %{workflow: workflow} do
       contract =
         put_in(valid_contract()["graph"]["nodes"], [
           %{"id" => "S1", "verb" => "WRITE", "label" => "x"}
         ])
 
-      step = step_with_contract(workflow, contract)
-      assert {:error, errors} = Contracts.lint(step)
-      assert :graph_verbs in errors
+      step = create_step(workflow, "Bad verb")
+
+      assert {:error, %Ecto.Changeset{} = cs} =
+               Workflows.update_step(step, contract_attrs(contract))
+
+      assert %{changes: %{nodes: [%{errors: errors}]}} = cs.changes.graph
+      assert errors[:verb]
     end
 
     test "graph without a VERIFY reachable node is rejected (funnel)", %{workflow: workflow} do
@@ -279,6 +297,22 @@ defmodule Dran.ContractsStepsTest do
       assert brief =~ "source: step:<id>"
     end
 
+    test "renders context_snapshot entries in the Context section", %{workflow: workflow} do
+      contract =
+        valid_contract()
+        |> Map.put("context_snapshot", [
+          %{"type" => "page", "id" => "uuid-1", "why" => "spec de referencia"},
+          %{"type" => "memory", "id" => "uuid-2", "why" => "decisión previa"}
+        ])
+
+      step = step_with_contract(workflow, contract)
+      {:ok, brief} = Contracts.render_brief(step)
+
+      assert brief =~ "## Context"
+      assert brief =~ "- page uuid-1"
+      assert brief =~ "- memory uuid-2"
+    end
+
     test "returns error for a step without contract", %{workflow: workflow} do
       step = create_step(workflow, "x")
       assert {:error, :no_contract} = Contracts.render_brief(step)
@@ -295,10 +329,7 @@ defmodule Dran.ContractsStepsTest do
       assert fp == Contracts.fingerprint(step)
 
       # el contrato cambia → fingerprint cambia
-      {:ok, step} =
-        Workflows.update_step(step, %{
-          "meta" => %{"contract" => valid_contract() |> Map.put("intent", "Other intent")}
-        })
+      {:ok, step} = Workflows.update_step(step, %{"intent" => "Other intent"})
 
       refute Contracts.fingerprint(step) == fp
 
@@ -341,8 +372,21 @@ defmodule Dran.ContractsStepsTest do
 
   defp step_with_contract(workflow, contract) do
     step = create_step(workflow, "Contract step")
-    {:ok, step} = Workflows.update_step(step, %{"meta" => %{"contract" => contract}})
+    {:ok, step} = Workflows.update_step(step, contract_attrs(contract))
     step
+  end
+
+  # The legacy string-keyed contract map → step attrs (columns + embeds).
+  # version/fingerprint/model/generated_by are server-managed: NOT passed.
+  defp contract_attrs(contract) do
+    %{
+      "intent" => contract["intent"],
+      "status" => contract["status"] || "draft",
+      "claims" => contract["claims"] || [],
+      "gates" => contract["gates"] || [],
+      "context_snapshot" => contract["context_snapshot"] || [],
+      "graph" => contract["graph"]
+    }
   end
 
   defp valid_contract do

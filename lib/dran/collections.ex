@@ -29,18 +29,37 @@ defmodule Dran.Collections do
     Collection.changeset(collection, attrs)
   end
 
-  @doc "Create a new collection"
+  @doc "Create a new collection. The slug is auto-managed (derived from name)."
   def create_collection(attrs) do
-    %Collection{}
-    |> Collection.changeset(attrs)
-    |> Repo.insert()
+    attrs
+    |> Dran.Slug.inject_create(
+      field: "name",
+      fallback: "collection",
+      taken?: fn candidate ->
+        case Dran.Slug.fetch_attr(attrs, "workspace_id") do
+          workspace_id when is_binary(workspace_id) ->
+            get_collection_by_slug(candidate, workspace_id) != nil
+
+          _ ->
+            false
+        end
+      end
+    )
+    |> then(&(%Collection{} |> Collection.changeset(&1) |> Repo.insert()))
   end
 
-  @doc "Update an existing collection"
+  @doc """
+  Update an existing collection. The slug is auto-managed: regenerated from
+  the name when it changes (unless attrs carry an explicit slug).
+  """
   def update_collection(%Collection{} = collection, attrs) do
-    collection
-    |> Collection.changeset(attrs)
-    |> Repo.update()
+    attrs
+    |> Dran.Slug.inject_update(collection,
+      field: "name",
+      fallback: "collection",
+      lookup: &get_collection_by_slug(&1, collection.workspace_id)
+    )
+    |> then(&(collection |> Collection.changeset(&1) |> Repo.update()))
   end
 
   @doc "Delete a collection"

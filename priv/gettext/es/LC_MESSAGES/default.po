@@ -1454,6 +1454,11 @@ msgstr[1] "páginas"
 msgid "Plan"
 msgstr "Plan"
 
+#: lib/dran_web/components/layouts.ex:405
+#, elixir-autogen, elixir-format
+msgid "Planning"
+msgstr "Planificación"
+
 #: lib/dran/page_registry.ex:338
 #, elixir-autogen, elixir-format
 msgid "Project"

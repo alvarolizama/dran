@@ -19,11 +19,12 @@ defmodule Dran.Task do
 
   ## Subtasks
 
-  Subtasks are a checklist inside `meta`:
+  Subtasks are a checklist column (`checklist`, jsonb):
 
-      %{checklist: [%{text: "Write outline", done: false}, ...]}
+      [%{text: "Write outline", done: false}, ...]
 
-  Lightweight by design — not individually queried or linked.
+  Lightweight by design — not individually queried or linked. Promoted from
+  the legacy `meta["checklist"]` bag.
 
   ## Recurrence
 
@@ -60,7 +61,7 @@ defmodule Dran.Task do
              :due_date,
              :assignee_id,
              :assignee_actor_id,
-             :meta,
+             :checklist,
              :recurrence,
              :completed_at,
              :archived,
@@ -93,7 +94,7 @@ defmodule Dran.Task do
       foreign_key: :assignee_actor_id,
       type: :binary_id
 
-    field :meta, :map, default: %{}
+    field :checklist, {:array, :map}, default: []
     field :recurrence, :string, default: "none"
 
     field :lock_version, :integer, default: 1
@@ -152,7 +153,7 @@ defmodule Dran.Task do
       :due_date,
       :assignee_id,
       :assignee_actor_id,
-      :meta,
+      :checklist,
       :recurrence,
       :completed_at,
       :archived,

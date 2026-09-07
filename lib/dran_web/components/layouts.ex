@@ -311,8 +311,8 @@ defmodule DranWeb.Layouts do
     end
   end
 
-  # Builds the workspace nav as a flat list of items, gated by feature
-  # flags. No group headers — just direct links.
+  # Builds the workspace nav as labelled groups (Planning, Workflows,
+  # Knowledge base, Memory, Insights), gated by feature flags.
   defp workspace_groups(ws, slug, counts) do
     enabled? = fn feature ->
       case ws do
@@ -336,9 +336,14 @@ defmodule DranWeb.Layouts do
         }
       end
 
-    items =
+    # Sin etiqueta (siempre visibles, sin <details> colapsable)
+    home_items = [
+      %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base}
+    ]
+
+    # Planning: objetivos y tareas — gated por feature flags
+    planning_items =
       [
-        %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
         enabled?.("goals") &&
           %{key: "goals", label: gettext("Objetivos"), icon: "hero-flag", path: base <> "/goals"},
         enabled?.("kanban") &&
@@ -347,7 +352,13 @@ defmodule DranWeb.Layouts do
             label: gettext("Tareas"),
             icon: "hero-view-columns",
             path: base <> "/tasks"
-          },
+          }
+      ]
+      |> Enum.reject(&(!&1))
+
+    # Workflows en su propia categoría
+    workflow_items =
+      [
         enabled?.("workflows") &&
           %{
             key: "workflows",
@@ -390,7 +401,9 @@ defmodule DranWeb.Layouts do
       |> Enum.reject(&(!&1))
 
     [
-      %{label: nil, items: items},
+      %{label: nil, items: home_items},
+      %{label: gettext("Planning"), items: planning_items},
+      %{label: gettext("Workflows"), items: workflow_items},
       %{label: gettext("Knowledge base"), items: page_type_items},
       %{label: gettext("Memory"), items: memory_items},
       %{label: "Insights", items: view_items}

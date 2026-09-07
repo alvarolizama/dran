@@ -169,6 +169,66 @@ defmodule DranWeb.API.ExecutionControllerTest do
       assert detail =~ "in_flight"
     end
 
+    @tag :capture_log
+    test "ownership: another agent key gets 403 on claim, and the pull only shows its own queue",
+         %{conn: conn, workspace: workspace, key: key} do
+      owner_user = key.created_by_user_id
+
+      {:ok, owner_key} =
+        Accounts.create_api_key(%{
+          name: "agent-owner-#{System.unique_integer([:positive])}",
+          workspace_ids: [{workspace.id, "write"}],
+          created_by_user_id: owner_user
+        })
+
+      {:ok, intruder_key} =
+        Accounts.create_api_key(%{
+          name: "agent-intruder-#{System.unique_integer([:positive])}",
+          workspace_ids: [{workspace.id, "write"}],
+          created_by_user_id: owner_user
+        })
+
+      owner_conn =
+        build_conn()
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{owner_key.token}")
+
+      intruder_conn =
+        build_conn()
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{intruder_key.token}")
+
+      {workflow, [_step]} = new_workflow(workspace, ["Single"])
+
+      owner_conn = post(owner_conn, "/api/workflows/#{workflow.id}/sessions", %{})
+      assert %{"data" => session_data} = json_response(owner_conn, 201)
+      [run] = session_data["runs"]
+
+      # La cola abierta (sesiones ajenas stampadas) no se ofrece al intruso.
+      assert %{"data" => []} =
+               json_response(
+                 get(intruder_conn, "/api/pending_runs?workspace=#{workspace.slug}"),
+                 200
+               )
+
+      # Y si conoce el UUID del run ajeno, el claim es 403 (no 404: la
+      # escritura workspace-scoped existe, la ownership la rechaza).
+      assert %{"errors" => %{"detail" => "run belongs to another actor"}} =
+               json_response(post(intruder_conn, "/api/runs/#{run["id"]}/start"), 403)
+
+      # El dueño lo ve y lo reclama.
+      assert %{"data" => [pending]} =
+               json_response(
+                 get(owner_conn, "/api/pending_runs?workspace=#{workspace.slug}"),
+                 200
+               )
+
+      assert pending["id"] == run["id"]
+
+      assert %{"data" => %{"status" => "in_flight"}} =
+               json_response(post(owner_conn, "/api/runs/#{run["id"]}/start"), 200)
+    end
+
     test "403 for unknown run id (no existence leak)", %{conn: conn} do
       # require_write_access cannot resolve a workspace from an unknown id →
       # 403 (same SEC-002 convention as /api/todos/:id).

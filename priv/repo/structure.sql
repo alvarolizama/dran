@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict PnZkRDyJvLBrWgvMY7kAblfbzVcLxI4fOwl4FbaLubS4iWe6pp0v1gYd3YI90Fi
+\restrict dz4cjhOfSPPSYfgzdhbfLB15ya0BsODhHGI6vXxcGyfMOlGabJLPzSavgRCuBUS
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -362,11 +362,22 @@ CREATE TABLE public.steps (
     workflow_id uuid CONSTRAINT steps_plan_id_not_null NOT NULL,
     title character varying(255) NOT NULL,
     slug character varying(255) NOT NULL,
-    body text DEFAULT ''::text,
     "position" integer DEFAULT 0 NOT NULL,
-    meta jsonb DEFAULT '{}'::jsonb,
     inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL
+    updated_at timestamp(0) without time zone NOT NULL,
+    intent character varying(255),
+    status character varying(255) DEFAULT 'draft'::character varying,
+    version integer DEFAULT 1,
+    history jsonb DEFAULT '[]'::jsonb,
+    fingerprint character varying(255),
+    model character varying(255),
+    generated_by character varying(255),
+    claims jsonb DEFAULT '[]'::jsonb,
+    gates jsonb DEFAULT '[]'::jsonb,
+    graph jsonb,
+    context_snapshot jsonb DEFAULT '[]'::jsonb,
+    pos_x integer,
+    pos_y integer
 );
 
 
@@ -385,7 +396,6 @@ CREATE TABLE public.tasks (
     "position" integer DEFAULT 0 NOT NULL,
     due_date date,
     assignee_id bigint,
-    meta jsonb DEFAULT '{}'::jsonb,
     recurrence character varying(255) DEFAULT 'none'::character varying NOT NULL,
     lock_version integer DEFAULT 1 NOT NULL,
     completed_at timestamp(0) without time zone,
@@ -396,7 +406,8 @@ CREATE TABLE public.tasks (
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
     assignee_actor_id uuid,
-    creator_actor_id uuid
+    creator_actor_id uuid,
+    checklist jsonb DEFAULT '[]'::jsonb
 );
 
 
@@ -1130,10 +1141,10 @@ CREATE INDEX steps_workflow_id_position_index ON public.steps USING btree (workf
 
 
 --
--- Name: steps_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
+-- Name: steps_workflow_id_slug_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX steps_workspace_id_slug_index ON public.steps USING btree (workspace_id, slug);
+CREATE UNIQUE INDEX steps_workflow_id_slug_index ON public.steps USING btree (workflow_id, slug);
 
 
 --
@@ -1594,7 +1605,7 @@ ALTER TABLE ONLY public.workflows
 -- PostgreSQL database dump complete
 --
 
-\unrestrict PnZkRDyJvLBrWgvMY7kAblfbzVcLxI4fOwl4FbaLubS4iWe6pp0v1gYd3YI90Fi
+\unrestrict dz4cjhOfSPPSYfgzdhbfLB15ya0BsODhHGI6vXxcGyfMOlGabJLPzSavgRCuBUS
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1663,3 +1674,7 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260904003233);
 INSERT INTO public."schema_migrations" (version) VALUES (20260904013000);
 INSERT INTO public."schema_migrations" (version) VALUES (20260904120000);
 INSERT INTO public."schema_migrations" (version) VALUES (20260904130000);
+INSERT INTO public."schema_migrations" (version) VALUES (20260905230811);
+INSERT INTO public."schema_migrations" (version) VALUES (20260906002054);
+INSERT INTO public."schema_migrations" (version) VALUES (20260906002055);
+INSERT INTO public."schema_migrations" (version) VALUES (20260906080000);

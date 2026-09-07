@@ -124,7 +124,7 @@ defmodule DranWeb.TaskLive do
       active_nav={@active_nav}
     >
       <div class="p-6 overflow-y-auto w-full">
-        <div class="max-w-3xl mx-auto">
+        <div>
           <.resource_header
             title={@task.title}
             icon="hero-check-circle"
@@ -271,6 +271,24 @@ defmodule DranWeb.TaskLive do
               class="text-sm text-base-content/40 py-8 text-center"
             >
               {gettext("No content yet.")}
+            </div>
+
+            <div :if={@task.checklist != []} class="mt-6">
+              <span class="label mb-1 block text-xs text-base-content/60">{gettext("Checklist")}</span>
+              <ul class="space-y-1">
+                <li :for={item <- @task.checklist} class="flex items-center gap-2 text-sm">
+                  <.icon
+                    name={if item["done"], do: "hero-check-circle", else: "hero-circle"}
+                    class={[
+                      "size-4 shrink-0",
+                      if(item["done"], do: "text-green-600", else: "text-base-content/30")
+                    ]}
+                  />
+                  <span class={if item["done"], do: "line-through text-base-content/50"}>
+                    {item["text"]}
+                  </span>
+                </li>
+              </ul>
             </div>
           <% end %>
         </div>

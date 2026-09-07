@@ -270,12 +270,48 @@ defmodule DranWeb.TaskBoardLive do
 
   # The form phx-change fires on every keystroke — sync the changeset back
   # so field errors surface live. The body comes through the hidden field
-  # (MarkdownEditor hook keeps it in sync).
+  # (MarkdownEditor hook keeps it in sync). The checklist arrives as HTML
+  # array params (map keyed by index, "done" => "on") — normalize it with
+  # the same parser used at save time so the changeset (and re-rendered
+  # rows) always see the stored shape.
   @impl true
   def handle_event("validate_task", %{"task" => params}, socket) do
     task = socket.assigns.modal_task || %Task{}
+
+    params =
+      Map.put(
+        params,
+        "checklist",
+        DranWeb.ResourceComponents.parse_checklist_param(params["checklist"])
+      )
+
     changeset = Task.update_changeset(task, params) |> Map.put(:action, :validate)
     {:noreply, assign(socket, modal_form: to_form(changeset, as: :task))}
+  end
+
+  # Remove a checklist row WITHOUT persisting: the modal is save-driven, so
+  # the row is dropped by rebuilding the form source. The changeset is
+  # rebuilt from the task + the pending params of the last `validate_task`
+  # (they carry title/body/status edits and the already-parsed checklist)
+  # with the row removed — unsaved edits elsewhere in the modal survive.
+  @impl true
+  def handle_event("remove_checklist_item", %{"index" => index}, socket)
+      when is_binary(index) do
+    with %Task{} = task <- socket.assigns.modal_task,
+         %Phoenix.HTML.Form{source: %Ecto.Changeset{} = changeset} <- socket.assigns.modal_form,
+         {n, ""} when n >= 0 <- Integer.parse(index),
+         true <- n < length(current_checklist(task, changeset)) do
+      kept = current_checklist(task, changeset) |> List.delete_at(n)
+
+      rebuilt =
+        task
+        |> Task.update_changeset(Map.put(changeset.params, "checklist", kept))
+        |> Map.put(:action, :validate)
+
+      {:noreply, assign(socket, modal_form: to_form(rebuilt, as: :task))}
+    else
+      _ -> {:noreply, socket}
+    end
   end
 
   def handle_event("save_task", %{"task" => params}, socket) do
@@ -866,7 +902,7 @@ defmodule DranWeb.TaskBoardLive do
     Date.compare(due, Date.utc_today()) == :lt
   end
 
-  defp checklist_progress(%Task{meta: %{"checklist" => checklist}})
+  defp checklist_progress(%Task{checklist: checklist})
        when is_list(checklist) and checklist != [] do
     done = Enum.count(checklist, & &1["done"])
     "#{done}/#{length(checklist)}"

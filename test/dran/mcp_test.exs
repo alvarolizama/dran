@@ -245,7 +245,7 @@ defmodule Dran.MCPTest do
       task = Dran.Tasks.get_task_by_slug(slug, ctx.id)
       assert task.priority == "high"
       assert task.recurrence == "weekly"
-      assert length(task.meta["checklist"]) == 2
+      assert length(task.checklist) == 2
 
       # Update status to done
       result =

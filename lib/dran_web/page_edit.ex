@@ -461,9 +461,14 @@ defmodule DranWeb.PageEdit do
         end)
 
       if changed do
+        # Keystroke autosave must NOT regenerate the slug (`sync_slug: false`
+        # opts out in Dran.Slug.inject_update) — URL slugs only change via the
+        # explicit slug field (field_change) or the Save button, never per
+        # keystroke.
         case Knowledge.update_page(
                page,
-               Map.put(save_params, "updated_by", session_identity(socket))
+               Map.put(save_params, "sync_slug", false)
+               |> Map.put("updated_by", session_identity(socket))
              ) do
           {:ok, updated_page} ->
             socket

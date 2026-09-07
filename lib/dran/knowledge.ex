@@ -604,11 +604,26 @@ defmodule Dran.Knowledge do
       save_page_version(page)
     end
 
-    attrs = normalize_meta_props(attrs)
+    attrs =
+      attrs
+      |> normalize_meta_props()
+      |> Dran.Slug.inject_update(page,
+        fallback: attrs["page_type"] || attrs[:page_type] || "page",
+        lookup: fn candidate -> get_page_by_slug(candidate, page.workspace_id) end
+      )
+
     changeset = Page.update_changeset(page, attrs)
 
     case Repo.update(changeset) do
       {:ok, updated_page} ->
+        # Auto-managed slug: a title change regenerated the slug — propagate
+        # it to inbound ![[embed]]s (same contract as rename_slug/2) and
+        # drop the stale cache entry keyed by the OLD slug.
+        if updated_page.slug != page.slug do
+          Dran.GraphCache.invalidate_page_slug(page.slug, page.workspace_id)
+          rewrite_embeds_for_slug(page.workspace_id, page.id, page.slug, updated_page.slug)
+        end
+
         log_action(updated_page.workspace_id, "page.update", updated_page.slug, %{
           page_id: updated_page.id,
           version: updated_page.version
@@ -2057,27 +2072,39 @@ defmodule Dran.Knowledge do
   every body change.
   """
   def rename_slug(%Page{} = page, new_slug) do
-    workspace_id = page.workspace_id
-    old_slug = page.slug
-
     Repo.transaction(fn ->
-      {:ok, updated} = update_page(page, %{"slug" => new_slug})
-
-      pages_with_embed =
-        Repo.all(
-          from p in Page,
-            where: p.workspace_id == ^workspace_id and p.id != ^page.id,
-            where: like(p.body, ^"%![[#{old_slug}%")
-        )
-
-      Enum.each(pages_with_embed, fn p ->
-        new_body = replace_slug_in_body(p.body, old_slug, new_slug)
-        {:ok, _} = update_page(p, %{"body" => new_body})
-      end)
-
+      {:ok, updated} = update_page(page, %{slug: new_slug})
+      rewrite_embeds_for_slug(page.workspace_id, page.id, page.slug, updated.slug)
       updated
     end)
   end
+
+  # Rewrite `![[old-slug]]` references in every OTHER page of the workspace
+  # (used by rename_slug/2 and by update_page/2 when the auto-managed slug
+  # changed). The body rewrites go through Ecto change/Repo.update directly
+  # — calling update_page/2 would bump versions and retrigger the augmenter
+  # on pages whose only change is a link.
+  defp rewrite_embeds_for_slug(workspace_id, page_id, old_slug, new_slug)
+       when old_slug != new_slug do
+    pages_with_embed =
+      Repo.all(
+        from p in Page,
+          where: p.workspace_id == ^workspace_id and p.id != ^page_id,
+          where: like(p.body, ^"%![[#{old_slug}%")
+      )
+
+    Enum.each(pages_with_embed, fn p ->
+      new_body = replace_slug_in_body(p.body, old_slug, new_slug)
+
+      p
+      |> Ecto.Changeset.change(%{body: new_body})
+      |> Repo.update()
+    end)
+
+    :ok
+  end
+
+  defp rewrite_embeds_for_slug(_workspace_id, _page_id, _old_slug, _new_slug), do: :ok
 
   @doc """
   Fetch embedded pages referenced by `![[slug]]` in a body.

@@ -25,7 +25,7 @@ defmodule DranWeb.GoalLive do
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show} class="p-6 overflow-y-auto w-full">
-        <div class="max-w-4xl mx-auto space-y-6">
+        <div class="space-y-6">
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2 mb-2 text-caption">
@@ -63,7 +63,7 @@ defmodule DranWeb.GoalLive do
           <%!-- Body (edit happens in the modal overlay) --%>
           <div
             :if={@goal.body != nil and @goal.body != ""}
-            class="prose prose-base dark:prose-invert"
+            class="prose prose-base dark:prose-invert max-w-none"
           >
             {render_markdown(@goal.body, [])}
           </div>
@@ -326,7 +326,6 @@ defmodule DranWeb.GoalLive do
               attrs
               |> Map.put("workspace_id", context.id)
               |> Map.put("created_by", session_identity_goal(socket))
-              |> ensure_slug()
 
             Goals.create_goal(attrs)
           else
@@ -396,14 +395,6 @@ defmodule DranWeb.GoalLive do
   defp session_identity_goal(socket) do
     Dran.Auth.resolve_created_by(%{email: socket.assigns[:current_user]})
   end
-
-  defp ensure_slug(%{"slug" => slug} = params) when is_binary(slug) and slug != "", do: params
-
-  defp ensure_slug(%{"title" => title} = params) when is_binary(title) and title != "" do
-    Map.put(params, "slug", Dran.Slug.slugify(title))
-  end
-
-  defp ensure_slug(params), do: params
 
   defp goal_status_class(%Goal{status: "active"}), do: "bg-green-100 text-green-700"
   defp goal_status_class(%Goal{status: "draft"}), do: "bg-base-200 text-base-content/70"

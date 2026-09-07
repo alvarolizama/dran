@@ -24,7 +24,7 @@ defmodule DranWeb.ReportLive do
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show} class="p-6 overflow-y-auto w-full">
-        <div class="max-w-4xl mx-auto space-y-6">
+        <div class="space-y-6">
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2 mb-2 text-caption">
@@ -49,7 +49,7 @@ defmodule DranWeb.ReportLive do
             </div>
           </div>
 
-          <div class="prose prose-base dark:prose-invert">
+          <div class="prose prose-base dark:prose-invert max-w-none">
             {render_markdown(@report.body || "", [])}
           </div>
 

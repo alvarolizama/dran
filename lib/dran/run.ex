@@ -7,7 +7,7 @@ defmodule Dran.Run do
   `(session_id, step_id)` with `attempt: n + 1`. No task is ever spawned:
   the manual layer (board) and the execution layer never mix.
 
-  - `contract_version` — the step's `meta[\"contract\"]` frozen at open
+  - `contract_version` — the step's contract frozen at open time (nil
     time (nil when the step has no contract).
   - `progress` — phase-level progress reported by the agent (overwrite,
     not append): `%{\"phase\" => \"…\", \"gates\" => %{…}}`. The history

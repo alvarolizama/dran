@@ -218,6 +218,79 @@ defmodule DranWeb.TaskBoardLiveTest do
     end
   end
 
+  describe "task checklist (modal editor)" do
+    test "saving the modal with checklist rows persists items and drops the empty add row", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      view
+      |> form("#task-modal-form")
+      |> render_submit(%{
+        "task" => %{
+          "title" => task.title,
+          "status" => task.status,
+          "checklist" => %{
+            "0" => %{"text" => "Write spec", "done" => "on"},
+            "1" => %{"text" => "Review with team"},
+            "2" => %{"text" => ""}
+          }
+        }
+      })
+
+      reloaded = Repo.reload!(task)
+
+      assert reloaded.checklist == [
+               %{"text" => "Write spec", "done" => true},
+               %{"text" => "Review with team", "done" => false}
+             ]
+    end
+
+    test "editing tasks shows existing checklist rows", %{conn: conn, ws: ws, task: task} do
+      {:ok, _} =
+        Tasks.update_task(task, %{
+          "checklist" => [%{"text" => "First step", "done" => false}]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      assert has_element?(view, "#checklist-row-0")
+      assert has_element?(view, "#checklist-row-next")
+      assert render(view) =~ "First step"
+    end
+
+    test "remove_checklist_item drops the row without persisting", %{
+      conn: conn,
+      ws: ws,
+      task: task
+    } do
+      {:ok, _} =
+        Tasks.update_task(task, %{
+          "checklist" => [
+            %{"text" => "keep me", "done" => false},
+            %{"text" => "drop me", "done" => true}
+          ]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/tasks?task=#{task.id}")
+
+      view
+      |> element("#checklist-row-1 button")
+      |> render_click()
+
+      # Row gone from the modal…
+      refute has_element?(view, "#checklist-row-1")
+
+      # …but the task is untouched (modal is save-driven).
+      assert Repo.reload!(task).checklist == [
+               %{"text" => "keep me", "done" => false},
+               %{"text" => "drop me", "done" => true}
+             ]
+    end
+  end
+
   describe "workspace scoping (migrated to TaskLive)" do
     test "a foreign task never renders on this board", %{conn: conn, ws: ws} do
       {:ok, other_ws} =

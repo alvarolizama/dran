@@ -3,6 +3,7 @@ defmodule DranWeb.DashboardLiveTest do
 
   alias Dran.Accounts
   alias Dran.Knowledge
+  alias Dran.Repo
 
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
@@ -46,6 +47,17 @@ defmodule DranWeb.DashboardLiveTest do
     end)
 
     {:ok, conn: conn}
+  end
+
+  setup tags do
+    if tags[:no_default_workspace] do
+      # Empty-instance tests need ZERO workspaces. The test DB can carry
+      # leftovers written outside the sandbox (smoke runs); purge inside
+      # the sandbox transaction — rollback restores everything after.
+      Repo.query!("TRUNCATE TABLE workspaces CASCADE")
+    end
+
+    :ok
   end
 
   describe "instance dashboard (owner)" do

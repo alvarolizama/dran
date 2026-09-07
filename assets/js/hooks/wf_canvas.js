@@ -20,6 +20,10 @@ const LINK_SNAP_RADIUS = 140
 const MENU_HIT_HALF = 10
 const CLICK_RADIUS = 4
 const PORT_RADIUS = 22
+// Tolerancia (en px de PANTALLA) para que un clic "enganche" el alambre de una
+// arista y abra su menú. Se convierte a unidades de stage dividiendo por scale,
+// así la tolerancia visual es constante a cualquier zoom.
+const EDGE_HIT_SCREEN = 9
 const SVG_NS = "http://www.w3.org/2000/svg"
 
 // Cubic bezier point at t — mirrors the edge path math of graph_edges/3.
@@ -114,6 +118,11 @@ const WfCanvas = {
 
   _editDown(e) {
     if (e.button !== 0) return
+
+    // Punto de inicio del gesto: en el click siguiente distingue un clic real
+    // (abrir menú de arista) de un pan/drag/conexión que terminó sobre un
+    // alambre (no debe abrir nada). Se captura antes de los early-returns.
+    this._downClient = {x: e.clientX, y: e.clientY}
 
     // The ✎ edit button owns its own phx-click — never start a card drag
     // (or a pan) from it.
@@ -352,11 +361,13 @@ const WfCanvas = {
     if (!menu) return
 
     if (e.target.closest("[data-edge-menu-toggle]")) {
+      // Toggle puro: abrir/cerrar el popup de opciones. El modo "linkear"
+      // solo se activa con el ítem "Linkear step…" del menú.
       if (menu.hasAttribute("data-edge-menu-open")) {
         menu.removeAttribute("data-edge-menu-open")
-        this._exitLinkMode()
+        menu.removeAttribute("data-menu-at-click")
+        menu.removeAttribute("data-menu-flip-up")
       } else {
-        this._enterLinkMode(menu)
         menu.setAttribute("data-edge-menu-open", "")
       }
       return
@@ -374,8 +385,92 @@ const WfCanvas = {
     }
 
     this.el.querySelectorAll("[data-edge-menu-open]").forEach((menu) => {
-      if (!menu.contains(e.target)) menu.removeAttribute("data-edge-menu-open")
+      if (!menu.contains(e.target)) {
+        menu.removeAttribute("data-edge-menu-open")
+        menu.removeAttribute("data-menu-at-click")
+        menu.removeAttribute("data-menu-flip-up")
+      }
     })
+
+    // Al hacer clic sobre un alambre (wire), abrir directamente su menú de
+    // arista — misma UX que el mini-canvas de steps donde clic en la línea
+    // muestra las opciones. Se ejecuta DESPUÉS del bucle de cierre para que
+    // el menú recién abierto no sea inmediatamente cerrado por este mismo handler.
+    this._maybeOpenEdgeMenu(e)
+  },
+
+  // Detectar si un punto del canvas cae sobre una arista renderizada (hit-test
+  // sobre los paths SVG). Devuelve `data-edge-key` de la más cercana dentro
+  // de EDGE_HIT_SCREEN px (convertido a stage units dividiendo por scale).
+  _edgeAt(p) {
+    let best = null
+    let bestD = EDGE_HIT_SCREEN / this.scale
+    for (const path of this.el.querySelectorAll("path[data-edge-key]")) {
+      let len = 0
+      try { len = path.getTotalLength() } catch { continue }
+      if (!len) continue
+      const steps = Math.min(64, Math.max(12, Math.ceil(len / 6)))
+      for (let i = 0; i <= steps; i++) {
+        const pt = path.getPointAtLength((i / steps) * len)
+        const d = Math.hypot(p.x - pt.x, p.y - pt.y)
+        if (d < bestD) {
+          bestD = d
+          best = path.dataset.edgeKey
+        }
+      }
+    }
+    return best
+  },
+
+  // Abrir el menú de arista correspondiente a `edgeKey`, cerrando otros.
+  // Solo se llama tras un clic real en el alambre (no pan/drag/conexión).
+  // El menú se reposiciona exactamente donde se hizo clic (no en el centro
+  // de la arista) para que la UX sea idéntica al mini-canvas de steps.
+  _maybeOpenEdgeMenu(e) {
+    // Fuera del canvas → solo cerrar (comportamiento existente).
+    if (!this.el.contains(e.target)) return
+    if (e.button !== 0) return
+    // UI ya manejada por sí misma → no abrir menú.
+    if (e.target.closest("[data-wf-edge-menu]")) return
+    if (e.target.closest(".wfe-node, [data-wf-port], [data-wf-controls], [phx-click]")) return
+    // Clic que fue realmente un pan/drag/conexión → suprimir.
+    const dc = this._downClient
+    this._downClient = null
+    if (dc && Math.hypot(e.clientX - dc.x, e.clientY - dc.y) > CLICK_RADIUS * 3) return
+    // ¿Pegó un alambre?
+    const key = this._edgeAt(this._stagePoint(e))
+    if (!key) return
+    // Cerrar otros abiertos + abrir este
+    this.el.querySelectorAll("[data-edge-menu-open]").forEach((m) => {
+      if (m) {
+        m.removeAttribute("data-edge-menu-open")
+        m.removeAttribute("data-menu-at-click")
+        m.removeAttribute("data-menu-flip-up")
+      }
+    })
+    const menu = this.el.querySelector(`[data-wf-edge-menu][data-edge-key="${key}"]`)
+    if (!menu) return
+    menu.setAttribute("data-edge-menu-open", "")
+    // Anclado al clic: _placeEdgeMenus no debe devolverlo al punto medio de
+    // la arista mientras esté abierto (el usuario lo abrió donde hizo clic).
+    menu.setAttribute("data-menu-at-click", "")
+    // Reposicionar el menú exactamente en el punto del clic. El menú vive
+    // DENTRO del stage transformado → convertir el punto de overlay a coords
+    // de stage ((x - tx) / scale); si se escribiera en coords de overlay el
+    // transform del stage lo desplazaría una segunda vez (bug del menú que
+    // "sale fuera" del clic).
+    const rect = this.el.getBoundingClientRect()
+    const ox = e.clientX - rect.left
+    const oy = e.clientY - rect.top
+    const sx = (ox - this.tx) / this.scale
+    const sy = (oy - this.ty) / this.scale
+    menu.style.left = `${sx - MENU_HIT_HALF}px`
+    menu.style.top = `${sy - MENU_HIT_HALF}px`
+    // Cerca del borde inferior el pop (que abre hacia abajo) se clipearía:
+    // invertirlo para que abra hacia arriba (decisión en px de overlay).
+    if (oy > this.el.clientHeight - 150) {
+      menu.setAttribute("data-menu-flip-up", "")
+    }
   },
 
   // "Linkear step…" — enter client-side link mode: edges to this edge's
@@ -389,7 +484,11 @@ const WfCanvas = {
     if (path) path.classList.add("wfe-edge-target")
     this._fillPicker(menu)
     this.el.querySelectorAll("[data-edge-menu-open]").forEach((m) => {
-      if (m !== menu) m.removeAttribute("data-edge-menu-open")
+      if (m !== menu) {
+        m.removeAttribute("data-edge-menu-open")
+        m.removeAttribute("data-menu-at-click")
+        m.removeAttribute("data-menu-flip-up")
+      }
     })
   },
 
@@ -438,6 +537,8 @@ const WfCanvas = {
         })
         this._exitLinkMode()
         menu.removeAttribute("data-edge-menu-open")
+        menu.removeAttribute("data-menu-at-click")
+        menu.removeAttribute("data-menu-flip-up")
       })
       picker.appendChild(opt)
     })
@@ -497,10 +598,9 @@ const WfCanvas = {
   // and on link-mode pointermove (the target edge's menu rides the snap
   // point instead of the resting midpoint).
   _placeEdgeMenus() {
-    const s = this.scale
-    const tx = this.tx
-    const ty = this.ty
     this.el.querySelectorAll("[data-wf-edge-menu]").forEach((menu) => {
+      // Abierto por clic en el alambre: respeta la posición del clic.
+      if (menu.hasAttribute("data-menu-at-click")) return
       const path = this.el.querySelector(`path[data-edge-key='${menu.dataset.edgeKey}']`)
       if (!path) return
 
@@ -526,8 +626,8 @@ const WfCanvas = {
         cy = bezier(a.cy, a.cy + sag, b.cy + sag, b.cy, t)
       }
 
-      menu.style.left = `${cx * s + tx - MENU_HIT_HALF}px`
-      menu.style.top = `${cy * s + ty - MENU_HIT_HALF}px`
+      menu.style.left = `${cx - MENU_HIT_HALF}px`
+      menu.style.top = `${cy - MENU_HIT_HALF}px`
     })
   },
 

@@ -27,7 +27,7 @@ defmodule Dran.Contracts do
   the SVG DAG view are renders from it.
 
   Since the plans/steps model (wave A) the same machinery also operates on
-  `%Dran.Step{}` (contract in `step.meta["contract"]`, `depends_on` edges
+  `%Dran.Step{}` (contract as columns + embeds, `depends_on` edges
   step→step) — dual with the task API until F3. Run-scoped sequencing over
   steps lives in `Dran.Executions`; step readiness here is definitional
   (steps have no board status).
@@ -37,26 +37,28 @@ defmodule Dran.Contracts do
   import Ecto.Query
 
   @verbs ~w(READ EDIT CREATE RUN VERIFY ASK)
-  @statuses ~w(draft active superseded)
+
+  # Statuses live on Dran.Step (Ecto.Enum column) since the meta-bag
+  # promotion — lint no longer validates status inside the JSON.
 
   # ──────────────────────────────────────────────────────────────────────────
   # Gate
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  True when the step carries a structurally valid contract (`meta.contract`
-  that passes `lint/1` with an intent). A step without a contract is a
-  regular step — this is the "is it a contract?" predicate.
+  True when the step carries a structurally valid contract (an intent plus
+  claims/gates/graph that pass `lint/1`). Every step IS a contract since
+  the meta-bag promotion — intent is a column — but a legacy/partial row
+  with a nil intent is not yet a valid contract.
   """
-  def contract?(%Step{meta: %{"contract" => %{"intent" => intent}}} = step)
-      when is_binary(intent) and intent != "" do
+  def contract?(%Step{intent: intent} = step) when is_binary(intent) and intent != "" do
     match?({:ok, _}, lint(step))
   end
 
   def contract?(_), do: false
 
   @doc """
-  Validate the structure of `task.meta.contract`. Returns `{:ok, warnings}`
+  Validate the step's contract (columns + embeds). Returns `{:ok, warnings}`
   or `{:error, errors}`.
 
   Structural (machine-checkable) rules — the closed verb vocabulary, the
@@ -64,11 +66,59 @@ defmodule Dran.Contracts do
   shape, and required fields.
   """
   def lint(%Step{} = step) do
-    case step.meta do
-      %{"contract" => contract} when is_map(contract) -> lint_contract(contract)
-      _ -> {:error, [:no_contract]}
+    case contract_map(step) do
+      nil -> {:error, [:no_contract]}
+      contract -> lint_contract(contract)
     end
   end
+
+  # ── Legacy adapter ──────────────────────────────────────────────────────
+
+  @doc false
+  # The step as the legacy string-keyed contract map (the shape the JSON
+  # textarea, `lint_contract/1` and the brief renderers speak). `nil` when
+  # there is no intent (a step without intent is not a contract).
+  def contract_map(%Step{intent: intent} = step) when is_binary(intent) and intent != "" do
+    contract =
+      %{
+        "intent" => step.intent,
+        "status" => step.status,
+        "version" => step.version,
+        "history" => step.history || [],
+        "fingerprint" => step.fingerprint,
+        "model" => step.model,
+        "generated_by" => step.generated_by,
+        "claims" => Enum.map(step.claims || [], &embed_map/1),
+        "gates" => Enum.map(step.gates || [], &embed_map/1),
+        "context_snapshot" => Enum.map(step.context_snapshot || [], &embed_map/1)
+      }
+      |> maybe_put_graph(step.graph)
+
+    if contract["graph"] == %{"nodes" => [], "edges" => []} do
+      Map.delete(contract, "graph")
+    else
+      contract
+    end
+  end
+
+  def contract_map(_), do: nil
+
+  defp embed_map(%struct{} = embed) do
+    struct.__schema__(:fields)
+    |> Map.new(fn field -> {to_string(field), Map.get(embed, field)} end)
+    # embeds_one/embeds_many @primary_key false → the virtual `id` field is
+    # always nil on persisted embeds; drop it to match the legacy JSON shape.
+    |> Map.reject(fn {k, v} -> k == "id" and is_nil(v) end)
+  end
+
+  defp maybe_put_graph(contract, %Dran.Step.Graph{} = graph) do
+    Map.put(contract, "graph", %{
+      "nodes" => Enum.map(graph.nodes || [], &embed_map/1),
+      "edges" => Enum.map(graph.edges || [], &embed_map/1)
+    })
+  end
+
+  defp maybe_put_graph(contract, _), do: contract
 
   def lint_contract(contract) do
     errors =
@@ -82,17 +132,12 @@ defmodule Dran.Contracts do
   end
 
   defp check_required(errors, contract) do
-    cond do
-      not is_binary(contract["intent"]) or contract["intent"] == "" ->
-        [:intent | errors]
-
-      contract["status"] not in @statuses ->
-        [:status | errors]
-
-      true ->
-        errors
-    end
+    if blank?(contract["intent"]), do: [:intent | errors], else: errors
   end
+
+  defp blank?(nil), do: true
+  defp blank?(s) when is_binary(s), do: String.trim(s) == ""
+  defp blank?(_), do: false
 
   defp check_claims(errors, %{"claims" => claims}) when is_list(claims) do
     if Enum.all?(claims, &valid_claim?/1) do
@@ -473,12 +518,12 @@ defmodule Dran.Contracts do
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  Render `step.meta.contract` as a riel-brief packet (9 sections). This is
-  the interchange format a pulling agent reads.
+  Render the step's contract (columns + embeds) as a riel-brief packet (9
+  sections). This is the interchange format a pulling agent reads.
   """
   def render_brief(%Step{} = step) do
-    case step.meta do
-      %{"contract" => %{"intent" => intent} = contract} when is_binary(intent) ->
+    case contract_map(step) do
+      %{"intent" => intent} = contract when is_binary(intent) ->
         sections = [
           "# Task: #{step.title}",
           "",
@@ -491,8 +536,7 @@ defmodule Dran.Contracts do
           "",
           brief_graph(contract),
           "",
-          "## Context",
-          "Pulled from #{step.workspace_id} — see step #{step.id} (workflow #{step.workflow_id}).",
+          brief_context(step, contract),
           "",
           "## Constraints",
           "Follow the closed verb vocabulary and the verification funnel (riel-contract).",
@@ -548,6 +592,27 @@ defmodule Dran.Contracts do
     ["## Verification gates"] ++ lines
   end
 
+  # Contexto congelado del contrato: páginas/memories que el agente debe
+  # leer antes de ejecutar. Sin entradas, el identificador del paso (mismo
+  # mensaje que antes de la sección editable).
+  defp brief_context(step, contract) do
+    entries =
+      case contract["context_snapshot"] do
+        list when is_list(list) -> list
+        _ -> []
+      end
+
+    lines =
+      for %{"type" => t, "id" => id} <- entries do
+        "- #{t} #{id}"
+      end
+
+    header =
+      "Pulled from #{step.workspace_id} — see step #{step.id} (workflow #{step.workflow_id})."
+
+    ["## Context", header] ++ lines
+  end
+
   defp brief_graph(contract) do
     case contract["graph"] do
       %{"nodes" => nodes, "edges" => edges} ->
@@ -595,11 +660,11 @@ defmodule Dran.Contracts do
       |> Enum.join(",")
 
     contract =
-      case step.meta do
-        %{"contract" => contract} when is_map(contract) -> inspect(contract)
+      case contract_map(step) do
+        contract when is_map(contract) -> inspect(contract)
         _ -> ""
       end
 
-    "#{step.id}|#{step.title}|#{step.body}|#{contract}|#{edges}"
+    "#{step.id}|#{step.title}|#{contract}|#{edges}"
   end
 end

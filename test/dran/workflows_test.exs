@@ -40,7 +40,8 @@ defmodule Dran.WorkflowsTest do
       assert {:ok, updated} = Workflows.update_workflow(plan, %{title: "B", body: "b"})
       assert updated.title == "B"
       assert updated.body == "b"
-      assert updated.slug == "a"
+      # Auto-managed slug: a title change regenerates the slug.
+      assert updated.slug == "b"
     end
 
     test "list_plans/1 lists plans of a workspace", %{workspace: ws} do
@@ -322,6 +323,31 @@ defmodule Dran.WorkflowsTest do
       assert {:error, :has_sessions} = Workflows.delete_workflow(plan)
     end
 
+    test "kind is editable before sessions and locked after", %{workspace: ws} do
+      {:ok, plan} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "K", slug: "k"})
+
+      # Pre-execution: the kind decision is exactly what updates before any
+      # session exist.
+      assert {:ok, one_shot} = Workflows.update_workflow(plan, %{"kind" => "one_shot"})
+      assert one_shot.kind == "one_shot"
+
+      {:ok, _} = Workflows.create_step(one_shot, %{title: "S", slug: "s"})
+      {:ok, _session} = Dran.Executions.open_session(one_shot)
+
+      # A session now exists: the kind is history — a CHANGE is refused...
+      assert {:error, :kind_locked} =
+               Workflows.update_workflow(one_shot, %{"kind" => "evergreen"})
+
+      # ...while a same-kind write (forms always submit the select) passes,
+      # and the rest of the fields stay editable.
+      assert {:ok, renamed} =
+               Workflows.update_workflow(one_shot, %{"kind" => "one_shot", "title" => "K2"})
+
+      assert renamed.title == "K2"
+      assert renamed.kind == "one_shot"
+    end
+
     test "delete_step/1 refuses when the step has open runs", %{workspace: ws} do
       {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p"})
       {:ok, step} = Workflows.create_step(plan, %{title: "S", slug: "s"})
@@ -362,22 +388,21 @@ defmodule Dran.WorkflowsTest do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Canvas positions (free layout in meta.pos)
+  # Canvas positions (free layout in pos_x/pos_y)
   # ──────────────────────────────────────────────────────────────────────────
 
   describe "canvas positions (move_step / repack_layout)" do
-    test "move_step persists meta.pos and preserves the contract", %{workspace: ws} do
+    test "move_step persists pos_x/pos_y and preserves the contract", %{workspace: ws} do
       {:ok, plan} =
         Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-canvas"})
 
       {:ok, step} = Workflows.create_step(plan, %{title: "S", slug: "s-canvas"})
 
-      {:ok, _} =
-        Workflows.update_step(step, %{"meta" => %{"contract" => %{"intent" => "x"}}})
+      {:ok, contracted} = Workflows.update_step(step, %{"intent" => "x"})
 
-      assert {:ok, moved} = Workflows.move_step(step, 120, 240)
-      assert moved.meta["pos"] == %{"x" => 120, "y" => 240}
-      assert moved.meta["contract"] == %{"intent" => "x"}
+      assert {:ok, moved} = Workflows.move_step(contracted, 120, 240)
+      assert {moved.pos_x, moved.pos_y} == {120, 240}
+      assert moved.intent == "x"
     end
 
     test "move_step rejects negative or non-integer coordinates", %{workspace: ws} do
@@ -390,24 +415,24 @@ defmodule Dran.WorkflowsTest do
       assert_raise FunctionClauseError, fn -> Workflows.move_step(step, 1.5, 0) end
     end
 
-    test "repack_layout clears meta.pos of every step and keeps contracts", %{workspace: ws} do
+    test "repack_layout clears pos_x/pos_y of every step and keeps contracts", %{workspace: ws} do
       {:ok, plan} =
         Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p-canvas-3"})
 
       {:ok, s1} = Workflows.create_step(plan, %{title: "S1", slug: "s1-canvas"})
       {:ok, s2} = Workflows.create_step(plan, %{title: "S2", slug: "s2-canvas"})
 
-      {:ok, _} = Workflows.update_step(s1, %{"meta" => %{"contract" => %{"intent" => "y"}}})
+      {:ok, _} = Workflows.update_step(s1, %{"intent" => "y"})
       {:ok, s1} = Workflows.move_step(s1, 10, 20)
       {:ok, _} = Workflows.move_step(s2, 30, 40)
 
       assert {:ok, _} = Workflows.repack_layout(plan)
 
       steps = Workflows.list_steps(plan)
-      assert Enum.all?(steps, &is_nil(&1.meta["pos"]))
+      assert Enum.all?(steps, &is_nil(&1.pos_x))
 
       by_id = Map.new(steps, &{&1.id, &1})
-      assert by_id[s1.id].meta["contract"] == %{"intent" => "y"}
+      assert by_id[s1.id].intent == "y"
     end
   end
 

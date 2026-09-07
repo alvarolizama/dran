@@ -323,16 +323,9 @@
                   for={%{}}
                   phx-submit="open_session"
                   phx-value-workflow-id={wf.id}
-                  class="flex items-center gap-2 flex-1 min-w-0"
+                  class="flex-1 min-w-0"
                 >
-                  <.input
-                    type="text"
-                    name="label"
-                    value=""
-                    placeholder={gettext("Etiqueta (opcional)")}
-                    class="input-sm"
-                  />
-                  <button type="submit" class="btn btn-primary btn-sm shrink-0">
+                  <button type="submit" class="btn btn-primary btn-sm w-full">
                     <.icon name="hero-play" class="size-3.5" /> {gettext("Nueva sesión")}
                   </button>
                 </.form>
@@ -381,14 +374,13 @@
         <span class="badge badge-ghost badge-sm">{kind_label(@workflow.kind)}</span>
         <div class="ml-auto flex gap-1 shrink-0">
           <button
-            :if={@workflow.status != "archived"}
             type="button"
-            phx-click="open_step_modal"
-            phx-value-mode="new"
-            class="btn btn-primary btn-xs"
-            data-testid="new-step"
+            phx-click="open_workflow_edit"
+            class="btn btn-ghost btn-xs text-base-content/50 hover:text-primary"
+            title={gettext("Editar")}
+            data-testid="edit-workflow-btn"
           >
-            <.icon name="hero-plus" class="size-3.5" /> {gettext("New step")}
+            <.icon name="hero-pencil-square" class="size-3.5" />
           </button>
           <button
             :if={@workflow.status != "archived"}
@@ -432,17 +424,46 @@
                 class="relative"
                 style={"width: #{graph_width(@positions)}px; height: #{graph_height(@positions)}px"}
               >
-                <%!-- Aristas (SVG) --%>
+                <%!-- Aristas (SVG) — flecha de dirección al final (mismo
+                     marker que el mini-canvas del step editor) --%>
                 <svg
                   class="absolute inset-0 pointer-events-none"
                   style={"width: #{graph_width(@positions)}px; height: #{graph_height(@positions)}px"}
                   viewBox={"0 0 #{graph_width(@positions)} #{graph_height(@positions)}"}
                   fill="none"
                 >
+                  <defs>
+                    <marker
+                      id="wfe-arrow"
+                      viewBox="0 0 10 7"
+                      refX="9"
+                      refY="3.5"
+                      markerWidth="8"
+                      markerHeight="6"
+                      orient="auto"
+                    >
+                      <path
+                        d="M 0 0 L 10 3.5 L 0 7 Z"
+                        fill="oklch(from var(--color-base-content) l c h / 45%)"
+                      />
+                    </marker>
+                    <marker
+                      id="wfe-arrow-done"
+                      viewBox="0 0 10 7"
+                      refX="9"
+                      refY="3.5"
+                      markerWidth="8"
+                      markerHeight="6"
+                      orient="auto"
+                    >
+                      <path d="M 0 0 L 10 3.5 L 0 7 Z" fill="var(--color-success)" />
+                    </marker>
+                  </defs>
                   <%= for {_src_id, edge} <- edges do %>
                     <path
                       d={edge.path}
                       data-edge-key={edge.prereq_id <> "|" <> edge.dependent_id}
+                      marker-end="url(#wfe-arrow)"
                       class={[
                         "wfe-edge",
                         edge.done && "wfe-edge-done",
@@ -578,11 +599,7 @@
                       port && port.in && port.in.done && "wfe-port-done"
                     ]}
                     style={
-                      "left: #{x - 6}px; top: #{y + node_h() / 2 - 6}px; " <>
-                        unless(port && port.in && port.in.done,
-                          do: "background: var(--color-base-content); opacity: .35;",
-                          else: ""
-                        )
+                      "left: #{x - 6}px; top: #{y + node_h() / 2 - 6}px; background: var(--color-info);"
                     }
                   />
                   <span
@@ -594,11 +611,7 @@
                       port && port.out && port.out.done && "wfe-port-done"
                     ]}
                     style={
-                      "left: #{x + node_w() - 6}px; top: #{y + node_h() / 2 - 6}px; " <>
-                        unless(port && port.out && port.out.done,
-                          do: "background: var(--color-base-content); opacity: .35;",
-                          else: ""
-                        )
+                      "left: #{x + node_w() - 6}px; top: #{y + node_h() / 2 - 6}px; background: var(--color-primary);"
                     }
                   />
                 <% end %>
@@ -645,6 +658,21 @@
                 <.icon name="hero-square-3-stack-3d" class="size-4" />
               </button>
             </div>
+
+            <%!-- Agregar step nuevo: overlay dentro del canvas, mismo patrón que
+                 el botón "+ Nodo" del mini-canvas de steps. phx-click = WfPanZoom
+                 ignora para pan; data-wf-controls = dblclick ignora. --%>
+            <button
+              :if={@workflow.status != "archived"}
+              type="button"
+              data-wf-controls
+              phx-click="open_step_modal"
+              phx-value-mode="new"
+              title={gettext("Agregar paso al workflow")}
+              class="absolute top-3 right-3 z-20 inline-flex items-center gap-1 rounded-lg border border-base-300 bg-base-100 px-2 py-1 text-xs font-medium text-base-content/70 shadow-sm transition-colors duration-150 hover:bg-base-200 hover:text-base-content"
+            >
+              <.icon name="hero-plus" class="size-3.5" /> {gettext("Step")}
+            </button>
 
             <p
               :if={@steps == []}
@@ -714,16 +742,9 @@
               for={%{}}
               phx-submit="open_session"
               phx-value-workflow-id={@workflow.id}
-              class="flex items-center gap-2 mb-3"
+              class="mb-3"
             >
-              <.input
-                type="text"
-                name="label"
-                value=""
-                placeholder={gettext("Etiqueta (opcional)")}
-                class="input-sm"
-              />
-              <button type="submit" class="btn btn-primary btn-sm shrink-0">
+              <button type="submit" class="btn btn-primary btn-sm w-full">
                 <.icon name="hero-play" class="size-3.5" /> {gettext("Nueva sesión")}
               </button>
             </.form>
@@ -757,6 +778,22 @@
                       class="btn btn-xs btn-ghost text-error shrink-0"
                     >
                       {gettext("Abortar")}
+                    </button>
+                    <button
+                      :if={session.status != "in_flight"}
+                      type="button"
+                      phx-click="delete_session"
+                      phx-value-session-id={session.id}
+                      data-confirm={
+                        gettext(
+                          "¿Eliminar esta sesión? Borra también sus runs. Historia irrecuperable."
+                        )
+                      }
+                      class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors shrink-0"
+                      title={gettext("Eliminar sesión")}
+                      data-testid={"delete-session-#{session.id}"}
+                    >
+                      <.icon name="hero-trash" class="size-3.5" />
                     </button>
                   </div>
                   <div class="flex items-center gap-2 mt-1.5">
@@ -912,6 +949,69 @@
     </.form>
   </.resource_modal>
 
+  <%!-- Edit-workflow modal (show, ?edit=true) — kind is a PRE-execution
+       decision: the select renders disabled once the workflow has sessions
+       (the context refuses the change with :kind_locked anyway). --%>
+  <.resource_modal
+    :if={@wf_edit}
+    id="workflow-edit-modal"
+    title={gettext("Edit Workflow")}
+    pill="WORKFLOW"
+    pill_class="bg-primary/10 text-primary"
+    on_close="close_workflow_edit"
+    form_id="workflow-edit-form"
+    submit_label={gettext("Save Workflow")}
+  >
+    <p class="text-sm text-base-content/60">
+      {gettext("Nombre y estado del workflow.")}
+      <%= if @wf_edit.kind_locked do %>
+        <span class="block mt-1 text-warning">
+          {gettext("El kind quedó bloqueado: este workflow ya tiene sesiones.")}
+        </span>
+      <% end %>
+    </p>
+
+    <.form
+      id="workflow-edit-form"
+      for={@wf_edit.form}
+      phx-change="validate_workflow_edit"
+      phx-submit="save_workflow_edit"
+      class="space-y-4"
+    >
+      <.input
+        field={@wf_edit.form[:title]}
+        type="text"
+        label={gettext("Title")}
+        class="text-lg font-medium"
+        autofocus
+      />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <.input
+          field={@wf_edit.form[:kind]}
+          type="select"
+          label={gettext("Kind")}
+          options={[
+            {gettext("Evergreen"), "evergreen"},
+            {gettext("One shot"), "one_shot"}
+          ]}
+          disabled={@wf_edit.kind_locked}
+          data-testid="edit-kind-select"
+        />
+
+        <.input
+          field={@wf_edit.form[:status]}
+          type="select"
+          label={gettext("Status")}
+          options={[
+            {gettext("Draft"), "draft"},
+            {gettext("Active"), "active"}
+          ]}
+        />
+      </div>
+    </.form>
+  </.resource_modal>
+
   <%!-- Step create/edit modal (show) — ?new_step=true / ?step=<id> --%>
   <.resource_modal
     :if={@step_modal}
@@ -931,20 +1031,15 @@
         else: gettext("Save Step")
     }
   >
-    <div class="flex items-center justify-between mb-4">
-      <p class="text-sm text-base-content/60">
-        {gettext("What this step does and the brief the agent reads.")}
-      </p>
-      <span
-        :if={@step_modal.mode == :edit and Contracts.contract?(@step_modal.step)}
-        class="badge badge-ghost badge-xs shrink-0"
-      >
-        contract
-      </span>
-    </div>
+    <p class="text-sm text-base-content/60">
+      {gettext("What this step achieves (intent), its contract, and the context the agent reads.")}
+    </p>
 
     <%!-- One `<.form>` spans BOTH columns — a single submit carries
-         everything (task/goal modal pattern). --%>
+         everything (task/goal modal pattern). Main column: client-side
+         tabs (Intent / Claims / Gates / Grafo / Contexto) + visual
+         contract editor (`StepEditorComponents`). Sidebar: Details /
+         Conexiones. --%>
     <.form
       id="step-modal-form"
       for={@step_form}
@@ -952,40 +1047,32 @@
       phx-submit="save_step"
       class="grid grid-cols-1 lg:grid-cols-[1fr_20rem] lg:gap-6"
     >
-      <div class="min-w-0 space-y-4">
-        <.input
-          field={@step_form[:title]}
-          type="text"
-          label={gettext("Title")}
-          placeholder={gettext("Step title…")}
-          class="text-lg font-medium"
-          autofocus
-        />
-
-        <div>
-          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Content")}</span>
-          <.markdown_editor
-            id={"step-editor-modal-#{@step_modal.step && @step_modal.step.id || "new"}"}
-            body={(@step_modal.step && @step_modal.step.body) || ""}
-            workspace_id={@context && @context.id}
-            autosave={false}
-            toolbar={false}
-            hidden_field="step[body]"
-            min_height="240px"
-          />
-        </div>
-      </div>
+      <.step_editor_tabs
+        id={"step-editor-tabs-#{if @step_modal.step && @step_modal.step.id, do: @step_modal.step.id, else: "new"}"}
+        form={@step_form}
+        step={@step_modal.step}
+      />
 
       <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
+        <%!-- Lint del contrato arriba del sidebar (antes vivía al pie del editor
+             de la columna principal). --%>
+        <.contract_lint_feedback lint={@contract_lint} />
+
         <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
           {gettext("Details")}
         </h4>
 
+        <%!-- Status del contrato: columna server-side (ya no viaja en el JSON
+             del contrato que serializa el hook). --%>
         <.input
-          field={@step_form[:slug]}
-          type="text"
-          label={gettext("Slug")}
-          placeholder={gettext("auto from title")}
+          field={@step_form[:status]}
+          type="select"
+          label={gettext("Status")}
+          options={[
+            {gettext("Draft"), "draft"},
+            {gettext("Active"), "active"},
+            {gettext("Superseded"), "superseded"}
+          ]}
         />
 
         <%!-- Create only: place the new step behind an existing one
@@ -1092,54 +1179,9 @@
         </p>
 
         <%!-- meta (incl. contract) y position no se editan aquí: el modal no
-             los envía, update los conserva tal cual. --%>
-        <%!-- Contrato del step (meta["contract"], edit): textarea JSON con
-             feedback de parseo+lint inline. phx-update="ignore" para que el
-             patch del LiveView no pise lo que el usuario está tecleando. --%>
-        <div :if={@step_modal.mode == :edit} class="space-y-1" data-testid="step-contract">
-          <label
-            for={"step-contract-json-#{@step_modal.step.id}"}
-            class="text-xs font-semibold uppercase tracking-wider text-base-content/50 block"
-          >
-            {gettext("Contrato (JSON)")}
-          </label>
-
-          <%!-- id único por step: phx-update="ignore" no reparchea contenido,
-               así que re-usar el id preservaría el JSON del step anterior. --%>
-          <textarea
-            id={"step-contract-json-#{@step_modal.step.id}"}
-            name="step[contract_json]"
-            rows="10"
-            phx-update="ignore"
-            phx-debounce="300"
-            class="textarea textarea-bordered w-full font-mono text-xs leading-relaxed bg-base-100"
-            placeholder={gettext("{\"intent\": \"...\"}")}
-          >{contract_json(@step_modal.step)}</textarea>
-
-          <p
-            :if={match?({:ok, _}, @contract_lint)}
-            class="text-xs text-success"
-            data-testid="contract-lint-ok"
-          >
-            <.icon name="hero-check-circle" class="size-3.5 inline-block align-text-bottom" />
-            {elem(@contract_lint, 1)}
-          </p>
-
-          <p
-            :if={match?({:invalid, _}, @contract_lint)}
-            class="text-xs text-error"
-            data-testid="contract-lint-error"
-          >
-            <.icon name="hero-exclamation-circle" class="size-3.5 inline-block align-text-bottom" />
-            {elem(@contract_lint, 1)}
-          </p>
-
-          <p class="text-xs text-base-content/40">
-            {gettext(
-              "Brief ejecutable del paso: intent, claims con verify, gates con cmd y graph con funnel de verificación. Vacío = sin contrato."
-            )}
-          </p>
-        </div>
+             los envía, update los conserva tal cual. El contrato se edita en
+             la pestaña Contrato de la columna principal (StepEditorComponents)
+             — mismo canal step[contract_json], mismo lint en vivo. --%>
       </aside>
     </.form>
 

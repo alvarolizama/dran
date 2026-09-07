@@ -63,6 +63,9 @@ defmodule DranWeb do
       import DranWeb.MarkdownEditorComponents,
         only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
 
+      import DranWeb.StepEditorComponents,
+        only: [step_editor_tabs: 1, contract_lint_feedback: 1]
+
       import DranWeb.VersionDiffComponent
 
       # Shared helpers for graph tab event handling
