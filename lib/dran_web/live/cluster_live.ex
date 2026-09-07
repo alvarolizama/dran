@@ -39,6 +39,7 @@ defmodule DranWeb.ClusterLive do
         <.show_view
           summary={@summary}
           cluster_pages={@cluster_pages}
+          workspace_slug={@workspace_slug}
         />
       </div>
     </Layouts.app>
