@@ -69,6 +69,35 @@ defmodule DranWeb.HomeLiveTest do
     end
   end
 
+  describe "graph node_click" do
+    # Regression: the hook sends the singular page_type ("note") but routes
+    # are plural workspace-scoped (/:ws/notes/:slug). With the raw type the
+    # wildcard matched page_type="note", PagesLive couldn't resolve it and
+    # redirected to the index — clicking a node landed on home.
+    test "navigates to the plural workspace-scoped page route", %{
+      conn: conn,
+      wiki_ctx: wiki_ctx,
+      page: page
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/graph")
+
+      render_click(view, "node_click", %{"slug" => page.slug, "type" => "note"})
+
+      assert_redirect(view, "/#{wiki_ctx.slug}/notes/#{page.slug}")
+    end
+
+    test "goal nodes navigate to the first-class goals route", %{
+      conn: conn,
+      wiki_ctx: wiki_ctx
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/graph")
+
+      render_click(view, "node_click", %{"slug" => "my-goal", "type" => "goal"})
+
+      assert_redirect(view, "/#{wiki_ctx.slug}/goals/my-goal")
+    end
+  end
+
   describe "authentication" do
     test "GET / redirects to /login without a session" do
       conn = build_conn() |> get(~p"/")

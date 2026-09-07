@@ -67,9 +67,6 @@ defmodule DranWeb do
         only: [step_editor_tabs: 1, contract_lint_feedback: 1]
 
       import DranWeb.VersionDiffComponent
-
-      # Shared helpers for graph tab event handling
-      import DranWeb.GraphEvents
     end
   end
 

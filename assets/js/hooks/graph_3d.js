@@ -107,8 +107,10 @@ const Graph3D = {
     // passes the sidebar's current set; show mode omits the attribute → null).
     this.visibleTypes = this.readVisibleTypes()
 
-    // URL prefix for page navigation. Wiki graph passes "/<context_slug>/type";
-    // panel/search leave it unset → fall back to root-level "/plural/slug".
+    // URL prefix for page navigation. Wiki graph passes its workspace root
+    // ("/personal"); panel/search leave it unset → fall back to root-level
+    // "/plural/slug". The hook pluralizes the node type (routes use the
+    // plural segment: /personal/notes/:slug).
     this.basePath = this.el.getAttribute("data-base-path") || null
 
     // URL for progressive graph JSON fetch. Panel uses the default
@@ -467,17 +469,18 @@ const Graph3D = {
       this.el.appendChild(overlay)
     }
 
-    // Determine the page path from the slug + type.
-    // basePath (e.g. "/personal/type") is context-aware; otherwise fall back
-    // to root-level "/plural/slug" (panel graph).
+    // Determine the page path from the slug + type. Routes are
+    // /:workspace_slug/:type_path/:slug with a PLURAL type segment, so
+    // pluralize first ("note" → "notes", "goal" → "goals").
     const typePlurals = {
       note: "notes", concept: "concepts", entity: "entities",
       reference: "references", project: "projects", goal: "goals",
       plan: "plans", todo: "todos", query: "queries"
     }
+    const typePath = typePlurals[node.type] || (node.type ? `${node.type}s` : "notes")
     const href = this.basePath
-      ? `${this.basePath}/${node.type}/${node.slug}`
-      : `/${typePlurals[node.type] || "notes"}/${node.slug}`
+      ? `${this.basePath}/${typePath}/${node.slug}`
+      : `/${typePath}/${node.slug}`
 
     overlay.innerHTML = `
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">

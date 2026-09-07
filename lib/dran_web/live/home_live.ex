@@ -942,7 +942,7 @@ defmodule DranWeb.HomeLive do
             nodes={@nodes}
             edges={@edges}
             visible_types={MapSet.to_list(@visible_types)}
-            base_path={"/#{@workspace.slug}/type"}
+            base_path={"/#{@workspace.slug}"}
             graph_url={"/#{@workspace.slug}/graph/json"}
             class="w-full h-full"
           />
@@ -1049,14 +1049,16 @@ defmodule DranWeb.HomeLive do
   # ── Filter event handlers (kanban + todo type_list) ──
 
   @impl true
-  def handle_event("node_click", %{"slug" => slug, "type" => type}, socket) do
+  def handle_event("node_click", %{"slug" => slug} = params, socket) do
     workspace = socket.assigns[:workspace]
 
     if workspace do
-      # Goals are first-class entities with a plural route (/:ws/goals/:slug),
-      # not page types (/:ws/notes/:slug). Map "goal" to "goals" for the route.
-      route_type = if type == "goal", do: "goals", else: type
-      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{route_type}/#{slug}")}
+      # Graph nodes carry the singular page_type ("note"); routes are
+      # workspace-scoped with the PLURAL path segment ("/personal/notes/..").
+      # PageRegistry.path pluralizes ("note" → "notes", "goal" → "goals") and
+      # falls back to "notes" for unknown types.
+      type_path = PageTypes.path(params["type"] || "note")
+      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{type_path}/#{slug}")}
     else
       {:noreply, socket}
     end

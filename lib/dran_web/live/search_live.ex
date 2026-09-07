@@ -118,6 +118,28 @@ defmodule DranWeb.SearchLive do
     {:noreply, assign(socket, search_mode: mode)}
   end
 
+  # Graph-mode node click → workspace-scoped page route. Nodes carry the
+  # singular page_type; PageRegistry.path pluralizes it ("note" → "notes").
+  @impl true
+  def handle_event("node_click", %{"slug" => slug} = params, socket) do
+    ws_slug = socket.assigns[:workspace_slug]
+
+    if ws_slug do
+      type_path = PageTypes.path(params["type"] || "note")
+      {:noreply, push_navigate(socket, to: "/#{ws_slug}/#{type_path}/#{slug}")}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # The hook pushes counters after its fetch. The search graph is LV-driven —
+  # results already live in @graph_nodes — so there is nothing to do here;
+  # the clause exists so the event doesn't crash the LiveView.
+  @impl true
+  def handle_event("graph_loaded", _counters, socket) do
+    {:noreply, socket}
+  end
+
   # Memory facts are part of the global search surface. bump_retrieval: false
   # — typing in the UI must not inflate the workers' usage counter.
   defp search_memories(%{assigns: %{context: %{id: _workspace_id}}} = socket, q) do
