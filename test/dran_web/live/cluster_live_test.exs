@@ -23,6 +23,16 @@ defmodule DranWeb.ClusterLiveTest do
         generated_at: DateTime.utc_now() |> DateTime.truncate(:second)
       })
 
+    {:ok, page} =
+      Knowledge.create_page(%{
+        "workspace_id" => ws.id,
+        "title" => "Page One",
+        "slug" => "page-one",
+        "page_type" => "note",
+        "content" => "hola",
+        "meta" => %{"cluster_id" => 7}
+      })
+
     conn =
       Phoenix.ConnTest.build_conn()
       |> Plug.Test.init_test_session(%{})
@@ -30,7 +40,7 @@ defmodule DranWeb.ClusterLiveTest do
       |> Plug.Conn.put_session(:workspace_slug, ws.slug)
       |> Plug.Conn.put_session(:is_owner, true)
 
-    {:ok, conn: conn, ws: ws, summary: summary}
+    {:ok, conn: conn, ws: ws, summary: summary, page: page}
   end
 
   describe "index" do
@@ -71,6 +81,20 @@ defmodule DranWeb.ClusterLiveTest do
       # push_navigate to the show route — must not raise. The KeyError crash
       # happened rendering the *target*, covered by the show tests above.
       render_click(view, "show_cluster", %{"id" => "7"})
+    end
+
+    # Regression: page links were built without the /:workspace_slug prefix,
+    # so clicking a member page pushed to a dead /notes/... route.
+    test "member page link navigates to the workspace-scoped show route", %{
+      conn: conn,
+      ws: ws,
+      page: page
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/clusters/7")
+
+      render_click(view, "show_page", %{"slug" => page.slug, "type" => page.page_type})
+
+      assert_redirect(view, "/#{ws.slug}/notes/page-one")
     end
   end
 end

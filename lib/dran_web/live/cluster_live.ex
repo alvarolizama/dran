@@ -290,15 +290,19 @@ defmodule DranWeb.ClusterLive do
 
   def handle_event("show_page", %{"slug" => slug} = params, socket) do
     type = Map.get(params, "type")
+    ws_slug = socket.assigns[:workspace_slug]
+    context = socket.assigns.context
 
+    # Page show routes are workspace-scoped (/:ws/:type_path/:slug) — the
+    # prefix is mandatory or the navigation lands on a 404-ish wildcard.
     path =
       if type do
-        "/#{PageTypes.path(type)}/#{slug}"
+        "/#{ws_slug}/#{PageTypes.path(type)}/#{slug}"
       else
         # For top_pages we don't have the type — try searching
-        case Knowledge.get_page_by_slug(slug, socket.assigns.context && socket.assigns.context.id) do
-          nil -> "/"
-          page -> PageTypes.page_show_path(page)
+        case context && Knowledge.get_page_by_slug(slug, context.id) do
+          nil -> "/#{ws_slug}"
+          page -> PageTypes.page_show_path(page, ws_slug)
         end
       end
 
