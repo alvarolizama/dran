@@ -103,6 +103,24 @@ defmodule DranWeb.SidebarNavTest do
       assert workflows < pos(html, ~s(href="/personal/workflows"))
     end
 
+    test "Clusters sits below Referencias inside Knowledge base" do
+      html = workspace_nav()
+
+      labels = group_labels(html)
+      summaries = summary_positions(html)
+      kb_index = Enum.find_index(labels, &(&1 == t("Knowledge base")))
+      memory_index = Enum.find_index(labels, &(&1 == t("Memory")))
+
+      assert refs_pos = pos(html, ~s(href="/personal/references"))
+      assert clusters_pos = pos(html, ~s(href="/personal/clusters"))
+
+      # clusters sigue dentro de Knowledge base: después de references y
+      # antes del <summary> del siguiente grupo (Memory).
+      assert refs_pos < clusters_pos
+      assert clusters_pos < Enum.at(summaries, memory_index)
+      assert Enum.at(summaries, kb_index) < refs_pos
+    end
+
     test "Inicio stays outside any group" do
       html = workspace_nav()
       [first_summary | _rest] = summary_positions(html)

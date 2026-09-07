@@ -326,15 +326,27 @@ defmodule DranWeb.Layouts do
     disabled = (ws && ws.disabled_page_types) || []
 
     page_type_items =
-      for type <- Dran.PageRegistry.types(), type not in disabled do
-        %{
-          key: Dran.PageRegistry.path(type),
-          label: Dran.PageRegistry.plural(type),
-          icon: Dran.PageRegistry.icon(type),
-          path: "#{base}/#{Dran.PageRegistry.path(type)}",
-          badge: counts[type_atom(type)] || 0
-        }
-      end
+      # Clusters cierra el grupo Knowledge base, debajo de Referencias.
+      (for type <- Dran.PageRegistry.types(), type not in disabled do
+         %{
+           key: Dran.PageRegistry.path(type),
+           label: Dran.PageRegistry.plural(type),
+           icon: Dran.PageRegistry.icon(type),
+           path: "#{base}/#{Dran.PageRegistry.path(type)}",
+           badge: counts[type_atom(type)] || 0
+         }
+       end ++
+         [
+           enabled?.("clusters") &&
+             %{
+               key: "clusters",
+               label: gettext("Clusters"),
+               icon: "hero-squares-2x2",
+               path: base <> "/clusters",
+               badge: counts[:clusters] || 0
+             }
+         ])
+      |> Enum.reject(&(!&1))
 
     # Sin etiqueta (siempre visibles, sin <details> colapsable)
     home_items = [
@@ -383,13 +395,6 @@ defmodule DranWeb.Layouts do
       [
         enabled?.("graph") &&
           %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
-        enabled?.("clusters") &&
-          %{
-            key: "clusters",
-            label: gettext("Clusters"),
-            icon: "hero-squares-2x2",
-            path: base <> "/clusters"
-          },
         enabled?.("journey") &&
           %{
             key: "journey",
