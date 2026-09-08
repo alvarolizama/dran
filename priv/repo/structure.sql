@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 7Cf7fSsvagjxkdhh7Hn3P31J0ePES67HN4DMUjNfwthG2uNdlm8yWrAnZk9tgyW
+\restrict WLkXDrbGovZlDDfENy39gM8C0lmrmvGWEyOy9QJfUdU3YsxEDyOYQZJdiI23v2P
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -1434,14 +1434,6 @@ ALTER TABLE ONLY public.reports
 
 
 --
--- Name: workflow_steps steps_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_steps
-    ADD CONSTRAINT steps_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
 -- Name: tasks tasks_assignee_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1586,6 +1578,14 @@ ALTER TABLE ONLY public.workflow_steps
 
 
 --
+-- Name: workflow_steps workflow_steps_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_steps
+    ADD CONSTRAINT workflow_steps_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
 -- Name: workflows workflows_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1605,7 +1605,7 @@ ALTER TABLE ONLY public.workflows
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 7Cf7fSsvagjxkdhh7Hn3P31J0ePES67HN4DMUjNfwthG2uNdlm8yWrAnZk9tgyW
+\unrestrict WLkXDrbGovZlDDfENy39gM8C0lmrmvGWEyOy9QJfUdU3YsxEDyOYQZJdiI23v2P
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1681,3 +1681,4 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260906080000);
 INSERT INTO public."schema_migrations" (version) VALUES (20260907215215);
 INSERT INTO public."schema_migrations" (version) VALUES (20260907220007);
 INSERT INTO public."schema_migrations" (version) VALUES (20260907234045);
+INSERT INTO public."schema_migrations" (version) VALUES (20260908001115);

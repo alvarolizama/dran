@@ -350,7 +350,7 @@ defmodule DranWeb.Router do
         end
 
       # /api/workflows/:workflow_id/sessions — workspace from the workflow
-      # (same SEC-002 pattern as /api/todos/:id; UUID-guarded so a garbage
+      # (same SEC-002 pattern as /api/tasks/:id; UUID-guarded so a garbage
       # id 403s instead of raising a CastError).
       conn.request_path =~ "/api/workflows/" and is_binary(conn.params["workflow_id"]) ->
         case Ecto.UUID.cast(conn.params["workflow_id"]) do
@@ -535,7 +535,7 @@ defmodule DranWeb.Router do
     # Workflow executions (write) — the agent loop over Dran.Executions:
     # open a session, claim a run, report progress, close, retry.
     # require_write_access resolves the workspace from params["workspace"]
-    # (all routes carry it; /api/todos-style body lookup is not needed).
+    # (all routes carry it; /api/tasks-style body lookup is not needed).
     post "/workflows/:workflow_id/sessions", ExecutionController, :open
     post "/workflow-runs/:id/start", ExecutionController, :start
     put "/workflow-runs/:id/progress", ExecutionController, :progress

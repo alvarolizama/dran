@@ -3,7 +3,7 @@ defmodule DranWeb.API.PageController do
 
   alias Dran.Knowledge
 
-  @doc "GET /api/pages — list pages with filters"
+  @doc "GET /api/knowledge-pages — list pages with filters"
   def index(conn, params) do
     # Resolve context slug to workspace_id (like TodoController does)
     params = resolve_workspace_id(conn, params)
@@ -29,7 +29,7 @@ defmodule DranWeb.API.PageController do
     end
   end
 
-  @doc "GET /api/pages/:slug — get a page"
+  @doc "GET /api/knowledge-pages/:slug — get a page"
   def show(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
@@ -54,7 +54,7 @@ defmodule DranWeb.API.PageController do
     |> json(%{errors: %{detail: "context query param is required"}})
   end
 
-  @doc "POST /api/pages — create a page"
+  @doc "POST /api/knowledge-pages — create a page"
   def create(conn, params) do
     # Resolve context slug to ID if needed
     params = resolve_workspace_id(conn, params)
@@ -81,7 +81,7 @@ defmodule DranWeb.API.PageController do
     end
   end
 
-  @doc "PUT /api/pages/:slug — update a page"
+  @doc "PUT /api/knowledge-pages/:slug — update a page"
   def update(conn, %{"slug" => slug, "workspace" => workspace_slug} = params) do
     with_context(conn, workspace_slug, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
@@ -128,7 +128,7 @@ defmodule DranWeb.API.PageController do
     |> json(%{errors: %{detail: "context query param is required"}})
   end
 
-  @doc "DELETE /api/pages/:slug — delete a page"
+  @doc "DELETE /api/knowledge-pages/:slug — delete a page"
   def delete(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
@@ -157,7 +157,7 @@ defmodule DranWeb.API.PageController do
     |> json(%{errors: %{detail: "context query param is required"}})
   end
 
-  @doc "GET /api/pages/:slug/links — inbound + outbound relations"
+  @doc "GET /api/knowledge-pages/:slug/links — inbound + outbound relations"
   def links(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
@@ -179,7 +179,7 @@ defmodule DranWeb.API.PageController do
     |> json(%{errors: %{detail: "context query param is required"}})
   end
 
-  @doc "GET /api/pages/:slug/graph — subgraph centered on a page"
+  @doc "GET /api/knowledge-pages/:slug/graph — subgraph centered on a page"
   def graph(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do

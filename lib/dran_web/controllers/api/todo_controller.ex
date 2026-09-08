@@ -4,7 +4,8 @@ defmodule DranWeb.API.TodoController do
   alias Dran.Tasks
 
   @moduledoc """
-  Legacy `/api/todos` facade — write-through to the first-class tasks table.
+  Legacy `/api/tasks` facade (antes `/api/todos`) — write-through to the
+  first-class tasks table.
 
   The response shape is unchanged for existing consumers (data array with
   title/slug/status fields), but everything now lives in `tasks`.

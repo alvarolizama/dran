@@ -5,7 +5,7 @@ defmodule Dran.Contracts do
   A task becomes a contract when its `meta.contract` passes the structural
   linter (`contract?/1`). The contract is a versioned JSON document inside
   the task; `task.body` holds the rendered brief (the interchange format a
-  pulling agent reads). See `.spike/workflows-design.md` for the full spec.
+  pulling agent reads).
 
   Shape of `meta.contract`:
 
