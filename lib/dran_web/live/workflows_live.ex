@@ -104,7 +104,7 @@ defmodule DranWeb.WorkflowsLive do
 
     form =
       if modal_open do
-        to_form(Workflows.change_workflow(%Dran.Workflow{}), as: :workflow)
+        to_form(Workflows.change_workflow(%Dran.Workflows.Workflow{}), as: :workflow)
       else
         socket.assigns[:form]
       end
@@ -117,8 +117,8 @@ defmodule DranWeb.WorkflowsLive do
           archived_workflows: archived_enriched,
           kind_filters: kind_filters,
           status_filters: status_filters,
-          workflow_kinds: Dran.Workflow.kinds(),
-          status_options: List.delete(Dran.Workflow.statuses(), "archived"),
+          workflow_kinds: Dran.Workflows.Workflow.kinds(),
+          status_options: List.delete(Dran.Workflows.Workflow.statuses(), "archived"),
           kind_menu_open: socket.assigns[:kind_menu_open] || false,
           status_menu_open: socket.assigns[:status_menu_open] || false,
           modal_open: modal_open,
@@ -176,6 +176,21 @@ defmodule DranWeb.WorkflowsLive do
         steps_count: Map.get(steps_counts, w.id, 0),
         active_sessions: Map.get(active_sessions_map, w.id, [])
       }
+    end)
+  end
+
+  @doc """
+  Given a list of sessions, return `{session, progress}` pairs using ONE
+  aggregate query (`Executions.sessions_progress_batch/1`) instead of one
+  `session_progress/1` query per session. Sessions with zero runs get
+  zeroed progress, same as the singular version.
+  """
+  def sessions_with_progress(sessions) when is_list(sessions) do
+    progress_map = Executions.sessions_progress_batch(sessions)
+    zero = %{total: 0, pending: 0, in_flight: 0, passed: 0, failed: 0, skipped: 0}
+
+    Enum.map(sessions, fn session ->
+      {session, Map.get(progress_map, session.id, zero)}
     end)
   end
 
@@ -241,11 +256,13 @@ defmodule DranWeb.WorkflowsLive do
     # ready here (steps have no board status).
     dep_info = Contracts.dependency_states(step_ids, :step)
 
-    # Newest first — `{session, progress}` pairs, one progress query each.
+    # Newest first — `{session, progress}` pairs, batched in ONE query
+    # (sessions_progress_batch aggregates all runs grouped by session_id;
+    # the per-session session_progress/1 call was an N+1 here).
     sessions =
       workflow
       |> Executions.list_sessions()
-      |> Enum.map(fn session -> {session, Executions.session_progress(session)} end)
+      |> sessions_with_progress()
 
     selected =
       case params["session"] do
@@ -292,7 +309,7 @@ defmodule DranWeb.WorkflowsLive do
     # section): {outgoing, incoming} step structs, workspace-preloaded.
     {outgoing_deps, incoming_deps} =
       case Map.get(socket.assigns, :step_modal) do
-        %{mode: :edit, step: %Dran.Step{} = step} ->
+        %{mode: :edit, step: %Dran.Workflows.Step{} = step} ->
           step_connections(edges, step, steps_by_id)
 
         _ ->
@@ -358,11 +375,11 @@ defmodule DranWeb.WorkflowsLive do
   # no live state to desync — the URL is the single source of truth. A step
   # id that does not resolve (deleted elsewhere, forged id, bad UUID) simply
   # renders no modal.
-  defp step_modal_state(%Dran.Workflow{} = workflow, params, steps) do
+  defp step_modal_state(%Dran.Workflows.Workflow{} = workflow, params, steps) do
     cond do
       params["new_step"] == "true" ->
         changeset =
-          %Dran.Step{workspace_id: workflow.workspace_id, workflow_id: workflow.id}
+          %Dran.Workflows.Step{workspace_id: workflow.workspace_id, workflow_id: workflow.id}
           |> Workflows.change_step()
 
         %{
@@ -381,7 +398,7 @@ defmodule DranWeb.WorkflowsLive do
 
       step_id = step_id_or_nil(params["step"]) ->
         case fetch_workflow_step(step_id, workflow.workspace_id) do
-          %Dran.Step{} = step ->
+          %Dran.Workflows.Step{} = step ->
             %{
               step_modal: %{mode: :edit, step: step, after_step_id: nil},
               step_form: to_form(Workflows.change_step(step), as: :step)
@@ -461,7 +478,7 @@ defmodule DranWeb.WorkflowsLive do
     case Ecto.UUID.cast(id) do
       {:ok, uuid} ->
         case Workflows.get_step!(uuid) do
-          %Dran.Step{workspace_id: ^workspace_id} = step -> step
+          %Dran.Workflows.Step{workspace_id: ^workspace_id} = step -> step
           _other -> nil
         end
 
@@ -499,7 +516,7 @@ defmodule DranWeb.WorkflowsLive do
       nil ->
         {:noreply, put_flash(socket, :error, gettext("Workflow no encontrado."))}
 
-      %Dran.Workflow{} = workflow ->
+      %Dran.Workflows.Workflow{} = workflow ->
         label = generated_session_label(workflow.id)
         opts = [label: label] ++ open_session_actor_opts(socket)
 
@@ -718,7 +735,7 @@ defmodule DranWeb.WorkflowsLive do
 
   def handle_event("validate_workflow", %{"workflow" => params}, socket) do
     changeset =
-      %Dran.Workflow{workspace_id: socket.assigns.context.id}
+      %Dran.Workflows.Workflow{workspace_id: socket.assigns.context.id}
       |> Workflows.change_workflow(params)
       |> Map.put(:action, :validate)
 
@@ -979,8 +996,8 @@ defmodule DranWeb.WorkflowsLive do
       ) do
     ws_id = socket.assigns.workflow.workspace_id
 
-    with %Dran.Step{} = step <- fetch_workflow_step(step_id, ws_id),
-         %Dran.Step{} = other <- fetch_workflow_step(other_id, ws_id),
+    with %Dran.Workflows.Step{} = step <- fetch_workflow_step(step_id, ws_id),
+         %Dran.Workflows.Step{} = other <- fetch_workflow_step(other_id, ws_id),
          :ok <- ensure_same_workflow(step, other, socket.assigns.workflow),
          # The edge is whichever direction exists (outgoing or incoming);
          # remove_dependency deletes step→other only, so a 0-count on the
@@ -1004,7 +1021,7 @@ defmodule DranWeb.WorkflowsLive do
   # card on its grid. The first drag materializes the whole workflow into
   # the free layout so the canvas is all-or-nothing (positions or levels).
   def handle_event("move_step", %{"step-id" => step_id, "x" => x, "y" => y}, socket) do
-    with %Dran.Step{} = step <-
+    with %Dran.Workflows.Step{} = step <-
            fetch_workflow_step(step_id, socket.assigns.workflow.workspace_id),
          {x, ""} <- Integer.parse(to_string(x)),
          {y, ""} <- Integer.parse(to_string(y)),
@@ -1028,9 +1045,9 @@ defmodule DranWeb.WorkflowsLive do
   # Cycle/self guards live in Contracts.add_dependency; both ids are
   # authorized against the workspace AND this workflow (forgeable params).
   def handle_event("connect_steps", %{"dependent-id" => dep_id, "prereq-id" => pre_id}, socket) do
-    with %Dran.Step{} = dependent <-
+    with %Dran.Workflows.Step{} = dependent <-
            fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
-         %Dran.Step{} = prereq <-
+         %Dran.Workflows.Step{} = prereq <-
            fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
          :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow) do
       case Contracts.add_dependency(dependent, prereq) do
@@ -1056,9 +1073,9 @@ defmodule DranWeb.WorkflowsLive do
         %{"dependent-id" => dep_id, "prereq-id" => pre_id},
         socket
       ) do
-    with %Dran.Step{} = dependent <-
+    with %Dran.Workflows.Step{} = dependent <-
            fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
-         %Dran.Step{} = prereq <-
+         %Dran.Workflows.Step{} = prereq <-
            fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
          :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow),
          {:ok, _} <- Contracts.remove_dependency(dependent, prereq) do
@@ -1077,9 +1094,9 @@ defmodule DranWeb.WorkflowsLive do
         %{"dependent-id" => dep_id, "prereq-id" => pre_id},
         socket
       ) do
-    with %Dran.Step{} = dependent <-
+    with %Dran.Workflows.Step{} = dependent <-
            fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
-         %Dran.Step{} = prereq <-
+         %Dran.Workflows.Step{} = prereq <-
            fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
          :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow) do
       case Workflows.insert_step_between(socket.assigns.workflow, dependent, prereq, %{
@@ -1109,11 +1126,11 @@ defmodule DranWeb.WorkflowsLive do
         %{"dependent-id" => dep_id, "prereq-id" => pre_id, "middle-id" => mid_id},
         socket
       ) do
-    with %Dran.Step{} = dependent <-
+    with %Dran.Workflows.Step{} = dependent <-
            fetch_workflow_step(dep_id, socket.assigns.workflow.workspace_id),
-         %Dran.Step{} = prereq <-
+         %Dran.Workflows.Step{} = prereq <-
            fetch_workflow_step(pre_id, socket.assigns.workflow.workspace_id),
-         %Dran.Step{} = middle <-
+         %Dran.Workflows.Step{} = middle <-
            fetch_workflow_step(mid_id, socket.assigns.workflow.workspace_id),
          :ok <- ensure_same_workflow(dependent, prereq, socket.assigns.workflow),
          :ok <- ensure_same_workflow(middle, prereq, socket.assigns.workflow),
@@ -1278,8 +1295,8 @@ defmodule DranWeb.WorkflowsLive do
   # to THIS workflow (workspace authorization already happened in
   # fetch_workflow_step; cross-workspace is still rejected downstream).
   defp ensure_same_workflow(
-         %Dran.Step{workflow_id: wid},
-         %Dran.Step{workflow_id: wid},
+         %Dran.Workflows.Step{workflow_id: wid},
+         %Dran.Workflows.Step{workflow_id: wid},
          _workflow
        ),
        do: :ok
@@ -1289,11 +1306,11 @@ defmodule DranWeb.WorkflowsLive do
   # The checked "después de" prereq, authorized against BOTH workspace and
   # workflow (the checkbox only offers this workflow's steps, but the param
   # is forgeable — a cross-workflow edge would poison dependency_states).
-  defp after_step_id(all_params, %Dran.Workflow{} = workflow) do
+  defp after_step_id(all_params, %Dran.Workflows.Workflow{} = workflow) do
     case all_params["new_step"]["after"] do
       after_id when is_binary(after_id) and after_id != "" ->
         case fetch_workflow_step(after_id, workflow.workspace_id) do
-          %Dran.Step{workflow_id: step_workflow_id, id: step_id}
+          %Dran.Workflows.Step{workflow_id: step_workflow_id, id: step_id}
           when step_workflow_id == workflow.id ->
             {:ok, step_id}
 
@@ -1424,11 +1441,11 @@ defmodule DranWeb.WorkflowsLive do
   # scope-pinned new step on create.
   defp step_for_mode(socket) do
     case socket.assigns.step_modal do
-      %{mode: :edit, step: %Dran.Step{} = step} ->
+      %{mode: :edit, step: %Dran.Workflows.Step{} = step} ->
         step
 
       _ ->
-        %Dran.Step{
+        %Dran.Workflows.Step{
           workspace_id: socket.assigns.workflow.workspace_id,
           workflow_id: socket.assigns.workflow.id
         }
@@ -1454,7 +1471,7 @@ defmodule DranWeb.WorkflowsLive do
   # Title of a step for the "después de" checkbox label.
   defp step_title(steps_by_id, step_id) when is_map(steps_by_id) and is_binary(step_id) do
     case Map.fetch(steps_by_id, step_id) do
-      {:ok, %Dran.Step{title: title}} -> title
+      {:ok, %Dran.Workflows.Step{title: title}} -> title
       _ -> "?"
     end
   end
@@ -1496,7 +1513,7 @@ defmodule DranWeb.WorkflowsLive do
     case Ecto.UUID.cast(id) do
       {:ok, uuid} ->
         case Workflows.get_workflow!(uuid) do
-          %Dran.Workflow{workspace_id: ws_id} = wf when ws_id == context.id -> wf
+          %Dran.Workflows.Workflow{workspace_id: ws_id} = wf when ws_id == context.id -> wf
           _other -> nil
         end
 
@@ -1511,7 +1528,7 @@ defmodule DranWeb.WorkflowsLive do
     case Ecto.UUID.cast(id) do
       {:ok, uuid} ->
         case Executions.get_session!(uuid) do
-          %Dran.WorkflowSession{workspace_id: ws_id} = s when ws_id == context.id -> s
+          %Dran.Workflows.Session{workspace_id: ws_id} = s when ws_id == context.id -> s
           _other -> nil
         end
 

@@ -102,6 +102,50 @@ defmodule DranWeb.SettingsLiveTest do
     assert Accounts.valid_api_key?(key.token) == :error
   end
 
+  test "copy_api_key_prefix of ANOTHER user's key is rejected without leaking the prefix", %{
+    conn: _conn
+  } do
+    unique = System.unique_integer([:positive])
+
+    {:ok, ctx} =
+      Knowledge.create_workspace(%{name: "Foreign #{unique}", slug: "foreign-#{unique}"})
+
+    # A NON-owner session user (the /settings/api_keys route is any-user).
+    {:ok, non_owner} =
+      Accounts.create_user(%{email: "plain-user-#{unique}@example.com", name: "Plain"})
+
+    {:ok, _} = Accounts.add_user_to_workspace(non_owner, ctx)
+
+    # A key created by a DIFFERENT user — the guard must reject it.
+    {:ok, other_user} =
+      Accounts.create_user(%{email: "other-owner-#{unique}@example.com", name: "Other"})
+
+    {:ok, _} = Accounts.add_user_to_workspace(other_user, ctx)
+
+    {:ok, foreign_key} =
+      Accounts.create_api_key(%{
+        name: "Foreign key",
+        workspace_ids: [{ctx.id, "read"}],
+        created_by_user_id: other_user.id
+      })
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> Plug.Test.init_test_session(%{})
+      |> Plug.Conn.put_session(:user, "plain-user-#{unique}@example.com")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
+
+    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
+
+    # The foreign key never appears in the non-owner's list (list_api_keys
+    # scopes by user) — so forge the event directly with its id, exactly like
+    # a tampered DOM would. owned_api_key must reject it: flash error, NO
+    # clipboard event.
+    html = render_click(view, "copy_api_key_prefix", %{"id" => foreign_key.id})
+
+    assert html =~ t("No autorizado.")
+  end
+
   # ── Actors tab ──────────────────────────────────────────────────────────────
 
   describe "actors tab" do
@@ -454,11 +498,11 @@ defmodule DranWeb.SettingsLiveTest do
       :ok
     end
 
-    test "renders the 6 registered jobs with toggles and run buttons", %{conn: conn} do
+    test "renders the 7 registered jobs with toggles and run buttons", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/admin/jobs")
 
       assert html =~ t("Jobs programados")
-      assert length(Jobs.list()) == 6
+      assert length(Jobs.list()) == 7
 
       for job <- Jobs.list() do
         assert html =~ ~s(id="job-row-#{job.key}")
@@ -534,7 +578,7 @@ defmodule DranWeb.SettingsLiveTest do
       keys = Enum.map(Jobs.list_keys(), &Atom.to_string/1)
 
       Dran.Repo.delete_all(
-        from p in Dran.Page,
+        from p in Dran.Knowledge.Page,
           where: p.workspace_id == ^workspace_id and p.page_type == "report",
           where: fragment("?->>'job_key'", p.meta) in ^keys
       )

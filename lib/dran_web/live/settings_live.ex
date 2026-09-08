@@ -242,8 +242,13 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("copy_api_key_prefix", %{"id" => id}, socket) do
-    key = Dran.Repo.get!(Dran.Accounts.ApiKey, id)
-    {:noreply, push_event(socket, "copy_to_clipboard", %{text: key.token_prefix})}
+    # Same ownership guard as the other key handlers — the id is client
+    # forjable, and the clipboard event would leak another user's prefix.
+    with {:ok, key} <- owned_api_key(id, socket) do
+      {:noreply, push_event(socket, "copy_to_clipboard", %{text: key.token_prefix})}
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+    end
   end
 
   # ── Actors tab ──────────────────────────────────────────────────────────────
