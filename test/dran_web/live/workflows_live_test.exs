@@ -809,7 +809,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       )
       |> render_click()
 
-      assert has_element?(view, "#step-resource-modal", "Edit Step")
+      assert has_element?(view, "#step-resource-modal", "Editar paso")
 
       # Prefilled with the existing step data.
       input_html = view |> element("#step_title") |> render()

@@ -11,7 +11,7 @@ defmodule DranWeb.PageComponents do
   import DranWeb.MarkdownEditorComponents,
     only: [meta_fields: 1, tag_input: 1]
 
-  import DranWeb.ResourceComponents, only: [markdown_body_field: 1, form_actions: 1]
+  import DranWeb.ResourceComponents, only: [markdown_body_field: 1]
 
   alias Dran.Knowledge
   alias Dran.PageRegistry
@@ -946,13 +946,11 @@ defmodule DranWeb.PageComponents do
     assigns = assign(assigns, :tag_suggestions, suggestions)
 
     ~H"""
-    <div class="p-6 max-w-3xl">
-      <div class="flex items-center justify-between mb-4">
-        <h1 class="text-title">
-          {new_title(@page_type)}
-        </h1>
-      </div>
-
+    <%!-- No padding/max-w wrapper and no inner title/actions here: the
+    resource_modal already provides the header (title + pill), the padded
+    scrollable body, and the footer with Cancel + Submit (wired to this
+    form via form_id). --%>
+    <div class="max-w-3xl">
       <.form
         for={@form}
         id={"page-new-form-#{@page_type}"}
@@ -996,20 +994,11 @@ defmodule DranWeb.PageComponents do
           autosave={false}
           label={gettext("Content")}
         />
-
-        <.form_actions
-          submit_label={new_title(@page_type)}
-          submit_icon="hero-check"
-          submit_testid="create-page-submit"
-          cancel_path={@cancel_path}
-        />
       </.form>
     </div>
     """
   end
 
-  # Creation form title per page type — reuses the empty-state CTAs, which
-  # carry correct gender per type ("Crear nota", "Añadir referencia", …).
   # Kind options for the creation-form select — registry labels, raw slugs.
   defp kind_options_for(page_type) do
     (PageRegistry.kinds(page_type) || [])
@@ -1022,10 +1011,4 @@ defmodule DranWeb.PageComponents do
   defp meta_kind(%{"kind" => kind}) when is_binary(kind), do: kind
   defp meta_kind(%{kind: kind}) when is_binary(kind), do: kind
   defp meta_kind(_), do: nil
-
-  defp new_title("note"), do: gettext("Create Note")
-  defp new_title("concept"), do: gettext("Create Concept")
-  defp new_title("entity"), do: gettext("Create Entity")
-  defp new_title("reference"), do: gettext("Add Reference")
-  defp new_title(_), do: gettext("Create Page")
 end
