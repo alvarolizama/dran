@@ -50,6 +50,7 @@ defmodule Dran.MCP do
   alias Dran.PageTypes
   alias DranWeb.ResourceAuthorization
   alias Dran.Goals
+  alias Dran.Goals.Goal
   import Ecto.Query, warn: false
 
   @protocol_version "2025-03-26"
@@ -395,6 +396,155 @@ defmodule Dran.MCP do
           }
         },
         "required" => ["workspace", "title"]
+      }
+    },
+    %{
+      "name" => "dran_get_goal",
+      "description" =>
+        "Read a goal (by slug or UUID) with its checklist items and progress. Returns title, slug, status, summary, body, parent_goal slug (if any), and the checklist (each item with index, text, done flag). Use this before updating or working through a goal's checklist.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the goal lives."
+          },
+          "goal" => %{
+            "type" => "string",
+            "description" => "Goal slug or UUID."
+          }
+        },
+        "required" => ["workspace", "goal"]
+      }
+    },
+    %{
+      "name" => "dran_update_goal",
+      "description" =>
+        "Update an existing goal (by slug or UUID): title, summary, body, status. When the title changes and no explicit slug is passed, the slug regenerates from the new title. Returns the updated goal's title and slug.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the goal lives."
+          },
+          "goal" => %{
+            "type" => "string",
+            "description" => "Goal slug or UUID."
+          },
+          "title" => %{"type" => "string", "description" => "New title (optional)."},
+          "summary" => %{"type" => "string", "description" => "New summary (optional)."},
+          "body" => %{"type" => "string", "description" => "New Markdown body (optional)."},
+          "status" => %{
+            "type" => "string",
+            "enum" => ["draft", "active", "on_hold", "done", "archived"],
+            "description" => "New status (optional)."
+          }
+        },
+        "required" => ["workspace", "goal"]
+      }
+    },
+    %{
+      "name" => "dran_delete_goal",
+      "description" =>
+        "Delete a goal (by slug or UUID). Irreversible — the goal and its checklist disappear; pages linked to it keep their relations pointing at the deleted goal are rejected at creation, existing ones become dangling references. Prefer status 'archived' unless you truly mean to remove it.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the goal lives."
+          },
+          "goal" => %{
+            "type" => "string",
+            "description" => "Goal slug or UUID."
+          }
+        },
+        "required" => ["workspace", "goal"]
+      }
+    },
+    %{
+      "name" => "dran_goal_checklist_add",
+      "description" =>
+        "Append an item to a goal's checklist (planning sub-items, NOT execution state). Items are `%{text, done}` maps appended in order; use the returned index for later toggle/remove. Returns the updated checklist with progress.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the goal lives."
+          },
+          "goal" => %{
+            "type" => "string",
+            "description" => "Goal slug or UUID."
+          },
+          "text" => %{
+            "type" => "string",
+            "description" => "Item text (trimmed; empty rejected)."
+          }
+        },
+        "required" => ["workspace", "goal", "text"]
+      }
+    },
+    %{
+      "name" => "dran_goal_checklist_toggle",
+      "description" =>
+        "Flip the done flag of the checklist item at `index` (0-based). Use dran_get_goal first to read the current indices. Returns the updated checklist with progress.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the goal lives."
+          },
+          "goal" => %{
+            "type" => "string",
+            "description" => "Goal slug or UUID."
+          },
+          "index" => %{
+            "type" => "integer",
+            "description" => "0-based index of the item to toggle."
+          }
+        },
+        "required" => ["workspace", "goal", "index"]
+      }
+    },
+    %{
+      "name" => "dran_goal_checklist_remove",
+      "description" =>
+        "Remove the checklist item at `index` (0-based) — indices of later items shift down by one. Use dran_get_goal first. Returns the updated checklist with progress.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the goal lives."
+          },
+          "goal" => %{
+            "type" => "string",
+            "description" => "Goal slug or UUID."
+          },
+          "index" => %{
+            "type" => "integer",
+            "description" => "0-based index of the item to remove."
+          }
+        },
+        "required" => ["workspace", "goal", "index"]
+      }
+    },
+    %{
+      "name" => "dran_list_goals",
+      "description" =>
+        "List a context's goals with status, checklist progress (done/total) and parent slug. Lightweight metadata only — use dran_get_goal for full content.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug to list goals from."
+          }
+        },
+        "required" => ["workspace"]
       }
     },
     %{
@@ -969,6 +1119,11 @@ defmodule Dran.MCP do
                  "dran_create_note",
                  "dran_update_note",
                  "dran_create_goal",
+                 "dran_update_goal",
+                 "dran_delete_goal",
+                 "dran_goal_checklist_add",
+                 "dran_goal_checklist_toggle",
+                 "dran_goal_checklist_remove",
                  "dran_create_relation",
                  "dran_delete_relation",
                  "dran_rename_slug",
@@ -1705,7 +1860,205 @@ defmodule Dran.MCP do
     end
   end
 
+  # ── Goals: read / update / delete / checklist (planning sub-items) ──────────
+
+  defp execute_tool("dran_get_goal", %{"workspace" => ws, "goal" => handle}, _user) do
+    context = workspace_cache_get(ws)
+
+    cond do
+      not is_map(context) ->
+        "Error: context '#{ws}' not found"
+
+      true ->
+        case fetch_goal(context.id, handle) do
+          %Goal{} = goal -> render_goal(goal)
+          _ -> "Error: goal '#{handle}' not found in context '#{ws}'"
+        end
+    end
+  end
+
+  defp execute_tool("dran_update_goal", %{"workspace" => ws, "goal" => handle} = args, _user) do
+    context = workspace_cache_get(ws)
+
+    if is_map(context) do
+      case fetch_goal(context.id, handle) do
+        %Goal{} = goal ->
+          attrs =
+            %{}
+            |> maybe_put("title", args["title"])
+            |> maybe_put("summary", args["summary"])
+            |> maybe_put("body", args["body"])
+            |> maybe_put("status", args["status"])
+
+          case Goals.update_goal(goal, attrs) do
+            {:ok, updated} ->
+              "Updated goal: #{updated.title} (#{updated.slug}) — status: #{updated.status}"
+
+            {:error, changeset} ->
+              "Error: #{format_changeset_errors(changeset)}"
+          end
+
+        _ ->
+          "Error: goal '#{handle}' not found in context '#{ws}'"
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
+  defp execute_tool("dran_delete_goal", %{"workspace" => ws, "goal" => handle}, _user) do
+    context = workspace_cache_get(ws)
+
+    if is_map(context) do
+      case fetch_goal(context.id, handle) do
+        %Goal{} = goal ->
+          case Goals.delete_goal(goal) do
+            {:ok, deleted} -> "Deleted goal: #{deleted.title} (#{deleted.slug})"
+            {:error, _} -> "Error: could not delete goal '#{handle}'"
+          end
+
+        _ ->
+          "Error: goal '#{handle}' not found in context '#{ws}'"
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "dran_goal_checklist_add",
+         %{"workspace" => ws, "goal" => handle, "text" => text},
+         _user
+       ) do
+    with_context_and_goal(ws, handle, fn goal ->
+      case Goals.add_checklist_item(goal, text) do
+        {:ok, updated} ->
+          {done, total} = Goals.checklist_progress(updated)
+          last = length(updated.checklist) - 1
+          "Added checklist item #{last}: \"#{String.trim(text)}\" — progress: #{done}/#{total}"
+
+        {:error, :empty_text} ->
+          "Error: checklist item text cannot be empty"
+
+        {:error, changeset} ->
+          "Error: #{format_changeset_errors(changeset)}"
+      end
+    end)
+  end
+
+  defp execute_tool(
+         "dran_goal_checklist_toggle",
+         %{"workspace" => ws, "goal" => handle, "index" => index},
+         _user
+       )
+       when is_integer(index) do
+    with_context_and_goal(ws, handle, fn goal ->
+      if index >= 0 and index < length(goal.checklist) do
+        {:ok, updated} = Goals.toggle_checklist_item(goal, index)
+        {done, total} = Goals.checklist_progress(updated)
+        item = Enum.at(updated.checklist, index)
+
+        "Checklist item #{index} '#{item["text"]}' → #{if item["done"], do: "done", else: "open"} — progress: #{done}/#{total}"
+      else
+        "Error: index #{index} out of bounds (checklist has #{length(goal.checklist)} items)"
+      end
+    end)
+  end
+
+  defp execute_tool(
+         "dran_goal_checklist_remove",
+         %{"workspace" => ws, "goal" => handle, "index" => index},
+         _user
+       )
+       when is_integer(index) do
+    with_context_and_goal(ws, handle, fn goal ->
+      if index >= 0 and index < length(goal.checklist) do
+        removed = Enum.at(goal.checklist, index)
+        {:ok, updated} = Goals.remove_checklist_item(goal, index)
+        {done, total} = Goals.checklist_progress(updated)
+        "Removed checklist item #{index}: '#{removed["text"]}' — progress: #{done}/#{total}"
+      else
+        "Error: index #{index} out of bounds (checklist has #{length(goal.checklist)} items)"
+      end
+    end)
+  end
+
+  defp execute_tool("dran_list_goals", %{"workspace" => ws}, _user) do
+    context = workspace_cache_get(ws)
+
+    if is_map(context) do
+      goals = Goals.list_goals(context.id)
+
+      if goals == [] do
+        "No goals in context '#{ws}'"
+      else
+        Enum.map_join(goals, "\n", fn goal ->
+          {done, total} = Goals.checklist_progress(goal)
+          "• #{goal.title} (#{goal.slug}) — #{goal.status} — checklist: #{done}/#{total}"
+        end)
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
   defp execute_tool(tool_name, _args, _user), do: "Error: unknown tool '#{tool_name}'"
+
+  # Resolve a goal by slug or UUID within the workspace. Returns
+  # %Goal{} | nil | {:error, :invalid_id}.
+  defp fetch_goal(workspace_id, handle) when is_binary(handle) do
+    case Ecto.UUID.cast(handle) do
+      {:ok, id} ->
+        case Goals.get_goal(id) do
+          %Goal{workspace_id: ^workspace_id} = goal -> goal
+          _ -> {:error, :invalid_id}
+        end
+
+      :error ->
+        Goals.get_goal_by_slug(handle, workspace_id)
+    end
+  end
+
+  defp fetch_goal(_, _), do: {:error, :invalid_id}
+
+  defp render_goal(%Goal{} = goal) do
+    {done, total} = Goals.checklist_progress(goal)
+
+    checklist =
+      goal.checklist
+      |> Enum.with_index()
+      |> Enum.map_join("\n", fn {item, i} ->
+        "  [#{if item["done"], do: "x", else: " "}] #{i}: #{item["text"]}"
+      end)
+
+    """
+    Goal: #{goal.title}
+    Slug: #{goal.slug}
+    ID: #{goal.id}
+    Status: #{goal.status}
+    Summary: #{goal.summary || "-"}
+    Checklist (#{done}/#{total} done):
+    #{if checklist == "", do: "  (empty)", else: checklist}
+
+    Body:
+    #{if goal.body == "", do: "(empty)", else: goal.body}
+    """
+  end
+
+  # Shared runner for goal checklist tools: resolves context + goal, handles
+  # the not-found errors, and delegates the operation to `fun`.
+  defp with_context_and_goal(ws, handle, fun) do
+    context = workspace_cache_get(ws)
+
+    if is_map(context) do
+      case fetch_goal(context.id, handle) do
+        %Goal{} = goal -> fun.(goal)
+        _ -> "Error: goal '#{handle}' not found in context '#{ws}'"
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
 
   # ── Worker helpers ─────────────────────────────────────────────────────────
 

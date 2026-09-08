@@ -88,7 +88,7 @@ defmodule Dran.MCPFullTest do
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 19
+      assert length(tools) == 26
     end
 
     test "all tools carry the dran_ prefix" do
@@ -676,6 +676,262 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~ "Error: context"
+    end
+  end
+
+  # ── Tool: dran_get_goal / dran_update_goal / dran_delete_goal ─────────────
+
+  describe "dran_get_goal" do
+    setup %{context: ctx} do
+      {:ok, goal} =
+        Goals.create_goal(%{
+          workspace_id: ctx.id,
+          title: "MCP Goals",
+          summary: "test goal"
+        })
+
+      {:ok, _} = Goals.add_checklist_item(goal, "first item")
+      goal = Goals.get_goal(goal.id)
+      {:ok, goal: goal}
+    end
+
+    test "reads a goal by slug with checklist indices", %{context: ctx, goal: goal} do
+      result = call_tool("dran_get_goal", %{"workspace" => "personal", "goal" => goal.slug})
+
+      assert result =~ "Goal: MCP Goals"
+      assert result =~ "Slug: #{goal.slug}"
+      assert result =~ "ID: #{goal.id}"
+      assert result =~ "Checklist (0/1 done)"
+      assert result =~ "[ ] 0: first item"
+    end
+
+    test "reads a goal by UUID", %{goal: goal} do
+      result = call_tool("dran_get_goal", %{"workspace" => "personal", "goal" => goal.id})
+      assert result =~ "Goal: MCP Goals"
+    end
+
+    test "errors on unknown goal", %{context: _ctx} do
+      result = call_tool("dran_get_goal", %{"workspace" => "personal", "goal" => "no-such"})
+      assert result =~ "Error: goal 'no-such' not found"
+    end
+
+    test "errors on unknown context" do
+      result = call_tool("dran_get_goal", %{"workspace" => "no-ctx", "goal" => "x"})
+      assert result =~ "Error: context 'no-ctx' not found"
+    end
+  end
+
+  describe "dran_update_goal" do
+    setup %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Before Update"})
+      {:ok, goal: goal}
+    end
+
+    test "updates status and summary", %{goal: goal} do
+      result =
+        call_tool("dran_update_goal", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "status" => "on_hold",
+          "summary" => "paused for now"
+        })
+
+      assert result =~ "Updated goal: Before Update"
+      assert result =~ "status: on_hold"
+      updated = Goals.get_goal(goal.id) |> then(& &1)
+      assert updated.summary == "paused for now"
+    end
+
+    test "regenerates slug from new title", %{goal: goal} do
+      result =
+        call_tool("dran_update_goal", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "title" => "After Update"
+        })
+
+      assert result =~ "Updated goal: After Update"
+      assert result =~ "after-update"
+      assert Goals.get_goal_by_slug("after-update", goal.workspace_id) != nil
+    end
+
+    test "errors on unknown goal" do
+      result =
+        call_tool("dran_update_goal", %{
+          "workspace" => "personal",
+          "goal" => "ghost",
+          "status" => "done"
+        })
+
+      assert result =~ "Error: goal 'ghost' not found"
+    end
+  end
+
+  describe "dran_delete_goal" do
+    setup %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Doomed"})
+      {:ok, goal: goal}
+    end
+
+    test "deletes the goal", %{goal: goal} do
+      result = call_tool("dran_delete_goal", %{"workspace" => "personal", "goal" => goal.slug})
+      assert result =~ "Deleted goal: Doomed"
+      assert Goals.get_goal(goal.id) == nil
+    end
+
+    test "errors on unknown goal" do
+      result = call_tool("dran_delete_goal", %{"workspace" => "personal", "goal" => "ghost"})
+      assert result =~ "Error: goal 'ghost' not found"
+    end
+  end
+
+  # ── Tool: goal checklist (planning sub-items) ──────────────────────────────
+
+  describe "dran_goal_checklist_add" do
+    setup %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Checklist Goal"})
+      {:ok, goal: goal}
+    end
+
+    test "appends items with running index", %{goal: goal} do
+      r1 =
+        call_tool("dran_goal_checklist_add", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "text" => "alpha"
+        })
+
+      r2 =
+        call_tool("dran_goal_checklist_add", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "text" => "beta"
+        })
+
+      assert r1 =~ "Added checklist item 0: \"alpha\" — progress: 0/1"
+      assert r2 =~ "Added checklist item 1: \"beta\" — progress: 0/2"
+    end
+
+    test "rejects empty text", %{goal: goal} do
+      result =
+        call_tool("dran_goal_checklist_add", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "text" => "   "
+        })
+
+      assert result =~ "Error: checklist item text cannot be empty"
+    end
+
+    test "works with UUID handle", %{goal: goal} do
+      result =
+        call_tool("dran_goal_checklist_add", %{
+          "workspace" => "personal",
+          "goal" => goal.id,
+          "text" => "by uuid"
+        })
+
+      assert result =~ "Added checklist item 0"
+    end
+  end
+
+  describe "dran_goal_checklist_toggle" do
+    setup %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Toggle Goal"})
+      {:ok, _} = Goals.add_checklist_item(goal, "one")
+      goal = Goals.get_goal(goal.id)
+      {:ok, goal: goal}
+    end
+
+    test "flips done flag and reports progress", %{goal: goal} do
+      result =
+        call_tool("dran_goal_checklist_toggle", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "index" => 0
+        })
+
+      assert result =~ "Checklist item 0 'one' → done — progress: 1/1"
+
+      result =
+        call_tool("dran_goal_checklist_toggle", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "index" => 0
+        })
+
+      assert result =~ "Checklist item 0 'one' → open — progress: 0/1"
+    end
+
+    test "errors on out-of-bounds index", %{goal: goal} do
+      result =
+        call_tool("dran_goal_checklist_toggle", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "index" => 5
+        })
+
+      assert result =~ "Error: index 5 out of bounds (checklist has 1 items)"
+    end
+  end
+
+  describe "dran_goal_checklist_remove" do
+    setup %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Remove Goal"})
+      {:ok, goal} = Goals.add_checklist_item(goal, "keep")
+      {:ok, goal} = Goals.add_checklist_item(goal, "drop")
+      {:ok, goal: goal}
+    end
+
+    test "removes the item at index", %{goal: goal} do
+      result =
+        call_tool("dran_goal_checklist_remove", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "index" => 1
+        })
+
+      assert result =~ "Removed checklist item 1: 'drop' — progress: 0/1"
+
+      updated = Goals.get_goal(goal.id)
+      assert length(updated.checklist) == 1
+      assert hd(updated.checklist)["text"] == "keep"
+    end
+
+    test "errors on out-of-bounds index", %{goal: goal} do
+      result =
+        call_tool("dran_goal_checklist_remove", %{
+          "workspace" => "personal",
+          "goal" => goal.slug,
+          "index" => 9
+        })
+
+      assert result =~ "Error: index 9 out of bounds"
+    end
+  end
+
+  describe "dran_list_goals" do
+    test "lists goals with checklist progress", %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Listed Goal"})
+      {:ok, goal} = Goals.add_checklist_item(goal, "a")
+      {:ok, goal} = Goals.add_checklist_item(goal, "b")
+      {:ok, goal} = Goals.toggle_checklist_item(goal, 0)
+
+      result = call_tool("dran_list_goals", %{"workspace" => "personal"})
+
+      assert result =~ "Listed Goal (#{goal.slug}) — active — checklist: 1/2"
+    end
+
+    test "empty context message", %{context: _ctx} do
+      # contexto nuevo sin goals
+      Knowledge.create_workspace(%{name: "Empty Goals", slug: "empty-goals"})
+      result = call_tool("dran_list_goals", %{"workspace" => "empty-goals"})
+      assert result =~ "No goals in context 'empty-goals'"
+    end
+
+    test "errors on unknown context" do
+      result = call_tool("dran_list_goals", %{"workspace" => "no-ctx"})
+      assert result =~ "Error: context 'no-ctx' not found"
     end
   end
 
