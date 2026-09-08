@@ -297,9 +297,7 @@ defmodule DranWeb.DocsLive do
         <li>Create pages from the UI or the API</li>
         <li>Link pages with relations</li>
         <li>Explore the graph to discover connections</li>
-        <li>
-          Organize work with goals and tasks — all visible on the global kanban
-        </li>
+        <li>Organize work with goals</li>
       </ol>
 
       <.h2_heading id="next-steps" icon="hero-sparkles" label="Next steps" />
@@ -325,7 +323,7 @@ defmodule DranWeb.DocsLive do
           <.icon name="hero-chat-bubble-left-right" class="w-8 h-8 text-primary mb-2" />
           <h3 class="font-semibold">{gettext("Guides")}</h3>
           <p class="text-sm text-base-content/60">
-            AI chat, autonomous workers, kanban board, and settings.
+            AI chat, autonomous workers, and settings.
           </p>
         </a>
         <a
@@ -564,7 +562,6 @@ defmodule DranWeb.DocsLive do
     <div class="prose prose-base dark:prose-invert max-w-none space-y-6">
       <.toc items={[
         {"autonomous-workers", "Autonomous workers"},
-        {"kanban-board", "Kanban board"},
         {"using-dran-from-agents", "Using Dran from agents"},
         {"settings", "Settings"}
       ]} />
@@ -614,17 +611,6 @@ defmodule DranWeb.DocsLive do
           for status, summary, and step-by-step progress.
         </p>
       </.callout>
-
-      <.h2_heading id="kanban-board" icon="hero-view-columns" label="Kanban board" />
-      <p>
-        The <code>/tasks</code> page is a global full-viewport kanban board with 5 columns
-        (backlog, todo, in_progress, done, cancelled) covering every task in the
-        context. You can drag and drop cards between columns to update their <code>status</code>, and combine the Project / Goal / Plan filters
-        (each with All / None — orphans — / &lt;slug&gt;). Cards show link badges; click a
-        badge to filter the board by that link. The board updates in real
-        time — when an autonomous worker creates or moves a task, the change is pushed to all
-        connected clients via PubSub.
-      </p>
 
       <.h2_heading
         id="using-dran-from-agents"
@@ -1052,20 +1038,7 @@ defmodule DranWeb.DocsLive do
         group: "Goals",
         method: "GET",
         path: "/api/goals/:slug?context=...",
-        desc: "Goal detail with linked notes and tasks"
-      },
-      %{
-        group: "Tasks",
-        method: "GET",
-        path: "/api/tasks?context=...&status=...",
-        desc: "List tasks (filterable by status)"
-      },
-      %{group: "Tasks", method: "POST", path: "/api/tasks", desc: "Create a task"},
-      %{
-        group: "Tasks",
-        method: "PUT",
-        path: "/api/tasks/:id",
-        desc: "Update a task (e.g. change status)"
+        desc: "Goal detail with linked notes"
       },
       %{
         group: "Maintenance",
@@ -1169,8 +1142,7 @@ defmodule DranWeb.DocsLive do
           — use <code>dran_create_page</code>
           with the appropriate <code>page_type</code>
           and <code>meta</code>. Use <code>dran_create_note</code>
-          for plain notes; <code>dran_create_task</code>
-          for actionable items.
+          for plain notes.
         </li>
         <li>
           <strong>Update</strong>
@@ -1222,7 +1194,7 @@ defmodule DranWeb.DocsLive do
           instead of deleted: set <code>archived: true</code>
           via <code>dran_update_page</code>
           (or the Archive button in the page detail). Archived pages disappear
-          from lists, stats, search and kanban boards but stay accessible by
+          from lists, stats and search but stay accessible by
           slug. Every list view shows a collapsible <strong>Archived</strong>
           section at the bottom, filterable by page type. Archiving is
           reversible; deletion is not.
@@ -1313,7 +1285,7 @@ defmodule DranWeb.DocsLive do
         shared links).
       </p>
       <div class="not-prose rounded-lg border border-base-300 bg-base-200/50 p-3">
-        <pre class="text-sm font-mono text-primary overflow-x-auto"><code phx-no-curly-interpolation>{"\n/notes/my-note?context=work\n/goals/mrr-100k?context=business\n/tasks\n/projects/tokengate?context=personal"}</code></pre>
+        <pre class="text-sm font-mono text-primary overflow-x-auto"><code phx-no-curly-interpolation>{"\n/notes/my-note?context=work\n/goals/mrr-100k?context=business\n/projects/tokengate?context=personal"}</code></pre>
       </div>
       <p class="text-sm text-base-content/60 mt-2">
         If the context slug doesn't exist, the session's current context is used as fallback.
@@ -1471,7 +1443,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="dran_create_note"
-          desc="Create a plain note (journal, idea, meeting…). For actionable items use dran_create_task."
+          desc="Create a plain note (journal, idea, meeting…)."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="title" type="string" required="yes" desc="Note title" />
@@ -1612,7 +1584,7 @@ defmodule DranWeb.DocsLive do
         </div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">goal://&#123;context&#125;/&#123;slug&#125;</code>
-          <span class="text-sm text-base-content/60 ml-2">Goal detail with linked notes and tasks (JSON)</span>
+          <span class="text-sm text-base-content/60 ml-2">Goal detail with linked notes (JSON)</span>
         </div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">wiki://&#123;context&#125;/index</code>

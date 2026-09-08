@@ -10,7 +10,6 @@ defmodule Dran.WorkflowsTest do
 
   alias Dran.{Contracts, Goals, Knowledge, Repo, Workflows}
   alias Dran.Relation
-  alias Dran.Tasks.Task
   alias Dran.Workflows.Workflow
 
   setup do

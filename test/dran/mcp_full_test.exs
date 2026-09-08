@@ -83,12 +83,12 @@ defmodule Dran.MCPFullTest do
   # ── Protocol: tools/list ────────────────────────────────────────────────────
 
   describe "tools/list" do
-    test "returns exactly 22 tools" do
+    test "returns exactly 19 tools" do
       resp =
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 22
+      assert length(tools) == 19
     end
 
     test "all tools carry the dran_ prefix" do
@@ -582,7 +582,7 @@ defmodule Dran.MCPFullTest do
       assert refreshed.meta["kind"] == "meeting"
     end
 
-    test "rejects legacy kanban keys (tasks own status now)", %{context: ctx} do
+    test "rejects legacy kanban keys on notes", %{context: ctx} do
       {:ok, note} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
@@ -627,8 +627,7 @@ defmodule Dran.MCPFullTest do
           "title" => "Ship v1",
           "slug" => "ship-v1-goal",
           "summary" => "Launch the product",
-          "status" => "active",
-          "team" => ["alvaro", "hermes"]
+          "status" => "active"
         })
 
       assert result =~ "Created goal: Ship v1"
@@ -636,7 +635,7 @@ defmodule Dran.MCPFullTest do
       assert result =~ "status: active"
 
       goal = Goals.get_goal_by_slug("ship-v1-goal", ctx.id)
-      assert goal.team == ["alvaro", "hermes"]
+      assert goal.summary == "Launch the product"
     end
 
     test "derives slug from title when omitted", %{context: ctx} do
@@ -1021,7 +1020,6 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Total pages:"
       assert result =~ "Total relations:"
       assert result =~ "Pages by type"
-      assert result =~ "Todos by status"
     end
 
     test "errors on non-existent context" do

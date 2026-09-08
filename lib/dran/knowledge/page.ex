@@ -22,8 +22,6 @@ defmodule Dran.Knowledge.Page do
   - `note`: `%{kind: "journal", date: ~D[2026-06-19]}`
   - `reference`: `%{source_url: "https://...", kind: "article"}`
 
-  Kanban/action-item data no longer lives here — tasks are first-class
-  (`Dran.Tasks.Task` in their own table) since the tasks migration.
 
   ## Owner tracking
 

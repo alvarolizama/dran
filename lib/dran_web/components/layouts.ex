@@ -344,29 +344,13 @@ defmodule DranWeb.Layouts do
          ])
       |> Enum.reject(&(!&1))
 
-    # Sin etiqueta (siempre visibles, sin <details> colapsable)
-    home_items = [
-      %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base}
-    ]
-
-    # Planning: objetivos y tareas — gated por feature flags
-    planning_items =
+    # Sin etiqueta (siempre visibles, sin <details> colapsable):
+    # Inicio + objetivos y workflows directo debajo
+    home_items =
       [
+        %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
         enabled?.("goals") &&
           %{key: "goals", label: gettext("Objetivos"), icon: "hero-flag", path: base <> "/goals"},
-        enabled?.("kanban") &&
-          %{
-            key: "kanban",
-            label: gettext("Tareas"),
-            icon: "hero-view-columns",
-            path: base <> "/tasks"
-          }
-      ]
-      |> Enum.reject(&(!&1))
-
-    # Workflows en su propia categoría
-    workflow_items =
-      [
         enabled?.("workflows") &&
           %{
             key: "workflows",
@@ -403,8 +387,6 @@ defmodule DranWeb.Layouts do
 
     [
       %{label: nil, items: home_items},
-      %{label: gettext("Planning"), items: planning_items},
-      %{label: gettext("Workflows"), items: workflow_items},
       %{label: gettext("Knowledge base"), items: page_type_items},
       %{label: gettext("Memory"), items: memory_items},
       %{label: "Insights", items: view_items}

@@ -790,10 +790,6 @@ defmodule DranWeb.SettingsLive do
               "%{count} pages",
               @actor_delete_confirmation.counts.pages
             )} · {ngettext(
-              "%{count} task",
-              "%{count} tasks",
-              @actor_delete_confirmation.counts.tasks
-            )} · {ngettext(
               "%{count} memory",
               "%{count} memories",
               @actor_delete_confirmation.counts.memories

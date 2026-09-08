@@ -29,8 +29,7 @@ defmodule Dran.PageTypes do
   Goals, collections, and reports are **first-class entities in
   their own tables** (`Dran.Goals.Goal`,
   `Dran.Collections.Collection`, `Dran.Reports.Report`) — they are not page types
-  and are not created through `dran_create_page`. Action items are
-  first-class `Dran.Tasks.Task` rows (own table, kanban board) — notes no longer
+  and are not created through `dran_create_page`. Notes no longer
   have a `todo` kind or kanban fields. `meta.kind` on pages is purely
   visual: it classifies, filters and groups — it never changes behavior.
 

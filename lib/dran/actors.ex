@@ -126,7 +126,7 @@ defmodule Dran.Actors do
   end
 
   @doc """
-  Count pages/tasks/memories attributed to this actor's name — the
+  Count pages/memories attributed to this actor's name — the
   deletion-impact preview for the settings UI.
   """
   def attribution_count(%Actor{name: name}) do
@@ -134,15 +134,11 @@ defmodule Dran.Actors do
       from(p in "knowledge_pages", where: p.created_by == ^name)
       |> Repo.aggregate(:count, :id)
 
-    tasks =
-      from(t in "tasks", where: t.created_by == ^name)
-      |> Repo.aggregate(:count, :id)
-
     memories =
       from(m in "memories", where: m.created_by == ^name)
       |> Repo.aggregate(:count, :id)
 
-    %{pages: pages, tasks: tasks, memories: memories}
+    %{pages: pages, memories: memories}
   end
 
   # ── Internal ──

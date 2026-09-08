@@ -664,7 +664,7 @@ defmodule DranWeb.MarkdownEditorComponents do
     if live != nil and live != "" do
       live
     else
-      Map.get(meta, key) || Map.get(meta, String.to_existing_atom(key)) || ""
+      Map.get(meta, key) || ""
     end
   end
 

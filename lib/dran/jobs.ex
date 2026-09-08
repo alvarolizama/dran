@@ -95,14 +95,6 @@ defmodule Dran.Jobs do
       description:
         "Nightly LLM backfill: fills a one-line summary on pages that lack " <>
           "one (machine-owned field — never edited in the UI)."
-    },
-    %{
-      key: :task_automation_daily,
-      label: "Task SLA/WIP sweep",
-      mfa: {Dran.Tasks.Automation, :run_scheduled, []},
-      description:
-        "Daily task hygiene: lists overdue tasks, stale in_progress (7d+) and " <>
-          "workspaces over their WIP limit."
     }
   ]
 

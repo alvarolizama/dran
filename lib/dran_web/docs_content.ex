@@ -12,9 +12,6 @@ defmodule DranWeb.DocsContent do
     - **Pages** — the knowledge graph (4 types: note, concept, entity,
     reference).
   - **Goals** — first-class OKR entities (own table, not pages).
-  - **Tasks** — first-class kanban action items (own table): status,
-    priority, due_date, recurrence, checklist. Linked to goals/pages
-    via optional part_of relations.
   - **Projects** — first-class grouping entities (own table, not pages).
   - **Collections** — saved filter queries (own table, replaces the old
     Smart Collection pattern).
@@ -90,22 +87,12 @@ defmodule DranWeb.DocsContent do
 
     GOAL  →  part_of project "acme"        (source_type="goal",  target_type="project")
 
-  Tasks (first-class entity, own table):
-    status          backlog | todo | in_progress | done | cancelled
-    priority        low | medium | high | urgent
-    due_date        date (nullable)
-    recurrence      none | daily | weekly | monthly (auto-clones on completion)
-    checklist       [%{text, done}] — lightweight subtasks
-    assignee_id     FK to users (nullable)
-    Linked to goals/pages via optional part_of relations
-    (source_type="task").
-
   Collections (first-class entity):
     Saved filter queries live in their own table with `filters` JSONB.
     They replace the old Smart Collection pattern.
 
   Sidebar:
-    Top: Dashboard, Tasks, Projects, Goals, Graph, Journey,
+    Top: Dashboard, Projects, Goals, Graph, Journey,
     Activity. Knowledge: Notes, Concepts, Entities, References,
     Collections. System: Reports. Config: Settings
     (admin only), Documentation.

@@ -498,11 +498,11 @@ defmodule DranWeb.SettingsLiveTest do
       :ok
     end
 
-    test "renders the 7 registered jobs with toggles and run buttons", %{conn: conn} do
+    test "renders the 6 registered jobs with toggles and run buttons", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/admin/jobs")
 
       assert html =~ t("Jobs programados")
-      assert length(Jobs.list()) == 7
+      assert length(Jobs.list()) == 6
 
       for job <- Jobs.list() do
         assert html =~ ~s(id="job-row-#{job.key}")

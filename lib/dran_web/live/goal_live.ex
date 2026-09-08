@@ -5,7 +5,6 @@ defmodule DranWeb.GoalLive do
 
   alias Dran.Goals
   alias Dran.Goals.Goal
-  alias Dran.Tasks
   alias Dran.Workflows
   alias DranWeb.Plugs.Auth
 
@@ -25,108 +24,160 @@ defmodule DranWeb.GoalLive do
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show} class="p-6 overflow-y-auto w-full">
-        <div class="space-y-6">
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2 mb-2 text-caption">
-                <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                  <.icon name="hero-flag" class="size-3" />
-                  {gettext("Goal")}
-                </span>
-                <span
-                  :if={@goal.status}
-                  class={"px-2 py-0.5 text-xs rounded-full " <> goal_status_class(@goal)}
-                >
-                  {String.capitalize(@goal.status)}
-                </span>
-              </div>
-              <h1 class="text-title break-words">{@goal.title}</h1>
-              <p :if={@goal.summary} class="text-sm text-base-content/60 mt-1">
-                {@goal.summary}
-              </p>
-            </div>
-            <div class="flex gap-2 shrink-0">
-              <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">
-                <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
-              </.link>
-              <.link
-                :if={not @editing}
-                patch={~p"/#{@workspace_slug}/goals/#{@goal.slug}?edit=true"}
-                class="btn btn-ghost btn-sm"
-              >
-                <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
-              </.link>
-            </div>
-          </div>
-
-          <%!-- Body (edit happens in the modal overlay) --%>
-          <div
-            :if={@goal.body != nil and @goal.body != ""}
-            class="prose prose-base dark:prose-invert max-w-none"
-          >
-            {render_markdown(@goal.body, [])}
-          </div>
-
-          <%!-- Linked workflows (read-only list, execution layer) --%>
-          <div :if={@workflows != []} id="goal-workflows" class="surface-2 rounded-xl p-4">
-            <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
-              <.icon name="hero-bolt" class="size-4 text-primary" />
-              {gettext("Workflows vinculados")}
-              <span class="badge badge-sm badge-ghost">{length(@workflows)}</span>
-            </h3>
-            <ul class="space-y-1.5">
-              <li :for={workflow <- @workflows}>
-                <.link
-                  navigate={~p"/#{@workspace_slug}/workflows/#{workflow.slug}"}
-                  class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
-                >
-                  <.icon name="hero-bolt" class="size-4 shrink-0 text-base-content/40" />
-                  <span class="flex-1 min-w-0 truncate">{workflow.title}</span>
-                  <span class={["badge badge-xs shrink-0", workflow_badge_class(workflow)]}>
-                    {String.capitalize(workflow.status)}
+        <%!-- Main column + right sidebar (checklist + workflows). The 20rem
+             sidebar column always renders on the goal detail. --%>
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_20rem] lg:gap-6">
+          <div class="space-y-6 min-w-0">
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2 mb-2 text-caption">
+                  <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                    <.icon name="hero-flag" class="size-3" />
+                    {gettext("Goal")}
                   </span>
-                  <span class="badge badge-ghost badge-xs shrink-0">{workflow.kind}</span>
+                  <span
+                    :if={@goal.status}
+                    class={"px-2 py-0.5 text-xs rounded-full " <> goal_status_class(@goal)}
+                  >
+                    {String.capitalize(@goal.status)}
+                  </span>
+                </div>
+                <h1 class="text-title break-words">{@goal.title}</h1>
+                <p :if={@goal.summary} class="text-sm text-base-content/60 mt-1">
+                  {@goal.summary}
+                </p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <.link navigate={~p"/#{@workspace_slug}/goals"} class="btn btn-ghost btn-sm">
+                  <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
                 </.link>
-              </li>
-            </ul>
+                <.link
+                  :if={not @editing}
+                  patch={~p"/#{@workspace_slug}/goals/#{@goal.slug}?edit=true"}
+                  class="btn btn-ghost btn-sm"
+                >
+                  <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+                </.link>
+              </div>
+            </div>
+
+            <%!-- Body (edit happens in the modal overlay) --%>
+            <div
+              :if={@goal.body != nil and @goal.body != ""}
+              class="prose prose-base dark:prose-invert max-w-none"
+            >
+              {render_markdown(@goal.body, [])}
+            </div>
           </div>
 
-          <%!-- Linked tasks --%>
-          <div :if={@tasks != []} class="surface-2 rounded-xl p-4">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold flex items-center gap-2">
+          <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
+            <%!-- Checklist — lightweight sub-items on the goal itself --%>
+            <div id="goal-checklist" class="surface-2 rounded-xl p-4">
+              <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
                 <.icon name="hero-check-circle" class="size-4 text-primary" />
-                {gettext("Linked tasks")}
-                <span class="badge badge-sm badge-ghost">{length(@tasks)}</span>
+                {gettext("Checklist")}
+                <span class="badge badge-sm badge-ghost">
+                  {checklist_badge(@goal)}
+                </span>
               </h3>
-              <.link
-                navigate={~p"/#{@workspace_slug}/tasks"}
-                class="text-xs text-base-content/60 hover:underline"
+
+              <ul
+                :if={@goal.checklist != []}
+                id="goal-checklist-items"
+                class="space-y-1"
               >
-                {gettext("Open board")}
-              </.link>
+                <li
+                  :for={{item, index} <- Enum.with_index(@goal.checklist)}
+                  id={"goal-checklist-item-#{index}"}
+                  class="flex items-center gap-2 group"
+                >
+                  <button
+                    type="button"
+                    phx-click="toggle_checklist_item"
+                    phx-value-index={index}
+                    class={[
+                      "shrink-0 size-4 rounded border flex items-center justify-center transition",
+                      if(item["done"],
+                        do: "bg-primary border-primary text-primary-content",
+                        else: "border-base-300 hover:border-primary/60"
+                      )
+                    ]}
+                    aria-label={gettext("Toggle item")}
+                  >
+                    <.icon
+                      :if={item["done"]}
+                      name="hero-check"
+                      class="size-3"
+                    />
+                  </button>
+                  <span class={[
+                    "flex-1 min-w-0 text-sm break-words",
+                    item["done"] && "line-through text-base-content/40"
+                  ]}>
+                    {item["text"]}
+                  </span>
+                  <button
+                    type="button"
+                    phx-click="remove_checklist_item"
+                    phx-value-index={index}
+                    class="shrink-0 opacity-0 group-hover:opacity-100 text-base-content/40 hover:text-error transition"
+                    aria-label={gettext("Remove item")}
+                  >
+                    <.icon name="hero-x-mark" class="size-3.5" />
+                  </button>
+                </li>
+              </ul>
+
+              <p :if={@goal.checklist == []} class="text-xs text-base-content/40">
+                {gettext("Sin ítems todavía.")}
+              </p>
+
+              <.form
+                for={@checklist_form}
+                id="goal-checklist-form"
+                phx-submit="add_checklist_item"
+                class="mt-3 flex gap-2"
+              >
+                <input
+                  type="text"
+                  name="checklist[text]"
+                  placeholder={gettext("Agregar ítem…")}
+                  class="input input-sm input-bordered flex-1 min-w-0"
+                />
+                <button
+                  type="submit"
+                  class="btn btn-sm btn-ghost shrink-0"
+                  aria-label={gettext("Add item")}
+                >
+                  <.icon name="hero-plus" class="size-4" />
+                </button>
+              </.form>
             </div>
-            <ul class="space-y-1.5">
-              <li
-                :for={task <- @tasks}
-                class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
-              >
-                <span class={["shrink-0 size-2 rounded-full", dot_class(task.status)]} />
-                <span class={[
-                  "flex-1 min-w-0 truncate",
-                  task.status in ~w(done cancelled) && "line-through text-base-content/40"
-                ]}>
-                  {task.title}
-                </span>
-                <span :if={task.due_date} class="shrink-0 text-xs text-base-content/50">
-                  {Calendar.strftime(task.due_date, "%d %b")}
-                </span>
-                <span :if={task.assignee_actor} class="shrink-0 text-xs text-base-content/50">
-                  {Dran.Actors.Actor.label(task.assignee_actor)}
-                </span>
-              </li>
-            </ul>
-          </div>
+
+            <%!-- Linked workflows — read-only list, execution layer --%>
+            <div :if={@workflows != []} id="goal-workflows" class="surface-2 rounded-xl p-4">
+              <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
+                <.icon name="hero-bolt" class="size-4 text-primary" />
+                {gettext("Workflows vinculados")}
+                <span class="badge badge-sm badge-ghost">{length(@workflows)}</span>
+              </h3>
+              <ul class="space-y-1.5">
+                <li :for={workflow <- @workflows}>
+                  <.link
+                    navigate={~p"/#{@workspace_slug}/workflows/#{workflow.slug}"}
+                    class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+                  >
+                    <.icon name="hero-bolt" class="size-4 shrink-0 text-base-content/40" />
+                    <span class="flex-1 min-w-0 truncate">{workflow.title}</span>
+                    <span class={["badge badge-xs shrink-0", workflow_badge_class(workflow)]}>
+                      {String.capitalize(workflow.status)}
+                    </span>
+                    <span class="badge badge-ghost badge-xs shrink-0">{workflow.kind}</span>
+                  </.link>
+                </li>
+              </ul>
+            </div>
+          </aside>
         </div>
       </div>
 
@@ -200,7 +251,8 @@ defmodule DranWeb.GoalLive do
 
     if context && connected?(socket) do
       Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
-      # Task changes broadcast on the workspace topic (Dran.Tasks.broadcast_task_change/3)
+      # Session/run changes broadcast on the workspace topic (keeps the
+      # linked-workflows list in sync).
       Phoenix.PubSub.subscribe(Dran.PubSub, "workspace:#{context.id}")
     end
 
@@ -210,7 +262,6 @@ defmodule DranWeb.GoalLive do
        editing: false,
        save_status: "idle",
        active_nav: "goals",
-       tasks: [],
        workflows: [],
        # Resource modal state — `?new=true` on the index opens create,
        # `?edit=true` on the show opens edit. Rendered via
@@ -280,7 +331,7 @@ defmodule DranWeb.GoalLive do
           assign(socket,
             goal: goal,
             form: form,
-            tasks: Tasks.list_tasks_for_goal(goal),
+            checklist_form: to_form(%{}, as: :checklist),
             workflows: Workflows.list_by_goal(goal),
             editing: Map.get(params, "edit") == "true",
             page_title: goal.title
@@ -295,7 +346,38 @@ defmodule DranWeb.GoalLive do
   # Events — goal resource modal (create + edit)
   # ──────────────────────────────────────────────────────────────────────────
 
+  # ── Checklist (goal sub-items, sidebar) ──
+
   @impl true
+
+  def handle_event("add_checklist_item", %{"checklist" => %{"text" => text}}, socket) do
+    case Goals.add_checklist_item(socket.assigns.goal, text) do
+      {:ok, goal} ->
+        {:noreply, assign(socket, goal: goal, checklist_form: to_form(%{}, as: :checklist))}
+
+      {:error, :empty_text} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("toggle_checklist_item", %{"index" => index}, socket) do
+    index = String.to_integer(index)
+
+    case Goals.toggle_checklist_item(socket.assigns.goal, index) do
+      {:ok, goal} -> {:noreply, assign(socket, goal: goal)}
+      {:error, _} -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("remove_checklist_item", %{"index" => index}, socket) do
+    index = String.to_integer(index)
+
+    case Goals.remove_checklist_item(socket.assigns.goal, index) do
+      {:ok, goal} -> {:noreply, assign(socket, goal: goal)}
+      {:error, _} -> {:noreply, socket}
+    end
+  end
+
   def handle_event("validate_goal", %{"goal" => params}, socket) do
     goal = socket.assigns.modal_goal || %Goal{}
     changeset = Goals.change_goal(goal, params) |> Map.put(:action, :validate)
@@ -306,7 +388,7 @@ defmodule DranWeb.GoalLive do
     context = socket.assigns.context
     ws_slug = socket.assigns[:workspace_slug]
 
-    # Whitelist + server-side identity — mirror of task_attrs_from_params.
+    # Whitelist + server-side identity (SEC-006 pattern).
     # Raw params NEVER reach the changeset: fields like workspace_id,
     # created_by, updated_by, archived, parent_goal_id are forgeable and
     # must be owned by the server (SEC-006 pattern).
@@ -389,10 +471,16 @@ defmodule DranWeb.GoalLive do
   # ── Helpers ──
 
   # Web session identity for attribution: the logged-in user's email,
-  # resolved through Dran.Auth.resolve_created_by/1 (same contract as the
-  # task board; falls back to "system" when no user).
+  # resolved through Dran.Auth.resolve_created_by/1 (falls back to "system"
+  # when no user).
   defp session_identity_goal(socket) do
     Dran.Auth.resolve_created_by(%{email: socket.assigns[:current_user]})
+  end
+
+  # "done/total" for the checklist badge — "3/7", or "0" when empty.
+  defp checklist_badge(%Goal{} = goal) do
+    {done, total} = Goals.checklist_progress(goal)
+    if total == 0, do: "0", else: "#{done}/#{total}"
   end
 
   defp goal_status_class(%Goal{status: "active"}), do: "bg-green-100 text-green-700"
@@ -405,13 +493,6 @@ defmodule DranWeb.GoalLive do
   defp workflow_badge_class(%{status: "draft"}), do: "bg-base-200 text-base-content/70"
   defp workflow_badge_class(%{status: "archived"}), do: "bg-yellow-100 text-yellow-700"
   defp workflow_badge_class(_), do: "bg-base-300 text-base-content/60"
-
-  defp dot_class("backlog"), do: "bg-base-300"
-  defp dot_class("todo"), do: "bg-sky-500"
-  defp dot_class("in_progress"), do: "bg-purple-500"
-  defp dot_class("done"), do: "bg-green-500"
-  defp dot_class("cancelled"), do: "bg-red-400"
-  defp dot_class(_), do: "bg-base-300"
 
   # ── PubSub: real-time update when a goal changes ──
 
@@ -428,19 +509,6 @@ defmodule DranWeb.GoalLive do
       end
     else
       {:noreply, socket}
-    end
-  end
-
-  # Tasks linked to the shown goal changed (board, MCP, API) — refresh the
-  # linked-tasks section.
-  @impl true
-  def handle_info({:task_changed, _action, _task}, socket) do
-    case socket.assigns[:goal] do
-      nil ->
-        {:noreply, socket}
-
-      goal ->
-        {:noreply, assign(socket, tasks: Tasks.list_tasks_for_goal(goal))}
     end
   end
 

@@ -105,7 +105,8 @@ defmodule Dran.Workspace do
   (defensive: LiveView assigns can carry a pre-rename struct across a hot
   code reload, which pattern-matches as a plain map).
   """
-  def feature_enabled?(ws, feature) when is_map(ws) and (is_atom(feature) or is_binary(feature)) do
+  def feature_enabled?(ws, feature)
+      when is_map(ws) and (is_atom(feature) or is_binary(feature)) do
     feature_key = to_string(feature)
     features = ws.enabled_features || %{}
 

@@ -340,17 +340,8 @@ defmodule DranWeb.Router do
           _ -> slug
         end
 
-      # /api/tasks/:id — no workspace in params; it comes from the task.
-      # Without this branch every API-key write to a task 403s (SEC-002
-      # false negative), even with write access to the owning workspace.
-      conn.request_path =~ "/api/tasks/" and is_binary(conn.params["id"]) ->
-        case Dran.Tasks.get_task(conn.params["id"]) do
-          %{workspace_id: ws_id} -> ws_id
-          _ -> nil
-        end
-
       # /api/workflows/:workflow_id/sessions — workspace from the workflow
-      # (same SEC-002 pattern as /api/tasks/:id; UUID-guarded so a garbage
+      # (SEC-002 pattern; UUID-guarded so a garbage
       # id 403s instead of raising a CastError).
       conn.request_path =~ "/api/workflows/" and is_binary(conn.params["workflow_id"]) ->
         case Ecto.UUID.cast(conn.params["workflow_id"]) do
@@ -488,9 +479,6 @@ defmodule DranWeb.Router do
     get "/goals", GoalController, :index
     get "/goals/:slug", GoalController, :show
 
-    # Todos (read)
-    get "/tasks", TodoController, :index
-
     # Quality / maintenance (read-only)
     get "/lint", LintController, :lint
 
@@ -528,14 +516,10 @@ defmodule DranWeb.Router do
     post "/relations", RelationController, :create
     delete "/relations/:id", RelationController, :delete
 
-    # Todos (write)
-    post "/tasks", TodoController, :create
-    put "/tasks/:id", TodoController, :update
-
     # Workflow executions (write) — the agent loop over Dran.Executions:
     # open a session, claim a run, report progress, close, retry.
     # require_write_access resolves the workspace from params["workspace"]
-    # (all routes carry it; /api/tasks-style body lookup is not needed).
+    # (all routes carry it).
     post "/workflows/:workflow_id/sessions", ExecutionController, :open
     post "/workflow-runs/:id/start", ExecutionController, :start
     put "/workflow-runs/:id/progress", ExecutionController, :progress
@@ -629,10 +613,6 @@ defmodule DranWeb.Router do
     live "/:workspace_slug/graph", HomeLive, :graph
     get "/:workspace_slug/graph/json", HomeGraphController, :show
 
-    # Task board — the interactive kanban (first-class tasks).
-    live "/:workspace_slug/tasks", TaskBoardLive, :index
-    live "/:workspace_slug/tasks/:id", TaskLive, :show
-
     # Shared multi-agent memory (first-class, own table — not page types).
     live "/:workspace_slug/memory", MemoryLive, :index
 
@@ -640,9 +620,6 @@ defmodule DranWeb.Router do
     # goal DAG show).
     live "/:workspace_slug/workflows", WorkflowsLive, :index
     live "/:workspace_slug/workflows/:slug", WorkflowsLive, :show
-
-    # Legacy kanban URL redirects to the task board.
-    get "/:workspace_slug/kanban", KanbanRedirectController, :redirect_to_tasks
 
     live "/:workspace_slug/collection/:slug", HomeLive, :collection
     live "/:workspace_slug/letter/:letter", HomeLive, :letter

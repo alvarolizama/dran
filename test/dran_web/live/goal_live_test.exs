@@ -3,7 +3,7 @@ defmodule DranWeb.GoalLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.{Executions, Goals, Knowledge, Tasks, Workflows}
+  alias Dran.{Executions, Goals, Knowledge, Workflows}
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
@@ -47,58 +47,10 @@ defmodule DranWeb.GoalLiveTest do
   end
 
   describe "show" do
-    test "renders the goal with no linked tasks", %{conn: conn, ws: ws, goal: goal} do
+    test "renders the goal detail", %{conn: conn, ws: ws, goal: goal} do
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
 
       assert html =~ "Learn Elixir"
-      refute html =~ t("Linked tasks")
-    end
-
-    test "lists tasks linked via part_of", %{conn: conn, ws: ws, goal: goal} do
-      {:ok, task} =
-        Tasks.create_task(%{
-          "workspace_id" => ws.id,
-          "title" => "Read the book",
-          "status" => "in_progress"
-        })
-
-      {:ok, _} = Tasks.link_to_goal(task, goal)
-
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
-
-      assert html =~ t("Linked tasks")
-      assert html =~ "Read the book"
-    end
-
-    test "done tasks render struck through", %{conn: conn, ws: ws, goal: goal} do
-      {:ok, task} =
-        Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Finished", "status" => "done"})
-
-      {:ok, _} = Tasks.link_to_goal(task, goal)
-
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
-
-      assert html =~ "Finished"
-      assert html =~ "line-through"
-    end
-
-    test "shows a link to the task board", %{conn: conn, ws: ws, goal: goal} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
-
-      assert html =~ ~s(href="/#{ws.slug}/tasks")
-    end
-
-    test "refreshes linked tasks on a task_changed broadcast", %{conn: conn, ws: ws, goal: goal} do
-      {:ok, task} = Tasks.create_task(%{"workspace_id" => ws.id, "title" => "Live added"})
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
-      refute render(view) =~ "Live added"
-
-      # link_to_goal triggers the real broadcast_task_change on the
-      # workspace topic — the exact production path, no manual broadcast.
-      {:ok, _} = Tasks.link_to_goal(task, goal)
-
-      assert render(view) =~ "Live added"
     end
   end
 
@@ -294,6 +246,40 @@ defmodule DranWeb.GoalLiveTest do
       assert created.workspace_id == ws.id
       assert created.created_by == "test_user"
       refute created.archived
+    end
+  end
+
+  describe "checklist (sidebar)" do
+    test "renders an empty checklist block with the add form", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      assert has_element?(view, "#goal-checklist")
+      assert has_element?(view, "#goal-checklist-form")
+      assert html =~ "Sin ítems todavía."
+    end
+
+    test "adds, toggles and removes items", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      view
+      |> element("#goal-checklist-form")
+      |> render_submit(%{checklist: %{text: "Primer paso"}})
+
+      assert render(view) =~ "Primer paso"
+      assert render(view) =~ "0/1"
+
+      view
+      |> element("#goal-checklist-item-0 button[phx-click='toggle_checklist_item']")
+      |> render_click()
+
+      assert render(view) =~ "1/1"
+      assert render(view) =~ "line-through"
+
+      view
+      |> element("#goal-checklist-item-0 button[phx-click='remove_checklist_item']")
+      |> render_click()
+
+      refute render(view) =~ "Primer paso"
     end
   end
 end

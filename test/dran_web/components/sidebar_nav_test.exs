@@ -81,26 +81,25 @@ defmodule DranWeb.SidebarNavTest do
       |> Enum.map(&(&1 |> String.replace(~r/<[^>]*>/, "") |> String.trim()))
     end
 
-    test "goals and tasks live in the Planning group, workflows in its own" do
+    test "goals and workflows sit right below Inicio, outside any group" do
       html = workspace_nav()
 
       assert group_labels(html) == [
-               t("Planning"),
-               t("Workflows"),
                t("Knowledge base"),
                t("Memory"),
                "Insights"
              ]
 
-      [planning, workflows | _rest] = summary_positions(html)
+      [first_summary | _rest] = summary_positions(html)
 
-      # Objetivos y Tareas dentro del grupo Planning…
-      assert planning < pos(html, ~s(href="/personal/goals"))
-      assert planning < pos(html, ~s(href="/personal/tasks"))
-      assert pos(html, ~s(href="/personal/tasks")) < workflows
+      home_pos = pos(html, ~s(href="/personal"))
+      goals_pos = pos(html, ~s(href="/personal/goals"))
+      workflows_pos = pos(html, ~s(href="/personal/workflows"))
 
-      # …y Workflows en su propio grupo, después
-      assert workflows < pos(html, ~s(href="/personal/workflows"))
+      # Inicio → Objetivos → Workflows, todos antes del primer grupo
+      assert home_pos < goals_pos
+      assert goals_pos < workflows_pos
+      assert workflows_pos < first_summary
     end
 
     test "Clusters sits below Referencias inside Knowledge base" do

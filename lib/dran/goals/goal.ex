@@ -24,8 +24,7 @@ defmodule Dran.Goals.Goal do
              :summary,
              :body,
              :status,
-             :team,
-             :meta,
+             :checklist,
              :archived,
              :created_by,
              :updated_by,
@@ -41,8 +40,7 @@ defmodule Dran.Goals.Goal do
     field :summary, :string
     field :body, :string, default: ""
     field :status, :string, default: "active"
-    field :team, {:array, :string}, default: []
-    field :meta, :map, default: %{}
+    field :checklist, {:array, :map}, default: []
     field :archived, :boolean, default: false
 
     # Attribution — resolves server-side from the actor (Dran.Actors)
@@ -65,8 +63,7 @@ defmodule Dran.Goals.Goal do
       :summary,
       :body,
       :status,
-      :team,
-      :meta,
+      :checklist,
       :archived,
       :created_by,
       :updated_by,

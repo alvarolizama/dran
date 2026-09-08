@@ -74,9 +74,7 @@ defmodule DranWeb.CommandPaletteTest do
 
       html = render(view)
       assert html =~ "New Note"
-      assert html =~ "New Task"
       assert html =~ "Go to Graph"
-      assert html =~ "Go to Tasks"
       assert html =~ "Go to Dashboard"
     end
   end

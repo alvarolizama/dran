@@ -1009,7 +1009,6 @@ defmodule Dran.KnowledgeTest do
       assert stats.total_pages == 0
       assert stats.by_type == %{}
       assert stats.recent == []
-      assert stats.todos_by_status == %{}
       assert stats.orphan_count == 0
       assert stats.total_relations == 0
     end

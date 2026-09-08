@@ -160,44 +160,6 @@ defmodule Dran.IntegrationTest do
       assert stats.orphan_count >= 0
     end
 
-    test "stats with tasks groups by status via SQL", %{context: ctx} do
-      # Create tasks with different statuses
-      {:ok, _t1} =
-        Dran.Tasks.create_task(%{
-          "workspace_id" => ctx.id,
-          "title" => "Task A",
-          "status" => "in_progress"
-        })
-
-      {:ok, _t2} =
-        Dran.Tasks.create_task(%{
-          "workspace_id" => ctx.id,
-          "title" => "Task B",
-          "status" => "done"
-        })
-
-      {:ok, _t3} =
-        Dran.Tasks.create_task(%{
-          "workspace_id" => ctx.id,
-          "title" => "Task C",
-          "status" => "backlog"
-        })
-
-      {:ok, _t4} =
-        Dran.Tasks.create_task(%{
-          "workspace_id" => ctx.id,
-          "title" => "Task D"
-          # no status → schema default is "backlog"
-        })
-
-      stats = Knowledge.stats(ctx.id)
-
-      assert stats.by_type == %{}
-      assert stats.todos_by_status["in_progress"] == 1
-      assert stats.todos_by_status["done"] == 1
-      assert stats.todos_by_status["backlog"] == 2
-    end
-
     test "orphan_pages finds pages with no inbound relations", %{context: ctx} do
       {:ok, a} =
         Knowledge.create_page(%{

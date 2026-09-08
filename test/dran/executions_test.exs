@@ -55,8 +55,6 @@ defmodule Dran.ExecutionsTest do
     assert Enum.all?(session.runs, &(&1.attempt == 1))
     # Sin contrato en los steps → nil.
     assert Enum.all?(session.runs, &(&1.contract_version == nil))
-    # El run es el runtime: nada de tasks.
-    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
   end
 
   test "P1: open_session freezes the snapshot with steps and depends_on edges", %{ws: ws} do
@@ -370,7 +368,6 @@ defmodule Dran.ExecutionsTest do
     assert {:error, {:wrong_status, "in_flight", "pending"}} = Executions.start_run(run)
 
     # El run es el runtime: NINGUNA task fue creada.
-    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
   end
 
   test "start_run with actor_id stamps the claimer", %{ws: ws} do
@@ -469,7 +466,6 @@ defmodule Dran.ExecutionsTest do
     session = Repo.get!(Session, session.id)
     assert session.status == "passed"
     assert session.finished_at != nil
-    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
   end
 
   test "P5: a skipped run still closes the session as passed", %{ws: ws} do
@@ -881,7 +877,6 @@ defmodule Dran.ExecutionsTest do
     assert skipped.outcome == "session aborted"
 
     # Ninguna task existe — nada que cancelar ni archivar (P7).
-    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
 
     # Abortar una sesión cerrada: rechazado.
     assert {:error, :session_closed} =

@@ -95,6 +95,54 @@ defmodule Dran.Goals do
   def delete_goal(%Goal{} = goal), do: Repo.delete(goal)
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Checklist (lightweight sub-items on the goal itself)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Append a checklist item (`%{"text" => text, "done" => false}`).
+  Empty/whitespace text is rejected with `{:error, :empty_text}`.
+  """
+  def add_checklist_item(%Goal{} = goal, text) when is_binary(text) do
+    text = String.trim(text)
+
+    if text == "" do
+      {:error, :empty_text}
+    else
+      item = %{"text" => text, "done" => false}
+      update_goal(goal, %{"checklist" => goal.checklist ++ [item]})
+    end
+  end
+
+  @doc "Flip the `done` flag of the checklist item at `index`."
+  def toggle_checklist_item(%Goal{} = goal, index) when is_integer(index) do
+    checklist =
+      goal.checklist
+      |> Enum.with_index()
+      |> Enum.map(fn {item, i} ->
+        if i == index, do: %{item | "done" => !item["done"]}, else: item
+      end)
+
+    update_goal(goal, %{"checklist" => checklist})
+  end
+
+  @doc "Remove the checklist item at `index`."
+  def remove_checklist_item(%Goal{} = goal, index) when is_integer(index) do
+    checklist =
+      goal.checklist
+      |> Enum.with_index()
+      |> Enum.reject(fn {_item, i} -> i == index end)
+      |> Enum.map(&elem(&1, 0))
+
+    update_goal(goal, %{"checklist" => checklist})
+  end
+
+  @doc "`{done, total}` counts for the goal's checklist — backs the badge."
+  def checklist_progress(%Goal{checklist: checklist}) do
+    done = Enum.count(checklist, & &1["done"])
+    {done, length(checklist)}
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Tree helpers (parent_goal_id hierarchy)
   # ──────────────────────────────────────────────────────────────────────────
 

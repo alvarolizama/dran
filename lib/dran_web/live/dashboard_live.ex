@@ -99,7 +99,7 @@ defmodule DranWeb.DashboardLive do
               <.workspace_card
                 :for={ws <- @workspaces}
                 ws={ws}
-                metrics={Map.get(@workspace_metrics, ws.id, %{pages: 0, todos: 0, last_updated: nil})}
+                metrics={Map.get(@workspace_metrics, ws.id, %{pages: 0, last_updated: nil})}
                 can_manage={@can_create_workspace or Map.get(ws, :role) in ~w(owner admin)}
               />
             </div>
@@ -316,15 +316,6 @@ defmodule DranWeb.DashboardLive do
       |> Dran.Repo.all()
       |> Map.new()
 
-    todo_counts =
-      from(t in Dran.Tasks.Task,
-        where: t.workspace_id in ^ids and t.archived == false,
-        group_by: t.workspace_id,
-        select: {t.workspace_id, count(t.id)}
-      )
-      |> Dran.Repo.all()
-      |> Map.new()
-
     last_updated =
       from(p in Dran.Knowledge.Page,
         where: p.workspace_id in ^ids and p.archived == false,
@@ -338,7 +329,6 @@ defmodule DranWeb.DashboardLive do
       {ws.id,
        %{
          pages: Map.get(page_counts, ws.id, 0),
-         todos: Map.get(todo_counts, ws.id, 0),
          last_updated: Map.get(last_updated, ws.id)
        }}
     end)
@@ -347,7 +337,7 @@ defmodule DranWeb.DashboardLive do
   # ── Components ───────────────────────────────────────────────────────────
 
   attr :ws, :map, required: true
-  attr :metrics, :map, default: %{pages: 0, todos: 0, last_updated: nil}
+  attr :metrics, :map, default: %{pages: 0, last_updated: nil}
   attr :can_manage, :boolean, default: false
 
   defp workspace_card(assigns) do
@@ -387,14 +377,10 @@ defmodule DranWeb.DashboardLive do
         </div>
       </div>
 
-      <div class="grid grid-cols-3 gap-2 border-t border-base-300 pt-3">
+      <div class="grid grid-cols-2 gap-2 border-t border-base-300 pt-3">
         <div class="text-center">
           <div class="text-lg font-bold tabular-nums leading-tight">{@metrics.pages}</div>
           <div class="text-caption">{gettext("pages")}</div>
-        </div>
-        <div class="text-center">
-          <div class="text-lg font-bold tabular-nums leading-tight">{@metrics.todos}</div>
-          <div class="text-caption">{gettext("todos")}</div>
         </div>
         <div class="text-center">
           <div class="text-sm font-semibold tabular-nums leading-tight">

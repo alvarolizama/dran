@@ -46,7 +46,7 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Auth, Goals, Knowledge, Repo, Worker, Tasks}
+  alias Dran.{Auth, Goals, Knowledge, Repo, Worker}
   alias Dran.PageTypes
   alias DranWeb.ResourceAuthorization
   alias Dran.Goals
@@ -315,7 +315,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_note",
       "description" =>
-        "Create a plain note page (journal, idea, meeting…). Actionable items belong in `dran_create_task` — tasks are first-class kanban items with status/priority/due_date/recurrence; notes have no kanban fields. `kind` is visual only (classify/filter). Link notes to goals/projects via dran_create_relation (relation_type `part_of`). Returns the created note's slug.",
+        "Create a plain note page (journal, idea, meeting…). `kind` is visual only (classify/filter). Link notes to goals/projects via dran_create_relation (relation_type `part_of`). Returns the created note's slug.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -362,7 +362,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_goal",
       "description" =>
-        "Create a first-class goal (stored in its own table, NOT a page). Goals carry outcome, hierarchy (parent_goal), and a team list. Link pages to the goal later with dran_create_relation (relation_type `part_of`, target_slug = the goal's slug). Creation fails if the slug already exists in the context. Returns the created goal's slug and status.",
+        "Create a first-class goal (stored in its own table, NOT a page). Goals carry outcome and hierarchy (parent_goal). Link pages to the goal later with dran_create_relation (relation_type `part_of`, target_slug = the goal's slug). Creation fails if the slug already exists in the context. Returns the created goal's slug and status.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -392,148 +392,9 @@ defmodule Dran.MCP do
             "description" =>
               "Goal status: draft, active, on_hold, done, or archived (default: active).",
             "enum" => ["draft", "active", "on_hold", "done", "archived"]
-          },
-          "team" => %{
-            "type" => "array",
-            "items" => %{"type" => "string"},
-            "description" => "List of team members or agents working on the goal (optional)."
           }
         },
         "required" => ["workspace", "title"]
-      }
-    },
-    %{
-      "name" => "dran_create_task",
-      "description" =>
-        "Create a first-class task (stored in its own `tasks` table, NOT a page). Tasks are the kanban action items: status backlog → todo → in_progress → done | cancelled, priority, due_date, recurrence (none/daily/weekly/monthly — completing a recurring task auto-clones the next occurrence) and a subtask checklist. Link the task to a goal or project/plan note OPTIONALLY via dran_create_relation (relation_type `part_of`, source_type `task`, source_id = the task id) — tasks exist standalone by default. Returns the created task's slug and id.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "workspace" => %{
-            "type" => "string",
-            "description" => "Context slug where the task will be created."
-          },
-          "title" => %{
-            "type" => "string",
-            "description" => "Task title (human-readable)."
-          },
-          "slug" => %{
-            "type" => "string",
-            "description" =>
-              "URL-friendly kebab-case slug, unique per context. Auto-generated from the title when omitted."
-          },
-          "body" => %{
-            "type" => "string",
-            "description" => "Task description in Markdown (optional)."
-          },
-          "status" => %{
-            "type" => "string",
-            "description" =>
-              "Board column: backlog, todo, in_progress, done, or cancelled (default: backlog).",
-            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
-          },
-          "priority" => %{
-            "type" => "string",
-            "description" => "Priority level: low, medium, high, or urgent (optional).",
-            "enum" => ["low", "medium", "high", "urgent"]
-          },
-          "due_date" => %{
-            "type" => "string",
-            "description" => "Due date in YYYY-MM-DD format (optional)."
-          },
-          "recurrence" => %{
-            "type" => "string",
-            "description" =>
-              "Recurrence: none, daily, weekly, or monthly (default: none). Completing a recurring task auto-creates the next occurrence in backlog with the next due date.",
-            "enum" => ["none", "daily", "weekly", "monthly"]
-          },
-          "checklist" => %{
-            "type" => "array",
-            "items" => %{"type" => "string"},
-            "description" =>
-              "Subtask checklist (optional): list of item texts. Stored on the task; toggling done happens via the UI or dran_update_task."
-          },
-          "created_by" => %{
-            "type" => "string",
-            "description" =>
-              "Who created this task, for provenance. Defaults to the authenticated identity (API key name or user email)."
-          },
-          "on_behalf_of" => %{
-            "type" => "string",
-            "description" => "Who an agent is acting on behalf of (optional)."
-          }
-        },
-        "required" => ["workspace", "title"]
-      }
-    },
-    %{
-      "name" => "dran_update_task",
-      "description" =>
-        "Update a task by slug: status, priority, due_date, recurrence, title, body, checklist, or archived. Setting status to done/cancelled on a recurring task auto-clones the next occurrence. Goal/page links are managed with dran_create_relation / dran_delete_relation (source_type `task`). Returns the updated task.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "workspace" => %{
-            "type" => "string",
-            "description" => "Context slug containing the task."
-          },
-          "slug" => %{
-            "type" => "string",
-            "description" => "Task slug."
-          },
-          "title" => %{"type" => "string", "description" => "New title (optional)."},
-          "body" => %{"type" => "string", "description" => "New body (optional)."},
-          "status" => %{
-            "type" => "string",
-            "description" => "New board column (optional).",
-            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
-          },
-          "priority" => %{
-            "type" => "string",
-            "description" => "New priority (optional).",
-            "enum" => ["low", "medium", "high", "urgent"]
-          },
-          "due_date" => %{
-            "type" => "string",
-            "description" => "New due date YYYY-MM-DD, or empty string to clear (optional)."
-          },
-          "recurrence" => %{
-            "type" => "string",
-            "description" => "New recurrence (optional).",
-            "enum" => ["none", "daily", "weekly", "monthly"]
-          },
-          "checklist" => %{
-            "type" => "array",
-            "items" => %{"type" => "string"},
-            "description" => "Replaces the subtask checklist (optional)."
-          },
-          "archived" => %{
-            "type" => "boolean",
-            "description" =>
-              "Archive (true) or unarchive (false) the task (optional). Archived tasks leave the board but keep their data."
-          }
-        },
-        "required" => ["workspace", "slug"]
-      }
-    },
-    %{
-      "name" => "dran_list_tasks",
-      "description" =>
-        "List tasks in a context, optionally filtered by status. Returns id, slug, title, status, priority, due_date, recurrence per task. Read-only.",
-      "inputSchema" => %{
-        "type" => "object",
-        "properties" => %{
-          "workspace" => %{
-            "type" => "string",
-            "description" => "Context slug to list tasks from."
-          },
-          "status" => %{
-            "type" => "string",
-            "description" => "Filter by board column (optional).",
-            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
-          }
-        },
-        "required" => ["workspace"]
       }
     },
     %{
@@ -622,7 +483,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_list_pages",
       "description" =>
-        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type and `tag` to filter by tag. For tasks (kanban) use `dran_list_tasks`. For a full index overview, prefer the `home://{workspace}/index` resource instead. Use `dran_get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
+        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type and `tag` to filter by tag. For a full index overview, prefer the `home://{workspace}/index` resource instead. Use `dran_get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -1108,8 +969,6 @@ defmodule Dran.MCP do
                  "dran_create_note",
                  "dran_update_note",
                  "dran_create_goal",
-                 "dran_create_task",
-                 "dran_update_task",
                  "dran_create_relation",
                  "dran_delete_relation",
                  "dran_rename_slug",
@@ -1341,134 +1200,6 @@ defmodule Dran.MCP do
   end
 
   defp execute_tool(
-         "dran_create_task",
-         %{"workspace" => workspace_slug, "title" => title} = args,
-         user
-       ) do
-    context = workspace_cache_get(workspace_slug)
-
-    if context do
-      attrs =
-        %{
-          "workspace_id" => context.id,
-          "title" => title,
-          "body" => Map.get(args, "body", ""),
-          "status" => Map.get(args, "status", "backlog"),
-          "recurrence" => Map.get(args, "recurrence", "none"),
-          # server-side attribution — not client-settable
-          "created_by" => Auth.resolve_created_by(user),
-          "creator_actor_id" => Auth.resolve_acting_actor(user)
-        }
-        |> maybe_put("slug", args["slug"])
-        |> maybe_put("priority", args["priority"])
-        |> maybe_put_str("due_date", args["due_date"])
-        |> maybe_put("on_behalf_of", args["on_behalf_of"])
-        |> maybe_put_assignee_actor(args["assignee"])
-        |> maybe_put_checklist(args["checklist"])
-
-      case Dran.Tasks.create_task(attrs) do
-        {:ok, task} ->
-          "Created task: #{task.title} (#{task.slug}, id: #{task.id}) — status: #{task.status}"
-
-        {:error, changeset} ->
-          "Error: #{format_changeset_errors(changeset)}"
-      end
-    else
-      "Error: context '#{workspace_slug}' not found"
-    end
-  end
-
-  defp execute_tool(
-         "dran_update_task",
-         %{"workspace" => workspace_slug, "slug" => slug} = args,
-         user
-       ) do
-    context = workspace_cache_get(workspace_slug)
-
-    if context do
-      case Dran.Tasks.get_task_by_slug(slug, context.id) do
-        nil ->
-          "Error: task '#{slug}' not found"
-
-        task ->
-          attrs = %{"updated_by" => Auth.resolve_created_by(user)}
-          attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
-          attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
-
-          attrs =
-            if is_boolean(args["archived"]),
-              do: Map.put(attrs, "archived", args["archived"]),
-              else: attrs
-
-          attrs = maybe_put(attrs, "status", args["status"])
-          attrs = maybe_put(attrs, "priority", args["priority"])
-          attrs = maybe_put_str(attrs, "due_date", args["due_date"])
-          attrs = maybe_put(attrs, "recurrence", args["recurrence"])
-
-          attrs =
-            case args["checklist"] do
-              nil ->
-                attrs
-
-              items when is_list(items) ->
-                Map.put(attrs, "checklist", Enum.map(items, &%{"text" => &1, "done" => false}))
-
-              _ ->
-                attrs
-            end
-
-          case Dran.Tasks.update_task(task, attrs) do
-            {:ok, updated} ->
-              "Updated task: #{updated.title} (#{updated.slug}) — status: #{updated.status}"
-
-            {:error, changeset} ->
-              "Error: #{format_changeset_errors(changeset)}"
-          end
-      end
-    else
-      "Error: context '#{workspace_slug}' not found"
-    end
-  end
-
-  defp execute_tool("dran_list_tasks", %{"workspace" => workspace_slug} = args, _user) do
-    context = workspace_cache_get(workspace_slug)
-
-    if context do
-      opts = [workspace_id: context.id, limit: 200]
-
-      opts =
-        if args["status"] do
-          Keyword.put(opts, :status, args["status"])
-        else
-          opts
-        end
-
-      tasks = Dran.Tasks.list_tasks(opts)
-
-      if tasks == [] do
-        "No tasks found in context '#{workspace_slug}'."
-      else
-        lines =
-          for task <- tasks do
-            parts = [
-              "- #{task.title} (#{task.slug}, id: #{task.id})",
-              "status: #{task.status}",
-              task.priority && "priority: #{task.priority}",
-              task.due_date && "due: #{task.due_date}",
-              task.recurrence != "none" && "recurrence: #{task.recurrence}"
-            ]
-
-            Enum.reject(parts, &is_nil(&1)) |> Enum.join(" | ")
-          end
-
-        "Tasks in '#{workspace_slug}' (#{length(tasks)}):\n" <> Enum.join(lines, "\n")
-      end
-    else
-      "Error: context '#{workspace_slug}' not found"
-    end
-  end
-
-  defp execute_tool(
          "dran_create_note",
          %{"workspace" => workspace_slug, "title" => title, "slug" => slug} = args,
          user
@@ -1526,7 +1257,6 @@ defmodule Dran.MCP do
           summary: Map.get(args, "summary"),
           body: Map.get(args, "body", ""),
           status: Map.get(args, "status", "active"),
-          team: args["team"] || [],
           # server-side attribution — not client-settable
           created_by: Auth.resolve_created_by(user)
         }
@@ -1732,15 +1462,14 @@ defmodule Dran.MCP do
         note ->
           # Merge meta: start with existing, overlay changes.
           # kanban_status/priority/assignee were legacy todo-note fields —
-          # notes no longer accept them; tasks (dran_update_task) do.
+          # notes no longer accept them.
           legacy_keys =
             ["kanban_status", "priority", "assignee"]
             |> Enum.filter(&(is_map_key(args, &1) and not is_nil(args[&1])))
 
           if legacy_keys != [] do
-            "Error: #{Enum.join(legacy_keys, ", ")} are task fields — notes no longer " <>
-              "carry kanban state. Use dran_update_task for tasks, or manage note meta " <>
-              "via dran_update_page."
+            "Error: #{Enum.join(legacy_keys, ", ")} are legacy todo-note fields — notes no " <>
+              "longer carry kanban state. Manage note meta via dran_update_page."
           else
             existing_meta = note.meta || %{}
 
@@ -1836,11 +1565,6 @@ defmodule Dran.MCP do
         |> Enum.map(fn {type, count} -> "- #{type}: #{count}" end)
         |> Enum.join("\n")
 
-      todos_by_status =
-        s.todos_by_status
-        |> Enum.map(fn {status, count} -> "- #{status}: #{count}" end)
-        |> Enum.join("\n")
-
       """
       # Stats for '#{workspace_slug}'
 
@@ -1851,8 +1575,6 @@ defmodule Dran.MCP do
       ## Pages by type
       #{by_type}
 
-      ## Todos by status
-      #{todos_by_status}
       """
     else
       "Error: context '#{workspace_slug}' not found"
@@ -2051,8 +1773,7 @@ defmodule Dran.MCP do
           "Error: goal not found"
 
         goal ->
-          # Notes linked to this goal via part_of relations. (Tasks are
-          # first-class now — fetch those separately via Tasks if needed.)
+          # Notes linked to this goal via part_of relations.
           import Ecto.Query
 
           linked_page_ids =
@@ -2089,10 +1810,7 @@ defmodule Dran.MCP do
                   slug: &1.slug,
                   kind: get_in(&1.meta, ["kind"])
                 }
-              ),
-            tasks:
-              Tasks.list_tasks_for_goal(goal)
-              |> Enum.map(&%{title: &1.title, slug: &1.slug, status: &1.status})
+              )
           })
       end
     else
@@ -2198,31 +1916,7 @@ defmodule Dran.MCP do
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-  # Like maybe_put, but also skips empty strings (lets callers clear a value
-  # with "" for meta-style keys while ignoring absent ones).
-  defp maybe_put_str(map, _key, nil), do: map
-  defp maybe_put_str(map, _key, ""), do: map
-  defp maybe_put_str(map, key, value), do: Map.put(map, key, value)
-
   defp maybe_put_meta(map, _key, nil), do: map
   defp maybe_put_meta(map, _key, ""), do: map
   defp maybe_put_meta(map, key, value), do: Map.put(map, key, value)
-
-  # Resolve an assignee by actor name ("coder", "alvaro") to assignee_actor_id.
-  # Unknown names are ignored (the task is created unassigned) — same lenient
-  # contract as the other optional args.
-  defp maybe_put_assignee_actor(map, name) when is_binary(name) and name != "" do
-    case Dran.Actors.get_actor_by_name(String.trim(name)) do
-      %Dran.Actors.Actor{id: id} -> Map.put(map, "assignee_actor_id", id)
-      nil -> map
-    end
-  end
-
-  defp maybe_put_assignee_actor(map, _), do: map
-
-  defp maybe_put_checklist(map, items) when is_list(items) do
-    Map.put(map, "checklist", Enum.map(items, &%{"text" => &1, "done" => false}))
-  end
-
-  defp maybe_put_checklist(map, _), do: map
 end

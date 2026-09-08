@@ -122,7 +122,7 @@ defmodule Dran.Workflows.Step do
   @doc """
   Changeset for canvas persistence (drag / batch positions): casts ONLY the
   presentation columns and skips contract validation — a legacy step without
-  intent yet can still be moved around. Mirrors `Dran.Tasks.Task.move_changeset/2`.
+  intent yet can still be moved around.
   """
   def position_changeset(%__MODULE__{} = step, attrs) do
     step

@@ -79,4 +79,43 @@ defmodule Dran.GoalTest do
       assert length(goals) == 2
     end
   end
+
+  describe "checklist" do
+    test "add_checklist_item/2 appends a pending item", %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Check", slug: "check"})
+
+      {:ok, goal} = Goals.add_checklist_item(goal, "Primer paso")
+      assert goal.checklist == [%{"text" => "Primer paso", "done" => false}]
+
+      {:ok, goal} = Goals.add_checklist_item(goal, "  Segundo  ")
+      assert Enum.map(goal.checklist, & &1["text"]) == ["Primer paso", "Segundo"]
+    end
+
+    test "add_checklist_item/2 rejects empty text", %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Check", slug: "check"})
+      assert {:error, :empty_text} = Goals.add_checklist_item(goal, "   ")
+    end
+
+    test "toggle_checklist_item/2 flips done", %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Check", slug: "check"})
+      {:ok, goal} = Goals.add_checklist_item(goal, "Uno")
+
+      {:ok, goal} = Goals.toggle_checklist_item(goal, 0)
+      assert hd(goal.checklist)["done"] == true
+      assert Goals.checklist_progress(goal) == {1, 1}
+
+      {:ok, goal} = Goals.toggle_checklist_item(goal, 0)
+      assert hd(goal.checklist)["done"] == false
+    end
+
+    test "remove_checklist_item/2 drops the item by index", %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "Check", slug: "check"})
+      {:ok, goal} = Goals.add_checklist_item(goal, "Uno")
+      {:ok, goal} = Goals.add_checklist_item(goal, "Dos")
+
+      {:ok, goal} = Goals.remove_checklist_item(goal, 0)
+      assert Enum.map(goal.checklist, & &1["text"]) == ["Dos"]
+      assert Goals.checklist_progress(goal) == {0, 1}
+    end
+  end
 end

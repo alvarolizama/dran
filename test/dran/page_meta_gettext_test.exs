@@ -188,7 +188,7 @@ defmodule Dran.PageMetaGettextTest do
     # note kind, only a translation artefact).
     #
     # Removed kinds: snippet (→code), outline (→template), log (→journal),
-    # todo (→ first-class Dran.Tasks.Task since the tasks-table migration)
+    # todo
     test "note_kinds/0 returns exactly the curated slugs" do
       assert PageMeta.note_kinds() ==
                ~w(journal idea meeting question quote reminder code recipe debug summary decision template plan project)

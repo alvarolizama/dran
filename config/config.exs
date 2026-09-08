@@ -112,10 +112,6 @@ if config_env() != :test do
       page_summaries_nightly: [
         schedule: "30 7 * * *",
         task: {Dran.Jobs, :run_scheduled, [:page_summaries_nightly]}
-      ],
-      task_automation_daily: [
-        schedule: "30 6 * * *",
-        task: {Dran.Jobs, :run_scheduled, [:task_automation_daily]}
       ]
     ]
 end

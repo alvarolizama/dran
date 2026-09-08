@@ -344,7 +344,6 @@ defmodule Dran.Knowledge do
   end
 
   # NOTE: list_todos was removed — todos are first-class tasks now.
-  # Use Dran.Tasks.list_tasks/1 (or list_board/1) instead.
 
   @doc """
   All distinct tags used in a context, sorted alphabetically. Used for
@@ -2170,7 +2169,6 @@ defmodule Dran.Knowledge do
   - `:total_pages` — total page count
   - `:by_type` — map of page_type => count
   - `:recent` — 5 most recently updated pages
-  - `:todos_by_status` — map of kanban_status => count (for todos)
   - `:orphan_count` — number of orphan pages
   - `:total_relations` — number of relations in the context
   """
@@ -2182,16 +2180,6 @@ defmodule Dran.Knowledge do
           where: p.workspace_id == ^workspace_id and p.archived == false,
           group_by: p.page_type,
           select: {p.page_type, count(p.id)}
-      )
-      |> Map.new()
-
-    # todos_by_status: group_by on the tasks table
-    todos_by_status =
-      Repo.all(
-        from t in Dran.Tasks.Task,
-          where: t.workspace_id == ^workspace_id and t.archived == false,
-          group_by: t.status,
-          select: {t.status, count(t.id)}
       )
       |> Map.new()
 
@@ -2244,7 +2232,6 @@ defmodule Dran.Knowledge do
       total_pages: total_pages,
       by_type: by_type,
       recent: recent,
-      todos_by_status: todos_by_status,
       orphan_count: length(orphan_pages(workspace_id)),
       total_relations: total_relations
     }

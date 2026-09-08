@@ -34,8 +34,7 @@ defmodule Dran.JobsTest do
     :cluster_summaries_nightly,
     :graph_maintenance_nightly,
     :link_gardener_weekly,
-    :page_summaries_nightly,
-    :task_automation_daily
+    :page_summaries_nightly
   ]
 
   setup do
