@@ -2,51 +2,121 @@
 
 # 🧠 Dran
 
-### Personal Second Brain
+### Knowledge base & memory for AI agents — with a built-in execution ledger
 
-A personal second-brain app built with **Phoenix 1.8 + LiveView**. Your knowledge lives as **typed pages** connected by **typed relations**, forming a queryable knowledge graph — editable in the browser and fully operable by AI agents through **MCP** and a **REST API**.
+A personal/shared second brain built with **Phoenix 1.8 + LiveView**, designed to be operated by humans **and** AI agents. Your knowledge lives as **typed pages** connected by **typed relations**, forming a queryable knowledge graph. Agents read and write it through **MCP** and a **REST API**, share a **trust-weighted memory**, and leave **verifiable execution evidence** in workflow runs — the ledger.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Elixir](https://img.shields.io/badge/Elixir-1.18+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
-[![Phoenix](https://img.shields.io/badge/Phoenix-LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
+[![Elixir](https://img.shields.io/badge/Elixir-1.15+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
+[![Phoenix](https://img.shields.io/badge/Phoenix-1.8-LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![MCP](https://img.shields.io/badge/MCP-Server-5B8DEF?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 
 ![Dran](docs/dran-header.png)
 
 </div>
 
-## Features
+## The three planes
 
-### Knowledge
-- **10 page types** — `note`, `concept`, `entity`, `reference`, `project`, `goal`, `plan`, `todo`, `query`, plus `report` (system run logs) — each with its own list/new/detail UI (`/panel/notes`, `/panel/concepts`, …)
-- **TipTap markdown editor** — WYSIWYG with tables, code blocks, mermaid diagrams, and `![[slug]]` page embeds; pages render read-only by default, *Edit* opens the editor
-- **Relations** — directed and typed (`related`, `part_of`, `supersedes`, `contradicts`, `embeds`, `semantic`, `mentions`); link pages freely — no rigid hierarchy, orphans are fine
-- **Custom props** — `meta.props` key-value bag; five keys (`role`, `tier`, `location`, `language`, `framework`) auto-materialize into graph edges
-- **Version history** — every edit is versioned with diff view on the page detail
+Dran is not a note app with an API bolted on. It is a single system with three interlocking planes:
 
-### Views
-- **Wiki at the root** (`/`, `/:context_slug`, …) — read-only knowledge browser per wiki-enabled context; the first thing a logged-in user sees. Sidebar with search, type index, pinned pages, collections, kanban, graph, and a context-aware link to the admin panel (visible to admins and editors). All data administration lives under **`/panel`**
-- **Dashboard** (`/panel`) — context overview; accessible to admins and editors
-- **Task board** (`/:workspace_slug/tasks`) — first-class tasks with columns `backlog → this_week → today → in_progress → done → cancelled`, native drag & drop between columns, quick-add per column, due dates, priority badges, recurrence. Optional `part_of` links to goals and project/plan notes (via relations). Legacy `/kanban` redirects here
-- **3D knowledge graph** (`/panel/graph`, `/panel/graph/:slug`, `/:context_slug/graph` in wiki) — force-directed 3D; hover highlights a node and its neighbors, click navigates (context-aware URLs in wiki via `data-base-path`)
-- **Clusters** (`/panel/clusters`, `/panel/clusters/:id`) — graph clusters (clusters of related pages) detected via modularity; each cluster gets an LLM-generated summary. Re-generated nightly or on demand
-- **Hybrid search** (`/panel/search`) — full-text, fuzzy, semantic, or hybrid fusion
-- **Smart Collections** (`/panel/collections`) — saved live queries rendered as pages
-- **Activity feed** (`/panel/activity`), **Journey** (`/panel/journey`), **Tags** (`/panel/tags/:tag`), **Docs** (`/panel/docs`)
-- **Multi-context** — switch brains from the sidebar; per-context page-type toggles (Settings → Contexts)
-- **Pinned pages** — toggle pin on any page type; pinned pages surface in the wiki sidebar and context home
+| Plane | What it holds | Surface |
+| --- | --- | --- |
+| **Knowledge** | Typed pages + typed relations — the queryable graph | Wiki UI, MCP tools, REST |
+| **Memory** | Atomic, deduplicated, trust-weighted facts shared by every agent | REST `/api/memory`, Hermes plugin |
+| **Ledger** | Workflow runs: what an agent claimed, what was verified, when | MCP run lifecycle, `/:ws/workflows` |
 
-### Automation
-- **3 autonomous workers** — `curator` (duplicates/contested cleanup, daily cron), `link_gardener` (proposes relations for orphans, weekly cron + manual), `graph_rag` (GraphRAG search with citations, manual)
-- **5 scheduled jobs** — `curator_daily`, `pagerank_nightly`, `community_summaries_nightly`, `graph_maintenance_nightly`, `link_gardener_weekly`. Controlled from **Settings → Brain** — per-job toggles, "run now" buttons, and a `report` page per run
-- **Entity linker** — auto-creates entity pages from real-world names detected in bodies (people, companies, tools); noise-filtered (no file paths, modules, or generic terms) and toggleable from Settings → Brain
-- **Graph intelligence** — PageRank authority scoring, cluster detection with LLM summaries, graph maintenance sweeps; all scheduled nightly
+An agent that only reads pages is using a third of Dran. The full loop is: recall from memory → read/create knowledge → execute a workflow → close runs with verified claims → let the nightly workers curate the graph.
 
-### Integration & admin
-- **MCP server** — `POST /api/mcp`, Streamable HTTP (MCP spec 2025-03-26), 22 tools + 3 workers + 3 resources + 2 prompts. attribution (`owner`/`created_by`) is derived server-side from the key's actor — never client-settable. API keys with `write_access: false` are read-only — write tools (`dran_create_page`, `dran_update_page`, `dran_delete_page`, `dran_create_note`, `dran_update_note`, `dran_create_task`, `dran_update_task`, `dran_create_goal`, `dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`, `dran_reaugment_page`, `dran_start_worker`) return `403`
-- **REST API** — token-protected CRUD for pages, relations, contexts, search, export (`/api/*`). Owner/created_by injected from auth identity on create. Write routes (`POST`, `PUT`, `DELETE`) require `write_access: true` on API keys — read routes (`GET`) are always allowed
-- **Multi-user auth** — first-run `/setup` admin, Google OAuth (invite/domain-restricted), per-user API tokens (Settings → Users). Three roles: **admin** (`is_admin`, full access + all contexts), **editor** (`is_editor`, panel + dashboard access, assigned contexts), regular user (wiki-only). Panel routes gated by `admin_or_editor` pipeline; wiki open to all logged-in users
-- **Settings panel** (admin) — users, contexts, API keys (with per-key `write_access` toggle — read-only by default), brain tuning, models, system, danger zone (`/panel/settings/:tab`)
+## Knowledge
+
+- **4 page types** — `note`, `entity`, `concept`, `reference` — each a full citizen (graph, journey, embeddings, MCP-create). Goals, collections and reports are first-class entities in their own tables, not page types
+- **TipTap markdown editor** — WYSIWYG with tables, code blocks, mermaid diagrams and `![[slug]]` page embeds; pages render read-only by default, *Edit* opens the editor
+- **13 relation types** — `related`, `part_of`, `supersedes`, `contradicts`, `embeds`, `semantic`, `mentions`, `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`, `depends_on` — link pages freely, no rigid hierarchy, orphans are fine
+- **Custom props → graph edges** — five prop keys (`role`, `tier`, `location`, `language`, `framework`) auto-materialize into typed edges to entity/concept pages
+- **Version history** — every edit is versioned, with diff view on the page detail
+- **Machine-owned summaries** — the page `summary` is written only by MCP/API and the nightly job, never by hand
+
+## Workflows — the execution ledger
+
+- **Workflows are DAGs** — steps with `depends_on`, authored in a visual canvas editor or over the API
+- **Step = contract** — each step declares intent, pre-registered claims and gates: *what must be true when this step is done*. The contract is pure data; the server enforces readiness and cycle rules
+- **Sessions & runs** — `open session → claim run (start) → report progress (✓NN) → close with outcome`; retry re-opens a failed run. Passed gates render as checked nodes in the DAG
+- **Pending-run queue** — agents pull their next ready step via MCP (`dran_list_pending_runs`); row-level auth and locks keep two agents from claiming the same run
+- **Runs are evidence, not vibes** — a run closed without re-running its gates is a false checkpoint; the UI shows what was actually verified
+
+### Riel
+
+Dran is the **board**; Riel is the **discipline**. Riel (the agent-side execution protocol — ledger, briefs, delegation) runs locally in the agent; Dran declares **what to verify** (step contracts) and stores the **durable evidence** (runs). The `skills/dran-workflow-flow` skill executes the Riel cycle over Dran's MCP tools — Dran never imposes Riel, but its run ledger is designed to be the remote half of it. Runs are the only Riel ledger in Dran: memory and goal checklists are deliberately outside this loop.
+
+## Goals
+
+- **First-class entities** (own table, own UI at `/:ws/goals`) with measurable targets, archived state and linked workflows ("Workflows vinculados")
+- **Human-managed checklist** — the goal checklist is the owner's OKR, not agent scratch space; agents can add/toggle items over MCP but the plan of record is human
+- Goals link optionally to workflows via FK — progress rolls up from run outcomes
+
+## Memory — shared multi-agent recall
+
+- **Atomic facts per workspace** — exact, immutable content; no LLM augmentation rewrites a memory
+- **Content dedupe** — `add` is idempotent per workspace; duplicates return the existing row untouched
+- **Asymmetric trust** — helpful `+0.05`, unhelpful `−0.10`, clamped `[0,1]`; search multiplies relevance by trust so useful facts surface first
+- **Hybrid search** — full-text + embeddings over the shared store (`GET /api/memory/search`)
+- **Hermes plugin** (`hermes_plugin/dran/`) — auto-recall at turn start (background prefetch), `dran_memory_add/search/feedback` tools, and auto-capture on session end (facts extracted server-side; transcripts are never persisted). One API key per agent → `created_by` attribution is server-side; subagents get read-only memory
+- **Not in the MCP surface** — memory is REST + plugin only, by design
+
+## Views
+
+- **Wiki at the workspace root** (`/:workspace_slug`) — read-first knowledge browser: sidebar with search, type index, pinned pages, collections, clusters, graph
+- **Instance dashboard** (`/`) — workspaces + metrics for every logged-in user; admin at `/admin` (owner-only): users, workspaces, models, system, jobs, impersonation
+- **Workflows** (`/:ws/workflows`) — index/board with kind & status filters, DAG detail with run state
+- **Goals** (`/:ws/goals`), **Memory** (`/:ws/memory`), **Reports** (`/:ws/reports/:slug`)
+- **3D knowledge graph** (`/:ws/graph`) — force-directed; hover highlights neighbors, click navigates
+- **Clusters** (`/:ws/clusters`) — modularity-detected clusters with LLM-generated summaries (nightly or on demand)
+- **Hybrid search** (`/:ws/search`) — full-text, fuzzy, semantic or fused, with optional rerank
+- **Smart Collections** (`/:ws/collections`) — saved live queries rendered as pages
+- **Activity feed**, **Journey** timeline, **per-workspace settings** (page types, features)
+- **Multi-workspace** — switch brains from the sidebar; per-workspace visibility (`public`/`private`) and page-type toggles
+
+## Automation
+
+- **3 autonomous workers** — `curator` (duplicate/conflict detection via embeddings → report), `link_gardener` (proposes relations for orphan pages), `graph_rag` (GraphRAG Q&A with citations). Start over MCP (`dran_start_worker`) and poll the session
+- **6 scheduled jobs** (Quantum cron, toggleable + "run now" from the admin jobs panel): `curator_daily`, `pagerank_nightly`, `cluster_summaries_nightly`, `graph_maintenance_nightly`, `link_gardener_weekly`, `page_summaries_nightly` — each run writes a `report` page
+- **Entity linker** — auto-creates entity pages from real-world names detected in bodies (noise-filtered, toggleable)
+- **Graph intelligence** — PageRank authority scoring, cluster detection, maintenance sweeps
+
+## MCP server
+
+`POST /api/mcp` — Streamable HTTP (MCP spec 2025-03-26), token-authenticated.
+
+- **35 tools** — pages & notes CRUD, search (`full`/`fuzzy`/`semantic`/`hybrid`), links & stats, goals CRUD + checklist ops, workflows/sessions/runs lifecycle (`get_workflow`, `get_step_contract`, `open_workflow_session`, `list_pending_runs`, `start_run`, `report_run_progress`, `close_run`, `retry_run`), workers, `lint_brain`, `rename_slug`, `reaugment_page`
+- **22 write tools** are gated behind `write_access: true` on the API key — read-only keys get `403` on every one of them (enforced by a permission-matrix test: a new write tool without a matrix row fails the audit)
+- **3 resources** — `page://{ws}/{slug}`, `goal://{ws}/{slug}`, `home://{ws}/index`
+- **2 prompts** — `brainstorm`, `goal_review`
+- **Attribution is server-side** — `owner`/`created_by` and run claims derive from the key's actor; never client-settable
+
+## REST API
+
+Token-protected CRUD under `/api/*` (kebab-case routes, tables prefixed by domain):
+
+- **Read** — workspaces, knowledge-pages (+ links, graph), search (full/fuzzy/semantic), goals, index, log, lint, memory (list/search), workflow sessions, pending runs, export
+- **Write** (requires `write_access: true`) — workspaces/pages/relations CRUD, workflow session + run lifecycle (`open`, `start`, `progress`, `close`, `retry`), memory (`create`, `feedback`, `ingest`, `delete`)
+- Owner/created_by injected from the auth identity on every create
+
+## Security
+
+- **First-run `/setup`** creates the owner account; Google OAuth optional (invite/domain-restricted)
+- **Instance + workspace roles** — `is_owner` (instance admin at `/admin`), per-workspace `owner`/`admin`/`editor`/`viewer`; workspace routes gated by members ∪ public ∪ owner; settings by workspace admin
+- **Per-user API keys** — scoped to the key creator's workspaces, `write_access` toggle (read-only by default), role inherited from creator
+- **Row-level auth** on executions (LiveView + API), IDOR-hardened task/relation paths, `FOR UPDATE` locks on run claim/close/reopen, UUID guards
+- **Audit tooling in precommit** — `deps.audit` + `sobelow --exit medium`
+
+## Agent skills suite
+
+`skills/` ships a 7-skill suite for Hermes (or any skill-loading agent) that encodes the operating flows above:
+
+`dran` (router) · `dran-knowledge-flow` · `dran-relations-flow` · `dran-goals-flow` · `dran-workflow-flow` (Riel loop) · `dran-workers-flow` · `dran-memory-flow`
+
+Shared rules across the suite: one key = one actor; a write is not done until a readback confirms the state; irreversible operations require explicit human confirmation.
 
 ## Installation
 
@@ -59,7 +129,7 @@ mix setup        # deps → DB create → migrations → assets → seed
 mix phx.server
 ```
 
-Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup` to create the admin account.
+Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup` to create the owner account.
 
 ## Configuration
 
@@ -71,7 +141,7 @@ All configuration is via environment variables — see [`.env.example`](.env.exa
 | `DATABASE_URL` | Ecto URL, e.g. `ecto://postgres:postgres@localhost/dran_dev` |
 | `PHX_HOST` / `PHX_PORT` / `PHX_SCHEME` | Public host/port/scheme for URL generation |
 | `DRAN_API_TOKEN` | Legacy admin bearer token for REST/MCP |
-| `DRAN_WORKSPACE_SLUG` / `DRAN_WORKSPACE_NAME` | Default context created on seed |
+| `DRAN_WORKSPACE_SLUG` / `DRAN_WORKSPACE_NAME` | Default workspace created on seed |
 | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Optional — enables "Sign in with Google" |
 | `DRAN_INFERENCE_API_URL` / `DRAN_INFERENCE_API_KEY` | OpenAI-compatible inference endpoint (`/v1/embeddings`, `/v1/rerank`, `/v1/chat/completions`) — powers embeddings, summaries, workers, semantic search |
 | `SESSION_SIGNING_SALT` / `SESSION_ENCRYPTION_SALT` | Required in production (`mix phx.gen.secret 32`) |
@@ -79,24 +149,6 @@ All configuration is via environment variables — see [`.env.example`](.env.exa
 | `DISABLE_FORCE_SSL` | Set to `1` **at build time** when serving over plain HTTP (VPN tunnels) |
 
 Inference is optional: without it, Dran still works — you lose embeddings, semantic search, auto-summaries, and workers.
-
-## Page types
-
-| Type | Purpose |
-| --- | --- |
-| `note` | Thoughts, journal, ideas, meetings |
-| `concept` | Techniques, patterns, theories |
-| `entity` | People, companies, tools, places |
-| `reference` | External sources (articles, papers, videos) |
-| `project` | Initiatives grouping goals/plans/tasks |
-| `goal` | Objectives with measurable targets |
-| `plan` | Time-horizoned plans (weekly/quarterly/yearly) |
-| `query` | Questions with answers |
-| `report` | System-created worker run logs (detail view only, `/panel/reports/:slug`) |
-
-**Tasks** are NOT page types — they live in their own `tasks` table with
-kanban status, priority, due dates, recurrence and checklists, optionally
-linked to goals/pages via `part_of` relations.
 
 ## Production
 
@@ -111,12 +163,12 @@ A `Dockerfile` ships with the repo (Coolify-ready; `/app/bin/migrate` runs migra
 
 ## Tech stack
 
-Phoenix 1.8 + LiveView · PostgreSQL + pgvector · TipTap v3 · MDEx (comrak) · Tailwind v4 + daisyUI · Bandit · Quantum (cron) · Req · MCP 2025-03-26
+Phoenix 1.8 + LiveView · PostgreSQL + pgvector · TipTap v3 · MDEx (comrak) · Tailwind v4 + daisyUI · 3d-force-graph (three.js) · Bandit · Quantum (cron) · Req · MCP 2025-03-26
 
 ## Pre-commit
 
 ```bash
-mix precommit   # compile --warnings-as-errors → format → deps audit → sobelow → test
+mix precommit   # compile --warnings-as-errors → deps.unlock --unused → format → deps audit → sobelow → test
 ```
 
 ## License
