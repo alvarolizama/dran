@@ -8,7 +8,7 @@ defmodule Dran.MCPFullTest do
   """
   use Dran.DataCase, async: false
 
-  alias Dran.{Goals, Knowledge, MCP}
+  alias Dran.{Contracts, Executions, Goals, Knowledge, MCP, Workflows}
 
   # Same setup as brain_test.exs / mcp_test.exs: disable inference so
   # dran_create_page doesn't call external APIs.
@@ -88,7 +88,7 @@ defmodule Dran.MCPFullTest do
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 26
+      assert length(tools) == 35
     end
 
     test "all tools carry the dran_ prefix" do
@@ -1427,6 +1427,287 @@ defmodule Dran.MCPFullTest do
 
     test "protocol_version returns the version string" do
       assert MCP.protocol_version() == "2025-03-26"
+    end
+  end
+
+  # ── Tools: workflows / steps / sessions / runs (Riel bridge) ──────────────
+
+  defp wf_mcp_contract do
+    %{
+      "intent" => "Ship the MCP bridge",
+      "status" => "active",
+      "claims" => [
+        %{"id" => "P1", "claim" => "runs close with evidence", "verify" => "mix test"}
+      ],
+      "gates" => [
+        %{
+          "name" => "compile",
+          "cmd" => "mix compile",
+          "expect" => "exit 0",
+          "on_failure" => "fix"
+        }
+      ],
+      "graph" => %{
+        "nodes" => [
+          %{"id" => "S1", "verb" => "READ", "label" => "mcp.ex"},
+          %{"id" => "G1", "verb" => "VERIFY", "label" => "green?"}
+        ],
+        "edges" => [%{"from" => "S1", "to" => "G1", "guard" => "yes"}]
+      }
+    }
+  end
+
+  defp wf_mcp_step(workflow, title, contract \\ nil) do
+    slug = "mcp-#{String.downcase(title)}-#{System.unique_integer([:positive])}"
+    {:ok, step} = Workflows.create_step(workflow, %{"title" => title, "slug" => slug})
+
+    if contract do
+      {:ok, step} =
+        Workflows.update_step(step, %{
+          "intent" => contract["intent"],
+          "status" => contract["status"] || "draft",
+          "claims" => contract["claims"] || [],
+          "gates" => contract["gates"] || [],
+          "graph" => contract["graph"]
+        })
+
+      step
+    else
+      step
+    end
+  end
+
+  # Workspace dedicado por test para los tests de workflows: aísla el
+  # listado/fetch de cualquier residuo del "personal" compartido.
+  defp wf_mcp_ws(_context) do
+    slug = "wf-mcp-#{System.unique_integer([:positive])}"
+
+    Knowledge.get_workspace_by_slug(slug) ||
+      elem(Knowledge.create_workspace(%{name: "WF MCP", slug: slug}), 1)
+  end
+
+  defp wf_mcp_workflow(context) do
+    {:ok, workflow} =
+      Workflows.create_workflow(%{
+        "workspace_id" => context.id,
+        "title" => "Riel Bridge #{System.unique_integer([:positive])}",
+        "slug" => "riel-bridge-#{System.unique_integer([:positive])}"
+      })
+
+    Dran.Repo.reload!(workflow)
+  end
+
+  describe "dran_list_workflows" do
+    test "lists workflows with step counts", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      wf_mcp_step(wf, "Alpha")
+
+      result = call_tool("dran_list_workflows", %{"workspace" => ws.slug})
+
+      assert result =~ "• #{wf.title} (#{wf.slug})"
+      assert result =~ "steps: 1"
+    end
+
+    test "errors on unknown context" do
+      result = call_tool("dran_list_workflows", %{"workspace" => "no-ctx"})
+      assert result =~ "Error: context 'no-ctx' not found"
+    end
+  end
+
+  describe "dran_get_workflow" do
+    test "shows steps with contract validity and prereq counts", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      s1 = wf_mcp_step(wf, "First", wf_mcp_contract())
+      s2 = wf_mcp_step(wf, "Second")
+      {:ok, _} = Contracts.add_dependency(s2, s1)
+
+      result = call_tool("dran_get_workflow", %{"workspace" => ws.slug, "workflow" => wf.slug})
+
+      assert result =~ "Workflow: #{wf.title}"
+      assert result =~ "(#{s1.slug})"
+      assert result =~ "contract ✓"
+      assert result =~ "(#{s2.slug})"
+      assert result =~ "prereqs: 1"
+    end
+
+    test "accepts UUID handle", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      result = call_tool("dran_get_workflow", %{"workspace" => ws.slug, "workflow" => wf.id})
+      assert result =~ "Workflow: #{wf.title}"
+    end
+
+    test "errors on unknown workflow" do
+      ws = wf_mcp_ws(nil)
+      result = call_tool("dran_get_workflow", %{"workspace" => ws.slug, "workflow" => "ghost"})
+      assert result =~ "Error: workflow 'ghost' not found"
+    end
+  end
+
+  describe "dran_get_step_contract" do
+    test "renders structured contract and the riel brief", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      step = wf_mcp_step(wf, "Contracted", wf_mcp_contract())
+
+      result =
+        call_tool("dran_get_step_contract", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "step" => step.slug
+        })
+
+      assert result =~ "Step: Contracted"
+      assert result =~ "intent:"
+      assert result =~ "P1"
+      assert result =~ "## Objective"
+      assert result =~ "We need Ship the MCP bridge"
+      assert result =~ "## DO NOT"
+    end
+
+    test "step without contract degrades gracefully", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      step = wf_mcp_step(wf, "Bare")
+
+      result =
+        call_tool("dran_get_step_contract", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "step" => step.slug
+        })
+
+      assert result =~ "Step: Bare"
+      assert result =~ "(none)"
+      assert result =~ "no valid contract"
+    end
+
+    test "errors on unknown step", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+
+      result =
+        call_tool("dran_get_step_contract", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "step" => "ghost-step"
+        })
+
+      assert result =~ "Error: step 'ghost-step' not found"
+    end
+  end
+
+  describe "dran_open_workflow_session" do
+    test "opens a session with one pending run per step", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      s1 = wf_mcp_step(wf, "One", wf_mcp_contract())
+      s2 = wf_mcp_step(wf, "Two")
+      {:ok, _} = Contracts.add_dependency(s2, s1)
+
+      result =
+        call_tool("dran_open_workflow_session", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "label" => "mcp test"
+        })
+
+      assert result =~ "Session opened:"
+      assert result =~ "2 runs created"
+      assert result =~ "step: #{s1.slug} — pending (ready)"
+      assert result =~ "step: #{s2.slug} — pending (blocked)"
+    end
+
+    test "errors on workflow without steps", %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+
+      result =
+        call_tool("dran_open_workflow_session", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug
+        })
+
+      assert result =~ "Error: could not open session"
+    end
+  end
+
+  describe "execution cycle: pending → start → progress → close" do
+    setup %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      step = wf_mcp_step(wf, "Solo", wf_mcp_contract())
+      {:ok, session} = Executions.open_session(wf, label: "cycle")
+      run = Enum.find(session.runs, &(&1.step_id == step.id))
+      {:ok, run: run, step: step, session: session, workflow: wf, ws: ws}
+    end
+
+    test "dran_list_pending_runs shows the queue", %{run: run, step: step, ws: ws} do
+      result = call_tool("dran_list_pending_runs", %{"workspace" => ws.slug})
+
+      assert result =~ "run #{run.id}"
+      assert result =~ "step: #{step.slug}"
+      assert result =~ "(attempt 1) — ready"
+    end
+
+    test "full cycle: start, progress, close, session closes", %{
+      context: _ctx,
+      run: run,
+      session: session
+    } do
+      started = call_tool("dran_start_run", %{"run_id" => run.id})
+      assert started =~ "Run started: #{run.id}"
+      assert started =~ "status: in_flight"
+
+      progress =
+        call_tool("dran_report_run_progress", %{
+          "run_id" => run.id,
+          "progress" => %{"01" => "gate compile passed"}
+        })
+
+      assert progress =~ "Progress recorded on run #{run.id}"
+      assert progress =~ "1 checkpoint(s)"
+
+      closed =
+        call_tool("dran_close_run", %{
+          "run_id" => run.id,
+          "status" => "passed",
+          "outcome" => "all gates green"
+        })
+
+      assert closed =~ "Run closed: #{run.id} — passed"
+      assert closed =~ "all gates green"
+
+      # el cierre del último run cierra la sesión como passed
+      closed_session = Dran.Repo.reload!(session)
+      assert closed_session.status == "passed"
+    end
+
+    test "failed run can be retried", %{context: _ctx, run: run} do
+      {:ok, run} = Executions.start_run(run)
+      call_tool("dran_close_run", %{"run_id" => run.id, "status" => "failed"})
+
+      result = call_tool("dran_retry_run", %{"run_id" => run.id})
+      assert result =~ "Retry created:"
+      assert result =~ "attempt 2"
+      assert result =~ "status: pending"
+    end
+
+    test "start on unknown run errors" do
+      result = call_tool("dran_start_run", %{"run_id" => Ecto.UUID.generate()})
+      assert result =~ "Error: run"
+    end
+
+    test "progress on non-started run errors", %{run: run} do
+      result =
+        call_tool("dran_report_run_progress", %{
+          "run_id" => run.id,
+          "progress" => %{"x" => "y"}
+        })
+
+      assert result =~ "Error: could not record progress"
     end
   end
 end

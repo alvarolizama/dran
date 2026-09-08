@@ -139,7 +139,7 @@ defmodule DranWeb.SidebarNavTest do
   end
 
   describe "sidebar_footer_icons" do
-    test "renders all 4 icons for owner" do
+    test "renders all footer icons for owner" do
       html =
         render_component(&Layouts.sidebar_footer_icons/1, %{
           is_owner: true,
@@ -149,11 +149,11 @@ defmodule DranWeb.SidebarNavTest do
       assert html =~ ~s(href="/")
       assert html =~ ~s(href="/admin")
       assert html =~ ~s(href="/settings/account")
-      assert html =~ ~s(href="/docs")
+      refute html =~ ~s(href="/docs")
       assert html =~ "hero-squares-2x2"
       assert html =~ "hero-command-line"
       assert html =~ "hero-user"
-      assert html =~ "hero-book-open"
+      refute html =~ "hero-book-open"
     end
 
     test "hides admin icon for non-owner" do
@@ -166,7 +166,6 @@ defmodule DranWeb.SidebarNavTest do
       assert html =~ ~s(href="/")
       refute html =~ ~s(href="/admin")
       assert html =~ ~s(href="/settings/account")
-      assert html =~ ~s(href="/docs")
     end
 
     test "shows workspace Config icon for workspace owner" do
@@ -197,7 +196,16 @@ defmodule DranWeb.SidebarNavTest do
 
       refute html =~ ~s(href="/personal/settings")
       assert html =~ ~s(href="/")
-      assert html =~ ~s(href="/docs")
+    end
+
+    test "footer icons align right" do
+      html =
+        render_component(&Layouts.sidebar_footer_icons/1, %{
+          is_owner: true,
+          workspace_slug: nil
+        })
+
+      assert html =~ "justify-end"
     end
 
     test "border-t separator present" do

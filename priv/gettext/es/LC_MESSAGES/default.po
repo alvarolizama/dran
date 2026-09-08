@@ -2674,17 +2674,17 @@ msgstr "Categorias"
 #: lib/dran_web/live/settings_live.ex:969
 #, elixir-autogen, elixir-format
 msgid "Click to enable write access"
-msgstr ""
+msgstr "Clic para habilitar acceso de escritura"
 
 #: lib/dran_web/live/settings_live.ex:968
 #, elixir-autogen, elixir-format
 msgid "Click to make read-only"
-msgstr ""
+msgstr "Clic para dejarla de solo lectura"
 
 #: lib/dran_web/live/settings_live.ex:946
 #, elixir-autogen, elixir-format
 msgid "Copy prefix"
-msgstr ""
+msgstr "Copiar prefijo"
 
 #: lib/dran_web/live/admin_users_live.ex:318
 #, elixir-autogen, elixir-format
@@ -2834,7 +2834,7 @@ msgstr "User has no API token."
 #: lib/dran_web/live/settings_live.ex:914
 #, elixir-autogen, elixir-format
 msgid "Write"
-msgstr ""
+msgstr "Escritura"
 
 #: lib/dran_web/live/smart_collection_live.ex:195
 #, elixir-autogen, elixir-format, fuzzy
@@ -3011,12 +3011,12 @@ msgstr "Público"
 #: lib/dran_web/live/settings_live.ex:1096
 #, elixir-autogen, elixir-format
 msgid "Read + write"
-msgstr ""
+msgstr "Lectura + escritura"
 
 #: lib/dran_web/live/settings_live.ex:1095
 #, elixir-autogen, elixir-format
 msgid "Read only"
-msgstr ""
+msgstr "Solo lectura"
 
 #: lib/dran_web/live/admin_live.ex:69
 #, elixir-autogen, elixir-format
@@ -3116,7 +3116,7 @@ msgstr "Aún no eres miembro de ningún espacio de trabajo."
 #: lib/dran_web/live/settings_live.ex:179
 #, elixir-autogen, elixir-format
 msgid "You can only grant access to your own workspaces"
-msgstr ""
+msgstr "Solo puedes otorgar acceso a tus propios espacios de trabajo"
 
 #: lib/dran_web/live/dashboard_live.ex:60
 #, elixir-autogen, elixir-format
@@ -3280,7 +3280,7 @@ msgstr "Aún no hay espacios de trabajo — crea uno con el botón de arriba."
 #: lib/dran_web/live/settings_live.ex:471
 #, elixir-autogen, elixir-format
 msgid "Account"
-msgstr ""
+msgstr "Cuenta"
 
 #: lib/dran_web/components/layouts.ex:589
 #, elixir-autogen, elixir-format
@@ -3305,22 +3305,22 @@ msgstr "Agregar usuario"
 #: lib/dran_web/live/settings_live.ex:565
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to unlink your Google account?"
-msgstr ""
+msgstr "¿Seguro que quieres desvincular tu cuenta de Google?"
 
 #: lib/dran_web/live/settings_live.ex:538
 #, elixir-autogen, elixir-format
 msgid "Change password"
-msgstr ""
+msgstr "Cambiar contraseña"
 
 #: lib/dran_web/live/settings_live.ex:485
 #, elixir-autogen, elixir-format
 msgid "Change your display name."
-msgstr ""
+msgstr "Cambia tu nombre para mostrar."
 
 #: lib/dran_web/live/settings_live.ex:511
 #, elixir-autogen, elixir-format
 msgid "Change your password."
-msgstr ""
+msgstr "Cambia tu contraseña."
 
 #: lib/dran_web/live/workspace_settings_live.ex:208
 #, elixir-autogen, elixir-format, fuzzy
@@ -3330,7 +3330,7 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:435
 #, elixir-autogen, elixir-format
 msgid "Could not unlink Google account"
-msgstr ""
+msgstr "No se pudo desvincular la cuenta de Google"
 
 #: lib/dran_web/live/workspace_settings_live.ex:295
 #, elixir-autogen, elixir-format, fuzzy
@@ -3340,7 +3340,7 @@ msgstr "No se pudo actualizar el contexto por defecto."
 #: lib/dran_web/live/settings_live.ex:524
 #, elixir-autogen, elixir-format
 msgid "Current password"
-msgstr ""
+msgstr "Contraseña actual"
 
 #: lib/dran_web/live/workspace_settings_live.ex:375
 #, elixir-autogen, elixir-format
@@ -3356,17 +3356,17 @@ msgstr "Generada"
 #: lib/dran_web/live/settings_live.ex:544
 #, elixir-autogen, elixir-format
 msgid "Google Account"
-msgstr ""
+msgstr "Cuenta de Google"
 
 #: lib/dran_web/live/settings_live.ex:555
 #, elixir-autogen, elixir-format
 msgid "Google account linked"
-msgstr ""
+msgstr "Cuenta de Google vinculada"
 
 #: lib/dran_web/live/settings_live.ex:429
 #, elixir-autogen, elixir-format
 msgid "Google account unlinked"
-msgstr ""
+msgstr "Cuenta de Google desvinculada"
 
 #: lib/dran_web/components/layouts.ex:341
 #, elixir-autogen, elixir-format
@@ -3386,12 +3386,12 @@ msgstr "Conocimiento"
 #: lib/dran_web/live/settings_live.ex:575
 #, elixir-autogen, elixir-format
 msgid "Link Google account"
-msgstr ""
+msgstr "Vincular cuenta de Google"
 
 #: lib/dran_web/live/settings_live.ex:545
 #, elixir-autogen, elixir-format
 msgid "Link or unlink your Google account."
-msgstr ""
+msgstr "Vincula o desvincula tu cuenta de Google."
 
 #: lib/dran_web/live/workspace_settings_live.ex:621
 #, elixir-autogen, elixir-format
@@ -3411,12 +3411,12 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:530
 #, elixir-autogen, elixir-format
 msgid "New password"
-msgstr ""
+msgstr "Nueva contraseña"
 
 #: lib/dran_web/live/settings_live.ex:556
 #, elixir-autogen, elixir-format
 msgid "No Google account linked"
-msgstr ""
+msgstr "Sin cuenta de Google vinculada"
 
 #: lib/dran_web/live/workspace_settings_live.ex:634
 #, elixir-autogen, elixir-format
@@ -3426,22 +3426,22 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:510
 #, elixir-autogen, elixir-format
 msgid "Password"
-msgstr ""
+msgstr "Contraseña"
 
 #: lib/dran_web/live/settings_live.ex:404
 #, elixir-autogen, elixir-format
 msgid "Password changed"
-msgstr ""
+msgstr "Contraseña cambiada"
 
 #: lib/dran_web/live/settings_live.ex:484
 #, elixir-autogen, elixir-format
 msgid "Profile"
-msgstr ""
+msgstr "Perfil"
 
 #: lib/dran_web/live/settings_live.ex:384
 #, elixir-autogen, elixir-format
 msgid "Profile updated"
-msgstr ""
+msgstr "Perfil actualizado"
 
 #: lib/dran_web/live/workspace_settings_live.ex:671
 #, elixir-autogen, elixir-format
@@ -3464,19 +3464,19 @@ msgid "Search users by email or name..."
 msgstr ""
 
 #: lib/dran_web/live/settings_live.ex:43
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Settings"
-msgstr "Ajustes guardados"
+msgstr "Configuración"
 
 #: lib/dran_web/live/settings_live.ex:570
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Unlink"
-msgstr "Desfijar"
+msgstr "Desvincular"
 
 #: lib/dran_web/live/settings_live.ex:567
 #, elixir-autogen, elixir-format
 msgid "Unlinking…"
-msgstr ""
+msgstr "Desvinculando…"
 
 #: lib/dran_web/components/markdown_editor_components.ex:384
 #, elixir-autogen, elixir-format
@@ -3501,7 +3501,7 @@ msgstr "Espacios de trabajo"
 #: lib/dran_web/live/settings_live.ex:497
 #, elixir-autogen, elixir-format
 msgid "Your name"
-msgstr ""
+msgstr "Tu nombre"
 
 #: lib/dran_web/live/smart_collection_live.ex:292
 #, elixir-autogen, elixir-format
@@ -3519,11 +3519,11 @@ msgid "%{count} facts de memoria"
 msgstr ""
 
 #: lib/dran_web/live/settings_live.ex:791
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "%{count} memory"
 msgid_plural "%{count} memories"
-msgstr[0] "%{count} página"
-msgstr[1] "%{count} páginas"
+msgstr[0] "%{count} memoria"
+msgstr[1] "%{count} memorias"
 
 #: lib/dran_web/live/memory_live.ex:343
 #, elixir-autogen, elixir-format
@@ -3543,7 +3543,7 @@ msgid "+ Add task"
 msgstr ""
 
 #: lib/dran_web/live/settings_live.ex:695
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "API keys"
 msgstr "Claves API"
 
@@ -3554,36 +3554,36 @@ msgstr "Activo"
 
 #: lib/dran_web/live/settings_live.ex:911
 #: lib/dran_web/live/settings_live.ex:1066
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Actor"
-msgstr "Activo"
+msgstr "Actor"
 
 #: lib/dran_web/live/settings_live.ex:268
 #, elixir-autogen, elixir-format
 msgid "Actor created"
-msgstr ""
+msgstr "Actor creado"
 
 #: lib/dran_web/live/settings_live.ex:355
 #, elixir-autogen, elixir-format
 msgid "Actor deleted"
-msgstr ""
+msgstr "Actor eliminado"
 
 #: lib/dran_web/live/settings_live.ex:933
 #, elixir-autogen, elixir-format
 msgid "Actor kind"
-msgstr ""
+msgstr "Tipo de actor"
 
 #: lib/dran_web/live/settings_live.ex:323
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Actor updated"
-msgstr ""
+msgstr "Actor actualizado"
 
 #: lib/dran_web/live/settings_live.ex:85
 #: lib/dran_web/live/settings_live.ex:477
 #: lib/dran_web/live/settings_live.ex:641
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Actors"
-msgstr "Acciones"
+msgstr "Actores"
 
 #: lib/dran_web/live/task_board_live.ex:357
 #, elixir-autogen, elixir-format
@@ -3632,14 +3632,14 @@ msgid "Could not create task"
 msgstr "No se pudo crear la API key"
 
 #: lib/dran_web/live/settings_live.ex:274
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Could not create the actor"
-msgstr "No se pudo crear la API key"
+msgstr "No se pudo crear el actor"
 
 #: lib/dran_web/live/settings_live.ex:374
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Could not delete the actor"
-msgstr "No se pudo eliminar el contexto."
+msgstr "No se pudo eliminar el actor"
 
 #: lib/dran_web/live/task_board_live.ex:202
 #, elixir-autogen, elixir-format
@@ -3647,37 +3647,37 @@ msgid "Could not move task: %{reason}"
 msgstr ""
 
 #: lib/dran_web/live/settings_live.ex:326
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Could not update the actor"
-msgstr "No se pudo actualizar el contexto por defecto."
+msgstr "No se pudo actualizar el actor"
 
 #: lib/dran_web/live/settings_live.ex:649
 #: lib/dran_web/live/settings_live.ex:681
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Create actor"
-msgstr "Crear proyecto"
+msgstr "Crear actor"
 
 #: lib/dran_web/live/settings_live.ex:807
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Delete actor"
-msgstr "Eliminar"
+msgstr "Eliminar actor"
 
 #: lib/dran_web/live/settings_live.ex:778
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Delete this actor?"
-msgstr "¿Eliminar este usuario?"
+msgstr "¿Eliminar este actor?"
 
 #: lib/dran_web/live/settings_live.ex:671
 #: lib/dran_web/live/settings_live.ex:693
 #: lib/dran_web/live/settings_live.ex:750
 #, elixir-autogen, elixir-format
 msgid "Display name"
-msgstr ""
+msgstr "Nombre para mostrar"
 
 #: lib/dran_web/live/settings_live.ex:744
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Edit actor"
-msgstr "Editar"
+msgstr "Editar actor"
 
 #: lib/dran_web/live/task_board_live.ex:530
 #, elixir-autogen, elixir-format, fuzzy
@@ -3685,9 +3685,9 @@ msgid "Edit task"
 msgstr "Editar"
 
 #: lib/dran_web/live/settings_live.ex:686
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Existing actors"
-msgstr "Claves existentes"
+msgstr "Actores existentes"
 
 #: lib/dran_web/live/memory_live.ex:392
 #, elixir-autogen, elixir-format
@@ -3709,12 +3709,12 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:755
 #, elixir-autogen, elixir-format
 msgid "Host"
-msgstr ""
+msgstr "Host"
 
 #: lib/dran_web/live/settings_live.ex:643
 #, elixir-autogen, elixir-format
 msgid "Identities that own work in Dran — humans (user) and agents (agent). API keys attach to an actor."
-msgstr ""
+msgstr "Identidades que poseen trabajo en Dran — humanos (user) y agentes (agent). Las API keys se asocian a un actor."
 
 #: lib/dran_web/live/memory_live.ex:180
 #, elixir-autogen, elixir-format
@@ -3746,9 +3746,9 @@ msgid "Memory no encontrada"
 msgstr ""
 
 #: lib/dran_web/live/settings_live.ex:737
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "No actors yet — create one with the form above."
-msgstr "Aún no hay espacios de trabajo — crea uno con el botón de arriba."
+msgstr "Aún no hay actores — crea uno con el formulario de arriba."
 
 #: lib/dran_web/live/memory_live.ex:424
 #, elixir-autogen, elixir-format
@@ -3764,13 +3764,13 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:756
 #, elixir-autogen, elixir-format
 msgid "Optional — e.g. laptop or ci-runner"
-msgstr ""
+msgstr "Opcional — ej. laptop o ci-runner"
 
 #: lib/dran_web/live/settings_live.ex:672
 #: lib/dran_web/live/settings_live.ex:751
 #, elixir-autogen, elixir-format
 msgid "Optional — shown instead of the name"
-msgstr ""
+msgstr "Opcional — se muestra en lugar del nombre"
 
 #: lib/dran_web/live/task_board_live.ex:657
 #, elixir-autogen, elixir-format, fuzzy
@@ -3800,7 +3800,7 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:370
 #, elixir-autogen, elixir-format
 msgid "System actors are code-managed and cannot be deleted"
-msgstr ""
+msgstr "Los actores de sistema los gestiona el código y no se pueden eliminar"
 
 #: lib/dran_web/components/layouts.ex:347
 #, elixir-autogen, elixir-format
@@ -3839,7 +3839,7 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:362
 #, elixir-autogen, elixir-format
 msgid "This actor still has API keys — revoke or delete them first"
-msgstr ""
+msgstr "Este actor todavía tiene API keys — revócalas o elimínalas primero"
 
 #: lib/dran_web/live/smart_collection_live.ex:303
 #: lib/dran_web/live/task_board_live.ex:660
@@ -3863,14 +3863,14 @@ msgid "Unassigned"
 msgstr ""
 
 #: lib/dran_web/live/settings_live.ex:816
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "User"
-msgstr "Usuarios"
+msgstr "Usuario"
 
 #: lib/dran_web/live/settings_live.ex:781
 #, elixir-autogen, elixir-format
 msgid "Work attributed to this actor:"
-msgstr ""
+msgstr "Trabajo atribuido a este actor:"
 
 #: lib/dran_web/live/memory_live.ex:303
 #, elixir-autogen, elixir-format, fuzzy
@@ -3885,7 +3885,7 @@ msgstr "Agente"
 #: lib/dran_web/live/settings_live.ex:660
 #, elixir-autogen, elixir-format
 msgid "e.g. alvaro or hermes-agent"
-msgstr ""
+msgstr "ej. alvaro o hermes-agent"
 
 #: lib/dran_web/live/memory_live.ex:310
 #: lib/dran_web/live/memory_live.ex:313
@@ -3896,7 +3896,7 @@ msgstr "Nuevo espacio de trabajo"
 #: lib/dran_web/live/settings_live.ex:1066
 #, elixir-autogen, elixir-format
 msgid "optional: the identity this key belongs to"
-msgstr ""
+msgstr "opcional: la identidad a la que pertenece esta clave"
 
 #: lib/dran_web/live/memory_live.ex:397
 #: lib/dran_web/live/search_live.ex:295
@@ -3917,7 +3917,7 @@ msgstr ""
 #: lib/dran_web/live/settings_live.ex:1069
 #, elixir-autogen, elixir-format
 msgid "— none (resolved from the key name) —"
-msgstr ""
+msgstr "— ninguna (se resuelve desde el nombre de la clave) —"
 
 #: lib/dran_web/live/task_board_live.ex:98
 #: lib/dran_web/live/task_board_live.ex:144

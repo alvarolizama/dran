@@ -46,7 +46,8 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Auth, Goals, Knowledge, Repo, Worker}
+  alias Dran.{Auth, Contracts, Executions, Goals, Knowledge, Repo, Worker}
+  alias Dran.Workflows
   alias Dran.PageTypes
   alias DranWeb.ResourceAuthorization
   alias Dran.Goals
@@ -545,6 +546,179 @@ defmodule Dran.MCP do
           }
         },
         "required" => ["workspace"]
+      }
+    },
+    %{
+      "name" => "dran_list_workflows",
+      "description" =>
+        "List a context's workflows (slug, title, status, kind, step count, open sessions). Use this to discover which workflow carries the contract you want to read.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug to list workflows from."
+          }
+        },
+        "required" => ["workspace"]
+      }
+    },
+    %{
+      "name" => "dran_get_workflow",
+      "description" =>
+        "Read a workflow (by slug or UUID) with its steps: title, slug, status, position, intent, contract validity and depends_on prerequisites. Read-only view of the plan DAG.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the workflow lives."
+          },
+          "workflow" => %{
+            "type" => "string",
+            "description" => "Workflow slug or UUID."
+          }
+        },
+        "required" => ["workspace", "workflow"]
+      }
+    },
+    %{
+      "name" => "dran_get_step_contract",
+      "description" =>
+        "Read a step's contract: the structured contract (intent, claims, gates, graph) AND the rendered riel-brief packet a pulling agent executes. The brief is the interchange format — claims are pre-registered, gates are the verification funnel. Get the step slug from dran_get_workflow.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the workflow lives."
+          },
+          "workflow" => %{
+            "type" => "string",
+            "description" => "Workflow slug or UUID."
+          },
+          "step" => %{
+            "type" => "string",
+            "description" => "Step slug or UUID."
+          }
+        },
+        "required" => ["workspace", "workflow", "step"]
+      }
+    },
+    %{
+      "name" => "dran_open_workflow_session",
+      "description" =>
+        "Open an execution session for a workflow: freezes a snapshot of the DAG and creates one pending run per step. Returns the session_id and per-run ids with readiness (prerequisites satisfied). Runs are claimed with dran_start_run.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the workflow lives."
+          },
+          "workflow" => %{
+            "type" => "string",
+            "description" => "Workflow slug or UUID."
+          },
+          "label" => %{
+            "type" => "string",
+            "description" => "Optional session label (e.g. who/why)."
+          }
+        },
+        "required" => ["workspace", "workflow"]
+      }
+    },
+    %{
+      "name" => "dran_list_pending_runs",
+      "description" =>
+        "List the pending (claimable) runs of a context's open sessions, with readiness per run. This is the pull queue: a run appears here when its session is open and its prerequisites have passed. Claim with dran_start_run.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug whose runs to list."
+          }
+        },
+        "required" => ["workspace"]
+      }
+    },
+    %{
+      "name" => "dran_start_run",
+      "description" =>
+        "Claim a pending run (transitions it to in_flight). Only the ready runs can start; a run already claimed by another executor is rejected. After starting, execute the step's brief (dran_get_step_contract) and report via dran_report_run_progress.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "run_id" => %{
+            "type" => "string",
+            "description" =>
+              "Run UUID (from dran_open_workflow_session or dran_list_pending_runs)."
+          }
+        },
+        "required" => ["run_id"]
+      }
+    },
+    %{
+      "name" => "dran_report_run_progress",
+      "description" =>
+        "Report progress on an in_flight run: a map of ledger entries (checkpoints) merged into the run's progress. This is the verified-state ledger of the execution — append entries as gates pass (e.g. %{\"01\" => \"✓ gate passed: mix test\"}).",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "run_id" => %{
+            "type" => "string",
+            "description" => "Run UUID."
+          },
+          "progress" => %{
+            "type" => "object",
+            "description" => "Map of checkpoint entries to record."
+          }
+        },
+        "required" => ["run_id", "progress"]
+      }
+    },
+    %{
+      "name" => "dran_close_run",
+      "description" =>
+        "Close an in_flight run with a result: status passed/failed/skipped (required), outcome summary, gate_results, checkpoints. Closing the last open run of the session closes the session (passed when every step's latest attempt passed/skipped). Failed runs can be retried with dran_retry_run.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "run_id" => %{
+            "type" => "string",
+            "description" => "Run UUID."
+          },
+          "status" => %{
+            "type" => "string",
+            "enum" => ["passed", "failed", "skipped"],
+            "description" => "Run result."
+          },
+          "outcome" => %{
+            "type" => "string",
+            "description" => "One-line outcome summary (optional)."
+          },
+          "checkpoints" => %{
+            "type" => "object",
+            "description" => "Final ledger entries (optional, merged)."
+          }
+        },
+        "required" => ["run_id", "status"]
+      }
+    },
+    %{
+      "name" => "dran_retry_run",
+      "description" =>
+        "Retry a failed run: creates a NEW run of the same step with attempt+1, pending. Only the LATEST failed attempt can be retried. Retrying after the session auto-closed as failed reopens it.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "run_id" => %{
+            "type" => "string",
+            "description" => "Run UUID (the failed attempt)."
+          }
+        },
+        "required" => ["run_id"]
       }
     },
     %{
@@ -1124,6 +1298,11 @@ defmodule Dran.MCP do
                  "dran_goal_checklist_add",
                  "dran_goal_checklist_toggle",
                  "dran_goal_checklist_remove",
+                 "dran_open_workflow_session",
+                 "dran_start_run",
+                 "dran_report_run_progress",
+                 "dran_close_run",
+                 "dran_retry_run",
                  "dran_create_relation",
                  "dran_delete_relation",
                  "dran_rename_slug",
@@ -2002,20 +2181,317 @@ defmodule Dran.MCP do
     end
   end
 
+  # ── Workflows / steps / sessions / runs (Riel bridge) ──────────────────────
+
+  defp execute_tool("dran_list_workflows", %{"workspace" => ws}, _user) do
+    context = workspace_cache_get(ws)
+
+    if is_map(context) do
+      workflows = Workflows.list_workflows(context.id)
+      counts = Workflows.steps_counts_by_ids(Enum.map(workflows, & &1.id))
+
+      if workflows == [] do
+        "No workflows in context '#{ws}'"
+      else
+        Enum.map_join(workflows, "\n", fn wf ->
+          "• #{wf.title} (#{wf.slug}) — #{wf.status} — kind: #{wf.kind} — steps: #{Map.get(counts, wf.id, 0)}"
+        end)
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
+  defp execute_tool("dran_get_workflow", %{"workspace" => ws, "workflow" => handle}, _user) do
+    context = Knowledge.get_workspace_by_slug(ws)
+
+    if is_map(context) do
+      case fetch_workflow(context.id, handle) do
+        %Workflows.Workflow{} = wf ->
+          steps = Workflows.list_steps(wf)
+
+          prereq_counts =
+            steps
+            |> Enum.map(& &1.id)
+            |> Contracts.dependency_edges(:step)
+            |> Enum.frequencies_by(fn {dependent, _prereq} -> dependent end)
+
+          step_lines =
+            Enum.map_join(steps, "\n", fn step ->
+              prereqs = Map.get(prereq_counts, step.id, 0)
+              contract = if Contracts.contract?(step), do: "contract ✓", else: "no contract"
+
+              "  • #{step.title} (#{step.slug}) — #{step.status} — #{contract}" <>
+                if prereqs == 0 do
+                  ""
+                else
+                  " — prereqs: #{prereqs}"
+                end
+            end)
+
+          """
+          Workflow: #{wf.title}
+          Slug: #{wf.slug}
+          ID: #{wf.id}
+          Status: #{wf.status} — kind: #{wf.kind}
+          Steps (#{length(steps)}):
+          #{step_lines}
+          """
+
+        nil ->
+          "Error: workflow '#{handle}' not found in context '#{ws}'"
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "dran_get_step_contract",
+         %{"workspace" => ws, "workflow" => wf_handle, "step" => step_handle},
+         _user
+       ) do
+    context = Knowledge.get_workspace_by_slug(ws)
+
+    if is_map(context) do
+      case fetch_workflow(context.id, wf_handle) do
+        %Workflows.Workflow{} = wf ->
+          steps = Workflows.list_steps(wf)
+
+          step =
+            Enum.find(steps, fn s ->
+              s.slug == step_handle or s.id == step_handle
+            end)
+
+          case step do
+            nil ->
+              "Error: step '#{step_handle}' not found in workflow '#{wf.slug}'"
+
+            %Workflows.Step{} = step ->
+              render_step_contract(step)
+          end
+
+        nil ->
+          "Error: workflow '#{wf_handle}' not found in context '#{ws}'"
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
+  defp execute_tool(
+         "dran_open_workflow_session",
+         %{"workspace" => ws, "workflow" => handle} = args,
+         _user
+       ) do
+    context = Knowledge.get_workspace_by_slug(ws)
+
+    if is_map(context) do
+      case fetch_workflow(context.id, handle) do
+        %Workflows.Workflow{} = wf ->
+          opts =
+            case args["label"] do
+              label when is_binary(label) and label != "" -> [label: label]
+              _ -> []
+            end
+
+          case Executions.open_session(wf, opts) do
+            {:ok, session} ->
+              runs =
+                session.runs
+                |> Repo.preload(:step)
+                |> Enum.sort_by(& &1.inserted_at)
+
+              run_lines =
+                Enum.map_join(runs, "\n", fn run ->
+                  ready = if Executions.run_ready?(run), do: "ready", else: "blocked"
+                  "  • run #{run.id} — step: #{run.step.slug} — #{run.status} (#{ready})"
+                end)
+
+              """
+              Session opened: #{session.id}
+              Workflow: #{wf.title} (#{wf.slug}) — #{length(runs)} runs created.
+              Runs:
+              #{run_lines}
+              Claim with dran_start_run(run_id). Briefs: dran_get_step_contract.
+              """
+
+            {:error, reason} ->
+              "Error: could not open session — #{inspect(reason)}"
+          end
+
+        nil ->
+          "Error: workflow '#{handle}' not found in context '#{ws}'"
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
+  defp execute_tool("dran_list_pending_runs", %{"workspace" => ws}, _user) do
+    context = Knowledge.get_workspace_by_slug(ws)
+
+    if is_map(context) do
+      runs =
+        Executions.list_pending_runs(context.id)
+        |> Repo.preload(step: [], session: [])
+
+      if runs == [] do
+        "No pending runs in context '#{ws}'"
+      else
+        Enum.map_join(runs, "\n", fn run ->
+          ready = if Executions.run_ready?(run), do: "ready", else: "blocked"
+
+          "• run #{run.id} — session: #{run.session_id} — step: #{run.step.slug} " <>
+            "(attempt #{run.attempt}) — #{ready}"
+        end)
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
+  defp execute_tool("dran_start_run", %{"run_id" => run_id}, _user) do
+    case Repo.get(Workflows.Run, run_id) do
+      nil ->
+        "Error: run '#{run_id}' not found"
+
+      %Workflows.Run{} = run ->
+        case Executions.start_run(run) do
+          {:ok, updated} ->
+            step = Repo.preload(updated, :step).step
+            "Run started: #{updated.id} — step: #{step.slug} — status: in_flight"
+
+          {:error, reason} ->
+            "Error: could not start run — #{inspect(reason)}"
+        end
+    end
+  end
+
+  defp execute_tool(
+         "dran_report_run_progress",
+         %{"run_id" => run_id, "progress" => progress},
+         _user
+       )
+       when is_map(progress) do
+    case Executions.update_progress(run_id, progress) do
+      {:ok, run} ->
+        "Progress recorded on run #{run.id} — #{map_size(run.progress)} checkpoint(s)"
+
+      {:error, reason} ->
+        "Error: could not record progress — #{inspect(reason)}"
+    end
+  end
+
+  defp execute_tool("dran_close_run", %{"run_id" => run_id, "status" => status} = args, _user) do
+    case Repo.get(Workflows.Run, run_id) do
+      nil ->
+        "Error: run '#{run_id}' not found"
+
+      %Workflows.Run{} = run ->
+        attrs =
+          %{status: status}
+          |> maybe_put(:outcome, args["outcome"])
+          |> maybe_put(:checkpoints, args["checkpoints"])
+
+        case Executions.close_run(run, attrs) do
+          {:ok, updated} ->
+            session = updated.session
+
+            session_note =
+              if session && session.status != "in_flight" do
+                " — session #{session.id} closed: #{session.status}"
+              else
+                ""
+              end
+
+            "Run closed: #{updated.id} — #{updated.status}" <>
+              session_note <>
+              if updated.outcome, do: " — #{updated.outcome}", else: ""
+
+          {:error, reason} ->
+            "Error: could not close run — #{inspect(reason)}"
+        end
+    end
+  end
+
+  defp execute_tool("dran_retry_run", %{"run_id" => run_id}, _user) do
+    case Repo.get(Workflows.Run, run_id) do
+      nil ->
+        "Error: run '#{run_id}' not found"
+
+      %Workflows.Run{} = run ->
+        case Executions.retry_run(run) do
+          {:ok, new_run} ->
+            "Retry created: run #{new_run.id} — attempt #{new_run.attempt} — status: #{new_run.status}"
+
+          {:error, reason} ->
+            "Error: could not retry — #{inspect(reason)}"
+        end
+    end
+  end
+
   defp execute_tool(tool_name, _args, _user), do: "Error: unknown tool '#{tool_name}'"
+
+  # Resolve a workflow by slug or UUID within the workspace.
+  # Canonical UUID shape (8-4-4-4-12 hex). Ecto.UUID.cast/1 additionally
+  # accepts raw 32-byte strings, which makes plain slugs cast as UUIDs and
+  # silently breaks the id-vs-slug dispatch in fetch_goal/fetch_workflow.
+  defp canonical_uuid?(value) when is_binary(value) do
+    value =~ ~r/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+  end
+
+  defp fetch_workflow(workspace_id, handle) when is_binary(handle) do
+    if canonical_uuid?(handle) do
+      case Repo.get(Workflows.Workflow, handle) do
+        %Workflows.Workflow{workspace_id: ^workspace_id} = wf -> wf
+        _ -> nil
+      end
+    else
+      Workflows.get_workflow_by_slug(handle, workspace_id)
+    end
+  end
+
+  defp fetch_workflow(_, _), do: nil
+
+  defp render_step_contract(%Workflows.Step{} = step) do
+    contract = Contracts.contract_map(step)
+
+    brief =
+      case Contracts.render_brief(step) do
+        {:ok, text} -> text
+        {:error, _} -> "(no valid contract — step lacks intent or fails lint)"
+      end
+
+    """
+    Step: #{step.title}
+    Slug: #{step.slug} — ID: #{step.id}
+    Status: #{step.status}
+
+    Contract (structured):
+    #{if contract, do: format_contract(contract), else: "(none)"}
+
+    ── Rendered brief (riel packet) ──
+    #{brief}
+    """
+  end
+
+  defp format_contract(contract) do
+    contract
+    |> Map.drop(["graph"])
+    |> Enum.map_join("\n", fn {k, v} -> "  #{k}: #{inspect(v, limit: :infinity)}" end)
+  end
 
   # Resolve a goal by slug or UUID within the workspace. Returns
   # %Goal{} | nil | {:error, :invalid_id}.
   defp fetch_goal(workspace_id, handle) when is_binary(handle) do
-    case Ecto.UUID.cast(handle) do
-      {:ok, id} ->
-        case Goals.get_goal(id) do
-          %Goal{workspace_id: ^workspace_id} = goal -> goal
-          _ -> {:error, :invalid_id}
-        end
-
-      :error ->
-        Goals.get_goal_by_slug(handle, workspace_id)
+    if canonical_uuid?(handle) do
+      case Goals.get_goal(handle) do
+        %Goal{workspace_id: ^workspace_id} = goal -> goal
+        _ -> {:error, :invalid_id}
+      end
+    else
+      Goals.get_goal_by_slug(handle, workspace_id)
     end
   end
 

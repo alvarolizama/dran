@@ -426,7 +426,7 @@ defmodule DranWeb.Layouts do
     """
   end
 
-  # ── Sidebar footer (Workspace link + Dashboard, Admin, Account, Docs) ───
+  # ── Sidebar footer (Dashboard, Workspace, Activity, Admin, Account) ──────
 
   attr :is_owner, :boolean, default: false
   attr :workspace_slug, :string, default: nil
@@ -438,7 +438,7 @@ defmodule DranWeb.Layouts do
     assigns = assign(assigns, :can_config, can_config)
 
     ~H"""
-    <div class="mt-auto flex items-center justify-center gap-1 pt-2 border-t border-base-300">
+    <div class="mt-auto flex items-center justify-end gap-1 pt-2 border-t border-base-300">
       <a
         href={~p"/"}
         class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
@@ -486,13 +486,6 @@ defmodule DranWeb.Layouts do
         title={gettext("Account")}
       >
         <.icon name="hero-user" class="size-4" />
-      </a>
-      <a
-        href={~p"/docs"}
-        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        title={gettext("Documentation")}
-      >
-        <.icon name="hero-book-open" class="size-4" />
       </a>
     </div>
     """

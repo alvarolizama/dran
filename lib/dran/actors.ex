@@ -42,11 +42,11 @@ defmodule Dran.Actors do
     :ok
   end
 
-  @doc "List actors excluding code-managed system ones (for CRUD UIs)."
+  @doc "List agent actors for the Agents management UI (users and system are automatic)."
   def list_managed_actors do
     Actor
-    |> where([a], a.kind != "system")
-    |> order_by([a], asc: a.kind, asc: a.name)
+    |> where([a], a.kind == "agent")
+    |> order_by([a], asc: a.name)
     |> Repo.all()
   end
 

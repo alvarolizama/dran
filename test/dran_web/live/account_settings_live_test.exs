@@ -26,26 +26,26 @@ defmodule DranWeb.AccountSettingsLiveTest do
   end
 
   describe "settings tabs" do
-    test "renders tab bar with Account and API Keys", %{conn: conn} do
+    test "renders tab bar with Account and Agents", %{conn: conn} do
       {_user, _attrs} = create_user()
 
       {:ok, _view, html} = live(owner_conn(conn), ~p"/settings/account")
 
       assert html =~ t("Account")
-      assert html =~ t("API Keys")
+      assert html =~ t("Agents")
       assert html =~ t("Profile")
       assert html =~ t("Password")
       assert html =~ t("Google Account")
       assert html =~ "Test User"
     end
 
-    test "api_keys tab renders keys content", %{conn: conn} do
+    test "agents tab renders agents content", %{conn: conn} do
       {_user, _attrs} = create_user()
 
-      {:ok, _view, html} = live(owner_conn(conn), ~p"/settings/api_keys")
+      {:ok, _view, html} = live(owner_conn(conn), ~p"/settings/agents")
 
-      assert html =~ t("API Keys")
-      assert html =~ t("Add Key")
+      assert html =~ t("Agents")
+      assert html =~ ~s(id="create-actor-form")
     end
 
     test "updates the display name", %{conn: conn} do

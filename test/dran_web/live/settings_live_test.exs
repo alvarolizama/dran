@@ -34,46 +34,36 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, conn: conn}
   end
 
-  test "the api keys tab renders the list and opens the create modal", %{conn: conn} do
-    {:ok, view, html} = live(conn, ~p"/settings/api_keys")
+  test "the agents tab renders agents with their inline key management", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/settings/agents")
 
-    # The tab renders the (empty) list of the current user's keys
-    assert html =~ t("No API keys yet — create one with the button above.")
+    # un solo tab de gestión: agentes, sin sección de API keys global
+    assert html =~ t("Agents")
+    assert html =~ t("No agents yet — create one with the form above.")
     refute html =~ ~s(id="create-api-key-form")
-
-    # Opening the modal reveals the multi-workspace create form
-    html = view |> element("button[phx-click='open_api_key_modal']") |> render_click()
-    assert html =~ ~s(id="create-api-key-form")
+    refute html =~ ~s(phx-click="open_api_key_modal")
   end
 
-  test "creating an api key from the modal reveals the token once", %{conn: conn} do
+  test "creating an agent key from its row reveals the token once", %{conn: conn} do
     unique = System.unique_integer([:positive])
 
-    {:ok, ctx} =
-      Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
+    {:ok, actor} =
+      Dran.Actors.create_actor(%{name: "hermes-#{unique}", kind: "agent"})
 
-    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
-
-    view |> element("button[phx-click='open_api_key_modal']") |> render_click()
+    {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
     html =
       view
-      |> form("#create-api-key-form",
-        api_key: %{
-          "name" => "Hermes",
-          "workspaces" => %{ctx.id => "read"},
-          "level" => %{ctx.id => "write"}
-        }
-      )
-      |> render_submit()
+      |> element("#actor-#{actor.id} button[phx-click='create_agent_key']")
+      |> render_click()
 
     # The one-time reveal card shows the full token + copy button
     assert html =~ ~s(id="revealed-api-key-card")
     assert html =~ ~s(id="copy-revealed-key-btn")
 
-    # The key now appears in the list with masked prefix only
-    assert html =~ "Hermes"
-    assert html =~ "••••••••••••"
+    # The agent row now shows the masked prefix instead of the create button
+    refute html =~ ~s(phx-click="create_agent_key")
+    assert html =~ "••••"
   end
 
   test "revoking a key from the list marks it revoked", %{conn: conn} do
@@ -91,15 +81,28 @@ defmodule DranWeb.SettingsLiveTest do
         created_by_user_id: user.id
       })
 
-    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
+    # key ligada a un agente para que aparezca en su fila
+    {:ok, actor} = Dran.Actors.create_actor(%{name: "revocable-#{unique}", kind: "agent"})
+
+    {:ok, key} =
+      Accounts.create_api_key(%{
+        name: "Revocable",
+        workspace_ids: [{ctx.id, "read"}],
+        created_by_user_id: user.id,
+        actor_id: actor.id
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
     html =
       view
-      |> element("#api-key-#{key.id} button[phx-click='revoke_api_key']")
+      |> element("#actor-#{actor.id} button[phx-click='revoke_api_key']")
       |> render_click()
 
-    assert html =~ t("Revoked")
     assert Accounts.valid_api_key?(key.token) == :error
+
+    # revocada la única key: la fila vuelve a ofrecer Create key
+    assert html =~ ~s(phx-click="create_agent_key")
   end
 
   test "copy_api_key_prefix of ANOTHER user's key is rejected without leaking the prefix", %{
@@ -135,7 +138,7 @@ defmodule DranWeb.SettingsLiveTest do
       |> Plug.Conn.put_session(:user, "plain-user-#{unique}@example.com")
       |> Plug.Conn.put_session(:workspace_slug, "personal")
 
-    {:ok, view, _html} = live(conn, ~p"/settings/api_keys")
+    {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
     # The foreign key never appears in the non-owner's list (list_api_keys
     # scopes by user) — so forge the event directly with its id, exactly like
@@ -152,40 +155,40 @@ defmodule DranWeb.SettingsLiveTest do
     test "renders the actors tab with the create form and existing actors", %{conn: conn} do
       {:ok, _actor} = Dran.Actors.create_actor(%{name: "visible-actor", kind: "agent"})
 
-      {:ok, view, html} = live(conn, ~p"/settings/actors")
+      {:ok, view, html} = live(conn, ~p"/settings/agents")
 
-      assert html =~ t("Actors")
+      assert html =~ t("Agents")
       assert html =~ ~s(id="create-actor-form")
       assert html =~ "visible-actor"
-      assert html =~ t("User")
-      assert html =~ t("Agent")
+      # solo agentes gestionables: no hay select de kind ni badge User
+      refute html =~ ~s(field="actor[kind]")
+      refute html =~ t("User")
       # System actors are never listed
       refute html =~ ~s(>system<)
 
       # The tab is reachable by patching from the api_keys tab
-      html = view |> element("a", t("Actors")) |> render_click()
-      assert html =~ t("Existing actors")
+      html = view |> element("a", t("Agents")) |> render_click()
+      assert html =~ t("Existing agents")
     end
 
     test "creating an actor with kind agent persists it and refreshes the list", %{conn: conn} do
       unique = System.unique_integer([:positive])
       name = "agent-#{unique}"
 
-      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+      {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
       html =
         view
         |> form("#create-actor-form", %{
           "actor" => %{
             "name" => name,
-            "kind" => "agent",
             "display_name" => "Test Agent #{unique}",
             "host" => "ci-runner"
           }
         })
         |> render_submit()
 
-      assert html =~ t("Actor created")
+      assert html =~ t("Agent created")
       assert html =~ name
 
       actor = Dran.Actors.get_actor_by_name(name)
@@ -199,27 +202,28 @@ defmodule DranWeb.SettingsLiveTest do
       unique = System.unique_integer([:positive])
       name = "evil-system-#{unique}"
 
-      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+      {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
-      # The select only offers user|agent, so a system attempt arrives via a
-      # hand-crafted submit (what a tampered client would send).
+      # kind is server-forced to agent: a tampered submit cannot create a
+      # system actor — the row is created as an agent, never as system
       html =
         render_submit(view, "create_actor", %{
           "actor" => %{"name" => name, "kind" => "system"}
         })
 
-      assert html =~ t("Could not create the actor")
-      refute Dran.Actors.get_actor_by_name(name)
+      assert html =~ t("Agent created")
+      actor = Dran.Actors.get_actor_by_name(name)
+      assert actor && actor.kind == "agent"
     end
 
     test "editing an actor updates display_name and host only", %{conn: conn} do
       {:ok, actor} =
         Dran.Actors.create_actor(%{
           name: "editable-#{System.unique_integer([:positive])}",
-          kind: "user"
+          kind: "agent"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+      {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
       _ = view |> element("#actor-#{actor.id} button[phx-click='edit_actor']") |> render_click()
       assert has_element?(view, "#edit-actor-modal")
@@ -231,12 +235,12 @@ defmodule DranWeb.SettingsLiveTest do
         })
         |> render_submit()
 
-      assert html =~ t("Actor updated")
+      assert html =~ t("Agent updated")
 
       reloaded = Dran.Actors.get_actor_by_name(actor.name)
       assert reloaded.display_name == "Renamed"
       assert reloaded.host == "laptop"
-      assert reloaded.kind == "user"
+      assert reloaded.kind == "agent"
     end
 
     test "deleting an actor with API keys is blocked with a flash error", %{conn: conn} do
@@ -257,7 +261,7 @@ defmodule DranWeb.SettingsLiveTest do
           actor_id: actor.id
         })
 
-      {:ok, view, _html} = live(conn, ~p"/settings/actors")
+      {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
       # Inline confirmation shows the attribution impact (0 pages/tasks/memories)
       html =

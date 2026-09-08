@@ -426,8 +426,7 @@ defmodule DranWeb.Router do
     pipe_through [:browser, :auth]
 
     live "/account", SettingsLive, :account
-    live "/api_keys", SettingsLive, :api_keys
-    live "/actors", SettingsLive, :actors
+    live "/agents", SettingsLive, :agents
   end
 
   # ── Admin (instance-level, owner-only) ────────────────────────────────────
