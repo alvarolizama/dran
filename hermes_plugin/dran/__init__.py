@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_BASE_URL = "http://localhost:4000"
 DEFAULT_WORKSPACE = "personal"
 CONFIG_FILENAME = "dran_memory.json"
+# Single-source-of-truth credential: profile .env's DRAN_API_KEY, the same
+# var config.yaml interpolates into mcp_servers.dran.headers.
+API_KEY_ENV_VAR = "DRAN_API_KEY"
 REQUEST_TIMEOUT = 5.0
 INGEST_TIMEOUT = 30.0
 MAX_PREFETCH_CHARS = 800
@@ -44,6 +47,23 @@ def _default_config() -> dict:
     }
 
 
+def _resolve_secret() -> str:
+    """Resolve DRAN_API_KEY from the active profile's secret scope.
+
+    Hermes loads the ACTIVE PROFILE's .env at startup (load_hermes_dotenv
+    runs before plugins are discovered). Under a multiplexing gateway
+    get_secret resolves the routed profile's scope and never falls through
+    to os.environ; otherwise it degrades to os.environ (single-profile
+    deployments inject credentials via the process env — systemd, op run).
+    """
+    try:
+        from agent.secret_scope import get_secret
+        val = get_secret(API_KEY_ENV_VAR, "")
+    except Exception:
+        val = os.environ.get(API_KEY_ENV_VAR, "")
+    return (val or "").strip()
+
+
 def _load_dran_config(hermes_home: str) -> dict:
     config = _default_config()
     config_path = Path(hermes_home) / CONFIG_FILENAME
@@ -56,13 +76,20 @@ def _load_dran_config(hermes_home: str) -> dict:
             logger.debug("Failed to parse %s", config_path, exc_info=True)
 
     config["base_url"] = str(config.get("base_url") or DEFAULT_BASE_URL).strip().rstrip("/")
-    config["api_key"] = str(config.get("api_key") or "").strip()
+    # Single-source-of-truth for the credential: omit api_key (or leave the
+    # ${DRAN_API_KEY} placeholder) and it resolves from the profile .env —
+    # the same var mcp_servers.dran interpolates in config.yaml. A literal
+    # key in the JSON still wins (per-agent overrides).
+    api_key = str(config.get("api_key") or "").strip()
+    if api_key in ("", "${DRAN_API_KEY}", "${env:DRAN_API_KEY}"):
+        api_key = _resolve_secret()
+    config["api_key"] = api_key
     config["workspace"] = str(config.get("workspace") or DEFAULT_WORKSPACE).strip()
     config["auto_recall"] = bool(config.get("auto_recall", True))
     config["auto_capture"] = bool(config.get("auto_capture", True))
     try:
         config["max_recall_results"] = max(1, min(20, int(config.get("max_recall_results", 5))))
-    except Exception:
+    except (TypeError, ValueError):
         config["max_recall_results"] = 5
     return config
 

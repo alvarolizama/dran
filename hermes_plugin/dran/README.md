@@ -9,7 +9,18 @@ viven server-side en Dran (`/api/memory`).
 1. En Dran → Settings → API keys: crea una key **por agente** con
    `write_access` sobre el workspace compartido (el `created_by` de cada
    recuerdo se atribuye server-side a la key que lo guardó).
-2. Configura el provider:
+2. Guarda la key **una sola vez** en el `.env` del perfil:
+
+   ```bash
+   # ~/.hermes/profiles/<perfil>/.env
+   DRAN_API_KEY=dran_sk_...
+   ```
+
+   Ese mismo valor lo consume el MCP (`config.yaml` →
+   `mcp_servers.dran.headers: "Authorization: Bearer ${DRAN_API_KEY}"`).
+3. Configura el provider — **sin escribir la key de nuevo**. `api_key` se
+   resuelve solo desde `DRAN_API_KEY` (se omite, o se deja el placeholder
+   `${DRAN_API_KEY}`). Un literal en el JSON gana, para overrides por agente:
 
    ```bash
    hermes memory setup    # elegir "dran"
@@ -20,7 +31,6 @@ viven server-side en Dran (`/api/memory`).
    ```json
    {
      "base_url": "http://localhost:4000",
-     "api_key": "dran_sk_...",
      "workspace": "personal",
      "auto_recall": true,
      "auto_capture": true,
@@ -28,14 +38,14 @@ viven server-side en Dran (`/api/memory`).
    }
    ```
 
-3. Instala el plugin en el perfil (symlink — la fuente vive en este repo):
+4. Instala el plugin en el perfil (symlink — la fuente vive en este repo):
 
    ```bash
    ln -s ~/Workspace/Repos/alvarolizama/dran/hermes_plugin/dran \
          ~/.hermes/profiles/<perfil>/plugins/dran
    ```
 
-4. Reinicia la sesión de Hermes y verifica: "¿qué recuerdas de ...?"
+5. Reinicia la sesión de Hermes y verifica: "¿qué recuerdas de ...?"
 
 ## Qué hace
 
