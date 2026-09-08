@@ -100,11 +100,16 @@ defmodule Dran.Workspace do
   Returns true if the feature is enabled.
   If enabled_features is empty (default), all features are ON.
   If the key exists and is false, the feature is OFF.
-  """
-  def feature_enabled?(%__MODULE__{} = ws, feature) when is_atom(feature) or is_binary(feature) do
-    feature_key = to_string(feature)
 
-    case Map.get(ws.enabled_features, feature_key) do
+  Accepts a Workspace struct or any map with :enabled_features/:features key
+  (defensive: LiveView assigns can carry a pre-rename struct across a hot
+  code reload, which pattern-matches as a plain map).
+  """
+  def feature_enabled?(ws, feature) when is_map(ws) and (is_atom(feature) or is_binary(feature)) do
+    feature_key = to_string(feature)
+    features = ws.enabled_features || %{}
+
+    case Map.get(features, feature_key) do
       nil -> true
       value -> value
     end
