@@ -2,7 +2,7 @@ defmodule Dran.EmbeddingsTest do
   use Dran.DataCase, async: false
 
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.Embeddings
 
   setup do
@@ -58,7 +58,7 @@ defmodule Dran.EmbeddingsTest do
       context = Knowledge.get_workspace_by_slug("personal")
 
       page =
-        Dran.Page.create_changeset(%{
+        Dran.Knowledge.Page.create_changeset(%{
           workspace_id: context.id,
           title: "Elixir",
           slug: "elixir",
@@ -123,7 +123,7 @@ defmodule Dran.EmbeddingsTest do
         Knowledge.create_workspace(%{name: "Backfill #{uniq}", slug: "backfill-#{uniq}"})
 
       p1 =
-        Dran.Page.create_changeset(%{
+        Dran.Knowledge.Page.create_changeset(%{
           workspace_id: context.id,
           title: "Page One",
           slug: "page-one",
@@ -135,7 +135,7 @@ defmodule Dran.EmbeddingsTest do
         |> Dran.Repo.insert!()
 
       p2 =
-        Dran.Page.create_changeset(%{
+        Dran.Knowledge.Page.create_changeset(%{
           workspace_id: context.id,
           title: "Page Two",
           slug: "page-two",

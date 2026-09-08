@@ -12,7 +12,8 @@ defmodule DranWeb.TaskLive do
 
   use DranWeb, :live_view
 
-  alias Dran.{Goals, Tasks, Task}
+  alias Dran.{Goals, Tasks}
+  alias Dran.Tasks.Task
   alias DranWeb.Plugs.Auth
 
   # Web session identity for attribution (same contract as the board).

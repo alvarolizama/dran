@@ -40,7 +40,7 @@ defmodule Dran.GoalTest do
         slug: "test-goal"
       }
 
-      assert {:ok, %Dran.Goal{} = goal} = Goals.create_goal(attrs)
+      assert {:ok, %Dran.Goals.Goal{} = goal} = Goals.create_goal(attrs)
       assert goal.title == "Test Goal"
     end
   end

@@ -7,9 +7,9 @@ defmodule Dran.PageRegistry do
   | What              | Old location        | Now               |
   |-------------------|---------------------|-------------------|
   | Capabilities      | `Dran.PageTypes`    | `PageRegistry`    |
-  | Kinds             | `Dran.PageMeta`     | `PageRegistry`    |
-  | Meta field defs   | `Dran.PageMeta`     | `PageRegistry`    |
-  | Kind labels       | `Dran.PageMeta`     | `PageRegistry`    |
+  | Kinds             | `Dran.Knowledge.PageMeta`     | `PageRegistry`    |
+  | Meta field defs   | `Dran.Knowledge.PageMeta`     | `PageRegistry`    |
+  | Kind labels       | `Dran.Knowledge.PageMeta`     | `PageRegistry`    |
   | UI attrs          | `DranWeb.PageTypes` | `PageRegistry`    |
 
   ## Adding a kind
@@ -31,7 +31,7 @@ defmodule Dran.PageRegistry do
 
   ## What is NOT here
 
-  The Ecto embedded schema (`Dran.PageMeta`) and its changeset stay in
+  The Ecto embedded schema (`Dran.Knowledge.PageMeta`) and its changeset stay in
   `PageMeta` — they are about validation, not configuration. `PageMeta`
   delegates to this registry for kinds and field definitions.
 
@@ -193,7 +193,7 @@ defmodule Dran.PageRegistry do
   # ── Meta field definitions ─────────────────────────────────────────
   #
   # What the editor renders per page type. Tuple shapes are identical to
-  # what `Dran.PageMeta.meta_fields_for/1` returned — the normaliser in
+  # what `Dran.Knowledge.PageMeta.meta_fields_for/1` returned — the normaliser in
   # `markdown_editor_components.ex` handles them unchanged.
 
   @doc """
@@ -218,7 +218,6 @@ defmodule Dran.PageRegistry do
       {:text, "language", gettext("Language"),
        placeholder: "elixir, python, typescript…", condition: {:kind, "code"}},
       {:date, "date", gettext("Date")},
-      {:text, "author", gettext("Author")},
       {:date, "due_date", gettext("Due date"), condition: {:kind, "reminder"}},
       {:props, "props", gettext("Custom properties")}
     ]

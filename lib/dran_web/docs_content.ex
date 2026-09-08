@@ -50,7 +50,7 @@ defmodule DranWeb.DocsContent do
 
   @auth_api_curl """
   curl -H "Authorization: Bearer ***" \
-       http://localhost:4000/api/pages?context=personal
+       http://localhost:4000/api/knowledge-pages?context=personal
   """
 
   # ── Planning model (v7 — polymorphic relations) ──
@@ -238,7 +238,7 @@ defmodule DranWeb.DocsContent do
 
   All scheduled jobs route through `Dran.Jobs.run_scheduled/1`, which
   honors the per-job toggles in Settings → Brain and writes a
-  `Dran.Report` record per run:
+  `Dran.Reports.Report` record per run:
     curator_daily                06:00  daily
     pagerank_nightly             03:00  daily  (this pipeline)
     cluster_summaries_nightly  03:30  daily  (LLM summary per cluster)

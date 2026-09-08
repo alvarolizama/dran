@@ -12,7 +12,7 @@ defmodule Dran.Graph.ClusterSummaries do
   import Ecto.Query
 
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.Graph.ClusterSummary
   alias Dran.Inference
   alias Dran.Repo

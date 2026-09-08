@@ -213,7 +213,7 @@ defmodule DranWeb.TaskBoardLiveTest do
       |> form("#quick-add-backlog")
       |> render_submit(%{"task" => %{"title" => "Fresh task", "status" => "backlog"}})
 
-      assert Repo.get_by(Dran.Task, title: "Fresh task")
+      assert Repo.get_by(Dran.Tasks.Task, title: "Fresh task")
       refute has_element?(view, "#task-detail-form")
     end
   end

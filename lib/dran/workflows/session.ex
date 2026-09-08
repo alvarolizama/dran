@@ -1,4 +1,4 @@
-defmodule Dran.WorkflowSession do
+defmodule Dran.Workflows.Session do
   @moduledoc """
   An execution instance of a workflow — one pass over the (stable,
   never-cloned) definition, frozen into `snapshot` at open time.
@@ -34,12 +34,12 @@ defmodule Dran.WorkflowSession do
     # %{\"steps\" => [%{\"id\", \"title\", \"contract\"}], \"edges\" => [[from, to]]}.
     field :snapshot, :map, default: %{}
 
-    belongs_to :workflow, Dran.Workflow
-    belongs_to :goal, Dran.Goal
+    belongs_to :workflow, Dran.Workflows.Workflow
+    belongs_to :goal, Dran.Goals.Goal
     belongs_to :workspace, Dran.Workspace
     belongs_to :actor, Dran.Actors.Actor
 
-    has_many :runs, Dran.Run, foreign_key: :session_id
+    has_many :runs, Dran.Workflows.Run, foreign_key: :session_id
 
     timestamps(type: :utc_datetime)
   end

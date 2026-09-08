@@ -1046,7 +1046,7 @@ defmodule DranWeb.HomeLive do
     {:noreply, assign(socket, search_query: query, search_results: results)}
   end
 
-  # ── Filter event handlers (kanban + todo type_list) ──
+  # ── Filter event handlers (type_list) ──
 
   @impl true
   def handle_event("node_click", %{"slug" => slug} = params, socket) do
@@ -1146,7 +1146,7 @@ defmodule DranWeb.HomeLive do
     |> Enum.map(fn type ->
       count =
         Dran.Repo.aggregate(
-          from(p in Dran.Page,
+          from(p in Dran.Knowledge.Page,
             where:
               p.workspace_id == ^workspace.id and
                 p.page_type == ^type and

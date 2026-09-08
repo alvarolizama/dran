@@ -1,7 +1,8 @@
 defmodule Dran.MemoryTest do
   use Dran.DataCase, async: false
 
-  alias Dran.{Knowledge, Memory}
+  alias Dran.{Knowledge}
+  alias Dran.Memory
 
   setup do
     original = Application.get_env(:dran, :inference)

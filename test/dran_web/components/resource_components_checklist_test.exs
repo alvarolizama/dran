@@ -1,7 +1,7 @@
 defmodule DranWeb.ResourceComponentsChecklistTest do
   use DranWeb.ConnCase, async: true
 
-  alias Dran.Task
+  alias Dran.Tasks.Task
   alias DranWeb.ResourceComponents
 
   describe "parse_checklist_param/1" do

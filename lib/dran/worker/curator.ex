@@ -24,7 +24,7 @@ defmodule Dran.Worker.Curator do
   import Ecto.Query
 
   alias Dran.{Knowledge, Repo, Reports}
-  alias Dran.Page
+  alias Dran.Knowledge.Page
 
   @worker_type "curator"
   @max_flags 20

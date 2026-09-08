@@ -48,11 +48,6 @@ defmodule DranWeb.PageListComponents do
           {gettext("No plans yet"), gettext("Lay out weekly, monthly or quarterly plans."),
            gettext("Create Plan")}
 
-        "todo" ->
-          {gettext("No todos yet"),
-           gettext("Add actionable items and move them across the board."),
-           gettext("Create Todo")}
-
         _ ->
           {gettext("No pages yet"),
            gettext("Your second brain is empty. Capture your first page."),

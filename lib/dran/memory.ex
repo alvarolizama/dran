@@ -3,7 +3,7 @@ defmodule Dran.Memory do
   Shared multi-agent memory: atomic facts per workspace, with content dedupe,
   asymmetric trust feedback, and trust-weighted hybrid search.
 
-  The memory layer is deliberately separate from `Dran.Page`:
+  The memory layer is deliberately separate from `Dran.Knowledge.Page`:
 
   * content is exact and immutable (no LLM augmentation rewrites facts)
   * write-hot, no inference call per fact (embedding only)

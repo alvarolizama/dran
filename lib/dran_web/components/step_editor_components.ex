@@ -454,7 +454,7 @@ defmodule DranWeb.StepEditorComponents do
 
   defp contract_json(nil), do: ""
 
-  defp contract_json(%Dran.Step{} = step) do
+  defp contract_json(%Dran.Workflows.Step{} = step) do
     case Dran.Contracts.contract_map(step) do
       nil ->
         ""

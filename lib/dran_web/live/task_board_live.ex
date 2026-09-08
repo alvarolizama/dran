@@ -2,7 +2,7 @@ defmodule DranWeb.TaskBoardLive do
   @moduledoc """
   Interactive task board (kanban) with native HTML5 drag & drop.
 
-  Columns come from `Dran.Task.statuses/0`. Moves go through
+  Columns come from `Dran.Tasks.Task.statuses/0`. Moves go through
   `Dran.Tasks.move_task/3` (optimistic locking + position renumbering).
   A stale lock shows a flash and reloads the board from the server — the
   losing client sees the winner's state instead of silently overwriting it.
@@ -16,7 +16,8 @@ defmodule DranWeb.TaskBoardLive do
 
   use DranWeb, :live_view
 
-  alias Dran.{Goals, Tasks, Task}
+  alias Dran.{Goals, Tasks}
+  alias Dran.Tasks.Task
 
   # Web session identity for attribution: the logged-in user's email
   # (sessions carry the email as `current_user`), resolved through

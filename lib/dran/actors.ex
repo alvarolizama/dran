@@ -131,7 +131,7 @@ defmodule Dran.Actors do
   """
   def attribution_count(%Actor{name: name}) do
     pages =
-      from(p in "pages", where: p.created_by == ^name)
+      from(p in "knowledge_pages", where: p.created_by == ^name)
       |> Repo.aggregate(:count, :id)
 
     tasks =

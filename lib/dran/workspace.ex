@@ -64,7 +64,7 @@ defmodule Dran.Workspace do
       :entity_linker_enabled,
       :worker_max_pages
     ])
-    |> validate_subset(:disabled_page_types, Dran.Page.all_types())
+    |> validate_subset(:disabled_page_types, Dran.Knowledge.Page.all_types())
     |> validate_inclusion(:visibility, ~w(public private))
     |> force_public_when_default()
     |> validate_number(:worker_max_pages, greater_than: 0)

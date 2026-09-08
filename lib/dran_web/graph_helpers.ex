@@ -6,7 +6,7 @@ defmodule DranWeb.GraphHelpers do
   """
 
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   import Ecto.Query
 
   @type_colors %{

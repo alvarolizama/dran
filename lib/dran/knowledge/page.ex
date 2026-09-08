@@ -1,4 +1,4 @@
-defmodule Dran.Page do
+defmodule Dran.Knowledge.Page do
   @moduledoc """
   The core entity of the second brain. Every piece of knowledge is a page.
 
@@ -18,12 +18,12 @@ defmodule Dran.Page do
 
   ## Meta JSONB
 
-  The `meta` field stores type-specific data, validated via `Dran.PageMeta`:
+  The `meta` field stores type-specific data, validated via `Dran.Knowledge.PageMeta`:
   - `note`: `%{kind: "journal", date: ~D[2026-06-19]}`
   - `reference`: `%{source_url: "https://...", kind: "article"}`
 
   Kanban/action-item data no longer lives here — tasks are first-class
-  (`Dran.Task` in their own table) since the tasks migration.
+  (`Dran.Tasks.Task` in their own table) since the tasks migration.
 
   ## Owner tracking
 
@@ -76,7 +76,7 @@ defmodule Dran.Page do
   @page_types Dran.PageTypes.types()
   @confidence_levels ~w(low medium high verified)
 
-  schema "pages" do
+  schema "knowledge_pages" do
     field :title, :string
     field :slug, :string
     field :body, :string, default: ""
@@ -138,7 +138,7 @@ defmodule Dran.Page do
     |> validate_inclusion(:page_type, @page_types)
     |> validate_inclusion(:kb_confidence, @confidence_levels)
     |> put_body_hash()
-    |> unique_constraint([:workspace_id, :slug], name: :pages_workspace_id_slug_index)
+    |> unique_constraint([:workspace_id, :slug], name: :knowledge_pages_workspace_id_slug_index)
   end
 
   @doc "Changeset for creating a new page"

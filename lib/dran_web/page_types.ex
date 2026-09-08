@@ -46,7 +46,7 @@ defmodule DranWeb.PageTypes do
   """
   def page_show_path(page, workspace_slug \\ nil)
 
-  def page_show_path(%Dran.Page{page_type: type, slug: slug}, workspace_slug)
+  def page_show_path(%Dran.Knowledge.Page{page_type: type, slug: slug}, workspace_slug)
       when is_binary(type) and is_binary(slug) do
     build_page_show_path(type, slug, workspace_slug)
   end

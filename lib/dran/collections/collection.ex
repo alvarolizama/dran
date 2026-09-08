@@ -1,4 +1,4 @@
-defmodule Dran.Collection do
+defmodule Dran.Collections.Collection do
   @moduledoc """
   Saved filter query — replaces the old Smart Collection pattern
   (query pages with `meta.query`).

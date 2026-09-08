@@ -8,7 +8,10 @@ defmodule Dran.WorkflowsTest do
 
   use Dran.DataCase, async: false
 
-  alias Dran.{Contracts, Goals, Knowledge, Relation, Repo, Task, Workflow, Workflows}
+  alias Dran.{Contracts, Goals, Knowledge, Repo, Workflows}
+  alias Dran.Relation
+  alias Dran.Tasks.Task
+  alias Dran.Workflows.Workflow
 
   setup do
     %{workspace: ensure_workspace!()}
@@ -186,7 +189,7 @@ defmodule Dran.WorkflowsTest do
     test "delete_step/1 deletes a step without open runs", %{plan: plan} do
       {:ok, step} = Workflows.create_step(plan, %{title: "S", slug: "s"})
 
-      assert {:ok, %Dran.Step{}} = Workflows.delete_step(step)
+      assert {:ok, %Dran.Workflows.Step{}} = Workflows.delete_step(step)
       assert Workflows.list_steps(plan) == []
     end
   end
@@ -311,7 +314,7 @@ defmodule Dran.WorkflowsTest do
       assert {:ok, deleted} = Workflows.delete_workflow(plan)
       assert deleted.id == plan.id
       # steps and their polymorphic edges are gone
-      assert Repo.all(from(s in Dran.Step, where: s.workflow_id == ^plan.id)) == []
+      assert Repo.all(from(s in Dran.Workflows.Step, where: s.workflow_id == ^plan.id)) == []
       assert Repo.all(from(r in Relation, where: r.source_type == "step")) == []
     end
 
@@ -352,7 +355,7 @@ defmodule Dran.WorkflowsTest do
       {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p"})
       {:ok, step} = Workflows.create_step(plan, %{title: "S", slug: "s"})
       {:ok, _session} = Dran.Executions.open_session(plan)
-      run = Dran.Repo.get_by!(Dran.Run, step_id: step.id)
+      run = Dran.Repo.get_by!(Dran.Workflows.Run, step_id: step.id)
 
       assert {:error, :has_open_runs} = Workflows.delete_step(step)
       assert Dran.Repo.reload!(run)

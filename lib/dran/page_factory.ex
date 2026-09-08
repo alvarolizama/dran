@@ -16,7 +16,7 @@ defmodule Dran.PageFactory do
   """
 
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
 
   @doc """
   Get or create a page of `page_type` with slug `slug` in `source_page`'s

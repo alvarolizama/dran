@@ -1,7 +1,7 @@
 defmodule Dran.Workflows do
   @moduledoc """
-  The Workflows context — CRUD for workflows (`Dran.Workflow`) and steps
-  (`Dran.Step`).
+  The Workflows context — CRUD for workflows (`Dran.Workflows.Workflow`) and steps
+  (`Dran.Workflows.Step`).
 
   Leaf context: depends only on Repo, its schemas and `Dran.Contracts`
   (the cycle guard reused by `link_step_between/3`). Definition layer
@@ -19,8 +19,8 @@ defmodule Dran.Workflows do
   alias Dran.Repo
   alias Dran.Relation
   alias Dran.Contracts
-  alias Dran.Workflow
-  alias Dran.Step
+  alias Dran.Workflows.Workflow
+  alias Dran.Workflows.Step
 
   # ──────────────────────────────────────────────────────────────────────────
   # Workflow CRUD
@@ -85,7 +85,7 @@ defmodule Dran.Workflows do
   defp statuses_filter(_), do: []
 
   @doc "List workflows optionally linked to a goal (GoalLive section)"
-  def list_by_goal(%Dran.Goal{} = goal) do
+  def list_by_goal(%Dran.Goals.Goal{} = goal) do
     Repo.all(
       from w in Workflow,
         where: w.goal_id == ^goal.id,
@@ -224,7 +224,7 @@ defmodule Dran.Workflows do
   @doc "True when the workflow has at least one session still in flight."
   def has_open_sessions?(%Workflow{} = workflow) do
     Repo.exists?(
-      from s in Dran.WorkflowSession,
+      from s in Dran.Workflows.Session,
         where: s.workflow_id == ^workflow.id and s.status == "in_flight"
     )
   end
@@ -619,12 +619,15 @@ defmodule Dran.Workflows do
   end
 
   defp session_count(%Workflow{} = workflow) do
-    Repo.aggregate(from(s in Dran.WorkflowSession, where: s.workflow_id == ^workflow.id), :count)
+    Repo.aggregate(
+      from(s in Dran.Workflows.Session, where: s.workflow_id == ^workflow.id),
+      :count
+    )
   end
 
   defp open_run_count(%Step{} = step) do
     Repo.aggregate(
-      from(r in Dran.Run,
+      from(r in Dran.Workflows.Run,
         where: r.step_id == ^step.id and r.status in ^~w(pending in_flight)
       ),
       :count
@@ -638,7 +641,7 @@ defmodule Dran.Workflows do
     edge_json = Jason.encode!([step.id])
 
     Repo.exists?(
-      from s in Dran.WorkflowSession,
+      from s in Dran.Workflows.Session,
         where: s.status == "in_flight",
         where:
           fragment("?->'steps' @> ?", s.snapshot, ^step_json) or

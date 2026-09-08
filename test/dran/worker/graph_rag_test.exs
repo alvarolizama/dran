@@ -3,7 +3,7 @@ defmodule Dran.Worker.GraphRagTest do
 
   alias Dran.Worker.GraphRag
   alias Dran.{Knowledge, Repo}
-  alias Dran.Page
+  alias Dran.Knowledge.Page
 
   #  Helpers 
 

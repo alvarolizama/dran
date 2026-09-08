@@ -3,7 +3,7 @@ defmodule Dran.PageMetaTest do
 
   import Ecto.Changeset, only: [traverse_errors: 2]
 
-  alias Dran.PageMeta
+  alias Dran.Knowledge.PageMeta
 
   defp errors_on(changeset) do
     traverse_errors(changeset, fn {msg, opts} ->

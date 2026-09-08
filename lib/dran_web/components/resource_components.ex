@@ -21,7 +21,7 @@ defmodule DranWeb.ResourceComponents do
   import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1]
   import Phoenix.HTML.Form, only: [input_value: 2]
 
-  alias Dran.Task
+  alias Dran.Tasks.Task
 
   @doc """
   Full-screen-ish modal shell for resource create & edit.

@@ -19,7 +19,7 @@ defmodule Dran.PageAugmenter do
 
   alias Dran.Repo
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.Embeddings
   alias Dran.Inference
   alias Dran.Summaries

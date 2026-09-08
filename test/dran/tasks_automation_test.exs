@@ -42,12 +42,12 @@ defmodule Dran.TasksAutomationTest do
 
     test "no-op for non-recurring tasks" do
       assert {:ok, :not_recurring} =
-               Automation.handle_completion(%Dran.Task{recurrence: "none", status: "done"})
+               Automation.handle_completion(%Dran.Tasks.Task{recurrence: "none", status: "done"})
     end
 
     test "no-op for recurring task not in terminal status" do
       assert {:ok, :not_recurring} =
-               Automation.handle_completion(%Dran.Task{
+               Automation.handle_completion(%Dran.Tasks.Task{
                  recurrence: "daily",
                  status: "in_progress"
                })

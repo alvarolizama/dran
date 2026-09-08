@@ -80,13 +80,13 @@ defmodule Dran.TasksMigrationTest do
     run_migration_up!()
 
     # 1. Tasks exist with the same ids, statuses mapped
-    assert Repo.get(Dran.Task, linked.id).status == "done"
-    assert Repo.get(Dran.Task, unlinked.id).status == "backlog"
+    assert Repo.get(Dran.Tasks.Task, linked.id).status == "done"
+    assert Repo.get(Dran.Tasks.Task, unlinked.id).status == "backlog"
     # 'pending' is not a valid task status → coalesced to backlog
-    assert Repo.get(Dran.Task, legacy_status.id).status == "backlog"
+    assert Repo.get(Dran.Tasks.Task, legacy_status.id).status == "backlog"
 
     # 2. completed_at set for done tasks
-    refute is_nil(Repo.get(Dran.Task, linked.id).completed_at)
+    refute is_nil(Repo.get(Dran.Tasks.Task, linked.id).completed_at)
 
     # 3. Goal link became a part_of task→goal relation
     goal_edges =
@@ -109,7 +109,7 @@ defmodule Dran.TasksMigrationTest do
 
     # 6. Idempotent: re-running moves nothing new
     run_migration_up!()
-    assert Repo.aggregate(Dran.Task, :count) == 3
+    assert Repo.aggregate(Dran.Tasks.Task, :count) == 3
   end
 
   test "relations pointing at a todo-note are rewritten to task endpoints", %{workspace: ws} do
@@ -155,6 +155,14 @@ defmodule Dran.TasksMigrationTest do
     # rollback removes them again.
     Repo.query!("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS summary varchar(255)")
     Repo.query!("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS meta jsonb")
+
+    # pages was renamed to knowledge_pages (migration 20260907220007); the
+    # historical migration below still addresses it as `pages`. Recreate the
+    # old name as a VIEW over the renamed table inside the sandbox — the
+    # per-test rollback drops it again. Same shim pattern as the column
+    # re-adds above (never rewrite an applied migration).
+    Repo.query!("DROP VIEW IF EXISTS pages")
+    Repo.query!("CREATE VIEW pages AS SELECT * FROM knowledge_pages")
 
     Enum.each(
       Dran.Repo.Migrations.MigrateTodoNotesToTasks.up_statements(),

@@ -16,17 +16,10 @@ defmodule Dran.ExecutionsTest do
 
   import Ecto.Query
 
-  alias Dran.{
-    Contracts,
-    Executions,
-    Goals,
-    Knowledge,
-    Relation,
-    Repo,
-    Run,
-    WorkflowSession,
-    Workflows
-  }
+  alias Dran.{Contracts, Executions, Goals, Knowledge, Repo, Workflows}
+  alias Dran.Relation
+  alias Dran.Workflows.Session
+  alias Dran.Workflows.Run
 
   setup do
     {:ok, ws} =
@@ -63,7 +56,7 @@ defmodule Dran.ExecutionsTest do
     # Sin contrato en los steps → nil.
     assert Enum.all?(session.runs, &(&1.contract_version == nil))
     # El run es el runtime: nada de tasks.
-    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
+    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
   end
 
   test "P1: open_session freezes the snapshot with steps and depends_on edges", %{ws: ws} do
@@ -345,7 +338,7 @@ defmodule Dran.ExecutionsTest do
     assert r2.progress == %{"phase" => "verifying", "gates" => %{}}
 
     # El run sigue abierto: no cerró la sesión ni cambió status.
-    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+    assert Repo.get!(Session, session.id).status == "in_flight"
     assert Repo.get!(Run, run.id).status == "in_flight"
 
     # Un run cerrado ya no acepta progreso.
@@ -377,7 +370,7 @@ defmodule Dran.ExecutionsTest do
     assert {:error, {:wrong_status, "in_flight", "pending"}} = Executions.start_run(run)
 
     # El run es el runtime: NINGUNA task fue creada.
-    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
+    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
   end
 
   test "start_run with actor_id stamps the claimer", %{ws: ws} do
@@ -448,7 +441,7 @@ defmodule Dran.ExecutionsTest do
     results = Task.await_many(tasks, 5_000)
     assert Enum.all?(results, &match?({:ok, _}, &1))
 
-    session = Repo.get!(WorkflowSession, session.id)
+    session = Repo.get!(Session, session.id)
     assert session.status == "passed"
     assert session.finished_at != nil
   end
@@ -473,10 +466,10 @@ defmodule Dran.ExecutionsTest do
     assert closed.gate_results == gates
 
     # Último run → sesión passed con finished_at. Sin writeback a goals.
-    session = Repo.get!(WorkflowSession, session.id)
+    session = Repo.get!(Session, session.id)
     assert session.status == "passed"
     assert session.finished_at != nil
-    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
+    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
   end
 
   test "P5: a skipped run still closes the session as passed", %{ws: ws} do
@@ -491,7 +484,7 @@ defmodule Dran.ExecutionsTest do
     {:ok, run_skip} = Executions.start_run(run_skip)
     {:ok, _} = Executions.close_run(run_skip, status: "skipped", outcome: "fuera de alcance")
 
-    closed = Repo.get!(WorkflowSession, session.id)
+    closed = Repo.get!(Session, session.id)
     assert closed.status == "passed"
     assert closed.finished_at != nil
   end
@@ -505,7 +498,7 @@ defmodule Dran.ExecutionsTest do
     {:ok, run} = Executions.start_run(run)
     {:ok, _} = Executions.close_run(run, status: "failed", outcome: "gate rojo")
 
-    assert Repo.get!(WorkflowSession, session.id).status == "failed"
+    assert Repo.get!(Session, session.id).status == "failed"
   end
 
   test "P5: close_run on a pending/stale run is rejected without side effects", %{ws: ws} do
@@ -517,7 +510,7 @@ defmodule Dran.ExecutionsTest do
     # close_run sobre un run pending: {:error, :not_in_flight}, sin efectos.
     assert {:error, :not_in_flight} = Executions.close_run(run, status: "passed")
     assert Repo.get!(Run, run.id).status == "pending"
-    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+    assert Repo.get!(Session, session.id).status == "in_flight"
 
     # Doble cierre con el MISMO struct in_flight: el segundo pierde.
     {:ok, run} = Executions.start_run(run)
@@ -540,7 +533,7 @@ defmodule Dran.ExecutionsTest do
 
     assert {:error, :invalid_status} = Executions.close_run(run, status: "banana")
     assert Repo.get!(Run, run.id).status == "in_flight"
-    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+    assert Repo.get!(Session, session.id).status == "in_flight"
   end
 
   # ───────────────────────────────────────────────────────── working ─────────
@@ -558,7 +551,7 @@ defmodule Dran.ExecutionsTest do
     {:ok, failed_run} = Executions.close_run(run, status: "failed", outcome: "flaky")
 
     # Auto-cierre failed (un solo step).
-    assert Repo.get!(WorkflowSession, session.id).status == "failed"
+    assert Repo.get!(Session, session.id).status == "failed"
 
     # Retry legítimo: reabre la sesión y crea attempt 2.
     {:ok, retry} = Executions.retry_run(failed_run)
@@ -569,7 +562,7 @@ defmodule Dran.ExecutionsTest do
     # Ownership: el retry hereda el stamp — la nueva attempt sigue siendo
     # del dueño original, nunca un claim abierto para otro actor.
     assert retry.actor_id == run.actor_id
-    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+    assert Repo.get!(Session, session.id).status == "in_flight"
 
     runs = Executions.list_runs(session)
     assert length(runs) == 2
@@ -590,13 +583,13 @@ defmodule Dran.ExecutionsTest do
     {:ok, retry} = Executions.start_run(retry)
     {:ok, _} = Executions.close_run(retry, status: "passed", outcome: "ok")
 
-    closed = Repo.get!(WorkflowSession, session.id)
+    closed = Repo.get!(Session, session.id)
     assert closed.status == "passed"
     assert closed.finished_at != nil
 
     # Un retry del attempt 1 VIEJO: rechazado SIN reabrir ni corromper.
     assert {:error, {:superseded, "passed"}} = Executions.retry_run(failed_run)
-    still_closed = Repo.get!(WorkflowSession, session.id)
+    still_closed = Repo.get!(Session, session.id)
     assert still_closed.status == "passed"
     assert still_closed.finished_at == closed.finished_at
   end
@@ -610,12 +603,12 @@ defmodule Dran.ExecutionsTest do
     {:ok, run} = Executions.start_run(run)
     {:ok, run} = Executions.close_run(run, status: "failed", outcome: "gate rojo")
 
-    assert Repo.get!(WorkflowSession, session.id).status == "failed"
+    assert Repo.get!(Session, session.id).status == "failed"
 
     {:ok, retry} = Executions.retry_run(run)
     assert retry.status == "pending"
-    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
-    assert Repo.get!(WorkflowSession, session.id).finished_at == nil
+    assert Repo.get!(Session, session.id).status == "in_flight"
+    assert Repo.get!(Session, session.id).finished_at == nil
   end
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -655,7 +648,7 @@ defmodule Dran.ExecutionsTest do
     assert retry.status == "passed"
 
     # El cierre pasa la sesión: todos los runs terminales, ninguno failed.
-    assert Repo.get!(WorkflowSession, session.id).status == "passed"
+    assert Repo.get!(Session, session.id).status == "passed"
   end
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -824,10 +817,10 @@ defmodule Dran.ExecutionsTest do
     {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
 
     # Sesión cerrada (passed) → borrable; sus runs caen con el cascade del FK.
-    session = Repo.get!(WorkflowSession, session.id)
+    session = Repo.get!(Session, session.id)
     assert {:ok, _} = Executions.delete_session(session)
 
-    assert Repo.get(WorkflowSession, session.id) == nil
+    assert Repo.get(Session, session.id) == nil
     assert Repo.all(from(r in Run, where: r.session_id == ^session.id)) == []
   end
 
@@ -836,14 +829,14 @@ defmodule Dran.ExecutionsTest do
     {:ok, session} = Executions.open_session(workflow)
 
     assert {:error, :session_open} =
-             Executions.delete_session(Repo.get!(WorkflowSession, session.id))
+             Executions.delete_session(Repo.get!(Session, session.id))
 
-    assert Repo.get!(WorkflowSession, session.id).status == "in_flight"
+    assert Repo.get!(Session, session.id).status == "in_flight"
 
     # Tras abortarla, ya es historia cerrada: borrable.
-    {:ok, _} = Executions.abort_session(Repo.get!(WorkflowSession, session.id))
-    assert {:ok, _} = Executions.delete_session(Repo.get!(WorkflowSession, session.id))
-    assert Repo.get(WorkflowSession, session.id) == nil
+    {:ok, _} = Executions.abort_session(Repo.get!(Session, session.id))
+    assert {:ok, _} = Executions.delete_session(Repo.get!(Session, session.id))
+    assert Repo.get(Session, session.id) == nil
   end
 
   test "delete_session of the one_shot's failed pass clears the re-run block", %{ws: ws} do
@@ -859,7 +852,7 @@ defmodule Dran.ExecutionsTest do
     assert {:error, :workflow_already_ran} = Executions.open_session(workflow)
 
     # Borrar la pasada fallida (historia cerrada) destraba una nueva pasada.
-    assert {:ok, _} = Executions.delete_session(Repo.get!(WorkflowSession, session.id))
+    assert {:ok, _} = Executions.delete_session(Repo.get!(Session, session.id))
     assert {:ok, _second} = Executions.open_session(workflow)
   end
 
@@ -878,7 +871,7 @@ defmodule Dran.ExecutionsTest do
     # run_s1 en vuelo; run_s2 pendiente.
     {:ok, run_s1} = Executions.start_run(run_s1)
 
-    {:ok, aborted} = Executions.abort_session(Repo.get!(WorkflowSession, session.id))
+    {:ok, aborted} = Executions.abort_session(Repo.get!(Session, session.id))
     assert aborted.status == "aborted"
     assert aborted.finished_at != nil
 
@@ -888,11 +881,11 @@ defmodule Dran.ExecutionsTest do
     assert skipped.outcome == "session aborted"
 
     # Ninguna task existe — nada que cancelar ni archivar (P7).
-    assert Repo.aggregate(from(t in Dran.Task), :count) == 0
+    assert Repo.aggregate(from(t in Dran.Tasks.Task), :count) == 0
 
     # Abortar una sesión cerrada: rechazado.
     assert {:error, :session_closed} =
-             Executions.abort_session(Repo.get!(WorkflowSession, session.id))
+             Executions.abort_session(Repo.get!(Session, session.id))
   end
 
   # ──────────────────────────────────────────────────────────────────────────

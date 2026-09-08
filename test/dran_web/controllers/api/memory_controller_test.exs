@@ -1,7 +1,8 @@
 defmodule DranWeb.API.MemoryControllerTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Accounts, Knowledge, Memory}
+  alias Dran.{Accounts, Knowledge}
+  alias Dran.Memory
 
   setup do
     original = Application.get_env(:dran, :inference)

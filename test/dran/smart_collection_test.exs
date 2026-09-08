@@ -34,9 +34,8 @@ defmodule Dran.SmartCollectionTest do
   describe "query_to_opts/1" do
     test "parses a full query map into keyword options" do
       query = %{
-        "type" => "todo",
+        "type" => "note",
         "tag" => "urgent",
-        "status" => "in_progress",
         "owner" => "alvaro",
         "due_before" => "2026-07-20",
         "due_after" => "2026-07-01"
@@ -44,11 +43,8 @@ defmodule Dran.SmartCollectionTest do
 
       opts = SmartCollection.query_to_opts(query)
 
-      # "todo" maps to note + kind todo in the new model
       assert Keyword.get(opts, :type) == "note"
-      assert Keyword.get(opts, :kind) == "todo"
       assert Keyword.get(opts, :tag) == "urgent"
-      assert Keyword.get(opts, :status) == "in_progress"
       assert Keyword.get(opts, :owner) == "alvaro"
       assert Keyword.get(opts, :due_before) == "2026-07-20"
       assert Keyword.get(opts, :due_after) == "2026-07-01"
@@ -63,11 +59,10 @@ defmodule Dran.SmartCollectionTest do
     end
 
     test "skips nil and empty string values" do
-      query = %{"type" => "todo", "tag" => "", "status" => nil}
+      query = %{"type" => "note", "tag" => "", "status" => nil}
       opts = SmartCollection.query_to_opts(query)
 
       assert Keyword.get(opts, :type) == "note"
-      assert Keyword.get(opts, :kind) == "todo"
       refute Keyword.has_key?(opts, :tag)
       refute Keyword.has_key?(opts, :status)
     end
@@ -101,10 +96,10 @@ defmodule Dran.SmartCollectionTest do
 
   describe "build_query/1" do
     test "builds clean query from params, stripping empties" do
-      params = %{"type" => "todo", "status" => "", "tag" => "urgent", "owner" => nil}
+      params = %{"type" => "note", "status" => "", "tag" => "urgent", "owner" => nil}
       query = SmartCollection.build_query(params)
 
-      assert query["type"] == "todo"
+      assert query["type"] == "note"
       assert query["tag"] == "urgent"
       refute Map.has_key?(query, "status")
       refute Map.has_key?(query, "owner")
@@ -124,10 +119,10 @@ defmodule Dran.SmartCollectionTest do
     end
 
     test "trims whitespace from values" do
-      params = %{"type" => "  todo  ", "tag" => " urgent "}
+      params = %{"type" => "  note  ", "tag" => " urgent "}
       query = SmartCollection.build_query(params)
 
-      assert query["type"] == "todo"
+      assert query["type"] == "note"
       assert query["tag"] == "urgent"
     end
   end
@@ -138,16 +133,16 @@ defmodule Dran.SmartCollectionTest do
     test "creates a smart collection page with query in meta", %{context: context} do
       attrs = %{
         "workspace_id" => context.id,
-        "title" => "Urgent Todos",
-        "query" => %{"type" => "todo", "status" => "in_progress"},
+        "title" => "Urgent Notes",
+        "query" => %{"type" => "note", "tag" => "urgent"},
         "created_by" => "test"
       }
 
       assert {:ok, page} = SmartCollection.create(attrs)
       assert page.page_type == "note"
-      assert page.title == "Urgent Todos"
-      assert page.meta["query"]["type"] == "todo"
-      assert page.meta["query"]["status"] == "in_progress"
+      assert page.title == "Urgent Notes"
+      assert page.meta["query"]["type"] == "note"
+      assert page.meta["query"]["tag"] == "urgent"
     end
 
     test "auto-generates slug from title", %{context: context} do
@@ -165,12 +160,12 @@ defmodule Dran.SmartCollectionTest do
       attrs = %{
         "workspace_id" => context.id,
         "title" => "Test Collection",
-        "query" => %{"type" => "todo", "status" => "backlog"}
+        "query" => %{"type" => "note", "kind" => "journal"}
       }
 
       assert {:ok, page} = SmartCollection.create(attrs)
-      assert page.summary =~ "type: todo"
-      assert page.summary =~ "status: backlog"
+      assert page.summary =~ "type: note"
+      assert page.summary =~ "kind: journal"
     end
 
     test "uses 'All pages' summary for empty query", %{context: context} do
@@ -265,28 +260,28 @@ defmodule Dran.SmartCollectionTest do
       # Create test pages
       Knowledge.create_page(%{
         workspace_id: context.id,
-        title: "Todo One",
-        slug: "todo-one",
+        title: "Journal One",
+        slug: "journal-one",
         page_type: "note",
         body: "content",
-        meta: %{"kind" => "todo", "kanban_status" => "in_progress"},
-        kanban_status: "in_progress"
+        meta: %{"kind" => "journal"}
       })
 
       Knowledge.create_page(%{
         workspace_id: context.id,
-        title: "Note One",
-        slug: "note-one",
+        title: "Meeting One",
+        slug: "meeting-one",
         page_type: "note",
-        body: "content"
+        body: "content",
+        meta: %{"kind" => "meeting"}
       })
 
-      query = %{"type" => "todo"}
+      query = %{"type" => "note", "kind" => "journal"}
       results = SmartCollection.execute(query, context.id)
 
       slugs = Enum.map(results, & &1.slug)
-      assert "todo-one" in slugs
-      refute "note-one" in slugs
+      assert "journal-one" in slugs
+      refute "meeting-one" in slugs
     end
 
     test "returns all pages for nil query", %{context: context} do
@@ -297,34 +292,6 @@ defmodule Dran.SmartCollectionTest do
     test "returns all pages for empty query", %{context: context} do
       results = SmartCollection.execute(%{}, context.id)
       assert is_list(results)
-    end
-
-    test "filters by status", %{context: context} do
-      Knowledge.create_page(%{
-        workspace_id: context.id,
-        title: "Active Todo",
-        slug: "active-todo",
-        page_type: "note",
-        body: "content",
-        meta: %{"kind" => "todo", "kanban_status" => "in_progress"},
-        kanban_status: "in_progress"
-      })
-
-      Knowledge.create_page(%{
-        workspace_id: context.id,
-        title: "Done Todo",
-        slug: "done-todo",
-        page_type: "note",
-        body: "content",
-        meta: %{"kind" => "todo", "kanban_status" => "done"},
-        kanban_status: "done"
-      })
-
-      results = SmartCollection.execute(%{"status" => "in_progress"}, context.id)
-      slugs = Enum.map(results, & &1.slug)
-
-      assert "active-todo" in slugs
-      refute "done-todo" in slugs
     end
 
     test "filters by tag", %{context: context} do

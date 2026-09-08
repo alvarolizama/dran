@@ -564,7 +564,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       workflow: workflow
     } do
       {:ok, session} = Executions.open_session(workflow, label: "dead pass")
-      {:ok, _} = Executions.abort_session(Repo.get!(Dran.WorkflowSession, session.id))
+      {:ok, _} = Executions.abort_session(Repo.get!(Dran.Workflows.Session, session.id))
 
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/deploy-pipeline")
 
@@ -575,8 +575,8 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> element("[data-testid='delete-session-#{session.id}']")
       |> render_click()
 
-      assert Repo.get(Dran.WorkflowSession, session.id) == nil
-      assert Repo.all(from(r in Dran.Run, where: r.session_id == ^session.id)) == []
+      assert Repo.get(Dran.Workflows.Session, session.id) == nil
+      assert Repo.all(from(r in Dran.Workflows.Run, where: r.session_id == ^session.id)) == []
       refute has_element?(view, "#session-row-#{session.id}")
       assert render(view) =~ "Sesión eliminada"
     end
@@ -601,12 +601,12 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> element("#workflow-edit-form")
       |> render_submit(%{workflow: %{"title" => "Empty flow", "kind" => "one_shot"}})
 
-      assert Repo.get!(Dran.Workflow, flow.id).kind == "one_shot"
+      assert Repo.get!(Dran.Workflows.Workflow, flow.id).kind == "one_shot"
 
       # A session appears → the same modal renders the kind select disabled.
       {:ok, _step} = Workflows.create_step(flow, %{"title" => "S", "slug" => "s"})
-      {:ok, session} = Executions.open_session(Repo.get!(Dran.Workflow, flow.id))
-      [run] = Executions.list_runs(Repo.get!(Dran.WorkflowSession, session.id))
+      {:ok, session} = Executions.open_session(Repo.get!(Dran.Workflows.Workflow, flow.id))
+      [run] = Executions.list_runs(Repo.get!(Dran.Workflows.Session, session.id))
       {:ok, run} = Executions.start_run(run)
       {:ok, _} = Executions.close_run(run, status: "passed", outcome: "ok")
 
@@ -615,9 +615,11 @@ defmodule DranWeb.WorkflowsLiveTest do
 
       # Forged submit changing kind: refused (context guard, not just UI).
       {:error, :kind_locked} =
-        Workflows.update_workflow(Repo.get!(Dran.Workflow, flow.id), %{"kind" => "evergreen"})
+        Workflows.update_workflow(Repo.get!(Dran.Workflows.Workflow, flow.id), %{
+          "kind" => "evergreen"
+        })
 
-      assert Repo.get!(Dran.Workflow, flow.id).kind == "one_shot"
+      assert Repo.get!(Dran.Workflows.Workflow, flow.id).kind == "one_shot"
     end
 
     test "delete_session is refused for an in_flight session (no button, guard flash)", %{
@@ -634,7 +636,7 @@ defmodule DranWeb.WorkflowsLiveTest do
 
       # A forged event is refused by the context anyway.
       render_hook(view, "delete_session", %{"session-id" => session.id})
-      assert Repo.get!(Dran.WorkflowSession, session.id).status == "in_flight"
+      assert Repo.get!(Dran.Workflows.Session, session.id).status == "in_flight"
     end
   end
 

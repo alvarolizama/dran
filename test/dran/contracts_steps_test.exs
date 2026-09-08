@@ -3,13 +3,14 @@ defmodule Dran.ContractsStepsTest do
   Wave C — Dran.Contracts ported to steps (plans/steps model): contract?,
   lint, render_brief, fingerprint, dependency_edges, dependency_states,
   prerequisite_ids, transitive_prereqs, ready?, levels and add_dependency
-  (with the anti-cycle BFS) over %Dran.Step{} and step→step depends_on
+  (with the anti-cycle BFS) over %Dran.Workflows.Step{} and step→step depends_on
   edges. Mold: test/dran/contracts_test.exs (task-based, untouched).
   """
 
   use Dran.DataCase, async: true
 
-  alias Dran.{Contracts, Knowledge, Workflows, Relation}
+  alias Dran.{Contracts, Knowledge, Workflows}
+  alias Dran.Relation
 
   setup do
     {:ok, ws} =
@@ -357,7 +358,8 @@ defmodule Dran.ContractsStepsTest do
     test "cross-workspace remove is rejected", %{workflow: workflow} do
       a = create_step(workflow, "A")
 
-      assert {:error, :invalid} = Contracts.remove_dependency(a, %Dran.Step{workspace_id: nil})
+      assert {:error, :invalid} =
+               Contracts.remove_dependency(a, %Dran.Workflows.Step{workspace_id: nil})
     end
   end
 

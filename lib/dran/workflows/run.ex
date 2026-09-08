@@ -1,4 +1,4 @@
-defmodule Dran.Run do
+defmodule Dran.Workflows.Run do
   @moduledoc """
   One execution attempt of a STEP within a session — the ONLY runtime.
 
@@ -26,7 +26,7 @@ defmodule Dran.Run do
 
   @run_statuses ~w(pending in_flight passed failed skipped)
 
-  schema "runs" do
+  schema "workflow_runs" do
     field :contract_version, :map
     field :status, :string, default: "pending"
     field :outcome, :string
@@ -35,8 +35,8 @@ defmodule Dran.Run do
     field :progress, :map, default: %{}
     field :attempt, :integer, default: 1
 
-    belongs_to :session, Dran.WorkflowSession, foreign_key: :session_id
-    belongs_to :step, Dran.Step
+    belongs_to :session, Dran.Workflows.Session, foreign_key: :session_id
+    belongs_to :step, Dran.Workflows.Step
     belongs_to :workspace, Dran.Workspace
     belongs_to :actor, Dran.Actors.Actor
 
@@ -71,7 +71,7 @@ defmodule Dran.Run do
     |> foreign_key_constraint(:workspace_id)
     |> foreign_key_constraint(:actor_id)
     |> unique_constraint([:session_id, :step_id, :attempt],
-      name: :runs_session_id_step_id_attempt_index
+      name: :workflow_runs_session_id_step_id_attempt_index
     )
   end
 

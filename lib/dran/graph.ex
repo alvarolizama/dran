@@ -159,7 +159,7 @@ defmodule Dran.Graph do
       new_meta = %{"pagerank" => Float.round(score, 6)}
 
       query =
-        from(p in Dran.Page,
+        from(p in Dran.Knowledge.Page,
           where: p.id == ^page_id,
           update: [set: [meta: fragment("COALESCE(meta, '{}'::jsonb) || ?::jsonb", ^new_meta)]]
         )
@@ -285,7 +285,7 @@ defmodule Dran.Graph do
       new_meta = %{"cluster_id" => cid}
 
       query =
-        from(p in Dran.Page,
+        from(p in Dran.Knowledge.Page,
           where: p.id == ^page_id,
           update: [set: [meta: fragment("COALESCE(meta, '{}'::jsonb) || ?::jsonb", ^new_meta)]]
         )

@@ -205,10 +205,6 @@ defmodule DranWeb.Layouts do
           references: safe_count.("reference"),
           clusters: clusters_count,
           collections: collection_count,
-          projects:
-            length(
-              Dran.Knowledge.list_pages(workspace_id: context.id, kind: "project", limit: 500)
-            ),
           goals: length(Dran.Goals.list_goals(workspace_id: context.id, limit: 500)),
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
@@ -325,8 +321,8 @@ defmodule DranWeb.Layouts do
 
     disabled = (ws && ws.disabled_page_types) || []
 
+    # Clusters cierra el grupo Knowledge base, debajo de Referencias.
     page_type_items =
-      # Clusters cierra el grupo Knowledge base, debajo de Referencias.
       (for type <- Dran.PageRegistry.types(), type not in disabled do
          %{
            key: Dran.PageRegistry.path(type),

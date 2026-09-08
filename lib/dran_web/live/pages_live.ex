@@ -10,7 +10,7 @@ defmodule DranWeb.PagesLive do
   use DranWeb, :live_view
 
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.PageRegistry
   alias DranWeb.PageDetail
   alias DranWeb.PageEdit

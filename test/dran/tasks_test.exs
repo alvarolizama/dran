@@ -1,7 +1,8 @@
 defmodule Dran.TasksTest do
   use Dran.DataCase, async: false
 
-  alias Dran.{Tasks, Task}
+  alias Dran.{Tasks}
+  alias Dran.Tasks.Task
 
   describe "create_task/1" do
     test "creates a standalone task with defaults" do

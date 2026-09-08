@@ -54,8 +54,8 @@ defmodule Dran.Relation do
     field :weight, :float
     field :meta, :map, default: %{}
 
-    has_one :source, Dran.Page, foreign_key: :id, references: :source_id
-    has_one :target, Dran.Page, foreign_key: :id, references: :target_id
+    has_one :source, Dran.Knowledge.Page, foreign_key: :id, references: :source_id
+    has_one :target, Dran.Knowledge.Page, foreign_key: :id, references: :target_id
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -125,10 +125,10 @@ defmodule Dran.Relation do
     end
   end
 
-  defp endpoint_module("page"), do: Dran.Page
-  defp endpoint_module("goal"), do: Dran.Goal
-  defp endpoint_module("task"), do: Dran.Task
-  defp endpoint_module("collection"), do: Dran.Collection
-  defp endpoint_module("step"), do: Dran.Step
+  defp endpoint_module("page"), do: Dran.Knowledge.Page
+  defp endpoint_module("goal"), do: Dran.Goals.Goal
+  defp endpoint_module("task"), do: Dran.Tasks.Task
+  defp endpoint_module("collection"), do: Dran.Collections.Collection
+  defp endpoint_module("step"), do: Dran.Workflows.Step
   defp endpoint_module(_), do: nil
 end

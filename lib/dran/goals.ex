@@ -1,6 +1,6 @@
 defmodule Dran.Goals do
   @moduledoc """
-  The Goals context — CRUD for goals (`Dran.Goal`).
+  The Goals context — CRUD for goals (`Dran.Goals.Goal`).
 
   Owns listing and the full changeset-backed CRUD over the goals table.
   Leaf context: depends only on Repo + its schema.
@@ -9,7 +9,7 @@ defmodule Dran.Goals do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.Goal
+  alias Dran.Goals.Goal
   alias Dran.Slug
 
   @doc "List goals from the goals table"

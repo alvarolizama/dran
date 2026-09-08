@@ -32,7 +32,6 @@ defmodule DranWeb.ReportLive do
                   <.icon name="hero-document-chart-bar" class="size-3" />
                   {gettext("Report")}
                 </span>
-                <code class="font-mono text-caption text-base-content/60">{@report.slug}</code>
                 <span
                   :if={@report.report_type}
                   class="px-2 py-0.5 text-xs rounded-full bg-base-300 text-base-content/70"

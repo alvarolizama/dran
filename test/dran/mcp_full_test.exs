@@ -171,7 +171,7 @@ defmodule Dran.MCPFullTest do
       assert text =~ "Hello world"
     end
 
-    test "resources/read goal returns JSON with todos", %{context: ctx} do
+    test "resources/read goal returns JSON with linked notes", %{context: ctx} do
       {:ok, goal} =
         Goals.create_goal(%{
           workspace_id: ctx.id,
@@ -182,10 +182,10 @@ defmodule Dran.MCPFullTest do
       {:ok, note} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Goal Todo",
-          slug: "goal-todo-page",
+          title: "Goal Note",
+          slug: "goal-note-page",
           page_type: "note",
-          meta: %{"kind" => "todo", "kanban_status" => "today"}
+          meta: %{"kind" => "idea"}
         })
 
       # Link the note to the goal via a part_of relation
@@ -207,9 +207,10 @@ defmodule Dran.MCPFullTest do
 
       text = resp["result"]["contents"] |> Enum.at(0) |> Map.get("text")
       json = Jason.decode!(text)
+
       assert json["goal"]["slug"] == "my-goal-page"
-      assert length(json["todos"]) == 1
-      assert hd(json["todos"])["slug"] == "goal-todo-page"
+      assert length(json["notes"]) == 1
+      assert hd(json["notes"])["slug"] == "goal-note-page"
     end
   end
 
@@ -338,7 +339,7 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~
-               "Error: page type 'report' is not a valid page type — use dran_create_goal or dran_create_note for goals and todo-style notes"
+               "Error: page type 'report' is not a valid page type — use dran_create_goal for goals"
 
       assert Knowledge.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
     end
@@ -578,17 +579,17 @@ defmodule Dran.MCPFullTest do
 
       refreshed = Knowledge.get_page!(note.id)
       assert refreshed.meta["due_date"] == "2026-02-02"
-      assert refreshed.meta["priority"] == "low"
+      assert refreshed.meta["kind"] == "meeting"
     end
 
-    test "updates assignee via merge", %{context: ctx} do
+    test "rejects legacy kanban keys (tasks own status now)", %{context: ctx} do
       {:ok, note} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
           title: "Assign Note",
           slug: "assign-update-test",
           page_type: "note",
-          meta: %{"kind" => "meeting", "assignee" => "alvaro"}
+          meta: %{"kind" => "meeting"}
         })
 
       result =
@@ -598,10 +599,9 @@ defmodule Dran.MCPFullTest do
           "assignee" => "hermes"
         })
 
-      assert result =~ "Updated note"
+      assert result =~ "Error:"
       refreshed = Knowledge.get_page!(note.id)
-      assert refreshed.meta["assignee"] == "hermes"
-      # kind preserved by merge
+      refute Map.has_key?(refreshed.meta, "assignee")
       assert refreshed.meta["kind"] == "meeting"
     end
 
@@ -959,62 +959,33 @@ defmodule Dran.MCPFullTest do
       assert result =~ "creator-filter-test"
     end
 
-    test "filters by assignee", %{context: ctx} do
+    test "filters by kind", %{context: ctx} do
       {:ok, _} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Assigned to Hermes",
-          slug: "assignee-filter-hermes",
+          title: "Meeting about roadmap",
+          slug: "kind-filter-meeting",
           page_type: "note",
-          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "hermes"}
+          meta: %{"kind" => "meeting"}
         })
 
       {:ok, _} =
         Knowledge.create_page(%{
           workspace_id: ctx.id,
-          title: "Assigned to Alvaro",
-          slug: "assignee-filter-alvaro",
+          title: "Idea for growth",
+          slug: "kind-filter-idea",
           page_type: "note",
-          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "alvaro"}
+          meta: %{"kind" => "idea"}
         })
 
       result =
         call_tool("dran_list_pages", %{
           "workspace" => "personal",
-          "assignee" => "hermes"
+          "kind" => "meeting"
         })
 
-      assert result =~ "assignee-filter-hermes"
-      refute result =~ "assignee-filter-alvaro"
-    end
-
-    test "filters unassigned todos with 'none'", %{context: ctx} do
-      {:ok, _} =
-        Knowledge.create_page(%{
-          workspace_id: ctx.id,
-          title: "Unassigned Todo",
-          slug: "assignee-filter-none",
-          page_type: "note",
-          meta: %{"kind" => "todo", "kanban_status" => "backlog"}
-        })
-
-      {:ok, _} =
-        Knowledge.create_page(%{
-          workspace_id: ctx.id,
-          title: "Assigned Todo",
-          slug: "assignee-filter-set",
-          page_type: "note",
-          meta: %{"kind" => "todo", "kanban_status" => "backlog", "assignee" => "hermes"}
-        })
-
-      result =
-        call_tool("dran_list_pages", %{
-          "workspace" => "personal",
-          "assignee" => "none"
-        })
-
-      assert result =~ "assignee-filter-none"
-      refute result =~ "assignee-filter-set"
+      assert result =~ "kind-filter-meeting"
+      refute result =~ "kind-filter-idea"
     end
 
     test "respects limit" do

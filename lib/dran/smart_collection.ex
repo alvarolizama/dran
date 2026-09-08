@@ -10,9 +10,8 @@ defmodule Dran.SmartCollection do
   ## Query format
 
       %{
-        "type" => "todo",
+        "type" => "note",
         "tag" => "urgent",
-        "status" => "in_progress",
         "owner" => "alvaro",
         "due_before" => "2026-07-20",
         "due_after" => "2026-07-01"
@@ -31,24 +30,14 @@ defmodule Dran.SmartCollection do
 
   ## Example
 
-      iex> Dran.SmartCollection.query_to_opts(%{"type" => "todo", "status" => "in_progress"})
-      [type: "note", kind: "todo", status: "in_progress"]
+      iex> Dran.SmartCollection.query_to_opts(%{"type" => "note", "tag" => "urgent"})
+      [type: "note", tag: "urgent"]
   """
   def query_to_opts(query) when is_map(query) do
-    type = query["type"] || query[:type]
-
-    # "todo"/"plan" are no longer page types — they are notes with a kind.
-    {type_opt, kind_opt} =
-      case type do
-        t when t in ["todo", "plan"] -> {"note", t}
-        t -> {t, nil}
-      end
-
     []
-    |> maybe_put(:type, type_opt)
-    |> maybe_put(:kind, kind_opt)
+    |> maybe_put(:type, query["type"] || query[:type])
+    |> maybe_put(:kind, query["kind"] || query[:kind])
     |> maybe_put(:tag, query["tag"] || query[:tag])
-    |> maybe_put(:status, query["status"] || query[:status])
     |> maybe_put(:owner, query["owner"] || query[:owner])
     |> maybe_put(:created_by, query["created_by"] || query[:created_by])
     |> maybe_put(:due_before, resolve_date(query["due_before"] || query[:due_before]))
@@ -92,11 +81,11 @@ defmodule Dran.SmartCollection do
 
   ## Example
 
-      iex> Dran.SmartCollection.build_query(%{"type" => "todo", "status" => "", "tag" => "urgent"})
-      %{"type" => "todo", "tag" => "urgent"}
+      iex> Dran.SmartCollection.build_query(%{"type" => "note", "status" => "", "tag" => "urgent"})
+      %{"type" => "note", "tag" => "urgent"}
   """
   def build_query(params) when is_map(params) do
-    keys = ~w(type tag status owner created_by due_before due_after)
+    keys = ~w(type kind tag status owner created_by due_before due_after)
 
     keys
     |> Enum.reduce(%{}, fn key, acc ->

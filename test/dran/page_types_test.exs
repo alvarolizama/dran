@@ -1,7 +1,7 @@
 defmodule Dran.PageTypesTest do
   use ExUnit.Case, async: true
 
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.PageTypes
 
   describe "types/0" do

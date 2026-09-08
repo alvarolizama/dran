@@ -52,8 +52,8 @@ defmodule Dran.Executions do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.WorkflowSession
-  alias Dran.Run
+  alias Dran.Workflows.Session
+  alias Dran.Workflows.Run
 
   @doc """
   Open a session for a WORKFLOW: creates the `in_flight` session plus
@@ -72,7 +72,7 @@ defmodule Dran.Executions do
 
   Returns `{:ok, session}` (with `:runs` preloaded) or `{:error, reason}`.
   """
-  def open_session(%Dran.Workflow{} = workflow, opts \\ []) do
+  def open_session(%Dran.Workflows.Workflow{} = workflow, opts \\ []) do
     workspace_id = workflow.workspace_id
     label = Keyword.get(opts, :label)
     context = Keyword.get(opts, :context, %{})
@@ -86,8 +86,8 @@ defmodule Dran.Executions do
         snapshot = workflow_snapshot(steps)
 
         session =
-          %WorkflowSession{}
-          |> WorkflowSession.changeset(%{
+          %Session{}
+          |> Session.changeset(%{
             workflow_id: workflow.id,
             goal_id: workflow.goal_id,
             workspace_id: workspace_id,
@@ -138,14 +138,14 @@ defmodule Dran.Executions do
   end
 
   @doc "Get a session by id, raises if missing."
-  def get_session!(id), do: Repo.get!(WorkflowSession, id)
+  def get_session!(id), do: Repo.get!(Session, id)
 
   @doc """
   List sessions of a workflow, most recent first.
   """
-  def list_sessions(%Dran.Workflow{} = workflow) do
+  def list_sessions(%Dran.Workflows.Workflow{} = workflow) do
     Repo.all(
-      from s in WorkflowSession,
+      from s in Session,
         where: s.workflow_id == ^workflow.id,
         order_by: [desc: s.inserted_at]
     )
@@ -157,7 +157,7 @@ defmodule Dran.Executions do
   """
   def count_sessions(workflow_id) do
     Repo.aggregate(
-      from(s in WorkflowSession, where: s.workflow_id == ^workflow_id),
+      from(s in Session, where: s.workflow_id == ^workflow_id),
       :count
     )
   end
@@ -172,7 +172,7 @@ defmodule Dran.Executions do
       []
     else
       Repo.all(
-        from s in WorkflowSession,
+        from s in Session,
           where: s.workflow_id in ^workflow_ids,
           order_by: [desc: s.inserted_at]
       )
@@ -180,7 +180,7 @@ defmodule Dran.Executions do
   end
 
   @doc "List the runs of a session, oldest first (attempt order)."
-  def list_runs(%WorkflowSession{} = session) do
+  def list_runs(%Session{} = session) do
     Repo.all(
       from r in Run,
         where: r.session_id == ^session.id,
@@ -204,7 +204,7 @@ defmodule Dran.Executions do
 
     base =
       from r in Run,
-        join: s in WorkflowSession,
+        join: s in Session,
         on: s.id == r.session_id,
         where:
           r.workspace_id == ^workspace_id and
@@ -242,7 +242,7 @@ defmodule Dran.Executions do
       pending
       |> Enum.map(& &1.session_id)
       |> Enum.uniq()
-      |> then(&Repo.all(from s in WorkflowSession, where: s.id in ^&1))
+      |> then(&Repo.all(from s in Session, where: s.id in ^&1))
       |> Map.new(&{&1.id, &1})
 
     passed_by_session =
@@ -288,7 +288,7 @@ defmodule Dran.Executions do
   # Snapshot edges are [from=dependiente, to=prereq] pairs — a prereq of X
   # is any edge whose first element is X. The session is passed in (batch
   # callers preload it); the single-run variant keeps loading on demand.
-  defp snapshot_prerequisite_ids(%WorkflowSession{} = session, step_id) do
+  defp snapshot_prerequisite_ids(%Session{} = session, step_id) do
     session.snapshot
     |> Map.get("edges", [])
     |> Enum.filter(fn [from, _to] -> from == step_id end)
@@ -298,8 +298,8 @@ defmodule Dran.Executions do
   defp snapshot_prerequisite_ids(%Run{} = run) do
     session =
       case run.session do
-        %WorkflowSession{} = loaded -> loaded
-        _not_loaded -> Repo.get!(WorkflowSession, run.session_id)
+        %Session{} = loaded -> loaded
+        _not_loaded -> Repo.get!(Session, run.session_id)
       end
 
     snapshot_prerequisite_ids(session, run.step_id)
@@ -500,7 +500,7 @@ defmodule Dran.Executions do
   be closed. Returns `{:ok, session}` or `{:error, reason}`
   (`:session_closed` when the session is not open).
   """
-  def abort_session(%WorkflowSession{} = session) do
+  def abort_session(%Session{} = session) do
     Repo.transaction(fn ->
       with :ok <- assert_session_open(%Run{session_id: session.id}) do
         from(r in Run,
@@ -512,7 +512,7 @@ defmodule Dran.Executions do
 
         closed =
           session
-          |> WorkflowSession.changeset(%{status: "aborted", finished_at: DateTime.utc_now()})
+          |> Session.changeset(%{status: "aborted", finished_at: DateTime.utc_now()})
           |> Repo.update!()
 
         closed
@@ -540,14 +540,14 @@ defmodule Dran.Executions do
   Broadcasts `{:session_changed, :deleted, session}` so other tabs drop
   the row. Returns `{:ok, session}` or `{:error, reason}`.
   """
-  def delete_session(%WorkflowSession{} = session) do
+  def delete_session(%Session{} = session) do
     case assert_session_closed(session) do
       :ok ->
         # delete_all (not Repo.delete): the DB cascade takes the runs and
         # a preloaded :runs association on the caller's struct cannot
         # raise here.
         {count, _} =
-          Repo.delete_all(from s in WorkflowSession, where: s.id == ^session.id)
+          Repo.delete_all(from s in Session, where: s.id == ^session.id)
 
         if count == 1 do
           broadcast_session_change(session, :deleted)
@@ -561,15 +561,15 @@ defmodule Dran.Executions do
     end
   end
 
-  defp assert_session_closed(%WorkflowSession{status: "in_flight"}), do: {:error, :session_open}
-  defp assert_session_closed(%WorkflowSession{}), do: :ok
+  defp assert_session_closed(%Session{status: "in_flight"}), do: {:error, :session_open}
+  defp assert_session_closed(%Session{}), do: :ok
 
   @doc """
   Progress of a session as a map: `%{total, pending, in_flight, passed,
   failed, skipped}` — counts over all runs of the session (including
   retries).
   """
-  def session_progress(%WorkflowSession{} = session) do
+  def session_progress(%Session{} = session) do
     counts =
       Repo.one(
         from r in Run,
@@ -669,10 +669,10 @@ defmodule Dran.Executions do
   In-flight sessions of a single workflow with their run progress — ONE query
   for sessions + ONE batched query for progress. Used by the show-page path.
   """
-  def active_sessions(%Dran.Workflow{id: wid}) do
+  def active_sessions(%Dran.Workflows.Workflow{id: wid}) do
     sessions =
       Repo.all(
-        from s in WorkflowSession,
+        from s in Session,
           where: s.workflow_id == ^wid and s.status == "in_flight",
           order_by: [desc: s.inserted_at]
       )
@@ -730,16 +730,16 @@ defmodule Dran.Executions do
 
   # An archived workflow must not open new passes; a draft may (agents
   # iterate on drafts) — status only gates archived.
-  defp ensure_workflow_runnable(%Dran.Workflow{status: "archived"}),
+  defp ensure_workflow_runnable(%Dran.Workflows.Workflow{status: "archived"}),
     do: {:error, :workflow_archived}
 
   # one_shot (review finding #7): the enum claims "one pass" — enforce it
   # for FUTURE passes, not the concurrent-creation race (two simultaneous
   # opens both see zero sessions without a lock; evergreen is the default
   # and the pass-count check happens BEFORE insert).
-  defp ensure_workflow_runnable(%Dran.Workflow{kind: "one_shot"} = workflow) do
+  defp ensure_workflow_runnable(%Dran.Workflows.Workflow{kind: "one_shot"} = workflow) do
     if Repo.aggregate(
-         from(s in WorkflowSession, where: s.workflow_id == ^workflow.id),
+         from(s in Session, where: s.workflow_id == ^workflow.id),
          :count
        ) > 0 do
       {:error, :workflow_already_ran}
@@ -748,11 +748,11 @@ defmodule Dran.Executions do
     end
   end
 
-  defp ensure_workflow_runnable(%Dran.Workflow{}), do: :ok
+  defp ensure_workflow_runnable(%Dran.Workflows.Workflow{}), do: :ok
 
   # A workflow with no steps would open a zombie session: no runs means
   # no close_run can ever fire the auto-close.
-  defp ensure_workflow_has_steps(%Dran.Workflow{} = workflow) do
+  defp ensure_workflow_has_steps(%Dran.Workflows.Workflow{} = workflow) do
     if Dran.Workflows.list_steps(workflow) == [] do
       {:error, :workflow_has_no_steps}
     else
@@ -784,7 +784,7 @@ defmodule Dran.Executions do
   # The step's contract as the legacy string-keyed map (the snapshot/
   # contract_version interchange shape), or nil when the step has no
   # intent yet (no contract to freeze).
-  defp contract_snapshot(%Dran.Step{} = step) do
+  defp contract_snapshot(%Dran.Workflows.Step{} = step) do
     case Dran.Contracts.contract_map(step) do
       nil -> nil
       contract -> contract
@@ -857,8 +857,8 @@ defmodule Dran.Executions do
   defp assert_run_owner(%Run{} = _run, _actor_id), do: {:error, :not_run_owner}
 
   defp session_owner_id(session_id) do
-    case Repo.get(WorkflowSession, session_id) do
-      %WorkflowSession{actor_id: actor_id} -> actor_id
+    case Repo.get(Session, session_id) do
+      %Session{actor_id: actor_id} -> actor_id
       nil -> nil
     end
   end
@@ -869,8 +869,8 @@ defmodule Dran.Executions do
     do: {:error, {:wrong_status, actual, expected}}
 
   defp assert_session_open(%Run{session_id: session_id}) do
-    case Repo.get(WorkflowSession, session_id) do
-      %WorkflowSession{status: "in_flight"} -> :ok
+    case Repo.get(Session, session_id) do
+      %Session{status: "in_flight"} -> :ok
       _ -> {:error, :session_closed}
     end
   end
@@ -931,22 +931,22 @@ defmodule Dran.Executions do
   # session can end terminal-with-open-runs or reopened-after-passed.
   defp reopen_session_if_closed(session_id) do
     case Repo.one(
-           from s in WorkflowSession,
+           from s in Session,
              where: s.id == ^session_id,
              lock: "FOR UPDATE"
          ) do
-      %WorkflowSession{status: "in_flight"} ->
+      %Session{status: "in_flight"} ->
         :ok
 
-      %WorkflowSession{status: "failed"} = session ->
+      %Session{status: "failed"} = session ->
         case session
-             |> WorkflowSession.changeset(%{status: "in_flight", finished_at: nil})
+             |> Session.changeset(%{status: "in_flight", finished_at: nil})
              |> Repo.update() do
           {:ok, _} -> :ok
           {:error, changeset} -> {:error, changeset}
         end
 
-      %WorkflowSession{status: other} ->
+      %Session{status: other} ->
         {:error, {:session_not_retryable, other}}
 
       nil ->
@@ -962,7 +962,7 @@ defmodule Dran.Executions do
     # second committer re-reads remaining AFTER the first committed.
     session =
       Repo.one(
-        from s in WorkflowSession,
+        from s in Session,
           where: s.id == ^run.session_id,
           lock: "FOR UPDATE"
       )
@@ -970,7 +970,7 @@ defmodule Dran.Executions do
     # Only an open session can close — retry after auto-close keeps the
     # session in its terminal state.
     case session do
-      %WorkflowSession{status: "in_flight"} ->
+      %Session{status: "in_flight"} ->
         case remaining_open_runs(session.id) do
           0 -> close_session(session)
           _ -> :ok
@@ -990,14 +990,14 @@ defmodule Dran.Executions do
     )
   end
 
-  defp close_session(%WorkflowSession{} = session) do
+  defp close_session(%Session{} = session) do
     status = session_outcome(session.id)
 
     # Repo.update! — a failed close inside the close_run transaction must
     # ROLLBACK, not silently leave a zombie open session.
     closed =
       session
-      |> WorkflowSession.changeset(%{status: status, finished_at: DateTime.utc_now()})
+      |> Session.changeset(%{status: status, finished_at: DateTime.utc_now()})
       |> Repo.update!()
 
     broadcast_session_change(closed, :closed)
@@ -1059,9 +1059,9 @@ defmodule Dran.Executions do
     ArgumentError -> :ok
   end
 
-  defp broadcast_session_change(%WorkflowSession{workspace_id: nil}, _action), do: :ok
+  defp broadcast_session_change(%Session{workspace_id: nil}, _action), do: :ok
 
-  defp broadcast_session_change(%WorkflowSession{} = session, action) do
+  defp broadcast_session_change(%Session{} = session, action) do
     Phoenix.PubSub.broadcast(
       Dran.PubSub,
       "workspace:#{session.workspace_id}",

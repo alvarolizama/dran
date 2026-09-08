@@ -12,7 +12,7 @@ defmodule Dran.Embeddings do
   """
 
   alias Dran.Repo
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.Inference
 
   @doc """

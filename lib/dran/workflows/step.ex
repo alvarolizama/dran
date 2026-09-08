@@ -1,4 +1,4 @@
-defmodule Dran.Step do
+defmodule Dran.Workflows.Step do
   @moduledoc """
   First-class step entity — a DEFINITION node of a workflow.
 
@@ -56,7 +56,7 @@ defmodule Dran.Step do
 
   @statuses ~w(draft active superseded)
 
-  schema "steps" do
+  schema "workflow_steps" do
     field :title, :string
     field :slug, :string
     field :position, :integer, default: 0
@@ -73,13 +73,13 @@ defmodule Dran.Step do
     field :model, :string
     field :generated_by, :string
 
-    embeds_many :claims, Dran.Step.Claim, on_replace: :delete
-    embeds_many :gates, Dran.Step.Gate, on_replace: :delete
-    embeds_one :graph, Dran.Step.Graph, on_replace: :update
-    embeds_many :context_snapshot, Dran.Step.ContextEntry, on_replace: :delete
+    embeds_many :claims, Dran.Workflows.Step.Claim, on_replace: :delete
+    embeds_many :gates, Dran.Workflows.Step.Gate, on_replace: :delete
+    embeds_one :graph, Dran.Workflows.Step.Graph, on_replace: :update
+    embeds_many :context_snapshot, Dran.Workflows.Step.ContextEntry, on_replace: :delete
 
     belongs_to :workspace, Dran.Workspace
-    belongs_to :workflow, Dran.Workflow
+    belongs_to :workflow, Dran.Workflows.Workflow
 
     timestamps(type: :utc_datetime)
   end
@@ -116,13 +116,13 @@ defmodule Dran.Step do
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_number(:version, greater_than_or_equal_to: 1)
     |> validate_inclusion(:status, @statuses)
-    |> unique_constraint([:workflow_id, :slug], name: :steps_workflow_id_slug_index)
+    |> unique_constraint([:workflow_id, :slug], name: :workflow_steps_workflow_id_slug_index)
   end
 
   @doc """
   Changeset for canvas persistence (drag / batch positions): casts ONLY the
   presentation columns and skips contract validation — a legacy step without
-  intent yet can still be moved around. Mirrors `Dran.Task.move_changeset/2`.
+  intent yet can still be moved around. Mirrors `Dran.Tasks.Task.move_changeset/2`.
   """
   def position_changeset(%__MODULE__{} = step, attrs) do
     step
@@ -186,8 +186,8 @@ defmodule Dran.Step do
 
     @primary_key false
     embedded_schema do
-      embeds_many :nodes, Dran.Step.Node, on_replace: :delete
-      embeds_many :edges, Dran.Step.Edge, on_replace: :delete
+      embeds_many :nodes, Dran.Workflows.Step.Node, on_replace: :delete
+      embeds_many :edges, Dran.Workflows.Step.Edge, on_replace: :delete
     end
 
     def changeset(graph, attrs) do

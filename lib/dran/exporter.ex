@@ -8,7 +8,9 @@ defmodule Dran.Exporter do
 
   alias Dran.Repo
   alias Dran.Knowledge
-  alias Dran.{Workspace, Page, Relation, PageVersion}
+  alias Dran.Workspace
+  alias Dran.Relation
+  alias Dran.Knowledge.{Page, PageVersion}
 
   @doc """
   Export a context by slug.

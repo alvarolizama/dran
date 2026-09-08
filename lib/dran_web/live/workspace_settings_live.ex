@@ -409,7 +409,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
       </header>
 
       <div class="px-5 py-5 space-y-3">
-        <%= for type <- Dran.Page.all_types() do %>
+        <%= for type <- Dran.Knowledge.Page.all_types() do %>
           <div class="flex items-center justify-between gap-4">
             <div>
               <div class="text-sm font-medium">{page_type_label(type)}</div>

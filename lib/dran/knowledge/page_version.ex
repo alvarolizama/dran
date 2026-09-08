@@ -1,4 +1,4 @@
-defmodule Dran.PageVersion do
+defmodule Dran.Knowledge.PageVersion do
   @moduledoc """
   Snapshot of a page's body at a specific version. Append-only —
   created every time a page's body changes.
@@ -12,13 +12,13 @@ defmodule Dran.PageVersion do
 
   @derive {Jason.Encoder,
            only: [:id, :page_id, :body, :body_hash, :version, :changed_by, :inserted_at]}
-  schema "page_versions" do
+  schema "knowledge_page_versions" do
     field :body, :string
     field :body_hash, :string
     field :version, :integer
     field :changed_by, :string
 
-    belongs_to :page, Dran.Page
+    belongs_to :page, Dran.Knowledge.Page
 
     timestamps(type: :utc_datetime, updated_at: false)
   end

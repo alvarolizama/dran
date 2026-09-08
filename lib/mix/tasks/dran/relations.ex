@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Dran.Relations do
 
   alias Dran.Repo
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
 
   @requirements ["app.start"]
 

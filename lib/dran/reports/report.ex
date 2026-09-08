@@ -1,4 +1,4 @@
-defmodule Dran.Report do
+defmodule Dran.Reports.Report do
   @moduledoc """
   System-created report entity — lint outputs, cluster summaries,
   job results, etc.

@@ -27,15 +27,15 @@ defmodule Dran.PageTypes do
   ## What is NOT a page type
 
   Goals, collections, and reports are **first-class entities in
-  their own tables** (`Dran.Goal`,
-  `Dran.Collection`, `Dran.Report`) — they are not page types
-  and are not created through `dran_create_page`. Todo-style action items
-  are `note` pages with `meta.kind == "todo"` plus kanban columns
-  (`kanban_status`, `priority`, `due_date`, `assignee`); use the
-  `dran_create_note` MCP tool for those.
+  their own tables** (`Dran.Goals.Goal`,
+  `Dran.Collections.Collection`, `Dran.Reports.Report`) — they are not page types
+  and are not created through `dran_create_page`. Action items are
+  first-class `Dran.Tasks.Task` rows (own table, kanban board) — notes no longer
+  have a `todo` kind or kanban fields. `meta.kind` on pages is purely
+  visual: it classifies, filters and groups — it never changes behavior.
 
   `DranWeb.PageTypes` is only UI labels/icons/paths — THIS module decides
-  what a type can do. `Dran.Page.@page_types` derives from `types/0`,
+  what a type can do. `Dran.Knowledge.Page.@page_types` derives from `types/0`,
   so adding a type here propagates to changeset validation automatically.
   """
 

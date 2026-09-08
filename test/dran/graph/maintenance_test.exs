@@ -64,7 +64,7 @@ defmodule Dran.Graph.MaintenanceTest do
 
     Dran.Repo.all(
       from r in Dran.Relation,
-        join: s in Dran.Page,
+        join: s in Dran.Knowledge.Page,
         on: s.id == r.source_id,
         where: s.workspace_id == ^ctx.id,
         where: r.relation_type == "semantic",

@@ -1,4 +1,4 @@
-defmodule Dran.Workflow do
+defmodule Dran.Workflows.Workflow do
   @moduledoc """
   Workflow — the execution entity: a step-by-step plan that agents RUN.
 
@@ -48,10 +48,10 @@ defmodule Dran.Workflow do
     field :kind, :string, default: "evergreen"
     field :meta, :map, default: %{}
 
-    belongs_to :goal, Dran.Goal
+    belongs_to :goal, Dran.Goals.Goal
     belongs_to :workspace, Dran.Workspace
-    has_many :steps, Dran.Step
-    has_many :sessions, Dran.WorkflowSession
+    has_many :steps, Dran.Workflows.Step
+    has_many :sessions, Dran.Workflows.Session
 
     timestamps(type: :utc_datetime)
   end

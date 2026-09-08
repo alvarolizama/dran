@@ -55,8 +55,8 @@ defmodule DranWeb.GraphGoalIntegrationTest do
 
     # Cleanup
     Repo.delete_all(Dran.Relation)
-    Repo.delete_all(Dran.Goal)
-    Repo.delete_all(Dran.Page)
+    Repo.delete_all(Dran.Goals.Goal)
+    Repo.delete_all(Dran.Knowledge.Page)
     Knowledge.delete_workspace(ws)
   end
 

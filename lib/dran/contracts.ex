@@ -27,18 +27,20 @@ defmodule Dran.Contracts do
   the SVG DAG view are renders from it.
 
   Since the plans/steps model (wave A) the same machinery also operates on
-  `%Dran.Step{}` (contract as columns + embeds, `depends_on` edges
+  `%Dran.Workflows.Step{}` (contract as columns + embeds, `depends_on` edges
   step→step) — dual with the task API until F3. Run-scoped sequencing over
   steps lives in `Dran.Executions`; step readiness here is definitional
   (steps have no board status).
   """
 
-  alias Dran.{Relation, Repo, Step}
+  alias Dran.{Repo}
+  alias Dran.Relation
+  alias Dran.Workflows.Step
   import Ecto.Query
 
   @verbs ~w(READ EDIT CREATE RUN VERIFY ASK)
 
-  # Statuses live on Dran.Step (Ecto.Enum column) since the meta-bag
+  # Statuses live on Dran.Workflows.Step (Ecto.Enum column) since the meta-bag
   # promotion — lint no longer validates status inside the JSON.
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -111,7 +113,7 @@ defmodule Dran.Contracts do
     |> Map.reject(fn {k, v} -> k == "id" and is_nil(v) end)
   end
 
-  defp maybe_put_graph(contract, %Dran.Step.Graph{} = graph) do
+  defp maybe_put_graph(contract, %Dran.Workflows.Step.Graph{} = graph) do
     Map.put(contract, "graph", %{
       "nodes" => Enum.map(graph.nodes || [], &embed_map/1),
       "edges" => Enum.map(graph.edges || [], &embed_map/1)
@@ -458,7 +460,7 @@ defmodule Dran.Contracts do
   Cycle-safe: in the pathological case of a cycle it still terminates by
   not depending on a topological order being acyclic.
 
-  Accepts `%Dran.Step{}` structs as well as tasks — steps are ordered by
+  Accepts `%Dran.Workflows.Step{}` structs as well as tasks — steps are ordered by
   their step→step `depends_on` edges (plan DAG).
   """
   def levels(tasks) do

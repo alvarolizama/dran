@@ -1,4 +1,4 @@
-defmodule Dran.Task do
+defmodule Dran.Tasks.Task do
   @moduledoc """
   First-class task entity — the action item of the second brain.
 

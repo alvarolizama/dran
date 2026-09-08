@@ -1,4 +1,4 @@
-defmodule Dran.Goal do
+defmodule Dran.Goals.Goal do
   @moduledoc """
   First-class goal entity — the PARA QUÉ: outcome and hierarchy.
 
@@ -49,7 +49,7 @@ defmodule Dran.Goal do
     field :created_by, :string, default: "system"
     field :updated_by, :string
 
-    belongs_to :parent_goal, Dran.Goal
+    belongs_to :parent_goal, Dran.Goals.Goal
     belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)

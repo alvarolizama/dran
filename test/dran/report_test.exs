@@ -40,7 +40,7 @@ defmodule Dran.ReportTest do
         slug: "test-report"
       }
 
-      assert {:ok, %Dran.Report{} = report} = Reports.create_report(attrs)
+      assert {:ok, %Dran.Reports.Report{} = report} = Reports.create_report(attrs)
       assert report.title == "Test Report"
     end
   end

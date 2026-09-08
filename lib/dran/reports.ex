@@ -1,6 +1,6 @@
 defmodule Dran.Reports do
   @moduledoc """
-  The Reports context — CRUD for reports (`Dran.Report`).
+  The Reports context — CRUD for reports (`Dran.Reports.Report`).
 
   Generated analysis documents per workspace. Leaf context: depends only
   on Repo + its schema.
@@ -9,7 +9,7 @@ defmodule Dran.Reports do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.Report
+  alias Dran.Reports.Report
 
   # ──────────────────────────────────────────────────────────────────────────
   # Report CRUD

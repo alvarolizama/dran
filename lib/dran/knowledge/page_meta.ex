@@ -1,4 +1,4 @@
-defmodule Dran.PageMeta do
+defmodule Dran.Knowledge.PageMeta do
   @moduledoc """
   Embedded schema for validating the `meta` JSONB of a page.
 
@@ -36,7 +36,6 @@ defmodule Dran.PageMeta do
     field :attendees, {:array, :string}
     field :resolved, :boolean
     field :source_ref, :string
-    field :author, :string
     field :language, :string
 
     # entity
@@ -78,7 +77,6 @@ defmodule Dran.PageMeta do
       :attendees,
       :resolved,
       :source_ref,
-      :author,
       :language,
       :aliases,
       :external_url,

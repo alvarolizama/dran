@@ -35,7 +35,8 @@ defmodule Dran.Tasks.Automation do
 
   import Ecto.Query
 
-  alias Dran.{Repo, Task, Tasks}
+  alias Dran.{Repo, Tasks}
+  alias Dran.Tasks.Task
 
   @stale_days 7
 

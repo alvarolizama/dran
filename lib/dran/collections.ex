@@ -1,6 +1,6 @@
 defmodule Dran.Collections do
   @moduledoc """
-  The Collections context — CRUD for collections (`Dran.Collection`).
+  The Collections context — CRUD for collections (`Dran.Collections.Collection`).
 
   Curated groupings of pages within a workspace. Leaf context: depends
   only on Repo + its schema.
@@ -9,7 +9,7 @@ defmodule Dran.Collections do
   import Ecto.Query, warn: false
 
   alias Dran.Repo
-  alias Dran.Collection
+  alias Dran.Collections.Collection
 
   # ──────────────────────────────────────────────────────────────────────────
   # Collection CRUD

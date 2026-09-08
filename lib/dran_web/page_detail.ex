@@ -113,7 +113,7 @@ defmodule DranWeb.PageDetail do
     {socket, context} = Auth.resolve_workspace(socket, params)
 
     with %{} = context <- context,
-         %Dran.Page{} = page <- Knowledge.get_page_by_slug(slug, context.id) do
+         %Dran.Knowledge.Page{} = page <- Knowledge.get_page_by_slug(slug, context.id) do
       active_tab = Map.get(socket.assigns, :active_tab, "content")
 
       {:noreply,
@@ -141,7 +141,7 @@ defmodule DranWeb.PageDetail do
   Fetch the GraphRAG cluster summary for a page, swallowing any error
   (clusters may not be computed yet, inference may be off, etc.).
   """
-  def load_cluster_summary(%Dran.Page{} = page) do
+  def load_cluster_summary(%Dran.Knowledge.Page{} = page) do
     case Dran.Graph.ClusterSummaries.get_summary_for_page(page.id) do
       {:ok, summary} -> summary
       _ -> nil
@@ -153,7 +153,7 @@ defmodule DranWeb.PageDetail do
   @doc """
   Render a page's markdown body with embeds and inline links resolved.
   """
-  def render_body(%Dran.Page{} = page) do
+  def render_body(%Dran.Knowledge.Page{} = page) do
     import DranWeb.PageComponents, only: [render_markdown: 2]
 
     render_markdown(page.body,

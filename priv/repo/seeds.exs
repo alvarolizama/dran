@@ -642,13 +642,13 @@ IO.puts("  ✓ Relations created (related, semantic, part_of, embeds)")
 
 total_pages =
   Repo.aggregate(
-    from(p in Dran.Page, where: p.workspace_id == ^ctx_id),
+    from(p in Dran.Knowledge.Page, where: p.workspace_id == ^ctx_id),
     :count
   )
 
 total_tasks =
   Repo.aggregate(
-    from(t in Dran.Task, where: t.workspace_id == ^ctx_id),
+    from(t in Dran.Tasks.Task, where: t.workspace_id == ^ctx_id),
     :count
   )
 

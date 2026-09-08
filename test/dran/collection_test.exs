@@ -40,7 +40,9 @@ defmodule Dran.CollectionTest do
         slug: "test-collection"
       }
 
-      assert {:ok, %Dran.Collection{} = collection} = Collections.create_collection(attrs)
+      assert {:ok, %Dran.Collections.Collection{} = collection} =
+               Collections.create_collection(attrs)
+
       assert collection.name == "Test Collection"
     end
   end

@@ -2,7 +2,7 @@ defmodule Dran.PageAugmenterTest do
   use Dran.DataCase, async: false
 
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.PageAugmenter
 
   setup do

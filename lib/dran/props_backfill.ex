@@ -17,7 +17,7 @@ defmodule Dran.PropsBackfill do
   import Ecto.Query
 
   alias Dran.Repo
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.PageAugmenter
 
   @doc """

@@ -67,7 +67,7 @@ defmodule DranWeb.DocsLiveTest do
     # api: endpoint table — a known REST path appears
     view |> element(~s(button[phx-value-tab="api"])) |> render_click()
     html = render(view)
-    assert html =~ "/api/pages"
+    assert html =~ "/api/knowledge-pages"
 
     # mcp: MCP endpoint mention
     view |> element(~s(button[phx-value-tab="mcp"])) |> render_click()

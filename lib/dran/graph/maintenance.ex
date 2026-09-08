@@ -28,7 +28,8 @@ defmodule Dran.Graph.Maintenance do
 
   alias Dran.Repo
   alias Dran.Knowledge
-  alias Dran.{Page, Relation}
+  alias Dran.Relation
+  alias Dran.Knowledge.Page
 
   @doc """
   Prune weak `semantic` relations in a context.

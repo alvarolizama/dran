@@ -308,7 +308,7 @@ defmodule DranWeb.DashboardLive do
     ids = Enum.map(workspaces, & &1.id)
 
     page_counts =
-      from(p in Dran.Page,
+      from(p in Dran.Knowledge.Page,
         where: p.workspace_id in ^ids and p.archived == false,
         group_by: p.workspace_id,
         select: {p.workspace_id, count(p.id)}
@@ -317,7 +317,7 @@ defmodule DranWeb.DashboardLive do
       |> Map.new()
 
     todo_counts =
-      from(t in Dran.Task,
+      from(t in Dran.Tasks.Task,
         where: t.workspace_id in ^ids and t.archived == false,
         group_by: t.workspace_id,
         select: {t.workspace_id, count(t.id)}
@@ -326,7 +326,7 @@ defmodule DranWeb.DashboardLive do
       |> Map.new()
 
     last_updated =
-      from(p in Dran.Page,
+      from(p in Dran.Knowledge.Page,
         where: p.workspace_id in ^ids and p.archived == false,
         group_by: p.workspace_id,
         select: {p.workspace_id, max(p.updated_at)}

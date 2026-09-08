@@ -1,6 +1,6 @@
 defmodule Dran.Tasks do
   @moduledoc """
-  The Tasks context — CRUD and board operations for `Dran.Task`.
+  The Tasks context — CRUD and board operations for `Dran.Tasks.Task`.
 
   Tasks are independent entities (standalone by default). Links to goals and
   pages are opt-in via `Dran.Relation` (W2 adds "task" as a node type).
@@ -22,7 +22,8 @@ defmodule Dran.Tasks do
 
   import Ecto.Query, warn: false
 
-  alias Dran.{Repo, Task, Slug, Knowledge}
+  alias Dran.{Repo, Slug, Knowledge}
+  alias Dran.Tasks.Task
 
   # ──────────────────────────────────────────────────────────────────────────
   # Listing
@@ -185,7 +186,7 @@ defmodule Dran.Tasks do
   derived progress. Idempotent — the unique index on
   (source_id, target_id, relation_type) absorbs duplicates.
   """
-  def link_to_goal(%Task{} = task, %Dran.Goal{} = goal) do
+  def link_to_goal(%Task{} = task, %Dran.Goals.Goal{} = goal) do
     result =
       Knowledge.create_relation(%{
         source_id: task.id,
@@ -206,7 +207,7 @@ defmodule Dran.Tasks do
   `part_of` relation (`source_type: "task"`, `target_type: "page"`).
   Idempotent.
   """
-  def link_to_page(%Task{} = task, %Dran.Page{} = page) do
+  def link_to_page(%Task{} = task, %Dran.Knowledge.Page{} = page) do
     Knowledge.create_relation(%{
       source_id: task.id,
       source_type: "task",
@@ -219,7 +220,7 @@ defmodule Dran.Tasks do
   @doc """
   Unlink a task from a goal — deletes the `part_of` relation.
   """
-  def unlink_from_goal(%Task{} = task, %Dran.Goal{} = goal) do
+  def unlink_from_goal(%Task{} = task, %Dran.Goals.Goal{} = goal) do
     Repo.delete_all(
       from(r in Dran.Relation,
         where:
@@ -235,11 +236,11 @@ defmodule Dran.Tasks do
 
   @doc """
   List goals linked to a task via `part_of` relations.
-  Returns a list of `%Dran.Goal{}`.
+  Returns a list of `%Dran.Goals.Goal{}`.
   """
   def list_linked_goals(%Task{} = task) do
     Repo.all(
-      from g in Dran.Goal,
+      from g in Dran.Goals.Goal,
         join: r in Dran.Relation,
         on:
           r.target_id == g.id and r.target_type == "goal" and
@@ -253,7 +254,7 @@ defmodule Dran.Tasks do
   `list_linked_goals/1`. Non-archived tasks only, in board order
   (position), with the assignee preloaded for card rendering.
   """
-  def list_tasks_for_goal(%Dran.Goal{} = goal) do
+  def list_tasks_for_goal(%Dran.Goals.Goal{} = goal) do
     from(t in Task,
       join: r in Dran.Relation,
       on:
@@ -305,7 +306,7 @@ defmodule Dran.Tasks do
         {:ok, get_task(task.id)}
 
       true ->
-        with %Dran.Goal{} = goal <- Dran.Goals.get_goal(goal_id),
+        with %Dran.Goals.Goal{} = goal <- Dran.Goals.get_goal(goal_id),
              true <- goal.workspace_id == task.workspace_id,
              :ok <- detach_all_goals(task, current_goals),
              {:ok, _relation} <- link_to_goal(task, goal) do
@@ -347,7 +348,7 @@ defmodule Dran.Tasks do
   """
   def list_linked_goals_by_ids(task_ids, workspace_id) when is_list(task_ids) do
     from(r in Dran.Relation,
-      join: g in Dran.Goal,
+      join: g in Dran.Goals.Goal,
       on: g.id == r.target_id,
       where:
         r.source_type == "task" and r.relation_type == "part_of" and

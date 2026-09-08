@@ -340,10 +340,10 @@ defmodule DranWeb.Router do
           _ -> slug
         end
 
-      # /api/todos/:id — no workspace in params; it comes from the task.
-      # Without this branch every API-key write to a todo 403s (SEC-002
+      # /api/tasks/:id — no workspace in params; it comes from the task.
+      # Without this branch every API-key write to a task 403s (SEC-002
       # false negative), even with write access to the owning workspace.
-      conn.request_path =~ "/api/todos/" and is_binary(conn.params["id"]) ->
+      conn.request_path =~ "/api/tasks/" and is_binary(conn.params["id"]) ->
         case Dran.Tasks.get_task(conn.params["id"]) do
           %{workspace_id: ws_id} -> ws_id
           _ -> nil
@@ -355,7 +355,7 @@ defmodule DranWeb.Router do
       conn.request_path =~ "/api/workflows/" and is_binary(conn.params["workflow_id"]) ->
         case Ecto.UUID.cast(conn.params["workflow_id"]) do
           {:ok, uuid} ->
-            case Dran.Repo.get(Dran.Workflow, uuid) do
+            case Dran.Repo.get(Dran.Workflows.Workflow, uuid) do
               %{workspace_id: ws_id} -> ws_id
               _ -> nil
             end
@@ -364,11 +364,11 @@ defmodule DranWeb.Router do
             nil
         end
 
-      # /api/runs/:id/* — workspace from the run (start/progress/close/retry).
-      conn.request_path =~ "/api/runs/" and is_binary(conn.params["id"]) ->
+      # /api/workflow_runs/:id/* — workspace from the run (start/progress/close/retry).
+      conn.request_path =~ "/api/workflow-runs/" and is_binary(conn.params["id"]) ->
         case Ecto.UUID.cast(conn.params["id"]) do
           {:ok, uuid} ->
-            case Dran.Repo.get(Dran.Run, uuid) do
+            case Dran.Repo.get(Dran.Workflows.Run, uuid) do
               %{workspace_id: ws_id} -> ws_id
               _ -> nil
             end
@@ -474,10 +474,10 @@ defmodule DranWeb.Router do
     get "/export/:workspace/full", ExportController, :full
 
     # Pages (read + graph)
-    get "/pages", PageController, :index
-    get "/pages/:slug", PageController, :show
-    get "/pages/:slug/links", PageController, :links
-    get "/pages/:slug/graph", PageController, :graph
+    get "/knowledge-pages", PageController, :index
+    get "/knowledge-pages/:slug", PageController, :show
+    get "/knowledge-pages/:slug/links", PageController, :links
+    get "/knowledge-pages/:slug/graph", PageController, :graph
 
     # Search (read-only)
     get "/search", SearchController, :search
@@ -489,7 +489,7 @@ defmodule DranWeb.Router do
     get "/goals/:slug", GoalController, :show
 
     # Todos (read)
-    get "/todos", TodoController, :index
+    get "/tasks", TodoController, :index
 
     # Quality / maintenance (read-only)
     get "/lint", LintController, :lint
@@ -505,8 +505,8 @@ defmodule DranWeb.Router do
 
     # Workflow executions (read): session inspection + the agent pull
     # endpoint (DranWeb.API.ExecutionController)
-    get "/workflow_sessions/:id", ExecutionController, :show_session
-    get "/pending_runs", ExecutionController, :pending
+    get "/workflow-sessions/:id", ExecutionController, :show_session
+    get "/pending-workflow-runs", ExecutionController, :pending
   end
 
   # ── REST API — write routes (requires write_access on API keys) ────────────
@@ -520,27 +520,27 @@ defmodule DranWeb.Router do
     delete "/workspaces/:slug", WorkspaceController, :delete
 
     # Pages (write)
-    post "/pages", PageController, :create
-    put "/pages/:slug", PageController, :update
-    delete "/pages/:slug", PageController, :delete
+    post "/knowledge-pages", PageController, :create
+    put "/knowledge-pages/:slug", PageController, :update
+    delete "/knowledge-pages/:slug", PageController, :delete
 
     # Relations (write)
     post "/relations", RelationController, :create
     delete "/relations/:id", RelationController, :delete
 
     # Todos (write)
-    post "/todos", TodoController, :create
-    put "/todos/:id", TodoController, :update
+    post "/tasks", TodoController, :create
+    put "/tasks/:id", TodoController, :update
 
     # Workflow executions (write) — the agent loop over Dran.Executions:
     # open a session, claim a run, report progress, close, retry.
     # require_write_access resolves the workspace from params["workspace"]
     # (all routes carry it; /api/todos-style body lookup is not needed).
     post "/workflows/:workflow_id/sessions", ExecutionController, :open
-    post "/runs/:id/start", ExecutionController, :start
-    put "/runs/:id/progress", ExecutionController, :progress
-    post "/runs/:id/close", ExecutionController, :close
-    post "/runs/:id/retry", ExecutionController, :retry
+    post "/workflow-runs/:id/start", ExecutionController, :start
+    put "/workflow-runs/:id/progress", ExecutionController, :progress
+    post "/workflow-runs/:id/close", ExecutionController, :close
+    post "/workflow-runs/:id/retry", ExecutionController, :retry
   end
 
   # ── MCP Streamable HTTP endpoint (self-authenticating) ────────────────────

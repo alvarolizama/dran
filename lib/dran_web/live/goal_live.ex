@@ -4,7 +4,7 @@ defmodule DranWeb.GoalLive do
   use DranWeb, :live_view
 
   alias Dran.Goals
-  alias Dran.Goal
+  alias Dran.Goals.Goal
   alias Dran.Tasks
   alias Dran.Workflows
   alias DranWeb.Plugs.Auth
@@ -33,7 +33,6 @@ defmodule DranWeb.GoalLive do
                   <.icon name="hero-flag" class="size-3" />
                   {gettext("Goal")}
                 </span>
-                <code class="font-mono text-caption text-base-content/60">{@goal.slug}</code>
                 <span
                   :if={@goal.status}
                   class={"px-2 py-0.5 text-xs rounded-full " <> goal_status_class(@goal)}

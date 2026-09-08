@@ -21,7 +21,7 @@ defmodule Dran.PageMetaGettextTest do
   # We use ExUnit.Case (no DB) — same style as page_meta_test.exs.
   use ExUnit.Case, async: false
 
-  alias Dran.PageMeta
+  alias Dran.Knowledge.PageMeta
 
   # meta_fields_for/1,2 resolves gettext at call time against the CURRENT
   # process locale. The app default is "es", so labels come back translated
@@ -188,7 +188,7 @@ defmodule Dran.PageMetaGettextTest do
     # note kind, only a translation artefact).
     #
     # Removed kinds: snippet (→code), outline (→template), log (→journal),
-    # todo (→ first-class Dran.Task since the tasks-table migration)
+    # todo (→ first-class Dran.Tasks.Task since the tasks-table migration)
     test "note_kinds/0 returns exactly the curated slugs" do
       assert PageMeta.note_kinds() ==
                ~w(journal idea meeting question quote reminder code recipe debug summary decision template plan project)

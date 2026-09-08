@@ -298,7 +298,7 @@ defmodule DranWeb.DocsLive do
         <li>Link pages with relations</li>
         <li>Explore the graph to discover connections</li>
         <li>
-          Organize work with projects, goals, plans and todos — all visible on the global kanban
+          Organize work with goals and tasks — all visible on the global kanban
         </li>
       </ol>
 
@@ -384,8 +384,9 @@ defmodule DranWeb.DocsLive do
         <li><strong>reference</strong> — external sources (URLs, books)</li>
         <li><strong>goal</strong> — outcomes you want to achieve</li>
         <li><strong>plan</strong> — steps or roadmaps</li>
-        <li><strong>todo</strong> — actionable items with kanban status</li>
-        <li><strong>project</strong> — initiatives grouping goals, plans and todos</li>
+        <li>
+          <strong>project</strong> — a note kind that groups related pages under a shared initiative
+        </li>
         <li>
           <strong>report</strong>
           — system-created run logs (jobs and worker runs); detail view only at
@@ -394,8 +395,11 @@ defmodule DranWeb.DocsLive do
         </li>
       </ul>
       <p>
-        Pages store a body (Markdown), summary, tags, and an arbitrary <code>meta</code> map
-        for type-specific metadata (e.g. kanban status, priority, horizon).
+        Pages store a body (Markdown), summary, tags, and an arbitrary <code>meta</code>
+        map
+        for type-specific metadata (e.g. language, due date, horizon). Notes also carry a
+        <code>meta.kind</code>
+        classifier — visual grouping and filtering only.
       </p>
 
       <.h2_heading id="relations" icon="hero-link" label="Relations" />
@@ -445,8 +449,8 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="smart-collections" icon="hero-squares-2x2" label="Smart Collections" />
       <p>
-        Dynamic page groupings based on filters (type, tags, date ranges). Collections auto-update
-        as pages change, giving you live views like "All todos from this week" or "Concepts tagged AI".
+        Dynamic page groupings based on filters (type, kind, tags, date ranges). Collections auto-update
+        as pages change, giving you live views like "All journal notes from this week" or "Concepts tagged AI".
       </p>
 
       <.h2_heading
@@ -613,14 +617,13 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="kanban-board" icon="hero-view-columns" label="Kanban board" />
       <p>
-        The <code>/kanban</code> page is a global full-viewport kanban board with 5 columns
-        (backlog, todo, in_progress, done, cancelled) covering every todo in the
-        context. You can drag and drop cards between columns to update their <code>kanban_status</code>, and combine the Project / Goal / Plan filters
+        The <code>/tasks</code> page is a global full-viewport kanban board with 5 columns
+        (backlog, todo, in_progress, done, cancelled) covering every task in the
+        context. You can drag and drop cards between columns to update their <code>status</code>, and combine the Project / Goal / Plan filters
         (each with All / None — orphans — / &lt;slug&gt;). Cards show link badges; click a
         badge to filter the board by that link. The board updates in real
-        time — when an autonomous worker creates or moves a todo, the change is pushed to all
-        connected clients via PubSub. The <code>/todos</code> page offers the same board
-        scoped to the todo page type.
+        time — when an autonomous worker creates or moves a task, the change is pushed to all
+        connected clients via PubSub.
       </p>
 
       <.h2_heading
@@ -890,7 +893,6 @@ defmodule DranWeb.DocsLive do
         {"relations-api", "Relations"},
         {"search-api", "Search"},
         {"goals-api", "Goals"},
-        {"todos-api", "Todos"},
         {"maintenance-api", "Maintenance"},
         {"wiki-api", "Wiki"},
         {"export-api", "Export"}
@@ -991,23 +993,28 @@ defmodule DranWeb.DocsLive do
       %{
         group: "Pages",
         method: "GET",
-        path: "/api/pages",
+        path: "/api/knowledge-pages",
         desc: "List pages (filters: context, type, tag, status, owner, limit)"
       },
-      %{group: "Pages", method: "POST", path: "/api/pages", desc: "Create a page"},
-      %{group: "Pages", method: "GET", path: "/api/pages/:slug", desc: "Get a page"},
-      %{group: "Pages", method: "PUT", path: "/api/pages/:slug", desc: "Update a page"},
-      %{group: "Pages", method: "DELETE", path: "/api/pages/:slug", desc: "Delete a page"},
+      %{group: "Pages", method: "POST", path: "/api/knowledge-pages", desc: "Create a page"},
+      %{group: "Pages", method: "GET", path: "/api/knowledge-pages/:slug", desc: "Get a page"},
+      %{group: "Pages", method: "PUT", path: "/api/knowledge-pages/:slug", desc: "Update a page"},
+      %{
+        group: "Pages",
+        method: "DELETE",
+        path: "/api/knowledge-pages/:slug",
+        desc: "Delete a page"
+      },
       %{
         group: "Pages",
         method: "GET",
-        path: "/api/pages/:slug/links",
+        path: "/api/knowledge-pages/:slug/links",
         desc: "Inbound + outbound relations"
       },
       %{
         group: "Pages",
         method: "GET",
-        path: "/api/pages/:slug/graph",
+        path: "/api/knowledge-pages/:slug/graph",
         desc: "Subgraph centered on a page"
       },
       %{
@@ -1045,20 +1052,20 @@ defmodule DranWeb.DocsLive do
         group: "Goals",
         method: "GET",
         path: "/api/goals/:slug?context=...",
-        desc: "Goal detail with todos and plans"
+        desc: "Goal detail with linked notes and tasks"
       },
       %{
-        group: "Todos",
+        group: "Tasks",
         method: "GET",
-        path: "/api/todos?context=...&status=...",
-        desc: "List todos (filterable by kanban status)"
+        path: "/api/tasks?context=...&status=...",
+        desc: "List tasks (filterable by status)"
       },
-      %{group: "Todos", method: "POST", path: "/api/todos", desc: "Create a todo"},
+      %{group: "Tasks", method: "POST", path: "/api/tasks", desc: "Create a task"},
       %{
-        group: "Todos",
+        group: "Tasks",
         method: "PUT",
-        path: "/api/todos/:id",
-        desc: "Update a todo (e.g. change status)"
+        path: "/api/tasks/:id",
+        desc: "Update a task (e.g. change status)"
       },
       %{
         group: "Maintenance",
@@ -1162,13 +1169,14 @@ defmodule DranWeb.DocsLive do
           — use <code>dran_create_page</code>
           with the appropriate <code>page_type</code>
           and <code>meta</code>. Use <code>dran_create_note</code>
-          for action items (notes with kanban tracking).
+          for plain notes; <code>dran_create_task</code>
+          for actionable items.
         </li>
         <li>
           <strong>Update</strong>
           — use <code>dran_update_page</code>
           to refine content. Use <code>dran_update_note</code>
-          to change a note's kanban status (merges meta).
+          to merge note meta.
         </li>
         <li>
           <strong>Delete</strong>
@@ -1190,7 +1198,7 @@ defmodule DranWeb.DocsLive do
         <li>
           <strong>Stats</strong>
           — use <code>dran_get_stats</code>
-          for a context overview (page counts, todos by status, orphans).
+          for a context overview (page counts, orphans).
         </li>
         <li>
           <strong>Rename</strong>
@@ -1270,22 +1278,10 @@ defmodule DranWeb.DocsLive do
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">todo</td>
-              <td class="px-4 py-2">Actionable items with kanban status</td>
-              <td class="px-4 py-2 text-xs">
-                personal, coding, business, learning, health, finance, other
-              </td>
-              <td class="px-4 py-2 text-xs">
-                kanban_status (backlog/todo/in_progress/done/cancelled), priority (low/medium/high/urgent), assignee, goal_slug, plan_slug, due_date
-              </td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">project</td>
-              <td class="px-4 py-2">Initiative grouping goals, plans and todos</td>
+              <td class="px-4 py-2">Note kind — a shared initiative that groups related pages</td>
               <td class="px-4 py-2 text-xs">—</td>
-              <td class="px-4 py-2 text-xs">
-                status (draft/active/on_hold/done/archived), priority, health, health_source, start_date, target_date
-              </td>
+              <td class="px-4 py-2 text-xs">meta.kind = "project" on any note</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">report</td>
@@ -1317,7 +1313,7 @@ defmodule DranWeb.DocsLive do
         shared links).
       </p>
       <div class="not-prose rounded-lg border border-base-300 bg-base-200/50 p-3">
-        <pre class="text-sm font-mono text-primary overflow-x-auto"><code phx-no-curly-interpolation>{"\n/notes/my-note?context=work\n/goals/mrr-100k?context=business\n/todos/fix-bug?context=coding\n/projects/tokengate?context=personal"}</code></pre>
+        <pre class="text-sm font-mono text-primary overflow-x-auto"><code phx-no-curly-interpolation>{"\n/notes/my-note?context=work\n/goals/mrr-100k?context=business\n/tasks\n/projects/tokengate?context=personal"}</code></pre>
       </div>
       <p class="text-sm text-base-content/60 mt-2">
         If the context slug doesn't exist, the session's current context is used as fallback.
@@ -1368,10 +1364,10 @@ defmodule DranWeb.DocsLive do
             name="type"
             type="string"
             required="no"
-            desc="note, concept, entity, reference, goal, plan, todo, project"
+            desc="note, concept, entity, reference"
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
-          <:param name="status" type="string" required="no" desc="Filter by kanban_status (todos)" />
+          <:param name="kind" type="string" required="no" desc="Filter by meta.kind (notes)" />
           <:param
             name="goal_slug"
             type="string"
@@ -1383,12 +1379,6 @@ defmodule DranWeb.DocsLive do
             type="string"
             required="no"
             desc="Filter by plan slug ('none' for orphans)"
-          />
-          <:param
-            name="assignee"
-            type="string"
-            required="no"
-            desc="Filter todos by assignee ('none' for unassigned)"
           />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
           <:param
@@ -1410,7 +1400,7 @@ defmodule DranWeb.DocsLive do
             name="page_type"
             type="string"
             required="yes"
-            desc="note, concept, entity, reference, goal, plan, todo, project"
+            desc="note, concept, entity, reference"
           />
           <:param
             name="body"
@@ -1448,7 +1438,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="dran_update_page"
-          desc="Update any page field. Version auto-increments on body change. Meta is replaced (not merged) — use dran_update_note for kanban notes."
+          desc="Update any page field. Version auto-increments on body change. Meta is replaced (not merged) — use dran_update_note to merge note meta."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Page slug to update" />
@@ -1481,43 +1471,27 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="dran_create_note"
-          desc="Create a note with todo-style kanban tracking (kind todo). Notes with kanban_status appear on the board."
+          desc="Create a plain note (journal, idea, meeting…). For actionable items use dran_create_task."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="title" type="string" required="yes" desc="Note title" />
           <:param name="slug" type="string" required="yes" desc="Note slug" />
           <:param
-            name="kanban_status"
+            name="kind"
             type="string"
             required="no"
-            desc="backlog, todo, in_progress, done, cancelled"
+            desc="Visual classifier: journal, idea, meeting, question… (filter/group only)"
           />
-          <:param name="priority" type="string" required="no" desc="low, medium, high, urgent" />
-          <:param name="due_date" type="string" required="no" desc="YYYY-MM-DD" />
-          <:param
-            name="assignee"
-            type="string"
-            required="no"
-            desc="Who executes this todo (alvaro, hermes, claude-code...)"
-          />
-          <:param name="body" type="string" required="no" desc="Note description (markdown)" />
+          <:param name="body" type="string" required="no" desc="Note body (markdown)" />
+          <:param name="tags" type="array" required="no" desc="Tags (kebab-case)" />
         </.mcp_tool>
 
         <.mcp_tool
           name="dran_update_note"
-          desc="Update a note's kanban fields (status, priority, due date, assignee). Merges meta — only pass changed fields."
+          desc="Update a note's title, body, or tags. Merges meta — only pass changed fields."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
           <:param name="slug" type="string" required="yes" desc="Note slug to update" />
-          <:param name="kanban_status" type="string" required="no" desc="New kanban status" />
-          <:param name="priority" type="string" required="no" desc="New priority" />
-          <:param name="due_date" type="string" required="no" desc="New due date YYYY-MM-DD" />
-          <:param
-            name="assignee"
-            type="string"
-            required="no"
-            desc="Reassign todo (alvaro, hermes, claude-code...)"
-          />
           <:param name="title" type="string" required="no" desc="New title" />
           <:param name="body" type="string" required="no" desc="New body (markdown)" />
           <:param name="tags" type="array" required="no" desc="New tags (replaces existing)" />
@@ -1563,7 +1537,7 @@ defmodule DranWeb.DocsLive do
 
         <.mcp_tool
           name="dran_get_stats"
-          desc="Aggregate statistics for a context. Returns page counts, todos by status, orphans, and total relations."
+          desc="Aggregate statistics for a context. Returns page counts, orphans, and total relations."
         >
           <:param name="workspace" type="string" required="yes" desc="Context slug" />
         </.mcp_tool>
@@ -1638,7 +1612,7 @@ defmodule DranWeb.DocsLive do
         </div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">goal://&#123;context&#125;/&#123;slug&#125;</code>
-          <span class="text-sm text-base-content/60 ml-2">Goal detail with related todos and plans (JSON)</span>
+          <span class="text-sm text-base-content/60 ml-2">Goal detail with linked notes and tasks (JSON)</span>
         </div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">wiki://&#123;context&#125;/index</code>
@@ -1657,7 +1631,7 @@ defmodule DranWeb.DocsLive do
         </div>
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">goal_review</code>
-          <span class="text-sm text-base-content/60 ml-2">Review a goal's status, todos, and plans. Args: goal_slug, context.</span>
+          <span class="text-sm text-base-content/60 ml-2">Review a goal's status and linked notes. Args: goal_slug, context.</span>
         </div>
       </div>
 

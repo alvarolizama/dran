@@ -44,7 +44,7 @@ defmodule Dran.PropsMaterializer do
 
   require Logger
 
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.PageFactory
   alias Dran.Slug
 

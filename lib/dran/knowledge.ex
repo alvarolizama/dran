@@ -31,13 +31,10 @@ defmodule Dran.Knowledge do
 
   alias Dran.Repo
 
-  alias Dran.{
-    Workspace,
-    Page,
-    Relation,
-    PageVersion,
-    Log
-  }
+  alias Dran.Knowledge.{Page, PageVersion}
+  alias Dran.Workspace
+  alias Dran.Relation
+  alias Dran.Log
 
   # ──────────────────────────────────────────────────────────────────────────
   # Contexts
@@ -155,16 +152,16 @@ defmodule Dran.Knowledge do
   ## Options
   - `:workspace_id` — filter by context (required for multi-context isolation)
   - `:type` — filter by page_type
+  - `:kind` — filter by `meta.kind` (visual classifier: filter/group only)
   - `:tag` — filter by a single tag
-  - `:status` — filter by kanban_status (for todos)
   - `:goal_slug` — filter by planning goal. A page matches when its own
-    `meta.goal_slug` equals the value OR (for todos) its `meta.plan_slug`
+    `meta.goal_slug` equals the value OR (for plans) its `meta.plan_slug`
     points to a plan whose `meta.goal_slug` equals the value. The special
     value `"none"` matches pages with no direct goal_slug and no plan
-    goal_slug. Mainly meaningful with `type: "plan"` or `type: "todo"`.
+    goal_slug. Mainly meaningful with `type: "plan"`.
   - `:plan_slug` — filter by `meta.plan_slug`. The special value `"none"`
     matches pages with no/empty plan_slug. Mainly meaningful with
-    `type: "todo"`.
+    `type: "plan"`.
   - `:project_slug` — filter by `meta.project_slug`. The special value
     `"none"` matches pages with no/empty project_slug (orphans).
   - `:archived` — `true` returns only archived pages, `false` or omitted
@@ -179,11 +176,9 @@ defmodule Dran.Knowledge do
     type = Keyword.get(opts, :type)
     kind = Keyword.get(opts, :kind)
     tag = Keyword.get(opts, :tag)
-    status = Keyword.get(opts, :status)
     # `owner` was dropped with the actor model — the opt stays for backward
     # compat with old saved filters but no longer matches any row.
     created_by = Keyword.get(opts, :created_by)
-    assignee = Keyword.get(opts, :assignee)
     props = Keyword.get(opts, :props)
     pinned = Keyword.get(opts, :pinned)
     archived = Keyword.get(opts, :archived, false)
@@ -232,10 +227,8 @@ defmodule Dran.Knowledge do
       |> maybe_filter_type(type)
       |> maybe_filter_kind(kind)
       |> maybe_filter_tag(tag)
-      |> maybe_filter_status(status)
       |> maybe_filter_owner(Keyword.get(opts, :owner))
       |> maybe_filter_created_by(created_by)
-      |> maybe_filter_assignee(assignee)
       |> maybe_filter_props(props)
       |> maybe_filter_pinned(pinned)
       |> where([p], p.archived == ^archived)
@@ -304,12 +297,6 @@ defmodule Dran.Knowledge do
     where(query, [p], ^tag in p.tags)
   end
 
-  defp maybe_filter_status(query, nil), do: query
-
-  defp maybe_filter_status(query, status) do
-    where(query, [p], fragment("?->>'kanban_status' = ?", p.meta, ^status))
-  end
-
   # `owner` column was dropped — the filter is a no-op kept for backward
   # compat with saved smart-collection queries and old MCP clients.
   defp maybe_filter_owner(query, _owner), do: query
@@ -326,25 +313,10 @@ defmodule Dran.Knowledge do
     where(query, [p], p.created_by == ^created_by)
   end
 
-  # assignee: nil → no filter; "none" → no assignee set; value → exact match.
-  defp maybe_filter_assignee(query, nil), do: query
-
-  defp maybe_filter_assignee(query, "none") do
-    where(
-      query,
-      [p],
-      is_nil(fragment("?->>'assignee'", p.meta)) or fragment("?->>'assignee'", p.meta) == ""
-    )
-  end
-
-  defp maybe_filter_assignee(query, assignee) do
-    where(query, [p], fragment("?->>'assignee'", p.meta) == ^assignee)
-  end
-
   # props: nil/empty → no filter; map → one `where` per key/value pair, compared
   # as `meta->'props'->>key = value` (AND logic). Filtering in the DB (rather than
   # post-fetch in memory) keeps limit/offset pagination correct. We use `->>`
-  # text comparison (the same pattern as kanban_status/assignee above) because a
+  # text comparison (the same pattern as the kind filter above) because a
   # single jsonb `@>` containment fragment sends the value as a text param that
   # Postgrex doesn't cast to jsonb correctly; per-key text comparison is reliable
   # and hits the meta GIN/expression indexes just the same. Values are compared
@@ -1106,7 +1078,7 @@ defmodule Dran.Knowledge do
       SELECT r.source_id, r.target_id, r.target_id AS via_id, 1 AS depth,
              ARRAY[r.source_id] AS visited
       FROM relations r
-      JOIN pages p ON p.id = r.source_id
+      JOIN knowledge_pages p ON p.id = r.source_id
       WHERE r.relation_type = 'part_of' AND p.workspace_id = $1::uuid
 
       UNION
@@ -1118,9 +1090,9 @@ defmodule Dran.Knowledge do
     )
     SELECT DISTINCT ps.slug AS source_slug, pt.slug AS target_slug, pv.slug AS via_slug
     FROM chain c
-    JOIN pages ps ON ps.id = c.source_id
-    JOIN pages pt ON pt.id = c.target_id
-    JOIN pages pv ON pv.id = c.via_id
+    JOIN knowledge_pages ps ON ps.id = c.source_id
+    JOIN knowledge_pages pt ON pt.id = c.target_id
+    JOIN knowledge_pages pv ON pv.id = c.via_id
     WHERE c.depth = 2
       AND c.source_id != c.target_id
       AND NOT EXISTS (
@@ -1238,7 +1210,7 @@ defmodule Dran.Knowledge do
     # don't compete with pages for the max_nodes cap — they're additive.
     goal_nodes =
       Repo.all(
-        from g in Dran.Goal,
+        from g in Dran.Goals.Goal,
           where: (g.workspace_id == ^workspace_id and is_nil(g.archived)) or g.archived == false,
           select: %{id: g.id, title: g.title, slug: g.slug, type: fragment("'goal'")}
       )
@@ -1429,7 +1401,7 @@ defmodule Dran.Knowledge do
 
     goal_count =
       Repo.one(
-        from g in Dran.Goal,
+        from g in Dran.Goals.Goal,
           where: g.workspace_id == ^workspace_id and (is_nil(g.archived) or g.archived == false),
           select: count(g.id)
       )
@@ -1725,7 +1697,7 @@ defmodule Dran.Knowledge do
     end)
   end
 
-  defp normalize_fuse_item({%Dran.Page{} = page, excerpt}), do: {page, excerpt}
+  defp normalize_fuse_item({%Dran.Knowledge.Page{} = page, excerpt}), do: {page, excerpt}
   defp normalize_fuse_item(%{} = map), do: {map, Map.get(map, :excerpt)}
 
   # ── PageRank authority boost ──
@@ -1821,7 +1793,7 @@ defmodule Dran.Knowledge do
     {:ok, Enum.map(results, &normalize_item(&1, strategy))}
   end
 
-  defp normalize_item({%Dran.Page{} = page, excerpt}, strategy) do
+  defp normalize_item({%Dran.Knowledge.Page{} = page, excerpt}, strategy) do
     %{
       id: page.id,
       title: page.title,
@@ -2216,7 +2188,7 @@ defmodule Dran.Knowledge do
     # todos_by_status: group_by on the tasks table
     todos_by_status =
       Repo.all(
-        from t in Dran.Task,
+        from t in Dran.Tasks.Task,
           where: t.workspace_id == ^workspace_id and t.archived == false,
           group_by: t.status,
           select: {t.status, count(t.id)}
