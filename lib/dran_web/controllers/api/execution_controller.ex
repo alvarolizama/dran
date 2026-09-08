@@ -5,13 +5,13 @@ defmodule DranWeb.API.ExecutionController do
 
       1. POST /api/workflows/:workflow_id/sessions   → open a session
          (runs are created upfront, one `pending` per step)
-      2. GET  /api/pending_runs?workspace=...        → pull ready runs
-      3. POST /api/runs/:id/start                    → claim pending→in_flight
-      4. PUT  /api/runs/:id/progress                 → report phase progress
-      5. POST /api/runs/:id/close                    → report the outcome
+      2. GET  /api/pending-workflow-runs?workspace=… → pull ready runs
+      3. POST /api/workflow-runs/:id/start           → claim pending→in_flight
+      4. PUT  /api/workflow-runs/:id/progress        → report phase progress
+      5. POST /api/workflow-runs/:id/close           → report the outcome
          (closing the last open run auto-closes the session)
-      + POST /api/runs/:id/retry                     → new attempt of a failed run
-      + GET  /api/workflow_sessions/:id              → inspect session + runs
+      + POST /api/workflow-runs/:id/retry            → new attempt of a failed run
+      + GET  /api/workflow-sessions/:id              → inspect session + runs
 
   Attribution follows the actor model: sessions, claims and progress writes
   are stamped with the authenticated identity's actor id
@@ -27,8 +27,8 @@ defmodule DranWeb.API.ExecutionController do
   alias Dran.Auth
   alias Dran.Executions
   alias Dran.Repo
-  alias Dran.Run
-  alias Dran.WorkflowSession
+  alias Dran.Workflows.Run
+  alias Dran.Workflows.Session
 
   @doc "POST /api/workflows/:workflow_id/sessions — open a session (runs upfront)."
   def open(conn, %{"workflow_id" => workflow_id} = params) do
@@ -51,7 +51,7 @@ defmodule DranWeb.API.ExecutionController do
     end
   end
 
-  @doc "GET /api/pending_runs?workspace=…&workflow=… — the agent pull endpoint."
+  @doc "GET /api/pending-workflow-runs?workspace=…&workflow=… — the agent pull endpoint."
   def pending(conn, params) do
     case resolve_workspace(params["workspace"]) do
       nil ->
@@ -134,7 +134,7 @@ defmodule DranWeb.API.ExecutionController do
     end
   end
 
-  @doc "POST /api/runs/:id/start — claim a pending run (pending → in_flight)."
+  @doc "POST /api/workflow-runs/:id/start — claim a pending run (pending → in_flight)."
   def start(conn, %{"id" => id}) do
     case fetch_run(id) do
       nil ->
@@ -153,7 +153,7 @@ defmodule DranWeb.API.ExecutionController do
     end
   end
 
-  @doc "PUT /api/runs/:id/progress — overwrite the phase-level progress map."
+  @doc "PUT /api/workflow-runs/:id/progress — overwrite the phase-level progress map."
   def progress(conn, %{"id" => id} = params) do
     progress = params["progress"]
 
@@ -175,7 +175,7 @@ defmodule DranWeb.API.ExecutionController do
   end
 
   @doc """
-  POST /api/runs/:id/close — report the terminal result: `status` (passed |
+  POST /api/workflow-runs/:id/close — report the terminal result: `status` (passed |
   failed | skipped, required), optional `outcome`, `gate_results`,
   `checkpoints`.
   """
@@ -195,7 +195,7 @@ defmodule DranWeb.API.ExecutionController do
 
         case Executions.close_run(run, attrs, actor_id: acting_actor_id(conn)) do
           {:ok, closed} ->
-            session = Repo.get!(WorkflowSession, closed.session_id)
+            session = Repo.get!(Session, closed.session_id)
 
             json(conn, %{
               data: render_run(closed),
@@ -208,7 +208,7 @@ defmodule DranWeb.API.ExecutionController do
     end
   end
 
-  @doc "POST /api/runs/:id/retry — new pending attempt of a failed run."
+  @doc "POST /api/workflow-runs/:id/retry — new pending attempt of a failed run."
   def retry(conn, %{"id" => id}) do
     case fetch_run(id) do
       nil ->
@@ -219,7 +219,7 @@ defmodule DranWeb.API.ExecutionController do
       run ->
         case Executions.retry_run(run) do
           {:ok, new_run} ->
-            session = Repo.get!(WorkflowSession, new_run.session_id)
+            session = Repo.get!(Session, new_run.session_id)
 
             conn
             |> put_status(:created)
@@ -241,7 +241,7 @@ defmodule DranWeb.API.ExecutionController do
   defp fetch_workflow(id) do
     case Ecto.UUID.cast(id) do
       {:ok, uuid} ->
-        case Repo.get(Dran.Workflow, uuid) do
+        case Repo.get(Dran.Workflows.Workflow, uuid) do
           nil -> {:error, :workflow_not_found}
           workflow -> {:ok, workflow}
         end
@@ -260,7 +260,7 @@ defmodule DranWeb.API.ExecutionController do
 
   defp fetch_workflow_session(id) do
     case Ecto.UUID.cast(id) do
-      {:ok, uuid} -> Repo.get(WorkflowSession, uuid)
+      {:ok, uuid} -> Repo.get(Session, uuid)
       :error -> nil
     end
   end
@@ -347,7 +347,7 @@ defmodule DranWeb.API.ExecutionController do
   # Renderers — explicit field lists (no Jason.Encoder derive on schemas)
   # ──────────────────────────────────────────────────────────────────────────
 
-  defp render_session(%WorkflowSession{} = session, runs) do
+  defp render_session(%Session{} = session, runs) do
     %{
       id: session.id,
       workflow_id: session.workflow_id,

@@ -10,7 +10,7 @@ defmodule DranWeb.PageEdit do
 
   LiveViews using these handlers must have in `socket.assigns`:
 
-  - `:page` — the `%Dran.Page{}` being edited (for edit mode)
+  - `:page` — the `%Dran.Knowledge.Page{}` being edited (for edit mode)
   - `:workspace` — the `%Dran.Workspace{}` (or nil)
   - `:page_type` — the page type string (e.g. `"note"`)
 
@@ -39,7 +39,7 @@ defmodule DranWeb.PageEdit do
 
   alias Dran.Auth
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.Summaries
   alias Dran.Uploads
 
@@ -71,14 +71,6 @@ defmodule DranWeb.PageEdit do
 
   def handle_event("cancel_edit", _params, socket) do
     {:noreply, push_navigate(socket, to: index_path(socket))}
-  end
-
-  def handle_event("suggest_summary", _params, %{assigns: %{page: %Page{}}} = socket) do
-    apply_suggestion(socket, "summary", &Summaries.summarize_page/1)
-  end
-
-  def handle_event("suggest_summary", _params, socket) do
-    {:noreply, put_flash(socket, :error, gettext("Cannot suggest summary: no page loaded."))}
   end
 
   def handle_event("suggest_tags", _params, %{assigns: %{page: %Page{}}} = socket) do

@@ -33,7 +33,7 @@ defmodule Dran.Jobs do
      `my_job: [schedule: "0 4 * * *", task: {Dran.Jobs, :run_scheduled, [:my_job]}]`
      (inside the existing `if config_env() != :test` guard).
 
-  Reports are second-citizen entities (see `Dran.Report`): no graph,
+  Reports are second-citizen entities (see `Dran.Reports.Report`): no graph,
   no journey, no embeddings — they cost zero inference. They are viewable
   at `/reports/:slug`.
   """
@@ -42,7 +42,7 @@ defmodule Dran.Jobs do
 
   alias Dran.{Knowledge, Repo, Reports, Settings}
   alias Dran.Worker.Session
-  alias Dran.Report
+  alias Dran.Reports.Report
 
   require Logger
 
@@ -87,6 +87,14 @@ defmodule Dran.Jobs do
       description:
         "Weekly gardener pass: reviews relation suggestions and proposes new links " <>
           "between pages."
+    },
+    %{
+      key: :page_summaries_nightly,
+      label: "Page summaries",
+      mfa: {Dran.PageSummaries, :run_scheduled, []},
+      description:
+        "Nightly LLM backfill: fills a one-line summary on pages that lack " <>
+          "one (machine-owned field — never edited in the UI)."
     },
     %{
       key: :task_automation_daily,

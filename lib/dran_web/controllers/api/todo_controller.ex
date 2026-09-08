@@ -10,7 +10,7 @@ defmodule DranWeb.API.TodoController do
   title/slug/status fields), but everything now lives in `tasks`.
   """
 
-  @doc "GET /api/todos?workspace=...&status=... — list tasks in a context"
+  @doc "GET /api/tasks?workspace=...&status=... — list tasks in a context"
   def index(conn, %{"workspace" => workspace_slug} = params) do
     with_context(conn, workspace_slug, fn conn, context ->
       opts = [workspace_id: context.id, limit: 500]
@@ -33,7 +33,7 @@ defmodule DranWeb.API.TodoController do
     |> json(%{errors: %{detail: "context query param is required"}})
   end
 
-  @doc "POST /api/todos — create a task"
+  @doc "POST /api/tasks — create a task"
   def create(conn, params) do
     workspace_slug = params["workspace"] || params["context"]
 
@@ -81,7 +81,7 @@ defmodule DranWeb.API.TodoController do
     end
   end
 
-  @doc "PUT /api/todos/:id — update a task (status, etc.)"
+  @doc "PUT /api/tasks/:id — update a task (status, etc.)"
   def update(conn, %{"id" => id} = params) do
     case Tasks.get_task(id) do
       nil ->
@@ -90,36 +90,58 @@ defmodule DranWeb.API.TodoController do
         |> json(%{errors: %{detail: "task not found"}})
 
       task ->
-        # Legacy field mapping: kanban_status → status
-        attrs =
-          case params["kanban_status"] do
-            nil ->
-              params
+        # SEC: the task is resolved globally by id — authorize the caller
+        # against the task's OWN workspace before touching it. Without this,
+        # any valid per-user token could update tasks of other workspaces by
+        # guessing ids (the write-access plug only scopes API keys).
+        if authorized_for_task?(conn, task) do
+          # Legacy field mapping: kanban_status → status
+          attrs =
+            case params["kanban_status"] do
+              nil ->
+                params
 
-            status ->
-              Map.put(params, "status", status)
+              status ->
+                Map.put(params, "status", status)
+            end
+
+          attrs =
+            Map.take(attrs, [
+              "title",
+              "body",
+              "status",
+              "priority",
+              "due_date",
+              "recurrence",
+              "archived"
+            ])
+            |> Map.put("updated_by", Dran.Auth.resolve_created_by(conn.assigns[:user]))
+
+          case Tasks.update_task(task, attrs) do
+            {:ok, updated} ->
+              json(conn, %{data: updated})
+
+            {:error, changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{errors: format_errors(changeset)})
           end
-
-        attrs =
-          Map.take(attrs, [
-            "title",
-            "body",
-            "status",
-            "priority",
-            "due_date",
-            "recurrence",
-            "archived"
-          ])
-
-        case Tasks.update_task(task, attrs) do
-          {:ok, updated} ->
-            json(conn, %{data: updated})
-
-          {:error, changeset} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{errors: format_errors(changeset)})
+        else
+          forbidden(conn)
         end
     end
+  end
+
+  # True when the caller may WRITE in the task's own workspace.
+  # `authorize/3` is the single policy (legacy owner token and nil-user
+  # fail-open, mirroring the read surfaces' behavior).
+  defp authorized_for_task?(conn, task) do
+    DranWeb.ResourceAuthorization.authorize(conn.assigns[:user], :write, task.workspace_id) == :ok
+  end
+
+  defp forbidden(conn) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.send_resp(403, Jason.encode!(%{errors: %{detail: "access to workspace denied"}}))
   end
 end

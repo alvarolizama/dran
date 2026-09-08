@@ -16,14 +16,14 @@ defmodule Dran.MCP do
   - `dran_update_page` — update page fields; REPLACES meta entirely (not a merge)
   - `dran_get_page` — read full page body by slug; use after dran_search/dran_list_pages, not before
   - `dran_delete_page` — delete a page by slug; **irreversible** (cascades to relations + versions)
-  - `dran_create_note` — create a note with kind:"todo" + kanban fields (todo-style note)
-  - `dran_update_note` — update a note's kanban fields; MERGES meta (pass only what changes)
+  - `dran_create_note` — create a plain note (kind is a visual classifier only)
+  - `dran_update_note` — update a note's title/body/tags; MERGES meta (pass only what changes)
   - `dran_create_goal` — create a first-class goal (its own table, not a page)
   - `dran_create_relation` — create a typed relation between two pages
   - `dran_delete_relation` — delete a relation between two pages; **irreversible**
   - `dran_get_links` — graph exploration: inbound + outbound relations of a page
-  - `dran_list_pages` — lightweight listing with filters (type/tag/status/owner/assignee/props); prefer home:// resource for full index
-  - `dran_get_stats` — context dashboard numbers: totals, by-type, todos by status, orphans
+  - `dran_list_pages` — lightweight listing with filters (type/tag/owner/props); prefer home:// resource for full index
+  - `dran_get_stats` — context dashboard numbers: totals, by-type, orphans
   - `dran_lint_brain` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
@@ -46,7 +46,7 @@ defmodule Dran.MCP do
   - `goal_review` — review a goal's status
   """
 
-  alias Dran.{Auth, Goals, Knowledge, Repo, Worker}
+  alias Dran.{Auth, Goals, Knowledge, Repo, Worker, Tasks}
   alias Dran.PageTypes
   alias DranWeb.ResourceAuthorization
   alias Dran.Goals
@@ -147,7 +147,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_page",
       "description" => """
-      Use for notes, concepts, entities, and references (page types only). Goals are first-class entities — use `dran_create_goal` for those. Projects are notes with `meta.kind: "project"`, created with this same tool. Notes with todo-style kanban tracking use `dran_create_note` instead. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
+      Use for notes, concepts, entities, and references (page types only). Goals are first-class entities — use `dran_create_goal` for those. Projects are notes with `meta.kind: "project"` — a visual classifier with no extra behavior. Each page has a `page_type` that determines its purpose and what metadata (`meta`) it accepts. If `slug` is omitted it is derived from the title; if `title` is omitted it is derived from the body. **Caveat: creation fails if the slug already exists in the given context** — use `dran_update_page` or `dran_rename_slug` in that case. Use `![[other-slug]]` inside `body` to embed another page; embeds are auto-resolved into `embeds` relations.
 
       Page types and subtypes (set `meta.kind`):
       #{Dran.PageRegistry.mcp_description()}
@@ -179,7 +179,7 @@ defmodule Dran.MCP do
           "page_type" => %{
             "type" => "string",
             "description" =>
-              "Page type determining purpose and accepted meta fields. Only note, concept, entity, and reference are available. Use dran_create_goal for goals, dran_create_note for todo-style notes.",
+              "Page type determining purpose and accepted meta fields. Only note, concept, entity, and reference are available. Use dran_create_goal for goals.",
             "enum" => Dran.PageRegistry.mcp_enum()
           },
           "tags" => %{
@@ -193,7 +193,8 @@ defmodule Dran.MCP do
           },
           "summary" => %{
             "type" => "string",
-            "description" => "Optional one-line summary shown in listings."
+            "description" =>
+              "Optional one-line summary shown in listings. Machine-owned field (MCP/API/nightly backfill — not editable in the UI). Omit it and the nightly job fills it from the body."
           },
           "owner" => %{
             "type" => "string",
@@ -216,7 +217,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_update_page",
       "description" =>
-        "Update an existing page by slug. Pass only the fields you want to change (title, body, tags, meta, summary, owner, created_by, on_behalf_of, kb_confidence, kb_source_url, kb_contested, archived). **Note: `meta` is REPLACED entirely, not merged** — include all existing keys you want to keep. For notes with kanban fields (todo-style notes), prefer `dran_update_note` which merges meta. Changing `body` auto-increments the page version and re-resolves `![[slug]]` embeds into relations. Returns the new title and version number. Returns an error if the page slug is not found in the context.",
+        "Update an existing page by slug. Pass only the fields you want to change (title, body, tags, meta, summary, owner, created_by, on_behalf_of, kb_confidence, kb_source_url, kb_contested, archived). **Note: `meta` is REPLACED entirely, not merged** — include all existing keys you want to keep. For notes, prefer `dran_update_note` which merges meta. Changing `body` auto-increments the page version and re-resolves `![[slug]]` embeds into relations. Returns the new title and version number. Returns an error if the page slug is not found in the context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -249,7 +250,8 @@ defmodule Dran.MCP do
           },
           "summary" => %{
             "type" => "string",
-            "description" => "New one-line summary (optional)."
+            "description" =>
+              "New one-line summary (optional). Machine-owned field — not editable in the UI."
           },
           "owner" => %{
             "type" => "string",
@@ -313,7 +315,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_note",
       "description" =>
-        "Create a plain note page (journal, idea, meeting…). DEPRECATED for todo-style tracking: use `dran_create_task` instead — tasks are first-class kanban items with status/priority/due_date/recurrence, and `kind:\"todo\"` no longer exists on notes. Link notes to goals/projects via dran_create_relation (relation_type `part_of`). Returns the created note's slug.",
+        "Create a plain note page (journal, idea, meeting…). Actionable items belong in `dran_create_task` — tasks are first-class kanban items with status/priority/due_date/recurrence; notes have no kanban fields. `kind` is visual only (classify/filter). Link notes to goals/projects via dran_create_relation (relation_type `part_of`). Returns the created note's slug.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -337,27 +339,7 @@ defmodule Dran.MCP do
           "kind" => %{
             "type" => "string",
             "description" =>
-              "Meta kind for the note. Defaults to \"todo\" for todo-style notes. Accepts any note kind (journal, idea, meeting, question, quote, reminder, code, recipe, debug, summary, decision, template, todo, plan, project)."
-          },
-          "priority" => %{
-            "type" => "string",
-            "description" => "Priority level: low, medium, high, or urgent (default: medium).",
-            "enum" => ["low", "medium", "high", "urgent"]
-          },
-          "kanban_status" => %{
-            "type" => "string",
-            "description" =>
-              "Kanban board column: backlog, todo, in_progress, done, or cancelled (default: backlog). Typical progression: backlog → todo → in_progress → done.",
-            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
-          },
-          "due_date" => %{
-            "type" => "string",
-            "description" => "Due date in YYYY-MM-DD format (optional)."
-          },
-          "assignee" => %{
-            "type" => "string",
-            "description" =>
-              "Who will execute this note (optional). Free-form string identifying the actor — e.g. 'alvaro' (human), 'hermes' (agent), 'claude-code' (coding agent). Omit for unassigned inbox items."
+              "Visual classifier for the note (filter/group only — no behavior). Defaults to \"journal\". One of: journal, idea, meeting, question, quote, reminder, code, recipe, debug, summary, decision, template, plan, project."
           },
           "owner" => %{
             "type" => "string",
@@ -640,7 +622,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_list_pages",
       "description" =>
-        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type, `tag` to filter by tag, and `status` to filter todo-style notes by kanban status. For a full index overview, prefer the `home://{workspace}/index` resource instead. Use `dran_get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
+        "Lightweight listing with filters. Returns metadata only (title, slug, type) — no body content. Use `type` to list a specific page type and `tag` to filter by tag. For tasks (kanban) use `dran_list_tasks`. For a full index overview, prefer the `home://{workspace}/index` resource instead. Use `dran_get_page` to read full content. Results are capped at `limit` (default 50, max 500).",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -662,11 +644,10 @@ defmodule Dran.MCP do
             "type" => "string",
             "description" => "Optional filter: only pages with this tag."
           },
-          "status" => %{
+          "kind" => %{
             "type" => "string",
             "description" =>
-              "Optional filter for todo-style notes by kanban_status: backlog, todo, in_progress, done, or cancelled.",
-            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
+              "Optional filter by meta.kind (visual classifier): journal, idea, meeting, question, quote, reminder, code, recipe, debug, summary, decision, template, plan, project."
           },
           "limit" => %{
             "type" => "integer",
@@ -686,11 +667,6 @@ defmodule Dran.MCP do
             "description" =>
               "Optional filter: only pages whose `created_by` (provenance) matches this value."
           },
-          "assignee" => %{
-            "type" => "string",
-            "description" =>
-              "Optional filter for todos: only todos whose meta.assignee matches this value. Use the literal value 'none' to list unassigned todos (no assignee)."
-          },
           "props" => %{
             "type" => "object",
             "description" =>
@@ -703,7 +679,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_update_note",
       "description" =>
-        "Update a note's kanban fields (kanban_status, priority, due_date, assignee), title, body, or tags. **Meta is MERGED, not replaced** — pass only the fields you want to change; existing meta keys (kanban_status, priority, due_date, assignee) are preserved. This is the key difference from `dran_update_page`, which replaces the entire meta object. Note that `tags` replaces the existing tag list entirely. Link the note to goals/projects separately via dran_create_relation. Returns the updated note's title, slug, and current kanban status.",
+        "Update a note's title, body, or tags. **Meta is MERGED, not replaced** — pass only the fields you want to change; existing meta keys are preserved. This is the key difference from `dran_update_page`, which replaces the entire meta object. Note that `tags` replaces the existing tag list entirely. Link the note to goals/projects separately via dran_create_relation. Returns the updated note's title and slug.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -714,26 +690,6 @@ defmodule Dran.MCP do
           "slug" => %{
             "type" => "string",
             "description" => "Slug of the note page to update."
-          },
-          "kanban_status" => %{
-            "type" => "string",
-            "description" =>
-              "New kanban status: backlog, todo, in_progress, done, or cancelled (optional). Typical progression: backlog → todo → in_progress → done.",
-            "enum" => ["backlog", "todo", "in_progress", "done", "cancelled"]
-          },
-          "priority" => %{
-            "type" => "string",
-            "description" => "New priority: low, medium, high, or urgent (optional).",
-            "enum" => ["low", "medium", "high", "urgent"]
-          },
-          "due_date" => %{
-            "type" => "string",
-            "description" => "New due date in YYYY-MM-DD format (optional)."
-          },
-          "assignee" => %{
-            "type" => "string",
-            "description" =>
-              "Reassign the note to a different actor (optional). Free-form string — e.g. 'alvaro', 'hermes', 'claude-code'."
           },
           "title" => %{
             "type" => "string",
@@ -801,7 +757,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_get_stats",
       "description" =>
-        "Context dashboard numbers: total page count, pages by type, todos by kanban status, orphan count, total relations, and broken-link count. Use this for dashboard overviews, weekly reviews, or to check the overall health of a context. Read-only.",
+        "Context dashboard numbers: total page count, pages by type, orphan count, total relations, and broken-link count. Use this for dashboard overviews, weekly reviews, or to check the overall health of a context. Read-only.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -929,7 +885,7 @@ defmodule Dran.MCP do
     %{
       "uri" => "goal://{workspace}/{slug}",
       "name" => "Goal detail",
-      "description" => "Goal detail with linked todo notes",
+      "description" => "Goal detail with linked notes",
       "mimeType" => "application/json"
     },
     %{
@@ -951,7 +907,7 @@ defmodule Dran.MCP do
     },
     %{
       "name" => "goal_review",
-      "description" => "Review a goal's status, todos, and plans.",
+      "description" => "Review a goal's status and linked notes.",
       "arguments" => [
         %{"name" => "goal_slug", "description" => "Goal slug", "required" => true},
         %{"name" => "workspace", "description" => "Context slug", "required" => true}
@@ -1295,7 +1251,7 @@ defmodule Dran.MCP do
         "Error: context '#{workspace_slug}' not found"
 
       page_type not in PageTypes.types() ->
-        "Error: page type '#{page_type}' is not a valid page type — use dran_create_goal or dran_create_note for goals and todo-style notes"
+        "Error: page type '#{page_type}' is not a valid page type — use dran_create_goal for goals"
 
       true ->
         attrs =
@@ -1540,8 +1496,7 @@ defmodule Dran.MCP do
 
       case Knowledge.create_page(attrs) do
         {:ok, note} ->
-          status = Map.get(meta, "kanban_status")
-          "Created note: #{note.title} (#{note.slug}) — status: #{status}"
+          "Created note: #{note.title} (#{note.slug})"
 
         {:error, :page_type_disabled} ->
           "Error: page type 'note' is disabled in context '#{workspace_slug}'"
@@ -1734,20 +1689,14 @@ defmodule Dran.MCP do
 
       opts = [workspace_id: context.id, context: context, limit: limit, offset: offset]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
+      opts = if args["kind"], do: Keyword.put(opts, :kind, args["kind"]), else: opts
+
       opts = if args["tag"], do: Keyword.put(opts, :tag, args["tag"]), else: opts
-      opts = if args["status"], do: Keyword.put(opts, :status, args["status"]), else: opts
 
       opts = if args["owner"], do: Keyword.put(opts, :owner, args["owner"]), else: opts
 
       opts =
-        if args["created_by"],
-          do: Keyword.put(opts, :created_by, args["created_by"]),
-          else: opts
-
-      opts =
-        if args["assignee"],
-          do: Keyword.put(opts, :assignee, args["assignee"]),
-          else: opts
+        if args["created_by"], do: Keyword.put(opts, :created_by, args["created_by"]), else: opts
 
       opts = if args["props"], do: Keyword.put(opts, :props, args["props"]), else: opts
 
@@ -1781,34 +1730,44 @@ defmodule Dran.MCP do
           "Error: note '#{slug}' not found"
 
         note ->
-          # Merge meta: start with existing, overlay changes
-          existing_meta = note.meta || %{}
+          # Merge meta: start with existing, overlay changes.
+          # kanban_status/priority/assignee were legacy todo-note fields —
+          # notes no longer accept them; tasks (dran_update_task) do.
+          legacy_keys =
+            ["kanban_status", "priority", "assignee"]
+            |> Enum.filter(&(is_map_key(args, &1) and not is_nil(args[&1])))
 
-          new_meta =
-            existing_meta
-            |> maybe_put_meta("kanban_status", args["kanban_status"])
-            |> maybe_put_meta("priority", args["priority"])
-            |> maybe_put_meta("due_date", args["due_date"])
-            |> maybe_put_meta("assignee", args["assignee"])
+          if legacy_keys != [] do
+            "Error: #{Enum.join(legacy_keys, ", ")} are task fields — notes no longer " <>
+              "carry kanban state. Use dran_update_task for tasks, or manage note meta " <>
+              "via dran_update_page."
+          else
+            existing_meta = note.meta || %{}
 
-          attrs = %{"meta" => new_meta}
-          attrs = Map.put(attrs, "updated_by", Auth.resolve_created_by(user))
-          attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
-          attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
-          attrs = if args["tags"], do: Map.put(attrs, "tags", args["tags"]), else: attrs
+            new_meta =
+              existing_meta
+              |> Map.drop(["kanban_status", "priority", "assignee"])
+              |> maybe_put_meta("due_date", args["due_date"])
 
-          # owner/created_by NOT client-settable; on_behalf_of stays informative
-          attrs =
-            attrs
-            |> maybe_put("on_behalf_of", args["on_behalf_of"])
+            attrs = %{"meta" => new_meta}
+            attrs = Map.put(attrs, "updated_by", Auth.resolve_created_by(user))
 
-          case Knowledge.update_page(note, attrs) do
-            {:ok, updated} ->
-              status = get_in(updated.meta, ["kanban_status"]) || "unknown"
-              "Updated note: #{updated.title} (#{updated.slug}) — status: #{status}"
+            attrs = if args["title"], do: Map.put(attrs, "title", args["title"]), else: attrs
+            attrs = if args["body"], do: Map.put(attrs, "body", args["body"]), else: attrs
+            attrs = if args["tags"], do: Map.put(attrs, "tags", args["tags"]), else: attrs
 
-            {:error, changeset} ->
-              "Error: #{format_changeset_errors(changeset)}"
+            # owner/created_by NOT client-settable; on_behalf_of stays informative
+            attrs =
+              attrs
+              |> maybe_put("on_behalf_of", args["on_behalf_of"])
+
+            case Knowledge.update_page(note, attrs) do
+              {:ok, updated} ->
+                "Updated note: #{updated.title} (#{updated.slug})"
+
+              {:error, changeset} ->
+                "Error: #{format_changeset_errors(changeset)}"
+            end
           end
       end
     else
@@ -2092,7 +2051,8 @@ defmodule Dran.MCP do
           "Error: goal not found"
 
         goal ->
-          # Find todo-kind notes linked to this goal via part_of relations
+          # Notes linked to this goal via part_of relations. (Tasks are
+          # first-class now — fetch those separately via Tasks if needed.)
           import Ecto.Query
 
           linked_page_ids =
@@ -2105,11 +2065,11 @@ defmodule Dran.MCP do
             )
             |> Repo.all()
 
-          todo_notes =
+          linked_notes =
             if linked_page_ids == [] do
               []
             else
-              from(p in Dran.Page,
+              from(p in Dran.Knowledge.Page,
                 where:
                   p.workspace_id == ^context.id and
                     p.id in ^linked_page_ids and
@@ -2117,17 +2077,22 @@ defmodule Dran.MCP do
                 limit: 500
               )
               |> Repo.all()
-              |> Enum.filter(fn p -> get_in(p.meta, ["kind"]) == "todo" end)
             end
 
           Jason.encode!(%{
             goal: %{title: goal.title, slug: goal.slug, body: goal.body},
-            todos:
+            notes:
               Enum.map(
-                todo_notes,
-                &%{title: &1.title, slug: &1.slug, status: get_in(&1.meta, ["kanban_status"])}
+                linked_notes,
+                &%{
+                  title: &1.title,
+                  slug: &1.slug,
+                  kind: get_in(&1.meta, ["kind"])
+                }
               ),
-            plans: []
+            tasks:
+              Tasks.list_tasks_for_goal(goal)
+              |> Enum.map(&%{title: &1.title, slug: &1.slug, status: &1.status})
           })
       end
     else
@@ -2193,7 +2158,7 @@ defmodule Dran.MCP do
           "text" => """
           Review goal '#{slug}' in context '#{context}'.
 
-          1. Get the goal page and all its todos and plans
+          1. Get the goal page and its linked notes
           2. Summarize current status
           3. Identify blockers and overdue items
           4. Suggest next actions

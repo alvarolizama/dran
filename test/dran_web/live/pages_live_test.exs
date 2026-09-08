@@ -253,7 +253,8 @@ defmodule DranWeb.PagesLiveTest do
 
       view
       |> form("#page-new-form-note", %{
-        page: %{"title" => "Nota desde form", "summary" => "resumen"}
+        # summary deliberately absent: machine-owned field, not in the creation form
+        page: %{"title" => "Nota desde form"}
       })
       |> render_submit()
 
@@ -286,6 +287,36 @@ defmodule DranWeb.PagesLiveTest do
 
       assert html =~ "page-edit-form"
       assert html =~ "Editable"
+    end
+
+    test "edit mode shows summary read-only (machine-owned field), never an input", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Con resumen",
+          body: "cuerpo",
+          summary: "Resumen escrito por un agente via MCP",
+          page_type: "note"
+        })
+
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
+
+      # The summary IS visible in the attributes sidebar…
+      assert html =~ "Resumen escrito por un agente via MCP"
+      # …but never as an editable field (machine-owned: MCP/API/backfill only).
+      refute has_element?(view, "input[name='page[summary]']")
+      refute has_element?(view, "textarea[name='page[summary]']")
+    end
+
+    test "creation form modal has no summary input", %{conn: conn, ws: ws} do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+
+      assert html =~ "page-new-form-note"
+      # Summary is machine-owned — the creation form must not include it.
+      refute html =~ "page[summary]"
     end
 
     test "renaming the title updates the page", %{conn: conn, ws: ws} do

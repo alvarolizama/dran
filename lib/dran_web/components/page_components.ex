@@ -14,7 +14,7 @@ defmodule DranWeb.PageComponents do
   import DranWeb.ResourceComponents, only: [markdown_body_field: 1, form_actions: 1]
 
   alias Dran.Knowledge
-  alias Dran.Page
+  alias Dran.Knowledge.Page
   alias Dran.PageRegistry
   alias DranWeb.PageTypes
   alias Phoenix.LiveView.JS
@@ -102,9 +102,6 @@ defmodule DranWeb.PageComponents do
                 <.icon name={PageTypes.icon(@page.page_type)} class="size-3" />
                 {PageTypes.label(@page.page_type)}
               </span>
-              <span class="text-base-content/30">·</span>
-              <code class="font-mono text-caption text-base-content/60">{@page.slug}</code>
-              <span class="text-base-content/30">·</span>
               <span class="inline-flex items-center gap-1 text-caption text-base-content/50">
                 <.icon name="hero-calendar" class="size-3" />
                 {gettext("Created")} {format_date(@page.inserted_at)}
@@ -872,7 +869,7 @@ defmodule DranWeb.PageComponents do
     )
   end
 
-  defp render_embed(%Dran.Page{} = page, display) do
+  defp render_embed(%Dran.Knowledge.Page{} = page, display) do
     meta = page.meta || %{}
     mime = Map.get(meta, "mime_type") || ""
     src = escape_html(Map.get(meta, "storage_path") || "")
@@ -943,13 +940,13 @@ defmodule DranWeb.PageComponents do
         </h3>
       </summary>
       <div class="space-y-3 mt-2">
-        <.input
-          field={@form[:summary]}
-          type="text"
-          label={gettext("Summary")}
-          placeholder={gettext("One-line description")}
-          class="text-sm"
-        />
+        <%!-- summary is machine-owned (MCP/REST/augmentation) — never edited here --%>
+        <div :if={@page.summary not in [nil, ""]} class="text-sm">
+          <span class="text-caption font-semibold text-base-content/60 uppercase tracking-wider block mb-1">
+            {gettext("Summary")} · {gettext("Auto")}
+          </span>
+          <p class="text-base-content/70">{@page.summary}</p>
+        </div>
 
         <.tag_input
           id={"#{@editor_id}-tags"}
@@ -1073,13 +1070,7 @@ defmodule DranWeb.PageComponents do
           autofocus
         />
 
-        <.input
-          field={@form[:summary]}
-          type="text"
-          label={gettext("Summary")}
-          placeholder={gettext("One-line description")}
-          class="text-sm"
-        />
+        <%!-- no summary input on creation: it is machine-owned (MCP/REST/augmentation) --%>
 
         <.input
           type="select"
