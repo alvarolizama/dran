@@ -12,9 +12,9 @@ metadata:
 
 # dran-knowledge-flow — Create and edit knowledge pages
 
-Pages are the unit of knowledge: `note`, `concept`, `entity`, `reference`,
-`project`, `plan`, `query` (goal has its own flow). This flow owns the
-write loop: search first, then create or update, then verify by readback.
+Pages are the unit of knowledge: `note`, `concept`, `entity`, `reference`
+(goals have their own flow). This flow owns the write loop: search first,
+then create or update, then verify by readback.
 
 ## Entry router
 
@@ -38,7 +38,7 @@ against existing pages. PRODUCES: a page whose state is confirmed by
 
 ```mermaid
 flowchart TD
-  START([knowledge task]) --> S1["RUN mcp_dran_dran_search\nquery + workspace + mode"]
+  START([knowledge task]) --> S1["RUN mcp_dran_dran_search\nquery + workspace + strategy"]
   S1 --> G1{"page exists\nwith this slug?"}
   G1 -->|"no"| S2["RUN mcp_dran_dran_create_page\nworkspace + page_type + body"]
   G1 -->|"yes"| S3["RUN mcp_dran_dran_update_page\nslug + changed fields"]
@@ -61,12 +61,12 @@ flowchart TD
 
 ## Notes on the calls
 
-- `page_type` enum comes from `Dran.PageRegistry`: note, concept, entity,
-  reference, project, plan, query… (`goal` routes to dran-goals-flow).
+- `page_type` enum is exactly 4 (from `Dran.PageRegistry`): `note`,
+  `concept`, `entity`, `reference` — goals route to dran-goals-flow.
   `dran_create_note` / `dran_update_note` are title+slug shorthands for
   `note`.
-- Search modes: `auto / fts / fuzzy / semantic / hybrid`. Run search before
-  any create — duplicates are the main graph rot.
+- Search `strategy` (not `mode`): `auto / fts / fuzzy / semantic / hybrid`.
+  Run search before any create — duplicates are the main graph rot.
 - `summary` on pages is **machine-owned** (set via create/update/nightly
   job; the UI never edits it). Keep it a real one-liner.
 - Confidence levels for claims recorded in pages: low / medium / high /

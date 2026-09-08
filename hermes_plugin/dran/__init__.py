@@ -64,7 +64,8 @@ def _resolve_secret() -> str:
     return (val or "").strip()
 
 
-def _load_dran_config(hermes_home: str) -> dict:
+def _read_raw_config(hermes_home: str) -> dict:
+    """Config as stored on disk — NO secret resolution (round-trip safe)."""
     config = _default_config()
     config_path = Path(hermes_home) / CONFIG_FILENAME
     if config_path.exists():
@@ -74,6 +75,11 @@ def _load_dran_config(hermes_home: str) -> dict:
                 config.update({k: v for k, v in raw.items() if v is not None})
         except Exception:
             logger.debug("Failed to parse %s", config_path, exc_info=True)
+    return config
+
+
+def _load_dran_config(hermes_home: str) -> dict:
+    config = _read_raw_config(hermes_home)
 
     config["base_url"] = str(config.get("base_url") or DEFAULT_BASE_URL).strip().rstrip("/")
     # Single-source-of-truth for the credential: omit api_key (or leave the
@@ -95,8 +101,12 @@ def _load_dran_config(hermes_home: str) -> dict:
 
 
 def _save_dran_config(values: dict, hermes_home: str) -> None:
+    # Round-trip through the RAW on-disk config: _load_dran_config resolves
+    # DRAN_API_KEY from the profile's secret scope, and persisting that
+    # resolved value would copy the secret into plaintext JSON — breaking
+    # the single-source-of-truth (.env stays the only home of the key).
     config_path = Path(hermes_home) / CONFIG_FILENAME
-    existing = _load_dran_config(hermes_home)
+    existing = _read_raw_config(hermes_home)
     existing.update({k: v for k, v in (values or {}).items() if v is not None})
     config_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
@@ -347,6 +357,8 @@ class DranMemoryProvider(MemoryProvider):
                 helpful = bool((args or {}).get("helpful", True))
                 if not memory_id:
                     return json.dumps({"error": "memory_id is required"})
+                if self._agent_context != "primary":
+                    return json.dumps({"error": "memory writes are disabled in this context"})
                 data = self._client.feedback(memory_id, helpful) if self._client else {}
                 return json.dumps({"rated": True, "data": data.get("data")})
 

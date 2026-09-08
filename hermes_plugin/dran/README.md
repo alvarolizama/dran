@@ -59,7 +59,8 @@ viven server-side en Dran (`/api/memory`).
 ## Identidad y contextos
 
 - `initialize` recibe `agent_identity` (nombre del perfil) → header
-  `X-Hermes-Agent` para el audit de Dran.
+  `X-Hermes-Agent` (informativo, para logs de transporte; Dran atribuye
+  cada recuerdo por el actor de la API key — el header no se persiste).
 - `agent_context != "primary"` (subagent, cron): prefetch permitido,
   **writes deshabilitados** — los agentes secundarios no contaminan la
   memoria compartida.

@@ -74,6 +74,9 @@ flowchart TD
 - Workflows attach to goals (`goal_id`); to see the execution side, read
   `dran_list_workflows` / `dran_get_workflow` (dran-workflow-flow owns
   those).
+- MCP surface for goals: `dran_create_goal`, `dran_get_goal`,
+  `dran_update_goal`, `dran_delete_goal`, `dran_list_goals`, and the three
+  checklist tools. Goals have no `parent_goal` write path over MCP.
 
 ## Pitfalls
 

@@ -1,6 +1,6 @@
 defmodule DranWeb.AdminJobsLive do
   @moduledoc """
-  Global scheduled jobs (owner-only): the 5 Quantum crons with per-job toggle,
+  Global scheduled jobs (owner-only): the 6 Quantum crons with per-job toggle,
   "Run now", and last-run report badges. Moved verbatim from the old
   SettingsLive jobs section.
   """

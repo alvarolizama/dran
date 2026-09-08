@@ -10,7 +10,7 @@ defmodule Dran.MCP do
   - `GET /api/mcp` — responds 405 (SSE stream not implemented)
   - `DELETE /api/mcp` — terminate session
 
-  ## Tools (19)
+  ## Tools (35)
   - `dran_search` — use FIRST to find anything; strategy=auto picks best available
   - `dran_create_page` — create notes, concepts, entities, and references
   - `dran_update_page` — update page fields; REPLACES meta entirely (not a merge)
@@ -19,14 +19,28 @@ defmodule Dran.MCP do
   - `dran_create_note` — create a plain note (kind is a visual classifier only)
   - `dran_update_note` — update a note's title/body/tags; MERGES meta (pass only what changes)
   - `dran_create_goal` — create a first-class goal (its own table, not a page)
+  - `dran_get_goal` — read a goal (slug or UUID) with checklist and progress
+  - `dran_update_goal` — update goal title/summary/body/status
+  - `dran_delete_goal` — delete a goal; **irreversible**
+  - `dran_goal_checklist_add` / `_toggle` / `_remove` — manage a goal's checklist items
+  - `dran_list_goals` — list goals of a workspace
   - `dran_create_relation` — create a typed relation between two pages
-  - `dran_delete_relation` — delete a relation between two pages; **irreversible**
+  - `dran_delete_relation` — delete a relation between two pages; **irreversible** (omitting relation_type deletes ALL relations between the pair, both directions)
   - `dran_get_links` — graph exploration: inbound + outbound relations of a page
   - `dran_list_pages` — lightweight listing with filters (type/tag/owner/props); prefer home:// resource for full index
   - `dran_get_stats` — context dashboard numbers: totals, by-type, orphans
   - `dran_lint_brain` — brain hygiene audit: orphans, stale pages (>90d), contested knowledge (read-only)
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
+  - `dran_list_workflows` — list workflows of a workspace (kind/status filters)
+  - `dran_get_workflow` — workflow detail: steps, DAG, linked goal
+  - `dran_get_step_contract` — a step's execution contract (intent, claims, gates) + rendered brief
+  - `dran_open_workflow_session` — open an execution session against the workflow snapshot
+  - `dran_list_pending_runs` — the pull queue: ready-to-claim runs of a workspace
+  - `dran_start_run` — claim a run (transitions to in_flight; rejects if already claimed)
+  - `dran_report_run_progress` — append ✓NN checkpoint entries to an in_flight run
+  - `dran_close_run` — close a run with status passed/failed/skipped (+ outcome, checkpoints)
+  - `dran_retry_run` — reopen the latest failed attempt as a new pending run
   - `dran_start_worker` — start an autonomous worker (curator, link_gardener, graph_rag)
   - `dran_get_worker_session` — poll a worker session for status and steps
   - `dran_generate_cluster_summaries` — generate LLM summaries for all clusters in a context

@@ -53,7 +53,8 @@ Run ONLY the flow you landed on. If the diagram sends you to another skill,
 - **Memory is NOT in the MCP surface** — REST `/api/memory` + Hermes plugin
   only. Do not look for `dran_memory_*` MCP tools.
 - MCP resources: `page://<ws>/<slug>`, `goal://<ws>/<slug>`,
-  `home://<ws>/index`. Prompts: brainstorm topic, goal briefing.
+  `home://<ws>/index`. Prompts: `brainstorm` (topic), `goal_review`
+  (goal_slug).
 
 ## General rules (every flow obeys them)
 

@@ -62,9 +62,9 @@ flowchart TD
 - `graph_rag` answers cite pages; quote slugs when surfacing results.
 - `dran_generate_cluster_summaries` follows the same fire shape (no
   session id — it regenerates nightly cluster summaries on demand).
-- Nightly jobs (PageRank, communities, maintenance) run on Quantum
-  server-side from Settings → Brain; manual "run now" is the UI's job,
-  not MCP's.
+- Nightly jobs (PageRank, communities, maintenance, page summaries) run on
+  Quantum server-side from Admin → Jobs (`/admin/jobs`, owner-only);
+  manual "run now" is the UI's job, not MCP's.
 
 ## Pitfalls
 

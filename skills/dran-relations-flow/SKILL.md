@@ -63,10 +63,17 @@ flowchart TD
 | `contradicts` | source disagrees with target |
 | `embeds` | source embeds target (usually auto from `![[slug]]`) |
 
+- **The MCP enum is exactly these 5**: `related`, `part_of`, `supersedes`,
+  `contradicts`, `embeds`. The schema accepts 13 types server-side, but the
+  rest are NOT creatable over MCP: `semantic` is machine-owned (auto-created
+  by the augmenter from embeddings), `mentions` comes from the entity
+  linker, `works_in`/`has_tier`/`based_in`/`written_in`/`built_with` from
+  props materialization, and `depends_on` is workflow-domain only.
 - Direction matters: `part_of` from the child TO the parent.
-- `depends_on` is **not** in the MCP enum — step sequencing belongs to the
-  workflow contract domain (UI), not to free page relations.
 - Duplicate relations on the same pair+type are idempotent — safe to retry.
+- `dran_delete_relation` takes an OPTIONAL `relation_type`: **omitting it
+  deletes ALL relations between the pair in BOTH directions** — always pass
+  the type unless wiping the pair is the intent.
 - Missing slug on either side → error, not silent drop: create the page
   first (dran-knowledge-flow).
 - Five `meta.props` keys (`role`, `tier`, `location`, `language`,
