@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dz4cjhOfSPPSYfgzdhbfLB15ya0BsODhHGI6vXxcGyfMOlGabJLPzSavgRCuBUS
+\restrict 7Cf7fSsvagjxkdhh7Hn3P31J0ePES67HN4DMUjNfwthG2uNdlm8yWrAnZk9tgyW
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -204,6 +204,53 @@ CREATE TABLE public.goals (
 
 
 --
+-- Name: knowledge_page_versions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.knowledge_page_versions (
+    id uuid DEFAULT gen_random_uuid() CONSTRAINT page_versions_id_not_null NOT NULL,
+    page_id uuid CONSTRAINT page_versions_page_id_not_null NOT NULL,
+    body text CONSTRAINT page_versions_body_not_null NOT NULL,
+    body_hash character varying(64),
+    version integer CONSTRAINT page_versions_version_not_null NOT NULL,
+    changed_by character varying(200),
+    inserted_at timestamp(0) without time zone CONSTRAINT page_versions_inserted_at_not_null NOT NULL
+);
+
+
+--
+-- Name: knowledge_pages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.knowledge_pages (
+    id uuid DEFAULT gen_random_uuid() CONSTRAINT pages_id_not_null NOT NULL,
+    workspace_id uuid CONSTRAINT pages_workspace_id_not_null NOT NULL,
+    title character varying(500) CONSTRAINT pages_title_not_null NOT NULL,
+    slug character varying(500) CONSTRAINT pages_slug_not_null NOT NULL,
+    body text DEFAULT ''::text,
+    page_type character varying(50) CONSTRAINT pages_page_type_not_null NOT NULL,
+    summary text,
+    tags character varying(255)[] DEFAULT ARRAY[]::character varying[],
+    meta jsonb DEFAULT '{}'::jsonb,
+    kb_confidence character varying(20),
+    kb_source_url text,
+    kb_contested boolean DEFAULT false CONSTRAINT pages_kb_contested_not_null NOT NULL,
+    body_hash character varying(64),
+    version integer DEFAULT 1 CONSTRAINT pages_version_not_null NOT NULL,
+    inserted_at timestamp(0) without time zone CONSTRAINT pages_inserted_at_not_null NOT NULL,
+    updated_at timestamp(0) without time zone CONSTRAINT pages_updated_at_not_null NOT NULL,
+    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('spanish'::regconfig, ((public.immutable_unaccent((COALESCE(title, ''::character varying))::text) || ' '::text) || public.immutable_unaccent(COALESCE(body, ''::text))))) STORED,
+    created_by character varying(255) DEFAULT 'system'::character varying CONSTRAINT pages_created_by_not_null NOT NULL,
+    updated_by character varying(255),
+    on_behalf_of character varying(255),
+    embedding_hash character varying(255),
+    embedding public.vector(1024),
+    archived boolean DEFAULT false CONSTRAINT pages_archived_not_null NOT NULL,
+    pinned boolean DEFAULT false CONSTRAINT pages_pinned_not_null NOT NULL
+);
+
+
+--
 -- Name: memories; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -222,53 +269,6 @@ CREATE TABLE public.memories (
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
     search_vector tsvector GENERATED ALWAYS AS (to_tsvector('spanish'::regconfig, public.immutable_unaccent(COALESCE(content, ''::text)))) STORED
-);
-
-
---
--- Name: page_versions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.page_versions (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    page_id uuid NOT NULL,
-    body text NOT NULL,
-    body_hash character varying(64),
-    version integer NOT NULL,
-    changed_by character varying(200),
-    inserted_at timestamp(0) without time zone NOT NULL
-);
-
-
---
--- Name: pages; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.pages (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    workspace_id uuid NOT NULL,
-    title character varying(500) NOT NULL,
-    slug character varying(500) NOT NULL,
-    body text DEFAULT ''::text,
-    page_type character varying(50) NOT NULL,
-    summary text,
-    tags character varying(255)[] DEFAULT ARRAY[]::character varying[],
-    meta jsonb DEFAULT '{}'::jsonb,
-    kb_confidence character varying(20),
-    kb_source_url text,
-    kb_contested boolean DEFAULT false NOT NULL,
-    body_hash character varying(64),
-    version integer DEFAULT 1 NOT NULL,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('spanish'::regconfig, ((public.immutable_unaccent((COALESCE(title, ''::character varying))::text) || ' '::text) || public.immutable_unaccent(COALESCE(body, ''::text))))) STORED,
-    created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
-    updated_by character varying(255),
-    on_behalf_of character varying(255),
-    embedding_hash character varying(255),
-    embedding public.vector(1024),
-    archived boolean DEFAULT false NOT NULL,
-    pinned boolean DEFAULT false NOT NULL
 );
 
 
@@ -308,28 +308,6 @@ CREATE TABLE public.reports (
 
 
 --
--- Name: runs; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.runs (
-    id uuid DEFAULT gen_random_uuid() CONSTRAINT task_runs_id_not_null NOT NULL,
-    session_id uuid CONSTRAINT task_runs_session_id_not_null NOT NULL,
-    workspace_id uuid CONSTRAINT task_runs_workspace_id_not_null NOT NULL,
-    contract_version jsonb,
-    status character varying(255) DEFAULT 'pending'::character varying CONSTRAINT task_runs_status_not_null NOT NULL,
-    outcome character varying(255),
-    gate_results jsonb DEFAULT '{}'::jsonb,
-    checkpoints jsonb DEFAULT '{}'::jsonb,
-    actor_id uuid,
-    attempt integer DEFAULT 1 CONSTRAINT task_runs_attempt_not_null NOT NULL,
-    inserted_at timestamp(0) without time zone CONSTRAINT task_runs_inserted_at_not_null NOT NULL,
-    updated_at timestamp(0) without time zone CONSTRAINT task_runs_updated_at_not_null NOT NULL,
-    step_id uuid,
-    progress jsonb DEFAULT '{}'::jsonb NOT NULL
-);
-
-
---
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -349,35 +327,6 @@ CREATE TABLE public.settings (
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
     workspace_id uuid
-);
-
-
---
--- Name: steps; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.steps (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    workspace_id uuid NOT NULL,
-    workflow_id uuid CONSTRAINT steps_plan_id_not_null NOT NULL,
-    title character varying(255) NOT NULL,
-    slug character varying(255) NOT NULL,
-    "position" integer DEFAULT 0 NOT NULL,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    intent character varying(255),
-    status character varying(255) DEFAULT 'draft'::character varying,
-    version integer DEFAULT 1,
-    history jsonb DEFAULT '[]'::jsonb,
-    fingerprint character varying(255),
-    model character varying(255),
-    generated_by character varying(255),
-    claims jsonb DEFAULT '[]'::jsonb,
-    gates jsonb DEFAULT '[]'::jsonb,
-    graph jsonb,
-    context_snapshot jsonb DEFAULT '[]'::jsonb,
-    pos_x integer,
-    pos_y integer
 );
 
 
@@ -522,6 +471,28 @@ CREATE TABLE public.worker_steps (
 
 
 --
+-- Name: workflow_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.workflow_runs (
+    id uuid DEFAULT gen_random_uuid() CONSTRAINT task_runs_id_not_null NOT NULL,
+    session_id uuid CONSTRAINT task_runs_session_id_not_null NOT NULL,
+    workspace_id uuid CONSTRAINT task_runs_workspace_id_not_null NOT NULL,
+    contract_version jsonb,
+    status character varying(255) DEFAULT 'pending'::character varying CONSTRAINT task_runs_status_not_null NOT NULL,
+    outcome character varying(255),
+    gate_results jsonb DEFAULT '{}'::jsonb,
+    checkpoints jsonb DEFAULT '{}'::jsonb,
+    actor_id uuid,
+    attempt integer DEFAULT 1 CONSTRAINT task_runs_attempt_not_null NOT NULL,
+    inserted_at timestamp(0) without time zone CONSTRAINT task_runs_inserted_at_not_null NOT NULL,
+    updated_at timestamp(0) without time zone CONSTRAINT task_runs_updated_at_not_null NOT NULL,
+    step_id uuid,
+    progress jsonb DEFAULT '{}'::jsonb CONSTRAINT runs_progress_not_null NOT NULL
+);
+
+
+--
 -- Name: workflow_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -539,6 +510,35 @@ CREATE TABLE public.workflow_sessions (
     updated_at timestamp(0) without time zone CONSTRAINT goal_sessions_updated_at_not_null NOT NULL,
     workflow_id uuid CONSTRAINT goal_sessions_plan_id_not_null NOT NULL,
     snapshot jsonb DEFAULT '{}'::jsonb
+);
+
+
+--
+-- Name: workflow_steps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.workflow_steps (
+    id uuid DEFAULT gen_random_uuid() CONSTRAINT steps_id_not_null NOT NULL,
+    workspace_id uuid CONSTRAINT steps_workspace_id_not_null NOT NULL,
+    workflow_id uuid CONSTRAINT steps_plan_id_not_null NOT NULL,
+    title character varying(255) CONSTRAINT steps_title_not_null NOT NULL,
+    slug character varying(255) CONSTRAINT steps_slug_not_null NOT NULL,
+    "position" integer DEFAULT 0 CONSTRAINT steps_position_not_null NOT NULL,
+    inserted_at timestamp(0) without time zone CONSTRAINT steps_inserted_at_not_null NOT NULL,
+    updated_at timestamp(0) without time zone CONSTRAINT steps_updated_at_not_null NOT NULL,
+    intent character varying(255),
+    status character varying(255) DEFAULT 'draft'::character varying,
+    version integer DEFAULT 1,
+    history jsonb DEFAULT '[]'::jsonb,
+    fingerprint character varying(255),
+    model character varying(255),
+    generated_by character varying(255),
+    claims jsonb DEFAULT '[]'::jsonb,
+    gates jsonb DEFAULT '[]'::jsonb,
+    graph jsonb,
+    context_snapshot jsonb DEFAULT '[]'::jsonb,
+    pos_x integer,
+    pos_y integer
 );
 
 
@@ -655,27 +655,27 @@ ALTER TABLE ONLY public.goals
 
 
 --
+-- Name: knowledge_page_versions knowledge_page_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_page_versions
+    ADD CONSTRAINT knowledge_page_versions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: knowledge_pages knowledge_pages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_pages
+    ADD CONSTRAINT knowledge_pages_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: memories memories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.memories
     ADD CONSTRAINT memories_pkey PRIMARY KEY (id);
-
-
---
--- Name: page_versions page_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.page_versions
-    ADD CONSTRAINT page_versions_pkey PRIMARY KEY (id);
-
-
---
--- Name: pages pages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.pages
-    ADD CONSTRAINT pages_pkey PRIMARY KEY (id);
 
 
 --
@@ -695,14 +695,6 @@ ALTER TABLE ONLY public.reports
 
 
 --
--- Name: runs runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.runs
-    ADD CONSTRAINT runs_pkey PRIMARY KEY (id);
-
-
---
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -716,14 +708,6 @@ ALTER TABLE ONLY public.schema_migrations
 
 ALTER TABLE ONLY public.settings
     ADD CONSTRAINT settings_pkey PRIMARY KEY (key);
-
-
---
--- Name: steps steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.steps
-    ADD CONSTRAINT steps_pkey PRIMARY KEY (id);
 
 
 --
@@ -767,11 +751,27 @@ ALTER TABLE ONLY public.worker_steps
 
 
 --
+-- Name: workflow_runs workflow_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: workflow_sessions workflow_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.workflow_sessions
     ADD CONSTRAINT workflow_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: workflow_steps workflow_steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_steps
+    ADD CONSTRAINT workflow_steps_pkey PRIMARY KEY (id);
 
 
 --
@@ -896,6 +896,146 @@ CREATE UNIQUE INDEX goals_workspace_id_slug_index ON public.goals USING btree (w
 
 
 --
+-- Name: knowledge_page_versions_page_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_page_versions_page_id_index ON public.knowledge_page_versions USING btree (page_id);
+
+
+--
+-- Name: knowledge_page_versions_page_version_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX knowledge_page_versions_page_version_uidx ON public.knowledge_page_versions USING btree (page_id, version);
+
+
+--
+-- Name: knowledge_page_versions_version_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_page_versions_version_index ON public.knowledge_page_versions USING btree (version);
+
+
+--
+-- Name: knowledge_pages_context_updated_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_context_updated_at_idx ON public.knowledge_pages USING btree (workspace_id, updated_at);
+
+
+--
+-- Name: knowledge_pages_ctx_type_archived_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_ctx_type_archived_idx ON public.knowledge_pages USING btree (workspace_id, page_type, archived);
+
+
+--
+-- Name: knowledge_pages_ctx_type_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_ctx_type_idx ON public.knowledge_pages USING btree (workspace_id, page_type);
+
+
+--
+-- Name: knowledge_pages_embedding_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_embedding_idx ON public.knowledge_pages USING hnsw (embedding public.vector_cosine_ops);
+
+
+--
+-- Name: knowledge_pages_meta_assignee_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_meta_assignee_idx ON public.knowledge_pages USING btree (((meta ->> 'assignee'::text))) WHERE ((meta ->> 'assignee'::text) IS NOT NULL);
+
+
+--
+-- Name: knowledge_pages_meta_goal_slug_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_meta_goal_slug_idx ON public.knowledge_pages USING btree (((meta ->> 'goal_slug'::text))) WHERE ((meta ->> 'goal_slug'::text) IS NOT NULL);
+
+
+--
+-- Name: knowledge_pages_meta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_meta_idx ON public.knowledge_pages USING gin (meta);
+
+
+--
+-- Name: knowledge_pages_meta_kanban_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_meta_kanban_status_idx ON public.knowledge_pages USING btree (((meta ->> 'kanban_status'::text))) WHERE ((meta ->> 'kanban_status'::text) IS NOT NULL);
+
+
+--
+-- Name: knowledge_pages_meta_plan_slug_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_meta_plan_slug_idx ON public.knowledge_pages USING btree (((meta ->> 'plan_slug'::text))) WHERE ((meta ->> 'plan_slug'::text) IS NOT NULL);
+
+
+--
+-- Name: knowledge_pages_meta_project_slug_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_meta_project_slug_idx ON public.knowledge_pages USING btree (((meta ->> 'project_slug'::text))) WHERE ((meta ->> 'project_slug'::text) IS NOT NULL);
+
+
+--
+-- Name: knowledge_pages_search_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_search_idx ON public.knowledge_pages USING gin (search_vector);
+
+
+--
+-- Name: knowledge_pages_tags_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_tags_idx ON public.knowledge_pages USING gin (tags);
+
+
+--
+-- Name: knowledge_pages_trgm_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_trgm_idx ON public.knowledge_pages USING gin (public.immutable_unaccent((title)::text) public.gin_trgm_ops);
+
+
+--
+-- Name: knowledge_pages_type_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_type_idx ON public.knowledge_pages USING btree (page_type);
+
+
+--
+-- Name: knowledge_pages_workspace_id_archived_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_workspace_id_archived_index ON public.knowledge_pages USING btree (workspace_id, archived);
+
+
+--
+-- Name: knowledge_pages_workspace_id_slug_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_workspace_id_slug_idx ON public.knowledge_pages USING btree (workspace_id, slug);
+
+
+--
+-- Name: knowledge_pages_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX knowledge_pages_workspace_id_slug_index ON public.knowledge_pages USING btree (workspace_id, slug);
+
+
+--
 -- Name: memories_embedding_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -921,146 +1061,6 @@ CREATE UNIQUE INDEX memories_workspace_content_hash_idx ON public.memories USING
 --
 
 CREATE INDEX memories_workspace_status_idx ON public.memories USING btree (workspace_id, status);
-
-
---
--- Name: page_versions_page_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX page_versions_page_id_index ON public.page_versions USING btree (page_id);
-
-
---
--- Name: page_versions_page_version_uidx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX page_versions_page_version_uidx ON public.page_versions USING btree (page_id, version);
-
-
---
--- Name: page_versions_version_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX page_versions_version_index ON public.page_versions USING btree (version);
-
-
---
--- Name: pages_context_updated_at_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_context_updated_at_idx ON public.pages USING btree (workspace_id, updated_at);
-
-
---
--- Name: pages_ctx_type_archived_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_ctx_type_archived_idx ON public.pages USING btree (workspace_id, page_type, archived);
-
-
---
--- Name: pages_ctx_type_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_ctx_type_idx ON public.pages USING btree (workspace_id, page_type);
-
-
---
--- Name: pages_embedding_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_embedding_idx ON public.pages USING hnsw (embedding public.vector_cosine_ops);
-
-
---
--- Name: pages_meta_assignee_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_meta_assignee_idx ON public.pages USING btree (((meta ->> 'assignee'::text))) WHERE ((meta ->> 'assignee'::text) IS NOT NULL);
-
-
---
--- Name: pages_meta_goal_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_meta_goal_slug_idx ON public.pages USING btree (((meta ->> 'goal_slug'::text))) WHERE ((meta ->> 'goal_slug'::text) IS NOT NULL);
-
-
---
--- Name: pages_meta_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_meta_idx ON public.pages USING gin (meta);
-
-
---
--- Name: pages_meta_kanban_status_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_meta_kanban_status_idx ON public.pages USING btree (((meta ->> 'kanban_status'::text))) WHERE ((meta ->> 'kanban_status'::text) IS NOT NULL);
-
-
---
--- Name: pages_meta_plan_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_meta_plan_slug_idx ON public.pages USING btree (((meta ->> 'plan_slug'::text))) WHERE ((meta ->> 'plan_slug'::text) IS NOT NULL);
-
-
---
--- Name: pages_meta_project_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_meta_project_slug_idx ON public.pages USING btree (((meta ->> 'project_slug'::text))) WHERE ((meta ->> 'project_slug'::text) IS NOT NULL);
-
-
---
--- Name: pages_search_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_search_idx ON public.pages USING gin (search_vector);
-
-
---
--- Name: pages_tags_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_tags_idx ON public.pages USING gin (tags);
-
-
---
--- Name: pages_trgm_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_trgm_idx ON public.pages USING gin (public.immutable_unaccent((title)::text) public.gin_trgm_ops);
-
-
---
--- Name: pages_type_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_type_idx ON public.pages USING btree (page_type);
-
-
---
--- Name: pages_workspace_id_archived_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_workspace_id_archived_index ON public.pages USING btree (workspace_id, archived);
-
-
---
--- Name: pages_workspace_id_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pages_workspace_id_slug_idx ON public.pages USING btree (workspace_id, slug);
-
-
---
--- Name: pages_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX pages_workspace_id_slug_index ON public.pages USING btree (workspace_id, slug);
 
 
 --
@@ -1106,45 +1106,10 @@ CREATE UNIQUE INDEX reports_workspace_id_slug_index ON public.reports USING btre
 
 
 --
--- Name: runs_session_id_step_id_attempt_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX runs_session_id_step_id_attempt_index ON public.runs USING btree (session_id, step_id, attempt);
-
-
---
--- Name: runs_step_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX runs_step_id_index ON public.runs USING btree (step_id);
-
-
---
--- Name: runs_workspace_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX runs_workspace_id_index ON public.runs USING btree (workspace_id);
-
-
---
 -- Name: settings_key_workspace_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX settings_key_workspace_id_index ON public.settings USING btree (key, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'::uuid));
-
-
---
--- Name: steps_workflow_id_position_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX steps_workflow_id_position_index ON public.steps USING btree (workflow_id, "position");
-
-
---
--- Name: steps_workflow_id_slug_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX steps_workflow_id_slug_index ON public.steps USING btree (workflow_id, slug);
 
 
 --
@@ -1274,6 +1239,27 @@ CREATE INDEX worker_steps_session_id_step_number_index ON public.worker_steps US
 
 
 --
+-- Name: workflow_runs_session_id_step_id_attempt_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX workflow_runs_session_id_step_id_attempt_index ON public.workflow_runs USING btree (session_id, step_id, attempt);
+
+
+--
+-- Name: workflow_runs_step_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX workflow_runs_step_id_index ON public.workflow_runs USING btree (step_id);
+
+
+--
+-- Name: workflow_runs_workspace_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX workflow_runs_workspace_id_index ON public.workflow_runs USING btree (workspace_id);
+
+
+--
 -- Name: workflow_sessions_goal_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1292,6 +1278,20 @@ CREATE INDEX workflow_sessions_workflow_id_index ON public.workflow_sessions USI
 --
 
 CREATE INDEX workflow_sessions_workspace_id_index ON public.workflow_sessions USING btree (workspace_id);
+
+
+--
+-- Name: workflow_steps_workflow_id_position_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX workflow_steps_workflow_id_position_index ON public.workflow_steps USING btree (workflow_id, "position");
+
+
+--
+-- Name: workflow_steps_workflow_id_slug_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX workflow_steps_workflow_id_slug_index ON public.workflow_steps USING btree (workflow_id, slug);
 
 
 --
@@ -1402,27 +1402,27 @@ ALTER TABLE ONLY public.goals
 
 
 --
+-- Name: knowledge_page_versions knowledge_page_versions_page_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_page_versions
+    ADD CONSTRAINT knowledge_page_versions_page_id_fkey FOREIGN KEY (page_id) REFERENCES public.knowledge_pages(id) ON DELETE CASCADE;
+
+
+--
+-- Name: knowledge_pages knowledge_pages_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_pages
+    ADD CONSTRAINT knowledge_pages_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
 -- Name: memories memories_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.memories
     ADD CONSTRAINT memories_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
--- Name: page_versions page_versions_page_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.page_versions
-    ADD CONSTRAINT page_versions_page_id_fkey FOREIGN KEY (page_id) REFERENCES public.pages(id) ON DELETE CASCADE;
-
-
---
--- Name: pages pages_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.pages
-    ADD CONSTRAINT pages_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 
 --
@@ -1434,50 +1434,10 @@ ALTER TABLE ONLY public.reports
 
 
 --
--- Name: runs runs_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: workflow_steps steps_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.runs
-    ADD CONSTRAINT runs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
-
-
---
--- Name: runs runs_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.runs
-    ADD CONSTRAINT runs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.workflow_sessions(id) ON DELETE CASCADE;
-
-
---
--- Name: runs runs_step_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.runs
-    ADD CONSTRAINT runs_step_id_fkey FOREIGN KEY (step_id) REFERENCES public.steps(id) ON DELETE CASCADE;
-
-
---
--- Name: runs runs_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.runs
-    ADD CONSTRAINT runs_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
--- Name: steps steps_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.steps
-    ADD CONSTRAINT steps_workflow_id_fkey FOREIGN KEY (workflow_id) REFERENCES public.workflows(id) ON DELETE CASCADE;
-
-
---
--- Name: steps steps_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.steps
+ALTER TABLE ONLY public.workflow_steps
     ADD CONSTRAINT steps_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 
@@ -1554,6 +1514,38 @@ ALTER TABLE ONLY public.worker_steps
 
 
 --
+-- Name: workflow_runs workflow_runs_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
+
+
+--
+-- Name: workflow_runs workflow_runs_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.workflow_sessions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_runs workflow_runs_step_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_step_id_fkey FOREIGN KEY (step_id) REFERENCES public.workflow_steps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_runs workflow_runs_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
 -- Name: workflow_sessions workflow_sessions_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1586,6 +1578,14 @@ ALTER TABLE ONLY public.workflow_sessions
 
 
 --
+-- Name: workflow_steps workflow_steps_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_steps
+    ADD CONSTRAINT workflow_steps_workflow_id_fkey FOREIGN KEY (workflow_id) REFERENCES public.workflows(id) ON DELETE CASCADE;
+
+
+--
 -- Name: workflows workflows_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1605,7 +1605,7 @@ ALTER TABLE ONLY public.workflows
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dz4cjhOfSPPSYfgzdhbfLB15ya0BsODhHGI6vXxcGyfMOlGabJLPzSavgRCuBUS
+\unrestrict 7Cf7fSsvagjxkdhh7Hn3P31J0ePES67HN4DMUjNfwthG2uNdlm8yWrAnZk9tgyW
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1678,3 +1678,6 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260905230811);
 INSERT INTO public."schema_migrations" (version) VALUES (20260906002054);
 INSERT INTO public."schema_migrations" (version) VALUES (20260906002055);
 INSERT INTO public."schema_migrations" (version) VALUES (20260906080000);
+INSERT INTO public."schema_migrations" (version) VALUES (20260907215215);
+INSERT INTO public."schema_migrations" (version) VALUES (20260907220007);
+INSERT INTO public."schema_migrations" (version) VALUES (20260907234045);
