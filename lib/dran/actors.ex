@@ -18,9 +18,6 @@ defmodule Dran.Actors do
     %{name: "automation", display_name: "Task Automation"}
   ]
 
-  @doc "The canonical system actor definitions (source of truth = code)."
-  def system_actor_defs, do: @system_actors
-
   @doc """
   Upsert all system actors. Idempotent — safe to call on every boot.
   Called from the migration and from `Dran.Application`.
@@ -45,16 +42,6 @@ defmodule Dran.Actors do
     :ok
   end
 
-  @doc "List actors, optionally filtered by kind. System actors included."
-  def list_actors(opts \\ []) do
-    kind = Keyword.get(opts, :kind)
-
-    Actor
-    |> maybe_where_kind(kind)
-    |> order_by([a], asc: a.kind, asc: a.name)
-    |> Repo.all()
-  end
-
   @doc "List actors excluding code-managed system ones (for CRUD UIs)."
   def list_managed_actors do
     Actor
@@ -70,9 +57,6 @@ defmodule Dran.Actors do
   def get_actor_by_name(name) when is_binary(name) do
     Repo.get_by(Actor, name: name)
   end
-
-  @doc "Get the actor for an API key (preloads-safe: plain FK lookup)."
-  def get_actor!(id), do: Repo.get!(Actor, id)
 
   @doc """
   Create a user/agent actor. Refuses system kind — system actors are
@@ -127,24 +111,24 @@ defmodule Dran.Actors do
 
   @doc """
   Count pages/memories attributed to this actor's name — the
-  deletion-impact preview for the settings UI.
+  deletion-impact preview for the settings UI. One query per table,
+  run concurrently.
   """
   def attribution_count(%Actor{name: name}) do
-    pages =
-      from(p in "knowledge_pages", where: p.created_by == ^name)
-      |> Repo.aggregate(:count, :id)
+    pages_task =
+      Task.async(fn ->
+        from(p in "knowledge_pages", where: p.created_by == ^name)
+        |> Repo.aggregate(:count, :id)
+      end)
 
     memories =
       from(m in "memories", where: m.created_by == ^name)
       |> Repo.aggregate(:count, :id)
 
-    %{pages: pages, memories: memories}
+    %{pages: Task.await(pages_task), memories: memories}
   end
 
   # ── Internal ──
-
-  defp maybe_where_kind(query, nil), do: query
-  defp maybe_where_kind(query, kind), do: where(query, [a], a.kind == ^kind)
 
   # Override the action: system kind is never creatable via CRUD
   defp validate_not_system(changeset) do

@@ -21,14 +21,6 @@ defmodule Dran.Collections do
     Repo.one(from c in Collection, where: c.slug == ^slug and c.workspace_id == ^workspace_id)
   end
 
-  @doc "Get a collection by id, returns nil if not found"
-  def get_collection(id), do: Repo.get(Collection, id)
-
-  @doc "Build a changeset for a collection (for LiveView forms)"
-  def change_collection(%Collection{} = collection, attrs \\ %{}) do
-    Collection.changeset(collection, attrs)
-  end
-
   @doc "Create a new collection. The slug is auto-managed (derived from name)."
   def create_collection(attrs) do
     attrs
@@ -46,20 +38,6 @@ defmodule Dran.Collections do
       end
     )
     |> then(&(%Collection{} |> Collection.changeset(&1) |> Repo.insert()))
-  end
-
-  @doc """
-  Update an existing collection. The slug is auto-managed: regenerated from
-  the name when it changes (unless attrs carry an explicit slug).
-  """
-  def update_collection(%Collection{} = collection, attrs) do
-    attrs
-    |> Dran.Slug.inject_update(collection,
-      field: "name",
-      fallback: "collection",
-      lookup: &get_collection_by_slug(&1, collection.workspace_id)
-    )
-    |> then(&(collection |> Collection.changeset(&1) |> Repo.update()))
   end
 
   @doc "Delete a collection"

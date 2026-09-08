@@ -161,9 +161,5 @@ if config_env() == :prod do
     client_secret: System.get_env("GOOGLE_OAUTH_CLIENT_SECRET"),
     redirect_uri:
       System.get_env("GOOGLE_OAUTH_REDIRECT_URI") ||
-        "#{scheme}://#{host}/auth/google/callback",
-    allowed_domains:
-      (System.get_env("GOOGLE_OAUTH_ALLOWED_DOMAINS") || "")
-      |> String.split(",", trim: true)
-      |> Enum.map(&String.trim/1)
+        "#{scheme}://#{host}/auth/google/callback"
 end

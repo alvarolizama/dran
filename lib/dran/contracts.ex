@@ -1,13 +1,12 @@
 defmodule Dran.Contracts do
   @moduledoc """
-  Contracts — the executable brief attached to a task.
+  Contracts — the executable brief attached to a workflow step.
 
-  A task becomes a contract when its `meta.contract` passes the structural
-  linter (`contract?/1`). The contract is a versioned JSON document inside
-  the task; `task.body` holds the rendered brief (the interchange format a
-  pulling agent reads).
+  A step becomes a contract when its contract fields (columns + embeds)
+  pass the structural linter (`contract?/1`). `render_brief/1` produces
+  the rendered brief (the interchange format a pulling agent reads).
 
-  Shape of `meta.contract`:
+  Shape of the contract (embedded in `%Dran.Workflows.Step{}`):
 
       %{
         version: 2,
@@ -17,7 +16,7 @@ defmodule Dran.Contracts do
         gates: [%{name: "…", cmd: "…", expect: "…", on_failure: "…"}],
         graph: %{nodes: [%{id: "S1", verb: "READ", label: "…"}],
                  edges: [%{from: "S1", to: "G1", guard: "yes"}]},
-        context_snapshot: [%{type: "page|goal|task|memory", id: "…", why: "…", extract: "…"}],
+        context_snapshot: [%{type: "page|memory", id: "…", why: "…", extract: "…"}],
         fingerprint: "sha…",
         model: "…", generated_by: "…",
         history: [%{version: 1, status: "superseded", …}]
@@ -26,11 +25,9 @@ defmodule Dran.Contracts do
   The `graph` is stored as structured JSON (source of truth); mermaid and
   the SVG DAG view are renders from it.
 
-  Since the plans/steps model (wave A) the same machinery also operates on
-  `%Dran.Workflows.Step{}` (contract as columns + embeds, `depends_on` edges
-  step→step) — dual with the task API until F3. Run-scoped sequencing over
-  steps lives in `Dran.Executions`; step readiness here is definitional
-  (steps have no board status).
+  Steps carry the contract as columns + embeds (`depends_on` edges
+  step→step). Run-scoped sequencing over steps lives in `Dran.Executions`;
+  step readiness here is definitional (steps have no board status).
   """
 
   alias Dran.{Repo}
@@ -232,14 +229,14 @@ defmodule Dran.Contracts do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Dependency edges (task→task via `depends_on`)
+  # Dependency edges (step→step via `depends_on`)
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  Create a `depends_on` edge (task → prerequisite task) with a cycle guard.
+  Create a `depends_on` edge (step → prerequisite step) with a cycle guard.
 
   Returns `{:ok, relation}` or `{:error, :cycle | :not_found | :invalid}`.
-  A self-dependency is rejected. Both tasks must belong to the same
+  A self-dependency is rejected. Both steps must belong to the same
   workspace.
   """
   def add_dependency(%Step{} = step, %Step{} = prerequisite) do
@@ -251,21 +248,6 @@ defmodule Dran.Contracts do
         source_type: "step",
         target_id: prerequisite.id,
         target_type: "step",
-        relation_type: "depends_on"
-      })
-      |> Repo.insert(on_conflict: :nothing)
-    end
-  end
-
-  def add_dependency(task, prerequisite) do
-    with :ok <- same_workspace?(task, prerequisite),
-         :ok <- reject_cycle(task, prerequisite) do
-      %Relation{}
-      |> Relation.changeset(%{
-        source_id: task.id,
-        source_type: "task",
-        target_id: prerequisite.id,
-        target_type: "task",
         relation_type: "depends_on"
       })
       |> Repo.insert(on_conflict: :nothing)
@@ -294,21 +276,6 @@ defmodule Dran.Contracts do
     end
   end
 
-  def remove_dependency(task, prerequisite) do
-    with :ok <- same_workspace?(task, prerequisite) do
-      {count, _} =
-        from(r in Relation,
-          where:
-            r.source_id == ^task.id and r.source_type == "task" and
-              r.target_id == ^prerequisite.id and r.target_type == "task" and
-              r.relation_type == "depends_on"
-        )
-        |> Repo.delete_all()
-
-      {:ok, count}
-    end
-  end
-
   defp same_workspace?(%{workspace_id: wid}, %{workspace_id: wid2})
        when wid == wid2 and not is_nil(wid),
        do: :ok
@@ -317,10 +284,10 @@ defmodule Dran.Contracts do
 
   defp reject_cycle(%{id: id}, %{id: id2}) when id == id2, do: {:error, :cycle}
 
-  defp reject_cycle(step_or_task, prerequisite) do
+  defp reject_cycle(step, prerequisite) do
     # Adding step→prerequisite creates a cycle if prerequisite transitively
     # depends on step.
-    if step_or_task.id in transitive_prereqs(prerequisite) do
+    if step.id in transitive_prereqs(prerequisite) do
       {:error, :cycle}
     else
       :ok
@@ -337,7 +304,7 @@ defmodule Dran.Contracts do
 
   # BFS with a queue of nodes to expand and a `seen` set of nodes that have
   # ALREADY been expanded. A node can be enqueued multiple times; it is
-  # expanded only once. Handles diamond shapes (two tasks sharing a prereq)
+  # expanded only once. Handles diamond shapes (two steps sharing a prereq)
   # without infinite loops.
   defp do_transitive_steps([], seen), do: MapSet.to_list(seen)
 
@@ -411,7 +378,7 @@ defmodule Dran.Contracts do
   be open (never "done") at the definition layer, so only a step with zero
   direct prerequisites is ready here. Where prereq runs (attempts) matter,
   that is session-scoped readiness — `Dran.Executions.run_ready?/1` (wave B).
-  Like its task twin, this query does NOT filter prereqs to the given set
+  Unlike `dependency_edges/2`, this query does NOT filter prereqs to the given set
   (external prereqs DO block readiness) — deliberately different from
   `dependency_edges/2`.
   """
@@ -453,63 +420,60 @@ defmodule Dran.Contracts do
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  Compute topological levels for a set of tasks over their `depends_on`
+  Compute topological levels (Kahn) for a set of steps over their `depends_on`
   edges. Returns a list of lists (level 0 = no prerequisites = leftmost
-  column) keyed by task id.
+  column) keyed by step id.
 
   Cycle-safe: in the pathological case of a cycle it still terminates by
-  not depending on a topological order being acyclic.
-
-  Accepts `%Dran.Workflows.Step{}` structs as well as tasks — steps are ordered by
-  their step→step `depends_on` edges (plan DAG).
+  emitting the remaining (cyclic) nodes as a final level.
   """
-  def levels(tasks) do
-    ids = Enum.map(tasks, & &1.id)
-    id_set = MapSet.new(ids)
-
+  def levels(steps) do
+    ids = Enum.map(steps, & &1.id)
+    # one query for all step→step depends_on edges within the set.
+    # dependency_edges returns {source, target} = {dependent, prerequisite};
+    # Kahn needs {prerequisite, dependent}, so swap the pairs.
     edges =
-      for t <- tasks,
-          id = t.id,
-          prereq <- step_prerequisite_ids(t),
-          MapSet.member?(id_set, prereq) do
-        {prereq, id}
-      end
+      dependency_edges(ids, :step)
+      |> Enum.map(fn {dependent, prerequisite} -> {prerequisite, dependent} end)
 
+    levels_from_edges(ids, edges)
+  end
+
+  # Kahn's algorithm: O(V + E). `from` = prerequisite, `to` = dependent.
+  defp levels_from_edges(ids, edges) do
     in_degree = Map.new(ids, &{&1, 0})
+    # dependents grouped by prerequisite for O(1) neighbour lookup
+    dependents =
+      Enum.group_by(edges, fn {from, _to} -> from end, fn {_from, to} -> to end)
 
     in_degree =
       Enum.reduce(edges, in_degree, fn {_from, to}, acc ->
         Map.update!(acc, to, &(&1 + 1))
       end)
 
-    by_level =
-      Enum.reduce_while(Stream.iterate(0, &(&1 + 1)), {ids, in_degree, []}, fn _level,
-                                                                               {remaining, deg,
-                                                                                acc} ->
-        zero = Enum.filter(remaining, &(Map.get(deg, &1, 0) == 0))
+    do_levels(ids, in_degree, dependents, [])
+  end
 
-        if zero == [] do
-          # cycle guard: emit whatever is left rather than loop forever
-          {:halt, Enum.reverse([remaining | acc])}
-        else
-          new_remaining = remaining -- zero
+  defp do_levels([], _in_degree, _dependents, acc), do: Enum.reverse(acc)
 
-          deg =
-            Enum.reduce(zero, deg, fn id, d ->
-              Enum.reduce(edges, d, fn {from, to}, acc2 ->
-                if from == id, do: Map.update!(acc2, to, &(&1 - 1)), else: acc2
-              end)
-            end)
+  defp do_levels(remaining, in_degree, dependents, acc) do
+    zero = for id <- remaining, Map.get(in_degree, id, 0) == 0, do: id
 
-          if new_remaining == [] do
-            {:halt, Enum.reverse([zero | acc])}
-          else
-            {:cont, {new_remaining, deg, [zero | acc]}}
-          end
-        end
-      end)
+    if zero == [] do
+      # cycle guard: emit whatever is left rather than loop forever
+      Enum.reverse([remaining | acc])
+    else
+      in_degree =
+        Enum.reduce(zero, in_degree, fn id, deg ->
+          Enum.reduce(Map.get(dependents, id, []), deg, fn to, d ->
+            Map.update!(d, to, &(&1 - 1))
+          end)
+        end)
 
-    by_level
+      zero_map = MapSet.new(zero)
+      rest = for id <- remaining, not MapSet.member?(zero_map, id), do: id
+      do_levels(rest, in_degree, dependents, [zero | acc])
+    end
   end
 
   @doc false
@@ -527,7 +491,7 @@ defmodule Dran.Contracts do
     case contract_map(step) do
       %{"intent" => intent} = contract when is_binary(intent) ->
         sections = [
-          "# Task: #{step.title}",
+          "# Step: #{step.title}",
           "",
           "## Objective",
           "We need #{intent}",
@@ -553,7 +517,7 @@ defmodule Dran.Contracts do
           "Report the run outcome via the executions API; report ✓NN checkpoints to memory (source: step:<id>).",
           "",
           "## DO NOT",
-          "Do not edit other steps, workflows, tasks or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
+          "Do not edit other steps, workflows or pages. Do not rewrite the brief. Do not invent context outside the snapshot."
         ]
 
         {:ok, Enum.join(List.flatten(sections), "\n")}
@@ -563,7 +527,7 @@ defmodule Dran.Contracts do
     end
   end
 
-  defp brief_claims(_task, contract) do
+  defp brief_claims(_step, contract) do
     claims =
       case contract["claims"] do
         list when is_list(list) -> list

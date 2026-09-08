@@ -664,12 +664,11 @@ defmodule DranWeb.DocsLive do
       <.h2_heading id="authentication" icon="hero-key" label="Authentication" />
       <p>
         Dran is multi-user. Web accounts live in the database: the first one is created
-        by the <code>/setup</code>
-        flow on first run (becomes the admin), and the admin
+        by the <code>/setup</code> flow on first run (becomes the admin), and the admin
         creates additional users from Settings → Users. Optionally, "Sign in with Google"
-        can be enabled via environment variables — it only logs in existing users, unless
-        <code>GOOGLE_OAUTH_ALLOWED_DOMAINS</code>
-        is set to auto-register trusted domains.
+        can be enabled via environment variables — it only logs in existing users;
+        auto-registration for new identities is enabled per workspace with the
+        Google open-signup setting (Settings → Auth).
         The REST/MCP API is protected by bearer tokens (see below).
       </p>
 
@@ -726,11 +725,6 @@ defmodule DranWeb.DocsLive do
               </td>
               <td class="px-4 py-2 font-mono text-base-content/60">(unset)</td>
               <td class="px-4 py-2">Enables "Sign in with Google" when both are set</td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">GOOGLE_OAUTH_ALLOWED_DOMAINS</td>
-              <td class="px-4 py-2 font-mono text-base-content/60">(empty)</td>
-              <td class="px-4 py-2">Domains allowed to auto-register via Google</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">
@@ -859,7 +853,8 @@ defmodule DranWeb.DocsLive do
             Set SESSION_SIGNING_SALT / SESSION_ENCRYPTION_SALT in production — the dev defaults are committed to the repo.
           </li>
           <li>
-            Google OAuth only logs in existing users; set GOOGLE_OAUTH_ALLOWED_DOMAINS to allow auto-registration.
+            Google OAuth only logs in existing users; enable the per-workspace
+            Google open-signup setting to allow auto-registration.
           </li>
         </ul>
       </.callout>

@@ -73,7 +73,6 @@ All configuration is via environment variables — see [`.env.example`](.env.exa
 | `DRAN_API_TOKEN` | Legacy admin bearer token for REST/MCP |
 | `DRAN_WORKSPACE_SLUG` / `DRAN_WORKSPACE_NAME` | Default context created on seed |
 | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Optional — enables "Sign in with Google" |
-| `GOOGLE_OAUTH_ALLOWED_DOMAINS` | Domains allowed to auto-register via Google |
 | `DRAN_INFERENCE_API_URL` / `DRAN_INFERENCE_API_KEY` | OpenAI-compatible inference endpoint (`/v1/embeddings`, `/v1/rerank`, `/v1/chat/completions`) — powers embeddings, summaries, workers, semantic search |
 | `SESSION_SIGNING_SALT` / `SESSION_ENCRYPTION_SALT` | Required in production (`mix phx.gen.secret 32`) |
 | `UPLOADS_DIR` | File upload storage path |

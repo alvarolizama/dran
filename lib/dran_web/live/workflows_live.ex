@@ -20,7 +20,7 @@ defmodule DranWeb.WorkflowsLive do
   alias DranWeb.ListPagination
 
   # The create-workflow modal's selects/`selected` options read the current
-  # form values via Phoenix.HTML.Form.input_value/2 (pages/task/goal modals
+  # form values via Phoenix.HTML.Form.input_value/2 (page/goal modals
   # import it through their form components — this LiveView builds its own).
   import Phoenix.HTML.Form, only: [input_value: 2]
 
@@ -1507,8 +1507,8 @@ defmodule DranWeb.WorkflowsLive do
   end
 
   # Row-level workspace authorization (review finding #2): phx-value ids
-  # are client-forgeable — the board already rejects foreign workspaces
-  # this way (fetch_board_task pattern); executions must not reincide.
+  # are client-forgeable — the same workspace ownership check must apply
+  # to every fetch by id; executions must not reincide.
   defp fetch_workspace_workflow(id, %Dran.Workspace{} = context) do
     case Ecto.UUID.cast(id) do
       {:ok, uuid} ->

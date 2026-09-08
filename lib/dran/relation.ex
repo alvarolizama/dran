@@ -4,8 +4,8 @@ defmodule Dran.Relation do
   `source` → `target`.
 
   Relations are **polymorphic**: `source_type` / `target_type` indicate which
-  table the `source_id` / `target_id` point to — `"page"`, `"goal"`,
-  `"project"`, or `"collection"`. App-level validation in `changeset/2`
+  table the `source_id` / `target_id` point to — "page", "goal",
+  "collection", or "step". App-level validation in `changeset/2`
   ensures each endpoint resolves to a real row of the declared type.
 
   ## Relation types (manual)
@@ -20,7 +20,7 @@ defmodule Dran.Relation do
   `works_in` / `has_tier` / `based_in` / `written_in` / `built_with` are
   materialized from `meta.props` — none of them are set manually.
 
-  `depends_on` (task→task) is the workflow edge: target is a prerequisite of
+  `depends_on` (step→step) is the workflow edge: target is a prerequisite of
   source. See `Dran.Contracts` for the ready/blocked semantics it enables.
   """
 

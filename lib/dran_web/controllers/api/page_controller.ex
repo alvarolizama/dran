@@ -5,7 +5,7 @@ defmodule DranWeb.API.PageController do
 
   @doc "GET /api/knowledge-pages — list pages with filters"
   def index(conn, params) do
-    # Resolve context slug to workspace_id (like TodoController does)
+    # Resolve context slug to workspace_id
     params = resolve_workspace_id(conn, params)
 
     opts =

@@ -14,10 +14,8 @@ defmodule DranWeb.PageComponents do
   import DranWeb.ResourceComponents, only: [markdown_body_field: 1, form_actions: 1]
 
   alias Dran.Knowledge
-  alias Dran.Knowledge.Page
   alias Dran.PageRegistry
   alias DranWeb.PageTypes
-  alias Phoenix.LiveView.JS
 
   attr :page, :map, required: true
   attr :relations, :map, default: %{outbound: [], inbound: []}
@@ -352,74 +350,6 @@ defmodule DranWeb.PageComponents do
   end
 
   @doc """
-  Renders the sub-tab bar for the page detail view: Content, Metadata,
-  Relations, Versions, Activity. Tab switching is handled entirely
-  client-side via Phoenix LiveView JS commands (no server state, no
-  router changes). Default visible tab is "content".
-  """
-  def detail_tabs_bar(assigns) do
-    tabs = [
-      {"content", gettext("Content")},
-      {"graph", gettext("Graph")}
-    ]
-
-    assigns = assign(assigns, :tabs, tabs)
-
-    ~H"""
-    <div class="border-b border-base-300">
-      <nav class="flex gap-1" role="tablist" aria-label={gettext("Page sections")}>
-        <button
-          :for={{tab, label} <- @tabs}
-          id={"detail-tab-#{tab}"}
-          data-detail-tab
-          data-detail-tab-key={tab}
-          phx-click={switch_detail_tab(tab)}
-          role="tab"
-          aria-selected={tab == "content"}
-          data-testid={"detail-tab-#{tab}"}
-          class={[
-            "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
-            tab == "content" && "border-primary text-primary",
-            tab != "content" &&
-              "border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20"
-          ]}
-        >
-          {label}
-        </button>
-      </nav>
-    </div>
-    """
-  end
-
-  @doc """
-  JS command that switches the active detail sub-tab client-side.
-
-  Hides every `[data-detail-panel]`, shows only the target panel, and
-  resets the active style on every `[data-detail-tab]` before applying
-  the active style to the clicked one. No server round-trip required.
-  """
-  def switch_detail_tab(js \\ %JS{}, tab) do
-    js
-    |> JS.hide(to: "[data-detail-panel]")
-    |> JS.remove_class(
-      "border-primary text-primary",
-      to: "[data-detail-tab]"
-    )
-    |> JS.add_class(
-      "border-transparent text-base-content/60",
-      to: "[data-detail-tab]"
-    )
-    |> JS.show(to: "#detail-panel-#{tab}")
-    |> JS.remove_class(
-      "border-transparent text-base-content/60",
-      to: "#detail-tab-#{tab}"
-    )
-    |> JS.add_class("border-primary text-primary", to: "#detail-tab-#{tab}")
-    |> JS.set_attribute({"aria-selected", "false"}, to: "[data-detail-tab]")
-    |> JS.set_attribute({"aria-selected", "true"}, to: "#detail-tab-#{tab}")
-  end
-
-  @doc """
   Collapsible "Linked from (N)" section showing inbound backlinks.
 
   Renders in the main content area below the page body. Each backlink shows
@@ -652,37 +582,6 @@ defmodule DranWeb.PageComponents do
   defdelegate type_plural(type), to: DranWeb.PageTypes, as: :plural
   defdelegate type_path(type), to: DranWeb.PageTypes, as: :path
   defdelegate page_show_path(page), to: DranWeb.PageTypes
-
-  def tag_page_exists?(tag, workspace_id) when is_binary(tag) and is_binary(workspace_id) do
-    Dran.Knowledge.get_page_by_slug(tag, workspace_id) != nil
-  end
-
-  def tag_page_exists?(_tag, _workspace_id), do: false
-
-  def tag_link_path(tag, workspace_id, tag_map \\ nil)
-
-  def tag_link_path(tag, _workspace_id, tag_map) when is_binary(tag) and is_map(tag_map) do
-    case Map.get(tag_map, tag) do
-      nil ->
-        "/search?q=#{URI.encode_www_form(tag)}"
-
-      page_type ->
-        "/#{PageTypes.path(page_type)}/#{tag}"
-    end
-  end
-
-  def tag_link_path(tag, workspace_id, nil) when is_binary(tag) and is_binary(workspace_id) do
-    case Dran.Knowledge.get_page_by_slug(tag, workspace_id) do
-      %Page{page_type: type, slug: slug} ->
-        "/#{PageTypes.path(type)}/#{slug}"
-
-      nil ->
-        "/search?q=#{URI.encode_www_form(tag)}"
-    end
-  end
-
-  def tag_link_path(tag, _workspace_id, _tag_map),
-    do: "/search?q=#{URI.encode_www_form(tag)}"
 
   def format_date(nil), do: ""
 
@@ -1129,86 +1028,4 @@ defmodule DranWeb.PageComponents do
   defp new_title("entity"), do: gettext("Create Entity")
   defp new_title("reference"), do: gettext("Add Reference")
   defp new_title(_), do: gettext("Create Page")
-
-  @doc "Renders a horizontal stats bar with metric badges."
-  attr :stats, :list,
-    required: true,
-    doc: "list of %{label: string, value: string/integer, icon: string, color: string}"
-
-  attr :class, :string, default: ""
-
-  def stats_bar(assigns) do
-    ~H"""
-    <div class={"flex items-center gap-4 #{@class}"}>
-      <div :for={stat <- @stats} class="flex items-center gap-1.5">
-        <.icon
-          :if={stat[:icon]}
-          name={stat.icon}
-          class={"size-4 #{Map.get(stat, :color, "text-base-content/50")}"}
-        />
-        <span class="text-sm font-medium tabular-nums">{stat.value}</span>
-        <span class="text-xs text-base-content/50">{stat.label}</span>
-      </div>
-    </div>
-    """
-  end
-
-  @doc "Renders a single stat badge with icon and value."
-  attr :icon, :string, required: true
-  attr :value, :string, required: true
-  attr :label, :string, required: true
-  attr :color, :string, default: "text-base-content/50"
-
-  def stat_badge(assigns) do
-    ~H"""
-    <div class="flex items-center gap-1.5">
-      <.icon name={@icon} class={"size-4 #{@color}"} />
-      <span class="text-sm font-medium tabular-nums">{@value}</span>
-      <span class="text-xs text-base-content/50">{@label}</span>
-    </div>
-    """
-  end
-
-  @doc "Renders a standardized actions toolbar for page detail views."
-  attr :page, :map, required: true, doc: "%Page{} struct"
-  attr :editing, :boolean, default: false
-  attr :class, :string, default: ""
-  slot :extra_actions, doc: "additional action buttons"
-
-  def page_actions(assigns) do
-    ~H"""
-    <div class={"flex items-center gap-2 flex-wrap #{@class}"}>
-      <.link navigate={back_path(@page)} class="btn btn-ghost btn-sm">
-        <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
-      </.link>
-      <div class="flex-1"></div>
-      {render_slot(@extra_actions)}
-      <div class="dropdown dropdown-end">
-        <button tabindex="0" class="btn btn-ghost btn-sm btn-square">
-          <.icon name="hero-ellipsis-vertical" class="size-4" />
-        </button>
-        <ul tabindex="0" class="dropdown-content menu p-2 shadow-lg bg-base-100 rounded-box z-10 w-48">
-          <li>
-            <.link navigate={"#{@page.slug}/edit"} class="text-sm"><.icon
-              name="hero-pencil"
-              class="size-4"
-            /> {gettext("Edit")}</.link>
-          </li>
-          <li>
-            <a class="text-sm text-error" phx-click="archive_page" phx-value-slug={@page.slug}><.icon
-              name="hero-archive-box"
-              class="size-4"
-            /> {gettext("Archive")}</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-    """
-  end
-
-  defp back_path(%{page_type: "note"}), do: "/notes"
-  defp back_path(%{page_type: "concept"}), do: "/concepts"
-  defp back_path(%{page_type: "entity"}), do: "/entities"
-  defp back_path(%{page_type: "reference"}), do: "/references"
-  defp back_path(_), do: "/"
 end

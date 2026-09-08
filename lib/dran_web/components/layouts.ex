@@ -245,9 +245,9 @@ defmodule DranWeb.Layouts do
 
   def sidebar_nav(assigns) do
     # Unified workspace sidebar: when a workspace_slug is present the nav shows
-    # the workspace sections as a flat list (Inicio, Objetivos, Kanban,
-    # Graph); without a workspace (dashboard/admin/account) the nav is empty
-    # and only the footer icons show.
+    # the workspace sections as labelled groups (Inicio/Objetivos/Workflows,
+    # Knowledge base, Memory, Insights); without a workspace (dashboard/admin/
+    # account) the nav is empty and only the footer icons show.
     slug = assigns[:workspace_slug]
 
     groups =
@@ -307,7 +307,7 @@ defmodule DranWeb.Layouts do
     end
   end
 
-  # Builds the workspace nav as labelled groups (Planning, Workflows,
+  # Builds the workspace nav as labelled groups (Inicio/Objetivos/Workflows,
   # Knowledge base, Memory, Insights), gated by feature flags.
   defp workspace_groups(ws, slug, counts) do
     enabled? = fn feature ->

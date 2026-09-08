@@ -72,7 +72,4 @@ defmodule Dran.Workflows.Session do
 
   @doc "Is the session still open (runs can be started/closed)?"
   def open?(%__MODULE__{status: status}), do: status == "in_flight"
-
-  @doc "Is the session closed (terminal state)?"
-  def closed?(%__MODULE__{status: status}), do: status in ["passed", "failed", "aborted"]
 end

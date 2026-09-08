@@ -88,17 +88,6 @@ defmodule Dran.Accounts.ApiKey do
   def active?(_), do: false
 
   @doc """
-  Returns the access level for a given workspace_id, or nil.
-  """
-  def access_level_for(%__MODULE__{api_key_workspaces: workspaces}, workspace_id)
-      when is_list(workspaces) do
-    case Enum.find(workspaces, &(&1.workspace_id == workspace_id)) do
-      nil -> nil
-      akw -> akw.access_level
-    end
-  end
-
-  @doc """
   Convenience: true if ANY of the key's workspaces has write access.
   """
   def write_access?(%__MODULE__{api_key_workspaces: %Ecto.Association.NotLoaded{}} = key) do
@@ -107,13 +96,5 @@ defmodule Dran.Accounts.ApiKey do
 
   def write_access?(%__MODULE__{api_key_workspaces: workspaces}) when is_list(workspaces) do
     Enum.any?(workspaces, &(&1.access_level == "write"))
-  end
-
-  @doc """
-  Convenience: true if the key has access to the given workspace.
-  """
-  def has_workspace?(%__MODULE__{api_key_workspaces: workspaces}, workspace_id)
-      when is_list(workspaces) do
-    Enum.any?(workspaces, &(&1.workspace_id == workspace_id))
   end
 end

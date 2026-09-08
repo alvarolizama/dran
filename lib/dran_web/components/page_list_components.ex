@@ -30,11 +30,6 @@ defmodule DranWeb.PageListComponents do
            gettext("Track people, companies, tools and places that matter."),
            gettext("Create Entity")}
 
-        "project" ->
-          {gettext("No projects yet"),
-           gettext("Group goals, plans and todos under a shared initiative."),
-           gettext("Create Project")}
-
         "reference" ->
           {gettext("No references yet"),
            gettext("Save articles, papers, videos and books worth remembering."),
@@ -43,10 +38,6 @@ defmodule DranWeb.PageListComponents do
         "goal" ->
           {gettext("No goals yet"), gettext("Set objectives and track their progress."),
            gettext("Create Goal")}
-
-        "plan" ->
-          {gettext("No plans yet"), gettext("Lay out weekly, monthly or quarterly plans."),
-           gettext("Create Plan")}
 
         _ ->
           {gettext("No pages yet"),

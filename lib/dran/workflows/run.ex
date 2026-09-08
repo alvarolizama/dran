@@ -4,11 +4,11 @@ defmodule Dran.Workflows.Run do
 
   Runs are created upfront (all `pending`) when the session opens, keyed
   by `(session_id, step_id, attempt)`. A retry is a new run of the same
-  `(session_id, step_id)` with `attempt: n + 1`. No task is ever spawned:
-  the manual layer (board) and the execution layer never mix.
+  `(session_id, step_id)` with `attempt: n + 1`. No extra task record is
+  ever spawned: the run itself is the only execution artifact.
 
   - `contract_version` — the step's contract frozen at open time (nil
-    time (nil when the step has no contract).
+    when the step has no contract).
   - `progress` — phase-level progress reported by the agent (overwrite,
     not append): `%{\"phase\" => \"…\", \"gates\" => %{…}}`. The history
     lives in `gate_results` at close (decisión ?02).
@@ -74,9 +74,6 @@ defmodule Dran.Workflows.Run do
       name: :workflow_runs_session_id_step_id_attempt_index
     )
   end
-
-  @doc "Is the run finished (terminal state)?"
-  def finished?(%__MODULE__{status: status}), do: status in ["passed", "failed", "skipped"]
 
   @doc "Is the run still open (pending or in_flight)?"
   def open?(%__MODULE__{status: status}), do: status in ["pending", "in_flight"]

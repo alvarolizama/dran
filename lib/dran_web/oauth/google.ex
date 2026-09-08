@@ -11,8 +11,9 @@ defmodule DranWeb.OAuth.Google do
     * `:client_id`
     * `:client_secret`
     * `:redirect_uri`
-    * `:allowed_domains` — list of email domains allowed to auto-register
-      (empty/nil = no auto-registration, only existing users can log in)
+
+  Auto-registration for new Google identities is controlled by the
+  `wiki_google_open_signup` setting (per workspace), not by config.
   """
 
   @auth_url "https://accounts.google.com/o/oauth2/v2/auth"
@@ -117,27 +118,6 @@ defmodule DranWeb.OAuth.Google do
 
       _status ->
         {:error, :userinfo_failed}
-    end
-  end
-
-  @doc """
-  Checks if a given email domain is in the allowed-domains list.
-
-  Fail-closed: an empty or missing allowlist means **no auto-registration**
-  (only pre-existing users can log in). Returns `true` only when the
-  allowlist is non-empty and the domain matches.
-  """
-  def domain_allowed?(email) when is_binary(email) do
-    case config()[:allowed_domains] do
-      nil ->
-        false
-
-      [] ->
-        false
-
-      domains when is_list(domains) ->
-        domain = email |> String.split("@") |> List.last()
-        domain in domains
     end
   end
 

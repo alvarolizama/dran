@@ -108,13 +108,7 @@ defmodule Dran.Knowledge.PageMeta do
   # These functions preserve the public API that consumers call directly.
   # The data lives in Dran.PageRegistry.
 
-  @doc "Valid kinds for a type (delegates to PageRegistry)."
-  def kinds_for(type), do: PageRegistry.kinds(type)
-
   def note_kinds, do: PageRegistry.kinds("note")
-  def entity_kinds, do: PageRegistry.kinds("entity")
-  def concept_kinds, do: PageRegistry.kinds("concept")
-  def reference_kinds, do: PageRegistry.kinds("reference")
 
   @doc """
   Returns the metadata fields and their select options for a given page type.

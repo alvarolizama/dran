@@ -242,19 +242,6 @@ defmodule Dran.Accounts do
     end
   end
 
-  @doc """
-  True if the user can create API keys in the given workspace.
-  Owners, admins, and editors can create keys.
-  """
-  def can_create_api_keys?(%User{} = user, %Workspace{} = workspace) do
-    case user_role_in_workspace(user, workspace) do
-      "owner" -> true
-      "admin" -> true
-      "editor" -> true
-      _ -> false
-    end
-  end
-
   # ── API Token auth ──
 
   def valid_token?(token) when is_binary(token) do
@@ -456,33 +443,6 @@ defmodule Dran.Accounts do
   end
 
   @doc """
-  Update workspaces for an API key.
-
-  Accepts a list of `{workspace_id, access_level}` tuples.
-  Replaces all existing workspace associations.
-  """
-  def update_api_key_workspaces(%ApiKey{} = key, workspace_ids) do
-    # Delete existing
-    ApiKeyWorkspace
-    |> where([w], w.api_key_id == ^key.id)
-    |> Repo.delete_all()
-
-    # Insert new
-    entries =
-      Enum.map(workspace_ids, fn {wid, level} ->
-        %ApiKeyWorkspace{}
-        |> ApiKeyWorkspace.changeset(%{
-          api_key_id: key.id,
-          workspace_id: wid,
-          access_level: level
-        })
-        |> Repo.insert!()
-      end)
-
-    {:ok, entries}
-  end
-
-  @doc """
   Update the access level for a specific workspace in an API key.
   Returns `{:ok, updated_workspace}` or `{:error, reason}`.
   """
@@ -534,13 +494,6 @@ defmodule Dran.Accounts do
   end
 
   def api_key_access_level(_, _), do: nil
-
-  @doc """
-  Check if an API key has write access to a specific workspace.
-  """
-  def api_key_has_write_access?(%ApiKey{} = key, workspace_id) do
-    api_key_access_level(key, workspace_id) == "write"
-  end
 
   @doc """
   Revoke an API key by setting `revoked_at`. The key stops working

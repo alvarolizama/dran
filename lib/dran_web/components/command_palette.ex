@@ -13,8 +13,7 @@ defmodule DranWeb.CommandPalette do
   alias DranWeb.PageTypes
 
   @quick_actions [
-    %{label: "New Note", icon: "hero-plus", path: "/notes/new"},
-    %{label: "New Project", icon: "hero-rocket-launch", path: "/projects/new"},
+    %{label: "New Note", icon: "hero-plus", page_type: "note"},
     %{label: "Go to Graph", icon: "hero-share", path: "/graph"},
     %{label: "Go to Dashboard", icon: "hero-home", path: "/"}
   ]
@@ -38,16 +37,15 @@ defmodule DranWeb.CommandPalette do
         _ -> []
       end
 
-    # Map quick action keys to feature flags for filtering. Task actions are
-    # always available (tasks are not a page type).
-    action_features = %{
-      "New Note" => "note",
-      "New Project" => "project"
-    }
+    # Map quick actions to page types so disabled_page_types can filter
+    # them. "New Note" resolves its path at click time against the current
+    # workspace (/:workspace_slug/notes) since there is no global /notes
+    # route; static actions (Graph, Dashboard) keep a fixed path.
+    action_page_types = %{"New Note" => "note"}
 
     filtered_actions =
       Enum.reject(@quick_actions, fn action ->
-        page_type = Map.get(action_features, action.label)
+        page_type = action[:page_type] || Map.get(action_page_types, action.label)
         page_type && page_type in disabled_types
       end)
 
@@ -238,11 +236,21 @@ defmodule DranWeb.CommandPalette do
     action = Enum.at(socket.assigns.quick_actions, index)
 
     if action do
-      {:noreply, push_navigate(socket, to: action.path)}
+      {:noreply,
+       push_navigate(socket, to: quick_action_path(action, socket.assigns.workspace_slug))}
     else
       {:noreply, socket}
     end
   end
+
+  # Page-type actions (New Note) resolve against the current workspace;
+  # static actions keep their fixed path.
+  defp quick_action_path(%{page_type: type}, workspace_slug) when is_binary(workspace_slug) do
+    "/#{workspace_slug}/#{PageTypes.path(type)}"
+  end
+
+  defp quick_action_path(%{page_type: type}, _), do: "/#{PageTypes.path(type)}"
+  defp quick_action_path(%{path: path}, _), do: path
 
   # ---------------------------------------------------------------------------
   # Helpers
@@ -256,9 +264,9 @@ defmodule DranWeb.CommandPalette do
     max(length(results), 1)
   end
 
-  defp resolve_selected_path(%{query: q, selected: selected, quick_actions: qa})
+  defp resolve_selected_path(%{query: q, selected: selected, quick_actions: qa} = assigns)
        when q in ["", nil] do
-    Enum.at(qa, selected, %{path: "/"}).path
+    qa |> Enum.at(selected, %{path: "/"}) |> quick_action_path(assigns[:workspace_slug])
   end
 
   defp resolve_selected_path(%{results: [], selected: _}) do

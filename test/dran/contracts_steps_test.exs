@@ -282,7 +282,7 @@ defmodule Dran.ContractsStepsTest do
       {:ok, brief} = Contracts.render_brief(step)
 
       for section <-
-            ~w(# Task: ## Objective ## Claims ## Verification gates ## Execution graph ## Context ## Constraints ## Pre-registered claims ## Deliverable ## DO NOT) do
+            ~w(# Step: ## Objective ## Claims ## Verification gates ## Execution graph ## Context ## Constraints ## Pre-registered claims ## Deliverable ## DO NOT) do
         assert brief =~ section
       end
 

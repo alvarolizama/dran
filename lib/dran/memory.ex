@@ -322,8 +322,6 @@ defmodule Dran.Memory do
     _ -> :ok
   end
 
-  def get_memory(id), do: Repo.get(__MODULE__, id)
-
   @doc """
   Fetch a memory scoped to its workspace. Returns nil when the id does not
   exist OR belongs to another workspace — callers must not distinguish the

@@ -284,8 +284,7 @@ defmodule DranWeb.SettingsLiveTest do
       Application.put_env(:dran, :google_oauth,
         client_id: "test-client",
         client_secret: "test-secret",
-        redirect_uri: "http://localhost/auth/google/callback",
-        allowed_domains: []
+        redirect_uri: "http://localhost/auth/google/callback"
       )
 
       on_exit(fn ->

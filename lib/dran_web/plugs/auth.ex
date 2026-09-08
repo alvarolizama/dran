@@ -118,9 +118,6 @@ defmodule DranWeb.Plugs.Auth do
 
   def current_user(conn), do: get_session(conn, @session_key)
 
-  def current_context(conn),
-    do: get_session(conn, @workspace_key) || Auth.default_workspace_slug()
-
   # ── LiveView helpers ──
 
   @doc """

@@ -34,16 +34,16 @@ defmodule DranWeb.API.SearchControllerTest do
         Req.Test.json(conn, %{
           "object" => "list",
           "data" => [
-            %{"object" => "embedding", "index" => 0, "embedding" => List.duplicate(0.0, 1024)}
+            # Non-zero vector: a zero-vector embedding yields NaN cosine
+            # distance in pgvector, and NaN rows are excluded from ordered
+            # results — the hit would silently disappear.
+            %{"object" => "embedding", "index" => 0, "embedding" => List.duplicate(1.0, 1024)}
           ]
         })
       end)
 
       # Fresh context: the shared "personal" context can carry pages with
-      # embeddings from other tests in the shared sandbox transaction. The
-      # stubbed zero-vector query embedding sorts as NaN in pgvector cosine
-      # distance (NaN sorts last in Postgres), so any residue could push the
-      # test's page past the result limit.
+      # embeddings from other tests in the shared sandbox transaction.
       uniq = System.unique_integer([:positive])
 
       {:ok, context} =
@@ -56,7 +56,8 @@ defmodule DranWeb.API.SearchControllerTest do
           slug: "semantic-hit",
           body: "Body",
           page_type: "note",
-          embedding: Pgvector.new(List.duplicate(0.0, 1024)),
+          # Same vector as the stubbed query embedding → cosine distance 0
+          embedding: Pgvector.new(List.duplicate(1.0, 1024)),
           embedding_hash: "hash"
         })
 
