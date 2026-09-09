@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, second-brain, mcp, knowledge-graph, workflows]
-    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-goals-flow, dran-workflow-flow, dran-workers-flow, dran-memory-flow, riel-protocol]
+    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-goals-flow, dran-create-workflow, dran-workflow-flow, dran-workers-flow, dran-memory-flow, riel-protocol]
 ---
 
 # dran — MCP reference + suite router
@@ -26,6 +26,7 @@ flowchart TD
   Q -->|"create/edit/query\nknowledge pages"| K[dran-knowledge-flow]
   Q -->|"link pages\ntyped relations"| R[dran-relations-flow]
   Q -->|"goals: create,\nstatus"| G[dran-goals-flow]
+  Q -->|"author a workflow\nfrom a plan"| C[dran-create-workflow]
   Q -->|"execute a workflow\nloop with riel"| W[dran-workflow-flow]
   Q -->|"run curator/link_gardener/\ngraph_rag"| X[dran-workers-flow]
   Q -->|"list/search/delete\nmemories"| M[dran-memory-flow]
@@ -80,13 +81,14 @@ flowchart LR
 - The goal checklist is human-managed (Álvaro's OKR); the agent's durable
   evidence of execution is the workflow run (dran-workflow-flow).
 
-## The 6 flows of the suite
+## The 7 flows of the suite
 
 | Flow | When to load it |
 | --- | --- |
 | `dran-knowledge-flow` | Create, update, search or rename pages (note, concept, entity, reference…) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-goals-flow` | Goals: create, status lifecycle, read |
+| `dran-create-workflow` | Author a workflow from a plan: steps, contracts, context, DAG (materialize in UI) |
 | `dran-workflow-flow` | Execute a workflow with riel: session → pull → brief → ledger → close |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (REST) |
@@ -99,7 +101,8 @@ flowchart LR
   again** — the surface grows; `dran_list_*` and the server docs are the
   truth, this suite is the map.
 - **Expecting `dran_memory_*` or workflow-editing tools on MCP** — memory
-  is REST/plugin; workflow/step authoring is UI (`/workflows`).
+  is REST/plugin; workflow/step authoring is UI (`/workflows`), driven by
+  dran-create-workflow.
 
 ## Cross-references
 

@@ -77,7 +77,7 @@ Humans get a wiki. Agents get 35 MCP tools and a REST API. One graph, one attrib
 
 ## Agent skills
 
-`skills/` ships 7 skills for Hermes (or any skill-loading agent) — one per operating flow: `dran` (router), knowledge, relations, goals, workflow (the Riel loop), workers, memory. Shared rules: one key = one actor; a write is not done until a readback confirms it; irreversible ops need human confirmation.
+`skills/` ships 8 skills for Hermes (or any skill-loading agent) — one per operating flow: `dran` (router), knowledge, relations, goals, create-workflow (authoring), workflow (the Riel loop), workers, memory. Shared rules: one key = one actor; a write is not done until a readback confirms it; irreversible ops need human confirmation.
 
 ## Installation
 
@@ -129,11 +129,11 @@ memory:
 
 Configure it from the dashboard panel (**Memory → Dran**: base URL, memory workspace, recall/capture toggles) or `hermes memory setup`. Stored at `$HERMES_HOME/dran/config.json`; the API key stays in `.env`. The memory workspace must be one the key can reach — the plugin validates against `GET /api/agent/config` and falls back to the first permitted workspace (with a warning) if the matrix changes.
 
-**e. Skills** (7: router + knowledge, relations, goals, workflow/Riel, workers, memory flows). Symlink the suite into a dir the profile already scans:
+**e. Skills** (8: router + knowledge, relations, goals, create-workflow, workflow/Riel, workers, memory flows). Symlink the suite into a dir the profile already scans:
 
 ```bash
 mkdir -p ~/Workspace/Skills
-for s in dran dran-goals-flow dran-knowledge-flow dran-memory-flow \
+for s in dran dran-create-workflow dran-goals-flow dran-knowledge-flow dran-memory-flow \
          dran-relations-flow dran-workers-flow dran-workflow-flow; do
   ln -s /path/to/dran/skills/$s ~/Workspace/Skills/$s
 done

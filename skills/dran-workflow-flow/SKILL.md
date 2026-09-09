@@ -22,7 +22,7 @@ riel ledger in Dran — memory and goal checklists are NOT part of this loop.
 ```mermaid
 flowchart TD
   Q{What do you need?} -->|"execute a workflow:\nopen, pull, run, close"| SELF["THIS SKILL\ndran-workflow-flow"]
-  Q -->|"author/edit the DAG\nor a step contract"| UI["Dran UI /workflows\n(not MCP)"]
+  Q -->|"author/edit the DAG\nor a step contract"| C[dran-create-workflow]
   Q -->|"local discipline:\nledger, delegation"| R[riel-ledger / riel-delegate]
   Q -->|"goal status after\nthe session closes"| G[dran-goals-flow]
 
@@ -63,7 +63,8 @@ content. How to work it:
 
 ```mermaid
 flowchart TD
-  START([execute a workflow]) --> S1["RUN mcp_dran_dran_get_workflow\nworkspace + workflow - steps + DAG"]
+  START([execute a workflow]) --> S0["RUN mcp_dran_dran_list_workflows\nworkspace - discover or pick"]
+  S0 --> S1["RUN mcp_dran_dran_get_workflow\nworkspace + workflow - steps + DAG"]
   S1 --> S2["RUN mcp_dran_dran_open_workflow_session\nlabel who/why - snapshot + runs pending"]
   S2 --> S3["RUN mcp_dran_dran_list_pending_runs\nworkspace - the pull queue"]
   S3 --> G1{"run ready\nexists?"}
