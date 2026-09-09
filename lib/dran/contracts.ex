@@ -13,7 +13,7 @@ defmodule Dran.Contracts do
         status: "draft" | "active" | "superseded",
         intent: "…",
         claims: [%{id: "P1", claim: "…", verify: "…"}],
-        gates: [%{name: "…", cmd: "…", expect: "…", on_failure: "…"}],
+        gates: [%{name: "…", check: "…", expect: "…", on_failure: "…"}],
         graph: %{nodes: [%{id: "S1", verb: "READ", label: "…"}],
                  edges: [%{from: "S1", to: "G1", guard: "yes"}]},
         context_snapshot: [%{type: "page|memory", id: "…", why: "…", extract: "…"}],
@@ -62,7 +62,8 @@ defmodule Dran.Contracts do
 
   Structural (machine-checkable) rules — the closed verb vocabulary, the
   verification funnel (a graph must reach a VERIFY before END), claim/gate
-  shape, and required fields.
+  shape, and required fields. A gate's `check` is free text (a command, an
+  expected output artifact, a frame analysis, ...) — only presence matters.
   """
   def lint(%Step{} = step) do
     case contract_map(step) do
@@ -166,8 +167,8 @@ defmodule Dran.Contracts do
 
   defp check_gates(errors, _), do: [:gates | errors]
 
-  defp valid_gate?(%{"name" => name, "cmd" => cmd, "expect" => expect})
-       when is_binary(name) and name != "" and is_binary(cmd) and cmd != "" and
+  defp valid_gate?(%{"name" => name, "check" => check, "expect" => expect})
+       when is_binary(name) and name != "" and is_binary(check) and check != "" and
               is_binary(expect) and expect != "" do
     true
   end
@@ -551,7 +552,12 @@ defmodule Dran.Contracts do
 
     lines =
       for gate <- gates do
-        "- **#{gate["name"]}** — `#{gate["cmd"]}` — expected: #{gate["expect"]}" <>
+        # `check` is open: a command, an output artifact (video, report), a
+        # frame analysis — whatever the done-criterion is. Legacy rows may
+        # still carry `cmd`.
+        check = gate["check"] || gate["cmd"] || ""
+
+        "- **#{gate["name"]}** — `#{check}` — expected: #{gate["expect"]}" <>
           if(gate["on_failure"], do: " — on failure: #{gate["on_failure"]}", else: "")
       end
 

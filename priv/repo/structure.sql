@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict KaHsco6qth6G4RE0ibWcC0ipxYSPzdnucaaXOtBpN0PCfcDGJs1QhN2gJxYbEIi
+\restrict mB0CQ4RNbivganNbINk1dc06RWxhYgKUE47Qd1BmyLX7vNP4p5XMoBUuh0cF0Ul
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -198,7 +198,8 @@ CREATE TABLE public.goals (
     updated_at timestamp(0) without time zone NOT NULL,
     created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
     updated_by character varying(255),
-    checklist jsonb DEFAULT '[]'::jsonb NOT NULL
+    checklist jsonb DEFAULT '[]'::jsonb NOT NULL,
+    pinned boolean DEFAULT false NOT NULL
 );
 
 
@@ -847,6 +848,13 @@ CREATE UNIQUE INDEX community_summaries_workspace_id_community_id_index ON publi
 --
 
 CREATE INDEX community_summaries_workspace_id_index ON public.cluster_summaries USING btree (workspace_id);
+
+
+--
+-- Name: goals_workspace_id_pinned_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX goals_workspace_id_pinned_index ON public.goals USING btree (workspace_id, pinned);
 
 
 --
@@ -1499,7 +1507,7 @@ ALTER TABLE ONLY public.workflows
 -- PostgreSQL database dump complete
 --
 
-\unrestrict KaHsco6qth6G4RE0ibWcC0ipxYSPzdnucaaXOtBpN0PCfcDGJs1QhN2gJxYbEIi
+\unrestrict mB0CQ4RNbivganNbINk1dc06RWxhYgKUE47Qd1BmyLX7vNP4p5XMoBUuh0cF0Ul
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1580,3 +1588,5 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260908035014);
 INSERT INTO public."schema_migrations" (version) VALUES (20260908035020);
 INSERT INTO public."schema_migrations" (version) VALUES (20260908054110);
 INSERT INTO public."schema_migrations" (version) VALUES (20260909002001);
+INSERT INTO public."schema_migrations" (version) VALUES (20260909054747);
+INSERT INTO public."schema_migrations" (version) VALUES (20260909072119);

@@ -281,7 +281,8 @@ const StepModalTabs = {
     this._fillList("gates", contract.gates, [
       ['[data-cf="name"]', "name"],
       ['[data-cf="expect"]', "expect"],
-      ['[data-cf="cmd"]', "cmd"],
+      // Legacy gates may still carry `cmd` — surface it as check.
+      ['[data-cf="check"]', (g) => g.check || g.cmd || ""],
     ])
     const graph = contract.graph && typeof contract.graph === "object" ? contract.graph : {}
     this._feedGraphCanvas(graph)
@@ -380,13 +381,14 @@ const StepModalTabs = {
     const row = tpl.content.firstElementChild.cloneNode(true)
     for (const [sel, key] of map) {
       const input = row.querySelector(sel)
+      const value = typeof key === "function" ? key(data) : data[key]
       if (input && input.tagName === "SELECT" && input.options.length === 0) {
         // Edge from/to selects: their options are built later (they depend
         // on node ids) — remember the intended value; _syncEdgeSelects()
         // applies it. Selects with options (verb) get the value directly.
-        input.dataset.pendingValue = data[key] || ""
+        input.dataset.pendingValue = value || ""
       } else if (input) {
-        input.value = data[key] || ""
+        input.value = value || ""
       }
     }
     return row
@@ -417,9 +419,9 @@ const StepModalTabs = {
       .map((row) => ({
         name: row.querySelector('[data-cf="name"]').value.trim(),
         expect: row.querySelector('[data-cf="expect"]').value.trim(),
-        cmd: row.querySelector('[data-cf="cmd"]').value.trim(),
+        check: row.querySelector('[data-cf="check"]').value.trim(),
       }))
-      .filter((g) => g.name || g.expect || g.cmd)
+      .filter((g) => g.name || g.expect || g.check)
 
     const ctx = [...this.visualBody.querySelectorAll('[data-list="ctx"] [data-row]')]
       .map((row) => {

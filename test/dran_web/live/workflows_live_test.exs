@@ -1017,7 +1017,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       contract = %{
         "intent" => "Ship the login flow",
         "claims" => [%{"id" => "P1", "claim" => "form validates", "verify" => "mix test"}],
-        "gates" => [%{"name" => "test", "cmd" => "mix test", "expect" => "exit 0"}]
+        "gates" => [%{"name" => "test", "check" => "mix test", "expect" => "exit 0"}]
       }
 
       build = Enum.find(Workflows.list_steps(workflow), &(&1.slug == "build"))
@@ -1214,10 +1214,10 @@ defmodule DranWeb.WorkflowsLiveTest do
   end
 
   # Lint-passing fixture (same shape as the context tests' valid_contract):
-  # intent, claims with verify, gates with cmd/expect, graph with a VERIFY
+  # intent, claims with verify, gates with check/expect, graph with a VERIFY
   # funnel.
   defp valid_contract_json do
-    ~s({"intent": "Ship the login flow", "status": "active", "claims": [{"id": "P1", "claim": "form validates", "verify": "mix test"}], "gates": [{"name": "compile", "cmd": "mix compile --warnings-as-errors", "expect": "exit 0"}], "graph": {"nodes": [{"id": "S1", "verb": "READ", "label": "router.ex"}, {"id": "S2", "verb": "RUN", "label": "mix test"}, {"id": "G1", "verb": "VERIFY", "label": "tests green?"}], "edges": [{"from": "S1", "to": "S2", "guard": "yes"}, {"from": "S2", "to": "G1", "guard": "yes"}]}})
+    ~s({"intent": "Ship the login flow", "status": "active", "claims": [{"id": "P1", "claim": "form validates", "verify": "mix test"}], "gates": [{"name": "compile", "check": "mix compile --warnings-as-errors", "expect": "exit 0"}], "graph": {"nodes": [{"id": "S1", "verb": "READ", "label": "router.ex"}, {"id": "S2", "verb": "RUN", "label": "mix test"}, {"id": "G1", "verb": "VERIFY", "label": "tests green?"}], "edges": [{"from": "S1", "to": "S2", "guard": "yes"}, {"from": "S2", "to": "G1", "guard": "yes"}]}})
   end
 
   # ──────────────────────────────────────────────────────────────────────────

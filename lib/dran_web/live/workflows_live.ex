@@ -1473,7 +1473,7 @@ defmodule DranWeb.WorkflowsLive do
   defp lint_message([:intent | _]), do: gettext("Falta \"intent\".")
   defp lint_message([:status | _]), do: gettext("\"status\" debe ser draft, active o superseded.")
   defp lint_message([:claims | _]), do: gettext("Claims: lista de {id, claim, verify} no vacíos.")
-  defp lint_message([:gates | _]), do: gettext("Gates: lista de {name, cmd, expect} no vacíos.")
+  defp lint_message([:gates | _]), do: gettext("Gates: lista de {name, check, expect} no vacíos.")
   defp lint_message([:graph_nodes | _]), do: gettext("El graph necesita al menos un nodo.")
 
   defp lint_message([:graph_verbs | _]),

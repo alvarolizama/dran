@@ -153,7 +153,15 @@ defmodule Dran.Workflows.Step do
   end
 
   defmodule Gate do
-    @moduledoc "A gate of a step contract: name · cmd · expect · on_failure."
+    @moduledoc """
+    A gate of a step contract: name · check · expect · on_failure.
+
+    `check` is the executable done-criterion — deliberately open: a shell
+    command (`mix test`), an expected output artifact (a rendered video,
+    a generated report), an inspection of a result (frame analysis), or any
+    other verifiable probe. It is free text the pulling agent interprets,
+    not necessarily a command.
+    """
 
     use Ecto.Schema
     import Ecto.Changeset
@@ -161,16 +169,35 @@ defmodule Dran.Workflows.Step do
     @primary_key false
     embedded_schema do
       field :name, :string
-      field :cmd, :string
+      field :check, :string
       field :expect, :string
       field :on_failure, :string
     end
 
     def changeset(gate, attrs) do
+      attrs = migrate_cmd(attrs)
+
       gate
-      |> cast(attrs, [:name, :cmd, :expect, :on_failure])
-      |> validate_required([:name, :cmd, :expect])
+      |> cast(attrs, [:name, :check, :expect, :on_failure])
+      |> validate_required([:name, :check, :expect])
     end
+
+    # Back-compat: gates authored before the rename carry `cmd` — accept it
+    # on write and map it to `check` (the visual editor and REST payloads
+    # may still send the legacy key).
+    defp migrate_cmd(attrs) when is_map(attrs) do
+      case Map.get(attrs, "cmd") do
+        cmd when is_binary(cmd) ->
+          attrs
+          |> Map.put("check", Map.get(attrs, "check") || cmd)
+          |> Map.delete("cmd")
+
+        _ ->
+          Map.drop(attrs, ["cmd"])
+      end
+    end
+
+    defp migrate_cmd(attrs), do: attrs
   end
 
   defmodule Graph do

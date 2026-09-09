@@ -174,11 +174,11 @@ defmodule DranWeb.StepEditorComponents do
         <div id={"#{@id}-panel-gates"} data-panel="gates" phx-update="ignore" hidden class="space-y-4">
           <p class="text-xs text-base-content/50">
             {gettext(
-              "Criterio de done ejecutable: name · cmd · expect. El agente reporta gate_results al cerrar."
+              "Criterio de done ejecutable: name · check · expect. El check es abierto — un comando, un output (video, reporte), un análisis. El agente reporta gate_results al cerrar."
             )}
           </p>
           <section class="space-y-1.5">
-            <.section_header title={gettext("Gates")} hint={gettext("name · cmd · expect")} />
+            <.section_header title={gettext("Gates")} hint={gettext("name · check · expect")} />
             <div data-list="gates" class="space-y-2"></div>
             <template data-tpl="gates">
               <.gate_row />
@@ -391,9 +391,9 @@ defmodule DranWeb.StepEditorComponents do
       </div>
       <input
         type="text"
-        data-cf="cmd"
-        placeholder={gettext("comando…")}
-        class="input input-bordered input-xs w-full font-mono"
+        data-cf="check"
+        placeholder={gettext("comando, output o análisis…")}
+        class="input input-bordered input-xs w-full"
       />
       <input
         type="text"

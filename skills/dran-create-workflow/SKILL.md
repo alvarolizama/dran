@@ -52,7 +52,7 @@ gates is not a step, it is a title.**
 | `title` | string ≤ 500 | imperative, one deliverable |
 | `intent` | one sentence | opens the brief as "We need <intent>" |
 | `claims` | `id` (P1, P2…), `claim`, `verify` | pre-registered; a failed claim is refuted, never reinterpreted |
-| `gates` | `name`, `cmd`, `expect`, `on_failure` | `cmd` is a REAL runnable command; the gate decides, the command only runs |
+| `gates` | `name`, `check`, `expect`, `on_failure` | `check` is the done-criterion — OPEN: a runnable command, an expected output artifact (a rendered video, a report), or an inspection of the result (frame analysis). The gate decides; the check only probes |
 | `graph` | nodes `id`/`verb`/`label`, edges `from`/`to` | verbs from the closed set `READ EDIT CREATE RUN VERIFY ASK` (same as riel-contract) |
 | `context` | entries `type` (`page`\|`memory`), `id`, `why` | pin only what the step needs; every entry carries its why |
 
@@ -69,7 +69,7 @@ flowchart TD
   S1 --> G1{"each step can close\npassed failed on its own?"}
   G1 -->|"no - merge or split"| S1
   G1 -->|yes| S2["EDIT author the packet - intent,\nclaims P-ids, gates, graph, context"]
-  S2 --> G2{"every gate cmd is\nrunnable as written?"}
+  S2 --> G2{"every gate check is\nverifiable as written?"}
   G2 -->|no| S2
   G2 -->|yes| S3["EDIT the DAG - depends_on edges,\ncycle-free, minimal"]
   S3 --> G3{"cycle-free and\nno redundant edges?"}
@@ -88,7 +88,10 @@ flowchart TD
   are one step; a step that needs "and then" is two.
 - **Gates are the verification funnel:** at least one gate per step, and
   the last gate must verify the step's claims. "Review the code" is not
-  a gate; `mix test test/path/` with `expect: exit 0` is.
+  a gate; `mix test test/path/` with `expect: exit 0` is — but so is
+  "video renderizado en outputs/" with `expect: archivo existe`, or a
+  frame-analysis check. `check` is free text the pulling agent
+  interprets.
 - **Claims before work:** the P-ids written here are what the executor's
   run is audited against (dran-workflow-flow). Do not soften them to
   make them easier to pass.
@@ -106,8 +109,10 @@ flowchart TD
 
 - **Looking for `dran_create_workflow` on MCP or REST** — it does not
   exist; authoring is UI-only. MCP is read + execute.
-- **Gates that are not commands** — a gate without a runnable `cmd`
-  cannot close a run honestly.
+- **Gates that are not verifiable** — a gate whose `check` cannot be
+  probed (run the command, inspect the output, check the artifact
+  exists) cannot close a run honestly. Prefer a command when one
+  exists; an artifact or inspection check is equally valid.
 - **Flipping `kind` after the first session** — `{:error, :kind_locked}`;
   choose evergreen unless the plan is one-pass by nature.
 - **Redundant diamond edges** — cycle-safety is enforced server-side
@@ -118,7 +123,7 @@ flowchart TD
 
 ## Checklist
 
-- [ ] Every step: intent + at least one claim + one gate with runnable cmd
+- [ ] Every step: intent + at least one claim + one gate with a verifiable check
 - [ ] Graph verbs inside the closed 6-verb set
 - [ ] Context entries: type + exact id + why
 - [ ] DAG cycle-free; kind chosen and confirmed with the human (ASK)

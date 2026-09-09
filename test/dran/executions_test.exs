@@ -83,7 +83,7 @@ defmodule Dran.ExecutionsTest do
     contract = %{
       "intent" => "Ship the login flow",
       "claims" => [%{"id" => "P1", "claim" => "form validates", "verify" => "mix test"}],
-      "gates" => [%{"name" => "test", "cmd" => "mix test", "expect" => "exit 0"}]
+      "gates" => [%{"name" => "test", "check" => "mix test", "expect" => "exit 0"}]
     }
 
     {workflow, [step1]} =
@@ -457,7 +457,7 @@ defmodule Dran.ExecutionsTest do
 
   test "P5: close_run persists outcome and gate_results; the last run closes the session",
        %{ws: ws} do
-    gates = %{"G1" => %{"cmd" => "mix test", "exit" => 0}}
+    gates = %{"G1" => %{"check" => "mix test", "exit" => 0}}
 
     {workflow, [step]} =
       new_workflow(ws, [%{title: "Step", contract: %{"intent" => "i"}}])
@@ -969,7 +969,7 @@ defmodule Dran.ExecutionsTest do
       Enum.map(gates, fn g ->
         %{
           "name" => g["name"] || g["id"] || "gate",
-          "cmd" => g["cmd"],
+          "check" => g["check"],
           "expect" => g["expect"] || "exit 0"
         }
       end)

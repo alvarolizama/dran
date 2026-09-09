@@ -68,9 +68,9 @@ defmodule Dran.ContractsStepsTest do
       assert errors[:verify]
     end
 
-    test "gates without cmd are rejected by the embed changeset", %{workflow: workflow} do
+    test "gates without check are rejected by the embed changeset", %{workflow: workflow} do
       contract =
-        put_in(valid_contract()["gates"], [%{"name" => "g", "cmd" => "", "expect" => "ok"}])
+        put_in(valid_contract()["gates"], [%{"name" => "g", "check" => "", "expect" => "ok"}])
 
       step = create_step(workflow, "Bad gates")
 
@@ -78,7 +78,20 @@ defmodule Dran.ContractsStepsTest do
                Workflows.update_step(step, contract_attrs(contract))
 
       assert [%{errors: errors}] = cs.changes.gates
-      assert errors[:cmd]
+      assert errors[:check]
+    end
+
+    test "legacy gate cmd is accepted and mapped to check", %{workflow: workflow} do
+      contract =
+        put_in(valid_contract()["gates"], [
+          %{"name" => "g", "cmd" => "mix test", "expect" => "exit 0"}
+        ])
+
+      step = create_step(workflow, "Legacy cmd gate")
+
+      assert {:ok, updated} = Workflows.update_step(step, contract_attrs(contract))
+
+      assert [%{name: "g", check: "mix test", expect: "exit 0"}] = updated.gates
     end
 
     test "graph with a non-verb node is rejected by the embed changeset", %{workflow: workflow} do
@@ -433,7 +446,7 @@ defmodule Dran.ContractsStepsTest do
       "gates" => [
         %{
           "name" => "compile",
-          "cmd" => "mix compile --warnings-as-errors",
+          "check" => "mix compile --warnings-as-errors",
           "expect" => "exit 0",
           "on_failure" => "fix warnings"
         }
