@@ -37,9 +37,18 @@ defmodule DranWeb.GoalLive do
                   </span>
                   <span
                     :if={@goal.status}
-                    class={"px-2 py-0.5 text-xs rounded-full " <> goal_status_class(@goal)}
+                    class={["px-2 py-0.5 text-xs rounded-full", goal_status_class(@goal)]}
                   >
                     {String.capitalize(@goal.status)}
+                  </span>
+                  <span class="inline-flex items-center gap-1 text-caption text-base-content/50">
+                    <.icon name="hero-calendar" class="size-3" />
+                    {gettext("Created")} {format_date(@goal.inserted_at)}
+                  </span>
+                  <span class="text-base-content/30">·</span>
+                  <span class="inline-flex items-center gap-1 text-caption text-base-content/50">
+                    <.icon name="hero-clock" class="size-3" />
+                    {gettext("Updated")} {format_date(@goal.updated_at)}
                   </span>
                 </div>
                 <h1 class="text-title break-words">{@goal.title}</h1>
@@ -52,12 +61,60 @@ defmodule DranWeb.GoalLive do
                   <.icon name="hero-arrow-left" class="size-4" /> {gettext("Back")}
                 </.link>
                 <.link
+                  :if={@workspace_slug}
+                  navigate={~p"/#{@workspace_slug}/graph"}
+                  class="btn btn-ghost btn-sm"
+                >
+                  <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
+                </.link>
+                <.link
                   :if={not @editing}
                   patch={~p"/#{@workspace_slug}/goals/#{@goal.slug}?edit=true"}
                   class="btn btn-ghost btn-sm"
                 >
                   <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
                 </.link>
+                <button
+                  :if={@goal.archived}
+                  phx-click="unarchive_goal"
+                  class="btn btn-ghost btn-sm"
+                  title={gettext("Restore this goal from the archive")}
+                >
+                  <.icon name="hero-arrow-uturn-up" class="size-4" /> {gettext("Unarchive")}
+                </button>
+                <button
+                  :if={not @goal.archived}
+                  phx-click="archive_goal"
+                  data-confirm={gettext("Archive this goal? It will be hidden from lists.")}
+                  class="btn btn-ghost btn-sm"
+                  title={gettext("Hide this goal from lists without deleting it")}
+                >
+                  <.icon name="hero-archive-box" class="size-4" /> {gettext("Archive")}
+                </button>
+                <button
+                  phx-click="toggle_pinned_goal"
+                  class={[
+                    "btn btn-sm",
+                    if(@goal.pinned, do: "btn-warning", else: "btn-ghost")
+                  ]}
+                  title={gettext("Pin this goal in the workspace home")}
+                >
+                  <.icon
+                    name={if @goal.pinned, do: "hero-star-solid", else: "hero-star"}
+                    class={[
+                      "size-4",
+                      if(@goal.pinned, do: "text-white", else: "text-amber-400")
+                    ]}
+                  />
+                  {if @goal.pinned, do: gettext("Unpin"), else: gettext("Pin")}
+                </button>
+                <button
+                  phx-click="delete"
+                  data-confirm={gettext("Are you sure? This cannot be undone.")}
+                  class="btn btn-ghost btn-sm text-error"
+                >
+                  <.icon name="hero-trash" class="size-4" /> {gettext("Delete")}
+                </button>
               </div>
             </div>
 
@@ -451,6 +508,39 @@ defmodule DranWeb.GoalLive do
       end
 
     {:noreply, push_patch(socket, to: to)}
+  end
+
+  def handle_event("archive_goal", _params, socket) do
+    case Goals.update_goal(socket.assigns.goal, %{"archived" => true}) do
+      {:ok, goal} ->
+        {:noreply,
+         socket
+         |> assign(goal: goal)
+         |> put_flash(:info, gettext("Goal archived."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not archive goal."))}
+    end
+  end
+
+  def handle_event("unarchive_goal", _params, socket) do
+    case Goals.update_goal(socket.assigns.goal, %{"archived" => false}) do
+      {:ok, goal} ->
+        {:noreply,
+         socket
+         |> assign(goal: goal)
+         |> put_flash(:info, gettext("Goal restored."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not restore goal."))}
+    end
+  end
+
+  def handle_event("toggle_pinned_goal", _params, socket) do
+    case Goals.update_goal(socket.assigns.goal, %{"pinned" => !socket.assigns.goal.pinned}) do
+      {:ok, goal} -> {:noreply, assign(socket, goal: goal)}
+      {:error, _} -> {:noreply, socket}
+    end
   end
 
   def handle_event("delete", _params, socket) do

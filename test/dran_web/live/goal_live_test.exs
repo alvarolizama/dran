@@ -52,6 +52,61 @@ defmodule DranWeb.GoalLiveTest do
 
       assert html =~ "Learn Elixir"
     end
+
+    test "header shows created/updated dates and graph link", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      assert has_element?(view, "a[href='#{~p"/#{ws.slug}/graph"}']", t("Graph"))
+      assert render(view) =~ t("Created")
+      assert render(view) =~ t("Updated")
+    end
+
+    test "archive/unarchive toggles the goal", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      view
+      |> element("button[phx-click='archive_goal']")
+      |> render_click()
+
+      assert render(view) =~ t("Unarchive")
+      assert Goals.get_goal(goal.id).archived
+
+      view
+      |> element("button[phx-click='unarchive_goal']")
+      |> render_click()
+
+      refute render(view) =~ t("Unarchive")
+      refute Goals.get_goal(goal.id).archived
+    end
+
+    test "pin/unpin toggles the goal", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      view
+      |> element("button[phx-click='toggle_pinned_goal']")
+      |> render_click()
+
+      assert render(view) =~ t("Unpin")
+      assert Goals.get_goal(goal.id).pinned
+
+      view
+      |> element("button[phx-click='toggle_pinned_goal']")
+      |> render_click()
+
+      assert render(view) =~ t("Pin")
+      refute Goals.get_goal(goal.id).pinned
+    end
+
+    test "delete removes the goal and navigates to the index", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      view
+      |> element("button[phx-click='delete']")
+      |> render_click()
+
+      refute Goals.get_goal(goal.id)
+      assert_redirect(view, ~p"/#{ws.slug}/goals")
+    end
   end
 
   describe "linked workflows" do

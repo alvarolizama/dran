@@ -26,6 +26,7 @@ defmodule Dran.Goals.Goal do
              :status,
              :checklist,
              :archived,
+             :pinned,
              :created_by,
              :updated_by,
              :inserted_at,
@@ -42,6 +43,7 @@ defmodule Dran.Goals.Goal do
     field :status, :string, default: "active"
     field :checklist, {:array, :map}, default: []
     field :archived, :boolean, default: false
+    field :pinned, :boolean, default: false
 
     # Attribution — resolves server-side from the actor (Dran.Actors)
     field :created_by, :string, default: "system"
@@ -65,6 +67,7 @@ defmodule Dran.Goals.Goal do
       :status,
       :checklist,
       :archived,
+      :pinned,
       :created_by,
       :updated_by,
       :parent_goal_id
