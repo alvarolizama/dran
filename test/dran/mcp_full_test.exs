@@ -1799,4 +1799,134 @@ defmodule Dran.MCPFullTest do
       assert result =~ "Error: could not record progress"
     end
   end
+
+  describe "per-execution variables (session context)" do
+    setup %{context: ctx} do
+      ws = wf_mcp_ws(ctx)
+      wf = wf_mcp_workflow(ws)
+      step = wf_mcp_step(wf, "Scripted", wf_mcp_contract())
+      {:ok, step: step, workflow: wf, ws: ws}
+    end
+
+    test "open_session stores context and echoes it", %{ws: ws, workflow: wf, step: step} do
+      result =
+        call_tool("dran_open_workflow_session", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "label" => "video ad v1",
+          "context" => %{
+            "script" => "un café que despierta creatividad",
+            "tone" => "cómico",
+            "duration" => 15
+          }
+        })
+
+      assert result =~ "Session opened:"
+      assert result =~ "Session variables (context):"
+      assert result =~ ~s("script" => "un café que despierta creatividad")
+      assert result =~ ~s("tone" => "cómico")
+
+      session =
+        Workflows.Session
+        |> Dran.Repo.get_by!(workflow_id: wf.id)
+        |> Dran.Repo.preload(:runs)
+
+      assert session.context["script"] == "un café que despierta creatividad"
+      assert session.context["duration"] == 15
+      step_run = Enum.find(session.runs, &(&1.step_id == step.id))
+      assert step_run.status == "pending"
+    end
+
+    test "start_run echoes the session variables on the claim", %{ws: ws, workflow: wf} do
+      {:ok, session} =
+        Executions.open_session(wf,
+          label: "video ad v2",
+          context: %{"script" => "promo de lanzamiento", "hook" => "¿Y si tu app…?"}
+        )
+
+      run = Enum.find(session.runs, &(&1.status == "pending"))
+
+      result = call_tool("dran_start_run", %{"run_id" => run.id})
+
+      assert result =~ "Run started: #{run.id}"
+      assert result =~ "Session variables"
+      assert result =~ ~s(hook: "¿Y si tu app…?")
+      assert result =~ "video ad v2"
+    end
+
+    test "get_step_contract with session renders variables into the brief", %{
+      ws: ws,
+      workflow: wf,
+      step: step
+    } do
+      {:ok, session} =
+        Executions.open_session(wf, context: %{"script" => "guion del ad", "take" => 3})
+
+      result =
+        call_tool("dran_get_step_contract", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "step" => step.slug,
+          "session" => session.id
+        })
+
+      assert result =~ "## Session variables"
+      assert result =~ "**script**: \"guion del ad\""
+      assert result =~ "**take**: 3"
+      # la sección vive en el brief, después del Objective
+      [_, after_objective] = String.split(result, "## Objective", parts: 2)
+      assert String.contains?(after_objective, "## Session variables")
+      assert String.contains?(after_objective, "## Claims")
+    end
+
+    test "get_step_contract without session renders no variables section", %{
+      ws: ws,
+      workflow: wf,
+      step: step
+    } do
+      result =
+        call_tool("dran_get_step_contract", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "step" => step.slug
+        })
+
+      refute result =~ "## Session variables"
+    end
+
+    test "get_step_contract with unknown session errors instead of a silent brief", %{
+      ws: ws,
+      workflow: wf,
+      step: step
+    } do
+      result =
+        call_tool("dran_get_step_contract", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "step" => step.slug,
+          "session" => Ecto.UUID.generate()
+        })
+
+      assert result =~ "Error: session"
+    end
+
+    test "open_session ignores a non-object context", %{ws: ws, workflow: wf} do
+      result =
+        call_tool("dran_open_workflow_session", %{
+          "workspace" => ws.slug,
+          "workflow" => wf.slug,
+          "context" => "script: whatever"
+        })
+
+      assert result =~ "Session opened:"
+      refute result =~ "Session variables"
+
+      session =
+        Workflows.Session
+        |> Dran.Repo.get_by!(workflow_id: wf.id)
+        |> Dran.Repo.preload(:runs)
+
+      assert session.context == %{}
+    end
+  end
 end

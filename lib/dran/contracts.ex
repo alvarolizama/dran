@@ -3,8 +3,10 @@ defmodule Dran.Contracts do
   Contracts — the executable brief attached to a workflow step.
 
   A step becomes a contract when its contract fields (columns + embeds)
-  pass the structural linter (`contract?/1`). `render_brief/1` produces
-  the rendered brief (the interchange format a pulling agent reads).
+  pass the structural linter (`contract?/1`). `render_brief/2` produces
+  the rendered brief (the interchange format a pulling agent reads);
+  `session_context` (optional) renders the session's per-execution
+  variables as a `## Session variables` section.
 
   Shape of the contract (embedded in `%Dran.Workflows.Step{}`):
 
@@ -487,8 +489,13 @@ defmodule Dran.Contracts do
   @doc """
   Render the step's contract (columns + embeds) as a riel-brief packet (9
   sections). This is the interchange format a pulling agent reads.
+
+  `session_context` (optional map) carries the per-execution variables of
+  the session the run belongs to — when non-empty they render as a
+  `## Session variables` section right after the Objective: same steps,
+  different inputs per session.
   """
-  def render_brief(%Step{} = step) do
+  def render_brief(%Step{} = step, session_context \\ %{}) do
     case contract_map(step) do
       %{"intent" => intent} = contract when is_binary(intent) ->
         sections = [
@@ -497,6 +504,7 @@ defmodule Dran.Contracts do
           "## Objective",
           "We need #{intent}",
           "",
+          brief_session_variables(session_context),
           brief_claims(step, contract),
           "",
           brief_gates(contract),
@@ -541,6 +549,27 @@ defmodule Dran.Contracts do
       end
 
     ["## Claims"] ++ lines
+  end
+
+  # Variables de la sesión (context): los inputs de ESTA ejecución. Se
+  # renderizan sólo cuando la sesión fue abierta con context no vacío —
+  # sin variables, el brief queda exactamente como antes (sin sección).
+  defp brief_session_variables(session_context) when session_context == %{} do
+    []
+  end
+
+  defp brief_session_variables(session_context) when is_map(session_context) do
+    lines =
+      for {key, value} <- Enum.sort_by(session_context, fn {k, _} -> k end) do
+        "- **#{key}**: #{inspect(value, limit: :infinity, printable_limit: :infinity)}"
+      end
+
+    [
+      "## Session variables",
+      "These are THIS execution's inputs (frozen on the session) — use them; the step contract stays stable across sessions." <>
+        " Do not fabricate values for missing variables.",
+      ""
+    ] ++ lines ++ [""]
   end
 
   defp brief_gates(contract) do

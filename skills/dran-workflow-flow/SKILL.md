@@ -59,18 +59,27 @@ content. How to work it:
 - The brief's DO NOT stands: do not invent context outside the snapshot —
   fetching MORE from the graph is fine, fabricating context is not.
 
+## Session variables (per-execution inputs)
+
+CONSUMES: a workflow whose steps are stable but whose inputs change per run. PRODUCES: sessions that carry their own variables — same DAG, different script/dialogs/tone each time.
+
+- **Open with `context`**: `dran_open_workflow_session(context: %{...})` freezes a JSON map on the session. Every session carries its own — a video-ad workflow gets a fresh script per session without touching the steps.
+- **The claim echoes them**: `dran_start_run` returns `Session variables` in its response — you CANNOT claim a run without seeing them. Read them; they are THIS execution's inputs.
+- **The brief renders them**: `dran_get_step_contract(session: <session_id>)` renders a `## Session variables` section right after the Objective. Always fetch the contract WITH the session id when executing a run of that session — a brief without it is not your execution's brief.
+- **Use them, don't invent them**: the section's rule is verbatim — use the given values; do not fabricate values for missing variables. A needed-but-missing variable goes to ASK, not to imagination.
+
 ## Operational flow
 
 ```mermaid
 flowchart TD
   START([execute a workflow]) --> S0["RUN mcp_dran_dran_list_workflows\nworkspace - discover or pick"]
   S0 --> S1["RUN mcp_dran_dran_get_workflow\nworkspace + workflow - steps + DAG"]
-  S1 --> S2["RUN mcp_dran_dran_open_workflow_session\nlabel who/why - snapshot + runs pending"]
+  S1 --> S2["RUN mcp_dran_dran_open_workflow_session\nlabel who/why + context vars\n(per-execution inputs) - runs pending"]
   S2 --> S3["RUN mcp_dran_dran_list_pending_runs\nworkspace - the pull queue"]
   S3 --> G1{"run ready\nexists?"}
   G1 -->|"no"| G5{"open runs\nremaining?"}
-  G1 -->|"yes"| S4["RUN mcp_dran_dran_start_run\nrun_id - claim to in_flight"]
-  S4 --> S5["RUN mcp_dran_dran_get_step_contract\nworkspace + workflow + step"]
+  G1 -->|"yes"| S4["RUN mcp_dran_dran_start_run\nrun_id - claim; echoes session vars"]
+  S4 --> S5["RUN mcp_dran_dran_get_step_contract\nworkspace + workflow + step + session"]
   S5 --> S6["WORK via riel-ledger\nexecute the brief locally;\ndelegate big phases riel-delegate"]
   S6 --> G2{"claims P-ids all\nverified or refuted?"}
   G2 -->|"scope change needed"| A1["ASK - outside pre-registered claims"]
@@ -136,7 +145,8 @@ flowchart TD
 
 ## Checklist
 
-- [ ] Session opened with a label; snapshot runs created
+- [ ] Session opened with a label (and `context` vars when inputs differ per run); snapshot runs created
+- [ ] Contract fetched WITH the session id — brief carries `## Session variables`; given values used, none fabricated
 - [ ] Every claim executed after a successful start_run
 - [ ] ✓NN reported as gates passed (not batched to the end)
 - [ ] Gates re-run by the parent before close passed

@@ -636,7 +636,10 @@ defmodule Dran.MCP do
                         "type" => "object",
                         "properties" => %{
                           "id" => %{"type" => "string"},
-                          "verb" => %{"type" => "string", "enum" => ["READ", "EDIT", "CREATE", "RUN", "VERIFY", "ASK"]},
+                          "verb" => %{
+                            "type" => "string",
+                            "enum" => ["READ", "EDIT", "CREATE", "RUN", "VERIFY", "ASK"]
+                          },
                           "label" => %{"type" => "string"}
                         },
                         "required" => ["id", "verb"]
@@ -733,7 +736,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_get_step_contract",
       "description" =>
-        "Read a step's contract: the structured contract (intent, claims, gates, graph) AND the rendered riel-brief packet a pulling agent executes. The brief is the interchange format — claims are pre-registered, gates are the verification funnel. Get the step slug from dran_get_workflow.",
+        "Read a step's contract: the structured contract (intent, claims, gates, graph) AND the rendered riel-brief packet a pulling agent executes. The brief is the interchange format — claims are pre-registered, gates are the verification funnel. Get the step slug from dran_get_workflow. Pass `session` (the session_id from dran_open_workflow_session) to render that session's variables into the brief — required whenever the session was opened with a context.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -748,6 +751,11 @@ defmodule Dran.MCP do
           "step" => %{
             "type" => "string",
             "description" => "Step slug or UUID."
+          },
+          "session" => %{
+            "type" => "string",
+            "description" =>
+              "Optional session UUID — renders the session's variables (context) into the brief. Use it when executing a run of that session."
           }
         },
         "required" => ["workspace", "workflow", "step"]
@@ -756,7 +764,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_open_workflow_session",
       "description" =>
-        "Open an execution session for a workflow: freezes a snapshot of the DAG and creates one pending run per step. Returns the session_id and per-run ids with readiness (prerequisites satisfied). Runs are claimed with dran_start_run.",
+        "Open an execution session for a workflow: freezes a snapshot of the DAG and creates one pending run per step. Returns the session_id and per-run ids with readiness (prerequisites satisfied). Runs are claimed with dran_start_run. Pass `context` for per-execution variables (same steps, different inputs per session): it is frozen on the session, echoed on every dran_start_run, and rendered into the brief via dran_get_step_contract(session).",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -771,6 +779,12 @@ defmodule Dran.MCP do
           "label" => %{
             "type" => "string",
             "description" => "Optional session label (e.g. who/why)."
+          },
+          "context" => %{
+            "type" => "object",
+            "description" =>
+              "Per-execution variables frozen on the session (JSON map) — e.g. %{\"script\" => \"…\", \"tone\" => \"comedy\"}. The step contracts stay stable; each session carries its own inputs.",
+            "additionalProperties" => true
           }
         },
         "required" => ["workspace", "workflow"]
@@ -2470,7 +2484,7 @@ defmodule Dran.MCP do
 
   defp execute_tool(
          "dran_get_step_contract",
-         %{"workspace" => ws, "workflow" => wf_handle, "step" => step_handle},
+         %{"workspace" => ws, "workflow" => wf_handle, "step" => step_handle} = args,
          _user
        ) do
     context = Knowledge.get_workspace_by_slug(ws)
@@ -2490,7 +2504,15 @@ defmodule Dran.MCP do
               "Error: step '#{step_handle}' not found in workflow '#{wf.slug}'"
 
             %Workflows.Step{} = step ->
-              render_step_contract(step)
+              session = fetch_session_variables(args["session"], wf.id)
+
+              if is_binary(session) do
+                # Guard: an explicit session that can't be resolved is an
+                # error, not a silent brief without variables.
+                session
+              else
+                render_step_contract(step, session)
+              end
           end
 
         nil ->
@@ -2512,10 +2534,9 @@ defmodule Dran.MCP do
       case fetch_workflow(context.id, handle) do
         %Workflows.Workflow{} = wf ->
           opts =
-            case args["label"] do
-              label when is_binary(label) and label != "" -> [label: label]
-              _ -> []
-            end
+            []
+            |> put_keyword(:label, valid_string(args["label"]))
+            |> put_keyword(:context, session_context_param(args))
 
           case Executions.open_session(wf, opts) do
             {:ok, session} ->
@@ -2530,9 +2551,17 @@ defmodule Dran.MCP do
                   "  • run #{run.id} — step: #{run.step.slug} — #{run.status} (#{ready})"
                 end)
 
+              ctx_line =
+                if session.context == %{} do
+                  ""
+                else
+                  "\nSession variables (context): #{inspect(session.context, limit: :infinity)}" <>
+                    "\nEvery dran_start_run on this session echoes them; the brief renders them (dran_get_step_contract + session)."
+                end
+
               """
               Session opened: #{session.id}
-              Workflow: #{wf.title} (#{wf.slug}) — #{length(runs)} runs created.
+              Workflow: #{wf.title} (#{wf.slug}) — #{length(runs)} runs created.#{ctx_line}
               Runs:
               #{run_lines}
               Claim with dran_start_run(run_id). Briefs: dran_get_step_contract.
@@ -2582,7 +2611,23 @@ defmodule Dran.MCP do
         case Executions.start_run(run) do
           {:ok, updated} ->
             step = Repo.preload(updated, :step).step
-            "Run started: #{updated.id} — step: #{step.slug} — status: in_flight"
+            session = Repo.get!(Workflows.Session, updated.session_id)
+
+            ctx_block =
+              if session.context == %{} do
+                ""
+              else
+                """
+                Session variables (use them — they are THIS execution's inputs):
+                #{format_session_context(session.context)}
+                """
+              end
+
+            """
+            Run started: #{updated.id} — step: #{step.slug} — status: in_flight
+            Session: #{session.id}#{session_label(session)}
+            #{ctx_block}Execute the step's brief (dran_get_step_contract) and report via dran_report_run_progress.
+            """
 
           {:error, reason} ->
             "Error: could not start run — #{inspect(reason)}"
@@ -2676,11 +2721,11 @@ defmodule Dran.MCP do
 
   defp fetch_workflow(_, _), do: nil
 
-  defp render_step_contract(%Workflows.Step{} = step) do
+  defp render_step_contract(%Workflows.Step{} = step, %{} = session_context) do
     contract = Contracts.contract_map(step)
 
     brief =
-      case Contracts.render_brief(step) do
+      case Contracts.render_brief(step, session_context) do
         {:ok, text} -> text
         {:error, _} -> "(no valid contract — step lacks intent or fails lint)"
       end
@@ -2703,6 +2748,49 @@ defmodule Dran.MCP do
     |> Map.drop(["graph"])
     |> Enum.map_join("\n", fn {k, v} -> "  #{k}: #{inspect(v, limit: :infinity)}" end)
   end
+
+  # Session variables as readable KEY: value lines (JSON-ish keys, nested
+  # values inspected whole) — the format dran_start_run echoes.
+  defp format_session_context(%{} = ctx) do
+    ctx
+    |> Enum.sort_by(fn {k, _} -> k end)
+    |> Enum.map_join("\n", fn {k, v} ->
+      "#{k}: #{inspect(v, limit: :infinity, printable_limit: :infinity)}"
+    end)
+  end
+
+  defp session_label(%Workflows.Session{label: label})
+       when is_binary(label) and label != "",
+       do: " (#{label})"
+
+  defp session_label(_session), do: ""
+
+  # Resolve the optional `session` param of dran_get_step_contract to its
+  # variables map. Returns:
+  #   %{}                      — no param (or empty context): brief as before
+  #   %{...}                   — the session's context (variables to render)
+  #   "Error: …" (binary)      — param given but session unknown/foreign
+  defp fetch_session_variables(session_handle, workflow_id)
+       when is_binary(session_handle) and session_handle != "" do
+    case Ecto.UUID.cast(session_handle) do
+      {:ok, uuid} ->
+        case Repo.get(Workflows.Session, uuid) do
+          %Workflows.Session{workflow_id: ^workflow_id} = session ->
+            session.context || %{}
+
+          %Workflows.Session{} ->
+            "Error: session '#{session_handle}' belongs to another workflow"
+
+          nil ->
+            "Error: session '#{session_handle}' not found"
+        end
+
+      :error ->
+        "Error: invalid session id '#{session_handle}'"
+    end
+  end
+
+  defp fetch_session_variables(_session_handle, _workflow_id), do: %{}
 
   # Resolve a goal by slug or UUID within the workspace. Returns
   # %Goal{} | nil | {:error, :invalid_id}.
@@ -3098,6 +3186,20 @@ defmodule Dran.MCP do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  # Keyword-list variants for open_session opts. A blank label ("") is
+  # dropped, not stored — same contract the old inline case guarded.
+  defp put_keyword(opts, _key, nil), do: opts
+  defp put_keyword(opts, _key, ""), do: opts
+  defp put_keyword(opts, key, value), do: Keyword.put(opts, key, value)
+
+  # Session variables: only a JSON object is accepted — anything else is
+  # ignored (default %{}), never coerced.
+  defp session_context_param(%{"context" => ctx}) when is_map(ctx), do: ctx
+  defp session_context_param(_args), do: nil
+
+  defp valid_string(value) when is_binary(value) and value != "", do: value
+  defp valid_string(_), do: nil
 
   defp maybe_put_meta(map, _key, nil), do: map
   defp maybe_put_meta(map, _key, ""), do: map
