@@ -81,6 +81,8 @@ Humans get a wiki. Agents get 35 MCP tools and a REST API. One graph, one attrib
 
 ## Installation
 
+### 1 · Dran (the server)
+
 **Requirements:** Elixir ~> 1.15, Erlang/OTP 26+, PostgreSQL 14+ with **pgvector**, Node (asset tooling only).
 
 ```bash
@@ -90,6 +92,62 @@ mix setup && mix phx.server
 ```
 
 Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup`.
+
+### 2 · Connect an agent (Hermes)
+
+One Dran instance serves every agent. Per agent profile:
+
+**a. Credential.** In Dran → **Settings → Agents**: create the agent and its key, ticking the **workspace × access-level matrix** (`write` on the workspace that will hold the agent's memory). The token is shown once. Every write is attributed server-side to this key's actor.
+
+**b. Secret (once per profile).** Store the token in the profile's `.env` — single source of truth, shared by MCP and the memory plugin:
+
+```bash
+# ~/.hermes/profiles/<profile>/.env
+DRAN_API_KEY=<paste-token>
+```
+
+**c. MCP server** (35 tools). In the profile's `config.yaml`:
+
+```yaml
+mcp_servers:
+  dran:
+    url: http://localhost:4000/api/mcp
+    headers:
+      Authorization: Bearer ${DRAN_API_KEY}
+```
+
+**d. Memory plugin** (auto-recall, `dran_memory_*` tools, session ingest). Symlink from this repo and select it:
+
+```bash
+ln -s /path/to/dran/hermes_plugin/dran ~/.hermes/profiles/<profile>/plugins/dran
+```
+
+```yaml
+memory:
+  provider: dran
+```
+
+Configure it from the dashboard panel (**Memory → Dran**: base URL, memory workspace, recall/capture toggles) or `hermes memory setup`. Stored at `$HERMES_HOME/dran/config.json`; the API key stays in `.env`. The memory workspace must be one the key can reach — the plugin validates against `GET /api/agent/config` and falls back to the first permitted workspace (with a warning) if the matrix changes.
+
+**e. Skills** (7: router + knowledge, relations, goals, workflow/Riel, workers, memory flows). Symlink the suite into a dir the profile already scans:
+
+```bash
+mkdir -p ~/Workspace/Skills
+for s in dran dran-goals-flow dran-knowledge-flow dran-memory-flow \
+         dran-relations-flow dran-workers-flow dran-workflow-flow; do
+  ln -s /path/to/dran/skills/$s ~/Workspace/Skills/$s
+done
+```
+
+```yaml
+skills:
+  external_dirs:
+    - ~/Workspace/Skills
+```
+
+Restart the Hermes session, then verify: MCP → "list my Dran goals"; memory → "¿qué recuerdas de …?"; skills → the agent should route Dran questions through the `dran` skill.
+
+Non-Hermes agents: skip d/e, point any MCP client at `POST /api/mcp` with the Bearer key, or use the REST API directly.
 
 ## Configuration
 
