@@ -16,11 +16,13 @@ Authoring layer: takes a plan (prose, checklist, mermaid, existing doc)
 and produces a Dran workflow — definition only. Execution is
 dran-workflow-flow; this skill never opens sessions.
 
-Surface fact: **MCP and REST have NO workflow/step authoring tools**
-(`lib/dran/mcp.ex` and the router expose reads + execution only).
-Creation happens in the Dran UI (`/:workspace/workflows`). This skill
-authors the contract offline, materializes it (human or browser assist),
-and verifies via MCP readback.
+Surface fact: **workflow authoring IS on MCP** — `dran_create_workflow`
+creates the workflow with FULL step contracts inline (claims, gates,
+graph, context, depends_on), and `dran_delete_workflow` deletes a draft
+(both write-gated in `@write_tools`). The Dran UI step modal remains the
+way to EDIT an existing contract; creation is one MCP call. This skill
+authors the packet, materializes it via MCP, and verifies via
+`dran_get_workflow` readback.
 
 ## Entry router
 
@@ -75,8 +77,8 @@ flowchart TD
   S3 --> G3{"cycle-free and\nno redundant edges?"}
   G3 -->|no| S3
   G3 -->|yes| S4["ASK kind evergreen or one_shot\n+ confirm packet with human"]
-  S4 --> S5["CREATE in Dran UI /workflows\nhuman paste or browser assist"]
-  S5 --> S6["VERIFY mcp_dran_dran_get_workflow\nsteps + depends_on + contracts"]
+  S4 --> S5["CREATE via MCP dran_create_workflow\nfull contracts inline"]
+  S5 --> S6["VERIFY dran_get_workflow\nsteps + depends_on + contract ✓"]
   S6 -->|"mismatch"| S5
   S6 -->|holds| END([workflow draft ready])
 ```
@@ -98,17 +100,25 @@ flowchart TD
 - **Context triage:** pin pages/memories with the exact slug/id + why.
   An entry without a why is noise for the pulling agent; the brief's
   `## Context` renders one-liners and the fetch command per entry.
-- **UI materialization facts:** workflow form = title + kind (+ optional
-  goal); one step modal per step; edges connect on the canvas as
-  `dependent → prereq`. Steps append at `position` max+100; the canvas
-  auto-layouts by topological level until dragged.
+- **UI materialization facts:** creation is one `dran_create_workflow`
+call with the whole packet; the UI (`/:workspace/workflows`) edits
+existing contracts (step modal) and visualizes the canvas — edges render
+as `dependent → prereq`. Steps append at `position` max+100.
+- **depends_on resolution:** references previously declared steps by
+TITLE or slug (the MCP executor resolves both); declare steps in DAG
+topological order in the `steps` array.
 - **Never activate or open a session here.** Hand off to
-  dran-workflow-flow when the human wants to run the plan.
+dran-workflow-flow when the human wants to run the plan.
+`dran_delete_workflow` removes a mis-created draft (ASK the human first
+— irreversible; refused when the workflow has sessions).
 
 ## Pitfalls
 
-- **Looking for `dran_create_workflow` on MCP or REST** — it does not
-  exist; authoring is UI-only. MCP is read + execute.
+- **Looking for `dran_create_workflow` on MCP or REST** — it exists (37
+tools as of this skill version); verify with `tools/list` if in doubt —
+the surface grows.
+- **Steps created bare (title/intent only)** — `dran_get_workflow` will
+read `no contract`; the MCP payload must carry claims/gates/graph inline.
 - **Gates that are not verifiable** — a gate whose `check` cannot be
   probed (run the command, inspect the output, check the artifact
   exists) cannot close a run honestly. Prefer a command when one

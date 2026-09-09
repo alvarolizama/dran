@@ -88,7 +88,7 @@ flowchart LR
 | `dran-knowledge-flow` | Create, update, search or rename pages (note, concept, entity, reference…) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-goals-flow` | Goals: create, status lifecycle, read |
-| `dran-create-workflow` | Author a workflow from a plan: steps, contracts, context, DAG (materialize in UI) |
+| `dran-create-workflow` | Author a workflow from a plan: steps, contracts, context, DAG — one `dran_create_workflow` MCP call with full contracts inline |
 | `dran-workflow-flow` | Execute a workflow with riel: session → pull → brief → ledger → close |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (REST) |
@@ -100,9 +100,10 @@ flowchart LR
 - **Reading the tool list off the MCP `initialize` output once and never
   again** — the surface grows; `dran_list_*` and the server docs are the
   truth, this suite is the map.
-- **Expecting `dran_memory_*` or workflow-editing tools on MCP** — memory
-  is REST/plugin; workflow/step authoring is UI (`/workflows`), driven by
-  dran-create-workflow.
+- **Expecting `dran_memory_*` or no workflow authoring on MCP** — memory
+  is REST/plugin; workflow CREATION is on MCP (`dran_create_workflow`
+  with full contracts inline, `dran_delete_workflow` for drafts).
+  Contract EDITS stay in the UI step modal.
 
 ## Cross-references
 
