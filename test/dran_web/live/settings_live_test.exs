@@ -47,23 +47,96 @@ defmodule DranWeb.SettingsLiveTest do
   test "creating an agent key from its row reveals the token once", %{conn: conn} do
     unique = System.unique_integer([:positive])
 
+    {:ok, ws} =
+      Knowledge.create_workspace(%{name: "Matrix #{unique}", slug: "matrix-#{unique}"})
+
     {:ok, actor} =
       Dran.Actors.create_actor(%{name: "hermes-#{unique}", kind: "agent"})
 
     {:ok, view, _html} = live(conn, ~p"/settings/agents")
 
+    # Create key opens the workspace×level modal first
     html =
       view
-      |> element("#actor-#{actor.id} button[phx-click='create_agent_key']")
+      |> element("#actor-#{actor.id} button[phx-click='open_create_key_modal']")
       |> render_click()
+
+    assert html =~ ~s(id="create-key-form")
+
+    # Submit: ws checked read
+    html =
+      view
+      |> element("#create-key-form")
+      |> render_submit(%{
+        "key" => %{
+          "actor_id" => actor.id,
+          "workspaces" => %{ws.id => %{"enabled" => "true", "level" => "read"}}
+        }
+      })
 
     # The one-time reveal card shows the full token + copy button
     assert html =~ ~s(id="revealed-api-key-card")
     assert html =~ ~s(id="copy-revealed-key-btn")
 
     # The agent row now shows the masked prefix instead of the create button
-    refute html =~ ~s(phx-click="create_agent_key")
+    refute html =~ ~s(phx-click="open_create_key_modal")
     assert html =~ "••••"
+  end
+
+  test "editing an agent key's access matrix updates workspaces and levels", %{conn: conn} do
+    unique = System.unique_integer([:positive])
+
+    {:ok, ws_a} =
+      Knowledge.create_workspace(%{name: "Alpha #{unique}", slug: "alpha-#{unique}"})
+
+    {:ok, ws_b} =
+      Knowledge.create_workspace(%{name: "Beta #{unique}", slug: "beta-#{unique}"})
+
+    user = Accounts.get_user_by_email("test_user")
+
+    {:ok, actor} =
+      Dran.Actors.create_actor(%{name: "editor-#{unique}", kind: "agent"})
+
+    {:ok, key} =
+      Accounts.create_api_key(%{
+        name: actor.name,
+        workspace_ids: [{ws_a.id, "read"}],
+        created_by_user_id: user.id,
+        actor_id: actor.id
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/settings/agents")
+
+    html =
+      view
+      |> element("#actor-#{actor.id} button[phx-click='edit_agent_access']")
+      |> render_click()
+
+    assert html =~ ~s(id="edit-key-form")
+
+    html =
+      view
+      |> element("#edit-key-form")
+      |> render_submit(%{
+        "key" => %{
+          "workspaces" => %{
+            ws_a.id => %{"enabled" => "true", "level" => "write"},
+            ws_b.id => %{"enabled" => "true", "level" => "read"}
+          }
+        }
+      })
+
+    assert html =~ t("Agent access updated")
+
+    # token preserved — the matrix edit never rotates the credential
+    token = key.token
+    key = Dran.Repo.preload(Dran.Repo.get!(Dran.Accounts.ApiKey, key.id), :api_key_workspaces)
+
+    levels = Map.new(key.api_key_workspaces, &{&1.workspace_id, &1.access_level})
+    assert levels[ws_a.id] == "write"
+    assert levels[ws_b.id] == "read"
+
+    assert Accounts.valid_api_key?(token) != :error
   end
 
   test "revoking a key from the list marks it revoked", %{conn: conn} do
@@ -102,7 +175,7 @@ defmodule DranWeb.SettingsLiveTest do
     assert Accounts.valid_api_key?(key.token) == :error
 
     # revocada la única key: la fila vuelve a ofrecer Create key
-    assert html =~ ~s(phx-click="create_agent_key")
+    assert html =~ ~s(phx-click="open_create_key_modal")
   end
 
   test "copy_api_key_prefix of ANOTHER user's key is rejected without leaking the prefix", %{

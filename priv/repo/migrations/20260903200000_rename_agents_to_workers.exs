@@ -66,7 +66,10 @@ defmodule Dran.Repo.Migrations.RenameAgentsToWorkers do
     # whatever its actual shape. Idempotent: nothing carrying agent_* left
     # → no-op. Column-name substitutions run BEFORE the table rename so
     # context_id/agent_type variants normalize first.
-    for {table, new_table} <- [{"agent_sessions", "worker_sessions"}, {"agent_steps", "worker_steps"}] do
+    for {table, new_table} <- [
+          {"agent_sessions", "worker_sessions"},
+          {"agent_steps", "worker_steps"}
+        ] do
       execute("""
       DO $$
       DECLARE

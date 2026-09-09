@@ -449,5 +449,49 @@ defmodule Dran.AccountsTest do
       assert {:error, :workspace_not_found_for_key} =
                Accounts.update_api_key_access(key, ctx2.id, "write")
     end
+
+    test "replace_api_key_workspaces/3 swaps the matrix preserving the token", %{
+      user: user,
+      ctx1: ctx1,
+      ctx2: ctx2
+    } do
+      {:ok, _} = Accounts.add_user_to_workspace(user, ctx2)
+
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "replace-test",
+          workspace_ids: [{ctx1.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      assert {:ok, updated} =
+               Accounts.replace_api_key_workspaces(
+                 key,
+                 [{ctx1.id, "write"}, {ctx2.id, "read"}],
+                 user
+               )
+
+      levels = Map.new(updated.api_key_workspaces, &{&1.workspace_id, &1.access_level})
+      assert levels[ctx1.id] == "write"
+      assert levels[ctx2.id] == "read"
+
+      # the credential survives the matrix edit
+      assert {:ok, _} = Accounts.valid_api_key?(key.token)
+    end
+
+    test "replace_api_key_workspaces/3 rejects workspaces outside the creator's membership", %{
+      non_member: non_member,
+      ctx2: ctx2
+    } do
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "replace-forbidden",
+          workspace_ids: [],
+          created_by_user_id: non_member.id
+        })
+
+      assert {:error, :workspace_not_allowed} =
+               Accounts.replace_api_key_workspaces(key, [{ctx2.id, "read"}], non_member)
+    end
   end
 end

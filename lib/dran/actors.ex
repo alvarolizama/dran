@@ -42,12 +42,17 @@ defmodule Dran.Actors do
     :ok
   end
 
-  @doc "List agent actors for the Agents management UI (users and system are automatic)."
+  @doc """
+  List agent actors for the Agents management UI (users and system are
+  automatic). Preloads api_keys + their workspaces so the Agents tab can
+  render the access matrix without extra queries.
+  """
   def list_managed_actors do
     Actor
     |> where([a], a.kind == "agent")
     |> order_by([a], asc: a.name)
     |> Repo.all()
+    |> Repo.preload(api_keys: [api_key_workspaces: :workspace])
   end
 
   @doc """

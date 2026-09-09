@@ -462,6 +462,50 @@ defmodule Dran.Accounts do
   def update_api_key_access(_, _, _), do: {:error, :invalid_access_level}
 
   @doc """
+  Replace the full workspace/access matrix of an API key transactionally:
+  deletes every `api_key_workspaces` row and re-inserts the given list of
+  `{workspace_id, access_level}` tuples. The key's token is preserved.
+
+  `creator` is the user performing the change — membership of every
+  requested workspace is validated against them (owners may use any).
+  """
+  def replace_api_key_workspaces(%ApiKey{} = key, workspace_ids, creator \\ nil) do
+    case validate_workspace_access(creator && creator.id, workspace_ids) do
+      {:error, reason} ->
+        {:error, reason}
+
+      :ok ->
+        Ecto.Multi.new()
+        |> Ecto.Multi.delete_all(
+          :drop_old,
+          from(akw in ApiKeyWorkspace, where: akw.api_key_id == ^key.id)
+        )
+        |> Ecto.Multi.insert_all(
+          :insert_new,
+          ApiKeyWorkspace,
+          Enum.map(workspace_ids, fn {wid, level} ->
+            %{
+              api_key_id: key.id,
+              workspace_id: wid,
+              access_level: level,
+              inserted_at: DateTime.utc_now() |> DateTime.truncate(:second)
+            }
+          end),
+          on_conflict: :nothing
+        )
+        |> Repo.transaction()
+        |> case do
+          {:ok, _} -> {:ok, reload_api_key(key)}
+          {:error, _step, reason, _} -> {:error, reason}
+        end
+    end
+  end
+
+  defp reload_api_key(%ApiKey{} = key) do
+    Repo.preload(key, [:created_by_user, :actor, api_key_workspaces: :workspace])
+  end
+
+  @doc """
   Validate an API key token. Returns `{:ok, %ApiKey{}}` (with workspaces
   preloaded) only when the key exists AND is not revoked.
   """

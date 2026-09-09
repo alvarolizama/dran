@@ -29,7 +29,6 @@ defmodule Dran.Actors.Actor do
 
     has_many :api_keys, Dran.Accounts.ApiKey
     # users.actor_id is a plain FK column (no belongs_to needed here)
-
     timestamps(type: :utc_datetime, updated_at: false)
   end
 

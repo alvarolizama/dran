@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -25,7 +26,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "http://localhost:4000"
 DEFAULT_WORKSPACE = "personal"
+# Canonical config path (what the dashboard's generic panel writes):
+# $HERMES_HOME/dran/config.json — same convention as other memory providers.
+# Legacy pre-schema installs kept it at $HERMES_HOME/dran_memory.json; still
+# read as a fallback so nothing breaks on upgrade.
 CONFIG_FILENAME = "dran_memory.json"
+CANONICAL_CONFIG_DIR = "dran"
+CANONICAL_CONFIG_FILENAME = "config.json"
 # Single-source-of-truth credential: profile .env's DRAN_API_KEY, the same
 # var config.yaml interpolates into mcp_servers.dran.headers.
 API_KEY_ENV_VAR = "DRAN_API_KEY"
@@ -34,6 +41,9 @@ INGEST_TIMEOUT = 30.0
 MAX_PREFETCH_CHARS = 800
 MAX_INGEST_MESSAGES = 40
 MAX_INGEST_CHARS = 12_000
+# How often the auto-discovered agent config (memory workspace) is refreshed
+# from the server, seconds. 0 = once per session (initialize).
+CONFIG_REFRESH_SECS = 300
 
 
 def _default_config() -> dict:
@@ -64,17 +74,28 @@ def _resolve_secret() -> str:
     return (val or "").strip()
 
 
+def _config_paths(hermes_home: str) -> list:
+    """Config candidates, most canonical first."""
+    home = Path(hermes_home)
+    return [
+        home / CANONICAL_CONFIG_DIR / CANONICAL_CONFIG_FILENAME,
+        home / CONFIG_FILENAME,
+    ]
+
+
 def _read_raw_config(hermes_home: str) -> dict:
     """Config as stored on disk — NO secret resolution (round-trip safe)."""
     config = _default_config()
-    config_path = Path(hermes_home) / CONFIG_FILENAME
-    if config_path.exists():
+    for path in _config_paths(hermes_home):
+        if not path.exists():
+            continue
         try:
-            raw = json.loads(config_path.read_text(encoding="utf-8"))
+            raw = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
                 config.update({k: v for k, v in raw.items() if v is not None})
+            break  # first existing file wins
         except Exception:
-            logger.debug("Failed to parse %s", config_path, exc_info=True)
+            logger.debug("Failed to parse %s", path, exc_info=True)
     return config
 
 
@@ -105,9 +126,10 @@ def _save_dran_config(values: dict, hermes_home: str) -> None:
     # DRAN_API_KEY from the profile's secret scope, and persisting that
     # resolved value would copy the secret into plaintext JSON — breaking
     # the single-source-of-truth (.env stays the only home of the key).
-    config_path = Path(hermes_home) / CONFIG_FILENAME
+    config_path = _config_paths(hermes_home)[0]
     existing = _read_raw_config(hermes_home)
     existing.update({k: v for k, v in (values or {}).items() if v is not None})
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
 
@@ -177,6 +199,19 @@ class _DranClient:
         except Exception:
             return False
 
+    def agent_config(self) -> Optional[dict]:
+        """GET /api/agent/config — the agent's server-side self-description.
+
+        Returns {agent, workspaces, access_levels} when the server knows this
+        key's actor, None otherwise (older Dran, non-agent key, or transport
+        failure — callers fall back to unvalidated local config).
+        """
+        try:
+            data = self.request("GET", "/api/agent/config", timeout=3.0)
+            return data.get("data") or None
+        except Exception:
+            return None
+
 
 class DranMemoryProvider(MemoryProvider):
     """Hermes memory provider backed by a Dran workspace."""
@@ -205,7 +240,23 @@ class DranMemoryProvider(MemoryProvider):
     def unavailable_reason(self) -> str:
         return ("Dran memory is not configured — set api_key (and optionally "
                 "base_url / workspace) via `hermes memory setup` or "
-                f"$HERMES_HOME/{CONFIG_FILENAME}")
+                f"$HERMES_HOME/{CANONICAL_CONFIG_DIR}/{CANONICAL_CONFIG_FILENAME}")
+
+    # -- Config surface (dashboard panel + `hermes memory setup`) -------------
+
+    def get_config_schema(self):
+        return [
+            {"key": "api_key", "description": "Dran API key per agent (Settings → Agents → Create key)", "secret": True},
+            {"key": "base_url", "description": "Dran instance URL", "default": DEFAULT_BASE_URL},
+            {"key": "workspace", "description": "Memory workspace (must be reachable by the key)", "default": DEFAULT_WORKSPACE},
+            {"key": "auto_recall", "description": "Inject relevant memories at turn start", "default": "true", "choices": ["true", "false"]},
+            {"key": "auto_capture", "description": "Ingest transcript at session end", "default": "true", "choices": ["true", "false"]},
+            {"key": "max_recall_results", "description": "Memories injected per turn (1-20)", "default": "5", "type": "integer", "minimum": 1, "maximum": 20},
+        ]
+
+    def save_config(self, values, hermes_home):
+        """Write non-secret setup values to the canonical dran config."""
+        _save_dran_config(values or {}, hermes_home)
 
     def initialize(self, session_id: str, **kwargs) -> None:
         self._session_id = session_id
@@ -218,16 +269,54 @@ class DranMemoryProvider(MemoryProvider):
             self._config["workspace"],
             agent_identity=self._agent_identity,
         )
+        # The memory workspace is a LOCAL choice (dran_memory.json). The
+        # background probe validates it against the server: if the key cannot
+        # reach it (revoked matrix edit), fall back to the first permitted
+        # workspace so memory keeps working instead of silently failing.
+        self._workspace_resolved_at = 0.0
         # Validate connection in the background — never block agent startup.
         threading.Thread(target=self._probe_connection, daemon=True).start()
+
+    def _resolve_workspace(self, force: bool = False) -> None:
+        """Validate the local workspace choice against the agent's key.
+
+        The choice itself is made in Hermes (dran_memory.json); Dran only
+        defines which workspaces the key may reach. If the configured
+        workspace is not among them, fall back to the first permitted one
+        and log it loudly.
+        """
+        if not self._client:
+            return
+        now = time.monotonic()
+        if not force and now - self._workspace_resolved_at < CONFIG_REFRESH_SECS:
+            return
+        self._workspace_resolved_at = now
+        config = self._client.agent_config()
+        if not config:
+            self._workspace_resolved_at = 0.0  # retry next turn — server unreachable
+            return
+        allowed = [str(ws.get("slug") or "") for ws in config.get("workspaces", [])]
+        allowed = [s for s in allowed if s]
+        current = self._client.workspace
+        if current in allowed:
+            return  # local choice is permitted — done
+        fallback = allowed[0] if allowed else current
+        self._client.workspace = fallback
+        logger.warning(
+            "Dran memory: workspace %r is not permitted for this key "
+            "(allowed: %s) — falling back to %r. Fix it in Dran → Settings → "
+            "Agents or pin another workspace in dran_memory.json",
+            current, ", ".join(allowed) or "none", fallback,
+        )
 
     def _probe_connection(self) -> None:
         if not self._client:
             return
         ok = self._client.ping()
         if ok:
+            self._resolve_workspace(force=True)
             logger.info("Dran memory: connected to %s (workspace=%s, agent=%s)",
-                        self._config["base_url"], self._config["workspace"],
+                        self._config["base_url"], self._client.workspace,
                         self._agent_identity or "?")
         else:
             logger.warning("Dran memory: cannot reach %s — recall/capture disabled this session",
@@ -251,10 +340,15 @@ class DranMemoryProvider(MemoryProvider):
             return  # a recall is already in flight — skip, next turn will retry
 
         self._last_injected = 0  # a new recall cycle starts
+        query = query.strip()
+        client = self._client
+
         def work():
             try:
-                results = self._client.search(query.strip(),
-                                              limit=self._config["max_recall_results"])
+                # cheap refresh window — picks up server-side workspace edits
+                self._resolve_workspace()
+                results = client.search(query,
+                                        limit=self._config["max_recall_results"])
                 text = self._format_results(results)
                 with self._prefetch_lock:
                     self._prefetch_cache = text

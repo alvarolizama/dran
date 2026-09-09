@@ -494,6 +494,10 @@ defmodule DranWeb.Router do
     # endpoint (DranWeb.API.ExecutionController)
     get "/workflow-sessions/:id", ExecutionController, :show_session
     get "/pending-workflow-runs", ExecutionController, :pending
+
+    # Agent self-description (the Hermes memory plugin auto-discovers its
+    # memory workspace + permitted workspaces from its own API key)
+    get "/agent/config", AgentConfigController, :show
   end
 
   # ── REST API — write routes (requires write_access on API keys) ────────────
