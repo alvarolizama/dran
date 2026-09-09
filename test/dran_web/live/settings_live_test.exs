@@ -331,14 +331,14 @@ defmodule DranWeb.SettingsLiveTest do
     # Landing shows the admin title and intro
     assert html =~ t("Admin")
 
-    # Brain tuning is NOT on the landing (lives in /:ws/settings)
+    # Automation settings are NOT on the landing (lives in /:ws/settings)
     refute html =~ "worker_max_pages"
   end
 
   # Tests L148, L176, L215 → /:ws/settings (reescribir a per-ws)
-  describe "brain tuning per-workspace" do
+  describe "automation (brain tuning) per-workspace" do
     setup do
-      # Create a workspace for brain tuning tests
+      # Create a workspace for automation settings tests
       unique = System.unique_integer([:positive])
 
       {:ok, ws} =
@@ -356,17 +356,17 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, ws: ws}
     end
 
-    test "renders the brain tuning form with default values", %{conn: conn, ws: ws} do
+    test "renders the automation form with default values", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
 
-      # Navigate to the Brain tuning tab
+      # Navigate to the Automation tab
       html =
         view
         |> element("button[phx-click='select_tab'][phx-value-tab='brain_tuning']")
         |> render_click()
 
       # Section heading (localized)
-      assert html =~ t("Brain tuning")
+      assert html =~ t("Automation")
 
       # Primary fields visible
       for name <- ~w(worker_max_pages) do
@@ -392,7 +392,7 @@ defmodule DranWeb.SettingsLiveTest do
     test "saving the form persists values and shows a flash", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
 
-      # Navigate to the Brain tuning tab
+      # Navigate to the Automation tab
       _ =
         view
         |> element("button[phx-click='select_tab'][phx-value-tab='brain_tuning']")
@@ -422,7 +422,7 @@ defmodule DranWeb.SettingsLiveTest do
     test "the brain tuning form still renders the worker_max_pages input", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
 
-      # Navigate to the Brain tuning tab
+      # Navigate to the Automation tab
       html =
         view
         |> element("button[phx-click='select_tab'][phx-value-tab='brain_tuning']")

@@ -526,7 +526,7 @@ msgstr ""
 #: lib/dran_web/live/workspace_settings_live.ex:135
 #: lib/dran_web/live/workspace_settings_live.ex:498
 #, elixir-autogen, elixir-format
-msgid "Brain tuning"
+msgid "Automation"
 msgstr ""
 
 #: lib/dran_web/live/search_live.ex:381
@@ -3336,7 +3336,7 @@ msgstr ""
 msgid "Útil (+0.05 trust)"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1426
+#: lib/dran_web/live/workflows_live.ex:1464
 #, elixir-autogen, elixir-format
 msgid "\"status\" debe ser draft, active o superseded."
 msgstr ""
@@ -3458,7 +3458,7 @@ msgstr ""
 msgid "Claims"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1427
+#: lib/dran_web/live/workflows_live.ex:1465
 #, elixir-autogen, elixir-format
 msgid "Claims: lista de {id, claim, verify} no vacíos."
 msgstr ""
@@ -3474,7 +3474,7 @@ msgstr ""
 msgid "Contexto"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1407
+#: lib/dran_web/live/workflows_live.ex:1445
 #, elixir-autogen, elixir-format
 msgid "Contrato válido."
 msgstr ""
@@ -3591,22 +3591,22 @@ msgstr ""
 msgid "Effective model for re-ranking search results. Configure in Admin → Models."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1417
+#: lib/dran_web/live/workflows_live.ex:1455
 #, elixir-autogen, elixir-format
 msgid "El JSON debe ser un objeto."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1438
+#: lib/dran_web/live/workflows_live.ex:1476
 #, elixir-autogen, elixir-format
 msgid "El contrato no pasa el lint."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1435
+#: lib/dran_web/live/workflows_live.ex:1473
 #, elixir-autogen, elixir-format
 msgid "El grafo debe alcanzar un nodo VERIFY (funnel de verificación)."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1429
+#: lib/dran_web/live/workflows_live.ex:1467
 #, elixir-autogen, elixir-format
 msgid "El graph necesita al menos un nodo."
 msgstr ""
@@ -3626,7 +3626,7 @@ msgstr ""
 msgid "El objetivo del brief que lee el agente. El resto del contrato lo detalla."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1147
+#: lib/dran_web/live/workflows_live.ex:1092
 #, elixir-autogen, elixir-format
 msgid "El step intermedio no puede ser un extremo de la conexión."
 msgstr ""
@@ -3661,7 +3661,7 @@ msgstr ""
 msgid "Estado"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1631
+#: lib/dran_web/live/workflows_live.ex:1669
 #: lib/dran_web/live/workflows_live.html.heex:926
 #: lib/dran_web/live/workflows_live.html.heex:995
 #, elixir-autogen, elixir-format
@@ -3673,7 +3673,7 @@ msgstr ""
 msgid "Existing agents"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1425
+#: lib/dran_web/live/workflows_live.ex:1463
 #, elixir-autogen, elixir-format
 msgid "Falta \"intent\"."
 msgstr ""
@@ -3689,7 +3689,7 @@ msgstr ""
 msgid "Gates"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1428
+#: lib/dran_web/live/workflows_live.ex:1466
 #, elixir-autogen, elixir-format
 msgid "Gates: lista de {name, cmd, expect} no vacíos."
 msgstr ""
@@ -3709,7 +3709,7 @@ msgstr ""
 msgid "Grafo vacío — doble clic para crear el primer nodo."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1437
+#: lib/dran_web/live/workflows_live.ex:1475
 #, elixir-autogen, elixir-format
 msgid "Graph inválido: {nodes: [], edges: []}."
 msgstr ""
@@ -3730,18 +3730,18 @@ msgstr ""
 msgid "JSON"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1420
+#: lib/dran_web/live/workflows_live.ex:1458
 #, elixir-autogen, elixir-format
 msgid "JSON inválido"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1059
-#: lib/dran_web/live/workflows_live.ex:1152
+#: lib/dran_web/live/workflows_live.ex:1004
+#: lib/dran_web/live/workflows_live.ex:1097
 #, elixir-autogen, elixir-format
 msgid "La conexión cerraría un ciclo de dependencias."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1109
+#: lib/dran_web/live/workflows_live.ex:1054
 #, elixir-autogen, elixir-format
 msgid "La conexión ya no existe."
 msgstr ""
@@ -3862,12 +3862,12 @@ msgstr ""
 msgid "No se pudo archivar el workflow."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1062
+#: lib/dran_web/live/workflows_live.ex:1007
 #, elixir-autogen, elixir-format
 msgid "No se pudo conectar los steps."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1112
+#: lib/dran_web/live/workflows_live.ex:1057
 #, elixir-autogen, elixir-format
 msgid "No se pudo crear el step."
 msgstr ""
@@ -3882,27 +3882,27 @@ msgstr ""
 msgid "No se pudo eliminar la sesión."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1265
+#: lib/dran_web/live/workflows_live.ex:1303
 #, elixir-autogen, elixir-format
 msgid "No se pudo guardar el step."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1155
+#: lib/dran_web/live/workflows_live.ex:1100
 #, elixir-autogen, elixir-format
 msgid "No se pudo linkear el step."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1013
+#: lib/dran_web/live/workflows_live.ex:958
 #, elixir-autogen, elixir-format
 msgid "No se pudo quitar la conexión."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1085
+#: lib/dran_web/live/workflows_live.ex:1030
 #, elixir-autogen, elixir-format
 msgid "No se pudo quitar la dependencia."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1170
+#: lib/dran_web/live/workflows_live.ex:1115
 #, elixir-autogen, elixir-format
 msgid "No se pudo reordenar el canvas."
 msgstr ""
@@ -3917,7 +3917,7 @@ msgstr ""
 msgid "No se puede archivar: tiene sesiones en ejecución."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:972
+#: lib/dran_web/live/workflows_live.ex:917
 #, elixir-autogen, elixir-format
 msgid "No se puede eliminar: tiene runs abiertos o pertenece al snapshot de una sesión en curso."
 msgstr ""
@@ -3938,12 +3938,12 @@ msgstr ""
 msgid "Nueva sesión"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1103
+#: lib/dran_web/live/workflows_live.ex:1048
 #, elixir-autogen, elixir-format
 msgid "Nuevo paso"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1632
+#: lib/dran_web/live/workflows_live.ex:1670
 #: lib/dran_web/live/workflows_live.html.heex:929
 #: lib/dran_web/live/workflows_live.html.heex:996
 #, elixir-autogen, elixir-format
@@ -4060,7 +4060,7 @@ msgstr ""
 
 #: lib/dran_web/live/workspace_settings_live.ex:500
 #, elixir-autogen, elixir-format
-msgid "Semantic thresholds and worker limits for this workspace."
+msgid "Worker limits and semantic thresholds for this workspace."
 msgstr ""
 
 #: lib/dran_web/live/workflows_live.html.heex:736
@@ -4127,25 +4127,25 @@ msgstr ""
 msgid "Step"
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1469
+#: lib/dran_web/live/workflows_live.ex:1507
 #, elixir-autogen, elixir-format
 msgid "Step actualizado."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1468
+#: lib/dran_web/live/workflows_live.ex:1506
 #, elixir-autogen, elixir-format
 msgid "Step creado."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:960
+#: lib/dran_web/live/workflows_live.ex:905
 #, elixir-autogen, elixir-format
 msgid "Step eliminado."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:953
-#: lib/dran_web/live/workflows_live.ex:1066
-#: lib/dran_web/live/workflows_live.ex:1116
-#: lib/dran_web/live/workflows_live.ex:1159
+#: lib/dran_web/live/workflows_live.ex:898
+#: lib/dran_web/live/workflows_live.ex:1011
+#: lib/dran_web/live/workflows_live.ex:1061
+#: lib/dran_web/live/workflows_live.ex:1104
 #, elixir-autogen, elixir-format
 msgid "Step no encontrado."
 msgstr ""
@@ -4180,7 +4180,7 @@ msgstr ""
 msgid "Vacío = sin contrato."
 msgstr ""
 
-#: lib/dran_web/live/workflows_live.ex:1432
+#: lib/dran_web/live/workflows_live.ex:1470
 #, elixir-autogen, elixir-format
 msgid "Verbos válidos: READ, EDIT, CREATE, RUN, VERIFY, ASK."
 msgstr ""

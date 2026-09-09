@@ -526,7 +526,7 @@ msgstr ""
 #: lib/dran_web/live/workspace_settings_live.ex:135
 #: lib/dran_web/live/workspace_settings_live.ex:498
 #, elixir-autogen, elixir-format
-msgid "Brain tuning"
+msgid "Automation"
 msgstr ""
 
 #: lib/dran_web/live/search_live.ex:381
@@ -4061,7 +4061,7 @@ msgstr ""
 
 #: lib/dran_web/live/workspace_settings_live.ex:500
 #, elixir-autogen, elixir-format, fuzzy
-msgid "Semantic thresholds and worker limits for this workspace."
+msgid "Worker limits and semantic thresholds for this workspace."
 msgstr ""
 
 #: lib/dran_web/live/workflows_live.html.heex:736

@@ -524,8 +524,8 @@ msgstr "hace %{n}sem"
 #: lib/dran_web/live/workspace_settings_live.ex:135
 #: lib/dran_web/live/workspace_settings_live.ex:498
 #, elixir-autogen, elixir-format
-msgid "Brain tuning"
-msgstr "Ajuste del cerebro"
+msgid "Automation"
+msgstr "Automatización"
 
 #: lib/dran_web/live/search_live.ex:381
 #, elixir-autogen, elixir-format
@@ -4058,8 +4058,8 @@ msgstr ""
 
 #: lib/dran_web/live/workspace_settings_live.ex:500
 #, elixir-autogen, elixir-format
-msgid "Semantic thresholds and worker limits for this workspace."
-msgstr "Umbrales semánticos y límites de workers para este workspace."
+msgid "Worker limits and semantic thresholds for this workspace."
+msgstr "Límites de workers y umbrales semánticos para este workspace."
 
 #: lib/dran_web/live/workflows_live.html.heex:736
 #, elixir-autogen, elixir-format

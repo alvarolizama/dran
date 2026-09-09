@@ -1,7 +1,7 @@
 defmodule DranWeb.WorkspaceSettingsLive do
   @moduledoc """
   Workspace configuration page with tabbed settings: General (name,
-  visibility), Page types, Features, Brain tuning, and Users (workspace
+  visibility), Page types, Features, Automation (worker limits + semantic
   membership).
 
   Access is enforced by the `:workspace_admin` router pipeline (owner/admin
@@ -132,7 +132,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 tab="brain_tuning"
                 icon="hero-adjustments-horizontal"
               >
-                {gettext("Brain tuning")}
+                {gettext("Automation")}
               </.tab_button>
               <.tab_button active={@active_tab == :users} tab="users" icon="hero-users">
                 {gettext("Users")}
@@ -495,9 +495,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
           <.icon name="hero-adjustments-horizontal" class="size-4 text-secondary" />
         </div>
         <div class="min-w-0">
-          <h2 class="text-heading">{gettext("Brain tuning")}</h2>
+          <h2 class="text-heading">{gettext("Automation")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Semantic thresholds and worker limits for this workspace.")}
+            {gettext("Worker limits and semantic thresholds for this workspace.")}
           </p>
         </div>
       </header>
