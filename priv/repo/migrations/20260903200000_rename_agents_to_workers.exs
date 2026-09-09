@@ -49,89 +49,47 @@ defmodule Dran.Repo.Migrations.RenameAgentsToWorkers do
       "ALTER INDEX agent_sessions_workspace_id_index RENAME TO worker_sessions_workspace_id_index"
     )
 
-    execute("""
-    ALTER TABLE worker_sessions
-      RENAME CONSTRAINT agent_sessions_workspace_id_fkey TO worker_sessions_workspace_id_fkey
-    """)
-
-    execute("""
-    ALTER TABLE worker_steps
-      RENAME CONSTRAINT agent_steps_session_id_fkey TO worker_steps_session_id_fkey
-    """)
-
-    execute("""
-    ALTER TABLE worker_sessions
-      RENAME CONSTRAINT agent_sessions_pkey TO worker_sessions_pkey
-    """)
-
-    execute("""
-    ALTER TABLE worker_steps
-      RENAME CONSTRAINT agent_steps_pkey TO worker_steps_pkey
-    """)
-
-    # NOT NULL constraints carry the old table name — rename them too so the
-    # schema stays greppable/consistent. The worker_type one is tolerant:
-    # fresh DBs name it agent_sessions_agent_type_not_null (column was
-    # agent_type), while DBs migrated by earlier drafts of this migration
-    # may carry agent_sessions_worker_type_not_null.
-    execute(
-      "ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_id_not_null TO worker_sessions_id_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_workspace_id_not_null TO worker_sessions_workspace_id_not_null"
-    )
-
-    execute("""
-    DO $$
-    BEGIN
-      IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agent_sessions_agent_type_not_null' AND conrelid = 'worker_sessions'::regclass) THEN
-        ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_agent_type_not_null TO worker_sessions_worker_type_not_null;
-      ELSIF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agent_sessions_worker_type_not_null' AND conrelid = 'worker_sessions'::regclass) THEN
-        ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_worker_type_not_null TO worker_sessions_worker_type_not_null;
-      END IF;
-    END $$;
-    """)
-
-    execute(
-      "ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_input_not_null TO worker_sessions_input_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_status_not_null TO worker_sessions_status_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_inserted_at_not_null TO worker_sessions_inserted_at_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_sessions RENAME CONSTRAINT agent_sessions_updated_at_not_null TO worker_sessions_updated_at_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_steps RENAME CONSTRAINT agent_steps_id_not_null TO worker_steps_id_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_steps RENAME CONSTRAINT agent_steps_session_id_not_null TO worker_steps_session_id_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_steps RENAME CONSTRAINT agent_steps_step_number_not_null TO worker_steps_step_number_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_steps RENAME CONSTRAINT agent_steps_tool_name_not_null TO worker_steps_tool_name_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_steps RENAME CONSTRAINT agent_steps_inserted_at_not_null TO worker_steps_inserted_at_not_null"
-    )
-
-    execute(
-      "ALTER TABLE worker_steps RENAME CONSTRAINT agent_steps_updated_at_not_null TO worker_steps_updated_at_not_null"
-    )
+    # FK constraint renames are guarded: the constraint name depends on how
+    # the DB reached this point. Fresh DBs (create 20260625) carry
+    # agent_sessions_workspace_id_fkey; DBs bridged from the contexts era
+    # (20260813 renamed context_id → workspace_id) may carry
+    # agent_sessions_context_id_fkey, and databases restored from older
+    # dumps may have no FK at all. Rename whichever exists; if the target
+    # name is already in place (partial re-run), that branch is a no-op.
+    # Constraint renames (FK, pkey, NOT NULL) are GENERIC: production DBs
+    # reached this migration through different paths (fresh create 20260625
+    # vs contexts-era bridge 20260813 renaming context_id → workspace_id),
+    # so constraint names vary (…_context_id_fkey vs …_workspace_id_fkey,
+    # …_agent_type_not_null vs …_worker_type_not_null). Enumerating names
+    # broke prod (42704). Instead: for every constraint still carrying an
+    # agent_* name, rename it by applying the table/column mappings —
+    # whatever its actual shape. Idempotent: nothing carrying agent_* left
+    # → no-op. Column-name substitutions run BEFORE the table rename so
+    # context_id/agent_type variants normalize first.
+    for {table, new_table} <- [{"agent_sessions", "worker_sessions"}, {"agent_steps", "worker_steps"}] do
+      execute("""
+      DO $$
+      DECLARE
+        c record;
+      BEGIN
+        FOR c IN
+          SELECT conname
+          FROM pg_constraint
+          WHERE conrelid = '#{new_table}'::regclass
+            AND conname LIKE '%#{table}%'
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE #{new_table} RENAME CONSTRAINT %I TO %I',
+            c.conname,
+            replace(replace(replace(c.conname,
+              'context_id', 'workspace_id'),
+              'agent_type', 'worker_type'),
+              '#{table}', '#{new_table}')
+          );
+        END LOOP;
+      END $$;
+      """)
+    end
   end
 
   def down do
