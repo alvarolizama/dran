@@ -89,12 +89,12 @@ defmodule Dran.MCPFullTest do
   # ── Protocol: tools/list ────────────────────────────────────────────────────
 
   describe "tools/list" do
-    test "returns exactly 19 tools" do
+    test "returns exactly 37 tools" do
       resp =
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 36
+      assert length(tools) == 37
     end
 
     test "all tools carry the dran_ prefix" do

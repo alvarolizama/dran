@@ -10,7 +10,7 @@ defmodule Dran.MCP do
   - `GET /api/mcp` — responds 405 (SSE stream not implemented)
   - `DELETE /api/mcp` — terminate session
 
-  ## Tools (35)
+  ## Tools (37)
   - `dran_search` — use FIRST to find anything; strategy=auto picks best available
   - `dran_create_page` — create notes, concepts, entities, and references
   - `dran_update_page` — update page fields; REPLACES meta entirely (not a merge)
@@ -33,6 +33,8 @@ defmodule Dran.MCP do
   - `dran_rename_slug` — rename a page slug; auto-rewrites all `![[old-slug]]` embeds in the context
   - `dran_reaugment_page` — re-run augmentation (summary/tags/embedding/relations); use after major edits
   - `dran_list_workflows` — list workflows of a workspace (kind/status filters)
+  - `dran_create_workflow` — create a workflow with FULL step contracts inline (claims, gates, graph, context, depends_on DAG)
+  - `dran_delete_workflow` — delete a draft workflow by slug; **irreversible**, refused when it has sessions
   - `dran_get_workflow` — workflow detail: steps, DAG, linked goal
   - `dran_get_step_contract` — a step's execution contract (intent, claims, gates) + rendered brief
   - `dran_open_workflow_session` — open an execution session against the workflow snapshot
@@ -565,7 +567,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_workflow",
       "description" =>
-        "Create a workflow (definition skeleton): title, kind (evergreen/one_shot), optional goal link and initial steps (title + intent). Status starts 'draft' — activation is an explicit human decision; a draft cannot open sessions. Full contracts (claims/gates/graph/context) are authored in the Dran UI step modal or via REST. Steps with depends_on edges can be declared here as {title, intent, depends_on: [slugs]}. Returns the workflow slug — verify with dran_get_workflow.",
+        "Create a workflow (definition skeleton): title, kind (evergreen/one_shot), optional goal link and initial steps. Status starts 'draft' — activation is an explicit human decision; a draft cannot open sessions. Steps carry the FULL contract inline: {title, intent, claims: [{id, claim, verify}], gates: [{name, check, expect, on_failure}], graph: {nodes: [{id, verb, label}], edges: [{from, to}]}, context: [{type, id, why}], depends_on: [titles or slugs of previously declared steps]}. Graph verbs are restricted to READ EDIT CREATE RUN VERIFY ASK. A step without claims and gates is a title, not a step. Returns the workflow slug — verify with dran_get_workflow.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -594,12 +596,78 @@ defmodule Dran.MCP do
           "steps" => %{
             "type" => "array",
             "description" =>
-              "Initial steps: {title (required), intent (optional), depends_on (optional, slugs of previously declared steps)}.",
+              "Initial steps with full contracts: {title (required), intent, claims, gates, graph, context, depends_on}. depends_on references previously declared steps by title or slug.",
             "items" => %{
               "type" => "object",
               "properties" => %{
                 "title" => %{"type" => "string"},
                 "intent" => %{"type" => "string"},
+                "claims" => %{
+                  "type" => "array",
+                  "items" => %{
+                    "type" => "object",
+                    "properties" => %{
+                      "id" => %{"type" => "string"},
+                      "claim" => %{"type" => "string"},
+                      "verify" => %{"type" => "string"}
+                    },
+                    "required" => ["id", "claim", "verify"]
+                  }
+                },
+                "gates" => %{
+                  "type" => "array",
+                  "items" => %{
+                    "type" => "object",
+                    "properties" => %{
+                      "name" => %{"type" => "string"},
+                      "check" => %{"type" => "string"},
+                      "expect" => %{"type" => "string"},
+                      "on_failure" => %{"type" => "string"}
+                    },
+                    "required" => ["name", "check", "expect"]
+                  }
+                },
+                "graph" => %{
+                  "type" => "object",
+                  "properties" => %{
+                    "nodes" => %{
+                      "type" => "array",
+                      "items" => %{
+                        "type" => "object",
+                        "properties" => %{
+                          "id" => %{"type" => "string"},
+                          "verb" => %{"type" => "string", "enum" => ["READ", "EDIT", "CREATE", "RUN", "VERIFY", "ASK"]},
+                          "label" => %{"type" => "string"}
+                        },
+                        "required" => ["id", "verb"]
+                      }
+                    },
+                    "edges" => %{
+                      "type" => "array",
+                      "items" => %{
+                        "type" => "object",
+                        "properties" => %{
+                          "from" => %{"type" => "string"},
+                          "to" => %{"type" => "string"},
+                          "guard" => %{"type" => "string"}
+                        },
+                        "required" => ["from", "to"]
+                      }
+                    }
+                  }
+                },
+                "context" => %{
+                  "type" => "array",
+                  "items" => %{
+                    "type" => "object",
+                    "properties" => %{
+                      "type" => %{"type" => "string", "enum" => ["page", "memory"]},
+                      "id" => %{"type" => "string"},
+                      "why" => %{"type" => "string"}
+                    },
+                    "required" => ["type", "id"]
+                  }
+                },
                 "depends_on" => %{"type" => "array", "items" => %{"type" => "string"}}
               },
               "required" => ["title"]
@@ -607,6 +675,25 @@ defmodule Dran.MCP do
           }
         },
         "required" => ["workspace", "title"]
+      }
+    },
+    %{
+      "name" => "dran_delete_workflow",
+      "description" =>
+        "Delete a draft workflow by slug — irreversible (cascades steps + depends_on edges). Refused when the workflow has any session (evidence is preserved); archive or clear sessions first. Ask the human before calling.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the workflow lives."
+          },
+          "workflow" => %{
+            "type" => "string",
+            "description" => "Workflow slug to delete."
+          }
+        },
+        "required" => ["workspace", "workflow"]
       }
     },
     %{
@@ -1369,7 +1456,9 @@ defmodule Dran.MCP do
                  "dran_rename_slug",
                  "dran_reaugment_page",
                  "dran_start_worker",
-                 "dran_generate_cluster_summaries"
+                 "dran_generate_cluster_summaries",
+                 "dran_create_workflow",
+                 "dran_delete_workflow"
                ])
 
   defp write_tool?(name) when is_binary(name), do: MapSet.member?(@write_tools, name)
@@ -2291,6 +2380,31 @@ defmodule Dran.MCP do
     end
   end
 
+  defp execute_tool("dran_delete_workflow", %{"workspace" => ws, "workflow" => handle}, _user) do
+    context = workspace_cache_get(ws)
+
+    if is_map(context) do
+      case fetch_workflow(context.id, handle) do
+        %Workflows.Workflow{} = workflow ->
+          case Workflows.delete_workflow(workflow) do
+            {:ok, _} ->
+              "Deleted workflow: #{workflow.title} (#{workflow.slug})"
+
+            {:error, :has_sessions} ->
+              "Error: workflow '#{workflow.slug}' has sessions — evidence is preserved; archive or clear sessions first"
+
+            {:error, reason} ->
+              "Error: #{inspect(reason)}"
+          end
+
+        _ ->
+          "Error: workflow '#{handle}' not found in context '#{ws}'"
+      end
+    else
+      "Error: context '#{ws}' not found"
+    end
+  end
+
   defp execute_tool("dran_list_workflows", %{"workspace" => ws}, _user) do
     context = workspace_cache_get(ws)
 
@@ -2688,6 +2802,10 @@ defmodule Dran.MCP do
         attrs =
           %{"title" => title}
           |> maybe_put("intent", step_args["intent"])
+          |> maybe_put("claims", step_args["claims"])
+          |> maybe_put("gates", step_args["gates"])
+          |> maybe_put("graph", step_args["graph"])
+          |> maybe_put("context_snapshot", step_args["context"])
 
         case Workflows.create_step(workflow, attrs) do
           {:ok, step} ->
