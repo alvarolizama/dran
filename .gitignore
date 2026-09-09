@@ -46,3 +46,4 @@ npm-debug.log
 mise.toml
 .riel/
 .spike/
+__pycache__/
