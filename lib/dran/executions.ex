@@ -67,7 +67,8 @@ defmodule Dran.Executions do
   `contract_version` (nil when the step has no contract).
 
   Refuses a workflow with no steps (`{:error, :workflow_has_no_steps}`)
-  or an archived workflow (`{:error, :workflow_archived}`). The session
+  or a workflow that is not active — draft or archived
+  (`{:error, :workflow_not_active}`). The session
   and all its runs are created in a single transaction.
 
   Returns `{:ok, session}` (with `:runs` preloaded) or `{:error, reason}`.
@@ -728,10 +729,12 @@ defmodule Dran.Executions do
   # ───────────────────────── persisted ───────────────────────────────────────
   # ──────────────────────────────────────────────────────────────────────────
 
-  # An archived workflow must not open new passes; a draft may (agents
-  # iterate on drafts) — status only gates archived.
-  defp ensure_workflow_runnable(%Dran.Workflows.Workflow{status: "archived"}),
-    do: {:error, :workflow_archived}
+  # Archived and draft workflows must not open new sessions. Archived is a
+  # retired definition; draft means it is not published yet — activating it
+  # is the explicit publishing step.
+  defp ensure_workflow_runnable(%Dran.Workflows.Workflow{status: status})
+       when status in ["archived", "draft"],
+       do: {:error, :workflow_not_active}
 
   # one_shot (review finding #7): the enum claims "one pass" — enforce it
   # for FUTURE passes, not the concurrent-creation race (two simultaneous

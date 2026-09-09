@@ -124,7 +124,8 @@ defmodule Dran.ExecutionsTest do
       Workflows.create_workflow(%{
         workspace_id: ws.id,
         title: "Empty",
-        slug: "empty-#{System.unique_integer([:positive])}"
+        slug: "empty-#{System.unique_integer([:positive])}",
+        status: "active"
       })
 
     assert {:error, :workflow_has_no_steps} = Executions.open_session(empty)
@@ -134,7 +135,17 @@ defmodule Dran.ExecutionsTest do
     {:ok, archived} =
       Workflows.update_workflow(workflow, %{"status" => "archived"})
 
-    assert {:error, :workflow_archived} = Executions.open_session(archived)
+    assert {:error, :workflow_not_active} = Executions.open_session(archived)
+
+    # Draft workflows also refuse to open sessions: activating is the
+    # explicit publishing step.
+    {:ok, draft} = Workflows.update_workflow(archived, %{"status" => "draft"})
+
+    assert {:error, :workflow_not_active} = Executions.open_session(draft)
+
+    # Once active, the session opens normally.
+    {:ok, active} = Workflows.update_workflow(draft, %{"status" => "active"})
+    assert {:ok, _session} = Executions.open_session(active)
   end
 
   test "P1: one_shot refuses a second pass after the first session exists (review #7)", %{
@@ -187,7 +198,8 @@ defmodule Dran.ExecutionsTest do
         workspace_id: ws.id,
         title: "W",
         slug: "w-#{System.unique_integer([:positive])}",
-        goal_id: goal.id
+        goal_id: goal.id,
+        status: "active"
       })
 
     {:ok, _} = Workflows.create_step(workflow, %{"title" => "S", "slug" => "s"})
@@ -894,7 +906,8 @@ defmodule Dran.ExecutionsTest do
       Workflows.create_workflow(%{
         "workspace_id" => ws.id,
         "title" => "W #{System.unique_integer([:positive])}",
-        "slug" => "w-#{System.unique_integer([:positive])}"
+        "slug" => "w-#{System.unique_integer([:positive])}",
+        "status" => "active"
       })
 
     steps =

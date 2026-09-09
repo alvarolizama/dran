@@ -39,7 +39,8 @@ defmodule DranWeb.WorkflowsLiveTest do
       Workflows.create_workflow(%{
         "workspace_id" => ws.id,
         "title" => "Deploy pipeline",
-        "slug" => "deploy-pipeline"
+        "slug" => "deploy-pipeline",
+        "status" => "active"
       })
 
     {:ok, build} = Workflows.create_step(workflow, %{"title" => "Build", "slug" => "build"})
@@ -75,7 +76,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       assert html =~ "Nueva sesión"
       assert has_element?(view, "#workflow-card-#{workflow.id}")
       assert has_element?(view, "#workflow-card-#{workflow.id}", "Evergreen")
-      assert has_element?(view, "#workflow-card-#{workflow.id}", "Draft")
+      assert has_element?(view, "#workflow-card-#{workflow.id}", "Active")
     end
 
     test "nueva sesión opens an in-flight session with an auto-generated label", %{
@@ -190,7 +191,8 @@ defmodule DranWeb.WorkflowsLiveTest do
         Workflows.create_workflow(%{
           "workspace_id" => other_ws.id,
           "title" => "F2",
-          "slug" => "f2-#{System.unique_integer([:positive])}"
+          "slug" => "f2-#{System.unique_integer([:positive])}",
+          "status" => "active"
         })
 
       {:ok, _} = Workflows.create_step(foreign_wf, %{"title" => "S", "slug" => "fs2"})
@@ -314,8 +316,7 @@ defmodule DranWeb.WorkflowsLiveTest do
 
     test "status filter via URL and toggle_status event (draft vs active)", %{
       conn: conn,
-      ws: ws,
-      workflow: workflow
+      ws: ws
     } do
       {:ok, active} =
         Workflows.create_workflow(%{
@@ -325,19 +326,27 @@ defmodule DranWeb.WorkflowsLiveTest do
           "status" => "active"
         })
 
+      {:ok, draft} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "title" => "Draft Flow",
+          "slug" => "draft-flow",
+          "status" => "draft"
+        })
+
       # ?status=draft hides the active one; ?status=active hides the draft one.
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?status=draft")
-      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      assert has_element?(view, "#workflow-card-#{draft.id}")
       refute has_element?(view, "#workflow-card-#{active.id}")
 
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?status=active")
       assert has_element?(view, "#workflow-card-#{active.id}")
-      refute has_element?(view, "#workflow-card-#{workflow.id}")
+      refute has_element?(view, "#workflow-card-#{draft.id}")
 
       # Combined filters compose: Active Flow (evergreen+active) survives,
       # the draft fixture does not.
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows?kind=evergreen&status=active")
-      refute has_element?(view, "#workflow-card-#{workflow.id}")
+      refute has_element?(view, "#workflow-card-#{draft.id}")
       assert has_element?(view, "#workflow-card-#{active.id}")
 
       # UI toggle: open menu, click draft, assert active hidden and patch state.
@@ -351,7 +360,7 @@ defmodule DranWeb.WorkflowsLiveTest do
       |> element("[data-testid='status-option-draft']")
       |> render_click()
 
-      assert has_element?(view, "#workflow-card-#{workflow.id}")
+      assert has_element?(view, "#workflow-card-#{draft.id}")
       refute has_element?(view, "#workflow-card-#{active.id}")
     end
 
@@ -589,7 +598,8 @@ defmodule DranWeb.WorkflowsLiveTest do
         Workflows.create_workflow(%{
           "workspace_id" => ws.id,
           "title" => "Empty flow",
-          "slug" => "empty-flow"
+          "slug" => "empty-flow",
+          "status" => "active"
         })
 
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/empty-flow?edit=true")

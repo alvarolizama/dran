@@ -1491,7 +1491,8 @@ defmodule Dran.MCPFullTest do
       Workflows.create_workflow(%{
         "workspace_id" => context.id,
         "title" => "Riel Bridge #{System.unique_integer([:positive])}",
-        "slug" => "riel-bridge-#{System.unique_integer([:positive])}"
+        "slug" => "riel-bridge-#{System.unique_integer([:positive])}",
+        "status" => "active"
       })
 
     Dran.Repo.reload!(workflow)

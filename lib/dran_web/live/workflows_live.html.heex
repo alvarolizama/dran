@@ -318,7 +318,7 @@
               <%!-- Nueva sesión + Archive --%>
               <div class="flex items-center gap-2 mt-1">
                 <.form
-                  :if={wf.status != "archived"}
+                  :if={wf.status == "active"}
                   id={"workflow-session-form-#{wf.id}"}
                   for={%{}}
                   phx-submit="open_session"
@@ -737,7 +737,7 @@
             </h3>
 
             <.form
-              :if={@workflow.status != "archived"}
+              :if={@workflow.status == "active"}
               id="workflow-session-form"
               for={%{}}
               phx-submit="open_session"
@@ -1009,6 +1009,13 @@
           ]}
         />
       </div>
+
+      <.resource_select name="workflow[goal_id]" label={gettext("Goal")}>
+        <option value="" selected={is_nil(input_value(@wf_edit.form, :goal_id))}>
+          {gettext("no goal")}
+        </option>
+        <.goal_options tree={@goal_tree} selected_id={input_value(@wf_edit.form, :goal_id)} />
+      </.resource_select>
     </.form>
   </.resource_modal>
 

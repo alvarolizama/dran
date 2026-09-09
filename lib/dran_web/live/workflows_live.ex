@@ -217,6 +217,7 @@ defmodule DranWeb.WorkflowsLive do
           # Edit-workflow modal (`?edit=true`, show only): kind is editable
           # ONLY while the workflow has no sessions (pre-execution decision).
           wf_edit: wf_edit_state(workflow, params),
+          goal_tree: Goals.flattened_tree(context.id),
           # Reset on every URL navigation — errors that live INSIDE the modal
           # (delete guard, contract JSON) must never leak to the next open.
           step_delete_error: nil,
@@ -533,6 +534,14 @@ defmodule DranWeb.WorkflowsLive do
             {:noreply,
              put_flash(socket, :error, gettext("El workflow no tiene steps: añade al menos uno."))}
 
+          {:error, :workflow_not_active} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               gettext("El workflow no está activo: actívalo para abrir sesiones.")
+             )}
+
           {:error, :workflow_archived} ->
             {:noreply,
              put_flash(
@@ -809,7 +818,7 @@ defmodule DranWeb.WorkflowsLive do
       %{workflow: workflow} = edit ->
         changeset =
           workflow
-          |> Workflows.change_workflow(Map.take(params, ["title", "kind", "status"]))
+          |> Workflows.change_workflow(Map.take(params, ["title", "kind", "status", "goal_id"]))
           |> Map.put(:action, :validate)
 
         {:noreply, assign(socket, wf_edit: %{edit | form: to_form(changeset, as: :workflow)})}
@@ -824,7 +833,8 @@ defmodule DranWeb.WorkflowsLive do
       %{workflow: workflow, kind_locked: locked} ->
         attrs = %{
           "title" => String.trim(params["title"] || ""),
-          "status" => params["status"]
+          "status" => params["status"],
+          "goal_id" => params["goal_id"]
         }
 
         # A forged submit cannot smuggle a kind change past the lock: the

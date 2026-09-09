@@ -70,7 +70,8 @@ defmodule DranWeb.API.ExecutionControllerTest do
         Workflows.create_workflow(%{
           "workspace_id" => workspace.id,
           "title" => "Empty",
-          "slug" => "empty-#{System.unique_integer([:positive])}"
+          "slug" => "empty-#{System.unique_integer([:positive])}",
+          "status" => "active"
         })
 
       conn = post(conn, "/api/workflows/#{workflow.id}/sessions", %{})
@@ -462,7 +463,8 @@ defmodule DranWeb.API.ExecutionControllerTest do
       Workflows.create_workflow(%{
         "workspace_id" => workspace.id,
         "title" => "W #{System.unique_integer([:positive])}",
-        "slug" => "w-#{System.unique_integer([:positive])}"
+        "slug" => "w-#{System.unique_integer([:positive])}",
+        "status" => "active"
       })
 
     steps =

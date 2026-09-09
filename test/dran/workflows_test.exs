@@ -318,7 +318,9 @@ defmodule Dran.WorkflowsTest do
     end
 
     test "delete_workflow/1 refuses when the workflow has sessions", %{workspace: ws} do
-      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p"})
+      {:ok, plan} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p", status: "active"})
+
       {:ok, _} = Workflows.create_step(plan, %{title: "S", slug: "s"})
       {:ok, _session} = Dran.Executions.open_session(plan)
 
@@ -327,7 +329,12 @@ defmodule Dran.WorkflowsTest do
 
     test "kind is editable before sessions and locked after", %{workspace: ws} do
       {:ok, plan} =
-        Workflows.create_workflow(%{workspace_id: ws.id, title: "K", slug: "k"})
+        Workflows.create_workflow(%{
+          workspace_id: ws.id,
+          title: "K",
+          slug: "k",
+          status: "active"
+        })
 
       # Pre-execution: the kind decision is exactly what updates before any
       # session exist.
@@ -351,7 +358,9 @@ defmodule Dran.WorkflowsTest do
     end
 
     test "delete_step/1 refuses when the step has open runs", %{workspace: ws} do
-      {:ok, plan} = Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p"})
+      {:ok, plan} =
+        Workflows.create_workflow(%{workspace_id: ws.id, title: "P", slug: "p", status: "active"})
+
       {:ok, step} = Workflows.create_step(plan, %{title: "S", slug: "s"})
       {:ok, _session} = Dran.Executions.open_session(plan)
       run = Dran.Repo.get_by!(Dran.Workflows.Run, step_id: step.id)
