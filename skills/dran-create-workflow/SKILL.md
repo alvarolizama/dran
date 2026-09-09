@@ -112,11 +112,39 @@ dran-workflow-flow when the human wants to run the plan.
 `dran_delete_workflow` removes a mis-created draft (ASK the human first
 — irreversible; refused when the workflow has sessions).
 
+## Fallback bridge (Hermes MCP transport down)
+
+If Hermes' MCP transport is down (`mcp__dran__*` tools vanish from the
+catalog and tool_search), do NOT hand-author in the UI — bridge raw
+JSON-RPC against the endpoint from config.yaml
+(`mcp_servers.dran.url` + Bearer key):
+
+1. `POST initialize` (protocolVersion 2024-11-05) → capture the
+   `Mcp-Session-Id` response header
+2. `POST notifications/initialized` (no id)
+3. `POST tools/list` FIRST — it registers the catalog in the session;
+   calling a tool before it can yield a bogus `unknown tool`
+4. `POST tools/call` per tool; responses come as SSE `data: <json>`
+   lines (or bare JSON) — parse both
+
+Bridge script pattern: ~40 lines of urllib (see /tmp/dran_bridge.py
+shape). Always the same MCP semantics — the bridge replaces the
+transport, never the skill's rules.
+
 ## Pitfalls
 
 - **Looking for `dran_create_workflow` on MCP or REST** — it exists (37
 tools as of this skill version); verify with `tools/list` if in doubt —
 the surface grows.
+- **Creating against a stale deploy** — a server running an old build
+accepts `dran_create_workflow` but silently DROPS claims/gates/graph
+(steps land as `no contract`) and lacks `dran_delete_workflow`. Guard:
+`tools/list` before any write; if the tool count or names don't match
+the packet's needs, ABORT — do not create.
+- **Graph without a reachable VERIFY node** — `contract?/1` is false no
+matter how good claims/gates/context are. The linter requires the graph
+to reach a VERIFY node from a start node (verification funnel). Every
+graph closes …→ VERIFY.
 - **Steps created bare (title/intent only)** — `dran_get_workflow` will
 read `no contract`; the MCP payload must carry claims/gates/graph inline.
 - **Gates that are not verifiable** — a gate whose `check` cannot be
