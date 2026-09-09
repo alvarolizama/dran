@@ -89,6 +89,13 @@ defmodule Dran.Inference.Client do
 
   @doc """
   Rerank a list of documents against a query.
+
+  Speaks the Cohere/Jina shape (`POST /rerank` with flat `query`/`documents`,
+  `results[]` at the top) by default. DashScope (QwenCloud) doesn't expose
+  that path — its rerank only exists on the native
+  `/api/v1/services/rerank/text-rerank/text-rerank` endpoint with a nested
+  `input` payload and `output.results` response — so when the configured
+  `base_url` points at dashscope we translate transparently.
   """
   @spec rerank(String.t(), String.t(), list(String.t())) :: result(list(map()))
   def rerank(model, query, documents) do
@@ -98,15 +105,51 @@ defmodule Dran.Inference.Client do
 
       true ->
         Dran.Inference.Queue.run(:rerank, fn ->
-          payload = %{
-            "model" => model,
-            "query" => query,
-            "documents" => documents
-          }
+          # The native endpoint lives at the host origin — NOT under the
+          # compatible-mode prefix — so build an absolute URL from it.
+          {path, payload, unwrap} =
+            if dashscope?(Config.base_url()) do
+              {
+                origin(Config.base_url()) <>
+                  "/api/v1/services/rerank/text-rerank/text-rerank",
+                %{
+                  "model" => model,
+                  "input" => %{"query" => query, "documents" => documents},
+                  "parameters" => %{"return_documents" => false}
+                },
+                fn body -> get_in(body, ["output", "results"]) || [] end
+              }
+            else
+              {
+                "/rerank",
+                %{"model" => model, "query" => query, "documents" => documents},
+                fn body -> Map.get(body, "results", []) end
+              }
+            end
 
-          request(:post, "/rerank", json: payload)
-          |> map_response(fn body -> Map.get(body, "results", []) end)
+          request(:post, path, json: payload)
+          |> map_response(unwrap)
         end)
+    end
+  end
+
+  # DashScope hosts don't serve /rerank (verified: compatible-mode returns
+  # 404); rerank only exists on their native endpoint.
+  defp dashscope?(nil), do: false
+
+  defp dashscope?(base_url) do
+    String.contains?(base_url, "dashscope")
+  end
+
+  # "https://host/prefix" → "https://host"
+  defp origin(base_url) do
+    case URI.new(base_url) do
+      {:ok, %URI{scheme: scheme, host: host} = uri}
+      when not is_nil(scheme) and not is_nil(host) ->
+        %{uri | path: nil, query: nil, fragment: nil} |> URI.to_string()
+
+      _ ->
+        base_url
     end
   end
 
@@ -144,9 +187,18 @@ defmodule Dran.Inference.Client do
     base = Config.base_url()
     key = Config.api_key()
 
+    # An absolute path (http…/…) bypasses the base_url — used by endpoints
+    # that live at the host origin (e.g. DashScope's native rerank).
+    url =
+      if String.starts_with?(path, "http") do
+        path
+      else
+        base <> path
+      end
+
     req_opts = [
       method: method,
-      url: base <> path,
+      url: url,
       headers: [{"authorization", "Bearer #{key}"}],
       receive_timeout: Config.timeout(),
       # Retry is handled by Agent.Engine.call_llm/2 — no double-retry.

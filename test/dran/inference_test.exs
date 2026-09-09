@@ -130,6 +130,58 @@ defmodule Dran.InferenceTest do
     end
   end
 
+  describe "rerank/2 on a DashScope base_url" do
+    setup do
+      Req.Test.stub(Dran.Inference.Client, fn conn ->
+        assert conn.method == "POST"
+
+        assert conn.request_path ==
+                 "/api/v1/services/rerank/text-rerank/text-rerank"
+
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        decoded = Jason.decode!(body)
+
+        # native shape: nested input + parameters, NOT the flat /rerank one
+        assert decoded["model"] == "Qwen3-Reranker"
+        assert decoded["input"]["query"] == "elixir"
+        assert decoded["input"]["documents"] == ["doc1", "doc2"]
+        assert is_map(decoded["parameters"])
+
+        Req.Test.json(conn, %{
+          "output" => %{
+            "results" => [
+              %{"index" => 1, "relevance_score" => 0.9},
+              %{"index" => 0, "relevance_score" => 0.4}
+            ]
+          },
+          "usage" => %{"total_tokens" => 61},
+          "request_id" => "test-req"
+        })
+      end)
+
+      Application.put_env(:dran, :inference,
+        base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        api_key: "test-key",
+        embedding_model: "Qwen3-Embedding",
+        rerank_model: "Qwen3-Reranker",
+        timeout: 5_000,
+        req_plug: {Req.Test, Dran.Inference.Client},
+        schedule_async: false
+      )
+
+      :ok
+    end
+
+    test "translates to the native endpoint and unwraps output.results" do
+      assert {:ok, results} = Inference.rerank("elixir", ["doc1", "doc2"])
+
+      assert results == [
+               %{"index" => 1, "relevance_score" => 0.9},
+               %{"index" => 0, "relevance_score" => 0.4}
+             ]
+    end
+  end
+
   describe "models/0" do
     setup do
       Req.Test.stub(Dran.Inference.Client, fn conn ->
