@@ -4,7 +4,6 @@ defmodule Dran.Inference.QueueSupervisor do
 
   Capabilities:
   - `:embed`
-  - `:rerank`
   - `:chat`
   """
 
@@ -20,7 +19,6 @@ defmodule Dran.Inference.QueueSupervisor do
     children = [
       {Registry, keys: :unique, name: Dran.Inference.QueueRegistry},
       {Dran.Inference.Queue, capability: :embed},
-      {Dran.Inference.Queue, capability: :rerank},
       {Dran.Inference.Queue, capability: :chat}
     ]
 

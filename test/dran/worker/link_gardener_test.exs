@@ -453,7 +453,6 @@ defmodule Dran.Worker.LinkGardenerTest do
         api_key: "test-key",
         chat_model: "Ornith-1.0-9B",
         embedding_model: "Qwen3-Embedding",
-        rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
         schedule_async: false,
         req_plug: {Req.Test, Dran.Inference.Client}

@@ -1,7 +1,7 @@
 defmodule DranWeb.AdminModelsLive do
   @moduledoc """
   Instance model configuration (owner-only): pick the model used for each
-  purpose (chat, embeddings, reranking) from the provider's `/v1/models` list,
+  purpose (chat, embeddings) from the provider's `/v1/models` list,
   with a per-model test button. Moved verbatim from the old SettingsLive
   "models" tab.
   """
@@ -26,11 +26,7 @@ defmodule DranWeb.AdminModelsLive do
          gettext("Model used for chat completions, worker reasoning, and title generation.")
        end},
       {"model_embedding", fn -> gettext("Embeddings") end,
-       fn -> gettext("Model used to vectorize page bodies for semantic search and relations.") end},
-      {"model_rerank", fn -> gettext("Re-ranking") end,
-       fn ->
-         gettext("Model used to re-rank semantic search results by relevance to the query.")
-       end}
+       fn -> gettext("Model used to vectorize page bodies for semantic search and relations.") end}
     ]
   end
 
@@ -157,9 +153,6 @@ defmodule DranWeb.AdminModelsLive do
         "model_embedding" ->
           Client.embeddings(model, ["test"])
 
-        "model_rerank" ->
-          Client.rerank(model, "test", ["test doc"])
-
         _ ->
           {:error, :unknown_model_key}
       end
@@ -172,7 +165,6 @@ defmodule DranWeb.AdminModelsLive do
 
   defp effective_model("model_chat"), do: Config.chat_model()
   defp effective_model("model_embedding"), do: Config.embedding_model()
-  defp effective_model("model_rerank"), do: Config.rerank_model()
   defp effective_model(_), do: nil
 
   # Compact, human-readable reason for the UI.

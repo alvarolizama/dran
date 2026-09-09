@@ -754,11 +754,6 @@ msgstr ""
 msgid "Key meta fields"
 msgstr ""
 
-#: lib/dran_web/live/admin_system_live.ex:69
-#, elixir-autogen, elixir-format
-msgid "LLM, embeddings, and reranking"
-msgstr ""
-
 #: lib/dran_web/live/docs_live.ex:23
 #: lib/dran_web/live/docs_live.ex:336
 #, elixir-autogen, elixir-format
@@ -805,16 +800,6 @@ msgstr ""
 #: lib/dran_web/live/docs_live.ex:1657
 #, elixir-autogen, elixir-format
 msgid "Required"
-msgstr ""
-
-#: lib/dran_web/live/admin_system_live.ex:182
-#, elixir-autogen, elixir-format
-msgid "Rerank enabled"
-msgstr ""
-
-#: lib/dran_web/live/admin_system_live.ex:172
-#, elixir-autogen, elixir-format
-msgid "Rerank model"
 msgstr ""
 
 #: lib/dran_web/live/admin_models_live.ex:310
@@ -1590,16 +1575,6 @@ msgstr ""
 msgid "Model used to vectorize page bodies for semantic search and relations."
 msgstr ""
 
-#: lib/dran_web/live/admin_models_live.ex:30
-#, elixir-autogen, elixir-format
-msgid "Re-ranking"
-msgstr ""
-
-#: lib/dran_web/live/admin_models_live.ex:32
-#, elixir-autogen, elixir-format
-msgid "Model used to re-rank semantic search results by relevance to the query."
-msgstr ""
-
 #: lib/dran_web/live/admin_system_live.ex:75
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
@@ -1629,11 +1604,6 @@ msgstr ""
 #: lib/dran_web/live/admin_system_live.ex:162
 #, elixir-autogen, elixir-format
 msgid "Maximum text length (in characters) sent to the embedding API per call. Read-only — set via environment variable."
-msgstr ""
-
-#: lib/dran_web/live/admin_system_live.ex:185
-#, elixir-autogen, elixir-format
-msgid "Whether semantic search results are re-ranked by relevance. Read-only — set via environment variable."
 msgstr ""
 
 #: lib/dran_web/live/admin_system_live.ex:196
@@ -2699,10 +2669,6 @@ msgstr ""
 msgid "Salir"
 msgstr ""
 
-#: lib/dran_web/live/admin_live.ex:62
-#, elixir-autogen, elixir-format
-msgid "Select models for chat, embeddings, and reranking."
-msgstr ""
 
 #: lib/dran_web/live/admin_system_live.ex:23
 #: lib/dran_web/live/admin_system_live.ex:60
@@ -3587,11 +3553,6 @@ msgstr ""
 #: lib/dran_web/live/admin_system_live.ex:142
 #, elixir-autogen, elixir-format
 msgid "Effective model for embeddings. Configure in Admin → Models."
-msgstr ""
-
-#: lib/dran_web/live/admin_system_live.ex:174
-#, elixir-autogen, elixir-format
-msgid "Effective model for re-ranking search results. Configure in Admin → Models."
 msgstr ""
 
 #: lib/dran_web/live/workflows_live.ex:1455

@@ -66,7 +66,7 @@ defmodule DranWeb.AdminSystemLive do
           <.config_section
             icon="hero-cpu-chip"
             title={gettext("Inference API")}
-            subtitle={gettext("LLM, embeddings, and reranking")}
+            subtitle={gettext("LLM, embeddings")}
           >
             <.config_row
               label={gettext("Status")}
@@ -167,27 +167,6 @@ defmodule DranWeb.AdminSystemLive do
               <span class="text-sm text-base-content/60">
                 {Config.embedding_body_limit()} {gettext("chars")}
               </span>
-            </.config_row>
-            <.config_row
-              label={gettext("Rerank model")}
-              description={
-                gettext("Effective model for re-ranking search results. Configure in Admin → Models.")
-              }
-            >
-              <code class="text-sm font-mono text-primary">
-                {Config.rerank_model() || "—"}
-              </code>
-            </.config_row>
-            <.config_row
-              label={gettext("Rerank enabled")}
-              env="DRAN_INFERENCE_USE_RERANK"
-              description={
-                gettext(
-                  "Whether semantic search results are re-ranked by relevance. Read-only — set via environment variable."
-                )
-              }
-            >
-              <.status_badge active={Config.use_rerank?()} />
             </.config_row>
             <.config_row
               label={gettext("Request timeout")}
@@ -316,25 +295,6 @@ defmodule DranWeb.AdminSystemLive do
         {render_slot(@inner_block)}
       </div>
     </div>
-    """
-  end
-
-  attr :active, :boolean, required: true
-
-  defp status_badge(assigns) do
-    ~H"""
-    <span class={[
-      "inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full",
-      @active && "bg-success/15 text-success",
-      !@active && "bg-base-200 text-base-content/50"
-    ]}>
-      <span class={[
-        "size-1.5 rounded-full",
-        @active && "bg-success",
-        !@active && "bg-base-content/30"
-      ]} />
-      {if @active, do: gettext("Enabled"), else: gettext("Disabled")}
-    </span>
     """
   end
 

@@ -10,7 +10,7 @@ defmodule Dran.GraphTest do
   #   - refresh_pagerank/1: scores persisted into Page.meta as floats
   #
   # Same setup pattern as sync_links_test.exs: disable inference so
-  # create_page doesn't call external embedding/rerank APIs. Each test
+  # create_page doesn't call external embedding APIs. Each test
   # that touches the DB creates its OWN isolated context (rather than
   # sharing "personal") so pagerank(ctx.id) only sees the relations
   # created by that test.
@@ -25,7 +25,6 @@ defmodule Dran.GraphTest do
       base_url: nil,
       api_key: nil,
       embedding_model: nil,
-      rerank_model: nil,
       timeout: 100,
       schedule_async: false
     )

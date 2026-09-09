@@ -26,7 +26,6 @@ defmodule Dran.Worker.EngineTest do
       base_url: nil,
       api_key: nil,
       embedding_model: nil,
-      rerank_model: nil,
       timeout: 100,
       schedule_async: false
     )

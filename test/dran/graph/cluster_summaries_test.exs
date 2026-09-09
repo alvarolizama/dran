@@ -4,7 +4,7 @@ defmodule Dran.Graph.ClusterSummariesTest do
   # Tests for Dran.Graph.ClusterSummaries (Plan F1: Cluster Summaries).
   #
   # Same setup pattern as graph_test.exs: inference is disabled so the pages
-  # helpers never call external embedding/rerank APIs, and `generate_all/1`
+  # helpers never call external embedding APIs, and `generate_all/1`
   # falls back to its deterministic summary. Each test creates its OWN isolated
   # context (rather than sharing "personal"). `async: false` keeps the sandbox
   # in shared mode so the `Task.async_stream` workers can check out a
@@ -21,7 +21,6 @@ defmodule Dran.Graph.ClusterSummariesTest do
       base_url: nil,
       api_key: nil,
       embedding_model: nil,
-      rerank_model: nil,
       timeout: 100,
       schedule_async: false
     )

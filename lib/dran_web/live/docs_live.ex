@@ -740,7 +740,7 @@ defmodule DranWeb.DocsLive do
                 (Admin → Models)
               </td>
               <td class="px-4 py-2 font-mono text-base-content/60">
-                Ornith-1.0-9B / Qwen3-Embedding / Qwen3-Reranker
+                Ornith-1.0-9B / Qwen3-Embedding
               </td>
               <td class="px-4 py-2">
                 Model overrides per capability — configured in the admin UI (DB), not env vars

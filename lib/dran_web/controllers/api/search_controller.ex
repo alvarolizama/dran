@@ -3,7 +3,7 @@ defmodule DranWeb.API.SearchController do
 
   alias Dran.Knowledge
 
-  @doc "GET /api/search?q=...&context=...&type=...&strategy=...&rerank=false"
+  @doc "GET /api/search?q=...&context=...&type=...&strategy=..."
   def search(conn, %{"q" => query} = params) do
     case resolve_workspace_id(params["workspace"]) do
       :error ->
@@ -18,7 +18,6 @@ defmodule DranWeb.API.SearchController do
           |> maybe_put(:type, params["type"])
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
           |> maybe_put(:strategy, parse_strategy(params["strategy"]))
-          |> maybe_put(:rerank, parse_rerank(params["rerank"]))
 
         case Knowledge.search(query, opts) do
           {:ok, results} ->
@@ -70,7 +69,7 @@ defmodule DranWeb.API.SearchController do
     |> json(%{errors: %{detail: "q parameter is required"}})
   end
 
-  @doc "GET /api/search/semantic?q=...&context=...&strategy=...&rerank=false"
+  @doc "GET /api/search/semantic?q=...&context=...&strategy=..."
   def semantic(conn, %{"q" => query} = params) do
     case resolve_workspace_id(params["workspace"]) do
       :error ->
@@ -84,7 +83,6 @@ defmodule DranWeb.API.SearchController do
           |> maybe_put(:workspace_id, workspace_id)
           |> maybe_put(:type, params["type"])
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
-          |> maybe_put(:rerank, parse_rerank(params["rerank"]))
 
         strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
 
@@ -132,11 +130,4 @@ defmodule DranWeb.API.SearchController do
   defp parse_strategy("hybrid"), do: :hybrid
   defp parse_strategy("auto"), do: :auto
   defp parse_strategy(_), do: nil
-
-  defp parse_rerank(nil), do: nil
-  defp parse_rerank("true"), do: true
-  defp parse_rerank("1"), do: true
-  defp parse_rerank("false"), do: false
-  defp parse_rerank("0"), do: false
-  defp parse_rerank(_), do: nil
 end

@@ -15,7 +15,6 @@ defmodule Dran.SemanticSearchTest do
       base_url: "http://localhost:8000/v1",
       api_key: "test-key",
       embedding_model: "Qwen3-Embedding",
-      rerank_model: "Qwen3-Reranker",
       timeout: 5_000,
       req_plug: {Req.Test, Dran.Inference.Client},
       schedule_async: false

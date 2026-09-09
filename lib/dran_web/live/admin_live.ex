@@ -59,7 +59,7 @@ defmodule DranWeb.AdminLive do
               href={~p"/admin/models"}
               icon="hero-cpu-chip"
               title={gettext("Models")}
-              description={gettext("Select models for chat, embeddings, and reranking.")}
+              description={gettext("Select models for chat and embeddings.")}
             />
 
             <.admin_card

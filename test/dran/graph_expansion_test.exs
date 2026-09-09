@@ -5,7 +5,7 @@ defmodule Dran.GraphExpansionTest do
   # Knowledge.cluster_pages/2 (Task 4.3).
   #
   # Fixture pattern mirrors sync_links_test.exs: inference is disabled so
-  # create_page doesn't call external embedding/rerank APIs, and a
+  # create_page doesn't call external embedding APIs, and a
   # "personal" context is reused or created.
 
   alias Dran.Knowledge
@@ -17,7 +17,6 @@ defmodule Dran.GraphExpansionTest do
       base_url: nil,
       api_key: nil,
       embedding_model: nil,
-      rerank_model: nil,
       timeout: 100,
       schedule_async: false
     )

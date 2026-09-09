@@ -5,14 +5,13 @@ defmodule Dran.JourneyTest do
   alias Dran.Journey
 
   setup do
-    # Disable inference so create_page doesn't call external embedding/rerank APIs
+    # Disable inference so create_page doesn't call external embedding APIs
     original = Application.get_env(:dran, :inference)
 
     Application.put_env(:dran, :inference,
       base_url: nil,
       api_key: nil,
       embedding_model: nil,
-      rerank_model: nil,
       timeout: 100,
       schedule_async: false
     )

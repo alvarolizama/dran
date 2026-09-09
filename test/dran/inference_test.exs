@@ -35,10 +35,6 @@ defmodule Dran.InferenceTest do
     test "embed/1 returns {:error, :not_configured}" do
       assert {:error, :not_configured} = Inference.embed("hola")
     end
-
-    test "rerank/2 returns {:error, :not_configured}" do
-      assert {:error, :not_configured} = Inference.rerank("query", ["doc"])
-    end
   end
 
   describe "embed/1" do
@@ -73,7 +69,6 @@ defmodule Dran.InferenceTest do
         base_url: "http://localhost:8000/v1",
         api_key: "test-key",
         embedding_model: "Qwen3-Embedding",
-        rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
         req_plug: {Req.Test, Dran.Inference.Client},
         schedule_async: false
@@ -87,101 +82,6 @@ defmodule Dran.InferenceTest do
     end
   end
 
-  describe "rerank/2" do
-    setup do
-      Req.Test.stub(Dran.Inference.Client, fn conn ->
-        assert conn.method == "POST"
-        assert conn.request_path == "/v1/rerank"
-
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
-        assert decoded["model"] == "Qwen3-Reranker"
-        assert decoded["query"] == "elixir"
-        assert decoded["documents"] == ["doc1", "doc2"]
-
-        Req.Test.json(conn, %{
-          "results" => [
-            %{"index" => 1, "relevance_score" => 0.9},
-            %{"index" => 0, "relevance_score" => 0.4}
-          ]
-        })
-      end)
-
-      Application.put_env(:dran, :inference,
-        base_url: "http://localhost:8000/v1",
-        api_key: "test-key",
-        embedding_model: "Qwen3-Embedding",
-        rerank_model: "Qwen3-Reranker",
-        timeout: 5_000,
-        req_plug: {Req.Test, Dran.Inference.Client},
-        schedule_async: false
-      )
-
-      :ok
-    end
-
-    test "returns reranked results" do
-      assert {:ok, results} = Inference.rerank("elixir", ["doc1", "doc2"])
-
-      assert results == [
-               %{"index" => 1, "relevance_score" => 0.9},
-               %{"index" => 0, "relevance_score" => 0.4}
-             ]
-    end
-  end
-
-  describe "rerank/2 on a DashScope base_url" do
-    setup do
-      Req.Test.stub(Dran.Inference.Client, fn conn ->
-        assert conn.method == "POST"
-
-        assert conn.request_path ==
-                 "/api/v1/services/rerank/text-rerank/text-rerank"
-
-        {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
-
-        # native shape: nested input + parameters, NOT the flat /rerank one
-        assert decoded["model"] == "Qwen3-Reranker"
-        assert decoded["input"]["query"] == "elixir"
-        assert decoded["input"]["documents"] == ["doc1", "doc2"]
-        assert is_map(decoded["parameters"])
-
-        Req.Test.json(conn, %{
-          "output" => %{
-            "results" => [
-              %{"index" => 1, "relevance_score" => 0.9},
-              %{"index" => 0, "relevance_score" => 0.4}
-            ]
-          },
-          "usage" => %{"total_tokens" => 61},
-          "request_id" => "test-req"
-        })
-      end)
-
-      Application.put_env(:dran, :inference,
-        base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-        api_key: "test-key",
-        embedding_model: "Qwen3-Embedding",
-        rerank_model: "Qwen3-Reranker",
-        timeout: 5_000,
-        req_plug: {Req.Test, Dran.Inference.Client},
-        schedule_async: false
-      )
-
-      :ok
-    end
-
-    test "translates to the native endpoint and unwraps output.results" do
-      assert {:ok, results} = Inference.rerank("elixir", ["doc1", "doc2"])
-
-      assert results == [
-               %{"index" => 1, "relevance_score" => 0.9},
-               %{"index" => 0, "relevance_score" => 0.4}
-             ]
-    end
-  end
-
   describe "models/0" do
     setup do
       Req.Test.stub(Dran.Inference.Client, fn conn ->
@@ -192,7 +92,6 @@ defmodule Dran.InferenceTest do
           "object" => "list",
           "data" => [
             %{"id" => "Qwen3-Embedding"},
-            %{"id" => "Qwen3-Reranker"},
             %{"id" => "MarkItDown"}
           ]
         })
@@ -202,7 +101,6 @@ defmodule Dran.InferenceTest do
         base_url: "http://localhost:8000/v1",
         api_key: "test-key",
         embedding_model: "Qwen3-Embedding",
-        rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
         req_plug: {Req.Test, Dran.Inference.Client},
         schedule_async: false
@@ -213,7 +111,7 @@ defmodule Dran.InferenceTest do
 
     test "returns configured model ids" do
       assert {:ok, models} = Inference.models()
-      assert Enum.map(models, & &1["id"]) == ["Qwen3-Embedding", "Qwen3-Reranker", "MarkItDown"]
+      assert Enum.map(models, & &1["id"]) == ["Qwen3-Embedding", "MarkItDown"]
     end
   end
 
@@ -223,8 +121,7 @@ defmodule Dran.InferenceTest do
         Req.Test.json(conn, %{
           "object" => "list",
           "data" => [
-            %{"id" => "Qwen3-Embedding"},
-            %{"id" => "Qwen3-Reranker"}
+            %{"id" => "Qwen3-Embedding"}
           ]
         })
       end)
@@ -233,7 +130,6 @@ defmodule Dran.InferenceTest do
         base_url: "http://localhost:8000/v1",
         api_key: "test-key",
         embedding_model: "Qwen3-Embedding",
-        rerank_model: "Qwen3-Reranker",
         timeout: 5_000,
         req_plug: {Req.Test, Dran.Inference.Client},
         schedule_async: false
@@ -246,7 +142,6 @@ defmodule Dran.InferenceTest do
       assert {:ok, {present, _missing}} = Inference.health_check()
 
       assert "Qwen3-Embedding" in present
-      assert "Qwen3-Reranker" in present
     end
   end
 
@@ -263,7 +158,6 @@ defmodule Dran.InferenceTest do
           "DRAN_INFERENCE_API_URL" => "http://inference.example.com:8000/v1/",
           "DRAN_INFERENCE_API_KEY" => "secret",
           "DRAN_INFERENCE_EMBEDDING_MODEL" => "custom-embed",
-          "DRAN_INFERENCE_RERANK_MODEL" => "custom-rerank",
           "DRAN_INFERENCE_CHAT_MODEL" => "custom-chat",
           "DRAN_INFERENCE_TIMEOUT" => "15000"
         },
@@ -275,7 +169,6 @@ defmodule Dran.InferenceTest do
           # Models come exclusively from the provider's /v1/models list (saved
           # to Settings) — model env vars are ignored.
           assert Keyword.get(cfg, :embedding_model) == nil
-          assert Keyword.get(cfg, :rerank_model) == nil
           assert Keyword.get(cfg, :chat_model) == nil
           assert Keyword.get(cfg, :timeout) == 15_000
         end

@@ -2,10 +2,9 @@ defmodule Dran.Inference do
   @moduledoc """
   Public API for the OpenAI-compatible inference server.
 
-  Works with three capabilities provided by the OpenAI-compatible inference server:
+  Works with the capabilities provided by the OpenAI-compatible inference server:
 
   - embeddings (for semantic search)
-  - reranking (for better search result ordering)
   - chat helpers (for summaries, tags, agents, and image descriptions)
 
   Models are configured via environment variables or the Settings panel —
@@ -42,14 +41,6 @@ defmodule Dran.Inference do
   end
 
   @doc """
-  Rerank a list of document strings for the given query.
-  """
-  @spec rerank(String.t(), list(String.t())) :: Client.result(list(map()))
-  def rerank(query, documents) when is_binary(query) and is_list(documents) do
-    Client.rerank(Config.rerank_model(), query, documents)
-  end
-
-  @doc """
   Send a chat completion request using the configured chat-compatible model.
   """
   @spec chat(map()) :: Client.result(map())
@@ -71,7 +62,6 @@ defmodule Dran.Inference do
   def health_check do
     required = [
       Config.embedding_model(),
-      Config.rerank_model(),
       Config.chat_model()
     ]
 

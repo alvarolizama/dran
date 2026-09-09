@@ -29,9 +29,6 @@ defmodule Dran.Inference.Config do
   @spec embedding_model :: String.t()
   def embedding_model, do: model_or_setting("embedding")
 
-  @spec rerank_model :: String.t()
-  def rerank_model, do: model_or_setting("rerank")
-
   @spec chat_model :: String.t()
   def chat_model, do: model_or_setting("chat")
 
@@ -44,9 +41,6 @@ defmodule Dran.Inference.Config do
   rescue
     _ -> get(:"#{key}_model")
   end
-
-  @spec use_rerank?() :: boolean()
-  def use_rerank?, do: get(:use_rerank) || false
 
   @spec embedding_dimensions :: pos_integer()
   def embedding_dimensions, do: get(:embedding_dimensions) || 1024
@@ -79,7 +73,6 @@ defmodule Dran.Inference.Config do
           base_url: ensure_no_trailing_slash(url),
           api_key: System.get_env("DRAN_INFERENCE_API_KEY"),
           timeout: parse_timeout(System.get_env("DRAN_INFERENCE_TIMEOUT", "30000")),
-          use_rerank: parse_boolean(System.get_env("DRAN_INFERENCE_USE_RERANK", "true")),
           embedding_dimensions: 1024,
           embedding_body_limit:
             parse_int(System.get_env("DRAN_EMBEDDING_BODY_LIMIT", "10000"), 10000)
@@ -107,10 +100,5 @@ defmodule Dran.Inference.Config do
       {n, ""} when n > 0 -> n
       _ -> default
     end
-  end
-
-  defp parse_boolean(value) do
-    value = String.downcase(to_string(value))
-    value in ["true", "1", "yes", "on"]
   end
 end

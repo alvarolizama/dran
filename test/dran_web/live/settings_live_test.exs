@@ -537,7 +537,7 @@ defmodule DranWeb.SettingsLiveTest do
 
     assert html =~ ~s(id="models-form")
 
-    for purpose <- ~w(model_chat model_embedding model_rerank) do
+    for purpose <- ~w(model_chat model_embedding) do
       assert html =~ ~s(id="models_#{purpose}")
       assert html =~ ~s(id="test_model_#{purpose}")
       assert html =~ "data-model-key=\"#{purpose}\""

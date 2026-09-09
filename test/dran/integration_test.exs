@@ -27,11 +27,9 @@ defmodule Dran.IntegrationTest do
       base_url: nil,
       api_key: nil,
       embedding_model: nil,
-      rerank_model: nil,
       chat_model: nil,
       timeout: 50,
-      schedule_async: false,
-      use_rerank: false
+      schedule_async: false
     )
 
     on_exit(fn ->

@@ -335,14 +335,6 @@ defmodule Dran.Knowledge do
 
   defp maybe_filter_props(query, _props), do: query
 
-  defp apply_rerank(query_string, results, opts) do
-    if Keyword.get(opts, :rerank, Dran.Inference.Config.use_rerank?()) do
-      Dran.Rerank.rerank(query_string, results)
-    else
-      {:ok, results}
-    end
-  end
-
   # NOTE: list_todos was removed — todos are first-class tasks now.
 
   @doc """
@@ -1435,7 +1427,6 @@ defmodule Dran.Knowledge do
   - `:limit` — max results (default 20)
   - `:strategy` — `:auto` (default), `:fts`, `:fuzzy`, `:semantic`, `:hybrid`
   - `:k` — RRF constant for hybrid (default 60)
-  - `:rerank` — boolean, overrides `DRAN_INFERENCE_USE_RERANK`
 
   Returns `{:ok, [result]}` where each result is a normalized map:
 
@@ -1531,7 +1522,7 @@ defmodule Dran.Knowledge do
 
     excerpts = Enum.map(results, fn %{page: page, excerpt: excerpt} -> {page, excerpt} end)
 
-    apply_rerank(query_string, excerpts, opts)
+    {:ok, excerpts}
   end
 
   @doc """
@@ -1614,7 +1605,7 @@ defmodule Dran.Knowledge do
           |> maybe_filter_type(type)
 
         results = Repo.all(query)
-        apply_rerank(query_string, results, opts)
+        {:ok, results}
 
       {:error, reason} ->
         {:error, reason}
@@ -1662,7 +1653,7 @@ defmodule Dran.Knowledge do
         |> Enum.take(Keyword.get(opts, :limit, 20))
         |> Enum.map(fn {_id, result} -> result end)
 
-      apply_rerank(query_string, results, opts)
+      {:ok, results}
     end
   end
 
@@ -1774,7 +1765,7 @@ defmodule Dran.Knowledge do
         |> Enum.take(limit)
         |> Enum.map(fn {_id, result} -> result end)
 
-      apply_rerank(query_string, scored, opts)
+      {:ok, scored}
     end
   end
 

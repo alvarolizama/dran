@@ -751,11 +751,6 @@ msgstr "API de inferencia"
 msgid "Key meta fields"
 msgstr "Campos meta clave"
 
-#: lib/dran_web/live/admin_system_live.ex:69
-#, elixir-autogen, elixir-format
-msgid "LLM, embeddings, and reranking"
-msgstr "LLM, embeddings y reranking"
-
 #: lib/dran_web/live/docs_live.ex:23
 #: lib/dran_web/live/docs_live.ex:336
 #, elixir-autogen, elixir-format
@@ -803,16 +798,6 @@ msgstr "Tiempo límite de petición"
 #, elixir-autogen, elixir-format
 msgid "Required"
 msgstr "Requerido"
-
-#: lib/dran_web/live/admin_system_live.ex:182
-#, elixir-autogen, elixir-format
-msgid "Rerank enabled"
-msgstr "Rerank activado"
-
-#: lib/dran_web/live/admin_system_live.ex:172
-#, elixir-autogen, elixir-format
-msgid "Rerank model"
-msgstr "Modelo de rerank"
 
 #: lib/dran_web/live/admin_models_live.ex:310
 #: lib/dran_web/live/settings_live.ex:657
@@ -1587,16 +1572,6 @@ msgstr "Embeddings"
 msgid "Model used to vectorize page bodies for semantic search and relations."
 msgstr "Modelo usado para vectorizar los cuerpos de las páginas para búsqueda semántica y relaciones."
 
-#: lib/dran_web/live/admin_models_live.ex:30
-#, elixir-autogen, elixir-format
-msgid "Re-ranking"
-msgstr "Re-ranking"
-
-#: lib/dran_web/live/admin_models_live.ex:32
-#, elixir-autogen, elixir-format
-msgid "Model used to re-rank semantic search results by relevance to the query."
-msgstr "Modelo usado para reordenar los resultados de búsqueda semántica por relevancia a la consulta."
-
 #: lib/dran_web/live/admin_system_live.ex:75
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
@@ -1627,11 +1602,6 @@ msgstr "Dimensionalidad del vector devuelto por el modelo de embeddings. Solo le
 #, elixir-autogen, elixir-format
 msgid "Maximum text length (in characters) sent to the embedding API per call. Read-only — set via environment variable."
 msgstr "Longitud máxima de texto (en caracteres) enviada a la API de embeddings por llamada. Solo lectura — se define vía variable de entorno."
-
-#: lib/dran_web/live/admin_system_live.ex:185
-#, elixir-autogen, elixir-format
-msgid "Whether semantic search results are re-ranked by relevance. Read-only — set via environment variable."
-msgstr "Si los resultados de búsqueda semántica se reordenan por relevancia. Solo lectura — se define vía variable de entorno."
 
 #: lib/dran_web/live/admin_system_live.ex:196
 #, elixir-autogen, elixir-format
@@ -2696,11 +2666,6 @@ msgstr "Reportes"
 msgid "Salir"
 msgstr ""
 
-#: lib/dran_web/live/admin_live.ex:62
-#, elixir-autogen, elixir-format
-msgid "Select models for chat, embeddings, and reranking."
-msgstr "Select models for chat, embeddings, and reranking."
-
 #: lib/dran_web/live/admin_system_live.ex:23
 #: lib/dran_web/live/admin_system_live.ex:60
 #, elixir-autogen, elixir-format
@@ -3584,11 +3549,6 @@ msgstr ""
 #: lib/dran_web/live/admin_system_live.ex:142
 #, elixir-autogen, elixir-format
 msgid "Effective model for embeddings. Configure in Admin → Models."
-msgstr ""
-
-#: lib/dran_web/live/admin_system_live.ex:174
-#, elixir-autogen, elixir-format
-msgid "Effective model for re-ranking search results. Configure in Admin → Models."
 msgstr ""
 
 #: lib/dran_web/live/workflows_live.ex:1455

@@ -4,7 +4,7 @@ defmodule Dran.Inference.Queue do
 
   Dran talks to a single local OpenAI-compatible inference server that may
   struggle with many concurrent requests. This GenServer hands out a single
-  "permit" per capability (`:embed`, `:rerank`, `:chat`) so that only one request of that type runs at a time.
+  "permit" per capability (`:embed`, `:chat`) so that only one request of that type runs at a time.
 
   The actual HTTP request still runs in the caller process, which keeps
   `Req.Test` stubs working in tests and avoids blocking a GenServer with
@@ -30,7 +30,6 @@ defmodule Dran.Inference.Queue do
   ## Capabilities
 
   - `:embed` — embedding requests
-  - `:rerank` — reranking requests
   - `:chat` — chat/summary/tag generation
   """
   @spec run(atom(), (-> result)) :: result when result: term()
