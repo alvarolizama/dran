@@ -141,6 +141,131 @@ defmodule DranWeb.GoalLiveTest do
       refute html =~ t("Workflows vinculados")
     end
 
+    test "detach_workflow unlinks the workflow from the goal", %{
+      conn: conn,
+      ws: ws,
+      goal: goal
+    } do
+      {:ok, workflow} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "goal_id" => goal.id,
+          "title" => "Deploy pipeline",
+          "slug" => "deploy-pipeline"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      assert has_element?(view, "#goal-workflows")
+
+      view
+      |> element("button[phx-click='detach_workflow'][phx-value-workflow-id='#{workflow.id}']")
+      |> render_click()
+
+      refute has_element?(view, "#goal-workflows")
+      assert Workflows.get_workflow!(workflow.id).goal_id == nil
+    end
+  end
+
+  describe "linked notes (part_of relations)" do
+    setup %{ws: ws} do
+      {:ok, plan_note} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Q4 Launch Plan",
+          slug: "q4-launch-plan",
+          body: "The plan",
+          page_type: "note",
+          meta: %{"kind" => "plan"}
+        })
+
+      {:ok, project_note} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Website Redesign",
+          slug: "website-redesign",
+          body: "The project",
+          page_type: "note",
+          meta: %{"kind" => "project"}
+        })
+
+      %{plan_note: plan_note, project_note: project_note}
+    end
+
+    test "empty state renders when no notes are linked", %{conn: conn, ws: ws, goal: goal} do
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      assert has_element?(view, "#goal-linked-notes")
+      assert html =~ t("Sin notas vinculadas.")
+    end
+
+    test "link_note links a plan/project note via part_of relation", %{
+      conn: conn,
+      ws: ws,
+      goal: goal,
+      plan_note: plan_note,
+      project_note: project_note
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      # Empty query: both linkable notes appear, grouped by kind.
+      assert render(view) =~ "Q4 Launch Plan"
+      assert render(view) =~ "Website Redesign"
+
+      # Typing filters server-side.
+      view |> render_change("search_linkable_notes", %{"q" => "website"})
+      assert render(view) =~ "Website Redesign"
+      refute render(view) =~ "Q4 Launch Plan"
+
+      view
+      |> element("button[phx-click='link_note'][phx-value-page-id='#{project_note.id}']")
+      |> render_click()
+
+      assert has_element?(view, "#goal-linked-note-#{project_note.id}")
+      assert Dran.Goals.linked_notes(goal) |> Enum.map(& &1.page.id) == [project_note.id]
+    end
+
+    test "unlink_note removes the relation", %{
+      conn: conn,
+      ws: ws,
+      goal: goal,
+      project_note: project_note
+    } do
+      Dran.Goals.link_note(goal, project_note)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      assert has_element?(view, "#goal-linked-note-#{project_note.id}")
+
+      view
+      |> element("button[phx-click='unlink_note'][phx-value-page-id='#{project_note.id}']")
+      |> render_click()
+
+      refute has_element?(view, "#goal-linked-note-#{project_note.id}")
+      assert Dran.Goals.linked_notes(goal) == []
+    end
+
+    test "archive_linked_note archives the page", %{
+      conn: conn,
+      ws: ws,
+      goal: goal,
+      plan_note: plan_note
+    } do
+      Dran.Goals.link_note(goal, plan_note)
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+
+      view
+      |> element("button[phx-click='archive_linked_note'][phx-value-page-id='#{plan_note.id}']")
+      |> render_click()
+
+      refute has_element?(view, "#goal-linked-note-#{plan_note.id}")
+      page = Knowledge.get_page(plan_note.id)
+      assert page.archived
+    end
+  end
+
+  describe "session broadcast sync" do
     test "refreshes the list on a session_changed broadcast", %{conn: conn, ws: ws, goal: goal} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
 
@@ -150,7 +275,8 @@ defmodule DranWeb.GoalLiveTest do
           "workspace_id" => ws.id,
           "goal_id" => goal.id,
           "title" => "Late workflow",
-          "slug" => "late-workflow"
+          "slug" => "late-workflow",
+          "status" => "active"
         })
 
       {:ok, _} = Workflows.create_step(workflow, %{"title" => "Only", "slug" => "only"})
@@ -162,6 +288,30 @@ defmodule DranWeb.GoalLiveTest do
       {:ok, _} = Executions.open_session(workflow)
 
       assert render(view) =~ "Late workflow"
+    end
+  end
+
+  describe "draft workflows cannot open sessions (live)" do
+    test "show page hides the Nueva sesión button for a draft workflow", %{
+      conn: conn,
+      ws: ws,
+      goal: goal
+    } do
+      {:ok, workflow} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ws.id,
+          "goal_id" => goal.id,
+          "title" => "Draft pipeline",
+          "slug" => "draft-pipeline",
+          "status" => "draft"
+        })
+
+      {:ok, _} = Workflows.create_step(workflow, %{"title" => "Only", "slug" => "only"})
+
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}")
+
+      refute has_element?(view, "#workflow-session-form")
+      refute html =~ "Nueva sesión"
     end
   end
 

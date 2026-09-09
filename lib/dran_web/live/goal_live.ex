@@ -5,6 +5,7 @@ defmodule DranWeb.GoalLive do
 
   alias Dran.Goals
   alias Dran.Goals.Goal
+  alias Dran.Knowledge
   alias Dran.Workflows
   alias DranWeb.Plugs.Auth
 
@@ -211,6 +212,111 @@ defmodule DranWeb.GoalLive do
               </.form>
             </div>
 
+            <%!-- Linked notes — pages (kind plan/project) linked via part_of
+                 relations (page → goal). Manageable from here: link, unlink,
+                 archive. --%>
+            <div id="goal-linked-notes" class="surface-2 rounded-xl p-4">
+              <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
+                <.icon name="hero-document-text" class="size-4 text-primary" />
+                {gettext("Notas vinculadas")}
+                <span class="badge badge-sm badge-ghost">{length(@linked_notes)}</span>
+              </h3>
+
+              <ul
+                :if={@linked_notes != []}
+                id="goal-linked-notes-items"
+                class="space-y-1.5"
+              >
+                <li
+                  :for={entry <- @linked_notes}
+                  id={"goal-linked-note-#{entry.page.id}"}
+                  class="group"
+                >
+                  <div class="flex items-center gap-2">
+                    <.link
+                      navigate={DranWeb.PageTypes.page_show_path(entry.page, @workspace_slug)}
+                      class="flex-1 min-w-0 flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+                    >
+                      <span
+                        :if={entry.page.meta["kind"]}
+                        class="badge badge-ghost badge-xs shrink-0"
+                      >
+                        {entry.page.meta["kind"]}
+                      </span>
+                      <span class="flex-1 min-w-0 truncate">{entry.page.title}</span>
+                    </.link>
+                    <button
+                      type="button"
+                      phx-click="unlink_note"
+                      phx-value-page-id={entry.page.id}
+                      class="shrink-0 opacity-0 group-hover:opacity-100 text-base-content/40 hover:text-warning transition"
+                      title={gettext("Desvincular del goal")}
+                      aria-label={gettext("Desvincular del goal")}
+                    >
+                      <.icon name="hero-link-slash" class="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="archive_linked_note"
+                      phx-value-page-id={entry.page.id}
+                      class="shrink-0 opacity-0 group-hover:opacity-100 text-base-content/40 hover:text-error transition"
+                      title={gettext("Archivar nota")}
+                      aria-label={gettext("Archivar nota")}
+                    >
+                      <.icon name="hero-archive-box" class="size-3.5" />
+                    </button>
+                  </div>
+                </li>
+              </ul>
+
+              <p :if={@linked_notes == []} class="text-xs text-base-content/40">
+                {gettext("Sin notas vinculadas.")}
+              </p>
+
+              <%!-- Search picker (workspace_settings pattern): filter
+                   server-side, one link button per result row, grouped by
+                   kind (plan / project). --%>
+              <form phx-change="search_linkable_notes" class="relative mt-3">
+                <.icon
+                  name="hero-magnifying-glass"
+                  class="absolute left-2.5 top-2 size-4 text-base-content/50"
+                />
+                <input
+                  type="text"
+                  name="q"
+                  value={@note_search}
+                  placeholder={gettext("Buscar notas plan/project…")}
+                  class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </form>
+
+              <div :if={@note_search_results != []} class="mt-2 space-y-1">
+                <div :for={{kind, notes} <- @note_search_results} class="mt-1 first:mt-0">
+                  <p class="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-0.5">
+                    {kind}
+                  </p>
+                  <button
+                    :for={note <- notes}
+                    type="button"
+                    phx-click="link_note"
+                    phx-value-page-id={note.id}
+                    class="w-full flex items-center gap-2 text-left text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+                  >
+                    <.icon name="hero-document-text" class="size-3.5 shrink-0 text-base-content/40" />
+                    <span class="flex-1 min-w-0 truncate">{note.title}</span>
+                    <.icon name="hero-plus" class="size-3.5 shrink-0 text-primary" />
+                  </button>
+                </div>
+              </div>
+
+              <p
+                :if={@note_search_results == [] and @note_search != ""}
+                class="text-xs text-base-content/40 mt-2 text-center"
+              >
+                {gettext("Sin resultados.")}
+              </p>
+            </div>
+
             <%!-- Linked workflows — read-only list, execution layer --%>
             <div :if={@workflows != []} id="goal-workflows" class="surface-2 rounded-xl p-4">
               <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
@@ -219,10 +325,10 @@ defmodule DranWeb.GoalLive do
                 <span class="badge badge-sm badge-ghost">{length(@workflows)}</span>
               </h3>
               <ul class="space-y-1.5">
-                <li :for={workflow <- @workflows}>
+                <li :for={workflow <- @workflows} class="flex items-center gap-1 group">
                   <.link
                     navigate={~p"/#{@workspace_slug}/workflows/#{workflow.slug}"}
-                    class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+                    class="flex-1 min-w-0 flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
                   >
                     <.icon name="hero-bolt" class="size-4 shrink-0 text-base-content/40" />
                     <span class="flex-1 min-w-0 truncate">{workflow.title}</span>
@@ -231,6 +337,16 @@ defmodule DranWeb.GoalLive do
                     </span>
                     <span class="badge badge-ghost badge-xs shrink-0">{workflow.kind}</span>
                   </.link>
+                  <button
+                    type="button"
+                    phx-click="detach_workflow"
+                    phx-value-workflow-id={workflow.id}
+                    class="shrink-0 opacity-0 group-hover:opacity-100 text-base-content/40 hover:text-warning transition"
+                    title={gettext("Desvincular del goal")}
+                    aria-label={gettext("Desvincular del goal")}
+                  >
+                    <.icon name="hero-link-slash" class="size-3.5" />
+                  </button>
                 </li>
               </ul>
             </div>
@@ -389,7 +505,11 @@ defmodule DranWeb.GoalLive do
             goal: goal,
             form: form,
             checklist_form: to_form(%{}, as: :checklist),
+            note_search: "",
+            note_search_results: note_search_results(goal, ""),
             workflows: Workflows.list_by_goal(goal),
+            linked_notes: Goals.linked_notes(goal, kinds: ~w(plan project)),
+            linkable_notes: Goals.linkable_notes(goal),
             editing: Map.get(params, "edit") == "true",
             page_title: goal.title
           )
@@ -543,6 +663,82 @@ defmodule DranWeb.GoalLive do
     end
   end
 
+  # ── Linked notes (part_of relations, sidebar) ──
+
+  # Server-side search over linkable plan/project notes. Results arrive
+  # pre-grouped by kind (`[{kind, [note]}]`) for the picker template.
+  def handle_event("search_linkable_notes", %{"q" => q}, socket) do
+    %{goal: %Goal{} = goal} = socket.assigns
+    {:noreply, assign(socket, note_search: q, note_search_results: note_search_results(goal, q))}
+  end
+
+  # Link a plan/project note to the goal. The page id arrives via the
+  # picker button's phx-value — re-fetched server-side and scoped to the
+  # workspace (a forged id from another workspace is rejected).
+  def handle_event("link_note", %{"page-id" => page_id}, socket) do
+    with %{goal: %Goal{} = goal, context: context} <- socket.assigns,
+         page when page != nil <- Knowledge.get_page(page_id),
+         true <- page.workspace_id == context.id do
+      case Goals.link_note(goal, page) do
+        {:ok, _relation} ->
+          {:noreply, reload_goal_notes(socket, goal)}
+
+        _else ->
+          {:noreply, put_flash(socket, :error, gettext("No se pudo vincular la nota."))}
+      end
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No se pudo vincular la nota."))}
+    end
+  end
+
+  def handle_event("unlink_note", %{"page-id" => page_id}, socket) do
+    with %{goal: %Goal{} = goal, context: context} <- socket.assigns,
+         page when page != nil <- Knowledge.get_page(page_id),
+         true <- page.workspace_id == context.id do
+      case Goals.unlink_note(goal, page) do
+        :ok -> {:noreply, reload_goal_notes(socket, goal)}
+        {:error, _} -> {:noreply, socket}
+      end
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("archive_linked_note", %{"page-id" => page_id}, socket) do
+    with %{goal: %Goal{} = goal, context: context} <- socket.assigns,
+         page when page != nil <- Knowledge.get_page(page_id),
+         true <- page.workspace_id == context.id do
+      case Knowledge.archive_page(page) do
+        {:ok, _page} ->
+          {:noreply,
+           socket
+           |> reload_goal_notes(goal)
+           |> put_flash(:info, gettext("Nota archivada."))}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, gettext("No se pudo archivar la nota."))}
+      end
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No se pudo archivar la nota."))}
+    end
+  end
+
+  # Detach a workflow from the goal (goal_id → nil). Row-level authorization:
+  # the workflow must belong to the goal's workspace.
+  def handle_event("detach_workflow", %{"workflow-id" => workflow_id}, socket) do
+    with %{goal: %Goal{} = goal, context: context} <- socket.assigns,
+         {:ok, uuid} <- Ecto.UUID.cast(workflow_id),
+         workflow when workflow != nil <- Workflows.get_workflow!(uuid),
+         true <- workflow.workspace_id == context.id do
+      case Goals.detach_workflow(goal, workflow) do
+        {:ok, _} -> {:noreply, assign(socket, workflows: Workflows.list_by_goal(goal))}
+        {:error, _} -> {:noreply, put_flash(socket, :error, gettext("No se pudo desvincular."))}
+      end
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No se pudo desvincular."))}
+    end
+  end
+
   def handle_event("delete", _params, socket) do
     goal = socket.assigns.goal
 
@@ -559,6 +755,36 @@ defmodule DranWeb.GoalLive do
   end
 
   # ── Helpers ──
+
+  # Refresh linked notes and reset the picker search after a link/unlink/
+  # archive action.
+  defp reload_goal_notes(socket, %Goal{} = goal) do
+    assign(socket,
+      linked_notes: Goals.linked_notes(goal, kinds: ~w(plan project)),
+      linkable_notes: Goals.linkable_notes(goal),
+      note_search: "",
+      note_search_results: note_search_results(goal, "")
+    )
+  end
+
+  # Linkable notes filtered by query, grouped by kind for the picker:
+  # `[{"plan", [note…]}, {"project", [note…]}]`. Empty query → first 5
+  # per kind (collapsed); typed query → filtered matches.
+  defp note_search_results(%Goal{} = goal, q) do
+    q = String.downcase(q || "")
+
+    results =
+      goal
+      |> Goals.linkable_notes()
+      |> Enum.filter(fn note ->
+        q == "" or String.contains?(String.downcase(note.title), q)
+      end)
+      |> Enum.take(20)
+
+    results
+    |> Enum.group_by(& &1.kind)
+    |> Enum.sort_by(fn {kind, _} -> kind end)
+  end
 
   # Web session identity for attribution: the logged-in user's email,
   # resolved through Dran.Auth.resolve_created_by/1 (falls back to "system"

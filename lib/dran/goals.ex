@@ -95,6 +95,104 @@ defmodule Dran.Goals do
   def delete_goal(%Goal{} = goal), do: Repo.delete(goal)
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Linked notes (page ─part_of→ goal relations)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  import Ecto.Query, only: [from: 2, where: 3]
+
+  alias Dran.Knowledge
+  alias Dran.Relation
+
+  @doc """
+  Pages linked to the goal via `part_of` relations (page → goal), with the
+  relation id attached so the UI can unlink without re-querying. Optional
+  `kinds` filter restricts to note kinds (e.g. `~w(plan project)`).
+  """
+  def linked_notes(%Goal{} = goal, opts \\ []) do
+    kinds = Keyword.get(opts, :kinds)
+
+    query =
+      from r in Relation,
+        where:
+          r.target_id == ^goal.id and
+            r.target_type == "goal" and
+            r.relation_type == "part_of",
+        join: p in Dran.Knowledge.Page,
+        on: p.id == r.source_id and p.page_type == "note" and p.archived == false,
+        order_by: [asc: p.title],
+        select: %{page: p, relation_id: r.id}
+
+    query =
+      if kinds do
+        where(query, [_, p], p.meta["kind"] in ^kinds)
+      else
+        query
+      end
+
+    Repo.all(query)
+  end
+
+  @doc "Link a page to the goal with a `part_of` relation (page → goal)."
+  def link_note(%Goal{} = goal, %Dran.Knowledge.Page{} = page) do
+    Knowledge.create_relation(%{
+      source_id: page.id,
+      source_type: "page",
+      target_id: goal.id,
+      target_type: "goal",
+      relation_type: "part_of"
+    })
+  end
+
+  @doc "Unlink a page from the goal by removing the `part_of` relation."
+  def unlink_note(%Goal{} = goal, %Dran.Knowledge.Page{} = page) do
+    from(r in Relation,
+      where:
+        r.source_id == ^page.id and r.source_type == "page" and
+          r.target_id == ^goal.id and r.target_type == "goal" and
+          r.relation_type == "part_of"
+    )
+    |> Repo.delete_all()
+    |> case do
+      {count, _} when count > 0 -> :ok
+      _ -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Notes of the workspace available to link (kind plan/project, not archived,
+  not already linked). Backs the goal sidebar picker.
+  """
+  def linkable_notes(%Goal{} = goal, kinds \\ ~w(plan project)) do
+    linked_ids =
+      from(r in Relation,
+        where: r.target_id == ^goal.id and r.target_type == "goal",
+        select: r.source_id
+      )
+      |> Repo.all()
+
+    from(p in Dran.Knowledge.Page,
+      where:
+        p.workspace_id == ^goal.workspace_id and
+          p.page_type == "note" and
+          p.archived == false and
+          p.meta["kind"] in ^kinds and
+          p.id not in ^linked_ids,
+      order_by: [asc: p.title],
+      limit: 100,
+      select: %{id: p.id, title: p.title, slug: p.slug, kind: p.meta["kind"]}
+    )
+    |> Repo.all()
+  end
+
+  @doc "Detach a workflow from the goal (`goal_id` → nil)."
+  def detach_workflow(%Goal{} = goal, workflow) do
+    Dran.Workflows.update_workflow(workflow, %{
+      "goal_id" => nil,
+      "workspace_id" => goal.workspace_id
+    })
+  end
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Checklist (lightweight sub-items on the goal itself)
   # ──────────────────────────────────────────────────────────────────────────
 
