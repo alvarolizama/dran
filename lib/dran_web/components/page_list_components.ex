@@ -365,6 +365,22 @@ defmodule DranWeb.PageListComponents do
 
   defp kind_title([_ | _], page_type), do: PageTypes.plural(page_type)
 
+  # Card badge: the note's kind (e.g. "Plan") when set, else the page type
+  # label ("Nota"). Kinds carry the real classification; the type is the
+  # fallback for unclassified notes. meta.kind is NOT validated on write
+  # (MCP/API accept arbitrary strings), so unknown kinds render capitalized
+  # instead of crashing kind_label/1 (Map.fetch!).
+  defp kind_badge_label(%{page_type: page_type, meta: %{"kind" => kind}})
+       when is_binary(kind) and kind != "" do
+    if kind in (PageRegistry.kinds(page_type) || []) do
+      PageRegistry.kind_label(kind)
+    else
+      String.capitalize(kind)
+    end
+  end
+
+  defp kind_badge_label(%{page_type: page_type}), do: PageTypes.label(page_type)
+
   attr :page, :map, required: true
   attr :page_type, :string, default: nil
   attr :workspace_slug, :string, default: "personal"
@@ -386,7 +402,7 @@ defmodule DranWeb.PageListComponents do
           {@page.title}
         </.link>
         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
-          {PageTypes.label(@page.page_type)}
+          {kind_badge_label(@page)}
         </span>
       </div>
       <p :if={@page.summary} class="text-sm text-base-content/60 line-clamp-2 mt-2">

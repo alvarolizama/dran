@@ -847,15 +847,20 @@ defmodule DranWeb.PageComponents do
           <p class="text-base-content/70">{@page.summary}</p>
         </div>
 
-        <.tag_input
-          id={"#{@editor_id}-tags"}
-          name="page[tags]"
-          value={Phoenix.HTML.Form.input_value(@form, :tags)}
-          label={gettext("Tags")}
-          suggestions={@tag_suggestions}
-        />
+        <%!-- Own form so the sidebar inputs (outside the main page-edit-form
+             in the two-column layout) still fire phx-change on every edit —
+             validate_page autosaves tags/meta server-side. --%>
+        <.form for={@form} id={"#{@editor_id}-attributes-form"} phx-change="validate_page">
+          <.tag_input
+            id={"#{@editor_id}-tags"}
+            name="page[tags]"
+            value={Phoenix.HTML.Form.input_value(@form, :tags)}
+            label={gettext("Tags")}
+            suggestions={@tag_suggestions}
+          />
 
-        <.meta_fields page_type={@page_type} meta={@page.meta || %{}} workspace_id={@workspace_id} />
+          <.meta_fields page_type={@page_type} meta={@page.meta || %{}} workspace_id={@workspace_id} />
+        </.form>
       </div>
     </details>
     """

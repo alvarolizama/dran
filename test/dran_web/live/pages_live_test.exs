@@ -51,6 +51,33 @@ defmodule DranWeb.PagesLiveTest do
       assert html =~ ~s(href="/#{ws.slug}/search?q=elixir")
     end
 
+    test "card badge shows the note kind, tolerating unknown kinds", %{conn: conn, ws: ws} do
+      {:ok, plan} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Mi plan",
+          body: "",
+          page_type: "note",
+          meta: %{"kind" => "plan"}
+        })
+
+      # kind not in the registry (MCP/API accept arbitrary meta) — must render
+      # capitalized, not crash kind_label/1 (Map.fetch!).
+      {:ok, technical} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Nota técnica",
+          body: "",
+          page_type: "note",
+          meta: %{"kind" => "technical"}
+        })
+
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/notes")
+
+      assert has_element?(view, "[data-testid='page-card-#{plan.slug}']", t("Plan"))
+      assert has_element?(view, "[data-testid='page-card-#{technical.slug}']", "Technical")
+    end
+
     test "renders the kind filter dropdown (collapsed)", %{conn: conn, ws: ws} do
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes")
 
@@ -287,6 +314,29 @@ defmodule DranWeb.PagesLiveTest do
 
       assert html =~ "page-edit-form"
       assert html =~ "Editable"
+    end
+
+    test "changing kind in the attributes panel autosaves to the db", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Kindable",
+          body: "cuerpo",
+          page_type: "note"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
+
+      assert has_element?(view, "#note-editor-attributes-form")
+
+      view
+      |> form("#note-editor-attributes-form", page: %{meta: %{"kind" => "plan"}})
+      |> render_change()
+
+      assert Knowledge.get_page(page.id).meta["kind"] == "plan"
     end
 
     test "edit mode shows summary read-only (machine-owned field), never an input", %{
