@@ -52,6 +52,12 @@ defmodule Dran.MCPFullTest do
     text
   end
 
+  # "Created workflow: Title (slug) — ..." → slug
+  defp extract_slug(result) do
+    [_, slug] = Regex.run(~r/\(([^)]+)\)/, result)
+    slug
+  end
+
   defp send_message(msg) do
     MCP.process_message(msg)
   end
@@ -88,7 +94,7 @@ defmodule Dran.MCPFullTest do
         send_message(%{"jsonrpc" => "2.0", "id" => 2, "method" => "tools/list"})
 
       tools = resp["result"]["tools"]
-      assert length(tools) == 35
+      assert length(tools) == 36
     end
 
     test "all tools carry the dran_ prefix" do
@@ -717,6 +723,88 @@ defmodule Dran.MCPFullTest do
 
     test "errors on unknown context" do
       result = call_tool("dran_get_goal", %{"workspace" => "no-ctx", "goal" => "x"})
+      assert result =~ "Error: context 'no-ctx' not found"
+    end
+
+    test "renders linked workflows and plan/project notes", %{
+      context: ctx,
+      goal: goal
+    } do
+      {:ok, _workflow} =
+        Workflows.create_workflow(%{
+          "workspace_id" => ctx.id,
+          "goal_id" => goal.id,
+          "title" => "Exec pipeline",
+          "slug" => "exec-pipeline",
+          "status" => "active"
+        })
+
+      {:ok, note} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "Q4 Plan",
+          slug: "q4-plan-mcp",
+          body: "steps",
+          page_type: "note",
+          meta: %{"kind" => "plan"}
+        })
+
+      {:ok, _} = Goals.link_note(goal, note)
+
+      result = call_tool("dran_get_goal", %{"workspace" => "personal", "goal" => goal.slug})
+
+      assert result =~ "Linked workflows (1)"
+      assert result =~ "exec-pipeline: Exec pipeline [active/evergreen]"
+      assert result =~ "Linked plan/project notes (1)"
+      assert result =~ "q4-plan-mcp: Q4 Plan (plan)"
+    end
+  end
+
+  describe "dran_create_workflow" do
+    setup %{context: ctx} do
+      {:ok, goal} = Goals.create_goal(%{workspace_id: ctx.id, title: "MCP WF Goal"})
+      {:ok, goal: goal}
+    end
+
+    test "creates a draft workflow with steps and a depends_on DAG", %{context: ctx, goal: goal} do
+      result =
+        call_tool("dran_create_workflow", %{
+          "workspace" => "personal",
+          "title" => "Bridge pipeline",
+          "goal_slug" => goal.slug,
+          "steps" => [
+            %{"title" => "Survey", "intent" => "We need the lay of the land"},
+            %{"title" => "Build", "depends_on" => ["Survey"]},
+            %{"title" => "Verify", "depends_on" => ["Build"]}
+          ]
+        })
+
+      assert result =~ "Created workflow: Bridge pipeline"
+      assert result =~ "draft — 3 steps with DAG"
+
+      slug = extract_slug(result)
+      workflow = Workflows.get_workflow_by_slug(slug, ctx.id)
+
+      assert workflow.status == "draft"
+      assert workflow.goal_id == goal.id
+      assert length(Workflows.list_steps(workflow)) == 3
+    end
+
+    test "fails with a clear error on unknown goal_slug" do
+      result =
+        call_tool("dran_create_workflow", %{
+          "workspace" => "personal",
+          "title" => "Orphan",
+          "goal_slug" => "no-such-goal"
+        })
+
+      assert result =~ "Error: goal 'no-such-goal' not found"
+    end
+
+    test "errors on unknown context" do
+      result =
+        call_tool("dran_create_workflow", %{"workspace" => "no-ctx", "title" => "X"})
+
       assert result =~ "Error: context 'no-ctx' not found"
     end
   end
@@ -1442,7 +1530,7 @@ defmodule Dran.MCPFullTest do
       "gates" => [
         %{
           "name" => "compile",
-          "cmd" => "mix compile",
+          "check" => "mix compile",
           "expect" => "exit 0",
           "on_failure" => "fix"
         }

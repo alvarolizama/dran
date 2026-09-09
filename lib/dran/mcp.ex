@@ -563,6 +563,53 @@ defmodule Dran.MCP do
       }
     },
     %{
+      "name" => "dran_create_workflow",
+      "description" =>
+        "Create a workflow (definition skeleton): title, kind (evergreen/one_shot), optional goal link and initial steps (title + intent). Status starts 'draft' — activation is an explicit human decision; a draft cannot open sessions. Full contracts (claims/gates/graph/context) are authored in the Dran UI step modal or via REST. Steps with depends_on edges can be declared here as {title, intent, depends_on: [slugs]}. Returns the workflow slug — verify with dran_get_workflow.",
+      "inputSchema" => %{
+        "type" => "object",
+        "properties" => %{
+          "workspace" => %{
+            "type" => "string",
+            "description" => "Context slug where the workflow is created."
+          },
+          "title" => %{
+            "type" => "string",
+            "description" => "Workflow title (imperative, one deliverable area)."
+          },
+          "kind" => %{
+            "type" => "string",
+            "description" =>
+              "evergreen (re-runnable, default) or one_shot (single pass). Locked once the workflow has sessions.",
+            "enum" => ["evergreen", "one_shot"]
+          },
+          "goal_slug" => %{
+            "type" => "string",
+            "description" => "Optional goal slug to link (goal_id)."
+          },
+          "body" => %{
+            "type" => "string",
+            "description" => "Optional workflow description (markdown)."
+          },
+          "steps" => %{
+            "type" => "array",
+            "description" =>
+              "Initial steps: {title (required), intent (optional), depends_on (optional, slugs of previously declared steps)}.",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "title" => %{"type" => "string"},
+                "intent" => %{"type" => "string"},
+                "depends_on" => %{"type" => "array", "items" => %{"type" => "string"}}
+              },
+              "required" => ["title"]
+            }
+          }
+        },
+        "required" => ["workspace", "title"]
+      }
+    },
+    %{
       "name" => "dran_list_workflows",
       "description" =>
         "List a context's workflows (slug, title, status, kind, step count, open sessions). Use this to discover which workflow carries the contract you want to read.",
@@ -2197,6 +2244,53 @@ defmodule Dran.MCP do
 
   # ── Workflows / steps / sessions / runs (Riel bridge) ──────────────────────
 
+  # Create a workflow skeleton (title/kind/goal/body) + initial steps with
+  # an optional depends_on DAG (slugs or titles of previously declared
+  # steps). Status is always draft — activation is a human decision; drafts
+  # cannot open sessions (context gate).
+  defp execute_tool(
+         "dran_create_workflow",
+         %{"workspace" => ws, "title" => title} = args,
+         _user
+       ) do
+    context = workspace_cache_get(ws)
+
+    cond do
+      not is_map(context) ->
+        "Error: context '#{ws}' not found"
+
+      true ->
+        case resolve_goal_id(context.id, args["goal_slug"]) do
+          {:error, :goal_not_found, slug} ->
+            "Error: goal '#{slug}' not found in context '#{ws}'"
+
+          goal_id ->
+            attrs = %{
+              "workspace_id" => context.id,
+              "title" => String.trim(title),
+              "kind" => Map.get(args, "kind", "evergreen"),
+              "status" => "draft",
+              "body" => Map.get(args, "body", ""),
+              "goal_id" => goal_id
+            }
+
+            case Workflows.create_workflow(attrs) do
+              {:ok, workflow} ->
+                detail =
+                  workflow
+                  |> create_workflow_steps(Map.get(args, "steps") || [])
+                  |> String.replace_prefix("Created workflow", "")
+
+                "Created workflow: #{workflow.title} (#{workflow.slug}) — #{workflow.kind} — draft" <>
+                  detail
+
+              {:error, changeset} ->
+                "Error: #{format_changeset_errors(changeset)}"
+            end
+        end
+    end
+  end
+
   defp execute_tool("dran_list_workflows", %{"workspace" => ws}, _user) do
     context = workspace_cache_get(ws)
 
@@ -2530,9 +2624,137 @@ defmodule Dran.MCP do
     Checklist (#{done}/#{total} done):
     #{if checklist == "", do: "  (empty)", else: checklist}
 
+    #{render_goal_workflows(goal)}\
+    #{render_goal_notes(goal)}
     Body:
     #{if goal.body == "", do: "(empty)", else: goal.body}
     """
+  end
+
+  # Linked workflows (goal_id FK) — the execution layer of the goal.
+  defp render_goal_workflows(%Goal{} = goal) do
+    case Dran.Workflows.list_by_goal(goal) do
+      [] ->
+        ""
+
+      workflows ->
+        lines =
+          workflows
+          |> Enum.map_join("\n", fn w ->
+            "  - #{w.slug}: #{w.title} [#{w.status}/#{w.kind}]"
+          end)
+
+        "Linked workflows (#{length(workflows)}):\n#{lines}\n\n"
+    end
+  end
+
+  # Linked plan/project notes (part_of relations, page → goal) — the
+  # planning documents. Same data the goal sidebar shows.
+  defp render_goal_notes(%Goal{} = goal) do
+    case Goals.linked_notes(goal, kinds: ~w(plan project), limit: 10) do
+      [] ->
+        ""
+
+      notes ->
+        lines =
+          notes
+          |> Enum.map_join("\n", fn entry ->
+            kind = entry.page.meta["kind"] || "note"
+            "  - #{entry.page.slug}: #{entry.page.title} (#{kind})"
+          end)
+
+        "Linked plan/project notes (#{length(notes)}):\n#{lines}\n\n"
+    end
+  end
+
+  defp resolve_goal_id(_workspace_id, nil), do: nil
+
+  defp resolve_goal_id(workspace_id, goal_slug) when is_binary(goal_slug) do
+    case Goals.get_goal_by_slug(goal_slug, workspace_id) do
+      %Goal{id: id} -> id
+      nil -> {:error, :goal_not_found, goal_slug}
+    end
+  end
+
+  # Create steps, then wire depends_on edges in a second pass so forward
+  # references work (edge resolution happens once all steps exist).
+  # `by_key` indexes each step by BOTH its slug and its declared title, so
+  # depends_on may reference either.
+  defp create_workflow_steps(workflow, steps) when is_list(steps) do
+    {created, by_key} =
+      Enum.reduce_while(steps, {0, %{}}, fn step_args, {n, by_key} ->
+        title = String.trim(step_args["title"] || "")
+
+        attrs =
+          %{"title" => title}
+          |> maybe_put("intent", step_args["intent"])
+
+        case Workflows.create_step(workflow, attrs) do
+          {:ok, step} ->
+            {:cont, {n + 1, Map.merge(by_key, %{step.slug => step, title => step})}}
+
+          {:error, changeset} ->
+            {:halt, {{:error, format_changeset_errors(changeset)}, by_key}}
+        end
+      end)
+
+    case created do
+      {:error, reason} ->
+        "Created workflow #{workflow.slug}, but a step failed: #{reason}"
+
+      n ->
+        wire_step_deps(steps, by_key, n)
+    end
+  end
+
+  defp wire_step_deps(steps, by_key, step_count) do
+    edges_result =
+      Enum.reduce_while(steps, :ok, fn step_args, :ok ->
+        deps = List.wrap(step_args["depends_on"])
+
+        if deps == [] do
+          {:cont, :ok}
+        else
+          step = Map.get(by_key, step_args["title"])
+
+          case resolve_deps(deps, by_key) do
+            {:ok, prereqs} ->
+              Enum.reduce_while(prereqs, :ok, fn prereq, :ok ->
+                case Contracts.add_dependency(step, prereq) do
+                  {:ok, _} -> {:cont, :ok}
+                  {:error, reason} -> {:halt, {:error, "edge error: #{inspect(reason)}"}}
+                end
+              end)
+              |> case do
+                :ok -> {:cont, :ok}
+                {:error, _} = err -> {:halt, err}
+              end
+
+            {:error, missing} ->
+              {:halt,
+               {:error, "depends_on references unknown steps: #{Enum.join(missing, ", ")}"}}
+          end
+        end
+      end)
+
+    case edges_result do
+      :ok ->
+        "Created workflow — #{step_count} steps with DAG"
+
+      {:error, reason} ->
+        "Created workflow with #{step_count} steps, but #{reason}"
+    end
+  end
+
+  defp resolve_deps(deps, by_key) do
+    {prereqs, missing} =
+      Enum.split_with(deps, fn dep -> Map.has_key?(by_key, dep) end)
+
+    if missing == [] do
+      {:ok, Enum.map(prereqs, &Map.fetch!(by_key, &1))}
+    else
+      {:error, missing}
+    end
   end
 
   # Shared runner for goal checklist tools: resolves context + goal, handles
