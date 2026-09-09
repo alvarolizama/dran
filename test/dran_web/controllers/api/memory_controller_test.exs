@@ -1,7 +1,7 @@
 defmodule DranWeb.API.MemoryControllerTest do
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Accounts, Knowledge}
+  alias Dran.{Accounts, Knowledge, Repo}
   alias Dran.Memory
 
   setup do
@@ -293,6 +293,18 @@ defmodule DranWeb.API.MemoryControllerTest do
 
       updated = Memory.get_memory!(memory.id)
       assert updated.status == "superseded"
+    end
+
+    test "purge=true hard-deletes the row", %{conn: conn, workspace: workspace} do
+      stub_embeddings()
+
+      {:ok, memory, :created} =
+        Memory.add(%{"workspace_id" => workspace.id, "content" => "fact a purgar"})
+
+      conn = delete(conn, "/api/memory/#{memory.id}?workspace=#{workspace.slug}&purge=true")
+
+      assert response(conn, 204) == ""
+      assert Repo.get(Memory, memory.id) == nil
     end
   end
 

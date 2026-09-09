@@ -3,6 +3,7 @@ defmodule DranWeb.MemoryLiveTest do
 
   alias Dran.Knowledge
   alias Dran.Memory
+  alias Dran.Repo
 
   # Gettext wrapper — the app default locale is "es", so assertions must
   # match the translated strings, not the English msgids.
@@ -140,6 +141,41 @@ defmodule DranWeb.MemoryLiveTest do
     updated = Memory.get_memory!(entry.id)
     assert updated.status == "superseded"
     refute render(view) =~ entry.content
+  end
+
+  test "purge permanently deletes a superseded memory", %{conn: conn, context: context} do
+    [entry | _] = Memory.list_memories(context.id, status: "active", limit: 1)
+    {:ok, _} = Memory.delete_memory(entry)
+
+    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+
+    view
+    |> element("#memory-filter-superseded")
+    |> render_click()
+
+    render_click(view |> element("#memory-purge-#{entry.id}"))
+
+    assert Repo.get(Memory, entry.id) == nil
+  end
+
+  test "purge_superseded bulk-deletes every obsolete memory", %{conn: conn, context: context} do
+    entries = Memory.list_memories(context.id, status: "active", limit: 2)
+    Enum.each(entries, &({:ok, _} = Memory.delete_memory(&1)))
+
+    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+
+    view
+    |> element("#memory-filter-superseded")
+    |> render_click()
+
+    assert has_element?(view, "#memory-purge-superseded")
+
+    view
+    |> element("#memory-purge-superseded")
+    |> render_click()
+
+    assert Memory.list_memories(context.id, status: "superseded") == []
+    assert Enum.all?(entries, &(Repo.get(Memory, &1.id) == nil))
   end
 
   test "feedback rejects ids from another workspace (forged phx event)", %{conn: conn} do

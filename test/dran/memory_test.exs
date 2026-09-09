@@ -1,7 +1,7 @@
 defmodule Dran.MemoryTest do
   use Dran.DataCase, async: false
 
-  alias Dran.{Knowledge}
+  alias Dran.{Knowledge, Repo}
   alias Dran.Memory
 
   setup do
@@ -203,6 +203,39 @@ defmodule Dran.MemoryTest do
       active = Memory.list_memories(ws.id, status: "active")
       assert length(active) == 1
       assert hd(active).content == "segundo"
+    end
+  end
+
+  describe "purge" do
+    test "purge_memory/1 hard-deletes the row", %{workspace: ws} do
+      {:ok, m1, :created} = add_fact(ws, "hecho a borrar permanentemente")
+
+      assert {:ok, _} = Memory.purge_memory(m1)
+      refute Repo.get(Memory, m1.id)
+    end
+
+    test "a purged fact can be stored again (no dedupe ghost)", %{workspace: ws} do
+      {:ok, m1, :created} = add_fact(ws, "hecho reciclado")
+      {:ok, _} = Memory.purge_memory(m1)
+
+      assert {:ok, _recreated, :created} = add_fact(ws, "hecho reciclado")
+    end
+
+    test "purge_superseded/1 deletes only superseded facts of the workspace", %{workspace: ws} do
+      {:ok, m1, :created} = add_fact(ws, "obsoleto uno")
+      {:ok, m2, :created} = add_fact(ws, "obsoleto dos")
+      {:ok, _m3, :created} = add_fact(ws, "vigente")
+
+      {:ok, _} = Memory.delete_memory(m1)
+      {:ok, _} = Memory.delete_memory(m2)
+
+      assert {2, nil} = Memory.purge_superseded(ws.id)
+
+      refute Repo.get(Memory, m1.id)
+      refute Repo.get(Memory, m2.id)
+
+      assert Memory.count_memories(ws.id) == 1
+      assert Memory.list_memories(ws.id, status: "superseded") == []
     end
   end
 

@@ -91,6 +91,33 @@ defmodule DranWeb.MemoryLive do
     end
   end
 
+  def handle_event("purge", %{"id" => id}, socket) do
+    context = socket.assigns.context
+
+    with %Memory{} = memory <- Memory.get_scoped_memory(id, context.id),
+         {:ok, _} <- Memory.purge_memory(memory) do
+      {:noreply, reload_memories(socket)}
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("Memory no encontrada"))}
+    end
+  end
+
+  def handle_event("purge_superseded", _params, socket) do
+    context = socket.assigns.context
+
+    case Memory.purge_superseded(context.id) do
+      {0, _} ->
+        {:noreply, put_flash(socket, :info, gettext("No hay memorias obsoletas que borrar"))}
+
+      {count, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("%{count} memorias borradas permanentemente", count: count))
+         |> reload_memories()}
+    end
+  end
+
   @impl true
   def handle_info({:memory_changed, _action, _memory}, socket) do
     # A fact was created/deleted (by a worker via the REST API, or by this
@@ -160,6 +187,18 @@ defmodule DranWeb.MemoryLive do
                 active={@status_filter == "all"}
               />
             </div>
+
+            <button
+              :if={@status_filter in ["superseded", "all"] and @query == ""}
+              id="memory-purge-superseded"
+              phx-click="purge_superseded"
+              data-confirm={gettext("¿Borrar permanentemente TODAS las memorias obsoletas?")}
+              class="inline-flex items-center gap-1 rounded-lg border border-base-300 bg-base-100 px-3 py-1.5 text-xs font-medium text-base-content/70 shadow-sm transition-colors duration-150 hover:bg-error/10 hover:text-error"
+              title={gettext("Borrado permanente — no se puede deshacer")}
+            >
+              <.icon name="hero-trash" class="size-3.5" />
+              {gettext("Borrar obsoletos")}
+            </button>
           </div>
 
           <.search_notice :if={@query != ""} query={@query} count={length(@memories)} />
@@ -433,6 +472,17 @@ defmodule DranWeb.MemoryLive do
             title={gettext("Marcar como obsoleto")}
           >
             <.icon name="hero-trash" class="size-3.5" />
+          </button>
+          <button
+            :if={@memory.status != "active"}
+            id={"memory-purge-#{@memory.id}"}
+            phx-click="purge"
+            phx-value-id={@memory.id}
+            data-confirm={gettext("¿Borrar permanentemente esta memoria? No se puede deshacer.")}
+            class="btn btn-ghost btn-xs text-base-content/40 hover:text-error"
+            title={gettext("Borrar permanentemente")}
+          >
+            <.icon name="hero-x-mark" class="size-3.5" />
           </button>
         </span>
       </div>

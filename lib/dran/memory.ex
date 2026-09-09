@@ -346,4 +346,36 @@ defmodule Dran.Memory do
       _ -> :ok
     end)
   end
+
+  @doc """
+  Permanently deletes a fact (hard DELETE — the row is gone, not superseded).
+
+  Returns `{:ok, memory}` (the deleted struct, for the broadcast payload)
+  or `{:error, :not_deleted}`.
+  """
+  def purge_memory(%__MODULE__{} = memory) do
+    case Repo.delete(memory) do
+      {:ok, deleted} ->
+        broadcast_memory_change(memory.workspace_id, :purged, deleted)
+        {:ok, deleted}
+
+      {:error, _} ->
+        {:error, :not_deleted}
+    end
+  end
+
+  @doc """
+  Permanently deletes every superseded (obsolete) fact of a workspace.
+
+  Returns `{count, nil}` — the number of rows hard-deleted. Does NOT touch
+  active facts.
+  """
+  def purge_superseded(workspace_id) do
+    {count, _} =
+      from(m in __MODULE__, where: m.workspace_id == ^workspace_id and m.status == "superseded")
+      |> Repo.delete_all()
+
+    if count > 0, do: broadcast_memory_change(workspace_id, :purged, nil)
+    {count, nil}
+  end
 end

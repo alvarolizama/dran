@@ -206,7 +206,11 @@ defmodule DranWeb.API.MemoryController do
     end
   end
 
-  @doc "DELETE /api/memory/:id?workspace= — soft-remove a fact (superseded)."
+  @doc """
+  DELETE /api/memory/:id?workspace= — soft-remove a fact (superseded).
+
+  Pass `purge=true` to hard-delete the row permanently instead.
+  """
   def delete(conn, %{"id" => id} = params) do
     params = resolve_workspace_id(conn, params)
 
@@ -217,14 +221,19 @@ defmodule DranWeb.API.MemoryController do
         |> json(%{errors: %{detail: "memory not found"}})
 
       memory ->
-        case Memory.delete_memory(memory) do
+        purge? = params["purge"] in [true, "true", "1"]
+
+        result =
+          if purge?, do: Memory.purge_memory(memory), else: Memory.delete_memory(memory)
+
+        case result do
           {:ok, _} ->
             send_resp(conn, :no_content, "")
 
           {:error, _} ->
             conn
             |> put_status(:internal_server_error)
-            |> json(%{errors: %{detail: "update failed"}})
+            |> json(%{errors: %{detail: "delete failed"}})
         end
     end
   end

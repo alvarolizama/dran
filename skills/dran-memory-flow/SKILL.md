@@ -44,12 +44,18 @@ flowchart TD
   G1 -->|"no"| S2["RUN GET /api/memory\nworkspace - browse list"]
   G1 -->|"yes"| G2{"delete\nrequested?"}
   S2 --> G2
-  G2 -->|"no"| END([reported])
-  G2 -->|"yes"| A1["ASK confirm delete -\ndurable data, irreversible"]
+  G2 -->|no| END([reported])
+  G2 -->|yes| G4{"soft supersede or\npermanent purge?"}
+  G4 -->|"obsolete"| A1["ASK confirm delete -\ndurable data, irreversible"]
+  G4 -->|"purge"| A2["ASK confirm PURGE -\nhard delete, NO undo"]
   A1 --> S3["RUN DELETE /api/memory/:id\nwrite_access key required"]
+  A2 --> S3P["RUN DELETE /api/memory/:id?purge=true"]
   S3 --> V1["VERIFY GET search\nreadback: gone from results"]
+  S3P --> V2["VERIFY row gone -\nRepo.get returns nil"]
   V1 -->|"still present"| S1
+  V2 -->|"still present"| S1
   V1 -->|"gone"| END([done])
+  V2 -->|gone| END([done])
 ```
 
 ## The REST surface (no MCP)
@@ -61,7 +67,8 @@ flowchart TD
 | `/api/memory` | POST | `write_access` — **plugin's job, not this flow's** |
 | `/api/memory/feedback` | POST | `write_access` — plugin's job |
 | `/api/memory/ingest` | POST | `write_access` — plugin's job (session end) |
-| `/api/memory/:id` | DELETE | `write_access` |
+| `/api/memory/:id` | DELETE | `write_access` — soft-delete (superseded) |
+| `/api/memory/:id?purge=true` | DELETE | `write_access` — **hard delete, permanent** |
 
 - Base URL is the profile's Dran (`$HERMES_HOME/dran_memory.json →
   base_url`); same `DRAN_API_KEY` as MCP.
@@ -73,6 +80,11 @@ flowchart TD
 - **`POST /api/memory` by hand to "save" something** — writes belong to the
   plugin so the provenance (`X-Hermes-Agent`, actor) stays honest; a
   manual POST forges the author's context.
+- **Purge ≠ delete** — plain DELETE soft-supersedes (status flips, row
+  stays, excluded from search); `?purge=true` hard-deletes the row, and
+  the fact can be re-stored later (no dedupe ghost). Bulk purge of all
+  superseded memories is UI-only (no REST endpoint) — use the Dran
+  Memory page's "Borrar obsoletos".
 - **Deleting the whole workspace's recall on a bad review** — delete by
   specific id, one confirmation each.
 - **Expecting `dran_memory_*` MCP tools** — zero on MCP; only the plugin
@@ -86,3 +98,4 @@ flowchart TD
 - [ ] Admin-only: no manual POST/ingest from this flow
 - [ ] Search + browse to locate exact ids before any delete
 - [ ] Delete confirmed by the human, verified by readback (gone)
+- [ ] Purge (`?purge=true`) explicitly flagged as permanent to the human
