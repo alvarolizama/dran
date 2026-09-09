@@ -27,8 +27,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   # Ordered feature keys shown in the Features tab. All are stored in the
   # `enabled_features` map; an empty map means "all on" (see
-  # `Workspace.feature_enabled?/2`).
-  @features ~w(goals collections clusters kanban graph journey activity search reports chat workers)
+  # `Workspace.feature_enabled?/2`). Only features with real entry points
+  # gated in `Layouts.workspace_groups/3` (sidebar): kanban/chat were removed
+  # products and "workers" was a typo for "workflows" (the gated key).
+  @features ~w(goals workflows clusters graph journey collections activity search reports)
 
   # Brain tuning keys: worker limits + advanced semantic thresholds.
   @brain_keys ~w(worker_max_pages entity_linker_enabled)
@@ -846,15 +848,13 @@ defmodule DranWeb.WorkspaceSettingsLive do
   defp page_type_impact(_), do: ""
 
   defp feature_label("goals"), do: gettext("Goals")
-  defp feature_label("collections"), do: gettext("Collections")
+  defp feature_label("workflows"), do: gettext("Workflows")
   defp feature_label("clusters"), do: gettext("Clusters")
-  defp feature_label("kanban"), do: gettext("Kanban")
   defp feature_label("graph"), do: gettext("Graph")
   defp feature_label("journey"), do: gettext("Journey")
+  defp feature_label("collections"), do: gettext("Collections")
   defp feature_label("activity"), do: gettext("Activity")
   defp feature_label("search"), do: gettext("Search")
   defp feature_label("reports"), do: gettext("Reports")
-  defp feature_label("chat"), do: gettext("Chat")
-  defp feature_label("workers"), do: gettext("Workers")
   defp feature_label(other), do: other
 end
