@@ -31,10 +31,33 @@ flowchart TD
 
 ## Parse contract
 
-CONSUMES: a workflow slug in a workspace, a write-capable key. PRODUCES: a
-session whose runs carry ✓NN progress and passed/failed outcomes; passed
+CONSUMES: a workflow slug in a workspace, a write-capable key. PRODUCES:
+a session whose runs carry ✓NN progress and passed/failed outcomes; passed
 steps render **checked in the DAG**. **A run closed without re-running its
 gates is a false checkpoint.**
+
+## Context section of the brief (what it gives you, what to do with it)
+
+`dran_get_step_contract` renders `## Context` with each entry RESOLVED —
+you don't get bare uuids:
+
+```
+- page **Spec de contratos** (74ffd947…) — spec de referencia > Una línea de resumen · fetch: MCP dran_get_page (workspace: personal, id: 74ffd947…)
+- memory **Decisión previa: los steps llevan contrato puro** (b6437467…) — decisión previa > … · fetch: GET /api/memory?workspace=personal then filter id b6437467…
+- page uuid-fantasma (unresolved — not found in workspace)
+```
+
+Each line = title + why + summary + the EXACT command to fetch the full
+content. How to work it:
+
+- The **summary is the triage layer**: read the one-liners first and decide
+  per entry whether it matters for THIS step. Fetching everything is waste.
+- **Fetch on demand** with the given command — `dran_get_page` (pages) or
+  `GET /api/memory` (memories). The id is the exact handle.
+- **`unresolved` entries** are stale (page/memory deleted after the
+  contract was written): note it in the run outcome, don't chase the id.
+- The brief's DO NOT stands: do not invent context outside the snapshot —
+  fetching MORE from the graph is fine, fabricating context is not.
 
 ## Operational flow
 

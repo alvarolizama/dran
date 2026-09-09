@@ -298,20 +298,47 @@ defmodule Dran.ContractsStepsTest do
       assert brief =~ "source: step:<id>"
     end
 
-    test "renders context_snapshot entries in the Context section", %{workflow: workflow} do
+    test "renders context_snapshot entries in the Context section", %{workflow: workflow, ws: ws} do
+      # Real rows: the brief resolves them to title + summary + fetch hint.
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          page_type: "reference",
+          title: "Spec de contratos",
+          body: "cuerpo",
+          summary: "Una línea de resumen"
+        })
+
+      {:ok, memory, :created} =
+        Dran.Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Decisión previa: los steps llevan contrato puro",
+          "created_by" => "test"
+        })
+
       contract =
         valid_contract()
         |> Map.put("context_snapshot", [
-          %{"type" => "page", "id" => "uuid-1", "why" => "spec de referencia"},
-          %{"type" => "memory", "id" => "uuid-2", "why" => "decisión previa"}
+          %{"type" => "page", "id" => page.id, "why" => "spec de referencia"},
+          %{"type" => "memory", "id" => memory.id, "why" => "decisión previa"},
+          %{"type" => "page", "id" => "uuid-fantasma", "why" => "borrada"}
         ])
 
       step = step_with_contract(workflow, contract)
       {:ok, brief} = Contracts.render_brief(step)
 
       assert brief =~ "## Context"
-      assert brief =~ "- page uuid-1"
-      assert brief =~ "- memory uuid-2"
+      # Resolved page: title + why + machine summary + fetch hint (MCP).
+      assert brief =~
+               "- page **Spec de contratos** (#{page.id}) — spec de referencia > Una línea de resumen · fetch: MCP dran_get_page"
+
+      # Resolved memory: truncated content as title/summary + REST fetch hint.
+      assert brief =~
+               "- memory **Decisión previa: los steps llevan contrato puro** (#{memory.id}) — decisión previa"
+
+      assert brief =~ "fetch: GET /api/memory"
+      # Stale entry: id stays visible, marked unresolved.
+      assert brief =~ "- page uuid-fantasma (unresolved — not found in workspace)"
     end
 
     test "returns error for a step without contract", %{workflow: workflow} do

@@ -892,61 +892,6 @@ defmodule DranWeb.WorkflowsLive do
     end
   end
 
-  # Contexto tab: search pages + memories for the context_snapshot picker.
-  # Renders a fused {type, id, title, summary} list — the client fills the
-  # dropdown, and picking one writes a ctx row (type/id/why) into the
-  # visual form (serialized by the hook into contract.context_snapshot).
-  def handle_event("search_context", %{"q" => q}, socket) do
-    q = String.trim(q || "")
-
-    results =
-      if q == "" do
-        []
-      else
-        workspace_id = socket.assigns.context.id
-
-        pages =
-          case Knowledge.search(q,
-                 workspace_id: workspace_id,
-                 limit: 8,
-                 props: %{"limit" => 8}
-               ) do
-            {:ok, pages} ->
-              Enum.map(pages, fn p ->
-                %{
-                  type: "page",
-                  id: to_string(p.id),
-                  title: p.title,
-                  summary: p.excerpt || ""
-                }
-              end)
-
-            _ ->
-              []
-          end
-
-        memories =
-          case Memory.search(workspace_id, q, limit: 6, bump_retrieval: false) do
-            memories when is_list(memories) ->
-              Enum.map(memories, fn %{memory: m} ->
-                %{
-                  type: "memory",
-                  id: to_string(m.id),
-                  title: truncate_memory_label(m.content, 80),
-                  summary: ""
-                }
-              end)
-
-            _ ->
-              []
-          end
-
-        dedupe_by_id(pages ++ memories)
-      end
-
-    {:reply, %{results: results}, socket}
-  end
-
   def handle_event("delete_step", %{"step-id" => step_id}, socket) do
     case fetch_workflow_step(step_id, socket.assigns.workflow.workspace_id) do
       nil ->
@@ -1193,6 +1138,10 @@ defmodule DranWeb.WorkflowsLive do
     end
   end
 
+  def handle_event("search_context", %{"q" => q}, socket) do
+    {:reply, %{results: context_picker_results(q, socket.assigns.context.id)}, socket}
+  end
+
   # Create carries the "después de" edge inside the SAME transaction
   # (create_step/3 `:after_step_id`) — a failed edge rolls the step back,
   # so the UI never reports success for a placement that did not happen.
@@ -1210,6 +1159,95 @@ defmodule DranWeb.WorkflowsLive do
     do: Workflows.update_step(step, attrs)
 
   # Truncate a memory's content to a single-line label for the dropdown.
+  # Contexto tab: search pages + memories for the context_snapshot picker.
+  # Renders a fused {type, id, title, summary} list — the client fills the
+  # dropdown, and picking one writes a ctx row (type/id/why) into the
+  # visual form (serialized by the hook into contract.context_snapshot).
+  #
+  # Public so the regression test can pin the exact call shape: this
+  # handler once passed `props: %{"limit" => 8}` to Knowledge.search/2 —
+  # :props is the CUSTOM PROPS FILTER, not pagination — and every query
+  # returned 0 pages.
+  def context_picker_results(q, workspace_id) when is_binary(q) do
+    q = String.trim(q)
+
+    if q == "" do
+      []
+    else
+      pages =
+        case Knowledge.search(q,
+               workspace_id: workspace_id,
+               limit: 8
+             ) do
+          {:ok, []} when byte_size(q) < 5 ->
+            # Short queries rarely clear the pg_trgm similarity threshold
+            # (0.3): a 3-4 char prefix dilutes against long Spanish titles.
+            # The picker is selection, not exploration — fall back to a
+            # prefix match on title/slug so type-ahead works from 2-3 chars.
+            prefix_pages(q, workspace_id)
+
+          {:ok, pages} ->
+            Enum.map(pages, fn p ->
+              %{type: "page", id: to_string(p.id), title: p.title, summary: p.excerpt || ""}
+            end)
+
+          _ ->
+            []
+        end
+
+      memories =
+        case Memory.search(workspace_id, q, limit: 6, bump_retrieval: false) do
+          memories when is_list(memories) ->
+            Enum.map(memories, fn %{memory: m} ->
+              %{
+                type: "memory",
+                id: to_string(m.id),
+                title: truncate_memory_label(m.content, 80),
+                summary: ""
+              }
+            end)
+
+          _ ->
+            []
+        end
+
+      dedupe_by_id(pages ++ memories)
+    end
+  end
+
+  # Type-ahead fallback for short queries: word-start match on title/slug.
+  # Two INDEXABLE anchored patterns per column — start-of-string or
+  # after-a-space — instead of `\m` regex: the planner decomposes each
+  # LIKE 'q%' into a btree range seek on the text_pattern_ops expression
+  # indexes (verified: Index Scan with ~>=~ q AND ~<~ succ(q)). A `\m`
+  # regex is not anchored and can't use them.
+  defp prefix_pages(q, workspace_id) do
+    import Ecto.Query
+
+    low = String.downcase(q)
+    start_pat = "#{low}%"
+    word_pat = "% #{low}%"
+
+    from(p in Dran.Knowledge.Page,
+      where:
+        p.workspace_id == ^workspace_id and p.archived == false and
+          (like(fragment("lower(?)", p.title), ^start_pat) or
+             like(fragment("lower(?)", p.title), ^word_pat) or
+             like(fragment("lower(?)", p.slug), ^start_pat) or
+             like(fragment("lower(?)", p.slug), ^word_pat)),
+      limit: 8,
+      order_by: [asc: p.title],
+      select: %{
+        type: "page",
+        id: p.id,
+        title: p.title,
+        summary: fragment("coalesce(?, '')", p.summary)
+      }
+    )
+    |> Dran.Repo.all()
+    |> Enum.map(&%{&1 | id: to_string(&1.id)})
+  end
+
   defp truncate_memory_label(content, max) when is_binary(content) do
     if String.length(content) <= max do
       content

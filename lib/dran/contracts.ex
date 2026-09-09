@@ -559,8 +559,10 @@ defmodule Dran.Contracts do
   end
 
   # Contexto congelado del contrato: páginas/memories que el agente debe
-  # leer antes de ejecutar. Sin entradas, el identificador del paso (mismo
-  # mensaje que antes de la sección editable).
+  # leer antes de ejecutar. Cada entrada se resuelve a título + resumen +
+  # el comando exacto para ampliarla (MCP/REST) — el agente sabe qué tiene
+  # y cómo pedir más sin adivinar ids. Sin entradas, el identificador del
+  # paso (mismo mensaje que antes de la sección editable).
   defp brief_context(step, contract) do
     entries =
       case contract["context_snapshot"] do
@@ -568,15 +570,100 @@ defmodule Dran.Contracts do
         _ -> []
       end
 
-    lines =
-      for %{"type" => t, "id" => id} <- entries do
-        "- #{t} #{id}"
-      end
-
     header =
       "Pulled from #{step.workspace_id} — see step #{step.id} (workflow #{step.workflow_id})."
 
-    ["## Context", header] ++ lines
+    if entries == [] do
+      ["## Context", header]
+    else
+      lookups = context_lookups(entries, step.workspace_id)
+
+      lines =
+        for %{"type" => t, "id" => id} = entry <- entries do
+          case Map.fetch(lookups, {t, id}) do
+            {:ok, %{title: title, summary: summary}} ->
+              # what it is, why it matters here, and how to fetch the full
+              # content — the id is the exact handle for that lookup.
+              fetch =
+                if t == "page",
+                  do: "MCP dran_get_page (workspace: #{step.workspace_id}, id: #{id})",
+                  else: "GET /api/memory?workspace=#{step.workspace_id} then filter id #{id}"
+
+              why = if entry["why"] not in [nil, ""], do: " — #{entry["why"]}", else: ""
+              summary_line = if summary not in [nil, ""], do: " > #{summary}", else: ""
+
+              "- #{t} **#{title}** (#{id})#{why}#{summary_line} · fetch: #{fetch}"
+
+            :error ->
+              # Deleted/stale entry: keep the id visible — the agent should
+              # know the context pointed at something that no longer resolves.
+              "- #{t} #{id} (unresolved — not found in workspace)"
+          end
+        end
+
+      ["## Context", header] ++ lines
+    end
+  end
+
+  # Batch-resolve context entries against the live workspace: pages by id,
+  # memories by id. One query per type regardless of entry count. Non-UUID
+  # ids (hand-written JSON, stale data) are filtered out here — they render
+  # as unresolved instead of killing the query.
+  defp context_lookups(entries, workspace_id) do
+    page_ids =
+      for %{"type" => "page", "id" => id} <- entries, valid_uuid?(id), do: id
+
+    memory_ids =
+      for %{"type" => "memory", "id" => id} <- entries, valid_uuid?(id), do: id
+
+    pages =
+      if page_ids == [] do
+        []
+      else
+        from(p in Dran.Knowledge.Page,
+          where: p.id in ^page_ids and p.workspace_id == ^workspace_id,
+          select: %{type: "page", id: p.id, title: p.title, summary: p.summary}
+        )
+        |> Repo.all()
+      end
+
+    memories =
+      if memory_ids == [] do
+        []
+      else
+        from(m in Dran.Memory,
+          where: m.id in ^memory_ids and m.workspace_id == ^workspace_id,
+          select: %{
+            type: "memory",
+            id: m.id,
+            title: fragment("left(?, 80)", m.content),
+            summary: fragment("left(?, 120)", m.content)
+          }
+        )
+        |> Repo.all()
+      end
+
+    Map.new(pages ++ memories, fn %{type: t, id: id, title: title, summary: summary} ->
+      {{t, to_string(id)}, %{title: title, summary: summary}}
+    end)
+  end
+
+  # 8-4-4-4-12 hex — the shape binary_id columns accept. Anything else
+  # skips the DB lookup and renders as unresolved.
+  defp valid_uuid?(id) when is_binary(id) do
+    case id do
+      <<a::bytes-8, ?-, b::bytes-4, ?-, c::bytes-4, ?-, d::bytes-4, ?-, e::bytes-12>> ->
+        Enum.all?([a, b, c, d, e], &uuid_hex?/1)
+
+      _ ->
+        false
+    end
+  end
+
+  defp valid_uuid?(_), do: false
+
+  defp uuid_hex?(part) do
+    String.length(part) == byte_size(part) and Regex.match?(~r/^[0-9a-fA-F]+$/, part)
   end
 
   defp brief_graph(contract) do

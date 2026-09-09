@@ -128,8 +128,11 @@ const StepModalTabs = {
         const row = del.closest("[data-row]")
         const list = row && row.closest("[data-list]")
         if (row) row.remove()
-        // Keep at least one empty row so the list never dead-ends.
-        if (list && !list.querySelector("[data-row]")) this._addRow(list.dataset.list)
+        // Keep at least one empty row so the list never dead-ends — except
+        // ctx, whose only entry path is the search dropdown.
+        if (list && list.dataset.list !== "ctx" && !list.querySelector("[data-row]"))
+          this._addRow(list.dataset.list)
+
         this._sync()
       }
     })
@@ -348,7 +351,9 @@ const StepModalTabs = {
     const list = this.el.querySelector('[data-list="ctx"]')
     if (!list) return
     list.querySelectorAll("[data-row]").forEach((row) => row.remove())
-    const rows = Array.isArray(entries) && entries.length ? entries : [{}]
+    // No placeholder row when empty — unlike claims/gates, ctx entries come
+    // from the search dropdown, never from typing into a blank row.
+    const rows = Array.isArray(entries) ? entries : []
     for (const entry of rows) {
       const data = entry && typeof entry === "object" ? entry : {}
       const row = this._row("ctx", data, [

@@ -171,6 +171,103 @@ defmodule DranWeb.WorkflowsStepEditorRegressionTest do
   end
 
   # ──────────────────────────────────────────────────────────────────────
+  # P0-3: search_context must return pages of the workspace
+  #
+  # Root cause: the handler passed `props: %{"limit" => 8}` to
+  # Knowledge.search/2 — but :props there is the CUSTOM PROPS FILTER
+  # (WHERE meta->'props'->>'limit' = '8'), not pagination. Every search
+  # matched zero pages, so the Contexto picker never offered anything and
+  # users fell back to hand-typing ctx rows. Fix: drop the props kwarg.
+  # ──────────────────────────────────────────────────────────────────────
+
+  test "search_context returns matching pages (props-filter bug)", %{conn: conn} do
+    ws = DataCase.ensure_workspace!()
+
+    {:ok, page} =
+      Dran.Knowledge.create_page(%{
+        workspace_id: ws.id,
+        page_type: "reference",
+        title: "Spec de contratos Zettelkasten",
+        body: "método de notas atómicas"
+      })
+
+    {:ok, workflow} =
+      Workflows.create_workflow(%{
+        "workspace_id" => ws.id,
+        "title" => "Ctx WF",
+        "slug" => "ctx-wf",
+        "kind" => "one_shot",
+        "status" => "draft"
+      })
+
+    {:ok, step} =
+      Workflows.create_step(workflow, %{
+        "title" => "Ctx Step",
+        "slug" => "ctx-step",
+        "intent" => "algo"
+      })
+
+    conn = session(conn, ws, true)
+
+    {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}?step=#{step.id}")
+
+    # render_hook on the view proves the handler wiring; the payload of a
+    # pushEvent reply isn't rendered into the DOM, so the substance is
+    # pinned by calling the extracted builder directly — the exact code
+    # that carried the props-filter bug.
+    html = render_hook(view, "search_context", %{"q" => "zettelkasten"})
+    assert is_binary(html)
+
+    results = DranWeb.WorkflowsLive.context_picker_results("zettelkasten", ws.id)
+
+    assert %{} = entry = Enum.find(results, &(&1.id == to_string(page.id))),
+           "the picker must offer the matching page — with the old `props: %{\\\"limit\\\" => 8}` filter every query returned 0 pages"
+
+    assert entry.type == "page"
+    assert entry.title == "Spec de contratos Zettelkasten"
+  end
+
+  test "context_picker_results falls back to word-start for short queries", %{conn: conn} do
+    ws = DataCase.ensure_workspace!()
+
+    # Title does NOT start with the query — word-start must still find it
+    # (trgm similarity 0.17 for "zett" vs this title never clears 0.3).
+    {:ok, page} =
+      Dran.Knowledge.create_page(%{
+        workspace_id: ws.id,
+        page_type: "reference",
+        title: "El método Zettelkasten de notas",
+        body: "notas atómicas"
+      })
+
+    {:ok, workflow} =
+      Workflows.create_workflow(%{
+        "workspace_id" => ws.id,
+        "title" => "Ctx TA",
+        "slug" => "ctx-ta",
+        "kind" => "one_shot",
+        "status" => "draft"
+      })
+
+    {:ok, step} =
+      Workflows.create_step(workflow, %{
+        "title" => "TA Step",
+        "slug" => "ta-step",
+        "intent" => "x"
+      })
+
+    conn = session(conn, ws, true)
+    {:ok, _view, _html} = live(conn, ~p"/#{ws.slug}/workflows/#{workflow.slug}?step=#{step.id}")
+
+    for q <- ["zet", "zett", "zettelkasten"] do
+      results = DranWeb.WorkflowsLive.context_picker_results(q, ws.id)
+
+      assert %{} = Enum.find(results, &(&1.id == to_string(page.id))),
+             "short query '#{q}' must find the page via word-start fallback"
+    end
+  end
+
+  # ──────────────────────────────────────────────────────────────────────
   # Helper
   # ──────────────────────────────────────────────────────────────────────
 

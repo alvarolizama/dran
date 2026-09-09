@@ -55,6 +55,10 @@ Run ONLY the flow you landed on. If the diagram sends you to another skill,
 - MCP resources: `page://<ws>/<slug>`, `goal://<ws>/<slug>`,
   `home://<ws>/index`. Prompts: `brainstorm` (topic), `goal_review`
   (goal_slug).
+- Step briefs (`dran_get_step_contract`) render `## Context` RESOLVED:
+  title + why + one-line summary + the exact fetch command per entry
+  (`dran_get_page` / `GET /api/memory`). Triage on the summaries; fetch
+  only what the step needs.
 
 ## General rules (every flow obeys them)
 

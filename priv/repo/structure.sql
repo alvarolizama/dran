@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict WLkXDrbGovZlDDfENy39gM8C0lmrmvGWEyOy9QJfUdU3YsxEDyOYQZJdiI23v2P
+\restrict KaHsco6qth6G4RE0ibWcC0ipxYSPzdnucaaXOtBpN0PCfcDGJs1QhN2gJxYbEIi
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -191,15 +191,14 @@ CREATE TABLE public.goals (
     summary character varying(255),
     body text DEFAULT ''::character varying,
     status character varying(255) DEFAULT 'active'::character varying,
-    team character varying(255)[] DEFAULT ARRAY[]::character varying[],
-    meta jsonb DEFAULT '{}'::jsonb,
     archived boolean DEFAULT false,
     parent_goal_id uuid,
     workspace_id uuid NOT NULL,
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
     created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
-    updated_by character varying(255)
+    updated_by character varying(255),
+    checklist jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 
@@ -327,36 +326,6 @@ CREATE TABLE public.settings (
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
     workspace_id uuid
-);
-
-
---
--- Name: tasks; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.tasks (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    workspace_id uuid NOT NULL,
-    title character varying(255) NOT NULL,
-    slug character varying(255) NOT NULL,
-    body text DEFAULT ''::text,
-    status character varying(255) DEFAULT 'backlog'::character varying NOT NULL,
-    priority character varying(255),
-    "position" integer DEFAULT 0 NOT NULL,
-    due_date date,
-    assignee_id bigint,
-    recurrence character varying(255) DEFAULT 'none'::character varying NOT NULL,
-    lock_version integer DEFAULT 1 NOT NULL,
-    completed_at timestamp(0) without time zone,
-    archived boolean DEFAULT false NOT NULL,
-    created_by character varying(255) DEFAULT 'system'::character varying,
-    updated_by character varying(255),
-    on_behalf_of character varying(255),
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    assignee_actor_id uuid,
-    creator_actor_id uuid,
-    checklist jsonb DEFAULT '[]'::jsonb
 );
 
 
@@ -711,14 +680,6 @@ ALTER TABLE ONLY public.settings
 
 
 --
--- Name: tasks tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.tasks
-    ADD CONSTRAINT tasks_pkey PRIMARY KEY (id);
-
-
---
 -- Name: user_workspaces user_workspaces_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1036,6 +997,20 @@ CREATE UNIQUE INDEX knowledge_pages_workspace_id_slug_index ON public.knowledge_
 
 
 --
+-- Name: knowledge_pages_ws_slug_word_start_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_ws_slug_word_start_idx ON public.knowledge_pages USING btree (workspace_id, lower((slug)::text) text_pattern_ops);
+
+
+--
+-- Name: knowledge_pages_ws_title_word_start_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_ws_title_word_start_idx ON public.knowledge_pages USING btree (workspace_id, lower((title)::text) text_pattern_ops);
+
+
+--
 -- Name: memories_embedding_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1110,55 +1085,6 @@ CREATE UNIQUE INDEX reports_workspace_id_slug_index ON public.reports USING btre
 --
 
 CREATE UNIQUE INDEX settings_key_workspace_id_index ON public.settings USING btree (key, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'::uuid));
-
-
---
--- Name: tasks_assignee_actor_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX tasks_assignee_actor_id_index ON public.tasks USING btree (assignee_actor_id);
-
-
---
--- Name: tasks_assignee_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX tasks_assignee_index ON public.tasks USING btree (workspace_id, assignee_id);
-
-
---
--- Name: tasks_board_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX tasks_board_index ON public.tasks USING btree (workspace_id, status, "position");
-
-
---
--- Name: tasks_creator_actor_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX tasks_creator_actor_id_index ON public.tasks USING btree (creator_actor_id);
-
-
---
--- Name: tasks_due_date_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX tasks_due_date_index ON public.tasks USING btree (workspace_id, due_date);
-
-
---
--- Name: tasks_recurrence_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX tasks_recurrence_index ON public.tasks USING btree (recurrence, completed_at) WHERE ((recurrence)::text <> 'none'::text);
-
-
---
--- Name: tasks_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX tasks_workspace_id_slug_index ON public.tasks USING btree (workspace_id, slug);
 
 
 --
@@ -1434,38 +1360,6 @@ ALTER TABLE ONLY public.reports
 
 
 --
--- Name: tasks tasks_assignee_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.tasks
-    ADD CONSTRAINT tasks_assignee_actor_id_fkey FOREIGN KEY (assignee_actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
-
-
---
--- Name: tasks tasks_assignee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.tasks
-    ADD CONSTRAINT tasks_assignee_id_fkey FOREIGN KEY (assignee_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: tasks tasks_creator_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.tasks
-    ADD CONSTRAINT tasks_creator_actor_id_fkey FOREIGN KEY (creator_actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
-
-
---
--- Name: tasks tasks_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.tasks
-    ADD CONSTRAINT tasks_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
 -- Name: user_workspaces user_workspaces_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1605,7 +1499,7 @@ ALTER TABLE ONLY public.workflows
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WLkXDrbGovZlDDfENy39gM8C0lmrmvGWEyOy9QJfUdU3YsxEDyOYQZJdiI23v2P
+\unrestrict KaHsco6qth6G4RE0ibWcC0ipxYSPzdnucaaXOtBpN0PCfcDGJs1QhN2gJxYbEIi
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1682,3 +1576,7 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260907215215);
 INSERT INTO public."schema_migrations" (version) VALUES (20260907220007);
 INSERT INTO public."schema_migrations" (version) VALUES (20260907234045);
 INSERT INTO public."schema_migrations" (version) VALUES (20260908001115);
+INSERT INTO public."schema_migrations" (version) VALUES (20260908035014);
+INSERT INTO public."schema_migrations" (version) VALUES (20260908035020);
+INSERT INTO public."schema_migrations" (version) VALUES (20260908054110);
+INSERT INTO public."schema_migrations" (version) VALUES (20260909002001);
