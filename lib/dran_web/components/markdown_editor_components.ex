@@ -448,12 +448,24 @@ defmodule DranWeb.MarkdownEditorComponents do
               return out;
             };
 
+            let pushTimer = null;
+
             const sync = () => {
               const obj = {};
               entries().forEach(([k, v]) => {
                 obj[k] = v;
               });
               hidden.value = Object.keys(obj).length > 0 ? JSON.stringify(obj) : "";
+
+              // Push the change through the enclosing form (if any) so the
+              // server-side phx-change (autosave) sees the new props — the
+              // hidden input alone never fires a change event. Debounced:
+              // `input` fires per keystroke and a round-trip per key would
+              // re-render under the user's fingers.
+              clearTimeout(pushTimer);
+              pushTimer = setTimeout(() => {
+                hidden.dispatchEvent(new Event("change", { bubbles: true }));
+              }, 400);
             };
 
             const buildRow = (key = "", value = "") => {
@@ -786,6 +798,11 @@ defmodule DranWeb.MarkdownEditorComponents do
               root.querySelectorAll("[data-tag-chip]").forEach((el) => el.remove());
               next.forEach((tag) => field.before(chip(tag)));
               field.placeholder = next.length === 0 ? field.dataset.placeholder || "" : "";
+
+              // Push the change through the enclosing form (if any) so the
+              // server-side phx-change (autosave) sees the new tags — the
+              // hidden input alone never fires a change event.
+              hidden.dispatchEvent(new Event("change", { bubbles: true }));
             };
 
             field.dataset.placeholder = field.placeholder;

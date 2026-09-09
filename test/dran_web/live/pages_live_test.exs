@@ -339,6 +339,30 @@ defmodule DranWeb.PagesLiveTest do
       assert Knowledge.get_page(page.id).meta["kind"] == "plan"
     end
 
+    test "tags serialized as a comma string (tag_input hidden field) autosave to the db", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Taggable",
+          body: "cuerpo",
+          page_type: "note"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}")
+
+      # tag_input's hidden input submits "alfa,beta" (a string); the schema
+      # casts :tags as {:array, :string} and would reject the changeset
+      # without normalization.
+      view
+      |> element("form#note-editor-attributes-form")
+      |> render_change(%{"page" => %{"tags" => "alfa,beta"}})
+
+      assert Knowledge.get_page(page.id).tags == ["alfa", "beta"]
+    end
+
     test "edit mode shows summary read-only (machine-owned field), never an input", %{
       conn: conn,
       ws: ws

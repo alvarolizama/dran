@@ -83,6 +83,7 @@ defmodule DranWeb.PageEdit do
 
   def handle_event("validate_page", %{"page" => page_params}, socket) do
     page = socket.assigns[:page] || %Page{}
+    page_params = normalize_form_params(page_params)
 
     changeset =
       Knowledge.change_page(page, Map.put_new(page_params, "workspace_id", workspace_id(socket)))
@@ -169,6 +170,7 @@ defmodule DranWeb.PageEdit do
 
     page_params =
       page_params
+      |> normalize_form_params()
       |> Map.put_new("workspace_id", workspace_id)
       |> Map.put_new("page_type", page_type)
       |> ensure_slug(workspace_id, page)
@@ -646,6 +648,16 @@ defmodule DranWeb.PageEdit do
 
   defp format_error(reason) when is_binary(reason), do: reason
   defp format_error(reason), do: inspect(reason)
+
+  # Form inputs serialize `tags` as a comma-separated string (tag_input's
+  # hidden input), but the schema casts `:tags` as {:array, :string} and
+  # REJECTS the whole changeset on a string. Split it here so every
+  # form-driven path (validate autosave + save) receives a list.
+  defp normalize_form_params(%{"tags" => tags} = params) when is_binary(tags) do
+    Map.put(params, "tags", String.split(tags, ",", trim: true) |> Enum.map(&String.trim/1))
+  end
+
+  defp normalize_form_params(params), do: params
 
   defp ensure_tag_suggestions(socket) do
     case socket.assigns[:tag_suggestions] do
