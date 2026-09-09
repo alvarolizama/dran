@@ -131,17 +131,20 @@ defmodule DranWeb.GoalLiveTest do
       assert html =~ ~s(href="/#{ws.slug}/workflows/#{workflow.slug}")
     end
 
-    test "renders no linked-workflows section when the goal has none", %{
+    test "renders the section with empty state and picker when the goal has none", %{
       conn: conn,
       ws: ws,
       goal: goal
     } do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
 
-      refute html =~ t("Workflows vinculados")
+      # Section is always present — the picker survives an empty list.
+      assert has_element?(view, "#goal-workflows")
+      assert html =~ t("Sin workflows vinculados.")
+      assert has_element?(view, "form[phx-change='search_linkable_workflows']")
     end
 
-    test "detach_workflow unlinks the workflow from the goal", %{
+    test "attach/detach round-trip via the picker", %{
       conn: conn,
       ws: ws,
       goal: goal
@@ -149,20 +152,29 @@ defmodule DranWeb.GoalLiveTest do
       {:ok, workflow} =
         Workflows.create_workflow(%{
           "workspace_id" => ws.id,
-          "goal_id" => goal.id,
           "title" => "Deploy pipeline",
-          "slug" => "deploy-pipeline"
+          "slug" => "deploy-pipeline",
+          "status" => "active"
         })
 
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/goals/#{goal.slug}")
 
-      assert has_element?(view, "#goal-workflows")
+      # Attach from the picker
+      view
+      |> element("button[phx-click='attach_workflow'][phx-value-workflow-id='#{workflow.id}']")
+      |> render_click()
 
+      assert has_element?(view, "#goal-workflows", "Deploy pipeline")
+      assert Workflows.get_workflow!(workflow.id).goal_id == goal.id
+
+      # Detach — the section (and picker) must survive the empty list
       view
       |> element("button[phx-click='detach_workflow'][phx-value-workflow-id='#{workflow.id}']")
       |> render_click()
 
-      refute has_element?(view, "#goal-workflows")
+      assert has_element?(view, "#goal-workflows")
+      assert render(view) =~ t("Sin workflows vinculados.")
+      assert has_element?(view, "button[phx-click='attach_workflow']")
       assert Workflows.get_workflow!(workflow.id).goal_id == nil
     end
   end

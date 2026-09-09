@@ -98,7 +98,7 @@ defmodule Dran.Goals do
   # Linked notes (page ─part_of→ goal relations)
   # ──────────────────────────────────────────────────────────────────────────
 
-  import Ecto.Query, only: [from: 2, where: 3]
+  import Ecto.Query, only: [from: 2, where: 3, limit: 2]
 
   alias Dran.Knowledge
   alias Dran.Relation
@@ -110,6 +110,7 @@ defmodule Dran.Goals do
   """
   def linked_notes(%Goal{} = goal, opts \\ []) do
     kinds = Keyword.get(opts, :kinds)
+    limit = Keyword.get(opts, :limit)
 
     query =
       from r in Relation,
@@ -119,12 +120,19 @@ defmodule Dran.Goals do
             r.relation_type == "part_of",
         join: p in Dran.Knowledge.Page,
         on: p.id == r.source_id and p.page_type == "note" and p.archived == false,
-        order_by: [asc: p.title],
+        order_by: [desc: p.updated_at],
         select: %{page: p, relation_id: r.id}
 
     query =
       if kinds do
         where(query, [_, p], p.meta["kind"] in ^kinds)
+      else
+        query
+      end
+
+    query =
+      if limit do
+        limit(query, ^limit)
       else
         query
       end
@@ -177,8 +185,8 @@ defmodule Dran.Goals do
           p.archived == false and
           p.meta["kind"] in ^kinds and
           p.id not in ^linked_ids,
-      order_by: [asc: p.title],
-      limit: 100,
+      order_by: [desc: p.updated_at],
+      limit: 50,
       select: %{id: p.id, title: p.title, slug: p.slug, kind: p.meta["kind"]}
     )
     |> Repo.all()

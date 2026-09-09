@@ -84,12 +84,39 @@ defmodule Dran.Workflows do
   defp statuses_filter(status) when status in ["draft", "active"], do: [status]
   defp statuses_filter(_), do: []
 
-  @doc "List workflows optionally linked to a goal (GoalLive section)"
-  def list_by_goal(%Dran.Goals.Goal{} = goal) do
+  @doc """
+  List workflows optionally linked to a goal (GoalLive section). Newest
+  updated first, capped at `limit` (default 10) — the sidebar shows a
+  preview, not the full history.
+  """
+  def list_by_goal(%Dran.Goals.Goal{} = goal, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 10)
+
     Repo.all(
       from w in Workflow,
         where: w.goal_id == ^goal.id,
-        order_by: [asc: w.title]
+        order_by: [desc: w.updated_at],
+        limit: ^limit
+    )
+  end
+
+  @doc """
+  Workflows available to link to a goal: same workspace, not archived, not
+  already linked to THIS goal (goal_id nil or pointing elsewhere). Newest
+  updated first, capped — backs the goal sidebar picker.
+  """
+  def linkable_for_goal(workspace_id, goal_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 50)
+
+    Repo.all(
+      from w in Workflow,
+        where:
+          w.workspace_id == ^workspace_id and
+            w.status != "archived" and
+            (is_nil(w.goal_id) or w.goal_id != ^goal_id),
+        order_by: [desc: w.updated_at],
+        limit: ^limit,
+        select: %{id: w.id, title: w.title, slug: w.slug, status: w.status, kind: w.kind}
     )
   end
 

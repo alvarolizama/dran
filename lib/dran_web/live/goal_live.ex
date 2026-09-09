@@ -318,13 +318,13 @@ defmodule DranWeb.GoalLive do
             </div>
 
             <%!-- Linked workflows — read-only list, execution layer --%>
-            <div :if={@workflows != []} id="goal-workflows" class="surface-2 rounded-xl p-4">
+            <div id="goal-workflows" class="surface-2 rounded-xl p-4">
               <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
                 <.icon name="hero-bolt" class="size-4 text-primary" />
                 {gettext("Workflows vinculados")}
                 <span class="badge badge-sm badge-ghost">{length(@workflows)}</span>
               </h3>
-              <ul class="space-y-1.5">
+              <ul :if={@workflows != []} class="space-y-1.5">
                 <li :for={workflow <- @workflows} class="flex items-center gap-1 group">
                   <.link
                     navigate={~p"/#{@workspace_slug}/workflows/#{workflow.slug}"}
@@ -349,6 +349,50 @@ defmodule DranWeb.GoalLive do
                   </button>
                 </li>
               </ul>
+
+              <p :if={@workflows == []} class="text-xs text-base-content/40">
+                {gettext("Sin workflows vinculados.")}
+              </p>
+
+              <%!-- Search picker (same pattern as the notes picker above):
+                   filter server-side, one attach button per result row. --%>
+              <form phx-change="search_linkable_workflows" class="relative mt-3">
+                <.icon
+                  name="hero-magnifying-glass"
+                  class="absolute left-2.5 top-2 size-4 text-base-content/50"
+                />
+                <input
+                  type="text"
+                  name="q"
+                  value={@workflow_search}
+                  placeholder={gettext("Buscar workflows…")}
+                  class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </form>
+
+              <div :if={@workflow_search_results != []} class="mt-2 space-y-1">
+                <button
+                  :for={workflow <- @workflow_search_results}
+                  type="button"
+                  phx-click="attach_workflow"
+                  phx-value-workflow-id={workflow.id}
+                  class="w-full flex items-center gap-2 text-left text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+                >
+                  <.icon name="hero-bolt" class="size-3.5 shrink-0 text-base-content/40" />
+                  <span class="flex-1 min-w-0 truncate">{workflow.title}</span>
+                  <span class={["badge badge-xs shrink-0", workflow_badge_class(workflow)]}>
+                    {String.capitalize(workflow.status)}
+                  </span>
+                  <.icon name="hero-plus" class="size-3.5 shrink-0 text-primary" />
+                </button>
+              </div>
+
+              <p
+                :if={@workflow_search_results == [] and @workflow_search != ""}
+                class="text-xs text-base-content/40 mt-2 text-center"
+              >
+                {gettext("Sin resultados.")}
+              </p>
             </div>
           </aside>
         </div>
@@ -507,8 +551,10 @@ defmodule DranWeb.GoalLive do
             checklist_form: to_form(%{}, as: :checklist),
             note_search: "",
             note_search_results: note_search_results(goal, ""),
+            workflow_search: "",
+            workflow_search_results: workflow_search_results(goal, ""),
             workflows: Workflows.list_by_goal(goal),
-            linked_notes: Goals.linked_notes(goal, kinds: ~w(plan project)),
+            linked_notes: Goals.linked_notes(goal, kinds: ~w(plan project), limit: 3),
             linkable_notes: Goals.linkable_notes(goal),
             editing: Map.get(params, "edit") == "true",
             page_title: goal.title
@@ -723,6 +769,36 @@ defmodule DranWeb.GoalLive do
     end
   end
 
+  # Server-side search over linkable workflows (same pattern as notes).
+  def handle_event("search_linkable_workflows", %{"q" => q}, socket) do
+    %{goal: %Goal{} = goal} = socket.assigns
+
+    {:noreply,
+     assign(socket,
+       workflow_search: q,
+       workflow_search_results: workflow_search_results(goal, q)
+     )}
+  end
+
+  # Attach a workflow to the goal (goal_id ← goal.id). Row-level
+  # authorization: the workflow must belong to the goal's workspace.
+  def handle_event("attach_workflow", %{"workflow-id" => workflow_id}, socket) do
+    with %{goal: %Goal{} = goal, context: context} <- socket.assigns,
+         {:ok, uuid} <- Ecto.UUID.cast(workflow_id),
+         workflow when workflow != nil <- Workflows.get_workflow!(uuid),
+         true <- workflow.workspace_id == context.id do
+      case Workflows.update_workflow(workflow, %{"goal_id" => goal.id}) do
+        {:ok, _} ->
+          {:noreply, reload_goal_workflows(socket, goal)}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, gettext("No se pudo vincular el workflow."))}
+      end
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("No se pudo vincular el workflow."))}
+    end
+  end
+
   # Detach a workflow from the goal (goal_id → nil). Row-level authorization:
   # the workflow must belong to the goal's workspace.
   def handle_event("detach_workflow", %{"workflow-id" => workflow_id}, socket) do
@@ -731,7 +807,7 @@ defmodule DranWeb.GoalLive do
          workflow when workflow != nil <- Workflows.get_workflow!(uuid),
          true <- workflow.workspace_id == context.id do
       case Goals.detach_workflow(goal, workflow) do
-        {:ok, _} -> {:noreply, assign(socket, workflows: Workflows.list_by_goal(goal))}
+        {:ok, _} -> {:noreply, reload_goal_workflows(socket, goal)}
         {:error, _} -> {:noreply, put_flash(socket, :error, gettext("No se pudo desvincular."))}
       end
     else
@@ -760,18 +836,43 @@ defmodule DranWeb.GoalLive do
   # archive action.
   defp reload_goal_notes(socket, %Goal{} = goal) do
     assign(socket,
-      linked_notes: Goals.linked_notes(goal, kinds: ~w(plan project)),
+      linked_notes: Goals.linked_notes(goal, kinds: ~w(plan project), limit: 3),
       linkable_notes: Goals.linkable_notes(goal),
       note_search: "",
       note_search_results: note_search_results(goal, "")
     )
   end
 
+  # Refresh linked workflows and reset the picker search after an
+  # attach/detach action.
+  defp reload_goal_workflows(socket, %Goal{} = goal) do
+    assign(socket,
+      workflows: Workflows.list_by_goal(goal),
+      workflow_search: "",
+      workflow_search_results: workflow_search_results(goal, "")
+    )
+  end
+
+  # Linkable workflows filtered by query. Empty query → the 3 most recent
+  # (collapsed preview); typed query → up to 10 filtered matches.
+  defp workflow_search_results(%Goal{} = goal, q) do
+    q = String.downcase(q || "")
+    take = if q == "", do: 3, else: 10
+
+    goal.workspace_id
+    |> Workflows.linkable_for_goal(goal.id)
+    |> Enum.filter(fn workflow ->
+      q == "" or String.contains?(String.downcase(workflow.title), q)
+    end)
+    |> Enum.take(take)
+  end
+
   # Linkable notes filtered by query, grouped by kind for the picker:
-  # `[{"plan", [note…]}, {"project", [note…]}]`. Empty query → first 5
-  # per kind (collapsed); typed query → filtered matches.
+  # `[{"plan", [note…]}, {"project", [note…]}]`. Empty query → the 3 most
+  # recent (collapsed preview); typed query → up to 10 filtered matches.
   defp note_search_results(%Goal{} = goal, q) do
     q = String.downcase(q || "")
+    take = if q == "", do: 3, else: 10
 
     results =
       goal
@@ -779,7 +880,7 @@ defmodule DranWeb.GoalLive do
       |> Enum.filter(fn note ->
         q == "" or String.contains?(String.downcase(note.title), q)
       end)
-      |> Enum.take(20)
+      |> Enum.take(take)
 
     results
     |> Enum.group_by(& &1.kind)
