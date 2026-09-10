@@ -88,18 +88,34 @@ defmodule Dran.Knowledge do
   @doc "Get a context by id"
   def get_workspace!(id), do: Repo.get!(Workspace, id)
 
-  @doc "Create a new context"
+  @doc """
+  Create a new workspace. The slug is auto-managed: an explicit non-blank
+  `slug` in attrs wins (API/MCP); otherwise it is derived from the name,
+  suffixed with a random hex while it collides with another workspace.
+  """
   def create_workspace(attrs) do
-    %Workspace{}
-    |> Workspace.changeset(attrs)
-    |> Repo.insert()
+    attrs
+    |> Dran.Slug.inject_create(
+      field: "name",
+      fallback: "workspace",
+      taken?: &get_workspace_by_slug/1
+    )
+    |> then(&(%Workspace{} |> Workspace.changeset(&1) |> Repo.insert()))
   end
 
-  @doc "Update a context"
+  @doc """
+  Update a workspace. When the name changes and no explicit slug arrived,
+  the slug is regenerated from the new name (suffixed with a random hex if
+  it collides with another workspace). An explicit slug always wins.
+  """
   def update_workspace(%Workspace{} = context, attrs) do
-    context
-    |> Workspace.changeset(attrs)
-    |> Repo.update()
+    attrs
+    |> Dran.Slug.inject_update(context,
+      field: "name",
+      fallback: "workspace",
+      lookup: &get_workspace_by_slug/1
+    )
+    |> then(&(context |> Workspace.changeset(&1) |> Repo.update()))
   end
 
   @doc """

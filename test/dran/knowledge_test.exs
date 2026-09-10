@@ -30,6 +30,44 @@ defmodule Dran.KnowledgeTest do
     {:ok, context: context}
   end
 
+  describe "workspace slug auto-management" do
+    test "create_workspace/1 derives slug from name and suffixes on collision", %{context: ctx} do
+      # "personal" already exists in the setup fixture — a DIFFERENT name
+      # that slugifies to the same base collides on slug only
+      {:ok, dup} = Knowledge.create_workspace(%{name: "Personal!"})
+
+      assert dup.slug != ctx.slug
+      assert String.starts_with?(dup.slug, "personal-")
+      assert Knowledge.get_workspace_by_slug(dup.slug).id == dup.id
+
+      # First creation without collision takes the bare slugified name
+      {:ok, clean} = Knowledge.create_workspace(%{name: "Work Research 2024"})
+      assert clean.slug == "work-research-2024"
+
+      # Explicit slug always wins
+      {:ok, explicit} = Knowledge.create_workspace(%{name: "Otro Nombre", slug: "slug-manual"})
+      assert explicit.slug == "slug-manual"
+    end
+
+    test "update_workspace/2 regenerates slug when name changes", %{context: ctx} do
+      {:ok, renamed} = Knowledge.update_workspace(ctx, %{name: "Personal Renombrado"})
+      assert renamed.slug == "personal-renombrado"
+
+      # Name unchanged → slug untouched
+      {:ok, same} = Knowledge.update_workspace(renamed, %{visibility: "private"})
+      assert same.slug == "personal-renombrado"
+
+      # Collision on rename → random hex suffix
+      {:ok, _other} = Knowledge.create_workspace(%{name: "X", slug: "choque"})
+      {:ok, colliding} = Knowledge.update_workspace(renamed, %{name: "Choque"})
+      assert String.starts_with?(colliding.slug, "choque-")
+
+      # Explicit slug always wins on update too
+      {:ok, forced} = Knowledge.update_workspace(renamed, %{name: "Nuevo", slug: "slug-fijo"})
+      assert forced.slug == "slug-fijo"
+    end
+  end
+
   describe "disabled page types" do
     test "enabled_page_types/1 returns all types minus disabled", %{context: ctx} do
       assert Knowledge.enabled_page_types(ctx) == Knowledge.page_types()

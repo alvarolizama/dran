@@ -232,9 +232,12 @@ defmodule DranWeb.DashboardLive do
   def handle_event("create_workspace", %{"context" => params}, socket) do
     # Owner-only, enforced server-side (the button is hidden for everyone else).
     if socket.assigns[:can_create_workspace] do
+      # An untouched slug field means it was auto-suggested from the name —
+      # drop it so Knowledge.create_workspace regenerates it with a random
+      # suffix on collision. A user-typed slug always wins.
       params =
-        if is_nil(params["slug"]) or params["slug"] == "" do
-          Map.put(params, "slug", Slug.slugify(params["name"] || ""))
+        if (socket.assigns[:slug_touched] || is_nil(params["slug"])) or params["slug"] == "" do
+          Map.drop(params, ["slug"])
         else
           params
         end

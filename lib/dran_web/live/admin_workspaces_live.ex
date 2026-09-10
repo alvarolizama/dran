@@ -513,10 +513,7 @@ defmodule DranWeb.AdminWorkspacesLive do
   defp page_type_impact("reference"), do: gettext("References, references list")
   defp page_type_impact(_), do: ""
 
-  defp save_workspace(nil, attrs) do
-    attrs = Map.put_new(attrs, :slug, Slug.slugify(attrs[:name] || ""))
-    Dran.Knowledge.create_workspace(attrs)
-  end
+  defp save_workspace(nil, attrs), do: Dran.Knowledge.create_workspace(attrs)
 
   defp save_workspace(ws, attrs), do: Dran.Knowledge.update_workspace(ws, attrs)
 end
