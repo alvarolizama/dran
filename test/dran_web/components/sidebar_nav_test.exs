@@ -198,14 +198,23 @@ defmodule DranWeb.SidebarNavTest do
       assert html =~ ~s(href="/")
     end
 
-    test "footer icons align right" do
+    test "workspace icon left, other icons right with divider between" do
       html =
         render_component(&Layouts.sidebar_footer_icons/1, %{
           is_owner: true,
-          workspace_slug: nil
+          workspace_slug: "personal"
         })
 
-      assert html =~ "justify-end"
+      # Workspace (cog) icon anchors the left…
+      assert html =~ ~s(href="/personal/settings")
+      # …a vertical divider follows it…
+      assert html =~ "w-px"
+      # …and the remaining icons sit in a right-aligned group.
+      assert html =~ "ml-auto"
+      assert html =~ ~s(href="/")
+      assert html =~ ~s(href="/personal/activity")
+      assert html =~ ~s(href="/admin")
+      assert html =~ ~s(href="/settings/account")
     end
 
     test "border-t separator present" do

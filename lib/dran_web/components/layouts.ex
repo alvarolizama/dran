@@ -438,55 +438,65 @@ defmodule DranWeb.Layouts do
     assigns = assign(assigns, :can_config, can_config)
 
     ~H"""
-    <div class="mt-auto flex items-center justify-end gap-1 pt-2 border-t border-base-300">
-      <a
-        href={~p"/"}
-        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        title={gettext("Dashboard")}
-      >
-        <.icon name="hero-squares-2x2" class="size-4" />
-      </a>
-      <a
-        :if={@workspace_slug && @can_config}
-        href={~p"/#{@workspace_slug}/settings"}
-        class={[
-          "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
-          @active == "workspace_settings" && "bg-primary/10 text-primary",
-          @active != "workspace_settings" &&
-            "text-base-content/60 hover:bg-base-200 hover:text-base-content"
-        ]}
-        title={gettext("Workspace")}
-      >
-        <.icon name="hero-cog-6-tooth" class="size-4" />
-      </a>
-      <a
+    <div class="mt-auto flex items-center gap-3 pt-2 border-t border-base-300">
+      <div class="flex items-center gap-1">
+        <a
+          href={~p"/"}
+          class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+          title={gettext("Dashboard")}
+        >
+          <.icon name="hero-squares-2x2" class="size-4" />
+        </a>
+        <a
+          href={~p"/settings/account"}
+          class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+          title={gettext("Account")}
+        >
+          <.icon name="hero-user" class="size-4" />
+        </a>
+        <a
+          :if={@is_owner}
+          href={~p"/admin"}
+          class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
+          title={gettext("Admin")}
+        >
+          <.icon name="hero-command-line" class="size-4" />
+        </a>
+      </div>
+      <div
         :if={@workspace_slug}
-        href={~p"/#{@workspace_slug}/activity"}
-        class={[
-          "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
-          @active == "activity" && "bg-primary/10 text-primary",
-          @active != "activity" &&
-            "text-base-content/60 hover:bg-base-200 hover:text-base-content"
-        ]}
-        title={gettext("Activity")}
+        class="ml-auto self-stretch my-1.5 w-px bg-base-300"
+        aria-hidden="true"
       >
-        <.icon name="hero-signal" class="size-4" />
-      </a>
-      <a
-        :if={@is_owner}
-        href={~p"/admin"}
-        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        title={gettext("Admin")}
-      >
-        <.icon name="hero-command-line" class="size-4" />
-      </a>
-      <a
-        href={~p"/settings/account"}
-        class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-        title={gettext("Account")}
-      >
-        <.icon name="hero-user" class="size-4" />
-      </a>
+      </div>
+      <div class="flex items-center gap-1">
+        <a
+          :if={@workspace_slug}
+          href={~p"/#{@workspace_slug}/activity"}
+          class={[
+            "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
+            @active == "activity" && "bg-primary/10 text-primary",
+            @active != "activity" &&
+              "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+          ]}
+          title={gettext("Activity")}
+        >
+          <.icon name="hero-signal" class="size-4" />
+        </a>
+        <a
+          :if={@workspace_slug && @can_config}
+          href={~p"/#{@workspace_slug}/settings"}
+          class={[
+            "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
+            @active == "workspace_settings" && "bg-primary/10 text-primary",
+            @active != "workspace_settings" &&
+              "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+          ]}
+          title={gettext("Workspace")}
+        >
+          <.icon name="hero-cog-6-tooth" class="size-4" />
+        </a>
+      </div>
     </div>
     """
   end
