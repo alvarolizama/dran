@@ -33,6 +33,7 @@ defmodule Dran.Workspace do
     field :semantic_threshold_long, :float
     field :entity_linker_enabled, :boolean
     field :worker_max_pages, :integer
+    field :summary_language, :string
     timestamps(type: :utc_datetime, updated_at: false)
   end
 
@@ -62,12 +63,14 @@ defmodule Dran.Workspace do
       :semantic_threshold_mid,
       :semantic_threshold_long,
       :entity_linker_enabled,
-      :worker_max_pages
+      :worker_max_pages,
+      :summary_language
     ])
     |> validate_subset(:disabled_page_types, Dran.Knowledge.Page.all_types())
     |> validate_inclusion(:visibility, ~w(public private))
     |> force_public_when_default()
     |> validate_number(:worker_max_pages, greater_than: 0)
+    |> validate_inclusion(:summary_language, ~w(auto es en))
     |> validate_threshold(:semantic_threshold_short)
     |> validate_threshold(:semantic_threshold_mid)
     |> validate_threshold(:semantic_threshold_long)
@@ -123,6 +126,36 @@ defmodule Dran.Workspace do
     case Map.get(ws, key) do
       nil -> Dran.Settings.get(to_string(key))
       value -> value
+    end
+  end
+
+  @doc """
+  Language pin for LLM-generated summaries (page summaries, cluster
+  summaries, agent memories) in this workspace.
+
+  Returns `"es"` / `"en"` when pinned, or `nil` for `"auto"` (and for the
+  default): the model then follows the language of the page/transcript it is
+  summarizing, which is the historical behavior.
+  """
+  @spec summary_language(ws :: map() | nil) :: String.t() | nil
+  def summary_language(nil), do: nil
+
+  def summary_language(ws) when is_map(ws) do
+    case ws.summary_language || Dran.Settings.get("summary_language") do
+      lang when lang in ["es", "en"] -> lang
+      _other -> nil
+    end
+  end
+
+  @doc """
+  Prompt suffix pinning the summary language, or `""` when auto.
+  """
+  @spec summary_language_instruction(ws :: map() | nil) :: String.t()
+  def summary_language_instruction(ws) do
+    case summary_language(ws) do
+      nil -> ""
+      "es" -> "Respond in Spanish. "
+      "en" -> "Respond in English. "
     end
   end
 end

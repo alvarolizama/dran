@@ -132,6 +132,14 @@ defmodule Dran.Graph.ClusterSummaries do
   defp build_summary(workspace_id, cluster_id, cluster_pages) do
     page_count = length(cluster_pages)
 
+    # Per-workspace summary language pin (Settings → Automation). "auto"
+    # (nil/default) keeps the model matching the pages' own language.
+    language_instruction =
+      case Repo.get(Dran.Workspace, workspace_id) do
+        nil -> ""
+        ws -> Dran.Workspace.summary_language_instruction(ws)
+      end
+
     top =
       cluster_pages
       |> Enum.sort_by(&pagerank_of/1, :desc)
@@ -144,7 +152,7 @@ defmodule Dran.Graph.ClusterSummaries do
 
     summary =
       if Inference.enabled?() do
-        summarize_with_llm(top)
+        summarize_with_llm(top, language_instruction)
       else
         fallback_summary(page_count, top_pages)
       end
@@ -152,9 +160,9 @@ defmodule Dran.Graph.ClusterSummaries do
     upsert_summary(workspace_id, cluster_id, summary, page_count, top_pages)
   end
 
-  defp summarize_with_llm(top) do
+  defp summarize_with_llm(top, language_instruction) do
     system_prompt = """
-    You are a knowledge graph analyst. Given a cluster of related pages from a personal knowledge base, write a 2-3 sentence summary that captures the main theme and key topics of this cluster. Be concise and specific.
+    You are a knowledge graph analyst. Given a cluster of related pages from a personal knowledge base, write a 2-3 sentence summary that captures the main theme and key topics of this cluster. Be concise and specific. #{language_instruction}
 
     Pages in this cluster (ordered by importance):
     #{prompt_pages(top)}

@@ -282,9 +282,115 @@ defmodule Dran.MemoryTest do
       assert Memory.count_memories(ws.id) == 1
       assert Memory.list_memories(ws.id, status: "superseded") == []
     end
+
+    test "purge drops the memory's informs relations (no orphan edges)", %{workspace: ws} do
+      {:ok, memory, :created} = add_fact(ws, "hecho enlazado antes de purgar")
+
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "P",
+          slug: "p-purge",
+          body: "b",
+          page_type: "note"
+        })
+
+      {:ok, _} =
+        Knowledge.create_relation(%{
+          source_id: memory.id,
+          source_type: "memory",
+          target_id: page.id,
+          target_type: "page",
+          relation_type: "informs"
+        })
+
+      # Sanity: the edge exists before the purge.
+      assert Repo.get_by(Dran.Relation, source_id: memory.id, source_type: "memory") != nil
+
+      assert {:ok, _} = Memory.purge_memory(memory)
+
+      # The relation went with it — polymorphic endpoints have no FK.
+      refute Repo.get_by(Dran.Relation, source_id: memory.id, source_type: "memory")
+    end
+
+    test "purge_superseded/1 sweeps informs relations of purged rows", %{workspace: ws} do
+      {:ok, m1, :created} = add_fact(ws, "obsoleto enlazado")
+
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "P",
+          slug: "p-purge-2",
+          body: "b",
+          page_type: "note"
+        })
+
+      {:ok, _} =
+        Knowledge.create_relation(%{
+          source_id: m1.id,
+          source_type: "memory",
+          target_id: page.id,
+          target_type: "page",
+          relation_type: "informs"
+        })
+
+      {:ok, _} = Memory.delete_memory(m1)
+      assert {1, nil} = Memory.purge_superseded(ws.id)
+
+      refute Repo.get_by(Dran.Relation, source_id: m1.id, source_type: "memory")
+    end
   end
 
   # ── Helpers ──────────────────────────────────────────────────────────
+
+  describe "informs relations (memory → page)" do
+    test "memory is a valid polymorphic endpoint for informs relations", %{workspace: ws} do
+      assert "memory" in Dran.Relation.node_types()
+      assert "informs" in Dran.Relation.relation_types()
+
+      {:ok, memory, :created} = add_fact(ws, "hecho con enlace")
+
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "P",
+          slug: "p-informs",
+          body: "b",
+          page_type: "note"
+        })
+
+      assert {:ok, _relation} =
+               Knowledge.create_relation(%{
+                 source_id: memory.id,
+                 source_type: "memory",
+                 target_id: page.id,
+                 target_type: "page",
+                 relation_type: "informs"
+               })
+    end
+
+    test "changeset rejects a memory endpoint that does not exist", %{workspace: ws} do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "P",
+          slug: "p-informs-2",
+          body: "b",
+          page_type: "note"
+        })
+
+      assert {:error, changeset} =
+               Knowledge.create_relation(%{
+                 source_id: Ecto.UUID.generate(),
+                 source_type: "memory",
+                 target_id: page.id,
+                 target_type: "page",
+                 relation_type: "informs"
+               })
+
+      assert Keyword.has_key?(changeset.errors, :source_id)
+    end
+  end
 
   defp add_fact(attrs) when is_map(attrs) do
     stub_embeddings()

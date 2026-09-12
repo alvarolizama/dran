@@ -11,6 +11,7 @@ defmodule Dran.Settings do
     "worker_max_sources" => 10,
     "pagerank_boost" => 0.15,
     "entity_linker_enabled" => true,
+    "summary_language" => "auto",
     "wiki_google_open_signup" => false
   }
 

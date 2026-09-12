@@ -56,6 +56,49 @@ defmodule Dran.SummariesTest do
     assert {:error, :not_configured} = Summaries.suggest_tags(page)
   end
 
+  test "pinned workspace summary_language adds a language instruction to the prompt" do
+    # A workspace pinned to Spanish
+    {:ok, ws} =
+      Dran.Repo.insert(%Dran.Workspace{
+        name: "Lang Test",
+        slug: "lang-test-#{System.unique_integer([:positive])}",
+        summary_language: "es"
+      })
+
+    page = build_page("Elixir is a functional language", "Elixir note")
+    page = %{page | workspace_id: ws.id}
+
+    parent = self()
+
+    Req.Test.stub(Dran.Inference.Client, fn conn ->
+      send(parent, {:prompt, conn.body_params})
+      Req.Test.json(conn, chat_response(~s({"summary": "Resumen en español"})))
+    end)
+
+    assert {:ok, "Resumen en español"} = Summaries.summarize_page(page)
+
+    assert_receive {:prompt, %{"messages" => messages}}
+    system = Enum.find(messages, &(&1["role"] == "system"))
+    assert system["content"] =~ "Respond in Spanish."
+  end
+
+  test "auto language (default) sends no language instruction" do
+    page = build_page("Elixir is a functional language", "Elixir note")
+
+    parent = self()
+
+    Req.Test.stub(Dran.Inference.Client, fn conn ->
+      send(parent, {:prompt, conn.body_params})
+      Req.Test.json(conn, chat_response(~s({"summary": "A summary"})))
+    end)
+
+    assert {:ok, "A summary"} = Summaries.summarize_page(page)
+
+    assert_receive {:prompt, %{"messages" => messages}}
+    system = Enum.find(messages, &(&1["role"] == "system"))
+    refute system["content"] =~ "Respond in"
+  end
+
   defp build_page(title, body) do
     %Page{
       id: Ecto.UUID.generate(),

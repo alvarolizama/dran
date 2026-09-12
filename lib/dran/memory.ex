@@ -388,17 +388,18 @@ defmodule Dran.Memory do
   @doc """
   Permanently deletes a fact (hard DELETE — the row is gone, not superseded).
 
-  Returns `{:ok, memory}` (the deleted struct, for the broadcast payload)
-  or `{:error, :not_deleted}`.
+  Drops the memory's `informs` relations in the same call: relations are
+  polymorphic (no FK), so leaving them would orphan edges pointing at a
+  deleted row. Returns `{:ok, memory}` (the deleted struct, for the
+  broadcast payload) or `{:error, :not_deleted}`.
   """
   def purge_memory(%__MODULE__{} = memory) do
-    case Repo.delete(memory) do
-      {:ok, deleted} ->
-        broadcast_memory_change(memory.workspace_id, :purged, deleted)
-        {:ok, deleted}
-
-      {:error, _} ->
-        {:error, :not_deleted}
+    with {:ok, deleted} <- Repo.delete(memory) do
+      delete_memory_relations(memory.id)
+      broadcast_memory_change(memory.workspace_id, :purged, deleted)
+      {:ok, deleted}
+    else
+      {:error, _} -> {:error, :not_deleted}
     end
   end
 
@@ -406,14 +407,37 @@ defmodule Dran.Memory do
   Permanently deletes every superseded (obsolete) fact of a workspace.
 
   Returns `{count, nil}` — the number of rows hard-deleted. Does NOT touch
-  active facts.
+  active facts. Also sweeps the `informs` relations of the purged rows
+  (polymorphic endpoints have no FK to cascade).
   """
   def purge_superseded(workspace_id) do
+    ids =
+      from(m in __MODULE__,
+        where: m.workspace_id == ^workspace_id and m.status == "superseded",
+        select: m.id
+      )
+      |> Repo.all()
+
     {count, _} =
       from(m in __MODULE__, where: m.workspace_id == ^workspace_id and m.status == "superseded")
       |> Repo.delete_all()
 
+    Enum.each(ids, &delete_memory_relations/1)
+
     if count > 0, do: broadcast_memory_change(workspace_id, :purged, nil)
     {count, nil}
+  end
+
+  # Polymorphic relations have no FK: a purged memory's informs edges must be
+  # swept explicitly or they dangle forever (they ARE queried by graph_data
+  # only when the memory id is among the active top-100 nodes, but orphan
+  # rows would still accumulate).
+  defp delete_memory_relations(memory_id) do
+    from(r in Dran.Relation,
+      where: r.source_id == ^memory_id and r.source_type == "memory"
+    )
+    |> Repo.delete_all()
+
+    :ok
   end
 end

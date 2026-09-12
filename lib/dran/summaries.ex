@@ -84,6 +84,18 @@ defmodule Dran.Summaries do
 
   # ── Prompts ──
 
+  # Resolves the workspace's summary-language pin. Tolerates a missing
+  # workspace row (or nil id — tests build detached pages): "" means "auto",
+  # the model matches the page's own language.
+  defp summary_language_instruction(workspace_id) when is_binary(workspace_id) do
+    case Repo.get(Dran.Workspace, workspace_id) do
+      nil -> ""
+      ws -> Dran.Workspace.summary_language_instruction(ws)
+    end
+  end
+
+  defp summary_language_instruction(_), do: ""
+
   defp augment_prompt(%Page{workspace_id: workspace_id} = page) do
     pages =
       if workspace_id do
@@ -91,6 +103,10 @@ defmodule Dran.Summaries do
       else
         []
       end
+
+    # Per-workspace summary language pin (Settings → Automation). Empty for
+    # "auto": the model then matches the language of the page body.
+    language_instruction = summary_language_instruction(workspace_id)
 
     available_pages =
       pages
@@ -105,7 +121,7 @@ defmodule Dran.Summaries do
     You are a knowledge-base assistant. Analyze the given page and return a single JSON object with these keys:
 
     - "title": a concise title for the page (max 512 chars)
-    - "summary": one concise sentence describing the page (max 120 chars)
+    - "summary": one concise sentence describing the page (max 120 chars). #{language_instruction}
     - "tags": 1-5 kebab-case tags
     - "entities": names of real-world entities ONLY: specific people, companies, products, tools, or places. DO NOT include: file paths or names (e.g. "readme.md", "settings_live.ex"), Elixir module names (e.g. "Dran.Knowledge.Page"), file extensions, or generic tech acronyms (e.g. "ai", "llm", "mcp", "socket"). Focus on named entities that have their own real-world identity.
     - "inline_links": array of {"text": "exact text from body", "slug": "slug from available pages"} — link body text to related pages. Only use slugs from the available pages list. Pick the most relevant 1-5 links. The "text" must be an exact substring from the page body.

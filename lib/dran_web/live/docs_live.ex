@@ -838,7 +838,8 @@ defmodule DranWeb.DocsLive do
         (10), <code>worker_max_sources</code>
         (10), <code>pagerank_boost</code>
         (0.15) and <code>entity_linker_enabled</code>
-        (true).
+        (true), <code>summary_language</code>
+        ("auto", or "es"/"en" to pin the language of LLM-generated summaries).
       </p>
 
       <h3 id="security-notes" class="scroll-mt-20">Security notes</h3>

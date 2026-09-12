@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict mB0CQ4RNbivganNbINk1dc06RWxhYgKUE47Qd1BmyLX7vNP4p5XMoBUuh0cF0Ul
+\restrict tNCaFRlly98ueolb1z3SdEc92AV7fKtgAHk92EW40VbFfr0gjorGta8eIaMygFh
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -550,7 +550,8 @@ CREATE TABLE public.workspaces (
     semantic_threshold_mid double precision,
     semantic_threshold_long double precision,
     entity_linker_enabled boolean,
-    worker_max_pages integer
+    worker_max_pages integer,
+    summary_language character varying(255)
 );
 
 
@@ -1507,7 +1508,7 @@ ALTER TABLE ONLY public.workflows
 -- PostgreSQL database dump complete
 --
 
-\unrestrict mB0CQ4RNbivganNbINk1dc06RWxhYgKUE47Qd1BmyLX7vNP4p5XMoBUuh0cF0Ul
+\unrestrict tNCaFRlly98ueolb1z3SdEc92AV7fKtgAHk92EW40VbFfr0gjorGta8eIaMygFh
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1590,3 +1591,4 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260908054110);
 INSERT INTO public."schema_migrations" (version) VALUES (20260909002001);
 INSERT INTO public."schema_migrations" (version) VALUES (20260909054747);
 INSERT INTO public."schema_migrations" (version) VALUES (20260909072119);
+INSERT INTO public."schema_migrations" (version) VALUES (20260912053941);

@@ -33,7 +33,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
   @features ~w(goals workflows clusters graph journey collections activity search reports)
 
   # Brain tuning keys: worker limits + advanced semantic thresholds.
-  @brain_keys ~w(worker_max_pages entity_linker_enabled)
+  @brain_keys ~w(worker_max_pages entity_linker_enabled summary_language)
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
   @impl true
@@ -499,7 +499,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Automation")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Worker limits and semantic thresholds for this workspace.")}
+            {gettext(
+              "Worker limits, semantic thresholds and summary language for this workspace. Applies to autonomous workers, the page augmenter and the nightly cron jobs."
+            )}
           </p>
         </div>
       </header>
@@ -525,7 +527,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 />
                 <p class="text-xs text-base-content/60 mt-1.5">
                   {gettext(
-                    "Maximum number of pages the autonomous workers will create in a single run. Blank uses the global default."
+                    "Maximum pages the autonomous workers (GraphRAG, Curator, Link gardener) create in a single run. Blank uses the global default."
                   )}
                 </p>
               </div>
@@ -537,7 +539,20 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 />
                 <p class="text-xs text-base-content/60 mt-1.5">
                   {gettext(
-                    "When enabled, the augmenter auto-creates entity pages for named things mentioned in page bodies."
+                    "When enabled, the page augmenter (runs on every page save, via the Relations supervisor) auto-creates entity pages for named things mentioned in page bodies."
+                  )}
+                </p>
+              </div>
+              <div>
+                <.input
+                  field={@form[:summary_language]}
+                  type="select"
+                  options={summary_language_options()}
+                  label={gettext("Summary language")}
+                />
+                <p class="text-xs text-base-content/60 mt-1.5">
+                  {gettext(
+                    "Language the assistants write generated summaries and memories in: page summaries (augmenter + nightly backfill job), cluster summaries (nightly job) and agent memories (API ingest). \"Auto\" matches the language of each page or transcript."
                   )}
                 </p>
               </div>
@@ -582,7 +597,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
               </div>
               <p class="text-xs text-base-content/60">
                 {gettext(
-                  "Minimum cosine similarity (0.0–1.0) required for a semantic relation between pages. Blank uses the global default."
+                  "Minimum cosine similarity (0.0–1.0) required for a semantic relation between pages. Used by the page augmenter when linking new pages (short/mid/long by body length) and by the nightly graph maintenance cron when pruning weak semantic relations (long). Blank uses the global default."
                 )}
               </p>
             </div>
@@ -766,8 +781,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
     values =
       Map.new(@brain_keys ++ @advanced_keys, fn key ->
-        {key, Workspace.get_tuning(workspace, key)}
+        {key, Workspace.get_tuning(workspace, String.to_atom(key))}
       end)
+      |> Map.update!("summary_language", &(&1 || "auto"))
 
     assign(socket, settings_form: to_form(values, as: :workspace))
   end
@@ -820,7 +836,12 @@ defmodule DranWeb.WorkspaceSettingsLive do
     |> Map.update("semantic_threshold_long", nil, &blank_to_nil/1)
     |> Map.update("worker_max_pages", nil, &blank_to_nil/1)
     |> Map.put("entity_linker_enabled", Map.get(ws_params, "entity_linker_enabled") == "true")
+    |> Map.update("summary_language", "auto", &blank_to_auto/1)
   end
+
+  # Blank/missing language resets to "auto" (follows each page's language).
+  defp blank_to_auto(""), do: "auto"
+  defp blank_to_auto(value), do: value
 
   # Rebuilds the full enabled_features map with real booleans. Unchecked
   # checkboxes are absent from the params, so every feature is set explicitly.
@@ -834,6 +855,16 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
+
+  # Select options for the summary language pin. "Auto" keeps the model
+  # matching each page/transcript's own language (the historical default).
+  defp summary_language_options do
+    [
+      {gettext("Auto (matches each page's language)"), "auto"},
+      {gettext("Spanish"), "es"},
+      {gettext("English"), "en"}
+    ]
+  end
 
   defp page_type_label("note"), do: gettext("Note")
   defp page_type_label("concept"), do: gettext("Concept")
