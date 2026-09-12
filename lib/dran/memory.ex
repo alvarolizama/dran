@@ -157,6 +157,10 @@ defmodule Dran.Memory do
             |> Repo.insert()
             |> case do
               {:ok, memory} ->
+                # Graph presence: derive informs relations to the closest
+                # pages. Best-effort — a linking failure must never fail the
+                # write (same posture as the augmenter's entity linking).
+                _ = Dran.MemoryLinker.link_to_pages(memory)
                 broadcast_memory_change(memory.workspace_id, :created, memory)
                 {:ok, memory, :created}
 

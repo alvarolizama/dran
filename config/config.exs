@@ -112,6 +112,10 @@ if config_env() != :test do
       page_summaries_nightly: [
         schedule: "30 7 * * *",
         task: {Dran.Jobs, :run_scheduled, [:page_summaries_nightly]}
+      ],
+      memory_relink_nightly: [
+        schedule: "15 4 * * *",
+        task: {Dran.Jobs, :run_scheduled, [:memory_relink_nightly]}
       ]
     ]
 end

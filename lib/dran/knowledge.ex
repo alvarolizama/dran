@@ -1247,9 +1247,10 @@ defmodule Dran.Knowledge do
 
     node_ids = Enum.map(page_nodes, & &1.id)
     goal_ids = Enum.map(goal_nodes, & &1.id)
+    memory_ids = Enum.map(memory_nodes, & &1.id)
 
     edges =
-      if Enum.empty?(node_ids) and Enum.empty?(goal_ids) do
+      if Enum.empty?(node_ids) and Enum.empty?(goal_ids) and Enum.empty?(memory_ids) do
         []
       else
         # Page↔Page edges (both endpoints are pages)
@@ -1288,7 +1289,33 @@ defmodule Dran.Knowledge do
             )
           end
 
-        page_edges ++ goal_edges
+        # Memory→Page/Goal edges — the `informs` relations MemoryLinker
+        # derives at ingest. Unlike page/goal edges (which implicitly match
+        # their endpoint type by id set), memory edges MUST filter by
+        # source_type explicitly: the memory id set is disjoint from page
+        # and goal ids, and any stray cross-type row would dangle.
+        memory_edges =
+          if Enum.empty?(memory_ids) or (Enum.empty?(node_ids) and Enum.empty?(goal_ids)) do
+            []
+          else
+            target_ids = node_ids ++ goal_ids
+
+            Repo.all(
+              from r in Relation,
+                where:
+                  r.source_id in ^memory_ids and r.source_type == "memory" and
+                    r.target_id in ^target_ids and
+                    r.target_type in ["page", "goal"],
+                select: %{
+                  source: r.source_id,
+                  target: r.target_id,
+                  type: r.relation_type,
+                  weight: r.weight
+                }
+            )
+          end
+
+        page_edges ++ goal_edges ++ memory_edges
       end
 
     total_edges =
@@ -1326,9 +1353,12 @@ defmodule Dran.Knowledge do
     end
   end
 
-  # Memory nodes show the fact itself as the hover label — first line,
-  # capped, so a long fact doesn't produce a monster tooltip.
-  defp truncate_memory_label(content) do
+  @doc """
+  Memory nodes show the fact itself as the hover label — first line,
+  capped, so a long fact doesn't produce a monster tooltip. Public: shared
+  by graph_data (global graph) and GraphHelpers (page subgraph).
+  """
+  def truncate_memory_label(content) do
     first_line = content |> String.split("\n", parts: 2) |> hd()
 
     if String.length(first_line) <= 80 do

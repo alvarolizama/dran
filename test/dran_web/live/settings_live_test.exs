@@ -459,6 +459,15 @@ defmodule DranWeb.SettingsLiveTest do
       # Default values come from Workspace.get_tuning/2
       assert html =~ to_string(Dran.Workspace.get_tuning(ws, :semantic_threshold_short))
       assert html =~ to_string(Dran.Workspace.get_tuning(ws, :worker_max_pages))
+
+      # Summary language select renders with the auto default
+      assert has_element?(
+               view,
+               "#workspace-settings-form select[name='workspace[summary_language]']"
+             )
+
+      assert html =~ t("Summary language")
+
       assert html =~ t("Save")
     end
 
@@ -478,7 +487,8 @@ defmodule DranWeb.SettingsLiveTest do
             "semantic_threshold_short" => "0.10",
             "semantic_threshold_mid" => "0.25",
             "semantic_threshold_long" => "0.30",
-            "worker_max_pages" => "42"
+            "worker_max_pages" => "42",
+            "summary_language" => "en"
           }
         })
         |> render_submit()
@@ -490,6 +500,9 @@ defmodule DranWeb.SettingsLiveTest do
       reloaded = Knowledge.get_workspace!(ws.id)
       assert Dran.Workspace.get_tuning(reloaded, :worker_max_pages) == 42
       assert Dran.Workspace.get_tuning(reloaded, :semantic_threshold_short) == 0.10
+
+      # The language pin is persisted as-is
+      assert reloaded.summary_language == "en"
     end
 
     test "the brain tuning form still renders the worker_max_pages input", %{conn: conn, ws: ws} do
@@ -578,7 +591,7 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, _view, html} = live(conn, ~p"/admin/jobs")
 
       assert html =~ t("Jobs programados")
-      assert length(Jobs.list()) == 6
+      assert length(Jobs.list()) == 7
 
       for job <- Jobs.list() do
         assert html =~ ~s(id="job-row-#{job.key}")

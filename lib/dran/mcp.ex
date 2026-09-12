@@ -1883,6 +1883,17 @@ defmodule Dran.MCP do
         page ->
           relations = Knowledge.list_relations_for_page(page.id)
 
+          # Inbound informs edges come from memories, not pages: the joined
+          # source Page is nil there (left_join misses). Resolve those ids
+          # against memories so the listing shows the fact instead of a blank.
+          memory_source_ids =
+            relations.inbound
+            |> Enum.filter(&is_nil(&1.source.id))
+            |> Enum.map(& &1.source_id)
+            |> Enum.uniq()
+
+          memories_by_id = memories_by_id(context.id, memory_source_ids)
+
           outbound =
             Enum.map(relations.outbound, fn rel ->
               "- --#{rel.relation_type}--> #{rel.target.title} (`#{rel.target.slug}`)"
@@ -1890,7 +1901,11 @@ defmodule Dran.MCP do
 
           inbound =
             Enum.map(relations.inbound, fn rel ->
-              "- #{rel.source.title} (`#{rel.source.slug}`) --#{rel.relation_type}-->"
+              if content = Map.get(memories_by_id, rel.source_id) do
+                "- [memory] #{content} --#{rel.relation_type}-->"
+              else
+                "- #{rel.source.title} (`#{rel.source.slug}`) --#{rel.relation_type}-->"
+              end
             end)
 
           """
@@ -3204,4 +3219,17 @@ defmodule Dran.MCP do
   defp maybe_put_meta(map, _key, nil), do: map
   defp maybe_put_meta(map, _key, ""), do: map
   defp maybe_put_meta(map, key, value), do: Map.put(map, key, value)
+
+  # Memory contents by id for a workspace — used to render inbound `informs`
+  # edges in dran_get_links (their source is a memory, not a page).
+  defp memories_by_id(_workspace_id, []), do: %{}
+
+  defp memories_by_id(workspace_id, ids) do
+    from(m in Dran.Memory,
+      where: m.workspace_id == ^workspace_id and m.id in ^ids,
+      select: {m.id, fragment("left(?, 80)", m.content)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
 end

@@ -2,6 +2,7 @@ defmodule Dran.KnowledgeTest do
   use Dran.DataCase, async: false
 
   alias Dran.Knowledge
+  alias Dran.Repo
 
   setup do
     # Disable inference so create_page doesn't call external APIs
@@ -408,6 +409,41 @@ defmodule Dran.KnowledgeTest do
       edge = Enum.find(graph.edges, &(&1.source == a.id and &1.target == b.id))
       assert Map.has_key?(edge, :weight)
       assert_in_delta edge.weight, 0.85, 0.001
+    end
+
+    test "informs memory→page edges appear in the graph", %{context: ctx} do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "Informed page",
+          slug: "informed-page",
+          page_type: "note"
+        })
+
+      memory =
+        Repo.insert!(%Dran.Memory{
+          workspace_id: ctx.id,
+          content: "fact that informs the page",
+          content_hash: Dran.Memory.content_hash("fact that informs the page")
+        })
+
+      {:ok, _} =
+        Knowledge.create_relation(%{
+          source_id: memory.id,
+          source_type: "memory",
+          target_id: page.id,
+          target_type: "page",
+          relation_type: "informs"
+        })
+
+      graph = Knowledge.graph_data(ctx.id)
+
+      # Memory node present (additive, hover-only)...
+      assert Enum.any?(graph.nodes, &(&1.id == memory.id and &1.type == "memory"))
+      # ...and the informs edge connects it to its page.
+      edge = Enum.find(graph.edges, &(&1.source == memory.id and &1.target == page.id))
+      assert edge != nil
+      assert edge.type == "informs"
     end
 
     test "exclude_types filters types in SQL", %{context: ctx} do

@@ -22,7 +22,8 @@ defmodule DranWeb.GraphHelpers do
     "related" => "#94A3B8",
     "contradicts" => "#EF4444",
     "supersedes" => "#F59E0B",
-    "part_of" => "#10B981"
+    "part_of" => "#10B981",
+    "informs" => "#A78BFA"
   }
 
   def type_colors, do: @type_colors
@@ -119,14 +120,38 @@ defmodule DranWeb.GraphHelpers do
         Map.new(pages, &{&1.id, &1})
       end
 
+    # Memory neighbors (inbound informs edges): ids that are NOT pages get a
+    # second, cheap lookup in memories — they render as violet hover-only
+    # nodes, same convention as the global graph.
+    memory_ids = Enum.reject(neighbor_ids, &Map.has_key?(neighbor_pages, &1))
+
+    memory_neighbors =
+      if memory_ids == [] do
+        %{}
+      else
+        Dran.Repo.all(
+          from m in Dran.Memory,
+            where: m.id in ^memory_ids and m.workspace_id == ^page.workspace_id,
+            select: %{id: m.id, content: m.content}
+        )
+        |> Map.new(fn m ->
+          {m.id,
+           %{
+             id: m.id,
+             slug: nil,
+             title: Dran.Knowledge.truncate_memory_label(m.content),
+             page_type: "memory"
+           }}
+        end)
+      end
+
     neighbor_nodes =
       neighbor_ids
       |> Enum.map(fn id ->
-        case Map.get(neighbor_pages, id) do
-          nil ->
-            nil
+        cond do
+          Map.has_key?(neighbor_pages, id) ->
+            p = Map.get(neighbor_pages, id)
 
-          p ->
             %{
               id: p.id,
               slug: p.slug,
@@ -134,6 +159,20 @@ defmodule DranWeb.GraphHelpers do
               type: p.page_type,
               color: Map.get(@type_colors, p.page_type, "#94A3B8")
             }
+
+          Map.has_key?(memory_neighbors, id) ->
+            m = Map.get(memory_neighbors, id)
+
+            %{
+              id: m.id,
+              slug: m.slug,
+              label: m.title,
+              type: "memory",
+              color: Map.get(@type_colors, "memory", "#94A3B8")
+            }
+
+          true ->
+            nil
         end
       end)
       |> Enum.reject(&is_nil/1)

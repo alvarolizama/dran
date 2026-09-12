@@ -114,6 +114,12 @@ defmodule Dran.GraphTest do
       refute Graph.cluster_edge?("contradicts")
     end
 
+    test "excludes informs (memory→page, graph-display only)" do
+      # Memory-sourced edges never reach load_edges (join on source page),
+      # and informs must not cluster pages even if that ever changes.
+      refute Graph.cluster_edge?("informs")
+    end
+
     test "excludes unknown types" do
       refute Graph.cluster_edge?("unknown")
     end

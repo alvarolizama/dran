@@ -95,6 +95,15 @@ defmodule Dran.Jobs do
       description:
         "Nightly LLM backfill: fills a one-line summary on pages that lack " <>
           "one (machine-owned field — never edited in the UI)."
+    },
+    %{
+      key: :memory_relink_nightly,
+      label: "Memory re-link",
+      mfa: {Dran.MemoryLinker, :run_scheduled, []},
+      description:
+        "Nightly graph sync for memories: re-derives informs relations " <>
+          "(memory → page/goal) now that new pages exist, and drops informs " <>
+          "edges whose memory was superseded. Zero inference."
     }
   ]
 

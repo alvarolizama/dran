@@ -5,7 +5,7 @@ defmodule Dran.Relation do
 
   Relations are **polymorphic**: `source_type` / `target_type` indicate which
   table the `source_id` / `target_id` point to — "page", "goal",
-  "collection", or "step". App-level validation in `changeset/2`
+  "collection", "step", or "memory". App-level validation in `changeset/2`
   ensures each endpoint resolves to a real row of the declared type.
 
   ## Relation types (manual)
@@ -22,6 +22,9 @@ defmodule Dran.Relation do
 
   `depends_on` (step→step) is the workflow edge: target is a prerequisite of
   source. See `Dran.Contracts` for the ready/blocked semantics it enables.
+
+  `informs` (memory→page) is derived automatically at memory ingest by
+  `Dran.MemoryLinker`: the memory's embedding top-k pages. Not set manually.
   """
 
   use Ecto.Schema
@@ -42,8 +45,8 @@ defmodule Dran.Relation do
              :weight,
              :inserted_at
            ]}
-  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with depends_on)
-  @node_types ~w(page goal collection step)
+  @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with depends_on informs)
+  @node_types ~w(page goal collection step memory)
 
   schema "relations" do
     field :source_id, :binary_id
@@ -129,5 +132,6 @@ defmodule Dran.Relation do
   defp endpoint_module("goal"), do: Dran.Goals.Goal
   defp endpoint_module("collection"), do: Dran.Collections.Collection
   defp endpoint_module("step"), do: Dran.Workflows.Step
+  defp endpoint_module("memory"), do: Dran.Memory
   defp endpoint_module(_), do: nil
 end

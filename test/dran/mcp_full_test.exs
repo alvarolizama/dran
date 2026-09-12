@@ -1204,6 +1204,39 @@ defmodule Dran.MCPFullTest do
       result = call_tool("dran_get_links", %{"workspace" => "personal", "slug" => "no-links"})
       assert result =~ "Error: page 'no-links' not found"
     end
+
+    test "renders inbound informs edges from memories", %{context: ctx} do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "Informed Page",
+          slug: "informed-page",
+          page_type: "note"
+        })
+
+      memory =
+        Dran.Repo.insert!(%Dran.Memory{
+          workspace_id: ctx.id,
+          content: "fact that informs the informed page",
+          content_hash: Dran.Memory.content_hash("fact that informs the informed page")
+        })
+
+      {:ok, _} =
+        Knowledge.create_relation(%{
+          source_id: memory.id,
+          source_type: "memory",
+          target_id: page.id,
+          target_type: "page",
+          relation_type: "informs"
+        })
+
+      result =
+        call_tool("dran_get_links", %{"workspace" => "personal", "slug" => "informed-page"})
+
+      assert result =~ "Inbound (1)"
+      assert result =~ "[memory] fact that informs the informed page"
+      assert result =~ "informs"
+    end
   end
 
   # ── Tool: dran_list_pages ───────────────────────────────────────────────────
