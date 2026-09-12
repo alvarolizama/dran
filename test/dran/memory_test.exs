@@ -90,6 +90,53 @@ defmodule Dran.MemoryTest do
     end
   end
 
+  describe "add/1 semantic dedupe" do
+    test "reworded fact with a near-identical embedding is a duplicate", %{workspace: ws} do
+      content = "Search filtering happens in memory, not in the database"
+
+      {:ok, original, :created} = add_fact(ws, content)
+
+      # Exact-same embedding (same stub seed) but different text -> hash differs,
+      # cosine similarity 1.0 -> semantic duplicate.
+      reworded = String.replace(content, "happens", "occurs")
+
+      Req.Test.stub(Dran.Inference.Client, fn conn ->
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        # Force the reworded input to embed as the original content.
+        input =
+          case extract_embed_input(body) do
+            ^reworded -> content
+            other -> other
+          end
+
+        Req.Test.json(conn, embeddings_response(embedding_for(input)))
+      end)
+
+      assert {:ok, dupe, :duplicate} =
+               Memory.add(%{"workspace_id" => ws.id, "content" => reworded})
+
+      assert dupe.id == original.id
+    end
+
+    test "different facts with different embeddings are both created", %{workspace: ws} do
+      {:ok, _m1, :created} = add_fact(ws, "El deployment se hace los martes")
+      {:ok, _m2, :created} = add_fact(ws, "La base de datos es Postgres 17")
+    end
+
+    test "no embedding service -> semantic dedupe skipped, insert proceeds", %{workspace: ws} do
+      # Embedding endpoint down: changeset keeps no embedding, add/1 must not fail.
+      Req.Test.stub(Dran.Inference.Client, fn conn ->
+        conn |> Plug.Conn.put_status(503) |> Req.Test.json(%{"error" => "down"})
+      end)
+
+      assert {:ok, _a, :created} =
+               Memory.add(%{"workspace_id" => ws.id, "content" => "sin embedding uno"})
+
+      assert {:ok, _b, :created} =
+               Memory.add(%{"workspace_id" => ws.id, "content" => "sin embedding dos"})
+    end
+  end
+
   describe "record_feedback/2" do
     test "helpful raises trust by 0.05 and bumps helpful_count", %{workspace: ws} do
       {:ok, memory, :created} = add_fact(ws, "fact uno")
@@ -249,16 +296,34 @@ defmodule Dran.MemoryTest do
     Memory.add(%{"workspace_id" => ws.id, "content" => content})
   end
 
+  # Deterministic per-content vectors: the semantic dedupe in Memory.add
+  # compares candidate vs stored embeddings, so a constant stub vector would
+  # make EVERY fact a duplicate of the first one.
   defp stub_embeddings do
     Req.Test.stub(Dran.Inference.Client, fn conn ->
       assert conn.request_path == "/v1/embeddings"
-      Req.Test.json(conn, embeddings_response())
+      {:ok, body, _conn} = Plug.Conn.read_body(conn)
+      input = extract_embed_input(body)
+      Req.Test.json(conn, embeddings_response(embedding_for(input)))
     end)
   end
 
-  defp embeddings_response do
-    vec = List.duplicate(0.1, 1024)
+  defp extract_embed_input(body) do
+    case Jason.decode(body) do
+      {:ok, %{"input" => [input | _]}} when is_binary(input) -> input
+      {:ok, %{"input" => input}} when is_binary(input) -> input
+      _ -> ""
+    end
+  end
 
+  # Stable pseudo-embedding derived from the content: same text -> same vector,
+  # different text -> one-hot on a different axis (cosine similarity 0.0).
+  defp embedding_for(input) do
+    idx = rem(:erlang.phash2(input), 1024)
+    List.duplicate(0.0, idx) ++ [1.0] ++ List.duplicate(0.0, 1023 - idx)
+  end
+
+  defp embeddings_response(vec) do
     %{
       "object" => "list",
       "data" => [

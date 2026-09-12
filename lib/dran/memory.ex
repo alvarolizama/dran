@@ -95,7 +95,7 @@ defmodule Dran.Memory do
   @doc false
   def changeset(memory, attrs) do
     memory
-    |> cast(attrs, [:workspace_id, :content, :status, :source_session, :created_by])
+    |> cast(attrs, [:workspace_id, :content, :status, :source_session, :created_by, :trust_score])
     |> validate_required([:workspace_id, :content])
     |> update_change(:content, &normalize_content/1)
     |> validate_length(:content, min: 1)
@@ -114,6 +114,11 @@ defmodule Dran.Memory do
   @doc """
   Store a fact in the workspace's shared memory. Idempotent per content.
 
+  Dedupe is two-tier: exact content hash first (cheap), then semantic — when
+  both the candidate and a stored fact have embeddings, a cosine similarity
+  >= `@semantic_dupe_threshold` also returns `{:ok, existing, :duplicate}`.
+  Near-identical rewordings of a stored fact must not pile up as new rows.
+
   Generates the embedding synchronously when inference is configured; on
   embedding failure the memory is still stored (embedding nil) — losing a
   fact over a degraded embedding service is worse than reduced recall.
@@ -122,6 +127,9 @@ defmodule Dran.Memory do
     * `{:ok, memory, :created}` — new fact stored
     * `{:ok, existing, :duplicate}` — fact already existed (row untouched)
   """
+  # 1 - cosine distance; catches "same fact, different wording" (hash misses it).
+  @semantic_dupe_threshold 0.95
+
   def add(attrs) do
     content = Map.fetch!(attrs, "content")
     ws_id = Map.fetch!(attrs, "workspace_id")
@@ -134,21 +142,51 @@ defmodule Dran.Memory do
         {:ok, existing, :duplicate}
 
       nil ->
-        %__MODULE__{}
-        |> changeset(attrs)
-        |> maybe_put_embedding()
-        |> Repo.insert()
-        |> case do
-          {:ok, memory} ->
-            broadcast_memory_change(memory.workspace_id, :created, memory)
-            {:ok, memory, :created}
+        changeset =
+          %__MODULE__{}
+          |> changeset(attrs)
+          |> maybe_put_embedding()
 
-          {:error, %Ecto.Changeset{errors: [{:content_hash, _} | _]}} ->
-            {:ok, Repo.get_by!(__MODULE__, workspace_id: ws_id, content_hash: hash), :duplicate}
+        # Semantic dedupe AFTER embedding generation: needs the candidate vector.
+        case semantic_duplicate(changeset, ws_id) do
+          %__MODULE__{} = existing ->
+            {:ok, existing, :duplicate}
 
-          {:error, reason} ->
-            {:error, reason}
+          nil ->
+            changeset
+            |> Repo.insert()
+            |> case do
+              {:ok, memory} ->
+                broadcast_memory_change(memory.workspace_id, :created, memory)
+                {:ok, memory, :created}
+
+              {:error, %Ecto.Changeset{errors: [{:content_hash, _} | _]}} ->
+                {:ok, Repo.get_by!(__MODULE__, workspace_id: ws_id, content_hash: hash),
+                 :duplicate}
+
+              {:error, reason} ->
+                {:error, reason}
+            end
         end
+    end
+  end
+
+  defp semantic_duplicate(changeset, workspace_id) do
+    case get_change(changeset, :embedding) do
+      nil ->
+        nil
+
+      vec ->
+        similarity = 1.0 - @semantic_dupe_threshold
+
+        from(m in __MODULE__,
+          where:
+            m.workspace_id == ^workspace_id and m.status == "active" and
+              not is_nil(m.embedding),
+          where: fragment("1 - (? <=> ?) >= ?", m.embedding, ^vec, ^similarity),
+          limit: 1
+        )
+        |> Repo.one()
     end
   end
 

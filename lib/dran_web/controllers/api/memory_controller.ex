@@ -20,7 +20,12 @@ defmodule DranWeb.API.MemoryController do
   alias Dran.Memory
 
   @max_transcript_chars 12_000
-  @max_facts_per_ingest 20
+  @max_facts_per_ingest 5
+  # Auto-extracted facts start below the manual 0.5 baseline (probation):
+  # they surface in search with less weight until feedback promotes them.
+  @auto_extracted_trust 0.35
+  # Self-reported confidence floor from the extraction model.
+  @min_extraction_confidence 0.7
 
   @doc "POST /api/memory — store a fact (idempotent per workspace)."
   def create(conn, params) do
@@ -175,7 +180,15 @@ defmodule DranWeb.API.MemoryController do
       true ->
         transcript = transcript_text(params["transcript"])
 
-        case extract_facts(transcript) do
+        # Existing facts give the extractor negative context: slots are not
+        # wasted re-extracting what the workspace already knows.
+        known =
+          case Memory.search(params["workspace_id"], transcript, limit: 10, bump_retrieval: false) do
+            [] -> []
+            facts -> Enum.map(facts, & &1.memory.content)
+          end
+
+        case extract_facts(transcript, known, summary_language(params["workspace_id"])) do
           {:error, :extraction_failed} ->
             json(conn, %{facts: [], created: 0, duplicates: 0, error: "extraction_failed"})
 
@@ -187,7 +200,10 @@ defmodule DranWeb.API.MemoryController do
                 "workspace_id" => params["workspace_id"],
                 "content" => content,
                 "source_session" => params["source_session"],
-                "created_by" => Auth.resolve_created_by(user)
+                "created_by" => Auth.resolve_created_by(user),
+                # Auto-extracted facts start on probation: they weigh less in
+                # search until feedback promotes them. Manual adds stay at 0.5.
+                "trust_score" => @auto_extracted_trust
               }
 
               case Memory.add(attrs) do
@@ -240,14 +256,58 @@ defmodule DranWeb.API.MemoryController do
 
   # ── Fact extraction (server-side, transcript discarded) ─────────────
 
-  defp extract_facts(transcript) do
+  # Per-workspace language pin for stored facts (Settings → Automation).
+  # "auto" (nil) keeps the historical behavior: facts in the transcript's language.
+  defp summary_language(workspace_id) do
+    case Dran.Repo.get(Dran.Workspace, workspace_id) do
+      nil -> nil
+      ws -> Dran.Workspace.summary_language(ws)
+    end
+  end
+
+  # "in the language of the transcript" (auto) vs "in Spanish"/"in English" (pinned).
+  defp fact_language_clause(nil), do: " in the language of the transcript"
+  defp fact_language_clause("es"), do: " in Spanish"
+  defp fact_language_clause("en"), do: " in English"
+  defp fact_language_clause(_), do: " in the language of the transcript"
+
+  defp extract_facts(transcript, known, params_lang) do
+    known_block =
+      case known do
+        [] ->
+          ""
+
+        facts ->
+          """
+          Facts ALREADY stored in this workspace (do NOT extract these or close
+          variants of them — the slots are for NEW knowledge only):
+          #{Enum.map_join(facts, "\n", &"- #{&1}")}
+          """
+      end
+
     prompt = """
     Extract atomic, self-contained facts from this agent session transcript.
-    Rules:
-    - Each fact is one standalone sentence in the language of the transcript
-    - Include durable knowledge only: decisions, preferences, project facts, technical findings
-    - NO secrets, tokens, passwords, or verbatim code
-    - Return JSON: {"facts": ["...", "..."]} with at most 20 facts; empty array if nothing durable
+    You are a strict gatekeeper: when in doubt, DISCARD the fact. An empty
+    result is a valid outcome.
+
+    MUST-HAVE (all required, drop the fact otherwise):
+    - Still true and relevant 3 months from now — durable decisions, stable
+      user preferences, project constraints, hard-won technical findings
+    - Something the agent could NOT trivially re-derive from the codebase or
+      this transcript alone
+    - One standalone sentence#{fact_language_clause(params_lang)}
+
+    NEVER store:
+    - Secrets, tokens, passwords, or verbatim code
+    - Task progress, one-off steps, transient errors, or what a command returned
+    - Facts already implied by another fact you extracted (no near-duplicates)
+
+    Self-score each candidate fact with a confidence between 0.0 and 1.0
+    answering: "would a teammate in 3 months be glad this was remembered?".
+    Facts below #{@min_extraction_confidence} are discarded by the caller.
+
+    #{known_block}Return JSON: {"facts": [{"content": "...", "confidence": 0.0}]}
+    with at most 5 facts; empty array if nothing clears the bar.
     """
 
     payload = %{
@@ -274,8 +334,15 @@ defmodule DranWeb.API.MemoryController do
 
   defp parse_facts(raw) when is_binary(raw) do
     case Jason.decode(raw) do
+      # Scored shape from the strict prompt: keep content above the confidence bar.
       {:ok, %{"facts" => facts}} when is_list(facts) ->
-        {:ok, Enum.filter(facts, fn f -> is_binary(f) and String.trim(f) != "" end)}
+        kept =
+          facts
+          |> extract_fact_entries()
+          |> Enum.reject(fn %{confidence: c} -> c < @min_extraction_confidence end)
+          |> Enum.map(& &1.content)
+
+        {:ok, kept}
 
       _ ->
         {:error, :invalid_json}
@@ -283,6 +350,28 @@ defmodule DranWeb.API.MemoryController do
   end
 
   defp parse_facts(_), do: {:error, :invalid_json}
+
+  # Accepts both {"content": s, "confidence": n} maps and plain strings
+  # (legacy / loose models); missing confidence defaults to 1.0 — the model
+  # was told to score, but a fact sent unscored is kept rather than guessed away.
+  defp extract_fact_entries(facts) do
+    facts
+    |> Enum.filter(fn
+      %{"content" => c} when is_binary(c) and byte_size(c) > 0 -> true
+      f when is_binary(f) and byte_size(f) > 0 -> true
+      _ -> false
+    end)
+    |> Enum.map(fn
+      %{"content" => c, "confidence" => conf} when is_number(conf) ->
+        %{content: String.trim(c), confidence: max(0.0, min(1.0, conf))}
+
+      %{"content" => c} ->
+        %{content: String.trim(c), confidence: 1.0}
+
+      f when is_binary(f) ->
+        %{content: String.trim(f), confidence: 1.0}
+    end)
+  end
 
   defp transcript_text(transcript) when is_binary(transcript), do: transcript
 

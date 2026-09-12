@@ -242,6 +242,56 @@ defmodule DranWeb.API.MemoryControllerTest do
                json_response(post(conn, "/api/memory/ingest", params), 200)
     end
 
+    test "auto-extracted facts start on probation trust (0.35)", %{
+      conn: conn,
+      workspace: workspace
+    } do
+      stub_chat(~s({"facts": [{"content": "hecho en probacion", "confidence": 0.9}]}))
+
+      assert %{"created" => 1} =
+               json_response(
+                 post(conn, "/api/memory/ingest", %{
+                   workspace: workspace.slug,
+                   transcript: "sesion con decision durable"
+                 }),
+                 200
+               )
+
+      [memory] = Memory.list_memories(workspace.id, status: "active")
+      assert_in_delta memory.trust_score, 0.35, 0.0001
+    end
+
+    test "facts below the confidence floor are discarded", %{conn: conn, workspace: workspace} do
+      stub_chat(
+        ~s({"facts": [{"content": "hecho dudoso", "confidence": 0.4}, {"content": "hecho solido", "confidence": 0.85}]})
+      )
+
+      assert %{"created" => 1, "facts" => ["hecho solido"]} =
+               json_response(
+                 post(conn, "/api/memory/ingest", %{
+                   workspace: workspace.slug,
+                   transcript: "sesion mixta"
+                 }),
+                 200
+               )
+    end
+
+    test "unscored plain-string facts still pass through (legacy shape)", %{
+      conn: conn,
+      workspace: workspace
+    } do
+      stub_chat(~s({"facts": ["hecho sin score explicito"]}))
+
+      assert %{"created" => 1} =
+               json_response(
+                 post(conn, "/api/memory/ingest", %{
+                   workspace: workspace.slug,
+                   transcript: "sesion simple"
+                 }),
+                 200
+               )
+    end
+
     test "returns empty on extraction failure (invalid JSON from model)", %{
       conn: conn,
       workspace: workspace
@@ -311,7 +361,8 @@ defmodule DranWeb.API.MemoryControllerTest do
   defp stub_embeddings do
     Req.Test.stub(Dran.Inference.Client, fn conn ->
       if String.contains?(conn.request_path, "embeddings") do
-        Req.Test.json(conn, embeddings_response())
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        Req.Test.json(conn, embeddings_response(embedding_for(embed_input(body))))
       else
         Req.Test.json(conn, chat_response(~s({"facts": []})))
       end
@@ -321,18 +372,35 @@ defmodule DranWeb.API.MemoryControllerTest do
   defp stub_chat(content) do
     Req.Test.stub(Dran.Inference.Client, fn conn ->
       if String.contains?(conn.request_path, "embeddings") do
-        Req.Test.json(conn, embeddings_response())
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        Req.Test.json(conn, embeddings_response(embedding_for(embed_input(body))))
       else
         Req.Test.json(conn, chat_response(content))
       end
     end)
   end
 
-  defp embeddings_response do
+  defp embed_input(body) do
+    case Jason.decode(body) do
+      {:ok, %{"input" => [input | _]}} when is_binary(input) -> input
+      {:ok, %{"input" => input}} when is_binary(input) -> input
+      _ -> ""
+    end
+  end
+
+  # One-hot pseudo-embedding per content: same text -> same vector, different
+  # text -> orthogonal vector. A constant vector would make the semantic dedupe
+  # in Memory.add collapse every fact into the first one.
+  defp embedding_for(input) do
+    idx = rem(:erlang.phash2(input), 1024)
+    List.duplicate(0.0, idx) ++ [1.0] ++ List.duplicate(0.0, 1023 - idx)
+  end
+
+  defp embeddings_response(vec) do
     %{
       "object" => "list",
       "data" => [
-        %{"object" => "embedding", "index" => 0, "embedding" => List.duplicate(0.1, 1024)}
+        %{"object" => "embedding", "index" => 0, "embedding" => vec}
       ],
       "model" => "Qwen3-Embedding",
       "usage" => %{"prompt_tokens" => 2, "total_tokens" => 2}

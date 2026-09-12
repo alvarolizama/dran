@@ -1,7 +1,7 @@
 ---
 name: dran-memory-flow
 description: "Use when listing, searching, or deleting Dran agent memories."
-version: 1.0.0
+version: 1.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -22,9 +22,14 @@ checkpoint store; run ledgers are (dran-workflow-flow).
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"list / search /\ndelete memories"| SELF["THIS SKILL\ndran-memory-flow"]
-  Q -->|"save a fact, recall at\nturn start"| P["Hermes plugin\ndran_memory_* tools"]
-  Q -->|"report ✓NN execution\ncheckpoints"| W[dran-workflow-flow]
+  Q{What do you need?} -->|"list / search /\
+delete memories"| SELF["THIS SKILL\
+dran-memory-flow"]
+  Q -->|"save a fact, recall at\
+turn start"| P["Hermes plugin\
+dran_memory_* tools"]
+  Q -->|"report ✓NN execution\
+checkpoints"| W[dran-workflow-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -39,19 +44,29 @@ disappears in `GET /api/memory/search`). **Never writes memories by hand.**
 
 ```mermaid
 flowchart TD
-  START([memory admin]) --> S1["RUN GET /api/memory/search\nq + workspace, Bearer key"]
-  S1 --> G1{"target memory\nfound?"}
-  G1 -->|"no"| S2["RUN GET /api/memory\nworkspace - browse list"]
-  G1 -->|"yes"| G2{"delete\nrequested?"}
+  START([memory admin]) --> S1["RUN GET /api/memory/search\
+q + workspace, Bearer key"]
+  S1 --> G1{"target memory\
+found?"}
+  G1 -->|"no"| S2["RUN GET /api/memory\
+workspace - browse list"]
+  G1 -->|"yes"| G2{"delete\
+requested?"}
   S2 --> G2
   G2 -->|no| END([reported])
-  G2 -->|yes| G4{"soft supersede or\npermanent purge?"}
-  G4 -->|"obsolete"| A1["ASK confirm delete -\ndurable data, irreversible"]
-  G4 -->|"purge"| A2["ASK confirm PURGE -\nhard delete, NO undo"]
-  A1 --> S3["RUN DELETE /api/memory/:id\nwrite_access key required"]
-  A2 --> S3P["RUN DELETE /api/memory/:id?purge=true"]
-  S3 --> V1["VERIFY GET search\nreadback: gone from results"]
-  S3P --> V2["VERIFY row gone -\nRepo.get returns nil"]
+  G2 -->|yes| G4{"soft supersede or\
+permanent purge?"}
+  G4 -->|"obsolete"| A1["ASK confirm delete -\
+durable data, irreversible"]
+  G4 -->|"purge"| A2["ASK confirm PURGE -\
+hard delete, NO undo"]
+  A1 --> S3["RUN DELETE /api/memory/:id?workspace=WS\
+write_access key required"]
+  A2 --> S3P["RUN DELETE /api/memory/:id?purge=true&workspace=WS"]
+  S3 --> V1["VERIFY GET search\
+readback: gone from results"]
+  S3P --> V2["VERIFY row gone -\
+Repo.get returns nil"]
   V1 -->|"still present"| S1
   V2 -->|"still present"| S1
   V1 -->|"gone"| END([done])
@@ -67,8 +82,8 @@ flowchart TD
 | `/api/memory` | POST | `write_access` — **plugin's job, not this flow's** |
 | `/api/memory/feedback` | POST | `write_access` — plugin's job |
 | `/api/memory/ingest` | POST | `write_access` — plugin's job (session end) |
-| `/api/memory/:id` | DELETE | `write_access` — soft-delete (superseded) |
-| `/api/memory/:id?purge=true` | DELETE | `write_access` — **hard delete, permanent** |
+| `/api/memory/:id` | DELETE | `write_access` — soft-delete (superseded); **API keys MUST pass `?workspace=<slug>`** |
+| `/api/memory/:id?purge=true&workspace=<slug>` | DELETE | `write_access` — **hard delete, permanent** |
 
 - Base URL is the profile's Dran (`$HERMES_HOME/dran_memory.json →
   base_url`); same `DRAN_API_KEY` as MCP.
@@ -82,9 +97,19 @@ flowchart TD
   manual POST forges the author's context.
 - **Purge ≠ delete** — plain DELETE soft-supersedes (status flips, row
   stays, excluded from search); `?purge=true` hard-deletes the row, and
-  the fact can be re-stored later (no dedupe ghost). Bulk purge of all
-  superseded memories is UI-only (no REST endpoint) — use the Dran
-  Memory page's "Borrar obsoletos".
+  the fact can be re-stored later (no dedupe ghost).
+- **DELETE /api/memory/:id without `?workspace=<slug>` 403s for API
+  keys** — the write-access plug resolves the workspace from
+  `conn.params` only; with no `workspace` param it gets `nil` →
+  `"API key does not have write access to this workspace"` even for a
+  valid write key. Query params populate `conn.params`, so appending
+  `&workspace=<slug>` fixes it.
+- **GET /api/memory caps at 100 rows regardless of `limit`** — paginate
+  with `offset` (loop until a page returns < 100) before claiming a
+  total count; the first page lies about the size of the workspace.
+- **No bulk purge endpoint** — full wipe = per-id loop of
+  `DELETE /:id?purge=true&workspace=<slug>`, then re-enumerate until 0
+  remain; the UI-only "Borrar obsoletos" covers superseded rows only.
 - **Deleting the whole workspace's recall on a bad review** — delete by
   specific id, one confirmation each.
 - **Expecting `dran_memory_*` MCP tools** — zero on MCP; only the plugin
@@ -99,3 +124,5 @@ flowchart TD
 - [ ] Search + browse to locate exact ids before any delete
 - [ ] Delete confirmed by the human, verified by readback (gone)
 - [ ] Purge (`?purge=true`) explicitly flagged as permanent to the human
+- [ ] API-key DELETEs carry `?workspace=<slug>` (else 403)
+- [ ] Totals counted with offset pagination (limit caps at 100)
