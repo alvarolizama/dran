@@ -47,6 +47,7 @@ defmodule Dran.MCP do
   alias Dran.PageTypes
   alias DranWeb.ResourceAuthorization
   import Ecto.Query, warn: false
+  require Logger
 
   @protocol_version "2025-03-26"
 
@@ -108,7 +109,7 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter restricting results to a single page type: note, idea, project, knowledge, technical, entity, concept, or reference.",
+              "Optional filter restricting results to a single page type: #{Dran.PageRegistry.mcp_enum() |> Enum.join(", ")}.",
             "enum" => Dran.PageRegistry.mcp_enum()
           },
           "strategy" => %{
@@ -170,7 +171,7 @@ defmodule Dran.MCP do
           "page_type" => %{
             "type" => "string",
             "description" =>
-              "Page type determining purpose and accepted meta fields. Only note, idea, project, knowledge, technical, entity, concept, and reference are available.",
+              "Page type determining purpose and accepted meta fields. Valid types: #{Dran.PageRegistry.mcp_enum() |> Enum.join(", ")}.",
             "enum" => Dran.PageRegistry.mcp_enum()
           },
           "tags" => %{
@@ -447,7 +448,7 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter by page type: note, idea, project, knowledge, technical, entity, concept, or reference.",
+              "Optional filter by page type: #{Dran.PageRegistry.mcp_enum() |> Enum.join(", ")}.",
             "enum" => Dran.PageRegistry.mcp_enum()
           },
           "tag" => %{
@@ -755,7 +756,19 @@ defmodule Dran.MCP do
             # SEC-001: validate that the requested context is accessible by the user
             case validate_tool_context_access(args, user) do
               :ok ->
-                result = execute_tool(tool_name, args, user)
+                result =
+                  try do
+                    execute_tool(tool_name, args, user)
+                  rescue
+                    # Protocol-level error instead of an HTTP 500 — the MCP
+                    # client must receive a JSON-RPC error object.
+                    exception ->
+                      Logger.error(
+                        "MCP tool #{tool_name} crashed: #{Exception.format(:error, exception)}"
+                      )
+
+                      "Error: tool execution failed — #{Exception.message(exception)}"
+                  end
 
                 %{
                   "jsonrpc" => "2.0",
@@ -877,6 +890,35 @@ defmodule Dran.MCP do
 
   defp workspace_from_args(args), do: args["workspace"]
 
+  # Clamp numeric tool args from JSON-RPC clients — negative or non-integer
+  # values would reach Ecto and crash Postgrex (LIMIT must not be negative).
+  defp clamp_limit(limit, max) when is_integer(limit),
+    do: max(1, min(limit, max))
+
+  defp clamp_limit(limit, max) when is_float(limit),
+    do: clamp_limit(trunc(limit), max)
+
+  defp clamp_limit(limit, max) when is_binary(limit) do
+    case Integer.parse(limit) do
+      {n, _} -> clamp_limit(n, max)
+      :error -> max
+    end
+  end
+
+  defp clamp_limit(_other, max), do: max
+
+  defp clamp_offset(offset) when is_integer(offset), do: max(0, offset)
+  defp clamp_offset(offset) when is_float(offset), do: clamp_offset(trunc(offset))
+
+  defp clamp_offset(offset) when is_binary(offset) do
+    case Integer.parse(offset) do
+      {n, _} -> clamp_offset(n)
+      :error -> 0
+    end
+  end
+
+  defp clamp_offset(_other), do: 0
+
   # SEC-001: Validate context access for resource URIs like page://context/slug
   defp validate_resource_context_access(uri, user) when is_binary(uri) do
     case String.split(uri, "://", parts: 2) do
@@ -983,9 +1025,36 @@ defmodule Dran.MCP do
         "serverInfo" => %{
           "name" => "dran",
           "version" => "0.1.0"
-        }
+        },
+        "instructions" => server_instructions()
       }
     }
+  end
+
+  @doc """
+  Server `instructions` block sent on `initialize` — MCP clients surface it
+  to the model at session start. Kept short and derived from live state:
+  the default workspace (server setting) and the page-type vocabulary
+  (registry), so agents boot knowing which workspace to target when the
+  user doesn't name one, and which types exist.
+  """
+  def server_instructions do
+    default_ws = Auth.default_workspace_slug()
+    types = PageTypes.types() |> Enum.join(", ")
+
+    """
+    Dran is a second brain: knowledge pages + shared agent memory.
+    - Workspaces (context slugs) scope every page operation. When the user \
+    does not name one, use "#{default_ws}" (instance default); discover \
+    others via the home://<workspace>/index resource.
+    - Page types (single source of truth: Dran.PageRegistry): #{types}. \
+    Each type has meta.kind subtypes and type-specific meta fields — see \
+    the dran_create_page tool description for the full list.
+    - Write tools require a write-enabled key (write_access). Verify writes \
+    with dran_get_page readback — an ok result is transport-level only.
+    - Memory is NOT part of MCP: it lives at /api/memory (REST/Hermes plugin).
+    """
+    |> String.trim()
   end
 
   # ── Tool execution ─────────────────────────────────────────────────────────
@@ -1001,8 +1070,17 @@ defmodule Dran.MCP do
       opts = [workspace_id: context.id]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
       opts = if args["strategy"], do: Keyword.put(opts, :strategy, args["strategy"]), else: opts
-      opts = if args["limit"], do: Keyword.put(opts, :limit, min(args["limit"], 100)), else: opts
-      opts = if args["offset"], do: Keyword.put(opts, :offset, args["offset"]), else: opts
+
+      opts =
+        if args["limit"],
+          do: Keyword.put(opts, :limit, clamp_limit(args["limit"], 100)),
+          else: opts
+
+      opts =
+        if args["offset"],
+          do: Keyword.put(opts, :offset, clamp_offset(args["offset"])),
+          else: opts
+
       opts = if args["props"], do: Keyword.put(opts, :props, args["props"]), else: opts
 
       case Knowledge.search(query, opts) do
@@ -1044,7 +1122,7 @@ defmodule Dran.MCP do
         "Error: context '#{workspace_slug}' not found"
 
       page_type not in PageTypes.types() ->
-        "Error: page type '#{page_type}' is not a valid page type — valid types are note, idea, project, knowledge, technical, entity, concept, and reference"
+        "Error: page type '#{page_type}' is not a valid page type — valid types are #{Enum.join(PageTypes.types(), ", ")}"
 
       true ->
         attrs =
@@ -1324,8 +1402,8 @@ defmodule Dran.MCP do
     context = workspace_cache_get(workspace_slug)
 
     if context do
-      limit = min(Map.get(args, "limit", 50), 500)
-      offset = Map.get(args, "offset", 0)
+      limit = clamp_limit(Map.get(args, "limit", 50), 500)
+      offset = clamp_offset(Map.get(args, "offset", 0))
 
       opts = [workspace_id: context.id, context: context, limit: limit, offset: offset]
       opts = if args["type"], do: Keyword.put(opts, :type, args["type"]), else: opts
@@ -1559,7 +1637,9 @@ defmodule Dran.MCP do
     case Ecto.UUID.cast(session_id) do
       {:ok, id} ->
         # P-04: preload steps in one query instead of N+1
-        case Repo.get(Worker.Session, id) |> Repo.preload(:steps) do
+        session = Repo.get(Worker.Session, id)
+
+        case session && Repo.preload(session, :steps) do
           nil ->
             "Error: session not found"
 
@@ -1657,45 +1737,55 @@ defmodule Dran.MCP do
   # ── Resource reading ──────────────────────────────────────────────────────
 
   defp read_resource("page://" <> rest) do
-    [workspace_slug, slug] = String.split(rest, "/", parts: 2)
-    context = workspace_cache_get(workspace_slug)
+    case String.split(rest, "/", parts: 2) do
+      [workspace_slug, slug] ->
+        context = workspace_cache_get(workspace_slug)
 
-    if context do
-      case Knowledge.get_page_by_slug(slug, context.id) do
-        nil ->
-          "Error: page not found"
+        if context do
+          case Knowledge.get_page_by_slug(slug, context.id) do
+            nil ->
+              "Error: page not found"
 
-        page ->
-          "# #{page.title}\n\n#{page.body}\n\n---\nType: #{page.page_type} | Tags: #{Enum.join(page.tags, ", ")}"
-      end
-    else
-      "Error: context not found"
+            page ->
+              "# #{page.title}\n\n#{page.body}\n\n---\nType: #{page.page_type} | Tags: #{Enum.join(page.tags, ", ")}"
+          end
+        else
+          "Error: context not found"
+        end
+
+      _ ->
+        "Error: resource URI must be page://<workspace>/<slug>"
     end
   end
 
   defp read_resource("home://" <> rest) do
-    [workspace_slug, "index"] = String.split(rest, "/", parts: 2)
-    context = workspace_cache_get(workspace_slug)
+    case String.split(rest, "/", parts: 2) do
+      [workspace_slug, "index"] ->
+        context = workspace_cache_get(workspace_slug)
 
-    if context do
-      # P-05: cap at 1,000 pages to avoid loading entire brain into memory
-      pages = Knowledge.list_pages(workspace_id: context.id, context: context, limit: 1_000)
+        if context do
+          # P-05: cap at 1,000 pages to avoid loading entire brain into memory
+          pages = Knowledge.list_pages(workspace_id: context.id, context: context, limit: 1_000)
 
-      lines =
-        Enum.map(pages, fn page ->
-          "- `#{page.slug}` — #{page.title} (#{page.page_type})"
-        end)
+          lines =
+            Enum.map(pages, fn page ->
+              "- `#{page.slug}` — #{page.title} (#{page.page_type})"
+            end)
 
-      total_note =
-        if length(pages) == 1_000 do
-          "\n\n---\n_Note: showing first 1,000 pages. Use dran_search or dran_list_pages with filters for more targeted results._"
+          total_note =
+            if length(pages) == 1_000 do
+              "\n\n---\n_Note: showing first 1,000 pages. Use dran_search or dran_list_pages with filters for more targeted results._"
+            else
+              ""
+            end
+
+          Enum.join(lines, "\n") <> total_note
         else
-          ""
+          "Error: context not found"
         end
 
-      Enum.join(lines, "\n") <> total_note
-    else
-      "Error: context not found"
+      _ ->
+        "Error: resource URI must be home://<workspace>/index"
     end
   end
 
