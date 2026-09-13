@@ -1,20 +1,28 @@
 defmodule Dran.MemoryLinker do
   @moduledoc """
-  Derives `informs` relations (memory → page) at memory ingest.
+  Derives graph relations for a stored fact at memory ingest.
 
-  A stored fact gains graph presence by linking to the pages its embedding is
-  closest to: for each new memory with an embedding, the workspace's pages are
-  ranked by cosine distance and the top-k pages under a threshold get an
-  `informs` relation (`source_type: "memory"`, `target_type: "page"`).
+  Two layers, both derived from the embedding `Dran.Memory.add/1` already
+  generated for semantic dedupe (zero extra inference):
+
+  * **`informs` (memory → page)** — the memory links to the top-k pages its
+    embedding is closest to (`source_type: "memory"`, `target_type: "page"`).
+  * **`semantic` (memory ↔ memory)** — the memory links to its top-k closest
+    *active sibling memories* (both endpoint types `"memory"`). Only
+    genuinely related facts get an edge: the dedupe bands own the high
+    similarity range (≥ 0.95 duplicate, ≥ 0.88 near-duplicate — those merge,
+    they don't link), so these edges connect related-but-distinct facts
+    (typically 0.70–0.85 cosine). Directional at insert; the nightly sweep
+    prunes by the same distance threshold as the page semantic layer.
 
   Design constraints:
 
-  * **Zero inference cost** — reuses the embedding `Dran.Memory.add/1` already
-    generated for semantic dedupe; a write without one simply skips linking.
-  * **Bounded write volume** — hard cap of `@max_links` informs relations per
-    memory, matching the page augmenter's `k` neighbourhood.
-  * **Workspace-scoped** — only pages of the memory's own workspace are
-    candidates, mirroring every other relation surface.
+  * **Zero inference cost** — reuses the dedupe embedding; a write without
+    one simply skips linking.
+  * **Bounded write volume** — hard cap of `@max_links` relations per memory
+    per layer, matching the page augmenter's `k` neighbourhood.
+  * **Workspace-scoped** — only pages/memories of the memory's own workspace
+    are candidates, mirroring every other relation surface.
   * **Idempotent** — `Repo.insert(on_conflict: :nothing)`: re-running the
     linker (backfill, retries) never duplicates edges.
 
@@ -28,20 +36,21 @@ defmodule Dran.MemoryLinker do
   alias Dran.Repo
   alias Dran.Workspace
 
-  # Hard cap of informs relations per memory. Same order as the page
-  # augmenter's semantic neighbourhood (k = 3).
+  # Hard cap of derived relations per memory, per layer. Same order as the
+  # page augmenter's semantic neighbourhood (k = 3).
   @max_links 3
 
-  @doc "Maximum informs relations a single memory may derive."
+  @doc "Maximum derived relations a single memory may get, per layer."
   def max_links, do: @max_links
 
   @doc """
-  Link `memory` to its top-k semantically closest pages.
+  Link `memory` to its graph neighbourhood: top-k closest pages (`informs`)
+  and top-k closest active memories (`semantic`).
 
-  Pages are matched by embedding cosine distance (top-k under the workspace
-  threshold). Returns `{:ok, created_count}` — relations actually inserted
-  (conflicts count as 0). Memories without an embedding, or with no close
-  pages, link nothing and return `{:ok, 0}`.
+  Pages and memories are matched by embedding cosine distance (top-k under
+  the workspace threshold). Returns `{:ok, created_count}` — relations
+  actually inserted (conflicts count as 0). Memories without an embedding,
+  or with no close neighbours, link nothing and return `{:ok, 0}`.
   """
   @spec link_to_pages(Dran.Memory.t()) :: {:ok, non_neg_integer()}
   def link_to_pages(%Dran.Memory{embedding: nil}), do: {:ok, 0}
@@ -63,16 +72,31 @@ defmodule Dran.MemoryLinker do
           select: %{id: p.id, type: "page"}
       )
 
+    memory_candidates =
+      Repo.all(
+        from m in Dran.Memory,
+          where:
+            m.workspace_id == ^memory.workspace_id and
+              m.status == "active" and
+              m.id != ^memory.id and
+              not is_nil(m.embedding),
+          where: fragment("? <=> ?", m.embedding, ^vec) <= ^threshold,
+          order_by: fragment("? <=> ?", m.embedding, ^vec),
+          limit: ^@max_links,
+          select: %{id: m.id, type: "memory"}
+      )
+
+    inserts =
+      Enum.map(page_candidates, fn target ->
+        relation_attrs(memory.id, "memory", target.id, "page", "informs")
+      end) ++
+        Enum.map(memory_candidates, fn target ->
+          relation_attrs(memory.id, "memory", target.id, "memory", "semantic")
+        end)
+
     created =
-      Enum.count(page_candidates, fn %{id: target_id} ->
-        case Repo.insert(
-               Dran.Relation.changeset(%Dran.Relation{}, %{
-                 source_id: memory.id,
-                 source_type: "memory",
-                 target_id: target_id,
-                 target_type: "page",
-                 relation_type: "informs"
-               }),
+      Enum.count(inserts, fn attrs ->
+        case Repo.insert(Dran.Relation.changeset(%Dran.Relation{}, attrs),
                on_conflict: :nothing
              ) do
           {:ok, %Dran.Relation{id: id}} when not is_nil(id) -> true
@@ -81,6 +105,16 @@ defmodule Dran.MemoryLinker do
       end)
 
     {:ok, created}
+  end
+
+  defp relation_attrs(source_id, source_type, target_id, target_type, relation_type) do
+    %{
+      source_id: source_id,
+      source_type: source_type,
+      target_id: target_id,
+      target_type: target_type,
+      relation_type: relation_type
+    }
   end
 
   @doc """
@@ -132,50 +166,50 @@ defmodule Dran.MemoryLinker do
 
   @doc """
   Quantum entrypoint (`memory_relink_nightly`): re-derive informs relations
-  for every active memory, then sweep informs edges whose memory is no
-  longer active (superseded rows keep their edges until purged — but they
-  must stop pointing at graph targets). Returns a markdown report body
-  following the `Dran.Jobs` log convention. Zero inference calls.
+  for every active memory, sweep informs/semantic edges whose memory
+  endpoint is no longer active, and decay trust of never-retrieved facts.
+  Returns a markdown report body following the `Dran.Jobs` log convention.
+  Zero inference calls.
   """
   @spec run_scheduled() :: String.t()
   def run_scheduled do
     {seen, created} = backfill()
     swept = sweep_inactive()
+    decayed = Dran.Memory.decay_trust()
 
     """
     # Memory re-link
 
-    Memories seen #{seen} · informs created #{created} · stale informs swept #{swept}
+    Memories seen #{seen} · informs created #{created} · stale edges swept #{swept} · trust decayed #{decayed}
     """
     |> String.trim()
   end
 
-  # Drop informs edges whose source memory is gone or superseded. Superseded
+  # Drop derived edges whose memory endpoint is gone or superseded — on
+  # EITHER side. informs edges have the memory as source; semantic
+  # memory↔memory edges can have it as source or target. Superseded
   # memories are excluded from search AND from the graph's active top-100
-  # nodes — their edges would render against nothing.
+  # nodes — any edge touching them would render against nothing.
   defp sweep_inactive do
-    {count, _} =
-      from(r in Dran.Relation,
-        join: m in Dran.Memory,
-        on: r.source_id == m.id and r.source_type == "memory",
-        where: r.relation_type == "informs" and m.status != "active"
-      )
-      |> Repo.delete_all()
+    active_ids =
+      from(m in Dran.Memory, where: m.status == "active", select: m.id)
 
-    # Edges whose memory row vanished entirely (should not happen — purge
-    # sweeps them — but a manual SQL delete would orphan them).
-    {orphans, _} =
+    {source_side, _} =
       from(r in Dran.Relation,
         where:
-          r.source_type == "memory" and r.relation_type == "informs" and
-            r.source_id not in subquery(
-              from m in Dran.Memory,
-                where: m.status == "active",
-                select: m.id
-            )
+          r.source_type == "memory" and r.relation_type in ["informs", "semantic"] and
+            r.source_id not in subquery(active_ids)
       )
       |> Repo.delete_all()
 
-    count + orphans
+    {target_side, _} =
+      from(r in Dran.Relation,
+        where:
+          r.target_type == "memory" and r.relation_type == "semantic" and
+            r.target_id not in subquery(active_ids)
+      )
+      |> Repo.delete_all()
+
+    source_side + target_side
   end
 end

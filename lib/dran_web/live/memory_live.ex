@@ -209,6 +209,7 @@ defmodule DranWeb.MemoryLive do
               id={"memory-#{entry.memory.id}"}
               memory={entry.memory}
               score={entry.score}
+              related={Map.get(entry, :related, [])}
             />
 
             <.empty_state
@@ -259,7 +260,33 @@ defmodule DranWeb.MemoryLive do
         %{memories: [], has_more: false}
       end
 
+    # Related-fact neighbours (semantic memory↔memory edges derived by the
+    # MemoryLinker), batched in ONE query for the whole page — per-card
+    # lookups would be N+1 on a list that grows live.
+    entries = attach_related(entries, context)
+
     assign(socket, memories: entries.memories, has_more: entries.has_more, page: 0)
+  end
+
+  # Attach each memory's related-fact snippets to the entries map. Only
+  # active memories carry semantic edges (the nightly sweep drops the rest).
+  defp attach_related(entries, nil), do: entries
+
+  defp attach_related(entries, context) do
+    ids = Enum.map(entries.memories, & &1.memory.id)
+
+    related_by_id =
+      if ids == [] do
+        %{}
+      else
+        Memory.related_snapshots(context.id, ids)
+      end
+
+    Map.update!(entries, :memories, fn memories ->
+      Enum.map(memories, fn entry ->
+        Map.put(entry, :related, Map.get(related_by_id, entry.memory.id, []))
+      end)
+    end)
   end
 
   defp fetch_more(socket) do
@@ -390,6 +417,7 @@ defmodule DranWeb.MemoryLive do
   attr :id, :string, required: true
   attr :memory, :map, required: true
   attr :score, :float, default: nil
+  attr :related, :list, default: []
 
   defp memory_card(assigns) do
     ~H"""
@@ -401,6 +429,27 @@ defmodule DranWeb.MemoryLive do
       ]}
     >
       <p class="text-sm leading-relaxed">{@memory.content}</p>
+
+      <div
+        :if={@related != []}
+        class="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-base-content/60"
+      >
+        <span
+          class="inline-flex items-center gap-1 shrink-0"
+          title={gettext("Hechos relacionados derivados automáticamente (semantic)")}
+        >
+          <.icon name="hero-arrows-right-left" class="size-3.5" />
+          {gettext("Relacionados:")}
+        </span>
+        <span
+          :for={rel <- @related}
+          id={"memory-related-#{@memory.id}-#{rel.id}"}
+          class="px-1.5 py-0.5 rounded-md bg-base-200/70 max-w-72 truncate"
+          title={rel.content}
+        >
+          {rel.content}
+        </span>
+      </div>
 
       <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-base-content/60">
         <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-base-200">

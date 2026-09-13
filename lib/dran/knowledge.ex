@@ -1278,7 +1278,29 @@ defmodule Dran.Knowledge do
             )
           end
 
-        page_edges ++ memory_edges
+        # Memory↔Memory edges — the `semantic` relations MemoryLinker
+        # derives between sibling facts. Both endpoints must be among the
+        # active memories rendered as nodes, or the edge would dangle.
+        memory_memory_edges =
+          if Enum.empty?(memory_ids) do
+            []
+          else
+            Repo.all(
+              from r in Relation,
+                where:
+                  r.source_id in ^memory_ids and r.source_type == "memory" and
+                    r.target_id in ^memory_ids and r.target_type == "memory" and
+                    r.relation_type == "semantic",
+                select: %{
+                  source: r.source_id,
+                  target: r.target_id,
+                  type: r.relation_type,
+                  weight: r.weight
+                }
+            )
+          end
+
+        page_edges ++ memory_edges ++ memory_memory_edges
       end
 
     total_edges =
