@@ -28,6 +28,13 @@ defmodule DranWeb.Router do
     plug :require_api_token
   end
 
+  # Row-level read authorization for the REST read surface. Exempts the
+  # workspace *listing* (no single workspace to authorize — the controller
+  # scopes it to the identity) and /agent/config (key-scoped by construction).
+  pipeline :api_read_access do
+    plug :require_read_access, exempt_index: ["workspaces", "agent"]
+  end
+
   pipeline :admin do
     plug :require_instance_owner
   end
@@ -242,7 +249,7 @@ defmodule DranWeb.Router do
       {:ok, token} ->
         cond do
           # Legacy admin token (backward compat) — full owner, no user row
-          token == Dran.Auth.api_token() ->
+          Plug.Crypto.secure_compare(token, Dran.Auth.api_token() || "") ->
             assign(conn, :user, %{is_owner: true, email: "admin", contexts: :all})
 
           # Per-user token — look up the user and assign it
@@ -320,8 +327,60 @@ defmodule DranWeb.Router do
         |> Plug.Conn.halt()
       end
     else
-      # Normal user or admin - always pass
-      conn
+      # Other identity shapes (per-user tokens) — authorize via the shared
+      # matrix instead of passing through. Fails closed when the request
+      # names no resolvable workspace.
+      if DranWeb.ResourceAuthorization.authorize(user, :write, get_requested_workspace_id(conn)) ==
+           :ok do
+        conn
+      else
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          403,
+          Jason.encode!(%{
+            errors: %{detail: "Token does not have write access to this workspace"}
+          })
+        )
+        |> Plug.Conn.halt()
+      end
+    end
+  end
+
+  # ── API read-access plug (SEC: row-level read authorization) ──
+  #
+  # The read pipeline authenticates the identity but the controllers resolve
+  # workspaces by slug themselves — without this plug any valid key could
+  # read any workspace (IDOR). Authorize against the same matrix the write
+  # plug uses, failing closed when the request names no resolvable workspace.
+
+  defp require_read_access(conn, opts) do
+    user = conn.assigns[:user]
+
+    exempt =
+      case conn.path_info do
+        ["api", section] -> Enum.any?(opts[:exempt_index] || [], &(&1 == section))
+        _ -> false
+      end
+
+    cond do
+      exempt ->
+        conn
+
+      DranWeb.ResourceAuthorization.authorize(user, :read, get_requested_workspace_id(conn)) ==
+          :ok ->
+        conn
+
+      true ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          403,
+          Jason.encode!(%{
+            errors: %{detail: "API key does not have read access to this workspace"}
+          })
+        )
+        |> Plug.Conn.halt()
     end
   end
 
@@ -330,18 +389,19 @@ defmodule DranWeb.Router do
     # The access_levels map is keyed by workspace UUID, so a slug in
     # params["workspace"] must be resolved to its ID before the check,
     # otherwise every write with a slug would 403 for API keys.
-    cond do
-      ws_id = conn.params["workspace_id"] ->
-        ws_id
+    raw =
+      conn.params["workspace_id"] || conn.params["workspace"] ||
+        conn.params["slug"] || conn.query_params["workspace"]
 
-      slug = conn.params["workspace"] ->
-        case Dran.Knowledge.get_workspace_by_slug(slug) do
-          %{id: id} -> id
-          _ -> slug
-        end
+    resolve_workspace_ref(raw)
+  end
 
-      true ->
-        nil
+  defp resolve_workspace_ref(nil), do: nil
+
+  defp resolve_workspace_ref(ws_id) when is_binary(ws_id) do
+    case Dran.Knowledge.get_workspace_by_slug(ws_id) do
+      %{id: id} -> id
+      _ -> ws_id
     end
   end
 
@@ -422,7 +482,16 @@ defmodule DranWeb.Router do
   # ── REST API (token-protected) ─────────────────────────────────────────────
 
   scope "/api", DranWeb.API do
+    # Agent self-description — authenticated only: the payload is scoped to
+    # the key itself (returns ONLY the workspaces the key reaches), so there
+    # is no workspace to authorize against.
     pipe_through [:api, :api_auth]
+
+    get "/agent/config", AgentConfigController, :show
+  end
+
+  scope "/api", DranWeb.API do
+    pipe_through [:api, :api_auth, :api_read_access]
 
     # Contexts (read + export)
     get "/workspaces", WorkspaceController, :index
@@ -454,10 +523,6 @@ defmodule DranWeb.Router do
     # Shared multi-agent memory (read)
     get "/memory", MemoryController, :index
     get "/memory/search", MemoryController, :search
-
-    # Agent self-description (the Hermes memory plugin auto-discovers its
-    # memory workspace + permitted workspaces from its own API key)
-    get "/agent/config", AgentConfigController, :show
   end
 
   # ── REST API — write routes (requires write_access on API keys) ────────────

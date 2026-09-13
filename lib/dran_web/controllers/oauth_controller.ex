@@ -28,7 +28,7 @@ defmodule DranWeb.OAuthController do
   def callback(conn, %{"code" => code, "state" => state}) do
     stored_state = get_session(conn, :oauth_state)
 
-    if stored_state && state == stored_state do
+    if stored_state && Plug.Crypto.secure_compare(state, stored_state) do
       conn = delete_session(conn, :oauth_state)
       process_callback(conn, code)
     else

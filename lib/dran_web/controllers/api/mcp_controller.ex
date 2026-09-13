@@ -33,7 +33,7 @@ defmodule DranWeb.API.MCPController do
       {:ok, token} ->
         cond do
           # 1. Legacy admin token (backward compat)
-          token == Dran.Auth.api_token() ->
+          Plug.Crypto.secure_compare(token, Dran.Auth.api_token() || "") ->
             {:ok, %{is_owner: true, email: "admin", workspaces: :all}}
 
           # 2. Per-user token

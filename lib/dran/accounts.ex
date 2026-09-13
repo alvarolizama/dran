@@ -61,6 +61,9 @@ defmodule Dran.Accounts do
           else: {:error, :unauthorized}
 
       _ ->
+        # Constant-time for unknown emails — burn a dummy verification so
+        # response timing does not reveal which emails exist.
+        Bcrypt.no_user_verify()
         {:error, :unauthorized}
     end
   end
@@ -373,7 +376,23 @@ defmodule Dran.Accounts do
     end
   end
 
-  defp validate_workspace_access(nil, _workspace_ids), do: :ok
+  # Keys without a creator user (system/test-created): the workspace list
+  # cannot be membership-validated, so require every referenced workspace to
+  # exist — no blanket allow of arbitrary ids.
+  defp validate_workspace_access(nil, workspace_ids) do
+    {ids, _levels} = Enum.unzip(workspace_ids)
+
+    existing =
+      from(w in Workspace, where: w.id in ^ids, select: w.id)
+      |> Repo.all()
+      |> MapSet.new()
+
+    missing = Enum.reject(ids, &MapSet.member?(existing, &1))
+
+    if missing == [],
+      do: :ok,
+      else: {:error, :workspace_not_found}
+  end
 
   defp validate_workspace_access(user_id, workspace_ids) do
     user = Repo.get(User, user_id)
