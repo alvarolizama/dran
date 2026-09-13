@@ -108,13 +108,8 @@ defmodule Dran.MCP do
           "type" => %{
             "type" => "string",
             "description" =>
-              "Optional filter restricting results to a single page type: note, concept, entity, or reference.",
-            "enum" => [
-              "note",
-              "concept",
-              "entity",
-              "reference"
-            ]
+              "Optional filter restricting results to a single page type: note, idea, project, knowledge, technical, entity, concept, or reference.",
+            "enum" => Dran.PageRegistry.mcp_enum()
           },
           "strategy" => %{
             "type" => "string",
@@ -175,7 +170,7 @@ defmodule Dran.MCP do
           "page_type" => %{
             "type" => "string",
             "description" =>
-              "Page type determining purpose and accepted meta fields. Only note, concept, entity, and reference are available.",
+              "Page type determining purpose and accepted meta fields. Only note, idea, project, knowledge, technical, entity, concept, and reference are available.",
             "enum" => Dran.PageRegistry.mcp_enum()
           },
           "tags" => %{
@@ -311,7 +306,7 @@ defmodule Dran.MCP do
     %{
       "name" => "dran_create_note",
       "description" =>
-        "Create a plain note page (journal, idea, meeting…). `kind` is visual only (classify/filter). Link notes to collections via dran_create_relation (relation_type `part_of`). Returns the created note's slug.",
+        "Create a plain note page (journal, idea, meeting…). `kind` is visual only (classify/filter) — notes are free-form, any kind string is accepted. Link notes to collections via dran_create_relation (relation_type `part_of`). Returns the created note's slug.",
       "inputSchema" => %{
         "type" => "object",
         "properties" => %{
@@ -335,7 +330,7 @@ defmodule Dran.MCP do
           "kind" => %{
             "type" => "string",
             "description" =>
-              "Visual classifier for the note (filter/group only — no behavior). Defaults to \"journal\". One of: journal, idea, meeting, question, quote, reminder, code, recipe, debug, summary, decision, template, plan, project."
+              "Visual classifier for the note (filter/group only — no behavior). Free-form: any string is accepted; common values: journal, meeting, reminder, decision."
           },
           "owner" => %{
             "type" => "string",
@@ -451,13 +446,9 @@ defmodule Dran.MCP do
           },
           "type" => %{
             "type" => "string",
-            "description" => "Optional filter by page type: note, concept, entity, or reference.",
-            "enum" => [
-              "note",
-              "concept",
-              "entity",
-              "reference"
-            ]
+            "description" =>
+              "Optional filter by page type: note, idea, project, knowledge, technical, entity, concept, or reference.",
+            "enum" => Dran.PageRegistry.mcp_enum()
           },
           "tag" => %{
             "type" => "string",
@@ -466,7 +457,7 @@ defmodule Dran.MCP do
           "kind" => %{
             "type" => "string",
             "description" =>
-              "Optional filter by meta.kind (visual classifier): journal, idea, meeting, question, quote, reminder, code, recipe, debug, summary, decision, template, plan, project."
+              "Optional filter by meta.kind (visual classifier). Free-form string — matches pages whose meta.kind equals the value."
           },
           "limit" => %{
             "type" => "integer",
@@ -1053,7 +1044,7 @@ defmodule Dran.MCP do
         "Error: context '#{workspace_slug}' not found"
 
       page_type not in PageTypes.types() ->
-        "Error: page type '#{page_type}' is not a valid page type — valid types are note, concept, entity, and reference"
+        "Error: page type '#{page_type}' is not a valid page type — valid types are note, idea, project, knowledge, technical, entity, concept, and reference"
 
       true ->
         attrs =

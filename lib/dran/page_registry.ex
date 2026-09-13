@@ -53,9 +53,28 @@ defmodule Dran.PageRegistry do
   @registry %{
     "note" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
-      kinds:
-        ~w(journal idea meeting question quote reminder code recipe debug summary decision template plan project),
+      kinds: nil,
       ui: %{path: "notes", label: "Note", icon: "hero-document-text", plural: "Notes"}
+    },
+    "idea" => %{
+      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      kinds: ~w(idea question hypothesis spark),
+      ui: %{path: "ideas", label: "Idea", icon: "hero-light-bulb", plural: "Ideas"}
+    },
+    "project" => %{
+      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      kinds: ~w(project plan goal milestone),
+      ui: %{path: "projects", label: "Project", icon: "hero-rocket-launch", plural: "Projects"}
+    },
+    "knowledge" => %{
+      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      kinds: ~w(quote summary highlight excerpt),
+      ui: %{path: "knowledge", label: "Knowledge", icon: "hero-book-open", plural: "Knowledge"}
+    },
+    "technical" => %{
+      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      kinds: ~w(code snippet debug recipe config command template pattern method),
+      ui: %{path: "technical", label: "Technical", icon: "hero-code-bracket", plural: "Technical"}
     },
     "entity" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
@@ -64,7 +83,7 @@ defmodule Dran.PageRegistry do
     },
     "concept" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
-      kinds: ~w(technique pattern discipline theory principle method model law),
+      kinds: nil,
       ui: %{path: "concepts", label: "Concept", icon: "hero-light-bulb", plural: "Concepts"}
     },
     "reference" => %{
@@ -74,9 +93,8 @@ defmodule Dran.PageRegistry do
     }
   }
 
-  # Canonical ordering — preserves the historical `Page.all_types()` order
-  # so UI surfaces that iterate the list keep their existing ordering.
-  @types ~w(note entity concept reference)
+  # Canonical ordering — sidebar/MCP/docs iterate this list.
+  @types ~w(note idea project knowledge technical entity concept reference)
 
   # ── Type accessors ─────────────────────────────────────────────────
 
@@ -214,18 +232,62 @@ defmodule Dran.PageRegistry do
 
   def meta_fields("note") do
     [
-      {:select, "kind", gettext("Kind"), kind_options("note")},
-      {:text, "language", gettext("Language"),
-       placeholder: "elixir, python, typescript…", condition: {:kind, "code"}},
       {:date, "date", gettext("Date")},
       {:date, "due_date", gettext("Due date"), condition: {:kind, "reminder"}},
       {:props, "props", gettext("Custom properties")}
     ]
   end
 
+  def meta_fields("idea") do
+    [
+      {:select, "kind", gettext("Kind"), kind_options("idea")},
+      {:props, "props", gettext("Custom properties")}
+    ]
+  end
+
+  def meta_fields("project") do
+    [
+      {:select, "kind", gettext("Kind"), kind_options("project")},
+      {:select, "horizon", gettext("Horizon"),
+       [
+         {gettext("Weekly"), "weekly"},
+         {gettext("Monthly"), "monthly"},
+         {gettext("Quarterly"), "quarterly"},
+         {gettext("Yearly"), "yearly"}
+       ]},
+      {:select, "status", gettext("Status"),
+       [
+         {gettext("Draft"), "draft"},
+         {gettext("Active"), "active"},
+         {gettext("On hold"), "on_hold"},
+         {gettext("Done"), "done"}
+       ]},
+      {:date, "due_date", gettext("Due date")},
+      {:props, "props", gettext("Custom properties")}
+    ]
+  end
+
+  def meta_fields("knowledge") do
+    [
+      {:select, "kind", gettext("Kind"), kind_options("knowledge")},
+      {:text, "source_url", gettext("Source URL")},
+      {:date, "date", gettext("Date")},
+      {:props, "props", gettext("Custom properties")}
+    ]
+  end
+
+  def meta_fields("technical") do
+    [
+      {:select, "kind", gettext("Kind"), kind_options("technical")},
+      {:text, "language", gettext("Language"),
+       placeholder: "elixir, python, typescript…", condition: {:kind, "code"}},
+      {:text, "version", gettext("Version")},
+      {:props, "props", gettext("Custom properties")}
+    ]
+  end
+
   def meta_fields("concept") do
     [
-      {:select, "kind", gettext("Kind"), kind_options("concept")},
       {:text, "domain", gettext("Domain")},
       {:text, "parent_concept", gettext("Parent concept")},
       {:props, "props", gettext("Custom properties")}
@@ -320,21 +382,37 @@ defmodule Dran.PageRegistry do
 
   defp kind_labels do
     %{
-      # ── note kinds ──────────────────────────────────────────────────────
+      # ── note kinds (free — kept for display of legacy data) ────────────
       "journal" => gettext("Journal"),
-      "idea" => gettext("Idea"),
       "meeting" => gettext("Meeting"),
-      "question" => gettext("Question"),
-      "quote" => gettext("Quote"),
       "reminder" => gettext("Reminder"),
-      "code" => gettext("Code"),
-      "recipe" => gettext("Recipe"),
-      "debug" => gettext("Debug"),
-      "summary" => gettext("Summary"),
       "decision" => gettext("Decision"),
-      "template" => gettext("Template"),
-      "plan" => gettext("Plan"),
+      "technical" => gettext("Technical"),
+      # ── idea kinds ──────────────────────────────────────────────────────
+      "idea" => gettext("Idea"),
+      "question" => gettext("Question"),
+      "hypothesis" => gettext("Hypothesis"),
+      "spark" => gettext("Spark"),
+      # ── project kinds ───────────────────────────────────────────────────
       "project" => gettext("Project"),
+      "plan" => gettext("Plan"),
+      "goal" => gettext("Goal"),
+      "milestone" => gettext("Milestone"),
+      # ── knowledge kinds ─────────────────────────────────────────────────
+      "quote" => gettext("Quote"),
+      "summary" => gettext("Summary"),
+      "highlight" => gettext("Highlight"),
+      "excerpt" => gettext("Excerpt"),
+      # ── technical kinds ─────────────────────────────────────────────────
+      "code" => gettext("Code"),
+      "snippet" => gettext("Snippet"),
+      "debug" => gettext("Debug"),
+      "recipe" => gettext("Recipe"),
+      "config" => gettext("Config"),
+      "command" => gettext("Command"),
+      "template" => gettext("Template"),
+      "pattern" => gettext("Pattern"),
+      "method" => gettext("Method"),
       # ── entity kinds ───────────────────────────────────────────────────
       "person" => gettext("Person"),
       "company" => gettext("Company"),
@@ -345,14 +423,12 @@ defmodule Dran.PageRegistry do
       "language" => gettext("Language"),
       "framework" => gettext("Framework"),
       "hardware" => gettext("Hardware"),
-      # ── concept kinds ──────────────────────────────────────────────────
       "protocol" => gettext("Protocol"),
+      # ── concept kinds (free — kept for display of legacy data) ─────────
       "technique" => gettext("Technique"),
-      "pattern" => gettext("Pattern"),
       "discipline" => gettext("Discipline"),
       "theory" => gettext("Theory"),
       "principle" => gettext("Principle"),
-      "method" => gettext("Method"),
       "model" => gettext("Model"),
       "law" => gettext("Law"),
       # ── reference kinds ────────────────────────────────────────────────
@@ -379,10 +455,18 @@ defmodule Dran.PageRegistry do
   if false do
     # UI type labels + plurals
     gettext("Note")
+    gettext("Idea")
+    gettext("Project")
+    gettext("Knowledge")
+    gettext("Technical")
     gettext("Concept")
     gettext("Entity")
     gettext("Reference")
     gettext("Notes")
+    gettext("Ideas")
+    gettext("Projects")
+    gettext("Knowledge Plural")
+    gettext("Technical Plural")
     gettext("Concepts")
     gettext("Entities")
     gettext("References")

@@ -294,13 +294,13 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~
-               "Error: page type 'report' is not a valid page type — valid types are note, concept, entity, and reference"
+               "Error: page type 'report' is not a valid page type — valid types are note, idea, project, knowledge, technical, entity, concept, and reference"
 
       assert Knowledge.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
     end
 
-    test "rejects non-page types (goal, project, todo, plan)", %{context: _ctx} do
-      for page_type <- ~w(goal project todo plan) do
+    test "rejects non-page types (goal-as-type, todo, kanban, diary)", %{context: _ctx} do
+      for page_type <- ~w(goal todo kanban diary) do
         result =
           call_tool("dran_create_page", %{
             "workspace" => "personal",

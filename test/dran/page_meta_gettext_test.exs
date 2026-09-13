@@ -22,6 +22,7 @@ defmodule Dran.PageMetaGettextTest do
   use ExUnit.Case, async: false
 
   alias Dran.Knowledge.PageMeta
+  alias Dran.PageRegistry
 
   # meta_fields_for/1,2 resolves gettext at call time against the CURRENT
   # process locale. The app default is "es", so labels come back translated
@@ -100,14 +101,14 @@ defmodule Dran.PageMetaGettextTest do
   # ── option labels appear in default.pot ──────────────────────────────────
 
   describe "select option labels are routed through gettext (present in default.pot)" do
-    test "note: every kind option label is in default.pot" do
+    test "note: free type — no kind options to gettext" do
       for {label, _value} <- select_pairs("note") do
         assert pot_has?(label),
                "note kind label #{inspect(label)} not in default.pot — not gettext'd"
       end
     end
 
-    test "concept: every kind option label is in default.pot" do
+    test "concept: free type — no kind options to gettext" do
       for {label, _value} <- select_pairs("concept") do
         assert pot_has?(label),
                "concept kind label #{inspect(label)} not in default.pot — not gettext'd"
@@ -132,18 +133,36 @@ defmodule Dran.PageMetaGettextTest do
   # ── option values (DB slugs) are NEVER translated ───────────────────────
 
   describe "select option VALUES (DB slugs) are never translated" do
-    test "note: kind values are raw slugs (lowercase)" do
-      values = Enum.map(select_pairs("note"), &elem(&1, 1))
+    test "note: free type — no kind select, values are raw slugs when present" do
+      # note is a free type (kinds: nil) — no kind select is rendered, so
+      # there are no values to translate. Legacy meta.kind survives as data.
+      assert select_pairs("note") == []
+    end
 
-      for expected <- ~w(journal idea meeting question quote reminder) do
+    test "concept: free type — no kind select" do
+      assert select_pairs("concept") == []
+    end
+
+    test "idea: kind values are raw slugs" do
+      values = Enum.map(select_pairs("idea"), &elem(&1, 1))
+
+      for expected <- ~w(idea question hypothesis spark) do
         assert expected in values
       end
     end
 
-    test "concept: kind values are raw slugs" do
-      values = Enum.map(select_pairs("concept"), &elem(&1, 1))
+    test "project: kind values are raw slugs" do
+      values = Enum.map(select_pairs("project"), &elem(&1, 1))
 
-      for expected <- ~w(technique pattern discipline theory) do
+      for expected <- ~w(project plan goal milestone) do
+        assert expected in values
+      end
+    end
+
+    test "technical: kind values are raw slugs" do
+      values = Enum.map(select_pairs("technical"), &elem(&1, 1))
+
+      for expected <- ~w(code snippet debug recipe config command template pattern method) do
         assert expected in values
       end
     end
@@ -189,19 +208,23 @@ defmodule Dran.PageMetaGettextTest do
     #
     # Removed kinds: snippet (→code), outline (→template), log (→journal),
     # todo
-    test "note_kinds/0 returns exactly the curated slugs" do
-      assert PageMeta.note_kinds() ==
-               ~w(journal idea meeting question quote reminder code recipe debug summary decision template plan project)
+    test "note_kinds/0 returns nil — note is a free type (no kind validation)" do
+      assert PageMeta.note_kinds() == nil
     end
 
-    test "note kinds are all lowercase slugs (never display labels)" do
-      for kind <- PageMeta.note_kinds() do
-        assert kind == String.downcase(kind),
-               "note kind #{inspect(kind)} is not lowercase — should be a slug"
+    test "validated types have lowercase slugs (never display labels)" do
+      for {type, kinds} <- [
+            {"idea", PageRegistry.kinds("idea")},
+            {"technical", PageRegistry.kinds("technical")}
+          ] do
+        for kind <- kinds || [] do
+          assert kind == String.downcase(kind),
+                 "#{type} kind #{inspect(kind)} is not lowercase — should be a slug"
+        end
       end
 
-      refute "Hecho" in PageMeta.note_kinds()
-      refute "Done" in PageMeta.note_kinds()
+      assert "Hecho" not in (PageRegistry.kinds("idea") || [])
+      assert "Done" not in (PageRegistry.kinds("technical") || [])
     end
   end
 

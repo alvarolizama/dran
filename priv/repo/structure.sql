@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9chFoJlz4pgoKDKw6WykocpCa8IKOLKjNtr1lqXAotPCWieTscKnNu9DPrlVbqu
+\restrict FeWl2Xb7ZwJNjBn0amfpVa4AoRBkr6tsIzXCYtAlapTfKFgDlOwMw4YkshdjpM5
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -1072,7 +1072,7 @@ ALTER TABLE ONLY public.worker_steps
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9chFoJlz4pgoKDKw6WykocpCa8IKOLKjNtr1lqXAotPCWieTscKnNu9DPrlVbqu
+\unrestrict FeWl2Xb7ZwJNjBn0amfpVa4AoRBkr6tsIzXCYtAlapTfKFgDlOwMw4YkshdjpM5
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1159,3 +1159,4 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260912053941);
 INSERT INTO public."schema_migrations" (version) VALUES (20260912235428);
 INSERT INTO public."schema_migrations" (version) VALUES (20260913001600);
 INSERT INTO public."schema_migrations" (version) VALUES (20260913021956);
+INSERT INTO public."schema_migrations" (version) VALUES (20260913040148);

@@ -170,9 +170,11 @@ defmodule DranWeb.Layouts do
         disabled = context.disabled_page_types || []
 
         # Zero out counts for disabled page types so sidebar links vanish.
-        safe_count = fn type ->
-          if type in disabled, do: 0, else: by_type[type] || 0
-        end
+        type_counts =
+          Map.new(Dran.PageRegistry.types(), fn type ->
+            count = if type in disabled, do: 0, else: by_type[type] || 0
+            {String.to_atom(Dran.PageRegistry.path(type)), count}
+          end)
 
         # Smart collections are first-class Brain collections now.
         collection_count = Dran.Collections.count_collections(context.id)
@@ -198,10 +200,8 @@ defmodule DranWeb.Layouts do
 
         %{
           dashboard: stats[:total_pages] || 0,
-          notes: safe_count.("note"),
-          concepts: safe_count.("concept"),
-          entities: safe_count.("entity"),
-          references: safe_count.("reference"),
+          # Per-type badges derive from stats.by_type — a new registry type
+          # shows its count without touching this map.
           clusters: clusters_count,
           collections: collection_count,
           contexts: contexts_count,
@@ -214,6 +214,7 @@ defmodule DranWeb.Layouts do
               _ -> 0
             end
         }
+        |> Map.merge(type_counts)
       else
         %{}
       end
@@ -380,10 +381,12 @@ defmodule DranWeb.Layouts do
     ]
   end
 
-  defp type_atom("note"), do: :notes
-  defp type_atom("entity"), do: :entities
-  defp type_atom("concept"), do: :concepts
-  defp type_atom("reference"), do: :references
+  # Badge keys are keyed by the registry path (e.g. "notes" → :notes) —
+  # compute_counts builds them from the registry, so a new type needs no
+  # clause here.
+  defp type_atom(type) do
+    type |> Dran.PageRegistry.path() |> String.to_atom()
+  end
 
   attr :label, :string, required: true
   attr :icon, :string, required: true

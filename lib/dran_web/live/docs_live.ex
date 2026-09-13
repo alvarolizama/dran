@@ -1314,10 +1314,15 @@ defmodule DranWeb.DocsLive do
             name="type"
             type="string"
             required="no"
-            desc="note, concept, entity, reference"
+            desc="note, idea, project, knowledge, technical, entity, concept, reference"
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
-          <:param name="kind" type="string" required="no" desc="Filter by meta.kind (notes)" />
+          <:param
+            name="kind"
+            type="string"
+            required="no"
+            desc="Filter by meta.kind (free-form string)"
+          />
           <:param
             name="plan_slug"
             type="string"
@@ -1344,7 +1349,7 @@ defmodule DranWeb.DocsLive do
             name="page_type"
             type="string"
             required="yes"
-            desc="note, concept, entity, reference"
+            desc="note, idea, project, knowledge, technical, entity, concept, reference"
           />
           <:param
             name="body"
