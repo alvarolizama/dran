@@ -526,20 +526,6 @@ defmodule Dran.Accounts do
   def valid_api_key?(_), do: :error
 
   @doc """
-  Check if an API key has access (read or write) to a specific workspace.
-  Returns the access level string or nil.
-  """
-  def api_key_access_level(%ApiKey{api_key_workspaces: workspaces}, workspace_id)
-      when is_list(workspaces) do
-    case Enum.find(workspaces, fn w -> w.workspace_id == workspace_id end) do
-      %{access_level: level} -> level
-      _ -> nil
-    end
-  end
-
-  def api_key_access_level(_, _), do: nil
-
-  @doc """
   Revoke an API key by setting `revoked_at`. The key stops working
   immediately but remains listed for audit.
   """

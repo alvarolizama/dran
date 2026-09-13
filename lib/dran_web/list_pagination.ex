@@ -13,15 +13,6 @@ defmodule DranWeb.ListPagination do
 
   import Phoenix.Component, only: [assign: 2]
 
-  @doc "Default pagination assigns. Merge into the list view's assigns."
-  def default_assigns do
-    %{
-      visible_count: @page_size,
-      show_archived: false,
-      archived_visible_count: @page_size
-    }
-  end
-
   @doc "Reveal the next batch of non-archived pages."
   def handle_load_more(socket) do
     assign(socket, visible_count: socket.assigns.visible_count + @page_size)

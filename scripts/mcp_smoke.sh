@@ -23,10 +23,11 @@ d = json.load(open('/tmp/mcp_tools.json'))
 tools = {t['name']: t for t in d['result']['tools']}
 print(f"tool count: {len(tools)}")
 expected = ["dran_search","dran_create_page","dran_update_page","dran_get_page","dran_delete_page",
-            "dran_create_task","dran_update_task","dran_list_tasks","dran_create_note","dran_update_note",
-            "dran_create_goal","dran_create_relation","dran_delete_relation",
+            "dran_create_note","dran_update_note",
+            "dran_create_relation","dran_delete_relation",
             "dran_get_links","dran_list_pages","dran_get_stats","dran_lint_brain",
-            "dran_rename_slug","dran_reaugment_page","dran_start_worker","dran_get_worker_session"]
+            "dran_rename_slug","dran_reaugment_page","dran_start_worker","dran_get_worker_session",
+            "dran_generate_cluster_summaries"]
 missing = [t for t in expected if t not in tools]
 extra = [t for t in tools if t not in expected]
 if missing: print("MISSING:", missing); sys.exit(1)

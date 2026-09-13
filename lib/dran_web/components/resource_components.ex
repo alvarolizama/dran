@@ -242,35 +242,4 @@ defmodule DranWeb.ResourceComponents do
     </div>
     """
   end
-
-  @doc """
-  Labelled `<select>` — the canonical select for the app: daisyUI `.select`
-  styling, small size, required `<label>` wrapper so the whole control is
-  clickable. Use this for every bare `<select>` in templates.
-
-  Options come pre-rendered; `selected` must already be set on each
-  option. `phx-change` etc. go through `{@rest}`.
-  """
-  attr :id, :string, default: nil
-  attr :name, :string, required: true
-  attr :label, :string, required: true
-  attr :class, :string, default: nil
-  attr :rest, :global, include: ~w(phx-change phx-value-* data-*)
-  slot :inner_block, required: true
-
-  def resource_select(assigns) do
-    ~H"""
-    <label class="block">
-      <span class="text-xs text-base-content/60">{@label}</span>
-      <select
-        id={@id}
-        name={@name}
-        class={["select select-sm select-bordered w-full mt-1", @class]}
-        {@rest}
-      >
-        {render_slot(@inner_block)}
-      </select>
-    </label>
-    """
-  end
 end
