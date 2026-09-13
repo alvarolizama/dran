@@ -474,7 +474,7 @@ const Graph3D = {
     // path (usually the plural). The fallback `${type}s` covers future
     // types; unknown ones default to notes.
     const typePaths = {
-      note: "notes", idea: "ideas", project: "projects",
+      note: "notes", idea: "ideas", food: "food",
       knowledge: "knowledge", technical: "technical",
       concept: "concepts", entity: "entities", reference: "references"
     }

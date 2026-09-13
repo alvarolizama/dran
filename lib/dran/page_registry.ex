@@ -73,17 +73,6 @@ defmodule Dran.PageRegistry do
         plural: "Ideas"
       }
     },
-    "project" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
-      kinds: ~w(project plan goal milestone),
-      ui: %{
-        path: "projects",
-        label: "Project",
-        icon: "hero-rocket-launch",
-        color: "#34D399",
-        plural: "Projects"
-      }
-    },
     "knowledge" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: ~w(quote summary highlight excerpt),
@@ -138,11 +127,22 @@ defmodule Dran.PageRegistry do
         color: "#A3E635",
         plural: "References"
       }
+    },
+    "food" => %{
+      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      kinds: ~w(recipe ingredient dish meal cuisine restaurant drink technique),
+      ui: %{
+        path: "food",
+        label: "Food",
+        icon: "hero-cake",
+        color: "#FB923C",
+        plural: "Food"
+      }
     }
   }
 
   # Canonical ordering — sidebar/MCP/docs iterate this list.
-  @types ~w(note idea project knowledge technical entity concept reference)
+  @types ~w(note idea knowledge technical entity concept reference food)
 
   # ── Type accessors ─────────────────────────────────────────────────
 
@@ -319,28 +319,6 @@ defmodule Dran.PageRegistry do
     ]
   end
 
-  def meta_fields("project") do
-    [
-      {:select, "kind", gettext("Kind"), kind_options("project")},
-      {:select, "horizon", gettext("Horizon"),
-       [
-         {gettext("Weekly"), "weekly"},
-         {gettext("Monthly"), "monthly"},
-         {gettext("Quarterly"), "quarterly"},
-         {gettext("Yearly"), "yearly"}
-       ]},
-      {:select, "status", gettext("Status"),
-       [
-         {gettext("Draft"), "draft"},
-         {gettext("Active"), "active"},
-         {gettext("On hold"), "on_hold"},
-         {gettext("Done"), "done"}
-       ]},
-      {:date, "due_date", gettext("Due date")},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
   def meta_fields("knowledge") do
     [
       {:select, "kind", gettext("Kind"), kind_options("knowledge")},
@@ -382,6 +360,18 @@ defmodule Dran.PageRegistry do
       {:select, "kind", gettext("Kind"), kind_options("reference")},
       {:text, "source_url", gettext("Source URL")},
       {:date, "published_at", gettext("Published at")},
+      {:props, "props", gettext("Custom properties")}
+    ]
+  end
+
+  def meta_fields("food") do
+    [
+      {:select, "kind", gettext("Kind"), kind_options("food")},
+      {:text, "cuisine", gettext("Cuisine"), placeholder: "italian, mexican, japanese…"},
+      {:text, "servings", gettext("Servings"), placeholder: "4"},
+      {:text, "prep_time", gettext("Prep time"), placeholder: "15 min"},
+      {:text, "cook_time", gettext("Cook time"), placeholder: "45 min"},
+      {:text, "source_url", gettext("Source URL")},
       {:props, "props", gettext("Custom properties")}
     ]
   end
@@ -473,7 +463,7 @@ defmodule Dran.PageRegistry do
       "question" => gettext("Question"),
       "hypothesis" => gettext("Hypothesis"),
       "spark" => gettext("Spark"),
-      # ── project kinds ───────────────────────────────────────────────────
+      # ── project kinds (legacy — kept for display of pre-removal rows) ──
       "project" => gettext("Project"),
       "plan" => gettext("Plan"),
       "goal" => gettext("Goal"),
@@ -522,7 +512,15 @@ defmodule Dran.PageRegistry do
       "release" => gettext("Release"),
       "website" => gettext("Website"),
       "repo" => gettext("Repository"),
-      "api" => gettext("API")
+      "api" => gettext("API"),
+      # ── food kinds ──────────────────────────────────────────────────────
+      # ("technique" ya tiene label más arriba, en los kinds de concept)
+      "ingredient" => gettext("Ingredient"),
+      "dish" => gettext("Dish"),
+      "meal" => gettext("Meal"),
+      "cuisine" => gettext("Cuisine"),
+      "restaurant" => gettext("Restaurant"),
+      "drink" => gettext("Drink")
     }
   end
 
@@ -536,19 +534,19 @@ defmodule Dran.PageRegistry do
     # UI type labels + plurals
     gettext("Note")
     gettext("Idea")
-    gettext("Project")
     gettext("Knowledge")
     gettext("Technical")
     gettext("Concept")
     gettext("Entity")
     gettext("Reference")
+    gettext("Food")
     gettext("Notes")
     gettext("Ideas")
-    gettext("Projects")
     gettext("Knowledge Plural")
     gettext("Technical Plural")
     gettext("Concepts")
     gettext("Entities")
     gettext("References")
+    gettext("Food")
   end
 end

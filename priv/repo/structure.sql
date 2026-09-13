@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict FeWl2Xb7ZwJNjBn0amfpVa4AoRBkr6tsIzXCYtAlapTfKFgDlOwMw4YkshdjpM5
+\restrict ZMbL3j7bMC3jCojWnhaIQUcftDMkQBVgocK7ANAoLVCRlZNhPfJr1M94oeBnmYZ
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -245,7 +245,7 @@ CREATE TABLE public.memories (
     created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL,
-    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('spanish'::regconfig, public.immutable_unaccent(COALESCE(content, ''::text)))) STORED
+    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, public.immutable_unaccent(COALESCE(content, ''::text)))) STORED
 );
 
 
@@ -1072,7 +1072,7 @@ ALTER TABLE ONLY public.worker_steps
 -- PostgreSQL database dump complete
 --
 
-\unrestrict FeWl2Xb7ZwJNjBn0amfpVa4AoRBkr6tsIzXCYtAlapTfKFgDlOwMw4YkshdjpM5
+\unrestrict ZMbL3j7bMC3jCojWnhaIQUcftDMkQBVgocK7ANAoLVCRlZNhPfJr1M94oeBnmYZ
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1160,3 +1160,5 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260912235428);
 INSERT INTO public."schema_migrations" (version) VALUES (20260913001600);
 INSERT INTO public."schema_migrations" (version) VALUES (20260913021956);
 INSERT INTO public."schema_migrations" (version) VALUES (20260913040148);
+INSERT INTO public."schema_migrations" (version) VALUES (20260913050953);
+INSERT INTO public."schema_migrations" (version) VALUES (20260913174156);

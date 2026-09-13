@@ -53,6 +53,12 @@ defmodule Dran.Knowledge.PageMeta do
     field :content_hash, :string
     field :fetched_at, :utc_datetime
 
+    # food
+    field :cuisine, :string
+    field :servings, :string
+    field :prep_time, :string
+    field :cook_time, :string
+
     # custom properties — namespaced free-form key-value bag for user metadata
     # (e.g. %{"role" => "sales", "tier" => "vip"}). Kept under :props so it
     # never collides with reserved top-level meta keys.
@@ -87,6 +93,10 @@ defmodule Dran.Knowledge.PageMeta do
       :published_at,
       :content_hash,
       :fetched_at,
+      :cuisine,
+      :servings,
+      :prep_time,
+      :cook_time,
       :props
     ]
   end
