@@ -1,5 +1,13 @@
 # Dran Inference API Reference
 
+> **Design doc (historical).** This is the original design reference for the
+> inference server contract. The implemented client consumes only
+> `/v1/embeddings` and `/v1/chat/completions`; model names are NOT read from
+> env vars — they come from the server's `/v1/models` list (saved to
+> Settings, admin UI) and health-checked from there. Reranking, MarkItDown
+> and ASR below are server capabilities, not consumed by Dran today.
+> The operative install reference is `.env.example`.
+
 Dran consumes an **OpenAI-compatible** local/VPN inference server for several capabilities used to organize information and data:
 
 - **Embeddings** (`Qwen3-Embedding`) for semantic search.

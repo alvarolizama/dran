@@ -2,6 +2,12 @@
 
 Status: draft — implementation not started.
 
+> **Historical planning doc.** Partially superseded: embeddings and chat are
+> implemented (`Dran.Inference`); model selection went to `/v1/models` +
+> Settings instead of the per-capability env vars proposed here
+> (`DRAN_INFERENCE_RERANK_MODEL`, `DRAN_INFERENCE_MARKITDOWN_MODEL` were
+> never implemented). Kept for context on why the pieces exist.
+
 This plan adds **embeddings**, **reranking**, and **document-to-markdown conversion** to Dran using the OpenAI-compatible inference server.
 
 Each phase has acceptance criteria and a test deliverable. We validate the business logic before adding new UI or MCP tools.
