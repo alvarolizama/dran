@@ -99,20 +99,25 @@ defmodule Dran.PageAugmenter do
   defp maybe_enrich_metadata(%Page{} = page) do
     case Summaries.augment_page(page) do
       {:ok, %{title: title, summary: summary, tags: tags, inline_links: inline_links} = enrich} ->
-        existing_meta = page.meta || %{}
+        # The LLM call took seconds — re-fetch the row so the changeset is
+        # built on the CURRENT state instead of the stale struct (otherwise
+        # this update silently reverts any concurrent edit).
+        fresh = Repo.get(Page, page.id) || page
+
+        existing_meta = fresh.meta || %{}
 
         updated_meta =
           Map.put(existing_meta, "inline_links", serialize_inline_links(inline_links))
 
         attrs = %{
-          title: pick_title(page.title, title),
-          summary: pick_summary(page.summary, summary),
-          tags: merge_tags(page.tags || [], tags),
+          title: pick_title(fresh.title, title),
+          summary: pick_summary(fresh.summary, summary),
+          tags: merge_tags(fresh.tags || [], tags),
           meta: updated_meta
         }
 
         with {:ok, updated_page} <-
-               page
+               fresh
                |> Ecto.Changeset.change(attrs)
                |> Repo.update() do
           link_entities(updated_page, Map.get(enrich, :entities, []))

@@ -709,12 +709,19 @@ defmodule Dran.Knowledge do
         from(p in Page, where: p.workspace_id == ^workspace_id)
         |> Repo.delete_all()
 
-      %{
+      result = %{
         pages: pages_count,
         relations: relations_count,
         versions: versions_count,
         logs: logs_count
       }
+
+      # The bulk delete_all bypasses broadcast_page_change, so the graph and
+      # page caches would keep serving pre-reset state (with no future write
+      # to invalidate them) — drop them explicitly.
+      Dran.GraphCache.invalidate_context(workspace_id)
+
+      result
     end)
   end
 
