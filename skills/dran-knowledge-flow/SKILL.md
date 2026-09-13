@@ -1,7 +1,7 @@
 ---
 name: dran-knowledge-flow
 description: "Use when creating or editing Dran knowledge pages via MCP."
-version: 1.1.0
+version: 1.2.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -64,20 +64,30 @@ flowchart TD
 - `page_type` enum comes from `Dran.PageRegistry` (8 types). Kinds
   (`meta.kind`; the lists in `PageMeta.changeset/3` are the contract, but
   note `create_page` does not enforce them on persist today) and
-  type-specific meta fields:
-  - `note` (free-form; date, due_date) — `dran_create_note` /
+  type-specific meta fields. When unsure which type fits, follow the
+  decision tree in `docs/page-types.md`:
+  - `note` — quick capture, journal, no structure yet (free kind; date;
+    due_date only when kind is `reminder`) — `dran_create_note` /
     `dran_update_note` are title+slug shorthands with **meta merge**
-  - `idea` — kinds: idea/question/hypothesis/spark
-  - `knowledge` — kinds: quote/summary/highlight/excerpt; extra meta:
+  - `idea` — a thought that wants to be developed;
+    kinds: idea/question/hypothesis/spark
+  - `knowledge` — someone else's words you extracted;
+    kinds: quote/summary/highlight/excerpt; extra meta:
     source_url, date
-  - `technical` — kinds: code/snippet/debug/recipe/config/command/
-    template/pattern/method; extra meta: language, version
-  - `entity` — kinds: person/company/product/tool/place/event/language/
+  - `technical` — how-to: code, commands, configs, dev recipes;
+    kinds: code/snippet/debug/recipe/config/command/
+    template/pattern/method; extra meta: language (only when kind is
+    `code`), version
+  - `entity` — a named thing: person, company, tool, place;
+    kinds: person/company/product/tool/place/event/language/
     framework/hardware/protocol; extra meta: location, external_url
-  - `concept` (free kind; domain, parent_concept)
-  - `reference` — kinds: article/paper/video/podcast/book/newsletter/
+  - `concept` — an abstract notion you define (free kind;
+    domain, parent_concept)
+  - `reference` — an external source you point at;
+    kinds: article/paper/video/podcast/book/newsletter/
     spec/code/release/website/repo/api; extra meta: source_url, published_at
-  - `food` — kinds: recipe/ingredient/dish/meal/cuisine/restaurant/
+  - `food` — cooking: recipes, ingredients, dishes;
+    kinds: recipe/ingredient/dish/meal/cuisine/restaurant/
     drink/technique; extra meta: cuisine, servings, prep_time, cook_time,
     source_url
 
