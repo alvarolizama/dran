@@ -1,7 +1,7 @@
 ---
 name: dran-memory-flow
-description: "Use when listing, searching, or deleting Dran agent memories."
-version: 1.1.0
+description: "Use when listing, searching, updating, or deleting Dran agent memories."
+version: 1.3.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -76,7 +76,8 @@ Repo.get returns nil"]
 | --- | --- | --- |
 | `/api/memory` | GET | key valid (read always allowed) |
 | `/api/memory/search` | GET (`q`, `workspace`, `limit`) | key valid |
-| `/api/memory` | POST | `write_access` — **plugin's job, not this flow's** |
+| `/api/memory` | POST | `write_access` — **plugin's job, not this flow's**; grey-zone match returns **409 + `near_duplicate: true`** (nothing stored) |
+| `/api/memory/:id` | PATCH | `write_access` — rewrite in place (trust/feedback counters preserved); **plugin's job (`dran_memory_update`)** |
 | `/api/memory/feedback` | POST | `write_access` — plugin's job |
 | `/api/memory/ingest` | POST | `write_access` — plugin's job (session end) |
 | `/api/memory/:id` | DELETE | `write_access` — soft-delete (superseded); **API keys MUST pass `?workspace=<slug>`** |
@@ -92,6 +93,21 @@ Repo.get returns nil"]
 - **`POST /api/memory` by hand to "save" something** — writes belong to the
   plugin so the provenance (`X-Hermes-Agent`, actor) stays honest; a
   manual POST forges the author's context.
+- **409 `near_duplicate` is not an error** — the fact landed in the grey
+  zone (cosine 0.88–0.95 vs an active fact, typically a cross-language
+  rewording). Resolve, don't retry blindly: refine the existing fact
+  (PATCH, plugin's `dran_memory_update`) or re-add with `force=true`
+  after confirming it is genuinely different.
+- **`semantic` memory↔memory edges are DERIVED, never manual** — the
+  MemoryLinker creates them at ingest for facts in the ~0.72–0.88 cosine
+  band (related but not duplicates). Don't create them via
+  `dran_create_relation`; to change a fact's neighbourhood, update the
+  fact (PATCH) — the nightly re-derives.
+- **Low trust WITHOUT feedback is decay, not corruption** —
+  `memory_relink_nightly` decays never-retrieved, never-rated facts
+  (−0.02/30d, floor 0.15). A calm `trust_score` on an old unused fact is
+  expected; only feedback (helpful) restores weight. Don't "fix" it by
+  hand.
 - **Purge ≠ delete** — plain DELETE soft-supersedes (status flips, row
   stays, excluded from search); `?purge=true` hard-deletes the row, and
   the fact can be re-stored later (no dedupe ghost).
@@ -114,6 +130,11 @@ Repo.get returns nil"]
 - **Confusing memory with page knowledge** — memories are agent-facts
   (dedupe + trust server-side); knowledge that humans read goes through
   dran-knowledge-flow.
+- **The ingest cursor lives in Hermes, not here** — the plugin sends only
+  each session's message delta (`$HERMES_HOME/dran_memory_cursor.json`).
+  A re-ingest of the same transcript is a no-op cost-wise server-side,
+  but if a session was ingested with facts MISSING, don't re-POST the
+  full transcript by hand — fix the fact with PATCH instead.
 
 ## Checklist
 

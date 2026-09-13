@@ -86,5 +86,26 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             inline=True,
             group="Memory",
         ),
+        ProviderField(
+            key="max_recall_chars",
+            label="Recall char budget",
+            kind=KIND_NUMBER,
+            description="Max characters of memory context injected per turn. "
+                        "Whole facts are dropped when the budget is hit.",
+            default="800",
+            inline=True,
+            group="Memory",
+        ),
+        ProviderField(
+            key="recall_cadence",
+            label="Recall cadence (turns)",
+            kind=KIND_NUMBER,
+            description="Minimum turns between recall searches. 1 = every turn; "
+                        "2+ skips the search (and its tokens) on off-turns. "
+                        "An unchanged fact set is never re-injected regardless.",
+            default="1",
+            inline=True,
+            group="Memory",
+        ),
     ),
 )

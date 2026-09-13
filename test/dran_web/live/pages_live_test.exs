@@ -249,7 +249,7 @@ defmodule DranWeb.PagesLiveTest do
       assert html =~ ~s(value="idea")
 
       # the Tags label renders exactly once (component label, not duplicated)
-      tags_labels = Regex.scan(~r/Etiquetas/, html)
+      _tags_labels = Regex.scan(~r/Etiquetas/, html)
       # locale-dependent: fall back to counting label-text occurrences in any locale
       label_count =
         Regex.scan(~r/label mb-1 block[^>]*>\s*<\/span>/, html) |> length()

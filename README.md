@@ -47,9 +47,12 @@ Humans get a wiki. Agents get MCP tools and a REST API. One graph, one attributi
 
 ## Memory
 
-- Atomic facts per workspace, idempotent on content (duplicates return the existing row)
+- Atomic facts per workspace, idempotent on content (duplicates return the existing row); rewordings in the grey zone (cosine 0.88–0.95, typically cross-language) return `409 near_duplicate` — refine via `PATCH /api/memory/:id` (trust preserved) or re-add with `force=true`
+- Auto-relations at ingest: `informs` (memory → top-3 closest pages) and `semantic` (memory ↔ related memories, ~0.72–0.88 band) — derived from the dedupe embedding, zero extra inference; visible in the 3D graph and as "related facts" in the memory UI
+- Nightly hygiene: re-derive edges, sweep edges touching dead memories (both endpoints), decay trust of never-retrieved facts (−0.02/30d, floor 0.15; feedback-earned trust never decays)
+- Ingest efficiency: the extractor's negative context includes the semantic neighbours of the known top-10 (skips related variants, not just dupes); the Hermes plugin sends only the session's message delta (cursor per session)
 - Asymmetric trust: helpful `+0.05`, unhelpful `−0.10`; search ranks relevance × trust
-- REST `/api/memory` + a **Hermes plugin** (`hermes_plugin/dran/`): auto-recall at turn start, `dran_memory_add/search/feedback` tools, auto-capture on session end (facts extracted server-side, transcripts never persisted)
+- REST `/api/memory` + a **Hermes plugin** (`hermes_plugin/dran/`): auto-recall at turn start, `dran_memory_add/update/search/feedback` tools, auto-capture on session end (facts extracted server-side, transcripts never persisted)
 - Not on the MCP surface — by design
 
 ## The app

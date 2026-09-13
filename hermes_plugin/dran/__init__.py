@@ -44,6 +44,17 @@ MAX_INGEST_CHARS = 12_000
 # How often the auto-discovered agent config (memory workspace) is refreshed
 # from the server, seconds. 0 = once per session (initialize).
 CONFIG_REFRESH_SECS = 300
+# Recall query depth: how many recent turns are concatenated into the
+# search query. Short follow-ups ("and why?") recall nothing on their own.
+RECALL_QUERY_TURNS = 3
+# Circuit breaker: after N consecutive failures, sleep before retrying.
+BREAKER_THRESHOLD = 3
+BREAKER_COOLDOWN_SECS = 60.0
+# HTTP retry (idempotent GETs only): attempts and backoff between them.
+HTTP_RETRY_ATTEMPTS = 2
+HTTP_RETRY_BACKOFF_SECS = 0.5
+# Ingest cursor state file (per profile): session_id -> messages digested.
+INGEST_CURSOR_FILE = "dran_memory_cursor.json"
 
 
 def _default_config() -> dict:
@@ -54,6 +65,8 @@ def _default_config() -> dict:
         "auto_recall": True,
         "auto_capture": True,
         "max_recall_results": 5,
+        "max_recall_chars": 800,
+        "recall_cadence": 1,
     }
 
 
@@ -118,6 +131,14 @@ def _load_dran_config(hermes_home: str) -> dict:
         config["max_recall_results"] = max(1, min(20, int(config.get("max_recall_results", 5))))
     except (TypeError, ValueError):
         config["max_recall_results"] = 5
+    try:
+        config["max_recall_chars"] = max(100, int(config.get("max_recall_chars", 800)))
+    except (TypeError, ValueError):
+        config["max_recall_chars"] = 800
+    try:
+        config["recall_cadence"] = max(1, min(10, int(config.get("recall_cadence", 1))))
+    except (TypeError, ValueError):
+        config["recall_cadence"] = 1
     return config
 
 
@@ -134,7 +155,13 @@ def _save_dran_config(values: dict, hermes_home: str) -> None:
 
 
 class _DranClient:
-    """Minimal REST client for Dran's /api/memory endpoints."""
+    """Minimal REST client for Dran's /api/memory endpoints.
+
+    Idempotent GETs get one retry with short backoff; everything tracks a
+    per-instance circuit breaker (after BREAKER_THRESHOLD consecutive
+    failures all calls fast-fail until the cooldown elapses) so a down
+    Dran doesn't add a timeout to every turn.
+    """
 
     def __init__(self, base_url: str, api_key: str, workspace: str,
                  agent_identity: str = "", timeout: float = REQUEST_TIMEOUT):
@@ -143,6 +170,8 @@ class _DranClient:
         self.workspace = workspace
         self.agent_identity = agent_identity
         self.timeout = timeout
+        self._failures = 0
+        self._breaker_open_until = 0.0
 
     def _headers(self) -> Dict[str, str]:
         headers = {
@@ -154,25 +183,89 @@ class _DranClient:
             headers["X-Hermes-Agent"] = self.agent_identity
         return headers
 
+    def _breaker_allows(self) -> bool:
+        return time.monotonic() >= self._breaker_open_until
+
+    def _record_success(self) -> None:
+        self._failures = 0
+        self._breaker_open_until = 0.0
+
+    def _record_failure(self) -> None:
+        self._failures += 1
+        if self._failures >= BREAKER_THRESHOLD:
+            self._breaker_open_until = time.monotonic() + BREAKER_COOLDOWN_SECS
+            logger.warning("Dran circuit breaker open for %.0fs after %d failures",
+                           BREAKER_COOLDOWN_SECS, self._failures)
+
     def request(self, method: str, path: str, payload: Any = None,
                 timeout: float | None = None) -> Any:
+        if not self._breaker_allows():
+            raise ConnectionError("dran unreachable (circuit breaker open)")
+
+        attempts = HTTP_RETRY_ATTEMPTS if method.upper() == "GET" else 1
+        last_exc: Exception | None = None
+
+        for attempt in range(attempts):
+            try:
+                return self._request_once(method, path, payload, timeout)
+            except urllib.error.HTTPError as exc:
+                # 4xx (except 429) is the server answering — retrying won't
+                # change the answer. Surface it; the 409 near-duplicate
+                # handling lives in add_memory.
+                if 400 <= exc.code < 500 and exc.code != 429:
+                    self._record_success()
+                    raise
+                last_exc = exc
+                self._record_failure()
+            except Exception as exc:
+                last_exc = exc
+                self._record_failure()
+
+            if attempt + 1 < attempts:
+                time.sleep(HTTP_RETRY_BACKOFF_SECS * (attempt + 1))
+
+        assert last_exc is not None
+        raise last_exc
+
+    def _request_once(self, method: str, path: str, payload: Any,
+                      timeout: float | None) -> Any:
         url = f"{self.base_url}{path}"
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
         req = urllib.request.Request(url, data=body, method=method,
                                      headers=self._headers())
         with urllib.request.urlopen(req, timeout=timeout or self.timeout) as resp:
             raw = resp.read().decode("utf-8")
+        self._record_success()
         if not raw:
             return {}
         return json.loads(raw)
 
     # -- Memory endpoints ------------------------------------------------
 
-    def add_memory(self, content: str, source_session: str = "") -> dict:
-        payload = {"workspace": self.workspace, "content": content}
+    def add_memory(self, content: str, source_session: str = "", force: bool = False) -> dict:
+        payload: Dict[str, Any] = {"workspace": self.workspace, "content": content}
         if source_session:
             payload["source_session"] = source_session
-        return self.request("POST", "/api/memory", payload)
+        if force:
+            payload["force"] = True
+        try:
+            return self.request("POST", "/api/memory", payload)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 409:
+                # Near-duplicate grey zone: Dran returns the stored fact +
+                # the submitted text so the agent can decide (update/force).
+                raw = exc.read().decode("utf-8", "replace")
+                try:
+                    return json.loads(raw)
+                except ValueError:
+                    raise
+            raise
+
+    def update_memory(self, memory_id: str, content: str) -> dict:
+        """Rewrite a fact in place; trust/feedback counters are preserved."""
+        return self.request("PATCH", f"/api/memory/{memory_id}", {
+            "content": content, "workspace": self.workspace,
+        })
 
     def search(self, query: str, limit: int = 5) -> list:
         from urllib.parse import urlencode
@@ -226,6 +319,13 @@ class DranMemoryProvider(MemoryProvider):
         self._prefetch_cache: str = ""
         self._prefetch_count = 0
         self._worker: threading.Thread | None = None
+        # Recall efficiency: turn counter (cadence) + fingerprint of the
+        # last injected fact set (skip re-injecting identical context).
+        # The counter starts armed (huge) so the FIRST recall always fires;
+        # prefetch resets it to 0 after each actual injection.
+        self._turns_since_inject = 1_000_000
+        self._last_injected_ids: frozenset = frozenset()
+        self._last_search_query = ""
 
     # -- Core lifecycle ----------------------------------------------------
 
@@ -252,6 +352,8 @@ class DranMemoryProvider(MemoryProvider):
             {"key": "auto_recall", "description": "Inject relevant memories at turn start", "default": "true", "choices": ["true", "false"]},
             {"key": "auto_capture", "description": "Ingest transcript at session end", "default": "true", "choices": ["true", "false"]},
             {"key": "max_recall_results", "description": "Memories injected per turn (1-20)", "default": "5", "type": "integer", "minimum": 1, "maximum": 20},
+            {"key": "max_recall_chars", "description": "Max chars of memory context injected per turn", "default": "800", "type": "integer", "minimum": 100},
+            {"key": "recall_cadence", "description": "Min turns between recall searches (1 = every turn)", "default": "1", "type": "integer", "minimum": 1, "maximum": 10},
         ]
 
     def save_config(self, values, hermes_home):
@@ -336,37 +438,81 @@ class DranMemoryProvider(MemoryProvider):
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         if not (self._config.get("auto_recall") and self._client and query and query.strip()):
             return
+
+        # Cadence (Honcho-style): skip the SEARCH itself on off-turns — an
+        # unchanged query would return the same facts anyway. The counter
+        # resets on every actual injection (prefetch).
+        cadence = max(1, int(self._config.get("recall_cadence", 1) or 1))
+        self._turns_since_inject += 1
+        if self._turns_since_inject < cadence:
+            return
         if self._worker and self._worker.is_alive():
             return  # a recall is already in flight — skip, next turn will retry
 
         self._last_injected = 0  # a new recall cycle starts
-        query = query.strip()
+
+        # Multi-turn query: short follow-ups ("and why?") recall nothing on
+        # their own; concatenating recent turns gives the search context.
+        # The raw query is the user's new message; this provider keeps no
+        # message history, so the caller-provided query is enriched with the
+        # last completed search query (stable conversational thread).
+        enriched = self._enrich_query(query.strip())
+
         client = self._client
+        last_query = enriched
 
         def work():
             try:
                 # cheap refresh window — picks up server-side workspace edits
                 self._resolve_workspace()
-                results = client.search(query,
+                results = client.search(enriched,
                                         limit=self._config["max_recall_results"])
-                text = self._format_results(results)
+                text, injected_ids = self._format_results(results)
                 with self._prefetch_lock:
                     self._prefetch_cache = text
                     self._prefetch_count = len(results)
+                    self._prefetch_ids = injected_ids
+                self._last_search_query = last_query
             except Exception:
                 logger.debug("Dran prefetch failed", exc_info=True)
 
         self._worker = threading.Thread(target=work, daemon=True)
         self._worker.start()
 
+    def _enrich_query(self, query: str) -> str:
+        parts = []
+        prev = getattr(self, "_last_search_query", "")
+        if prev:
+            parts.append(prev)
+        parts.append(query)
+        enriched = " ".join(parts)
+        # Keep the NEW message dominant: truncate from the front.
+        return enriched[-300:]
+
     def prefetch(self, query: str, *, session_id: str = "") -> str:
         with self._prefetch_lock:
             cached = self._prefetch_cache
+            injected_ids = getattr(self, "_prefetch_ids", frozenset())
             # Recall contract: recall_status must reflect ONLY the LAST
             # prefetch — keep the count after consuming the cache.
             self._last_injected = self._prefetch_count
             self._prefetch_cache = ""
             self._prefetch_count = 0
+            self._prefetch_ids = frozenset()
+
+        self._turns_since_inject = 0
+
+        # Injected-set dedupe: if the fact set is identical to what the
+        # previous turn already received, skip re-injecting — pure token
+        # savings, the agent already has this context.
+        if cached and injected_ids and injected_ids == self._last_injected_ids:
+            logger.debug("Dran recall: fact set unchanged, skipping injection")
+            self._last_injected = 0
+            return ""
+
+        if injected_ids:
+            self._last_injected_ids = injected_ids
+
         return cached or ""
 
     def recall_status(self) -> Optional[RecallStatus]:
@@ -392,13 +538,26 @@ class DranMemoryProvider(MemoryProvider):
             },
             {
                 "name": "dran_memory_add",
-                "description": "Store a durable, atomic fact in the shared Dran memory. One fact per call, self-contained sentence.",
+                "description": "Store a durable, atomic fact in the shared Dran memory. One fact per call, self-contained sentence. On a near-duplicate (HTTP 409) the fact is NOT stored: either refine the existing fact with dran_memory_update, or re-call with force=true when it is genuinely a different fact.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "content": {"type": "string", "description": "The fact, one standalone sentence"}
+                        "content": {"type": "string", "description": "The fact, one standalone sentence"},
+                        "force": {"type": "boolean", "description": "Store even when a near-duplicate (0.88-0.95 similarity) exists. Only after reviewing the near-duplicate."},
                     },
                     "required": ["content"],
+                },
+            },
+            {
+                "name": "dran_memory_update",
+                "description": "Rewrite an existing memory in place — trust score and feedback history are preserved. Preferred over storing a near-duplicate as a new fact: when a stored fact needs refinement or correction, update it.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "memory_id": {"type": "string"},
+                        "content": {"type": "string", "description": "The corrected fact, one standalone sentence"},
+                    },
+                    "required": ["memory_id", "content"],
                 },
             },
             {
@@ -429,14 +588,29 @@ class DranMemoryProvider(MemoryProvider):
                 ]})
 
             if tool_name == "dran_memory_add":
-                content = str((args or {}).get("content", "")).strip()
+                args = args or {}
+                content = str(args.get("content", "")).strip()
+                force = bool(args.get("force", False))
                 if not content:
                     return json.dumps({"error": "content is required"})
                 if self._agent_context != "primary":
                     return json.dumps({"error": "memory writes are disabled in this context"})
                 if not self._config.get("auto_capture"):
                     return json.dumps({"skipped": "auto_capture disabled"})
-                data = self._client.add_memory(content, source_session=self._session_id) if self._client else {}
+                data = self._client.add_memory(
+                    content, source_session=self._session_id, force=force,
+                ) if self._client else {}
+                if data.get("near_duplicate"):
+                    existing = data.get("data") or {}
+                    return json.dumps({
+                        "stored": False,
+                        "near_duplicate": True,
+                        "existing_id": existing.get("id"),
+                        "existing_content": existing.get("content"),
+                        "submitted": data.get("submitted"),
+                        "hint": "refine with dran_memory_update(existing_id, merged content) "
+                                "or re-add with force=true if genuinely different",
+                    })
                 dup = bool(data.get("duplicate"))
                 memory = data.get("data") or {}
                 return json.dumps({
@@ -444,6 +618,22 @@ class DranMemoryProvider(MemoryProvider):
                     "duplicate": dup,
                     "id": memory.get("id"),
                     "note": "fact already existed" if dup else "fact stored",
+                })
+
+            if tool_name == "dran_memory_update":
+                memory_id = str((args or {}).get("memory_id", ""))
+                content = str((args or {}).get("content", "")).strip()
+                if not memory_id or not content:
+                    return json.dumps({"error": "memory_id and content are required"})
+                if self._agent_context != "primary":
+                    return json.dumps({"error": "memory writes are disabled in this context"})
+                data = self._client.update_memory(memory_id, content) if self._client else {}
+                memory = data.get("data") or {}
+                return json.dumps({
+                    "updated": True,
+                    "id": memory.get("id"),
+                    "content": memory.get("content"),
+                    "trust_score": memory.get("trust_score"),
                 })
 
             if tool_name == "dran_memory_feedback":
@@ -469,14 +659,53 @@ class DranMemoryProvider(MemoryProvider):
         if not (self._config.get("auto_capture") and self._client):
             return
         try:
-            transcript = self._transcript_text(messages)
+            # Ingest cursor: only send the messages not yet digested for
+            # this session. A session that ends twice (crash, /exit +
+            # resume) re-sends the full transcript otherwise — the server
+            # dedupes facts, but the LLM extraction cost is paid again.
+            cursor = self._load_ingest_cursor()
+            key = self._session_id or "adhoc"
+            already = int(cursor.get(key, 0))
+
+            window = messages[-MAX_INGEST_MESSAGES:]
+            delta = window[already:] if already < len(window) else []
+
+            # Nothing new since the last ingest for this session.
+            if not delta:
+                return
+
+            transcript = self._transcript_text(delta)
             if not transcript:
                 return
+
             data = self._client.ingest(transcript, source_session=self._session_id)
-            logger.info("Dran memory ingest: created=%s duplicates=%s",
-                        data.get("created", 0), data.get("duplicates", 0))
+            cursor[key] = len(window)
+            self._save_ingest_cursor(cursor)
+            logger.info("Dran memory ingest: created=%s duplicates=%s (delta=%d msgs)",
+                        data.get("created", 0), data.get("duplicates", 0), len(delta))
         except Exception:
             logger.warning("Dran memory ingest failed (session continues)", exc_info=True)
+
+    def _cursor_path(self):
+        from pathlib import Path
+        return Path(self._hermes_home()) / INGEST_CURSOR_FILE
+
+    def _load_ingest_cursor(self) -> dict:
+        try:
+            raw = self._cursor_path().read_text(encoding="utf-8")
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _save_ingest_cursor(self, cursor: dict) -> None:
+        try:
+            # Prune: keep only the 20 most recent sessions.
+            if len(cursor) > 20:
+                cursor = dict(sorted(cursor.items(), key=lambda kv: kv[1])[-20:])
+            self._cursor_path().write_text(json.dumps(cursor), encoding="utf-8")
+        except Exception:
+            logger.debug("Dran ingest cursor write failed", exc_info=True)
 
     def shutdown(self) -> None:
         if self._worker and self._worker.is_alive():
@@ -484,16 +713,36 @@ class DranMemoryProvider(MemoryProvider):
 
     # -- Helpers ----------------------------------------------------------------
 
-    def _format_results(self, results: list) -> str:
+    def _format_results(self, results: list) -> tuple[str, frozenset]:
+        """Format recall results under the char budget.
+
+        Returns ``(text, injected_ids)`` — the ids feed the injected-set
+        dedupe in prefetch(). Whole lines are dropped when the budget is
+        hit (never a truncated fact mid-sentence).
+        """
         if not results:
-            return ""
-        lines = ["Relevant shared memories (Dran):"]
+            return "", frozenset()
+
+        budget = int(self._config.get("max_recall_chars", MAX_PREFETCH_CHARS) or MAX_PREFETCH_CHARS)
+        header = "Relevant shared memories (Dran):"
+        lines: list[str] = []
+        ids: list[str] = []
+
         for r in results:
             content = str(r.get("content", "")).strip()
-            if content:
-                lines.append(f"- [{r.get('created_by', '?')}] {content}")
-        text = "\n".join(lines)
-        return text[:MAX_PREFETCH_CHARS]
+            if not content:
+                continue
+            line = f"- [{r.get('created_by', '?')}] {content}"
+            projected = len(header) + 1 + len("\n".join(lines + [line]))
+            if lines and projected > budget:
+                break  # budget exhausted — stop at the last whole line
+            lines.append(line)
+            ids.append(str(r.get("id", "")))
+
+        if not lines:
+            return "", frozenset()
+
+        return "\n".join([header] + lines), frozenset(ids)
 
     def _transcript_text(self, messages: List[Dict[str, Any]]) -> str:
         parts = []
