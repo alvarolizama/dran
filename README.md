@@ -39,10 +39,12 @@ is tied to the API key's actor, server-side.
 - **8 page types, each with `meta.kind` subtypes and type-specific meta fields** — defined
   in one place, `Dran.PageRegistry` (`lib/dran/page_registry.ex`):
 
-  | `note` | free capture | *(free — none validated)* | `date`, `due_date` *(when kind is `reminder`)* |
+  | Type | Purpose | `meta.kind` values | Extra meta fields |
+  |---|---|---|---|
+  | `note` | free capture | *(free — none validated)* | `date`, `due_date` *(kind `reminder`)* |
   | `idea` | sparks & thinking | `idea` `question` `hypothesis` `spark` | — |
   | `knowledge` | captured wisdom | `quote` `summary` `highlight` `excerpt` | `source_url`, `date` |
-  | `technical` | code & how-to | `code` `snippet` `debug` `recipe` `config` `command` `template` `pattern` `method` | `language` *(when kind is `code`)*, `version` |
+  | `technical` | code & how-to | `code` `snippet` `debug` `recipe` `config` `command` `template` `pattern` `method` | `language` *(kind `code`)*, `version` |
   | `entity` | named things | `person` `company` `product` `tool` `place` `event` `language` `framework` `hardware` `protocol` | `location`, `external_url` |
   | `concept` | abstract ideas | *(free)* | `domain`, `parent_concept` |
   | `reference` | external sources | `article` `paper` `video` `podcast` `book` `newsletter` `spec` `code` `release` `website` `repo` `api` | `source_url`, `published_at` |
@@ -84,8 +86,8 @@ is tied to the API key's actor, server-side.
   only the session's message delta (cursor per session).
 - REST `/api/memory` + a **Hermes plugin** (`hermes_plugin/dran/`): auto-recall at turn
   start, `dran_memory_add/update/search/feedback` tools, auto-capture on session end (facts
-  extracted server-side, transcripts never persisted).
-- **Not on the MCP surface** — by design.
+  extracted server-side, transcripts never persisted). Memory is intentionally **not** on
+  the MCP surface.
 
 ## The app
 
@@ -100,10 +102,12 @@ is tied to the API key's actor, server-side.
 
 ## Automation
 
-- **3 workers** — `curator` (duplicate/conflict detection), `link_gardener` (relations for
-  orphans), `graph_rag` (GraphRAG Q&A with citations); start over MCP, poll the session
-- **7 scheduled jobs** (Quantum cron, toggleable + run-now in admin): curator, PageRank,
-  cluster summaries, graph maintenance, link gardener, page summaries, memory re-link
+- **3 background workers** — `curator` (duplicate/conflict detection), `link_gardener`
+  (relations for orphans), `graph_rag` (GraphRAG Q&A with citations). Start them over MCP
+  (`dran_start_worker`), then poll the session (`dran_get_worker_session`).
+- **7 scheduled jobs** (Quantum cron — toggleable, run-now from `/admin`): curator,
+  PageRank, cluster summaries, graph maintenance, link gardener, page summaries, memory
+  re-link
 - **Entity linker** — auto-creates entity pages from names detected in bodies
 
 ## APIs
@@ -209,8 +213,9 @@ skills:
     - ~/Workspace/Skills
 ```
 
-Restart the Hermes session, then verify: MCP → "list my pages"; memory → "¿qué recuerdas
-de …?"; skills → the agent should route Dran questions through the `dran` skill.
+Restart the Hermes session, then verify each piece: MCP — ask it to "list my pages";
+memory — "what do you remember about …?"; skills — it should route Dran questions
+through the `dran` skill.
 
 Non-Hermes agents: skip d/e, point any MCP client at `POST /api/mcp` with the Bearer key,
 or use the REST API directly.
@@ -225,7 +230,7 @@ without it Dran still works, minus those features).
 
 Not env vars (admin UI only, stored in the database): the default workspace and the
 legacy admin API/MCP token — both live in `/admin/system`. Per-user API tokens are
-managed in `/admin/users`; context-scoped API keys in each workspace's settings.
+managed in `/admin/users`; workspace-scoped API keys in each workspace's settings.
 
 ## Production
 
