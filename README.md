@@ -9,6 +9,7 @@
 ### Shared memory & knowledge base for AI agent swarms
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.0-8B5CF6.svg)](./mix.exs)
 [![Elixir](https://img.shields.io/badge/Elixir-1.15+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
 [![Phoenix](https://img.shields.io/badge/Phoenix-1.8-LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org)
@@ -256,6 +257,18 @@ Phoenix 1.8 + LiveView · PostgreSQL + pgvector · TipTap v3 · MDEx · Tailwind
 mix precommit   # compile --warnings-as-errors → deps.unlock --unused → format → deps audit → sobelow → test
 ```
 
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org/). The current version
+lives in [`mix.exs`](mix.exs) (`version:`), mirrored in `assets/package.json` and
+`hermes_plugin/dran/plugin.yaml`. The Hermes plugin and the agent skills ship with
+the server and are versioned together with it — the skills carry their own
+frontmatter versions, bumped independently as each flow evolves.
+
 ## License
 
-MIT
+Released under the [MIT License](LICENSE) — Copyright (c) 2026 Alvaro Lizama.
+The license covers the whole repository: the Elixir/Phoenix server, the Hermes
+memory plugin (`hermes_plugin/dran/`), and the agent skills (`skills/`).
+Third-party dependencies keep their own licenses; vendored assets
+(`assets/vendor/daisyui`) are subject to their upstream licenses (daisyUI — MIT).
