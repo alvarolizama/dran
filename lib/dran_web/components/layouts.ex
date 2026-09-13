@@ -92,7 +92,7 @@ defmodule DranWeb.Layouts do
               href={~p"/"}
               class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
             >
-              <.icon name="hero-cube-transparent" class="size-5 text-primary" />
+              <img src={~p"/favicon.svg"} class="size-6 shrink-0" alt="" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
             <.workspace_selector
