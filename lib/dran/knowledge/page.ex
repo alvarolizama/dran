@@ -4,20 +4,25 @@ defmodule Dran.Knowledge.Page do
 
   ## Page types
 
-  - `note` — ephemeral thought, quick note, journal entry, meeting, idea
-  - `plan` — a plan with a horizon (weekly, monthly, quarterly, yearly)
+  - `note` — free-form capture (no kind validation; journal, meeting,
+    reminder, decision live on as legacy `meta.kind` values)
+  - `idea` — the open-ended: idea, question, hypothesis, spark
+  - `project` — a named effort with horizon/status meta: project, plan,
+    goal, milestone
+  - `knowledge` — own extracts: quote, summary, highlight, excerpt
+  - `technical` — dev/procedural: code, snippet, debug, recipe, config,
+    command, template, pattern, method
   - `entity` — something concrete (person, company, product, tool, place, event)
-  - `concept` — abstract idea, technique, pattern, discipline, theory
+  - `concept` — abstract idea (free — no kind validation)
   - `reference` — immutable external source (article, paper, video, podcast, book)
-  - `query` — question with answer; semantic relations link it to concepts/entities
-  - `project` — a note kind grouping related pages under a shared initiative
-  - `report` — system-created report (jobs, system output); second-citizen page,
-    see `Dran.PageTypes` for its capabilities
+
+  The registry (`Dran.PageRegistry`) is the single source of truth — this
+  list is descriptive. See `Dran.PageTypes` for capabilities.
 
   ## Meta JSONB
 
   The `meta` field stores type-specific data, validated via `Dran.Knowledge.PageMeta`:
-  - `note`: `%{kind: "journal", date: ~D[2026-06-19]}`
+  - `project`: `%{kind: "plan", horizon: "quarterly", status: "active", due_date: ...}`
   - `reference`: `%{source_url: "https://...", kind: "article"}`
 
 

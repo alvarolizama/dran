@@ -18,14 +18,14 @@
 
 Dran gives your AI agents a place to **know**, **remember** and **prove** — in one system, shared with you:
 
-- **Knowledge** — typed pages (`note`, `entity`, `concept`, `reference`) linked by typed relations: a queryable knowledge graph. You edit it in the browser; agents read and write it over MCP/REST.
+- **Knowledge** — typed pages (`note`, `idea`, `project`, `knowledge`, `technical`, `entity`, `concept`, `reference`) linked by typed relations: a queryable knowledge graph. You edit it in the browser; agents read and write it over MCP/REST.
 - **Memory** — atomic, deduplicated facts with trust scores, shared by every agent. What one agent learns, all recall.
 
 Humans get a wiki. Agents get MCP tools and a REST API. One graph, one attribution model: every write is tied to the API key's actor, server-side.
 
 ## Knowledge
 
-- **4 page types** — `note`, `entity`, `concept`, `reference`; collections and reports are first-class entities in their own tables
+- **8 page types** — `note` (free capture), `idea`, `project`, `knowledge`, `technical`, `entity`, `concept`, `reference`; collections and reports are first-class entities in their own tables
 - **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]` embeds; read-only render by default
 - **12 relation types** — `related`, `part_of`, `supersedes`, `contradicts`, `embeds`… plus machine-owned ones (`semantic`, `mentions`, props-derived) created by the augmenter, not by hand
 - **Props → edges** — `role`, `tier`, `location`, `language`, `framework` auto-materialize into typed edges

@@ -9,8 +9,8 @@ defmodule DranWeb.DocsContent do
 
   Dran uses a split model:
 
-    - **Pages** — the knowledge graph (4 types: note, concept, entity,
-    reference).
+    - **Pages** — the knowledge graph (8 types: note, idea, project,
+    knowledge, technical, entity, concept, reference).
   - **Collections** — saved filter queries (own table, replaces the old
     Smart Collection pattern).
   - **Reports** — system-created logs, lint outputs, worker output (own table).

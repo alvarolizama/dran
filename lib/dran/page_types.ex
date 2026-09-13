@@ -22,7 +22,8 @@ defmodule Dran.PageTypes do
   | `embeddings`  | gets embeddings + semantic relations (`PageAugmenter`)         |
   | `mcp_create`  | can be created through the `dran_create_page` MCP tool         |
 
-  All four types are full citizens (every capability `true`).
+  All eight types are full citizens (every capability `true`); `note` and
+  `concept` are free types (no kind validation).
 
   ## What is NOT a page type
 

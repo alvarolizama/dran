@@ -74,7 +74,7 @@ flowchart LR
 
 | Flow | When to load it |
 | --- | --- |
-| `dran-knowledge-flow` | Create, update, search or rename pages (note, concept, entity, reference…) |
+| `dran-knowledge-flow` | Create, update, search or rename pages (note, idea, project, knowledge, technical, entity, concept, reference…) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (REST) |

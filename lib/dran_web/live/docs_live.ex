@@ -36,8 +36,12 @@ defmodule DranWeb.DocsLive do
   # because it's documentation prose, not structured config.
 
   @page_type_purposes %{
-    "note" => "Ephemeral thoughts, journal, ideas",
-    "concept" => "Abstract ideas, techniques, theories",
+    "note" => "Free-form capture (no kind validation)",
+    "idea" => "Open-ended: ideas, questions, hypotheses, sparks",
+    "project" => "Named efforts: projects, plans, goals, milestones (horizon/status meta)",
+    "knowledge" => "Own extracts: quotes, summaries, highlights, excerpts",
+    "technical" => "Dev/procedural: code, snippets, debug logs, recipes, configs",
+    "concept" => "Abstract ideas (free)",
     "entity" => "Concrete things (people, companies, tools)",
     "reference" => "External sources (articles, papers, videos)"
   }
@@ -455,17 +459,15 @@ defmodule DranWeb.DocsLive do
         label="Planning model (independent links)"
       />
       <p>
-        Dran has no rigid planning hierarchy — every page is an orphan by default and the
-        link slugs are independent: <code>meta.project_slug</code>
-        and <code>meta.plan_slug</code>. There is no precedence between them; each one
-        materializes its own <code>part_of</code>
-        relation when set, and a page may carry
-        0, 1 or both slugs at once. Use <code>dran_list_pages</code>
-        with the <code>project_slug</code>
-        or <code>plan_slug</code>
-        filters
-        (value <code>"none"</code>
-        returns orphans — the GTD inbox).
+        Dran has no rigid planning hierarchy — every page is an orphan by default.
+        Use typed relations (<code>part_of</code>, <code>related</code>) to link
+        pages into projects; the <code>project</code>
+        page type carries <code>horizon</code>
+        and <code>status</code>
+        meta. Use <code>dran_list_pages</code>
+        with the <code>type</code>
+        and <code>kind</code>
+        filters to slice by type or kind.
       </p>
       <.code_block
         id="planning-hierarchy-diagram"
@@ -1323,12 +1325,6 @@ defmodule DranWeb.DocsLive do
             required="no"
             desc="Filter by meta.kind (free-form string)"
           />
-          <:param
-            name="plan_slug"
-            type="string"
-            required="no"
-            desc="Filter by plan slug ('none' for orphans)"
-          />
           <:param name="limit" type="integer" required="no" desc="Max results (default 50, max 500)" />
           <:param
             name="offset"
@@ -1429,7 +1425,7 @@ defmodule DranWeb.DocsLive do
             name="kind"
             type="string"
             required="no"
-            desc="Visual classifier: journal, idea, meeting, question… (filter/group only)"
+            desc="Free-form visual classifier (any string; journal, meeting, reminder common)"
           />
           <:param name="body" type="string" required="no" desc="Note body (markdown)" />
           <:param name="tags" type="array" required="no" desc="Tags (kebab-case)" />

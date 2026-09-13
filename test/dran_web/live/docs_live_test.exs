@@ -53,10 +53,10 @@ defmodule DranWeb.DocsLiveTest do
     # getting-started: default tab — heading present
     assert has_element?(view, "h2", "What is Dran?")
 
-    # concepts: planning hierarchy section (plan_slug appears in the hierarchy docs)
+    # concepts: page types section (the registry types appear in the hierarchy docs)
     view |> element(~s(button[phx-value-tab="concepts"])) |> render_click()
     html = render(view)
-    assert html =~ "plan_slug"
+    assert html =~ "horizon"
 
     # guides: real-time kanban mention
     view |> element(~s(button[phx-value-tab="guides"])) |> render_click()
@@ -87,8 +87,9 @@ defmodule DranWeb.DocsLiveTest do
     view |> element(~s(button[phx-value-tab="concepts"])) |> render_click()
     html = render(view)
 
-    # plan_slug is a stable identifier used in the planning hierarchy docs.
-    assert html =~ "plan_slug"
+    # horizon/status meta on the project type is the stable planning vocabulary.
+    assert html =~ "horizon"
+    assert html =~ "status"
   end
 
   # ── 4. Guides tab — real-time kanban ──

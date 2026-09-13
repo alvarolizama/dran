@@ -12,7 +12,8 @@ metadata:
 
 # dran-knowledge-flow — Create and edit knowledge pages
 
-Pages are the unit of knowledge: `note`, `concept`, `entity`, `reference`.
+Pages are the unit of knowledge: `note`, `idea`, `project`, `knowledge`,
+`technical`, `entity`, `concept`, `reference`.
 This flow owns the write loop: search first,
 then create or update, then verify by readback.
 
@@ -60,8 +61,12 @@ flowchart TD
 
 ## Notes on the calls
 
-- `page_type` enum is exactly 4 (from `Dran.PageRegistry`): `note`,
-  `concept`, `entity`, `reference`.
+- `page_type` enum comes from `Dran.PageRegistry` (8 types): `note`
+  (free-form capture), `idea` (idea/question/hypothesis/spark), `project`
+  (project/plan/goal/milestone — with horizon/status meta), `knowledge`
+  (quote/summary/highlight/excerpt), `technical` (code/snippet/debug/
+  recipe/config/command/template/pattern/method), `entity`, `concept`
+  (free), `reference`.
   `dran_create_note` / `dran_update_note` are title+slug shorthands for
   `note`.
 - Search `strategy` (not `mode`): `auto / fts / fuzzy / semantic / hybrid`.
