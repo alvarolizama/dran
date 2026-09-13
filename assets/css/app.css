@@ -5,6 +5,7 @@
 @import "phoenix-colocated/dran/colocated.css";
 @source "../css";
 @source "../js";
+@source "../../lib/dran";
 @source "../../lib/dran_web";
 /* Required for Tailwind to automatically pick up changes in colocated CSS files in dev */
 @source "../../_build/dev/phoenix-colocated/dran/*/";
