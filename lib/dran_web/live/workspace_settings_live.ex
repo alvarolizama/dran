@@ -866,17 +866,14 @@ defmodule DranWeb.WorkspaceSettingsLive do
     ]
   end
 
-  defp page_type_label("note"), do: gettext("Note")
-  defp page_type_label("concept"), do: gettext("Concept")
-  defp page_type_label("entity"), do: gettext("Entity")
-  defp page_type_label("reference"), do: gettext("Reference")
-  defp page_type_label(other), do: other
+  defp page_type_label(type), do: Dran.PageRegistry.label(type)
 
-  defp page_type_impact("note"), do: gettext("Notes, notes list")
-  defp page_type_impact("concept"), do: gettext("Concepts, concepts list")
-  defp page_type_impact("entity"), do: gettext("Entities, entities list")
-  defp page_type_impact("reference"), do: gettext("References, references list")
-  defp page_type_impact(_), do: ""
+  defp page_type_impact(type) do
+    gettext("%{plural} section and %{path} list",
+      plural: Dran.PageRegistry.plural(type),
+      path: Dran.PageRegistry.path(type)
+    )
+  end
 
   defp feature_label("clusters"), do: gettext("Clusters")
   defp feature_label("graph"), do: gettext("Graph")

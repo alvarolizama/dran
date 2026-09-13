@@ -417,7 +417,7 @@ defmodule DranWeb.AdminWorkspacesLive do
                 class="flex items-center justify-between gap-3 py-2.5 cursor-pointer hover:bg-base-200/50 px-2 rounded-lg transition-colors"
               >
                 <div class="min-w-0">
-                  <p class="text-sm font-medium">{String.capitalize(page_type)}</p>
+                  <p class="text-sm font-medium">{Dran.PageRegistry.label(page_type)}</p>
                   <p
                     :if={pt_ctx && page_type in (pt_ctx.disabled_page_types || [])}
                     class="text-xs text-error"
@@ -507,11 +507,12 @@ defmodule DranWeb.AdminWorkspacesLive do
   end
 
   # Short human-readable hint shown next to each page type toggle.
-  defp page_type_impact("note"), do: gettext("Notes, notes list")
-  defp page_type_impact("concept"), do: gettext("Concepts, concepts list")
-  defp page_type_impact("entity"), do: gettext("Entities, entities list")
-  defp page_type_impact("reference"), do: gettext("References, references list")
-  defp page_type_impact(_), do: ""
+  defp page_type_impact(type) do
+    gettext("%{plural} section and %{path} list",
+      plural: Dran.PageRegistry.plural(type),
+      path: Dran.PageRegistry.path(type)
+    )
+  end
 
   defp save_workspace(nil, attrs), do: Dran.Knowledge.create_workspace(attrs)
 
