@@ -1,59 +1,43 @@
 # Dran Inference API Reference
 
-> **Design doc (historical).** This is the original design reference for the
-> inference server contract. The implemented client consumes only
-> `/v1/embeddings` and `/v1/chat/completions`; model names are NOT read from
-> env vars — they come from the server's `/v1/models` list (saved to
-> Settings, admin UI) and health-checked from there. Reranking, MarkItDown
-> and ASR below are server capabilities, not consumed by Dran today.
-> The operative install reference is `.env.example`.
+Dran consumes an **OpenAI-compatible** local/VPN inference server for two capabilities:
 
-Dran consumes an **OpenAI-compatible** local/VPN inference server for several capabilities used to organize information and data:
+- **Embeddings** — semantic search, dedupe, auto-relations, memory linking.
+- **Chat / text generation** — page summaries, cluster summaries, workers, memory fact extraction.
 
-- **Embeddings** (`Qwen3-Embedding`) for semantic search.
-- **Reranking** (`Qwen3-Reranker`) for better search result ordering.
-- **Document-to-Markdown** (`MarkItDown`) for extracting text from uploaded files.
-- **Chat / text generation** (`Ornith-1.0-9B`) for summaries, tags, agents, and image descriptions.
-- **Audio transcription** (`Qwen3-ASR`) for converting audio files to text.
-
-Connection is configured with two environment variables:
+Connection is configured with two environment variables (see `.env.example`):
 
 ```bash
 DRAN_INFERENCE_API_URL=http://<inference-host>:8000/v1
-DRAN_INFERENCE_API_KEY=<your-...n
-> Never commit the real hostname or key. Leave them in `.env`.
-
-## Capabilities
-
-| Capability | HTTP endpoint | Typical model |
-| ---------- | -------------- | --------------- |
-| Embeddings | `POST /v1/embeddings` | `Qwen3-Embedding` |
-| Reranking | `POST /v1/rerank` | `Qwen3-Reranker` |
-| Document → Markdown | `POST /v1/chat/completions` with file part | `MarkItDown` |
-| Chat / text generation | `POST /v1/chat/completions` | `Ornith-1.0-9B` |
-| Audio transcription | `POST /v1/audio/transcriptions` | `Qwen3-ASR` |
-| Image description | `POST /v1/chat/completions` with image part | `Ornith-1.0-9B` |
-
-You can list available models with:
-
-```bash
-curl -sS http://<inference-host>:8000/v1/models \
-  -H "Authorization: Bearer $DRAN_...onse shape:
-
-```json
-{
-  "object": "list",
-  "data": [
-    {"id": "Qwen3-Embedding", "object": "model", "owned_by": "omlx"},
-    {"id": "Qwen3-Reranker", "object": "model", "owned_by": "omlx"},
-    {"id": "MarkItDown", "object": "model", "owned_by": "omlx"},
-    {"id": "Qwen3.5-9B", "object": "model", "owned_by": "omlx"},
-    {"id": "Qwen3-ASR", "object": "model", "owned_by": "omlx"}
-  ]
-}
+DRAN_INFERENCE_API_KEY=<your-key>
 ```
 
-> Model names can change between restarts. Dran should read the configured model names from env vars and verify them at boot time.
+Optional: `DRAN_INFERENCE_TIMEOUT` (ms, default 30000), `DRAN_EMBEDDING_BODY_LIMIT` (chars, default 10000).
+
+> Never commit the real hostname or key. Leave them in `.env`.
+
+## Model selection
+
+Model names are **not** environment variables. Dran reads the server's model
+list, stores it in Settings (admin UI → Models), and health-checks from there:
+
+```
+GET /v1/models  →  saved to Settings (model_embedding, model_chat)
+```
+
+Typical models on the reference server: `Qwen3-Embedding`, `Qwen3.5-9B`.
+Model IDs can change between server restarts — re-sync from the admin Models
+page when they do.
+
+Without `DRAN_INFERENCE_API_URL`, Dran runs degraded: no semantic search,
+embeddings, summaries, or workers — everything else works.
+
+## Endpoints consumed
+
+| Capability | Endpoint |
+| --- | --- |
+| Embeddings | `POST /v1/embeddings` |
+| Chat / text generation | `POST /v1/chat/completions` |
 
 ## Embeddings
 
@@ -81,83 +65,28 @@ curl -sS http://<inference-host>:8000/v1/models \
     }
   ],
   "model": "Qwen3-Embedding",
-  "usage": {
-    "prompt_tokens": 4,
-    "total_tokens": 4
-  }
+  "usage": {"prompt_tokens": 4, "total_tokens": 4}
 }
 ```
 
-### Notes for Dran
+### How Dran uses it
 
-- Generate one embedding per page from a concatenation of `slug`, `title`, `summary`, and `body`.
-- Store the vector in a `pgvector` column on `pages`.
-- Use cosine distance (`embedding <=> query_vector`) for semantic search.
-- Cache an `embedding_hash` of the indexed text so Dran only re-computes when the page actually changes.
-- Do **not** generate embeddings synchronously in the HTTP request — use `Task.Supervisor` for the MVP and migrate to Oban in production.
+- One embedding per page from `slug` + `title` + `summary` + `body`; stored
+  in a `pgvector` column; cosine distance (`<=>`) for semantic search.
+- An `embedding_hash` skips re-computation when the page did not change.
+- Memories embed at ingest (same vector powers dedupe + `informs`/`semantic`
+  relation derivation — no extra inference calls).
 
-## Reranking
+## Chat / text generation
 
-`POST /v1/rerank`
-
-The reranker takes a query and a list of candidate texts and returns relevance scores. It improves the final ordering of FTS/vector hits before they are shown to the user.
-
-### Expected request shape
-
-```json
-{
-  "model": "Qwen3-Reranker",
-  "query": "how does pattern matching work in Elixir",
-  "documents": [
-    "Page one text...",
-    "Page two text..."
-  ]
-}
-```
-
-### Expected response shape
-
-```json
-{
-  "results": [
-    {"index": 1, "relevance_score": 0.92},
-    {"index": 0, "relevance_score": 0.34}
-  ]
-}
-```
-
-> Verify the exact field names against your server before shipping. Some rerankers return `data` with `score` or `relevance_score`.
-
-### Notes for Dran
-
-- Use for hybrid search: search FTS + vector, fuse with RRF, then rerank top-K.
-- Limit input to small snippets (title + first ~500 chars of body). Dran controls the chunking.
-
-## Document → Markdown (MarkItDown)
-
-`MarkItDown` is consumed through `/v1/chat/completions`, not its own endpoint. Send the file bytes as a content part.
+`POST /v1/chat/completions`
 
 ### Request
 
 ```json
 {
-  "model": "MarkItDown",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {"type": "text", "text": "Convert this file to Markdown."},
-        {
-          "type": "file",
-          "file": {
-            "filename": "notes.pdf",
-            "file_data": "<base64-encoded file bytes>",
-            "content_type": "application/pdf"
-          }
-        }
-      ]
-    }
-  ]
+  "model": "Qwen3.5-9B",
+  "messages": [{"role": "user", "content": "..."}]
 }
 ```
 
@@ -166,38 +95,15 @@ The reranker takes a query and a list of candidate texts and returns relevance s
 ```json
 {
   "choices": [
-    {
-      "message": {
-        "role": "assistant",
-        "content": "# Notes\n\nConverted markdown..."
-      }
-    }
+    {"message": {"role": "assistant", "content": "..."}}
   ]
 }
 ```
 
-> MarkItDown must be tested with a real file before shipping. Do not assume every model labelled for document conversion follows this exact payload shape.
+### How Dran uses it
 
-### Notes for Dran
-
-- Hook this into the ingest pipeline after a file is downloaded.
-- Convert PDF, DOCX, PPTX and TXT uploaded via `ingest_url` or the editor.
-- **MarkItDown does NOT accept URLs** — the content part requires base64-encoded file bytes in `file.file_data`. To ingest a URL that returns HTML, Dran must download the page first and pass the raw bytes (or use a chat-completion fallback to convert/clean HTML to markdown).
-- Sanitize the resulting markdown before storing it in the page body.
-- Keep the original file as an `artifact`/`reference` and store the extracted markdown in a `note` or `artifact` page.
-
-## Configuration shape for Dran
-
-```elixir
-config :dran, :inference,
-  base_url: System.fetch_env!("DRAN_INFERENCE_API_URL"),
-  api_key: System.fetch_env!("DRAN_INFERENCE_API_KEY"),
-  embedding_model: System.get_env("DRAN_INFERENCE_EMBEDDING_MODEL", "Qwen3-Embedding"),
-  rerank_model: System.get_env("DRAN_INFERENCE_RERANK_MODEL", "Qwen3-Reranker"),
-  markitdown_model: System.get_env("DRAN_INFERENCE_MARKITDOWN_MODEL", "MarkItDown"),
-  chat_model: System.get_env("DRAN_INFERENCE_CHAT_MODEL", "Ornith-1.0-9B"),
-  asr_model: System.get_env("DRAN_INFERENCE_ASR_MODEL", "Qwen3-ASR"),
-  vision_model: System.get_env("DRAN_INFERENCE_VISION_MODEL", "Ornith-1.0-9B")
-```
-
-This keeps model names configurable without code changes when the server restarts with different IDs.
+- **Page summaries** — one-line machine-owned summary per page (nightly backfill).
+- **Cluster summaries** — LLM summary per graph cluster.
+- **Workers** — curator, link_gardener, graph_rag reasoning steps.
+- **Memory fact extraction** — session transcripts are distilled server-side
+  into atomic facts at `/api/memory/ingest`; the transcript is never persisted.
