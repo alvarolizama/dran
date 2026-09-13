@@ -35,6 +35,15 @@ dran-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Screenshot tooling deps (reinstall with: cd scripts/screenshot && npm install)
+/scripts/screenshot/node_modules/
+
+# phx.digest output — regenerated at deploy time. Keep the source files only.
+/priv/static/**/*.gz
+/priv/static/favicon-*.svg
+/priv/static/favicon-*.ico
+/priv/static/images/logo-*.svg
+
 # Ignore uploaded files (user-generated content).
 /priv/static/uploads/
 
