@@ -3,7 +3,7 @@ defmodule Dran.Repo.Migrations.CreatePlansSteps do
 
   @moduledoc """
   Plans and steps as first-class definition entities (plans/steps/tasks model,
-  wave A — see .spike/plans-steps-tasks-design.md).
+  wave A).
 
   * `plans` — the CÓMO: an ordered set of steps + `depends_on` edges between
     them, served to goals via `serves` relations. Definition only: no status,

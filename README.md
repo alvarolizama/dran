@@ -115,11 +115,13 @@ is tied to the API key's actor, server-side.
 **MCP** — `POST /api/mcp`, Streamable HTTP (spec 2025-03-26): **18 tools** for pages,
 search, workers and lint; resources (`page://`, `home://`), and the `brainstorm` prompt.
 Write tools require a `write_access` key — enforced by a permission-matrix test
-(`test/dran/mcp_tool_audit_test.exs`).
+(`test/dran/mcp_tool_audit_test.exs`). Full tool/resource/prompt reference:
+[docs/mcp.md](docs/mcp.md).
 
 **REST** — token-protected `/api/*` (kebab-case): read routes always allowed; writes
 (pages, relations, memory) require `write_access: true`. Attribution (`owner`/`created_by`)
-is injected server-side from the key's actor — never client-settable.
+is injected server-side from the key's actor — never client-settable. Full endpoint
+reference: [docs/api.md](docs/api.md).
 
 ## Security
 
