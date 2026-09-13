@@ -547,7 +547,7 @@ defmodule DranWeb.HomeLive do
 
   defp context_home_view(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto px-6 py-8 space-y-10">
+    <div class="px-6 py-8 space-y-10">
       <%!-- Context header --%>
       <div>
         <h1 class="text-3xl font-bold tracking-tight">{@workspace.name}</h1>
@@ -642,8 +642,8 @@ defmodule DranWeb.HomeLive do
         </div>
       </div>
 
-      <%!-- Secondary options — centered row below the index --%>
-      <div class="pt-2 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-1">
+      <%!-- Secondary options — row below the index (no inter-item gap) --%>
+      <div class="pt-2 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-0">
         <.footer_link
           href={~p"/#{@workspace.slug}/activity"}
           icon="hero-signal"
@@ -673,7 +673,7 @@ defmodule DranWeb.HomeLive do
     <a
       href={@href}
       class={[
-        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
         @active && "bg-primary/10 text-primary",
         !@active && "text-base-content/60 hover:text-base-content hover:bg-base-200"
       ]}

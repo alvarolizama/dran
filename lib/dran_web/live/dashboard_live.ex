@@ -111,12 +111,12 @@ defmodule DranWeb.DashboardLive do
         </div>
 
         <%!-- Secondary options — centered row below the workspace list --%>
-        <div class="pt-4 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-1">
+        <div class="pt-4 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-0">
           <.footer_link href={~p"/settings/account"} icon="hero-user" label={gettext("Account")} />
           <.footer_link
             :if={@is_owner}
             href={~p"/admin"}
-            icon="hero-command-line"
+            icon="hero-shield-check"
             label={gettext("Admin")}
           />
           <form id="logout-form" action={~p"/session"} method="post">
@@ -124,7 +124,7 @@ defmodule DranWeb.DashboardLive do
             <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
             <button
               type="submit"
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+              class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
               title={gettext("Logout")}
             >
               <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
@@ -374,7 +374,7 @@ defmodule DranWeb.DashboardLive do
     ~H"""
     <a
       href={@href}
-      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+      class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
     >
       <.icon name={@icon} class="size-4" />
       {@label}

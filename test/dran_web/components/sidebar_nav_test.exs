@@ -152,7 +152,7 @@ defmodule DranWeb.SidebarNavTest do
       assert html =~ ~s(href="/settings/account")
       refute html =~ ~s(href="/docs")
       assert html =~ "hero-squares-2x2"
-      assert html =~ "hero-command-line"
+      assert html =~ "hero-shield-check"
       assert html =~ "hero-user"
       refute html =~ "hero-book-open"
     end
@@ -199,19 +199,19 @@ defmodule DranWeb.SidebarNavTest do
       assert html =~ ~s(href="/")
     end
 
-    test "workspace icon left, other icons right with divider between" do
+    test "footer icons centered in one row with divider between groups" do
       html =
         render_component(&Layouts.sidebar_footer_icons/1, %{
           is_owner: true,
           workspace_slug: "personal"
         })
 
-      # Workspace (cog) icon anchors the left…
-      assert html =~ ~s(href="/personal/settings")
-      # …a vertical divider follows it…
+      # The whole row is centered and the items sit flush (no inter-item gap).
+      assert html =~ "justify-center"
+      assert html =~ "gap-0"
+      # A vertical divider separates the global icons from the workspace ones.
       assert html =~ "w-px"
-      # …and the remaining icons sit in a right-aligned group.
-      assert html =~ "ml-auto"
+      refute html =~ "ml-auto"
       assert html =~ ~s(href="/")
       assert html =~ ~s(href="/personal/activity")
       assert html =~ ~s(href="/admin")

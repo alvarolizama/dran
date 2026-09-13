@@ -436,8 +436,8 @@ defmodule DranWeb.Layouts do
     assigns = assign(assigns, :can_config, can_config)
 
     ~H"""
-    <div class="mt-auto flex items-center gap-3 pt-2 border-t border-base-300">
-      <div class="flex items-center gap-1">
+    <div class="mt-auto flex items-center justify-center gap-0 pt-2 border-t border-base-300">
+      <div class="flex items-center gap-0">
         <a
           href={~p"/"}
           class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
@@ -458,16 +458,16 @@ defmodule DranWeb.Layouts do
           class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
           title={gettext("Admin")}
         >
-          <.icon name="hero-command-line" class="size-4" />
+          <.icon name="hero-shield-check" class="size-4" />
         </a>
       </div>
       <div
         :if={@workspace_slug}
-        class="ml-auto self-stretch my-1.5 w-px bg-base-300"
+        class="self-stretch my-1.5 mx-1 w-px bg-base-300"
         aria-hidden="true"
       >
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-0">
         <a
           :if={@workspace_slug}
           href={~p"/#{@workspace_slug}/activity"}
