@@ -210,13 +210,26 @@ defmodule Dran.PageRegistry do
   end
 
   @doc """
-  Node color per page type (graph views), plus the non-page `\"memory\"`
-  pseudo-type. Derived from `@registry` — a type without an explicit color
-  falls back to slate.
+  Node color per page type (graph views), plus the non-page `"memory"`
+  pseudo-type. Map form — for lookups.
   """
   def type_colors do
-    Map.new(@registry, fn {type, %{ui: %{color: c}}} -> {type, c} end)
-    |> Map.put("memory", "#A78BFA")
+    Map.new(ordered_type_colors())
+  end
+
+  @doc """
+  Same colors as `type_colors/0` but as an ordered keyword list: registry
+  canonical order with `"memory"` last — graph legends use this so their
+  order matches the sidebar.
+  """
+  def ordered_type_colors do
+    colors =
+      for type <- @types,
+          %{ui: %{color: c}} <- [Map.get(@registry, type, %{})] do
+        {type, c}
+      end
+
+    colors ++ [{"memory", "#A78BFA"}]
   end
 
   @doc "Node color for a single type (or nil for unknown types)."

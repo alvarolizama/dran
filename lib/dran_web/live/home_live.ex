@@ -365,7 +365,7 @@ defmodule DranWeb.HomeLive do
   end
 
   defp sidebar_type_colors do
-    GraphHelpers.type_colors()
+    Dran.PageRegistry.ordered_type_colors()
     |> Enum.reject(fn {type, _color} -> type in @graph_hidden_types end)
   end
 
