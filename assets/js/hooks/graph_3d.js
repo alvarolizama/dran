@@ -470,14 +470,15 @@ const Graph3D = {
     }
 
     // Determine the page path from the slug + type. Routes are
-    // /:workspace_slug/:type_path/:slug with a PLURAL type segment, so
-    // pluralize first ("note" → "notes", "goal" → "goals").
-    const typePlurals = {
-      note: "notes", concept: "concepts", entity: "entities",
-      reference: "references", project: "projects", goal: "goals",
-      plan: "plans", todo: "todos", query: "queries"
+    // /:workspace_slug/:type_path/:slug where type_path is the registry
+    // path (usually the plural). The fallback `${type}s` covers future
+    // types; unknown ones default to notes.
+    const typePaths = {
+      note: "notes", idea: "ideas", project: "projects",
+      knowledge: "knowledge", technical: "technical",
+      concept: "concepts", entity: "entities", reference: "references"
     }
-    const typePath = typePlurals[node.type] || (node.type ? `${node.type}s` : "notes")
+    const typePath = typePaths[node.type] || (node.type ? `${node.type}s` : "notes")
     const href = this.basePath
       ? `${this.basePath}/${typePath}/${node.slug}`
       : `/${typePath}/${node.slug}`

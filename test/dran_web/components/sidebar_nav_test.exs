@@ -86,16 +86,21 @@ defmodule DranWeb.SidebarNavTest do
 
       assert group_labels(html) == [
                t("Knowledge base"),
-               t("Memory"),
-               "Insights"
+               t("Memory")
              ]
 
       [first_summary | _rest] = summary_positions(html)
 
       home_pos = pos(html, ~s(href="/personal"))
-      assert home_pos < first_summary
+      graph_pos = pos(html, ~s(href="/personal/graph"))
+      journey_pos = pos(html, ~s(href="/personal/journey"))
       refute html =~ ~s(href="/personal/goals")
       refute html =~ ~s(href="/personal/workflows")
+
+      # Inicio → Grafo → Journey, todos antes del primer grupo
+      assert home_pos < graph_pos
+      assert graph_pos < journey_pos
+      assert journey_pos < first_summary
     end
 
     test "Clusters sits below Referencias inside Knowledge base" do

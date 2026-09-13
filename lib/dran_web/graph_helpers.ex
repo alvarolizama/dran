@@ -9,13 +9,7 @@ defmodule DranWeb.GraphHelpers do
   alias Dran.Knowledge.Page
   import Ecto.Query
 
-  @type_colors %{
-    "note" => "#60A5FA",
-    "entity" => "#FB7185",
-    "concept" => "#FBBF24",
-    "reference" => "#60A5FA",
-    "memory" => "#A78BFA"
-  }
+  @type_colors Dran.PageRegistry.type_colors()
 
   @edge_colors %{
     "related" => "#94A3B8",

@@ -54,42 +54,90 @@ defmodule Dran.PageRegistry do
     "note" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: nil,
-      ui: %{path: "notes", label: "Note", icon: "hero-document-text", plural: "Notes"}
+      ui: %{
+        path: "notes",
+        label: "Note",
+        icon: "hero-document-text",
+        color: "#60A5FA",
+        plural: "Notes"
+      }
     },
     "idea" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: ~w(idea question hypothesis spark),
-      ui: %{path: "ideas", label: "Idea", icon: "hero-light-bulb", plural: "Ideas"}
+      ui: %{
+        path: "ideas",
+        label: "Idea",
+        icon: "hero-light-bulb",
+        color: "#F472B6",
+        plural: "Ideas"
+      }
     },
     "project" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: ~w(project plan goal milestone),
-      ui: %{path: "projects", label: "Project", icon: "hero-rocket-launch", plural: "Projects"}
+      ui: %{
+        path: "projects",
+        label: "Project",
+        icon: "hero-rocket-launch",
+        color: "#34D399",
+        plural: "Projects"
+      }
     },
     "knowledge" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: ~w(quote summary highlight excerpt),
-      ui: %{path: "knowledge", label: "Knowledge", icon: "hero-book-open", plural: "Knowledge"}
+      ui: %{
+        path: "knowledge",
+        label: "Knowledge",
+        icon: "hero-book-open",
+        color: "#FBBF24",
+        plural: "Knowledge"
+      }
     },
     "technical" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: ~w(code snippet debug recipe config command template pattern method),
-      ui: %{path: "technical", label: "Technical", icon: "hero-code-bracket", plural: "Technical"}
+      ui: %{
+        path: "technical",
+        label: "Technical",
+        icon: "hero-code-bracket",
+        color: "#22D3EE",
+        plural: "Technical"
+      }
     },
     "entity" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: ~w(person company product tool place event language framework hardware protocol),
-      ui: %{path: "entities", label: "Entity", icon: "hero-user", plural: "Entities"}
+      ui: %{
+        path: "entities",
+        label: "Entity",
+        icon: "hero-user",
+        color: "#FB7185",
+        plural: "Entities"
+      }
     },
     "concept" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: nil,
-      ui: %{path: "concepts", label: "Concept", icon: "hero-light-bulb", plural: "Concepts"}
+      ui: %{
+        path: "concepts",
+        label: "Concept",
+        icon: "hero-light-bulb",
+        color: "#F59E0B",
+        plural: "Concepts"
+      }
     },
     "reference" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
       kinds: ~w(article paper video podcast book newsletter spec code release website repo api),
-      ui: %{path: "references", label: "Reference", icon: "hero-bookmark", plural: "References"}
+      ui: %{
+        path: "references",
+        label: "Reference",
+        icon: "hero-bookmark",
+        color: "#A3E635",
+        plural: "References"
+      }
     }
   }
 
@@ -153,13 +201,26 @@ defmodule Dran.PageRegistry do
 
   # ── UI accessors ───────────────────────────────────────────────────
 
-  @doc "UI attrs for a type (%{path, label, icon, plural}), or nil."
+  @doc "UI attrs for a type (%{path, label, icon, color, plural}), or nil."
   def ui(type) do
     case Map.get(@registry, type) do
       %{ui: ui} -> ui
       _ -> nil
     end
   end
+
+  @doc """
+  Node color per page type (graph views), plus the non-page `\"memory\"`
+  pseudo-type. Derived from `@registry` — a type without an explicit color
+  falls back to slate.
+  """
+  def type_colors do
+    Map.new(@registry, fn {type, %{ui: %{color: c}}} -> {type, c} end)
+    |> Map.put("memory", "#A78BFA")
+  end
+
+  @doc "Node color for a single type (or nil for unknown types)."
+  def type_color(type), do: Map.get(type_colors(), type)
 
   @doc "URL path segment for a type (e.g. \"notes\")."
   def path(type) when is_binary(type) do

@@ -504,8 +504,9 @@ defmodule DranWeb.SearchLive do
   defp type_chip_bg("entity"), do: "bg-accent/10"
   defp type_chip_bg("project"), do: "bg-primary/10"
   defp type_chip_bg("reference"), do: "bg-success/10"
-  defp type_chip_bg("plan"), do: "bg-secondary/10"
-  defp type_chip_bg("todo"), do: "bg-success/10"
+  defp type_chip_bg("idea"), do: "bg-secondary/10"
+  defp type_chip_bg("knowledge"), do: "bg-warning/10"
+  defp type_chip_bg("technical"), do: "bg-accent/10"
   defp type_chip_bg(_), do: "bg-base-content/10"
 
   defp type_icon_color("note"), do: "text-info"
@@ -513,8 +514,9 @@ defmodule DranWeb.SearchLive do
   defp type_icon_color("entity"), do: "text-accent"
   defp type_icon_color("project"), do: "text-primary"
   defp type_icon_color("reference"), do: "text-success"
-  defp type_icon_color("plan"), do: "text-secondary"
-  defp type_icon_color("todo"), do: "text-success"
+  defp type_icon_color("idea"), do: "text-secondary"
+  defp type_icon_color("knowledge"), do: "text-warning"
+  defp type_icon_color("technical"), do: "text-accent"
   defp type_icon_color(_), do: "text-base-content/60"
 
   # Colored type badge shown on the right side of each card title.
@@ -523,8 +525,9 @@ defmodule DranWeb.SearchLive do
   defp type_badge("entity"), do: "bg-accent/15 text-accent"
   defp type_badge("project"), do: "bg-primary/15 text-primary"
   defp type_badge("reference"), do: "bg-success/15 text-success"
-  defp type_badge("plan"), do: "bg-secondary/15 text-secondary"
-  defp type_badge("todo"), do: "bg-success/15 text-success"
+  defp type_badge("idea"), do: "bg-secondary/15 text-secondary"
+  defp type_badge("knowledge"), do: "bg-warning/15 text-warning"
+  defp type_badge("technical"), do: "bg-accent/15 text-accent"
   defp type_badge(_), do: "bg-base-200 text-base-content/60"
 
   # Example queries shown as clickable chips in the empty hero. Each tuple is

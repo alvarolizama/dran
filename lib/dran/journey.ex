@@ -133,14 +133,39 @@ defmodule Dran.Journey do
   Returns a map of %{type => "#RRGGBB"}.
   """
   def type_colors do
-    # Pre-computed colors with golden-angle hue spacing (137.508°)
-    # Ensures distinct colors for every page type shown in the journey
-    %{
-      "note" => "#D36969",
-      "concept" => "#D3A369",
-      "entity" => "#C4D369",
-      "reference" => "#69D38A"
-    }
+    # Golden-angle hue spacing (137.508°) over the registry types —
+    # ensures distinct colors for every page type shown in the journey.
+    Dran.PageRegistry.types()
+    |> Enum.with_index()
+    |> Map.new(fn {type, i} ->
+      hue = rem(round(i * 137.508), 360)
+      {type, hsl_to_hex(hue, 55, 62)}
+    end)
+  end
+
+  # HSL → hex (h = 0..360, s/l = 0..100)
+  defp hsl_to_hex(h, s, l) do
+    s = s / 100
+    l = l / 100
+    c = (1 - abs(2 * l - 1)) * s
+    hp = h / 60
+    x = c * (1 - abs(rem(h, 60) / 60 * 2 - 1))
+    m = l - c / 2
+
+    {r, g, b} =
+      cond do
+        hp < 1 -> {c, x, 0.0}
+        hp < 2 -> {x, c, 0.0}
+        hp < 3 -> {0.0, c, x}
+        hp < 4 -> {0.0, x, c}
+        hp < 5 -> {x, 0.0, c}
+        true -> {c, 0.0, x}
+      end
+
+    [r, g, b]
+    |> Enum.map(fn v -> ((v + m) * 255) |> max(0) |> min(255) |> round() end)
+    |> Enum.map_join("", &(Integer.to_string(&1, 16) |> String.pad_leading(2, "0")))
+    |> then(&"##{&1}")
   end
 
   # Convert DateTime/NaiveDateTime (assumed UTC) to unix timestamp

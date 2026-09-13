@@ -344,23 +344,10 @@ defmodule DranWeb.Layouts do
       |> Enum.reject(&(!&1))
 
     # Sin etiqueta (siempre visibles, sin <details> colapsable):
-    # Inicio directo arriba.
-    home_items = [
-      %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base}
-    ]
-
-    memory_items = [
-      %{
-        key: "memory",
-        label: gettext("Memory"),
-        icon: "hero-cpu-chip",
-        path: base <> "/memory",
-        badge: counts[:memory] || 0
-      }
-    ]
-
-    view_items =
+    # Inicio arriba, Grafo y Journey directo debajo.
+    home_items =
       [
+        %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
         enabled?.("graph") &&
           %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
         enabled?.("journey") &&
@@ -373,11 +360,20 @@ defmodule DranWeb.Layouts do
       ]
       |> Enum.reject(&(!&1))
 
+    memory_items = [
+      %{
+        key: "memory",
+        label: gettext("Memory"),
+        icon: "hero-cpu-chip",
+        path: base <> "/memory",
+        badge: counts[:memory] || 0
+      }
+    ]
+
     [
       %{label: nil, items: home_items},
       %{label: gettext("Knowledge base"), items: page_type_items},
-      %{label: gettext("Memory"), items: memory_items},
-      %{label: "Insights", items: view_items}
+      %{label: gettext("Memory"), items: memory_items}
     ]
   end
 
