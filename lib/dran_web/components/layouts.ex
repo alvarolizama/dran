@@ -41,6 +41,10 @@ defmodule DranWeb.Layouts do
     default: nil,
     doc: "the email of the admin who is impersonating the current user"
 
+  attr :sidebar, :boolean,
+    default: true,
+    doc: "when false, hides the sidebar entirely (e.g. the / workspace launcher)"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -85,7 +89,10 @@ defmodule DranWeb.Layouts do
 
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
-      <aside class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col">
+      <aside
+        :if={@sidebar}
+        class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col"
+      >
         <div class="p-4 border-b border-base-300">
           <div class="flex items-center gap-2">
             <a
@@ -143,8 +150,13 @@ defmodule DranWeb.Layouts do
         </div>
       </aside>
 
-      <div class="flex-1 overflow-y-auto flex flex-col w-full">
-        {render_slot(@inner_block)}
+      <div class={[
+        "flex-1 overflow-y-auto flex flex-col w-full",
+        !@sidebar && "items-center"
+      ]}>
+        <div class={if @sidebar, do: "contents", else: "w-full max-w-3xl px-6 pt-6 pb-16"}>
+          {render_slot(@inner_block)}
+        </div>
       </div>
 
       <.live_component

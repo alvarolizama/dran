@@ -399,6 +399,9 @@ defmodule DranWeb.HomeLive do
               pinned_pages={@pinned_pages}
               type_index={@type_index}
               alphabet={@alphabet}
+              workspace_role={@workspace_role}
+              is_owner={@is_owner}
+              active_nav={@active_nav}
             />
           <% :type_list -> %>
             <.type_list_view
@@ -533,9 +536,18 @@ defmodule DranWeb.HomeLive do
     """
   end
 
+  attr :workspace, :map, required: true
+  attr :collections, :list, default: []
+  attr :pinned_pages, :list, default: []
+  attr :type_index, :list, default: []
+  attr :alphabet, :list, default: []
+  attr :workspace_role, :string, default: nil
+  attr :is_owner, :boolean, default: false
+  attr :active_nav, :string, default: nil
+
   defp context_home_view(assigns) do
     ~H"""
-    <div class="px-6 py-8 space-y-10">
+    <div class="max-w-4xl mx-auto px-6 py-8 space-y-10">
       <%!-- Context header --%>
       <div>
         <h1 class="text-3xl font-bold tracking-tight">{@workspace.name}</h1>
@@ -629,7 +641,46 @@ defmodule DranWeb.HomeLive do
           </.link>
         </div>
       </div>
+
+      <%!-- Secondary options — centered row below the index --%>
+      <div class="pt-2 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-1">
+        <.footer_link
+          href={~p"/#{@workspace.slug}/activity"}
+          icon="hero-signal"
+          label={gettext("Activity")}
+          active={@active_nav == "activity"}
+        />
+        <.footer_link
+          :if={@is_owner or @workspace_role in ~w(owner admin)}
+          href={~p"/#{@workspace.slug}/settings"}
+          icon="hero-cog-6-tooth"
+          label={gettext("Settings")}
+          active={@active_nav == "workspace_settings"}
+        />
+        <.footer_link href={~p"/"} icon="hero-squares-2x2" label={gettext("Workspaces")} />
+      </div>
     </div>
+    """
+  end
+
+  attr :href, :string, required: true
+  attr :icon, :string, required: true
+  attr :label, :string, required: true
+  attr :active, :boolean, default: false
+
+  defp footer_link(assigns) do
+    ~H"""
+    <a
+      href={@href}
+      class={[
+        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        @active && "bg-primary/10 text-primary",
+        !@active && "text-base-content/60 hover:text-base-content hover:bg-base-200"
+      ]}
+    >
+      <.icon name={@icon} class="size-4" />
+      {@label}
+    </a>
     """
   end
 

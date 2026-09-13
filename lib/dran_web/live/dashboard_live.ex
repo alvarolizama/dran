@@ -31,18 +31,63 @@ defmodule DranWeb.DashboardLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
+      sidebar={false}
     >
-      <div class="flex-1 overflow-y-auto">
-        <div class="w-full p-6 space-y-8">
-          <div class="flex items-center justify-between gap-4">
+      <div class="w-full space-y-8">
+        <div class="flex items-center gap-2 pt-2">
+          <img src={~p"/favicon.svg"} class="size-6 shrink-0" alt="" />
+          <span class="text-lg font-bold tracking-tight">Dran</span>
+        </div>
+
+        <div class="flex items-center justify-between gap-4">
+          <div class="space-y-1">
+            <h1 class="text-title">{greeting()}</h1>
+            <p class="text-caption">
+              {format_today()} · {ngettext(
+                "%{count} workspace",
+                "%{count} workspaces",
+                @instance.total_workspaces
+              )} · {ngettext("%{count} page", "%{count} pages", @instance.total_pages)}
+            </p>
+          </div>
+          <button
+            :if={@can_create_workspace}
+            phx-click="open_context_modal"
+            class="btn btn-primary btn-sm gap-1.5 transition-colors active:scale-95"
+          >
+            <.icon name="hero-plus" class="size-4" />
+            {gettext("New workspace")}
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <h2 class="text-heading">
+            {if @can_create_workspace, do: gettext("Workspaces"), else: gettext("Your workspaces")}
+          </h2>
+
+          <div
+            :if={@workspaces == []}
+            class="surface-2 p-12 rounded-2xl flex flex-col items-center gap-4 text-center"
+          >
+            <div class="size-14 rounded-full bg-base-200 flex items-center justify-center">
+              <.icon
+                name={if @can_create_workspace, do: "hero-squares-2x2", else: "hero-lock-closed"}
+                class="size-7 text-base-content/40"
+              />
+            </div>
             <div class="space-y-1">
-              <h1 class="text-title">{greeting()}</h1>
-              <p class="text-caption">
-                {format_today()} · {ngettext(
-                  "%{count} workspace",
-                  "%{count} workspaces",
-                  @instance.total_workspaces
-                )} · {ngettext("%{count} page", "%{count} pages", @instance.total_pages)}
+              <div class="font-semibold">
+                {if @can_create_workspace,
+                  do: gettext("No workspaces yet"),
+                  else: gettext("No workspaces assigned")}
+              </div>
+              <p class="text-caption max-w-md">
+                {if @can_create_workspace,
+                  do: gettext("Create the first workspace to start building your second brain."),
+                  else:
+                    gettext(
+                      "Ask the instance owner to add you to a workspace, or browse public workspaces from the Wiki."
+                    )}
               </p>
             </div>
             <button
@@ -55,55 +100,37 @@ defmodule DranWeb.DashboardLive do
             </button>
           </div>
 
-          <div class="space-y-4">
-            <h2 class="text-heading">
-              {if @can_create_workspace, do: gettext("Workspaces"), else: gettext("Your workspaces")}
-            </h2>
-
-            <div
-              :if={@workspaces == []}
-              class="surface-2 p-12 rounded-2xl flex flex-col items-center gap-4 text-center"
-            >
-              <div class="size-14 rounded-full bg-base-200 flex items-center justify-center">
-                <.icon
-                  name={if @can_create_workspace, do: "hero-squares-2x2", else: "hero-lock-closed"}
-                  class="size-7 text-base-content/40"
-                />
-              </div>
-              <div class="space-y-1">
-                <div class="font-semibold">
-                  {if @can_create_workspace,
-                    do: gettext("No workspaces yet"),
-                    else: gettext("No workspaces assigned")}
-                </div>
-                <p class="text-caption max-w-md">
-                  {if @can_create_workspace,
-                    do: gettext("Create the first workspace to start building your second brain."),
-                    else:
-                      gettext(
-                        "Ask the instance owner to add you to a workspace, or browse public workspaces from the Wiki."
-                      )}
-                </p>
-              </div>
-              <button
-                :if={@can_create_workspace}
-                phx-click="open_context_modal"
-                class="btn btn-primary btn-sm gap-1.5 transition-colors active:scale-95"
-              >
-                <.icon name="hero-plus" class="size-4" />
-                {gettext("New workspace")}
-              </button>
-            </div>
-
-            <div :if={@workspaces != []} class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <.workspace_card
-                :for={ws <- @workspaces}
-                ws={ws}
-                metrics={Map.get(@workspace_metrics, ws.id, %{pages: 0, last_updated: nil})}
-                can_manage={@can_create_workspace or Map.get(ws, :role) in ~w(owner admin)}
-              />
-            </div>
+          <div :if={@workspaces != []} class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <.workspace_card
+              :for={ws <- @workspaces}
+              ws={ws}
+              metrics={Map.get(@workspace_metrics, ws.id, %{pages: 0, last_updated: nil})}
+              can_manage={@can_create_workspace or Map.get(ws, :role) in ~w(owner admin)}
+            />
           </div>
+        </div>
+
+        <%!-- Secondary options — centered row below the workspace list --%>
+        <div class="pt-4 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-1">
+          <.footer_link href={~p"/settings/account"} icon="hero-user" label={gettext("Account")} />
+          <.footer_link
+            :if={@is_owner}
+            href={~p"/admin"}
+            icon="hero-command-line"
+            label={gettext("Admin")}
+          />
+          <form id="logout-form" action={~p"/session"} method="post">
+            <input type="hidden" name="_method" value="delete" />
+            <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+            <button
+              type="submit"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+              title={gettext("Logout")}
+            >
+              <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
+              {gettext("Logout")}
+            </button>
+          </form>
         </div>
       </div>
 
@@ -338,6 +365,22 @@ defmodule DranWeb.DashboardLive do
   end
 
   # ── Components ───────────────────────────────────────────────────────────
+
+  attr :href, :string, required: true
+  attr :icon, :string, required: true
+  attr :label, :string, required: true
+
+  defp footer_link(assigns) do
+    ~H"""
+    <a
+      href={@href}
+      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+    >
+      <.icon name={@icon} class="size-4" />
+      {@label}
+    </a>
+    """
+  end
 
   attr :ws, :map, required: true
   attr :metrics, :map, default: %{pages: 0, last_updated: nil}
