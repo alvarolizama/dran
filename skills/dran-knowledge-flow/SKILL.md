@@ -1,7 +1,7 @@
 ---
 name: dran-knowledge-flow
 description: "Use when creating or editing Dran knowledge pages via MCP."
-version: 1.0.0
+version: 1.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -61,14 +61,30 @@ flowchart TD
 
 ## Notes on the calls
 
-- `page_type` enum comes from `Dran.PageRegistry` (8 types): `note`
-  (free-form capture), `idea` (idea/question/hypothesis/spark), `project`
-  (project/plan/goal/milestone — with horizon/status meta), `knowledge`
-  (quote/summary/highlight/excerpt), `technical` (code/snippet/debug/
-  recipe/config/command/template/pattern/method), `entity`, `concept`
-  (free), `reference`.
-  `dran_create_note` / `dran_update_note` are title+slug shorthands for
-  `note`.
+- `page_type` enum comes from `Dran.PageRegistry` (8 types). Kinds
+  (`meta.kind`, changeset-validated unless marked free) and type-specific
+  meta fields:
+  - `note` (free-form; date, due_date) — `dran_create_note` /
+    `dran_update_note` are title+slug shorthands with **meta merge**
+  - `idea` — kinds: idea/question/hypothesis/spark
+  - `project` — kinds: project/plan/goal/milestone; extra meta: horizon,
+    status, due_date
+  - `knowledge` — kinds: quote/summary/highlight/excerpt; extra meta:
+    source_url, date
+  - `technical` — kinds: code/snippet/debug/recipe/config/command/
+    template/pattern/method; extra meta: language, version
+  - `entity` — kinds: person/company/product/tool/place/event/language/
+    framework/hardware/protocol; extra meta: location, external_url
+  - `concept` (free kind; domain, parent_concept)
+  - `reference` — kinds: article/paper/video/podcast/book/newsletter/
+    spec/release/website/repo/api; extra meta: source_url, published_at
+
+  Every type also takes `meta.props` (free key-value bag). Kind
+  classifies/filters only — never changes behavior.
+- **`meta` on `dran_update_page` REPLACES the whole object** (include
+  every key you want to keep); `dran_update_note` MERGES meta — prefer
+  it for notes when only touching some keys.
+
 - Search `strategy` (not `mode`): `auto / fts / fuzzy / semantic / hybrid`.
   Run search before any create — duplicates are the main graph rot.
 - `summary` on pages is **machine-owned** (set via create/update/nightly

@@ -25,7 +25,21 @@ Humans get a wiki. Agents get MCP tools and a REST API. One graph, one attributi
 
 ## Knowledge
 
-- **8 page types** — `note` (free capture), `idea`, `project`, `knowledge`, `technical`, `entity`, `concept`, `reference`; collections and reports are first-class entities in their own tables
+- **8 page types, each with `meta.kind` subtypes and type-specific meta fields** — defined in one place, `Dran.PageRegistry` (`lib/dran/page_registry.ex`):
+
+  | Type | Purpose | `meta.kind` values | Extra meta fields |
+  |---|---|---|---|
+  | `note` | free capture | *(free — none validated)* | `date`, `due_date` |
+  | `idea` | sparks & thinking | `idea` `question` `hypothesis` `spark` | — |
+  | `project` | work with lifecycle | `project` `plan` `goal` `milestone` | `horizon`, `status`, `due_date` |
+  | `knowledge` | captured wisdom | `quote` `summary` `highlight` `excerpt` | `source_url`, `date` |
+  | `technical` | code & how-to | `code` `snippet` `debug` `recipe` `config` `command` `template` `pattern` `method` | `language`, `version` |
+  | `entity` | named things | `person` `company` `product` `tool` `place` `event` `language` `framework` `hardware` `protocol` | `location`, `external_url` |
+  | `concept` | abstract ideas | *(free)* | `domain`, `parent_concept` |
+  | `reference` | external sources | `article` `paper` `video` `podcast` `book` `newsletter` `spec` `release` `website` `repo` `api` | `source_url`, `published_at` |
+
+  Every type also accepts `meta.props` (free-form key-value bag, indexed). `meta.kind` is validated by the changeset (free on `note`/`concept`); it classifies and filters — it never changes behavior. Collections and reports are first-class entities in their own tables, not page types.
+
 - **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]` embeds; read-only render by default
 - **12 relation types** — `related`, `part_of`, `supersedes`, `contradicts`, `embeds`… plus machine-owned ones (`semantic`, `mentions`, props-derived) created by the augmenter, not by hand
 - **Props → edges** — `role`, `tier`, `location`, `language`, `framework` auto-materialize into typed edges

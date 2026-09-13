@@ -405,10 +405,16 @@ defmodule Dran.PageRegistry do
   def mcp_description do
     for type <- @types, reduce: [] do
       acc ->
-        kind_list = kinds(type) || []
-        # Show first 7 kinds as a sample (matching the old hardcoded format)
-        sample = Enum.take(kind_list, 7)
-        acc ++ ["- #{type}: #{Enum.join(sample, ", ")}"]
+        case kinds(type) do
+          nil ->
+            acc ++ ["- #{type}: kind is free-form (no validation)"]
+
+          kind_list ->
+            # Show first 7 kinds as a sample (matching the old hardcoded format)
+            sample = Enum.take(kind_list, 7)
+            more = if length(kind_list) > 7, do: "…", else: ""
+            acc ++ ["- #{type}: #{Enum.join(sample, ", ")}#{more}"]
+        end
     end
     |> Enum.join("\n")
   end
