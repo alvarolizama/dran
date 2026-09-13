@@ -10,7 +10,7 @@ defmodule Dran.MCP do
   - `GET /api/mcp` — responds 405 (SSE stream not implemented)
   - `DELETE /api/mcp` — terminate session
 
-  ## Tools (37)
+  ## Tools (18)
   - `dran_search` — use FIRST to find anything; strategy=auto picks best available
   - `dran_create_page` — create notes, concepts, entities, and references
   - `dran_update_page` — update page fields; REPLACES meta entirely (not a merge)

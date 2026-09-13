@@ -77,7 +77,7 @@ flowchart TD
     framework/hardware/protocol; extra meta: location, external_url
   - `concept` (free kind; domain, parent_concept)
   - `reference` — kinds: article/paper/video/podcast/book/newsletter/
-    spec/release/website/repo/api; extra meta: source_url, published_at
+    spec/code/release/website/repo/api; extra meta: source_url, published_at
 
   Every type also takes `meta.props` (free key-value bag). Kind
   classifies/filters only — never changes behavior.
