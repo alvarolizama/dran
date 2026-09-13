@@ -27,7 +27,7 @@ Humans get a wiki. Agents get MCP tools and a REST API. One graph, one attributi
 
 - **4 page types** — `note`, `entity`, `concept`, `reference`; collections and reports are first-class entities in their own tables
 - **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]` embeds; read-only render by default
-- **13 relation types** — `related`, `part_of`, `supersedes`, `contradicts`, `embeds`… plus machine-owned ones (`semantic`, `mentions`, props-derived) created by the augmenter, not by hand
+- **12 relation types** — `related`, `part_of`, `supersedes`, `contradicts`, `embeds`… plus machine-owned ones (`semantic`, `mentions`, props-derived) created by the augmenter, not by hand
 - **Props → edges** — `role`, `tier`, `location`, `language`, `framework` auto-materialize into typed edges
 - **Version history** with diff view; **machine-owned summaries** (written only by API/nightly job)
 
