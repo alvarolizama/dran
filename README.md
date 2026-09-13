@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🧠 Dran
+<img src="priv/static/favicon.svg" width="96" height="96" alt="Dran" />
+
+# Dran
 
 ### Shared memory & knowledge base for AI agent swarms
 
@@ -9,8 +11,6 @@
 [![Phoenix](https://img.shields.io/badge/Phoenix-1.8-LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![MCP](https://img.shields.io/badge/MCP-Server-5B8DEF?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
-
-![Dran](docs/dran-header.png)
 
 </div>
 
