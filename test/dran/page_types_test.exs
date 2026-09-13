@@ -7,7 +7,7 @@ defmodule Dran.PageTypesTest do
   describe "types/0" do
     test "returns the canonical page types in order" do
       assert PageTypes.types() ==
-               ~w(note idea project knowledge technical entity concept reference)
+               ~w(note idea knowledge technical entity concept reference food)
     end
 
     test "is the single source for Page.all_types/0" do
@@ -25,7 +25,7 @@ defmodule Dran.PageTypesTest do
     end
 
     test "all full-citizen types have every capability enabled" do
-      for type <- ~w(note idea project knowledge technical entity concept reference) do
+      for type <- ~w(note idea knowledge technical entity concept reference food) do
         assert PageTypes.graph?(type), "#{type} should be in the graph"
         assert PageTypes.journey?(type), "#{type} should be in the journey"
         assert PageTypes.embeddings?(type), "#{type} should have embeddings"

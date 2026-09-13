@@ -151,11 +151,11 @@ defmodule Dran.PageMetaGettextTest do
       end
     end
 
-    test "project: kind values are raw slugs" do
-      values = Enum.map(select_pairs("project"), &elem(&1, 1))
+    test "project was removed — no kind select, legacy kinds stay labeled" do
+      assert select_pairs("project") == []
 
-      for expected <- ~w(project plan goal milestone) do
-        assert expected in values
+      for legacy <- ~w(project plan goal milestone) do
+        assert Dran.PageRegistry.kind_label(legacy)
       end
     end
 

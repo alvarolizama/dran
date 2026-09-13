@@ -294,7 +294,8 @@ defmodule Dran.MCPFullTest do
         })
 
       assert result =~
-               "Error: page type 'report' is not a valid page type — valid types are note, idea, project, knowledge, technical, entity, concept, and reference"
+               "Error: page type 'report' is not a valid page type — valid types are " <>
+                 Enum.join(Dran.PageTypes.types(), ", ")
 
       assert Knowledge.get_page_by_slug("mcp-report-create-test", ctx.id) == nil
     end

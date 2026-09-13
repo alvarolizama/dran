@@ -261,11 +261,11 @@ defmodule DranWeb.PagesLiveTest do
     test "creation form renders per type with its kinds", %{conn: conn, ws: ws} do
       for {type_path, kind_sample} <- [
             {"ideas", "question"},
-            {"projects", "plan"},
             {"knowledge", "quote"},
             {"technical", "code"},
             {"entities", "person"},
-            {"references", "article"}
+            {"references", "article"},
+            {"food", "recipe"}
           ] do
         {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/#{type_path}?new=true")
 
