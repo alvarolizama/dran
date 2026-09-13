@@ -44,6 +44,11 @@ defmodule Dran.Knowledge do
     Repo.all(from c in Workspace, order_by: [asc: c.name])
   end
 
+  @doc "Count workspaces (sidebar context badge) without loading rows."
+  def count_workspaces do
+    Repo.one(from c in Workspace, select: count(c.id))
+  end
+
   @doc """
   Returns a map of `workspace_id => page_count` for all contexts.
 
@@ -169,11 +174,6 @@ defmodule Dran.Knowledge do
   - `:type` — filter by page_type
   - `:kind` — filter by `meta.kind` (visual classifier: filter/group only)
   - `:tag` — filter by a single tag
-  - `:plan_slug` — filter by `meta.plan_slug`. The special value `"none"`
-    matches pages with no/empty plan_slug. Mainly meaningful with
-    `type: "plan"`.
-  - `:project_slug` — filter by `meta.project_slug`. The special value
-    `"none"` matches pages with no/empty project_slug (orphans).
   - `:archived` — `true` returns only archived pages, `false` or omitted
     returns only non-archived pages
   - `:limit` — limit results (default 50)
@@ -2209,6 +2209,17 @@ defmodule Dran.Knowledge do
         :count
       )
 
+    # Anti-join count in SQL — orphan_pages/1 loads full rows (with
+    # order_by title) only for this length; the count never needs them.
+    orphan_count =
+      Repo.one(
+        from p in Page,
+          left_join: r in Relation,
+          on: r.target_id == p.id,
+          where: p.workspace_id == ^workspace_id and is_nil(r.id) and p.archived == false,
+          select: count(p.id)
+      )
+
     total_relations =
       Repo.aggregate(
         from(r in Relation,
@@ -2222,7 +2233,7 @@ defmodule Dran.Knowledge do
       total_pages: total_pages,
       by_type: by_type,
       recent: recent,
-      orphan_count: length(orphan_pages(workspace_id)),
+      orphan_count: orphan_count,
       total_relations: total_relations
     }
   end

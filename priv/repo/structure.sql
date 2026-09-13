@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict HSeE1DNL6ay8AvaUT6JA4yLJldJmoSeQUIr26mixpmG5iV69GNyvIwQUhFi7aKZ
+\restrict 9chFoJlz4pgoKDKw6WykocpCa8IKOLKjNtr1lqXAotPCWieTscKnNu9DPrlVbqu
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -486,19 +486,19 @@ ALTER TABLE ONLY public.brain_log
 
 
 --
+-- Name: cluster_summaries cluster_summaries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cluster_summaries
+    ADD CONSTRAINT cluster_summaries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: collections collections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.collections
     ADD CONSTRAINT collections_pkey PRIMARY KEY (id);
-
-
---
--- Name: cluster_summaries community_summaries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.cluster_summaries
-    ADD CONSTRAINT community_summaries_pkey PRIMARY KEY (id);
 
 
 --
@@ -661,17 +661,10 @@ CREATE INDEX brain_log_ctx_inserted_at_idx ON public.brain_log USING btree (work
 
 
 --
--- Name: brain_log_workspace_id_index; Type: INDEX; Schema: public; Owner: -
+-- Name: cluster_summaries_ws_cluster_uidx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX brain_log_workspace_id_index ON public.brain_log USING btree (workspace_id);
-
-
---
--- Name: cluster_summaries_workspace_id_cluster_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX cluster_summaries_workspace_id_cluster_id_index ON public.cluster_summaries USING btree (workspace_id, cluster_id);
+CREATE UNIQUE INDEX cluster_summaries_ws_cluster_uidx ON public.cluster_summaries USING btree (workspace_id, cluster_id);
 
 
 --
@@ -679,20 +672,6 @@ CREATE UNIQUE INDEX cluster_summaries_workspace_id_cluster_id_index ON public.cl
 --
 
 CREATE UNIQUE INDEX collections_workspace_id_slug_index ON public.collections USING btree (workspace_id, slug);
-
-
---
--- Name: community_summaries_workspace_id_community_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX community_summaries_workspace_id_community_id_index ON public.cluster_summaries USING btree (workspace_id, cluster_id);
-
-
---
--- Name: community_summaries_workspace_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX community_summaries_workspace_id_index ON public.cluster_summaries USING btree (workspace_id);
 
 
 --
@@ -745,38 +724,10 @@ CREATE INDEX knowledge_pages_embedding_idx ON public.knowledge_pages USING hnsw 
 
 
 --
--- Name: knowledge_pages_meta_assignee_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX knowledge_pages_meta_assignee_idx ON public.knowledge_pages USING btree (((meta ->> 'assignee'::text))) WHERE ((meta ->> 'assignee'::text) IS NOT NULL);
-
-
---
 -- Name: knowledge_pages_meta_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX knowledge_pages_meta_idx ON public.knowledge_pages USING gin (meta);
-
-
---
--- Name: knowledge_pages_meta_kanban_status_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX knowledge_pages_meta_kanban_status_idx ON public.knowledge_pages USING btree (((meta ->> 'kanban_status'::text))) WHERE ((meta ->> 'kanban_status'::text) IS NOT NULL);
-
-
---
--- Name: knowledge_pages_meta_plan_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX knowledge_pages_meta_plan_slug_idx ON public.knowledge_pages USING btree (((meta ->> 'plan_slug'::text))) WHERE ((meta ->> 'plan_slug'::text) IS NOT NULL);
-
-
---
--- Name: knowledge_pages_meta_project_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX knowledge_pages_meta_project_slug_idx ON public.knowledge_pages USING btree (((meta ->> 'project_slug'::text))) WHERE ((meta ->> 'project_slug'::text) IS NOT NULL);
 
 
 --
@@ -801,13 +752,6 @@ CREATE INDEX knowledge_pages_trgm_idx ON public.knowledge_pages USING gin (publi
 
 
 --
--- Name: knowledge_pages_type_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX knowledge_pages_type_idx ON public.knowledge_pages USING btree (page_type);
-
-
---
 -- Name: knowledge_pages_workspace_id_archived_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -815,17 +759,17 @@ CREATE INDEX knowledge_pages_workspace_id_archived_index ON public.knowledge_pag
 
 
 --
--- Name: knowledge_pages_workspace_id_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX knowledge_pages_workspace_id_slug_idx ON public.knowledge_pages USING btree (workspace_id, slug);
-
-
---
 -- Name: knowledge_pages_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX knowledge_pages_workspace_id_slug_index ON public.knowledge_pages USING btree (workspace_id, slug);
+
+
+--
+-- Name: knowledge_pages_ws_archived_type_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_pages_ws_archived_type_idx ON public.knowledge_pages USING btree (workspace_id, archived, page_type);
 
 
 --
@@ -885,24 +829,10 @@ CREATE UNIQUE INDEX relations_source_id_target_id_relation_type_index ON public.
 
 
 --
--- Name: relations_source_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX relations_source_idx ON public.relations USING btree (source_id);
-
-
---
 -- Name: relations_target_id_target_type_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX relations_target_id_target_type_index ON public.relations USING btree (target_id, target_type);
-
-
---
--- Name: relations_target_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX relations_target_idx ON public.relations USING btree (target_id);
 
 
 --
@@ -980,13 +910,6 @@ CREATE INDEX worker_sessions_worker_type_index ON public.worker_sessions USING b
 --
 
 CREATE INDEX worker_sessions_workspace_id_index ON public.worker_sessions USING btree (workspace_id);
-
-
---
--- Name: worker_steps_session_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX worker_steps_session_id_index ON public.worker_steps USING btree (session_id);
 
 
 --
@@ -1149,7 +1072,7 @@ ALTER TABLE ONLY public.worker_steps
 -- PostgreSQL database dump complete
 --
 
-\unrestrict HSeE1DNL6ay8AvaUT6JA4yLJldJmoSeQUIr26mixpmG5iV69GNyvIwQUhFi7aKZ
+\unrestrict 9chFoJlz4pgoKDKw6WykocpCa8IKOLKjNtr1lqXAotPCWieTscKnNu9DPrlVbqu
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1235,3 +1158,4 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260909072119);
 INSERT INTO public."schema_migrations" (version) VALUES (20260912053941);
 INSERT INTO public."schema_migrations" (version) VALUES (20260912235428);
 INSERT INTO public."schema_migrations" (version) VALUES (20260913001600);
+INSERT INTO public."schema_migrations" (version) VALUES (20260913021956);

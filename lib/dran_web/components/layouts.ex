@@ -175,11 +175,11 @@ defmodule DranWeb.Layouts do
         end
 
         # Smart collections are first-class Brain collections now.
-        collection_count = length(Dran.Collections.list_collections(context.id))
+        collection_count = Dran.Collections.count_collections(context.id)
 
         contexts_count =
           try do
-            length(Dran.Knowledge.list_workspaces())
+            Dran.Knowledge.count_workspaces()
           rescue
             _ -> 0
           end
@@ -188,8 +188,7 @@ defmodule DranWeb.Layouts do
           try do
             Dran.Repo.aggregate(
               from(cs in Dran.Graph.ClusterSummary,
-                where: cs.workspace_id == ^context.id,
-                select: cs.id
+                where: cs.workspace_id == ^context.id
               ),
               :count
             )

@@ -49,4 +49,9 @@ defmodule Dran.Collections do
       from c in Collection, where: c.workspace_id == ^workspace_id, order_by: [asc: c.name]
     )
   end
+
+  @doc "Count collections of a workspace (sidebar badge) without loading rows."
+  def count_collections(workspace_id) when is_binary(workspace_id) do
+    Repo.one(from c in Collection, where: c.workspace_id == ^workspace_id, select: count(c.id))
+  end
 end
