@@ -34,23 +34,15 @@ Two pillars:
 Humans get a wiki. Agents get MCP tools and a REST API. One attribution model: every write
 is tied to the API key's actor, server-side.
 
-> [!NOTE]
-> Dran does **not** run your agents and keeps **no execution ledger** — no goals, no
-> workflow engine, no run history. It is the store they share: knowledge + memory.
-> Execution discipline (ledger, briefs, delegation) belongs to the agent's own tooling,
-> not here.
-
 ## Knowledge
 
 - **8 page types, each with `meta.kind` subtypes and type-specific meta fields** — defined
   in one place, `Dran.PageRegistry` (`lib/dran/page_registry.ex`):
 
-  | Type | Purpose | `meta.kind` values | Extra meta fields |
-  |---|---|---|---|
-  | `note` | free capture | *(free — none validated)* | `date`, `due_date` |
+  | `note` | free capture | *(free — none validated)* | `date`, `due_date` *(when kind is `reminder`)* |
   | `idea` | sparks & thinking | `idea` `question` `hypothesis` `spark` | — |
   | `knowledge` | captured wisdom | `quote` `summary` `highlight` `excerpt` | `source_url`, `date` |
-  | `technical` | code & how-to | `code` `snippet` `debug` `recipe` `config` `command` `template` `pattern` `method` | `language`, `version` |
+  | `technical` | code & how-to | `code` `snippet` `debug` `recipe` `config` `command` `template` `pattern` `method` | `language` *(when kind is `code`)*, `version` |
   | `entity` | named things | `person` `company` `product` `tool` `place` `event` `language` `framework` `hardware` `protocol` | `location`, `external_url` |
   | `concept` | abstract ideas | *(free)* | `domain`, `parent_concept` |
   | `reference` | external sources | `article` `paper` `video` `podcast` `book` `newsletter` `spec` `code` `release` `website` `repo` `api` | `source_url`, `published_at` |
