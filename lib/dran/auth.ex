@@ -5,7 +5,9 @@ defmodule Dran.Auth do
   Web login is handled entirely by `Dran.Accounts` (email + bcrypt password)
   and the first-run `/setup` flow — there are no env-var login credentials.
 
-  Config read from environment variables at startup:
+  Config read from environment variables at RUNTIME (releases bake the
+  compile-time environment — reading these as module attributes would
+  freeze the Dockerfile's build-time value into the beam files):
 
     * `DRAN_API_TOKEN` — bearer token for API/MCP (default: `"dran-token"`)
     * `DRAN_WORKSPACE_SLUG` — default context slug (default: `"personal"`)
@@ -15,18 +17,18 @@ defmodule Dran.Auth do
   least one of `DRAN_WORKSPACE_SLUG` / `DRAN_WORKSPACE_NAME` is explicitly set.
   """
 
-  @api_token System.get_env("DRAN_API_TOKEN", "dran-token")
-  @default_workspace_slug System.get_env("DRAN_WORKSPACE_SLUG", "personal")
-  @default_workspace_name System.get_env("DRAN_WORKSPACE_NAME", "Personal")
+  @default_api_token "dran-token"
+  @default_workspace_slug "personal"
+  @default_workspace_name "Personal"
 
   @doc "Bearer token for API/MCP access (legacy admin token)."
-  def api_token, do: @api_token
+  def api_token, do: System.get_env("DRAN_API_TOKEN", @default_api_token)
 
   @doc "The default context slug (startup config)."
-  def default_workspace_slug, do: @default_workspace_slug
+  def default_workspace_slug, do: System.get_env("DRAN_WORKSPACE_SLUG", @default_workspace_slug)
 
   @doc "The default context display name (startup config)."
-  def default_workspace_name, do: @default_workspace_name
+  def default_workspace_name, do: System.get_env("DRAN_WORKSPACE_NAME", @default_workspace_name)
 
   @doc """
   True when the default context was explicitly configured via
@@ -43,7 +45,7 @@ defmodule Dran.Auth do
   @doc """
   Checks a bearer token against the configured legacy API token (admin).
   """
-  def valid_token?(token) when is_binary(token), do: token == @api_token
+  def valid_token?(token) when is_binary(token), do: token == api_token()
   def valid_token?(_), do: false
 
   # ── Owner / created_by resolution ──
