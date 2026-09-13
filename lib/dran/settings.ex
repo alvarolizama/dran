@@ -36,6 +36,13 @@ defmodule Dran.Settings do
     )
   end
 
+  @doc """
+  Remove a settings key so its default (or nil) takes effect again.
+  """
+  def delete(key) do
+    Repo.delete_all(from s in "settings", where: s.key == ^key)
+  end
+
   def all do
     db =
       Repo.all(from s in "settings", select: {s.key, s.value})

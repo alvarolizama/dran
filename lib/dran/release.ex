@@ -105,9 +105,9 @@ defmodule Dran.Release do
   @doc """
   Create only the default context if it does not exist.
 
-  Skipped unless `DRAN_WORKSPACE_SLUG` (or `DRAN_WORKSPACE_NAME`) is explicitly
-  set in the environment — a deleted context stays deleted across deploys
-  when no env var is present.
+  Skipped unless a default workspace is explicitly configured in the settings
+  (via /admin/system — see `Dran.Auth.default_context_configured?/0`) — a
+  deleted context stays deleted across deploys when no override is set.
 
   Safe for production: does not create demo pages, todos, or relations.
   Used by `setup/0` so a fresh prod deploy gets a working context without
@@ -118,7 +118,7 @@ defmodule Dran.Release do
       do_seed_context()
     else
       Logger.info(
-        "[release] DRAN_WORKSPACE_SLUG/DRAN_WORKSPACE_NAME not set, skipping default context seed"
+        "[release] default workspace not configured in settings, skipping default context seed"
       )
 
       :ok

@@ -1,9 +1,13 @@
 defmodule DranWeb.AdminSystemLive do
   @moduledoc """
-  Read-only system information (owner-only): the "Entorno" section showing
-  inference, workers, and uploads configuration loaded from env vars at
-  startup, plus an inference connection test button. Moved verbatim from the
-  old SettingsLive "system" tab.
+  Instance configuration + monitoring (owner-only):
+
+    * Monitoreo — DB size, table count, disk, BEAM memory, uptime and process
+      counts, refreshed on demand.
+    * Instancia — editable: default workspace slug/name and the legacy admin
+      API token (Settings keys, persisted in DB).
+    * Entorno — read-only inference/workers/uploads config loaded from env
+      vars at startup, plus an inference connection test button.
   """
 
   use DranWeb, :live_view
@@ -12,7 +16,11 @@ defmodule DranWeb.AdminSystemLive do
 
   alias Dran.Inference.Client
   alias Dran.Inference.Config
+  alias Dran.Knowledge
+  alias Dran.Settings
   alias DranWeb.Plugs.Auth
+
+  @slug_format ~r/^[a-z0-9]+(-[a-z0-9]+)*$/
 
   @impl true
   def mount(_params, session, socket) do
@@ -22,8 +30,84 @@ defmodule DranWeb.AdminSystemLive do
       socket
       |> assign(active_nav: "admin", page_title: gettext("Sistema"), workspace_slug: nil)
       |> assign(inference_test: nil)
+      |> assign(monitoring: nil)
+      |> assign_instance_form()
 
     {:ok, socket}
+  end
+
+  # ── Instance settings (Settings-backed, editable) ─────────────────────────
+
+  defp assign_instance_form(socket) do
+    assign(
+      socket,
+      instance_form:
+        to_form(
+          %{
+            "default_workspace_slug" => setting_or_empty("default_workspace_slug"),
+            "default_workspace_name" => setting_or_empty("default_workspace_name"),
+            "api_token" => setting_or_empty("api_token")
+          },
+          as: :instance
+        )
+    )
+  end
+
+  defp setting_or_empty(key) do
+    case Settings.get(key) do
+      value when is_binary(value) -> value
+      _ -> ""
+    end
+  end
+
+  # ── Instance settings events ───────────────────────────────────────────────
+
+  @impl true
+  def handle_event("save_instance", %{"instance" => params}, socket) do
+    slug = normalize(params["default_workspace_slug"])
+    name = normalize(params["default_workspace_name"])
+    token = normalize(params["api_token"])
+
+    cond do
+      slug != "" and not Regex.match?(@slug_format, slug) ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Slug inválido: usa minúsculas, dígitos y guiones.")
+         )}
+
+      true ->
+        put_or_delete("default_workspace_slug", slug)
+        put_or_delete("default_workspace_name", name)
+        put_or_delete("api_token", token)
+
+        # Mirror the release setup behaviour: when a default workspace is
+        # explicitly configured, make sure it actually exists (first-run).
+        maybe_create_default_workspace(slug, name)
+
+        {:noreply,
+         socket
+         |> assign_instance_form()
+         |> put_flash(:info, gettext("Configuración de instancia guardada."))}
+    end
+  end
+
+  @impl true
+  def handle_event("generate_token", _params, socket) do
+    token = Dran.Auth.generate_token()
+    Settings.put("api_token", token)
+
+    {:noreply,
+     socket
+     |> assign_instance_form()
+     |> push_event("copy_to_clipboard", %{text: token})
+     |> put_flash(:info, gettext("Token generado y copiado al portapapeles."))}
+  end
+
+  @impl true
+  def handle_event("refresh_monitoring", _params, socket) do
+    {:noreply, assign(socket, monitoring: collect_monitoring())}
   end
 
   @impl true
@@ -43,6 +127,27 @@ defmodule DranWeb.AdminSystemLive do
     {:noreply, assign(socket, inference_test: result)}
   end
 
+  # ── Instance settings helpers ──────────────────────────────────────────────
+
+  defp put_or_delete(key, ""), do: Settings.delete(key)
+
+  defp put_or_delete(key, value), do: Settings.put(key, value)
+
+  defp maybe_create_default_workspace("", _name), do: :ok
+
+  defp maybe_create_default_workspace(slug, name) do
+    if is_nil(Knowledge.get_workspace_by_slug(slug)) do
+      {:ok, _ws} = Knowledge.create_workspace(%{name: name_or_slug(name, slug), slug: slug})
+    end
+
+    :ok
+  end
+
+  defp name_or_slug("", slug), do: String.capitalize(slug)
+  defp name_or_slug(name, _slug), do: name
+
+  # ── Render ─────────────────────────────────────────────────────────────────
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -59,9 +164,76 @@ defmodule DranWeb.AdminSystemLive do
           <div>
             <h1 class="text-title">{gettext("Sistema")}</h1>
             <p class="text-caption mt-0.5">
-              {gettext("Read-only — loaded from environment variables at startup.")}
+              {gettext("Monitoreo, configuración de instancia y entorno.")}
             </p>
           </div>
+
+          <.monitoring_widgets monitoring={@monitoring} />
+
+          <.section
+            title={gettext("Instancia")}
+            icon="hero-adjustments-horizontal"
+            caption={
+              gettext(
+                "Workspace por defecto y token admin del API/MCP — persistidos en la base de datos."
+              )
+            }
+          >
+            <.form
+              for={@instance_form}
+              id="instance-form"
+              phx-submit="save_instance"
+              class="px-5 py-5 space-y-5"
+            >
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <.input
+                  field={@instance_form[:default_workspace_slug]}
+                  type="text"
+                  label={gettext("Workspace por defecto (slug)")}
+                  placeholder="personal"
+                />
+                <.input
+                  field={@instance_form[:default_workspace_name]}
+                  type="text"
+                  label={gettext("Workspace por defecto (nombre)")}
+                  placeholder="Personal"
+                />
+              </div>
+              <p class="text-xs text-base-content/60">
+                {gettext(
+                  "Workspace usado cuando un usuario no tiene workspace propio ni sesión activa. Se crea al guardar si no existe. Vacío = \"personal\"."
+                )}
+              </p>
+
+              <div class="border-t border-base-content/10 pt-4">
+                <.input
+                  field={@instance_form[:api_token]}
+                  type="text"
+                  label={gettext("Token admin del API/MCP")}
+                  placeholder={gettext("(vacío = deshabilitado)")}
+                />
+                <p class="text-xs text-base-content/60 mt-1.5">
+                  {gettext(
+                    "Bearer legacy para API y MCP con acceso full-owner. Vacío = deshabilitado; los tokens por usuario siguen funcionando."
+                  )}
+                </p>
+                <button
+                  type="button"
+                  phx-click="generate_token"
+                  class="btn btn-xs btn-ghost hover:bg-primary/10 mt-2 gap-1.5"
+                >
+                  <.icon name="hero-key" class="size-3.5" />
+                  {gettext("Generar token")}
+                </button>
+              </div>
+
+              <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary btn-sm">
+                  {gettext("Guardar")}
+                </button>
+              </div>
+            </.form>
+          </.section>
 
           <.config_section
             icon="hero-cpu-chip"
@@ -255,7 +427,170 @@ defmodule DranWeb.AdminSystemLive do
     """
   end
 
-  # -- Components ------------------------------------------------------------
+  # ── Monitoring components ──────────────────────────────────────────────────
+
+  attr :monitoring, :map, default: nil
+
+  defp monitoring_widgets(assigns) do
+    ~H"""
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <.monitor_card :for={card <- monitor_cards(@monitoring)} card={card} />
+      </div>
+      <div class="flex justify-end">
+        <button
+          phx-click="refresh_monitoring"
+          class="btn btn-xs btn-ghost hover:bg-primary/10 gap-1.5"
+        >
+          <.icon name="hero-arrow-path" class="size-3.5" />
+          {gettext("Actualizar")}
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  attr :card, :map, required: true
+
+  defp monitor_card(assigns) do
+    ~H"""
+    <div class="surface-2 rounded-2xl px-4 py-3.5 flex items-start gap-3">
+      <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+        <.icon name={@card.icon} class="size-4 text-primary" />
+      </div>
+      <div class="min-w-0">
+        <p class="text-xs text-base-content/50 truncate">{@card.label}</p>
+        <p class="text-lg font-semibold leading-tight truncate">{@card.value}</p>
+        <p :if={@card.sub} class="text-xs text-base-content/50 truncate">{@card.sub}</p>
+      </div>
+    </div>
+    """
+  end
+
+  defp monitor_cards(nil) do
+    [
+      %{label: gettext("Base de datos"), value: "—", sub: nil, icon: "hero-circle-stack"},
+      %{label: gettext("Disco"), value: "—", sub: nil, icon: "hero-server"},
+      %{label: gettext("Memoria BEAM"), value: "—", sub: nil, icon: "hero-cpu-chip"},
+      %{label: gettext("Uptime"), value: "—", sub: nil, icon: "hero-clock"}
+    ]
+  end
+
+  defp monitor_cards(m) do
+    [
+      %{
+        label: gettext("Base de datos"),
+        value: m.db_size,
+        sub: "#{m.table_count} tablas",
+        icon: "hero-circle-stack"
+      },
+      %{
+        label: gettext("Disco"),
+        value: m.disk_free,
+        sub: "#{m.disk_percent}% usado · #{m.disk_total}",
+        icon: "hero-server"
+      },
+      %{
+        label: gettext("Memoria BEAM"),
+        value: m.memory_used,
+        sub: "#{m.memory_percent}% de #{m.memory_total}",
+        icon: "hero-cpu-chip"
+      },
+      %{
+        label: gettext("Uptime"),
+        value: m.uptime,
+        sub: "#{m.process_count} procesos · #{m.schedulers} schedulers",
+        icon: "hero-clock"
+      }
+    ]
+  end
+
+  defp collect_monitoring do
+    disk = disk_stat()
+    mem_used = :erlang.memory(:processes) + :erlang.memory(:ets)
+    mem_total = :erlang.memory(:total)
+
+    %{
+      db_size: format_bytes(db_size_bytes()),
+      table_count: table_count(),
+      disk_free: format_bytes(disk.free),
+      disk_total: format_bytes(disk.total),
+      disk_percent: disk.used_percent,
+      memory_used: format_bytes(mem_used),
+      memory_total: format_bytes(mem_total),
+      memory_percent: percent(mem_used, mem_total),
+      uptime: format_uptime(),
+      process_count: :erlang.system_info(:process_count),
+      schedulers: :erlang.system_info(:schedulers_online)
+    }
+  end
+
+  defp db_size_bytes do
+    case Dran.Repo.query!("SELECT pg_database_size(current_database())") do
+      %{rows: [[bytes]]} when is_integer(bytes) -> bytes
+      _ -> 0
+    end
+  end
+
+  defp table_count do
+    case Dran.Repo.query!(
+           "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
+         ) do
+      %{rows: [[n]]} when is_integer(n) -> n
+      _ -> 0
+    end
+  end
+
+  # :disksup (os_mon) reports [{mount, total_kb, used_percent, free...}].
+  # Falls back to zeros when unavailable (e.g. exotic platforms).
+  defp disk_stat do
+    case :disksup.get_disk_data() do
+      [{_mount, total_kb, used_percent, _} | _] when is_integer(total_kb) ->
+        total = total_kb * 1024
+        used = div(total * used_percent, 100)
+        %{total: total, used: used, free: max(total - used, 0), used_percent: used_percent}
+
+      _ ->
+        %{total: 0, used: 0, free: 0, used_percent: 0}
+    end
+  end
+
+  defp percent(_part, 0), do: 0
+
+  defp percent(part, whole), do: min(div(part * 100, whole), 100)
+
+  defp format_uptime do
+    {ms, _} = :erlang.statistics(:wall_clock)
+    sec = div(ms, 1000)
+    days = div(sec, 86_400)
+    hours = div(rem(sec, 86_400), 3600)
+    minutes = div(rem(sec, 3600), 60)
+
+    cond do
+      days > 0 -> "#{days}d #{hours}h"
+      hours > 0 -> "#{hours}h #{minutes}m"
+      true -> "#{minutes}m"
+    end
+  end
+
+  # ── Shared helpers ─────────────────────────────────────────────────────────
+
+  defp normalize(nil), do: ""
+  defp normalize(v) when is_binary(v), do: String.trim(v)
+  defp normalize(_), do: ""
+
+  defp format_bytes(bytes) when is_integer(bytes) do
+    cond do
+      bytes >= 1_073_741_824 -> "#{Float.round(bytes / 1_073_741_824, 1)} GB"
+      bytes >= 1_048_576 -> "#{Float.round(bytes / 1_048_576, 1)} MB"
+      bytes >= 1_024 -> "#{Float.round(bytes / 1_024, 1)} KB"
+      true -> "#{bytes} B"
+    end
+  end
+
+  defp format_bytes(_), do: "—"
+
+  # ── Environment section components ─────────────────────────────────────────
 
   attr :icon, :string, default: nil
   attr :title, :string, required: true
@@ -357,15 +692,4 @@ defmodule DranWeb.AdminSystemLive do
   end
 
   defp format_inference_error(reason), do: inspect(reason)
-
-  defp format_bytes(bytes) when is_integer(bytes) do
-    cond do
-      bytes >= 1_073_741_824 -> "#{Float.round(bytes / 1_073_741_824, 1)} GB"
-      bytes >= 1_048_576 -> "#{Float.round(bytes / 1_048_576, 1)} MB"
-      bytes >= 1_024 -> "#{Float.round(bytes / 1_024, 1)} KB"
-      true -> "#{bytes} B"
-    end
-  end
-
-  defp format_bytes(_), do: "—"
 end

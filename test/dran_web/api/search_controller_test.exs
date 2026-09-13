@@ -24,7 +24,14 @@ defmodule DranWeb.API.SearchControllerTest do
       end
     end)
 
-    {:ok, conn: put_req_header(conn, "authorization", "Bearer dran-token")}
+    {:ok, conn: put_req_header(conn, "authorization", "Bearer #{token_for_auth()}")}
+  end
+
+  # The legacy admin bearer now lives in the settings table (configured from
+  # /admin/system) — set it per-test so the API pipeline accepts it.
+  defp token_for_auth do
+    Dran.Settings.put("api_token", "test-admin-token")
+    "test-admin-token"
   end
 
   describe "GET /api/search/semantic" do

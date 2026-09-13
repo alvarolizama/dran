@@ -64,9 +64,13 @@ defmodule DranWeb.E2EAuthTest do
     assert Accounts.valid_token?("bogus-token") == :error
   end
 
-  test "legacy admin token still works", %{} do
-    # DRAN_API_TOKEN should still work and be accepted by the MCP controller
-    assert Dran.Auth.valid_token?(Dran.Auth.api_token())
+  test "legacy admin token works when configured, disabled otherwise", %{} do
+    # With no token configured (default), the legacy admin token is disabled
+    # and any bearer is rejected by Dran.Auth.valid_token?/1.
+    refute Dran.Auth.valid_token?("invalid-token")
+
+    Dran.Settings.put("api_token", "test-legacy-token")
+    assert Dran.Auth.valid_token?("test-legacy-token")
     refute Dran.Auth.valid_token?("invalid-token")
   end
 
@@ -342,6 +346,8 @@ defmodule DranWeb.E2EAuthTest do
     end
 
     test "legacy admin token bypasses write_access check", %{conn: conn, ctx1: ctx1} do
+      Dran.Settings.put("api_token", "test-legacy-admin-token")
+
       msg = %{
         "jsonrpc" => "2.0",
         "method" => "tools/call",
@@ -359,7 +365,7 @@ defmodule DranWeb.E2EAuthTest do
 
       conn =
         conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{Dran.Auth.api_token()}")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-legacy-admin-token")
         |> Plug.Conn.put_req_header("accept", "application/json")
         |> Phoenix.ConnTest.post("/api/mcp", msg)
 

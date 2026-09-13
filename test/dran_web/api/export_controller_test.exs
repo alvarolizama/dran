@@ -4,7 +4,10 @@ defmodule DranWeb.API.ExportControllerTest do
   alias Dran.Knowledge
 
   setup %{conn: conn} do
-    {:ok, conn: put_req_header(conn, "authorization", "Bearer dran-token")}
+    # The legacy admin bearer now lives in the settings table (configured
+    # from /admin/system) — set it per-test so the API pipeline accepts it.
+    Dran.Settings.put("api_token", "test-admin-token")
+    {:ok, conn: put_req_header(conn, "authorization", "Bearer test-admin-token")}
   end
 
   describe "GET /api/workspaces/:slug/export" do

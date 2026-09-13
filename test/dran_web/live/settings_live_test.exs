@@ -520,11 +520,14 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   # Tests L222, L229, L236 → /admin/system
-  test "the Sistema header exists with its read-only caption", %{conn: conn} do
+  test "the Sistema header exists with monitoring and instance sections", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/admin/system")
 
     assert html =~ t("Sistema")
-    assert html =~ t("Read-only — loaded from environment variables at startup.")
+    assert html =~ t("Monitoreo, configuración de instancia y entorno.")
+    assert html =~ t("Instancia")
+    assert html =~ t("Base de datos")
+    assert html =~ t("Uptime")
   end
 
   test "inference test button is present in the Inference API section", %{conn: conn} do
@@ -542,6 +545,95 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ t("Probando...")
     # The button is disabled while testing
     assert html =~ "disabled"
+  end
+
+  # Instance settings (Settings-backed) + monitoring on /admin/system
+  describe "admin system: instancia y monitoreo" do
+    test "renders the instance form and monitoring widgets", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/admin/system")
+
+      assert has_element?(view, "#instance-form")
+      assert has_element?(view, "#instance_default_workspace_slug")
+      assert has_element?(view, "#instance_api_token")
+      assert has_element?(view, "button[phx-click='generate_token']")
+      assert has_element?(view, "button[phx-click='refresh_monitoring']")
+    end
+
+    test "refresh_monitoring populates the widgets", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+      html = render_click(view, "refresh_monitoring")
+      # table count appears after a real collect_monitoring run
+      assert html =~ "tablas"
+      assert html =~ t("% usado")
+    end
+
+    test "save_instance persists settings and creates the default workspace", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+      html =
+        render_submit(view, "save_instance", %{
+          "instance" => %{
+            "default_workspace_slug" => "instancia-test",
+            "default_workspace_name" => "Instancia Test",
+            "api_token" => ""
+          }
+        })
+
+      assert html =~ t("Configuración de instancia guardada.")
+      assert Dran.Settings.get("default_workspace_slug") == "instancia-test"
+      assert Dran.Settings.get("default_workspace_name") == "Instancia Test"
+      assert Dran.Auth.default_workspace_slug() == "instancia-test"
+      assert Dran.Auth.default_workspace_name() == "Instancia Test"
+      assert Dran.Auth.default_context_configured?()
+      # The workspace is created on save (mirrors release setup behaviour)
+      assert Dran.Knowledge.get_workspace_by_slug("instancia-test")
+    end
+
+    test "save_instance rejects an invalid slug", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+      html =
+        render_submit(view, "save_instance", %{
+          "instance" => %{
+            "default_workspace_slug" => "Invalid Slug!!",
+            "default_workspace_name" => "",
+            "api_token" => ""
+          }
+        })
+
+      assert html =~ t("Slug inválido: usa minúsculas, dígitos y guiones.")
+      assert is_nil(Dran.Settings.get("default_workspace_slug"))
+    end
+
+    test "generate_token stores a random token in settings", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+      html = render_click(view, "generate_token")
+
+      assert html =~ t("Token generado y copiado al portapapeles.")
+      token = Dran.Settings.get("api_token")
+      assert is_binary(token) and byte_size(token) >= 20
+      assert Dran.Auth.valid_token?(token)
+    end
+
+    test "clearing the token field disables the legacy admin token", %{conn: conn} do
+      # Put the token BEFORE mount so the form carries it, then clear it.
+      Dran.Settings.put("api_token", "old-token")
+      {:ok, view, _html} = live(conn, ~p"/admin/system")
+
+      render_submit(view, "save_instance", %{
+        "instance" => %{
+          "default_workspace_slug" => "",
+          "default_workspace_name" => "",
+          "api_token" => ""
+        }
+      })
+
+      assert is_nil(Dran.Settings.get("api_token"))
+      refute Dran.Auth.valid_token?("old-token")
+      refute Dran.Auth.valid_token?("dran-token")
+    end
   end
 
   # Test L246 → /admin/models

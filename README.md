@@ -222,10 +222,14 @@ or use the REST API directly.
 ## Configuration
 
 Via environment variables — see [`.env.example`](.env.example) for the full list.
-Essentials: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST/PORT/SCHEME`, `DRAN_API_TOKEN`,
-`DRAN_WORKSPACE_SLUG/NAME`, session salts (prod), `UPLOADS_DIR`. Optional: Google OAuth
-vars and `DRAN_INFERENCE_API_URL/KEY` (OpenAI-compatible endpoint powering embeddings,
-summaries, workers, semantic search — without it Dran still works, minus those features).
+Essentials: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST/PORT/SCHEME`, session salts
+(prod), `UPLOADS_DIR`. Optional: Google OAuth vars and `DRAN_INFERENCE_API_URL/KEY`
+(OpenAI-compatible endpoint powering embeddings, summaries, workers, semantic search —
+without it Dran still works, minus those features).
+
+Not env vars (admin UI only, stored in the database): the default workspace and the
+legacy admin API/MCP token — both live in `/admin/system`. Per-user API tokens are
+managed in `/admin/users`; context-scoped API keys in each workspace's settings.
 
 ## Production
 

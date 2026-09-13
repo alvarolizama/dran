@@ -1,46 +1,83 @@
 defmodule Dran.Auth do
   @moduledoc """
-  Startup config helpers for Dran: MCP/API token and default context.
+  Instance-level auth and default-context helpers, backed by `Dran.Settings`
+  (DB) and configurable from `/admin/system`. No environment variables.
+
+    * Admin API token — Settings key `"api_token"`. Legacy bearer token for
+      API/MCP (full owner, no user row). Unset = disabled.
+    * Default context — Settings keys `"default_workspace_slug"` /
+      `"default_workspace_name"`. Used as the fallback workspace slug when a
+      user has no session/cookie and no personal default, and as the context
+      auto-created by release setup / seeds.
 
   Web login is handled entirely by `Dran.Accounts` (email + bcrypt password)
   and the first-run `/setup` flow — there are no env-var login credentials.
-
-  Config read from environment variables at RUNTIME (releases bake the
-  compile-time environment — reading these as module attributes would
-  freeze the Dockerfile's build-time value into the beam files):
-
-    * `DRAN_API_TOKEN` — bearer token for API/MCP (default: `"dran-token"`)
-    * `DRAN_WORKSPACE_SLUG` — default context slug (default: `"personal"`)
-    * `DRAN_WORKSPACE_NAME` — default context display name (default: `"Personal"`)
-
-  The default context is only auto-created (release setup / seeds) when at
-  least one of `DRAN_WORKSPACE_SLUG` / `DRAN_WORKSPACE_NAME` is explicitly set.
   """
 
-  @default_api_token "dran-token"
-  @default_workspace_slug "personal"
-  @default_workspace_name "Personal"
-
-  @doc "Bearer token for API/MCP access (legacy admin token)."
-  def api_token, do: System.get_env("DRAN_API_TOKEN", @default_api_token)
-
-  @doc "The default context slug (startup config)."
-  def default_workspace_slug, do: System.get_env("DRAN_WORKSPACE_SLUG", @default_workspace_slug)
-
-  @doc "The default context display name (startup config)."
-  def default_workspace_name, do: System.get_env("DRAN_WORKSPACE_NAME", @default_workspace_name)
+  @fallback_workspace_slug "personal"
 
   @doc """
-  True when the default context was explicitly configured via
-  `DRAN_WORKSPACE_SLUG` and/or `DRAN_WORKSPACE_NAME`. Only then should the
-  context be auto-created (seeds, release setup).
+  Bearer token for API/MCP access (legacy admin token).
 
-  Read at runtime (not compile time) so release `eval` commands and tests
-  honour the environment they're actually running with.
+  Stored in the `settings` table; unset means the legacy admin token is
+  DISABLED (fail closed on DB errors too). Generate or rotate it from
+  /admin/system.
+  """
+  def api_token do
+    Dran.Settings.get("api_token")
+  rescue
+    _ -> nil
+  end
+
+  @doc "Generates a random URL-safe token for the legacy admin bearer."
+  def generate_token do
+    :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
+  end
+
+  @doc """
+  The default context slug — the settings override, falling back to
+  `"personal"` when unset.
+  """
+  def default_workspace_slug do
+    case Dran.Settings.get("default_workspace_slug") do
+      slug when is_binary(slug) and slug != "" -> slug
+      _ -> @fallback_workspace_slug
+    end
+  rescue
+    _ -> @fallback_workspace_slug
+  end
+
+  @doc """
+  The default context display name — the settings override, falling back to
+  the slug-derived default.
+  """
+  def default_workspace_name do
+    case Dran.Settings.get("default_workspace_name") do
+      name when is_binary(name) and name != "" -> name
+      _ -> String.capitalize(default_workspace_slug())
+    end
+  rescue
+    _ -> String.capitalize(@fallback_workspace_slug)
+  end
+
+  @doc """
+  True when the default context was explicitly configured (via /admin/system).
+  Only then should the context be auto-created (seeds, release setup) — a
+  deleted context stays deleted across deploys when no override is set.
   """
   def default_context_configured? do
-    System.get_env("DRAN_WORKSPACE_SLUG") != nil or System.get_env("DRAN_WORKSPACE_NAME") != nil
+    configured =
+      not blank?(Dran.Settings.get("default_workspace_slug")) or
+        not blank?(Dran.Settings.get("default_workspace_name"))
+
+    configured
+  rescue
+    _ -> false
   end
+
+  defp blank?(nil), do: true
+  defp blank?(""), do: true
+  defp blank?(_), do: false
 
   @doc """
   Checks a bearer token against the configured legacy API token (admin).
