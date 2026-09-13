@@ -4,6 +4,8 @@
 
 # Dran
 
+### *Dran* — Tibetan for "remember". What one agent learns, none forget.
+
 ### Shared memory & knowledge base for AI agent swarms
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -17,12 +19,12 @@
 ## What is Dran
 
 Dran is the **shared brain an agent swarm reads and writes** — one instance, one graph,
-one memory store, shared by every agent and by you.
+one memory store, shared by every agent and by you. What one agent learns, none forget.
 
 Two pillars:
 
 - **Knowledge** — a typed, queryable **knowledge graph**. Pages (`note`, `idea`,
-  `project`, `knowledge`, `technical`, `entity`, `concept`, `reference`) linked by typed
+  `knowledge`, `technical`, `entity`, `concept`, `reference`, `food`) linked by typed
   relations. You browse and edit it in the browser; agents read and write it over MCP/REST.
 - **Memory** — atomic, deduplicated **facts with trust scores**, shared by every agent.
   What one agent learns, all recall. Written through the Hermes plugin and REST,
@@ -46,17 +48,18 @@ is tied to the API key's actor, server-side.
   |---|---|---|---|
   | `note` | free capture | *(free — none validated)* | `date`, `due_date` |
   | `idea` | sparks & thinking | `idea` `question` `hypothesis` `spark` | — |
-  | `project` | work with lifecycle | `project` `plan` `goal` `milestone` | `horizon`, `status`, `due_date` |
   | `knowledge` | captured wisdom | `quote` `summary` `highlight` `excerpt` | `source_url`, `date` |
   | `technical` | code & how-to | `code` `snippet` `debug` `recipe` `config` `command` `template` `pattern` `method` | `language`, `version` |
   | `entity` | named things | `person` `company` `product` `tool` `place` `event` `language` `framework` `hardware` `protocol` | `location`, `external_url` |
   | `concept` | abstract ideas | *(free)* | `domain`, `parent_concept` |
   | `reference` | external sources | `article` `paper` `video` `podcast` `book` `newsletter` `spec` `code` `release` `website` `repo` `api` | `source_url`, `published_at` |
+  | `food` | cooking & gastronomy | `recipe` `ingredient` `dish` `meal` `cuisine` `restaurant` `drink` `technique` | `cuisine`, `servings`, `prep_time`, `cook_time`, `source_url` |
 
   Every type also accepts `meta.props` (free-form key-value bag, indexed). `meta.kind` is
   validated by the changeset (free on `note`/`concept`); it classifies and filters — it
   never changes behavior. Collections and reports are first-class entities in their own
-  tables, not page types.
+  tables, not page types. See [docs/page-types.md](docs/page-types.md) for when to pick
+  which type and how to use each kind.
 
 - **13 relation types** — 5 you set by hand over MCP (`related`, `contradicts`,
   `supersedes`, `part_of`, `embeds`) plus 8 machine-owned, created by Dran and never by

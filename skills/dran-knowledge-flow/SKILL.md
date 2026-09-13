@@ -12,8 +12,8 @@ metadata:
 
 # dran-knowledge-flow — Create and edit knowledge pages
 
-Pages are the unit of knowledge: `note`, `idea`, `project`, `knowledge`,
-`technical`, `entity`, `concept`, `reference`.
+Pages are the unit of knowledge: `note`, `idea`, `knowledge`,
+`technical`, `entity`, `concept`, `reference`, `food`.
 This flow owns the write loop: search first,
 then create or update, then verify by readback.
 
@@ -62,13 +62,12 @@ flowchart TD
 ## Notes on the calls
 
 - `page_type` enum comes from `Dran.PageRegistry` (8 types). Kinds
-  (`meta.kind`, changeset-validated unless marked free) and type-specific
-  meta fields:
+  (`meta.kind`; the lists in `PageMeta.changeset/3` are the contract, but
+  note `create_page` does not enforce them on persist today) and
+  type-specific meta fields:
   - `note` (free-form; date, due_date) — `dran_create_note` /
     `dran_update_note` are title+slug shorthands with **meta merge**
   - `idea` — kinds: idea/question/hypothesis/spark
-  - `project` — kinds: project/plan/goal/milestone; extra meta: horizon,
-    status, due_date
   - `knowledge` — kinds: quote/summary/highlight/excerpt; extra meta:
     source_url, date
   - `technical` — kinds: code/snippet/debug/recipe/config/command/
@@ -78,6 +77,9 @@ flowchart TD
   - `concept` (free kind; domain, parent_concept)
   - `reference` — kinds: article/paper/video/podcast/book/newsletter/
     spec/code/release/website/repo/api; extra meta: source_url, published_at
+  - `food` — kinds: recipe/ingredient/dish/meal/cuisine/restaurant/
+    drink/technique; extra meta: cuisine, servings, prep_time, cook_time,
+    source_url
 
   Every type also takes `meta.props` (free key-value bag). Kind
   classifies/filters only — never changes behavior.

@@ -52,6 +52,32 @@ Run ONLY the flow you landed on. If the diagram sends you to another skill,
 - MCP resources: `page://<ws>/<slug>`, `home://<ws>/index`. Prompts:
   `brainstorm` (topic).
 
+## Workspace selection (every call is workspace-scoped)
+
+```mermaid
+flowchart TD
+  S([page/memory tool call]) --> G1{"user named a\nworkspace?"}
+  G1 -->|yes| U1["use that slug —\nverify with home://<ws>/index"]
+  G1 -->|no| G2{"key reaches\nworkspaces?"}
+  G2 -->|"one / a list"| U2["omit 'workspace' — server injects\nthe FIRST workspace of the key\n(get_default_context_for_user)"]
+  G2 -->|"owner / :all"| U3["no injection — ALWAYS name\nthe workspace explicitly"]
+  U1 --> W[run tool + readback]
+  U2 --> W
+  U3 --> W
+```
+
+- The instance default workspace (`Dran.Auth.default_workspace_slug/0`,
+  Settings → /admin/system, fallback `personal`) is what web/seeds use —
+  NOT necessarily what your key reaches.
+- One key = one actor with its own workspace matrix (Dran → Settings →
+  Agents). Owner keys and `:all` keys get no injection — always name the
+  workspace explicitly with those.
+- The memory plugin's workspace is separate (dashboard → Memory → Dran) and
+  validated against the key's matrix on connect; do not assume it equals
+  the workspace you use for pages.
+- Discover valid slugs: `home://<ws>/index` resource, or a failing call
+  answers `context 'x' not found`.
+
 ## General rules (every flow obeys them)
 
 ```mermaid
@@ -74,7 +100,7 @@ flowchart LR
 
 | Flow | When to load it |
 | --- | --- |
-| `dran-knowledge-flow` | Create, update, search or rename pages (note, idea, project, knowledge, technical, entity, concept, reference…) |
+| `dran-knowledge-flow` | Create, update, search or rename pages (note, idea, knowledge, technical, entity, concept, reference, food…) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (REST) |
