@@ -381,9 +381,6 @@ defmodule DranWeb.Router do
     # Dashboard — overview of the entire instance + all workspaces
     live "/", DashboardLive, :index
 
-    # Docs (global, not workspace-scoped)
-    live "/docs", DocsLive, :index
-
     # Workspace switching
     post "/workspace", SessionController, :switch_workspace
   end
