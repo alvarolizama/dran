@@ -108,18 +108,18 @@ defmodule Dran.WorkspaceTest do
   describe "feature_enabled?/2" do
     test "empty enabled_features (default) → all features ON" do
       ws = %Workspace{enabled_features: %{}}
-      assert Workspace.feature_enabled?(ws, "goals")
-      assert Workspace.feature_enabled?(ws, :goals)
+      assert Workspace.feature_enabled?(ws, "clusters")
+      assert Workspace.feature_enabled?(ws, :clusters)
     end
 
     test "feature explicitly disabled → returns false" do
-      ws = %Workspace{enabled_features: %{"goals" => false}}
-      refute Workspace.feature_enabled?(ws, "goals")
+      ws = %Workspace{enabled_features: %{"clusters" => false}}
+      refute Workspace.feature_enabled?(ws, "clusters")
     end
 
     test "feature explicitly enabled → returns true" do
-      ws = %Workspace{enabled_features: %{"goals" => true}}
-      assert Workspace.feature_enabled?(ws, "goals")
+      ws = %Workspace{enabled_features: %{"clusters" => true}}
+      assert Workspace.feature_enabled?(ws, "clusters")
     end
 
     test "unknown feature with empty map → ON (default)" do

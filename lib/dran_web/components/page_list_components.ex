@@ -35,10 +35,6 @@ defmodule DranWeb.PageListComponents do
            gettext("Save articles, papers, videos and books worth remembering."),
            gettext("Add Reference")}
 
-        "goal" ->
-          {gettext("No goals yet"), gettext("Set objectives and track their progress."),
-           gettext("Create Goal")}
-
         _ ->
           {gettext("No pages yet"),
            gettext("Your second brain is empty. Capture your first page."),

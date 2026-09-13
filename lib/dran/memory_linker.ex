@@ -11,9 +11,8 @@ defmodule Dran.MemoryLinker do
 
   * **Zero inference cost** — reuses the embedding `Dran.Memory.add/1` already
     generated for semantic dedupe; a write without one simply skips linking.
-  * **Bounded write volume** — hard caps of `@max_links` page links plus
-    `@max_links` propagated goal links per memory (≤ 6 relations total),
-    matching the page augmenter's `k` neighbourhood.
+  * **Bounded write volume** — hard cap of `@max_links` informs relations per
+    memory, matching the page augmenter's `k` neighbourhood.
   * **Workspace-scoped** — only pages of the memory's own workspace are
     candidates, mirroring every other relation surface.
   * **Idempotent** — `Repo.insert(on_conflict: :nothing)`: re-running the
@@ -37,16 +36,12 @@ defmodule Dran.MemoryLinker do
   def max_links, do: @max_links
 
   @doc """
-  Link `memory` to its top-k semantically closest pages, and through them to
-  their goals.
+  Link `memory` to its top-k semantically closest pages.
 
   Pages are matched by embedding cosine distance (top-k under the workspace
-  threshold). Goals have no embedding, so they inherit: a memory that informs
-  a page `part_of` a goal also informs that goal — a memory about "ship the
-  auth flow" lands on the auth goal through the auth pages. Returns
-  `{:ok, created_count}` — relations actually inserted (conflicts count as
-  0). Memories without an embedding, or with no close pages, link nothing
-  and return `{:ok, 0}`.
+  threshold). Returns `{:ok, created_count}` — relations actually inserted
+  (conflicts count as 0). Memories without an embedding, or with no close
+  pages, link nothing and return `{:ok, 0}`.
   """
   @spec link_to_pages(Dran.Memory.t()) :: {:ok, non_neg_integer()}
   def link_to_pages(%Dran.Memory{embedding: nil}), do: {:ok, 0}
@@ -68,36 +63,14 @@ defmodule Dran.MemoryLinker do
           select: %{id: p.id, type: "page"}
       )
 
-    # Goals have NO embedding column — semantic matching is impossible
-    # without extra inference per goal (violates the zero-cost constraint).
-    # Instead: propagate transitively. A memory that informs a page which is
-    # `part_of` a goal also informs that goal — zero extra queries beyond
-    # one relation lookup over the linked pages, bounded by @max_links.
-    linked_page_ids = Enum.map(page_candidates, & &1.id)
-
-    goal_candidates =
-      if linked_page_ids == [] do
-        []
-      else
-        Repo.all(
-          from r in Dran.Relation,
-            where:
-              r.source_id in ^linked_page_ids and r.source_type == "page" and
-                r.relation_type == "part_of" and r.target_type == "goal",
-            distinct: true,
-            limit: ^@max_links,
-            select: %{id: r.target_id, type: "goal"}
-        )
-      end
-
     created =
-      Enum.count(page_candidates ++ goal_candidates, fn %{id: target_id, type: target_type} ->
+      Enum.count(page_candidates, fn %{id: target_id} ->
         case Repo.insert(
                Dran.Relation.changeset(%Dran.Relation{}, %{
                  source_id: memory.id,
                  source_type: "memory",
                  target_id: target_id,
-                 target_type: target_type,
+                 target_type: "page",
                  relation_type: "informs"
                }),
                on_conflict: :nothing

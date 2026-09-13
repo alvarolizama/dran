@@ -4,9 +4,8 @@ defmodule Dran.Knowledge do
 
   Owns workspaces, pages (CRUD, embeds, renames), relations, page
   versions, search (FTS / fuzzy / semantic / hybrid), the audit log,
-  lint/health checks and stats/metrics. Goal, collection and report CRUD
-  live in their own contexts: `Dran.Goals`, `Dran.Collections`, and
-  `Dran.Reports`.
+  lint/health checks and stats/metrics. Collection and report CRUD
+  live in their own contexts: `Dran.Collections` and `Dran.Reports`.
 
   ## Usage
 
@@ -170,11 +169,6 @@ defmodule Dran.Knowledge do
   - `:type` — filter by page_type
   - `:kind` — filter by `meta.kind` (visual classifier: filter/group only)
   - `:tag` — filter by a single tag
-  - `:goal_slug` — filter by planning goal. A page matches when its own
-    `meta.goal_slug` equals the value OR (for plans) its `meta.plan_slug`
-    points to a plan whose `meta.goal_slug` equals the value. The special
-    value `"none"` matches pages with no direct goal_slug and no plan
-    goal_slug. Mainly meaningful with `type: "plan"`.
   - `:plan_slug` — filter by `meta.plan_slug`. The special value `"none"`
     matches pages with no/empty plan_slug. Mainly meaningful with
     `type: "plan"`.
@@ -1212,22 +1206,9 @@ defmodule Dran.Knowledge do
           {nodes, total}
       end
 
-    # Goals are first-class entities (own table, not pages). Load them as
-    # graph nodes with type "goal" so they appear alongside pages. Goals
-    # don't compete with pages for the max_nodes cap — they're additive.
-    goal_nodes =
-      Repo.all(
-        from g in Dran.Goals.Goal,
-          where: (g.workspace_id == ^workspace_id and is_nil(g.archived)) or g.archived == false,
-          select: %{id: g.id, title: g.title, slug: g.slug, type: fragment("'goal'")}
-      )
-
-    nodes = page_nodes ++ goal_nodes
-    total_nodes = total_pages + length(goal_nodes)
-
     # Memories are first-class too (own table, multi-agent shared memory).
-    # Like goals they're ADDITIVE — they don't compete with pages for the
-    # max_nodes cap — but capped at the newest 100 so a write-hot memory
+    # They're ADDITIVE — they don't compete with pages for the max_nodes
+    # cap — but capped at the newest 100 so a write-hot memory
     # store can't flood the 3D view. slug stays nil: the graph hook only
     # navigates nodes with a slug, so memory nodes are hover-only.
     memory_nodes =
@@ -1242,15 +1223,14 @@ defmodule Dran.Knowledge do
         %{id: m.id, title: truncate_memory_label(m.content), slug: nil, type: m.type}
       end)
 
-    nodes = nodes ++ memory_nodes
-    total_nodes = total_nodes + length(memory_nodes)
+    nodes = page_nodes ++ memory_nodes
+    total_nodes = total_pages + length(memory_nodes)
 
     node_ids = Enum.map(page_nodes, & &1.id)
-    goal_ids = Enum.map(goal_nodes, & &1.id)
     memory_ids = Enum.map(memory_nodes, & &1.id)
 
     edges =
-      if Enum.empty?(node_ids) and Enum.empty?(goal_ids) and Enum.empty?(memory_ids) do
+      if Enum.empty?(node_ids) and Enum.empty?(memory_ids) do
         []
       else
         # Page↔Page edges (both endpoints are pages)
@@ -1272,40 +1252,23 @@ defmodule Dran.Knowledge do
             )
           end
 
-        # Page→Goal edges (source is a page, target is a goal)
-        goal_edges =
-          if Enum.empty?(node_ids) or Enum.empty?(goal_ids) do
-            []
-          else
-            Repo.all(
-              from r in Relation,
-                where: r.source_id in ^node_ids and r.target_id in ^goal_ids,
-                select: %{
-                  source: r.source_id,
-                  target: r.target_id,
-                  type: r.relation_type,
-                  weight: r.weight
-                }
-            )
-          end
-
-        # Memory→Page/Goal edges — the `informs` relations MemoryLinker
-        # derives at ingest. Unlike page/goal edges (which implicitly match
+        # Memory→Page edges — the `informs` relations MemoryLinker
+        # derives at ingest. Unlike page edges (which implicitly match
         # their endpoint type by id set), memory edges MUST filter by
         # source_type explicitly: the memory id set is disjoint from page
-        # and goal ids, and any stray cross-type row would dangle.
+        # ids, and any stray cross-type row would dangle.
         memory_edges =
-          if Enum.empty?(memory_ids) or (Enum.empty?(node_ids) and Enum.empty?(goal_ids)) do
+          if Enum.empty?(memory_ids) or Enum.empty?(node_ids) do
             []
           else
-            target_ids = node_ids ++ goal_ids
+            target_ids = node_ids
 
             Repo.all(
               from r in Relation,
                 where:
                   r.source_id in ^memory_ids and r.source_type == "memory" and
                     r.target_id in ^target_ids and
-                    r.target_type in ["page", "goal"],
+                    r.target_type == "page",
                 select: %{
                   source: r.source_id,
                   target: r.target_id,
@@ -1315,7 +1278,7 @@ defmodule Dran.Knowledge do
             )
           end
 
-        page_edges ++ goal_edges ++ memory_edges
+        page_edges ++ memory_edges
       end
 
     total_edges =
@@ -1428,22 +1391,12 @@ defmodule Dran.Knowledge do
   the rendered graph is capped.
   """
   def graph_type_counts(workspace_id, exclude_types \\ []) do
-    page_counts =
-      Repo.all(
-        from p in graph_base(workspace_id, exclude_types),
-          group_by: p.page_type,
-          select: {p.page_type, count(p.id)}
-      )
-      |> Map.new()
-
-    goal_count =
-      Repo.one(
-        from g in Dran.Goals.Goal,
-          where: g.workspace_id == ^workspace_id and (is_nil(g.archived) or g.archived == false),
-          select: count(g.id)
-      )
-
-    Map.put(page_counts, "goal", goal_count || 0)
+    Repo.all(
+      from p in graph_base(workspace_id, exclude_types),
+        group_by: p.page_type,
+        select: {p.page_type, count(p.id)}
+    )
+    |> Map.new()
     |> Map.put("memory", Dran.Memory.count_memories(workspace_id))
   end
 

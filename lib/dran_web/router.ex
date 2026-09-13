@@ -340,34 +340,6 @@ defmodule DranWeb.Router do
           _ -> slug
         end
 
-      # /api/workflows/:workflow_id/sessions — workspace from the workflow
-      # (SEC-002 pattern; UUID-guarded so a garbage
-      # id 403s instead of raising a CastError).
-      conn.request_path =~ "/api/workflows/" and is_binary(conn.params["workflow_id"]) ->
-        case Ecto.UUID.cast(conn.params["workflow_id"]) do
-          {:ok, uuid} ->
-            case Dran.Repo.get(Dran.Workflows.Workflow, uuid) do
-              %{workspace_id: ws_id} -> ws_id
-              _ -> nil
-            end
-
-          :error ->
-            nil
-        end
-
-      # /api/workflow_runs/:id/* — workspace from the run (start/progress/close/retry).
-      conn.request_path =~ "/api/workflow-runs/" and is_binary(conn.params["id"]) ->
-        case Ecto.UUID.cast(conn.params["id"]) do
-          {:ok, uuid} ->
-            case Dran.Repo.get(Dran.Workflows.Run, uuid) do
-              %{workspace_id: ws_id} -> ws_id
-              _ -> nil
-            end
-
-          :error ->
-            nil
-        end
-
       true ->
         nil
     end
@@ -474,10 +446,6 @@ defmodule DranWeb.Router do
     get "/search/fuzzy", SearchController, :fuzzy
     get "/search/semantic", SearchController, :semantic
 
-    # Goals (read-only)
-    get "/goals", GoalController, :index
-    get "/goals/:slug", GoalController, :show
-
     # Quality / maintenance (read-only)
     get "/lint", LintController, :lint
 
@@ -489,11 +457,6 @@ defmodule DranWeb.Router do
     # Shared multi-agent memory (read)
     get "/memory", MemoryController, :index
     get "/memory/search", MemoryController, :search
-
-    # Workflow executions (read): session inspection + the agent pull
-    # endpoint (DranWeb.API.ExecutionController)
-    get "/workflow-sessions/:id", ExecutionController, :show_session
-    get "/pending-workflow-runs", ExecutionController, :pending
 
     # Agent self-description (the Hermes memory plugin auto-discovers its
     # memory workspace + permitted workspaces from its own API key)
@@ -518,16 +481,6 @@ defmodule DranWeb.Router do
     # Relations (write)
     post "/relations", RelationController, :create
     delete "/relations/:id", RelationController, :delete
-
-    # Workflow executions (write) — the agent loop over Dran.Executions:
-    # open a session, claim a run, report progress, close, retry.
-    # require_write_access resolves the workspace from params["workspace"]
-    # (all routes carry it).
-    post "/workflows/:workflow_id/sessions", ExecutionController, :open
-    post "/workflow-runs/:id/start", ExecutionController, :start
-    put "/workflow-runs/:id/progress", ExecutionController, :progress
-    post "/workflow-runs/:id/close", ExecutionController, :close
-    post "/workflow-runs/:id/retry", ExecutionController, :retry
   end
 
   # ── MCP Streamable HTTP endpoint (self-authenticating) ────────────────────
@@ -596,10 +549,7 @@ defmodule DranWeb.Router do
 
     # First-class entities (their own schemas, not page types) — MUST be
     # defined BEFORE the generic /:workspace_slug/:type route, otherwise
-    # /:workspace_slug/:type would swallow /:workspace_slug/goals etc.
-    live "/:workspace_slug/goals", GoalLive, :index
-    live "/:workspace_slug/goals/:slug", GoalLive, :show
-
+    # /:workspace_slug/:type would swallow them.
     live "/:workspace_slug/collections", SmartCollectionLive, :index
     live "/:workspace_slug/collections/new", SmartCollectionLive, :new
     live "/:workspace_slug/collections/:slug", SmartCollectionLive, :show
@@ -618,11 +568,6 @@ defmodule DranWeb.Router do
 
     # Shared multi-agent memory (first-class, own table — not page types).
     live "/:workspace_slug/memory", MemoryLive, :index
-
-    # Workflows — goals with contracts and their execution (index tabs +
-    # goal DAG show).
-    live "/:workspace_slug/workflows", WorkflowsLive, :index
-    live "/:workspace_slug/workflows/:slug", WorkflowsLive, :show
 
     live "/:workspace_slug/collection/:slug", HomeLive, :collection
     live "/:workspace_slug/letter/:letter", HomeLive, :letter

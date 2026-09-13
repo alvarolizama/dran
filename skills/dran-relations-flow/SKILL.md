@@ -23,7 +23,6 @@ flowchart TD
   Q{What do you need?} -->|"link/unlink two\nexisting pages"| SELF["THIS SKILL\ndran-relations-flow"]
   Q -->|"the target page\ndoes not exist yet"| K[dran-knowledge-flow]
   Q -->|"propose relations for\norphans automatically"| X[dran-workers-flow]
-  Q -->|"step sequencing in\na workflow"| W[dran-workflow-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -67,8 +66,8 @@ flowchart TD
   `contradicts`, `embeds`. The schema accepts 13 types server-side, but the
   rest are NOT creatable over MCP: `semantic` is machine-owned (auto-created
   by the augmenter from embeddings), `mentions` comes from the entity
-  linker, `works_in`/`has_tier`/`based_in`/`written_in`/`built_with` from
-  props materialization, and `depends_on` is workflow-domain only.
+  linker, and `works_in`/`has_tier`/`based_in`/`written_in`/`built_with`
+  from props materialization.
 - Direction matters: `part_of` from the child TO the parent.
 - Duplicate relations on the same pair+type are idempotent — safe to retry.
 - `dran_delete_relation` takes an OPTIONAL `relation_type`: **omitting it

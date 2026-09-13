@@ -81,7 +81,7 @@ defmodule DranWeb.SidebarNavTest do
       |> Enum.map(&(&1 |> String.replace(~r/<[^>]*>/, "") |> String.trim()))
     end
 
-    test "goals and workflows sit right below Inicio, outside any group" do
+    test "no Objetivos/Workflows links remain outside any group" do
       html = workspace_nav()
 
       assert group_labels(html) == [
@@ -93,13 +93,9 @@ defmodule DranWeb.SidebarNavTest do
       [first_summary | _rest] = summary_positions(html)
 
       home_pos = pos(html, ~s(href="/personal"))
-      goals_pos = pos(html, ~s(href="/personal/goals"))
-      workflows_pos = pos(html, ~s(href="/personal/workflows"))
-
-      # Inicio → Objetivos → Workflows, todos antes del primer grupo
-      assert home_pos < goals_pos
-      assert goals_pos < workflows_pos
-      assert workflows_pos < first_summary
+      assert home_pos < first_summary
+      refute html =~ ~s(href="/personal/goals")
+      refute html =~ ~s(href="/personal/workflows")
     end
 
     test "Clusters sits below Referencias inside Knowledge base" do
@@ -129,9 +125,9 @@ defmodule DranWeb.SidebarNavTest do
     end
 
     test "active key highlights the right link" do
-      html = workspace_nav("workflows")
+      html = workspace_nav("memory")
 
-      p = pos(html, ~s(href="/personal/workflows"))
+      p = pos(html, ~s(href="/personal/memory"))
       {end_pos, _len} = :binary.match(html, "</a>", scope: {p, byte_size(html) - p})
       anchor = binary_part(html, p, end_pos - p)
       assert anchor =~ "bg-primary/10"

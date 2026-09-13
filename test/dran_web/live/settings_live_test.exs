@@ -419,7 +419,7 @@ defmodule DranWeb.SettingsLiveTest do
           name: "Brain Tuning #{unique}",
           slug: "brain-tuning-#{unique}",
           # The settings form only renders when all required features are on
-          enabled_features: %{feature_goals: true}
+          enabled_features: %{feature_clusters: true}
         })
 
       # Add the test user to the workspace as owner

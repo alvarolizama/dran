@@ -205,7 +205,6 @@ defmodule DranWeb.Layouts do
           references: safe_count.("reference"),
           clusters: clusters_count,
           collections: collection_count,
-          goals: length(Dran.Goals.list_goals(workspace_id: context.id, limit: 500)),
           contexts: contexts_count,
           graph: stats[:total_relations] || 0,
           activity: Dran.Knowledge.count_log(context.id),
@@ -245,8 +244,8 @@ defmodule DranWeb.Layouts do
 
   def sidebar_nav(assigns) do
     # Unified workspace sidebar: when a workspace_slug is present the nav shows
-    # the workspace sections as labelled groups (Inicio/Objetivos/Workflows,
-    # Knowledge base, Memory, Insights); without a workspace (dashboard/admin/
+    # the workspace sections as labelled groups (Inicio, Knowledge base,
+    # Memory, Insights); without a workspace (dashboard/admin/
     # account) the nav is empty and only the footer icons show.
     slug = assigns[:workspace_slug]
 
@@ -307,8 +306,8 @@ defmodule DranWeb.Layouts do
     end
   end
 
-  # Builds the workspace nav as labelled groups (Inicio/Objetivos/Workflows,
-  # Knowledge base, Memory, Insights), gated by feature flags.
+  # Builds the workspace nav as labelled groups (Inicio, Knowledge base,
+  # Memory, Insights), gated by feature flags.
   defp workspace_groups(ws, slug, counts) do
     enabled? = fn feature ->
       case ws do
@@ -345,21 +344,10 @@ defmodule DranWeb.Layouts do
       |> Enum.reject(&(!&1))
 
     # Sin etiqueta (siempre visibles, sin <details> colapsable):
-    # Inicio + objetivos y workflows directo debajo
-    home_items =
-      [
-        %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
-        enabled?.("goals") &&
-          %{key: "goals", label: gettext("Objetivos"), icon: "hero-flag", path: base <> "/goals"},
-        enabled?.("workflows") &&
-          %{
-            key: "workflows",
-            label: gettext("Workflows"),
-            icon: "hero-queue-list",
-            path: base <> "/workflows"
-          }
-      ]
-      |> Enum.reject(&(!&1))
+    # Inicio directo arriba.
+    home_items = [
+      %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base}
+    ]
 
     memory_items = [
       %{

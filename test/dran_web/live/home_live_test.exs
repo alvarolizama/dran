@@ -84,17 +84,6 @@ defmodule DranWeb.HomeLiveTest do
 
       assert_redirect(view, "/#{wiki_ctx.slug}/notes/#{page.slug}")
     end
-
-    test "goal nodes navigate to the first-class goals route", %{
-      conn: conn,
-      wiki_ctx: wiki_ctx
-    } do
-      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/graph")
-
-      render_click(view, "node_click", %{"slug" => "my-goal", "type" => "goal"})
-
-      assert_redirect(view, "/#{wiki_ctx.slug}/goals/my-goal")
-    end
   end
 
   describe "authentication" do

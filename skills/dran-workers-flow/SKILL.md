@@ -24,7 +24,6 @@ flowchart TD
   Q{What do you need?} -->|"run a worker:\ndedupe, link, graph RAG"| SELF["THIS SKILL\ndran-workers-flow"]
   Q -->|"apply a relation the\nlink_gardener proposed"| R[dran-relations-flow]
   Q -->|"cleanup of pages the\ncurator flagged"| K[dran-knowledge-flow]
-  Q -->|"claim/report/close\nworkflow runs"| W[dran-workflow-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```

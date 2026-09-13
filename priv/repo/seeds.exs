@@ -3,7 +3,7 @@
 #     mix run priv/repo/seeds.exs
 #
 # Creates the default context and seeds it with realistic Spanish content:
-# goals with nested todos, notes with embeds, concepts with semantic relations.
+# notes with embeds, concepts with semantic relations.
 # Idempotent — safe to run multiple times.
 #
 # Admin users are NOT created here: the first-run /setup web flow handles
@@ -72,24 +72,6 @@ defmodule Seeder do
     end
   end
 
-  @doc "Create a goal only if it doesn't already exist (by slug within context)."
-  def goal!(workspace_id, attrs) do
-    slug = attrs["slug"] || attrs[:slug]
-
-    case Dran.Goals.get_goal_by_slug(slug, workspace_id) do
-      nil ->
-        # Goals have no owner fields — drop them before the changeset.
-        attrs = Map.drop(attrs, ["owner", "created_by", :owner, :created_by])
-        {:ok, goal} = Dran.Goals.create_goal(Map.put(attrs, "workspace_id", workspace_id))
-        IO.puts("  ✓ Created goal: #{goal.slug}")
-        goal
-
-      existing ->
-        IO.puts("  · Exists   goal: #{existing.slug}")
-        existing
-    end
-  end
-
   @doc "Create a relation by slugs (idempotent via on_conflict: :nothing)."
   def rel!(workspace_id, source_slug, target_slug, type \\ "related") do
     Dran.Knowledge.create_relation_by_slugs(source_slug, target_slug, type, workspace_id)
@@ -97,85 +79,6 @@ defmodule Seeder do
 end
 
 IO.puts("\nSeeding context '#{workspace_slug}' with realistic content...\n")
-
-# ──────────────────────────────────────────────────────────────────────────
-# 1. Goals (3) with kanban_status
-# ──────────────────────────────────────────────────────────────────────────
-
-IO.puts("Goals:")
-
-goal_aprender_elixir =
-  Seeder.goal!(ctx_id, %{
-    "slug" => "goal-aprender-elixir-phoenix",
-    "title" => "Aprender Elixir y Phoenix",
-    "body" => """
-    # Aprender Elixir y Phoenix
-
-    Dominar el stack Elixir + Phoenix + LiveView para construir aplicaciones
-    concurrentes y en tiempo real.
-
-    ## Objetivos específicos
-    - Comprender el modelo de concurrencia con actores (GenServer, Supervisor)
-    - Construir una LiveView completa con pubsub
-    - Desplegar en producción con releases
-
-    ## Recursos
-    - Programming Phoenix LiveView (Bruce Tate)
-    - Elixir in Action (Saša Jurić)
-    - Hexdocs oficial
-    """,
-    "summary" => "Dominar Elixir, Phoenix y LiveView para construir apps concurrentes.",
-    "owner" => "alvaro",
-    "created_by" => "alvaro"
-  })
-
-goal_escribir_libro =
-  Seeder.goal!(ctx_id, %{
-    "slug" => "goal-escribir-libro-segundo-cerebro",
-    "title" => "Escribir libro sobre Segundo Cerebro",
-    "body" => """
-    # Escribir libro: Construyendo tu Segundo Cerebro
-
-    Un libro práctico sobre cómo implementar un sistema de gestión de conocimiento
-    personal usando metodologías Zettelkasten, PARA y herramientas digitales.
-
-    ## Estructura propuesta
-    1. Introducción: Por qué necesitas un segundo cerebro
-    2. Capturar: Recolección de información
-    3. Organizar: Sistemas y estructuras
-    4. Destilar: Resúmenes y conexiones
-    5. Expresar: Crear a partir del conocimiento
-
-    ## Estado
-    Borrador del capítulo 1 completo. Trabajando en capítulo 2.
-    """,
-    "summary" => "Libro práctico sobre gestión de conocimiento personal (Zettelkasten, PARA).",
-    "owner" => "alvaro",
-    "created_by" => "alvaro"
-  })
-
-goal_mejorar_salud_fisica =
-  Seeder.goal!(ctx_id, %{
-    "slug" => "goal-mejorar-salud-fisica",
-    "title" => "Mejorar salud física",
-    "body" => """
-    # Mejorar salud física
-
-    Establecer una rutina sostenible de ejercicio y alimentación.
-
-    ## Metas
-    - Correr 5K sin parar
-    - 3 sesiones de fuerza por semana
-    - Dormir 7+ horas diarias
-    - Reducir azúcar procesado
-
-    ## Progreso
-    Actualmente corriendo 3K. Mejorando la consistencia.
-    """,
-    "summary" => "Rutina sostenible de ejercicio, alimentación y descanso.",
-    "owner" => "alvaro",
-    "created_by" => "alvaro"
-  })
 
 # ──────────────────────────────────────────────────────────────────────────
 # 3. Notes (5+) with embeds ![[slug]] between them
@@ -205,8 +108,6 @@ note_zettelkasten =
     la red de conexiones que se forma entre ellas.
 
     ![[concepto-segundo-cerebro]]
-
-    Relacionado con mi objetivo de ![[goal-escribir-libro-segundo-cerebro]].
 
     También conecta con el concepto de ![[concepto-grafo-de-conocimiento]].
     """,
@@ -315,7 +216,6 @@ note_elixir_pattern =
     end
     ```
 
-    Relacionado con ![[goal-aprender-elixir-phoenix]].
 
     El concepto de actores se explica en ![[concepto-modelo-actores]].
     """,
@@ -344,8 +244,6 @@ note_writing_routine =
     3. 45 min de escritura sin distracciones
     4. 15 min de revisión y edición
     5. Planificar el día
-
-    Esta rutina alimenta directamente ![[goal-escribir-libro-segundo-cerebro]].
 
     Las ideas sobre productividad de ![[nota-reflexion-productividad-diaria]]
     me ayudaron a diseñar esta rutina sin obsesionarme con la perfección.
@@ -441,8 +339,7 @@ concept_actores =
 
     Este modelo es la base de la concurrencia en Erlang/Elixir (BEAM VM).
 
-    Relacionado con ![[nota-patron-genserver-elixir]] y con el objetivo de
-    ![[goal-aprender-elixir-phoenix]].
+    Relacionado con ![[nota-patron-genserver-elixir]].
 
     Al igual que un ![[concepto-grafo-de-conocimiento]], los actores forman
     una red de nodos que se comunican.
@@ -470,50 +367,6 @@ Seeder.rel!(ctx_id, "concepto-modelo-actores", "nota-patron-genserver-elixir", "
 Seeder.rel!(ctx_id, "concepto-segundo-cerebro", "concepto-grafo-de-conocimiento", "semantic")
 Seeder.rel!(ctx_id, "concepto-grafo-de-conocimiento", "concepto-modelo-actores", "semantic")
 Seeder.rel!(ctx_id, "concepto-segundo-cerebro", "concepto-modelo-actores", "semantic")
-
-# Part_of: todos are part of goals
-Seeder.rel!(
-  ctx_id,
-  "todo-completar-curso-elixir-school",
-  "goal-aprender-elixir-phoenix",
-  "part_of"
-)
-
-Seeder.rel!(
-  ctx_id,
-  "todo-construir-app-liveview-tareas",
-  "goal-aprender-elixir-phoenix",
-  "part_of"
-)
-
-Seeder.rel!(
-  ctx_id,
-  "todo-leer-programming-phoenix-liveview",
-  "goal-aprender-elixir-phoenix",
-  "part_of"
-)
-
-Seeder.rel!(
-  ctx_id,
-  "todo-borrador-capitulo-1-libro",
-  "goal-escribir-libro-segundo-cerebro",
-  "part_of"
-)
-
-Seeder.rel!(ctx_id, "todo-esquema-capitulo-2", "goal-escribir-libro-segundo-cerebro", "part_of")
-Seeder.rel!(ctx_id, "todo-rutina-correr-3x-semana", "goal-mejorar-salud-fisica", "part_of")
-Seeder.rel!(ctx_id, "todo-ajustar-dieta-reducir-azucar", "goal-mejorar-salud-fisica", "part_of")
-
-# Related: notes to goals
-Seeder.rel!(
-  ctx_id,
-  "nota-rutina-escritura-manana",
-  "goal-escribir-libro-segundo-cerebro",
-  "related"
-)
-
-Seeder.rel!(ctx_id, "nota-patron-genserver-elixir", "goal-aprender-elixir-phoenix", "related")
-Seeder.rel!(ctx_id, "nota-reflexion-productividad-diaria", "goal-mejorar-salud-fisica", "related")
 
 IO.puts("  ✓ Relations created (related, semantic, part_of, embeds)")
 

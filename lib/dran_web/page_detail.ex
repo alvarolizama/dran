@@ -1,7 +1,7 @@
 defmodule DranWeb.PageDetail do
   @moduledoc """
   Shared plumbing for the per-page-type LiveViews (note, entity, concept,
-  reference, todo, goal, plan, project).
+  reference, plan, project).
 
   Those LiveViews all follow the same shape: an index list at `/notes` and a
   detail view at `/notes/:slug` with relations, versions, activity log,

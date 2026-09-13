@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict tNCaFRlly98ueolb1z3SdEc92AV7fKtgAHk92EW40VbFfr0gjorGta8eIaMygFh
+\restrict HSeE1DNL6ay8AvaUT6JA4yLJldJmoSeQUIr26mixpmG5iV69GNyvIwQUhFi7aKZ
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -177,29 +177,6 @@ CREATE TABLE public.collections (
     workspace_id uuid NOT NULL,
     inserted_at timestamp(0) without time zone NOT NULL,
     updated_at timestamp(0) without time zone NOT NULL
-);
-
-
---
--- Name: goals; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.goals (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    title character varying(255) NOT NULL,
-    slug character varying(255) NOT NULL,
-    summary character varying(255),
-    body text DEFAULT ''::character varying,
-    status character varying(255) DEFAULT 'active'::character varying,
-    archived boolean DEFAULT false,
-    parent_goal_id uuid,
-    workspace_id uuid NOT NULL,
-    inserted_at timestamp(0) without time zone NOT NULL,
-    updated_at timestamp(0) without time zone NOT NULL,
-    created_by character varying(255) DEFAULT 'system'::character varying NOT NULL,
-    updated_by character varying(255),
-    checklist jsonb DEFAULT '[]'::jsonb NOT NULL,
-    pinned boolean DEFAULT false NOT NULL
 );
 
 
@@ -441,99 +418,6 @@ CREATE TABLE public.worker_steps (
 
 
 --
--- Name: workflow_runs; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.workflow_runs (
-    id uuid DEFAULT gen_random_uuid() CONSTRAINT task_runs_id_not_null NOT NULL,
-    session_id uuid CONSTRAINT task_runs_session_id_not_null NOT NULL,
-    workspace_id uuid CONSTRAINT task_runs_workspace_id_not_null NOT NULL,
-    contract_version jsonb,
-    status character varying(255) DEFAULT 'pending'::character varying CONSTRAINT task_runs_status_not_null NOT NULL,
-    outcome character varying(255),
-    gate_results jsonb DEFAULT '{}'::jsonb,
-    checkpoints jsonb DEFAULT '{}'::jsonb,
-    actor_id uuid,
-    attempt integer DEFAULT 1 CONSTRAINT task_runs_attempt_not_null NOT NULL,
-    inserted_at timestamp(0) without time zone CONSTRAINT task_runs_inserted_at_not_null NOT NULL,
-    updated_at timestamp(0) without time zone CONSTRAINT task_runs_updated_at_not_null NOT NULL,
-    step_id uuid,
-    progress jsonb DEFAULT '{}'::jsonb CONSTRAINT runs_progress_not_null NOT NULL
-);
-
-
---
--- Name: workflow_sessions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.workflow_sessions (
-    id uuid DEFAULT gen_random_uuid() CONSTRAINT goal_sessions_id_not_null NOT NULL,
-    goal_id uuid,
-    workspace_id uuid CONSTRAINT goal_sessions_workspace_id_not_null NOT NULL,
-    label character varying(255),
-    context jsonb DEFAULT '{}'::jsonb,
-    status character varying(255) DEFAULT 'in_flight'::character varying CONSTRAINT goal_sessions_status_not_null NOT NULL,
-    actor_id uuid,
-    started_at timestamp(0) without time zone,
-    finished_at timestamp(0) without time zone,
-    inserted_at timestamp(0) without time zone CONSTRAINT goal_sessions_inserted_at_not_null NOT NULL,
-    updated_at timestamp(0) without time zone CONSTRAINT goal_sessions_updated_at_not_null NOT NULL,
-    workflow_id uuid CONSTRAINT goal_sessions_plan_id_not_null NOT NULL,
-    snapshot jsonb DEFAULT '{}'::jsonb
-);
-
-
---
--- Name: workflow_steps; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.workflow_steps (
-    id uuid DEFAULT gen_random_uuid() CONSTRAINT steps_id_not_null NOT NULL,
-    workspace_id uuid CONSTRAINT steps_workspace_id_not_null NOT NULL,
-    workflow_id uuid CONSTRAINT steps_plan_id_not_null NOT NULL,
-    title character varying(255) CONSTRAINT steps_title_not_null NOT NULL,
-    slug character varying(255) CONSTRAINT steps_slug_not_null NOT NULL,
-    "position" integer DEFAULT 0 CONSTRAINT steps_position_not_null NOT NULL,
-    inserted_at timestamp(0) without time zone CONSTRAINT steps_inserted_at_not_null NOT NULL,
-    updated_at timestamp(0) without time zone CONSTRAINT steps_updated_at_not_null NOT NULL,
-    intent character varying(255),
-    status character varying(255) DEFAULT 'draft'::character varying,
-    version integer DEFAULT 1,
-    history jsonb DEFAULT '[]'::jsonb,
-    fingerprint character varying(255),
-    model character varying(255),
-    generated_by character varying(255),
-    claims jsonb DEFAULT '[]'::jsonb,
-    gates jsonb DEFAULT '[]'::jsonb,
-    graph jsonb,
-    context_snapshot jsonb DEFAULT '[]'::jsonb,
-    pos_x integer,
-    pos_y integer
-);
-
-
---
--- Name: workflows; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.workflows (
-    id uuid DEFAULT gen_random_uuid() CONSTRAINT plans_id_not_null NOT NULL,
-    workspace_id uuid CONSTRAINT plans_workspace_id_not_null NOT NULL,
-    title character varying(255) CONSTRAINT plans_title_not_null NOT NULL,
-    slug character varying(255) CONSTRAINT plans_slug_not_null NOT NULL,
-    body text DEFAULT ''::text,
-    meta jsonb DEFAULT '{}'::jsonb,
-    inserted_at timestamp(0) without time zone CONSTRAINT plans_inserted_at_not_null NOT NULL,
-    updated_at timestamp(0) without time zone CONSTRAINT plans_updated_at_not_null NOT NULL,
-    status character varying(255) DEFAULT 'draft'::character varying NOT NULL,
-    kind character varying(255) DEFAULT 'evergreen'::character varying NOT NULL,
-    goal_id uuid,
-    CONSTRAINT workflows_kind_check CHECK (((kind)::text = ANY ((ARRAY['evergreen'::character varying, 'one_shot'::character varying])::text[]))),
-    CONSTRAINT workflows_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'archived'::character varying])::text[])))
-);
-
-
---
 -- Name: workspaces; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -615,14 +499,6 @@ ALTER TABLE ONLY public.collections
 
 ALTER TABLE ONLY public.cluster_summaries
     ADD CONSTRAINT community_summaries_pkey PRIMARY KEY (id);
-
-
---
--- Name: goals goals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.goals
-    ADD CONSTRAINT goals_pkey PRIMARY KEY (id);
 
 
 --
@@ -711,38 +587,6 @@ ALTER TABLE ONLY public.worker_sessions
 
 ALTER TABLE ONLY public.worker_steps
     ADD CONSTRAINT worker_steps_pkey PRIMARY KEY (id);
-
-
---
--- Name: workflow_runs workflow_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_runs
-    ADD CONSTRAINT workflow_runs_pkey PRIMARY KEY (id);
-
-
---
--- Name: workflow_sessions workflow_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_sessions
-    ADD CONSTRAINT workflow_sessions_pkey PRIMARY KEY (id);
-
-
---
--- Name: workflow_steps workflow_steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_steps
-    ADD CONSTRAINT workflow_steps_pkey PRIMARY KEY (id);
-
-
---
--- Name: workflows workflows_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflows
-    ADD CONSTRAINT workflows_pkey PRIMARY KEY (id);
 
 
 --
@@ -852,20 +696,6 @@ CREATE INDEX community_summaries_workspace_id_index ON public.cluster_summaries 
 
 
 --
--- Name: goals_workspace_id_pinned_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX goals_workspace_id_pinned_index ON public.goals USING btree (workspace_id, pinned);
-
-
---
--- Name: goals_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX goals_workspace_id_slug_index ON public.goals USING btree (workspace_id, slug);
-
-
---
 -- Name: knowledge_page_versions_page_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -919,13 +749,6 @@ CREATE INDEX knowledge_pages_embedding_idx ON public.knowledge_pages USING hnsw 
 --
 
 CREATE INDEX knowledge_pages_meta_assignee_idx ON public.knowledge_pages USING btree (((meta ->> 'assignee'::text))) WHERE ((meta ->> 'assignee'::text) IS NOT NULL);
-
-
---
--- Name: knowledge_pages_meta_goal_slug_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX knowledge_pages_meta_goal_slug_idx ON public.knowledge_pages USING btree (((meta ->> 'goal_slug'::text))) WHERE ((meta ->> 'goal_slug'::text) IS NOT NULL);
 
 
 --
@@ -1174,76 +997,6 @@ CREATE INDEX worker_steps_session_id_step_number_index ON public.worker_steps US
 
 
 --
--- Name: workflow_runs_session_id_step_id_attempt_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX workflow_runs_session_id_step_id_attempt_index ON public.workflow_runs USING btree (session_id, step_id, attempt);
-
-
---
--- Name: workflow_runs_step_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflow_runs_step_id_index ON public.workflow_runs USING btree (step_id);
-
-
---
--- Name: workflow_runs_workspace_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflow_runs_workspace_id_index ON public.workflow_runs USING btree (workspace_id);
-
-
---
--- Name: workflow_sessions_goal_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflow_sessions_goal_id_index ON public.workflow_sessions USING btree (goal_id);
-
-
---
--- Name: workflow_sessions_workflow_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflow_sessions_workflow_id_index ON public.workflow_sessions USING btree (workflow_id);
-
-
---
--- Name: workflow_sessions_workspace_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflow_sessions_workspace_id_index ON public.workflow_sessions USING btree (workspace_id);
-
-
---
--- Name: workflow_steps_workflow_id_position_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflow_steps_workflow_id_position_index ON public.workflow_steps USING btree (workflow_id, "position");
-
-
---
--- Name: workflow_steps_workflow_id_slug_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX workflow_steps_workflow_id_slug_index ON public.workflow_steps USING btree (workflow_id, slug);
-
-
---
--- Name: workflows_workspace_id_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflows_workspace_id_index ON public.workflows USING btree (workspace_id);
-
-
---
--- Name: workflows_workspace_id_slug_index; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX workflows_workspace_id_slug_index ON public.workflows USING btree (workspace_id, slug);
-
-
---
 -- Name: workspaces_is_default_index; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1321,22 +1074,6 @@ ALTER TABLE ONLY public.cluster_summaries
 
 
 --
--- Name: goals goals_parent_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.goals
-    ADD CONSTRAINT goals_parent_goal_id_fkey FOREIGN KEY (parent_goal_id) REFERENCES public.goals(id) ON DELETE SET NULL;
-
-
---
--- Name: goals goals_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.goals
-    ADD CONSTRAINT goals_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
 -- Name: knowledge_page_versions knowledge_page_versions_page_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1409,106 +1146,10 @@ ALTER TABLE ONLY public.worker_steps
 
 
 --
--- Name: workflow_runs workflow_runs_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_runs
-    ADD CONSTRAINT workflow_runs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
-
-
---
--- Name: workflow_runs workflow_runs_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_runs
-    ADD CONSTRAINT workflow_runs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.workflow_sessions(id) ON DELETE CASCADE;
-
-
---
--- Name: workflow_runs workflow_runs_step_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_runs
-    ADD CONSTRAINT workflow_runs_step_id_fkey FOREIGN KEY (step_id) REFERENCES public.workflow_steps(id) ON DELETE CASCADE;
-
-
---
--- Name: workflow_runs workflow_runs_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_runs
-    ADD CONSTRAINT workflow_runs_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
--- Name: workflow_sessions workflow_sessions_actor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_sessions
-    ADD CONSTRAINT workflow_sessions_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.actors(id) ON DELETE SET NULL;
-
-
---
--- Name: workflow_sessions workflow_sessions_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_sessions
-    ADD CONSTRAINT workflow_sessions_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.goals(id) ON DELETE CASCADE;
-
-
---
--- Name: workflow_sessions workflow_sessions_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_sessions
-    ADD CONSTRAINT workflow_sessions_workflow_id_fkey FOREIGN KEY (workflow_id) REFERENCES public.workflows(id) ON DELETE CASCADE;
-
-
---
--- Name: workflow_sessions workflow_sessions_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_sessions
-    ADD CONSTRAINT workflow_sessions_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
--- Name: workflow_steps workflow_steps_workflow_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_steps
-    ADD CONSTRAINT workflow_steps_workflow_id_fkey FOREIGN KEY (workflow_id) REFERENCES public.workflows(id) ON DELETE CASCADE;
-
-
---
--- Name: workflow_steps workflow_steps_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_steps
-    ADD CONSTRAINT workflow_steps_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
--- Name: workflows workflows_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflows
-    ADD CONSTRAINT workflows_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.goals(id) ON DELETE SET NULL;
-
-
---
--- Name: workflows workflows_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflows
-    ADD CONSTRAINT workflows_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
-
-
---
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tNCaFRlly98ueolb1z3SdEc92AV7fKtgAHk92EW40VbFfr0gjorGta8eIaMygFh
+\unrestrict HSeE1DNL6ay8AvaUT6JA4yLJldJmoSeQUIr26mixpmG5iV69GNyvIwQUhFi7aKZ
 
 INSERT INTO public."schema_migrations" (version) VALUES (0);
 INSERT INTO public."schema_migrations" (version) VALUES (1);
@@ -1592,3 +1233,5 @@ INSERT INTO public."schema_migrations" (version) VALUES (20260909002001);
 INSERT INTO public."schema_migrations" (version) VALUES (20260909054747);
 INSERT INTO public."schema_migrations" (version) VALUES (20260909072119);
 INSERT INTO public."schema_migrations" (version) VALUES (20260912053941);
+INSERT INTO public."schema_migrations" (version) VALUES (20260912235428);
+INSERT INTO public."schema_migrations" (version) VALUES (20260913001600);

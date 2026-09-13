@@ -35,7 +35,7 @@ defmodule Dran.PageRegistry do
   `PageMeta` — they are about validation, not configuration. `PageMeta`
   delegates to this registry for kinds and field definitions.
 
-  Goals, Reports, and Collections are first-class entities in their own
+  Reports, and Collections are first-class entities in their own
   tables — they are not page types and are not configured here.
   """
 

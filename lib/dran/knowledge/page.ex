@@ -6,13 +6,11 @@ defmodule Dran.Knowledge.Page do
 
   - `note` — ephemeral thought, quick note, journal entry, meeting, idea
   - `plan` — a plan with a horizon (weekly, monthly, quarterly, yearly)
-  - `todo` — action with kanban status (backlog → done)
-  - `goal` — a first-class goal (own table) with derived progress and hierarchy
   - `entity` — something concrete (person, company, product, tool, place, event)
   - `concept` — abstract idea, technique, pattern, discipline, theory
   - `reference` — immutable external source (article, paper, video, podcast, book)
   - `query` — question with answer; semantic relations link it to concepts/entities
-  - `project` — a project grouping goals, plans and todos
+  - `project` — a note kind grouping related pages under a shared initiative
   - `report` — system-created report (jobs, system output); second-citizen page,
     see `Dran.PageTypes` for its capabilities
 

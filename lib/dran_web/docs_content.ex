@@ -11,16 +11,15 @@ defmodule DranWeb.DocsContent do
 
     - **Pages** — the knowledge graph (4 types: note, concept, entity,
     reference).
-  - **Goals** — first-class OKR entities (own table, not pages).
   - **Collections** — saved filter queries (own table, replaces the old
     Smart Collection pattern).
   - **Reports** — system-created logs, lint outputs, worker output (own table).
 
   ## Polymorphic relations
 
-  Pages, goals, collections, and workflow steps are linked via the relations
-  table using `source_type` and `target_type` columns (`"page"`, `"goal"`,
-  `"collection"`, `"step"`).
+  Pages and collections are linked via the relations
+  table using `source_type` and `target_type` columns (`"page"`,
+  `"collection"`).
   See `planning_hierarchy_diagram/0` for the canonical description.
 
   ## Graph intelligence
@@ -52,44 +51,40 @@ defmodule DranWeb.DocsContent do
 
   # ── Planning model (v7 — polymorphic relations) ──
   #
-  # Pages, goals, collections, and workflow steps are linked via polymorphic
+  # Pages and collections are linked via polymorphic
   # relations in the relations table. source_type and target_type columns
-  # identify what each side of the relation is ("page", "goal", "collection",
-  # or "step").
+  # identify what each side of the relation is ("page" or "collection").
   #
-  # There is no precedence between link types. A page may link to a goal,
-  # a collection, or both — each materializes its own relation.
+  # There is no precedence between link types. A page may link to
+  # a collection, another page, or both — each materializes its own relation.
 
   @planning_hierarchy_diagram """
   Polymorphic relations — v7 model
   ==================================
 
-  Pages, goals, collections, and workflow steps are linked via the
+  Pages and collections are linked via the
   relations table using polymorphic source/target pairs. There is no rigid
   hierarchy — each link is independent and optional.
 
     source       source_type  →  target_type  target
     ─────────────────────────────────────────────────────
-    page         "page"          "goal"        goal
     page         "page"          "collection"  collection
     page         "page"          "page"        page   (embeds, part_of, related, etc.)
-    step         "step"          "step"        step   (depends_on)
 
   The source_type and target_type columns on the relations table tell the
   application which entity each side of the relation refers to. App-level
   validation (Dran.Relation.changeset/2) enforces the allowed node types.
 
-  Example — a note linked to a goal and a collection simultaneously:
+  Example — a note linked to a collection:
 
-    NOTE  →  part_of goal    "mrr-100k"    (source_type="page",  target_type="goal")
-          →  part_of collection "acme"     (source_type="page",  target_type="collection")
+    NOTE  →  part_of collection "acme"     (source_type="page",  target_type="collection")
 
   Collections (first-class entity):
     Saved filter queries live in their own table with `filters` JSONB.
     They replace the old Smart Collection pattern.
 
   Sidebar:
-    Inicio: Home, Objetivos, Workflows (flat, no groups). Knowledge:
+    Inicio: Home (flat, no groups). Knowledge:
     Notes, Concepts, Entities, References, Clusters. Memory. Insights:
     Grafo, Journey.
   """

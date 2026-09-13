@@ -48,7 +48,7 @@ defmodule Dran.MCP.ToolAuditTest do
     test "every registered tool has a dran_ name, description and inputSchema" do
       tools = list_tools()
 
-      assert length(tools) >= 19
+      assert length(tools) >= 18
 
       for tool <- tools do
         assert tool["name"] =~ ~r/^dran_[a-z_]+$/,

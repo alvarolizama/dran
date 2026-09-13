@@ -26,9 +26,8 @@ defmodule Dran.PageTypes do
 
   ## What is NOT a page type
 
-  Goals, collections, and reports are **first-class entities in
-  their own tables** (`Dran.Goals.Goal`,
-  `Dran.Collections.Collection`, `Dran.Reports.Report`) — they are not page types
+  Collections and reports are **first-class entities in
+  their own tables** (`Dran.Collections.Collection`, `Dran.Reports.Report`) — they are not page types
   and are not created through `dran_create_page`. Notes no longer
   have a `todo` kind or kanban fields. `meta.kind` on pages is purely
   visual: it classifies, filters and groups — it never changes behavior.

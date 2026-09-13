@@ -80,7 +80,7 @@ defmodule Dran.Release do
   @doc """
   Run priv/repo/seeds.exs inside an active repo connection.
 
-  This seeds the **full demo content** (goals, todos, notes, concepts,
+  This seeds the **full demo content** (notes, concepts,
   relations) on top of the default context. Intended for dev/test only —
   production should use `seed_context/0` instead.
 

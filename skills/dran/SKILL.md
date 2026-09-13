@@ -1,22 +1,22 @@
 ---
 name: dran
 description: "Use when operating Dran over MCP — router and shared rules."
-version: 10.0.0
+version: 11.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
-    tags: [dran, second-brain, mcp, knowledge-graph, workflows]
-    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-goals-flow, dran-create-workflow, dran-workflow-flow, dran-workers-flow, dran-memory-flow, riel-protocol]
+    tags: [dran, second-brain, mcp, knowledge-graph]
+    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow]
 ---
 
 # dran — MCP reference + suite router
 
 Main skill of the Dran suite. Load it first: it routes to the per-action
 flows and holds what every flow shares — connection, auth, the readback
-rule. Dran is the board: plan (workflows/steps), evidence (runs), knowledge
-(pages/goals). The agent's local execution discipline (ledger, briefs,
-delegation) is riel — this suite owns only the MCP/REST call sequences.
+rule. Dran is the second brain: knowledge (pages) and memory. The agent's
+local execution discipline (ledger, briefs, delegation) is riel — this
+suite owns only the MCP/REST call sequences.
 
 ## Entry router
 
@@ -25,9 +25,6 @@ flowchart TD
   Q{What do you need?} -->|"MCP tools, connection,\ngeneral rules"| SELF["THIS SKILL\nmain dran"]
   Q -->|"create/edit/query\nknowledge pages"| K[dran-knowledge-flow]
   Q -->|"link pages\ntyped relations"| R[dran-relations-flow]
-  Q -->|"goals: create,\nstatus"| G[dran-goals-flow]
-  Q -->|"author a workflow\nfrom a plan"| C[dran-create-workflow]
-  Q -->|"execute a workflow\nloop with riel"| W[dran-workflow-flow]
   Q -->|"run curator/link_gardener/\ngraph_rag"| X[dran-workers-flow]
   Q -->|"list/search/delete\nmemories"| M[dran-memory-flow]
 
@@ -46,20 +43,14 @@ Run ONLY the flow you landed on. If the diagram sends you to another skill,
   server (no hot-reload).
 - Hermes registers each tool as `mcp_<server>_<tool>` → with server `dran`,
   calls look like `mcp_dran_dran_search`.
-- **One key = one actor.** Attribution (`owner`/`created_by`, run claims) is
+- **One key = one actor.** Attribution (`owner`/`created_by`) is
   derived server-side from the key — never client-settable.
 - **Write gate**: keys with `write_access: false` get `403` on every write
-  tool (`@write_tools` in the server: pages, goals, relations, run
-  lifecycle, workers).
+  tool (`@write_tools` in the server: pages, relations, workers).
 - **Memory is NOT in the MCP surface** — REST `/api/memory` + Hermes plugin
   only. Do not look for `dran_memory_*` MCP tools.
-- MCP resources: `page://<ws>/<slug>`, `goal://<ws>/<slug>`,
-  `home://<ws>/index`. Prompts: `brainstorm` (topic), `goal_review`
-  (goal_slug).
-- Step briefs (`dran_get_step_contract`) render `## Context` RESOLVED:
-  title + why + one-line summary + the exact fetch command per entry
-  (`dran_get_page` / `GET /api/memory`). Triage on the summaries; fetch
-  only what the step needs.
+- MCP resources: `page://<ws>/<slug>`, `home://<ws>/index`. Prompts:
+  `brainstorm` (topic).
 
 ## General rules (every flow obeys them)
 
@@ -67,7 +58,7 @@ Run ONLY the flow you landed on. If the diagram sends you to another skill,
 flowchart LR
   W["Any write tool\ncalled"] --> G{"MCP said ok?"}
   G -->|"no"| F["Fix params /\ncheck write_access"] --> W
-  G -->|"yes"| V["VERIFY readback\nget_page / get_links /\nget_goal / GET list"]
+  G -->|"yes"| V["VERIFY readback\nget_page / get_links /\nGET list"]
   V -->|"state holds"| E([done])
   V -->|"state missing"| W
 ```
@@ -76,20 +67,15 @@ flowchart LR
   is transport-level, not state-level.
 - Slugs are canonical identifiers; a slug not found is an error, never a
   silent drop. Derive slugs from titles, lowercase-hyphen.
-- Irreversible operations (delete page/goal/memory, rename slug) require an
+- Irreversible operations (delete page/memory, rename slug) require an
   explicit human confirmation first — every flow marks them with ASK.
-- The goal checklist is human-managed (Álvaro's OKR); the agent's durable
-  evidence of execution is the workflow run (dran-workflow-flow).
 
-## The 7 flows of the suite
+## The flows of the suite
 
 | Flow | When to load it |
 | --- | --- |
 | `dran-knowledge-flow` | Create, update, search or rename pages (note, concept, entity, reference…) |
 | `dran-relations-flow` | Link two pages with a typed relation |
-| `dran-goals-flow` | Goals: create, status lifecycle, read |
-| `dran-create-workflow` | Author a workflow from a plan: steps, contracts, context, DAG — one `dran_create_workflow` MCP call with full contracts inline |
-| `dran-workflow-flow` | Execute a workflow with riel: session → pull → brief → ledger → close |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (REST) |
 
@@ -100,15 +86,10 @@ flowchart LR
 - **Reading the tool list off the MCP `initialize` output once and never
   again** — the surface grows; `dran_list_*` and the server docs are the
   truth, this suite is the map.
-- **Expecting `dran_memory_*` or no workflow authoring on MCP** — memory
-  is REST/plugin; workflow CREATION is on MCP (`dran_create_workflow`
-  with full contracts inline, `dran_delete_workflow` for drafts).
-  Contract EDITS stay in the UI step modal.
+- **Looking for `dran_memory_*` MCP tools** — memory is REST/plugin only.
 
 ## Cross-references
 
-- Server-side surface (tool definitions, write gate, execution domain):
-  `lib/dran/mcp.ex` + `lib/dran/executions.ex` in this repo
-- Execution discipline inside dran-workflow-flow: `riel-ledger`,
-  `riel-delegate`, `riel-briefs`
+- Server-side surface (tool definitions, write gate): `lib/dran/mcp.ex`
+  in this repo
 - Verb/graph conventions the flow DAGs follow: `riel-contract`

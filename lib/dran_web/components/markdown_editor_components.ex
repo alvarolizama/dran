@@ -290,7 +290,6 @@ defmodule DranWeb.MarkdownEditorComponents do
         <% prompt =
           case slug_type do
             "project" -> gettext("Sin proyecto")
-            "goal" -> gettext("Sin objetivo")
             "plan" -> gettext("Sin plan")
             _ -> gettext("Ninguno")
           end %>

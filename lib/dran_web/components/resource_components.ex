@@ -1,6 +1,6 @@
 defmodule DranWeb.ResourceComponents do
   @moduledoc """
-  Shared shell components for resource (goal / page) create & edit.
+  Shared shell components for resource (page) create & edit.
 
   The resource pattern: create and edit are dedicated pages — `/new` and
   `/:id?edit=true` — assembled from these pieces so every resource looks
@@ -9,16 +9,14 @@ defmodule DranWeb.ResourceComponents do
     - `resource_header` — back link, icon, title, subtitle, action buttons
     - `form_actions` — the cancel/submit row
     - `markdown_body_field` — labelled Tiptap body editor (Mermaid included)
-    - `goal_options` / `actor_options` — flattened option lists for selects
     - `resource_modal` — near-full-screen create/edit modal shell
   """
 
   use Phoenix.Component
   use Gettext, backend: DranWeb.Gettext
 
-  import DranWeb.CoreComponents, only: [icon: 1, input: 1]
+  import DranWeb.CoreComponents, only: [icon: 1]
   import DranWeb.MarkdownEditorComponents, only: [markdown_editor: 1]
-  import Phoenix.HTML.Form, only: [input_value: 2]
 
   @doc """
   Full-screen-ish modal shell for resource create & edit.
@@ -250,8 +248,7 @@ defmodule DranWeb.ResourceComponents do
   styling, small size, required `<label>` wrapper so the whole control is
   clickable. Use this for every bare `<select>` in templates.
 
-  Options come pre-rendered (use `<.goal_options>` / `<.actor_options>` for
-  hierarchical and actor lists); `selected` must already be set on each
+  Options come pre-rendered; `selected` must already be set on each
   option. `phx-change` etc. go through `{@rest}`.
   """
   attr :id, :string, default: nil
@@ -274,116 +271,6 @@ defmodule DranWeb.ResourceComponents do
         {render_slot(@inner_block)}
       </select>
     </label>
-    """
-  end
-
-  @doc """
-  Flattened, indented `<option>` list for goal selects — works at any
-  hierarchy depth (a native `<optgroup>` cannot nest). `tree` comes from
-  `Dran.Goals.flattened_tree/1` (`[{goal, depth}]`).
-  """
-  attr :tree, :list, required: true
-  attr :selected_id, :string, required: true
-
-  def goal_options(assigns) do
-    ~H"""
-    <option :for={{goal, depth} <- @tree} value={goal.id} selected={@selected_id == goal.id}>
-      {String.duplicate("—", depth + 1)} {goal.title}
-    </option>
-    """
-  end
-
-  @doc """
-  Flat `<option>` list of assignee actors (agent + user), labelled via
-  `Dran.Actors.Actor.label/1`.
-  """
-  attr :actors, :list, required: true
-  attr :selected_id, :string, required: true
-
-  def actor_options(assigns) do
-    ~H"""
-    <option :for={actor <- @actors} value={actor.id} selected={@selected_id == actor.id}>
-      {Dran.Actors.Actor.label(actor)}
-    </option>
-    """
-  end
-
-  @doc """
-  Goal form for the resource modal — same two-column contract as
-  `task_form_fields`: main column (title, description, body editor) and
-  metadata sidebar (status).
-
-  - `goal` — the struct (`%Goal{}` for create)
-  - `changeset` — form source; id must match the modal footer button
-  """
-  attr :id, :string, required: true
-  attr :goal, :map, required: true
-  attr :changeset, :any, required: true
-  attr :workspace_id, :string, required: true
-  attr :editor_min_height, :string, default: "320px"
-
-  def goal_form_fields(assigns) do
-    editor_id = "goal-editor-modal-#{assigns.goal.id || "new"}"
-
-    assigns =
-      assigns
-      |> assign(:editor_id, editor_id)
-      |> assign(:form, to_form(assigns.changeset, as: :goal))
-
-    ~H"""
-    <.form
-      id={@id}
-      for={@form}
-      phx-change="validate_goal"
-      phx-submit="save_goal"
-      class="grid grid-cols-1 lg:grid-cols-[1fr_20rem] lg:gap-6"
-    >
-      <div class="min-w-0 space-y-4">
-        <.input
-          field={@form[:title]}
-          type="text"
-          label={gettext("Title")}
-          placeholder={gettext("Goal title…")}
-          class="text-lg font-medium"
-          autofocus
-        />
-
-        <.input
-          field={@form[:summary]}
-          type="textarea"
-          label={gettext("Summary")}
-          rows={2}
-        />
-
-        <div>
-          <span class="label mb-1 block text-xs text-base-content/60">{gettext("Content")}</span>
-          <.markdown_editor
-            id={@editor_id}
-            body={@goal.body || ""}
-            workspace_id={@workspace_id}
-            autosave={false}
-            toolbar={false}
-            hidden_field="goal[body]"
-            min_height={@editor_min_height}
-          />
-        </div>
-      </div>
-
-      <aside class="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
-          {gettext("Details")}
-        </h4>
-
-        <.resource_select name="goal[status]" label={gettext("Status")}>
-          <option value="active" selected={input_value(@form, :status) == "active"}>Active</option>
-          <option value="draft" selected={input_value(@form, :status) == "draft"}>Draft</option>
-          <option value="on_hold" selected={input_value(@form, :status) == "on_hold"}>
-            On Hold
-          </option>
-          <option value="done" selected={input_value(@form, :status) == "done"}>Done</option>
-        </.resource_select>
-      </aside>
-    </.form>
     """
   end
 end

@@ -102,7 +102,7 @@ defmodule Dran.Jobs do
       mfa: {Dran.MemoryLinker, :run_scheduled, []},
       description:
         "Nightly graph sync for memories: re-derives informs relations " <>
-          "(memory → page/goal) now that new pages exist, and drops informs " <>
+          "(memory → page) now that new pages exist, and drops informs " <>
           "edges whose memory was superseded. Zero inference."
     }
   ]

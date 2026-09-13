@@ -297,7 +297,6 @@ defmodule DranWeb.DocsLive do
         <li>Create pages from the UI or the API</li>
         <li>Link pages with relations</li>
         <li>Explore the graph to discover connections</li>
-        <li>Organize work with goals</li>
       </ol>
 
       <.h2_heading id="next-steps" icon="hero-sparkles" label="Next steps" />
@@ -380,7 +379,6 @@ defmodule DranWeb.DocsLive do
         <li><strong>concept</strong> — definitions or ideas</li>
         <li><strong>entity</strong> — people, organizations, tools</li>
         <li><strong>reference</strong> — external sources (URLs, books)</li>
-        <li><strong>goal</strong> — outcomes you want to achieve</li>
         <li><strong>plan</strong> — steps or roadmaps</li>
         <li>
           <strong>project</strong> — a note kind that groups related pages under a shared initiative
@@ -458,12 +456,12 @@ defmodule DranWeb.DocsLive do
       />
       <p>
         Dran has no rigid planning hierarchy — every page is an orphan by default and the
-        three link slugs are independent: <code>meta.project_slug</code>, <code>meta.goal_slug</code>
+        link slugs are independent: <code>meta.project_slug</code>
         and <code>meta.plan_slug</code>. There is no precedence between them; each one
         materializes its own <code>part_of</code>
         relation when set, and a page may carry
-        0, 1, 2 or all 3 slugs at once. Use <code>dran_list_pages</code>
-        with the <code>project_slug</code>, <code>goal_slug</code>
+        0, 1 or both slugs at once. Use <code>dran_list_pages</code>
+        with the <code>project_slug</code>
         or <code>plan_slug</code>
         filters
         (value <code>"none"</code>
@@ -874,7 +872,6 @@ defmodule DranWeb.DocsLive do
         {"pages-api", "Pages"},
         {"relations-api", "Relations"},
         {"search-api", "Search"},
-        {"goals-api", "Goals"},
         {"maintenance-api", "Maintenance"},
         {"wiki-api", "Wiki"},
         {"export-api", "Export"}
@@ -1029,13 +1026,6 @@ defmodule DranWeb.DocsLive do
         path: "/api/search/semantic?q=...&context=...",
         desc: "Semantic (embedding) search"
       },
-      %{group: "Goals", method: "GET", path: "/api/goals?context=...", desc: "List goals"},
-      %{
-        group: "Goals",
-        method: "GET",
-        path: "/api/goals/:slug?context=...",
-        desc: "Goal detail with linked notes"
-      },
       %{
         group: "Maintenance",
         method: "GET",
@@ -1119,7 +1109,7 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="agent-quick-start" icon="hero-rocket-launch" label="Agent Quick Start" />
       <p>
-        When an agent connects to Dran, it should follow this workflow:
+        When an agent connects to Dran, it should follow this flow:
       </p>
       <ol>
         <li>
@@ -1228,21 +1218,13 @@ defmodule DranWeb.DocsLive do
               <td class="px-4 py-2 text-xs">{page_type_meta_summary(type)}</td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-4 py-2 font-mono text-primary">goal</td>
-              <td class="px-4 py-2">Objectives with derived progress and hierarchy</td>
-              <td class="px-4 py-2 text-xs">—</td>
-              <td class="px-4 py-2 text-xs">
-                status (draft/active/on_hold/done/archived), progress, team
-              </td>
-            </tr>
-            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-4 py-2 font-mono text-primary">plan</td>
               <td class="px-4 py-2">Time-horizoned plans</td>
               <td class="px-4 py-2 text-xs">
                 personal, coding, business, learning, health, finance, other
               </td>
               <td class="px-4 py-2 text-xs">
-                horizon (weekly/monthly/quarterly/yearly), status, period, goal_slug
+                horizon (weekly/monthly/quarterly/yearly), status, period
               </td>
             </tr>
             <tr class="hover:bg-base-200/50 transition-colors">
@@ -1281,7 +1263,7 @@ defmodule DranWeb.DocsLive do
         shared links).
       </p>
       <div class="not-prose rounded-lg border border-base-300 bg-base-200/50 p-3">
-        <pre class="text-sm font-mono text-primary overflow-x-auto"><code phx-no-curly-interpolation>{"\n/notes/my-note?context=work\n/goals/mrr-100k?context=business\n/projects/tokengate?context=personal"}</code></pre>
+        <pre class="text-sm font-mono text-primary overflow-x-auto"><code phx-no-curly-interpolation>{"\n/notes/my-note?context=work\n/projects/tokengate?context=personal"}</code></pre>
       </div>
       <p class="text-sm text-base-content/60 mt-2">
         If the context slug doesn't exist, the session's current context is used as fallback.
@@ -1336,12 +1318,6 @@ defmodule DranWeb.DocsLive do
           />
           <:param name="tag" type="string" required="no" desc="Filter by tag" />
           <:param name="kind" type="string" required="no" desc="Filter by meta.kind (notes)" />
-          <:param
-            name="goal_slug"
-            type="string"
-            required="no"
-            desc="Filter by goal slug ('none' for orphans)"
-          />
           <:param
             name="plan_slug"
             type="string"
@@ -1579,10 +1555,6 @@ defmodule DranWeb.DocsLive do
           <span class="text-sm text-base-content/60 ml-2">Full page content as markdown</span>
         </div>
         <div class="rounded-lg border border-base-300 p-3">
-          <code class="font-mono text-primary">goal://&#123;context&#125;/&#123;slug&#125;</code>
-          <span class="text-sm text-base-content/60 ml-2">Goal detail with linked notes (JSON)</span>
-        </div>
-        <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">wiki://&#123;context&#125;/index</code>
           <span class="text-sm text-base-content/60 ml-2">All pages in a context (slug + title + type)</span>
         </div>
@@ -1590,16 +1562,12 @@ defmodule DranWeb.DocsLive do
 
       <.h2_heading id="prompts" icon="hero-sparkles" label="Prompts" />
       <p>
-        Pre-built prompt templates for common agent workflows:
+        Pre-built prompt templates for common agent flows:
       </p>
       <div class="not-prose space-y-2">
         <div class="rounded-lg border border-base-300 p-3">
           <code class="font-mono text-primary">brainstorm</code>
           <span class="text-sm text-base-content/60 ml-2">Generate ideas around a topic. Args: topic, context.</span>
-        </div>
-        <div class="rounded-lg border border-base-300 p-3">
-          <code class="font-mono text-primary">goal_review</code>
-          <span class="text-sm text-base-content/60 ml-2">Review a goal's status and linked notes. Args: goal_slug, context.</span>
         </div>
       </div>
 

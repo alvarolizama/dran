@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, memory, rest, hermes-plugin]
-    related_skills: [dran, dran-workflow-flow]
+    related_skills: [dran]
 ---
 
 # dran-memory-flow — Administer shared agent memories
@@ -15,8 +15,7 @@ metadata:
 Memory is the **shared recall of agents**, written through the Hermes
 plugin (`hermes_plugin/dran/` — `dran_memory_add` tool, auto-capture on
 session end). This flow covers ADMINISTRATION only — list, search, delete —
-because memory is not part of the MCP surface. Memory is also NOT a riel
-checkpoint store; run ledgers are (dran-workflow-flow).
+because memory is not part of the MCP surface.
 
 ## Entry router
 
@@ -28,8 +27,6 @@ dran-memory-flow"]
   Q -->|"save a fact, recall at\
 turn start"| P["Hermes plugin\
 dran_memory_* tools"]
-  Q -->|"report ✓NN execution\
-checkpoints"| W[dran-workflow-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```

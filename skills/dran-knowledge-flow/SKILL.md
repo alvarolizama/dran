@@ -7,13 +7,13 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, mcp, knowledge, pages]
-    related_skills: [dran, dran-relations-flow, dran-goals-flow]
+    related_skills: [dran, dran-relations-flow]
 ---
 
 # dran-knowledge-flow — Create and edit knowledge pages
 
-Pages are the unit of knowledge: `note`, `concept`, `entity`, `reference`
-(goals have their own flow). This flow owns the write loop: search first,
+Pages are the unit of knowledge: `note`, `concept`, `entity`, `reference`.
+This flow owns the write loop: search first,
 then create or update, then verify by readback.
 
 ## Entry router
@@ -22,7 +22,6 @@ then create or update, then verify by readback.
 flowchart TD
   Q{What do you need?} -->|"write/read/rename\na page"| SELF["THIS SKILL\ndran-knowledge-flow"]
   Q -->|"typed link between\ntwo pages"| R[dran-relations-flow]
-  Q -->|"measurable objective\nwith dates"| G[dran-goals-flow]
   Q -->|"connection, auth,\nreadback rule"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669
@@ -62,7 +61,7 @@ flowchart TD
 ## Notes on the calls
 
 - `page_type` enum is exactly 4 (from `Dran.PageRegistry`): `note`,
-  `concept`, `entity`, `reference` — goals route to dran-goals-flow.
+  `concept`, `entity`, `reference`.
   `dran_create_note` / `dran_update_note` are title+slug shorthands for
   `note`.
 - Search `strategy` (not `mode`): `auto / fts / fuzzy / semantic / hybrid`.

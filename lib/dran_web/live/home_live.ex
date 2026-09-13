@@ -1055,7 +1055,7 @@ defmodule DranWeb.HomeLive do
     if workspace do
       # Graph nodes carry the singular page_type ("note"); routes are
       # workspace-scoped with the PLURAL path segment ("/personal/notes/..").
-      # PageRegistry.path pluralizes ("note" → "notes", "goal" → "goals") and
+      # PageRegistry.path pluralizes ("note" → "notes") and
       # falls back to "notes" for unknown types.
       type_path = PageTypes.path(params["type"] || "note")
       {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{type_path}/#{slug}")}

@@ -20,26 +20,16 @@ Dran gives your AI agents a place to **know**, **remember** and **prove** — in
 
 - **Knowledge** — typed pages (`note`, `entity`, `concept`, `reference`) linked by typed relations: a queryable knowledge graph. You edit it in the browser; agents read and write it over MCP/REST.
 - **Memory** — atomic, deduplicated facts with trust scores, shared by every agent. What one agent learns, all recall.
-- **Ledger** — workflows whose runs record what an agent claimed and what was verified. Execution evidence, not vibes.
 
-Humans get a wiki. Agents get 35 MCP tools and a REST API. One graph, one attribution model: every write is tied to the API key's actor, server-side.
+Humans get a wiki. Agents get MCP tools and a REST API. One graph, one attribution model: every write is tied to the API key's actor, server-side.
 
 ## Knowledge
 
-- **4 page types** — `note`, `entity`, `concept`, `reference`; goals, collections and reports are first-class entities in their own tables
+- **4 page types** — `note`, `entity`, `concept`, `reference`; collections and reports are first-class entities in their own tables
 - **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]` embeds; read-only render by default
 - **13 relation types** — `related`, `part_of`, `supersedes`, `contradicts`, `embeds`… plus machine-owned ones (`semantic`, `mentions`, props-derived) created by the augmenter, not by hand
 - **Props → edges** — `role`, `tier`, `location`, `language`, `framework` auto-materialize into typed edges
 - **Version history** with diff view; **machine-owned summaries** (written only by API/nightly job)
-
-## Workflows — the ledger
-
-- **DAGs of steps** authored in a visual canvas editor; each step is a **contract**: intent, pre-registered claims, gates (what must be true when done)
-- **Execution loop**: open session → claim a ready run → work → report ✓NN checkpoints → close `passed`/`failed`/`skipped` → retry reopens failures
-- Agents pull work via `dran_list_pending_runs`; row-level auth + locks prevent double claims
-- **Runs are evidence**: a run closed without re-running its gates is a false checkpoint
-
-**Riel**: Dran is the board, Riel is the discipline — the agent-side execution protocol (local ledger, briefs, delegation). Step contracts declare *what to verify*; runs store the durable evidence. The `skills/` suite executes that loop over MCP.
 
 ## Memory
 
@@ -51,7 +41,7 @@ Humans get a wiki. Agents get 35 MCP tools and a REST API. One graph, one attrib
 ## The app
 
 - **Wiki** at `/:workspace_slug` — read-first browser: search, type index, pinned pages, collections, clusters, graph
-- **Workflows** `/:ws/workflows` — board + DAG detail with run state · **Goals** `/:ws/goals` · **Memory** `/:ws/memory` · **Reports** `/:ws/reports/:slug`
+- **Memory** `/:ws/memory` · **Reports** `/:ws/reports/:slug`
 - **3D graph** (`/:ws/graph`), **clusters** with LLM summaries, **hybrid search** (fts/fuzzy/semantic), **smart collections**, activity feed, journey timeline
 - **Instance dashboard** at `/`; admin (owner-only) at `/admin`: users, workspaces, models, system, jobs
 - **Multi-workspace** with per-workspace visibility and page-type toggles
@@ -64,20 +54,20 @@ Humans get a wiki. Agents get 35 MCP tools and a REST API. One graph, one attrib
 
 ## APIs
 
-**MCP** — `POST /api/mcp`, Streamable HTTP (spec 2025-03-26): 35 tools (pages, search, goals + checklist, workflow/session/run lifecycle, workers, lint), 3 resources (`page://`, `goal://`, `home://`), 2 prompts. 22 write tools require a `write_access` key — enforced by a permission-matrix test.
+**MCP** — `POST /api/mcp`, Streamable HTTP (spec 2025-03-26): pages, search, workers, lint tools; resources (`page://`, `home://`), prompts. Write tools require a `write_access` key — enforced by a permission-matrix test.
 
-**REST** — token-protected `/api/*` (kebab-case): read routes always allowed; writes (pages, relations, run lifecycle, memory) require `write_access: true`. Attribution (`owner`/`created_by`) is injected server-side from the key's actor — never client-settable.
+**REST** — token-protected `/api/*` (kebab-case): read routes always allowed; writes (pages, relations, memory) require `write_access: true`. Attribution (`owner`/`created_by`) is injected server-side from the key's actor — never client-settable.
 
 ## Security
 
 - First-run `/setup` creates the owner; Google OAuth optional (domain-restricted)
 - Instance owner + per-workspace roles (`owner`/`admin`/`editor`/`viewer`)
 - Per-user API keys, read-only by default, scoped to the creator's workspaces
-- Row-level auth on executions, `FOR UPDATE` locks on run claims, audit tooling in precommit
+- Row-level auth on resources, audit tooling in precommit
 
 ## Agent skills
 
-`skills/` ships 8 skills for Hermes (or any skill-loading agent) — one per operating flow: `dran` (router), knowledge, relations, goals, create-workflow (authoring), workflow (the Riel loop), workers, memory. Shared rules: one key = one actor; a write is not done until a readback confirms it; irreversible ops need human confirmation.
+`skills/` ships skills for Hermes (or any skill-loading agent) — one per operating flow: `dran` (router), knowledge, relations, workers, memory. Shared rules: one key = one actor; a write is not done until a readback confirms it; irreversible ops need human confirmation.
 
 ## Installation
 
@@ -129,12 +119,12 @@ memory:
 
 Configure it from the dashboard panel (**Memory → Dran**: base URL, memory workspace, recall/capture toggles) or `hermes memory setup`. Stored at `$HERMES_HOME/dran/config.json`; the API key stays in `.env`. The memory workspace must be one the key can reach — the plugin validates against `GET /api/agent/config` and falls back to the first permitted workspace (with a warning) if the matrix changes.
 
-**e. Skills** (8: router + knowledge, relations, goals, create-workflow, workflow/Riel, workers, memory flows). Symlink the suite into a dir the profile already scans:
+**e. Skills** (5: router + knowledge, relations, workers, memory flows). Symlink the suite into a dir the profile already scans:
 
 ```bash
 mkdir -p ~/Workspace/Skills
-for s in dran dran-create-workflow dran-goals-flow dran-knowledge-flow dran-memory-flow \
-         dran-relations-flow dran-workers-flow dran-workflow-flow; do
+for s in dran dran-knowledge-flow dran-memory-flow \
+         dran-relations-flow dran-workers-flow; do
   ln -s /path/to/dran/skills/$s ~/Workspace/Skills/$s
 done
 ```
@@ -145,7 +135,7 @@ skills:
     - ~/Workspace/Skills
 ```
 
-Restart the Hermes session, then verify: MCP → "list my Dran goals"; memory → "¿qué recuerdas de …?"; skills → the agent should route Dran questions through the `dran` skill.
+Restart the Hermes session, then verify: MCP → "list my pages"; memory → "¿qué recuerdas de …?"; skills → the agent should route Dran questions through the `dran` skill.
 
 Non-Hermes agents: skip d/e, point any MCP client at `POST /api/mcp` with the Bearer key, or use the REST API directly.
 
