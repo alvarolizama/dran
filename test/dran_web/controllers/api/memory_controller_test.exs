@@ -105,6 +105,149 @@ defmodule DranWeb.API.MemoryControllerTest do
       conn = post(conn, "/api/memory", %{workspace: workspace.slug, content: "   "})
       assert %{"errors" => _} = json_response(conn, 422)
     end
+
+    test "409 near_duplicate in the grey zone returns both texts, stores nothing", %{
+      conn: conn,
+      workspace: workspace
+    } do
+      stub_embeddings()
+
+      assert %{"duplicate" => false} =
+               json_response(
+                 post(conn, "/api/memory", %{workspace: workspace.slug, content: "hecho base"}),
+                 201
+               )
+
+      # Second fact embeds into the grey zone (cosine ≈ 0.89) of the first.
+      stub_grey_zone("hecho base", "hecho similar en inglés")
+
+      conn =
+        post(conn, "/api/memory", %{
+          workspace: workspace.slug,
+          content: "hecho similar en inglés"
+        })
+
+      assert %{
+               "near_duplicate" => true,
+               "data" => %{"content" => "hecho base"},
+               "submitted" => "hecho similar en inglés"
+             } = json_response(conn, 409)
+
+      assert Memory.count_memories(workspace.id) == 1
+    end
+
+    test "force=true stores through the grey zone", %{conn: conn, workspace: workspace} do
+      stub_embeddings()
+
+      assert %{"duplicate" => false} =
+               json_response(
+                 post(conn, "/api/memory", %{workspace: workspace.slug, content: "hecho base"}),
+                 201
+               )
+
+      stub_grey_zone("hecho base", "hecho similar en inglés")
+
+      assert %{"duplicate" => false} =
+               json_response(
+                 post(conn, "/api/memory", %{
+                   workspace: workspace.slug,
+                   content: "hecho similar en inglés",
+                   force: true
+                 }),
+                 201
+               )
+
+      assert Memory.count_memories(workspace.id) == 2
+    end
+  end
+
+  describe "PATCH /api/memory/:id" do
+    test "rewrites content in place and keeps trust", %{conn: conn, workspace: workspace} do
+      stub_embeddings()
+
+      assert %{"data" => %{"id" => id} = created} =
+               json_response(
+                 post(conn, "/api/memory", %{workspace: workspace.slug, content: "hecho v1"}),
+                 201
+               )
+
+      assert %{"data" => rated} =
+               json_response(
+                 post(conn, "/api/memory/feedback", %{
+                   id: id,
+                   helpful: true,
+                   workspace: workspace.slug
+                 }),
+                 200
+               )
+
+      assert rated["trust_score"] > 0.5
+
+      assert %{"data" => updated} =
+               json_response(
+                 patch(conn, "/api/memory/#{id}", %{
+                   workspace: workspace.slug,
+                   content: "hecho v2 corregido"
+                 }),
+                 200
+               )
+
+      assert updated["content"] == "hecho v2 corregido"
+      assert updated["id"] == created["id"]
+      # Earned trust survives the rewrite
+      assert updated["trust_score"] > 0.5
+      assert updated["helpful_count"] == 1
+    end
+
+    test "400 without content", %{conn: conn, workspace: workspace} do
+      stub_embeddings()
+
+      assert %{"data" => %{"id" => id}} =
+               json_response(
+                 post(conn, "/api/memory", %{workspace: workspace.slug, content: "hecho x"}),
+                 201
+               )
+
+      assert %{"errors" => _} =
+               json_response(
+                 patch(conn, "/api/memory/#{id}", %{workspace: workspace.slug, content: "  "}),
+                 400
+               )
+    end
+
+    test "404 on unknown id", %{conn: conn, workspace: workspace} do
+      stub_embeddings()
+
+      assert %{"errors" => _} =
+               json_response(
+                 patch(conn, "/api/memory/00000000-0000-0000-0000-000000000000", %{
+                   workspace: workspace.slug,
+                   content: "x"
+                 }),
+                 404
+               )
+    end
+
+    test "409 on superseded memory", %{conn: conn, workspace: workspace} do
+      stub_embeddings()
+
+      assert %{"data" => %{"id" => id}} =
+               json_response(
+                 post(conn, "/api/memory", %{workspace: workspace.slug, content: "hecho viejo"}),
+                 201
+               )
+
+      delete(conn, "/api/memory/#{id}?workspace=#{workspace.slug}")
+
+      assert %{"errors" => _} =
+               json_response(
+                 patch(conn, "/api/memory/#{id}", %{
+                   workspace: workspace.slug,
+                   content: "hecho nuevo"
+                 }),
+                 409
+               )
+    end
   end
 
   describe "GET /api/memory/search" do
@@ -394,6 +537,32 @@ defmodule DranWeb.API.MemoryControllerTest do
   defp embedding_for(input) do
     idx = rem(:erlang.phash2(input), 1024)
     List.duplicate(0.0, idx) ++ [1.0] ++ List.duplicate(0.0, 1023 - idx)
+  end
+
+  # Stub where `grey_content` embeds at cosine ≈ 0.89 from `base_content`'s
+  # vector (inside the [0.88, 0.95) near-duplicate band); everything else
+  # keeps the deterministic per-content one-hot.
+  defp stub_grey_zone(base_content, grey_content) do
+    grey_vec = grey_zone_vector(embedding_for(base_content))
+
+    Req.Test.stub(Dran.Inference.Client, fn conn ->
+      if String.contains?(conn.request_path, "embeddings") do
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        input = embed_input(body)
+        vec = if input == grey_content, do: grey_vec, else: embedding_for(input)
+        Req.Test.json(conn, embeddings_response(vec))
+      else
+        Req.Test.json(conn, chat_response(~s({"facts": []})))
+      end
+    end)
+  end
+
+  defp grey_zone_vector(base) do
+    scale = :math.sqrt(1.0 / :math.pow(0.894, 2) - 1)
+    dominant_idx = Enum.find_index(base, &(&1 == 1.0))
+    orth_idx = if dominant_idx == 0, do: 1, else: 0
+
+    List.replace_at(base, orth_idx, scale)
   end
 
   defp embeddings_response(vec) do

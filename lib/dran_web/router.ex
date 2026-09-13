@@ -501,6 +501,7 @@ defmodule DranWeb.Router do
     pipe_through [:api, :api_auth, :require_write_access]
 
     post "/", MemoryController, :create
+    patch "/:id", MemoryController, :update
     post "/feedback", MemoryController, :feedback
     post "/ingest", MemoryController, :ingest
     delete "/:id", MemoryController, :delete

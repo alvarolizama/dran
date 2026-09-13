@@ -123,6 +123,85 @@ defmodule Dran.MemoryTest do
       {:ok, _m2, :created} = add_fact(ws, "La base de datos es Postgres 17")
     end
 
+    test "cross-language rewording in the grey zone returns near_duplicate and stores nothing",
+         %{workspace: ws} do
+      content = "Álvaro prefiere respuestas cortas y directas"
+      {:ok, original, :created} = add_fact(ws, content)
+
+      # English rewording: same dominant axis as the original (cosine ≈ 0.89,
+      # inside [0.88, 0.95)) — the classic cross-language near-duplicate.
+      english = "Alvaro prefers short and direct answers"
+      grey_vec = grey_zone_vector(embedding_for(content))
+
+      Req.Test.stub(Dran.Inference.Client, fn conn ->
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        input = extract_embed_input(body)
+        vec = if input == english, do: grey_vec, else: embedding_for(input)
+        Req.Test.json(conn, embeddings_response(vec))
+      end)
+
+      assert {:ok, existing, :near_duplicate} =
+               Memory.add(%{"workspace_id" => ws.id, "content" => english})
+
+      assert existing.id == original.id
+      # Nothing was stored
+      assert Memory.count_memories(ws.id) == 1
+    end
+
+    test "force: true stores through the grey zone", %{workspace: ws} do
+      content = "El deploy de producción requiere aprobación manual"
+      {:ok, _original, :created} = add_fact(ws, content)
+
+      english = "Production deploys require manual approval"
+      grey_vec = grey_zone_vector(embedding_for(content))
+
+      Req.Test.stub(Dran.Inference.Client, fn conn ->
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        input = extract_embed_input(body)
+        vec = if input == english, do: grey_vec, else: embedding_for(input)
+        Req.Test.json(conn, embeddings_response(vec))
+      end)
+
+      assert {:ok, _memory, :created} =
+               Memory.add(
+                 %{"workspace_id" => ws.id, "content" => english},
+                 force: true
+               )
+
+      assert Memory.count_memories(ws.id) == 2
+    end
+
+    test "update_memory/2 rewrites content, keeps trust, and re-embeds", %{workspace: ws} do
+      {:ok, memory, :created} = add_fact(ws, "Hermes usa el provider holographic")
+      {:ok, rated} = Memory.record_feedback(memory.id, true)
+      {:ok, rated2} = Memory.record_feedback(rated.id, true)
+
+      new_content = "Hermes usa el provider holographic con HRR y trust scoring"
+      assert {:ok, updated} = Memory.update_memory(rated2, new_content)
+
+      assert updated.content == new_content
+      assert updated.id == memory.id
+      # Earned trust survives the rewrite (Holographic update semantics)
+      assert updated.trust_score > 0.5
+      assert updated.helpful_count == 2
+      assert updated.retrieval_count == 0
+      # Re-embedded with the NEW content's vector
+      assert updated.embedding == embedding_for(new_content)
+    end
+
+    test "update_memory/2 with identical content is a no-op", %{workspace: ws} do
+      {:ok, memory, :created} = add_fact(ws, "hecho estable")
+      assert {:ok, same} = Memory.update_memory(memory, "hecho estable")
+      assert same.id == memory.id
+      assert same.updated_at == memory.updated_at
+    end
+
+    test "update_memory/2 on a superseded memory is an error", %{workspace: ws} do
+      {:ok, memory, :created} = add_fact(ws, "hecho obsoleto")
+      {:ok, deleted} = Memory.delete_memory(memory)
+      assert {:error, :superseded} = Memory.update_memory(deleted, "nueva versión")
+    end
+
     test "no embedding service -> semantic dedupe skipped, insert proceeds", %{workspace: ws} do
       # Embedding endpoint down: changeset keeps no embedding, add/1 must not fail.
       Req.Test.stub(Dran.Inference.Client, fn conn ->
@@ -152,6 +231,45 @@ defmodule Dran.MemoryTest do
       assert {:ok, updated} = Memory.record_feedback(memory.id, false)
       assert_in_delta updated.trust_score, 0.40, 0.0001
       assert updated.helpful_count == 0
+    end
+
+    test "decay_trust lowers never-used old facts, spares the rest", %{workspace: ws} do
+      # Old, never retrieved, never rated → decays.
+      {:ok, stale, :created} = add_fact(ws, "hecho viejo nunca consultado")
+
+      {:ok, _} =
+        stale
+        |> Ecto.Changeset.change(
+          inserted_at: DateTime.add(DateTime.utc_now(), -90, :day) |> DateTime.truncate(:second)
+        )
+        |> Dran.Repo.update()
+
+      # Recently created → untouched even with zero usage.
+      {:ok, fresh, :created} = add_fact(ws, "hecho reciente sin uso")
+
+      # Rated → feedback-earned trust never decays.
+      {:ok, rated, :created} = add_fact(ws, "hecho calificado")
+      {:ok, _} = Memory.record_feedback(rated.id, true)
+
+      rated
+      |> Ecto.Changeset.change(
+        inserted_at: DateTime.add(DateTime.utc_now(), -90, :day) |> DateTime.truncate(:second)
+      )
+      |> Dran.Repo.update()
+
+      # Retrieved → usage signal, no decay.
+      {:ok, used, :created} = add_fact(ws, "hecho consultado")
+      {:ok, _} = used |> Ecto.Changeset.change(retrieval_count: 3) |> Dran.Repo.update()
+
+      count = Memory.decay_trust()
+      assert count >= 1
+
+      stale_after = Dran.Repo.reload!(stale)
+      assert stale_after.trust_score < 0.5
+
+      assert Dran.Repo.reload!(fresh).trust_score == 0.5
+      assert Dran.Repo.reload!(Dran.Repo.get(Dran.Memory, rated.id)).trust_score > 0.5
+      assert Dran.Repo.reload!(Dran.Repo.get(Dran.Memory, used.id)).trust_score == 0.5
     end
 
     test "trust clamps at 1.0", %{workspace: ws} do
@@ -427,6 +545,18 @@ defmodule Dran.MemoryTest do
   defp embedding_for(input) do
     idx = rem(:erlang.phash2(input), 1024)
     List.duplicate(0.0, idx) ++ [1.0] ++ List.duplicate(0.0, 1023 - idx)
+  end
+
+  # A vector inside the grey zone against `base`: same dominant axis plus an
+  # orthogonal component sized for cosine ≈ 0.894 — above 0.88 (near-duplicate)
+  # and below 0.95 (duplicate). Models cross-language rewordings, where
+  # multilingual embeddings land close but not identical.
+  defp grey_zone_vector(base) do
+    scale = :math.sqrt(1.0 / :math.pow(0.894, 2) - 1)
+    dominant_idx = Enum.find_index(base, &(&1 == 1.0))
+    orth_idx = if dominant_idx == 0, do: 1, else: 0
+
+    List.replace_at(base, orth_idx, scale)
   end
 
   defp embeddings_response(vec) do

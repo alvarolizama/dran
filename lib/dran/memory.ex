@@ -114,10 +114,15 @@ defmodule Dran.Memory do
   @doc """
   Store a fact in the workspace's shared memory. Idempotent per content.
 
-  Dedupe is two-tier: exact content hash first (cheap), then semantic — when
-  both the candidate and a stored fact have embeddings, a cosine similarity
-  >= `@semantic_dupe_threshold` also returns `{:ok, existing, :duplicate}`.
-  Near-identical rewordings of a stored fact must not pile up as new rows.
+  Dedupe is three-tier: exact content hash first (cheap), then semantic in
+  two bands — cosine similarity >= `@semantic_dupe_threshold` returns
+  `{:ok, existing, :duplicate}` (row untouched), while the grey zone
+  [`@near_dupe_threshold`, `@semantic_dupe_threshold`) returns
+  `{:ok, existing, :near_duplicate}` without storing. The caller decides
+  what to do: refine the existing fact (`update/2`), or re-call `add/1`
+  with `force: true` to store it as a genuinely different fact.
+  Cross-language rewordings land in the grey zone instead of piling up
+  as near-identical active rows.
 
   Generates the embedding synchronously when inference is configured; on
   embedding failure the memory is still stored (embedding nil) — losing a
@@ -126,14 +131,22 @@ defmodule Dran.Memory do
   Returns:
     * `{:ok, memory, :created}` — new fact stored
     * `{:ok, existing, :duplicate}` — fact already existed (row untouched)
+    * `{:ok, existing, :near_duplicate}` — grey zone; nothing was stored
+    * `{:error, reason}` — validation or storage failure
   """
   # 1 - cosine distance; catches "same fact, different wording" (hash misses it).
   @semantic_dupe_threshold 0.95
+  # Cross-language rewordings and partial overlaps: same fact family, not
+  # provably identical. Too aggressive to auto-merge, too close to ignore.
+  @near_dupe_threshold 0.88
 
-  def add(attrs) do
+  def add(attrs, opts \\ [])
+
+  def add(attrs, opts) do
     content = Map.fetch!(attrs, "content")
     ws_id = Map.fetch!(attrs, "workspace_id")
     hash = content_hash(content)
+    force? = Keyword.get(opts, :force, false)
 
     # Explicit dedupe first — cheap read beats a constraint race, and the
     # unique_constraint in the changeset catches the true insert race.
@@ -148,49 +161,131 @@ defmodule Dran.Memory do
           |> maybe_put_embedding()
 
         # Semantic dedupe AFTER embedding generation: needs the candidate vector.
-        case semantic_duplicate(changeset, ws_id) do
-          %__MODULE__{} = existing ->
-            {:ok, existing, :duplicate}
+        cond do
+          force? ->
+            insert_memory(changeset, ws_id, hash)
 
-          nil ->
-            changeset
-            |> Repo.insert()
-            |> case do
-              {:ok, memory} ->
-                # Graph presence: derive informs relations to the closest
-                # pages. Best-effort — a linking failure must never fail the
-                # write (same posture as the augmenter's entity linking).
-                _ = Dran.MemoryLinker.link_to_pages(memory)
-                broadcast_memory_change(memory.workspace_id, :created, memory)
-                {:ok, memory, :created}
+          true ->
+            case semantic_match(changeset, ws_id) do
+              {:duplicate, %__MODULE__{} = existing} ->
+                {:ok, existing, :duplicate}
 
-              {:error, %Ecto.Changeset{errors: [{:content_hash, _} | _]}} ->
-                {:ok, Repo.get_by!(__MODULE__, workspace_id: ws_id, content_hash: hash),
-                 :duplicate}
+              {:near_duplicate, %__MODULE__{} = existing} ->
+                {:ok, existing, :near_duplicate}
 
-              {:error, reason} ->
-                {:error, reason}
+              nil ->
+                insert_memory(changeset, ws_id, hash)
             end
         end
     end
   end
 
-  defp semantic_duplicate(changeset, workspace_id) do
+  defp insert_memory(changeset, ws_id, hash) do
+    changeset
+    |> Repo.insert()
+    |> case do
+      {:ok, memory} ->
+        # Graph presence: derive informs relations to the closest
+        # pages. Best-effort — a linking failure must never fail the
+        # write (same posture as the augmenter's entity linking).
+        _ = Dran.MemoryLinker.link_to_pages(memory)
+        broadcast_memory_change(memory.workspace_id, :created, memory)
+        {:ok, memory, :created}
+
+      {:error, %Ecto.Changeset{errors: [{:content_hash, _} | _]}} ->
+        {:ok, Repo.get_by!(__MODULE__, workspace_id: ws_id, content_hash: hash), :duplicate}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # Closest active embedding in two similarity bands (1 - cosine distance):
+  # >= 0.95 → :duplicate; >= 0.88 → :near_duplicate (grey zone); else nil.
+  defp semantic_match(changeset, workspace_id) do
     case get_change(changeset, :embedding) do
       nil ->
         nil
 
       vec ->
-        similarity = 1.0 - @semantic_dupe_threshold
+        # Bands are SIMILARITY >= 0.88/0.95; pgvector gives cosine DISTANCE
+        # (1 - similarity). Prefilter with the near-duplicate distance so
+        # only rows inside the wider band reach the SQL-side classification.
+        near_distance = 1.0 - @near_dupe_threshold
 
         from(m in __MODULE__,
           where:
             m.workspace_id == ^workspace_id and m.status == "active" and
               not is_nil(m.embedding),
-          where: fragment("1 - (? <=> ?) >= ?", m.embedding, ^vec, ^similarity),
-          limit: 1
+          where: fragment("? <=> ? <= ?", m.embedding, ^vec, ^near_distance),
+          order_by: fragment("? <=> ?", m.embedding, ^vec),
+          limit: 1,
+          select: {m, fragment("1 - (? <=> ?)", m.embedding, ^vec)}
         )
         |> Repo.one()
+        |> case do
+          nil ->
+            nil
+
+          {%__MODULE__{} = m, similarity} ->
+            if similarity >= @semantic_dupe_threshold do
+              {:duplicate, m}
+            else
+              {:near_duplicate, m}
+            end
+        end
+    end
+  end
+
+  @doc """
+  Update a fact in place (Holographic `update` semantics): rewrite content,
+  re-embed, and keep the row's earned trust — trust_score, helpful_count and
+  retrieval_count survive the rewrite. Broadcasts `:updated`.
+
+  The row must be active; updating a superseded fact is an error. Embedding
+  failures keep the old embedding (a degraded inference service must not
+  block a correction).
+  """
+  def update_memory(%__MODULE__{status: "superseded"}, _content), do: {:error, :superseded}
+
+  def update_memory(%__MODULE__{} = memory, content) when is_binary(content) do
+    normalized = normalize_content(content)
+
+    if normalized == memory.content do
+      {:ok, memory}
+    else
+      changeset =
+        memory
+        |> change(content: normalized, content_hash: content_hash(normalized))
+        |> maybe_reembed(memory)
+
+      case Repo.update(changeset) do
+        {:ok, updated} ->
+          broadcast_memory_change(updated.workspace_id, :updated, updated)
+          {:ok, updated}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  defp maybe_reembed(changeset, _memory) do
+    case get_change(changeset, :content) do
+      nil ->
+        changeset
+
+      new_content ->
+        if Dran.Inference.enabled?() do
+          # On failure keep the old embedding — a degraded inference
+          # service must not block a content correction.
+          case Dran.Inference.embed(new_content) do
+            {:ok, vec} -> put_change(changeset, :embedding, vec)
+            _ -> changeset
+          end
+        else
+          changeset
+        end
     end
   end
 
@@ -233,10 +328,52 @@ defmodule Dran.Memory do
   end
 
   @doc """
-  Trust-weighted hybrid search: FTS (spanish tsvector) + semantic (pgvector
-  cosine) fused with Reciprocal Rank Fusion, final score multiplied by
-  trust_score. Superseded memories are excluded. Bumps retrieval_count of
-  the returned facts.
+  Decay trust of never-retrieved memories (nightly hygiene, holographic-style).
+
+  Active memories older than `@decay_min_age_days` whose `retrieval_count`
+  is 0 lose `@decay_step` trust per elapsed 30-day window (clamped at
+  `@trust_floor`). Feedback-earned trust is untouched: only facts that were
+  never retrieved AND never rated fade. Returns the number of rows updated.
+  """
+  @decay_min_age_days 30
+  @decay_step 0.02
+  @decay_floor 0.15
+
+  def decay_trust do
+    cutoff = DateTime.add(DateTime.utc_now(), -@decay_min_age_days * 24, :hour)
+
+    {count, _} =
+      from(m in __MODULE__,
+        where:
+          m.status == "active" and m.retrieval_count == 0 and
+            m.helpful_count == 0 and
+            m.trust_score > @decay_floor and
+            m.inserted_at < ^cutoff,
+        update: [
+          set: [
+            trust_score:
+              fragment(
+                "greatest(?, ? - (floor(extract(epoch from (now() - ?)) / 2592000.0) - ?) * ?)",
+                ^@decay_floor,
+                m.trust_score,
+                m.inserted_at,
+                ^(@decay_min_age_days / 30.0),
+                ^@decay_step
+              ),
+            updated_at: fragment("now()")
+          ]
+        ]
+      )
+      |> Repo.update_all([])
+
+    count
+  end
+
+  @doc """
+  Trust-weighted hybrid search: FTS (language-neutral `simple` + unaccent)
+  + semantic (pgvector cosine) fused with Reciprocal Rank Fusion, final
+  score multiplied by trust_score. Superseded memories are excluded. Bumps
+  retrieval_count of the returned facts.
   """
   def search(workspace_id, query, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
@@ -277,12 +414,15 @@ defmodule Dran.Memory do
   end
 
   defp fts_candidates(workspace_id, query, limit) do
+    # 'simple' + unaccent: language-neutral token match (see migration
+    # MemoriesMultilangFtsAndGreyzone). Cross-language recall is carried by
+    # the semantic candidates; FTS handles exact-ish token overlap.
     from(m in __MODULE__,
       where:
         m.workspace_id == ^workspace_id and
           m.status == "active" and
-          fragment("search_vector @@ plainto_tsquery('spanish', ?)", ^query),
-      order_by: fragment("ts_rank(search_vector, plainto_tsquery('spanish', ?)) DESC", ^query),
+          fragment("search_vector @@ plainto_tsquery('simple', ?)", ^query),
+      order_by: fragment("ts_rank(search_vector, plainto_tsquery('simple', ?)) DESC", ^query),
       limit: ^limit
     )
     |> Repo.all()
@@ -340,6 +480,50 @@ defmodule Dran.Memory do
   def count_memories(workspace_id) do
     from(m in __MODULE__, where: m.workspace_id == ^workspace_id and m.status == "active")
     |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Related-fact snapshots for a batch of memories: the other endpoint of
+  each semantic memory↔memory edge, grouped by source id.
+
+  Returns `%{memory_id => [%{id: id, content: content}, ...]}` — active
+  neighbours only, one query for the whole batch. Powers the "related
+  facts" row in the memory UI; the graph renders the same edges as 3D
+  links between memory nodes.
+  """
+  def related_snapshots(workspace_id, ids) when is_list(ids) do
+    from(r in Dran.Relation,
+      join: m in __MODULE__,
+      on:
+        (r.source_id == m.id and r.target_id in ^ids and r.source_type == "memory" and
+           r.target_type == "memory") or
+          (r.target_id == m.id and r.source_id in ^ids and r.source_type == "memory" and
+             r.target_type == "memory"),
+      where:
+        r.relation_type == "semantic" and m.workspace_id == ^workspace_id and
+          m.status == "active",
+      select: {r.source_id, r.target_id, m.id, m.content}
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn {src, tgt, neighbor_id, content}, acc ->
+      # The edge is stored directionally (latest → earlier); the UI shows it
+      # from both ends, so attribute the neighbour to whichever side matches.
+      acc
+      |> maybe_put_neighbor(src, ids, neighbor_id, content)
+      |> maybe_put_neighbor(tgt, ids, neighbor_id, content)
+    end)
+  end
+
+  defp maybe_put_neighbor(acc, endpoint, batch_ids, neighbor_id, content) do
+    # `endpoint` is IN the batch (the card being rendered) when the neighbour
+    # is the other side; skip when the endpoint is the neighbour itself.
+    if endpoint in batch_ids and endpoint != neighbor_id do
+      Map.update(acc, endpoint, [%{id: neighbor_id, content: content}], fn list ->
+        [%{id: neighbor_id, content: content} | list]
+      end)
+    else
+      acc
+    end
   end
 
   # UI notification: MemoryLive refreshes on {:memory_changed, action, memory}.
@@ -432,13 +616,14 @@ defmodule Dran.Memory do
     {count, nil}
   end
 
-  # Polymorphic relations have no FK: a purged memory's informs edges must be
-  # swept explicitly or they dangle forever (they ARE queried by graph_data
-  # only when the memory id is among the active top-100 nodes, but orphan
-  # rows would still accumulate).
+  # Polymorphic relations have no FK: a purged memory's derived edges must be
+  # swept explicitly on BOTH sides or they dangle forever. informs edges have
+  # the memory as source; semantic memory↔memory edges can have it as target.
   defp delete_memory_relations(memory_id) do
     from(r in Dran.Relation,
-      where: r.source_id == ^memory_id and r.source_type == "memory"
+      where:
+        (r.source_id == ^memory_id and r.source_type == "memory") or
+          (r.target_id == ^memory_id and r.target_type == "memory")
     )
     |> Repo.delete_all()
 

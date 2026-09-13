@@ -27,7 +27,13 @@ defmodule DranWeb.API.MemoryController do
   # Self-reported confidence floor from the extraction model.
   @min_extraction_confidence 0.7
 
-  @doc "POST /api/memory — store a fact (idempotent per workspace)."
+  @doc """
+  POST /api/memory — store a fact (dedupe per workspace: exact hash →
+  semantic duplicate → semantic near-duplicate grey zone → create).
+
+  Pass `force=true` to skip the semantic grey zone when the caller has
+  examined the near-duplicate and confirmed the fact is genuinely new.
+  """
   def create(conn, params) do
     params = resolve_workspace_id(conn, params)
     user = conn.assigns[:user]
@@ -39,7 +45,9 @@ defmodule DranWeb.API.MemoryController do
       "created_by" => Auth.resolve_created_by(user)
     }
 
-    case Memory.add(attrs) do
+    opts = if params["force"] in [true, "true", "1"], do: [force: true], else: []
+
+    case Memory.add(attrs, opts) do
       {:ok, memory, :created} ->
         conn
         |> put_status(:created)
@@ -47,6 +55,17 @@ defmodule DranWeb.API.MemoryController do
 
       {:ok, memory, :duplicate} ->
         json(conn, %{data: memory, duplicate: true})
+
+      {:ok, existing, :near_duplicate} ->
+        # Grey zone (cosine 0.88–0.95): not stored. Return both texts so the
+        # caller (agent) can decide — refine via PATCH, or re-add with force.
+        conn
+        |> put_status(:conflict)
+        |> json(%{
+          near_duplicate: true,
+          data: existing,
+          submitted: params["content"]
+        })
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
@@ -58,6 +77,55 @@ defmodule DranWeb.API.MemoryController do
         |> put_status(:internal_server_error)
         |> json(%{errors: %{detail: to_string(reason)}})
     end
+  end
+
+  @doc """
+  PATCH /api/memory/:id — rewrite a fact in place (Holographic `update`
+  semantics). Trust, feedback and retrieval counters survive the rewrite;
+  content is re-embedded. Same-content PATCH is a no-op returning the row.
+  """
+  def update(conn, %{"id" => id} = params) do
+    params = resolve_workspace_id(conn, params)
+
+    with :ok <- require_content(params),
+         memory when not is_nil(memory) <-
+           Memory.get_scoped_memory(id, params["workspace_id"]) do
+      case Memory.update_memory(memory, params["content"]) do
+        {:ok, updated} ->
+          json(conn, %{data: render_memory(%{memory: updated, score: nil})})
+
+        {:error, :superseded} ->
+          conn
+          |> put_status(:conflict)
+          |> json(%{errors: %{detail: "memory is superseded"}})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: format_errors(changeset)})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:internal_server_error)
+          |> json(%{errors: %{detail: to_string(reason)}})
+      end
+    else
+      {:error, :content_required} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: %{detail: "content is required"}})
+
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "memory not found"}})
+    end
+  end
+
+  defp require_content(params) do
+    if blank?(params["content"]),
+      do: {:error, :content_required},
+      else: :ok
   end
 
   @doc "GET /api/memory/search?q=&workspace=&limit= — trust-weighted hybrid search."
@@ -181,11 +249,29 @@ defmodule DranWeb.API.MemoryController do
         transcript = transcript_text(params["transcript"])
 
         # Existing facts give the extractor negative context: slots are not
-        # wasted re-extracting what the workspace already knows.
+        # wasted re-extracting what the workspace already knows. The top-10
+        # is inflated with their semantic memory↔memory neighbours — the
+        # extractor must also skip related variants, not just exact dupes.
         known =
-          case Memory.search(params["workspace_id"], transcript, limit: 10, bump_retrieval: false) do
-            [] -> []
-            facts -> Enum.map(facts, & &1.memory.content)
+          case Memory.search(params["workspace_id"], transcript,
+                 limit: 10,
+                 bump_retrieval: false
+               ) do
+            [] ->
+              []
+
+            facts ->
+              base_ids = Enum.map(facts, & &1.memory.id)
+              base_contents = Enum.map(facts, & &1.memory.content)
+
+              neighbor_contents =
+                params["workspace_id"]
+                |> Memory.related_snapshots(base_ids)
+                |> Enum.flat_map(fn {_id, neighbors} -> neighbors end)
+                |> Enum.map(& &1.content)
+                |> Enum.uniq()
+
+              Enum.uniq(base_contents ++ neighbor_contents)
           end
 
         case extract_facts(transcript, known, summary_language(params["workspace_id"])) do
@@ -211,6 +297,13 @@ defmodule DranWeb.API.MemoryController do
                   %{acc | created: acc.created + 1, facts: [memory.content | acc.facts]}
 
                 {:ok, _existing, :duplicate} ->
+                  %{acc | duplicates: acc.duplicates + 1}
+
+                # Grey-zone matches on auto-extracted facts count as
+                # duplicates: no LLM round-trip, no forced row — the
+                # extractor's rewording is not trusted enough to overwrite
+                # a human/agent-curated fact.
+                {:ok, _existing, :near_duplicate} ->
                   %{acc | duplicates: acc.duplicates + 1}
 
                 {:error, _} ->
@@ -401,6 +494,10 @@ defmodule DranWeb.API.MemoryController do
 
   # ── Shared helpers ───────────────────────────────────────────────────
 
+  defp render_memory(%{memory: memory, score: nil}) do
+    render_memory(memory)
+  end
+
   defp render_memory(%{memory: memory, score: score}) do
     memory
     |> render_memory()
@@ -447,7 +544,7 @@ defmodule DranWeb.API.MemoryController do
   end
 
   defp blank?(nil), do: true
-  defp blank?(""), do: true
+  defp blank?(str) when is_binary(str), do: String.trim(str) == ""
   defp blank?(_), do: false
 
   # Row-level authorization: exists AND belongs to the resolved workspace.
