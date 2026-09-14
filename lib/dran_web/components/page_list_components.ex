@@ -128,7 +128,7 @@ defmodule DranWeb.PageListComponents do
 
       <div
         :if={not @show_archived and kind_options(@page_type) != []}
-        class="mb-4"
+        class="mb-4 flex justify-end"
         data-testid="kind-filters"
       >
         <div class="relative" id="kind-filter-root" phx-click-away="close_kind_menu">

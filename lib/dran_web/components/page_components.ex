@@ -560,7 +560,7 @@ defmodule DranWeb.PageComponents do
     ~H"""
     <div
       class={["relative overflow-hidden", @class]}
-      style={"background: #0a0e27; #{@style}"}
+      style={"background: #{canvas_bg()}; #{@style}"}
     >
       <div
         id={@id}
@@ -576,6 +576,8 @@ defmodule DranWeb.PageComponents do
   end
 
   # ── Helpers ──
+
+  defp canvas_bg, do: "#0a0e27"
 
   defdelegate type_icon(type), to: DranWeb.PageTypes, as: :icon
   defdelegate type_label(type), to: DranWeb.PageTypes, as: :label

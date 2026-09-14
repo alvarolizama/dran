@@ -149,7 +149,7 @@ defmodule Dran.GraphCache do
           slug: n.slug,
           label: n.title,
           type: n.type,
-          color: Map.get(GraphHelpers.type_colors(), n.type, "#94A3B8")
+          color: Map.get(GraphHelpers.type_colors(), n.type, GraphHelpers.fallback_color())
         }
       end)
 
@@ -158,7 +158,7 @@ defmodule Dran.GraphCache do
         %{
           source_id: e.source,
           target_id: e.target,
-          color: Map.get(GraphHelpers.edge_colors(), e.type, "#94A3B8")
+          color: Map.get(GraphHelpers.edge_colors(), e.type, GraphHelpers.fallback_color())
         }
       end)
 

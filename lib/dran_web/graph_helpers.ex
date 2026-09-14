@@ -19,6 +19,9 @@ defmodule DranWeb.GraphHelpers do
     "informs" => "#A78BFA"
   }
 
+  @fallback_color "#94A3B8"
+  def fallback_color, do: @fallback_color
+
   def type_colors, do: @type_colors
   def edge_colors, do: @edge_colors
 
@@ -89,7 +92,7 @@ defmodule DranWeb.GraphHelpers do
       slug: page.slug,
       label: page.title,
       type: page.page_type,
-      color: Map.get(@type_colors, page.page_type, "#94A3B8")
+      color: Map.get(@type_colors, page.page_type, @fallback_color)
     }
 
     # Collect all unique page ids (center + neighbors)
@@ -150,7 +153,7 @@ defmodule DranWeb.GraphHelpers do
               slug: p.slug,
               label: p.title,
               type: p.page_type,
-              color: Map.get(@type_colors, p.page_type, "#94A3B8")
+              color: Map.get(@type_colors, p.page_type, @fallback_color)
             }
 
           Map.has_key?(memory_neighbors, id) ->
@@ -161,7 +164,7 @@ defmodule DranWeb.GraphHelpers do
               slug: m.slug,
               label: m.title,
               type: "memory",
-              color: Map.get(@type_colors, "memory", "#94A3B8")
+              color: Map.get(@type_colors, "memory", @fallback_color)
             }
 
           true ->
@@ -180,7 +183,7 @@ defmodule DranWeb.GraphHelpers do
         %{
           source_id: e.source_id,
           target_id: e.target_id,
-          color: Map.get(@edge_colors, e.relation_type, "#94A3B8")
+          color: Map.get(@edge_colors, e.relation_type, @fallback_color)
         }
       end)
 

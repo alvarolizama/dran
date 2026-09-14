@@ -364,6 +364,8 @@ defmodule DranWeb.HomeLive do
     |> MapSet.difference(MapSet.new(@graph_hidden_types))
   end
 
+  defp hidden_type_color, do: "#64748B"
+
   defp sidebar_type_colors do
     Dran.PageRegistry.ordered_type_colors()
     |> Enum.reject(fn {type, _color} -> type in @graph_hidden_types end)
@@ -946,7 +948,7 @@ defmodule DranWeb.HomeLive do
           >
             <div
               class="w-3 h-3 shrink-0 rounded-full"
-              style={"background: #{if MapSet.member?(@visible_types, type), do: color, else: "#64748B"}"}
+              style={"background: #{if MapSet.member?(@visible_types, type), do: color, else: hidden_type_color()}"}
             >
             </div>
             <span class="text-sm capitalize flex-1">{type}</span>

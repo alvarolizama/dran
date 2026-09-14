@@ -150,6 +150,8 @@ defmodule DranWeb.JourneyLive do
   defp bg_for("text-warning"), do: "bg-warning/10"
   defp bg_for(_), do: "bg-base-200"
 
+  defp type_fallback_color, do: "#666"
+
   attr :buckets, :list, required: true
   attr :trajectory, :list, required: true
   attr :type_colors, :map, required: true
@@ -176,7 +178,7 @@ defmodule DranWeb.JourneyLive do
           <div class="flex-1 flex items-center gap-1">
             <div
               class="h-5 rounded-sm transition-all duration-300 group-hover:brightness-110"
-              style={"width: #{bucket_width(bucket.total, @max_total)}%; background-color: #{Map.get(@type_colors, bucket.dominant_type, "#666")}"}
+              style={"width: #{bucket_width(bucket.total, @max_total)}%; background-color: #{Map.get(@type_colors, bucket.dominant_type, type_fallback_color())}"}
               title={"#{bucket.label}: #{bucket.total}"}
             >
             </div>
@@ -241,7 +243,7 @@ defmodule DranWeb.JourneyLive do
       assigns.by_type
       |> Enum.sort_by(fn {_, v} -> -v end)
       |> Enum.map(fn {type, count} ->
-        {type, count, Map.get(assigns.type_colors, type, "#666")}
+        {type, count, Map.get(assigns.type_colors, type, type_fallback_color())}
       end)
 
     assigns = assign(assigns, sorted: sorted)
