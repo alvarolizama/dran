@@ -34,9 +34,34 @@ defmodule DranWeb.DashboardLive do
       sidebar={false}
     >
       <div class="w-full space-y-8">
-        <div class="flex items-center gap-2 pt-2">
-          <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
-          <span class="text-lg font-bold tracking-tight">Dran</span>
+        <div class="flex items-center justify-between gap-4 pt-2">
+          <div class="flex items-center gap-2">
+            <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
+            <span class="text-lg font-bold tracking-tight">Dran</span>
+          </div>
+
+          <%!-- Account / admin / logout — top-right of the header --%>
+          <div class="flex flex-wrap items-center gap-0">
+            <.footer_link href={~p"/settings/account"} icon="hero-user" label={gettext("Account")} />
+            <.footer_link
+              :if={@is_owner}
+              href={~p"/admin"}
+              icon="hero-shield-check"
+              label={gettext("Admin")}
+            />
+            <form id="logout-form" action={~p"/session"} method="post">
+              <input type="hidden" name="_method" value="delete" />
+              <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+              <button
+                type="submit"
+                class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                title={gettext("Logout")}
+              >
+                <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
+                {gettext("Logout")}
+              </button>
+            </form>
+          </div>
         </div>
 
         <div class="flex items-center justify-between gap-4">
@@ -108,29 +133,6 @@ defmodule DranWeb.DashboardLive do
               can_manage={@can_create_workspace or Map.get(ws, :role) in ~w(owner admin)}
             />
           </div>
-        </div>
-
-        <%!-- Secondary options — centered row below the workspace list --%>
-        <div class="pt-4 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-0">
-          <.footer_link href={~p"/settings/account"} icon="hero-user" label={gettext("Account")} />
-          <.footer_link
-            :if={@is_owner}
-            href={~p"/admin"}
-            icon="hero-shield-check"
-            label={gettext("Admin")}
-          />
-          <form id="logout-form" action={~p"/session"} method="post">
-            <input type="hidden" name="_method" value="delete" />
-            <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
-            <button
-              type="submit"
-              class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-              title={gettext("Logout")}
-            >
-              <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
-              {gettext("Logout")}
-            </button>
-          </form>
         </div>
       </div>
 
