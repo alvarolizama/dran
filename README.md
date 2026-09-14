@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="priv/static/favicon.svg" width="96" height="96" alt="Dran" />
+<img src="priv/static/logo.png" width="96" height="96" alt="Dran" />
 
 # Dran
 

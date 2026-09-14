@@ -1,9 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#1a1a2e"/>
-      <stop offset="100%" stop-color="#0a0a14"/>
-    </radialGradient>
     <filter id="glow">
       <feGaussianBlur stdDeviation="2" result="blur"/>
       <feMerge>
@@ -12,8 +8,7 @@
       </feMerge>
     </filter>
   </defs>
-  <!-- Background circle -->
-  <circle cx="32" cy="32" r="32" fill="url(#bg)"/>
+  <!-- Transparent background (no fill) so the icon sits on any surface -->
   <!-- Connection lines (thick enough to survive downscale) -->
   <g stroke="#60a5fa" stroke-width="2.2" stroke-linecap="round" opacity="0.5" filter="url(#glow)">
     <line x1="32" y1="32" x2="16" y2="14"/>

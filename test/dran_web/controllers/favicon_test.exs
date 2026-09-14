@@ -1,24 +1,29 @@
 defmodule DranWeb.FaviconTest do
   @moduledoc """
-  The Dran icon must be served as the favicon.
+  The Dran icon must be served as a PNG.
 
-  `favicon.svg` was missing from `DranWeb.static_paths/0`, so `Plug.Static`
-  never served it: a request to `/favicon.svg` fell through to the router and
-  redirected to `/login`, and the browser silently fell back to `favicon.ico`.
-  These tests pin the static allow-list so the crisp SVG icon keeps loading.
+  SVG icons were not rendering reliably (GitHub README and some browsers), so
+  the brand icon ships as `priv/static/logo.png`, referenced both as the
+  favicon and in the README header. `favicon.ico` stays as a legacy fallback.
+
+  The PNG must be listed in `DranWeb.static_paths/0`; otherwise `Plug.Static`
+  never serves it, a request to `/logo.png` falls through to the router and
+  redirects to `/login`, and the browser silently shows no icon. These tests
+  pin the static allow-list so the icon keeps loading.
   """
   use DranWeb.ConnCase, async: true
 
-  test "serves the SVG favicon at /favicon.svg", %{conn: conn} do
-    conn = get(conn, "/favicon.svg")
+  test "serves the PNG logo/favicon at /logo.png", %{conn: conn} do
+    conn = get(conn, "/logo.png")
 
     assert conn.status == 200
     assert [content_type | _] = get_resp_header(conn, "content-type")
-    assert content_type =~ "image/svg+xml"
-    assert conn.resp_body =~ "<svg"
+    assert content_type =~ "image/png"
+    # PNG magic bytes.
+    assert <<0x89, "PNG\r\n", 0x1A, "\n", _rest::binary>> = conn.resp_body
   end
 
-  test "serves favicon.ico", %{conn: conn} do
+  test "serves the legacy favicon.ico fallback", %{conn: conn} do
     conn = get(conn, "/favicon.ico")
     assert conn.status == 200
   end

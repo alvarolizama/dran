@@ -35,7 +35,7 @@ defmodule DranWeb.DashboardLive do
     >
       <div class="w-full space-y-8">
         <div class="flex items-center gap-2 pt-2">
-          <img src={~p"/favicon.svg"} class="size-6 shrink-0" alt="" />
+          <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
           <span class="text-lg font-bold tracking-tight">Dran</span>
         </div>
 
