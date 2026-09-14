@@ -150,14 +150,14 @@ defmodule DranWeb.Layouts do
         </div>
       </aside>
 
-      <div class={[
+      <main class={[
         "flex-1 overflow-y-auto flex flex-col w-full",
         !@sidebar && "items-center"
       ]}>
         <div class={if @sidebar, do: "contents", else: "w-full max-w-3xl px-6 pt-6 pb-16"}>
           {render_slot(@inner_block)}
         </div>
-      </div>
+      </main>
 
       <.live_component
         module={DranWeb.CommandPalette}

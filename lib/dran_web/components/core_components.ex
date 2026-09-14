@@ -377,7 +377,7 @@ defmodule DranWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
+    <table class="table table-sm">
       <thead>
         <tr>
           <th :for={col <- @col}>{col[:label]}</th>

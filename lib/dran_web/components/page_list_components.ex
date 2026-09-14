@@ -131,7 +131,7 @@ defmodule DranWeb.PageListComponents do
         class="mb-4"
         data-testid="kind-filters"
       >
-        <div class="relative" id="kind-filter-root">
+        <div class="relative" id="kind-filter-root" phx-click-away="close_kind_menu">
           <button
             type="button"
             phx-click="toggle_kind_menu"

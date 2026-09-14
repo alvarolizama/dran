@@ -543,3 +543,13 @@
 /* The hover overlay is rendered by the Graph3D hook as an inline-styled HTML
    div (`.graph-hover-overlay`), so it needs no rules here. Kept as a
    placeholder for potential future tooltip styling. */
+
+/* ── Tablas: hover de fila global (§C6) ── */
+
+.table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.table tbody tr:hover {
+  background-color: color-mix(in oklab, var(--color-base-200) 60%, transparent);
+}

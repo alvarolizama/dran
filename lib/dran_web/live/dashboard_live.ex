@@ -138,6 +138,8 @@ defmodule DranWeb.DashboardLive do
       <div
         :if={@show_workspace_modal}
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        phx-window-keydown="close_context_modal"
+        phx-key="Escape"
       >
         <div
           class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"

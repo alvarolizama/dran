@@ -37,13 +37,18 @@ defmodule DranWeb.Admin do
 
   def modal(assigns) do
     ~H"""
-    <div :if={@show} class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div
+      :if={@show}
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      phx-window-keydown={@on_close}
+      phx-key="Escape"
+    >
       <div
         id={@id}
         class={["card bg-base-100 border border-base-300 shadow-xl w-full", @max_w]}
         phx-click-away={@on_close}
       >
-        <div class="card-body">
+        <div class="card-body p-6">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-lg font-semibold">{@title}</h3>
             <button type="button" phx-click={@on_close} class="btn btn-ghost btn-xs btn-circle">

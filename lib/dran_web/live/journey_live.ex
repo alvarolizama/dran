@@ -177,6 +177,7 @@ defmodule DranWeb.JourneyLive do
             <div
               class="h-5 rounded-sm transition-all duration-300 group-hover:brightness-110"
               style={"width: #{bucket_width(bucket.total, @max_total)}%; background-color: #{Map.get(@type_colors, bucket.dominant_type, "#666")}"}
+              title={"#{bucket.label}: #{bucket.total}"}
             >
             </div>
             <span class="text-xs font-medium tabular-nums text-base-content/70 w-6 text-right">

@@ -273,6 +273,10 @@ defmodule DranWeb.PagesLive do
     {:noreply, assign(socket, kind_menu_open: not socket.assigns[:kind_menu_open])}
   end
 
+  def handle_event("close_kind_menu", _params, socket) do
+    {:noreply, assign(socket, kind_menu_open: false)}
+  end
+
   def handle_event("filter_archived", %{"type" => type}, socket) do
     {:noreply, assign(socket, archived_filter: type)}
   end

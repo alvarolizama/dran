@@ -84,7 +84,7 @@ defmodule DranWeb.CommandPalette do
               type="text"
               name="query"
               value={@query}
-              phx-keyup="search"
+              phx-change="search"
               phx-debounce="200"
               phx-target={@myself}
               placeholder={gettext("Search pages, actions...")}
