@@ -138,6 +138,27 @@ operating flow: `dran` (router), `dran-knowledge-flow`, `dran-relations-flow`,
 `dran-workers-flow`, `dran-memory-flow`. Shared rules: one key = one actor; a write is not
 done until a readback confirms it; irreversible ops need human confirmation.
 
+## System prompt initialization
+
+Paste this block into `soul.md` (or an injected system prompt) so the agent
+loads the Dran skills on match:
+
+```
+## Frameworks — activation lines
+
+- **Dran (second brain)** — when operating the Dran workspace (knowledge
+  pages, typed relations, memories, or its workers), load the `dran` skill
+  and whichever apply: `dran-knowledge-flow` (pages), `dran-relations-flow`
+  (typed links), `dran-memory-flow` (durable facts), `dran-workers-flow`
+  (curator / link_gardener / graph_rag). Dran stores and returns what is
+  known — it does not decide it.
+```
+
+Keep it this short: the soul references the skills, it never embeds them
+(embedding desyncs and costs tokens every turn). The same block lives at
+`system-prompt.md`. Name your default workspace in the line if the
+deployment pins one.
+
 ## Installation
 
 ### 1 · Dran (the server)
