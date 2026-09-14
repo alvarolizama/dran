@@ -287,7 +287,7 @@ frontmatter versions, bumped independently as each flow evolves.
 
 ## License
 
-Released under the [MIT License](LICENSE) — Copyright (c) 2026 Alvaro Lizama.
+Released under the [MIT License](LICENSE) — Copyright (c) 2026 Álvaro Lizama.
 The license covers the whole repository: the Elixir/Phoenix server, the Hermes
 memory plugin (`hermes_plugin/dran/`), and the agent skills (`skills/`).
 Third-party dependencies keep their own licenses; vendored assets
