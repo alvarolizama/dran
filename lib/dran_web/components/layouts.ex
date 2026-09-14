@@ -45,6 +45,15 @@ defmodule DranWeb.Layouts do
     default: true,
     doc: "when false, hides the sidebar entirely (e.g. the / workspace launcher)"
 
+  attr :topbar, :boolean,
+    default: false,
+    doc:
+      "when true, renders the app top bar (logo + options menu top-right) inside the content area. Pair it with `sidebar={false}` for the shell-less pages: / , /settings/* and /admin/*"
+
+  attr :topbar_active, :atom,
+    default: nil,
+    doc: "which top bar option to highlight: :dashboard | :account | :admin"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -65,10 +74,17 @@ defmodule DranWeb.Layouts do
 
     # If the caller didn't forward page_counts, compute them here so the
     # sidebar context selector never silently shows "Context (0)".
+    # Shell-less pages (sidebar={false}) never render the selector, so the
+    # aggregate is skipped there.
+    sidebar? = assigns[:sidebar] != false
+
     page_counts =
       case assigns[:page_counts] do
         counts_by_context when is_map(counts_by_context) and map_size(counts_by_context) > 0 ->
           counts_by_context
+
+        _ when not sidebar? ->
+          %{}
 
         _ ->
           try do
@@ -155,6 +171,7 @@ defmodule DranWeb.Layouts do
         !@sidebar && "items-center"
       ]}>
         <div class={if @sidebar, do: "contents", else: "w-full px-6 pt-6 pb-16"}>
+          <.app_topbar :if={@topbar} is_owner={@is_owner} active={@topbar_active} />
           {render_slot(@inner_block)}
         </div>
       </main>
@@ -420,6 +437,91 @@ defmodule DranWeb.Layouts do
       >
         {@badge}
       </span>
+    </a>
+    """
+  end
+
+  # ── Top bar (shell-less pages: / , /settings/* and /admin/*) ─────────────
+  #
+  # One bar for every page outside the workspace sidebar: the logo on the
+  # left, the three instance-level options (Workspaces, Account, Admin) plus
+  # logout on the right. `active` highlights the current option.
+
+  attr :is_owner, :boolean, default: false
+  attr :active, :atom, default: nil
+
+  def app_topbar(assigns) do
+    ~H"""
+    <div id="app-topbar" class="flex flex-wrap items-center justify-between gap-4 pt-2 mb-8">
+      <a
+        href={~p"/"}
+        class="flex items-center gap-2 shrink-0 transition-opacity duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
+      >
+        <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
+        <span class="text-lg font-bold tracking-tight">Dran</span>
+      </a>
+
+      <nav class="flex flex-wrap items-center gap-0" aria-label={gettext("Options")}>
+        <.topbar_option
+          id="topbar-dashboard"
+          href={~p"/"}
+          icon="hero-squares-2x2"
+          label={gettext("Workspaces")}
+          active={@active == :dashboard}
+        />
+        <.topbar_option
+          id="topbar-account"
+          href={~p"/settings/account"}
+          icon="hero-user"
+          label={gettext("Account")}
+          active={@active == :account}
+        />
+        <.topbar_option
+          :if={@is_owner}
+          id="topbar-admin"
+          href={~p"/admin"}
+          icon="hero-shield-check"
+          label={gettext("Admin")}
+          active={@active == :admin}
+        />
+
+        <form id="logout-form" action={~p"/session"} method="post">
+          <input type="hidden" name="_method" value="delete" />
+          <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+          <button
+            type="submit"
+            class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            title={gettext("Logout")}
+          >
+            <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
+            {gettext("Logout")}
+          </button>
+        </form>
+      </nav>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :href, :string, required: true
+  attr :icon, :string, required: true
+  attr :label, :string, required: true
+  attr :active, :boolean, default: false
+
+  defp topbar_option(assigns) do
+    ~H"""
+    <a
+      id={@id}
+      href={@href}
+      aria-current={@active && "page"}
+      class={[
+        "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        @active && "bg-primary/10 text-primary font-medium",
+        !@active && "text-base-content/60 hover:text-base-content hover:bg-base-200"
+      ]}
+    >
+      <.icon name={@icon} class="size-4" />
+      {@label}
     </a>
     """
   end

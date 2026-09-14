@@ -621,9 +621,12 @@ defmodule DranWeb.SettingsLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
+      sidebar={false}
+      topbar
+      topbar_active={:account}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full p-6 space-y-6">
+        <div class="w-full space-y-6">
           <div class="flex items-center gap-1 border-b border-base-300">
             <.tab_link active={@active_tab == :account} to={~p"/settings/account"}>
               {gettext("Account")}

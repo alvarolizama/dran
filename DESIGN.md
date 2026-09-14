@@ -476,8 +476,15 @@ Transiciones `transition-all duration-150`; desplazamientos `hover:translate-x-0
   `kbd ⌘K`), nav en `<details open>` colapsables (chevron `group-open:rotate-90`),
   `sidebar_footer_icons` y `user_footer`.
 - **Nav link activo:** `bg-primary/10 text-primary font-medium border-l-2 border-primary`.
-- **Opciones del shell:** `sidebar={false}` (launcher `/`, max-w-3xl), `fluid`
-  (contenido sin padding interno), `active_nav`.
+- **Opciones del shell:** `sidebar={false}` (oculta el `aside`), `topbar` +
+  `topbar_active={:dashboard | :account | :admin}` (barra `<.app_topbar>` con el
+  logo a la izquierda y el menú de opciones —Workspaces, Account, Admin y
+  Salir— arriba a la derecha, con la opción activa resaltada), `fluid` (contenido
+  sin padding interno), `active_nav`.
+- **Shell sin sidebar:** lo comparten las tres opciones de instancia y sus
+  subpáginas — `/`, `/settings/account`, `/settings/agents` y todo `/admin/*` —
+  vía `sidebar={false}` + `topbar`. El contenido lo paddea el layout
+  (`px-6 pt-6 pb-16`) y la opción Admin solo aparece para owners.
 - **Command palette:** `DranWeb.CommandPalette` (`#command-palette`, `phx-hook`, ⌘K) —
   overlay `fixed inset-0 z-50 bg-black/50 backdrop-blur-sm`, panel
   `mx-auto max-w-lg rounded-xl border border-base-300 bg-base-100 shadow-2xl`

@@ -158,9 +158,12 @@ defmodule DranWeb.AdminSystemLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
+      sidebar={false}
+      topbar
+      topbar_active={:admin}
     >
       <div class="flex-1 overflow-y-auto">
-        <div class="w-full p-6 space-y-6">
+        <div class="w-full space-y-6">
           <div>
             <h1 class="text-title">{gettext("Sistema")}</h1>
             <p class="text-caption mt-0.5">

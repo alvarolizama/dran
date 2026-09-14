@@ -32,38 +32,10 @@ defmodule DranWeb.DashboardLive do
       workspaces={@workspaces}
       active_nav={@active_nav}
       sidebar={false}
+      topbar
+      topbar_active={:dashboard}
     >
       <div class="w-full space-y-8">
-        <div class="flex items-center justify-between gap-4 pt-2">
-          <div class="flex items-center gap-2">
-            <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
-            <span class="text-lg font-bold tracking-tight">Dran</span>
-          </div>
-
-          <%!-- Account / admin / logout — top-right of the header --%>
-          <div class="flex flex-wrap items-center gap-0">
-            <.footer_link href={~p"/settings/account"} icon="hero-user" label={gettext("Account")} />
-            <.footer_link
-              :if={@is_owner}
-              href={~p"/admin"}
-              icon="hero-shield-check"
-              label={gettext("Admin")}
-            />
-            <form id="logout-form" action={~p"/session"} method="post">
-              <input type="hidden" name="_method" value="delete" />
-              <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
-              <button
-                type="submit"
-                class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                title={gettext("Logout")}
-              >
-                <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
-                {gettext("Logout")}
-              </button>
-            </form>
-          </div>
-        </div>
-
         <div class="flex items-center justify-between gap-4">
           <div class="space-y-1">
             <h1 class="text-title">{greeting()}</h1>
@@ -369,22 +341,6 @@ defmodule DranWeb.DashboardLive do
   end
 
   # ── Components ───────────────────────────────────────────────────────────
-
-  attr :href, :string, required: true
-  attr :icon, :string, required: true
-  attr :label, :string, required: true
-
-  defp footer_link(assigns) do
-    ~H"""
-    <a
-      href={@href}
-      class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-    >
-      <.icon name={@icon} class="size-4" />
-      {@label}
-    </a>
-    """
-  end
 
   attr :ws, :map, required: true
   attr :metrics, :map, default: %{pages: 0, last_updated: nil}
