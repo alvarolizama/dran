@@ -10,7 +10,7 @@ defmodule DranWeb.VisibilityLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.{Accounts, Knowledge, Memory, Repo}
+  alias Dran.{Knowledge, Memory, Repo}
   alias Dran.Accounts.{User, UserWorkspace}
 
   setup do
@@ -239,14 +239,11 @@ defmodule DranWeb.VisibilityLiveTest do
 
       # Desactiva compartir memoria (el form envía ambos toggles: uno solo
       # dejaría el otro en su default del hidden input).
-      html =
-        view
-        |> form("#workspace-settings-form", %{
-          "workspace" => %{"share_memory" => "false", "share_pages" => "true"}
-        })
-        |> render_submit()
-
-      assert html
+      view
+      |> form("#workspace-settings-form", %{
+        "workspace" => %{"share_memory" => "false", "share_pages" => "true"}
+      })
+      |> render_submit()
 
       updated = Knowledge.get_workspace_by_slug(ws.slug)
       assert updated.share_memory == false

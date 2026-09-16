@@ -18,6 +18,9 @@ defmodule DranWeb.API.WorkerController do
 
   @worker_types ~w(curator link_gardener graph_rag)
   @terminal_statuses ~w(done failed)
+  # Whitelist de opts aceptadas: ver normalize_opts/1 (sin String.to_atom
+  # sobre input del cliente).
+  @worker_opt_keys ~w(limit focus depth max_pages force)a
 
   @doc "POST /api/workers — start a worker session."
   def create(conn, params) do
@@ -130,13 +133,29 @@ defmodule DranWeb.API.WorkerController do
     do: Worker.GraphRag.run(input, workspace_id, normalize_opts(opts))
 
   # The MCP tool accepted a map of opts; the workers expect a keyword list.
+  # Keys are whitelisted — `String.to_atom/1` on client input would let a
+  # caller grow the atom table (the reason sobelow flags it as Medium).
   defp normalize_opts(nil), do: []
-  defp normalize_opts(opts) when is_list(opts), do: opts
 
-  defp normalize_opts(opts) when is_map(opts),
-    do: Enum.map(opts, fn {k, v} -> {String.to_atom(k), v} end)
+  defp normalize_opts(opts) when is_list(opts) do
+    Enum.filter(opts, fn
+      {k, _v} when is_atom(k) -> k in @worker_opt_keys
+      _ -> false
+    end)
+  end
+
+  defp normalize_opts(opts) when is_map(opts) do
+    for {k, v} <- opts, key = worker_opt_key(k), key != nil, do: {key, v}
+  end
 
   defp normalize_opts(_), do: []
+
+  defp worker_opt_key(key) when is_atom(key), do: if(key in @worker_opt_keys, do: key)
+
+  defp worker_opt_key(key) when is_binary(key),
+    do: Enum.find(@worker_opt_keys, &(Atom.to_string(&1) == key))
+
+  defp worker_opt_key(_), do: nil
 
   defp preload_steps(nil), do: nil
   defp preload_steps(session), do: Repo.preload(session, :steps)

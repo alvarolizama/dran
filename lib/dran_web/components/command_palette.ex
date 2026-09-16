@@ -32,6 +32,7 @@ defmodule DranWeb.CommandPalette do
   @impl true
   def update(%{workspace_slug: workspace_slug} = assigns, socket) do
     socket = assign(socket, :user, Map.get(assigns, :user))
+
     disabled_types =
       case workspace_slug && Knowledge.get_workspace_by_slug(workspace_slug) do
         %{disabled_page_types: disabled} when is_list(disabled) -> disabled
