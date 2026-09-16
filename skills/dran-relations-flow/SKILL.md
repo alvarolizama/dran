@@ -1,6 +1,6 @@
 ---
 name: dran-relations-flow
-description: "Use when linking two Dran pages with a typed relation (plugin tools)."
+description: "Use when linking two Dran pages with a relation."
 version: 2.0.0
 author: Álvaro Lizama
 license: MIT

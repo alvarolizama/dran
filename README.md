@@ -139,10 +139,20 @@ Full endpoint reference: [docs/api.md](docs/api.md).
 
 ## Agent skills
 
-`skills/` ships 5 skills for Hermes (or any skill-loading agent) — one router plus one per
-operating flow: `dran` (router), `dran-knowledge-flow`, `dran-relations-flow`,
-`dran-workers-flow`, `dran-memory-flow`. Shared rules: one key = one actor; a write is not
-done until a readback confirms it; irreversible ops need human confirmation.
+`skills/` ships **two suites**, both versioned with this repo:
+
+- **Agent flows (5)** — `dran` (router) + `dran-knowledge-flow`,
+  `dran-relations-flow`, `dran-workers-flow`, `dran-memory-flow`. These teach
+  an agent how to *operate* a Dran instance through the plugin tools.
+- **Dev skills (7)** — `skills/dev/dran-dev-*`: page types, auth surface, slug
+  policy, settings, UI tweaks, inference providers, actor model. These assume
+  you are *editing this repo*.
+
+Shared rules: one key = one actor; a write is not done until a readback
+confirms it; irreversible ops need human confirmation.
+
+Install and conventions (including the 60-char description limit): see
+[skills/README.md](skills/README.md).
 
 ## System prompt initialization
 
@@ -224,14 +234,14 @@ the API key stays in `.env`. The memory workspace must be one the key can reach 
 plugin validates against `GET /api/agent/config` and falls back to the first permitted
 workspace (with a warning) if the matrix changes.
 
-**e. Skills** (5: router + knowledge, relations, workers, memory flows). Symlink the suite
-into a dir the profile already scans:
+**e. Skills** — two suites (5 agent flows + 7 dev skills). The flows are the
+everyday ones; add `skills/dev/*` only when you work on this repo:
 
 ```bash
 mkdir -p ~/Workspace/Skills
 for s in dran dran-knowledge-flow dran-memory-flow \
          dran-relations-flow dran-workers-flow; do
-  ln -s /path/to/dran/skills/$s ~/Workspace/Skills/$s
+  ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
 done
 ```
 
@@ -240,6 +250,10 @@ skills:
   external_dirs:
     - ~/Workspace/Skills
 ```
+
+The details (why `external_dirs` and not the plugin's `register_skill`, the
+60-char description limit, the naming convention) live in
+[skills/README.md](skills/README.md).
 
 Restart the Hermes session, then verify each piece: tools — ask it to "list my pages";
 memory — "what do you remember about …?"; skills — it should route Dran questions

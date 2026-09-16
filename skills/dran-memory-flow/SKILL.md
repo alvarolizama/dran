@@ -1,6 +1,6 @@
 ---
 name: dran-memory-flow
-description: "Use when listing, searching, updating, or deleting Dran agent memories."
+description: "Use when listing/searching Dran agent memories."
 version: 1.3.0
 author: Álvaro Lizama
 license: MIT

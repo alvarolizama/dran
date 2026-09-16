@@ -1,6 +1,6 @@
 ---
 name: dran-knowledge-flow
-description: "Use when creating or editing Dran knowledge pages (plugin tools)."
+description: "Use when creating/editing/deleting Dran pages."
 version: 2.0.0
 author: Álvaro Lizama
 license: MIT

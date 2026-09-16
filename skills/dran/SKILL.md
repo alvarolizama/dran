@@ -1,6 +1,6 @@
 ---
 name: dran
-description: "Use when operating Dran — router and shared rules (plugin tools)."
+description: "Use when operating Dran: router + shared rules."
 version: 12.0.0
 author: Álvaro Lizama
 license: MIT
@@ -39,6 +39,24 @@ flowchart TD
 
 Run ONLY the flow you landed on. If the diagram sends you to another skill,
 **stop here** and hand off — don't absorb that work.
+
+### Changing Dran itself
+
+The flows above are for USING Dran. To CHANGE its code, load the matching
+`dran-dev-*` skill (they ship in `skills/dev/` of this repo, versioned with it):
+
+| Skill | For |
+| --- | --- |
+| `dran-dev-actor-model` | identity/ownership: actors, keys, attribution |
+| `dran-dev-auth-surface` | REST authorization layers + audit method |
+| `dran-dev-page-types` | adding/changing page types or kinds |
+| `dran-dev-settings-config` | settings-backed config and admin forms |
+| `dran-dev-slug-management` | slug creation/update policy |
+| `dran-dev-ui-tweaks` | Web UI edits from inspector snippets |
+| `dran-dev-inference-providers` | embeddings/chat provider config |
+
+These are developer skills, not agent flows: they assume you are editing this
+repo, not operating a Dran instance.
 
 ## Connection (once per Hermes profile)
 

@@ -1,6 +1,6 @@
 ---
 name: dran-workers-flow
-description: "Use when running Dran workers: curator, link_gardener, graph_rag (plugin tools)."
+description: "Use when running Dran workers (curator, graph_rag)."
 version: 2.0.0
 author: Álvaro Lizama
 license: MIT
