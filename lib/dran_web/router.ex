@@ -550,6 +550,7 @@ defmodule DranWeb.Router do
 
     # Relations (write)
     post "/relations", RelationController, :create
+    delete "/relations", RelationController, :delete_by_slugs
     delete "/relations/:id", RelationController, :delete
 
     # Workers (write: starting a worker writes pages)

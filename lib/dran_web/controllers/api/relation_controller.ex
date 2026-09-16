@@ -64,7 +64,84 @@ defmodule DranWeb.API.RelationController do
     })
   end
 
-  @doc "DELETE /api/relations/:id — delete a relation"
+  @doc """
+  DELETE /api/relations — delete relations between two pages (by slug pair).
+
+  Semantics inherited from the retired MCP tool: `relation_type` optional —
+  omitting it deletes ALL relations between the pair in both directions.
+  Returns the count of deleted relations.
+  """
+  def delete_by_slugs(conn, params) do
+    user = conn.assigns[:user]
+    source_slug = params["source_slug"]
+    target_slug = params["target_slug"]
+    relation_type = params["relation_type"]
+    workspace_slug = params["workspace"]
+
+    cond do
+      blank?(source_slug) or blank?(target_slug) ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: %{detail: "source_slug and target_slug are required"}})
+
+      is_nil(workspace_slug) ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: %{detail: "workspace query param is required"}})
+
+      true ->
+        case resolve_workspace(workspace_slug) do
+          nil ->
+            conn
+            |> put_status(:not_found)
+            |> json(%{errors: %{detail: "workspace not found"}})
+
+          workspace ->
+            # SEC-011: same access gate as delete/2 before touching rows.
+            case DranWeb.ResourceAuthorization.authorize(user, :write, workspace) do
+              :ok ->
+                case Dran.Knowledge.delete_relation_by_slugs(
+                       source_slug,
+                       target_slug,
+                       relation_type,
+                       workspace.id
+                     ) do
+                  {:error, :source_not_found} ->
+                    conn
+                    |> put_status(:not_found)
+                    |> json(%{errors: %{detail: "source page not found"}})
+
+                  {:error, :target_not_found} ->
+                    conn
+                    |> put_status(:not_found)
+                    |> json(%{errors: %{detail: "target page not found"}})
+
+                  {count, errors} ->
+                    json(conn, %{data: %{deleted: count, errors: errors}})
+                end
+
+              {:error, :forbidden} ->
+                conn
+                |> put_status(:forbidden)
+                |> json(%{errors: %{detail: "forbidden"}})
+            end
+        end
+    end
+  end
+
+  defp blank?(nil), do: true
+  defp blank?(str) when is_binary(str), do: String.trim(str) == ""
+  defp blank?(_), do: false
+
+  defp resolve_workspace(slug) do
+    Dran.Knowledge.get_workspace_by_slug(slug) ||
+      case Ecto.UUID.cast(slug) do
+        {:ok, uuid} -> Dran.Repo.get(Dran.Workspace, uuid)
+        :error -> nil
+      end
+  end
+
+  @doc "DELETE /api/relations/:id — delete a relation by id."
   def delete(conn, %{"id" => id}) do
     # SEC-011: validate the user has access to the relation's context before deleting
     user = conn.assigns[:user]
