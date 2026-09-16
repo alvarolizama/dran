@@ -42,7 +42,11 @@ defmodule DranWeb.API.MemoryController do
       "workspace_id" => params["workspace_id"],
       "content" => params["content"],
       "source_session" => params["source_session"],
-      "created_by" => Auth.resolve_created_by(user)
+      "created_by" => Auth.resolve_created_by(user),
+      # SERVER-SIDE ONLY: owner_user_id and agent_name are resolved here and
+      # overwrite anything the client sent — a client can never set them.
+      "owner_user_id" => Auth.resolve_owner_user_id(user),
+      "agent_name" => Auth.agent_name_from_headers(conn.req_headers)
     }
 
     opts = if params["force"] in [true, "true", "1"], do: [force: true], else: []
@@ -145,9 +149,13 @@ defmodule DranWeb.API.MemoryController do
 
       true ->
         limit = parse_limit(params["limit"])
+        scope = scope_for(conn, params["workspace_id"], :memory)
 
         results =
-          Memory.search(params["workspace_id"], params["q"], limit: limit)
+          Memory.search(params["workspace_id"], params["q"],
+            limit: limit,
+            scope: scope
+          )
 
         json(conn, %{data: Enum.map(results, &render_memory/1)})
     end
@@ -161,7 +169,8 @@ defmodule DranWeb.API.MemoryController do
       Memory.list_memories(params["workspace_id"],
         status: params["status"],
         limit: parse_limit(params["limit"]),
-        offset: parse_int(params["offset"])
+        offset: parse_int(params["offset"]),
+        scope: scope_for(conn, params["workspace_id"], :memory)
       )
 
     json(conn, %{data: memories})
@@ -287,6 +296,10 @@ defmodule DranWeb.API.MemoryController do
                 "content" => content,
                 "source_session" => params["source_session"],
                 "created_by" => Auth.resolve_created_by(user),
+                # Server-side attribution, same guarantee as create/2:
+                # client-supplied values never reach the row.
+                "owner_user_id" => Auth.resolve_owner_user_id(user),
+                "agent_name" => Auth.agent_name_from_headers(conn.req_headers),
                 # Auto-extracted facts start on probation: they weigh less in
                 # search until feedback promotes them. Manual adds stay at 0.5.
                 "trust_score" => @auto_extracted_trust
@@ -572,5 +585,11 @@ defmodule DranWeb.API.MemoryController do
       {n, _} when n >= 0 -> n
       _ -> nil
     end
+  end
+
+  # The read scope comes from the SINGLE policy module — never a local rule.
+  # Resolves against the authenticated identity + the workspace policy.
+  defp scope_for(conn, workspace_id, kind) do
+    Dran.ContentVisibility.resolve(workspace_id, conn.assigns[:user], kind)
   end
 end

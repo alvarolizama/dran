@@ -18,6 +18,7 @@ defmodule DranWeb.API.SearchController do
           |> maybe_put(:type, params["type"])
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
           |> maybe_put(:strategy, parse_strategy(params["strategy"]))
+          |> Keyword.put(:scope, scope_for(conn, workspace_id, :pages))
 
         case Knowledge.search(query, opts) do
           {:ok, results} ->
@@ -55,6 +56,7 @@ defmodule DranWeb.API.SearchController do
           []
           |> maybe_put(:workspace_id, workspace_id)
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+          |> Keyword.put(:scope, scope_for(conn, workspace_id, :pages))
 
         case Knowledge.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
           {:ok, results} -> json(conn, %{data: results})
@@ -83,6 +85,7 @@ defmodule DranWeb.API.SearchController do
           |> maybe_put(:workspace_id, workspace_id)
           |> maybe_put(:type, params["type"])
           |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+          |> Keyword.put(:scope, scope_for(conn, workspace_id, :pages))
 
         strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
 
@@ -122,6 +125,11 @@ defmodule DranWeb.API.SearchController do
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
+
+  # The read scope comes from the SINGLE policy module — never a local rule.
+  defp scope_for(conn, workspace_id, kind) do
+    Dran.ContentVisibility.resolve(workspace_id, conn.assigns[:user], kind)
+  end
 
   defp parse_strategy(nil), do: nil
   defp parse_strategy("fts"), do: :fts

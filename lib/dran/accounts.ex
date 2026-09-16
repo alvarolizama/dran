@@ -330,7 +330,16 @@ defmodule Dran.Accounts do
     case validate_workspace_access(attrs[:created_by_user_id], workspace_ids) do
       :ok ->
         token = ApiKey.generate_token()
-        actor_id = attrs[:actor_id] || ApiKey.ensure_actor_for_key_name(attrs.name).id
+        actor = ApiKey.ensure_actor_for_key_name(attrs.name)
+
+        # Ownership link (D1): a key created by a user makes that user the
+        # owner of the key's actor — so agents inherit their owner's content
+        # preference (D5) and their writes are attributed (owner_user_id).
+        # Only ever fills a NULL: an actor already owned by someone else
+        # (shared keys) keeps its owner.
+        _ = maybe_own_actor(actor, attrs[:created_by_user_id])
+
+        actor_id = attrs[:actor_id] || actor.id
 
         Ecto.Multi.new()
         |> Ecto.Multi.insert(
@@ -623,4 +632,26 @@ defmodule Dran.Accounts do
 
   defp actor_id(%Dran.Actors.Actor{id: id}), do: id
   defp actor_id(_), do: nil
+
+  # Ownership link user→agent (D1): the actor behind a key is owned by the
+  # user who created the key. Best-effort and NULL-filling only — an actor
+  # that already has an owner (a key shared across users) keeps it.
+  defp maybe_own_actor(_actor, nil), do: :ok
+
+  defp maybe_own_actor(%Dran.Actors.Actor{owner_user_id: owner_id}, _user_id)
+       when not is_nil(owner_id),
+       do: :ok
+
+  defp maybe_own_actor(%Dran.Actors.Actor{} = actor, user_id) do
+    case actor
+         |> Ecto.Changeset.change(%{owner_user_id: user_id})
+         |> Repo.update() do
+      {:ok, _} -> :ok
+      # Never fail a key creation over the ownership link (a soft attribution
+      # problem must not block a credential).
+      {:error, _} -> :ok
+    end
+  end
+
+  defp maybe_own_actor(_actor, _user_id), do: :ok
 end

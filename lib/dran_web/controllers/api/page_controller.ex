@@ -18,6 +18,7 @@ defmodule DranWeb.API.PageController do
       |> maybe_put(:created_by, params["created_by"])
       |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
       |> maybe_put(:include_body, params["include"] == "body")
+      |> Keyword.put(:scope, scope_for(conn, params["workspace_id"], :pages))
 
     pages = Knowledge.list_pages(opts)
 
@@ -61,12 +62,15 @@ defmodule DranWeb.API.PageController do
 
     # Inject attribution from the authenticated identity.
     # created_by is derived server-side from the actor — never client-settable.
-    # owner was dropped with the actor model (phase 2).
+    # owner_user_id and agent_name are resolved here too and overwrite any
+    # client-supplied value (a client can never set them).
     user = conn.assigns[:user]
 
     params =
       params
       |> Map.put("created_by", Dran.Auth.resolve_created_by(user))
+      |> Map.put("owner_user_id", Dran.Auth.resolve_owner_user_id(user))
+      |> Map.put("agent_name", Dran.Auth.agent_name_from_headers(conn.req_headers))
 
     case Knowledge.create_page(params) do
       {:ok, page} ->
@@ -253,4 +257,9 @@ defmodule DranWeb.API.PageController do
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
+
+  # The read scope comes from the SINGLE policy module — never a local rule.
+  defp scope_for(conn, workspace_id, kind) do
+    Dran.ContentVisibility.resolve(workspace_id, conn.assigns[:user], kind)
+  end
 end
