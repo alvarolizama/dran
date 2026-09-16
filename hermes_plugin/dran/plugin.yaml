@@ -1,8 +1,40 @@
 name: dran
-version: 1.1.0
+version: 1.2.0
 description: "Dran — shared multi-agent memory store + knowledge tools backed by your Dran workspace (REST, per-agent API key attribution, X-Hermes-Agent identity)."
+author: Álvaro Lizama
+license: MIT
+kind: standalone
 hooks:
   - on_session_end
-toolsets:
-  - name: dran
-    description: "Dran knowledge tools (search, pages, relations, workers, lint)."
+# Tool names this plugin registers from register(ctx). Listed so the plugins
+# hub can show what it provides (and surface `requires_env` hints); the
+# schemas themselves live in __init__.py and are the source of truth.
+provides_tools:
+  - dran_search
+  - dran_list_pages
+  - dran_get_page
+  - dran_create_page
+  - dran_update_page
+  - dran_delete_page
+  - dran_rename_slug
+  - dran_reaugment_page
+  - dran_get_links
+  - dran_create_relation
+  - dran_delete_relation
+  - dran_start_worker
+  - dran_get_worker_session
+  - dran_generate_cluster_summaries
+  - dran_lint_brain
+  - dran_stats
+  - dran_memory_search
+  - dran_memory_add
+  - dran_memory_update
+  - dran_memory_feedback
+# Config surface of the MEMORY provider panel (the one `hermes memory setup`
+# and the desktop Memory → Dran page render). It is declared in
+# config_schema.py and loaded by path from the web server, so it stays out of
+# this manifest; `api_key` resolves from DRAN_API_KEY (the profile .env).
+requires_env:
+  - name: DRAN_API_KEY
+    description: "Dran API key for this profile (Dran → Settings → Agents → Create key). Shared by the memory provider and the knowledge tools: one key, one actor."
+    prompt: "Dran API key (dran_…)"

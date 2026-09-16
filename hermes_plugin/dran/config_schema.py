@@ -3,10 +3,14 @@
 Pure data only (this module is loaded by path from the web server; it must
 not import the agent runtime). Field semantics match the memory provider:
 
-* ``workspace`` — the agent's memory workspace CHOICE. Made here, in Hermes,
-  from the workspaces the agent's Dran API key may reach (Settings → Agents
-  matrix); the provider validates it against ``GET /api/agent/config`` and
-  falls back to the first permitted workspace if the key loses access.
+* ``workspace`` — the agent's workspace CHOICE, used by BOTH surfaces this
+  plugin provides: the memory provider (facts) and the knowledge toolset
+  (pages, relations, workers). One setting, one workspace: a page created by
+  ``dran_create_page`` lands in the same workspace the facts go to. Made
+  here, in Hermes, from the workspaces the agent's Dran API key may reach
+  (Settings → Agents matrix); the provider validates it against
+  ``GET /api/agent/config`` and falls back to the first permitted workspace
+  if the key loses access.
 * ``api_key`` — secret, lives in the profile ``.env`` (single source of truth,
   shared with the plugin tools). Never read back.
 """
@@ -49,10 +53,12 @@ CONFIG_SCHEMA = ProviderConfigSchema(
         ),
         ProviderField(
             key="workspace",
-            label="Memory workspace",
+            label="Workspace",
             kind=KIND_TEXT,
-            description="Workspace where this agent's shared facts live. Must be "
-            "one the API key can reach (Dran → Settings → Agents matrix).",
+            description="Workspace used by BOTH surfaces of this plugin: the memory "
+            "provider (facts) and the knowledge tools (pages, relations, workers). "
+            "A page created by dran_create_page lands in this same workspace. Must "
+            "be one the API key can reach (Dran → Settings → Agents matrix).",
             default="personal",
             placeholder="personal",
             inline=True,

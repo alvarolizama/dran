@@ -492,7 +492,7 @@ class DranMemoryProvider(MemoryProvider):
         return [
             {"key": "api_key", "description": "Dran API key per agent (Settings → Agents → Create key)", "secret": True},
             {"key": "base_url", "description": "Dran instance URL", "default": DEFAULT_BASE_URL},
-            {"key": "workspace", "description": "Memory workspace (must be reachable by the key)", "default": DEFAULT_WORKSPACE},
+            {"key": "workspace", "description": "Workspace used by both the memory provider and the knowledge tools (pages/relations/workers); must be reachable by the key", "default": DEFAULT_WORKSPACE},
             {"key": "auto_recall", "description": "Inject relevant memories at turn start", "default": "true", "choices": ["true", "false"]},
             {"key": "auto_capture", "description": "Ingest transcript at session end", "default": "true", "choices": ["true", "false"]},
             {"key": "max_recall_results", "description": "Memories injected per turn (1-20)", "default": "5", "type": "integer", "minimum": 1, "maximum": 20},
@@ -937,7 +937,12 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def _client_for(ctx) -> Optional[_DranClient]:
-    """Build a client from plugin config, falling back to the memory provider config."""
+    """Build a client from plugin config, falling back to the memory provider config.
+
+    Uses the same `workspace` for both surfaces of the plugin: the memory
+    provider's facts and the knowledge tools' pages/relations/workers. One
+    setting, one workspace.
+    """
     config: Dict[str, Any] = {}
     try:
         config = dict(ctx.config or {})
