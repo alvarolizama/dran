@@ -19,6 +19,8 @@ defmodule Dran.Workspace do
              :is_default,
              :visibility,
              :enabled_features,
+             :share_memory,
+             :share_pages,
              :inserted_at
            ]}
   schema "workspaces" do
@@ -34,6 +36,8 @@ defmodule Dran.Workspace do
     field :entity_linker_enabled, :boolean
     field :worker_max_pages, :integer
     field :summary_language, :string
+    field :share_memory, :boolean, default: true
+    field :share_pages, :boolean, default: true
     timestamps(type: :utc_datetime, updated_at: false)
   end
 
@@ -64,7 +68,9 @@ defmodule Dran.Workspace do
       :semantic_threshold_long,
       :entity_linker_enabled,
       :worker_max_pages,
-      :summary_language
+      :summary_language,
+      :share_memory,
+      :share_pages
     ])
     |> validate_subset(:disabled_page_types, Dran.Knowledge.Page.all_types())
     |> validate_inclusion(:visibility, ~w(public private))

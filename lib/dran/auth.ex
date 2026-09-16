@@ -132,4 +132,47 @@ defmodule Dran.Auth do
   end
 
   def resolve_created_by(_), do: "system"
+
+  @doc """
+  Resolve the OWNER user id for content being written — the user that owns the
+  agent behind the request. Injected server-side, never client-settable.
+
+  * API key identity — the user that owns the key's actor
+    (`actors.owner_user_id`), or `nil` for unattributable agents.
+  * user identity (`%Dran.Accounts.User{}`) — that user.
+  * legacy admin token / `nil` — `nil`: historical producer content is
+    workspace-wide (see `Dran.ContentVisibility`).
+  """
+  def resolve_owner_user_id(%Dran.Accounts.User{id: id}), do: id
+
+  def resolve_owner_user_id(user) when is_map(user) do
+    case Map.get(user, :actor) do
+      %Dran.Actors.Actor{owner_user_id: owner_id} -> owner_id
+      _ -> nil
+    end
+  end
+
+  def resolve_owner_user_id(_), do: nil
+
+  @doc """
+  Extract the Hermes profile name from the request headers
+  (`X-Hermes-Agent`), or `nil` when absent. Plug lowercases header names.
+
+  It is attribution, not authorization: the value is persisted as
+  `agent_name` on the written content and never widens access.
+  """
+  def agent_name_from_headers(headers) when is_list(headers) do
+    Enum.find_value(headers, fn
+      {"x-hermes-agent", value} when is_binary(value) ->
+        case String.trim(value) do
+          "" -> nil
+          trimmed -> String.slice(trimmed, 0, 120)
+        end
+
+      _ ->
+        nil
+    end)
+  end
+
+  def agent_name_from_headers(_), do: nil
 end

@@ -67,6 +67,8 @@ defmodule Dran.Knowledge.Page do
              :created_by,
              :updated_by,
              :on_behalf_of,
+             :owner_user_id,
+             :agent_name,
              :inserted_at,
              :updated_at
            ]}
@@ -103,6 +105,12 @@ defmodule Dran.Knowledge.Page do
     field :updated_by, :string
     field :on_behalf_of, :string
 
+    # Ownership snapshot, injected server-side on every write (never
+    # client-settable). NULL = workspace-wide content (system producers).
+    field :owner_user_id, :integer
+    # The Hermes profile that produced the write (`X-Hermes-Agent`).
+    field :agent_name, :string
+
     # search_vector is a Postgres generated column — not mapped in Ecto.
     # It's maintained automatically by Postgres and used only in raw SQL queries.
 
@@ -129,6 +137,8 @@ defmodule Dran.Knowledge.Page do
       :created_by,
       :updated_by,
       :on_behalf_of,
+      :owner_user_id,
+      :agent_name,
       :archived,
       :pinned
     ])

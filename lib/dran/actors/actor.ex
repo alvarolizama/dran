@@ -27,6 +27,11 @@ defmodule Dran.Actors.Actor do
     field :display_name, :string
     field :host, :string
 
+    # The user that owns the agent this actor represents (nullable: system
+    # producers and unresolvable legacy actors have no owner and their
+    # content is workspace-wide). See Dran.ContentVisibility.
+    field :owner_user_id, :integer
+
     has_many :api_keys, Dran.Accounts.ApiKey
     # users.actor_id is a plain FK column (no belongs_to needed here)
     timestamps(type: :utc_datetime, updated_at: false)
@@ -34,7 +39,7 @@ defmodule Dran.Actors.Actor do
 
   def changeset(actor, attrs) do
     actor
-    |> cast(attrs, [:name, :kind, :display_name, :host])
+    |> cast(attrs, [:name, :kind, :display_name, :host, :owner_user_id])
     |> validate_required([:name, :kind])
     |> validate_inclusion(:kind, @kinds)
     |> validate_length(:name, max: 255)
