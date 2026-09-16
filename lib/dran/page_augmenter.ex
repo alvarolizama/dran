@@ -11,7 +11,7 @@ defmodule Dran.PageAugmenter do
   4. Finds semantically similar pages in the same context.
   5. Creates `semantic` relations for the closest neighbours.
 
-  All work runs under `Dran.Relations.TaskSupervisor` so the HTTP/MCP request
+  All work runs under `Dran.Relations.TaskSupervisor` so the HTTP request
   that created the page returns immediately.
   """
 

@@ -1,17 +1,18 @@
 defmodule DranWeb.ResourceAuthorization do
   @moduledoc """
-  Single authorization policy for every non-web surface (REST + MCP).
+  Single authorization policy for every agent surface (REST + plugin tools).
 
   One function, `authorize/3`, replaces the per-module variants that had
   drifted apart (`can_write?/2` ×5 and `user_has_context_access?/2` ×5 in
-  MCP, the router's `require_write_access`, and the `contexts`-vs-`workspaces`
+  the retired MCP server, the router's `require_write_access`, and the
+  `contexts`-vs-`workspaces`
   naming split). The identity shapes it accepts mirror what the API auth
   pipelines actually produce (see `DranWeb.Router.require_api_token/2`):
 
     * legacy admin token — `%{is_owner: true, email: "admin", contexts: :all}`
     * per-user token     — `%Dran.Accounts.User{}` (access = members ∪ public)
     * API key            — `%{workspaces: [...], access_levels: %{ws_id => "read" | "write"}, ...}`
-    * MCP legacy admin   — `%{is_owner: true, email: "admin", workspaces: :all}`
+    * legacy admin token — `%{is_owner: true, email: "admin", workspaces: :all}`
     * no user (tests)    — `nil` (fail-open, matching today's behavior)
 
   Access is decided per workspace and per mode (`:read` | `:write`).
@@ -41,7 +42,7 @@ defmodule DranWeb.ResourceAuthorization do
     end
   end
 
-  # ── Owner shapes (legacy token + MCP legacy admin) ────────────────────────
+  # ── Owner shapes (legacy admin token) ─────────────────────────────────────
 
   defp do_authorize(%{is_owner: true}, _mode, _ws_id), do: :ok
 

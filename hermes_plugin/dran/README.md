@@ -13,7 +13,7 @@ Recall char budget, Recall cadence).
 También funciona `hermes memory setup` → elegir "dran".
 
 Se persiste en `$HERMES_HOME/dran/config.json` (la API key al `.env` del
-perfil — `DRAN_API_KEY`, single source of truth compartida con el MCP).
+perfil — `DRAN_API_KEY`, single source of truth para todas las tools).
 
 ## Workspace de memoria — se elige AQUÍ, en Hermes
 
@@ -38,9 +38,7 @@ loguea con warning. Si Dran no responde, se usa la config local sin validar.
    DRAN_API_KEY=dran_sk_...
    ```
 
-   Ese mismo valor lo consume el plugin (memory provider + tools) —
-   `config.yaml` → `mcp_servers.dran` queda solo por compatibilidad mientras
-   se retira el MCP.
+   Ese mismo valor lo consume el plugin entero (memory provider + tools).
 3. Configura el resto desde la UI: **dashboard de Hermes → Memory → Dran**
    (o `hermes memory setup` → elegir "dran"). La API key pégala en el campo
    del panel — va al `.env`, no al JSON.
@@ -95,11 +93,12 @@ loguea con warning. Si Dran no responde, se usa la config local sin validar.
   fallan rápido durante 60 s — un Dran caído no agrega un timeout a cada
   turno. Cualquier éxito rearma el contador.
 
-## Tools del plugin — reemplazo del MCP
+## Tools del plugin
 
 Desde la v1.1 el módulo expone `register(ctx)`, que registra **dos
 superficies en el mismo plugin**: el memory provider (arriba) y un toolset
-`dran` con las operaciones de conocimiento. Dran retira el servidor MCP:
+`dran` con las operaciones de conocimiento (cliente delgado sobre la API
+REST de Dran):
 estas tools son el consumo del agente.
 
 | Tool | Qué hace |

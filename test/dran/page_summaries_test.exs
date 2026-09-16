@@ -96,7 +96,7 @@ defmodule Dran.PageSummariesTest do
       title: "Already summarized",
       slug: "already-summarized",
       body: "A note that already has a summary.",
-      summary: "Human set this via MCP",
+      summary: "Human set this via the API",
       page_type: "note"
     })
 
@@ -105,7 +105,7 @@ defmodule Dran.PageSummariesTest do
     assert {:ok, %{filled: 0}} = PageSummaries.backfill(context.id)
 
     refreshed = Knowledge.get_page_by_slug("already-summarized", context.id)
-    assert refreshed.summary == "Human set this via MCP"
+    assert refreshed.summary == "Human set this via the API"
   end
 
   test "backfill/1 skips pages with empty bodies" do

@@ -82,7 +82,7 @@ defmodule Dran.Knowledge.PropsNormalizationTest do
       assert is_nil(updated.meta["props"])
     end
 
-    test "keeps map props untouched (non-form callers, e.g. MCP)", %{page: page} do
+    test "keeps map props untouched (non-form callers, e.g. the REST API)", %{page: page} do
       {:ok, updated} =
         Knowledge.update_page(page, %{"meta" => %{"props" => %{"role" => "sales"}}})
 

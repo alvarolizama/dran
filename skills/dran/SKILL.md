@@ -19,9 +19,10 @@ local execution discipline (ledger, briefs, delegation) is riel — this
 suite owns only the Dran call sequences.
 
 The agent consumes Dran through the **Hermes plugin tools** (`dran_*`); the
-MCP server is retired. The plugin registers its toolset via `register(ctx)`
-in `hermes_plugin/dran/__init__.py`, so the tools are available whenever the
-`dran` plugin is enabled for the profile.
+The plugin registers its toolset via `register(ctx)` in
+`hermes_plugin/dran/__init__.py`, so the tools are available whenever the
+`dran` plugin is enabled for the profile. Every tool is a thin client over
+Dran's REST API — there is no other protocol surface.
 
 ## Entry router
 
@@ -123,6 +124,7 @@ flowchart LR
 
 ## Cross-references
 
-- Server-side surface (tool definitions, write gate): `lib/dran/mcp.ex`
-  in this repo
+- Plugin-side surface (tool definitions, schemas): `hermes_plugin/dran/__init__.py`
+- Server-side routes and the write gate: `lib/dran_web/router.ex`
+- Endpoint reference: `docs/api.md`
 - Verb/graph conventions the flow DAGs follow: `riel-contract`

@@ -557,25 +557,6 @@ defmodule DranWeb.Router do
     post "/workers", WorkerController, :create
   end
 
-  # ── MCP Streamable HTTP endpoint (LEGACY — kept as a documented shim) ─────
-  #
-  # The Hermes plugin toolset (hermes_plugin/dran/ with register(ctx)) is the
-  # primary agent surface now: same operations, plus X-Hermes-Agent
-  # attribution and the memory provider tools. This endpoint stays for MCP
-  # clients that are NOT Hermes; no new tools are added here.
-  #
-  # The MCP controller performs its own dual auth — legacy admin token
-  # (admin) OR each user's per-user api_token — and then enforces per-user
-  # context access. It must therefore NOT go through the :api_auth pipeline,
-  # which only validates the legacy admin token and would reject user tokens.
-  scope "/api", DranWeb.API do
-    pipe_through [:api]
-
-    post "/mcp", MCPController, :handle_post
-    get "/mcp", MCPController, :handle_get
-    delete "/mcp", MCPController, :handle_delete
-  end
-
   # ── REST API — memory write routes (requires write_access on API keys) ─────
   # Agents store facts, rate them, ingest transcripts and soft-delete via the
   # same write-scoped gate as pages/relations (DranWeb.API.MemoryController).

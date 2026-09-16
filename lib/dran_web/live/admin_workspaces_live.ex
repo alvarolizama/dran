@@ -411,7 +411,7 @@ defmodule DranWeb.AdminWorkspacesLive do
 
             <p class="text-caption mt-1">
               {gettext(
-                "Disabled types are hidden in the web UI and rejected in the MCP API for this context."
+                "Disabled types are hidden in the web UI and rejected by the agent tools for this context."
               )}
             </p>
 

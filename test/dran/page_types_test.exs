@@ -21,7 +21,7 @@ defmodule Dran.PageTypesTest do
       assert PageTypes.graph?("note")
       assert PageTypes.journey?("note")
       assert PageTypes.embeddings?("note")
-      assert PageTypes.mcp_create?("note")
+      assert PageTypes.agent_create?("note")
     end
 
     test "all full-citizen types have every capability enabled" do
@@ -29,7 +29,7 @@ defmodule Dran.PageTypesTest do
         assert PageTypes.graph?(type), "#{type} should be in the graph"
         assert PageTypes.journey?(type), "#{type} should be in the journey"
         assert PageTypes.embeddings?(type), "#{type} should have embeddings"
-        assert PageTypes.mcp_create?(type), "#{type} should be creatable via MCP"
+        assert PageTypes.agent_create?(type), "#{type} should be creatable via the plugin tools"
       end
     end
 
@@ -37,7 +37,7 @@ defmodule Dran.PageTypesTest do
       assert PageTypes.graph?("nonexistent")
       assert PageTypes.journey?("nonexistent")
       assert PageTypes.embeddings?("nonexistent")
-      assert PageTypes.mcp_create?("nonexistent")
+      assert PageTypes.agent_create?("nonexistent")
     end
   end
 

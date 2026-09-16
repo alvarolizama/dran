@@ -67,7 +67,7 @@ defmodule DranWeb.API.RelationController do
   @doc """
   DELETE /api/relations — delete relations between two pages (by slug pair).
 
-  Semantics inherited from the retired MCP tool: `relation_type` optional —
+  Semantics inherited from the plugin tool: `relation_type` optional —
   omitting it deletes ALL relations between the pair in both directions.
   Returns the count of deleted relations.
   """

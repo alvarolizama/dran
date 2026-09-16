@@ -62,7 +62,7 @@ defmodule Dran.FoodPageTypeTest do
       assert PageRegistry.graph?("food")
       assert PageRegistry.journey?("food")
       assert PageRegistry.embeddings?("food")
-      assert PageRegistry.mcp_create?("food")
+      assert PageRegistry.agent_create?("food")
     end
 
     test "color de food en el mapa del grafo" do
@@ -70,8 +70,8 @@ defmodule Dran.FoodPageTypeTest do
       assert {"food", "#FB923C"} in PageRegistry.ordered_type_colors()
     end
 
-    test "mcp_description incluye food" do
-      assert PageRegistry.mcp_description() =~ "food"
+    test "agent_description incluye food" do
+      assert PageRegistry.agent_description() =~ "food"
     end
   end
 

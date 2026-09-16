@@ -2,7 +2,7 @@ defmodule Dran.PageSummaries do
   @moduledoc """
   LLM-generated summaries for pages that lack one.
 
-  `summary` is a machine-owned field: it is written by MCP/REST (agents) or
+  `summary` is a machine-owned field: it is written by REST (agents) or
   by this backfill — never by a human in the UI. This module implements the
   nightly backfill that fills the gap: for every non-archived page in every
   workspace whose `summary` is empty, ask the inference API for a one-line

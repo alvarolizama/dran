@@ -841,7 +841,7 @@ defmodule DranWeb.PageComponents do
         </h3>
       </summary>
       <div class="space-y-3 mt-2">
-        <%!-- summary is machine-owned (MCP/REST/augmentation) — never edited here --%>
+        <%!-- summary is machine-owned (REST/augmentation) — never edited here --%>
         <div :if={@page.summary not in [nil, ""]} class="text-sm">
           <span class="text-caption font-semibold text-base-content/60 uppercase tracking-wider block mb-1">
             {gettext("Summary")} · {gettext("Auto")}
@@ -974,7 +974,7 @@ defmodule DranWeb.PageComponents do
           autofocus
         />
 
-        <%!-- no summary input on creation: it is machine-owned (MCP/REST/augmentation) --%>
+        <%!-- no summary input on creation: it is machine-owned (REST/augmentation) --%>
 
         <.input
           type="select"

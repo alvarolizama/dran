@@ -800,7 +800,7 @@ defmodule DranWeb.SettingsLive do
         <h1 class="text-title">{gettext("Agents")}</h1>
         <p class="text-caption mt-1">
           {gettext(
-            "Agent identities for API/MCP access with their own API keys. Human users become actors automatically on login — they are not managed here."
+            "Agent identities for API access with their own API keys. Human users become actors automatically on login — they are not managed here."
           )}
         </p>
       </div>

@@ -94,7 +94,7 @@ defmodule Dran.Knowledge do
 
   @doc """
   Create a new workspace. The slug is auto-managed: an explicit non-blank
-  `slug` in attrs wins (API/MCP); otherwise it is derived from the name,
+  `slug` in attrs wins (API); otherwise it is derived from the name,
   suffixed with a random hex while it collides with another workspace.
   """
   def create_workspace(attrs) do
@@ -309,7 +309,7 @@ defmodule Dran.Knowledge do
   end
 
   # `owner` column was dropped — the filter is a no-op kept for backward
-  # compat with saved smart-collection queries and old MCP clients.
+  # compat with saved smart-collection queries and legacy clients.
   defp maybe_filter_owner(query, _owner), do: query
 
   # Read visibility: the scope comes from Dran.ContentVisibility (the single

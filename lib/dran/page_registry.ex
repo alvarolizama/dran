@@ -16,7 +16,7 @@ defmodule Dran.PageRegistry do
 
   1. Add the slug to the type's `:kinds` list in `@registry`.
   2. Add `"slug" => gettext("Label")` to `kind_labels/0`.
-  3. Done — changeset validation, the editor UI, and `mcp_description/0`
+  3. Done — changeset validation, the editor UI, and `agent_description/0`
      all read from here.
 
   ## Adding a meta field
@@ -52,7 +52,7 @@ defmodule Dran.PageRegistry do
 
   @registry %{
     "note" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: nil,
       ui: %{
         path: "notes",
@@ -63,7 +63,7 @@ defmodule Dran.PageRegistry do
       }
     },
     "idea" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: ~w(idea question hypothesis spark),
       ui: %{
         path: "ideas",
@@ -74,7 +74,7 @@ defmodule Dran.PageRegistry do
       }
     },
     "knowledge" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: ~w(quote summary highlight excerpt),
       ui: %{
         path: "knowledge",
@@ -85,7 +85,7 @@ defmodule Dran.PageRegistry do
       }
     },
     "technical" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: ~w(code snippet debug recipe config command template pattern method),
       ui: %{
         path: "technical",
@@ -96,7 +96,7 @@ defmodule Dran.PageRegistry do
       }
     },
     "entity" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: ~w(person company product tool place event language framework hardware protocol),
       ui: %{
         path: "entities",
@@ -107,7 +107,7 @@ defmodule Dran.PageRegistry do
       }
     },
     "concept" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: nil,
       ui: %{
         path: "concepts",
@@ -118,7 +118,7 @@ defmodule Dran.PageRegistry do
       }
     },
     "reference" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: ~w(article paper video podcast book newsletter spec code release website repo api),
       ui: %{
         path: "references",
@@ -129,7 +129,7 @@ defmodule Dran.PageRegistry do
       }
     },
     "food" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, mcp_create: true},
+      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
       kinds: ~w(recipe ingredient dish meal cuisine restaurant drink technique),
       ui: %{
         path: "food",
@@ -141,7 +141,7 @@ defmodule Dran.PageRegistry do
     }
   }
 
-  # Canonical ordering — sidebar/MCP/docs iterate this list.
+  # Canonical ordering — sidebar/agent tools/docs iterate this list.
   @types ~w(note idea knowledge technical entity concept reference food)
 
   # ── Type accessors ─────────────────────────────────────────────────
@@ -166,8 +166,8 @@ defmodule Dran.PageRegistry do
   @doc "True if pages of this type get embeddings and semantic relations."
   def embeddings?(type), do: capability(type, :embeddings)
 
-  @doc "True if pages of this type can be created via the MCP `dran_create_page` tool."
-  def mcp_create?(type), do: capability(type, :mcp_create)
+  @doc "True if pages of this type can be created via the `dran_create_page` plugin tool."
+  def agent_create?(type), do: capability(type, :agent_create)
 
   @doc "List of page types excluded from the global graph by default."
   def hidden_from_graph do
@@ -383,16 +383,16 @@ defmodule Dran.PageRegistry do
     |> Enum.map(&{kind_label(&1), &1})
   end
 
-  # ── MCP description ────────────────────────────────────────────────
+  # ── Agent tool description ─────────────────────────────────────────
   #
-  # Builds the page-type section of the `dran_create_page` MCP tool
+  # Builds the page-type section of the `dran_create_page` plugin tool
   # description dynamically, so it never drifts from the registry.
 
   @doc """
   Returns a human-readable summary of page types and their kinds,
-  suitable for embedding in MCP tool descriptions.
+  suitable for embedding in agent tool descriptions.
   """
-  def mcp_description do
+  def agent_description do
     for type <- @types, reduce: [] do
       acc ->
         case kinds(type) do
@@ -410,14 +410,14 @@ defmodule Dran.PageRegistry do
   end
 
   @doc """
-  Returns the enum list of page types for MCP JSON schema.
+  Returns the enum list of page types for the agent tool JSON schema.
   """
-  def mcp_enum, do: @types
+  def agent_enum, do: @types
 
   @doc """
-  Returns the meta description string for MCP, keyed by type.
+  Returns the meta description string for the agent tools, keyed by type.
   """
-  def mcp_meta_description do
+  def agent_meta_description do
     parts =
       for type <- @types do
         fields = meta_fields(type) |> extract_field_keys()

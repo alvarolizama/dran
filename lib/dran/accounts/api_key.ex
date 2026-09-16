@@ -2,7 +2,7 @@ defmodule Dran.Accounts.ApiKey do
   @moduledoc """
   Context-scoped API key.
 
-  An API key grants API/MCP access to N workspaces, each with a specific access
+  An API key grants agent (plugin tool / REST) access to N workspaces, each with a specific access
   level ('read' or 'write'). The key also inherits the role of its creator
   (stored as `created_by_user_id`).
 

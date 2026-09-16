@@ -179,7 +179,7 @@ defmodule DranWeb.AdminSystemLive do
             icon="hero-adjustments-horizontal"
             caption={
               gettext(
-                "Workspace por defecto y token admin del API/MCP — persistidos en la base de datos."
+                "Workspace por defecto y token admin del API — persistidos en la base de datos."
               )
             }
           >
@@ -213,12 +213,12 @@ defmodule DranWeb.AdminSystemLive do
                 <.input
                   field={@instance_form[:api_token]}
                   type="text"
-                  label={gettext("Token admin del API/MCP")}
+                  label={gettext("Token admin del API")}
                   placeholder={gettext("(vacío = deshabilitado)")}
                 />
                 <p class="text-xs text-base-content/60 mt-1.5">
                   {gettext(
-                    "Bearer legacy para API y MCP con acceso full-owner. Vacío = deshabilitado; los tokens por usuario siguen funcionando."
+                    "Bearer legacy para el API con acceso full-owner. Vacío = deshabilitado; los tokens por usuario siguen funcionando."
                   )}
                 </p>
                 <button

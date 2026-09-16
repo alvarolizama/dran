@@ -4,7 +4,7 @@ defmodule Dran.Auth do
   (DB) and configurable from `/admin/system`. No environment variables.
 
     * Admin API token — Settings key `"api_token"`. Legacy bearer token for
-      API/MCP (full owner, no user row). Unset = disabled.
+      API/agent access (full owner, no user row). Unset = disabled.
     * Default context — Settings keys `"default_workspace_slug"` /
       `"default_workspace_name"`. Used as the fallback workspace slug when a
       user has no session/cookie and no personal default, and as the context
@@ -17,7 +17,7 @@ defmodule Dran.Auth do
   @fallback_workspace_slug "personal"
 
   @doc """
-  Bearer token for API/MCP access (legacy admin token).
+  Bearer token for API/agent access (legacy admin token).
 
   Stored in the `settings` table; unset means the legacy admin token is
   DISABLED (fail closed on DB errors too). Generate or rotate it from

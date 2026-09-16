@@ -17,7 +17,8 @@ Pages are the unit of knowledge: `note`, `idea`, `knowledge`,
 This flow owns the write loop: search first,
 then create or update, then verify by readback.
 
-The tools come from the Dran Hermes plugin (`dran_*`); MCP is retired.
+The tools come from the Dran Hermes plugin (`dran_*`), which talks to Dran
+over its REST API.
 
 ## Entry router
 

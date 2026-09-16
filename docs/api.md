@@ -76,7 +76,7 @@ Validation failures return `422` with field-keyed messages:
 ```
 
 Common status codes: `400` bad request, `401` bad/missing token, `403`
-insufficient access, `404` not found, `405` (MCP GET), `409` conflict
+insufficient access, `404` not found, `405` (method not allowed), `409` conflict
 (memory near-duplicate), `422` validation, `503` inference not configured.
 
 ## Endpoints
@@ -261,8 +261,12 @@ curl -s -X POST localhost:4000/api/memory \
 |---|---|---|---|
 | GET | `/health` | none | Liveness check |
 
-## MCP
+## Agent tools
 
-The MCP server is served at `POST /api/mcp` and performs its own
-authentication (it must not go through the `:api_auth` pipeline). See
-[mcp.md](mcp.md).
+The Hermes plugin (`hermes_plugin/dran/`) exposes the same operations as tools
+(`dran_*` for knowledge, `dran_memory_*` for memory), each a thin client over the
+REST routes above. There is no separate protocol surface: what an agent can do is
+what these endpoints expose. See `hermes_plugin/dran/README.md`.
+
+Non-Hermes agents skip the plugin and call these endpoints with a Bearer key —
+same auth, same attribution, same visibility rules.

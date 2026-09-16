@@ -207,7 +207,7 @@ defmodule DranWeb.API.PageController do
 
         page ->
           # Clear the embedding hash so the augmenter treats the page as
-          # stale, then schedule the async pipeline (same as the MCP tool).
+          # stale, then schedule the async pipeline (same as the plugin tool).
           page
           |> Ecto.Changeset.change(embedding_hash: nil)
           |> Dran.Repo.update!()

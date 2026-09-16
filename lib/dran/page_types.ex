@@ -11,7 +11,7 @@ defmodule Dran.PageTypes do
 
   There are exactly **4** page types: `note`, `entity`, `concept`, and
   `reference`. They are the only values accepted by `Page.@page_types` and by
-  the `dran_create_page` MCP tool.
+  the `dran_create_page` plugin tool.
 
   ## Capabilities
 
@@ -20,7 +20,7 @@ defmodule Dran.PageTypes do
   | `graph`       | included in the global graph (GraphCache / graph views)        |
   | `journey`     | counted in the Journey timeline (`Dran.Journey`)               |
   | `embeddings`  | gets embeddings + semantic relations (`PageAugmenter`)         |
-  | `mcp_create`  | can be created through the `dran_create_page` MCP tool         |
+  | `agent_create`| can be created through the `dran_create_page` plugin tool      |
 
   All eight types are full citizens (every capability `true`); `note` and
   `concept` are free types (no kind validation).
@@ -50,8 +50,8 @@ defmodule Dran.PageTypes do
   @doc "True if pages of this type get embeddings and semantic relations."
   defdelegate embeddings?(type), to: Dran.PageRegistry
 
-  @doc "True if pages of this type can be created via the MCP `dran_create_page` tool."
-  defdelegate mcp_create?(type), to: Dran.PageRegistry
+  @doc "True if pages of this type can be created via the `dran_create_page` plugin tool."
+  defdelegate agent_create?(type), to: Dran.PageRegistry
 
   @doc "List of page types excluded from the global graph by default."
   defdelegate hidden_from_graph, to: Dran.PageRegistry

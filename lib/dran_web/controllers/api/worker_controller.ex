@@ -2,7 +2,7 @@ defmodule DranWeb.API.WorkerController do
   @moduledoc """
   REST surface for the autonomous workers (curator, link_gardener, graph_rag).
 
-  Parity with the retired MCP tools `dran_start_worker` /
+  Parity with the plugin tools `dran_start_worker` /
   `dran_get_worker_session`: start returns immediately with a session id and
   the caller polls until the session reaches a terminal status.
 
@@ -132,7 +132,7 @@ defmodule DranWeb.API.WorkerController do
   defp start_worker("graph_rag", input, workspace_id, opts),
     do: Worker.GraphRag.run(input, workspace_id, normalize_opts(opts))
 
-  # The MCP tool accepted a map of opts; the workers expect a keyword list.
+  # The tool accepts a map of opts; the workers expect a keyword list.
   # Keys are whitelisted — `String.to_atom/1` on client input would let a
   # caller grow the atom table (the reason sobelow flags it as Medium).
   defp normalize_opts(nil), do: []

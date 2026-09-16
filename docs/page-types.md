@@ -58,7 +58,7 @@ replaces it).
 - `due_date` — shown in the editor only when kind is `reminder`
 
 When unsure between `note` and a structured type: start as `note`, promote
-later. Notes are full citizens (graph, journey, embeddings, MCP create).
+later. Notes are full citizens (graph, journey, embeddings, agent create).
 
 ### `idea` — sparks & thinking
 

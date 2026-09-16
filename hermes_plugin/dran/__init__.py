@@ -34,7 +34,7 @@ CONFIG_FILENAME = "dran_memory.json"
 CANONICAL_CONFIG_DIR = "dran"
 CANONICAL_CONFIG_FILENAME = "config.json"
 # Single-source-of-truth credential: profile .env's DRAN_API_KEY, the same
-# var config.yaml interpolates into mcp_servers.dran.headers.
+# var the plugin resolves for its REST calls.
 API_KEY_ENV_VAR = "DRAN_API_KEY"
 REQUEST_TIMEOUT = 5.0
 INGEST_TIMEOUT = 30.0
@@ -118,7 +118,7 @@ def _load_dran_config(hermes_home: str) -> dict:
     config["base_url"] = str(config.get("base_url") or DEFAULT_BASE_URL).strip().rstrip("/")
     # Single-source-of-truth for the credential: omit api_key (or leave the
     # ${DRAN_API_KEY} placeholder) and it resolves from the profile .env —
-    # the same var mcp_servers.dran interpolates in config.yaml. A literal
+    # the same var the plugin resolves. A literal
     # key in the JSON still wins (per-agent overrides).
     api_key = str(config.get("api_key") or "").strip()
     if api_key in ("", "${DRAN_API_KEY}", "${env:DRAN_API_KEY}"):
@@ -273,7 +273,7 @@ class _DranClient:
         data = self.request("GET", f"/api/memory/search?{qs}")
         return data.get("data", [])
 
-    # -- Knowledge endpoints (plugin tools, MCP replacement) -------------
+    # -- Knowledge endpoints (used by the plugin tools) ------------------
 
     def search_pages(self, query: str, strategy: str = "auto", limit: int = 10) -> list:
         from urllib.parse import urlencode
@@ -912,7 +912,7 @@ class DranMemoryProvider(MemoryProvider):
 # The plugin ships BOTH surfaces from one module:
 #
 #   * the memory provider (dran memory recall/capture) — unchanged, above
-#   * a toolset that replaces the old MCP server for agent consumption
+#   * a toolset for agent consumption
 #
 # Hermes' memory-provider loader accepts a directory plugin whose module
 # exposes `register(ctx)`: it hands the module a collector that captures
@@ -958,7 +958,7 @@ def _client_for(ctx) -> Optional[_DranClient]:
 
 
 def _tool_schemas() -> List[Dict[str, Any]]:
-    """Tool schemas exposed to the agent (mirrors the retired MCP toolset)."""
+    """Tool schemas exposed to the agent."""
     return [
         {
             "name": "dran_search",
@@ -1132,7 +1132,7 @@ def _tool_schemas() -> List[Dict[str, Any]]:
 
 
 def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> str:
-    """Handler body for the `dran_*` knowledge tools (the retired MCP surface).
+    """Handler body for the `dran_*` knowledge tools.
 
     Hermes dispatches every tool as ``handler(args, **kwargs)`` — it does not
     pass the tool name. `register()` therefore binds the name per tool with a
@@ -1312,7 +1312,7 @@ def _make_handler(tool_name: str):
 
 
 def register(ctx) -> None:
-    """Register the memory provider AND the knowledge tools (MCP replacement).
+    """Register the memory provider AND the knowledge tools.
 
     Called by the memory-provider loader (plugins/memory) and by normal plugin
     discovery. Both surfaces live in this module by design: one credential, one

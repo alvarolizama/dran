@@ -8,7 +8,7 @@ not import the agent runtime). Field semantics match the memory provider:
   matrix); the provider validates it against ``GET /api/agent/config`` and
   falls back to the first permitted workspace if the key loses access.
 * ``api_key`` — secret, lives in the profile ``.env`` (single source of truth,
-  shared with ``mcp_servers.dran`` in config.yaml). Never read back.
+  shared with the plugin tools). Never read back.
 """
 
 from plugins.memory.config_schema import (

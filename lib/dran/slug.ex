@@ -98,7 +98,7 @@ defmodule Dran.Slug do
   # Auto-managed slugs — the shared create/update policy for every context
   # (pages, collections).
   #
-  #   * An explicit non-blank `slug` in attrs ALWAYS wins (API/MCP/seeds).
+  #   * An explicit non-blank `slug` in attrs ALWAYS wins (API/seeds).
   #   * Create without slug → derived from the title (or `:name`) field,
   #     suffixed with a random hex while `taken?` reports a collision.
   #   * Update → the slug is regenerated ONLY when the title changed AND no

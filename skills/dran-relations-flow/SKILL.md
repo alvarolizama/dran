@@ -73,9 +73,14 @@ flowchart TD
 - `dran_delete_relation` takes an OPTIONAL `relation_type`: **omitting it
   deletes ALL relations between the pair in BOTH directions** — always pass
   the type unless wiping the pair is the intent.
-- The tools come from the Dran Hermes plugin (`dran_*`); MCP is retired.
-  Both endpoints accept `{source_slug, target_slug, relation_type}` /
-  `{source_slug, target_slug}`; the plugin resolves slugs server-side.
+- The tools come from the Dran Hermes plugin (`dran_*`), which talks to Dran
+  over its REST API. Both endpoints accept `{source_slug, target_slug,
+  relation_type}` / `{source_slug, target_slug}`; the plugin resolves slugs
+  server-side.
+- `dran_delete_relation` **requires the slug pair** (`source_slug` +
+  `target_slug`); deleting by id is a different REST route with no tool.
+  Omitting `relation_type` deletes every relation between the pair, both
+  directions.
 - Missing slug on either side → error, not silent drop: create the page
   first (dran-knowledge-flow).
 - Five `meta.props` keys (`role`, `tier`, `location`, `language`,

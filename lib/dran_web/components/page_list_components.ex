@@ -364,7 +364,7 @@ defmodule DranWeb.PageListComponents do
   # Card badge: the note's kind (e.g. "Plan") when set, else the page type
   # label ("Nota"). Kinds carry the real classification; the type is the
   # fallback for unclassified notes. meta.kind is NOT validated on write
-  # (MCP/API accept arbitrary strings), so unknown kinds render capitalized
+  # (the REST API accepts arbitrary strings), so unknown kinds render capitalized
   # instead of crashing kind_label/1 (Map.fetch!).
   defp kind_badge_label(%{page_type: page_type, meta: %{"kind" => kind}})
        when is_binary(kind) and kind != "" do

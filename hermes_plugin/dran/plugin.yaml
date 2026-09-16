@@ -5,4 +5,4 @@ hooks:
   - on_session_end
 toolsets:
   - name: dran
-    description: "Dran knowledge tools (search, pages, relations, lint) — replaces the retired MCP server."
+    description: "Dran knowledge tools (search, pages, relations, workers, lint)."

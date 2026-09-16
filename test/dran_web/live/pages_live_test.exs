@@ -61,7 +61,7 @@ defmodule DranWeb.PagesLiveTest do
           meta: %{"kind" => "plan"}
         })
 
-      # kind not in the registry (MCP/API accept arbitrary meta) — must render
+      # kind not in the registry (the API accepts arbitrary meta) — must render
       # capitalized, not crash kind_label/1 (Map.fetch!).
       {:ok, technical} =
         Knowledge.create_page(%{
@@ -375,15 +375,15 @@ defmodule DranWeb.PagesLiveTest do
           workspace_id: ws.id,
           title: "Con resumen",
           body: "cuerpo",
-          summary: "Resumen escrito por un agente via MCP",
+          summary: "Resumen escrito por un agente via las tools",
           page_type: "note"
         })
 
       {:ok, view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
 
       # The summary IS visible in the attributes sidebar…
-      assert html =~ "Resumen escrito por un agente via MCP"
-      # …but never as an editable field (machine-owned: MCP/API/backfill only).
+      assert html =~ "Resumen escrito por un agente via las tools"
+      # …but never as an editable field (machine-owned: REST/backfill only).
       refute has_element?(view, "input[name='page[summary]']")
       refute has_element?(view, "textarea[name='page[summary]']")
     end

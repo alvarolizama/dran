@@ -3,7 +3,7 @@
 Two surfaces are covered:
 
 1. `register(ctx)` — the module must register the memory provider AND the
-   knowledge toolset (the MCP replacement). Exercised with a fake ctx, so no
+   knowledge toolset. Exercised with a fake ctx, so no
    Hermes install is required.
 2. `_DranClient` — the write paths must carry the `X-Hermes-Agent` header, and
    the knowledge endpoints must hit the documented REST routes.

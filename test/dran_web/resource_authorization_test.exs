@@ -35,7 +35,7 @@ defmodule DranWeb.ResourceAuthorizationTest do
     end
   end
 
-  describe "MCP legacy admin shape (workspaces: :all)" do
+  describe "legacy admin shape (workspaces: :all)" do
     test "allowed read and write anywhere" do
       user = %{is_owner: true, email: "admin", workspaces: :all}
 

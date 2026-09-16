@@ -3,7 +3,7 @@ defmodule DranWeb.PageTypes do
   Centralized page type UI mappings — delegates to `Dran.PageRegistry`.
 
   Only presentation lives here (path, label, icon, plural). What a type
-  CAN do (graph, journey, embeddings, MCP-create) is defined in
+  CAN do (graph, journey, embeddings, agent-create) is defined in
   `Dran.PageTypes`, which also delegates to `Dran.PageRegistry`.
 
   All data has been consolidated into `Dran.PageRegistry` — the single

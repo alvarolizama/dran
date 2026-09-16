@@ -62,9 +62,9 @@ flowchart TD
 - Nightly jobs (PageRank, communities, maintenance, page summaries) run on
   Quantum server-side from Admin → Jobs (`/admin/jobs`, owner-only);
   manual "run now" is the UI's job, not an agent's.
-- The tools come from the Dran Hermes plugin (`dran_*`); MCP is retired.
-  `POST /api/workers` starts a session (write access required — a worker
-  writes pages) and `GET /api/workers/:id` polls it.
+- The tools come from the Dran Hermes plugin (`dran_*`), which talks to Dran
+  over its REST API: `POST /api/workers` starts a session (write access
+  required — a worker writes pages) and `GET /api/workers/:id` polls it.
 
 ## Pitfalls
 

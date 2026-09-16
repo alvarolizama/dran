@@ -482,7 +482,7 @@ defmodule DranWeb.PageEdit do
   # Web session identity for attribution: the logged-in user's email (web
   # sessions carry the email as `current_user`), resolved through
   # Dran.Auth.resolve_created_by/1 — falls back to "system" when no user is
-  # present (same contract as the API/MCP attribution).
+  # present (same contract as the API attribution).
   defp session_identity(socket) do
     case socket.assigns[:current_user] do
       email when is_binary(email) -> Auth.resolve_created_by(%{email: email})

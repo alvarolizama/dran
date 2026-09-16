@@ -3,7 +3,7 @@ defmodule Dran.ContentVisibility do
   The single read-visibility policy for content (memories + knowledge pages).
 
   Read visibility is decided in exactly ONE place. `Memory`, `Knowledge`, the
-  graph, REST, MCP and the LiveViews all funnel through `scope/3` and
+  graph, REST and the LiveViews all funnel through `scope/3` and
   `filter/3` — there are no ad-hoc checks per controller or per template.
 
   ## The one vocabulary: the scope
@@ -115,7 +115,7 @@ defmodule Dran.ContentVisibility do
   @doc """
   Convenience resolver: like `scope/3` but accepting a workspace id, slug or
   struct. Loads the workspace when only an id/slug is given, so every caller
-  (REST controller, MCP tool, LiveView) can resolve with what it already has.
+  (REST controller, plugin tool, LiveView) can resolve with what it already has.
   """
   @spec resolve(binary() | map() | struct() | nil, identity(), kind()) :: scope()
   def resolve(workspace, identity, kind)

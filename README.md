@@ -13,7 +13,6 @@
 [![Elixir](https://img.shields.io/badge/Elixir-1.20+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
 [![Phoenix](https://img.shields.io/badge/Phoenix-1.8_LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org)
-[![MCP](https://img.shields.io/badge/MCP-Server-5B8DEF?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 
 </div>
 
@@ -26,12 +25,13 @@ Two pillars:
 
 - **Knowledge** — a typed, queryable **knowledge graph**. Pages (`note`, `idea`,
   `knowledge`, `technical`, `entity`, `concept`, `reference`, `food`) linked by typed
-  relations. You browse and edit it in the browser; agents read and write it over MCP/REST.
+  relations. You browse and edit it in the browser; agents read and write it through the
+  Hermes plugin tools and the REST API.
 - **Memory** — atomic, deduplicated **facts with trust scores**, shared by every agent.
   What one agent learns, all recall. Written through the Hermes plugin and REST,
   never hand-edited in the UI.
 
-Humans get a wiki. Agents get MCP tools and a REST API. One attribution model: every write
+Humans get a wiki. Agents get plugin tools and a REST API. One attribution model: every write
 is tied to the API key's actor, server-side.
 
 ## Knowledge
@@ -56,7 +56,7 @@ is tied to the API key's actor, server-side.
   tables, not page types. See [docs/page-types.md](docs/page-types.md) for when to pick
   which type and how to use each kind.
 
-- **13 relation types** — 5 you set by hand over MCP (`related`, `contradicts`,
+- **13 relation types** — 5 you set by hand (`related`, `contradicts`,
   `supersedes`, `part_of`, `embeds`) plus 8 machine-owned, created by Dran and never by
   hand: `semantic` (augmenter), `mentions` (entity linker), `works_in` / `has_tier` /
   `based_in` / `written_in` / `built_with` (props-derived) and `informs` (memory → page,
@@ -86,8 +86,7 @@ is tied to the API key's actor, server-side.
   only the session's message delta (cursor per session).
 - REST `/api/memory` + a **Hermes plugin** (`hermes_plugin/dran/`): auto-recall at turn
   start, `dran_memory_add/update/search/feedback` tools, auto-capture on session end (facts
-  extracted server-side, transcripts never persisted). Memory is intentionally **not** on
-  the MCP surface.
+  extracted server-side, transcripts never persisted).
 
 ## The app
 
@@ -113,23 +112,18 @@ is tied to the API key's actor, server-side.
 
 ## APIs
 
-**Hermes plugin tools** — the primary surface for agents. The `dran` plugin
+**Hermes plugin tools** — the agent surface. The `dran` plugin
 (`hermes_plugin/dran/`) registers a toolset via `register(ctx)`: search, page lifecycle,
-relations, workers and lint (`dran_*`), plus the memory provider tools
-(`dran_memory_*`). Every write carries `X-Hermes-Agent` (the active profile), which the
+relations, workers and lint (`dran_*`, 16 tools), plus the memory provider tools
+(`dran_memory_*`, 4). Every write carries `X-Hermes-Agent` (the active profile), which the
 server persists as `agent_name`; attribution (`created_by`/`owner_user_id`) is derived
 server-side from the key's actor — never client-settable. See
 [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
 
-**MCP** — `POST /api/mcp`, Streamable HTTP (spec 2025-03-26): 18 tools for pages,
-search, workers and lint; resources (`page://`, `home://`), and the `brainstorm` prompt.
-Kept for non-Hermes MCP clients while the plugin tools take over; write tools require a
-`write_access` key — enforced by a permission-matrix test
-(`test/dran/mcp_tool_audit_test.exs`). Full reference: [docs/mcp.md](docs/mcp.md).
-
 **REST** — token-protected `/api/*` (kebab-case): read routes always allowed; writes
-(pages, relations, workers, memory) require `write_access: true`. Attribution
-(`owner_user_id`/`created_by`/`agent_name`) is injected server-side — never
+(pages, relations, workers, memory) require `write_access: true`. The plugin tools are a
+thin client over these routes, so non-Hermes agents use the same API directly.
+Attribution (`owner_user_id`/`created_by`/`agent_name`) is injected server-side — never
 client-settable. Reads are filtered by the workspace sharing policy
 (`Dran.ContentVisibility`): `share_memory`/`share_pages` decide whether the workspace
 shares content, and each user's `content_scope` ("all" | "own") narrows it further.
@@ -196,24 +190,23 @@ agent's memory). The token is shown once. Every write is attributed server-side 
 key's actor.
 
 **b. Secret (once per profile).** Store the token in the profile's `.env` — single source
-of truth, shared by MCP and the memory plugin:
+of truth, shared by the plugin's memory provider and its toolset:
 
 ```bash
 # ~/.hermes/profiles/<profile>/.env
 DRAN_API_KEY=<paste-token>
 ```
 
-**c. MCP server** (18 tools). In the profile's `config.yaml`:
+**c. Enable the plugin** in the profile's `config.yaml` — it registers the knowledge
+toolset (`dran_*`, 16 tools) **and** the memory provider (`dran_memory_*`) from one module:
 
 ```yaml
-mcp_servers:
-  dran:
-    url: http://localhost:4000/api/mcp
-    headers:
-      Authorization: Bearer ***
+plugins:
+  enabled:
+    - dran
 ```
 
-**d. Memory plugin** (auto-recall, `dran_memory_*` tools, session ingest). Symlink from
+**d. Symlink the plugin** (auto-recall, tools, session ingest). Symlink from
 this repo and select it:
 
 ```bash
@@ -248,12 +241,11 @@ skills:
     - ~/Workspace/Skills
 ```
 
-Restart the Hermes session, then verify each piece: MCP — ask it to "list my pages";
+Restart the Hermes session, then verify each piece: tools — ask it to "list my pages";
 memory — "what do you remember about …?"; skills — it should route Dran questions
 through the `dran` skill.
 
-Non-Hermes agents: skip d/e, point any MCP client at `POST /api/mcp` with the Bearer key,
-or use the REST API directly.
+Non-Hermes agents: use the REST API directly (`docs/api.md`) with the Bearer key.
 
 ## Configuration
 
@@ -264,7 +256,7 @@ Essentials: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST/PORT/SCHEME`, session s
 without it Dran still works, minus those features).
 
 Not env vars (admin UI only, stored in the database): the default workspace and the
-legacy admin API/MCP token — both live in `/admin/system`. Per-user API tokens are
+legacy admin API token — both live in `/admin/system`. Per-user API tokens are
 managed in `/admin/users`; workspace-scoped API keys in each workspace's settings.
 
 ## Production
@@ -281,7 +273,7 @@ Runtime env vars only — never bake secrets into the image.
 ## Tech stack
 
 Phoenix 1.8 + LiveView · PostgreSQL + pgvector · TipTap v3 · MDEx · Tailwind v4 + daisyUI ·
-3d-force-graph · Bandit · Quantum · Req · MCP 2025-03-26
+3d-force-graph · Bandit · Quantum · Req
 
 ## Pre-commit
 
