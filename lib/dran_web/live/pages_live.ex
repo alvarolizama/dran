@@ -203,20 +203,24 @@ defmodule DranWeb.PagesLive do
     # request — an empty selection means no filter.
     kind_filters = valid_kinds(params["kind"], page_type)
 
+    scope = page_scope(socket)
+
     {pages, archived_pages} =
       if socket.assigns.context do
         {Knowledge.list_pages(
            workspace_id: socket.assigns.context.id,
            type: page_type,
            kind: kind_filters,
-           limit: 500
+           limit: 500,
+           scope: scope
          ),
          Knowledge.list_pages(
            workspace_id: socket.assigns.context.id,
            type: page_type,
            kind: kind_filters,
            archived: true,
-           limit: 200
+           limit: 200,
+           scope: scope
          )}
       else
         {[], []}
@@ -436,4 +440,9 @@ defmodule DranWeb.PagesLive do
 
   defp build_page_path(workspace_slug, page_type, slug),
     do: "/#{workspace_slug}/#{PageTypes.path(page_type)}/#{slug}"
+
+  # El scope de lectura sale del módulo único de política.
+  defp page_scope(socket) do
+    Dran.ContentVisibility.resolve(socket.assigns[:context], socket.assigns[:user], :pages)
+  end
 end

@@ -235,6 +235,26 @@ defmodule Dran.Accounts do
   def is_owner?(_), do: false
 
   @doc """
+  Update the user's CONTENT preference inside a workspace
+  (`content_scope`: "all" | "own").
+
+  This is a per-user preference (D5): it narrows what the user — and the
+  agents that inherit their ownership — read from the workspace. It never
+  changes what they may WRITE (roles keep that).
+  """
+  def update_content_scope(%User{} = user, %Workspace{} = workspace, content_scope) do
+    case Repo.get_by(UserWorkspace, user_id: user.id, workspace_id: workspace.id) do
+      nil ->
+        {:error, :not_a_member}
+
+      %UserWorkspace{} = uw ->
+        uw
+        |> UserWorkspace.changeset(%{content_scope: content_scope})
+        |> Repo.update()
+    end
+  end
+
+  @doc """
   Returns the user's role string for a given workspace.
   Falls back to "viewer" if no membership exists.
   """

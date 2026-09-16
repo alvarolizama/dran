@@ -53,7 +53,8 @@ defmodule DranWeb.SearchLive do
           Knowledge.search(q,
             workspace_id: socket.assigns.context.id,
             limit: 20,
-            strategy: String.to_atom(socket.assigns.search_mode)
+            strategy: String.to_atom(socket.assigns.search_mode),
+            scope: page_scope(socket)
           )
 
         %{nodes: graph_nodes, edges: graph_edges} = graph_data(socket, results)
@@ -90,7 +91,8 @@ defmodule DranWeb.SearchLive do
             Knowledge.search(q,
               workspace_id: socket.assigns.context.id,
               limit: 20,
-              strategy: String.to_atom(socket.assigns.search_mode)
+              strategy: String.to_atom(socket.assigns.search_mode),
+              scope: page_scope(socket)
             )
 
           r
@@ -143,7 +145,11 @@ defmodule DranWeb.SearchLive do
   # Memory facts are part of the global search surface. bump_retrieval: false
   # — typing in the UI must not inflate the workers' usage counter.
   defp search_memories(%{assigns: %{context: %{id: _workspace_id}}} = socket, q) do
-    Memory.search(socket.assigns.context.id, q, limit: 5, bump_retrieval: false)
+    Memory.search(socket.assigns.context.id, q,
+      limit: 5,
+      bump_retrieval: false,
+      scope: memory_scope(socket)
+    )
   rescue
     _ -> []
   end
@@ -550,5 +556,15 @@ defmodule DranWeb.SearchLive do
       {gettext("Meeting notes"), "meeting"},
       {gettext("Tagged programming"), "tag:programming"}
     ]
+  end
+
+  # El scope de lectura sale del módulo único de política, resuelto con la
+  # identidad del socket y la política del workspace.
+  defp page_scope(socket) do
+    Dran.ContentVisibility.resolve(socket.assigns[:context], socket.assigns[:user], :pages)
+  end
+
+  defp memory_scope(socket) do
+    Dran.ContentVisibility.resolve(socket.assigns[:context], socket.assigns[:user], :memory)
   end
 end

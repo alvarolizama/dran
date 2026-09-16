@@ -179,6 +179,7 @@ defmodule DranWeb.Plugs.Auth do
 
     socket =
       socket
+      |> Phoenix.Component.assign(:user, user)
       |> Phoenix.Component.assign(:current_user, current_user)
       |> Phoenix.Component.assign(:is_owner, is_owner)
       |> Phoenix.Component.assign(:workspace_slug, workspace_slug)

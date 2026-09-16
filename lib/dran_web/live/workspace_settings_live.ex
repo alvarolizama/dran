@@ -240,6 +240,8 @@ defmodule DranWeb.WorkspaceSettingsLive do
       params
       |> brain_attrs()
       |> Map.put("enabled_features", features_attrs(params))
+      |> Map.put("share_memory", share_attr(params, "share_memory"))
+      |> Map.put("share_pages", share_attr(params, "share_pages"))
 
     case workspace |> Workspace.settings_changeset(attrs) |> Repo.update() do
       {:ok, updated} ->
@@ -559,6 +561,69 @@ defmodule DranWeb.WorkspaceSettingsLive do
             </div>
           </div>
 
+          <%!-- Read sharing policy --%>
+          <div class="space-y-2">
+            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+              {gettext("Compartir lectura")}
+            </h3>
+            <div class="space-y-4">
+              <div>
+                <input
+                  type="hidden"
+                  name="workspace[share_memory]"
+                  value="false"
+                />
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input
+                    id="workspace-share-memory"
+                    type="checkbox"
+                    name="workspace[share_memory]"
+                    value="true"
+                    checked={@workspace.share_memory}
+                    class="mt-0.5 size-4 rounded border-base-300 text-primary focus:ring-1 focus:ring-primary"
+                  />
+                  <span class="min-w-0">
+                    <span class="block text-sm font-medium text-base-content">
+                      {gettext("Compartir memoria entre los usuarios del workspace")}
+                    </span>
+                    <span class="block text-xs text-base-content/60 mt-1">
+                      {gettext(
+                        "Si se desactiva, cada usuario (y sus agentes) ve solo los hechos que le pertenecen; owner y admin del workspace conservan la vista completa."
+                      )}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <div>
+                <input
+                  type="hidden"
+                  name="workspace[share_pages]"
+                  value="false"
+                />
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input
+                    id="workspace-share-pages"
+                    type="checkbox"
+                    name="workspace[share_pages]"
+                    value="true"
+                    checked={@workspace.share_pages}
+                    class="mt-0.5 size-4 rounded border-base-300 text-primary focus:ring-1 focus:ring-primary"
+                  />
+                  <span class="min-w-0">
+                    <span class="block text-sm font-medium text-base-content">
+                      {gettext("Compartir páginas entre los usuarios del workspace")}
+                    </span>
+                    <span class="block text-xs text-base-content/60 mt-1">
+                      {gettext(
+                        "Si se desactiva, cada usuario ve solo las páginas que le pertenecen; el grafo solo pinta nodos y aristas visibles."
+                      )}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <%!-- Advanced: semantic thresholds --%>
           <details class="group rounded-xl border border-base-content/10 px-4 py-3">
             <summary class="flex items-center gap-2 cursor-pointer select-none">
@@ -851,6 +916,14 @@ defmodule DranWeb.WorkspaceSettingsLive do
     Map.new(@features, fn feature ->
       {feature, Map.get(raw, feature) == "true"}
     end)
+  end
+
+  # Los toggles de compartición viven en el sub-map `workspace` (como el
+  # resto de campos del workspace). Un checkbox sin marcar no llega: solo el
+  # hidden input envía "false", así que ausente = false.
+  defp share_attr(params, key) do
+    ws_params = Map.get(params, "workspace", %{})
+    Map.get(ws_params, key) == "true"
   end
 
   defp blank_to_nil(""), do: nil

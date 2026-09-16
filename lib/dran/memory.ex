@@ -604,17 +604,17 @@ defmodule Dran.Memory do
     end)
   end
 
-  # Scope filtering on a NAMED binding (`:m`), because this query joins
-  # relations with memories.
-  defp maybe_filter_memory_scope(query, nil, _binding), do: query
-  defp maybe_filter_memory_scope(query, :all, _binding), do: query
+  # Scope filtering for the related-facts query, whose bindings are
+  # positional: [relation, memory]. The neighbour side is index 1.
+  defp maybe_filter_memory_scope(query, nil, _pos), do: query
+  defp maybe_filter_memory_scope(query, :all, _pos), do: query
 
-  defp maybe_filter_memory_scope(query, {:own, nil}, binding) do
-    where(query, [{^binding, m}], is_nil(m.owner_user_id))
+  defp maybe_filter_memory_scope(query, {:own, nil}, _pos) do
+    where(query, [_r, m], is_nil(m.owner_user_id))
   end
 
-  defp maybe_filter_memory_scope(query, {:own, owner_id}, binding) do
-    where(query, [{^binding, m}], m.owner_user_id == ^owner_id)
+  defp maybe_filter_memory_scope(query, {:own, owner_id}, _pos) do
+    where(query, [_r, m], m.owner_user_id == ^owner_id)
   end
 
   defp maybe_put_neighbor(acc, endpoint, batch_ids, neighbor_id, content) do

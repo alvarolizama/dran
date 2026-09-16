@@ -118,7 +118,8 @@ defmodule DranWeb.HomeLive do
         all_pages =
           Knowledge.list_pages(
             workspace_id: workspace.id,
-            limit: 500
+            limit: 500,
+            scope: page_scope(socket)
           )
 
         alphabet = build_alphabet(all_pages)
@@ -152,7 +153,8 @@ defmodule DranWeb.HomeLive do
           Knowledge.list_pages(
             workspace_id: workspace.id,
             type: page_type,
-            limit: 500
+            limit: 500,
+            scope: page_scope(socket)
           )
 
         grouped = group_alphabetically(pages)
@@ -297,7 +299,12 @@ defmodule DranWeb.HomeLive do
   defp apply_action(socket, :letter, %{"workspace_slug" => workspace_slug, "letter" => letter}) do
     case Knowledge.get_workspace_by_slug(workspace_slug) do
       %Workspace{} = workspace ->
-        all_pages = Knowledge.list_pages(workspace_id: workspace.id, limit: 500)
+        all_pages =
+          Knowledge.list_pages(
+            workspace_id: workspace.id,
+            limit: 500,
+            scope: page_scope(socket)
+          )
 
         letter = String.upcase(letter)
         grouped = group_alphabetically(all_pages)
@@ -1339,5 +1346,10 @@ defmodule DranWeb.HomeLive do
     page_type = Map.get(result, :page_type) || Map.get(result, "page_type")
     slug = Map.get(result, :slug) || Map.get(result, "slug")
     ~p"/#{workspace.slug}/#{page_type}/#{slug}"
+  end
+
+  # El scope de lectura sale del módulo único de política.
+  defp page_scope(socket) do
+    Dran.ContentVisibility.resolve(socket.assigns[:workspace], socket.assigns[:user], :pages)
   end
 end

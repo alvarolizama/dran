@@ -41,11 +41,47 @@ defmodule DranWeb.MemoryLive do
         status_filter: "active",
         page: 0,
         memories: [],
-        memory_count: safe_count(context),
-        has_more: false
+        memory_count: safe_count(context, nil),
+        has_more: false,
+        # Toggle "todo el workspace | solo míos": solo se ofrece cuando el
+        # workspace COMPARTE memoria (en aislado la política ya filtra y el
+        # toggle no tendría efecto). Se evalúa con el `context` local: dentro
+        # del assign/2 el socket todavía no lleva el assign nuevo.
+        content_scope: content_scope_assign(socket, context),
+        show_scope_toggle: show_scope_toggle?(context)
       )
 
     {:ok, reload_memories(socket)}
+  end
+
+  @impl true
+  def handle_event("set_content_scope", %{"scope" => scope}, socket)
+      when scope in ~w(all own) do
+    context = socket.assigns.context
+    user = socket.assigns[:user]
+
+    persisted =
+      case user do
+        %Dran.Accounts.User{} ->
+          Dran.Accounts.update_content_scope(user, context, scope)
+
+        _ ->
+          # Sin usuario con membresía no hay preferencia que persistir: el
+          # cambio aplica solo a esta sesión.
+          {:ok, :session_only}
+      end
+
+    case persisted do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign(content_scope: scope)
+         |> put_flash(:info, scope_label(scope))
+         |> reload_memories()}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("No se pudo guardar la preferencia"))}
+    end
   end
 
   @impl true
@@ -124,7 +160,7 @@ defmodule DranWeb.MemoryLive do
     # view) — reload from the DB and refresh the sidebar badge count.
     {:noreply,
      socket
-     |> assign(memory_count: safe_count(socket.assigns.context))
+     |> assign(memory_count: safe_count(socket.assigns.context, memory_scope(socket)))
      |> reload_memories()}
   end
 
@@ -188,6 +224,29 @@ defmodule DranWeb.MemoryLive do
               />
             </div>
 
+            <div
+              :if={@show_scope_toggle}
+              id="memory-scope-toggle"
+              role="group"
+              aria-label={gettext("Alcance de la memoria")}
+              class="inline-flex rounded-lg bg-base-200 p-1 self-start"
+            >
+              <.scope_button
+                id="memory-scope-all"
+                value="all"
+                label={gettext("Todo")}
+                icon="hero-users"
+                active={@content_scope == "all"}
+              />
+              <.scope_button
+                id="memory-scope-own"
+                value="own"
+                label={gettext("Solo míos")}
+                icon="hero-user"
+                active={@content_scope == "own"}
+              />
+            </div>
+
             <button
               :if={@status_filter in ["superseded", "all"] and @query == ""}
               id="memory-purge-superseded"
@@ -243,16 +302,21 @@ defmodule DranWeb.MemoryLive do
   # one @page_size query instead of re-reading every loaded row from zero.
   defp reload_memories(socket) do
     context = socket.assigns.context
+    scope = memory_scope(socket)
 
     entries =
       if context do
         cond do
           blank?(socket.assigns.query) ->
-            fetch_page(context, socket.assigns.status_filter, 0)
+            fetch_page(context, socket.assigns.status_filter, 0, scope)
 
           true ->
             results =
-              Memory.search(context.id, socket.assigns.query, limit: 20, bump_retrieval: false)
+              Memory.search(context.id, socket.assigns.query,
+                limit: 20,
+                bump_retrieval: false,
+                scope: scope
+              )
 
             %{memories: results, has_more: false}
         end
@@ -263,23 +327,25 @@ defmodule DranWeb.MemoryLive do
     # Related-fact neighbours (semantic memory↔memory edges derived by the
     # MemoryLinker), batched in ONE query for the whole page — per-card
     # lookups would be N+1 on a list that grows live.
-    entries = attach_related(entries, context)
+    entries = attach_related(entries, context, socket)
 
     assign(socket, memories: entries.memories, has_more: entries.has_more, page: 0)
   end
 
   # Attach each memory's related-fact snippets to the entries map. Only
   # active memories carry semantic edges (the nightly sweep drops the rest).
-  defp attach_related(entries, nil), do: entries
+  defp attach_related(entries, nil, _socket), do: entries
 
-  defp attach_related(entries, context) do
+  defp attach_related(entries, context, socket) do
     ids = Enum.map(entries.memories, & &1.memory.id)
 
     related_by_id =
       if ids == [] do
         %{}
       else
-        Memory.related_snapshots(context.id, ids)
+        # El vecino pasa por el mismo filtro de visibilidad: un fact oculto
+        # no se asoma por la fila de "related".
+        Memory.related_snapshots(context.id, ids, scope: memory_scope(socket))
       end
 
     Map.update!(entries, :memories, fn memories ->
@@ -293,7 +359,7 @@ defmodule DranWeb.MemoryLive do
     context = socket.assigns.context
     next_page = socket.assigns.page + 1
 
-    entries = fetch_page(context, socket.assigns.status_filter, next_page)
+    entries = fetch_page(context, socket.assigns.status_filter, next_page, memory_scope(socket))
 
     assign(socket,
       memories: socket.assigns.memories ++ entries.memories,
@@ -303,14 +369,15 @@ defmodule DranWeb.MemoryLive do
   end
 
   # Fetch one extra row to detect has_more without a count query.
-  defp fetch_page(nil, _status_filter, _page), do: %{memories: [], has_more: false}
+  defp fetch_page(nil, _status_filter, _page, _scope), do: %{memories: [], has_more: false}
 
-  defp fetch_page(context, status_filter, page) do
+  defp fetch_page(context, status_filter, page, scope) do
     memories =
       Memory.list_memories(context.id,
         status: status_opt(status_filter),
         limit: @page_size + 1,
-        offset: page * @page_size
+        offset: page * @page_size,
+        scope: scope
       )
 
     has_more = length(memories) > @page_size
@@ -334,13 +401,47 @@ defmodule DranWeb.MemoryLive do
     assign(socket, memories: entries)
   end
 
-  defp safe_count(nil), do: 0
+  defp safe_count(nil, _scope), do: 0
 
-  defp safe_count(%{id: workspace_id}) do
-    Memory.count_memories(workspace_id)
+  defp safe_count(%{id: workspace_id}, scope) do
+    Memory.count_memories(workspace_id, scope: scope)
   rescue
     _ -> 0
   end
+
+  # El scope de lectura sale del módulo único de política, resuelto con la
+  # identidad del socket (el struct User) y la política del workspace.
+  defp memory_scope(socket) do
+    Dran.ContentVisibility.resolve(
+      socket.assigns[:context],
+      socket.assigns[:user],
+      :memory
+    )
+  end
+
+  # El toggle se lee de la preferencia persistida del usuario (no de un
+  # assign efímero), así sobrevive a un reload de la vista.
+  defp content_scope_assign(socket, context) do
+    case {socket.assigns[:user], context} do
+      {%Dran.Accounts.User{id: user_id}, %{id: workspace_id}} ->
+        Dran.ContentVisibility.content_scope_for(user_id, workspace_id)
+
+      _ ->
+        "all"
+    end
+  end
+
+  # "Solo míos" no se ofrece cuando el workspace ya está aislado: la política
+  # fuerza ese scope para todos, así que un toggle sería mentira.
+  defp show_scope_toggle?(context) do
+    case context do
+      %{share_memory: shared} -> shared == true
+      _ -> false
+    end
+  end
+
+  defp scope_label("own"), do: gettext("Mostrando solo tus memorias")
+  defp scope_label(_), do: gettext("Mostrando todo el workspace")
 
   defp blank?(nil), do: true
   defp blank?(""), do: true
@@ -395,6 +496,34 @@ defmodule DranWeb.MemoryLive do
         !@active && "text-base-content/60 hover:text-base-content"
       ]}
     >
+      {@label}
+    </button>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :value, :string, required: true
+  attr :label, :string, required: true
+  attr :icon, :string, required: true
+  attr :active, :boolean, required: true
+
+  # Toggle de alcance de lectura ("todo | solo míos"). El mismo lenguaje
+  # visual que status_filter_button, con icono para que el alcance se lea de
+  # un vistazo.
+  defp scope_button(assigns) do
+    ~H"""
+    <button
+      id={@id}
+      phx-click="set_content_scope"
+      phx-value-scope={@value}
+      aria-pressed={to_string(@active)}
+      class={[
+        "inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-all duration-150",
+        @active && "bg-base-100 shadow-sm font-medium",
+        !@active && "text-base-content/60 hover:text-base-content"
+      ]}
+    >
+      <.icon name={@icon} class="size-3.5" />
       {@label}
     </button>
     """
