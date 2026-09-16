@@ -1,163 +1,214 @@
-<div align="center">
-
-<img src="priv/static/logo.png" width="96" height="96" alt="Dran" />
-
 # Dran
 
-### *Dran* — Tibetan for "remember". What one agent learns, none forget.
+*Dran* — Tibetan for "remember". What one agent learns, none forget.
 
-### Shared memory & knowledge base for AI agent swarms
-
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-8B5CF6.svg)](./mix.exs)
-[![Elixir](https://img.shields.io/badge/Elixir-1.20+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
-[![Phoenix](https://img.shields.io/badge/Phoenix-1.8_LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org)
-
-</div>
+**A shared brain for agent swarms**: one instance holding both the knowledge
+(a wiki graph) and the memory (facts) that every agent reads and writes.
 
 ## What is Dran
 
-Dran is the **shared brain an agent swarm reads and writes** — one instance, one graph,
-one memory store, shared by every agent and by you. What one agent learns, none forget.
+One server. One knowledge graph. One memory store. Shared by every agent and
+by you.
 
-Two pillars:
+| | Humans | Agents |
+|---|---|---|
+| **See it in** | the browser — a wiki with search, graph, timeline | tool calls |
+| **Write it via** | the editor | plugin tools, or the REST API directly |
+| **Attribution** | your user account | the API key's actor, injected server-side |
 
-- **Knowledge** — a typed, queryable **knowledge graph**. Pages (`note`, `idea`,
-  `knowledge`, `technical`, `entity`, `concept`, `reference`, `food`) linked by typed
-  relations. You browse and edit it in the browser; agents read and write it through the
-  Hermes plugin tools and the REST API.
-- **Memory** — atomic, deduplicated **facts with trust scores**, shared by every agent.
-  What one agent learns, all recall. Written through the Hermes plugin and REST,
-  never hand-edited in the UI.
+Two things live inside, and they are different on purpose:
 
-Humans get a wiki. Agents get plugin tools and a REST API. One attribution model: every write
-is tied to the API key's actor, server-side.
+- **Knowledge** — a typed graph of **pages** (`note`, `idea`, `knowledge`,
+  `technical`, `entity`, `concept`, `reference`, `food`) joined by typed
+  relations. Curated, editable, versioned. Think "the wiki".
+- **Memory** — atomic **facts** with trust scores, deduplicated per
+  workspace. Written by agents as they learn; never hand-edited. Think
+  "what the swarm knows".
 
-## Knowledge
+## What it is for
 
-- **8 page types, each with `meta.kind` subtypes and type-specific meta fields** — defined
-  in one place, `Dran.PageRegistry` (`lib/dran/page_registry.ex`):
+- **One agent that remembers across sessions** — facts survive restarts, and
+  are recalled automatically at the start of a turn.
+- **Many agents that share what they learn** — a fact stored by one is
+  available to all; the graph keeps them linked.
+- **Agent output you can actually read** — reports, notes and entities land
+  in a graph you browse, not in a folder of markdown files.
+- **Multi-tenant by workspace** — separate silos (personal, work, a project)
+  with per-workspace visibility and sharing policy.
 
-  | Type | Purpose | `meta.kind` values | Extra meta fields |
-  |---|---|---|---|
-  | `note` | free capture | *(free — none validated)* | `date`, `due_date` *(kind `reminder`)* |
-  | `idea` | sparks & thinking | `idea` `question` `hypothesis` `spark` | — |
-  | `knowledge` | captured wisdom | `quote` `summary` `highlight` `excerpt` | `source_url`, `date` |
-  | `technical` | code & how-to | `code` `snippet` `debug` `recipe` `config` `command` `template` `pattern` `method` | `language` *(kind `code`)*, `version` |
-  | `entity` | named things | `person` `company` `product` `tool` `place` `event` `language` `framework` `hardware` `protocol` | `location`, `external_url` |
-  | `concept` | abstract ideas | *(free)* | `domain`, `parent_concept` |
-  | `reference` | external sources | `article` `paper` `video` `podcast` `book` `newsletter` `spec` `code` `release` `website` `repo` `api` | `source_url`, `published_at` |
-  | `food` | cooking & gastronomy | `recipe` `ingredient` `dish` `meal` `cuisine` `restaurant` `drink` `technique` | `cuisine`, `servings`, `prep_time`, `cook_time`, `source_url` |
+## Features
 
-  Every type also accepts `meta.props` (free-form key-value bag, indexed). `meta.kind` is
-  validated by the changeset (free on `note`/`concept`); it classifies and filters — it
-  never changes behavior. Collections and reports are first-class entities in their own
-  tables, not page types. See [docs/page-types.md](docs/page-types.md) for when to pick
-  which type and how to use each kind.
+**Knowledge**
+- 8 page types, each with `meta.kind` subtypes and type-specific meta fields,
+  defined in one place — `Dran.PageRegistry`. Every type also takes
+  `meta.props`, a free-form indexed key-value bag. See
+  [docs/page-types.md](docs/page-types.md).
+- **13 relation types**: 5 you set by hand (`related`, `contradicts`,
+  `supersedes`, `part_of`, `embeds`), 8 machine-owned (`semantic`, `mentions`,
+  `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`, `informs`).
+  Five `meta.props` keys auto-materialize into edges.
+- **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]`
+  embeds. Version history with diff view.
+- **Hybrid search** — full-text, fuzzy and semantic, fused.
 
-- **13 relation types** — 5 you set by hand (`related`, `contradicts`,
-  `supersedes`, `part_of`, `embeds`) plus 8 machine-owned, created by Dran and never by
-  hand: `semantic` (augmenter), `mentions` (entity linker), `works_in` / `has_tier` /
-  `based_in` / `written_in` / `built_with` (props-derived) and `informs` (memory → page,
-  at ingest).
-- **Props → edges** — `role`, `tier`, `location`, `language`, `framework` auto-materialize
-  into typed edges.
-- **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]` embeds; read-only
-  render by default.
-- **Version history** with diff view; **machine-owned summaries** (written only by
-  API/nightly job).
+**Memory**
+- **Idempotent on content**: re-storing a fact returns the existing row. A
+  grey-zone rewording (cosine 0.88–0.95, typically cross-language) returns
+  `409 near_duplicate` so nothing is silently merged.
+- **Asymmetric trust**: helpful `+0.05`, unhelpful `−0.10`; ranking is
+  relevance × trust. Untouched, never-rated facts decay slowly.
+- **Auto-relations at ingest**: facts link to their closest pages and to
+  sibling facts, for free (derived from the dedupe embedding).
+- **Auto-recall and auto-capture** through the plugin: relevant facts are
+  injected at turn start, and the session is digested at the end (facts
+  extracted server-side — the transcript is never stored).
 
-## Memory
+**Automation**
+- **3 background workers**: `curator` (duplicates/conflicts), `link_gardener`
+  (relations for orphans), `graph_rag` (Q&A with citations). Start and poll
+  them from a tool.
+- **7 scheduled jobs** (Quantum cron, toggleable, run-now from `/admin`).
+- **Entity linker** — auto-creates entity pages from names in page bodies.
 
-- Atomic facts per workspace, **idempotent on content** (duplicates return the existing
-  row); rewordings in the grey zone (cosine 0.88–0.95, typically cross-language) return
-  `409 near_duplicate` — refine via `PATCH /api/memory/:id` (trust preserved) or re-add
-  with `force=true`.
-- **Auto-relations at ingest**: `informs` (memory → top-3 closest pages) and `semantic`
-  (memory ↔ related memories, ~0.72–0.88 cosine band) — derived from the dedupe embedding,
-  zero extra inference; visible in the 3D graph and as "related facts" in the memory UI.
-- **Nightly hygiene**: re-derive edges, sweep edges touching dead memories (both
-  endpoints), decay trust of facts that were never retrieved *and* never rated
-  (−0.02/30d, floor 0.15; feedback-earned trust never decays).
-- **Asymmetric trust**: helpful `+0.05`, unhelpful `−0.10`; search ranks relevance × trust.
-- **Ingest efficiency**: the extractor's negative context includes the semantic neighbours
-  of the known top-10 (skips related variants, not just dupes); the Hermes plugin sends
-  only the session's message delta (cursor per session).
-- REST `/api/memory` + a **Hermes plugin** (`hermes_plugin/dran/`): auto-recall at turn
-  start, `dran_memory_add/update/search/feedback` tools, auto-capture on session end (facts
-  extracted server-side, transcripts never persisted).
+**App**
+- Wiki at `/:workspace_slug`; memory at `/:ws/memory`; 3D graph at
+  `/:ws/graph`; clusters with LLM summaries; smart collections; activity feed;
+  journey timeline.
+- Admin (owner-only) at `/admin`: users, workspaces, models, system, jobs.
 
-## The app
+## Architecture
 
-- **Wiki** at `/:workspace_slug` — read-first browser: search, type index, pinned pages,
-  collections, clusters, graph
-- **Memory** `/:ws/memory` · **Reports** `/:ws/reports/:slug`
-- **3D graph** (`/:ws/graph`), **clusters** with LLM summaries, **hybrid search**
-  (`fts`/`fuzzy`/`semantic`), **smart collections**, activity feed, journey timeline
-- **Instance dashboard** at `/`; admin (owner-only) at `/admin`: users, workspaces, models,
-  system, jobs
-- **Multi-workspace** with per-workspace visibility (public/private) and page-type toggles
+```
+┌──────────────┐   plugin tools (20)   ┌──────────────────┐
+│ Hermes agent │ ────────────────────► │                  │
+└──────────────┘                       │   Dran server    │
+┌──────────────┐   REST /api/*         │   (Phoenix)      │
+│ any agent    │ ────────────────────► │                  │
+└──────────────┘                       │  Postgres +      │
+┌──────────────┐      browser          │  pgvector        │
+│   you        │ ────────────────────► │                  │
+└──────────────┘                       └──────────────────┘
+```
 
-## Automation
+There is **no MCP server**. The agent surface is the Hermes plugin, and every
+tool it exposes is a thin client over the REST API — so a non-Hermes agent
+uses the same routes directly.
 
-- **3 background workers** — `curator` (duplicate/conflict detection), `link_gardener`
-  (relations for orphans), `graph_rag` (GraphRAG Q&A with citations). Start them with
-  `dran_start_worker` (plugin tool or `POST /api/workers`), then poll the session
-  (`dran_get_worker_session` or `GET /api/workers/:id`).
-- **7 scheduled jobs** (Quantum cron — toggleable, run-now from `/admin`): curator,
-  PageRank, cluster summaries, graph maintenance, link gardener, page summaries, memory
-  re-link
-- **Entity linker** — auto-creates entity pages from names detected in bodies
+## Install
 
-## APIs
+Three parts, independent: **the server**, **the plugin**, **the skills**.
 
-**Hermes plugin tools** — the agent surface. The `dran` plugin
-(`hermes_plugin/dran/`) registers a toolset via `register(ctx)`: search, page lifecycle,
-relations, workers and lint (`dran_*`, 16 tools), plus the memory provider tools
-(`dran_memory_*`, 4). Every write carries `X-Hermes-Agent` (the active profile), which the
-server persists as `agent_name`; attribution (`created_by`/`owner_user_id`) is derived
-server-side from the key's actor — never client-settable. See
-[hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
+### 1 · The server
 
-**REST** — token-protected `/api/*` (kebab-case): read routes always allowed; writes
-(pages, relations, workers, memory) require `write_access: true`. The plugin tools are a
-thin client over these routes, so non-Hermes agents use the same API directly.
-Attribution (`owner_user_id`/`created_by`/`agent_name`) is injected server-side — never
-client-settable. Reads are filtered by the workspace sharing policy
-(`Dran.ContentVisibility`): `share_memory`/`share_pages` decide whether the workspace
-shares content, and each user's `content_scope` ("all" | "own") narrows it further.
-Full endpoint reference: [docs/api.md](docs/api.md).
+**Requirements:** Elixir 1.20+, Erlang/OTP 26+, PostgreSQL 14+ with
+**pgvector**, Node (asset tooling only).
 
-## Security
+```bash
+git clone git@github.com:alvarolizama/dran.git && cd dran
+cp .env.example .env && $EDITOR .env
+mix setup && mix phx.server
+```
 
-- First-run `/setup` creates the owner; Google OAuth optional
-- Instance owner + per-workspace roles (`owner` / `admin` / `editor` / `viewer`)
-- Per-user API keys, read-only by default (per-workspace `access_level`, default `read`),
-  scoped to the creator's workspaces
-- Row-level auth on resources; audit tooling in precommit (`sobelow`, `deps.audit`)
+Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup`
+to create the owner account. Then create a workspace and, in **Settings →
+Agents**, an agent key (see below).
 
-## Agent skills
+**Configuration:** environment variables — [`.env.example`](.env.example) has the
+full list. Essentials: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST/PORT/SCHEME`,
+`UPLOADS_DIR`. Optional: `DRAN_INFERENCE_API_URL/KEY` (any OpenAI-compatible
+endpoint; powers embeddings, summaries, semantic search and the workers —
+without it Dran still works, minus those features).
 
-`skills/` ships **two suites**, both versioned with this repo:
+Not env vars (stored in the database, edited in the UI): the default workspace
+and the legacy admin API token live in `/admin/system`; per-user tokens in
+`/admin/users`; workspace-scoped keys in each workspace's settings.
 
-- **Agent flows (5)** — `dran` (router) + `dran-knowledge-flow`,
-  `dran-relations-flow`, `dran-workers-flow`, `dran-memory-flow`. These teach
-  an agent how to *operate* a Dran instance through the plugin tools.
-- **Dev skills (7)** — `skills/dev/dran-dev-*`: page types, auth surface, slug
-  policy, settings, UI tweaks, inference providers, actor model. These assume
-  you are *editing this repo*.
+### 2 · The Hermes plugin
 
-Shared rules: one key = one actor; a write is not done until a readback
-confirms it; irreversible ops need human confirmation.
+Gives an agent the tools (`dran_*`, 16) **and** the memory provider
+(`dran_memory_*`, 4) — one key, one attribution, one workspace.
 
-Install and conventions (including the 60-char description limit): see
+**a. Create the credential.** In Dran → **Settings → Agents**: create the agent
+and its key, ticking the **workspace × access-level matrix** (`write` on the
+workspace that will hold its content). The token is shown once. Every write is
+attributed server-side to this key's actor.
+
+**b. Store the secret** in the profile's `.env` — single source of truth,
+shared by the tools and the memory provider:
+
+```bash
+# ~/.hermes/profiles/<profile>/.env
+DRAN_API_KEY=<paste-token>
+```
+
+**c. Symlink the plugin and enable it:**
+
+```bash
+ln -sfn /path/to/dran/hermes_plugin/dran ~/.hermes/profiles/<profile>/plugins/dran
+```
+
+```yaml
+# ~/.hermes/profiles/<profile>/config.yaml
+plugins:
+  enabled:
+    - dran
+memory:
+  provider: dran
+```
+
+**d. Configure it.** Values live in `$HERMES_HOME/dran/config.json`; the API key
+stays in `.env`. Either:
+
+- the desktop panel — **Memory → Dran** (base URL, workspace, recall/capture
+  toggles), or
+- `hermes memory setup dran` (terminal, same fields), or
+- edit the JSON directly:
+
+```json
+{
+  "base_url": "http://localhost:4000",
+  "workspace": "personal",
+  "auto_recall": true,
+  "auto_capture": true,
+  "max_recall_results": 5,
+  "max_recall_chars": 800,
+  "recall_cadence": 1
+}
+```
+
+> **`workspace` applies to both surfaces.** Pages created by the agent land in
+> the same workspace its facts go to. The key must be able to reach it — the
+> plugin validates against `GET /api/agent/config` on connect and falls back to
+> the first permitted workspace (with a warning) if the matrix changes.
+
+**e. Restart the session** and verify: ask it to *"list my pages"* (tools) and
+*"what do you remember about…"* (memory).
+
+### 3 · The skills
+
+Two suites, versioned with this repo. Install the daily ones:
+
+```bash
+mkdir -p ~/Workspace/Skills
+for s in dran dran-knowledge-flow dran-memory-flow \
+         dran-relations-flow dran-workers-flow; do
+  ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
+done
+```
+
+```yaml
+# config.yaml
+skills:
+  external_dirs:
+    - ~/Workspace/Skills
+```
+
+Add `skills/dev/dran-dev-*` too if you also work on this repo's code. Full
+details — the 60-char description limit, the naming convention, why
+`external_dirs` and not the plugin's `register_skill` — in
 [skills/README.md](skills/README.md).
 
-## System prompt initialization
-
-Paste this block into `soul.md` (or an injected system prompt) so the agent
-loads the Dran skills on match:
+Then point the agent at them from its system prompt:
 
 ```
 ## Frameworks — activation lines
@@ -170,110 +221,26 @@ loads the Dran skills on match:
   known — it does not decide it.
 ```
 
-Keep it this short: the soul references the skills, it never embeds them
-(embedding desyncs and costs tokens every turn). The same block lives at
-`system-prompt.md`. Name your default workspace in the line if the
-deployment pins one.
+Keep it that short: the prompt references the skills, it never embeds them.
+The same block lives at [`system-prompt.md`](system-prompt.md).
 
-## Installation
+## Reference
 
-### 1 · Dran (the server)
+- **REST API** — [docs/api.md](docs/api.md)
+- **Page types & kinds** — [docs/page-types.md](docs/page-types.md)
+- **Plugin** — [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md)
+- **Skills** — [skills/README.md](skills/README.md)
 
-**Requirements:** Elixir ~> 1.15, Erlang/OTP 26+, PostgreSQL 14+ with **pgvector**, Node
-(asset tooling only).
+### Security
 
-```bash
-git clone git@github.com:alvarolizama/dran.git && cd dran
-cp .env.example .env && $EDITOR .env
-mix setup && mix phx.server
-```
+- First-run `/setup` creates the owner; Google OAuth optional
+- Instance owner + per-workspace roles (`owner` / `admin` / `editor` / `viewer`)
+- Per-user API keys, read-only by default, scoped to the creator's workspaces
+- Reads filtered by workspace policy (`share_memory` / `share_pages`), further
+  narrowable per user (`content_scope`: "all" | "own")
+- Row-level auth on resources; `sobelow` + `deps.audit` in precommit
 
-Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup`.
-
-### 2 · Connect an agent (Hermes)
-
-One Dran instance serves every agent. Per agent profile:
-
-**a. Credential.** In Dran → **Settings → Agents**: create the agent and its key, ticking
-the **workspace × access-level matrix** (`write` on the workspace that will hold the
-agent's memory). The token is shown once. Every write is attributed server-side to this
-key's actor.
-
-**b. Secret (once per profile).** Store the token in the profile's `.env` — single source
-of truth, shared by the plugin's memory provider and its toolset:
-
-```bash
-# ~/.hermes/profiles/<profile>/.env
-DRAN_API_KEY=<paste-token>
-```
-
-**c. Enable the plugin** in the profile's `config.yaml` — it registers the knowledge
-toolset (`dran_*`, 16 tools) **and** the memory provider (`dran_memory_*`) from one module:
-
-```yaml
-plugins:
-  enabled:
-    - dran
-```
-
-**d. Symlink the plugin** (auto-recall, tools, session ingest). Symlink from
-this repo and select it:
-
-```bash
-ln -s /path/to/dran/hermes_plugin/dran ~/.hermes/profiles/<profile>/plugins/dran
-```
-
-```yaml
-memory:
-  provider: dran
-```
-
-Configure it from the dashboard panel (**Memory → Dran**: base URL, memory workspace,
-recall/capture toggles) or `hermes memory setup`. Stored at `$HERMES_HOME/dran/config.json`;
-the API key stays in `.env`. The memory workspace must be one the key can reach — the
-plugin validates against `GET /api/agent/config` and falls back to the first permitted
-workspace (with a warning) if the matrix changes.
-
-**e. Skills** — two suites (5 agent flows + 7 dev skills). The flows are the
-everyday ones; add `skills/dev/*` only when you work on this repo:
-
-```bash
-mkdir -p ~/Workspace/Skills
-for s in dran dran-knowledge-flow dran-memory-flow \
-         dran-relations-flow dran-workers-flow; do
-  ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
-done
-```
-
-```yaml
-skills:
-  external_dirs:
-    - ~/Workspace/Skills
-```
-
-The details (why `external_dirs` and not the plugin's `register_skill`, the
-60-char description limit, the naming convention) live in
-[skills/README.md](skills/README.md).
-
-Restart the Hermes session, then verify each piece: tools — ask it to "list my pages";
-memory — "what do you remember about …?"; skills — it should route Dran questions
-through the `dran` skill.
-
-Non-Hermes agents: use the REST API directly (`docs/api.md`) with the Bearer key.
-
-## Configuration
-
-Via environment variables — see [`.env.example`](.env.example) for the full list.
-Essentials: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST/PORT/SCHEME`, session salts
-(prod), `UPLOADS_DIR`. Optional: Google OAuth vars and `DRAN_INFERENCE_API_URL/KEY`
-(OpenAI-compatible endpoint powering embeddings, summaries, workers, semantic search —
-without it Dran still works, minus those features).
-
-Not env vars (admin UI only, stored in the database): the default workspace and the
-legacy admin API token — both live in `/admin/system`. Per-user API tokens are
-managed in `/admin/users`; workspace-scoped API keys in each workspace's settings.
-
-## Production
+### Production
 
 ```bash
 MIX_ENV=prod mix deps.get --only prod
@@ -281,32 +248,26 @@ MIX_ENV=prod mix compile && MIX_ENV=prod mix assets.deploy
 MIX_ENV=prod mix release   # start with bin/server
 ```
 
-A `Dockerfile` ships with the repo (Coolify-ready; `/app/bin/migrate` as pre-deploy step).
-Runtime env vars only — never bake secrets into the image.
+A `Dockerfile` ships with the repo (Coolify-ready; `/app/bin/migrate` as the
+pre-deploy step). Runtime env vars only — never bake secrets into the image.
 
-## Tech stack
-
-Phoenix 1.8 + LiveView · PostgreSQL + pgvector · TipTap v3 · MDEx · Tailwind v4 + daisyUI ·
-3d-force-graph · Bandit · Quantum · Req
-
-## Pre-commit
+### Development
 
 ```bash
-mix precommit   # compile --warnings-as-errors → deps.unlock --unused → format → deps audit → sobelow → test
+mix precommit   # compile --warnings-as-errors → deps.unlock → format → deps.audit → sobelow → test
 ```
 
-## Versioning
+**Stack:** Phoenix 1.8 + LiveView · PostgreSQL + pgvector · TipTap v3 · MDEx ·
+Tailwind v4 + daisyUI · 3d-force-graph · Bandit · Quantum · Req
 
-This project follows [Semantic Versioning](https://semver.org/). The current version
-lives in [`mix.exs`](mix.exs) (`version:`), mirrored in `assets/package.json` and
-`hermes_plugin/dran/plugin.yaml`. The Hermes plugin and the agent skills ship with
-the server and are versioned together with it — the skills carry their own
-frontmatter versions, bumped independently as each flow evolves.
+**Versioning:** Semantic Versioning, in [`mix.exs`](mix.exs) (`version:`),
+mirrored in `assets/package.json` and `hermes_plugin/dran/plugin.yaml`. The
+plugin and the skills ship with the server.
 
 ## License
 
 Released under the [MIT License](LICENSE) — Copyright (c) 2026 Álvaro Lizama.
 The license covers the whole repository: the Elixir/Phoenix server, the Hermes
-memory plugin (`hermes_plugin/dran/`), and the agent skills (`skills/`).
+plugin (`hermes_plugin/dran/`), and the agent skills (`skills/`).
 Third-party dependencies keep their own licenses; vendored assets
 (`assets/vendor/daisyui`) are subject to their upstream licenses (daisyUI — MIT).
