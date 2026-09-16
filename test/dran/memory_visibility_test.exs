@@ -6,7 +6,7 @@ defmodule Dran.MemoryVisibilityTest do
   suyo (y lo de sus agentes), el admin ve todo, y el dedupe no filtra la
   existencia de facts ajenos vía 409.
   """
-  use Dran.DataCase, async: false
+  use DranWeb.ConnCase, async: false
 
   alias Dran.{ContentVisibility, Knowledge, Memory, Repo}
   alias Dran.Accounts.{ApiKey, User, UserWorkspace}
@@ -270,6 +270,59 @@ defmodule Dran.MemoryVisibilityTest do
         |> Repo.update()
 
       assert ContentVisibility.scope(ws, identity, :memory) == {:own, owner.id}
+    end
+  end
+
+  describe "P4 — la misma key cambia de vista al cambiar content_scope (REST)" do
+    test "GET /api/memory responde distinto para la MISMA key" do
+      unique = System.unique_integer([:positive])
+      ws = create_workspace(true)
+
+      owner = create_user()
+      member(owner, ws, "owner", "all")
+
+      # La key se crea DESPUÉS de la membresía: hereda el owner del actor.
+      {:ok, key} =
+        Dran.Accounts.create_api_key(%{
+          name: "p4-key-#{unique}",
+          created_by_user_id: owner.id,
+          workspace_ids: [{ws.id, "write"}]
+        })
+
+      conn =
+        Phoenix.ConnTest.build_conn()
+        |> Plug.Conn.put_req_header("accept", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+
+      # Un fact del dueño y otro de un tercero.
+      other = create_user()
+      member(other, ws, "editor")
+
+      {:ok, _, _} =
+        add_fact(ws, "Del dueño #{unique}", owner.id)
+
+      {:ok, _, _} =
+        add_fact(ws, "De otro #{unique}", other.id)
+
+      # Preferencia "all" ⇒ la key ve ambos.
+      first = get(conn, ~p"/api/memory?workspace=#{ws.slug}")
+      assert %{"data" => data_all} = json_response(first, 200)
+      contents_all = Enum.map(data_all, & &1["content"])
+      assert "Del dueño #{unique}" in contents_all
+      assert "De otro #{unique}" in contents_all
+
+      # El dueño cambia su preferencia a "own" ⇒ la MISMA key ve solo lo suyo.
+      {:ok, _} =
+        Dran.Accounts.UserWorkspace
+        |> Repo.get_by(user_id: owner.id, workspace_id: ws.id)
+        |> Dran.Accounts.UserWorkspace.changeset(%{content_scope: "own"})
+        |> Repo.update()
+
+      second = get(conn, ~p"/api/memory?workspace=#{ws.slug}")
+      assert %{"data" => data_own} = json_response(second, 200)
+      contents_own = Enum.map(data_own, & &1["content"])
+      assert "Del dueño #{unique}" in contents_own
+      refute "De otro #{unique}" in contents_own
     end
   end
 
