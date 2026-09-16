@@ -87,37 +87,39 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  W["Any write tool\ncalled"] --> G{"MCP said ok?"}
-  G -->|"no"| F["Fix params /\ncheck write_access"] --> W
-  G -->|"yes"| V["VERIFY readback\nget_page / get_links /\nGET list"]
+  W["Any write tool\ncalled"] --> G{"tool said ok?"}
+  G -->|"no"| F["Fix params /\ncheck write access"] --> W
+  G -->|"yes"| V["VERIFY readback\ndran_get_page / dran_get_links /\nlist"]
   V -->|"state holds"| E([done])
   V -->|"state missing"| W
 ```
 
-- **A write is not done until a readback confirms the state.** The MCP `ok`
-  is transport-level, not state-level.
+- **A write is not done until a readback confirms the state.** The tool's
+  `ok` is transport-level, not state-level.
 - Slugs are canonical identifiers; a slug not found is an error, never a
   silent drop. Derive slugs from titles, lowercase-hyphen.
-- Irreversible operations (delete page/memory, rename slug) require an
-  explicit human confirmation first — every flow marks them with ASK.
+- Irreversible operations (delete page/memory) require an explicit human
+  confirmation first — every flow marks them with ASK.
 
 ## The flows of the suite
 
 | Flow | When to load it |
 | --- | --- |
-| `dran-knowledge-flow` | Create, update, search or rename pages (note, idea, knowledge, technical, entity, concept, reference, food…) |
+| `dran-knowledge-flow` | Create, update, search or delete pages (note, idea, knowledge, technical, entity, concept, reference, food…) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
-| `dran-memory-flow` | Administer shared agent memories (REST) |
+| `dran-memory-flow` | Administer shared agent memories (provider tools + REST) |
 
 ## Pitfalls
 
 - **Absorbing a flow you were routed away from** — the router is the
   contract; hand off.
-- **Reading the tool list off the MCP `initialize` output once and never
-  again** — the surface grows; `dran_list_*` and the server docs are the
-  truth, this suite is the map.
-- **Looking for `dran_memory_*` MCP tools** — memory is REST/plugin only.
+- **Assuming a tool exists because it sounds natural** — the plugin's
+  toolset is the truth (`hermes_plugin/dran/__init__.py`); read the
+  registered names instead of guessing.
+- **Expecting the knowledge tools to cover memory** — memory is
+  `dran_memory_*` from the provider; the knowledge toolset has no memory
+  operations.
 
 ## Cross-references
 
