@@ -23,14 +23,38 @@ import * as THREE from "three"
 // BFS depth for click-selection neighborhood (1 = direct neighbors only)
 const HIGHLIGHT_BFS_DEPTH = 1
 
-// Resolve a CSS custom property from the document root, with a fallback.
-// WebGL takes a concrete color, so theme variables are read from the DOM at
-// mount instead of being hardcoded in the scene.
+// Resolve a CSS custom property to a color WebGL can consume.
+//
+// Two conversion hops are needed:
+//   1. getPropertyValue() returns raw tokens — for a variable defined as
+//      `var(--other)` it hands back the literal string. Painting a throwaway
+//      element and reading the COMPUTED style resolves the chain.
+//   2. The resolved value may be `oklch(...)` (daisyUI v5 themes do this), but
+//      force-graph parses colors with `polished`, which only understands
+//      hex/rgb/hsl and throws on anything else. A 1x1 canvas round-trip is the
+//      reliable way to normalise any CSS color to rgb().
 function cssColor(varName, fallback) {
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(varName)
-    .trim()
-  return value || fallback
+  const probe = document.createElement("div")
+  probe.style.color = `var(${varName})`
+  probe.style.display = "none"
+  document.body.appendChild(probe)
+  const resolved = getComputedStyle(probe).color
+  probe.remove()
+
+  if (!resolved) return fallback
+  return toRgb(resolved) || fallback
+}
+
+// Normalise any CSS color string (incl. oklch/lab) to "rgb(r, g, b)".
+function toRgb(color) {
+  const canvas = document.createElement("canvas")
+  canvas.width = canvas.height = 1
+  const ctx = canvas.getContext("2d")
+  if (!ctx) return null
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, 1, 1)
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+  return `rgb(${r}, ${g}, ${b})`
 }
 
 // Adaptive render quality: big graphs need cheap geometry, no particle

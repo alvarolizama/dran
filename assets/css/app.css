@@ -463,8 +463,9 @@
    Las sombras usan oklch con alpha bajo y funcionan con el tema único. */
 
 :root {
-  /* Fondo del canvas del grafo 3D. Vive como variable (no hardcodeado en el
-     componente) para que siga al theme; el hook WebGL lo lee del DOM. */
+  /* Fondo del canvas del grafo 3D. El hook WebGL lo lee del DOM y lo normaliza
+     a rgb() (WebGL no acepta variables y `polished` no entiende oklch), así
+     que esto sigue al theme como cualquier otro color. */
   --graph-canvas-bg: var(--color-base-300);
 
   /* Sombras derivadas del theme, no negro fijo: un theme claro necesita
