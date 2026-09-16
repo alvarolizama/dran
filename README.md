@@ -103,8 +103,9 @@ is tied to the API key's actor, server-side.
 ## Automation
 
 - **3 background workers** — `curator` (duplicate/conflict detection), `link_gardener`
-  (relations for orphans), `graph_rag` (GraphRAG Q&A with citations). Start them over MCP
-  (`dran_start_worker`), then poll the session (`dran_get_worker_session`).
+  (relations for orphans), `graph_rag` (GraphRAG Q&A with citations). Start them with
+  `dran_start_worker` (plugin tool or `POST /api/workers`), then poll the session
+  (`dran_get_worker_session` or `GET /api/workers/:id`).
 - **7 scheduled jobs** (Quantum cron — toggleable, run-now from `/admin`): curator,
   PageRank, cluster summaries, graph maintenance, link gardener, page summaries, memory
   re-link
@@ -112,16 +113,27 @@ is tied to the API key's actor, server-side.
 
 ## APIs
 
-**MCP** — `POST /api/mcp`, Streamable HTTP (spec 2025-03-26): **18 tools** for pages,
+**Hermes plugin tools** — the primary surface for agents. The `dran` plugin
+(`hermes_plugin/dran/`) registers a toolset via `register(ctx)`: search, page lifecycle,
+relations, workers and lint (`dran_*`), plus the memory provider tools
+(`dran_memory_*`). Every write carries `X-Hermes-Agent` (the active profile), which the
+server persists as `agent_name`; attribution (`created_by`/`owner_user_id`) is derived
+server-side from the key's actor — never client-settable. See
+[hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
+
+**MCP** — `POST /api/mcp`, Streamable HTTP (spec 2025-03-26): 18 tools for pages,
 search, workers and lint; resources (`page://`, `home://`), and the `brainstorm` prompt.
-Write tools require a `write_access` key — enforced by a permission-matrix test
-(`test/dran/mcp_tool_audit_test.exs`). Full tool/resource/prompt reference:
-[docs/mcp.md](docs/mcp.md).
+Kept for non-Hermes MCP clients while the plugin tools take over; write tools require a
+`write_access` key — enforced by a permission-matrix test
+(`test/dran/mcp_tool_audit_test.exs`). Full reference: [docs/mcp.md](docs/mcp.md).
 
 **REST** — token-protected `/api/*` (kebab-case): read routes always allowed; writes
-(pages, relations, memory) require `write_access: true`. Attribution (`owner`/`created_by`)
-is injected server-side from the key's actor — never client-settable. Full endpoint
-reference: [docs/api.md](docs/api.md).
+(pages, relations, workers, memory) require `write_access: true`. Attribution
+(`owner_user_id`/`created_by`/`agent_name`) is injected server-side — never
+client-settable. Reads are filtered by the workspace sharing policy
+(`Dran.ContentVisibility`): `share_memory`/`share_pages` decide whether the workspace
+shares content, and each user's `content_scope` ("all" | "own") narrows it further.
+Full endpoint reference: [docs/api.md](docs/api.md).
 
 ## Security
 
