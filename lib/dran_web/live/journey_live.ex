@@ -151,7 +151,7 @@ defmodule DranWeb.JourneyLive do
   defp bg_for("text-warning"), do: "bg-warning/10"
   defp bg_for(_), do: "bg-base-200"
 
-  defp type_fallback_color, do: "#666"
+  defp type_fallback_color, do: DranWeb.GraphHelpers.fallback_color()
 
   attr :buckets, :list, required: true
   attr :trajectory, :list, required: true

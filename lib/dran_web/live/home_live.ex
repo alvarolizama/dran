@@ -371,7 +371,7 @@ defmodule DranWeb.HomeLive do
     |> MapSet.difference(MapSet.new(@graph_hidden_types))
   end
 
-  defp hidden_type_color, do: "#64748B"
+  defdelegate hidden_type_color, to: GraphHelpers
 
   defp sidebar_type_colors do
     Dran.PageRegistry.ordered_type_colors()

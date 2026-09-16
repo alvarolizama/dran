@@ -23,6 +23,16 @@ import * as THREE from "three"
 // BFS depth for click-selection neighborhood (1 = direct neighbors only)
 const HIGHLIGHT_BFS_DEPTH = 1
 
+// Resolve a CSS custom property from the document root, with a fallback.
+// WebGL takes a concrete color, so theme variables are read from the DOM at
+// mount instead of being hardcoded in the scene.
+function cssColor(varName, fallback) {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(varName)
+    .trim()
+  return value || fallback
+}
+
 // Adaptive render quality: big graphs need cheap geometry, no particle
 // streams and a short force simulation to stay fluid. Small graphs keep the
 // full polish.
@@ -132,7 +142,7 @@ const Graph3D = {
     this.graph = ForceGraph3D()(container)
       .width(width)
       .height(height)
-      .backgroundColor("#0a0e27")
+      .backgroundColor(cssColor("--graph-canvas-bg", "#0a0e27"))
       .showNavInfo(false)
       // Node appearance — sphere only (no text labels rendered)
       .nodeThreeObject(node => this.buildNodeObject(node))

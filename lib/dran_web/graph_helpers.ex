@@ -20,7 +20,11 @@ defmodule DranWeb.GraphHelpers do
   }
 
   @fallback_color "#94A3B8"
+  # Color de los tipos OCULTOS en la leyenda (no se pintan en el grafo).
+  @hidden_type_color "#64748B"
+
   def fallback_color, do: @fallback_color
+  def hidden_type_color, do: @hidden_type_color
 
   def type_colors, do: @type_colors
   def edge_colors, do: @edge_colors
