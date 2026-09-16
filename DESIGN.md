@@ -428,8 +428,15 @@ Reglas:
 
 ## Custom — Dran
 
-Este `DESIGN.md` es de **Dran**. Tema `dark` (único) · `<html lang="es" data-theme="dark">`; es la app con el
+Este `DESIGN.md` es de **Dran**. Tema `night` (único) · `<html lang="es" data-theme="night">`; es la app con el
 sistema de tokens propio más completo y el editor de contenido.
+
+> **Tema: `night`, no `dark`.** El Commons dice "tema `dark`" porque es el de gorim;
+> TokenGate usa `dim` y Dran usa `night` (commits `0366b01`, `fb2cf8f`). El Commons
+> generaliza a *un* tema built-in por app, declarado acá: `app.css` →
+> `@plugin "../vendor/daisyui" { themes: night --default; }` y `root.html.heex:2` →
+> `data-theme="night"`. Todo lo demás de §C2 (usar las vars del tema, nunca hex suelto)
+> aplica igual.
 
 ### D1. Sistema propio de tokens (`app.css`, bloque "DRAN DESIGN SYSTEM")
 
@@ -482,7 +489,7 @@ Transiciones `transition-all duration-150`; desplazamientos `hover:translate-x-0
   Salir— arriba a la derecha, con la opción activa resaltada), `fluid` (contenido
   sin padding interno), `active_nav`.
 - **Shell sin sidebar:** lo comparten las tres opciones de instancia y sus
-  subpáginas — `/`, `/settings/account`, `/settings/agents` y todo `/admin/*` —
+  subpáginas — `/`, `/settings/account`, `/settings/api-keys` y todo `/admin/*` —
   vía `sidebar={false}` + `topbar`. El contenido lo paddea el layout
   (`px-6 pt-6 pb-16`) y la opción Admin solo aparece para owners.
 - **Command palette:** `DranWeb.CommandPalette` (`#command-palette`, `phx-hook`, ⌘K) —
@@ -535,17 +542,65 @@ full-screen, header (pill + título + ✕), cuerpo a dos columnas (contenido + s
   (`viewBox="0 0 200 30"`, `<polyline class="text-primary/40">`); escalas en
   helpers (`bucket_width/2`, `build_sparkline/1`). Contenedor `.surface-2 p-5 rounded-2xl`.
 
-### D6. ⚠️ Discordancia a corregir
+### D6. ✅ Discordancia resuelta
 
-El `<.table>` de `core_components.ex` hoy renderiza `table table-zebra`, pero el
-uso real en la app es `table-sm` **sin zebra** (5 usos `table-sm` vs 1 `zebra`),
-y `dran/assets/css/app.css` **no tiene** la regla global de hover de §C6. Para
-alinear con el Commons: cambiar el componente a `table table-sm` **y** añadir la
-regla de hover.
+El `<.table>` de `core_components.ex` rendía `table table-zebra` y `app.css` no tenía
+la regla global de hover de §C6. **Ambas cosas están corregidas** (commit `6ac1e56`):
 
----
+- `lib/dran_web/components/core_components.ex:380` → `table table-sm` (sin zebra).
+- `assets/css/app.css:556-562` → `.table tbody tr` + `.table tbody tr:hover`
+  (`color-mix(in oklab, var(--color-base-200) 60%, transparent)`).
 
-## D7. Referencias (código real)
+Verificar con:
+```bash
+grep -n 'table table-sm' lib/dran_web/components/core_components.ex
+grep -n 'tbody tr:hover' assets/css/app.css
+```
+
+### D7. Modelo de página (4 tipos + tipos custom por workspace)
+
+El vocabulario de páginas quedó reducido y movido:
+
+- **Cuatro tipos built-in**: `note`, `reference`, `entity`, `concept`. Son los únicos
+  valores de `Dran.PageRegistry.types/0`.
+- **`meta.kind` NO existe.** Se fueron el select de kind del editor, el filtro `?kind=`
+  de las listas, la validación por kind, `kind_labels/0` y `kind_options/*`.
+  `meta.props` **se queda** (bolsa libre de propiedades, ortogonal, con
+  `PropsMaterializer`).
+- **Tipos custom por workspace**: `workspaces.workspace_page_types` (jsonb, lista
+  ordenada de `{slug, label, plural, path, icon, color, meta_fields}`). Los tipos
+  efectivos de un workspace = 4 built-in ∪ custom. El `path` es explícito y único dentro
+  del workspace (el sidebar y la leyenda del grafo iteran la lista, y el orden importa).
+
+**Reglas de UI que se derivan:**
+
+- **El sidebar y la leyenda de tipo iteran los tipos efectivos del workspace**, nunca
+  `PageRegistry.types()` a secas: un tipo custom debe aparecer con la misma dignidad que
+  un built-in. El color del nodo y del chip salen de `ui.color` del tipo (built-in del
+  registry, custom de la config del workspace).
+- **Sin cláusulas por tipo.** Un helper con una cláusula por slug (el patrón
+  `type_chip_bg/1`, `type_icon_color/1`, `type_badge/1` de `search_live.ex:509-538`)
+  está prohibido: un tipo custom nace sin cláusula y cae al fallback. El color viaja en
+  el dato del tipo, no en una tabla de casos.
+- **Iconos de tipo custom**: los `.hero-*` solo compilan si `app.css` los escanea. El
+  `@source` debe cubrir el directorio donde vive el registry **y** cualquier icono
+  elegible en el formulario de tipos custom, o el icono rinde vacío sin diagnóstico.
+
+### D8. Deuda de estandarización (medida)
+
+Cifras reales medidas con grep (no estimadas):
+
+| Regla | Hoy (medido) | Trabajo |
+|---|---|---|
+| C1/C2 — "Un solo tema: `dark`" | **Dran corre `night`**, no `dark`: `root.html.heex:2` → `<html lang="es" data-theme="night">`; `app.css:24` → `themes: night --default;` (commits `0366b01`, `fb2cf8f`). Los otros dos repos sí usan `dark`/`dim` | Corregir el texto: el Commons generaliza a "un tema built-in por app, declarado en Custom"; Dran declara `night`. **No se cambia el tema** |
+| C3 — header de página | **`<.header>` tiene 0 usos** (`grep -rn "<\.header[^_a-zA-Z]" lib test assets` → vacío). El que se usa en `activity_live.ex:71` es `<.header_section>`, un `defp` local (`:94`). Hay **34 `h1`**, 24 con `text-title` y 9 con `text-2xl/3xl font-bold`. El `<.header>` del Commons (`core_components.ex:332-346`) usa `text-lg font-semibold`, no la escala de D1 | Decidir: header de página con la escala propia (`text-title`). Ojo: tocar `<.header>` afecta a los 3 repos si sube al Commons — la escala propia es un override de Dran (§Dudas) |
+| C5 — una sola forma de caja | La forma canónica `card bg-base-100 border border-base-300 shadow-sm` tiene **0 usos**. Conviven: `card bg-base-100 border border-base-300` sin sombra ×7, `shadow-xl`/`shadow-2xl` (modales) ×3, y **`surface-2` ×29 en 12 archivos** — a la que D1 llama literalmente "**card estándar**" | Elegir: `surface-2` como caja canónica de Dran (gana 29–11 en uso y ya es la que D1 declara), y dejar `card` + sombras para modales |
+| C4 — botón secundario | `btn-outline` ×3 (`login_live.ex:71`, `settings_live.ex:732,947`), `btn-soft` ×1 | Decidir y escribir la regla (`btn-outline` para "otra vía" es legítimo si se documenta) |
+| C9/C11 — color de serie | `graph_helpers.ex:15-24`: 6 hex de relación (`#94A3B8`, `#EF4444`, `#F59E0B`, `#10B981`, `#A78BFA`, `#64748B`); `graph_3d.js` repite `#94A3B8` ×6 como fallback; 0 `@apply` | Mover a una paleta nombrada; los tipos ya declaran su color en el registry |
+| C11 — ids estables | `data-testid` ×24 convivendo con 91 `id="` sin regla escrita; el borrado de kind se lleva 5 testids (`kind-filters`, `kind-option-*`, `kind-clear`, `kind-filter-toggle`, `kind-filter-menu`) que **2 asserts usan** (`pages_live_test.exs:84,238`) | Fijar la convención y decidir el reemplazo de los testids de kind **antes** de tocar la UI |
+| D3 — componentes extra | El `@doc` de `admin.ex:71` documenta `<.admin_section …>` pero la función es `section/1` (`:82`); 11 usos de `<.section>` y 1 de `<.admin_section>` (dentro de su propio doc). La lista de D3 omite 7 componentes de `page_components.ex` (`backlinks_section/1:361`, `tabs_bar/1:453`, `empty_state/1:502`, `graph_3d/1:547`, `page_attributes/1:815`, `page_edit_form/1:883`, `page_new_form/1:938`) | Corregir el `@doc` y completar la lista |
+
+### D9. Referencias (código real)
 
 - `lib/dran_web/components/core_components.ex` — `flash`, `button`, `input`,
   `header`, `table`, `list`, `icon`, `show/hide`.
@@ -555,7 +610,7 @@ regla de hover.
 - `lib/dran_web/components/command_palette.ex` — `DranWeb.CommandPalette` (⌘K).
 - `lib/dran_web/components/layouts.ex` — shell `app/1`, `sidebar_nav`, `nav_link`,
   `sidebar_footer_icons`, `workspace_selector`, `user_footer`.
-- `lib/dran_web/components/layouts/root.html.heex` — `data-theme="dark"`, `lang="es"`.
+- `lib/dran_web/components/layouts/root.html.heex` — `data-theme="night"`, `lang="es"`.
 - `assets/css/app.css` — escala tipográfica, superficies, skeleton, lift, foco,
   TipTap, mermaid, wikilinks/tags/embeds.
 - Skills: `liveview-ui-wiring` (pickers), `phoenix-daisyui-theming` (tema).
