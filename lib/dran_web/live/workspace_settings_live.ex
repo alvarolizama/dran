@@ -92,6 +92,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
+      user={@user}
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}

@@ -24,6 +24,7 @@ defmodule DranWeb.Layouts do
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
   attr :current_user, :string, default: nil, doc: "the authenticated user"
+  attr :user, :map, default: nil, doc: "the authenticated user struct (ownership/visibility)"
   attr :is_owner, :boolean, default: false, doc: "whether the current user is the instance owner"
   attr :workspace_slug, :string, default: nil, doc: "the active workspace slug"
   attr :workspaces, :list, default: [], doc: "available workspaces for the selector"
@@ -180,6 +181,7 @@ defmodule DranWeb.Layouts do
         module={DranWeb.CommandPalette}
         id="command-palette"
         workspace_slug={@workspace_slug}
+        user={@user}
       />
 
       <.flash_group flash={@flash} />

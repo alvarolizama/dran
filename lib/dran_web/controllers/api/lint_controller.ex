@@ -3,10 +3,11 @@ defmodule DranWeb.API.LintController do
 
   alias Dran.Knowledge
 
-  @doc "GET /api/lint?context=..."
+  @doc "GET /api/lint?context=... — structural hygiene audit (visibility-filtered)"
   def lint(conn, %{"workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      json(conn, %{data: Knowledge.lint(context.id)})
+      scope = Dran.ContentVisibility.resolve(context, conn.assigns[:user], :pages)
+      json(conn, %{data: Knowledge.lint(context.id, scope: scope)})
     end)
   end
 

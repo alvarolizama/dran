@@ -55,7 +55,10 @@ defmodule Dran.MemoryVisibilityTest do
 
     {:ok, ws} =
       ws
-      |> Dran.Workspace.settings_changeset(%{share_memory: share_memory, share_pages: share_memory})
+      |> Dran.Workspace.settings_changeset(%{
+        share_memory: share_memory,
+        share_pages: share_memory
+      })
       |> Repo.update()
 
     ws

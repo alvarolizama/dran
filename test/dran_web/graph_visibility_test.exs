@@ -227,6 +227,7 @@ defmodule DranWeb.GraphVisibilityTest do
       # ... y el lector con scope propio NO recibe ese payload cacheado.
       own_view = Dran.GraphCache.get(workspace.id, {:own, owner.id})
       assert own_view.json =~ mine.slug
+
       refute own_view.json =~ theirs.slug,
              "el payload de otro scope no debe servirse a este lector"
     end

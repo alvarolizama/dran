@@ -96,8 +96,19 @@ defmodule DranWeb.VisibilityLiveTest do
       member(alice, ws, "editor")
       member(bob, ws, "editor")
 
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "Fact A #{unique}", "owner_user_id" => alice.id})
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "Fact B #{unique}", "owner_user_id" => bob.id})
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Fact A #{unique}",
+          "owner_user_id" => alice.id
+        })
+
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Fact B #{unique}",
+          "owner_user_id" => bob.id
+        })
 
       {:ok, view, html} = conn |> login(alice) |> live(~p"/#{ws.slug}/memory")
 
@@ -115,8 +126,19 @@ defmodule DranWeb.VisibilityLiveTest do
       member(alice, ws, "editor")
       member(bob, ws, "editor")
 
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "Mía #{unique}", "owner_user_id" => alice.id})
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "Ajena #{unique}", "owner_user_id" => bob.id})
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Mía #{unique}",
+          "owner_user_id" => alice.id
+        })
+
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Ajena #{unique}",
+          "owner_user_id" => bob.id
+        })
 
       {:ok, view, _html} = conn |> login(alice) |> live(~p"/#{ws.slug}/memory")
 
@@ -146,8 +168,19 @@ defmodule DranWeb.VisibilityLiveTest do
       member(alice, ws, "editor", "all")
       member(bob, ws, "editor", "all")
 
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "Propia #{unique}", "owner_user_id" => alice.id})
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "De otro #{unique}", "owner_user_id" => bob.id})
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Propia #{unique}",
+          "owner_user_id" => alice.id
+        })
+
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "De otro #{unique}",
+          "owner_user_id" => bob.id
+        })
 
       {:ok, view, html} = conn |> login(alice) |> live(~p"/#{ws.slug}/memory")
 
@@ -167,8 +200,19 @@ defmodule DranWeb.VisibilityLiveTest do
       member(admin, ws, "admin")
       member(other, ws, "editor")
 
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "Del admin #{unique}", "owner_user_id" => admin.id})
-      {:ok, _, _} = Memory.add(%{"workspace_id" => ws.id, "content" => "Del otro #{unique}", "owner_user_id" => other.id})
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Del admin #{unique}",
+          "owner_user_id" => admin.id
+        })
+
+      {:ok, _, _} =
+        Memory.add(%{
+          "workspace_id" => ws.id,
+          "content" => "Del otro #{unique}",
+          "owner_user_id" => other.id
+        })
 
       {:ok, _view, html} = conn |> login(admin) |> live(~p"/#{ws.slug}/memory")
 

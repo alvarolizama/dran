@@ -55,6 +55,7 @@ defmodule Dran.ContentVisibilityMigrationTest do
         """)
 
       assert length(rows) == 2, "ambas columnas deben existir"
+
       for [_name, default, is_nullable] <- rows do
         assert is_nullable == "NO"
         assert default =~ "true", "el default preserva el comportamiento compartido"
@@ -96,6 +97,7 @@ defmodule Dran.ContentVisibilityMigrationTest do
         """)
 
       assert [[definition]] = rows
+
       assert definition =~ "NULLS NOT DISTINCT",
              "sin esto, el contenido del workspace dejaría de dedupear"
 

@@ -132,7 +132,10 @@ defmodule DranWeb.API.WorkerController do
   # The MCP tool accepted a map of opts; the workers expect a keyword list.
   defp normalize_opts(nil), do: []
   defp normalize_opts(opts) when is_list(opts), do: opts
-  defp normalize_opts(opts) when is_map(opts), do: Enum.map(opts, fn {k, v} -> {String.to_atom(k), v} end)
+
+  defp normalize_opts(opts) when is_map(opts),
+    do: Enum.map(opts, fn {k, v} -> {String.to_atom(k), v} end)
+
   defp normalize_opts(_), do: []
 
   defp preload_steps(nil), do: nil

@@ -26,13 +26,13 @@ defmodule Dran.Exporter do
                       summary, tags, meta, timestamps)
     * `relations`   — list of `%{source_slug, target_slug, relation_type}`
   """
-  def export_context(workspace_slug) when is_binary(workspace_slug) do
+  def export_context(workspace_slug, opts \\ []) when is_binary(workspace_slug) do
     case Knowledge.get_workspace_by_slug(workspace_slug) do
       nil ->
         {:error, :not_found}
 
       %Dran.Workspace{} = context ->
-        pages = load_pages(context.id)
+        pages = load_pages(context.id, Keyword.get(opts, :scope, :all))
 
         page_ids = Enum.map(pages, & &1.id)
         slug_by_id = Map.new(pages, &{&1.id, &1.slug})
@@ -70,13 +70,13 @@ defmodule Dran.Exporter do
     * `versions`    — list of all page_version snapshots for those pages
                       `%{page_slug, version, body, body_hash, changed_by, inserted_at}`
   """
-  def full_export(workspace_id) when is_binary(workspace_id) do
+  def full_export(workspace_id, opts \\ []) when is_binary(workspace_id) do
     case Repo.get(Workspace, workspace_id) do
       nil ->
         {:error, :not_found}
 
       %Workspace{} = context ->
-        pages = load_pages(context.id)
+        pages = load_pages(context.id, Keyword.get(opts, :scope, :all))
         page_ids = Enum.map(pages, & &1.id)
         slug_by_id = Map.new(pages, &{&1.id, &1.slug})
 
@@ -102,12 +102,13 @@ defmodule Dran.Exporter do
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 
-  defp load_pages(workspace_id) do
-    Repo.all(
-      from p in Page,
-        where: p.workspace_id == ^workspace_id,
-        order_by: [asc: p.slug]
+  defp load_pages(workspace_id, scope) do
+    from(p in Page,
+      where: p.workspace_id == ^workspace_id,
+      order_by: [asc: p.slug]
     )
+    |> Dran.ContentVisibility.filter(scope)
+    |> Repo.all()
   end
 
   defp load_relations(page_ids, slug_by_id) do

@@ -319,6 +319,7 @@ defmodule Dran.Knowledge do
   defp maybe_filter_visibility_scope(query, scope) do
     Dran.ContentVisibility.filter(query, scope)
   end
+
   defp maybe_filter_pinned(query, nil), do: query
 
   defp maybe_filter_pinned(query, pinned) when is_boolean(pinned) do
@@ -2177,38 +2178,43 @@ defmodule Dran.Knowledge do
 
   defp replace_slug_in_body(body, _old_slug, _new_slug), do: body
 
-  @doc "Find pages with no inbound relations (orphans)"
-  def orphan_pages(workspace_id) do
+  @doc "Find pages with no inbound relations (orphans). Opts: :scope."
+  def orphan_pages(workspace_id, opts \\ []) do
     # left_join + is_nil is more efficient than NOT IN subquery,
     # especially as the relations table grows.
-    Repo.all(
-      from p in Page,
-        left_join: r in Relation,
-        on: r.target_id == p.id,
-        where: p.workspace_id == ^workspace_id and is_nil(r.id) and p.archived == false,
-        order_by: [asc: p.title],
-        select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
+    from(p in Page,
+      left_join: r in Relation,
+      on: r.target_id == p.id,
+      where: p.workspace_id == ^workspace_id and is_nil(r.id) and p.archived == false,
+      order_by: [asc: p.title],
+      select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
+    |> Dran.ContentVisibility.filter(Keyword.get(opts, :scope, :all), :owner_user_id)
+    |> Repo.all()
   end
 
-  defp stale_pages(workspace_id, days \\ 90) do
+  defp stale_pages(workspace_id, opts) do
+    scope = Keyword.get(opts, :scope, :all)
+    days = Keyword.get(opts, :days, 90)
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 24 * 60 * 60, :second)
 
-    Repo.all(
-      from p in Page,
-        where: p.workspace_id == ^workspace_id and p.updated_at < ^cutoff and p.archived == false,
-        order_by: [asc: p.updated_at],
-        select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
+    from(p in Page,
+      where: p.workspace_id == ^workspace_id and p.updated_at < ^cutoff and p.archived == false,
+      order_by: [asc: p.updated_at],
+      select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
+    |> Dran.ContentVisibility.filter(scope)
+    |> Repo.all()
   end
 
-  defp contested_pages(workspace_id) do
-    Repo.all(
-      from p in Page,
-        where: p.workspace_id == ^workspace_id and p.kb_contested == true and p.archived == false,
-        order_by: [asc: p.title],
-        select: %{slug: p.slug, title: p.title, page_type: p.page_type}
+  defp contested_pages(workspace_id, scope \\ :all) do
+    from(p in Page,
+      where: p.workspace_id == ^workspace_id and p.kb_contested == true and p.archived == false,
+      order_by: [asc: p.title],
+      select: %{slug: p.slug, title: p.title, page_type: p.page_type}
     )
+    |> Dran.ContentVisibility.filter(scope)
+    |> Repo.all()
   end
 
   @doc """
@@ -2219,11 +2225,13 @@ defmodule Dran.Knowledge do
   - `:stale` — pages not updated in 90 days
   - `:contested` — pages flagged as contested
   """
-  def lint(workspace_id) do
+  def lint(workspace_id, opts \\ []) do
+    scope = Keyword.get(opts, :scope, :all)
+
     %{
-      orphans: orphan_pages(workspace_id),
-      stale: stale_pages(workspace_id),
-      contested: contested_pages(workspace_id)
+      orphans: orphan_pages(workspace_id, scope: scope),
+      stale: stale_pages(workspace_id, scope: scope),
+      contested: contested_pages(workspace_id, scope)
     }
   end
 

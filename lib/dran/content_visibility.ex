@@ -131,14 +131,23 @@ defmodule Dran.ContentVisibility do
   end
 
   def resolve(workspace_id, identity, kind) when is_binary(workspace_id) do
-    case Dran.Knowledge.get_workspace_by_slug(workspace_id) ||
-           Repo.get(Dran.Workspace, workspace_id) do
+    case Dran.Knowledge.get_workspace_by_slug(workspace_id) || get_workspace_by_uuid(workspace_id) do
       nil -> :all
       workspace -> scope(workspace, identity, kind)
     end
   end
 
   def resolve(_workspace, _identity, _kind), do: :all
+
+  # A non-UUID string would raise a CastError inside Ecto; an unknown slug or
+  # malformed id simply resolves to no workspace (⇒ :all, fail-open on the
+  # policy, the authorization layer already gated the request).
+  defp get_workspace_by_uuid(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, uuid} -> Repo.get(Dran.Workspace, uuid)
+      :error -> nil
+    end
+  end
 
   # ── Query helpers ─────────────────────────────────────────────────────────
 

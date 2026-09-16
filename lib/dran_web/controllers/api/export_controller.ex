@@ -3,9 +3,11 @@ defmodule DranWeb.API.ExportController do
 
   alias Dran.Exporter
 
-  @doc "GET /api/workspaces/:slug/export — export context as JSON"
+  @doc "GET /api/workspaces/:slug/export — export context as JSON (visibility-filtered)"
   def show(conn, %{"slug" => slug}) do
-    case Exporter.export_context(slug) do
+    scope = export_scope(conn, slug)
+
+    case Exporter.export_context(slug, scope: scope) do
       {:ok, data} ->
         json(conn, data)
 
@@ -28,7 +30,9 @@ defmodule DranWeb.API.ExportController do
     user = conn.assigns[:user]
 
     if user && (user.is_owner or user_has_context_access?(user, workspace_id)) do
-      case Exporter.full_export(workspace_id) do
+      scope = Dran.ContentVisibility.resolve(workspace_id, user, :pages)
+
+      case Exporter.full_export(workspace_id, scope: scope) do
         {:ok, data} ->
           filename = "dran-export-#{workspace_id}.json"
 
@@ -51,5 +55,10 @@ defmodule DranWeb.API.ExportController do
   # Single authorization policy (SEC-001 read access).
   defp user_has_context_access?(user, workspace_id) do
     DranWeb.ResourceAuthorization.authorize(user, :read, workspace_id) == :ok
+  end
+
+  # El scope del export sale del módulo único de política (slug → workspace).
+  defp export_scope(conn, slug) do
+    Dran.ContentVisibility.resolve(slug, conn.assigns[:user], :pages)
   end
 end

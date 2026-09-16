@@ -387,6 +387,7 @@ defmodule DranWeb.HomeLive do
       flash={@flash}
       current_scope={@current_scope}
       current_user={@current_user}
+      user={@user}
       workspace_slug={@workspace && @workspace.slug}
       workspaces={@contexts}
       active_nav={@active_nav}

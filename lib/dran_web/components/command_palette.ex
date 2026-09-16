@@ -31,6 +31,7 @@ defmodule DranWeb.CommandPalette do
 
   @impl true
   def update(%{workspace_slug: workspace_slug} = assigns, socket) do
+    socket = assign(socket, :user, Map.get(assigns, :user))
     disabled_types =
       case workspace_slug && Knowledge.get_workspace_by_slug(workspace_slug) do
         %{disabled_page_types: disabled} when is_list(disabled) -> disabled
@@ -198,7 +199,7 @@ defmodule DranWeb.CommandPalette do
   def handle_event("search", %{"query" => query}, socket) do
     results =
       if String.length(String.trim(query)) >= 2 do
-        do_search(socket.assigns.workspace_slug, query)
+        do_search(socket.assigns.workspace_slug, query, socket.assigns[:user])
       else
         []
       end
@@ -280,12 +281,16 @@ defmodule DranWeb.CommandPalette do
     end
   end
 
-  defp do_search(workspace_slug, query) do
+  defp do_search(workspace_slug, query, user) do
     workspace_id = resolve_workspace_id(workspace_slug)
 
     try do
       opts = [limit: 8]
       opts = if workspace_id, do: Keyword.put(opts, :workspace_id, workspace_id), else: opts
+
+      # La paleta lee páginas: el scope del lector las filtra igual que el resto
+      # de superficies (módulo único de política).
+      opts = Keyword.put(opts, :scope, Dran.ContentVisibility.resolve(workspace_id, user, :pages))
 
       case Knowledge.search(query, opts) do
         {:ok, results} when is_list(results) -> results

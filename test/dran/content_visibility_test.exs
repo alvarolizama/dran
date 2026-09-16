@@ -31,6 +31,7 @@ defmodule Dran.ContentVisibilityTest do
 
   defp create_workspace(share_memory, share_pages) do
     unique = System.unique_integer([:positive])
+
     {:ok, ws} =
       Knowledge.create_workspace(%{name: "Vis #{unique}", slug: "vis-#{unique}"})
 
