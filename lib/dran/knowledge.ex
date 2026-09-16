@@ -241,6 +241,7 @@ defmodule Dran.Knowledge do
       |> maybe_filter_created_by(created_by)
       |> maybe_filter_props(props)
       |> maybe_filter_pinned(pinned)
+      |> maybe_filter_visibility_scope(Keyword.get(opts, :scope))
       |> where([p], p.archived == ^archived)
       |> order_by([p], desc: p.updated_at)
       |> limit(^limit)
@@ -311,6 +312,13 @@ defmodule Dran.Knowledge do
   # compat with saved smart-collection queries and old MCP clients.
   defp maybe_filter_owner(query, _owner), do: query
 
+  # Read visibility: the scope comes from Dran.ContentVisibility (the single
+  # policy module). No :scope opt ⇒ :all = pre-feature behaviour.
+  defp maybe_filter_visibility_scope(query, nil), do: query
+
+  defp maybe_filter_visibility_scope(query, scope) do
+    Dran.ContentVisibility.filter(query, scope)
+  end
   defp maybe_filter_pinned(query, nil), do: query
 
   defp maybe_filter_pinned(query, pinned) when is_boolean(pinned) do
@@ -1468,6 +1476,7 @@ defmodule Dran.Knowledge do
     requested_strategy = Keyword.get(opts, :strategy, :auto)
     strategy = resolve_strategy(requested_strategy, query_string)
     props = Keyword.get(opts, :props)
+    scope = Keyword.get(opts, :scope)
 
     case do_search(query_string, opts, strategy) do
       {:error, :not_configured} when requested_strategy != :auto ->
@@ -1478,12 +1487,40 @@ defmodule Dran.Knowledge do
       {:error, _reason} when requested_strategy == :auto ->
         do_search(query_string, opts, :fts)
         |> normalize_results(:fts)
+        |> maybe_filter_results_by_scope(scope)
         |> maybe_filter_results_by_props(props)
 
       result ->
         normalize_results(result, strategy)
+        |> maybe_filter_results_by_scope(scope)
         |> maybe_filter_results_by_props(props)
     end
+  end
+
+  # Post-query visibility filter — ONE stage for all four strategies
+  # (fts/fuzzy/semantic/hybrid), driven by the single policy module. The
+  # scope is resolved by the caller (Dran.ContentVisibility.resolve/3); no
+  # :scope opt ⇒ :all = pre-feature behaviour.
+  defp maybe_filter_results_by_scope(result, nil), do: result
+  defp maybe_filter_results_by_scope(result, :all), do: result
+
+  defp maybe_filter_results_by_scope({:ok, results}, {:own, _owner_id} = scope) do
+    {:ok, Enum.filter(results, &scope_visible?(&1, scope))}
+  end
+
+  defp maybe_filter_results_by_scope(result, _scope), do: result
+
+  # Search results arrive as %Page{} structs (fts/fuzzy) or string-keyed maps
+  # (semantic/hybrid vector paths) — handle both shapes.
+  defp scope_visible?(result, scope) do
+    owner =
+      case result do
+        %{owner_user_id: owner} -> owner
+        %{"owner_user_id" => owner} -> owner
+        _ -> nil
+      end
+
+    Dran.ContentVisibility.visible?(owner, scope)
   end
 
   # Post-query props filter for search results. Applied after normalize_results

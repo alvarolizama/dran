@@ -153,6 +153,12 @@ defmodule Dran.ContentVisibility do
 
   def filter(queryable, :all, _field), do: queryable
 
+  # `field == nil` is forbidden in Ecto queries — {:own, nil} is the scope of
+  # an unattributable reader (workspace content only), so it becomes is_nil/1.
+  def filter(queryable, {:own, nil}, field) do
+    from(q in queryable, where: is_nil(field(q, ^field)))
+  end
+
   def filter(queryable, {:own, owner_id}, field) do
     from(q in queryable, where: field(q, ^field) == ^owner_id)
   end

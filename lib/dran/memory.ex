@@ -165,10 +165,22 @@ defmodule Dran.Memory do
     ws_id = Map.fetch!(attrs, "workspace_id")
     hash = content_hash(content)
     force? = Keyword.get(opts, :force, false)
+    owner_id = Map.get(attrs, "owner_user_id")
+
+    # Dedupe scope: in a SHARED workspace it stays global (today's behaviour —
+    # one workspace, one fact). In an ISOLATED workspace it is per owner, so a
+    # 409 never reveals that another user already holds the same fact
+    # (P6: el near-duplicate no filtra facts ajenos).
+    dedupe_scope =
+      if shared_workspace?(ws_id) do
+        :global
+      else
+        {:owner, owner_id}
+      end
 
     # Explicit dedupe first — cheap read beats a constraint race, and the
     # unique_constraint in the changeset catches the true insert race.
-    case Repo.get_by(__MODULE__, workspace_id: ws_id, content_hash: hash) do
+    case find_duplicate(ws_id, hash, dedupe_scope) do
       %__MODULE__{} = existing ->
         {:ok, existing, :duplicate}
 
@@ -184,7 +196,7 @@ defmodule Dran.Memory do
             insert_memory(changeset, ws_id, hash)
 
           true ->
-            case semantic_match(changeset, ws_id) do
+            case semantic_match(changeset, ws_id, dedupe_scope) do
               {:duplicate, %__MODULE__{} = existing} ->
                 {:ok, existing, :duplicate}
 
@@ -220,7 +232,7 @@ defmodule Dran.Memory do
 
   # Closest active embedding in two similarity bands (1 - cosine distance):
   # >= 0.95 → :duplicate; >= 0.88 → :near_duplicate (grey zone); else nil.
-  defp semantic_match(changeset, workspace_id) do
+  defp semantic_match(changeset, workspace_id, dedupe_scope) do
     case get_change(changeset, :embedding) do
       nil ->
         nil
@@ -240,6 +252,7 @@ defmodule Dran.Memory do
           limit: 1,
           select: {m, fragment("1 - (? <=> ?)", m.embedding, ^vec)}
         )
+        |> maybe_filter_dupe_scope(dedupe_scope)
         |> Repo.one()
         |> case do
           nil ->
@@ -253,6 +266,50 @@ defmodule Dran.Memory do
             end
         end
     end
+  end
+
+  # ── Dedupe scoping ─────────────────────────────────────────────────────────
+
+  # Shared workspace (default) → dedupe is global: one fact per workspace,
+  # exactly as before this feature. Isolated → per owner.
+  defp shared_workspace?(workspace_id) do
+    case Dran.Knowledge.get_workspace_by_slug(workspace_id) ||
+           Repo.get(Dran.Workspace, workspace_id) do
+      nil -> true
+      workspace -> Dran.ContentVisibility.shared?(workspace, :memory)
+    end
+  end
+
+  defp find_duplicate(ws_id, hash, :global) do
+    Repo.get_by(__MODULE__, workspace_id: ws_id, content_hash: hash)
+  end
+
+  defp find_duplicate(ws_id, hash, {:owner, nil}) do
+    from(m in __MODULE__,
+      where:
+        m.workspace_id == ^ws_id and m.content_hash == ^hash and
+          is_nil(m.owner_user_id)
+    )
+    |> Repo.one()
+  end
+
+  defp find_duplicate(ws_id, hash, {:owner, owner_id}) do
+    from(m in __MODULE__,
+      where:
+        m.workspace_id == ^ws_id and m.content_hash == ^hash and
+          m.owner_user_id == ^owner_id
+    )
+    |> Repo.one()
+  end
+
+  defp maybe_filter_dupe_scope(query, :global), do: query
+
+  defp maybe_filter_dupe_scope(query, {:owner, nil}) do
+    where(query, [m], is_nil(m.owner_user_id))
+  end
+
+  defp maybe_filter_dupe_scope(query, {:owner, owner_id}) do
+    where(query, [m], m.owner_user_id == ^owner_id)
   end
 
   @doc """
@@ -396,8 +453,9 @@ defmodule Dran.Memory do
   def search(workspace_id, query, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
     bump? = Keyword.get(opts, :bump_retrieval, true)
-    fts = fts_candidates(workspace_id, query, limit)
-    semantic = semantic_candidates(workspace_id, query, limit)
+    scope = Keyword.get(opts, :scope)
+    fts = fts_candidates(workspace_id, query, limit, scope)
+    semantic = semantic_candidates(workspace_id, query, limit, scope)
 
     fused =
       %{}
@@ -431,7 +489,7 @@ defmodule Dran.Memory do
     end)
   end
 
-  defp fts_candidates(workspace_id, query, limit) do
+  defp fts_candidates(workspace_id, query, limit, scope) do
     # 'simple' + unaccent: language-neutral token match (see migration
     # MemoriesMultilangFtsAndGreyzone). Cross-language recall is carried by
     # the semantic candidates; FTS handles exact-ish token overlap.
@@ -443,10 +501,11 @@ defmodule Dran.Memory do
       order_by: fragment("ts_rank(search_vector, plainto_tsquery('simple', ?)) DESC", ^query),
       limit: ^limit
     )
+    |> maybe_filter_scope(scope)
     |> Repo.all()
   end
 
-  defp semantic_candidates(workspace_id, query, limit) do
+  defp semantic_candidates(workspace_id, query, limit, scope) do
     if Dran.Inference.enabled?() do
       case Dran.Inference.embed(query) do
         {:ok, vec} ->
@@ -456,6 +515,7 @@ defmodule Dran.Memory do
             order_by: fragment("? <=> ?", m.embedding, ^vec),
             limit: ^limit
           )
+          |> maybe_filter_scope(scope)
           |> Repo.all()
 
         _ ->
@@ -475,12 +535,13 @@ defmodule Dran.Memory do
     :ok
   end
 
-  @doc "List memories of a workspace, newest first. Opts: :status, :limit, :offset."
+  @doc "List memories of a workspace, newest first. Opts: :status, :limit, :offset, :scope."
   def list_memories(workspace_id, opts \\ []) do
     # limit/offset push down to SQL (LIMIT/OFFSET) — paginating in memory
     # would load the workspace's whole memories table on every call.
     from(m in __MODULE__, where: m.workspace_id == ^workspace_id)
     |> maybe_filter_status(Keyword.get(opts, :status))
+    |> maybe_filter_scope(Keyword.get(opts, :scope))
     # Tiebreak by id so offset pagination is deterministic even when two
     # facts land in the same second (multi-agent REST ingest).
     |> order_by(desc: :inserted_at, desc: :id)
@@ -489,14 +550,20 @@ defmodule Dran.Memory do
     |> Repo.all()
   end
 
+  # Read visibility: the scope comes from Dran.ContentVisibility (the single
+  # policy module). No :scope opt ⇒ :all = pre-feature behaviour.
+  defp maybe_filter_scope(query, nil), do: query
+  defp maybe_filter_scope(query, scope), do: Dran.ContentVisibility.filter(query, scope)
+
   defp maybe_filter_status(query, nil), do: query
   defp maybe_filter_status(query, status), do: where(query, [m], m.status == ^status)
 
   def get_memory!(id), do: Repo.get!(__MODULE__, id)
 
-  @doc "Count active memories of a workspace (sidebar badge)."
-  def count_memories(workspace_id) do
+  @doc "Count active memories of a workspace (sidebar badge). Opts: :scope."
+  def count_memories(workspace_id, opts \\ []) do
     from(m in __MODULE__, where: m.workspace_id == ^workspace_id and m.status == "active")
+    |> maybe_filter_scope(Keyword.get(opts, :scope))
     |> Repo.aggregate(:count)
   end
 
@@ -509,7 +576,9 @@ defmodule Dran.Memory do
   facts" row in the memory UI; the graph renders the same edges as 3D
   links between memory nodes.
   """
-  def related_snapshots(workspace_id, ids) when is_list(ids) do
+  def related_snapshots(workspace_id, ids, opts \\ []) when is_list(ids) do
+    scope = Keyword.get(opts, :scope)
+
     from(r in Dran.Relation,
       join: m in __MODULE__,
       on:
@@ -522,6 +591,9 @@ defmodule Dran.Memory do
           m.status == "active",
       select: {r.source_id, r.target_id, m.id, m.content}
     )
+    # A hidden neighbour must not leak its content through the related-facts
+    # row: the same visibility policy narrows the neighbour side.
+    |> maybe_filter_memory_scope(scope, :m)
     |> Repo.all()
     |> Enum.reduce(%{}, fn {src, tgt, neighbor_id, content}, acc ->
       # The edge is stored directionally (latest → earlier); the UI shows it
@@ -530,6 +602,19 @@ defmodule Dran.Memory do
       |> maybe_put_neighbor(src, ids, neighbor_id, content)
       |> maybe_put_neighbor(tgt, ids, neighbor_id, content)
     end)
+  end
+
+  # Scope filtering on a NAMED binding (`:m`), because this query joins
+  # relations with memories.
+  defp maybe_filter_memory_scope(query, nil, _binding), do: query
+  defp maybe_filter_memory_scope(query, :all, _binding), do: query
+
+  defp maybe_filter_memory_scope(query, {:own, nil}, binding) do
+    where(query, [{^binding, m}], is_nil(m.owner_user_id))
+  end
+
+  defp maybe_filter_memory_scope(query, {:own, owner_id}, binding) do
+    where(query, [{^binding, m}], m.owner_user_id == ^owner_id)
   end
 
   defp maybe_put_neighbor(acc, endpoint, batch_ids, neighbor_id, content) do
