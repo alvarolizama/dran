@@ -1,28 +1,33 @@
 ---
 name: dran
-description: "Use when operating Dran over MCP — router and shared rules."
-version: 11.0.0
+description: "Use when operating Dran — router and shared rules (plugin tools)."
+version: 12.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
-    tags: [dran, second-brain, mcp, knowledge-graph]
+    tags: [dran, second-brain, tools, knowledge-graph]
     related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow]
 ---
 
-# dran — MCP reference + suite router
+# dran — plugin tools reference + suite router
 
 Main skill of the Dran suite. Load it first: it routes to the per-action
 flows and holds what every flow shares — connection, auth, the readback
 rule. Dran is the second brain: knowledge (pages) and memory. The agent's
 local execution discipline (ledger, briefs, delegation) is riel — this
-suite owns only the MCP/REST call sequences.
+suite owns only the Dran call sequences.
+
+The agent consumes Dran through the **Hermes plugin tools** (`dran_*`); the
+MCP server is retired. The plugin registers its toolset via `register(ctx)`
+in `hermes_plugin/dran/__init__.py`, so the tools are available whenever the
+`dran` plugin is enabled for the profile.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"MCP tools, connection,\ngeneral rules"| SELF["THIS SKILL\nmain dran"]
+  Q{What do you need?} -->|"tools, connection,\ngeneral rules"| SELF["THIS SKILL\nmain dran"]
   Q -->|"create/edit/query\nknowledge pages"| K[dran-knowledge-flow]
   Q -->|"link pages\ntyped relations"| R[dran-relations-flow]
   Q -->|"run curator/link_gardener/\ngraph_rag"| X[dran-workers-flow]
@@ -36,30 +41,30 @@ Run ONLY the flow you landed on. If the diagram sends you to another skill,
 
 ## Connection (once per Hermes profile)
 
-- `config.yaml` → `mcp_servers.dran: { url: "http://localhost:4000/api/mcp",
-  headers: { Authorization: "Bearer ${DRAN_API_KEY}" } }`. The secret lives
-  ONCE in the profile's `.env` (`DRAN_API_KEY`); the memory plugin resolves
-  the same var — one key, one actor. Restart the session after adding the
-  server (no hot-reload).
-- Hermes registers each tool as `mcp_<server>_<tool>` → with server `dran`,
-  calls look like `mcp_dran_dran_search`.
-- **One key = one actor.** Attribution (`owner`/`created_by`) is
-  derived server-side from the key — never client-settable.
-- **Write gate**: keys with `write_access: false` get `403` on every write
-  tool (`@write_tools` in the server: pages, relations, workers).
-- **Memory is NOT in the MCP surface** — REST `/api/memory` + Hermes plugin
-  only. Do not look for `dran_memory_*` MCP tools.
-- MCP resources: `page://<ws>/<slug>`, `home://<ws>/index`. Prompts:
-  `brainstorm` (topic).
+- The plugin is enabled per profile: `plugins.enabled` in the profile's
+  `config.yaml` must list `dran`, and the plugin directory is symlinked into
+  `~/.hermes/profiles/<perfil>/plugins/dran`.
+- The secret lives ONCE in the profile's `.env` (`DRAN_API_KEY`); the memory
+  provider and the tools resolve the same var — one key, one actor.
+- Config comes from `$HERMES_HOME/dran/config.json` (base URL + workspace),
+  the same file the memory panel writes.
+- **One key = one actor.** Attribution (`owner_user_id`/`created_by`) is
+  derived server-side from the key — never client-settable. Each write also
+  carries `X-Hermes-Agent` (the active profile) which the server persists as
+  `agent_name`.
+- **Write gate**: keys with `read` access get `403` on every write tool.
+- **Memory tools** (`dran_memory_*`) come from the memory provider; the
+  knowledge tools (`dran_search`, `dran_create_page`, …) come from the same
+  plugin's toolset.
 
 ## Workspace selection (every call is workspace-scoped)
 
 ```mermaid
 flowchart TD
   S([page/memory tool call]) --> G1{"user named a\nworkspace?"}
-  G1 -->|yes| U1["use that slug —\nverify with home://<ws>/index"]
+  G1 -->|yes| U1["use that slug"]
   G1 -->|no| G2{"key reaches\nworkspaces?"}
-  G2 -->|"one / a list"| U2["omit 'workspace' — server injects\nthe FIRST workspace of the key\n(get_default_context_for_user)"]
+  G2 -->|"one / a list"| U2["omit 'workspace' — server injects\nthe FIRST workspace of the key"]
   G2 -->|"owner / :all"| U3["no injection — ALWAYS name\nthe workspace explicitly"]
   U1 --> W[run tool + readback]
   U2 --> W
@@ -72,11 +77,11 @@ flowchart TD
 - One key = one actor with its own workspace matrix (Dran → Settings →
   Agents). Owner keys and `:all` keys get no injection — always name the
   workspace explicitly with those.
-- The memory plugin's workspace is separate (dashboard → Memory → Dran) and
-  validated against the key's matrix on connect; do not assume it equals
-  the workspace you use for pages.
-- Discover valid slugs: `home://<ws>/index` resource, or a failing call
-  answers `context 'x' not found`.
+- The memory provider's workspace is configured in the panel and validated
+  against the key's matrix on connect; do not assume it equals the workspace
+  you use for pages.
+- Discover valid slugs with `dran_list_pages` (empty query) or `dran_search`;
+  a failing call answers `context 'x' not found`.
 
 ## General rules (every flow obeys them)
 

@@ -378,6 +378,23 @@ class _DranClient:
         data = self.request("GET", f"/api/lint?{urlencode({'workspace': self.workspace})}")
         return data.get("data", data) if isinstance(data, dict) else {}
 
+    def start_worker(self, worker_type: str, input: str = "") -> dict:
+        payload = {"workspace": self.workspace, "worker_type": worker_type, "input": input}
+        return self.request("POST", "/api/workers", payload)
+
+    def get_worker_session(self, session_id: str) -> Optional[dict]:
+        from urllib.parse import urlencode
+        try:
+            data = self.request(
+                "GET",
+                f"/api/workers/{session_id}?{urlencode({'workspace': self.workspace})}",
+            )
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+        return data.get("data") if isinstance(data, dict) else None
+
     def stats(self) -> dict:
         data = self.request("GET", "/api/workspaces")
         return data.get("data", data) if isinstance(data, dict) else {}
@@ -1040,6 +1057,29 @@ def _tool_schemas() -> List[Dict[str, Any]]:
             "parameters": {"type": "object", "properties": {}},
         },
         {
+            "name": "dran_start_worker",
+            "description": "Start an autonomous worker session and return immediately (session_id + track_url). worker_type: 'curator' (duplicate/conflicting pages → report), 'link_gardener' (relation proposals for orphans), 'graph_rag' (GraphRAG answer). Poll with dran_get_worker_session.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "worker_type": {"type": "string", "enum": ["curator", "link_gardener", "graph_rag"]},
+                    "input": {"type": "string", "description": "Worker input (a question for graph_rag, a focus note otherwise)"},
+                },
+                "required": ["worker_type"],
+            },
+        },
+        {
+            "name": "dran_get_worker_session",
+            "description": "Poll an autonomous worker session: status (pending/running/done/failed), summary, pages_created and the ordered steps. Poll until status is 'done' or 'failed'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "UUID returned by dran_start_worker"},
+                },
+                "required": ["session_id"],
+            },
+        },
+        {
             "name": "dran_stats",
             "description": "Dashboard numbers for the Dran workspace: page counts by type, memory count, relations.",
             "parameters": {"type": "object", "properties": {}},
@@ -1140,6 +1180,29 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
 
         if tool_name == "dran_lint_brain":
             return json.dumps(client.lint_brain())
+
+        if tool_name == "dran_start_worker":
+            worker_type = str(args.get("worker_type", "")).strip()
+            if worker_type not in ("curator", "link_gardener", "graph_rag"):
+                return json.dumps({"error": "worker_type must be curator, link_gardener or graph_rag"})
+            data = client.start_worker(worker_type, str(args.get("input") or ""))
+            session = data.get("data") or {}
+            return json.dumps({
+                "started": True,
+                "session_id": session.get("id"),
+                "status": session.get("status"),
+                "track_url": session.get("track_url"),
+                "hint": "poll with dran_get_worker_session(session_id)",
+            })
+
+        if tool_name == "dran_get_worker_session":
+            session_id = str(args.get("session_id", "")).strip()
+            if not session_id:
+                return json.dumps({"error": "session_id is required"})
+            session = client.get_worker_session(session_id)
+            if session is None:
+                return json.dumps({"error": f"worker session not found: {session_id}"})
+            return json.dumps(session)
 
         if tool_name == "dran_stats":
             return json.dumps(client.stats())

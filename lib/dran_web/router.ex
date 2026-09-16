@@ -523,6 +523,9 @@ defmodule DranWeb.Router do
     # Shared multi-agent memory (read)
     get "/memory", MemoryController, :index
     get "/memory/search", MemoryController, :search
+
+    # Worker sessions (read: poll a running session by id)
+    get "/workers/:id", WorkerController, :show
   end
 
   # ── REST API — write routes (requires write_access on API keys) ────────────
@@ -543,6 +546,9 @@ defmodule DranWeb.Router do
     # Relations (write)
     post "/relations", RelationController, :create
     delete "/relations/:id", RelationController, :delete
+
+    # Workers (write: starting a worker writes pages)
+    post "/workers", WorkerController, :create
   end
 
   # ── MCP Streamable HTTP endpoint (self-authenticating) ────────────────────

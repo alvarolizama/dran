@@ -15,7 +15,7 @@ metadata:
 Memory is the **shared recall of agents**, written through the Hermes
 plugin (`hermes_plugin/dran/` — `dran_memory_add` tool, auto-capture on
 session end). This flow covers ADMINISTRATION only — list, search, delete —
-because memory is not part of the MCP surface.
+because memory is served by the Hermes memory provider, not by the knowledge toolset.
 
 ## Entry router
 
@@ -70,7 +70,7 @@ Repo.get returns nil"]
   V2 -->|gone| END([done])
 ```
 
-## The REST surface (no MCP)
+## The REST surface (and the provider tools)
 
 | Route | Method | Access |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ Repo.get returns nil"]
 | `/api/memory/:id?purge=true&workspace=<slug>` | DELETE | `write_access` — **hard delete, permanent** |
 
 - Base URL is the profile's Dran (`$HERMES_HOME/dran_memory.json →
-  base_url`); same `DRAN_API_KEY` as MCP.
+  base_url`); same `DRAN_API_KEY` as the plugin tools.
 - `created_by` on every memory is attributed server-side from the key's
   actor — never trust a client-set author.
 
@@ -125,7 +125,7 @@ Repo.get returns nil"]
   remain; the UI-only "Borrar obsoletos" covers superseded rows only.
 - **Deleting the whole workspace's recall on a bad review** — delete by
   specific id, one confirmation each.
-- **Expecting `dran_memory_*` MCP tools** — zero on MCP; only the plugin
+- **Expecting the knowledge tools to cover memory** — `dran_search`/`dran_*_page` are knowledge; memory is `dran_memory_*` from the provider
   and REST exist.
 - **Confusing memory with page knowledge** — memories are agent-facts
   (dedupe + trust server-side); knowledge that humans read goes through

@@ -1,12 +1,12 @@
 ---
 name: dran-knowledge-flow
-description: "Use when creating or editing Dran knowledge pages via MCP."
-version: 1.2.0
+description: "Use when creating or editing Dran knowledge pages (plugin tools)."
+version: 2.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
-    tags: [dran, mcp, knowledge, pages]
+    tags: [dran, knowledge, pages, tools]
     related_skills: [dran, dran-relations-flow]
 ---
 
@@ -17,11 +17,13 @@ Pages are the unit of knowledge: `note`, `idea`, `knowledge`,
 This flow owns the write loop: search first,
 then create or update, then verify by readback.
 
+The tools come from the Dran Hermes plugin (`dran_*`); MCP is retired.
+
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"write/read/rename\na page"| SELF["THIS SKILL\ndran-knowledge-flow"]
+  Q{What do you need?} -->|"write/read/delete\na page"| SELF["THIS SKILL\ndran-knowledge-flow"]
   Q -->|"typed link between\ntwo pages"| R[dran-relations-flow]
   Q -->|"connection, auth,\nreadback rule"| D[dran — main]
 
@@ -38,21 +40,16 @@ against existing pages. PRODUCES: a page whose state is confirmed by
 
 ```mermaid
 flowchart TD
-  START([knowledge task]) --> S1["RUN mcp_dran_dran_search\nquery + workspace + strategy"]
+  START([knowledge task]) --> S1["RUN dran_search\nquery + strategy"]
   S1 --> G1{"page exists\nwith this slug?"}
-  G1 -->|"no"| S2["RUN mcp_dran_dran_create_page\nworkspace + page_type + body"]
-  G1 -->|"yes"| S3["RUN mcp_dran_dran_update_page\nslug + changed fields"]
-  S2 --> S4["RUN mcp_dran_dran_reaugment_page\nslug - refresh embeddings"]
-  S4 --> V1["VERIFY dran_get_page\nreadback: title + body"]
+  G1 -->|"no"| S2["RUN dran_create_page\ntitle + page_type + body"]
+  G1 -->|"yes"| S3["RUN dran_update_page\nslug + changed fields"]
+  S2 --> V1["VERIFY dran_get_page\nreadback: title + body"]
   S3 --> V1
   V1 -->|"mismatch"| S1
-  V1 -->|"holds"| G2{"slug rename\nneeded?"}
-  G2 -->|"yes"| S5["ASK confirm rename -\nbacklinks break"]
-  S5 --> S6["RUN mcp_dran_dran_rename_slug\nold_slug + new_slug"]
-  S6 --> V1
-  G2 -->|"no"| G3{"delete\nrequested?"}
-  G3 -->|"yes"| S7["ASK confirm delete -\nirreversible"]
-  S7 --> S8["RUN mcp_dran_dran_delete_page"]
+  V1 -->|"holds"| G3{"delete\nrequested?"}
+  G3 -->|"yes"| S7["ASK[irreversible] confirm delete"]
+  S7 --> S8["RUN dran_delete_page"]
   S8 --> V2["VERIFY dran_get_page\nreadback: not found"]
   V2 -->|"still present"| S1
   V2 -->|"gone"| END([done])
@@ -62,22 +59,17 @@ flowchart TD
 ## Notes on the calls
 
 - `page_type` enum comes from `Dran.PageRegistry` (8 types). Kinds
-  (`meta.kind`; the lists in `PageMeta.changeset/3` are the contract, but
-  note `create_page` does not enforce them on persist today) and
+  (`meta.kind`; the lists in `PageMeta.changeset/3` are the contract) and
   type-specific meta fields. When unsure which type fits, follow the
   decision tree in `docs/page-types.md`:
-  - `note` — quick capture, journal, no structure yet (free kind; date;
-    due_date only when kind is `reminder`) — `dran_create_note` /
-    `dran_update_note` are title+slug shorthands with **meta merge**
+  - `note` — quick capture, journal, no structure yet (free kind)
   - `idea` — a thought that wants to be developed;
     kinds: idea/question/hypothesis/spark
   - `knowledge` — someone else's words you extracted;
-    kinds: quote/summary/highlight/excerpt; extra meta:
-    source_url, date
+    kinds: quote/summary/highlight/excerpt; extra meta: source_url, date
   - `technical` — how-to: code, commands, configs, dev recipes;
     kinds: code/snippet/debug/recipe/config/command/
-    template/pattern/method; extra meta: language (only when kind is
-    `code`), version
+    template/pattern/method; extra meta: language, version
   - `entity` — a named thing: person, company, tool, place;
     kinds: person/company/product/tool/place/event/language/
     framework/hardware/protocol; extra meta: location, external_url
@@ -93,33 +85,35 @@ flowchart TD
 
   Every type also takes `meta.props` (free key-value bag). Kind
   classifies/filters only — never changes behavior.
-- **`meta` on `dran_update_page` REPLACES the whole object** (include
-  every key you want to keep); `dran_update_note` MERGES meta — prefer
-  it for notes when only touching some keys.
-
-- Search `strategy` (not `mode`): `auto / fts / fuzzy / semantic / hybrid`.
+- **`dran_update_page` only changes the fields you pass** — send the fields
+  to change and leave the rest out.
+- Search `strategy`: `auto / fts / fuzzy / semantic / hybrid`.
   Run search before any create — duplicates are the main graph rot.
 - `summary` on pages is **machine-owned** (set via create/update/nightly
   job; the UI never edits it). Keep it a real one-liner.
 - Confidence levels for claims recorded in pages: low / medium / high /
   verified.
-- After create/update with body changes, `dran_reaugment_page` refreshes
-  embeddings — skip it only when the body is untouched.
-- `dran_list_pages` takes optional type/status filters for audits;
-  `dran_get_stats` for counts; `dran_get_page` for one slug.
+- `dran_list_pages` takes an optional `page_type`; `dran_stats` for counts;
+  `dran_get_page` for one slug.
+- Every write is attributed server-side: the key's actor sets `created_by`
+  (and `owner_user_id` when the actor has an owner), and the active profile
+  lands in `agent_name` via `X-Hermes-Agent`. Neither is client-settable.
 
 ## Pitfalls
 
 - **Creating a page that already exists under another slug** — search
   variants (accents, hyphens) first.
-- **Renaming slugs casually** — embeds (`![[slug]]`) and backlinks break;
-  ASK, rename, then re-read `dran_get_links` both sides.
 - **Trusting the create `ok`** — verify with `dran_get_page`; the readback
   IS the done-check.
+- **Deleting without confirmation** — `dran_delete_page` is irreversible
+  and takes the page's relations with it; ASK first.
+- **Assuming a rename tool exists** — the plugin has no `rename_slug`; to
+  move a page, update its `title` (the slug is auto-managed) and re-check
+  `dran_get_links` on both sides.
 
 ## Checklist
 
 - [ ] Search ran before write; slug confirmed fresh or update chosen
-- [ ] Write + reaugment done
+- [ ] Write done with only the changed fields
 - [ ] Readback verified (get_page; for delete: gone)
-- [ ] Rename/delete went through ASK
+- [ ] Delete went through ASK

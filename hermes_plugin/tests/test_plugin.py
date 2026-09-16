@@ -99,6 +99,8 @@ def test_register_registers_memory_provider_and_tools(plugin):
         "dran_create_relation",
         "dran_delete_relation",
         "dran_lint_brain",
+        "dran_start_worker",
+        "dran_get_worker_session",
         "dran_stats",
     ]
     assert len(set(names)) == len(names), "no duplicate tool names"
@@ -227,6 +229,8 @@ def test_tool_calls_hit_documented_routes(plugin):
                 {"source_slug": "a", "target_slug": "b"}, ctx=ctx
             )
             handlers["dran_lint_brain"]({}, ctx=ctx)
+            handlers["dran_start_worker"]({"worker_type": "curator"}, ctx=ctx)
+            handlers["dran_get_worker_session"]({"session_id": "abc"}, ctx=ctx)
             handlers["dran_stats"]({}, ctx=ctx)
 
         paths = [p for _, p in routes]
@@ -235,6 +239,8 @@ def test_tool_calls_hit_documented_routes(plugin):
         assert any(p.startswith("/api/knowledge-pages/s/links?") for p in paths), paths
         assert "/api/relations" in paths, paths
         assert any(p.startswith("/api/lint?") for p in paths), paths
+        assert "/api/workers" in paths, paths
+        assert any(p.startswith("/api/workers/abc?") for p in paths), paths
         assert "/api/workspaces" in paths, paths
 
         # The workspace is always pinned in the query string.

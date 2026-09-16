@@ -38,8 +38,9 @@ loguea con warning. Si Dran no responde, se usa la config local sin validar.
    DRAN_API_KEY=dran_sk_...
    ```
 
-   Ese mismo valor lo consume el MCP (`config.yaml` →
-   `mcp_servers.dran.headers: "Authorization: Bearer ***"`).
+   Ese mismo valor lo consume el plugin (memory provider + tools) —
+   `config.yaml` → `mcp_servers.dran` queda solo por compatibilidad mientras
+   se retira el MCP.
 3. Configura el resto desde la UI: **dashboard de Hermes → Memory → Dran**
    (o `hermes memory setup` → elegir "dran"). La API key pégala en el campo
    del panel — va al `.env`, no al JSON.
@@ -109,6 +110,7 @@ estas tools son el consumo del agente.
 | `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas |
 | `dran_get_links` | Relaciones entrantes/salientes de una página |
 | `dran_create_relation` / `dran_delete_relation` | Relaciones tipadas y dirigidas |
+| `dran_start_worker` / `dran_get_worker_session` | Dispara y sondea curator / link_gardener / graph_rag |
 | `dran_lint_brain` | Auditoría estructural (read-only) |
 | `dran_stats` | Números del dashboard |
 
