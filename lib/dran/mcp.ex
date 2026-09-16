@@ -5,6 +5,18 @@ defmodule Dran.MCP do
   Served from Phoenix at `/api/mcp`. Supports POST and DELETE per
   MCP spec 2025-03-26 Streamable HTTP transport.
 
+  ## Status: legacy surface, kept as a documented shim
+
+  The Hermes plugin (`hermes_plugin/dran/`) is now the primary agent surface:
+  it registers a `dran` toolset through `register(ctx)` with functional parity
+  for this toolset (search, page lifecycle, relations, workers, lint, rename,
+  reaugment, cluster summaries) plus the memory provider tools, and it
+  attributes every write with `X-Hermes-Agent`.
+
+  This MCP server stays reachable for MCP clients that are NOT Hermes. It is
+  no longer the surface the Dran skills teach, and new tools are added to the
+  plugin, not here.
+
   ## Endpoints
   - `POST /api/mcp` — send JSON-RPC request → JSON response
   - `GET /api/mcp` — responds 405 (SSE stream not implemented)

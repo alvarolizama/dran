@@ -1,6 +1,10 @@
 defmodule DranWeb.API.MCPController do
   @moduledoc """
   MCP Streamable HTTP transport endpoint with per-user context auth.
+
+  LEGACY surface: the Hermes plugin toolset (`hermes_plugin/dran/`) is the
+  primary agent surface now. This endpoint stays for non-Hermes MCP clients
+  only — see `Dran.MCP` for the full status note.
   """
 
   use DranWeb, :controller

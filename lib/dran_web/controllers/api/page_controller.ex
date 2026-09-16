@@ -161,6 +161,87 @@ defmodule DranWeb.API.PageController do
     |> json(%{errors: %{detail: "context query param is required"}})
   end
 
+  @doc "POST /api/knowledge-pages/:slug/rename — rename a page's slug (rewrites embeds)."
+  def rename(conn, %{"slug" => slug, "workspace" => workspace_slug} = params) do
+    with_context(conn, workspace_slug, fn conn, context ->
+      new_slug = params["new_slug"]
+
+      cond do
+        not is_binary(new_slug) or String.trim(new_slug) == "" ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{errors: %{detail: "new_slug is required"}})
+
+        true ->
+          case Knowledge.get_page_by_slug(slug, context.id) do
+            nil ->
+              conn
+              |> put_status(:not_found)
+              |> json(%{errors: %{detail: "page not found"}})
+
+            page ->
+              # Rename rewrites `![[old-slug]]` embeds across the workspace —
+              # irreversible-ish, which is why the skills gate it behind an ASK.
+              case Knowledge.rename_slug(page, String.trim(new_slug)) do
+                %{slug: renamed} = updated ->
+                  json(conn, %{data: updated, renamed_from: slug, renamed_to: renamed})
+
+                other ->
+                  conn
+                  |> put_status(:unprocessable_entity)
+                  |> json(%{errors: %{detail: "rename failed: #{inspect(other)}"}})
+              end
+          end
+      end
+    end)
+  end
+
+  @doc "POST /api/knowledge-pages/:slug/reaugment — refresh embeddings/summary."
+  def reaugment(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
+    with_context(conn, workspace_slug, fn conn, context ->
+      case Knowledge.get_page_by_slug(slug, context.id) do
+        nil ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{errors: %{detail: "page not found"}})
+
+        page ->
+          # Clear the embedding hash so the augmenter treats the page as
+          # stale, then schedule the async pipeline (same as the MCP tool).
+          page
+          |> Ecto.Changeset.change(embedding_hash: nil)
+          |> Dran.Repo.update!()
+
+          Dran.PageAugmenter.schedule(page)
+
+          json(conn, %{data: %{slug: page.slug, scheduled: true}})
+      end
+    end)
+  end
+
+  @doc "POST /api/cluster-summaries — regenerate the nightly cluster summaries."
+  def cluster_summaries(conn, params) do
+    params = resolve_workspace_id(conn, params)
+    workspace_id = params["workspace_id"]
+
+    if workspace_id do
+      case Dran.Graph.ClusterSummaries.generate_all(workspace_id) do
+        :ok ->
+          summaries = Dran.Graph.ClusterSummaries.list_summaries(workspace_id)
+          json(conn, %{data: %{count: length(summaries)}})
+
+        {:error, reason} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: %{detail: "failed: #{inspect(reason)}"}})
+      end
+    else
+      conn
+      |> put_status(:bad_request)
+      |> json(%{errors: %{detail: "workspace query param is required"}})
+    end
+  end
+
   @doc "GET /api/knowledge-pages/:slug/links — inbound + outbound relations"
   def links(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->

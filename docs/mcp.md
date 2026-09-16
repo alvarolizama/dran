@@ -1,5 +1,12 @@
 # Dran MCP server
 
+> **Legacy surface.** The Hermes plugin (`hermes_plugin/dran/`) is the primary
+> agent surface: it registers the `dran` toolset with `register(ctx)` (search,
+> page lifecycle, relations, workers, lint, rename, reaugment, cluster
+> summaries) plus the memory provider tools, and every write carries
+> `X-Hermes-Agent`. This MCP server stays reachable for MCP clients that are
+> **not** Hermes; new tools are added to the plugin, not here.
+
 Dran exposes a [Model Context Protocol](https://modelcontextprotocol.io)
 server so agents can read and write the knowledge graph as tools. This is the
 practical reference: transport, authentication, the tool/resource/prompt

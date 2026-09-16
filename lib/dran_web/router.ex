@@ -542,6 +542,11 @@ defmodule DranWeb.Router do
     post "/knowledge-pages", PageController, :create
     put "/knowledge-pages/:slug", PageController, :update
     delete "/knowledge-pages/:slug", PageController, :delete
+    post "/knowledge-pages/:slug/rename", PageController, :rename
+    post "/knowledge-pages/:slug/reaugment", PageController, :reaugment
+
+    # Cluster summaries (write: regenerates stored summaries)
+    post "/cluster-summaries", PageController, :cluster_summaries
 
     # Relations (write)
     post "/relations", RelationController, :create
@@ -551,7 +556,12 @@ defmodule DranWeb.Router do
     post "/workers", WorkerController, :create
   end
 
-  # ── MCP Streamable HTTP endpoint (self-authenticating) ────────────────────
+  # ── MCP Streamable HTTP endpoint (LEGACY — kept as a documented shim) ─────
+  #
+  # The Hermes plugin toolset (hermes_plugin/dran/ with register(ctx)) is the
+  # primary agent surface now: same operations, plus X-Hermes-Agent
+  # attribution and the memory provider tools. This endpoint stays for MCP
+  # clients that are NOT Hermes; no new tools are added here.
   #
   # The MCP controller performs its own dual auth — legacy admin token
   # (admin) OR each user's per-user api_token — and then enforces per-user

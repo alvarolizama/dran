@@ -378,6 +378,24 @@ class _DranClient:
         data = self.request("GET", f"/api/lint?{urlencode({'workspace': self.workspace})}")
         return data.get("data", data) if isinstance(data, dict) else {}
 
+    def rename_slug(self, slug: str, new_slug: str) -> dict:
+        from urllib.parse import urlencode
+        return self.request(
+            "POST",
+            f"/api/knowledge-pages/{slug}/rename?{urlencode({'workspace': self.workspace})}",
+            {"new_slug": new_slug},
+        )
+
+    def reaugment_page(self, slug: str) -> dict:
+        from urllib.parse import urlencode
+        return self.request(
+            "POST",
+            f"/api/knowledge-pages/{slug}/reaugment?{urlencode({'workspace': self.workspace})}",
+        )
+
+    def generate_cluster_summaries(self) -> dict:
+        return self.request("POST", "/api/cluster-summaries", {"workspace": self.workspace})
+
     def start_worker(self, worker_type: str, input: str = "") -> dict:
         payload = {"workspace": self.workspace, "worker_type": worker_type, "input": input}
         return self.request("POST", "/api/workers", payload)
@@ -1057,6 +1075,32 @@ def _tool_schemas() -> List[Dict[str, Any]]:
             "parameters": {"type": "object", "properties": {}},
         },
         {
+            "name": "dran_rename_slug",
+            "description": "Rename a page's slug. Rewrites ![[old-slug]] embeds across the workspace, so ask the user before doing it.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "Current slug"},
+                    "new_slug": {"type": "string", "description": "New slug (lowercase-hyphen)"},
+                },
+                "required": ["slug", "new_slug"],
+            },
+        },
+        {
+            "name": "dran_reaugment_page",
+            "description": "Re-run the augmentation pipeline for a page (refresh embedding, summary, relations). Use after a body change when inference was offline.",
+            "parameters": {
+                "type": "object",
+                "properties": {"slug": {"type": "string"}},
+                "required": ["slug"],
+            },
+        },
+        {
+            "name": "dran_generate_cluster_summaries",
+            "description": "Regenerate the nightly cluster summaries of the workspace on demand.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        {
             "name": "dran_start_worker",
             "description": "Start an autonomous worker session and return immediately (session_id + track_url). worker_type: 'curator' (duplicate/conflicting pages → report), 'link_gardener' (relation proposals for orphans), 'graph_rag' (GraphRAG answer). Poll with dran_get_worker_session.",
             "parameters": {
@@ -1180,6 +1224,29 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
 
         if tool_name == "dran_lint_brain":
             return json.dumps(client.lint_brain())
+
+        if tool_name == "dran_rename_slug":
+            slug = str(args.get("slug", "")).strip()
+            new_slug = str(args.get("new_slug", "")).strip()
+            if not slug or not new_slug:
+                return json.dumps({"error": "slug and new_slug are required"})
+            data = client.rename_slug(slug, new_slug)
+            return json.dumps({
+                "renamed": True,
+                "from": data.get("renamed_from"),
+                "to": data.get("renamed_to"),
+            })
+
+        if tool_name == "dran_reaugment_page":
+            slug = str(args.get("slug", "")).strip()
+            if not slug:
+                return json.dumps({"error": "slug is required"})
+            data = client.reaugment_page(slug)
+            return json.dumps({"scheduled": True, "data": data.get("data")})
+
+        if tool_name == "dran_generate_cluster_summaries":
+            data = client.generate_cluster_summaries()
+            return json.dumps({"data": data.get("data")})
 
         if tool_name == "dran_start_worker":
             worker_type = str(args.get("worker_type", "")).strip()
