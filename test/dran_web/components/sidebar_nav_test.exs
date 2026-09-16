@@ -84,23 +84,24 @@ defmodule DranWeb.SidebarNavTest do
     test "no Objetivos/Workflows links remain outside any group" do
       html = workspace_nav()
 
-      assert group_labels(html) == [
-               t("Knowledge base"),
-               t("Memory")
-             ]
+      # Memory moved out of its own group: it now sits with the always-visible
+      # entries, so Knowledge base is the only labelled group left.
+      assert group_labels(html) == [t("Knowledge base")]
 
       [first_summary | _rest] = summary_positions(html)
 
       home_pos = pos(html, ~s(href="/personal"))
       graph_pos = pos(html, ~s(href="/personal/graph"))
       journey_pos = pos(html, ~s(href="/personal/journey"))
+      memory_pos = pos(html, ~s(href="/personal/memory"))
       refute html =~ ~s(href="/personal/goals")
       refute html =~ ~s(href="/personal/workflows")
 
-      # Inicio → Grafo → Journey, todos antes del primer grupo
+      # Inicio → Grafo → Journey → Memory, todos antes del primer grupo
       assert home_pos < graph_pos
       assert graph_pos < journey_pos
-      assert journey_pos < first_summary
+      assert journey_pos < memory_pos
+      assert memory_pos < first_summary
     end
 
     test "Clusters sits below Referencias inside Knowledge base" do
@@ -109,15 +110,12 @@ defmodule DranWeb.SidebarNavTest do
       labels = group_labels(html)
       summaries = summary_positions(html)
       kb_index = Enum.find_index(labels, &(&1 == t("Knowledge base")))
-      memory_index = Enum.find_index(labels, &(&1 == t("Memory")))
 
       assert refs_pos = pos(html, ~s(href="/personal/references"))
       assert clusters_pos = pos(html, ~s(href="/personal/clusters"))
 
-      # clusters sigue dentro de Knowledge base: después de references y
-      # antes del <summary> del siguiente grupo (Memory).
+      # clusters sigue dentro de Knowledge base: después de references.
       assert refs_pos < clusters_pos
-      assert clusters_pos < Enum.at(summaries, memory_index)
       assert Enum.at(summaries, kb_index) < refs_pos
     end
 

@@ -275,9 +275,9 @@ defmodule DranWeb.Layouts do
 
   def sidebar_nav(assigns) do
     # Unified workspace sidebar: when a workspace_slug is present the nav shows
-    # the workspace sections as labelled groups (Inicio, Knowledge base,
-    # Memory, Insights); without a workspace (dashboard/admin/
-    # account) the nav is empty and only the footer icons show.
+    # the always-visible entries (Inicio/Grafo/Journey/Memory) followed by the
+    # page types under a labelled "Knowledge base" group; without a workspace
+    # (dashboard/admin/account) the nav is empty and only the footer icons show.
     slug = assigns[:workspace_slug]
 
     groups =
@@ -337,8 +337,9 @@ defmodule DranWeb.Layouts do
     end
   end
 
-  # Builds the workspace nav as labelled groups (Inicio, Knowledge base,
-  # Memory, Insights), gated by feature flags.
+  # Builds the workspace nav: the always-visible entries (Inicio, Grafo,
+  # Journey, Memory) plus the labelled Knowledge base group, gated by feature
+  # flags.
   defp workspace_groups(ws, slug, counts) do
     enabled? = fn feature ->
       case ws do
@@ -375,7 +376,7 @@ defmodule DranWeb.Layouts do
       |> Enum.reject(&(!&1))
 
     # Sin etiqueta (siempre visibles, sin <details> colapsable):
-    # Inicio arriba, Grafo y Journey directo debajo.
+    # Inicio arriba, Grafo, Journey y Memory directo debajo.
     home_items =
       [
         %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
@@ -387,24 +388,22 @@ defmodule DranWeb.Layouts do
             label: gettext("Journey"),
             icon: "hero-clock",
             path: base <> "/journey"
-          }
+          },
+        # Memory no es un feature gestionable (no está en @features de
+        # WorkspaceSettingsLive), así que no lleva gate — siempre visible.
+        %{
+          key: "memory",
+          label: gettext("Memory"),
+          icon: "hero-cpu-chip",
+          path: base <> "/memory",
+          badge: counts[:memory] || 0
+        }
       ]
       |> Enum.reject(&(!&1))
 
-    memory_items = [
-      %{
-        key: "memory",
-        label: gettext("Memory"),
-        icon: "hero-cpu-chip",
-        path: base <> "/memory",
-        badge: counts[:memory] || 0
-      }
-    ]
-
     [
       %{label: nil, items: home_items},
-      %{label: gettext("Knowledge base"), items: page_type_items},
-      %{label: gettext("Memory"), items: memory_items}
+      %{label: gettext("Knowledge base"), items: page_type_items}
     ]
   end
 
