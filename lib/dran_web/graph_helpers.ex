@@ -41,10 +41,14 @@ defmodule DranWeb.GraphHelpers do
     neighbors, level 2 = neighbors of neighbors, etc.
   - `:max_nodes` — cap on total nodes (default 200, including the center).
     When the expansion exceeds this, the most-connected nodes win.
+  - `:scope_memory` — read scope for memory neighbours (from
+    `Dran.ContentVisibility`). A hidden fact never becomes a node, and its
+    edges are never painted.
   """
   def build_page_subgraph(page, opts \\ []) do
     depth = Keyword.get(opts, :depth, 3)
     max_nodes = Keyword.get(opts, :max_nodes, 200)
+    scope_memory = Keyword.get(opts, :scope_memory, :all)
 
     # Pre-loaded relations (first level) from the LiveView, or fetch them.
     preloaded = Keyword.get(opts, :relations)
@@ -128,8 +132,11 @@ defmodule DranWeb.GraphHelpers do
         Dran.Repo.all(
           from m in Dran.Memory,
             where: m.id in ^memory_ids and m.workspace_id == ^page.workspace_id,
-            select: %{id: m.id, content: m.content}
+            select: %{id: m.id, content: m.content, owner_user_id: m.owner_user_id}
         )
+        # Visibilidad: el vecino oculto no se convierte en nodo (y sin nodo,
+        # tampoco se pinta su arista).
+        |> Enum.filter(&Dran.ContentVisibility.visible?(&1.owner_user_id, scope_memory))
         |> Map.new(fn m ->
           {m.id,
            %{

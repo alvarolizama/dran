@@ -184,5 +184,51 @@ defmodule DranWeb.GraphVisibilityTest do
              end),
              "la arista entre dos nodos visibles debe pintarse"
     end
+
+    test "el cache del grafo está particionado por scope (no filtra entre lectores)", %{
+      workspace: workspace,
+      owner: owner,
+      unique: unique
+    } do
+      {:ok, _} =
+        workspace
+        |> Dran.Workspace.settings_changeset(%{share_pages: false})
+        |> Repo.update()
+
+      {:ok, mine} =
+        Knowledge.create_page(%{
+          "workspace_id" => workspace.id,
+          "title" => "Mía #{unique}",
+          "slug" => "cache-mine-#{unique}",
+          "page_type" => "note",
+          "owner_user_id" => owner.id
+        })
+
+      {:ok, other} =
+        Accounts.create_user(%{
+          email: "cache-other-#{unique}@example.com",
+          api_token: "cache-other-#{unique}"
+        })
+
+      {:ok, theirs} =
+        Knowledge.create_page(%{
+          "workspace_id" => workspace.id,
+          "title" => "Ajena #{unique}",
+          "slug" => "cache-theirs-#{unique}",
+          "page_type" => "note",
+          "owner_user_id" => other.id
+        })
+
+      # Un lector "all" (el owner) cachea su vista ...
+      all_view = Dran.GraphCache.get(workspace.id, :all)
+      assert all_view.json =~ theirs.slug
+      assert all_view.json =~ mine.slug
+
+      # ... y el lector con scope propio NO recibe ese payload cacheado.
+      own_view = Dran.GraphCache.get(workspace.id, {:own, owner.id})
+      assert own_view.json =~ mine.slug
+      refute own_view.json =~ theirs.slug,
+             "el payload de otro scope no debe servirse a este lector"
+    end
   end
 end

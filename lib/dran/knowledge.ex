@@ -1176,13 +1176,18 @@ defmodule Dran.Knowledge do
   def graph_data(workspace_id, opts \\ []) do
     exclude_types = Keyword.get(opts, :exclude_types, [])
     max_nodes = Keyword.get(opts, :max_nodes)
+    # Read visibility (P7): each content type has its own scope, resolved by
+    # the single policy module. Nodos = visibles; aristas = intersección
+    # estricta entre nodos visibles.
+    scope_pages = Keyword.get(opts, :scope_pages, :all)
+    scope_memory = Keyword.get(opts, :scope_memory, :all)
 
     {page_nodes, total_pages} =
       cond do
         is_nil(max_nodes) ->
           nodes =
             Repo.all(
-              from p in graph_base(workspace_id, exclude_types),
+              from p in graph_base(workspace_id, exclude_types, scope_pages),
                 select: %{
                   id: p.id,
                   title: p.title,
@@ -1196,12 +1201,12 @@ defmodule Dran.Knowledge do
           {nodes, length(nodes)}
 
         true ->
-          total = Repo.aggregate(graph_base(workspace_id, exclude_types), :count)
+          total = Repo.aggregate(graph_base(workspace_id, exclude_types, scope_pages), :count)
 
           nodes =
             if total <= max_nodes do
               Repo.all(
-                from p in graph_base(workspace_id, exclude_types),
+                from p in graph_base(workspace_id, exclude_types, scope_pages),
                   select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
               )
             else
@@ -1211,7 +1216,7 @@ defmodule Dran.Knowledge do
                 []
               else
                 Repo.all(
-                  from p in graph_base(workspace_id, exclude_types),
+                  from p in graph_base(workspace_id, exclude_types, scope_pages),
                     where: p.id in ^top_ids,
                     select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
                 )
@@ -1227,13 +1232,14 @@ defmodule Dran.Knowledge do
     # store can't flood the 3D view. slug stays nil: the graph hook only
     # navigates nodes with a slug, so memory nodes are hover-only.
     memory_nodes =
-      Repo.all(
-        from m in Dran.Memory,
-          where: m.workspace_id == ^workspace_id and m.status == "active",
-          order_by: [desc: m.inserted_at],
-          limit: 100,
-          select: %{id: m.id, content: m.content, type: fragment("'memory'")}
+      from(m in Dran.Memory,
+        where: m.workspace_id == ^workspace_id and m.status == "active",
+        order_by: [desc: m.inserted_at],
+        limit: 100,
+        select: %{id: m.id, content: m.content, type: fragment("'memory'")}
       )
+      |> Dran.ContentVisibility.filter(scope_memory)
+      |> Repo.all()
       |> Enum.map(fn m ->
         %{id: m.id, title: truncate_memory_label(m.content), slug: nil, type: m.type}
       end)
@@ -1344,13 +1350,16 @@ defmodule Dran.Knowledge do
 
   # Base page query for the graph, scoped to the context and optionally
   # excluding page types (filtered in SQL so hidden types never load).
-  defp graph_base(workspace_id, exclude_types) do
-    if exclude_types == [] do
-      from p in Page, where: p.workspace_id == ^workspace_id
-    else
-      from p in Page,
-        where: p.workspace_id == ^workspace_id and p.page_type not in ^exclude_types
-    end
+  defp graph_base(workspace_id, exclude_types, scope) do
+    query =
+      if exclude_types == [] do
+        from p in Page, where: p.workspace_id == ^workspace_id
+      else
+        from p in Page,
+          where: p.workspace_id == ^workspace_id and p.page_type not in ^exclude_types
+      end
+
+    Dran.ContentVisibility.filter(query, scope)
   end
 
   @doc """
@@ -1427,14 +1436,14 @@ defmodule Dran.Knowledge do
   global graph). Used by the graph sidebar so totals stay truthful even when
   the rendered graph is capped.
   """
-  def graph_type_counts(workspace_id, exclude_types \\ []) do
+  def graph_type_counts(workspace_id, exclude_types \\ [], scope \\ :all) do
     Repo.all(
-      from p in graph_base(workspace_id, exclude_types),
+      from p in graph_base(workspace_id, exclude_types, scope),
         group_by: p.page_type,
         select: {p.page_type, count(p.id)}
     )
     |> Map.new()
-    |> Map.put("memory", Dran.Memory.count_memories(workspace_id))
+    |> Map.put("memory", Dran.Memory.count_memories(workspace_id, scope: scope))
   end
 
   # ──────────────────────────────────────────────────────────────────────────

@@ -15,7 +15,9 @@ defmodule DranWeb.HomeGraphController do
   def show(conn, %{"workspace_slug" => workspace_slug}) do
     case Knowledge.get_workspace_by_slug(workspace_slug) do
       %{} = context ->
-        cached = GraphCache.get(context.id)
+        # El grafo se cachea POR SCOPE: el lector pide su propia vista.
+        scope = Dran.ContentVisibility.resolve(context, conn.assigns[:user], :pages)
+        cached = GraphCache.get(context.id, scope)
 
         conn
         |> put_resp_content_type("application/json")

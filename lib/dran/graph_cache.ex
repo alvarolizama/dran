@@ -42,14 +42,20 @@ defmodule Dran.GraphCache do
   Get the cached global graph JSON for a context, building if missing.
   Returns `%{json: binary(), cached: boolean()}`.
   Reads from ETS directly; on miss, calls the GenServer to build + cache.
+
+  The cache key includes the reader's scope: the graph is now visibility-
+  filtered, so one payload per workspace would leak the first reader's view
+  to everyone else.
   """
-  def get(workspace_id) do
-    case :ets.lookup(@graph_table, workspace_id) do
-      [{^workspace_id, json}] ->
+  def get(workspace_id, scope \\ :all) do
+    key = {workspace_id, scope}
+
+    case :ets.lookup(@graph_table, key) do
+      [{^key, json}] ->
         %{json: json, cached: true}
 
       [] ->
-        GenServer.call(__MODULE__, {:build_graph, workspace_id})
+        GenServer.call(__MODULE__, {:build_graph, workspace_id, scope})
     end
   end
 
@@ -67,15 +73,20 @@ defmodule Dran.GraphCache do
     end
   end
 
-  @doc "Invalidate the global graph cache for a context."
+  @doc """
+  Invalidate the global graph cache for a context.
+
+  Entries are keyed by `{workspace_id, scope}`, so a write invalidates every
+  scope variant of the workspace (a match_delete on the workspace id).
+  """
   def invalidate_context(workspace_id) do
-    :ets.delete(@graph_table, workspace_id)
+    :ets.match_delete(@graph_table, {{workspace_id, :_}, :_})
     :ok
   end
 
   @doc "Invalidate the cached graph for a specific page."
   def invalidate_page(_page_id, workspace_id) do
-    :ets.delete(@graph_table, workspace_id)
+    :ets.match_delete(@graph_table, {{workspace_id, :_}, :_})
     :ok
   end
 
@@ -99,15 +110,17 @@ defmodule Dran.GraphCache do
   # ── Global graph ──
 
   @impl true
-  def handle_call({:build_graph, workspace_id}, _from, state) do
+  def handle_call({:build_graph, workspace_id, scope}, _from, state) do
+    key = {workspace_id, scope}
+
     # Double-check after GenServer call (another process may have built it)
-    case :ets.lookup(@graph_table, workspace_id) do
-      [{^workspace_id, json}] ->
+    case :ets.lookup(@graph_table, key) do
+      [{^key, json}] ->
         {:reply, %{json: json, cached: true}, state}
 
       [] ->
-        json = build_graph_json(workspace_id)
-        :ets.insert(@graph_table, {workspace_id, json})
+        json = build_graph_json(workspace_id, scope)
+        :ets.insert(@graph_table, {key, json})
         {:reply, %{json: json, cached: false}, state}
     end
   end
@@ -135,11 +148,13 @@ defmodule Dran.GraphCache do
 
   # ── Payload building ───────────────────────────────────────────────────
 
-  defp build_graph_json(workspace_id) do
+  defp build_graph_json(workspace_id, scope) do
     %{nodes: raw_nodes, edges: raw_edges, total_nodes: total_nodes, total_edges: total_edges} =
       Knowledge.graph_data(workspace_id,
         exclude_types: @hidden_by_default,
-        max_nodes: @max_graph_nodes
+        max_nodes: @max_graph_nodes,
+        scope_pages: scope,
+        scope_memory: scope
       )
 
     nodes =
@@ -162,7 +177,7 @@ defmodule Dran.GraphCache do
         }
       end)
 
-    type_counts = Knowledge.graph_type_counts(workspace_id, @hidden_by_default)
+    type_counts = Knowledge.graph_type_counts(workspace_id, @hidden_by_default, scope)
 
     Jason.encode!(%{
       nodes: nodes,
