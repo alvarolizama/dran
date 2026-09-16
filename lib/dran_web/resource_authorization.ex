@@ -4,7 +4,7 @@ defmodule DranWeb.ResourceAuthorization do
 
   One function, `authorize/3`, replaces the per-module variants that had
   drifted apart (`can_write?/2` ×5 and `user_has_context_access?/2` ×5 in
-  the retired MCP server, the router's `require_write_access`, and the
+  the retired agent server, the router's `require_write_access`, and the
   `contexts`-vs-`workspaces`
   naming split). The identity shapes it accepts mirror what the API auth
   pipelines actually produce (see `DranWeb.Router.require_api_token/2`):
