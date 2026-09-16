@@ -273,6 +273,115 @@ class _DranClient:
         data = self.request("GET", f"/api/memory/search?{qs}")
         return data.get("data", [])
 
+    # -- Knowledge endpoints (plugin tools, MCP replacement) -------------
+
+    def search_pages(self, query: str, strategy: str = "auto", limit: int = 10) -> list:
+        from urllib.parse import urlencode
+        qs = urlencode({"q": query, "workspace": self.workspace,
+                        "strategy": strategy, "limit": limit})
+        try:
+            data = self.request("GET", f"/api/search?{qs}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return []  # no results
+            raise
+        return data.get("data", []) if isinstance(data, dict) else []
+
+    def list_pages(self, page_type: str = "", limit: int = 20) -> list:
+        from urllib.parse import urlencode
+        params = {"workspace": self.workspace, "limit": limit}
+        if page_type:
+            params["type"] = page_type
+        data = self.request("GET", f"/api/knowledge-pages?{urlencode(params)}")
+        return data.get("data", []) if isinstance(data, dict) else []
+
+    def get_page(self, slug: str) -> Optional[dict]:
+        from urllib.parse import urlencode
+        qs = urlencode({"workspace": self.workspace, "include": "body"})
+        try:
+            data = self.request("GET", f"/api/knowledge-pages/{slug}?{qs}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+        return data.get("data") if isinstance(data, dict) else None
+
+    def create_page(self, title: str, body: str = "", page_type: str = "note",
+                    tags: Optional[List[str]] = None, summary: str = "",
+                    meta: Optional[dict] = None) -> dict:
+        payload: Dict[str, Any] = {
+            "workspace": self.workspace, "title": title, "body": body,
+            "page_type": page_type,
+        }
+        if tags:
+            payload["tags"] = tags
+        if summary:
+            payload["summary"] = summary
+        if meta:
+            payload["meta"] = meta
+        return self.request("POST", "/api/knowledge-pages", payload)
+
+    def update_page(self, slug: str, **fields: Any) -> dict:
+        from urllib.parse import urlencode
+        payload = {k: v for k, v in fields.items() if v is not None}
+        return self.request("PUT", f"/api/knowledge-pages/{slug}?{urlencode({'workspace': self.workspace})}",
+                            payload)
+
+    def delete_page(self, slug: str) -> bool:
+        from urllib.parse import urlencode
+        try:
+            self.request("DELETE",
+                         f"/api/knowledge-pages/{slug}?{urlencode({'workspace': self.workspace})}")
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return False
+            raise
+
+    def get_links(self, slug: str) -> dict:
+        from urllib.parse import urlencode
+        try:
+            data = self.request("GET", f"/api/knowledge-pages/{slug}/links?{urlencode({'workspace': self.workspace})}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return {}
+            raise
+        return data.get("data", data) if isinstance(data, dict) else {}
+
+    def create_relation(self, source_slug: str, target_slug: str, relation_type: str = "related",
+                        description: str = "") -> dict:
+        payload: Dict[str, Any] = {
+            "workspace": self.workspace, "source_slug": source_slug,
+            "target_slug": target_slug, "relation_type": relation_type,
+        }
+        if description:
+            payload["description"] = description
+        return self.request("POST", "/api/relations", payload)
+
+    def delete_relation(self, source_slug: str, target_slug: str,
+                        relation_type: str = "") -> bool:
+        from urllib.parse import urlencode
+        params = {"workspace": self.workspace, "source_slug": source_slug,
+                  "target_slug": target_slug}
+        if relation_type:
+            params["relation_type"] = relation_type
+        try:
+            self.request("DELETE", f"/api/relations?{urlencode(params)}")
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return False
+            raise
+
+    def lint_brain(self) -> dict:
+        from urllib.parse import urlencode
+        data = self.request("GET", f"/api/lint?{urlencode({'workspace': self.workspace})}")
+        return data.get("data", data) if isinstance(data, dict) else {}
+
+    def stats(self) -> dict:
+        data = self.request("GET", "/api/workspaces")
+        return data.get("data", data) if isinstance(data, dict) else {}
+
     def feedback(self, memory_id: str, helpful: bool) -> dict:
         return self.request("POST", "/api/memory/feedback", {
             "id": memory_id, "helpful": helpful, "workspace": self.workspace,
@@ -761,3 +870,344 @@ class DranMemoryProvider(MemoryProvider):
             return str(get_hermes_home())
         except Exception:
             return os.path.expanduser("~/.hermes")
+
+
+# ── Plugin tools (register(ctx)) ──────────────────────────────────────────
+#
+# The plugin ships BOTH surfaces from one module:
+#
+#   * the memory provider (dran memory recall/capture) — unchanged, above
+#   * a toolset that replaces the old MCP server for agent consumption
+#
+# Hermes' memory-provider loader accepts a directory plugin whose module
+# exposes `register(ctx)`: it hands the module a collector that captures
+# `register_memory_provider(provider)` and forwards every other
+# `register_*` call to a real PluginContext. So `register(ctx)` below
+# registers the provider AND the tools in one pass, and the plugin also
+# works when loaded through normal plugin discovery.
+#
+# Every write goes through _DranClient, which puts the Hermes profile name
+# in the `X-Hermes-Agent` header; Dran persists it as `agent_name` on the
+# written content (server-side attribution).
+
+_TOOLSET = "dran"
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Merge plugin config over the provider's config (provider wins on scalars)."""
+    merged = dict(base or {})
+    for key, value in (override or {}).items():
+        merged[key] = value
+    return merged
+
+
+def _client_for(ctx) -> Optional[_DranClient]:
+    """Build a client from plugin config, falling back to the memory provider config."""
+    config: Dict[str, Any] = {}
+    try:
+        config = dict(ctx.config or {})
+    except Exception:
+        config = {}
+    try:
+        config = _deep_merge(config, _load_dran_config(os.path.expanduser("~/.hermes")))
+    except Exception:
+        pass
+    api_key = config.get("api_key") or _resolve_secret()
+    if not api_key:
+        return None
+    return _DranClient(
+        config.get("base_url") or DEFAULT_BASE_URL,
+        api_key,
+        config.get("workspace") or DEFAULT_WORKSPACE,
+    )
+
+
+def _tool_schemas() -> List[Dict[str, Any]]:
+    """Tool schemas exposed to the agent (mirrors the retired MCP toolset)."""
+    return [
+        {
+            "name": "dran_search",
+            "description": "Search knowledge pages in the Dran workspace (full-text, fuzzy, semantic or hybrid). Use this first to find anything already written.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "strategy": {"type": "string", "enum": ["auto", "fts", "fuzzy", "semantic", "hybrid"],
+                                 "description": "Search strategy (default auto)"},
+                    "limit": {"type": "integer", "description": "Max results (default 10)"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "dran_list_pages",
+            "description": "List knowledge pages, optionally filtered by page type (note, idea, knowledge, technical, entity, concept, reference, food).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "page_type": {"type": "string", "description": "Optional page type filter"},
+                    "limit": {"type": "integer", "description": "Max results (default 20)"},
+                },
+            },
+        },
+        {
+            "name": "dran_get_page",
+            "description": "Read the full body of a page by slug.",
+            "parameters": {
+                "type": "object",
+                "properties": {"slug": {"type": "string", "description": "Page slug"}},
+                "required": ["slug"],
+            },
+        },
+        {
+            "name": "dran_create_page",
+            "description": "Create a knowledge page in the Dran workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "body": {"type": "string", "description": "Page body (markdown)"},
+                    "page_type": {"type": "string", "description": "note | idea | knowledge | technical | entity | concept | reference | food"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                    "summary": {"type": "string"},
+                },
+                "required": ["title"],
+            },
+        },
+        {
+            "name": "dran_update_page",
+            "description": "Update fields of an existing page by slug (only the fields you pass change).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string"},
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["slug"],
+            },
+        },
+        {
+            "name": "dran_delete_page",
+            "description": "Delete a page by slug.",
+            "parameters": {
+                "type": "object",
+                "properties": {"slug": {"type": "string"}},
+                "required": ["slug"],
+            },
+        },
+        {
+            "name": "dran_get_links",
+            "description": "Get the inbound and outbound relations of a page (graph exploration).",
+            "parameters": {
+                "type": "object",
+                "properties": {"slug": {"type": "string"}},
+                "required": ["slug"],
+            },
+        },
+        {
+            "name": "dran_create_relation",
+            "description": "Create a typed, directed relation between two pages.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_slug": {"type": "string"},
+                    "target_slug": {"type": "string"},
+                    "relation_type": {"type": "string", "description": "e.g. related, references, depends_on, part_of"},
+                    "description": {"type": "string"},
+                },
+                "required": ["source_slug", "target_slug"],
+            },
+        },
+        {
+            "name": "dran_delete_relation",
+            "description": "Delete a relation between two pages.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_slug": {"type": "string"},
+                    "target_slug": {"type": "string"},
+                    "relation_type": {"type": "string"},
+                },
+                "required": ["source_slug", "target_slug"],
+            },
+        },
+        {
+            "name": "dran_lint_brain",
+            "description": "Structural hygiene audit of the workspace (read-only): orphans, broken embeds, missing metadata.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "dran_stats",
+            "description": "Dashboard numbers for the Dran workspace: page counts by type, memory count, relations.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    ]
+
+
+def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> str:
+    """Handler body for the `dran_*` knowledge tools (the retired MCP surface).
+
+    Hermes dispatches every tool as ``handler(args, **kwargs)`` — it does not
+    pass the tool name. `register()` therefore binds the name per tool with a
+    closure (see `_make_handler`).
+    """
+    args = args or {}
+    try:
+        client = _client_for(kwargs.get("ctx") or _PLUGIN_CTX)
+        if client is None:
+            return json.dumps({"error": "dran not configured (set api_key in the plugin or memory config)"})
+
+        if tool_name == "dran_search":
+            query = str(args.get("query", "")).strip()
+            if not query:
+                return json.dumps({"error": "query is required"})
+            results = client.search_pages(query,
+                                          strategy=str(args.get("strategy") or "auto"),
+                                          limit=int(args.get("limit") or 10))
+            return json.dumps({"results": _trim_results(results)})
+
+        if tool_name == "dran_list_pages":
+            pages = client.list_pages(page_type=str(args.get("page_type") or ""),
+                                      limit=int(args.get("limit") or 20))
+            return json.dumps({"pages": _trim_results(pages)})
+
+        if tool_name == "dran_get_page":
+            slug = str(args.get("slug", "")).strip()
+            if not slug:
+                return json.dumps({"error": "slug is required"})
+            page = client.get_page(slug)
+            if page is None:
+                return json.dumps({"error": f"page not found: {slug}"})
+            return json.dumps(page)
+
+        if tool_name == "dran_create_page":
+            title = str(args.get("title", "")).strip()
+            if not title:
+                return json.dumps({"error": "title is required"})
+            data = client.create_page(
+                title=title,
+                body=str(args.get("body") or ""),
+                page_type=str(args.get("page_type") or "note"),
+                tags=list(args.get("tags") or []),
+                summary=str(args.get("summary") or ""),
+            )
+            page = data.get("data") or {}
+            return json.dumps({"created": True, "slug": page.get("slug"), "id": page.get("id")})
+
+        if tool_name == "dran_update_page":
+            slug = str(args.get("slug", "")).strip()
+            if not slug:
+                return json.dumps({"error": "slug is required"})
+            fields = {k: args.get(k) for k in ("title", "body", "summary", "tags") if args.get(k) is not None}
+            if not fields:
+                return json.dumps({"error": "nothing to update"})
+            data = client.update_page(slug, **fields)
+            page = data.get("data") or {}
+            return json.dumps({"updated": True, "slug": page.get("slug"), "version": page.get("version")})
+
+        if tool_name == "dran_delete_page":
+            slug = str(args.get("slug", "")).strip()
+            if not slug:
+                return json.dumps({"error": "slug is required"})
+            return json.dumps({"deleted": client.delete_page(slug), "slug": slug})
+
+        if tool_name == "dran_get_links":
+            slug = str(args.get("slug", "")).strip()
+            if not slug:
+                return json.dumps({"error": "slug is required"})
+            return json.dumps(client.get_links(slug))
+
+        if tool_name == "dran_create_relation":
+            source = str(args.get("source_slug", "")).strip()
+            target = str(args.get("target_slug", "")).strip()
+            if not source or not target:
+                return json.dumps({"error": "source_slug and target_slug are required"})
+            data = client.create_relation(source, target,
+                                          relation_type=str(args.get("relation_type") or "related"),
+                                          description=str(args.get("description") or ""))
+            return json.dumps({"created": True, "data": data.get("data")})
+
+        if tool_name == "dran_delete_relation":
+            source = str(args.get("source_slug", "")).strip()
+            target = str(args.get("target_slug", "")).strip()
+            if not source or not target:
+                return json.dumps({"error": "source_slug and target_slug are required"})
+            return json.dumps({"deleted": client.delete_relation(
+                source, target, str(args.get("relation_type") or ""))})
+
+        if tool_name == "dran_lint_brain":
+            return json.dumps(client.lint_brain())
+
+        if tool_name == "dran_stats":
+            return json.dumps(client.stats())
+
+        return json.dumps({"error": f"unknown tool {tool_name}"})
+    except Exception as exc:
+        logger.warning("Dran plugin tool %s failed: %s", tool_name, exc)
+        return json.dumps({"error": f"dran unavailable: {exc}"})
+
+
+def _trim_results(results: Any, *, body_chars: int = 600) -> list:
+    """Keep tool answers bounded: long bodies are truncated, never dropped."""
+    if not isinstance(results, list):
+        return []
+    out = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        row = {k: item.get(k) for k in
+               ("id", "slug", "title", "page_type", "summary", "tags",
+                "score", "created_by", "agent_name", "updated_at")}
+        body = item.get("body")
+        if isinstance(body, str) and body:
+            row["body"] = body[:body_chars]
+        out.append({k: v for k, v in row.items() if v is not None})
+    return out
+
+
+_PLUGIN_CTX: Any = None
+
+
+def _make_handler(tool_name: str):
+    """Bind a tool name to the shared handler (Hermes calls handler(args, **kw))."""
+
+    def _handler(args: Dict[str, Any], **kwargs: Any) -> str:
+        return _handle_plugin_tool(tool_name, args, **kwargs)
+
+    _handler.__name__ = f"dran_tool_{tool_name}"
+    return _handler
+
+
+def register(ctx) -> None:
+    """Register the memory provider AND the knowledge tools (MCP replacement).
+
+    Called by the memory-provider loader (plugins/memory) and by normal plugin
+    discovery. Both surfaces live in this module by design: one credential, one
+    config, one X-Hermes-Agent identity for recall and for tool writes.
+    """
+    global _PLUGIN_CTX
+    _PLUGIN_CTX = ctx
+
+    # 1) Memory provider — the original surface, unchanged.
+    try:
+        ctx.register_memory_provider(DranMemoryProvider())
+    except Exception as exc:  # never let the tool registration cost the provider
+        logger.warning("Dran plugin: could not register memory provider: %s", exc)
+
+    # 2) Knowledge tools — each write carries X-Hermes-Agent.
+    for schema in _tool_schemas():
+        name = schema["name"]
+        try:
+            ctx.register_tool(
+                name=name,
+                toolset=_TOOLSET,
+                schema=schema,
+                handler=_make_handler(name),
+                description=schema.get("description", ""),
+                emoji="🧠",
+            )
+        except Exception as exc:
+            logger.warning("Dran plugin: could not register tool %s: %s", name, exc)

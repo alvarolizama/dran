@@ -1,5 +1,8 @@
 name: dran
-version: 1.0.0
-description: "Dran memory — shared multi-agent memory store backed by your Dran workspace (REST, per-agent API key attribution)."
+version: 1.1.0
+description: "Dran — shared multi-agent memory store + knowledge tools backed by your Dran workspace (REST, per-agent API key attribution, X-Hermes-Agent identity)."
 hooks:
   - on_session_end
+toolsets:
+  - name: dran
+    description: "Dran knowledge tools (search, pages, relations, lint) — replaces the retired MCP server."

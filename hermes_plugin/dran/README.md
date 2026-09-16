@@ -94,11 +94,46 @@ loguea con warning. Si Dran no responde, se usa la config local sin validar.
   fallan rápido durante 60 s — un Dran caído no agrega un timeout a cada
   turno. Cualquier éxito rearma el contador.
 
+## Tools del plugin — reemplazo del MCP
+
+Desde la v1.1 el módulo expone `register(ctx)`, que registra **dos
+superficies en el mismo plugin**: el memory provider (arriba) y un toolset
+`dran` con las operaciones de conocimiento. Dran retira el servidor MCP:
+estas tools son el consumo del agente.
+
+| Tool | Qué hace |
+|---|---|
+| `dran_search` | Busca páginas (fts / fuzzy / semantic / hybrid) |
+| `dran_list_pages` | Lista páginas, filtrable por tipo |
+| `dran_get_page` | Lee el cuerpo completo por slug |
+| `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas |
+| `dran_get_links` | Relaciones entrantes/salientes de una página |
+| `dran_create_relation` / `dran_delete_relation` | Relaciones tipadas y dirigidas |
+| `dran_lint_brain` | Auditoría estructural (read-only) |
+| `dran_stats` | Números del dashboard |
+
+Cada tool escribe por `_DranClient`, así que **todo write lleva
+`X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`
+— Hermes no pasa el nombre de la tool — así que `register()` ata el nombre
+por closure (`_make_handler`).
+
 ## Identidad y contextos
 
 - `initialize` recibe `agent_identity` (nombre del perfil) → header
-  `X-Hermes-Agent` (informativo, para logs de transporte; Dran atribuye
-  cada recuerdo por el actor de la API key — el header no se persiste).
+  `X-Hermes-Agent` en cada request. Dran lo persiste server-side como
+  `agent_name` del contenido escrito, además de atribuir por el actor de la
+  API key (`owner_user_id`). El header es atribución, no autorización: nunca
+  amplía acceso.
 - `agent_context != "primary"` (subagent, cron): prefetch permitido,
   **writes deshabilitados** — los agentes secundarios no contaminan la
   memoria compartida.
+
+## Tests
+
+```bash
+python3 -m pytest hermes_plugin/tests/ -q
+```
+
+Cubren el registro (provider + tools, schemas válidos, un fallo de tool no
+cuesta el provider), el header en cada path de escritura, las rutas REST y
+el manejo de errores como JSON.
