@@ -521,7 +521,6 @@ defmodule Dran.Worker.GraphRag do
             owner: "graph_rager",
             meta: %{
               "mode" => state.mode,
-              "kind" => "answer",
               "worker_session_id" => state.session.id,
               "sources" => sources
             }

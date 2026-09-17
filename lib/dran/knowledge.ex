@@ -172,7 +172,6 @@ defmodule Dran.Knowledge do
   ## Options
   - `:workspace_id` — filter by context (required for multi-context isolation)
   - `:type` — filter by page_type
-  - `:kind` — filter by `meta.kind` (visual classifier: filter/group only)
   - `:tag` — filter by a single tag
   - `:archived` — `true` returns only archived pages, `false` or omitted
     returns only non-archived pages
@@ -184,7 +183,6 @@ defmodule Dran.Knowledge do
   def list_pages(opts \\ []) do
     workspace_id = Keyword.get(opts, :workspace_id)
     type = Keyword.get(opts, :type)
-    kind = Keyword.get(opts, :kind)
     tag = Keyword.get(opts, :tag)
     # `owner` was dropped with the actor model — the opt stays for backward
     # compat with old saved filters but no longer matches any row.
@@ -235,7 +233,6 @@ defmodule Dran.Knowledge do
       |> maybe_filter_context(workspace_id)
       |> maybe_exclude_disabled_types(context, workspace_id)
       |> maybe_filter_type(type)
-      |> maybe_filter_kind(kind)
       |> maybe_filter_tag(tag)
       |> maybe_filter_owner(Keyword.get(opts, :owner))
       |> maybe_filter_created_by(created_by)
@@ -286,21 +283,6 @@ defmodule Dran.Knowledge do
   defp maybe_filter_type(query, type) do
     where(query, [p], p.page_type == ^type)
   end
-
-  # kind filters on meta.kind — used for note sub-kinds like "todo"/"plan".
-  # Accepts a single binary or a list (multi-select OR semantics: meta->>'kind'
-  # = ANY(list)). Empty list applies no filter.
-  defp maybe_filter_kind(query, nil), do: query
-
-  defp maybe_filter_kind(query, kinds) when is_list(kinds) and kinds != [] do
-    where(query, [p], fragment("?->>'kind' = ANY(?)", p.meta, ^kinds))
-  end
-
-  defp maybe_filter_kind(query, kinds) when is_binary(kinds) do
-    where(query, [p], fragment("?->>'kind' = ?", p.meta, ^kinds))
-  end
-
-  defp maybe_filter_kind(query, _), do: query
 
   defp maybe_filter_tag(query, nil), do: query
 

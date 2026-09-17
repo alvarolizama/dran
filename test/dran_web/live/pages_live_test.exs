@@ -51,7 +51,9 @@ defmodule DranWeb.PagesLiveTest do
       assert html =~ ~s(href="/#{ws.slug}/search?q=elixir")
     end
 
-    test "card badge shows the note kind, tolerating unknown kinds", %{conn: conn, ws: ws} do
+    test "card badge shows the page type, ignoring legacy meta.kind", %{conn: conn, ws: ws} do
+      # Rows created before M9 carried a `meta.kind` (the collapsed type). The
+      # list must render the TYPE label ("Nota"), never the dead kind slug.
       {:ok, plan} =
         Knowledge.create_page(%{
           workspace_id: ws.id,
@@ -61,8 +63,6 @@ defmodule DranWeb.PagesLiveTest do
           meta: %{"kind" => "plan"}
         })
 
-      # kind not in the registry (the API accepts arbitrary meta) — must render
-      # capitalized, not crash kind_label/1 (Map.fetch!).
       {:ok, technical} =
         Knowledge.create_page(%{
           workspace_id: ws.id,
@@ -74,139 +74,47 @@ defmodule DranWeb.PagesLiveTest do
 
       {:ok, view, html} = live(conn, ~p"/#{ws.slug}/notes")
 
-      assert has_element?(view, "[data-testid='page-card-#{plan.slug}']", t("Plan"))
-      assert has_element?(view, "[data-testid='page-card-#{technical.slug}']", "Technical")
+      assert has_element?(view, "[data-testid='page-card-#{plan.slug}']", t("Note"))
+      assert has_element?(view, "[data-testid='page-card-#{technical.slug}']", t("Note"))
+      refute html =~ t("Plan")
     end
 
-    test "renders the kind filter dropdown (collapsed)", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/ideas")
+    test "no kind filter dropdown is rendered (the vocabulary is gone)", %{conn: conn, ws: ws} do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes")
 
-      assert html =~ ~s(data-testid="kind-filters")
-      assert html =~ ~s(data-testid="kind-filter-toggle")
-      # Collapsed by default — options only render when open
+      refute html =~ ~s(data-testid="kind-filters")
+      refute html =~ ~s(data-testid="kind-filter-toggle")
       refute html =~ ~s(data-testid="kind-filter-menu")
     end
 
-    test "filters the list by ?kind= (single)", %{conn: conn, ws: ws} do
-      {:ok, _journal} =
-        Knowledge.create_page(%{
-          workspace_id: ws.id,
-          title: "Entrada de idea",
-          body: "...",
-          page_type: "idea",
-          meta: %{"kind" => "idea"}
-        })
-
-      {:ok, _idea} =
-        Knowledge.create_page(%{
-          workspace_id: ws.id,
-          title: "Pregunta suelta",
-          body: "...",
-          page_type: "idea",
-          meta: %{"kind" => "question"}
-        })
-
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/ideas?kind=idea")
-
-      assert html =~ "Entrada de idea"
-      refute html =~ "Pregunta suelta"
-    end
-
-    test "filters the list by ?kind=a,b (multi)", %{conn: conn, ws: ws} do
-      {:ok, _journal} =
-        Knowledge.create_page(%{
-          workspace_id: ws.id,
-          title: "Entrada de idea",
-          body: "...",
-          page_type: "idea",
-          meta: %{"kind" => "idea"}
-        })
-
-      {:ok, _idea} =
-        Knowledge.create_page(%{
-          workspace_id: ws.id,
-          title: "Pregunta suelta",
-          body: "...",
-          page_type: "idea",
-          meta: %{"kind" => "question"}
-        })
-
-      {:ok, _quote} =
-        Knowledge.create_page(%{
-          workspace_id: ws.id,
-          title: "Hipótesis célebre",
-          body: "...",
-          page_type: "idea",
-          meta: %{"kind" => "hypothesis"}
-        })
-
-      # Two of three kinds selected — the third must not appear
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/ideas?kind=idea,question")
-
-      assert html =~ "Entrada de idea"
-      assert html =~ "Pregunta suelta"
-      refute html =~ "Hipótesis célebre"
-    end
-
-    test "unknown kinds in the list are dropped", %{conn: conn, ws: ws} do
+    test "a legacy ?kind= param is inert — the full list still renders", %{conn: conn, ws: ws} do
       Knowledge.create_page(%{
         workspace_id: ws.id,
-        title: "Visible igual",
+        title: "Entrada con kind legacy",
         body: "...",
-        page_type: "idea"
+        page_type: "note",
+        meta: %{"kind" => "journal"}
       })
 
-      # "no-existe" is dropped; empty valid remainder = no filter
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/ideas?kind=no-existe")
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?kind=journal")
 
-      assert html =~ "Visible igual"
+      assert html =~ "Entrada con kind legacy"
     end
 
-    test "opening the menu and toggling kinds patches the URL and refilters", %{
-      conn: conn,
-      ws: ws
-    } do
-      Knowledge.create_page(%{
-        workspace_id: ws.id,
-        title: "Solo idea",
-        body: "...",
-        page_type: "idea",
-        meta: %{"kind" => "idea"}
-      })
+    test "a retired type path is a 404, not a redirect to /", %{conn: conn, ws: ws} do
+      # ?01 settled: /ideas, /knowledge, /technical, /food are simply gone.
+      # The generic /:workspace_slug/:type route matches but resolves to no
+      # type, so the LiveView raises NotFoundError. Before this change
+      # pages_live.ex redirected to "/", which is what the gate forbids.
+      for retired <- ~w(ideas knowledge technical food) do
+        assert_raise DranWeb.NotFoundError, fn -> live(conn, "/#{ws.slug}/#{retired}") end
+      end
 
-      Knowledge.create_page(%{
-        workspace_id: ws.id,
-        title: "Solo pregunta",
-        body: "...",
-        page_type: "idea",
-        meta: %{"kind" => "question"}
-      })
-
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/ideas")
-
-      # Open the dropdown
-      view |> element(~s([data-testid="kind-filter-toggle"])) |> render_click()
-      assert render(view) =~ ~s(data-testid="kind-filter-menu")
-
-      # Select idea — the other page disappears, URL carries the filter
-      view |> element(~s([data-testid="kind-option-idea"])) |> render_click()
-
-      assert_patch view, "/#{ws.slug}/ideas?kind=idea"
-      html = render(view)
-      assert html =~ "Solo idea"
-      refute html =~ "Solo pregunta"
-
-      # Add question to the selection — both appear
-      view |> element(~s([data-testid="kind-option-question"])) |> render_click()
-
-      assert_patch view, "/#{ws.slug}/ideas?kind=idea,question"
-      html = render(view)
-      assert html =~ "Solo idea"
-      assert html =~ "Solo pregunta"
-
-      # Clear resets everything
-      view |> element(~s([data-testid="kind-clear"])) |> render_click()
-      assert_patch view, "/#{ws.slug}/ideas"
+      # …and the exception really is a 404 (not a 500): Plug.Exception.status
+      # is what the endpoint uses to pick the response, and ErrorHTML renders
+      # the matching status message for it.
+      assert Plug.Exception.status(DranWeb.NotFoundError.exception([])) == 404
+      assert DranWeb.ErrorHTML.render("404.html", %{}) == "Not Found"
     end
   end
 
@@ -229,48 +137,37 @@ defmodule DranWeb.PagesLiveTest do
 
   describe "new — create a page (resource modal)" do
     test "renders the creation modal (over the list)", %{conn: conn, ws: ws} do
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/ideas?new=true")
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
 
       assert html =~ "page-resource-modal"
-      assert html =~ "page-new-form-idea"
+      assert html =~ "page-new-form-note"
       assert html =~ t("Create")
-      # The modal overlays the list — the empty state stays in the DOM
-      assert has_element?(view, "[data-testid='kind-filters']")
     end
 
-    test "kind select offers the type's registered kinds, no duplicate Tags label", %{
-      conn: conn,
-      ws: ws
-    } do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/ideas?new=true")
+    test "creation form has no kind select and no duplicate Tags label", %{conn: conn, ws: ws} do
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
 
-      # kind select posts to page[meta][kind] with raw slugs as values
-      assert html =~ ~s(name="page[meta][kind]")
-      assert html =~ ~s(value="idea")
+      # Replaces "kind select offers the type's registered kinds": the kind
+      # vocabulary is gone from the page model, so the creation form must not
+      # post `page[meta][kind]` at all.
+      refute html =~ ~s(name="page[meta][kind]")
 
       # the Tags label renders exactly once (component label, not duplicated)
-      _tags_labels = Regex.scan(~r/Etiquetas/, html)
-      # locale-dependent: fall back to counting label-text occurrences in any locale
-      label_count =
-        Regex.scan(~r/label mb-1 block[^>]*>\s*<\/span>/, html) |> length()
+      label_count = Regex.scan(~r/label mb-1 block[^>]*>\s*<\/span>/, html) |> length()
 
       assert label_count == 0,
              "expected no leftover manual Tags label above tag_input, got #{label_count}"
     end
 
-    test "creation form renders per type with its kinds", %{conn: conn, ws: ws} do
-      for {type_path, kind_sample} <- [
-            {"ideas", "question"},
-            {"knowledge", "quote"},
-            {"technical", "code"},
-            {"entities", "person"},
-            {"references", "article"},
-            {"food", "recipe"}
-          ] do
+    test "creation form renders per type, with only the four surviving types",
+         %{conn: conn, ws: ws} do
+      # Replaces the per-type kind-sample loop: every surviving type renders a
+      # creation form under its path segment, and none of them offers kinds.
+      for type_path <- ~w(notes entities concepts references) do
         {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/#{type_path}?new=true")
 
-        assert html =~ ~s(name="page[meta][kind]"), "missing kind select for #{type_path}"
-        assert html =~ ~s(value="#{kind_sample}"), "missing kind #{kind_sample} for #{type_path}"
+        assert html =~ "page-resource-modal", "no creation modal for #{type_path}"
+        refute html =~ ~s(name="page[meta][kind]"), "#{type_path} still offers a kind select"
       end
     end
 
@@ -318,28 +215,30 @@ defmodule DranWeb.PagesLiveTest do
       assert html =~ "Editable"
     end
 
-    test "changing kind in the attributes panel autosaves to the db", %{
+    test "changing a meta field in the attributes panel autosaves to the db", %{
       conn: conn,
       ws: ws
     } do
+      # Replaces the kind autosave coverage: `kind` is gone from the schema, so
+      # the equivalent is a real meta field of a surviving type.
       {:ok, page} =
         Knowledge.create_page(%{
           workspace_id: ws.id,
-          title: "Kindable",
+          title: "Ubicable",
           body: "cuerpo",
-          page_type: "idea",
-          meta: %{"kind" => "idea"}
+          page_type: "entity",
+          meta: %{"location" => "CDMX"}
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/ideas/#{page.slug}?edit=true")
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/entities/#{page.slug}?edit=true")
 
-      assert has_element?(view, "#idea-editor-attributes-form")
+      assert has_element?(view, "#entity-editor-attributes-form")
 
       view
-      |> form("#idea-editor-attributes-form", page: %{meta: %{"kind" => "question"}})
+      |> form("#entity-editor-attributes-form", page: %{meta: %{"location" => "Guadalajara"}})
       |> render_change()
 
-      assert Knowledge.get_page(page.id).meta["kind"] == "question"
+      assert Knowledge.get_page(page.id).meta["location"] == "Guadalajara"
     end
 
     test "tags serialized as a comma string (tag_input hidden field) autosave to the db", %{

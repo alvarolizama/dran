@@ -368,9 +368,11 @@ defmodule DranWeb.SettingsLive do
 
   @impl true
   def handle_event("create_actor", %{"actor" => params}, socket) do
+    # `kind` is intentionally absent: the actor schema defaults it to "agent"
+    # (users and system actors are created by their own paths) and passing it
+    # here only duplicated the default.
     attrs = %{
       "name" => params["name"] |> to_string() |> String.trim(),
-      "kind" => "agent",
       "display_name" => normalize_optional(params["display_name"]),
       "host" => normalize_optional(params["host"])
     }

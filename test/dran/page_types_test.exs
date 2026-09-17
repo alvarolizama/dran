@@ -6,13 +6,20 @@ defmodule Dran.PageTypesTest do
 
   describe "types/0" do
     test "returns the canonical page types in order" do
-      assert PageTypes.types() ==
-               ~w(note idea knowledge technical entity concept reference food)
+      assert PageTypes.types() == ~w(note entity concept reference)
     end
 
     test "is the single source for Page.all_types/0" do
       assert Page.all_types() == PageTypes.types()
       refute "report" in Page.all_types()
+    end
+
+    test "the retired types are gone" do
+      # idea/knowledge/technical/food were collapsed into note (M9 step 1);
+      # their rows live on in note, their vocabulary does not.
+      for retired <- ~w(idea knowledge technical food project) do
+        refute retired in PageTypes.types(), "#{retired} should no longer be a page type"
+      end
     end
   end
 
@@ -24,8 +31,8 @@ defmodule Dran.PageTypesTest do
       assert PageTypes.agent_create?("note")
     end
 
-    test "all full-citizen types have every capability enabled" do
-      for type <- ~w(note idea knowledge technical entity concept reference food) do
+    test "all four types have every capability enabled" do
+      for type <- ~w(note entity concept reference) do
         assert PageTypes.graph?(type), "#{type} should be in the graph"
         assert PageTypes.journey?(type), "#{type} should be in the journey"
         assert PageTypes.embeddings?(type), "#{type} should have embeddings"
@@ -44,7 +51,7 @@ defmodule Dran.PageTypesTest do
   describe "list helpers" do
     test "hidden_from_graph/0 returns empty for standard types" do
       # goal, plan, todo, and report have been removed from the page types registry
-      # or handled elsewhere. The PageTypes module now only contains 4 standard types.
+      # or handled elsewhere. The registry now holds exactly 4 standard types.
       assert PageTypes.hidden_from_graph() == []
     end
 

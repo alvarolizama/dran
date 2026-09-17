@@ -595,7 +595,6 @@ defmodule DranWeb.PageEdit do
         owner: "system",
         created_by: socket.assigns[:current_user] || "system",
         meta: %{
-          "kind" => "file",
           "filename" => stored.filename,
           "mime_type" => stored.mime_type,
           "size" => stored.size,

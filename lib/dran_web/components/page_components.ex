@@ -14,7 +14,6 @@ defmodule DranWeb.PageComponents do
   import DranWeb.ResourceComponents, only: [markdown_body_field: 1]
 
   alias Dran.Knowledge
-  alias Dran.PageRegistry
   alias DranWeb.PageTypes
 
   attr :page, :map, required: true
@@ -974,15 +973,6 @@ defmodule DranWeb.PageComponents do
 
         <%!-- no summary input on creation: it is machine-owned (REST/augmentation) --%>
 
-        <.input
-          type="select"
-          name="page[meta][kind]"
-          value={Phoenix.HTML.Form.input_value(@form, :meta) |> meta_kind()}
-          options={kind_options_for(@page_type)}
-          prompt={gettext("Ninguno")}
-          label={gettext("Kind")}
-        />
-
         <div>
           <.tag_input
             id={"#{@editor_id}-new-tags"}
@@ -1003,17 +993,4 @@ defmodule DranWeb.PageComponents do
     </div>
     """
   end
-
-  # Kind options for the creation-form select — registry labels, raw slugs.
-  defp kind_options_for(page_type) do
-    (PageRegistry.kinds(page_type) || [])
-    |> Enum.map(&{PageRegistry.kind_label(&1), &1})
-  end
-
-  # Current meta.kind from the form (live params) or the persisted struct.
-  defp meta_kind(%Phoenix.HTML.Form{params: %{"meta" => %{"kind" => kind}}}), do: kind
-  defp meta_kind(%{params: %{"meta" => %{"kind" => kind}}}), do: kind
-  defp meta_kind(%{"kind" => kind}) when is_binary(kind), do: kind
-  defp meta_kind(%{kind: kind}) when is_binary(kind), do: kind
-  defp meta_kind(_), do: nil
 end

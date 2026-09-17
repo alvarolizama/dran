@@ -13,7 +13,7 @@ defmodule Dran.Worker.Curator do
       embedding distance < 0.05.
     * `flag_contested` — sets `kb_contested = true` on pages by slug.
     * `lint_report` — delegates to `Knowledge.lint/1`.
-    * `create_report` — creates a `report` page (kind `log`) with the
+    * `create_report` — creates a `report` page (`report_type` `log`) with the
       curator's report.
     * `done` — finishes the session.
   """
@@ -115,7 +115,7 @@ defmodule Dran.Worker.Curator do
         "function" => %{
           "name" => "create_report",
           "description" =>
-            "Create a report page (page_type 'report', kind 'log') with the curator report. " <>
+            "Create a report page (report_type 'log') with the curator report. " <>
               "The title will be 'Curator report <date>'.",
           "parameters" => %{
             "type" => "object",
@@ -325,7 +325,7 @@ defmodule Dran.Worker.Curator do
         slug: slug,
         body: body,
         report_type: "log",
-        meta: %{"kind" => "log", "worker_session_id" => state.session.id}
+        meta: %{"worker_session_id" => state.session.id}
       }
 
       case Reports.create_report(report_attrs) do

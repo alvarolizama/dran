@@ -7,33 +7,25 @@ defmodule Dran.PageRegistry do
   | What              | Old location        | Now               |
   |-------------------|---------------------|-------------------|
   | Capabilities      | `Dran.PageTypes`    | `PageRegistry`    |
-  | Kinds             | `Dran.Knowledge.PageMeta`     | `PageRegistry`    |
   | Meta field defs   | `Dran.Knowledge.PageMeta`     | `PageRegistry`    |
-  | Kind labels       | `Dran.Knowledge.PageMeta`     | `PageRegistry`    |
   | UI attrs          | `DranWeb.PageTypes` | `PageRegistry`    |
 
-  ## Adding a kind
-
-  1. Add the slug to the type's `:kinds` list in `@registry`.
-  2. Add `"slug" => gettext("Label")` to `kind_labels/0`.
-  3. Done — changeset validation, the editor UI, and `agent_description/0`
-     all read from here.
+  There are exactly four built-in page types (`note`, `entity`, `concept`,
+  `reference`) and no sub-type vocabulary: a page is fully described by its
+  type plus free-form `meta` fields and `meta.props`.
 
   ## Adding a meta field
 
   Add a tuple to the relevant `meta_fields/1` clause. Tuple shapes:
 
-      {:select, "key", "Label", options}        # options = [{label, value}, ...]
-      {:text,   "key", "Label", opts}           # opts = keyword list
-      {:date,   "key", "Label"}                 # no opts
-      {:date,   "key", "Label", condition: {:kind, "reminder"}}
-      {:props,  "key", "Label"}
+      {:text,  "key", "Label", opts}     # opts = keyword list
+      {:date,  "key", "Label"}           # no opts
+      {:props, "key", "Label"}
 
   ## What is NOT here
 
   The Ecto embedded schema (`Dran.Knowledge.PageMeta`) and its changeset stay in
-  `PageMeta` — they are about validation, not configuration. `PageMeta`
-  delegates to this registry for kinds and field definitions.
+  `PageMeta` — they are about validation, not configuration.
 
   Reports, and Collections are first-class entities in their own
   tables — they are not page types and are not configured here.
@@ -47,13 +39,11 @@ defmodule Dran.PageRegistry do
   #
   # Fields per type:
   #   :capabilities — what pages of this type can do
-  #   :kinds        — valid meta.kind sub-types (nil = no kind validation)
   #   :ui           — presentation attrs (path, label, icon, plural)
 
   @registry %{
     "note" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: nil,
       ui: %{
         path: "notes",
         label: "Note",
@@ -62,42 +52,8 @@ defmodule Dran.PageRegistry do
         plural: "Notes"
       }
     },
-    "idea" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: ~w(idea question hypothesis spark),
-      ui: %{
-        path: "ideas",
-        label: "Idea",
-        icon: "hero-light-bulb",
-        color: "#F472B6",
-        plural: "Ideas"
-      }
-    },
-    "knowledge" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: ~w(quote summary highlight excerpt),
-      ui: %{
-        path: "knowledge",
-        label: "Knowledge",
-        icon: "hero-book-open",
-        color: "#FBBF24",
-        plural: "Knowledge"
-      }
-    },
-    "technical" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: ~w(code snippet debug recipe config command template pattern method),
-      ui: %{
-        path: "technical",
-        label: "Technical",
-        icon: "hero-code-bracket",
-        color: "#22D3EE",
-        plural: "Technical"
-      }
-    },
     "entity" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: ~w(person company product tool place event language framework hardware protocol),
       ui: %{
         path: "entities",
         label: "Entity",
@@ -108,7 +64,6 @@ defmodule Dran.PageRegistry do
     },
     "concept" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: nil,
       ui: %{
         path: "concepts",
         label: "Concept",
@@ -119,7 +74,6 @@ defmodule Dran.PageRegistry do
     },
     "reference" => %{
       capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: ~w(article paper video podcast book newsletter spec code release website repo api),
       ui: %{
         path: "references",
         label: "Reference",
@@ -127,22 +81,11 @@ defmodule Dran.PageRegistry do
         color: "#A3E635",
         plural: "References"
       }
-    },
-    "food" => %{
-      capabilities: %{graph: true, journey: true, embeddings: true, agent_create: true},
-      kinds: ~w(recipe ingredient dish meal cuisine restaurant drink technique),
-      ui: %{
-        path: "food",
-        label: "Food",
-        icon: "hero-cake",
-        color: "#FB923C",
-        plural: "Food"
-      }
     }
   }
 
   # Canonical ordering — sidebar/agent tools/docs iterate this list.
-  @types ~w(note idea knowledge technical entity concept reference food)
+  @types ~w(note entity concept reference)
 
   # ── Type accessors ─────────────────────────────────────────────────
 
@@ -152,7 +95,7 @@ defmodule Dran.PageRegistry do
   @doc "The full registry map."
   def all, do: @registry
 
-  @doc "Config for a single type (capabilities, kinds, ui). Returns nil if unknown."
+  @doc "Config for a single type (capabilities, ui). Returns nil if unknown."
   def config(type), do: Map.get(@registry, type)
 
   # ── Capability accessors ───────────────────────────────────────────
@@ -186,16 +129,6 @@ defmodule Dran.PageRegistry do
     case Map.get(@registry, type) do
       nil -> true
       %{capabilities: caps} -> Map.get(caps, key, true)
-    end
-  end
-
-  # ── Kind accessors ─────────────────────────────────────────────────
-
-  @doc "Valid kinds for a type, or nil if the type has no kind validation."
-  def kinds(type) do
-    case Map.get(@registry, type) do
-      %{kinds: kinds} -> kinds
-      _ -> nil
     end
   end
 
@@ -293,47 +226,15 @@ defmodule Dran.PageRegistry do
 
   ## Tuple shapes
 
-      {:select, "key", "Label", [{label, value}, ...]}
-      {:text,   "key", "Label", [placeholder: "...", condition: {:kind, "code"}]}
-      {:date,   "key", "Label"}
-      {:date,   "key", "Label", [condition: {:kind, "reminder"}]}
-      {:props,  "key", "Label"}
-
-  The `:condition` opt is a `{field, expected_value}` tuple that hides
-  the field unless `meta[field]` equals `expected_value`.
+      {:text,  "key", "Label", [placeholder: "..."]}
+      {:date,  "key", "Label"}
+      {:props, "key", "Label"}
   """
   def meta_fields(type)
 
   def meta_fields("note") do
     [
       {:date, "date", gettext("Date")},
-      {:date, "due_date", gettext("Due date"), condition: {:kind, "reminder"}},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
-  def meta_fields("idea") do
-    [
-      {:select, "kind", gettext("Kind"), kind_options("idea")},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
-  def meta_fields("knowledge") do
-    [
-      {:select, "kind", gettext("Kind"), kind_options("knowledge")},
-      {:text, "source_url", gettext("Source URL")},
-      {:date, "date", gettext("Date")},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
-  def meta_fields("technical") do
-    [
-      {:select, "kind", gettext("Kind"), kind_options("technical")},
-      {:text, "language", gettext("Language"),
-       placeholder: "elixir, python, typescript…", condition: {:kind, "code"}},
-      {:text, "version", gettext("Version")},
       {:props, "props", gettext("Custom properties")}
     ]
   end
@@ -348,7 +249,6 @@ defmodule Dran.PageRegistry do
 
   def meta_fields("entity") do
     [
-      {:select, "kind", gettext("Kind"), kind_options("entity")},
       {:text, "location", gettext("Location")},
       {:text, "external_url", gettext("External URL")},
       {:props, "props", gettext("Custom properties")}
@@ -357,172 +257,13 @@ defmodule Dran.PageRegistry do
 
   def meta_fields("reference") do
     [
-      {:select, "kind", gettext("Kind"), kind_options("reference")},
       {:text, "source_url", gettext("Source URL")},
       {:date, "published_at", gettext("Published at")},
       {:props, "props", gettext("Custom properties")}
     ]
   end
 
-  def meta_fields("food") do
-    [
-      {:select, "kind", gettext("Kind"), kind_options("food")},
-      {:text, "cuisine", gettext("Cuisine"), placeholder: "italian, mexican, japanese…"},
-      {:text, "servings", gettext("Servings"), placeholder: "4"},
-      {:text, "prep_time", gettext("Prep time"), placeholder: "15 min"},
-      {:text, "cook_time", gettext("Cook time"), placeholder: "45 min"},
-      {:text, "source_url", gettext("Source URL")},
-      {:props, "props", gettext("Custom properties")}
-    ]
-  end
-
   def meta_fields(_), do: []
-
-  defp kind_options(type) do
-    kinds(type)
-    |> Enum.map(&{kind_label(&1), &1})
-  end
-
-  # ── Agent tool description ─────────────────────────────────────────
-  #
-  # Builds the page-type section of the `dran_create_page` plugin tool
-  # description dynamically, so it never drifts from the registry.
-
-  @doc """
-  Returns a human-readable summary of page types and their kinds,
-  suitable for embedding in agent tool descriptions.
-  """
-  def agent_description do
-    for type <- @types, reduce: [] do
-      acc ->
-        case kinds(type) do
-          nil ->
-            acc ++ ["- #{type}: kind is free-form (no validation)"]
-
-          kind_list ->
-            # Show first 7 kinds as a sample (matching the old hardcoded format)
-            sample = Enum.take(kind_list, 7)
-            more = if length(kind_list) > 7, do: "…", else: ""
-            acc ++ ["- #{type}: #{Enum.join(sample, ", ")}#{more}"]
-        end
-    end
-    |> Enum.join("\n")
-  end
-
-  @doc """
-  Returns the enum list of page types for the agent tool JSON schema.
-  """
-  def agent_enum, do: @types
-
-  @doc """
-  Returns the meta description string for the agent tools, keyed by type.
-  """
-  def agent_meta_description do
-    parts =
-      for type <- @types do
-        fields = meta_fields(type) |> extract_field_keys()
-        "#{type}→{#{Enum.join(fields, ", ")}}"
-      end
-
-    "Type-specific metadata. Key fields by type: #{Enum.join(parts, ", ")}. " <>
-      "**Custom properties**: use `meta.props` as a namespaced key-value bag " <>
-      "for free-form metadata (e.g. `props: %{\\\"role\\\" => \\\"sales\\\", \\\"tier\\\" => \\\"vip\\\"}`). " <>
-      "Props survive round-trips and are indexed by the existing meta GIN index."
-  end
-
-  defp extract_field_keys(fields) do
-    fields
-    |> Enum.map(fn
-      {_type, key, _label} -> key
-      {_type, key, _label, _opts} -> key
-    end)
-    |> Enum.reject(&(&1 == "props"))
-  end
-
-  # ── Kind labels (gettext extraction source) ───────────────────────
-  #
-  # Slugs → gettext'd display labels. Only the *display label* is
-  # translated; the slug (DB value) is never passed to gettext.
-  # This map is the single source of truth for display names.
-
-  @doc "Returns the display label for a kind slug."
-  def kind_label(slug) when is_binary(slug) do
-    Map.fetch!(kind_labels(), slug)
-  end
-
-  defp kind_labels do
-    %{
-      # ── note kinds (free — kept for display of legacy data) ────────────
-      "journal" => gettext("Journal"),
-      "meeting" => gettext("Meeting"),
-      "reminder" => gettext("Reminder"),
-      "decision" => gettext("Decision"),
-      "technical" => gettext("Technical"),
-      # ── idea kinds ──────────────────────────────────────────────────────
-      "idea" => gettext("Idea"),
-      "question" => gettext("Question"),
-      "hypothesis" => gettext("Hypothesis"),
-      "spark" => gettext("Spark"),
-      # ── project kinds (legacy — kept for display of pre-removal rows) ──
-      "project" => gettext("Project"),
-      "plan" => gettext("Plan"),
-      "goal" => gettext("Goal"),
-      "milestone" => gettext("Milestone"),
-      # ── knowledge kinds ─────────────────────────────────────────────────
-      "quote" => gettext("Quote"),
-      "summary" => gettext("Summary"),
-      "highlight" => gettext("Highlight"),
-      "excerpt" => gettext("Excerpt"),
-      # ── technical kinds ─────────────────────────────────────────────────
-      "code" => gettext("Code"),
-      "snippet" => gettext("Snippet"),
-      "debug" => gettext("Debug"),
-      "recipe" => gettext("Recipe"),
-      "config" => gettext("Config"),
-      "command" => gettext("Command"),
-      "template" => gettext("Template"),
-      "pattern" => gettext("Pattern"),
-      "method" => gettext("Method"),
-      # ── entity kinds ───────────────────────────────────────────────────
-      "person" => gettext("Person"),
-      "company" => gettext("Company"),
-      "product" => gettext("Product"),
-      "tool" => gettext("Tool"),
-      "place" => gettext("Place"),
-      "event" => gettext("Event"),
-      "language" => gettext("Language"),
-      "framework" => gettext("Framework"),
-      "hardware" => gettext("Hardware"),
-      "protocol" => gettext("Protocol"),
-      # ── concept kinds (free — kept for display of legacy data) ─────────
-      "technique" => gettext("Technique"),
-      "discipline" => gettext("Discipline"),
-      "theory" => gettext("Theory"),
-      "principle" => gettext("Principle"),
-      "model" => gettext("Model"),
-      "law" => gettext("Law"),
-      # ── reference kinds ────────────────────────────────────────────────
-      "article" => gettext("Article"),
-      "paper" => gettext("Paper"),
-      "video" => gettext("Video"),
-      "podcast" => gettext("Podcast"),
-      "book" => gettext("Book"),
-      "newsletter" => gettext("Newsletter"),
-      "spec" => gettext("Spec"),
-      "release" => gettext("Release"),
-      "website" => gettext("Website"),
-      "repo" => gettext("Repository"),
-      "api" => gettext("API"),
-      # ── food kinds ──────────────────────────────────────────────────────
-      # ("technique" ya tiene label más arriba, en los kinds de concept)
-      "ingredient" => gettext("Ingredient"),
-      "dish" => gettext("Dish"),
-      "meal" => gettext("Meal"),
-      "cuisine" => gettext("Cuisine"),
-      "restaurant" => gettext("Restaurant"),
-      "drink" => gettext("Drink")
-    }
-  end
 
   # ── Gettext extraction markers ─────────────────────────────────────
   #
@@ -533,20 +274,12 @@ defmodule Dran.PageRegistry do
   if false do
     # UI type labels + plurals
     gettext("Note")
-    gettext("Idea")
-    gettext("Knowledge")
-    gettext("Technical")
     gettext("Concept")
     gettext("Entity")
     gettext("Reference")
-    gettext("Food")
     gettext("Notes")
-    gettext("Ideas")
-    gettext("Knowledge Plural")
-    gettext("Technical Plural")
     gettext("Concepts")
     gettext("Entities")
     gettext("References")
-    gettext("Food")
   end
 end

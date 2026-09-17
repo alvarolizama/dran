@@ -458,7 +458,7 @@ defmodule Dran.Worker.CuratorTest do
       assert report.title =~ "Curator report"
       assert report.report_type == "log"
       assert report.body =~ "Curator Report"
-      assert report.meta["kind"] == "log"
+      refute Map.has_key?(report.meta, "kind")
       assert report.meta["worker_session_id"] == session.id
 
       # Verify the pages were flagged as contested

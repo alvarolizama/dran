@@ -186,14 +186,12 @@ defmodule DranWeb.MarkdownEditorComponents do
 
   `Dran.Knowledge.PageMeta.meta_fields_for/1` returns tuples of variable arity:
 
-      {:date, "due_date", "Due date"}
-      {:select, "kind", "Kind", [{"Idea", "idea"}, ...]}
-      {:date, "due_date", "Due date", condition: {:kind, "reminder"}}
-      {:select, "kind", "Kind", options, placeholder: "…", condition: {:kind, "reminder"}}
+      {:date, "published_at", "Published at"}
+      {:text, "source_url", "Source URL"}
 
   The renderer normalises all of these to `{type, key, label, opts}` where
-  `opts` is always a keyword list. The only special key is `:condition`, a
-  `{field, expected_value}` tuple that hides the field unless `meta[field]`
+  `opts` is always a keyword list. An optional `:condition`, a
+  `{field, expected_value}` tuple, hides the field unless `meta[field]`
   (or the live form value) equals `expected_value`.
   """
   attr :page_type, :string, required: true
@@ -595,8 +593,9 @@ defmodule DranWeb.MarkdownEditorComponents do
   #
   # The `:select` type historically carries its option list as the 4th element;
   # we preserve that under `opts[:options]` so the renderer has a single place
-  # to look. Unknown opts (placeholder, step, min, max, condition, …) are
-  # passed through untouched — only `:condition` is treated specially below.
+  # to look. Unknown opts (placeholder, step, min, max, …) are passed through
+  # untouched; `:condition` is optional and hides the field unless its
+  # `{field, expected}` pair matches the current meta value.
   defp normalise_meta_field({type, key, label})
        when is_atom(type) and is_binary(key) and is_binary(label) do
     {type, key, label, []}
@@ -605,7 +604,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   defp normalise_meta_field({type, key, label, opts})
        when is_atom(type) and is_binary(key) and is_binary(label) and is_list(opts) do
     # The 4th element is a list. It may be a keyword list of opts (e.g.
-    # `condition: {:kind, "reminder"}`) or a select options list (list of
+    # `placeholder: "…"`) or a select options list (list of
     # `{String, String}` tuples). Disambiguate by inspecting the first element.
     if keyword_list?(opts) do
       {type, key, label, opts}
@@ -641,7 +640,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   #   1. Live form params — when the parent `<.form phx-change="…">` re-renders
   #      the component, the form carries the latest user input under
   #      `page[meta][field]`. This gives real-time reactivity: changing the
-  #      `kind` select immediately shows/hides conditional fields without a
+  #      driving field immediately shows/hides conditional fields without a
   #      save round-trip.
   #   2. Persisted `@meta` map — fallback for the initial render before any
   #      change event has fired, or when no `:form` assign is passed.

@@ -413,7 +413,10 @@ defmodule Dran.Worker.GraphRagTest do
     assert page.page_type == "note"
     assert page.title == "Test Query"
     assert page.meta["mode"] == "local"
-    assert page.meta["kind"] == "answer"
+    # Replaces `assert page.meta["kind"] == "answer"`: answer pages are plain
+    # notes now — the worker no longer stamps a sub-type key on knowledge_pages.
+    refute Map.has_key?(page.meta, "kind")
+    assert page.meta["worker_session_id"]
 
     # Verify source relation was created
     relations = Knowledge.list_relations_for_page(page.id)

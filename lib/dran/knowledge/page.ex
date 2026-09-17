@@ -4,25 +4,21 @@ defmodule Dran.Knowledge.Page do
 
   ## Page types
 
-  - `note` — free-form capture (no kind validation; journal, meeting,
-    reminder, decision live on as legacy `meta.kind` values)
-  - `idea` — the open-ended: idea, question, hypothesis, spark
-  - `knowledge` — own extracts: quote, summary, highlight, excerpt
-  - `technical` — dev/procedural: code, snippet, debug, recipe, config,
-    command, template, pattern, method
-  - `entity` — something concrete (person, company, product, tool, place, event)
-  - `concept` — abstract idea (free — no kind validation)
-  - `reference` — immutable external source (article, paper, video, podcast, book)
-  - `food` — cooking & gastronomy: recipe, ingredient, dish, meal, cuisine,
-    restaurant, drink, technique
+  - `note` — free-form capture (journals, meeting notes, decisions, snippets)
+  - `entity` — something concrete (person, company, product, tool, place)
+  - `concept` — abstract idea (a technique, a discipline, a theory)
+  - `reference` — immutable external source (article, paper, video, book)
 
   The registry (`Dran.PageRegistry`) is the single source of truth — this
   list is descriptive. See `Dran.PageTypes` for capabilities.
 
+  Classification beyond the type lives in `meta.props` and tags; there is no
+  reserved `meta.kind` key.
+
   ## Meta JSONB
 
   The `meta` field stores type-specific data, validated via `Dran.Knowledge.PageMeta`:
-  - `reference`: `%{source_url: "https://...", kind: "article"}`
+  - `reference`: `%{source_url: "https://...", published_at: ~D[2026-01-01]}`
 
 
   ## Owner tracking

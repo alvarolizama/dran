@@ -18,20 +18,19 @@ defmodule Dran.PageTypes do
   | Capability    | Meaning                                                        |
   |---------------|----------------------------------------------------------------|
   | `graph`       | included in the global graph (GraphCache / graph views)        |
-  | `journey`     | counted in the Journey timeline (`Dran.Journey`)               |
+  | `journey`     | counted in the Journey timeline (`Dran.Journey`)              |
   | `embeddings`  | gets embeddings + semantic relations (`PageAugmenter`)         |
   | `agent_create`| can be created through the `dran_create_page` plugin tool      |
 
-  All eight types are full citizens (every capability `true`); `note` and
-  `concept` are free types (no kind validation).
+  All four types are full citizens (every capability `true`).
 
   ## What is NOT a page type
 
   Collections and reports are **first-class entities in
   their own tables** (`Dran.Collections.Collection`, `Dran.Reports.Report`) — they are not page types
-  and are not created through `dran_create_page`. Notes no longer
-  have a `todo` kind or kanban fields. `meta.kind` on pages is purely
-  visual: it classifies, filters and groups — it never changes behavior.
+  and are not created through `dran_create_page`. Pages carry no sub-type
+  vocabulary: classification beyond the type lives in `meta.props` and tags,
+  never in a reserved `meta.kind` key.
 
   `DranWeb.PageTypes` is only UI labels/icons/paths — THIS module decides
   what a type can do. `Dran.Knowledge.Page.@page_types` derives from `types/0`,

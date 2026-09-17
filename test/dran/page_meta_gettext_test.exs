@@ -1,34 +1,27 @@
 defmodule Dran.PageMetaGettextTest do
-  # Verifies that all option labels and field labels returned by
-  # meta_fields_for/1,2 go through gettext.
+  # Verifies that all field labels returned by meta_fields_for/1,2 go through
+  # gettext.
   #
-  # Strategy: the parent task fixes priv/gettext/es/LC_MESSAGES/default.po
-  # where msgid "None" had msgstr "Hecho" (fuzzy pollution), and other
-  # msgstrs may also be wrong (e.g. "Active" → "Archivar"). We must NOT
-  # assert on specific Spanish strings — the .po state is in flux during
-  # this task batch. Instead, we prove labels are routed through gettext
-  # by checking that the msgid appears in priv/gettext/default.pot —
-  # the extractor only writes msgids it found as `gettext("...")` calls
-  # in source code.
+  # Strategy: prove labels are routed through gettext by checking that the
+  # msgid appears in priv/gettext/default.pot — the extractor only writes
+  # msgids it found as `gettext("...")` calls in source code. We do NOT assert
+  # on specific Spanish strings.
   #
-  # Combined with asserting the DB-value side (second tuple element) is
-  # always the raw slug (never translated), this gives a complete proof:
-  #
-  #   1. Labels in default.pot ⇒ `gettext("...")` calls in page_meta.ex
-  #      ⇒ labels go through gettext at runtime.
-  #   2. Values are raw slugs ⇒ DB invariant holds.
+  # The previous select-option coverage (kind labels/values per type) is gone
+  # with the vocabulary: no page type renders a select any more, so there are
+  # no option labels or DB slugs to check. The replacement coverage is the
+  # field-label routing below plus the structural guards — both now run over
+  # the four surviving types.
   #
   # We use ExUnit.Case (no DB) — same style as page_meta_test.exs.
   use ExUnit.Case, async: false
 
   alias Dran.Knowledge.PageMeta
-  alias Dran.PageRegistry
 
   # meta_fields_for/1,2 resolves gettext at call time against the CURRENT
-  # process locale. The app default is "es", so labels come back translated
-  # ("Pendientes"). We assert against the msgids in default.pot (English
-  # source strings), so each assertion helper pins the process locale to
-  # "en" while collecting fields.
+  # process locale. The app default is "es", so labels come back translated.
+  # We assert against the msgids in default.pot (English source strings), so
+  # each assertion helper pins the process locale to "en" while collecting.
   defp with_en_locale(fun) do
     Gettext.put_locale(DranWeb.Gettext, "en")
     result = fun.()
@@ -58,130 +51,19 @@ defmodule Dran.PageMetaGettextTest do
 
   defp pot_has?(msgid) when is_binary(msgid), do: MapSet.member?(@pot_msgids, msgid)
 
-  # Extract {label, value} pairs from all :select options for a page type.
-  defp select_pairs(type, mode \\ :edit) do
-    with_en_locale(fn ->
-      type
-      |> PageMeta.meta_fields_for(mode)
-      |> Enum.flat_map(fn
-        {:select, _key, _label, opts} when is_list(opts) ->
-          direct_opts =
-            Enum.filter(opts, fn
-              {k, _v} when is_atom(k) -> false
-              {l, v} when is_binary(l) and is_binary(v) -> true
-              _ -> false
-            end)
-
-          keyword_opts = Keyword.get_values(opts, :options) |> List.flatten()
-
-          (direct_opts ++ keyword_opts)
-          |> Enum.flat_map(fn
-            {l, v} when is_binary(l) and is_binary(v) -> [{l, v}]
-            _ -> []
-          end)
-
-        _ ->
-          []
-      end)
-    end)
-  end
-
   # Collect the field labels (3rd tuple element) for a page type.
   defp field_labels(type, mode \\ :edit) do
-    with_en_locale(fn ->
-      type
-      |> PageMeta.meta_fields_for(mode)
-      |> Enum.map(fn
-        {_type, _key, label, _opts} -> label
-        {_type, _key, label} -> label
-      end)
+    with_en_locale(fn -> raw_field_labels(type, mode) end)
+  end
+
+  # Same, but WITHOUT pinning the locale — used to prove runtime localization.
+  defp raw_field_labels(type, mode \\ :edit) do
+    type
+    |> PageMeta.meta_fields_for(mode)
+    |> Enum.map(fn
+      {_type, _key, label, _opts} -> label
+      {_type, _key, label} -> label
     end)
-  end
-
-  # ── option labels appear in default.pot ──────────────────────────────────
-
-  describe "select option labels are routed through gettext (present in default.pot)" do
-    test "note: free type — no kind options to gettext" do
-      for {label, _value} <- select_pairs("note") do
-        assert pot_has?(label),
-               "note kind label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
-    test "concept: free type — no kind options to gettext" do
-      for {label, _value} <- select_pairs("concept") do
-        assert pot_has?(label),
-               "concept kind label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
-    test "entity: every kind option label is in default.pot" do
-      for {label, _value} <- select_pairs("entity") do
-        assert pot_has?(label),
-               "entity kind label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-
-    test "reference: every kind option label is in default.pot" do
-      for {label, _value} <- select_pairs("reference") do
-        assert pot_has?(label),
-               "reference kind label #{inspect(label)} not in default.pot — not gettext'd"
-      end
-    end
-  end
-
-  # ── option values (DB slugs) are NEVER translated ───────────────────────
-
-  describe "select option VALUES (DB slugs) are never translated" do
-    test "note: free type — no kind select, values are raw slugs when present" do
-      # note is a free type (kinds: nil) — no kind select is rendered, so
-      # there are no values to translate. Legacy meta.kind survives as data.
-      assert select_pairs("note") == []
-    end
-
-    test "concept: free type — no kind select" do
-      assert select_pairs("concept") == []
-    end
-
-    test "idea: kind values are raw slugs" do
-      values = Enum.map(select_pairs("idea"), &elem(&1, 1))
-
-      for expected <- ~w(idea question hypothesis spark) do
-        assert expected in values
-      end
-    end
-
-    test "project was removed — no kind select, legacy kinds stay labeled" do
-      assert select_pairs("project") == []
-
-      for legacy <- ~w(project plan goal milestone) do
-        assert Dran.PageRegistry.kind_label(legacy)
-      end
-    end
-
-    test "technical: kind values are raw slugs" do
-      values = Enum.map(select_pairs("technical"), &elem(&1, 1))
-
-      for expected <- ~w(code snippet debug recipe config command template pattern method) do
-        assert expected in values
-      end
-    end
-
-    test "entity: kind values are raw slugs" do
-      values = Enum.map(select_pairs("entity"), &elem(&1, 1))
-
-      for expected <- ~w(person company product tool place event) do
-        assert expected in values
-      end
-    end
-
-    test "reference: kind values are raw slugs" do
-      values = Enum.map(select_pairs("reference"), &elem(&1, 1))
-
-      for expected <- ~w(article paper video podcast book) do
-        assert expected in values
-      end
-    end
   end
 
   # ── field labels are routed through gettext ──────────────────────────────
@@ -194,37 +76,48 @@ defmodule Dran.PageMetaGettextTest do
                "field label #{inspect(label)} for type #{inspect(type)} not in default.pot — not gettext'd"
       end
     end
+
+    test "labels are localized at runtime (es differs from the msgid for known fields)" do
+      # Routes through Gettext.gettext/2 — the note's "Date" label carries a
+      # Spanish msgstr ("Fecha"), so the es render must not equal the msgid.
+      Gettext.put_locale(DranWeb.Gettext, "en")
+      labels_en = raw_field_labels("note")
+      Gettext.put_locale(DranWeb.Gettext, "es")
+      labels_es = raw_field_labels("note")
+
+      assert "Date" in labels_en
+      refute "Date" in labels_es, "the note Date label is not localized"
+      assert "Fecha" in labels_es
+    end
   end
 
-  # ── regression — no 'Hecho' in note kind list ────────────────────────────
+  # ── no kind field anywhere ───────────────────────────────────────────────
 
-  describe "regression — note kind list has no bogus 'Hecho' option" do
-    # The original "Hecho" bug came from fuzzy .po pollution (msgid "None"
-    # had msgstr "Hecho"). This guards the note kind list itself: it must
-    # contain exactly the curated slugs (pruned 2026: thought→idea,
-    # fleeting/permanent/moc/comparison→summary+tags, brainstorm→idea,
-    # draft is a state not a kind) and no 'Hecho' (which was never a real
-    # note kind, only a translation artefact).
-    #
-    # Removed kinds: snippet (→code), outline (→template), log (→journal),
-    # todo
-    test "note_kinds/0 returns nil — note is a free type (no kind validation)" do
-      assert PageMeta.note_kinds() == nil
+  describe "no page type exposes kind fields or options" do
+    # Replaces the per-type "kind values are raw slugs" coverage: the kind
+    # vocabulary is gone from the model, so the proof is that no field key is
+    # "kind" and no select field survives to carry option labels.
+    test "no page type has a kind key among its meta fields" do
+      for type <- ~w(note concept entity reference) do
+        keys =
+          Enum.map(PageMeta.meta_fields_for(type), fn
+            {_type, key, _label} -> key
+            {_type, key, _label, _opts} -> key
+          end)
+
+        refute "kind" in keys, "type #{type} still exposes a kind meta field"
+      end
     end
 
-    test "validated types have lowercase slugs (never display labels)" do
-      for {type, kinds} <- [
-            {"idea", PageRegistry.kinds("idea")},
-            {"technical", PageRegistry.kinds("technical")}
-          ] do
-        for kind <- kinds || [] do
-          assert kind == String.downcase(kind),
-                 "#{type} kind #{inspect(kind)} is not lowercase — should be a slug"
-        end
+    test "no page type renders a :select meta field" do
+      for type <- ~w(note concept entity reference) do
+        refute Enum.any?(PageMeta.meta_fields_for(type), fn
+                 {:select, _key, _label, _opts} -> true
+                 {:select, _key, _label} -> true
+                 _ -> false
+               end),
+               "type #{type} still renders a :select meta field"
       end
-
-      assert "Hecho" not in (PageRegistry.kinds("idea") || [])
-      assert "Done" not in (PageRegistry.kinds("technical") || [])
     end
   end
 
@@ -232,10 +125,9 @@ defmodule Dran.PageMetaGettextTest do
 
   describe "regression — no raw English 'None' label leaks into field labels" do
     # The fix replaces the buggy `gettext("None")` prompt (which had msgstr
-    # "Hecho" via fuzzy pollution) with "Ninguno" / "Sin proyecto" /
-    # "Sin objetivo" / "Sin plan" in markdown_editor_components.ex. Those
-    # prompts are not part of meta_fields_for's return, but we keep a guard
-    # that no field label is the English literal "None".
+    # "Hecho" via fuzzy pollution) with "Ninguno" in the UI. Those prompts are
+    # not part of meta_fields_for's return, but we keep a guard that no field
+    # label is the English literal "None".
     test "no page type returns 'None' as a field label" do
       for type <- ~w(note concept entity reference) do
         refute "None" in field_labels(type),
@@ -267,24 +159,14 @@ defmodule Dran.PageMetaGettextTest do
       end
     end
 
-    test "every :select field has non-empty options" do
-      for type <- ~w(note concept entity reference),
-          {:select, key, _label, opts} <- PageMeta.meta_fields_for(type) do
-        # Options may be inline (list of {binary, binary}) or under :options.
-        direct_opts =
-          Enum.filter(opts, fn
-            {k, _v} when is_atom(k) -> false
-            {l, v} when is_binary(l) and is_binary(v) -> true
-            _ -> false
-          end)
-
-        keyword_opts = Keyword.get_values(opts, :options) |> List.flatten()
-
-        all_opts = direct_opts ++ keyword_opts
-
-        assert all_opts != [],
-               ":select field #{inspect(key)} for type #{inspect(type)} has no options"
-      end
+    test "every page type ends with the props field" do
+      with_en_locale(fn ->
+        for type <- ~w(note concept entity reference) do
+          assert List.last(PageMeta.meta_fields_for(type)) ==
+                   {:props, "props", "Custom properties"},
+                 "type #{type} does not end with the props field"
+        end
+      end)
     end
   end
 end
