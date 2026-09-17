@@ -14,13 +14,14 @@ by you.
 |---|---|---|
 | **See it in** | the browser — a wiki with search, graph, timeline | tool calls |
 | **Write it via** | the editor | plugin tools, or the REST API directly |
-| **Attribution** | your user account | the API key's actor, injected server-side |
+| **Attribution** | your user account | the API key + `X-Hermes-Agent`, resolved server-side |
 
 Two things live inside, and they are different on purpose:
 
-- **Knowledge** — a typed graph of **pages** (`note`, `idea`, `knowledge`,
-  `technical`, `entity`, `concept`, `reference`, `food`) joined by typed
-  relations. Curated, editable, versioned. Think "the wiki".
+- **Knowledge** — a typed graph of **pages** joined by typed relations.
+  Every page has one of the **4 built-in types** (`note`, `entity`, `concept`,
+  `reference`) or a **custom type declared by its workspace**. Curated,
+  editable, versioned. Think "the wiki".
 - **Memory** — atomic **facts** with trust scores, deduplicated per
   workspace. Written by agents as they learn; never hand-edited. Think
   "what the swarm knows".
@@ -131,8 +132,9 @@ Gives an agent the tools (`dran_*`, 16) **and** the memory provider
 
 **a. Create the credential.** In Dran → **Settings → API Keys**: create the key
 and pick its access, ticking the **workspace × access-level matrix** (`write` on
-the workspace that will hold its content). The token is shown once. Every write is
-attributed server-side to this key.
+the workspace that will hold its content). The token is shown once. A key
+creates no actor: every write is attributed server-side to the key (or to the
+`X-Hermes-Agent` header when the client sends one).
 
 **b. Store the secret** in the profile's `.env` — single source of truth,
 shared by the tools and the memory provider:

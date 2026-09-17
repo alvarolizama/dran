@@ -25,12 +25,20 @@ Settings → API Keys). Al arrancar — y cada 5 min — el plugin consulta
 ese workspace (la matriz cambió en Dran), cae al primero permitido y lo
 loguea con warning. Si Dran no responde, se usa la config local sin validar.
 
+La misma respuesta trae los **page types efectivos** del workspace
+(`page_types` y `page_type_defs`: los 4 built-in — `note`, `entity`, `concept`,
+`reference` — más los tipos custom que el workspace declare). El plugin los lee
+para renderizar el vocabulario en sus tools en vez de hardcodear la lista, y
+valida `page_type` contra ellos antes de crear una página (fail-closed); sin
+servidor cae a los 4 built-in.
+
 ## Setup (por perfil de Hermes)
 
-1. En Dran → Settings → API Keys: crea el agente y su key eligiendo la matriz
-   workspaces×nivel (la key necesita `write` en el workspace de memoria; el
-   `created_by` de cada recuerdo se atribuye server-side a la key que lo
-   guardó).
+1. En Dran → Settings → API Keys: crea la key eligiendo la matriz
+   workspaces×nivel (la key necesita `write` en el workspace de memoria). La
+   key **no crea un actor**: el `created_by` de cada recuerdo lo resuelve el
+   servidor — el header `X-Hermes-Agent` si viene, si no el **nombre de la
+   key** — y `owner_user_id` es el usuario dueño de la key.
 2. Guarda la key **una sola vez** en el `.env` del perfil:
 
    ```bash
@@ -104,9 +112,9 @@ estas tools son el consumo del agente.
 | Tool | Qué hace |
 |---|---|
 | `dran_search` | Busca páginas (fts / fuzzy / semantic / hybrid) |
-| `dran_list_pages` | Lista páginas, filtrable por tipo |
+| `dran_list_pages` | Lista páginas, filtrable por tipo (los válidos son los efectivos del workspace, leídos de `/api/agent/config`) |
 | `dran_get_page` | Lee el cuerpo completo por slug |
-| `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas |
+| `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas (`page_type` se valida fail-closed contra los tipos efectivos del workspace) |
 | `dran_get_links` | Relaciones entrantes/salientes de una página |
 | `dran_create_relation` / `dran_delete_relation` | Relaciones tipadas y dirigidas |
 | `dran_start_worker` / `dran_get_worker_session` | Dispara y sondea curator / link_gardener / graph_rag |
@@ -122,9 +130,9 @@ por closure (`_make_handler`).
 
 - `initialize` recibe `agent_identity` (nombre del perfil) → header
   `X-Hermes-Agent` en cada request. Dran lo persiste server-side como
-  `agent_name` del contenido escrito, además de atribuir por el actor de la
-  API key (`owner_user_id`). El header es atribución, no autorización: nunca
-  amplía acceso.
+  `agent_name` del contenido escrito; si el header falta, el `created_by` es el
+  nombre de la key. `owner_user_id` = `api_keys.created_by_user_id` (dueño de
+  la key). El header es atribución, no autorización: nunca amplía acceso.
 - `agent_context != "primary"` (subagent, cron): prefetch permitido,
   **writes deshabilitados** — los agentes secundarios no contaminan la
   memoria compartida.
@@ -136,5 +144,7 @@ python3 -m pytest hermes_plugin/tests/ -q
 ```
 
 Cubren el registro (provider + tools, schemas válidos, un fallo de tool no
-cuesta el provider), el header en cada path de escritura, las rutas REST y
-el manejo de errores como JSON.
+cuesta el provider), el header en cada path de escritura, las rutas REST, el
+manejo de errores como JSON y la **discovery de page types efectivos** desde
+`/api/agent/config` (con fallback a los 4 built-in y rechazo fail-closed de un
+tipo retirado al crear).

@@ -291,3 +291,131 @@ def test_trim_results_keeps_agent_name_and_bounds_body(plugin):
     assert rows[0]["agent_name"] == "coder"
     assert len(rows[0]["body"]) == 600
     assert "noise" not in rows[0]
+
+
+# ── Effective page types (no hardcoded vocabulary) ───────────────────────────
+# P-plugin: the plugin reads the workspace's effective types from
+# /api/agent/config instead of hardcoding the retired 8-type list.
+
+_AGENT_CONFIG = {
+    "agent": {"id": "1", "name": "hermes"},
+    "page_types": ["note", "entity", "concept", "reference", "recipe"],
+    "workspaces": [
+        {"slug": "personal",
+         "page_types": ["note", "entity", "concept", "reference", "recipe"]},
+        {"slug": "work",
+         "page_types": ["note", "entity", "concept", "reference"]},
+    ],
+}
+
+
+class _FakeConfigClient:
+    """Stand-in client whose agent_config returns a canned payload."""
+
+    def __init__(self, workspace, payload):
+        self.workspace = workspace
+        self._payload = payload
+
+    def agent_config(self, timeout=3.0):
+        return self._payload
+
+
+# The vocabulary the new model RETIRED — asserted ABSENT. Written one slug per
+# line so a grep for the old type list does not match this negative assertion.
+_RETIRED_TYPES = {
+    "food",
+    "technical",
+    "knowledge",
+    "idea",
+}
+
+
+def _with_config(plugin, payload, workspace="personal"):
+    plugin._TYPE_CACHE.clear()
+    return mock.patch.object(
+        plugin, "_client_for",
+        return_value=_FakeConfigClient(workspace, payload),
+    )
+
+
+def test_effective_page_types_read_from_agent_config(plugin):
+    with _with_config(plugin, _AGENT_CONFIG):
+        assert plugin._effective_page_types() == [
+            "note", "entity", "concept", "reference", "recipe",
+        ]
+        assert plugin._effective_page_types("work") == [
+            "note", "entity", "concept", "reference",
+        ]
+
+
+def test_effective_page_types_fall_back_to_the_four_builtins(plugin):
+    """No client, unreachable server or non-agent key -> the 4 built-ins."""
+    with mock.patch.object(plugin, "_client_for", return_value=None):
+        plugin._TYPE_CACHE.clear()
+        assert list(plugin.BUILTIN_PAGE_TYPES) == [
+            "note", "entity", "concept", "reference",
+        ]
+        assert plugin._effective_page_types() == list(plugin.BUILTIN_PAGE_TYPES)
+
+    with _with_config(plugin, None):
+        assert plugin._effective_page_types() == list(plugin.BUILTIN_PAGE_TYPES)
+
+
+def test_tool_descriptions_render_the_effective_types(plugin):
+    with _with_config(plugin, _AGENT_CONFIG):
+        schemas = {s["name"]: s for s in plugin._tool_schemas()}
+    listed = schemas["dran_list_pages"]["description"]
+    created = schemas["dran_create_page"]["parameters"]["properties"]["page_type"]
+    for slug in ("note", "entity", "concept", "reference", "recipe"):
+        assert slug in listed
+        assert slug in created["description"]
+    # No trace of the retired TYPES in the rendered vocabulary. "knowledge"
+    # still appears as prose ("List knowledge pages") — that is the domain
+    # noun, not a page type, so compare the rendered type lists instead.
+    rendered = (
+        listed.split("page type (", 1)[1].rstrip(").")
+        + " "
+        + created["description"].split(": ", 1)[1]
+    )
+    rendered_types = [t.strip() for t in rendered.split("|") if t.strip()]
+    for retired in _RETIRED_TYPES:
+        assert retired not in rendered_types, rendered_types
+
+
+def test_create_page_rejects_a_type_outside_the_effective_set(plugin):
+    """Fail-closed: a retired type never reaches the API."""
+    ctx = FakeCtx()
+
+    class Exploding(_FakeConfigClient):
+        def create_page(self, **kwargs):  # pragma: no cover - must not run
+            raise AssertionError("the API must not be called")
+
+    with mock.patch.object(plugin, "_client_for",
+                           return_value=Exploding("personal", _AGENT_CONFIG)):
+        plugin._TYPE_CACHE.clear()
+        out = json.loads(plugin._handle_plugin_tool(
+            "dran_create_page", {"title": "T", "page_type": "idea"}, ctx=ctx))
+
+    assert "unknown page type" in out["error"]
+    assert out["effective_page_types"] == [
+        "note", "entity", "concept", "reference", "recipe",
+    ]
+
+
+def test_create_page_accepts_a_custom_workspace_type(plugin):
+    ctx = FakeCtx()
+    captured = {}
+
+    class Recording(_FakeConfigClient):
+        def create_page(self, **kwargs):
+            captured.update(kwargs)
+            return {"data": {"slug": "s", "id": "1"}}
+
+    with mock.patch.object(plugin, "_client_for",
+                           return_value=Recording("personal", _AGENT_CONFIG)):
+        plugin._TYPE_CACHE.clear()
+        out = json.loads(plugin._handle_plugin_tool(
+            "dran_create_page", {"title": "T", "page_type": "recipe"}, ctx=ctx))
+
+    assert out["created"] is True
+    assert captured["page_type"] == "recipe"

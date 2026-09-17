@@ -26,6 +26,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "http://localhost:4000"
 DEFAULT_WORKSPACE = "personal"
+# Built-in page types — Dran keeps exactly FOUR. A workspace may ADD its own
+# through `workspace_page_types`; the effective set (built-in ∪ custom) is
+# served by `GET /api/agent/config` and discovered at runtime by
+# `_effective_page_types()`. This tuple is the offline fallback only.
+BUILTIN_PAGE_TYPES = ("note", "entity", "concept", "reference")
+# Effective-type cache: workspace -> (monotonic timestamp, slug list).
+_TYPE_CACHE: Dict[str, Any] = {}
 # Canonical config path (what the dashboard's generic panel writes):
 # $HERMES_HOME/dran/config.json — same convention as other memory providers.
 # Legacy pre-schema installs kept it at $HERMES_HOME/dran_memory.json; still
@@ -436,15 +443,22 @@ class _DranClient:
         except Exception:
             return False
 
-    def agent_config(self) -> Optional[dict]:
+    def agent_config(self, timeout: float = 3.0) -> Optional[dict]:
         """GET /api/agent/config — the agent's server-side self-description.
 
-        Returns {agent, workspaces, access_levels} when the server knows this
-        key's actor, None otherwise (older Dran, non-agent key, or transport
+        Returns {agent, workspaces, page_types, access_levels} for an agent
+        API key, None otherwise (older Dran, non-agent key, or transport
         failure — callers fall back to unvalidated local config).
+
+        Each workspace carries its EFFECTIVE page types (`page_types`, string
+        slugs) and their full definitions (`page_type_defs`: slug, label,
+        plural, path, icon, color, meta_fields, builtin) — built-ins first,
+        then the workspace's custom types. `page_types` at the top level is
+        the union across every workspace the key reaches. The plugin reads
+        them instead of hardcoding the type list.
         """
         try:
-            data = self.request("GET", "/api/agent/config", timeout=3.0)
+            data = self.request("GET", "/api/agent/config", timeout=timeout)
             return data.get("data") or None
         except Exception:
             return None
@@ -541,8 +555,7 @@ class DranMemoryProvider(MemoryProvider):
         if not config:
             self._workspace_resolved_at = 0.0  # retry next turn — server unreachable
             return
-        allowed = [str(ws.get("slug") or "") for ws in config.get("workspaces", [])]
-        allowed = [s for s in allowed if s]
+        allowed = _workspace_slugs(config)
         current = self._client.workspace
         if current in allowed:
             return  # local choice is permitted — done
@@ -551,7 +564,7 @@ class DranMemoryProvider(MemoryProvider):
         logger.warning(
             "Dran memory: workspace %r is not permitted for this key "
             "(allowed: %s) — falling back to %r. Fix it in Dran → Settings → "
-            "Agents or pin another workspace in dran_memory.json",
+            "API Keys or pin another workspace in dran_memory.json",
             current, ", ".join(allowed) or "none", fallback,
         )
 
@@ -962,8 +975,93 @@ def _client_for(ctx) -> Optional[_DranClient]:
     )
 
 
+def _workspace_slugs(config: Optional[dict]) -> List[str]:
+    """Workspace slugs a key may reach, from an /api/agent/config payload."""
+    if not config:
+        return []
+    slugs = []
+    for ws in config.get("workspaces") or []:
+        if isinstance(ws, dict):
+            slug = str(ws.get("slug") or "").strip()
+            if slug:
+                slugs.append(slug)
+    return slugs
+
+
+# Timeout for the discovery probe used while BUILDING tool descriptions: the
+# plugin must not stall session start on a slow/unreachable Dran.
+TYPE_DISCOVERY_TIMEOUT = 2.0
+
+
+def _effective_page_types(workspace: str = "", timeout: float | None = None) -> List[str]:
+    """The page types to offer: the workspace's EFFECTIVE types.
+
+    Best effort, never fatal: `/api/agent/config` serves the effective set
+    (the 4 built-in ∪ the workspace's custom `workspace_page_types`, already
+    implemented server-side in W2). When Dran is unreachable or the key is
+    not an agent key, fall back to the 4 built-in types — the plugin never
+    hardcodes a workspace's custom vocabulary, and never invents a field.
+
+    `workspace` selects one workspace's set (its `page_types`); empty means
+    the union across every workspace the key reaches (`data.page_types`).
+    Cached for CONFIG_REFRESH_SECS (same cadence as the workspace probe) so
+    rendering tool descriptions never pays a round-trip per call.
+    """
+    now = time.monotonic()
+    cached = _TYPE_CACHE.get(workspace)
+    if cached and now - cached[0] < CONFIG_REFRESH_SECS:
+        return list(cached[1])
+    types = _fetch_effective_page_types(workspace, timeout)
+    _TYPE_CACHE[workspace] = (now, types)
+    return list(types)
+
+
+def _fetch_effective_page_types(workspace: str = "",
+                                timeout: float | None = None) -> List[str]:
+    """Uncached discovery — see `_effective_page_types` for the contract."""
+    client = _client_for(_PLUGIN_CTX)
+    if client is None:
+        return list(BUILTIN_PAGE_TYPES)
+    config = client.agent_config(timeout=timeout or TYPE_DISCOVERY_TIMEOUT)
+    if not config:
+        return list(BUILTIN_PAGE_TYPES)
+    workspaces = config.get("workspaces") or []
+    if workspace:
+        for ws in workspaces:
+            if isinstance(ws, dict) and str(ws.get("slug") or "") == workspace:
+                types = [str(t) for t in (ws.get("page_types") or []) if t]
+                if types:
+                    return types
+                break  # known workspace, empty set — do not fall back to the union
+    types = [str(t) for t in (config.get("page_types") or []) if t]
+    if not types:
+        for ws in workspaces:
+            if isinstance(ws, dict):
+                types.extend(
+                    str(t) for t in (ws.get("page_types") or []) if t
+                )
+    seen: List[str] = []
+    for t in list(BUILTIN_PAGE_TYPES) + types:
+        if t not in seen:
+            seen.append(t)
+    return seen
+
+
 def _tool_schemas() -> List[Dict[str, Any]]:
-    """Tool schemas exposed to the agent."""
+    """Tool schemas exposed to the agent.
+
+    The page-type vocabulary is DISCOVERED, not hardcoded: the descriptions
+    render the effective types of the plugin's workspace, read from
+    `/api/agent/config` (built-in ∪ custom), with the 4 built-ins as the
+    offline fallback.
+    """
+    _schemas_client = _client_for(_PLUGIN_CTX)
+    _types = _effective_page_types(
+        _schemas_client.workspace if _schemas_client is not None else "",
+        timeout=TYPE_DISCOVERY_TIMEOUT,
+    )
+    _types_doc = ", ".join(_types)
+    _types_enum = " | ".join(_types)
     return [
         {
             "name": "dran_search",
@@ -981,7 +1079,7 @@ def _tool_schemas() -> List[Dict[str, Any]]:
         },
         {
             "name": "dran_list_pages",
-            "description": "List knowledge pages, optionally filtered by page type (note, idea, knowledge, technical, entity, concept, reference, food).",
+            "description": f"List knowledge pages, optionally filtered by page type ({_types_doc}).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1007,7 +1105,7 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                 "properties": {
                     "title": {"type": "string"},
                     "body": {"type": "string", "description": "Page body (markdown)"},
-                    "page_type": {"type": "string", "description": "note | idea | knowledge | technical | entity | concept | reference | food"},
+                    "page_type": {"type": "string", "description": f"One of the workspace's effective page types: {_types_enum}"},
                     "tags": {"type": "array", "items": {"type": "string"}},
                     "summary": {"type": "string"},
                 },
@@ -1176,10 +1274,20 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
             title = str(args.get("title", "")).strip()
             if not title:
                 return json.dumps({"error": "title is required"})
+            page_type = str(args.get("page_type") or "note").strip()
+            # Fail-closed against the workspace's EFFECTIVE types (built-in ∪
+            # custom) so a retired type never reaches the API. The list comes
+            # from /api/agent/config (best effort: the 4 built-ins offline).
+            available = _effective_page_types(client.workspace)
+            if page_type not in available:
+                return json.dumps({
+                    "error": f"unknown page type {page_type!r}",
+                    "effective_page_types": available,
+                })
             data = client.create_page(
                 title=title,
                 body=str(args.get("body") or ""),
-                page_type=str(args.get("page_type") or "note"),
+                page_type=page_type,
                 tags=list(args.get("tags") or []),
                 summary=str(args.get("summary") or ""),
             )

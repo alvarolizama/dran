@@ -16,7 +16,7 @@ real IDORs with it.
 |---|---|---|---|
 | REST read (`scope "/api"` + `:api_read_access`) | `require_api_token` (Bearer → 3 identity shapes) | `require_read_access` → `ResourceAuthorization.authorize(user, :read, ws_id)` per request, fail-closed when no resolvable workspace | 403 JSON |
 | REST write (`:api_write_access`) | idem | `require_write_access` → `authorize(user, :write, ws_id)` for ALL identity shapes (API keys via `:access_levels`, per-user tokens via membership) | 403 JSON |
-| Agent tools (Hermes plugin → REST) | key's actor + per-workspace `access_levels` | `resource_authorization.ex: authorize/3` per route; write routes behind `:require_write_access` | `403` |
+| Agent tools (Hermes plugin → REST) | the API key + its per-workspace `access_levels` (no actor) | `resource_authorization.ex: authorize/3` per route; write routes behind `:require_write_access` | `403` |
 | Browser LiveViews | session | `:auth` / `:workspace_access` / `:admin` pipelines, role checks in LiveViews | redirect |
 
 Identity shapes from `require_api_token`: legacy admin token
@@ -26,8 +26,9 @@ Identity shapes from `require_api_token`: legacy admin token
 clause per shape — a plug that only handles ONE shape silently passes the
 others through (that is how the write bypass existed).
 
-Who each shape IS as an identity (actor name, key creator, and why
-"who owns this agent" is the wrong frame): skill `dran-actor-model`.
+Who each shape IS as an identity (key name, `X-Hermes-Agent` header, key
+creator, and why "who owns this agent" is the wrong frame): skill
+`dran-dev-actor-model`.
 
 `get_requested_workspace_id/1` resolves the workspace from
 `params["workspace_id"] || params["workspace"] || params["slug"] ||

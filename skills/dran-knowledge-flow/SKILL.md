@@ -12,10 +12,11 @@ metadata:
 
 # dran-knowledge-flow — Create and edit knowledge pages
 
-Pages are the unit of knowledge: `note`, `idea`, `knowledge`,
-`technical`, `entity`, `concept`, `reference`, `food`.
-This flow owns the write loop: search first,
-then create or update, then verify by readback.
+Pages are the unit of knowledge. There are **four built-in page types** —
+`note`, `entity`, `concept`, `reference` — and a workspace may declare **its
+own** (`recipe`, `trip`, …). There is no `meta.kind`: the type is the only
+classifier. This flow owns the write loop: search first, then create or
+update, then verify by readback.
 
 The tools come from the Dran Hermes plugin (`dran_*`), which talks to Dran
 over its REST API.
@@ -59,33 +60,22 @@ flowchart TD
 
 ## Notes on the calls
 
-- `page_type` enum comes from `Dran.PageRegistry` (8 types). Kinds
-  (`meta.kind`; the lists in `PageMeta.changeset/3` are the contract) and
-  type-specific meta fields. When unsure which type fits, follow the
-  decision tree in `docs/page-types.md`:
-  - `note` — quick capture, journal, no structure yet (free kind)
-  - `idea` — a thought that wants to be developed;
-    kinds: idea/question/hypothesis/spark
-  - `knowledge` — someone else's words you extracted;
-    kinds: quote/summary/highlight/excerpt; extra meta: source_url, date
-  - `technical` — how-to: code, commands, configs, dev recipes;
-    kinds: code/snippet/debug/recipe/config/command/
-    template/pattern/method; extra meta: language, version
-  - `entity` — a named thing: person, company, tool, place;
-    kinds: person/company/product/tool/place/event/language/
-    framework/hardware/protocol; extra meta: location, external_url
-  - `concept` — an abstract notion you define (free kind;
-    domain, parent_concept)
-  - `reference` — an external source you point at;
-    kinds: article/paper/video/podcast/book/newsletter/
-    spec/code/release/website/repo/api; extra meta: source_url, published_at
-  - `food` — cooking: recipes, ingredients, dishes;
-    kinds: recipe/ingredient/dish/meal/cuisine/restaurant/
-    drink/technique; extra meta: cuisine, servings, prep_time, cook_time,
-    source_url
-
-  Every type also takes `meta.props` (free key-value bag). Kind
-  classifies/filters only — never changes behavior.
+- `page_type` must be one of the workspace's **effective** types: the four
+  built-in (`note`, `entity`, `concept`, `reference`) ∪ the workspace's custom
+  types. Validation is fail-closed — an unknown type (a retired slug, or
+  another workspace's custom type) is refused, and the error lists the valid
+  ones. There is **no `meta.kind`**; the type is the only classifier, and
+  `meta.props` is a free key-value bag available on every type. When unsure
+  which type fits, follow the decision tree in `docs/page-types.md`:
+  - `note` — quick capture, journal, no structure yet (meta: date)
+  - `entity` — a named thing: person, company, tool, place
+    (meta: location, external_url)
+  - `concept` — an abstract notion you define
+    (meta: domain, parent_concept)
+  - `reference` — an external source you point at
+    (meta: source_url, published_at)
+  - a custom type — whatever the workspace declares (e.g. `recipe`); use it
+    when `dran_list_pages` or the error message shows it exists.
 - **`dran_update_page` only changes the fields you pass** — send the fields
   to change and leave the rest out.
 - Search `strategy`: `auto / fts / fuzzy / semantic / hybrid`.
@@ -96,9 +86,11 @@ flowchart TD
   verified.
 - `dran_list_pages` takes an optional `page_type`; `dran_stats` for counts;
   `dran_get_page` for one slug.
-- Every write is attributed server-side: the key's actor sets `created_by`
-  (and `owner_user_id` when the actor has an owner), and the active profile
-  lands in `agent_name` via `X-Hermes-Agent`. Neither is client-settable.
+- Every write is attributed server-side and nothing is client-settable:
+  `created_by` is the `X-Hermes-Agent` header when it came (the Hermes
+  profile), otherwise the API key name; `owner_user_id` is the OWNER of the
+  key (`api_keys.created_by_user_id`). The header lands in `agent_name` —
+  attribution, never authorization: it never widens access.
 
 ## Pitfalls
 

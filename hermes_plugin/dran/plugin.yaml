@@ -1,5 +1,5 @@
 name: dran
-version: 1.2.0
+version: 1.3.0
 description: "Dran — shared multi-agent memory store + knowledge tools backed by your Dran workspace (REST, per-agent API key attribution, X-Hermes-Agent identity)."
 author: Álvaro Lizama
 license: MIT
@@ -36,5 +36,5 @@ provides_tools:
 # this manifest; `api_key` resolves from DRAN_API_KEY (the profile .env).
 requires_env:
   - name: DRAN_API_KEY
-    description: "Dran API key for this profile (Dran → Settings → API Keys → Create key). Shared by the memory provider and the knowledge tools: one key, one actor."
+    description: "Dran API key for this profile (Dran → Settings → API Keys → Create key). Shared by the memory provider and the knowledge tools: one key, one credential — no actor is created."
     prompt: "Dran API key (dran_…)"

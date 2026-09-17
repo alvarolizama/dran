@@ -2,8 +2,18 @@
 
 **Fecha:** 2026-09-16 · **Repo:** `/Users/alvaro/Workspace/Repos/alvarolizama/dran`
 **Estado del árbol al analizar:** `main`, working tree limpio, 26 commits por delante de `origin/main` (`0286755`).
-**Alcance de este documento:** análisis técnico previo. El plan ejecutable vive en
+**Alcance de este documento:** análisis técnico **previo**. El plan ejecutable vive en
 `.riel/contract.md`; el estándar visual en `DESIGN.md`.
+
+> **Estado: modelo EJECUTADO y vigente.** D1–D6 se aplicaron en las olas W1–W4:
+> el registry tiene 4 tipos built-in, `meta.kind` ya no existe en ninguna capa,
+> los tipos custom por workspace (`workspace_page_types`, validación fail-closed)
+> están vivos, y `/settings/agents` es `/settings/api-keys` sin CRUD de actores
+> (la key no crea actor; la atribución va por key + header `X-Hermes-Agent`).
+> **El contrato vigente es `docs/page-types.md`** (+ `docs/api.md` para la API y
+> `DESIGN.md` para el UI). Las secciones §2 (estado previo, verificado antes del
+> cambio) y las preguntas/decisiones de §4 se conservan como registro del
+> baseline que motivó el cambio: describen lo que HABÍA, no lo que hay.
 
 ---
 
@@ -11,7 +21,7 @@
 
 | # | Decisión | Efecto |
 |---|---|---|
-| D1 | **4 page types built-in**: `note`, `reference`, `entity`, `concept` | Se eliminan `idea`, `knowledge`, `technical`, `food` |
+| D1 | **4 page types built-in**: `note`, `reference`, `entity`, `concept` | Se retiran los otros cuatro tipos del registry (`food`, `technical`, `knowledge` y `idea`) |
 | D2 | **`meta.kind` desaparece por completo** | No queda como "legacy para display": se van el select, el filtro `?kind=`, la validación, los labels y las opciones |
 | D3 | **Tipos custom por workspace** vía configuración del workspace | El workspace deja de solo *desactivar* tipos: ahora también *agrega* |
 | D4 | `/settings/agents` → **`/settings/api-keys`** | Desaparece el CRUD de actores/agentes |
@@ -28,8 +38,12 @@ relaciones tipadas, el grafo, los workers, la política de visibilidad de lectur
 
 ### 2.1 El registry es el centro de gravedad
 
-`lib/dran/page_registry.ex` es la única fuente de verdad y hoy declara **8 tipos**
-(`@types`, l.145) con **kinds** por tipo (`:kinds`, l.53-142):
+### 2.1 El registry ANTES del cambio (baseline)
+
+`lib/dran/page_registry.ex` era la única fuente de verdad y declaraba **8 tipos**
+(`@types`, l.145) con **kinds** por tipo (`:kinds`, l.53-142) — esto es lo que
+existía y se eliminó; hoy el registry declara `~w(note entity concept reference)`
+sin ninguna noción de kind:
 
 | Tipo | kinds (l.) | meta_fields (l.) |
 |---|---|---|
@@ -392,7 +406,7 @@ que salen), **AGENTS** (por el rename y el fin del CRUD de actores).
 
 | Archivo | Línea | Clase | Aserción / fixture que rompe |
 |---|---|---|---|
-| `test/dran/page_types_test.exs` | 9-15 | TYPE | `types() == ~w(note idea knowledge technical entity concept reference food)` |
+| `test/dran/page_types_test.exs` | 9-15 | TYPE | `types()` fijaba la lista completa de los 8 tipos del baseline (ver §2.1) |
 | `test/dran/page_types_test.exs` | 28 | TYPE | itera los 8 tipos afirmando cada capacidad |
 | `test/dran/page_types_test.exs` | 46-47 | TYPE | comentario "ahora sólo 4 tipos" — ya desincronizado con `:28` |
 | `test/dran/food_page_type_test.exs` | 86-94 | TYPE | `meta_fields("food")` expone `kind`, `cuisine`, `servings`… |
@@ -406,7 +420,7 @@ que salen), **AGENTS** (por el rename y el fin del CRUD de actores).
 | `test/dran_web/live/pages_live_test.exs` | 81-149 | TYPE+KIND | navega a `/ideas`, `?kind=idea,question`, fixture `page_type: "idea"` |
 | `test/dran_web/live/pages_live_test.exs` | 151-163 | TYPE | `?kind=no-existe` sobre `/ideas` |
 | `test/dran_web/live/pages_live_test.exs` | 165-240 | KIND | menú de kind, toggle, `assert_patch …?kind=idea` |
-| `test/dran_web/live/pages_live_test.exs` | 241-310 | TYPE+KIND | `name="page[meta][kind]"`, forms por `/ideas`, `/knowledge`, `/technical`, `/food` |
+| `test/dran_web/live/pages_live_test.exs` | 241-310 | TYPE+KIND | `name="page[meta][kind]"`, forms por los paths de los tipos retirados (`/food`, `/technical`, `/knowledge` y los demás) |
 | `test/dran_web/live/pages_live_test.exs` | 321-345 | KIND | autosave con `meta: %{"kind" => "question"}` |
 | `test/dran_web/live/settings_live_test.exs` | 227-357 | AGENTS | describe entero de la pestaña de actores (create/edit/delete/kind system) |
 | `test/dran_web/live/settings_live_test.exs` | 37-225 | AGENTS | pestaña de agents + create/edit/revoke/copy de keys |
@@ -580,8 +594,8 @@ Lo que **corregí** de mi propia primera pasada de D8, al verificar con grep:
    así que el radio de impacto de reducir el registry está acotado y verificado.
 3. **Cláusulas mueren silenciosas**: `type_chip_bg("project")` sobrevive a la eliminación
    del tipo `project` sin fallar; el mismo patrón se repetirá con los 4 tipos que salen.
-4. **El router resuelve por path**: `/ideas`, `/knowledge`, `/technical`, `/food` dejan de
-   resolver. Los tests navegan por esos paths (`pages_live_test.exs:82`), y los bookmarks
+4. **El router resuelve por path**: los paths de los tipos retirados dejan de
+   resolver. Los tests navegaban por esos paths (`pages_live_test.exs:82`), y los bookmarks
    de usuario también. Hay que decidir si se añade un redirect 301 de los paths muertos a
    `/notes` (recomendado) o se acepta el 404.
 5. **`graph_3d.js`** tiene el mapa `typePaths` + fallback `${type}s`: un tipo custom sin

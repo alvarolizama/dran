@@ -49,7 +49,7 @@ The flows above are for USING Dran. To CHANGE its code, load the matching
 | --- | --- |
 | `dran-dev-actor-model` | identity/ownership: actors, keys, attribution |
 | `dran-dev-auth-surface` | REST authorization layers + audit method |
-| `dran-dev-page-types` | adding/changing page types or kinds |
+| `dran-dev-page-types` | changing built-in page types or workspace custom types |
 | `dran-dev-settings-config` | settings-backed config and admin forms |
 | `dran-dev-slug-management` | slug creation/update policy |
 | `dran-dev-ui-tweaks` | Web UI edits from inspector snippets |
@@ -64,13 +64,13 @@ repo, not operating a Dran instance.
   `config.yaml` must list `dran`, and the plugin directory is symlinked into
   `~/.hermes/profiles/<perfil>/plugins/dran`.
 - The secret lives ONCE in the profile's `.env` (`DRAN_API_KEY`); the memory
-  provider and the tools resolve the same var — one key, one actor.
+  provider and the tools resolve the same var — one key, one credential.
 - Config comes from `$HERMES_HOME/dran/config.json` (base URL + workspace),
   the same file the memory panel writes.
-- **One key = one actor.** Attribution (`owner_user_id`/`created_by`) is
-  derived server-side from the key — never client-settable. Each write also
-  carries `X-Hermes-Agent` (the active profile) which the server persists as
-  `agent_name`.
+- **A key creates NO actor.** Attribution is derived server-side — never
+  client-settable: `created_by` is the `X-Hermes-Agent` header (the active
+  profile) when it came, otherwise the key name; `owner_user_id` is the user
+  that owns the key. The header value is persisted as `agent_name`.
 - **Write gate**: keys with `read` access get `403` on every write tool.
 - **Memory tools** (`dran_memory_*`) come from the memory provider; the
   knowledge tools (`dran_search`, `dran_create_page`, …) come from the same
@@ -93,8 +93,10 @@ flowchart TD
 - The instance default workspace (`Dran.Auth.default_workspace_slug/0`,
   Settings → /admin/system, fallback `personal`) is what web/seeds use —
   NOT necessarily what your key reaches.
-- One key = one actor with its own workspace matrix (Dran → Settings →
-  Agents). Owner keys and `:all` keys get no injection — always name the
+- One key = one credential with its own workspace matrix (Dran → Settings →
+  API Keys). The key creates **no actor**: attribution comes from the key name
+  and the `X-Hermes-Agent` header, and `owner_user_id` is the user that owns
+  the key. Owner keys and `:all` keys get no injection — always name the
   workspace explicitly with those.
 - The memory provider's workspace is configured in the panel and validated
   against the key's matrix on connect; do not assume it equals the workspace
@@ -124,7 +126,7 @@ flowchart LR
 
 | Flow | When to load it |
 | --- | --- |
-| `dran-knowledge-flow` | Create, update, search or delete pages (note, idea, knowledge, technical, entity, concept, reference, food…) |
+| `dran-knowledge-flow` | Create, update, search or delete pages (4 built-in types + the workspace's custom ones) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (provider tools + REST) |

@@ -91,5 +91,5 @@ internally" when it should have picked "how to use it".
 ## What does NOT ship as a skill
 
 - **MCP**: there is no MCP server any more. If you find a skill mentioning
-  `mcp_dran_*` or `mcp_servers`, it is stale — the plugin tools and the REST
-  API replaced it.
+  MCP tool names or `mcp_servers`, it is stale — the plugin tools and the REST
+  API replaced it. MCP imports of a live server config are likewise gone.

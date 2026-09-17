@@ -36,7 +36,11 @@ Three token shapes are accepted (`DranWeb.Router.require_api_token/2`):
 |---|---|---|
 | **Legacy admin token** | instance owner (`is_owner: true`) | every workspace |
 | **Per-user token** | the user row | workspaces the user can access (membership ∪ public) |
-| **Context-scoped API key** | synthetic `api-key:<name>` identity | only the workspaces granted to the key, each with its own `access_level` (`read` / `write`) |
+| **Per-agent API key** | the key itself (no actor row) | only the workspaces granted to the key, each with its own `access_level` (`read` / `write`) |
+
+An API key **does not create an actor**. Its identity is the key: the key
+`name` plus the workspaces granted to it in `api_key_workspaces`. It belongs to
+the user that created it (`created_by_user_id`).
 
 A missing or malformed header returns:
 
@@ -55,9 +59,17 @@ A missing or malformed header returns:
   Otherwise `403 {"errors":{"detail":"API key does not have write access to this workspace"}}`.
 - **Workspace create / update / delete** additionally require the instance
   owner (`require_admin`).
-- **Attribution is server-side.** `created_by` / `updated_by` are derived from
-  the token's actor (`Dran.Auth.resolve_created_by/1`) and are never
-  client-settable. `owner` was dropped with the actor model.
+- **Attribution is server-side** (`Dran.Auth`), never client-settable:
+  - `created_by` / `updated_by` — the `X-Hermes-Agent` header when it came
+    (the Hermes profile name), otherwise the **key name**; user tokens fall
+    back to the user email; the legacy admin token maps to `admin` / `system`.
+  - `agent_name` — the same `X-Hermes-Agent` value, persisted on the written
+    content. The header is attribution, not authorization: it never widens
+    access.
+  - `owner_user_id` — the **owner of the key** (`api_keys.created_by_user_id`);
+    for a user token, that user. `nil` for keys with no creator and for the
+    legacy admin token (historical content is workspace-wide). The `owner`
+    field was dropped with the actor model.
 - Workspaces are referenced by **slug** or **UUID**. Query param `workspace=`
   accepts either.
 
@@ -85,14 +97,53 @@ insufficient access, `404` not found, `405` (method not allowed), `409` conflict
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/agent/config` | agent API key only | Self-description for agent clients: agent identity + reachable workspaces + access levels |
+| GET | `/api/agent/config` | agent API key only | Self-description for agent clients: agent identity + reachable workspaces + access levels + **effective page types** |
 
-`GET /api/agent/config` returns `404` for non-agent identities (user tokens /
-legacy admin have no agent actor). The Hermes memory plugin uses it to pick a
-memory workspace locally.
+`GET /api/agent/config` returns `404` for identities that are not an agent API
+key (user tokens and the legacy admin token have no agent identity).
+
+**Page types.** Each workspace reports its **effective** page types — the 4
+built-in types (`note`, `entity`, `concept`, `reference`) plus the workspace's
+own custom types (`workspace_page_types`). Same shape as
+`Dran.Knowledge.effective_page_types/1`, so an agent discovers custom
+vocabulary instead of hardcoding the built-in four:
+
+| Field | Shape | Meaning |
+|---|---|---|
+| `data.page_types` | `["note", "entity", "concept", "reference", "recipe"]` | union across every workspace this key reaches |
+| `data.workspaces[].page_types` | same | effective types of that workspace |
+| `data.workspaces[].page_type_defs` | `[{slug, label, plural, path, icon, color, meta_fields, builtin}]` | full definitions: built-ins first with `"builtin": true`, then the custom ones with `"builtin": false`, in declaration order |
+
+```json
+{
+  "data": {
+    "agent": { "id": "…", "name": "hermes", "display_name": "Hermes" },
+    "page_types": ["note", "entity", "concept", "reference", "recipe"],
+    "workspaces": [
+      {
+        "id": "…", "name": "Personal", "slug": "personal",
+        "page_types": ["note", "entity", "concept", "reference", "recipe"],
+        "page_type_defs": [
+          { "slug": "note", "label": "Note", "plural": "Notes", "path": "notes",
+            "icon": "hero-pencil", "color": "#60A5FA",
+            "meta_fields": [["date", "date", "Date"]], "builtin": true },
+          { "slug": "recipe", "label": "Recipe", "plural": "Recipes",
+            "path": "recipes", "icon": "hero-book-open", "color": "#F59E0B",
+            "meta_fields": [], "builtin": false }
+        ]
+      }
+    ],
+    "access_levels": { "personal": "write" }
+  }
+}
+```
+
+The Hermes memory plugin uses this endpoint to pick its memory workspace
+locally and to render the effective page types in its tool descriptions; with
+Dran unreachable it falls back to the 4 built-in types.
 
 ```bash
-curl -s localhost:4000/api/agent/config -H "Authorization: Bearer $KEY"
+curl -s localhost:4000/api/agent/config -H "Authorization: Bearer ***"
 ```
 
 ### Workspaces
@@ -125,7 +176,7 @@ curl -s localhost:4000/api/agent/config -H "Authorization: Bearer $KEY"
 | Param | Meaning |
 |---|---|
 | `workspace` | workspace slug or UUID (also accepted as `workspace_id`) |
-| `type` | page type — see [page-types.md](page-types.md) |
+| `type` | page type — one of the workspace's effective types (built-in ∪ custom); see [page-types.md](page-types.md) and `GET /api/agent/config` |
 | `tag` | filter by tag |
 | `status` | filter by meta status |
 | `owner` / `created_by` | filter by attribution |

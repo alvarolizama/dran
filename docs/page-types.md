@@ -1,110 +1,60 @@
-> **Desactualizado.** El modelo vigente son **4 tipos built-in** (`note`,
-> `reference`, `entity`, `concept`) **más tipos custom por workspace**, y
-> `meta.kind` **ya no existe** — ver `DESIGN.md` §D7. El inventario de tipos y
-> kinds de este documento se reescribe en la ola de docs.
+# Page types
 
-# Page types and kinds
-
-Single source of truth: `Dran.PageRegistry` (`lib/dran/page_registry.ex`).
+Single source of truth: `Dran.PageRegistry` (`lib/dran/page_registry.ex`) for
+the built-ins, `Dran.Workspace` (`lib/dran/workspace.ex`) for the custom ones.
 This document explains **how to use each type** — the registry defines them;
 this page tells you when to pick which.
 
-Every page also accepts `meta.props` — a free-form key-value bag
-(e.g. `%{"role" => "sales"}`) that survives round-trips and is indexed.
-`meta.kind` classifies and filters; it never changes behavior.
+There are exactly **four built-in page types** and a workspace may **declare
+its own**. `meta.kind` **does not exist**: the type is the only classifier, and
+every page accepts `meta.props` — a free-form key-value bag (e.g.
+`%{"role" => "sales"}`) that survives round-trips and is indexed. Type-specific
+meta fields are declared per type and validated as ordinary meta keys.
 
 ## Choosing a type
 
 ```mermaid
 flowchart TD
   Q{"What is the content?"}
-  Q -->|"quick capture, journal,\nno structure yet"| N[note — free kind]
-  Q -->|"a thought that wants\nto be developed"| I[idea]
-  Q -->|"someone else's words\nyou extracted"| K[knowledge]
-  Q -->|"how-to: code, commands,\nconfigs, dev recipes"| T[technical]
+  Q -->|"quick capture, journal,\nno structure yet"| N[note]
   Q -->|"a named thing: person,\ncompany, tool, place"| E[entity]
-  Q -->|"an abstract notion\nyou define"| C[concept — free kind]
+  Q -->|"an abstract notion\nyou define"| C[concept]
   Q -->|"an external source\nyou point at"| R[reference]
-  Q -->|"cooking: recipes,\ningredients, dishes"| F[food]
+  Q -->|"anything else your\nworkspace declares"| X["custom type\n(Settings → workspace)"]
 
   style N fill:#dbeafe
-  style I fill:#fce7f3
-  style K fill:#fef3c7
-  style T fill:#cffafe
   style E fill:#ffe4e6
   style C fill:#fef3c7
   style R fill:#ecfccb
-  style F fill:#ffedd5
+  style X fill:#f1f5f9
 ```
 
-## The eight types
+## The four built-in types
 
-| Type | Purpose | URL path | Extra meta fields |
+| Type | Purpose | URL path | Meta fields (besides `props`) |
 |---|---|---|---|
-| `note` | free capture | `/notes` | `date`, `due_date` (when kind is `reminder`) |
-| `idea` | sparks & thinking | `/ideas` | — |
-| `knowledge` | captured wisdom | `/knowledge` | `source_url`, `date` |
-| `technical` | code & how-to | `/technical` | `language` (when kind is `code`), `version` |
+| `note` | free capture | `/notes` | `date` |
 | `entity` | named things | `/entities` | `location`, `external_url` |
 | `concept` | abstract ideas | `/concepts` | `domain`, `parent_concept` |
 | `reference` | external sources | `/references` | `source_url`, `published_at` |
-| `food` | cooking & gastronomy | `/food` | `cuisine`, `servings`, `prep_time`, `cook_time`, `source_url` |
 
-### `note` — free-form capture (kind is free)
+`Dran.PageRegistry.meta_fields/1` is the contract for the four built-ins.
 
-The journal, the inbox. No kind validation: any string lands (journal,
-meeting, reminder, decision appear as legacy values in existing rows). Use
-`dran_create_note` / `dran_update_note` — title+slug shorthands where
-`dran_update_note` **merges** meta (unlike `dran_update_page`, which
-replaces it).
+### `note` — free-form capture
+
+The journal, the inbox, the default. Use `dran_create_note` /
+`dran_update_note` — title+slug shorthands where `dran_update_note`
+**merges** meta (unlike `dran_update_page`, which replaces it).
 
 - `date` — when it happened
-- `due_date` — shown in the editor only when kind is `reminder`
 
 When unsure between `note` and a structured type: start as `note`, promote
 later. Notes are full citizens (graph, journey, embeddings, agent create).
 
-### `idea` — sparks & thinking
-
-Kinds: `idea`, `question`, `hypothesis`, `spark`.
-
-- `idea` — a seed you may develop
-- `question` — something you want answered; link answers back with
-  `related` relations
-- `hypothesis` — a claim you intend to test; contradicting evidence goes in
-  a `contradicts` relation
-- `spark` — unprocessed fragment too small to be an idea yet
-
-No extra meta. Link sparks → ideas as they mature with `related`/`part_of`
-relations. Efforts with deadlines are plain `note` pages (set `due_date`
-and kind `plan` — a legacy kind that still renders) linked via `part_of`.
-
-### `knowledge` — extracts from sources
-
-Kinds: `quote`, `summary`, `highlight`, `excerpt`.
-
-- `source_url` — where it came from
-- `date` — when captured
-
-When you capture a whole external item to keep immutable, that is
-`reference`; when you extract your own distilled piece from it, that is
-`knowledge` (link them with `related`).
-
-### `technical` — code & how-to
-
-Kinds: `code`, `snippet`, `debug`, `recipe`, `config`, `command`,
-`template`, `pattern`, `method`.
-
-- `language` — editor shows it only when kind is `code` (e.g. `elixir`)
-- `version` — the version this applies to
-
-`recipe` here means a **procedural recipe** (steps to get something done in
-a system). Cooking recipes belong to `food`.
-
 ### `entity` — named things
 
-Kinds: `person`, `company`, `product`, `tool`, `place`, `event`,
-`language`, `framework`, `hardware`, `protocol`.
+People, companies, products, tools, places, events, languages, frameworks,
+hardware, protocols.
 
 - `location` — where it lives
 - `external_url` — its homepage/profile
@@ -113,70 +63,102 @@ The entity linker auto-creates entity pages from names detected in bodies —
 expect entities to appear without you creating them. Machine-owned
 relations (`mentions`, `works_in`, `built_with`…) attach them to pages.
 
-### `concept` — abstract ideas (kind is free)
+### `concept` — abstract ideas
 
-Definition-style pages: fermentation, zero-trust, Zettelkasten. Free kind
-(legacy values like `technique`, `theory`, `principle` render from old
-rows). Meta: `domain`, `parent_concept` — build hierarchies with
-`parent_concept` naming another concept's slug.
+Definition-style pages: fermentation, zero-trust, Zettelkasten.
+
+- `domain` — the area it belongs to
+- `parent_concept` — another concept's slug; build hierarchies with it
 
 ### `reference` — external sources
 
-Kinds: `article`, `paper`, `video`, `podcast`, `book`, `newsletter`,
-`spec`, `code`, `release`, `website`, `repo`, `api`.
+Articles, papers, videos, podcasts, books, newsletters, specs, repos, APIs —
+anything you point at.
 
 - `source_url` — the canonical URL (required in practice)
 - `published_at` — publication date
 
-References are pointers; your own take goes in `knowledge` or `note`.
+References are pointers; your own take goes in `note` or in a custom type.
 
-### `food` — cooking & gastronomy
+## Custom types per workspace
 
-Kinds: `recipe`, `ingredient`, `dish`, `meal`, `cuisine`, `restaurant`,
-`drink`, `technique`.
+A workspace **adds** page types on top of the built-ins by declaring
+`workspace_page_types` (ordered jsonb list; edited in the workspace settings
+UI). No schema migration is involved — the list is data.
 
-- `cuisine` — free text (e.g. `mexican`, `italian`)
-- `servings` — free text (e.g. `6`)
-- `prep_time` / `cook_time` — free text (e.g. `15 min`)
-- `source_url` — where the recipe came from
+```json
+[
+  {
+    "slug": "recipe",
+    "label": "Recipe",
+    "plural": "Recipes",
+    "path": "recipes",
+    "icon": "hero-book-open",
+    "color": "#F59E0B",
+    "meta_fields": [
+      ["text", "cuisine", "Cuisine"],
+      ["text", "servings", "Servings"]
+    ]
+  }
+]
+```
 
-Structure a cookbook with relations: ingredient pages linked to recipe
-pages via `part_of` (a recipe's parts are its ingredients), recipes to a
-`cuisine` page, restaurants kept as `restaurant`-kind pages with
-`location`-style info in `props`. `technique` (knife cuts, sous-vide,
-mother sauces) is the culinary counterpart of `technical`'s method pages.
-
-## Kinds across types (shared slugs)
-
-A kind slug may appear in several types; each type validates its own list:
-
-| Slug | Types | Meaning |
+| Key | Required | Meaning |
 |---|---|---|
-| `recipe` | `technical`, `food` | procedural steps — dev recipe vs cooking recipe |
-| `technique` | `concept` (legacy), `food` | a named method/skill |
-| `language` | `entity` (kind), `technical` (meta field) | careful: different roles |
+| `slug` | yes | identifier, `^[a-z0-9][a-z0-9_-]*$`, never a built-in slug |
+| `label` | no | singular label (falls back to the slug) |
+| `plural` | no | plural label |
+| `path` | yes | URL segment (`/recipes`), **explicit** — never a blind pluralization |
+| `icon` | no | heroicon name (default `hero-document-text`) |
+| `color` | no | hex color (default `#94A3B8`) |
+| `meta_fields` | no | editor field definitions for the type's `meta` keys |
 
-## Validation notes (current behavior)
+### Validation is fail-closed
 
-- `meta.kind` **is validated by `PageMeta.changeset/3`** against the type's
-  list — but `Knowledge.create_page/1` casts `meta` as a plain map and does
-  not run that changeset, so an invalid kind currently persists without
-  error. Treat the lists above as the contract regardless.
-- `note` and `concept` are free types (`kinds: nil`): no kind select in the
-  editor, no kind filter for them.
-- Page type itself is validated at creation (`page_type` must be in the
-  registry list) and can be disabled per workspace.
+`Dran.Workspace` validates the whole list on save; an invalid entry is an
+error, never a silent drop or a silent dedupe:
 
-## Adding or changing a type
+- `slug` and `path` are **required** on every entry.
+- **Slugs are unique** and **paths are unique** within the workspace.
+- The slug must match `^[a-z0-9][a-z0-9_-]*$`.
+- A slug that repeats a built-in type (`note`, `entity`, `concept`,
+  `reference`) is rejected — built-ins cannot be redefined.
+- The list must be a list of objects.
 
-Everything derives from the registry: `@registry` (capabilities, kinds,
-ui attrs), `@types` order, `meta_fields/1` clauses, `kind_labels/0`,
-and the `if false do gettext(...) end` marker block. Then:
+At **write** time the API validates `page_type` against the workspace's
+**effective types** — the 4 built-in ∪ the custom ones. A type that is not in
+that set (a retired slug, or another workspace's custom type) is refused;
+`Knowledge.create_page/1` / `update_page/2` are the gate.
+
+### Effective types
+
+```
+effective_page_types(workspace) = built-in (note, entity, concept, reference)
+                                  ∪ workspace_page_types (declaration order)
+```
+
+`Dran.Knowledge.effective_page_types/1` is the accessor. It is what the web
+UI renders (sidebar, filters, editor) and what `GET /api/agent/config` returns
+to agent clients (see [api.md](api.md)) so the Hermes plugin and other agents
+discover the vocabulary instead of hardcoding the built-in four.
+
+`disabled_page_types` still exists and is still validated against the
+workspace's effective types — a workspace can disable a type, but only for
+types it actually has.
+
+## Adding or changing a BUILT-IN type
+
+Everything derives from the registry: `@registry` (capabilities, `ui` attrs,
+`meta_fields/1` clauses), `@types` order, and the `if false do gettext(...) end`
+marker block. Then:
 
 ```bash
 mix gettext.extract --merge   # fill the new es translations
 mix precommit                 # test/dran/page_types_test.exs pins the list
 ```
 
-See the repo skills (`dran-page-types` in the Hermes profile) for the full
-procedure including data migrations and hardcoded-surface audit.
+See the repo skill `dran-dev-page-types` for the full procedure including data
+migrations and the hardcoded-surface audit.
+
+Adding a **custom** type needs no code change at all: declare it in the
+workspace settings and it is immediately usable on the web and through the API.
