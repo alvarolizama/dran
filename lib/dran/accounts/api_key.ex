@@ -6,6 +6,24 @@ defmodule Dran.Accounts.ApiKey do
   level ('read' or 'write'). The key also inherits the role of its creator
   (stored as `created_by_user_id`).
 
+  ## Identity and attribution (W3)
+
+  A key IS the agent identity: its `name` is the agent name. Creating a key
+  no longer creates (or links) a row in `actors` — `kind: "agent"` actors are
+  not created for keys anymore, and the `actor_id` column is a **legacy,
+  nullable, read-only** leftover kept until the M3 drop (see
+  `MakeApiKeyActorIdNullableAndBackfillOwner`). No application path writes or
+  reads it.
+
+  Server-side attribution for content written through a key:
+
+    * `created_by` — the `X-Hermes-Agent` request header when present,
+      otherwise the key `name` (resolved once, in
+      `DranWeb.Router.require_api_token/2`, and consumed by
+      `Dran.Auth.resolve_created_by/1`).
+    * `owner_user_id` — `api_keys.created_by_user_id` (the user that created
+      the key), consumed by `Dran.Auth.resolve_owner_user_id/1`.
+
   ## Security model
 
   * The plaintext token is shown ONCE at creation/regeneration time and
@@ -34,8 +52,10 @@ defmodule Dran.Accounts.ApiKey do
       type: :integer,
       foreign_key: :created_by_user_id
 
-    # The actor this key is a credential FOR (kind: agent, normally).
-    # Attribution (owner/created_by) resolves server-side from this actor.
+    # LEGACY (W3, tiempo M1): the column stays nullable until the M3 drop
+    # (?03) but the key no longer carries an agent actor. Kept in the schema
+    # only so historical rows remain loadable; nothing in the application
+    # writes or preloads it.
     belongs_to :actor, Dran.Actors.Actor, type: :binary_id
 
     has_many :api_key_workspaces, Dran.Accounts.ApiKeyWorkspace
@@ -43,31 +63,18 @@ defmodule Dran.Accounts.ApiKey do
     timestamps(type: :utc_datetime, updated_at: false)
   end
 
-  @doc "Changeset for creating an API key"
+  @doc """
+  Changeset for creating an API key.
+
+  `actor_id` is deliberately NOT cast: a key is its own agent identity (its
+  `name`), and creating one never touches `actors`.
+  """
   def changeset(api_key, attrs) do
     api_key
-    |> cast(attrs, [:name, :token_hash, :token_prefix, :created_by_user_id, :actor_id])
+    |> cast(attrs, [:name, :token_hash, :token_prefix, :created_by_user_id])
     |> validate_required([:name, :token_hash, :token_prefix])
     |> unique_constraint(:token_hash)
     |> foreign_key_constraint(:created_by_user_id)
-    |> foreign_key_constraint(:actor_id)
-  end
-
-  @doc """
-  Resolve the actor for a key name, creating a kind=agent actor on first
-  sight (the old convention: key name IS the agent identity). Idempotent.
-  """
-  def ensure_actor_for_key_name(name) when is_binary(name) and name != "" do
-    case Dran.Actors.get_actor_by_name(name) do
-      nil ->
-        case Dran.Actors.create_actor(%{name: name, kind: "agent"}) do
-          {:ok, actor} -> actor
-          {:error, _} -> Dran.Actors.get_actor_by_name(name)
-        end
-
-      %Dran.Actors.Actor{} = actor ->
-        actor
-    end
   end
 
   @doc "Generate a new random token (URL-safe, 43 chars)."

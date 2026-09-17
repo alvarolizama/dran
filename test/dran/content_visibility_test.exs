@@ -129,7 +129,7 @@ defmodule Dran.ContentVisibilityTest do
       owner = create_user()
       member(owner, ws, "editor", "own")
 
-      actor = ApiKey.ensure_actor_for_key_name("agent-#{System.unique_integer([:positive])}")
+      actor = agent_actor("agent-#{System.unique_integer([:positive])}")
       {:ok, actor} = actor |> Ecto.Changeset.change(%{owner_user_id: owner.id}) |> Repo.update()
 
       identity = %{actor: actor}
@@ -138,14 +138,14 @@ defmodule Dran.ContentVisibilityTest do
 
     test "agente sin dueño en workspace aislado ⇒ {:own, nil} (solo contenido del workspace)" do
       ws = create_workspace(false, false)
-      actor = ApiKey.ensure_actor_for_key_name("orphan-#{System.unique_integer([:positive])}")
+      actor = agent_actor("orphan-#{System.unique_integer([:positive])}")
 
       assert ContentVisibility.scope(ws, %{actor: actor}, :memory) == {:own, nil}
     end
 
     test "agente sin dueño en workspace compartido ⇒ :all" do
       ws = create_workspace(true, true)
-      actor = ApiKey.ensure_actor_for_key_name("shared-#{System.unique_integer([:positive])}")
+      actor = agent_actor("shared-#{System.unique_integer([:positive])}")
 
       assert ContentVisibility.scope(ws, %{actor: actor}, :memory) == :all
     end
@@ -216,5 +216,12 @@ defmodule Dran.ContentVisibilityTest do
       assert ContentVisibility.resolve(ws.slug, user, :memory) == {:own, user.id}
       assert ContentVisibility.resolve(nil, user, :memory) == :all
     end
+  end
+
+  # W3: la key ya no crea actores; los tests de visibilidad construyen la
+  # identidad de agente con un actor explícito.
+  defp agent_actor(name) do
+    {:ok, actor} = Dran.Actors.create_actor(%{name: name, kind: "agent"})
+    actor
   end
 end

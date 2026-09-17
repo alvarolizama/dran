@@ -66,16 +66,9 @@ defmodule DranWeb.API.OwnershipTest do
         created_by_user_id: owner.id
       })
 
-    # El actor de la key pertenece al owner ⇒ resolve_owner_user_id lo resuelve.
-    actor = Repo.get!(Dran.Actors.Actor, key.actor_id)
-
-    {:ok, _} =
-      actor
-      |> Ecto.Changeset.change(%{owner_user_id: owner.id})
-      |> Repo.update()
-
-    # El test guarda la key con su actor, igual que el router al autenticar.
-    key = %{key | actor: Repo.get!(Dran.Actors.Actor, key.actor_id)}
+    # W3: la key ya no crea un actor. El propietario de lo escrito sale de
+    # `api_keys.created_by_user_id` (el creador de la key), no de un
+    # `actors.owner_user_id`.
 
     conn =
       Phoenix.ConnTest.build_conn()
@@ -103,7 +96,7 @@ defmodule DranWeb.API.OwnershipTest do
       conn = post(conn, ~p"/api/memory", body)
       assert %{"data" => data} = json_response(conn, 201)
 
-      # El dueño es el del actor de la key, NO el del body.
+      # El dueño es el de la key (created_by_user_id), NO el del body.
       assert data["owner_user_id"] == owner.id
       refute data["owner_user_id"] == 999_999
       # agent_name no vino por header ⇒ nil (no el valor del cliente).

@@ -58,14 +58,16 @@ defmodule DranWeb.API.AgentConfigControllerTest do
     ws_b: ws_b,
     unique: unique
   } do
-    {conn, actor, _key} = agent_conn(owner, ws_a, ws_b, unique)
+    {conn, _actor, key} = agent_conn(owner, ws_a, ws_b, unique)
 
     conn = get(conn, "/api/agent/config")
 
     assert %{"data" => data} = json_response(conn, 200)
 
-    assert data["agent"]["name"] == actor.name
-    assert data["agent"]["id"] == actor.id
+    # W3: la identidad del agente se DERIVA de la key (una key ya no tiene
+    # actor) — el `name` de la key es el nombre del agente y su `id` la key.
+    assert data["agent"]["name"] == key.name
+    assert data["agent"]["id"] == key.id
 
     slugs = data["workspaces"] |> Enum.map(& &1["slug"]) |> Enum.sort()
     assert slugs == Enum.sort([ws_a.slug, ws_b.slug])

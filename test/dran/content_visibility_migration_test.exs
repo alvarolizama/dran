@@ -146,15 +146,23 @@ defmodule Dran.ContentVisibilityMigrationTest do
         })
         |> Repo.insert()
 
-      actor = Dran.Accounts.ApiKey.ensure_actor_for_key_name("backfill-agent-#{unique}")
+      # W3: la key ya no crea un actor; el backfill de W1 sigue alimentándose
+      # del vínculo key → created_by_user_id, así que se reproduce con un
+      # actor explícito + el actor_id legacy (columna todavía presente).
+      {:ok, actor} =
+        Dran.Actors.create_actor(%{name: "backfill-agent-#{unique}", kind: "agent"})
 
-      {:ok, _key} =
+      {:ok, key} =
         Dran.Accounts.create_api_key(%{
           name: "backfill-agent-#{unique}",
           created_by_user_id: user.id,
-          actor_id: actor.id,
           workspace_ids: [{workspace.id, "write"}]
         })
+
+      Repo.query!(
+        "UPDATE api_keys SET actor_id = $1 WHERE id = $2",
+        [Ecto.UUID.dump!(actor.id), Ecto.UUID.dump!(key.id)]
+      )
 
       # El backfill corre en SQL dentro de la migración; aquí se comprueba que
       # el vínculo que lo alimenta (key → created_by_user_id) es resoluble, que

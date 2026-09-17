@@ -271,12 +271,23 @@ defmodule DranWeb.Router do
 
             assign(conn, :user, %{
               role: "viewer",
-              email: "api-key:#{key.token_prefix}...",
+              email: "api-key:#{key.id}",
               key_name: key.name,
-              actor: key.actor,
+              # Agent identity DERIVED FROM THE KEY (W3): a key is its own
+              # agent — no actor row is created for it. Exposed as `:actor`
+              # (id = key id, name = key name) so consumers written before the
+              # change (e.g. /api/agent/config) keep working; the ownership
+              # clauses of ContentVisibility are served by `:owner_user_id`
+              # below, not by this map.
+              actor: %{id: key.id, name: key.name, display_name: nil},
               workspaces: workspaces,
               access_levels: access_levels,
-              created_by_user_id: key.created_by_user_id
+              # Attribution, resolved in this SINGLE point (P13/M7):
+              # created_by = X-Hermes-Agent header, else the key name;
+              # owner_user_id = api_keys.created_by_user_id.
+              agent_name: Dran.Auth.agent_name_from_headers(conn.req_headers),
+              created_by_user_id: key.created_by_user_id,
+              owner_user_id: key.created_by_user_id
             })
 
           true ->
@@ -455,7 +466,7 @@ defmodule DranWeb.Router do
     pipe_through [:browser, :auth]
 
     live "/account", SettingsLive, :account
-    live "/agents", SettingsLive, :agents
+    live "/api-keys", SettingsLive, :api_keys
   end
 
   # ── Admin (instance-level, owner-only) ────────────────────────────────────

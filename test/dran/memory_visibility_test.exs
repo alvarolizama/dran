@@ -255,7 +255,7 @@ defmodule Dran.MemoryVisibilityTest do
       owner = create_user()
       member(owner, ws, "editor", "all")
 
-      actor = ApiKey.ensure_actor_for_key_name("pref-#{System.unique_integer([:positive])}")
+      actor = agent_actor("pref-#{System.unique_integer([:positive])}")
       {:ok, actor} = actor |> Ecto.Changeset.change(%{owner_user_id: owner.id}) |> Repo.update()
       identity = %{actor: actor}
 
@@ -368,5 +368,12 @@ defmodule Dran.MemoryVisibilityTest do
     |> Repo.get_by(user_id: user.id, workspace_id: workspace.id)
     |> Dran.Accounts.UserWorkspace.changeset(%{content_scope: content_scope})
     |> Repo.update()
+  end
+
+  # W3: la key ya no crea actores; los tests de visibilidad construyen la
+  # identidad de agente con un actor explícito.
+  defp agent_actor(name) do
+    {:ok, actor} = Dran.Actors.create_actor(%{name: name, kind: "agent"})
+    actor
   end
 end

@@ -34,324 +34,240 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, conn: conn}
   end
 
-  test "the agents tab renders agents with their inline key management", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/settings/agents")
+  # ── W3: /settings/api-keys — gestión de keys sin CRUD de actores ───────────
 
-    # un solo tab de gestión: agentes, sin sección de API keys global
-    assert html =~ t("Agents")
-    assert html =~ t("No agents yet — create one with the form above.")
-    refute html =~ ~s(id="create-api-key-form")
-    refute html =~ ~s(phx-click="open_api_key_modal")
-  end
+  describe "api keys tab (W3)" do
+    test "GET /settings/api-keys responde 200 y la ruta vieja /settings/agents no existe (P6)", %{
+      conn: conn
+    } do
+      {:ok, view, html} = live(conn, ~p"/settings/api-keys")
 
-  test "creating an agent key from its row reveals the token once", %{conn: conn} do
-    unique = System.unique_integer([:positive])
+      assert html =~ t("API keys")
+      assert html =~ ~s(id="api-keys-tab")
 
-    {:ok, ws} =
-      Knowledge.create_workspace(%{name: "Matrix #{unique}", slug: "matrix-#{unique}"})
+      # La ruta vieja ya no está en la tabla de rutas (P6): ninguna entrada
+      # declara el path literal "/settings/agents".
+      paths = Enum.map(DranWeb.Router.__routes__(), & &1.path)
 
-    {:ok, actor} =
-      Dran.Actors.create_actor(%{name: "hermes-#{unique}", kind: "agent"})
+      refute "/settings/agents" in paths
+      assert "/settings/api-keys" in paths
 
-    {:ok, view, _html} = live(conn, ~p"/settings/agents")
+      # Y pedirla no renderiza la página: cae al wildcard de workspace ⇒ 404.
+      assert_raise DranWeb.NotFoundError, fn -> live(conn, ~p"/settings/agents") end
 
-    # Create key opens the workspace×level modal first
-    html =
-      view
-      |> element("#actor-#{actor.id} button[phx-click='open_create_key_modal']")
-      |> render_click()
-
-    assert html =~ ~s(id="create-key-form")
-
-    # Submit: ws checked read
-    html =
-      view
-      |> element("#create-key-form")
-      |> render_submit(%{
-        "key" => %{
-          "actor_id" => actor.id,
-          "workspaces" => %{ws.id => %{"enabled" => "true", "level" => "read"}}
-        }
-      })
-
-    # The one-time reveal card shows the full token + copy button
-    assert html =~ ~s(id="revealed-api-key-card")
-    assert html =~ ~s(id="copy-revealed-key-btn")
-
-    # The agent row now shows the masked prefix instead of the create button
-    refute html =~ ~s(phx-click="open_create_key_modal")
-    assert html =~ "••••"
-  end
-
-  test "editing an agent key's access matrix updates workspaces and levels", %{conn: conn} do
-    unique = System.unique_integer([:positive])
-
-    {:ok, ws_a} =
-      Knowledge.create_workspace(%{name: "Alpha #{unique}", slug: "alpha-#{unique}"})
-
-    {:ok, ws_b} =
-      Knowledge.create_workspace(%{name: "Beta #{unique}", slug: "beta-#{unique}"})
-
-    user = Accounts.get_user_by_email("test_user")
-
-    {:ok, actor} =
-      Dran.Actors.create_actor(%{name: "editor-#{unique}", kind: "agent"})
-
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: actor.name,
-        workspace_ids: [{ws_a.id, "read"}],
-        created_by_user_id: user.id,
-        actor_id: actor.id
-      })
-
-    {:ok, view, _html} = live(conn, ~p"/settings/agents")
-
-    html =
-      view
-      |> element("#actor-#{actor.id} button[phx-click='edit_agent_access']")
-      |> render_click()
-
-    assert html =~ ~s(id="edit-key-form")
-
-    html =
-      view
-      |> element("#edit-key-form")
-      |> render_submit(%{
-        "key" => %{
-          "workspaces" => %{
-            ws_a.id => %{"enabled" => "true", "level" => "write"},
-            ws_b.id => %{"enabled" => "true", "level" => "read"}
-          }
-        }
-      })
-
-    assert html =~ t("Agent access updated")
-
-    # token preserved — the matrix edit never rotates the credential
-    token = key.token
-    key = Dran.Repo.preload(Dran.Repo.get!(Dran.Accounts.ApiKey, key.id), :api_key_workspaces)
-
-    levels = Map.new(key.api_key_workspaces, &{&1.workspace_id, &1.access_level})
-    assert levels[ws_a.id] == "write"
-    assert levels[ws_b.id] == "read"
-
-    assert Accounts.valid_api_key?(token) != :error
-  end
-
-  test "revoking a key from the list marks it revoked", %{conn: conn} do
-    unique = System.unique_integer([:positive])
-
-    {:ok, ctx} =
-      Knowledge.create_workspace(%{name: "Keys #{unique}", slug: "keys-#{unique}"})
-
-    user = Accounts.get_user_by_email("test_user")
-
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "Revocable",
-        workspace_ids: [{ctx.id, "read"}],
-        created_by_user_id: user.id
-      })
-
-    # key ligada a un agente para que aparezca en su fila
-    {:ok, actor} = Dran.Actors.create_actor(%{name: "revocable-#{unique}", kind: "agent"})
-
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "Revocable",
-        workspace_ids: [{ctx.id, "read"}],
-        created_by_user_id: user.id,
-        actor_id: actor.id
-      })
-
-    {:ok, view, _html} = live(conn, ~p"/settings/agents")
-
-    html =
-      view
-      |> element("#actor-#{actor.id} button[phx-click='revoke_api_key']")
-      |> render_click()
-
-    assert Accounts.valid_api_key?(key.token) == :error
-
-    # revocada la única key: la fila vuelve a ofrecer Create key
-    assert html =~ ~s(phx-click="open_create_key_modal")
-  end
-
-  test "copy_api_key_prefix of ANOTHER user's key is rejected without leaking the prefix", %{
-    conn: _conn
-  } do
-    unique = System.unique_integer([:positive])
-
-    {:ok, ctx} =
-      Knowledge.create_workspace(%{name: "Foreign #{unique}", slug: "foreign-#{unique}"})
-
-    # A NON-owner session user (the /settings/api_keys route is any-user).
-    {:ok, non_owner} =
-      Accounts.create_user(%{email: "plain-user-#{unique}@example.com", name: "Plain"})
-
-    {:ok, _} = Accounts.add_user_to_workspace(non_owner, ctx)
-
-    # A key created by a DIFFERENT user — the guard must reject it.
-    {:ok, other_user} =
-      Accounts.create_user(%{email: "other-owner-#{unique}@example.com", name: "Other"})
-
-    {:ok, _} = Accounts.add_user_to_workspace(other_user, ctx)
-
-    {:ok, foreign_key} =
-      Accounts.create_api_key(%{
-        name: "Foreign key",
-        workspace_ids: [{ctx.id, "read"}],
-        created_by_user_id: other_user.id
-      })
-
-    conn =
-      Phoenix.ConnTest.build_conn()
-      |> Plug.Test.init_test_session(%{})
-      |> Plug.Conn.put_session(:user, "plain-user-#{unique}@example.com")
-      |> Plug.Conn.put_session(:workspace_slug, "personal")
-
-    {:ok, view, _html} = live(conn, ~p"/settings/agents")
-
-    # The foreign key never appears in the non-owner's list (list_api_keys
-    # scopes by user) — so forge the event directly with its id, exactly like
-    # a tampered DOM would. owned_api_key must reject it: flash error, NO
-    # clipboard event.
-    html = render_click(view, "copy_api_key_prefix", %{"id" => foreign_key.id})
-
-    assert html =~ t("No autorizado.")
-  end
-
-  # ── Actors tab ──────────────────────────────────────────────────────────────
-
-  describe "actors tab" do
-    test "renders the actors tab with the create form and existing actors", %{conn: conn} do
-      {:ok, _actor} = Dran.Actors.create_actor(%{name: "visible-actor", kind: "agent"})
-
-      {:ok, view, html} = live(conn, ~p"/settings/agents")
-
-      assert html =~ t("Agents")
-      assert html =~ ~s(id="create-actor-form")
-      assert html =~ "visible-actor"
-      # solo agentes gestionables: no hay select de kind ni badge User
-      refute html =~ ~s(field="actor[kind]")
-      refute html =~ t("User")
-      # System actors are never listed
-      refute html =~ ~s(>system<)
-
-      # The tab is reachable by patching from the api_keys tab
-      html = view |> element("a", t("Agents")) |> render_click()
-      assert html =~ t("Existing agents")
+      # No queda NADA del CRUD de actores en la UI.
+      refute html =~ ~s(id="create-actor-form")
+      refute html =~ ~s(phx-click="create_actor")
+      refute html =~ ~s(phx-click="edit_actor")
+      refute html =~ ~s(phx-click="delete_actor")
+      refute has_element?(view, "#agents-tab")
     end
 
-    test "creating an actor with kind agent persists it and refreshes the list", %{conn: conn} do
+    test "crear una API key NO crea ninguna fila en actors (P7)", %{conn: conn} do
       unique = System.unique_integer([:positive])
-      name = "agent-#{unique}"
 
-      {:ok, view, _html} = live(conn, ~p"/settings/agents")
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "NoActor #{unique}", slug: "no-actor-#{unique}"})
+
+      user = Accounts.get_user_by_email("test_user")
+      before_count = Dran.Repo.aggregate(Dran.Actors.Actor, :count)
+
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "no-actor-key-#{unique}",
+          workspace_ids: [{ws.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      after_count = Dran.Repo.aggregate(Dran.Actors.Actor, :count)
+
+      assert after_count == before_count
+      # La key existe, no tiene actor y sí tiene dueño (created_by_user_id).
+      assert is_nil(key.actor_id)
+      assert key.created_by_user_id == user.id
+      assert Dran.Actors.get_actor_by_name(key.name) == nil
+    end
+
+    test "crear una key desde la UI no crea actores y revela el token una vez (P7/P6)", %{
+      conn: conn
+    } do
+      unique = System.unique_integer([:positive])
+
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "UIKey #{unique}", slug: "ui-key-#{unique}"})
+
+      before_count = Dran.Repo.aggregate(Dran.Actors.Actor, :count)
+
+      {:ok, view, _html} = live(conn, ~p"/settings/api-keys")
+
+      html = view |> element("#new-api-key-btn") |> render_click()
+      assert html =~ ~s(id="create-key-form")
 
       html =
         view
-        |> form("#create-actor-form", %{
-          "actor" => %{
-            "name" => name,
-            "display_name" => "Test Agent #{unique}",
-            "host" => "ci-runner"
+        |> element("#create-key-form")
+        |> render_submit(%{
+          "key" => %{
+            "name" => "ui-agent-#{unique}",
+            "workspaces" => %{ws.id => %{"enabled" => "true", "level" => "read"}}
           }
         })
-        |> render_submit()
 
-      assert html =~ t("Agent created")
-      assert html =~ name
-
-      actor = Dran.Actors.get_actor_by_name(name)
-      assert actor
-      assert actor.kind == "agent"
-      assert actor.display_name == "Test Agent #{unique}"
-      assert actor.host == "ci-runner"
+      assert html =~ ~s(id="revealed-api-key-card")
+      assert html =~ ~s(id="copy-revealed-key-btn")
+      assert Dran.Repo.aggregate(Dran.Actors.Actor, :count) == before_count
+      # La identidad de la key es su nombre, visible en la tabla.
+      assert html =~ "ui-agent-#{unique}"
     end
 
-    test "creating an actor with kind system is rejected with an error", %{conn: conn} do
-      unique = System.unique_integer([:positive])
-      name = "evil-system-#{unique}"
-
-      {:ok, view, _html} = live(conn, ~p"/settings/agents")
-
-      # kind is server-forced to agent: a tampered submit cannot create a
-      # system actor — the row is created as an agent, never as system
-      html =
-        render_submit(view, "create_actor", %{
-          "actor" => %{"name" => name, "kind" => "system"}
-        })
-
-      assert html =~ t("Agent created")
-      actor = Dran.Actors.get_actor_by_name(name)
-      assert actor && actor.kind == "agent"
-    end
-
-    test "editing an actor updates display_name and host only", %{conn: conn} do
-      {:ok, actor} =
-        Dran.Actors.create_actor(%{
-          name: "editable-#{System.unique_integer([:positive])}",
-          kind: "agent"
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/settings/agents")
-
-      _ = view |> element("#actor-#{actor.id} button[phx-click='edit_actor']") |> render_click()
-      assert has_element?(view, "#edit-actor-modal")
-
-      html =
-        view
-        |> form("#edit-actor-form", %{
-          "actor" => %{"display_name" => "Renamed", "host" => "laptop"}
-        })
-        |> render_submit()
-
-      assert html =~ t("Agent updated")
-
-      reloaded = Dran.Actors.get_actor_by_name(actor.name)
-      assert reloaded.display_name == "Renamed"
-      assert reloaded.host == "laptop"
-      assert reloaded.kind == "agent"
-    end
-
-    test "deleting an actor with API keys is blocked with a flash error", %{conn: conn} do
+    test "la matriz de workspaces de una key se edita en su fila (P6)", %{conn: conn} do
       unique = System.unique_integer([:positive])
 
-      {:ok, ctx} =
-        Knowledge.create_workspace(%{name: "ActorDel #{unique}", slug: "actor-del-#{unique}"})
+      {:ok, ws_a} =
+        Knowledge.create_workspace(%{name: "KeyA #{unique}", slug: "key-a-#{unique}"})
 
-      {:ok, actor} = Dran.Actors.create_actor(%{name: "keyed-#{unique}", kind: "agent"})
+      {:ok, ws_b} =
+        Knowledge.create_workspace(%{name: "KeyB #{unique}", slug: "key-b-#{unique}"})
 
       user = Accounts.get_user_by_email("test_user")
 
-      {:ok, _key} =
+      {:ok, key} =
         Accounts.create_api_key(%{
-          name: "keyed-key-#{unique}",
-          workspace_ids: [{ctx.id, "read"}],
-          created_by_user_id: user.id,
-          actor_id: actor.id
+          name: "mutable-#{unique}",
+          workspace_ids: [{ws_a.id, "read"}],
+          created_by_user_id: user.id
         })
 
-      {:ok, view, _html} = live(conn, ~p"/settings/agents")
+      {:ok, view, _html} = live(conn, ~p"/settings/api-keys")
 
-      # Inline confirmation shows the attribution impact (0 pages/tasks/memories)
+      html = view |> element("#api-key-#{key.id} button[phx-click='edit_api_key']") |> render_click()
+      assert html =~ ~s(id="edit-key-form")
+
       html =
         view
-        |> element("#actor-#{actor.id} button[phx-click='confirm_delete_actor']")
+        |> element("#edit-key-form")
+        |> render_submit(%{
+          "key" => %{
+            "workspaces" => %{
+              ws_a.id => %{"enabled" => "true", "level" => "write"},
+              ws_b.id => %{"enabled" => "true", "level" => "read"}
+            }
+          }
+        })
+
+      assert html =~ t("API key access updated")
+
+      # El token se preserva y los niveles quedaron persistidos.
+      reloaded = Dran.Repo.preload(Dran.Repo.get!(Dran.Accounts.ApiKey, key.id), :api_key_workspaces)
+      levels = Map.new(reloaded.api_key_workspaces, &{&1.workspace_id, &1.access_level})
+      assert levels[ws_a.id] == "write"
+      assert levels[ws_b.id] == "read"
+      assert Accounts.valid_api_key?(key.token) != :error
+    end
+
+    test "revocar una key la marca revoked y ofrece restaurarla", %{conn: conn} do
+      unique = System.unique_integer([:positive])
+
+      {:ok, ws} = Knowledge.create_workspace(%{name: "Rev #{unique}", slug: "rev-#{unique}"})
+      user = Accounts.get_user_by_email("test_user")
+
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "revocable-#{unique}",
+          workspace_ids: [{ws.id, "read"}],
+          created_by_user_id: user.id
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/settings/api-keys")
+
+      html =
+        view
+        |> element("#api-key-#{key.id} button[phx-click='revoke_api_key']")
         |> render_click()
 
-      assert html =~ t("Delete this actor?")
-      assert html =~ "0"
+      assert Accounts.valid_api_key?(key.token) == :error
+      assert html =~ t("Revoked")
+      assert has_element?(view, "#api-key-#{key.id} button[phx-click='restore_api_key']")
+    end
 
-      # The actual delete is refused: the actor still has API keys
-      html = view |> element("button[phx-click='delete_actor']") |> render_click()
+    test "copy_api_key_prefix de la key de OTRO usuario se rechaza sin filtrar el prefijo", %{
+      conn: _conn
+    } do
+      unique = System.unique_integer([:positive])
 
-      assert html =~
-               t("This actor still has API keys — revoke or delete them first")
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "ForeignW3 #{unique}", slug: "foreign-w3-#{unique}"})
 
-      assert Dran.Actors.get_actor_by_name(actor.name)
+      {:ok, non_owner} =
+        Accounts.create_user(%{email: "plain-w3-#{unique}@example.com", name: "Plain"})
+
+      {:ok, _} = Accounts.add_user_to_workspace(non_owner, ws)
+
+      {:ok, other_user} =
+        Accounts.create_user(%{email: "other-w3-#{unique}@example.com", name: "Other"})
+
+      {:ok, _} = Accounts.add_user_to_workspace(other_user, ws)
+
+      {:ok, foreign_key} =
+        Accounts.create_api_key(%{
+          name: "Foreign W3 key",
+          workspace_ids: [{ws.id, "read"}],
+          created_by_user_id: other_user.id
+        })
+
+      conn =
+        Phoenix.ConnTest.build_conn()
+        |> Plug.Test.init_test_session(%{})
+        |> Plug.Conn.put_session(:user, "plain-w3-#{unique}@example.com")
+        |> Plug.Conn.put_session(:workspace_slug, "personal")
+
+      {:ok, view, _html} = live(conn, ~p"/settings/api-keys")
+
+      html = render_click(view, "copy_api_key_prefix", %{"id" => foreign_key.id})
+
+      assert html =~ t("No autorizado.")
+    end
+  end
+
+  # ── P8: atribución server-side desde la key (sin actor) ────────────────────
+
+  describe "atribución de una key nueva (P8)" do
+    test "owner_user_id = created_by_user_id de la key", %{conn: _conn} do
+      unique = System.unique_integer([:positive])
+
+      {:ok, owner} =
+        Accounts.create_user(%{email: "p8-owner-#{unique}@example.com", name: "P8 Owner"})
+
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "P8 #{unique}", slug: "p8-#{unique}"})
+
+      {:ok, _} = Accounts.add_user_to_workspace(owner, ws)
+
+      {:ok, key} =
+        Accounts.create_api_key(%{
+          name: "p8-agent-#{unique}",
+          workspace_ids: [{ws.id, "write"}],
+          created_by_user_id: owner.id
+        })
+
+      # El mapa sintético que el router inyecta al autenticar la key.
+      identity = %{
+        key_name: key.name,
+        agent_name: Dran.Auth.agent_name_from_headers([]),
+        created_by_user_id: key.created_by_user_id,
+        owner_user_id: key.created_by_user_id
+      }
+
+      assert Dran.Auth.resolve_owner_user_id(identity) == owner.id
+      # Sin header ⇒ created_by es el name de la key.
+      assert Dran.Auth.resolve_created_by(identity) == key.name
+      assert Dran.Auth.resolve_owner(identity) == key.name
+
+      # Con header ⇒ created_by es el header, no el name de la key (M7).
+      with_header = %{identity | agent_name: Dran.Auth.agent_name_from_headers([{"x-hermes-agent", "coder"}])}
+      assert Dran.Auth.resolve_created_by(with_header) == "coder"
+      # El dueño NO cambia por el header.
+      assert Dran.Auth.resolve_owner_user_id(with_header) == owner.id
     end
   end
 

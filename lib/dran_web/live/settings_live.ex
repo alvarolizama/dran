@@ -4,12 +4,22 @@ defmodule DranWeb.SettingsLive do
 
   After the F3 /admin split, each user manages only their own context-scoped
   API keys here. Instance-level configuration (users, workspaces, models,
-  system info, jobs) lives in the owner-only `/admin/*` LiveViews. The old
-  `attach_hook(:require_admin)` whitelist was removed (corrección #8): it
-  silently dropped `regenerate_api_key` and `delete_api_key` for non-owners,
-  so a regular user could not manage their own keys. Now every api_key event
-  is allowed for any logged-in session — ownership is enforced per-key by
-  `owned_api_key/2`, never by the admin flag.
+  system info, jobs) lives in the owner-only `/admin/*` LiveViews.
+
+  ## W3 (M5) — `/settings/api-keys`, sin CRUD de actores
+
+  The tab is `/settings/api-keys` and shows ONLY API key management: the key
+  **name** is the agent identity and the key's workspace×level matrix
+  (`api_key_workspaces`) is edited inline. The actor CRUD was removed together
+  with its LiveView events (`create_actor`/`edit_actor`/`update_actor`/
+  `delete_actor`/`confirm_delete_actor`/`cancel_edit_actor`) — actors are no
+  longer part of the key lifecycle (`Dran.Actors` keeps its `kind: user` /
+  `kind: system` responsibilities and its CRUD functions; `list_managed_actors/0`
+  is intentionally left in the module even though this UI was its only caller,
+  per the W3 decision not to delete the module while ?03 is open).
+
+  Events are allowed for any logged-in session — ownership is enforced per-key
+  by `owned_api_key/2`, never by the admin flag.
   """
 
   use DranWeb, :live_view
@@ -48,15 +58,10 @@ defmodule DranWeb.SettingsLive do
         api_keys: Dran.Accounts.list_api_keys(user),
         api_key_workspaces: api_key_workspaces(user),
         revealed_api_key: nil,
-        show_create_key_modal: nil,
+        show_create_key_modal: false,
         create_key_form: nil,
         editing_key_id: nil,
         edit_key_form: nil,
-        managed_actors: [],
-        create_actor_form: to_form(%{}, as: :actor, id: "create-actor"),
-        edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor"),
-        editing_actor_id: nil,
-        actor_delete_confirmation: nil,
         profile_form: to_form(Dran.Accounts.User.profile_changeset(user, %{}), as: :profile),
         password_form:
           to_form(Dran.Accounts.User.update_password_changeset(user, %{}), as: :password),
@@ -76,16 +81,12 @@ defmodule DranWeb.SettingsLive do
     |> assign(active_tab: :account, page_title: gettext("Account"))
   end
 
-  defp apply_tab(socket, :agents, _params) do
+  defp apply_tab(socket, :api_keys, _params) do
     socket
-    |> assign(active_tab: :agents, page_title: gettext("Agents"))
+    |> assign(active_tab: :api_keys, page_title: gettext("API keys"))
     |> assign(
-      managed_actors: managed_actors_with_key_counts(),
-      create_actor_form: to_form(%{}, as: :actor, id: "create-actor"),
-      edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor"),
-      editing_actor_id: nil,
-      actor_delete_confirmation: nil,
-      show_create_key_modal: nil,
+      api_keys: current_api_keys(socket),
+      show_create_key_modal: false,
       create_key_form: nil,
       editing_key_id: nil,
       edit_key_form: nil
@@ -94,7 +95,7 @@ defmodule DranWeb.SettingsLive do
 
   defp apply_tab(socket, _action, _params) do
     socket
-    |> assign(active_tab: :agents, page_title: gettext("Agents"))
+    |> assign(active_tab: :api_keys, page_title: gettext("API keys"))
   end
 
   # Resolves the %User{} (or nil) behind the LiveView session. The session
@@ -114,124 +115,89 @@ defmodule DranWeb.SettingsLive do
     {:noreply, assign(socket, revealed_api_key: nil)}
   end
 
+  # ── Create key: key name + workspace×level matrix ─────────────────────────
+
   @impl true
-  def handle_event("open_create_key_modal", %{"id" => actor_id}, socket) do
-    actor =
-      socket.assigns.managed_actors
-      |> Enum.find(&(&1.id == actor_id))
-
-    cond do
-      is_nil(actor) ->
-        {:noreply, put_flash(socket, :error, gettext("Agent not found"))}
-
-      active_agent_key(actor) ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("This agent already has an active key — edit its access instead")
-         )}
-
-      true ->
-        socket =
-          socket
-          |> assign(show_create_key_modal: actor.id)
-          |> assign(
-            create_key_form: key_workspaces_form(socket.assigns.api_key_workspaces, actor)
-          )
-
-        {:noreply, socket}
-    end
+  def handle_event("open_create_key_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(show_create_key_modal: true)
+     |> assign(create_key_form: key_form(socket.assigns.api_key_workspaces))}
   end
 
   @impl true
   def handle_event("close_create_key_modal", _params, socket) do
-    {:noreply, assign(socket, show_create_key_modal: nil)}
+    {:noreply, assign(socket, show_create_key_modal: false, create_key_form: nil)}
   end
 
   @impl true
-  def handle_event("create_agent_key", %{"key" => key_params}, socket) do
+  def handle_event("create_api_key", %{"key" => key_params}, socket) do
     user = socket.assigns[:current_user_struct] || session_user_via_assigns(socket)
 
-    actor =
-      (socket.assigns[:show_create_key_modal] &&
-         Enum.find(
-           socket.assigns.managed_actors,
-           &(&1.id == socket.assigns.show_create_key_modal)
-         )) ||
-        Enum.find(socket.assigns.managed_actors, &(&1.id == key_params["actor_id"]))
+    name = key_params |> Map.get("name", "") |> to_string() |> String.trim()
 
-    cond do
-      is_nil(actor) ->
-        {:noreply, put_flash(socket, :error, gettext("Agent not found"))}
-
-      active_agent_key(actor) ->
-        {:noreply, put_flash(socket, :error, gettext("This agent already has an active key"))}
-
-      true ->
-        with {:ok, workspace_ids} <- parse_key_workspaces(key_params),
-             {:ok, key} <-
-               Dran.Accounts.create_api_key(%{
-                 name: actor.name,
-                 workspace_ids: workspace_ids,
-                 created_by_user_id: user && user.id,
-                 actor_id: actor.id
-               }) do
+    if name == "" do
+      {:noreply, put_flash(socket, :error, gettext("The key name is required"))}
+    else
+      with {:ok, workspace_ids} <- parse_key_workspaces(key_params),
+           {:ok, key} <-
+             Dran.Accounts.create_api_key(%{
+               name: name,
+               workspace_ids: workspace_ids,
+               created_by_user_id: user && user.id
+             }) do
+        {:noreply,
+         socket
+         |> assign(
+           api_keys: current_api_keys(socket),
+           revealed_api_key: %{id: key.id, token: key.token},
+           show_create_key_modal: false,
+           create_key_form: nil
+         )
+         |> put_flash(
+           :info,
+           gettext("API key created — copy it now, it won't be shown again")
+         )}
+      else
+        {:error, :workspace_not_allowed} ->
           {:noreply,
-           socket
-           |> assign(
-             managed_actors: managed_actors_with_key_counts(),
-             revealed_api_key: %{id: key.id, token: key.token},
-             show_create_key_modal: nil
-           )
-           |> put_flash(
-             :info,
-             gettext("API key created — copy it now, it won't be shown again")
+           put_flash(
+             socket,
+             :error,
+             gettext("You can only grant access to your own workspaces")
            )}
-        else
-          {:error, :workspace_not_allowed} ->
-            {:noreply,
-             put_flash(
-               socket,
-               :error,
-               gettext("You can only grant access to your own workspaces")
-             )}
 
-          _ ->
-            {:noreply, put_flash(socket, :error, gettext("Could not create the API key"))}
-        end
+        _ ->
+          {:noreply, put_flash(socket, :error, gettext("Could not create the API key"))}
+      end
     end
   end
 
-  # ── Agent key access matrix (post-creation editing) ─────────────────────────
+  # ── Key access matrix (post-creation editing) ─────────────────────────────
 
   @impl true
-  def handle_event("edit_agent_access", %{"id" => actor_id}, socket) do
-    actor = Enum.find(socket.assigns.managed_actors, &(&1.id == actor_id))
+  def handle_event("edit_api_key", %{"id" => key_id}, socket) do
+    with {:ok, key} <- owned_api_key(key_id, socket) do
+      key = Dran.Repo.preload(key, :api_key_workspaces)
 
-    key = actor && active_agent_key(actor)
-
-    if key do
       socket =
         socket
         |> assign(editing_key_id: key.id)
-        |> assign(
-          edit_key_form: key_workspaces_form(socket.assigns.api_key_workspaces, actor, key)
-        )
+        |> assign(edit_key_form: key_form(socket.assigns.api_key_workspaces, key))
 
       {:noreply, socket}
     else
-      {:noreply, put_flash(socket, :error, gettext("Agent not found"))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
     end
   end
 
   @impl true
   def handle_event("close_edit_key_modal", _params, socket) do
-    {:noreply, assign(socket, editing_key_id: nil)}
+    {:noreply, assign(socket, editing_key_id: nil, edit_key_form: nil)}
   end
 
   @impl true
-  def handle_event("update_agent_access", %{"key" => key_params}, socket) do
+  def handle_event("update_api_key_access", %{"key" => key_params}, socket) do
     user = socket.assigns[:current_user_struct] || session_user_via_assigns(socket)
 
     with {:ok, key} <- owned_api_key(socket.assigns[:editing_key_id], socket),
@@ -240,31 +206,30 @@ defmodule DranWeb.SettingsLive do
         {:ok, _key} ->
           {:noreply,
            socket
-           |> assign(managed_actors: managed_actors_with_key_counts(), editing_key_id: nil)
-           |> put_flash(:info, gettext("Agent access updated"))}
+           |> assign(api_keys: current_api_keys(socket), editing_key_id: nil, edit_key_form: nil)
+           |> put_flash(:info, gettext("API key access updated"))}
 
         {:error, :workspace_not_allowed} ->
           {:noreply,
            put_flash(socket, :error, gettext("You can only grant access to your own workspaces"))}
 
         {:error, _} ->
-          {:noreply, put_flash(socket, :error, gettext("Could not update the agent access"))}
+          {:noreply, put_flash(socket, :error, gettext("Could not update the access"))}
       end
     else
       _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
     end
   end
 
-  # R/W ↔ R/O toggle per key (single-workspace fast path). The old template
-  # referenced this event but no handler existed — clicking crashed the LV.
+  # R/W ↔ R/O toggle per key: flips EVERY row the key has (a key with mixed
+  # levels normalizes to the toggled state), keeping per-workspace granularity
+  # reachable through the edit modal.
   @impl true
   def handle_event("toggle_write_access", %{"id" => key_id}, socket) do
     with {:ok, key} <- owned_api_key(key_id, socket) do
       key = Dran.Repo.preload(key, :api_key_workspaces)
       currently_write? = Dran.Accounts.ApiKey.write_access?(key)
 
-      # Keep per-workspace granularity: flip EVERY row (a key with mixed
-      # levels normalizes to the toggled state).
       workspace_ids =
         Enum.map(key.api_key_workspaces, fn akw ->
           {akw.workspace_id, if(currently_write?, do: "read", else: "write")}
@@ -278,11 +243,11 @@ defmodule DranWeb.SettingsLive do
         {:ok, _} ->
           {:noreply,
            socket
-           |> assign(managed_actors: managed_actors_with_key_counts())
-           |> put_flash(:info, gettext("Agent access updated"))}
+           |> assign(api_keys: current_api_keys(socket))
+           |> put_flash(:info, gettext("API key access updated"))}
 
         {:error, _} ->
-          {:noreply, put_flash(socket, :error, gettext("Could not update the agent access"))}
+          {:noreply, put_flash(socket, :error, gettext("Could not update the access"))}
       end
     else
       _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
@@ -295,10 +260,7 @@ defmodule DranWeb.SettingsLive do
          {:ok, _} <- Dran.Accounts.revoke_api_key(key) do
       {:noreply,
        socket
-       |> assign(
-         api_keys: current_api_keys(socket),
-         managed_actors: managed_actors_with_key_counts()
-       )
+       |> assign(api_keys: current_api_keys(socket))
        |> put_flash(:info, gettext("API key revoked"))}
     else
       _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
@@ -311,10 +273,7 @@ defmodule DranWeb.SettingsLive do
          {:ok, _} <- Dran.Accounts.restore_api_key(key) do
       {:noreply,
        socket
-       |> assign(
-         api_keys: current_api_keys(socket),
-         managed_actors: managed_actors_with_key_counts()
-       )
+       |> assign(api_keys: current_api_keys(socket))
        |> put_flash(:info, gettext("API key restored"))}
     else
       _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
@@ -343,10 +302,7 @@ defmodule DranWeb.SettingsLive do
          {:ok, _} <- Dran.Accounts.delete_api_key(key) do
       {:noreply,
        socket
-       |> assign(
-         api_keys: current_api_keys(socket),
-         managed_actors: managed_actors_with_key_counts()
-       )
+       |> assign(api_keys: current_api_keys(socket))
        |> put_flash(:info, gettext("API key deleted"))}
     else
       _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
@@ -361,137 +317,6 @@ defmodule DranWeb.SettingsLive do
       {:noreply, push_event(socket, "copy_to_clipboard", %{text: key.token_prefix})}
     else
       _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
-    end
-  end
-
-  # ── Agents tab (UI) ──────────────────────────────────────────────────────────────
-
-  @impl true
-  def handle_event("create_actor", %{"actor" => params}, socket) do
-    # `kind` is intentionally absent: the actor schema defaults it to "agent"
-    # (users and system actors are created by their own paths) and passing it
-    # here only duplicated the default.
-    attrs = %{
-      "name" => params["name"] |> to_string() |> String.trim(),
-      "display_name" => normalize_optional(params["display_name"]),
-      "host" => normalize_optional(params["host"])
-    }
-
-    case Dran.Actors.create_actor(attrs) do
-      {:ok, _actor} ->
-        {:noreply,
-         socket
-         |> assign(
-           managed_actors: managed_actors_with_key_counts(),
-           create_actor_form: to_form(%{}, as: :actor, id: "create-actor")
-         )
-         |> put_flash(:info, gettext("Agent created"))}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply,
-         socket
-         |> assign(create_actor_form: to_form(changeset, as: :actor, id: "create-actor"))
-         |> put_flash(:error, gettext("Could not create the agent"))}
-    end
-  end
-
-  @impl true
-  def handle_event("edit_actor", %{"id" => id}, socket) do
-    actor = Dran.Repo.get!(Dran.Actors.Actor, id)
-
-    {:noreply,
-     socket
-     |> assign(editing_actor_id: actor.id)
-     |> assign(
-       edit_actor_form:
-         to_form(
-           %{"display_name" => actor.display_name || "", "host" => actor.host || ""},
-           as: :actor,
-           id: "edit-actor"
-         )
-     )}
-  end
-
-  @impl true
-  def handle_event("cancel_edit_actor", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(
-       editing_actor_id: nil,
-       edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor")
-     )}
-  end
-
-  @impl true
-  def handle_event("update_actor", %{"actor" => params}, socket) do
-    actor = Dran.Repo.get!(Dran.Actors.Actor, socket.assigns.editing_actor_id)
-
-    attrs = %{
-      "display_name" => normalize_optional(params["display_name"]),
-      "host" => normalize_optional(params["host"])
-    }
-
-    case Dran.Actors.update_actor(actor, attrs) do
-      {:ok, _actor} ->
-        {:noreply,
-         socket
-         |> assign(
-           managed_actors: managed_actors_with_key_counts(),
-           editing_actor_id: nil,
-           edit_actor_form: to_form(%{}, as: :actor, id: "edit-actor")
-         )
-         |> put_flash(:info, gettext("Agent updated"))}
-
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update the agent"))}
-    end
-  end
-
-  @impl true
-  def handle_event("confirm_delete_actor", %{"id" => id}, socket) do
-    actor = Dran.Repo.get!(Dran.Actors.Actor, id)
-    counts = Dran.Actors.attribution_count(actor)
-
-    {:noreply, assign(socket, actor_delete_confirmation: %{actor_id: actor.id, counts: counts})}
-  end
-
-  @impl true
-  def handle_event("cancel_delete_actor", _params, socket) do
-    {:noreply, assign(socket, actor_delete_confirmation: nil)}
-  end
-
-  @impl true
-  def handle_event("delete_actor", %{"id" => id}, socket) do
-    actor = Dran.Repo.get!(Dran.Actors.Actor, id)
-
-    case Dran.Actors.delete_actor(actor) do
-      {:ok, _actor} ->
-        {:noreply,
-         socket
-         |> assign(
-           managed_actors: managed_actors_with_key_counts(),
-           actor_delete_confirmation: nil
-         )
-         |> put_flash(:info, gettext("Agent deleted"))}
-
-      {:error, :actor_has_api_keys} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("This actor still has API keys — revoke or delete them first")
-         )}
-
-      {:error, :system_actor} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("System actors are code-managed and cannot be deleted")
-         )}
-
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not delete the actor"))}
     end
   end
 
@@ -556,14 +381,12 @@ defmodule DranWeb.SettingsLive do
     end
   end
 
-  # The agent's single active (non-revoked) API key, if any.
-  defp active_agent_key(%{api_keys: keys}) do
-    Enum.find(keys, &is_nil(&1.revoked_at))
-  end
-
   # Form params for the workspace×level matrix modals. `key` (optional) is
-  # the existing key whose current state seeds the form (edit modal).
-  defp key_workspaces_form(workspaces, actor, key \\ nil) do
+  # the existing key whose current state seeds the form (edit modal). The key
+  # NAME is the agent identity (W3): entered on create, shown read-only on
+  # edit — the row is the credential's identity and renaming it is out of
+  # scope here (revoke + recreate is the explicit path).
+  defp key_form(workspaces, key \\ nil) do
     current =
       case key do
         nil -> %{}
@@ -571,7 +394,7 @@ defmodule DranWeb.SettingsLive do
       end
 
     %{
-      "actor_id" => actor && actor.id,
+      "name" => key && key.name,
       "workspaces" =>
         Map.new(workspaces, fn ws ->
           {ws.id,
@@ -596,23 +419,6 @@ defmodule DranWeb.SettingsLive do
 
   defp parse_key_workspaces(_), do: {:error, :invalid_params}
 
-  # Managed AGENTS with their api_keys preloaded, so the Agents tab can show
-  # how many keys each one has without touching the Actors context.
-  defp managed_actors_with_key_counts do
-    Dran.Actors.list_managed_actors()
-    |> Dran.Repo.preload(:api_keys)
-  end
-
-  # Empty string -> nil for optional text fields.
-  defp normalize_optional(nil), do: nil
-
-  defp normalize_optional(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -634,8 +440,8 @@ defmodule DranWeb.SettingsLive do
             <.tab_link active={@active_tab == :account} to={~p"/settings/account"}>
               {gettext("Account")}
             </.tab_link>
-            <.tab_link active={@active_tab == :agents} to={~p"/settings/agents"}>
-              {gettext("Agents")}
+            <.tab_link active={@active_tab == :api_keys} to={~p"/settings/api-keys"}>
+              {gettext("API keys")}
             </.tab_link>
           </div>
 
@@ -740,21 +546,15 @@ defmodule DranWeb.SettingsLive do
               </.section>
             </div>
           <% else %>
-            <%= if @active_tab == :agents do %>
-              <.agents_tab
-                managed_actors={@managed_actors}
-                create_actor_form={@create_actor_form}
-                edit_actor_form={@edit_actor_form}
-                editing_actor_id={@editing_actor_id}
-                actor_delete_confirmation={@actor_delete_confirmation}
-                api_key_workspaces={@api_key_workspaces}
-                revealed_api_key={@revealed_api_key}
-                show_create_key_modal={@show_create_key_modal}
-                create_key_form={@create_key_form}
-                editing_key_id={@editing_key_id}
-                edit_key_form={@edit_key_form}
-              />
-            <% end %>
+            <.api_keys_tab
+              api_keys={@api_keys}
+              api_key_workspaces={@api_key_workspaces}
+              revealed_api_key={@revealed_api_key}
+              show_create_key_modal={@show_create_key_modal}
+              create_key_form={@create_key_form}
+              editing_key_id={@editing_key_id}
+              edit_key_form={@edit_key_form}
+            />
           <% end %>
         </div>
       </div>
@@ -783,11 +583,7 @@ defmodule DranWeb.SettingsLive do
     """
   end
 
-  attr :managed_actors, :list, required: true
-  attr :create_actor_form, :map, required: true
-  attr :edit_actor_form, :map, required: true
-  attr :editing_actor_id, :any, default: nil
-  attr :actor_delete_confirmation, :map, default: nil
+  attr :api_keys, :list, required: true
   attr :api_key_workspaces, :list, default: []
   attr :revealed_api_key, :map, default: nil
   attr :show_create_key_modal, :any, default: nil
@@ -795,16 +591,28 @@ defmodule DranWeb.SettingsLive do
   attr :editing_key_id, :any, default: nil
   attr :edit_key_form, :map, default: nil
 
-  defp agents_tab(assigns) do
+  defp api_keys_tab(assigns) do
     ~H"""
-    <div id="agents-tab" class="space-y-6">
-      <div>
-        <h1 class="text-title">{gettext("Agents")}</h1>
-        <p class="text-caption mt-1">
-          {gettext(
-            "Agent identities for API access with their own API keys. Human users become actors automatically on login — they are not managed here."
-          )}
-        </p>
+    <div id="api-keys-tab" class="space-y-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h1 class="text-title">{gettext("API keys")}</h1>
+          <p class="text-caption mt-1">
+            {gettext(
+              "Each key carries its own name — that name is the agent identity used to attribute what it writes — plus its own workspace access matrix (read, or read + write)."
+            )}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          id="new-api-key-btn"
+          phx-click="open_create_key_modal"
+          class="btn btn-primary btn-sm gap-1.5"
+        >
+          <.icon name="hero-plus" class="size-4" />
+          {gettext("New API key")}
+        </button>
       </div>
 
       <%!-- Newly created / regenerated token — shown ONCE --%>
@@ -855,174 +663,147 @@ defmodule DranWeb.SettingsLive do
         </div>
       </div>
 
-      <.section title={gettext("Create agent")} icon="hero-user-plus">
-        <.form
-          for={@create_actor_form}
-          id="create-actor-form"
-          phx-submit="create_actor"
-          class="space-y-4"
-        >
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <.input
-              field={@create_actor_form[:name]}
-              label={gettext("Name")}
-              placeholder={gettext("e.g. hermes-agent or backup-script")}
-              required
-            />
-            <.input
-              field={@create_actor_form[:display_name]}
-              label={gettext("Display name")}
-              placeholder={gettext("Optional — shown instead of the name")}
-            />
-            <.input
-              field={@create_actor_form[:host]}
-              label={gettext("Host")}
-              placeholder={gettext("Optional — e.g. laptop or ci-runner")}
-            />
-          </div>
-          <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Saving…")}>
-            {gettext("Create agent")}
-          </button>
-        </.form>
-      </.section>
+      <div :if={@api_keys == []} class="text-center text-base-content/50 py-6">
+        {gettext("No API keys yet — create one to give an agent access to your workspaces.")}
+      </div>
 
-      <.section :if={@managed_actors != []} title={gettext("Existing agents")} icon="hero-users">
-        <div class="overflow-x-auto">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>{gettext("Name")}</th>
-                <th>{gettext("Display name")}</th>
-                <th>{gettext("Host")}</th>
-                <th>{gettext("API key")}</th>
-                <th>{gettext("Workspaces")}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr :for={actor <- @managed_actors} id={"actor-#{actor.id}"}>
-                <td class="font-medium">{actor.name}</td>
-                <td>{actor.display_name || "—"}</td>
-                <td>{actor.host || "—"}</td>
-                <td>
-                  <div class="flex items-center gap-1">
-                    <%= if active_key = active_agent_key(actor) do %>
-                      <code class="text-xs">{active_key.token_prefix}••••</code>
-                      <button
-                        type="button"
-                        phx-click="copy_api_key_prefix"
-                        phx-value-id={active_key.id}
-                        class="btn btn-ghost btn-xs p-1"
-                        title={gettext("Copy prefix")}
-                      >
-                        <.icon name="hero-clipboard-document" class="size-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="regenerate_api_key"
-                        phx-value-id={active_key.id}
-                        data-confirm={
-                          gettext(
-                            "Regenerate this key? The current token stops working immediately and you'll get a new one."
-                          )
-                        }
-                        class="btn btn-ghost btn-xs p-1"
-                        title={gettext("Regenerate")}
-                      >
-                        <.icon name="hero-arrow-path" class="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="revoke_api_key"
-                        phx-value-id={active_key.id}
-                        data-confirm={gettext("Revoke this key? It stops working immediately.")}
-                        class="btn btn-ghost btn-xs p-1 text-error"
-                        title={gettext("Revoke")}
-                      >
-                        <.icon name="hero-no-symbol" class="size-4" />
-                      </button>
-                    <% else %>
-                      <button
-                        type="button"
-                        phx-click="open_create_key_modal"
-                        phx-value-id={actor.id}
-                        class="btn btn-outline btn-xs gap-1"
-                      >
-                        <.icon name="hero-key" class="size-3.5" />
-                        {gettext("Create key")}
-                      </button>
-                    <% end %>
-                  </div>
-                </td>
-                <td>
-                  <div class="flex items-center gap-1.5 flex-wrap">
-                    <%= if active_key = active_agent_key(actor) do %>
-                      <span
-                        class="badge badge-sm font-mono"
-                        title={
-                          Enum.map_join(
-                            active_key.api_key_workspaces,
-                            ", ",
-                            &"#{&1.workspace.name}: #{access_label(&1.access_level)}"
-                          )
-                        }
-                      >
-                        <.icon name="hero-square-3-stack-3d" class="size-3 mr-1" />
-                        {ngettext(
-                          "%{count} workspace",
-                          "%{count} workspaces",
-                          length(active_key.api_key_workspaces)
-                        )}
-                      </span>
-                      <%= if write_all?(active_key) do %>
-                        <span class="badge badge-primary badge-sm">{gettext("R/W")}</span>
-                      <% else %>
-                        <span class="badge badge-ghost badge-sm">{gettext("R/O")}</span>
-                      <% end %>
-                      <button
-                        type="button"
-                        phx-click="edit_agent_access"
-                        phx-value-id={actor.id}
-                        class="btn btn-ghost btn-xs p-1"
-                        title={gettext("Configure workspaces and levels")}
-                      >
-                        <.icon name="hero-adjustments-horizontal" class="size-4" />
-                      </button>
-                    <% else %>
-                      <span class="text-base-content/40 text-xs">—</span>
-                    <% end %>
-                  </div>
-                </td>
-                <td>
-                  <div class="flex items-center gap-1 justify-end">
-                    <button
-                      type="button"
-                      phx-click="edit_actor"
-                      phx-value-id={actor.id}
-                      class="btn btn-ghost btn-xs p-1"
-                      title={gettext("Edit")}
-                    >
-                      <.icon name="hero-pencil-square" class="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      phx-click="confirm_delete_actor"
-                      phx-value-id={actor.id}
-                      class="btn btn-ghost btn-xs p-1 text-error"
-                      title={gettext("Delete")}
-                    >
-                      <.icon name="hero-trash" class="size-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </.section>
-
-      <div :if={@managed_actors == []} class="text-center text-base-content/50 py-6">
-        {gettext("No agents yet — create one with the form above.")}
+      <div :if={@api_keys != []} class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>{gettext("Name")}</th>
+              <th>{gettext("Key")}</th>
+              <th>{gettext("Workspaces")}</th>
+              <th>{gettext("Status")}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={key <- @api_keys} id={"api-key-#{key.id}"}>
+              <td class="font-medium">{key.name}</td>
+              <td>
+                <div class="flex items-center gap-1">
+                  <code class="text-xs">{key.token_prefix}••••</code>
+                  <button
+                    type="button"
+                    phx-click="copy_api_key_prefix"
+                    phx-value-id={key.id}
+                    class="btn btn-ghost btn-xs p-1"
+                    title={gettext("Copy prefix")}
+                  >
+                    <.icon name="hero-clipboard-document" class="size-3.5" />
+                  </button>
+                </div>
+              </td>
+              <td>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    class="badge badge-sm font-mono"
+                    title={
+                      Enum.map_join(
+                        key.api_key_workspaces,
+                        ", ",
+                        &"#{&1.workspace.name}: #{access_label(&1.access_level)}"
+                      )
+                    }
+                  >
+                    <.icon name="hero-square-3-stack-3d" class="size-3 mr-1" />
+                    {ngettext(
+                      "%{count} workspace",
+                      "%{count} workspaces",
+                      length(key.api_key_workspaces)
+                    )}
+                  </span>
+                  <%= if write_access?(key) do %>
+                    <span class="badge badge-primary badge-sm">{gettext("R/W")}</span>
+                  <% else %>
+                    <span class="badge badge-ghost badge-sm">{gettext("R/O")}</span>
+                  <% end %>
+                  <button
+                    type="button"
+                    phx-click="edit_api_key"
+                    phx-value-id={key.id}
+                    class="btn btn-ghost btn-xs p-1"
+                    title={gettext("Configure workspaces and levels")}
+                  >
+                    <.icon name="hero-adjustments-horizontal" class="size-4" />
+                  </button>
+                  <button
+                    :if={key.api_key_workspaces != []}
+                    type="button"
+                    phx-click="toggle_write_access"
+                    phx-value-id={key.id}
+                    class="btn btn-ghost btn-xs p-1"
+                    title={
+                      if write_access?(key),
+                        do: gettext("Switch to read only"),
+                        else: gettext("Switch to read + write")
+                    }
+                  >
+                    <.icon name="hero-arrows-right-left" class="size-4" />
+                  </button>
+                </div>
+              </td>
+              <td>
+                <%= if key.revoked_at do %>
+                  <span class="badge badge-error badge-sm">{gettext("Revoked")}</span>
+                <% else %>
+                  <span class="badge badge-success badge-sm">{gettext("Active")}</span>
+                <% end %>
+              </td>
+              <td>
+                <div class="flex items-center gap-1 justify-end">
+                  <button
+                    :if={is_nil(key.revoked_at)}
+                    type="button"
+                    phx-click="regenerate_api_key"
+                    phx-value-id={key.id}
+                    data-confirm={
+                      gettext(
+                        "Regenerate this key? The current token stops working immediately and you'll get a new one."
+                      )
+                    }
+                    class="btn btn-ghost btn-xs p-1"
+                    title={gettext("Regenerate")}
+                  >
+                    <.icon name="hero-arrow-path" class="size-4" />
+                  </button>
+                  <button
+                    :if={is_nil(key.revoked_at)}
+                    type="button"
+                    phx-click="revoke_api_key"
+                    phx-value-id={key.id}
+                    data-confirm={gettext("Revoke this key? It stops working immediately.")}
+                    class="btn btn-ghost btn-xs p-1 text-error"
+                    title={gettext("Revoke")}
+                  >
+                    <.icon name="hero-no-symbol" class="size-4" />
+                  </button>
+                  <button
+                    :if={key.revoked_at}
+                    type="button"
+                    phx-click="restore_api_key"
+                    phx-value-id={key.id}
+                    class="btn btn-ghost btn-xs p-1"
+                    title={gettext("Restore")}
+                  >
+                    <.icon name="hero-arrow-uturn-left" class="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="delete_api_key"
+                    phx-value-id={key.id}
+                    data-confirm={gettext("Delete this key permanently?")}
+                    class="btn btn-ghost btn-xs p-1 text-error"
+                    title={gettext("Delete")}
+                  >
+                    <.icon name="hero-trash" class="size-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyApiToken">
@@ -1091,36 +872,7 @@ defmodule DranWeb.SettingsLive do
         }
       </script>
 
-      <%!-- Inline edit (display_name / host) --%>
-      <.modal
-        id="edit-actor-modal"
-        show={@editing_actor_id != nil}
-        title={gettext("Edit actor")}
-        on_close="cancel_edit_actor"
-      >
-        <.form for={@edit_actor_form} id="edit-actor-form" phx-submit="update_actor" class="space-y-4">
-          <.input
-            field={@edit_actor_form[:display_name]}
-            label={gettext("Display name")}
-            placeholder={gettext("Optional — shown instead of the name")}
-          />
-          <.input
-            field={@edit_actor_form[:host]}
-            label={gettext("Host")}
-            placeholder={gettext("Optional — e.g. laptop or ci-runner")}
-          />
-          <div class="flex justify-end gap-2 pt-2">
-            <button type="button" phx-click="cancel_edit_actor" class="btn btn-ghost btn-sm">
-              {gettext("Cancel")}
-            </button>
-            <button type="submit" class="btn btn-primary btn-sm" phx-disable-with={gettext("Saving…")}>
-              {gettext("Save")}
-            </button>
-          </div>
-        </.form>
-      </.modal>
-
-      <%!-- Create agent key: workspace×level matrix + memory workspace radio --%>
+      <%!-- Create key: name + workspace×level matrix --%>
       <.modal
         :if={@show_create_key_modal && @create_key_form}
         id="create-key-modal"
@@ -1133,12 +885,13 @@ defmodule DranWeb.SettingsLive do
           id="create-key-form"
           form={@create_key_form}
           workspaces={@api_key_workspaces}
-          submit_event="create_agent_key"
+          submit_event="create_api_key"
           submit_label={gettext("Create key")}
+          name_mode={:editable}
         />
       </.modal>
 
-      <%!-- Edit agent key access matrix --%>
+      <%!-- Edit key access matrix --%>
       <.modal
         :if={@editing_key_id && @edit_key_form}
         id="edit-key-modal"
@@ -1151,50 +904,11 @@ defmodule DranWeb.SettingsLive do
           id="edit-key-form"
           form={@edit_key_form}
           workspaces={@api_key_workspaces}
-          submit_event="update_agent_access"
+          submit_event="update_api_key_access"
           submit_label={gettext("Save")}
+          name_mode={:readonly}
         />
       </.modal>
-
-      <%!-- Inline delete confirmation with attribution impact --%>
-      <div
-        :if={@actor_delete_confirmation}
-        class="card bg-error/10 border border-error/40"
-        id="actor-delete-confirmation"
-      >
-        <div class="card-body py-4 space-y-3">
-          <h3 class="font-semibold text-error flex items-center gap-2">
-            <.icon name="hero-exclamation-triangle" class="size-5" />
-            {gettext("Delete this actor?")}
-          </h3>
-          <p class="text-sm text-base-content/80">
-            {gettext("Work attributed to this actor:")}
-
-            {ngettext(
-              "%{count} page",
-              "%{count} pages",
-              @actor_delete_confirmation.counts.pages
-            )} · {ngettext(
-              "%{count} memory",
-              "%{count} memories",
-              @actor_delete_confirmation.counts.memories
-            )}
-          </p>
-          <div class="flex justify-end gap-2">
-            <button type="button" phx-click="cancel_delete_actor" class="btn btn-ghost btn-sm">
-              {gettext("Cancel")}
-            </button>
-            <button
-              type="button"
-              phx-click="delete_actor"
-              phx-value-id={@actor_delete_confirmation.actor_id}
-              class="btn btn-error btn-sm"
-            >
-              {gettext("Delete actor")}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
     """
   end
@@ -1206,11 +920,35 @@ defmodule DranWeb.SettingsLive do
   attr :workspaces, :list, required: true
   attr :submit_event, :string, required: true
   attr :submit_label, :string, required: true
+  attr :name_mode, :atom, default: :editable
 
   defp key_access_form(assigns) do
     ~H"""
     <form id={@id} phx-submit={@submit_event} class="space-y-4">
-      <input type="hidden" name="key[actor_id]" value={@form["actor_id"]} />
+      <div>
+        <p class="text-sm font-medium mb-1">{gettext("Name")}</p>
+        <p class="text-caption mb-3">
+          {gettext(
+            "The key name is the agent identity: content written with this key is attributed to this name unless the client sends an X-Hermes-Agent header."
+          )}
+        </p>
+        <input
+          :if={@name_mode == :editable}
+          type="text"
+          name="key[name]"
+          value={@form["name"]}
+          required
+          placeholder={gettext("e.g. hermes-agent or backup-script")}
+          class="input input-bordered input-sm w-full"
+        />
+        <input
+          :if={@name_mode == :readonly}
+          type="text"
+          value={@form["name"]}
+          disabled
+          class="input input-bordered input-sm w-full"
+        />
+      </div>
 
       <div>
         <p class="text-sm font-medium mb-1">{gettext("Workspaces")}</p>
@@ -1253,7 +991,7 @@ defmodule DranWeb.SettingsLive do
         <button
           type="button"
           phx-click={
-            if @submit_event == "create_agent_key",
+            if @submit_event == "create_api_key",
               do: "close_create_key_modal",
               else: "close_edit_key_modal"
           }
@@ -1274,11 +1012,12 @@ defmodule DranWeb.SettingsLive do
   defp access_label("write"), do: gettext("R/W")
   defp access_label(_), do: gettext("R/O")
 
-  defp write_all?(%{api_key_workspaces: workspaces}) when workspaces != [] do
-    Enum.all?(workspaces, &(&1.access_level == "write"))
+  # A key with ANY write row is R/W; an empty matrix is R/O.
+  defp write_access?(%{api_key_workspaces: workspaces}) when workspaces != [] do
+    Enum.any?(workspaces, &(&1.access_level == "write"))
   end
 
-  defp write_all?(_), do: false
+  defp write_access?(_), do: false
 
   # ── API Keys section ──────────────────────────────────────────────────────
 

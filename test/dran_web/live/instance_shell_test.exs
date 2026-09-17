@@ -32,7 +32,7 @@ defmodule DranWeb.InstanceShellTest do
   @pages [
     {"/", "topbar-dashboard"},
     {"/settings/account", "topbar-account"},
-    {"/settings/agents", "topbar-account"},
+    {"/settings/api-keys", "topbar-account"},
     {"/admin", "topbar-admin"},
     {"/admin/users", "topbar-admin"},
     {"/admin/workspaces", "topbar-admin"},
