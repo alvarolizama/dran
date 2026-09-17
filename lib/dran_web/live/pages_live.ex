@@ -11,10 +11,11 @@ defmodule DranWeb.PagesLive do
 
   alias Dran.Knowledge
   alias Dran.Knowledge.Page
+  alias Dran.Workspace
   alias DranWeb.PageDetail
   alias DranWeb.PageEdit
-  alias DranWeb.PageTypes
   alias DranWeb.ListPagination
+  alias DranWeb.Plugs.Auth
 
   @impl true
   def render(assigns) do
@@ -151,18 +152,33 @@ defmodule DranWeb.PagesLive do
 
   @impl true
   def mount(params, session, socket) do
-    case page_type_from_params(params) do
+    # Resolve the workspace BEFORE the type gate so a path declared by the
+    # workspace's own custom types is not a 404: `page_types` is
+    # built-in ∪ custom, not the global registry alone.
+    socket = resolve_mount_workspace(socket, params, session)
+
+    case page_type_from_params(params, socket.assigns[:context]) do
       nil ->
-        # Unknown type path (a page type the registry no longer knows) — the
-        # route matched the generic /:workspace_slug/:type wildcard but there
-        # is no such page type. 404, no redirect: those URLs are gone.
+        # Unknown type path for THIS workspace — a retired built-in path or a
+        # path no custom type declares. 404, no redirect.
         {:ok, raise DranWeb.NotFoundError}
 
       page_type ->
         PageDetail.mount_page_viewer(socket, params, session,
           page_type: page_type,
-          active_nav: PageTypes.path(page_type)
+          active_nav: Workspace.page_type_path(socket.assigns[:context], page_type)
         )
+    end
+  end
+
+  # Resolves the workspace from the URL slug (falling back to the session) so
+  # the type gate has the right effective-types list. Never raises: an
+  # unresolvable workspace leaves `context` nil and the gate falls back to the
+  # built-in types.
+  defp resolve_mount_workspace(socket, params, session) do
+    case Auth.assign_to_socket(socket, session, params) do
+      {socket, %Dran.Workspace{} = context} -> assign(socket, context: context)
+      {socket, _} -> socket
     end
   end
 
@@ -177,10 +193,11 @@ defmodule DranWeb.PagesLive do
 
       handle_params(params, nil, socket)
     else
-      page_type = socket.assigns[:page_type] || page_type_from_params(params)
+      context = socket.assigns[:context]
+      page_type = socket.assigns[:page_type] || page_type_from_params(params, context)
       workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
-      back_path = build_back_path(workspace_slug, page_type)
-      page_path = build_page_path(workspace_slug, page_type, slug)
+      back_path = build_back_path(workspace_slug, context, page_type)
+      page_path = build_page_path(workspace_slug, context, page_type, slug)
 
       # Alias workspace_slug → workspace so Auth.resolve_workspace finds it
       params = Map.put(params, "workspace", workspace_slug)
@@ -196,7 +213,8 @@ defmodule DranWeb.PagesLive do
   # create modal is URL state, not a page.
 
   def handle_params(params, _url, socket) do
-    page_type = socket.assigns[:page_type] || page_type_from_params(params)
+    context = socket.assigns[:context]
+    page_type = socket.assigns[:page_type] || page_type_from_params(params, context)
     workspace_slug = socket.assigns[:workspace_slug] || params["workspace_slug"]
 
     scope = page_scope(socket)
@@ -228,8 +246,8 @@ defmodule DranWeb.PagesLive do
        visible_count: 30,
        show_archived: false,
        archived_visible_count: 30,
-       page_title: PageTypes.plural(page_type),
-       back_path: build_back_path(workspace_slug, page_type),
+       page_title: Workspace.page_type_plural(context, page_type),
+       back_path: build_back_path(workspace_slug, context, page_type),
        # Create-modal state (?new=true) — form + workspace for the editor
        modal_open: params["new"] == "true",
        workspace_id: socket.assigns.context && socket.assigns.context.id,
@@ -267,20 +285,23 @@ defmodule DranWeb.PagesLive do
   def handle_event("show_page", %{"slug" => slug}, socket) do
     page_type = socket.assigns[:page_type]
     workspace_slug = socket.assigns[:workspace_slug]
-    {:noreply, push_navigate(socket, to: build_page_path(workspace_slug, page_type, slug))}
+    context = socket.assigns[:context]
+
+    {:noreply,
+     push_navigate(socket, to: build_page_path(workspace_slug, context, page_type, slug))}
   end
 
   def handle_event("new_page", _params, socket) do
     page_type = socket.assigns[:page_type]
     workspace_slug = socket.assigns[:workspace_slug]
-    type_path = PageTypes.path(page_type)
+    type_path = Workspace.page_type_path(socket.assigns[:context], page_type)
     {:noreply, push_patch(socket, to: ~p"/#{workspace_slug}/#{type_path}?new=true")}
   end
 
   def handle_event("close_page_modal", _params, socket) do
     page_type = socket.assigns[:page_type]
     workspace_slug = socket.assigns[:workspace_slug]
-    type_path = PageTypes.path(page_type)
+    type_path = Workspace.page_type_path(socket.assigns[:context], page_type)
 
     {:noreply, push_patch(socket, to: ~p"/#{workspace_slug}/#{type_path}")}
   end
@@ -359,25 +380,47 @@ defmodule DranWeb.PagesLive do
 
   # ── Helpers ──
 
-  defp page_type_from_params(%{"type" => type_path}) when is_binary(type_path) do
-    PageTypes.type_from_path(type_path)
+  defp page_type_from_params(%{"type" => type_path}, context)
+       when is_binary(type_path) do
+    workspace_type_from_path(context, type_path)
   end
 
-  defp page_type_from_params(%{"page_type" => type_path}) when is_binary(type_path) do
-    PageTypes.type_from_path(type_path)
+  defp page_type_from_params(%{"page_type" => type_path}, context)
+       when is_binary(type_path) do
+    workspace_type_from_path(context, type_path)
   end
 
-  defp page_type_from_params(_), do: nil
+  defp page_type_from_params(_params, _context), do: nil
 
-  defp build_back_path(nil, page_type), do: "/#{PageTypes.path(page_type)}"
+  # Built-in paths resolve first, then the workspace's own custom paths. When
+  # mounts run without a resolved context (unauthenticated / non-workspace
+  # URLs) the built-in registry is still the fallback, so the retired paths
+  # keep 404ing.
+  defp workspace_type_from_path(context, type_path) do
+    case Dran.PageRegistry.type_from_path(type_path) do
+      nil ->
+        Workspace.page_type_by_path(context, type_path)
 
-  defp build_back_path(workspace_slug, page_type),
-    do: "/#{workspace_slug}/#{PageTypes.path(page_type)}"
+      type ->
+        # A built-in path the workspace no longer knows still 404s (the
+        # built-in set is stable, so this only guards a future retirement).
+        if context == nil or Knowledge.effective_page_type?(context, type), do: type
+    end
+  end
 
-  defp build_page_path(nil, page_type, slug), do: "/#{PageTypes.path(page_type)}/#{slug}"
+  # Paths come from the workspace (custom types declare their own `path`), so
+  # a custom page type's list and detail URLs are built from its declaration.
+  defp build_back_path(nil, context, page_type),
+    do: "/#{Workspace.page_type_path(context, page_type)}"
 
-  defp build_page_path(workspace_slug, page_type, slug),
-    do: "/#{workspace_slug}/#{PageTypes.path(page_type)}/#{slug}"
+  defp build_back_path(workspace_slug, context, page_type),
+    do: "/#{workspace_slug}/#{Workspace.page_type_path(context, page_type)}"
+
+  defp build_page_path(nil, context, page_type, slug),
+    do: "/#{Workspace.page_type_path(context, page_type)}/#{slug}"
+
+  defp build_page_path(workspace_slug, context, page_type, slug),
+    do: "/#{workspace_slug}/#{Workspace.page_type_path(context, page_type)}/#{slug}"
 
   # El scope de lectura sale del módulo único de política.
   defp page_scope(socket) do

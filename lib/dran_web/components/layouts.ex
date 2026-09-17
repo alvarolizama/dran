@@ -201,10 +201,12 @@ defmodule DranWeb.Layouts do
         disabled = context.disabled_page_types || []
 
         # Zero out counts for disabled page types so sidebar links vanish.
+        # Iterates the workspace's EFFECTIVE types (4 built-in ∪ custom), and
+        # the key is the type's own path — custom types declare theirs.
         type_counts =
-          Map.new(Dran.PageRegistry.types(), fn type ->
+          Map.new(Dran.Knowledge.effective_page_types(context), fn type ->
             count = if type in disabled, do: 0, else: by_type[type] || 0
-            {String.to_atom(Dran.PageRegistry.path(type)), count}
+            {String.to_atom(Dran.Workspace.page_type_path(context, type)), count}
           end)
 
         # Smart collections are first-class Brain collections now.
@@ -352,15 +354,18 @@ defmodule DranWeb.Layouts do
 
     disabled = (ws && ws.disabled_page_types) || []
 
-    # Clusters cierra el grupo Knowledge base, debajo de Referencias.
+    # Types come from the workspace (built-in ∪ custom) so a custom type is
+    # navigable as soon as it is declared.
     page_type_items =
-      (for type <- Dran.PageRegistry.types(), type not in disabled do
+      (for type <- Dran.Knowledge.effective_page_types(ws),
+           type not in disabled,
+           ui = Dran.Workspace.page_type_ui(ws, type) do
          %{
-           key: Dran.PageRegistry.path(type),
-           label: Dran.PageRegistry.plural(type),
-           icon: Dran.PageRegistry.icon(type),
-           path: "#{base}/#{Dran.PageRegistry.path(type)}",
-           badge: counts[type_atom(type)] || 0
+           key: ui.path,
+           label: ui.plural,
+           icon: ui.icon,
+           path: "#{base}/#{ui.path}",
+           badge: counts[type_atom(ws, type)] || 0
          }
        end ++
          [
@@ -407,11 +412,10 @@ defmodule DranWeb.Layouts do
     ]
   end
 
-  # Badge keys are keyed by the registry path (e.g. "notes" → :notes) —
-  # compute_counts builds them from the registry, so a new type needs no
-  # clause here.
-  defp type_atom(type) do
-    type |> Dran.PageRegistry.path() |> String.to_atom()
+  # Badge keys are keyed by the type's workspace path (e.g. "notes" → :notes)
+  # — compute_counts builds them the same way, so a new type needs no clause.
+  defp type_atom(ws, type) do
+    ws |> Dran.Workspace.page_type_path(type) |> String.to_atom()
   end
 
   attr :label, :string, required: true

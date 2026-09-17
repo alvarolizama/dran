@@ -70,6 +70,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
       )
       |> assign_settings_form()
       |> assign_general_form()
+      |> assign_custom_type_form()
       |> assign_workspace_members()
       |> assign_all_users()
       # Corrección #11: defense-in-depth — halt every event for users who are
@@ -148,7 +149,11 @@ defmodule DranWeb.WorkspaceSettingsLive do
             </div>
 
             <div :if={@active_tab == :page_types}>
-              <.page_types_section workspace={@workspace} />
+              <.page_types_section
+                workspace={@workspace}
+                custom_type_form={@custom_type_form}
+                custom_type_error={@custom_type_error}
+              />
             </div>
 
             <div :if={@active_tab == :features}>
@@ -209,6 +214,67 @@ defmodule DranWeb.WorkspaceSettingsLive do
          socket
          |> assign(general_form: to_form(changeset, as: :workspace))
          |> put_flash(:error, gettext("Could not save workspace"))}
+    end
+  end
+
+  # -- Custom page types ------------------------------------------------------
+
+  @impl true
+  def handle_event("add_custom_page_type", %{"workspace" => params}, socket) do
+    workspace = socket.assigns.workspace
+
+    entry = %{
+      "slug" => params["slug"],
+      "label" => params["label"],
+      "plural" => params["plural"],
+      "path" => params["path"],
+      "icon" => params["icon"],
+      "color" => params["color"],
+      "meta_fields" => parse_meta_fields(params["meta_fields"])
+    }
+
+    existing = Dran.Workspace.custom_page_types(workspace)
+
+    case Knowledge.update_workspace_settings(workspace, %{
+           workspace_page_types: existing ++ [entry]
+         }) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(workspace: updated, custom_type_error: nil)
+         |> assign_custom_type_form()
+         |> put_flash(:info, gettext("Page type added"))}
+
+      {:error, changeset} ->
+        # On failure keep the submitted values in the form (minus the server
+        # defaults) and surface the validation message — the entry is not
+        # persisted.
+        {:noreply,
+         assign(socket,
+           custom_type_error: custom_type_message(changeset),
+           custom_type_form: to_form(Map.delete(params, "meta_fields"), as: :workspace)
+         )}
+    end
+  end
+
+  @impl true
+  def handle_event("remove_custom_page_type", %{"slug" => slug}, socket) do
+    workspace = socket.assigns.workspace
+
+    remaining =
+      workspace
+      |> Dran.Workspace.custom_page_types()
+      |> Enum.reject(&(&1["slug"] == slug))
+
+    case Knowledge.update_workspace_settings(workspace, %{workspace_page_types: remaining}) do
+      {:ok, updated} ->
+        {:noreply,
+         socket
+         |> assign(workspace: updated, custom_type_error: nil)
+         |> put_flash(:info, gettext("Page type removed"))}
+
+      {:error, changeset} ->
+        {:noreply, put_flash(socket, :error, custom_type_message(changeset))}
     end
   end
 
@@ -397,6 +463,8 @@ defmodule DranWeb.WorkspaceSettingsLive do
   end
 
   attr :workspace, Workspace, required: true
+  attr :custom_type_form, :any, required: true
+  attr :custom_type_error, :any, default: nil
 
   defp page_types_section(assigns) do
     ~H"""
@@ -414,22 +482,82 @@ defmodule DranWeb.WorkspaceSettingsLive do
       </header>
 
       <div class="px-5 py-5 space-y-3">
-        <%= for type <- Dran.Knowledge.Page.all_types() do %>
+        <%!-- Effective types = 4 built-in ∪ custom; custom ones cannot collide
+             with a built-in, so one loop covers both. --%>
+        <%= for type <- effective_page_types(@workspace) do %>
           <div class="flex items-center justify-between gap-4">
             <div>
-              <div class="text-sm font-medium">{page_type_label(type)}</div>
-              <div class="text-xs text-base-content/60">{page_type_impact(type)}</div>
+              <div class="text-sm font-medium">
+                {page_type_label(@workspace, type)}
+                <span
+                  :if={Dran.Workspace.custom_page_type?(@workspace, type)}
+                  class="ml-1 text-[10px] uppercase tracking-wide text-base-content/40"
+                >
+                  {gettext("custom")}
+                </span>
+              </div>
+              <div class="text-xs text-base-content/60">{page_type_impact(@workspace, type)}</div>
             </div>
-            <input
-              type="checkbox"
-              id={"page-type-#{type}"}
-              checked={type not in (@workspace.disabled_page_types || [])}
-              phx-click="toggle_page_type"
-              phx-value-page_type={type}
-              class="toggle toggle-sm toggle-primary"
-            />
+            <div class="flex items-center gap-3">
+              <button
+                :if={Dran.Workspace.custom_page_type?(@workspace, type)}
+                type="button"
+                phx-click="remove_custom_page_type"
+                phx-value-slug={type}
+                class="text-xs text-error/80 hover:text-error"
+              >
+                {gettext("Remove")}
+              </button>
+              <input
+                type="checkbox"
+                id={"page-type-#{type}"}
+                checked={type not in (@workspace.disabled_page_types || [])}
+                phx-click="toggle_page_type"
+                phx-value-page_type={type}
+                class="toggle toggle-sm toggle-primary"
+              />
+            </div>
           </div>
         <% end %>
+      </div>
+
+      <%!-- Custom types: slug/label/plural/path/icon/color are form fields.
+           `meta_fields` stays raw JSON for now (documented decision): the
+           editor tuple format is an internal shape, and a dedicated builder
+           belongs with the W5 agent-facing work. --%>
+      <div class="border-t border-base-content/10 px-5 py-5 space-y-3">
+        <div>
+          <h3 class="text-sm font-medium">{gettext("Add a custom page type")}</h3>
+          <p class="text-caption mt-1">
+            {gettext(
+              "slug and path are explicit and must be unique in this workspace; a slug cannot repeat a built-in type."
+            )}
+          </p>
+        </div>
+
+        <.form for={@custom_type_form} phx-submit="add_custom_page_type" class="space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <.input field={@custom_type_form[:slug]} label={gettext("Slug")} placeholder="recipe" />
+            <.input field={@custom_type_form[:path]} label={gettext("URL path")} placeholder="recipes" />
+            <.input field={@custom_type_form[:label]} label={gettext("Label")} placeholder="Receta" />
+            <.input field={@custom_type_form[:plural]} label={gettext("Plural")} placeholder="Recetas" />
+            <.input field={@custom_type_form[:icon]} label={gettext("Icon")} placeholder="hero-beaker" />
+            <.input field={@custom_type_form[:color]} label={gettext("Color")} placeholder="amber" />
+          </div>
+
+          <.input
+            field={@custom_type_form[:meta_fields]}
+            type="textarea"
+            label={gettext("Meta fields (JSON, optional)")}
+            placeholder='[["text", "cuisine", "Cocina"]]'
+          />
+
+          <div :if={@custom_type_error} class="text-sm text-error">{@custom_type_error}</div>
+
+          <button type="submit" class="btn btn-sm btn-primary">
+            {gettext("Add page type")}
+          </button>
+        </.form>
       </div>
     </section>
     """
@@ -854,6 +982,39 @@ defmodule DranWeb.WorkspaceSettingsLive do
     assign(socket, settings_form: to_form(values, as: :workspace))
   end
 
+  defp assign_custom_type_form(socket) do
+    assign(socket,
+      custom_type_form: to_form(%{"meta_fields" => ""}, as: :workspace),
+      custom_type_error: nil
+    )
+  end
+
+  # meta_fields is raw JSON for now (array-of-arrays, one per field). Empty
+  # input means "no custom fields" — not an error.
+  defp parse_meta_fields(nil), do: []
+  defp parse_meta_fields(""), do: []
+
+  defp parse_meta_fields(raw) when is_binary(raw) do
+    case Jason.decode(String.trim(raw)) do
+      {:ok, list} when is_list(list) -> list
+      _ -> []
+    end
+  end
+
+  defp parse_meta_fields(other) when is_list(other), do: other
+  defp parse_meta_fields(_other), do: []
+
+  defp custom_type_message(changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {msg, _opts} -> msg end)
+    |> Map.get(:workspace_page_types, [])
+    |> List.first()
+    |> case do
+      nil -> gettext("Could not save the page type")
+      message -> message
+    end
+  end
+
   # General tab form: name, visibility, is_default from the workspace itself.
   defp assign_general_form(socket) do
     workspace = socket.assigns.workspace
@@ -940,12 +1101,16 @@ defmodule DranWeb.WorkspaceSettingsLive do
     ]
   end
 
-  defp page_type_label(type), do: Dran.PageRegistry.label(type)
+  # Effective types come from the workspace (4 built-in ∪ custom); labels and
+  # paths resolve through it too, so a custom type shows its declared values.
+  defp effective_page_types(workspace), do: Dran.Knowledge.effective_page_types(workspace)
 
-  defp page_type_impact(type) do
+  defp page_type_label(workspace, type), do: Dran.Workspace.page_type_label(workspace, type)
+
+  defp page_type_impact(workspace, type) do
     gettext("%{plural} section and %{path} list",
-      plural: Dran.PageRegistry.plural(type),
-      path: Dran.PageRegistry.path(type)
+      plural: Dran.Workspace.page_type_plural(workspace, type),
+      path: Dran.Workspace.page_type_path(workspace, type)
     )
   end
 

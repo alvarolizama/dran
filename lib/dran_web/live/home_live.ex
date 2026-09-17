@@ -24,9 +24,7 @@ defmodule DranWeb.HomeLive do
   alias Dran.Collections
   alias Dran.Workspace
 
-  alias Dran.PageTypes, as: BrainPageTypes
   alias DranWeb.GraphHelpers
-  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
   # Types hidden from the global 3D graph — same list the panel uses via
@@ -68,8 +66,9 @@ defmodule DranWeb.HomeLive do
        # Progressive graph (mirrors GraphLive panel)
        nodes: [],
        edges: [],
-       visible_types: default_graph_visible_types(),
-       type_colors: sidebar_type_colors(),
+       visible_types: default_graph_visible_types(workspace),
+       type_colors: sidebar_type_colors(workspace),
+       type_paths: Workspace.type_paths(workspace),
        type_counts: %{},
        node_count: 0,
        edge_count: 0,
@@ -171,7 +170,7 @@ defmodule DranWeb.HomeLive do
           page_type: page_type,
           pages: pages,
           grouped_pages: grouped,
-          page_title: "#{workspace.name} · #{PageTypes.label(page_type)}",
+          page_title: "#{workspace.name} · #{Workspace.page_type_label(workspace, page_type)}",
           collections: collections,
           pinned_pages: pinned,
           type_index: type_index,
@@ -281,6 +280,8 @@ defmodule DranWeb.HomeLive do
           active_nav: "graph",
           workspace: workspace,
           graph_data: %{nodes: [], edges: []},
+          # Handed to the Graph3D hook: custom types declare their own `path`.
+          type_paths: Workspace.type_paths(workspace),
           page_title: "#{workspace.name} · Graph",
           collections: collections,
           pinned_pages: pinned,
@@ -364,8 +365,10 @@ defmodule DranWeb.HomeLive do
 
   # ── Graph helpers ──────────────────────────────────────────────────────────
 
-  defp default_graph_visible_types do
-    GraphHelpers.type_colors()
+  # Both the graph's visible-type set and the legend colors come from the
+  # WORKSPACE's effective types (built-in ∪ custom), not the global registry.
+  defp default_graph_visible_types(workspace) do
+    GraphHelpers.type_colors(workspace)
     |> Map.keys()
     |> MapSet.new()
     |> MapSet.difference(MapSet.new(@graph_hidden_types))
@@ -373,8 +376,8 @@ defmodule DranWeb.HomeLive do
 
   defdelegate hidden_type_color, to: GraphHelpers
 
-  defp sidebar_type_colors do
-    Dran.PageRegistry.ordered_type_colors()
+  defp sidebar_type_colors(workspace) do
+    Workspace.ordered_type_colors(workspace)
     |> Enum.reject(fn {type, _color} -> type in @graph_hidden_types end)
   end
 
@@ -447,6 +450,7 @@ defmodule DranWeb.HomeLive do
               nodes={@nodes}
               edges={@edges}
               loading={@loading}
+              type_paths={@type_paths}
             />
           <% :letter -> %>
             <.letter_view workspace={@workspace} letter={@letter} pages={@pages} alphabet={@alphabet} />
@@ -485,7 +489,7 @@ defmodule DranWeb.HomeLive do
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 min-w-0">
               <.icon
-                name={PageTypes.icon(result.page_type)}
+                name={Workspace.page_type_icon(@workspace, result.page_type)}
                 class="size-4 text-base-content/40 group-hover:text-primary transition-colors shrink-0"
               />
               <span class="font-medium truncate group-hover:text-primary transition-colors">
@@ -493,7 +497,7 @@ defmodule DranWeb.HomeLive do
               </span>
             </div>
             <span class="text-xs text-base-content/50 shrink-0 ml-2">
-              {PageTypes.label(result.page_type)}
+              {Workspace.page_type_label(@workspace, result.page_type)}
             </span>
           </div>
           <p :if={result[:excerpt]} class="text-sm text-base-content/60 mt-1 line-clamp-2">
@@ -572,7 +576,7 @@ defmodule DranWeb.HomeLive do
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <.link
             :for={page <- @pinned_pages}
-            navigate={~p"/#{@workspace.slug}/#{page.page_type}/#{page.slug}"}
+            navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
@@ -708,13 +712,16 @@ defmodule DranWeb.HomeLive do
             {@workspace.name}
           </.link>
           <span>/</span>
-          <span>{PageTypes.label(@page_type)}</span>
+          <span>{Workspace.page_type_label(@workspace, @page_type)}</span>
         </div>
-        <h1 class="text-2xl font-bold">{PageTypes.plural(@page_type)}</h1>
+        <h1 class="text-2xl font-bold">{Workspace.page_type_plural(@workspace, @page_type)}</h1>
       </div>
 
       <div :if={@grouped_pages == []} class="text-center py-12">
-        <.icon name={PageTypes.icon(@page_type)} class="size-10 text-base-content/30 mx-auto mb-3" />
+        <.icon
+          name={Workspace.page_type_icon(@workspace, @page_type)}
+          class="size-10 text-base-content/30 mx-auto mb-3"
+        />
         <p class="text-base-content/50">{gettext("No pages of this type.")}</p>
       </div>
 
@@ -728,7 +735,7 @@ defmodule DranWeb.HomeLive do
         <div class="space-y-1">
           <.link
             :for={page <- pages}
-            navigate={~p"/#{@workspace.slug}/#{@page_type}/#{page.slug}"}
+            navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, @page_type)}/#{page.slug}"}
             class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
           >
             <div class="flex items-center gap-2">
@@ -756,8 +763,11 @@ defmodule DranWeb.HomeLive do
           {@workspace.name}
         </.link>
         <span>/</span>
-        <.link navigate={~p"/#{@workspace.slug}/#{@page.page_type}"} class="hover:underline">
-          {PageTypes.plural(@page.page_type)}
+        <.link
+          navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, @page.page_type)}"}
+          class="hover:underline"
+        >
+          {Workspace.page_type_plural(@workspace, @page.page_type)}
         </.link>
         <span>/</span>
         <span class="text-base-content/70 truncate">{@page.title}</span>
@@ -766,8 +776,13 @@ defmodule DranWeb.HomeLive do
       <%!-- Title + meta --%>
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2">
-          <.icon name={PageTypes.icon(@page.page_type)} class="size-5 text-base-content/40" />
-          <span class="text-sm text-base-content/50">{PageTypes.label(@page.page_type)}</span>
+          <.icon
+            name={Workspace.page_type_icon(@workspace, @page.page_type)}
+            class="size-5 text-base-content/40"
+          />
+          <span class="text-sm text-base-content/50">
+            {Workspace.page_type_label(@workspace, @page.page_type)}
+          </span>
           <span :if={@page.pinned} class="text-amber-500">
             <.icon name="hero-bookmark" class="size-4" />
           </span>
@@ -805,12 +820,12 @@ defmodule DranWeb.HomeLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.outbound}
-              navigate={~p"/#{@workspace.slug}/#{rel.target.page_type}/#{rel.target.slug}"}
+              navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, rel.target.page_type)}/#{rel.target.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
                 <.icon
-                  name={PageTypes.icon(rel.target.page_type)}
+                  name={Workspace.page_type_icon(@workspace, rel.target.page_type)}
                   class="size-4 text-base-content/40 group-hover:text-primary transition-colors"
                 />
                 <span class="group-hover:text-primary transition-colors">{rel.target.title}</span>
@@ -825,12 +840,12 @@ defmodule DranWeb.HomeLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.inbound}
-              navigate={~p"/#{@workspace.slug}/#{rel.source.page_type}/#{rel.source.slug}"}
+              navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, rel.source.page_type)}/#{rel.source.slug}"}
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
                 <.icon
-                  name={PageTypes.icon(rel.source.page_type)}
+                  name={Workspace.page_type_icon(@workspace, rel.source.page_type)}
                   class="size-4 text-base-content/40 group-hover:text-primary transition-colors"
                 />
                 <span class="group-hover:text-primary transition-colors">{rel.source.title}</span>
@@ -878,19 +893,19 @@ defmodule DranWeb.HomeLive do
       <div class="space-y-2">
         <.link
           :for={page <- Enum.sort_by(@results, & &1.title, :asc)}
-          navigate={~p"/#{@workspace.slug}/#{page.page_type}/#{page.slug}"}
+          navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"}
           class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
         >
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 min-w-0">
               <.icon
-                name={PageTypes.icon(page.page_type)}
+                name={Workspace.page_type_icon(@workspace, page.page_type)}
                 class="size-4 text-base-content/40 group-hover:text-primary transition-colors shrink-0"
               />
               <span class="font-medium truncate group-hover:text-primary transition-colors">{page.title}</span>
             </div>
             <span class="text-xs text-base-content/50 shrink-0 ml-2">
-              {PageTypes.label(page.page_type)}
+              {Workspace.page_type_label(@workspace, page.page_type)}
             </span>
           </div>
           <p :if={page.summary} class="text-sm text-base-content/60 mt-1 line-clamp-1">
@@ -916,6 +931,10 @@ defmodule DranWeb.HomeLive do
   attr :nodes, :list, default: []
   attr :edges, :list, default: []
   attr :loading, :boolean, default: false
+
+  attr :type_paths, :map,
+    default: nil,
+    doc: "slug → URL path for the workspace's effective types (custom types declare their own)"
 
   defp graph_view(assigns) do
     ~H"""
@@ -1004,6 +1023,7 @@ defmodule DranWeb.HomeLive do
             edges={@edges}
             visible_types={MapSet.to_list(@visible_types)}
             base_path={"/#{@workspace.slug}"}
+            type_paths={@type_paths}
             graph_url={"/#{@workspace.slug}/graph/json"}
             class="w-full h-full"
           />
@@ -1060,12 +1080,12 @@ defmodule DranWeb.HomeLive do
       <div :if={@pages != []} class="space-y-1">
         <.link
           :for={page <- @pages}
-          navigate={~p"/#{@workspace.slug}/#{page.page_type}/#{page.slug}"}
+          navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"}
           class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
         >
           <div class="flex items-center gap-2">
             <span class="font-medium group-hover:text-primary transition-colors">{page.title}</span>
-            <span class="text-xs text-base-content/40">({PageTypes.label(page.page_type)})</span>
+            <span class="text-xs text-base-content/40">({Workspace.page_type_label(@workspace, page.page_type)})</span>
             <span :if={page.pinned} class="text-amber-500">
               <.icon name="hero-star" class="size-3" />
             </span>
@@ -1115,10 +1135,10 @@ defmodule DranWeb.HomeLive do
 
     if workspace do
       # Graph nodes carry the singular page_type ("note"); routes are
-      # workspace-scoped with the PLURAL path segment ("/personal/notes/..").
-      # PageRegistry.path pluralizes ("note" → "notes") and
-      # falls back to "notes" for unknown types.
-      type_path = PageTypes.path(params["type"] || "note")
+      # workspace-scoped with the type's own path segment. A custom type
+      # declares its `path`, so resolve through the workspace (the server
+      # hands the hook a type_paths map for the same reason).
+      type_path = Workspace.page_type_path(workspace, params["type"] || "note")
       {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{type_path}/#{slug}")}
     else
       {:noreply, socket}
@@ -1202,7 +1222,9 @@ defmodule DranWeb.HomeLive do
     disabled = workspace.disabled_page_types || []
     excluded = disabled
 
-    BrainPageTypes.types()
+    # Effective types of the workspace (built-in ∪ custom) — a custom type
+    # shows up in the type index as soon as it is declared.
+    Dran.Knowledge.effective_page_types(workspace)
     |> Enum.reject(&(&1 in excluded))
     |> Enum.map(fn type ->
       count =
@@ -1218,9 +1240,9 @@ defmodule DranWeb.HomeLive do
 
       %{
         type: type,
-        label: PageTypes.plural(type),
+        label: Workspace.page_type_plural(workspace, type),
         count: count,
-        icon: PageTypes.icon(type)
+        icon: Workspace.page_type_icon(workspace, type)
       }
     end)
     |> Enum.reject(&(&1.count == 0))
@@ -1298,7 +1320,12 @@ defmodule DranWeb.HomeLive do
       Enum.reduce(slugs, %{}, fn slug, acc ->
         case Map.get(slug_types, slug) do
           nil -> acc
-          page_type -> Map.put(acc, slug, "/#{workspace.slug}/#{page_type}/#{slug}")
+          page_type ->
+            Map.put(
+              acc,
+              slug,
+              "/#{workspace.slug}/#{Workspace.page_type_path(workspace, page_type)}/#{slug}"
+            )
         end
       end)
     end
@@ -1346,7 +1373,9 @@ defmodule DranWeb.HomeLive do
   defp wiki_page_path(workspace, result) do
     page_type = Map.get(result, :page_type) || Map.get(result, "page_type")
     slug = Map.get(result, :slug) || Map.get(result, "slug")
-    ~p"/#{workspace.slug}/#{page_type}/#{slug}"
+    # The type's path comes from the workspace's declaration (custom types
+    # declare their own), not from the type name.
+    ~p"/#{workspace.slug}/#{Workspace.page_type_path(workspace, page_type)}/#{slug}"
   end
 
   # El scope de lectura sale del módulo único de política.

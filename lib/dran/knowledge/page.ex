@@ -70,7 +70,9 @@ defmodule Dran.Knowledge.Page do
            ]}
 
   # The canonical list of page types lives in Dran.PageTypes (single
-  # source of truth, including per-type capabilities).
+  # source of truth, including per-type capabilities). This module-level list
+  # is the BUILT-IN set only: it is descriptive for the type registry and for
+  # `all_types/0`, never the write-path validator (see `changeset/2`).
   @page_types Dran.PageTypes.types()
   @confidence_levels ~w(low medium high verified)
 
@@ -141,7 +143,10 @@ defmodule Dran.Knowledge.Page do
     |> validate_required([:workspace_id, :title, :slug, :page_type])
     |> validate_length(:title, max: 500)
     |> validate_length(:slug, max: 500)
-    |> validate_inclusion(:page_type, @page_types)
+    # `page_type` is NOT validated here anymore (M4): the workspace's
+    # effective types (4 built-in ∪ custom) are only known at the context
+    # level, so the fail-closed check lives in `Knowledge.create_page/1` /
+    # `Knowledge.update_page/2`. `@confidence_levels` stays static.
     |> validate_inclusion(:kb_confidence, @confidence_levels)
     |> put_body_hash()
     |> unique_constraint([:workspace_id, :slug], name: :knowledge_pages_workspace_id_slug_index)

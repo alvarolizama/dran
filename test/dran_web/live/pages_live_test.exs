@@ -116,6 +116,64 @@ defmodule DranWeb.PagesLiveTest do
       assert Plug.Exception.status(DranWeb.NotFoundError.exception([])) == 404
       assert DranWeb.ErrorHTML.render("404.html", %{}) == "Not Found"
     end
+
+    test "a custom type's declared path is NOT a 404 (workspace-aware gate)", %{conn: conn, ws: ws} do
+      # W2: the type gate resolves against the workspace's effective types
+      # (4 built-in ∪ custom), so a path a custom type declares is a real
+      # route — only paths nobody declares keep 404ing.
+      {:ok, ws} =
+        Knowledge.update_workspace_settings(ws, %{
+          workspace_page_types: [
+            %{
+              "slug" => "recipe",
+              "label" => "Receta",
+              "plural" => "Recetas",
+              "path" => "recipes",
+              "icon" => "hero-beaker",
+              "color" => "amber",
+              "meta_fields" => []
+            }
+          ]
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/recipes")
+      assert html =~ "Receta"
+
+      # …and an undeclared path still 404s
+      assert_raise DranWeb.NotFoundError, fn -> live(conn, "/#{ws.slug}/gadgets") end
+    end
+
+    test "a page of a custom type is reachable and listable at its own path", %{conn: conn, ws: ws} do
+      {:ok, ws} =
+        Knowledge.update_workspace_settings(ws, %{
+          workspace_page_types: [
+            %{
+              "slug" => "recipe",
+              "label" => "Receta",
+              "plural" => "Recetas",
+              "path" => "recipes",
+              "icon" => "hero-beaker",
+              "color" => "amber",
+              "meta_fields" => []
+            }
+          ]
+        })
+
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Paella valenciana",
+          body: "arroz",
+          page_type: "recipe"
+        })
+
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/recipes")
+      assert html =~ "Paella valenciana"
+      assert html =~ ~s(href="/#{ws.slug}/recipes/#{page.slug}")
+
+      {:ok, _view, show_html} = live(conn, ~p"/#{ws.slug}/recipes/#{page.slug}")
+      assert show_html =~ "Paella valenciana"
+    end
   end
 
   describe "show — view a page" do

@@ -519,6 +519,164 @@ defmodule DranWeb.SettingsLiveTest do
     end
   end
 
+
+  describe "custom page types per workspace (W2)" do
+    setup do
+      unique = System.unique_integer([:positive])
+
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "Types #{unique}", slug: "types-#{unique}"})
+
+      user = Accounts.get_user_by_email("test_user")
+      Accounts.add_user_to_workspace(user, ws)
+
+      {:ok, ws: ws}
+    end
+
+    test "the page types tab lists the 4 built-in types plus the custom ones", %{conn: conn, ws: ws} do
+      {:ok, ws} =
+        Knowledge.update_workspace_settings(ws, %{
+          workspace_page_types: [
+            %{
+              "slug" => "recipe",
+              "label" => "Receta",
+              "plural" => "Recetas",
+              "path" => "recipes",
+              "icon" => "hero-beaker",
+              "color" => "amber",
+              "meta_fields" => []
+            }
+          ]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      html =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='page_types']")
+        |> render_click()
+
+      # Custom type is listed, marked as custom, with its declared path
+      assert html =~ "Receta"
+      assert html =~ "recipes"
+      assert html =~ t("custom")
+
+      # The built-ins are still there and are not removable
+      assert html =~ "Note"
+      assert has_element?(view, "#page-type-note")
+      assert has_element?(view, "#page-type-recipe")
+    end
+
+    test "adding a custom type from the form persists it", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      _ =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='page_types']")
+        |> render_click()
+
+      html =
+        view
+        |> form("form[phx-submit='add_custom_page_type']", %{
+          "workspace" => %{
+            "slug" => "recipe",
+            "label" => "Receta",
+            "plural" => "Recetas",
+            "path" => "recipes",
+            "icon" => "hero-beaker",
+            "color" => "amber",
+            "meta_fields" => ""
+          }
+        })
+        |> render_submit()
+
+      assert html =~ t("Page type added")
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+      assert Dran.Workspace.custom_page_type_slugs(reloaded) == ["recipe"]
+      assert Knowledge.page_types(reloaded) == ~w(note entity concept reference recipe)
+    end
+
+    test "a duplicate slug is rejected with a visible message", %{conn: conn, ws: ws} do
+      {:ok, ws} =
+        Knowledge.update_workspace_settings(ws, %{
+          workspace_page_types: [
+            %{
+              "slug" => "recipe",
+              "label" => "Receta",
+              "plural" => "Recetas",
+              "path" => "recipes",
+              "icon" => "hero-beaker",
+              "color" => "amber",
+              "meta_fields" => []
+            }
+          ]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      _ =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='page_types']")
+        |> render_click()
+
+      html =
+        view
+        |> form("form[phx-submit='add_custom_page_type']", %{
+          "workspace" => %{
+            "slug" => "recipe",
+            "label" => "Otra",
+            "plural" => "Otras",
+            "path" => "other-recipes",
+            "icon" => "",
+            "color" => "",
+            "meta_fields" => ""
+          }
+        })
+        |> render_submit()
+
+      assert html =~ "duplicate slug"
+
+      # Nothing was persisted
+      reloaded = Knowledge.get_workspace!(ws.id)
+      assert Dran.Workspace.custom_page_type_slugs(reloaded) == ["recipe"]
+    end
+
+    test "removing a custom type drops it from the effective list", %{conn: conn, ws: ws} do
+      {:ok, ws} =
+        Knowledge.update_workspace_settings(ws, %{
+          workspace_page_types: [
+            %{
+              "slug" => "recipe",
+              "label" => "Receta",
+              "plural" => "Recetas",
+              "path" => "recipes",
+              "icon" => "hero-beaker",
+              "color" => "amber",
+              "meta_fields" => []
+            }
+          ]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      _ =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='page_types']")
+        |> render_click()
+
+      html =
+        view
+        |> element("button[phx-click='remove_custom_page_type'][phx-value-slug='recipe']")
+        |> render_click()
+
+      assert html =~ t("Page type removed")
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+      assert Dran.Workspace.custom_page_types(reloaded) == []
+    end
+  end
+
   # Tests L222, L229, L236 → /admin/system
   test "the Sistema header exists with monitoring and instance sections", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/admin/system")

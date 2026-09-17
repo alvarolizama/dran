@@ -399,11 +399,47 @@ defmodule Dran.Knowledge do
   def page_types, do: Page.all_types()
 
   @doc """
-  Page types enabled for a context — all types minus the context's
-  `disabled_page_types`.
+  List of valid page types for a workspace — its effective types
+  (4 built-in ∪ custom). `page_types/0` stays as the built-in list for
+  compatibility.
+  """
+  def page_types(context), do: effective_page_types(context)
+
+  @doc """
+  The EFFECTIVE page types for a workspace: the 4 built-in types ∪ the
+  workspace's own custom types (`workspace_page_types`), ordered with the
+  built-ins first in their canonical order, then the custom ones in
+  declaration order.
+  """
+  def effective_page_types(nil), do: Page.all_types()
+
+  def effective_page_types(%Workspace{} = context) do
+    builtin = Page.all_types()
+    custom = Workspace.custom_page_type_slugs(context) -- builtin
+
+    builtin ++ custom
+  end
+
+  def effective_page_types(_other), do: Page.all_types()
+
+  @doc """
+  Whether `page_type` is one of the workspace's effective types — the
+  fail-closed gate used by `create_page/1` and `update_page/2`.
+  """
+  def effective_page_type?(nil, page_type), do: page_type in Page.all_types()
+
+  def effective_page_type?(%Workspace{} = context, page_type) when is_binary(page_type) do
+    page_type in effective_page_types(context)
+  end
+
+  def effective_page_type?(_context, _page_type), do: false
+
+  @doc """
+  Page types enabled for a context — the workspace's EFFECTIVE types (built-in
+  ∪ custom) minus the context's `disabled_page_types`.
   """
   def enabled_page_types(%Workspace{} = context) do
-    Page.all_types() -- (context.disabled_page_types || [])
+    effective_page_types(context) -- (context.disabled_page_types || [])
   end
 
   @doc "True if the given page type is enabled in the context."
@@ -434,7 +470,7 @@ defmodule Dran.Knowledge do
       |> default_owner_field("created_by", "system")
       |> ensure_title_and_slug()
 
-    with :ok <- check_page_type_enabled(attrs) do
+    with :ok <- check_page_type(attrs) do
       changeset = Page.create_changeset(attrs)
 
       case Repo.insert(changeset) do
@@ -455,20 +491,48 @@ defmodule Dran.Knowledge do
         {:error, changeset} ->
           {:error, changeset}
       end
+    else
+      # Fail-closed (M4): the changeset no longer validates `page_type`
+      # statically, so a type outside the workspace's EFFECTIVE types comes
+      # back as a changeset error on :page_type (not a silent accept).
+      {:error, :page_type_unknown} ->
+        {:error, Page.create_changeset(attrs) |> put_unknown_page_type_error()}
+
+      other ->
+        other
     end
   end
 
-  defp check_page_type_enabled(attrs) do
-    workspace_id = attrs["workspace_id"]
-    page_type = attrs["page_type"]
+  # A page must carry one of the workspace's effective types (4 built-in ∪
+  # custom). With no workspace (or an unresolvable one) only the built-in
+  # types are acceptable — never a blanket pass.
+  defp check_page_type(attrs, fallback_workspace_id \\ nil) do
+    page_type = attrs["page_type"] || attrs[:page_type]
+    workspace_id = attrs["workspace_id"] || attrs[:workspace_id] || fallback_workspace_id
+    context = workspace_id && Repo.get(Workspace, workspace_id)
 
-    with %Workspace{} = context when not is_nil(workspace_id) <-
-           workspace_id && Repo.get(Workspace, workspace_id),
-         false <- page_type_enabled?(context, page_type || "note") do
-      {:error, :page_type_disabled}
-    else
-      _ -> :ok
+    cond do
+      # Missing/non-binary page_type: let validate_required report it.
+      not is_binary(page_type) ->
+        :ok
+
+      not effective_page_type?(context, page_type) ->
+        {:error, :page_type_unknown}
+
+      not page_type_enabled?(context, page_type) ->
+        {:error, :page_type_disabled}
+
+      true ->
+        :ok
     end
+  end
+
+  defp put_unknown_page_type_error(changeset) do
+    Ecto.Changeset.add_error(
+      changeset,
+      :page_type,
+      "is not a page type of this workspace"
+    )
   end
 
   defp ensure_title_and_slug(attrs) do
@@ -576,6 +640,21 @@ defmodule Dran.Knowledge do
         lookup: fn candidate -> get_page_by_slug(candidate, page.workspace_id) end
       )
 
+    # Fail-closed (M4): a page_type change must land on one of the
+    # workspace's effective types, and not on a disabled one.
+    case check_page_type(attrs, page.workspace_id) do
+      :ok ->
+        do_update_page(page, attrs)
+
+      {:error, :page_type_unknown} ->
+        {:error, page |> Page.update_changeset(attrs) |> put_unknown_page_type_error()}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp do_update_page(%Page{} = page, attrs) do
     changeset = Page.update_changeset(page, attrs)
 
     case Repo.update(changeset) do

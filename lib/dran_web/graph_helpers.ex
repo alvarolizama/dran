@@ -27,6 +27,21 @@ defmodule DranWeb.GraphHelpers do
   def hidden_type_color, do: @hidden_type_color
 
   def type_colors, do: @type_colors
+
+  @doc """
+  Type colors for a workspace: the built-in registry map ∪ the workspace's
+  custom types (each with its declared color). Unknown types fall back to
+  `fallback_color/0` at the call site.
+  """
+  def type_colors(ws) do
+    custom =
+      for entry <- Dran.Workspace.custom_page_types(ws), into: %{} do
+        {entry["slug"], entry["color"]}
+      end
+
+    Map.merge(@type_colors, custom)
+  end
+
   def edge_colors, do: @edge_colors
 
   @doc """
@@ -53,6 +68,9 @@ defmodule DranWeb.GraphHelpers do
     depth = Keyword.get(opts, :depth, 3)
     max_nodes = Keyword.get(opts, :max_nodes, 200)
     scope_memory = Keyword.get(opts, :scope_memory, :all)
+    # Colors resolve against the workspace so a custom type's declared color
+    # paints its node; the global map stays the default.
+    type_colors = Keyword.get(opts, :type_colors, @type_colors)
 
     # Pre-loaded relations (first level) from the LiveView, or fetch them.
     preloaded = Keyword.get(opts, :relations)
@@ -100,7 +118,7 @@ defmodule DranWeb.GraphHelpers do
       slug: page.slug,
       label: page.title,
       type: page.page_type,
-      color: Map.get(@type_colors, page.page_type, @fallback_color)
+      color: Map.get(type_colors, page.page_type, @fallback_color)
     }
 
     # Collect all unique page ids (center + neighbors)
@@ -164,7 +182,7 @@ defmodule DranWeb.GraphHelpers do
               slug: p.slug,
               label: p.title,
               type: p.page_type,
-              color: Map.get(@type_colors, p.page_type, @fallback_color)
+              color: Map.get(type_colors, p.page_type, @fallback_color)
             }
 
           Map.has_key?(memory_neighbors, id) ->
@@ -175,7 +193,7 @@ defmodule DranWeb.GraphHelpers do
               slug: m.slug,
               label: m.title,
               type: "memory",
-              color: Map.get(@type_colors, "memory", @fallback_color)
+              color: Map.get(type_colors, "memory", @fallback_color)
             }
 
           true ->

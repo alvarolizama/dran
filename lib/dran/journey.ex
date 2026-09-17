@@ -130,18 +130,30 @@ defmodule Dran.Journey do
   @doc """
   Deterministic color for each page_type using golden-angle hue spacing.
 
-  Returns a map of %{type => "#RRGGBB"}.
+  Returns a map of %{type => "#RRGGBB"}. Pass a workspace (or its id) to color
+  the workspace's EFFECTIVE types (4 built-in ∪ custom) so custom types get a
+  stable slot instead of the fallback; `nil` keeps the built-in registry set.
   """
-  def type_colors do
-    # Golden-angle hue spacing (137.508°) over the registry types —
-    # ensures distinct colors for every page type shown in the journey.
-    Dran.PageRegistry.types()
+  def type_colors(context \\ nil) do
+    # Golden-angle hue spacing (137.508°) over the workspace's effective types
+    # — ensures distinct colors for every page type shown in the journey.
+    context
+    |> journey_types()
     |> Enum.with_index()
     |> Map.new(fn {type, i} ->
       hue = rem(round(i * 137.508), 360)
       {type, hsl_to_hex(hue, 55, 62)}
     end)
   end
+
+  defp journey_types(nil), do: Dran.PageRegistry.types()
+
+  defp journey_types(workspace_id) when is_binary(workspace_id) do
+    journey_types(Repo.get(Dran.Workspace, workspace_id))
+  end
+
+  defp journey_types(%Dran.Workspace{} = ws), do: Dran.Knowledge.effective_page_types(ws)
+  defp journey_types(_other), do: Dran.PageRegistry.types()
 
   # HSL → hex (h = 0..360, s/l = 0..100)
   defp hsl_to_hex(h, s, l) do

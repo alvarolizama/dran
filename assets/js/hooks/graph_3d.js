@@ -146,6 +146,14 @@ const Graph3D = {
     // "/plural/slug". The hook pluralizes the node type (routes use the
     // plural segment: /personal/notes/:slug).
     this.basePath = this.el.getAttribute("data-base-path") || null
+    // slug → path segment for the workspace's effective types (built-in ∪
+    // custom), shipped by the server: a custom type declares its own `path`,
+    // so the hook cannot derive it from the type name.
+    try {
+      this.typePaths = JSON.parse(this.el.getAttribute("data-type-paths") || "null")
+    } catch (_e) {
+      this.typePaths = null
+    }
 
     // URL for progressive graph JSON fetch. Panel uses the default
     // "/panel/graph-json"; the wiki graph passes its own context-aware URL
@@ -504,15 +512,16 @@ const Graph3D = {
     }
 
     // Determine the page path from the slug + type. Routes are
-    // /:workspace_slug/:type_path/:slug where type_path is the registry
-    // path (usually the plural). The fallback `${type}s` covers future
-    // types; unknown ones default to notes.
-    const typePaths = {
-      note: "notes", idea: "ideas", food: "food",
-      knowledge: "knowledge", technical: "technical",
-      concept: "concepts", entity: "entities", reference: "references"
+    // /:workspace_slug/:type_path/:slug. The server ships the authoritative
+    // slug → path map for the workspace's effective types (built-in ∪ custom);
+    // without it (or for an unknown type) fall back to the built-in table and
+    // then to `${type}s`.
+    const builtinTypePaths = {
+      note: "notes", concept: "concepts", entity: "entities", reference: "references"
     }
-    const typePath = typePaths[node.type] || (node.type ? `${node.type}s` : "notes")
+    const typePaths = this.typePaths || builtinTypePaths
+    const typePath =
+      typePaths[node.type] || builtinTypePaths[node.type] || (node.type ? `${node.type}s` : "notes")
     const href = this.basePath
       ? `${this.basePath}/${typePath}/${node.slug}`
       : `/${typePath}/${node.slug}`

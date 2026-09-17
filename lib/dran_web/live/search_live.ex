@@ -11,9 +11,9 @@ defmodule DranWeb.SearchLive do
 
   alias Dran.Knowledge
   alias Dran.Memory
+  alias Dran.Workspace
   alias DranWeb.GraphHelpers
   alias DranWeb.HTMLSanitizer
-  alias DranWeb.PageTypes
   alias DranWeb.Plugs.Auth
 
   @search_modes [
@@ -121,13 +121,14 @@ defmodule DranWeb.SearchLive do
   end
 
   # Graph-mode node click → workspace-scoped page route. Nodes carry the
-  # singular page_type; PageRegistry.path pluralizes it ("note" → "notes").
+  # singular page_type; the path comes from the workspace (a custom type
+  # declares its own), not from a blind pluralization.
   @impl true
   def handle_event("node_click", %{"slug" => slug} = params, socket) do
     ws_slug = socket.assigns[:workspace_slug]
 
     if ws_slug do
-      type_path = PageTypes.path(params["type"] || "note")
+      type_path = Workspace.page_type_path(socket.assigns[:context], params["type"] || "note")
       {:noreply, push_navigate(socket, to: "/#{ws_slug}/#{type_path}/#{slug}")}
     else
       {:noreply, socket}
@@ -225,7 +226,7 @@ defmodule DranWeb.SearchLive do
             <.results_header query={@query} count={length(@results)} />
 
             <div class="space-y-2">
-              <.result_card :for={result <- @results} result={result} />
+              <.result_card :for={result <- @results} result={result} context={@context} />
             </div>
           </div>
 
@@ -396,6 +397,7 @@ defmodule DranWeb.SearchLive do
   end
 
   attr :result, :map, required: true
+  attr :context, :map, default: nil
 
   defp result_card(assigns) do
     ~H"""
@@ -406,7 +408,7 @@ defmodule DranWeb.SearchLive do
           type_chip_bg(@result.page_type)
         ]}>
           <.icon
-            name={PageTypes.icon(@result.page_type)}
+            name={Workspace.page_type_icon(@context, @result.page_type)}
             class={["size-4", type_icon_color(@result.page_type)]}
           />
         </div>
@@ -415,7 +417,7 @@ defmodule DranWeb.SearchLive do
           <div class="flex items-start justify-between gap-3">
             <h3 class="font-medium text-sm break-words text-heading">
               <.link
-                navigate={page_path_for(@result)}
+                navigate={page_path_for(@result, @context)}
                 class="after:absolute after:inset-0 after:content-[''] hover:text-primary transition-colors"
               >
                 {@result.title}
@@ -425,7 +427,7 @@ defmodule DranWeb.SearchLive do
               "shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full",
               type_badge(@result.page_type)
             ]}>
-              {PageTypes.label(@result.page_type)}
+              {Workspace.page_type_label(@context, @result.page_type)}
             </span>
           </div>
 
@@ -453,11 +455,13 @@ defmodule DranWeb.SearchLive do
 
   # ── Render-only helpers ────────────────────────────────────────────────────
 
-  defp page_path_for(%{page_type: type, slug: slug})
+  # The workspace path segment wins: a custom type declares its own `path`,
+  # so the search result link must not pluralize the slug name.
+  defp page_path_for(%{page_type: type, slug: slug}, context)
        when is_binary(type) and is_binary(slug),
-       do: "/#{PageTypes.path(type)}/#{slug}"
+       do: "/#{Workspace.page_type_path(context, type)}/#{slug}"
 
-  defp page_path_for(_), do: "#"
+  defp page_path_for(_, _), do: "#"
 
   # Builds the merged graph data for "graph" search mode: a mini subgraph for
   # each result, merged into one set of nodes/edges (deduped by id). Uses a
@@ -477,7 +481,11 @@ defmodule DranWeb.SearchLive do
         relations = Map.get(relations_map, result.id, %{outbound: [], inbound: []})
 
         %{nodes: sub_nodes, edges: sub_edges} =
-          GraphHelpers.build_page_subgraph(result, relations: relations, max_neighbors: 50)
+          GraphHelpers.build_page_subgraph(result,
+            relations: relations,
+            type_colors: GraphHelpers.type_colors(socket.assigns[:context]),
+            max_neighbors: 50
+          )
 
         nodes_acc =
           Enum.reduce(sub_nodes, nodes_acc, fn node, acc ->

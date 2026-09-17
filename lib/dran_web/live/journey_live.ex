@@ -26,7 +26,7 @@ defmodule DranWeb.JourneyLive do
      assign(socket,
        context: context,
        journey: journey,
-       type_colors: Journey.type_colors(),
+       type_colors: Journey.type_colors(context),
        active_nav: "journey",
        page_title: gettext("Trayectoria")
      )}

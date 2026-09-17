@@ -168,11 +168,97 @@ defmodule Dran.WorkspaceTest do
       assert ws.is_default == false
       assert ws.visibility == "public"
       assert ws.enabled_features == %{}
+      assert ws.workspace_page_types == []
       refute ws.semantic_threshold_short
       refute ws.semantic_threshold_mid
       refute ws.semantic_threshold_long
       refute ws.entity_linker_enabled
       refute ws.worker_max_pages
+    end
+  end
+
+  describe "workspace_page_types — validation and normalization" do
+    @recipe %{
+      "slug" => "recipe",
+      "label" => "Receta",
+      "plural" => "Recetas",
+      "path" => "recipes",
+      "icon" => "hero-beaker",
+      "color" => "amber",
+      "meta_fields" => []
+    }
+
+    test "a well-formed ordered list is valid and preserved in order" do
+      trip = %{@recipe | "slug" => "trip", "path" => "trips"}
+
+      changeset =
+        Workspace.settings_changeset(%Workspace{}, %{workspace_page_types: [@recipe, trip]})
+
+      assert changeset.valid?
+      slugs = Workspace.custom_page_type_slugs(%Workspace{workspace_page_types: [@recipe, trip]})
+      assert slugs == ["recipe", "trip"]
+    end
+
+    test "icon/color default when omitted; label/plural default to the slug" do
+      minimal = %{"slug" => "recipe", "path" => "recipes"}
+
+      normalized = Workspace.normalize_page_types([minimal])
+      assert [entry] = normalized
+      assert entry["icon"] == "hero-document-text"
+      assert entry["color"] == "#94A3B8"
+      assert entry["meta_fields"] == []
+    end
+
+    test "a duplicated slug is rejected" do
+      changeset =
+        Workspace.settings_changeset(%Workspace{}, %{
+          workspace_page_types: [@recipe, %{@recipe | "path" => "other"}]
+        })
+
+      refute changeset.valid?
+      assert %{workspace_page_types: _} = errors_on(changeset)
+    end
+
+    test "a duplicated path is rejected" do
+      changeset =
+        Workspace.settings_changeset(%Workspace{}, %{
+          workspace_page_types: [@recipe, %{@recipe | "slug" => "dish"}]
+        })
+
+      refute changeset.valid?
+      assert %{workspace_page_types: _} = errors_on(changeset)
+    end
+
+    test "a slug colliding with a built-in type is rejected" do
+      changeset =
+        Workspace.settings_changeset(%Workspace{}, %{
+          workspace_page_types: [%{@recipe | "slug" => "note"}]
+        })
+
+      refute changeset.valid?
+      assert %{workspace_page_types: _} = errors_on(changeset)
+    end
+
+    test "slug format is enforced (lowercase identifier)" do
+      changeset =
+        Workspace.settings_changeset(%Workspace{}, %{
+          workspace_page_types: [%{@recipe | "slug" => "Receta Mía"}]
+        })
+
+      refute changeset.valid?
+      assert %{workspace_page_types: _} = errors_on(changeset)
+    end
+
+    test "slug and path are both required per entry" do
+      for attrs <- [Map.delete(@recipe, "slug"), Map.delete(@recipe, "path")] do
+        changeset = Workspace.settings_changeset(%Workspace{}, %{workspace_page_types: [attrs]})
+        refute changeset.valid?
+        assert %{workspace_page_types: _} = errors_on(changeset)
+      end
+    end
+
+    test "the empty list (default) is valid" do
+      assert Workspace.settings_changeset(%Workspace{}, %{workspace_page_types: []}).valid?
     end
   end
 

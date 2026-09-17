@@ -543,10 +543,24 @@ defmodule DranWeb.PageComponents do
   attr :class, :string, default: ""
   attr :style, :string, default: ""
 
+  attr :type_paths, :map,
+    default: nil,
+    doc:
+      "slug → URL path segment for the workspace's effective types (incl. custom). nil = hook's built-in table"
+
   def graph_3d(assigns) do
     # Build the JSON data for the hook
     graph_data = %{nodes: assigns.nodes, edges: assigns.edges}
     assigns = assign(assigns, :graph_json, Jason.encode!(graph_data))
+
+    # A custom page type declares its own `path`, so the hook cannot derive the
+    # URL from the type name: the server ships the authoritative map.
+    assigns =
+      assign(
+        assigns,
+        :type_paths_json,
+        assigns.type_paths && Jason.encode!(assigns.type_paths)
+      )
     # nil attribute values are omitted by HEEx, so passing nil skips the hook's
     # client-side type filter (subgraphs always render everything).
     assigns =
@@ -567,6 +581,7 @@ defmodule DranWeb.PageComponents do
         data-graph={@graph_json}
         data-visible-types={@visible_types_json}
         data-base-path={@base_path}
+        data-type-paths={@type_paths_json}
         data-graph-url={@graph_url}
         style="width: 100%; height: 100%; min-height: 300px;"
       />
