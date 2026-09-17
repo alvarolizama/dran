@@ -7,7 +7,49 @@ defmodule DranWeb.PageListComponents do
   use Gettext, backend: DranWeb.Gettext
   import DranWeb.CoreComponents, only: [icon: 1]
 
+  alias Dran.Workspace
   alias DranWeb.PageTypes
+
+  # ── Workspace-aware UI helpers ─────────────────────────────────────────────
+  #
+  # The path/icon/label/plural of a page type are per-workspace now: a custom
+  # type declares its own `path` (which is NOT necessarily `slug <> "s"`), so
+  # reading them from the global registry produced dead links and generic
+  # glyphs for every custom type. `Workspace.page_type_*` resolve custom types
+  # first and fall back to the registry.
+  #
+  # A nil `page_type` means the "All Pages" view: keep the global fallback
+  # (`PageTypes.path(nil) == "notes"`) so the New CTA still targets a real
+  # route.
+
+  defp ui_path(_context, nil), do: PageTypes.path(nil)
+  defp ui_path(context, type), do: Workspace.page_type_path(context, type)
+
+  # label/plural are Gettext-localized for built-ins ("Note" → "Nota") but a
+  # custom type's label is the literal string its author typed (already in their
+  # language), so route built-ins through PageTypes (localized) and custom types
+  # through Workspace (raw declared label). page_type_path/icon are identical
+  # for built-ins either way, so they go straight through Workspace.
+  defp ui_plural(context, type) do
+    if Workspace.custom_page_type?(context, type),
+      do: Workspace.page_type_plural(context, type),
+      else: PageTypes.plural(type)
+  end
+
+  defp ui_label(context, type) do
+    if Workspace.custom_page_type?(context, type),
+      do: Workspace.page_type_label(context, type),
+      else: PageTypes.label(type)
+  end
+
+  defp ui_icon(context, type), do: Workspace.page_type_icon(context, type)
+
+  # Same URL shape as `DranWeb.PageTypes.page_show_path/2` but built from the
+  # workspace's own path for the page's type.
+  defp show_path(context, page, nil), do: "/#{ui_path(context, page.page_type)}/#{page.slug}"
+
+  defp show_path(context, page, workspace_slug),
+    do: "/#{workspace_slug}/#{ui_path(context, page.page_type)}/#{page.slug}"
 
   # Returns the empty-state metadata (title, description, cta) for a page type.
   # Falls back to the default "All Pages" state when `page_type` is `nil`.
@@ -64,6 +106,10 @@ defmodule DranWeb.PageListComponents do
   attr :archived_filter, :string, default: "all"
   attr :page_type, :string, default: nil
   attr :workspace_slug, :string, default: "personal"
+
+  # The resolved %Workspace{} (or nil) — needed so custom page types render
+  # with their own path/icon/label instead of the built-in registry defaults.
+  attr :context, :any, default: nil
   # Pagination state (driven by the parent LiveView).
   attr :show_archived, :boolean, default: false
   attr :total_count, :integer, default: 0
@@ -74,14 +120,14 @@ defmodule DranWeb.PageListComponents do
     <div class="p-6">
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-title">
-          {if @page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")}
+          {if @page_type, do: ui_plural(@context, @page_type), else: gettext("All Pages")}
         </h1>
         <div class="flex gap-2">
           <.link
             :if={@page_type}
             navigate={
               "/#{@workspace_slug}/collections/new?type=#{@page_type}&title=" <>
-                URI.encode_www_form("#{gettext("All")} #{PageTypes.plural(@page_type)}")
+                URI.encode_www_form("#{gettext("All")} #{ui_plural(@context, @page_type)}")
             }
             class="btn btn-ghost btn-sm"
             title={gettext("Save as smart collection")}
@@ -103,11 +149,11 @@ defmodule DranWeb.PageListComponents do
               class="w-4 h-4"
             />
             {if @show_archived,
-              do: if(@page_type, do: PageTypes.plural(@page_type), else: gettext("All Pages")),
+              do: if(@page_type, do: ui_plural(@context, @page_type), else: gettext("All Pages")),
               else: gettext("Archived")} ({if @show_archived, do: @total_count, else: @total_archived})
           </button>
           <.link
-            patch={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}?new=true"}
+            patch={"/#{@workspace_slug}/#{ui_path(@context, @page_type)}?new=true"}
             class="btn btn-primary btn-sm"
             data-testid="new-page-button"
           >
@@ -144,7 +190,7 @@ defmodule DranWeb.PageListComponents do
                   "border-base-300 text-base-content/60 hover:border-primary/40 hover:text-base-content"
               ]}
             >
-              {if type == "all", do: gettext("All"), else: PageTypes.plural(type)}
+              {if type == "all", do: gettext("All"), else: ui_plural(@context, type)}
             </button>
           </div>
           <div class="px-4 py-2 space-y-1">
@@ -154,17 +200,17 @@ defmodule DranWeb.PageListComponents do
               data-testid={"archived-page-" <> page.slug}
             >
               <.icon
-                name={PageTypes.icon(page.page_type)}
+                name={ui_icon(@context, page.page_type)}
                 class="size-4 text-base-content/40 shrink-0"
               />
               <.link
-                navigate={PageTypes.page_show_path(page, @workspace_slug)}
+                navigate={show_path(@context, page, @workspace_slug)}
                 class="text-sm flex-1 truncate hover:text-primary transition-colors"
               >
                 {page.title}
               </.link>
               <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/50">
-                {PageTypes.label(page.page_type)}
+                {ui_label(@context, page.page_type)}
               </span>
               <span :if={page.updated_at} class="text-caption shrink-0">
                 {Calendar.strftime(page.updated_at, "%b %d")}
@@ -207,7 +253,7 @@ defmodule DranWeb.PageListComponents do
           <div class="flex justify-center">
             <div class="size-20 rounded-full bg-base-200 flex items-center justify-center">
               <.icon
-                name={if @page_type, do: PageTypes.icon(@page_type), else: "hero-sparkles"}
+                name={if @page_type, do: ui_icon(@context, @page_type), else: "hero-sparkles"}
                 class="size-10 text-base-content/40"
               />
             </div>
@@ -217,7 +263,7 @@ defmodule DranWeb.PageListComponents do
             <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
           </div>
           <.link
-            patch={"/#{@workspace_slug}/#{PageTypes.path(@page_type)}?new=true"}
+            patch={"/#{@workspace_slug}/#{ui_path(@context, @page_type)}?new=true"}
             class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
           >
             <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
@@ -230,6 +276,7 @@ defmodule DranWeb.PageListComponents do
             page={page}
             page_type={@page_type}
             workspace_slug={@workspace_slug}
+            context={@context}
           />
         </div>
 
@@ -251,11 +298,12 @@ defmodule DranWeb.PageListComponents do
 
   # Card badge: the page type label ("Nota"). Classification beyond the type
   # lives in tags and `meta.props` — pages carry no `meta.kind`.
-  defp type_badge_label(%{page_type: page_type}), do: PageTypes.label(page_type)
+  defp type_badge_label(context, %{page_type: page_type}), do: ui_label(context, page_type)
 
   attr :page, :map, required: true
   attr :page_type, :string, default: nil
   attr :workspace_slug, :string, default: "personal"
+  attr :context, :any, default: nil
 
   defp page_card(assigns) do
     ~H"""
@@ -265,16 +313,16 @@ defmodule DranWeb.PageListComponents do
     >
       <div class="flex items-center gap-3">
         <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
-          <.icon name={PageTypes.icon(@page.page_type)} class="size-4 text-primary" />
+          <.icon name={ui_icon(@context, @page.page_type)} class="size-4 text-primary" />
         </span>
         <.link
-          navigate={PageTypes.page_show_path(@page, @workspace_slug)}
+          navigate={show_path(@context, @page, @workspace_slug)}
           class="font-medium leading-snug flex-1 hover:text-primary transition-colors"
         >
           {@page.title}
         </.link>
         <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
-          {type_badge_label(@page)}
+          {type_badge_label(@context, @page)}
         </span>
       </div>
       <p :if={@page.summary} class="text-sm text-base-content/60 line-clamp-2 mt-2">

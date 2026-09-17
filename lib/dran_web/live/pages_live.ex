@@ -122,6 +122,7 @@ defmodule DranWeb.PagesLive do
           archived_filter={@archived_filter}
           page_type={@page_type}
           workspace_slug={@workspace_slug}
+          context={@context}
           show_archived={@show_archived}
           total_count={length(@pages)}
           total_archived={length(@archived_pages)}
