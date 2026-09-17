@@ -538,10 +538,22 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <.form for={@custom_type_form} phx-submit="add_custom_page_type" class="space-y-3">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <.input field={@custom_type_form[:slug]} label={gettext("Slug")} placeholder="recipe" />
-            <.input field={@custom_type_form[:path]} label={gettext("URL path")} placeholder="recipes" />
+            <.input
+              field={@custom_type_form[:path]}
+              label={gettext("URL path")}
+              placeholder="recipes"
+            />
             <.input field={@custom_type_form[:label]} label={gettext("Label")} placeholder="Receta" />
-            <.input field={@custom_type_form[:plural]} label={gettext("Plural")} placeholder="Recetas" />
-            <.input field={@custom_type_form[:icon]} label={gettext("Icon")} placeholder="hero-beaker" />
+            <.input
+              field={@custom_type_form[:plural]}
+              label={gettext("Plural")}
+              placeholder="Recetas"
+            />
+            <.input
+              field={@custom_type_form[:icon]}
+              label={gettext("Icon")}
+              placeholder="hero-beaker"
+            />
             <.input field={@custom_type_form[:color]} label={gettext("Color")} placeholder="amber" />
           </div>
 

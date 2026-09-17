@@ -1,9 +1,13 @@
+> **Desactualizado.** El modelo vigente son **4 tipos built-in** (`note`,
+> `reference`, `entity`, `concept`) **más tipos custom por workspace**, y
+> `meta.kind` **ya no existe** — ver `DESIGN.md` §D7. El inventario de tipos y
+> kinds de este documento se reescribe en la ola de docs.
+
 # Page types and kinds
 
 Single source of truth: `Dran.PageRegistry` (`lib/dran/page_registry.ex`).
-This document explains **how to use each type and kind** — the registry
-defines them; this page tells you when to pick which. It describes only what
-currently exists in the codebase.
+This document explains **how to use each type** — the registry defines them;
+this page tells you when to pick which.
 
 Every page also accepts `meta.props` — a free-form key-value bag
 (e.g. `%{"role" => "sales"}`) that survives round-trips and is indexed.

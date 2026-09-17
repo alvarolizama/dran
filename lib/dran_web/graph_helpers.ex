@@ -11,15 +11,27 @@ defmodule DranWeb.GraphHelpers do
 
   @type_colors Dran.PageRegistry.type_colors()
 
+  # ── Paleta nombrada ──────────────────────────────────────────────────────
+  #
+  # Los colores de un TIPO de página no viven acá: un built-in los declara en
+  # `Dran.PageRegistry` y un tipo custom en la config del workspace (su
+  # `color`). Viajan en el dato del tipo, nunca en una tabla de casos.
+  #
+  # Acá viven sólo los colores que no son de un tipo: el de cada relación, el
+  # neutro (tipo sin color declarado / payload incompleto) y el de los tipos
+  # ocultos en la leyenda. Único lugar donde estos hex existen en Elixir.
+
+  @neutral_color "#94A3B8"
+
   @edge_colors %{
-    "related" => "#94A3B8",
+    "related" => @neutral_color,
     "contradicts" => "#EF4444",
     "supersedes" => "#F59E0B",
     "part_of" => "#10B981",
     "informs" => "#A78BFA"
   }
 
-  @fallback_color "#94A3B8"
+  @fallback_color @neutral_color
   # Color de los tipos OCULTOS en la leyenda (no se pintan en el grafo).
   @hidden_type_color "#64748B"
 

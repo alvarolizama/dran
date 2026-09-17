@@ -36,5 +36,5 @@ provides_tools:
 # this manifest; `api_key` resolves from DRAN_API_KEY (the profile .env).
 requires_env:
   - name: DRAN_API_KEY
-    description: "Dran API key for this profile (Dran → Settings → Agents → Create key). Shared by the memory provider and the knowledge tools: one key, one actor."
+    description: "Dran API key for this profile (Dran → Settings → API Keys → Create key). Shared by the memory provider and the knowledge tools: one key, one actor."
     prompt: "Dran API key (dran_…)"

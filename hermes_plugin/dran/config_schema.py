@@ -8,7 +8,7 @@ not import the agent runtime). Field semantics match the memory provider:
   (pages, relations, workers). One setting, one workspace: a page created by
   ``dran_create_page`` lands in the same workspace the facts go to. Made
   here, in Hermes, from the workspaces the agent's Dran API key may reach
-  (Settings → Agents matrix); the provider validates it against
+  (Settings → API Keys matrix); the provider validates it against
   ``GET /api/agent/config`` and falls back to the first permitted workspace
   if the key loses access.
 * ``api_key`` — secret, lives in the profile ``.env`` (single source of truth,
@@ -34,10 +34,10 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             key="api_key",
             label="API key",
             kind=KIND_SECRET,
-            description="Dran API key per agent (Settings → Agents → Create key). "
+            description="Dran API key per agent (Settings → API Keys → Create key). "
             "Attribution: every stored fact is credited to this key's agent.",
             env_key="DRAN_API_KEY",
-            placeholder="dran_… (paste from Dran → Settings → Agents)",
+            placeholder="dran_… (paste from Dran → Settings → API Keys)",
             inline=True,
             group="Connection",
         ),
@@ -58,7 +58,7 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             description="Workspace used by BOTH surfaces of this plugin: the memory "
             "provider (facts) and the knowledge tools (pages, relations, workers). "
             "A page created by dran_create_page lands in this same workspace. Must "
-            "be one the API key can reach (Dran → Settings → Agents matrix).",
+            "be one the API key can reach (Dran → Settings → API Keys matrix).",
             default="personal",
             placeholder="personal",
             inline=True,

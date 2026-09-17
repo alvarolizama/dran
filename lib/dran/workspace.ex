@@ -402,13 +402,14 @@ defmodule Dran.Workspace do
     end
   end
 
-  def page_type_ui(_ws, type), do: %{
-    path: "pages",
-    label: to_string(type),
-    plural: to_string(type),
-    icon: @default_custom_icon,
-    color: @default_custom_color
-  }
+  def page_type_ui(_ws, type),
+    do: %{
+      path: "pages",
+      label: to_string(type),
+      plural: to_string(type),
+      icon: @default_custom_icon,
+      color: @default_custom_color
+    }
 
   @doc "URL path segment for a page type in this workspace."
   def page_type_path(ws, type), do: page_type_ui(ws, type).path
@@ -432,9 +433,10 @@ defmodule Dran.Workspace do
   """
   def page_type_by_path(ws, path_segment) when is_binary(path_segment) do
     case Dran.PageRegistry.type_from_path(path_segment) do
-      nil -> Enum.find_value(custom_page_types(ws), fn e ->
-               if e["path"] == path_segment, do: e["slug"]
-             end)
+      nil ->
+        Enum.find_value(custom_page_types(ws), fn e ->
+          if e["path"] == path_segment, do: e["slug"]
+        end)
 
       type ->
         type

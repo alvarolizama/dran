@@ -68,11 +68,11 @@ defmodule DranWeb.Admin do
 
   ## Example
 
-      <.admin_section title={gettext("Existing Users")} icon="hero-user-group">
+      <.section title={gettext("Existing Users")} icon="hero-user-group">
         <div class="overflow-x-auto">
           <table class="table table-sm">...</table>
         </div>
-      </.admin_section>
+      </.section>
   """
   attr :title, :string, required: true
   attr :caption, :string, default: nil

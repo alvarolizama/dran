@@ -66,7 +66,7 @@ El registry se declara "single source of truth", pero el vocabulario se copia:
 | `lib/dran_web/live/search_live.ex` | 509-538 | `type_chip_bg/1`, `type_icon_color/1`, `type_badge/1` — una cláusula por tipo **+ una cláusula `"project"` muerta** (el tipo se eliminó) |
 | `hermes_plugin/dran/__init__.py` | ~983, ~1014 | la lista de tipos en la descripción de `dran_list_pages` y `dran_create_page` |
 | `docs/page-types.md` | — | el documento entero |
-| `README.md` | ~114, ~131 | "Settings → Agents", tabla de tipos |
+| `README.md` | ~114, ~131 | el label viejo de la pestaña de API keys, tabla de tipos |
 
 **Código muerto confirmado:** en el propio registry, `agent_description/0` (l.395),
 `agent_enum/0` (l.415) y `agent_meta_description/0` (l.420) **no tienen ningún
@@ -147,7 +147,7 @@ api_keys.actor_id ──► mapa sintético de auth          (router.ex:232-247)
   l.462-500) **y** la gestión de keys (`create_api_key`, `edit_agent_access`,
   `revoke/restore/regenerate/delete_api_key`, l.113-365).
 - `requires_env` del plugin (`plugin.yaml`) le dice al usuario:
-  *"Dran → Settings → Agents → Create key"*.
+  *"Dran → Settings → API Keys → Create key"*.
 - `agent_config_controller.ex` devuelve `actor.id/name/display_name` + workspaces y
   `docs/api.md:84-95` lo documenta como endpoint de agente.
 - `ContentVisibility.scope/3` (l.87-96) tiene **dos ramas dedicadas al actor de la key**
@@ -182,7 +182,7 @@ La cadena completa key→actor→atribución, con los puntos que se borran y los
 | `lib/dran_web/controllers/api/agent_config_controller.ex:14,22,32,34` | guarda por `user[:actor]`; devuelve `agent: {id,name,display_name}` | adaptar: guardar por key, exponer `name` + `workspaces` + **tipos del workspace** (§5.3) |
 | `docs/api.md:59-60,88-95` | "created_by/updated_by derivados del actor del token"; endpoint de agente | adaptar |
 | `hermes_plugin/dran/__init__.py:182-183` | `_headers()` añade `X-Hermes-Agent` | **conservar** (ya es la identidad) |
-| `hermes_plugin/dran/plugin.yaml:39`, `config_schema.py:11,37,40,61`, `README.md:23,30,117,123-125` | texto "Settings → Agents" | adaptar a "Settings → API Keys" |
+| `hermes_plugin/dran/plugin.yaml:39`, `config_schema.py:11,37,40,61`, `README.md:23,30,117,123-125` | el label viejo de la pestaña de API keys | adaptado a "Settings → API Keys" |
 
 **Punto crítico de diseño [inferido, no verificado en runtime]:** `resolve_created_by/1`
 recibe solo el mapa sintético, que **no lleva headers**. El header hay que inyectarlo una
@@ -587,7 +587,8 @@ Lo que **corregí** de mi propia primera pasada de D8, al verificar con grep:
 5. **`graph_3d.js`** tiene el mapa `typePaths` + fallback `${type}s`: un tipo custom sin
    entrada en el mapa cae al fallback y genera una URL rota silenciosa.
 6. **El plugin Hermes hardcodea la lista de tipos** en dos descripciones de tools
-   (`__init__.py` ~983, ~1014) y su `plugin.yaml` apunta al usuario a "Settings → Agents".
+   (`__init__.py` ~983, ~1014) y su `plugin.yaml` apuntaba al usuario a la pestaña
+   con su label viejo.
 7. **El ledger `.riel/` está en `.gitignore`** y no debe entrar en ningún commit.
 
 ---

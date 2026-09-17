@@ -20,14 +20,14 @@ perfil — `DRAN_API_KEY`, single source of truth para todas las tools).
 El workspace donde este agente guarda sus facts se configura en el panel
 (arriba) o en `dran/config.json` (`"workspace": "..."`), eligiendo entre los
 que la API key del agente puede alcanzar (matriz workspaces×nivel en Dran →
-Settings → Agents). Al arrancar — y cada 5 min — el plugin consulta
+Settings → API Keys). Al arrancar — y cada 5 min — el plugin consulta
 `GET /api/agent/config` para **validar** la elección: si la key ya no alcanza
 ese workspace (la matriz cambió en Dran), cae al primero permitido y lo
 loguea con warning. Si Dran no responde, se usa la config local sin validar.
 
 ## Setup (por perfil de Hermes)
 
-1. En Dran → Settings → Agents: crea el agente y su key eligiendo la matriz
+1. En Dran → Settings → API Keys: crea el agente y su key eligiendo la matriz
    workspaces×nivel (la key necesita `write` en el workspace de memoria; el
    `created_by` de cada recuerdo se atribuye server-side a la key que lo
    guardó).

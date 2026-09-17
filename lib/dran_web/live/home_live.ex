@@ -466,7 +466,7 @@ defmodule DranWeb.HomeLive do
     ~H"""
     <div class="px-6 py-8">
       <div class="mb-6">
-        <h1 class="text-2xl font-bold">{gettext("Search results")}</h1>
+        <h1 class="text-title">{gettext("Search results")}</h1>
         <p class="text-base-content/60 mt-1">
           {gettext("Results for")} <span class="font-medium">"{@search_query}"</span>
         </p>
@@ -513,7 +513,7 @@ defmodule DranWeb.HomeLive do
     ~H"""
     <div class="px-6 py-10">
       <div class="mb-8">
-        <h1 class="text-3xl font-bold tracking-tight">Wiki</h1>
+        <h1 class="text-display">Wiki</h1>
         <p class="text-base-content/60 mt-2">
           {gettext("Browse knowledge bases. Pick a workspace to start exploring.")}
         </p>
@@ -564,7 +564,7 @@ defmodule DranWeb.HomeLive do
     <div class="px-6 py-8 space-y-10">
       <%!-- Context header --%>
       <div>
-        <h1 class="text-3xl font-bold tracking-tight">{@workspace.name}</h1>
+        <h1 class="text-display">{@workspace.name}</h1>
       </div>
 
       <%!-- Pinned pages --%>
@@ -576,7 +576,9 @@ defmodule DranWeb.HomeLive do
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <.link
             :for={page <- @pinned_pages}
-            navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"}
+            navigate={
+              ~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"
+            }
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
           >
             <div class="card-body p-5">
@@ -714,7 +716,7 @@ defmodule DranWeb.HomeLive do
           <span>/</span>
           <span>{Workspace.page_type_label(@workspace, @page_type)}</span>
         </div>
-        <h1 class="text-2xl font-bold">{Workspace.page_type_plural(@workspace, @page_type)}</h1>
+        <h1 class="text-title">{Workspace.page_type_plural(@workspace, @page_type)}</h1>
       </div>
 
       <div :if={@grouped_pages == []} class="text-center py-12">
@@ -735,7 +737,9 @@ defmodule DranWeb.HomeLive do
         <div class="space-y-1">
           <.link
             :for={page <- pages}
-            navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, @page_type)}/#{page.slug}"}
+            navigate={
+              ~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, @page_type)}/#{page.slug}"
+            }
             class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
           >
             <div class="flex items-center gap-2">
@@ -787,7 +791,7 @@ defmodule DranWeb.HomeLive do
             <.icon name="hero-bookmark" class="size-4" />
           </span>
         </div>
-        <h1 class="text-3xl font-bold tracking-tight">{@page.title}</h1>
+        <h1 class="text-title">{@page.title}</h1>
         <p :if={@page.summary} class="text-base-content/60 mt-2">{@page.summary}</p>
         <div class="flex flex-wrap gap-1.5 mt-3">
           <span
@@ -820,7 +824,9 @@ defmodule DranWeb.HomeLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.outbound}
-              navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, rel.target.page_type)}/#{rel.target.slug}"}
+              navigate={
+                ~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, rel.target.page_type)}/#{rel.target.slug}"
+              }
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -840,7 +846,9 @@ defmodule DranWeb.HomeLive do
           <div class="space-y-1">
             <.link
               :for={rel <- @relations.inbound}
-              navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, rel.source.page_type)}/#{rel.source.slug}"}
+              navigate={
+                ~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, rel.source.page_type)}/#{rel.source.slug}"
+              }
               class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors text-sm group"
             >
               <div class="flex items-center gap-2">
@@ -870,7 +878,7 @@ defmodule DranWeb.HomeLive do
           <span>/</span>
           <span>{gettext("Collection")}</span>
         </div>
-        <h1 class="text-2xl font-bold">{@collection.name}</h1>
+        <h1 class="text-title">{@collection.name}</h1>
         <p :if={@collection.summary} class="text-base-content/60 mt-2">
           {@collection.summary}
         </p>
@@ -893,7 +901,9 @@ defmodule DranWeb.HomeLive do
       <div class="space-y-2">
         <.link
           :for={page <- Enum.sort_by(@results, & &1.title, :asc)}
-          navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"}
+          navigate={
+            ~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"
+          }
           class="block p-3 rounded-lg border border-base-300 hover:bg-base-200 transition cursor-pointer group"
         >
           <div class="flex items-center justify-between">
@@ -1054,7 +1064,7 @@ defmodule DranWeb.HomeLive do
         <span>{@letter}</span>
       </div>
 
-      <h1 class="text-2xl font-bold mb-6">{@letter}</h1>
+      <h1 class="text-title mb-6">{@letter}</h1>
 
       <%!-- Alphabet bar --%>
       <div class="flex flex-wrap gap-1 mb-8">
@@ -1080,12 +1090,17 @@ defmodule DranWeb.HomeLive do
       <div :if={@pages != []} class="space-y-1">
         <.link
           :for={page <- @pages}
-          navigate={~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"}
+          navigate={
+            ~p"/#{@workspace.slug}/#{Workspace.page_type_path(@workspace, page.page_type)}/#{page.slug}"
+          }
           class="block px-3 py-2 rounded-lg hover:bg-base-200 transition-colors group"
         >
           <div class="flex items-center gap-2">
             <span class="font-medium group-hover:text-primary transition-colors">{page.title}</span>
-            <span class="text-xs text-base-content/40">({Workspace.page_type_label(@workspace, page.page_type)})</span>
+            <span class="text-xs text-base-content/40">({Workspace.page_type_label(
+              @workspace,
+              page.page_type
+            )})</span>
             <span :if={page.pinned} class="text-amber-500">
               <.icon name="hero-star" class="size-3" />
             </span>
@@ -1319,7 +1334,9 @@ defmodule DranWeb.HomeLive do
 
       Enum.reduce(slugs, %{}, fn slug, acc ->
         case Map.get(slug_types, slug) do
-          nil -> acc
+          nil ->
+            acc
+
           page_type ->
             Map.put(
               acc,

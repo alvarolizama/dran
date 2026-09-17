@@ -178,7 +178,9 @@ defmodule Dran.KnowledgePageTypesTest do
       duplicate = %{@recipe | "path" => "other-path"}
 
       assert {:error, changeset} =
-               Knowledge.update_workspace_settings(ws, %{workspace_page_types: [@recipe, duplicate]})
+               Knowledge.update_workspace_settings(ws, %{
+                 workspace_page_types: [@recipe, duplicate]
+               })
 
       assert message = custom_type_error(changeset)
       assert message =~ "duplicate slug"
@@ -189,7 +191,9 @@ defmodule Dran.KnowledgePageTypesTest do
       same_path = %{@recipe | "slug" => "dish"}
 
       assert {:error, changeset} =
-               Knowledge.update_workspace_settings(ws, %{workspace_page_types: [@recipe, same_path]})
+               Knowledge.update_workspace_settings(ws, %{
+                 workspace_page_types: [@recipe, same_path]
+               })
 
       assert message = custom_type_error(changeset)
       assert message =~ "duplicate path"

@@ -45,6 +45,12 @@ function cssColor(varName, fallback) {
   return toRgb(resolved) || fallback
 }
 
+// ── Named palette ─────────────────────────────────────────────────────
+// Node and edge colors arrive in the data, computed server-side from the
+// type registry / workspace config (never a per-slug table). This neutral
+// only covers an incomplete payload; it mirrors GraphHelpers.fallback_color/0.
+const NEUTRAL_COLOR = "#94A3B8"
+
 // Normalise any CSS color string (incl. oklch/lab) to "rgb(r, g, b)".
 function toRgb(color) {
   const canvas = document.createElement("canvas")
@@ -187,7 +193,7 @@ const Graph3D = {
       .linkDirectionalParticles(link => this.scale.particles === 0 ? 0 : (this.highlightLinks.has(link) ? this.scale.particles * 2 : this.scale.particles))
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleSpeed(0.006)
-      .linkDirectionalParticleColor(link => link.color || "#94A3B8")
+      .linkDirectionalParticleColor(link => link.color || NEUTRAL_COLOR)
       // Interaction: hover to highlight neighborhood (debounced 300ms), click to
       // navigate to the page. No click-to-select — hover replaces it.
       .onNodeHover((node, prevNode) => this.handleNodeHover(node, prevNode))
@@ -285,7 +291,7 @@ const Graph3D = {
 
   buildNodeObject(node) {
     const group = new THREE.Group()
-    const color = new THREE.Color(node.color || "#94A3B8")
+    const color = new THREE.Color(node.color || NEUTRAL_COLOR)
 
     // Sphere — sized by connections. Segment count follows the adaptive
     // quality scale: high-poly spheres on small graphs, low-poly on big ones
@@ -348,7 +354,7 @@ const Graph3D = {
       slug: n.slug,
       label: n.label || "",
       type: n.type,
-      color: n.color || "#94A3B8",
+      color: n.color || NEUTRAL_COLOR,
       connections: 0
     }))
 
@@ -357,7 +363,7 @@ const Graph3D = {
     const links = (data.edges || []).map(e => ({
       source: String(e.source_id),
       target: String(e.target_id),
-      color: e.color || "#94A3B8"
+      color: e.color || NEUTRAL_COLOR
     }))
 
     // Count connections per node (for sizing)
@@ -607,9 +613,9 @@ const Graph3D = {
   },
 
   linkDisplayColor(link) {
-    if (!this.selectedNode) return link.color || "#94A3B8"
+    if (!this.selectedNode) return link.color || NEUTRAL_COLOR
     return this.highlightLinks.has(link)
-      ? link.color || "#94A3B8"
+      ? link.color || NEUTRAL_COLOR
       : "rgba(148, 163, 184, 0.05)"
   },
 

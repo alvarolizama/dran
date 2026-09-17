@@ -31,7 +31,7 @@ defmodule DranWeb.SetupLive do
     <div class="min-h-screen flex items-center justify-center bg-base-200">
       <div class="card w-full max-w-sm bg-base-100 shadow-xl border border-base-300">
         <div class="card-body">
-          <h1 class="text-2xl font-bold text-center mb-1">Dran</h1>
+          <h1 class="text-display text-center mb-1">Dran</h1>
           <p class="text-sm text-base-content/60 text-center mb-6">
             Create your admin account to get started
           </p>

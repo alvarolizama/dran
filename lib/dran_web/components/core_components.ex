@@ -324,6 +324,10 @@ defmodule DranWeb.CoreComponents do
 
   @doc """
   Renders a header with title.
+
+  La escala tipográfica es la de la app, no la del scaffold: en Dran el título
+  usa `text-title` (D1). Es un override de **Custom** sobre el `<.header>` del
+  Commons.
   """
   slot :inner_block, required: true
   slot :subtitle
@@ -333,7 +337,7 @@ defmodule DranWeb.CoreComponents do
     ~H"""
     <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4"]}>
       <div>
-        <h1 class="text-lg font-semibold leading-8">
+        <h1 class="text-title">
           {render_slot(@inner_block)}
         </h1>
         <p :if={@subtitle != []} class="text-sm text-base-content/70">

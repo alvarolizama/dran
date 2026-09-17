@@ -161,7 +161,7 @@ defmodule DranWeb.PagesLive do
       nil ->
         # Unknown type path for THIS workspace — a retired built-in path or a
         # path no custom type declares. 404, no redirect.
-        {:ok, raise DranWeb.NotFoundError}
+        {:ok, raise(DranWeb.NotFoundError)}
 
       page_type ->
         PageDetail.mount_page_viewer(socket, params, session,

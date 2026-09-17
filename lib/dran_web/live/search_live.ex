@@ -403,14 +403,16 @@ defmodule DranWeb.SearchLive do
     ~H"""
     <div class="surface-2 lift p-4 relative hover:border-primary/40">
       <div class="flex items-start gap-3">
-        <div class={[
-          "shrink-0 size-9 rounded-lg flex items-center justify-center",
-          type_chip_bg(@result.page_type)
-        ]}>
-          <.icon
-            name={Workspace.page_type_icon(@context, @result.page_type)}
-            class={["size-4", type_icon_color(@result.page_type)]}
-          />
+        <div
+          class="shrink-0 size-9 rounded-lg flex items-center justify-center"
+          style={"background: #{type_tint(type_color(@context, @result.page_type), 12)}"}
+        >
+          <span class="flex" style={"color: #{type_color(@context, @result.page_type)}"}>
+            <.icon
+              name={Workspace.page_type_icon(@context, @result.page_type)}
+              class="size-4"
+            />
+          </span>
         </div>
 
         <div class="flex-1 min-w-0">
@@ -423,10 +425,13 @@ defmodule DranWeb.SearchLive do
                 {@result.title}
               </.link>
             </h3>
-            <span class={[
-              "shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full",
-              type_badge(@result.page_type)
-            ]}>
+            <span
+              class="shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full"
+              style={
+                "background: #{type_tint(type_color(@context, @result.page_type), 15)}; " <>
+                  "color: #{type_color(@context, @result.page_type)}"
+              }
+            >
               {Workspace.page_type_label(@context, @result.page_type)}
             </span>
           </div>
@@ -511,39 +516,14 @@ defmodule DranWeb.SearchLive do
   defp tags_for(%{tags: tags}) when is_list(tags), do: tags
   defp tags_for(_), do: []
 
-  # Per-type icon chip background and icon color, for the result card leading
-  # icon. Uses semantic surface tints so the chip reads as "this kind of page"
-  # at a glance without resorting to flat primary-everywhere.
-  defp type_chip_bg("note"), do: "bg-info/10"
-  defp type_chip_bg("concept"), do: "bg-warning/10"
-  defp type_chip_bg("entity"), do: "bg-accent/10"
-  defp type_chip_bg("project"), do: "bg-primary/10"
-  defp type_chip_bg("reference"), do: "bg-success/10"
-  defp type_chip_bg("idea"), do: "bg-secondary/10"
-  defp type_chip_bg("knowledge"), do: "bg-warning/10"
-  defp type_chip_bg("technical"), do: "bg-accent/10"
-  defp type_chip_bg(_), do: "bg-base-content/10"
+  # The result card derives its chip tint, icon color and badge from the TYPE's
+  # declared color — `Workspace.page_type_color/2` reads it from the registry
+  # (built-in) or the workspace config (custom). A per-slug clause table is
+  # banned (DESIGN.md §D7): a custom type is born without a clause and would
+  # fall to the fallback forever.
+  defp type_color(context, type), do: Workspace.page_type_color(context, type)
 
-  defp type_icon_color("note"), do: "text-info"
-  defp type_icon_color("concept"), do: "text-warning"
-  defp type_icon_color("entity"), do: "text-accent"
-  defp type_icon_color("project"), do: "text-primary"
-  defp type_icon_color("reference"), do: "text-success"
-  defp type_icon_color("idea"), do: "text-secondary"
-  defp type_icon_color("knowledge"), do: "text-warning"
-  defp type_icon_color("technical"), do: "text-accent"
-  defp type_icon_color(_), do: "text-base-content/60"
-
-  # Colored type badge shown on the right side of each card title.
-  defp type_badge("note"), do: "bg-info/15 text-info"
-  defp type_badge("concept"), do: "bg-warning/15 text-warning"
-  defp type_badge("entity"), do: "bg-accent/15 text-accent"
-  defp type_badge("project"), do: "bg-primary/15 text-primary"
-  defp type_badge("reference"), do: "bg-success/15 text-success"
-  defp type_badge("idea"), do: "bg-secondary/15 text-secondary"
-  defp type_badge("knowledge"), do: "bg-warning/15 text-warning"
-  defp type_badge("technical"), do: "bg-accent/15 text-accent"
-  defp type_badge(_), do: "bg-base-200 text-base-content/60"
+  defp type_tint(color, pct), do: "color-mix(in oklab, #{color} #{pct}%, transparent)"
 
   # Example queries shown as clickable chips in the empty hero. Each tuple is
   # {display_label, query_string}. The query_string is what gets submitted

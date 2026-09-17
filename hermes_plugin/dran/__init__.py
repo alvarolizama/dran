@@ -490,7 +490,7 @@ class DranMemoryProvider(MemoryProvider):
 
     def get_config_schema(self):
         return [
-            {"key": "api_key", "description": "Dran API key per agent (Settings → Agents → Create key)", "secret": True},
+            {"key": "api_key", "description": "Dran API key per agent (Settings → API Keys → Create key)", "secret": True},
             {"key": "base_url", "description": "Dran instance URL", "default": DEFAULT_BASE_URL},
             {"key": "workspace", "description": "Workspace used by both the memory provider and the knowledge tools (pages/relations/workers); must be reachable by the key", "default": DEFAULT_WORKSPACE},
             {"key": "auto_recall", "description": "Inject relevant memories at turn start", "default": "true", "choices": ["true", "false"]},

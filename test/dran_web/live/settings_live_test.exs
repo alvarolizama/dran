@@ -140,7 +140,9 @@ defmodule DranWeb.SettingsLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/settings/api-keys")
 
-      html = view |> element("#api-key-#{key.id} button[phx-click='edit_api_key']") |> render_click()
+      html =
+        view |> element("#api-key-#{key.id} button[phx-click='edit_api_key']") |> render_click()
+
       assert html =~ ~s(id="edit-key-form")
 
       html =
@@ -158,7 +160,9 @@ defmodule DranWeb.SettingsLiveTest do
       assert html =~ t("API key access updated")
 
       # El token se preserva y los niveles quedaron persistidos.
-      reloaded = Dran.Repo.preload(Dran.Repo.get!(Dran.Accounts.ApiKey, key.id), :api_key_workspaces)
+      reloaded =
+        Dran.Repo.preload(Dran.Repo.get!(Dran.Accounts.ApiKey, key.id), :api_key_workspaces)
+
       levels = Map.new(reloaded.api_key_workspaces, &{&1.workspace_id, &1.access_level})
       assert levels[ws_a.id] == "write"
       assert levels[ws_b.id] == "read"
@@ -264,7 +268,11 @@ defmodule DranWeb.SettingsLiveTest do
       assert Dran.Auth.resolve_owner(identity) == key.name
 
       # Con header ⇒ created_by es el header, no el name de la key (M7).
-      with_header = %{identity | agent_name: Dran.Auth.agent_name_from_headers([{"x-hermes-agent", "coder"}])}
+      with_header = %{
+        identity
+        | agent_name: Dran.Auth.agent_name_from_headers([{"x-hermes-agent", "coder"}])
+      }
+
       assert Dran.Auth.resolve_created_by(with_header) == "coder"
       # El dueño NO cambia por el header.
       assert Dran.Auth.resolve_owner_user_id(with_header) == owner.id
@@ -435,7 +443,6 @@ defmodule DranWeb.SettingsLiveTest do
     end
   end
 
-
   describe "custom page types per workspace (W2)" do
     setup do
       unique = System.unique_integer([:positive])
@@ -449,7 +456,10 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, ws: ws}
     end
 
-    test "the page types tab lists the 4 built-in types plus the custom ones", %{conn: conn, ws: ws} do
+    test "the page types tab lists the 4 built-in types plus the custom ones", %{
+      conn: conn,
+      ws: ws
+    } do
       {:ok, ws} =
         Knowledge.update_workspace_settings(ws, %{
           workspace_page_types: [

@@ -39,10 +39,11 @@ Two things live inside, and they are different on purpose:
 ## Features
 
 **Knowledge**
-- 8 page types, each with `meta.kind` subtypes and type-specific meta fields,
-  defined in one place — `Dran.PageRegistry`. Every type also takes
-  `meta.props`, a free-form indexed key-value bag. See
-  [docs/page-types.md](docs/page-types.md).
+- **4 built-in page types** (`note`, `reference`, `entity`, `concept`) plus
+  **custom types per workspace** (declared in the workspace config with their own
+  slug, path, icon and color). Type-specific meta fields live in one place —
+  `Dran.PageRegistry`. Every page also takes `meta.props`, a free-form indexed
+  key-value bag. See [docs/page-types.md](docs/page-types.md).
 - **13 relation types**: 5 you set by hand (`related`, `contradicts`,
   `supersedes`, `part_of`, `embeds`), 8 machine-owned (`semantic`, `mentions`,
   `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`, `informs`).
@@ -111,7 +112,7 @@ mix setup && mix phx.server
 
 Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup`
 to create the owner account. Then create a workspace and, in **Settings →
-Agents**, an agent key (see below).
+API Keys**, an API key (see below).
 
 **Configuration:** environment variables — [`.env.example`](.env.example) has the
 full list. Essentials: `SECRET_KEY_BASE`, `DATABASE_URL`, `PHX_HOST/PORT/SCHEME`,
@@ -128,10 +129,10 @@ and the legacy admin API token live in `/admin/system`; per-user tokens in
 Gives an agent the tools (`dran_*`, 16) **and** the memory provider
 (`dran_memory_*`, 4) — one key, one attribution, one workspace.
 
-**a. Create the credential.** In Dran → **Settings → Agents**: create the agent
-and its key, ticking the **workspace × access-level matrix** (`write` on the
-workspace that will hold its content). The token is shown once. Every write is
-attributed server-side to this key's actor.
+**a. Create the credential.** In Dran → **Settings → API Keys**: create the key
+and pick its access, ticking the **workspace × access-level matrix** (`write` on
+the workspace that will hold its content). The token is shown once. Every write is
+attributed server-side to this key.
 
 **b. Store the secret** in the profile's `.env` — single source of truth,
 shared by the tools and the memory provider:
@@ -227,7 +228,7 @@ The same block lives at [`system-prompt.md`](system-prompt.md).
 ## Reference
 
 - **REST API** — [docs/api.md](docs/api.md)
-- **Page types & kinds** — [docs/page-types.md](docs/page-types.md)
+- **Page types** — [docs/page-types.md](docs/page-types.md)
 - **Plugin** — [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md)
 - **Skills** — [skills/README.md](skills/README.md)
 

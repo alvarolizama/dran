@@ -561,6 +561,7 @@ defmodule DranWeb.PageComponents do
         :type_paths_json,
         assigns.type_paths && Jason.encode!(assigns.type_paths)
       )
+
     # nil attribute values are omitted by HEEx, so passing nil skips the hook's
     # client-side type filter (subgraphs always render everything).
     assigns =
