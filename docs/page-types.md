@@ -108,8 +108,8 @@ UI). No schema migration is involved — the list is data.
 | `slug` | yes | identifier, `^[a-z0-9][a-z0-9_-]*$`, never a built-in slug |
 | `label` | no | singular label (falls back to the slug) |
 | `plural` | no | plural label |
-| `path` | yes | URL segment (`/recipes`), **explicit** — never a blind pluralization |
-| `icon` | no | heroicon name (default `hero-document-text`) |
+| `path` | yes | URL segment (`/recipes`), **explicit** — never a blind pluralization. Same format as `slug`; must not be a reserved route segment |
+| `icon` | no | heroicon name (default `hero-document-text`). A missing `hero-` prefix is added for you |
 | `color` | no | hex color (default `#94A3B8`) |
 | `meta_fields` | no | editor field definitions for the type's `meta` keys |
 
@@ -121,9 +121,23 @@ error, never a silent drop or a silent dedupe:
 - `slug` and `path` are **required** on every entry.
 - **Slugs are unique** and **paths are unique** within the workspace.
 - The slug must match `^[a-z0-9][a-z0-9_-]*$`.
+- The **path** must match the same pattern — it becomes a URL segment, so
+  `/`, `..`, spaces and uppercase are refused.
+- The **path** must not be a **reserved route segment**. The router matches
+  these *before* the generic `/:workspace_slug/:type` route, so declaring one
+  would make the type unreachable or shadow a real page — the full set is
+  `collections clusters reports search activity journey graph memory collection
+  letter settings api dev login session auth health docs admin` plus the
+  built-in paths `notes entities concepts references`.
 - A slug that repeats a built-in type (`note`, `entity`, `concept`,
   `reference`) is rejected — built-ins cannot be redefined.
 - The list must be a list of objects.
+
+The `icon` is **normalized, not validated**: a value without the `hero-`
+prefix gets it (`beaker` → `hero-beaker`), and an empty one falls back to
+`hero-document-text`. This runs on read as well as on write, so a value stored
+before normalization existed is repaired instead of crashing the render —
+`<.icon>` only matches `hero-*` names.
 
 At **write** time the API validates `page_type` against the workspace's
 **effective types** — the 4 built-in ∪ the custom ones. A type that is not in

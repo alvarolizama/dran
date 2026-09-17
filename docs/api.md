@@ -108,6 +108,11 @@ own custom types (`workspace_page_types`). Same shape as
 `Dran.Knowledge.effective_page_types/1`, so an agent discovers custom
 vocabulary instead of hardcoding the built-in four:
 
+Note that `page_type_defs[].icon` is always normalized to a `hero-` prefixed
+name, and `path` is validated on write (format + reserved route segments) —
+see [page-types.md](page-types.md) for the rules a client must satisfy when
+declaring types through `PUT /api/workspaces/:slug`.
+
 | Field | Shape | Meaning |
 |---|---|---|
 | `data.page_types` | `["note", "entity", "concept", "reference", "recipe"]` | union across every workspace this key reaches |
