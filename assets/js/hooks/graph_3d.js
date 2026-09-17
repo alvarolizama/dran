@@ -532,16 +532,38 @@ const Graph3D = {
       ? `${this.basePath}/${typePath}/${node.slug}`
       : `/${typePath}/${node.slug}`
 
-    overlay.innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <span style="font-size:11px;color:rgba(148,163,184,0.7);text-transform:uppercase;letter-spacing:0.05em;">${node.type || "page"}</span>
-      </div>
-      <div style="font-size:14px;font-weight:600;color:#f1f5f9;line-height:1.35;margin-bottom:8px;">${node.label}</div>
-      <a href="${href}" onclick="event.stopPropagation();"
-        style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#60a5fa;text-decoration:none;hover:text-decoration:underline;">
-        Open page →
-      </a>
-    `
+    // Build the overlay with DOM nodes + textContent, never innerHTML:
+    // node.label/node.type come from user-authored page titles shipped raw by
+    // the graph JSON (Jason does not escape "<" ">"), so interpolating them
+    // into a markup string was a stored-XSS sink. textContent is inert.
+    overlay.textContent = ""
+
+    const typeRow = document.createElement("div")
+    typeRow.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:4px;"
+    const typeSpan = document.createElement("span")
+    typeSpan.style.cssText =
+      "font-size:11px;color:rgba(148,163,184,0.7);text-transform:uppercase;letter-spacing:0.05em;"
+    typeSpan.textContent = node.type || "page"
+    typeRow.appendChild(typeSpan)
+
+    const titleDiv = document.createElement("div")
+    titleDiv.style.cssText =
+      "font-size:14px;font-weight:600;color:#f1f5f9;line-height:1.35;margin-bottom:8px;"
+    titleDiv.textContent = node.label
+
+    const link = document.createElement("a")
+    link.style.cssText =
+      "display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#60a5fa;text-decoration:none;"
+    link.textContent = "Open page →"
+    // Only allow the in-app path we just built; never an arbitrary/scheme URL.
+    if (typeof href === "string" && href.startsWith("/")) {
+      link.setAttribute("href", href)
+    }
+    link.addEventListener("click", event => event.stopPropagation())
+
+    overlay.appendChild(typeRow)
+    overlay.appendChild(titleDiv)
+    overlay.appendChild(link)
 
     // Fade in
     requestAnimationFrame(() => {
