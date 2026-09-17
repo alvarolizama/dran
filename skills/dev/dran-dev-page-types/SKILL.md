@@ -28,13 +28,28 @@ No code, no migration, no deploy:
    `icon`, `color`, `meta_fields`.
 2. Validation is **fail-closed** (`Dran.Workspace.validate_page_types/1`):
    required slug/path, unique slugs, unique paths, slug format
-   `^[a-z0-9][a-z0-9_-]*$`, and a slug that collides with a built-in is
-   refused. Failures land on `:workspace_page_types` with a precise message —
-   never silently dropped or deduped. `path` is EXPLICIT: never blind-pluralize.
-3. The type is immediately effective: `Dran.Knowledge.effective_page_types/1`
+   `^[a-z0-9][a-z0-9_-]*$`, a slug that collides with a built-in is refused,
+   the **path** carries the same slug-format check, and the path is rejected
+   when it collides with a router-reserved segment (`@reserved_path_segments`:
+   `settings api admin notes collections graph memory …`). Failures land on
+   `:workspace_page_types` with a precise message — never silently dropped or
+   deduped. `path` is EXPLICIT: never blind-pluralize.
+3. `normalize_page_types/1` normalizes `icon` to a `hero-` prefix
+   (`normalize_icon/1`). That is NOT cosmetic: `<.icon>` has a single clause
+   matching `%{name: "hero-" <> _}`, so a declared bare `beaker` raised
+   `FunctionClauseError` and 500'd EVERY page of the workspace (the sidebar
+   paints the icon). Normalizing on read also repairs already-stored values.
+4. The type is immediately effective: `Dran.Knowledge.effective_page_types/1`
    = built-ins ∪ custom (declaration order), which is what the UI renders, the
    write gate validates against, and `GET /api/agent/config` serves to agents.
-4. `meta_fields` entries are JSON arrays (`["text", "key", "Label", opts]`) or
+5. Render the type through the WORKSPACE, not the global registry. Any
+   component showing a type's path/icon/label/plural must take the workspace
+   and call `Dran.Workspace.page_type_path|icon|label|plural/2`. Reading
+   `DranWeb.PageTypes.*` (registry-backed) silently breaks custom types: its
+   `path/1` falls back to `slug <> "s"`, so a type declaring `path: "recetario"`
+   got its `New` CTA and card links pointing at `/recipes` (dead link) plus a
+   generic glyph. Built-ins are the only case where both agree.
+6. `meta_fields` entries are JSON arrays (`["text", "key", "Label", opts]`) or
    Elixir tuples in code; opts must have string keys (Jason cannot encode atoms
    or tuples) — `Workspace.normalize_meta_fields/1` is the boundary.
 
@@ -94,6 +109,17 @@ copy of the enum and no gate compiles them:
 
 ## Pitfalls
 
+- **An unvalidated `path` is three bugs at once.** It becomes a URL segment
+  (`/`, `..`, spaces, or a reserved word like `settings` build routes the
+  router resolves elsewhere or nowhere), AND `layouts.ex` does
+  `String.to_atom(page_type_path(...))` for the sidebar badge keys — every new
+  path permanently interned an atom (unbounded growth → node crash). Validate
+  format AND reserved segments; never let declared data reach `to_atom`.
+- **A type's route must be built with the workspace slug.** The real shape is
+  `/:workspace_slug/:type_path/:slug`: a handler building `"/#{path}/#{slug}"`
+  produces a path the router reads as `workspace_slug = <type_path>` and 404s.
+  That bug shipped in `smart_collection_live.ex` — grep `"/#{` + `path` when
+  touching navigation, and assert on the redirect target in a probe.
 - **Registry fields that become CSS class names only exist if Tailwind's
   content scan sees them.** Icons/colors defined in `lib/dran/` render as empty
   space while `app.css` scans only `lib/dran_web/`; fix with
