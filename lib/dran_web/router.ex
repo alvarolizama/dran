@@ -486,12 +486,17 @@ defmodule DranWeb.Router do
     post "/impersonate/:id", ImpersonationController, :create
     delete "/impersonate", ImpersonationController, :delete
 
-    live "/", AdminLive, :index
-    live "/users", AdminUsersLive, :index
-    live "/workspaces", AdminWorkspacesLive, :index
-    live "/models", AdminModelsLive, :index
-    live "/system", AdminSystemLive, :index
-    live "/jobs", AdminJobsLive, :index
+    # live_session wraps the privileged LiveViews with an on_mount twin of the
+    # :admin pipeline: the plug runs on the HTTP request only, so without this
+    # the guard would not re-run when the LiveView mounts over the socket.
+    live_session :admin, on_mount: {DranWeb.LiveAuth, :require_admin} do
+      live "/", AdminLive, :index
+      live "/users", AdminUsersLive, :index
+      live "/workspaces", AdminWorkspacesLive, :index
+      live "/models", AdminModelsLive, :index
+      live "/system", AdminSystemLive, :index
+      live "/jobs", AdminJobsLive, :index
+    end
   end
 
   # ── REST API (token-protected) ─────────────────────────────────────────────
