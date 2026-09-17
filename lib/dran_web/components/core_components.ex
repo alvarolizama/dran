@@ -466,6 +466,19 @@ defmodule DranWeb.CoreComponents do
     """
   end
 
+  # Defensive fallback: a name without the `hero-` prefix (e.g. a workspace
+  # custom page type that slipped past normalization, or any dynamic caller)
+  # must NOT crash the whole render with a FunctionClauseError. Render the
+  # generic document icon instead — a missing glyph is recoverable, a 500 on
+  # every page of a workspace is not.
+  def icon(assigns) do
+    assigns = assign(assigns, name: "hero-document")
+
+    ~H"""
+    <span class={[@name, @class]} />
+    """
+  end
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do

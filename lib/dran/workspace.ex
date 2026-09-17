@@ -111,6 +111,17 @@ defmodule Dran.Workspace do
   @default_custom_color "#94A3B8"
   @slug_format ~r/^[a-z0-9][a-z0-9_-]*$/
 
+  # URL segments the router matches BEFORE the generic `/:workspace_slug/:type`
+  # route (see DranWeb.Router): a custom page type declaring one of these as
+  # its `path` would build links the router never resolves to it (dead links /
+  # a `/settings` path colliding with the workspace-admin route). Rejecting
+  # them keeps the declared path routable.
+  @reserved_path_segments MapSet.new(~w(
+    collections clusters reports search activity journey graph memory
+    collection letter settings api dev login session auth health docs admin
+    notes entities concepts references
+  ))
+
   @doc """
   The workspace's declared custom page types, normalized.
 
@@ -152,7 +163,7 @@ defmodule Dran.Workspace do
         "label" => blank_to_nil(entry["label"]),
         "plural" => blank_to_nil(entry["plural"]),
         "path" => blank_to_nil(entry["path"]),
-        "icon" => blank_to_nil(entry["icon"]) || @default_custom_icon,
+        "icon" => normalize_icon(entry["icon"]),
         "color" => blank_to_nil(entry["color"]) || @default_custom_color,
         "meta_fields" => normalize_meta_fields(entry["meta_fields"])
       }
@@ -215,6 +226,19 @@ defmodule Dran.Workspace do
 
   defp blank_to_nil(_), do: nil
 
+  # The `<.icon>` component only matches names with the `hero-` prefix
+  # (`core_components.ex: def icon(%{name: "hero-" <> _})`), so a custom type
+  # declaring a bare `beaker` — or anything else — crashed EVERY page render of
+  # the workspace (the sidebar paints the icon). Normalizing here guarantees the
+  # prefix for both validation and reads, so legacy stored values are safe too.
+  defp normalize_icon(value) do
+    case blank_to_nil(value) do
+      nil -> @default_custom_icon
+      "hero-" <> _ = icon -> icon
+      other -> "hero-" <> other
+    end
+  end
+
   # `disabled_page_types` keeps working, but validates against the workspace's
   # EFFECTIVE types (4 built-in ∪ its own custom types) instead of the built-in
   # list alone — disabling a custom type must not break the saved list. The
@@ -261,6 +285,8 @@ defmodule Dran.Workspace do
       |> validate_custom_types_unique_slugs(normalized)
       |> validate_custom_types_unique_paths(normalized)
       |> validate_custom_types_slug_format(normalized)
+      |> validate_custom_types_path_format(normalized)
+      |> validate_custom_types_path_not_reserved(normalized)
       |> validate_custom_types_not_builtin(normalized)
     else
       add_error(
@@ -343,6 +369,44 @@ defmodule Dran.Workspace do
         changeset,
         :workspace_page_types,
         "invalid slug (use lowercase letters, digits, _ or -): #{Enum.join(bad, ", ")}"
+      )
+    end
+  end
+
+  defp validate_custom_types_path_format(changeset, entries) do
+    bad =
+      entries
+      |> Enum.map(& &1["path"])
+      |> Enum.reject(&is_nil/1)
+      |> Enum.reject(&Regex.match?(@slug_format, &1))
+      |> Enum.uniq()
+
+    if bad == [] do
+      changeset
+    else
+      add_error(
+        changeset,
+        :workspace_page_types,
+        "invalid path (use lowercase letters, digits, _ or -): #{Enum.join(bad, ", ")}"
+      )
+    end
+  end
+
+  defp validate_custom_types_path_not_reserved(changeset, entries) do
+    reserved =
+      entries
+      |> Enum.map(& &1["path"])
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&MapSet.member?(@reserved_path_segments, &1))
+      |> Enum.uniq()
+
+    if reserved == [] do
+      changeset
+    else
+      add_error(
+        changeset,
+        :workspace_page_types,
+        "path collides with a reserved route segment: #{Enum.join(reserved, ", ")}"
       )
     end
   end
