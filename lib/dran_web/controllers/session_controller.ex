@@ -10,14 +10,33 @@ defmodule DranWeb.SessionController do
 
   @doc "POST /session — process login form"
   def create(conn, %{"login" => %{"username" => username, "password" => password}}) do
+    # Failure-based throttle keyed on the submitted identifier (see
+    # DranWeb.LoginThrottle for why the IP is not usable here). Checked BEFORE
+    # authenticate_user so a throttled attempt costs no bcrypt work.
+    case DranWeb.LoginThrottle.check(username) do
+      {:error, :throttled} ->
+        conn
+        |> put_flash(:error, "Too many failed attempts. Try again later.")
+        |> redirect(to: ~p"/login")
+
+      :ok ->
+        do_login(conn, username, password)
+    end
+  end
+
+  defp do_login(conn, username, password) do
     case Accounts.authenticate_user(username, password) do
       {:ok, user} ->
+        DranWeb.LoginThrottle.clear(username)
+
         conn
         |> SessionAuth.login(user.email)
         |> delete_session(:return_to)
         |> redirect(to: SessionAuth.resolve_login_redirect(conn))
 
       {:error, _} ->
+        DranWeb.LoginThrottle.record_failure(username)
+
         conn
         |> put_flash(:error, "Invalid username or password")
         |> redirect(to: ~p"/login")

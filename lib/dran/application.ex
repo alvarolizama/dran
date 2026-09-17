@@ -25,6 +25,7 @@ defmodule Dran.Application do
       Dran.Relations.Supervisor,
       Dran.Scheduler,
       Dran.GraphCache,
+      DranWeb.LoginThrottle,
       DranWeb.Endpoint
     ]
 
