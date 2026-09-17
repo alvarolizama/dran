@@ -8,6 +8,10 @@ defmodule DranWeb.Router do
 
   pipeline :browser do
     plug :accepts, ["html"]
+    # Rewrite conn.remote_ip from x-forwarded-for BEFORE any IP-keyed control
+    # runs (the login throttle). Without it, every request behind the reverse
+    # proxy shares the proxy's address. See DranWeb.Plugs.ClientIp.
+    plug DranWeb.Plugs.ClientIp
     plug :fetch_session
     plug :fetch_live_flash
     plug :put_root_layout, html: {DranWeb.Layouts, :root}

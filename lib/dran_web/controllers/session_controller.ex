@@ -10,23 +10,27 @@ defmodule DranWeb.SessionController do
 
   @doc "POST /session — process login form"
   def create(conn, %{"login" => %{"username" => username, "password" => password}}) do
-    # Failure-based throttle keyed on the submitted identifier (see
-    # DranWeb.LoginThrottle for why the IP is not usable here). Checked BEFORE
-    # authenticate_user so a throttled attempt costs no bcrypt work.
-    case DranWeb.LoginThrottle.check(username) do
+    # Failure-based throttle, two layers (see DranWeb.LoginThrottle): the
+    # submitted identifier (proxy-independent) and the client IP. Both are
+    # checked BEFORE authenticate_user so a throttled attempt costs no bcrypt
+    # work. conn.remote_ip is the real client because DranWeb.Plugs.ClientIp
+    # rewrote it from x-forwarded-for in the :browser pipeline.
+    with :ok <- DranWeb.LoginThrottle.check(username),
+         :ok <- DranWeb.LoginThrottle.check_ip(client_ip(conn)) do
+      do_login(conn, username, password)
+    else
       {:error, :throttled} ->
         conn
         |> put_flash(:error, "Too many failed attempts. Try again later.")
         |> redirect(to: ~p"/login")
-
-      :ok ->
-        do_login(conn, username, password)
     end
   end
 
   defp do_login(conn, username, password) do
     case Accounts.authenticate_user(username, password) do
       {:ok, user} ->
+        # Only the identifier is cleared: an IP is shared by other users, so
+        # clearing it would erase their failure history.
         DranWeb.LoginThrottle.clear(username)
 
         conn
@@ -36,12 +40,15 @@ defmodule DranWeb.SessionController do
 
       {:error, _} ->
         DranWeb.LoginThrottle.record_failure(username)
+        DranWeb.LoginThrottle.record_failure_ip(client_ip(conn))
 
         conn
         |> put_flash(:error, "Invalid username or password")
         |> redirect(to: ~p"/login")
     end
   end
+
+  defp client_ip(conn), do: conn.remote_ip |> :inet.ntoa() |> to_string()
 
   @doc "POST /setup — first-run admin creation (only while users table is empty)"
   def setup(conn, %{
