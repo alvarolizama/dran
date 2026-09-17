@@ -146,13 +146,13 @@ defmodule DranWeb.SmartCollectionLive do
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2 min-w-0">
                 <.icon
-                  name={DranWeb.PageTypes.icon(page.page_type)}
+                  name={type_icon(@context, page.page_type)}
                   class="w-4 h-4 text-base-content/40 shrink-0"
                 />
                 <span class="font-medium truncate">{page.title}</span>
               </div>
               <span class="text-xs text-base-content/50 shrink-0 ml-2">
-                {DranWeb.PageTypes.label(page.page_type)}
+                {type_label(@context, page.page_type)}
               </span>
             </div>
             <p :if={page.summary} class="text-sm text-base-content/60 mt-1 truncate">
@@ -264,9 +264,14 @@ defmodule DranWeb.SmartCollectionLive do
       Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
     end
 
+    # The workspace's EFFECTIVE types (4 built-in ∪ its custom ones), not the
+    # global registry: a workspace that declares its own types could not
+    # filter by them, and the labels use the declared custom label.
     type_options =
       [{gettext("All types"), ""}] ++
-        Enum.map(DranWeb.PageTypes.all(), fn {type, _} -> {String.capitalize(type), type} end)
+        Enum.map(Dran.Knowledge.effective_page_types(context), fn type ->
+          {type_label(context, type), type}
+        end)
 
     status_options = [
       {gettext("Any status"), ""},
@@ -350,11 +355,45 @@ defmodule DranWeb.SmartCollectionLive do
   end
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Workspace-aware type presentation
+  # ──────────────────────────────────────────────────────────────────────────
+  #
+  # A custom type declares its own label/path/icon (`workspace_page_types`),
+  # which are not derivable from the global registry. Built-ins keep going
+  # through `PageTypes` for the Gettext-localized label ("note" → "Nota"); a
+  # custom type's label is the literal string its author typed, so it is shown
+  # as declared.
+
+  defp type_label(context, type) do
+    if Dran.Workspace.custom_page_type?(context, type) do
+      Dran.Workspace.page_type_label(context, type)
+    else
+      DranWeb.PageTypes.label(type)
+    end
+  end
+
+  defp type_icon(context, type), do: Dran.Workspace.page_type_icon(context, type)
+
+  defp type_path(context, type), do: Dran.Workspace.page_type_path(context, type)
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Events
   # ──────────────────────────────────────────────────────────────────────────
 
   def handle_event("show_page", %{"slug" => slug, "type" => type}, socket) do
-    path = "/#{DranWeb.PageTypes.path(type)}/#{slug}"
+    # Pages live under the workspace scope (/:workspace_slug/:type_path/:slug).
+    # The path was built WITHOUT the workspace slug, so clicking a result
+    # navigated to "/notes/<slug>" — which the router reads as
+    # workspace_slug="notes" and 404s. Custom types also declare their own
+    # path, so it must come from the workspace, not the global registry.
+    context = socket.assigns[:context]
+
+    path =
+      case socket.assigns[:workspace_slug] do
+        nil -> "/#{type_path(context, type)}/#{slug}"
+        workspace_slug -> "/#{workspace_slug}/#{type_path(context, type)}/#{slug}"
+      end
+
     {:noreply, push_navigate(socket, to: path)}
   end
 
