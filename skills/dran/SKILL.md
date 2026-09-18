@@ -126,7 +126,7 @@ flowchart LR
 
 | Flow | When to load it |
 | --- | --- |
-| `dran-knowledge-flow` | Create, update, search or delete pages (4 built-in types + the workspace's custom ones) |
+| `dran-knowledge-flow` | Create, update, search or delete pages (4 built-in types + the workspace's custom ones; lists the effective types first when none is named) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (provider tools + REST) |

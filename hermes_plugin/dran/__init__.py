@@ -302,6 +302,22 @@ class _DranClient:
         data = self.request("GET", f"/api/knowledge-pages?{urlencode(params)}")
         return data.get("data", []) if isinstance(data, dict) else []
 
+    def list_page_types(self) -> dict:
+        """Effective page types of the workspace (built-in ∪ custom) with their
+        full definitions, via GET /api/workspaces/:slug/page-types."""
+        from urllib.parse import quote
+        slug = quote(str(self.workspace), safe="")
+        try:
+            data = self.request("GET", f"/api/workspaces/{slug}/page-types")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return {"page_types": [], "page_type_defs": []}
+            raise
+        payload = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(payload, dict):
+            return {"page_types": [], "page_type_defs": []}
+        return payload
+
     def get_page(self, slug: str) -> Optional[dict]:
         from urllib.parse import urlencode
         qs = urlencode({"workspace": self.workspace, "include": "body"})
@@ -1089,6 +1105,17 @@ def _tool_schemas() -> List[Dict[str, Any]]:
             },
         },
         {
+            "name": "dran_list_page_types",
+            "description": (
+                "List the workspace's effective page types — the 4 built-in types "
+                f"({_types_doc}) plus any custom types the workspace declares — with "
+                "each type's slug, label, plural, path, icon, color and meta fields. "
+                "Call this before dran_create_page when the page type was not "
+                "specified, then pick the best fit from the returned definitions."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+        {
             "name": "dran_get_page",
             "description": "Read the full body of a page by slug.",
             "parameters": {
@@ -1260,6 +1287,9 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
             pages = client.list_pages(page_type=str(args.get("page_type") or ""),
                                       limit=int(args.get("limit") or 20))
             return json.dumps({"pages": _trim_results(pages)})
+
+        if tool_name == "dran_list_page_types":
+            return json.dumps(client.list_page_types())
 
         if tool_name == "dran_get_page":
             slug = str(args.get("slug", "")).strip()

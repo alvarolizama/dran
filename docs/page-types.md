@@ -156,6 +156,11 @@ UI renders (sidebar, filters, editor) and what `GET /api/agent/config` returns
 to agent clients (see [api.md](api.md)) so the Hermes plugin and other agents
 discover the vocabulary instead of hardcoding the built-in four.
 
+`Dran.Knowledge.page_type_defs/1` is the full-definition twin (built-ins first
+with `"builtin": true`, then custom in declaration order). It backs
+`GET /api/workspaces/:slug/page-types`, reachable by any identity with read
+access, which is what the Hermes plugin's `dran_list_page_types` tool calls.
+
 `disabled_page_types` still exists and is still validated against the
 workspace's effective types — a workspace can disable a type, but only for
 types it actually has.

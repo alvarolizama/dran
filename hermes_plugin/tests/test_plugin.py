@@ -91,6 +91,7 @@ def test_register_registers_memory_provider_and_tools(plugin):
     assert names == [
         "dran_search",
         "dran_list_pages",
+        "dran_list_page_types",
         "dran_get_page",
         "dran_create_page",
         "dran_update_page",
@@ -226,6 +227,7 @@ def test_tool_calls_hit_documented_routes(plugin):
 
             handlers["dran_search"]({"query": "elixir"}, ctx=ctx)
             handlers["dran_list_pages"]({}, ctx=ctx)
+            handlers["dran_list_page_types"]({}, ctx=ctx)
             handlers["dran_create_page"]({"title": "T"}, ctx=ctx)
             handlers["dran_get_links"]({"slug": "s"}, ctx=ctx)
             handlers["dran_create_relation"](
@@ -239,6 +241,7 @@ def test_tool_calls_hit_documented_routes(plugin):
         paths = [p for _, p in routes]
         assert any(p.startswith("/api/search?") for p in paths), paths
         assert any(p.startswith("/api/knowledge-pages?") for p in paths), paths
+        assert "/api/workspaces/personal/page-types" in paths, paths
         assert any(p.startswith("/api/knowledge-pages/s/links?") for p in paths), paths
         assert "/api/relations" in paths, paths
         assert any(p.startswith("/api/lint?") for p in paths), paths
@@ -365,9 +368,11 @@ def test_tool_descriptions_render_the_effective_types(plugin):
     with _with_config(plugin, _AGENT_CONFIG):
         schemas = {s["name"]: s for s in plugin._tool_schemas()}
     listed = schemas["dran_list_pages"]["description"]
+    listed_types = schemas["dran_list_page_types"]["description"]
     created = schemas["dran_create_page"]["parameters"]["properties"]["page_type"]
     for slug in ("note", "entity", "concept", "reference", "recipe"):
         assert slug in listed
+        assert slug in listed_types
         assert slug in created["description"]
     # No trace of the retired TYPES in the rendered vocabulary. "knowledge"
     # still appears as prose ("List knowledge pages") — that is the domain

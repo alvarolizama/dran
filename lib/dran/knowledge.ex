@@ -423,6 +423,41 @@ defmodule Dran.Knowledge do
   def effective_page_types(_other), do: Page.all_types()
 
   @doc """
+  Full ordered definitions of a workspace's EFFECTIVE page types: the four
+  built-ins first (`"builtin" => true`, registry UI attrs + meta fields), then
+  the workspace's custom types in declaration order (`"builtin" => false`).
+
+  The shape served by `GET /api/agent/config` and
+  `GET /api/workspaces/:slug/page-types`, so an agent renders the same
+  vocabulary as the web UI and builds the right paths — instead of hardcoding
+  the four built-in slugs.
+  """
+  def page_type_defs(nil), do: builtin_page_type_defs()
+
+  def page_type_defs(%Workspace{} = context) do
+    builtin_page_type_defs() ++ Workspace.page_type_defs(context)
+  end
+
+  def page_type_defs(_other), do: builtin_page_type_defs()
+
+  defp builtin_page_type_defs do
+    for type <- Page.all_types() do
+      ui = Dran.PageRegistry.ui(type) || %{}
+
+      %{
+        "slug" => type,
+        "label" => ui[:label],
+        "plural" => ui[:plural],
+        "path" => ui[:path],
+        "icon" => ui[:icon],
+        "color" => ui[:color],
+        "meta_fields" => Workspace.meta_fields_json(type),
+        "builtin" => true
+      }
+    end
+  end
+
+  @doc """
   Whether `page_type` is one of the workspace's effective types — the
   fail-closed gate used by `create_page/1` and `update_page/2`.
   """

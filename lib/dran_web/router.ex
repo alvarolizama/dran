@@ -519,6 +519,7 @@ defmodule DranWeb.Router do
     # Contexts (read + export)
     get "/workspaces", WorkspaceController, :index
     get "/workspaces/:slug", WorkspaceController, :show
+    get "/workspaces/:slug/page-types", PageTypeController, :index
     get "/workspaces/:slug/export", ExportController, :show
 
     # Full export (by context id)

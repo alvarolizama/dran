@@ -81,7 +81,7 @@ Two things live inside, and they are different on purpose:
 ## Architecture
 
 ```
-┌──────────────┐   plugin tools (20)   ┌──────────────────┐
+┌──────────────┐   plugin tools (21)   ┌──────────────────┐
 │ Hermes agent │ ────────────────────► │                  │
 └──────────────┘                       │   Dran server    │
 ┌──────────────┐   REST /api/*         │   (Phoenix)      │
@@ -127,7 +127,7 @@ and the legacy admin API token live in `/admin/system`; per-user tokens in
 
 ### 2 · The Hermes plugin
 
-Gives an agent the tools (`dran_*`, 16) **and** the memory provider
+Gives an agent the tools (`dran_*`, 17) **and** the memory provider
 (`dran_memory_*`, 4) — one key, one attribution, one workspace.
 
 **a. Create the credential.** In Dran → **Settings → API Keys**: create the key

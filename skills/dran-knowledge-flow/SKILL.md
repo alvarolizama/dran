@@ -16,7 +16,8 @@ Pages are the unit of knowledge. There are **four built-in page types** —
 `note`, `entity`, `concept`, `reference` — and a workspace may declare **its
 own** (`recipe`, `trip`, …). There is no `meta.kind`: the type is the only
 classifier. This flow owns the write loop: search first, then create or
-update, then verify by readback.
+update, then verify by readback. When the type was not named, list the
+workspace's types first and decide before creating.
 
 The tools come from the Dran Hermes plugin (`dran_*`), which talks to Dran
 over its REST API.
@@ -44,7 +45,10 @@ against existing pages. PRODUCES: a page whose state is confirmed by
 flowchart TD
   START([knowledge task]) --> S1["RUN dran_search\nquery + strategy"]
   S1 --> G1{"page exists\nwith this slug?"}
-  G1 -->|"no"| S2["RUN dran_create_page\ntitle + page_type + body"]
+  G1 -->|"no"| G2{"user named\na page type?"}
+  G2 -->|"no"| S0["RUN dran_list_page_types\npick the best fit"]
+  G2 -->|"yes"| S2["RUN dran_create_page\ntitle + page_type + body"]
+  S0 --> S2
   G1 -->|"yes"| S3["RUN dran_update_page\nslug + changed fields"]
   S2 --> V1["VERIFY dran_get_page\nreadback: title + body"]
   S3 --> V1
@@ -60,6 +64,11 @@ flowchart TD
 
 ## Notes on the calls
 
+- **List the types before creating when the type was not named.** Run
+  `dran_list_page_types` — it returns the workspace's effective types with
+  their full definitions (slug, label, plural, path, icon, color, meta
+  fields) — then pick the best fit. `note` is the safe default only when
+  nothing more specific matches.
 - `page_type` must be one of the workspace's **effective** types: the four
   built-in (`note`, `entity`, `concept`, `reference`) ∪ the workspace's custom
   types. Validation is fail-closed — an unknown type (a retired slug, or
@@ -84,8 +93,9 @@ flowchart TD
   job; the UI never edits it). Keep it a real one-liner.
 - Confidence levels for claims recorded in pages: low / medium / high /
   verified.
-- `dran_list_pages` takes an optional `page_type`; `dran_stats` for counts;
-  `dran_get_page` for one slug.
+- `dran_list_pages` takes an optional `page_type`; `dran_list_page_types`
+  returns the effective types with their full definitions; `dran_stats` for
+  counts; `dran_get_page` for one slug.
 - Every write is attributed server-side and nothing is client-settable:
   `created_by` is the `X-Hermes-Agent` header when it came (the Hermes
   profile), otherwise the API key name; `owner_user_id` is the OWNER of the
@@ -107,6 +117,7 @@ flowchart TD
 ## Checklist
 
 - [ ] Search ran before write; slug confirmed fresh or update chosen
+- [ ] Page type chosen: named by the user, or decided from `dran_list_page_types`
 - [ ] Write done with only the changed fields
 - [ ] Readback verified (get_page; for delete: gone)
 - [ ] Delete went through ASK

@@ -32,6 +32,11 @@ para renderizar el vocabulario en sus tools en vez de hardcodear la lista, y
 valida `page_type` contra ellos antes de crear una página (fail-closed); sin
 servidor cae a los 4 built-in.
 
+La tool `dran_list_page_types` expone esa lista al agente con las definiciones
+completas (slug, label, plural, path, icon, color, meta fields) vía
+`GET /api/workspaces/:slug/page-types` — alcanzable por cualquier token con
+read, no solo por agent keys (a diferencia de `/api/agent/config`).
+
 ## Setup (por perfil de Hermes)
 
 1. En Dran → Settings → API Keys: crea la key eligiendo la matriz
@@ -113,6 +118,7 @@ estas tools son el consumo del agente.
 |---|---|
 | `dran_search` | Busca páginas (fts / fuzzy / semantic / hybrid) |
 | `dran_list_pages` | Lista páginas, filtrable por tipo (los válidos son los efectivos del workspace, leídos de `/api/agent/config`) |
+| `dran_list_page_types` | Lista los page types efectivos (4 built-in + custom) con sus definiciones — slug, label, plural, path, icon, color, meta fields — vía `GET /api/workspaces/:slug/page-types` |
 | `dran_get_page` | Lee el cuerpo completo por slug |
 | `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas (`page_type` se valida fail-closed contra los tipos efectivos del workspace) |
 | `dran_get_links` | Relaciones entrantes/salientes de una página |

@@ -23,9 +23,16 @@ carries free-form data. Do not reintroduce a kind layer while working here.
 No code, no migration, no deploy:
 
 1. Declare the entry in the workspace's `workspace_page_types` (ordered jsonb
-   list; the settings UI writes it, or `PUT /api/workspaces/:slug` for the
-   owner). Required keys `slug` and `path`; optional `label`, `plural`,
-   `icon`, `color`, `meta_fields`.
+   list; the **settings UI** writes it via
+   `Knowledge.update_workspace_settings/2` → `Workspace.settings_changeset/2`,
+   which casts and validates the field). Required keys `slug` and `path`;
+   optional `label`, `plural`, `icon`, `color`, `meta_fields`.
+   **`PUT /api/workspaces/:slug` does NOT write it** — that route goes through
+   `Knowledge.update_workspace/2` → `Workspace.changeset/2`, which casts only
+   `name/slug/is_default/visibility` and silently drops `workspace_page_types`.
+   There is currently no API/plugin route to declare custom types; an agent can
+   only READ them (`GET /api/workspaces/:slug/page-types`, tool
+   `dran_list_page_types`).
 2. Validation is **fail-closed** (`Dran.Workspace.validate_page_types/1`):
    required slug/path, unique slugs, unique paths, slug format
    `^[a-z0-9][a-z0-9_-]*$`, a slug that collides with a built-in is refused,

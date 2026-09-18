@@ -31,7 +31,7 @@ defmodule DranWeb.API.AgentConfigController do
               name: ws.name,
               slug: ws.slug,
               page_types: Dran.Knowledge.effective_page_types(ws),
-              page_type_defs: agent_page_type_defs(ws)
+              page_type_defs: Dran.Knowledge.page_type_defs(ws)
             }
           end)
 
@@ -48,27 +48,6 @@ defmodule DranWeb.API.AgentConfigController do
     end
   end
 
-  # One entry per built-in type (flag + UI attrs) followed by the workspace's
-  # custom types in declaration order. The agent gets the full shape — slug,
-  # label, plural, path, icon, color, meta_fields — so it can build URLs and
-  # render the same vocabulary as the web UI.
-  defp agent_page_type_defs(ws) do
-    builtin =
-      for type <- Dran.Knowledge.Page.all_types() do
-        ui = Dran.PageRegistry.ui(type) || %{}
-
-        %{
-          "slug" => type,
-          "label" => ui[:label],
-          "plural" => ui[:plural],
-          "path" => ui[:path],
-          "icon" => ui[:icon],
-          "color" => ui[:color],
-          "meta_fields" => Dran.Workspace.meta_fields_json(type),
-          "builtin" => true
-        }
-      end
-
-    builtin ++ Dran.Workspace.page_type_defs(ws)
-  end
+  # Full definitions are composed in Dran.Knowledge.page_type_defs/1 — shared
+  # with GET /api/workspaces/:slug/page-types so both endpoints serve one shape.
 end

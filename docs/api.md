@@ -151,12 +151,37 @@ Dran unreachable it falls back to the 4 built-in types.
 curl -s localhost:4000/api/agent/config -H "Authorization: Bearer ***"
 ```
 
+Any identity with read access to a workspace (agent key, user token or the
+legacy admin token) can fetch the same vocabulary for **one** workspace via
+`GET /api/workspaces/:slug/page-types`, which returns the same
+`page_types` / `page_type_defs` shape:
+
+```json
+{
+  "data": {
+    "page_types": ["note", "entity", "concept", "reference", "recipe"],
+    "page_type_defs": [
+      { "slug": "note", "label": "Note", "plural": "Notes", "path": "notes",
+        "icon": "hero-pencil", "color": "#60A5FA",
+        "meta_fields": [["date", "date", "Date"]], "builtin": true },
+      { "slug": "recipe", "label": "Recipe", "plural": "Recipes",
+        "path": "recipes", "icon": "hero-book-open", "color": "#F59E0B",
+        "meta_fields": [], "builtin": false }
+    ]
+  }
+}
+```
+
+This is what the plugin's `dran_list_page_types` tool calls; unlike
+`/api/agent/config` it is not restricted to agent keys.
+
 ### Workspaces
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/workspaces` | read | List workspaces reachable by this identity |
 | GET | `/api/workspaces/:slug` | read | Get one workspace |
+| GET | `/api/workspaces/:slug/page-types` | read | Effective page types (4 built-in ∪ custom) with full definitions |
 | POST | `/api/workspaces` | write **+ owner** | Create a workspace |
 | PUT | `/api/workspaces/:slug` | write **+ owner** | Update a workspace |
 | DELETE | `/api/workspaces/:slug` | write **+ owner** | Delete a workspace |
