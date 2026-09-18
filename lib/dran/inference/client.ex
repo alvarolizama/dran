@@ -18,7 +18,7 @@ defmodule Dran.Inference.Client do
 
   Returns `{:ok, %{latency_ms: n, models: count}}` on success, or
   `{:error, reason}` when the server is unreachable, misconfigured, or
-  the API key is invalid. Used by the Settings UI "Probar conexión" button.
+  the API key is invalid. Used by the Settings UI "Test connection" button.
   """
   @spec ping() ::
           {:ok, %{latency_ms: non_neg_integer(), models: non_neg_integer()}} | {:error, term()}

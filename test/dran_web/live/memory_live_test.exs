@@ -5,8 +5,8 @@ defmodule DranWeb.MemoryLiveTest do
   alias Dran.Memory
   alias Dran.Repo
 
-  # Gettext wrapper — the app default locale is "es", so assertions must
-  # match the translated strings, not the English msgids.
+  # Gettext wrapper. English is the app default locale, so the msgid is
+  # what the app renders unless a test pins another locale.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
   setup %{conn: conn} do
@@ -195,7 +195,7 @@ defmodule DranWeb.MemoryLiveTest do
     # Simulates a forged phx-click carrying the foreign id
     html = render_click(view, "feedback", %{"id" => foreign.id, "helpful" => "true"})
 
-    assert html =~ t("Memory no encontrada")
+    assert html =~ t("Memory not found")
     assert Memory.get_memory!(foreign.id).trust_score == trust_before
   end
 

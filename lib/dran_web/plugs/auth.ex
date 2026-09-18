@@ -177,6 +177,17 @@ defmodule DranWeb.Plugs.Auth do
         {logged_in, ws} -> Dran.Accounts.user_role_in_workspace(logged_in, ws)
       end
 
+    # Each LiveView runs in its own process, so the request-level locale set by
+    # `DranWeb.Plugs.Locale` does not reach it. Pin it here: explicit session
+    # override first, then the user's durable preference, then the app default.
+    locale =
+      DranWeb.Gettext.resolve_locale([
+        session["locale"],
+        user && user.locale
+      ])
+
+    Gettext.put_locale(DranWeb.Gettext, locale)
+
     socket =
       socket
       |> Phoenix.Component.assign(:user, user)
@@ -188,6 +199,7 @@ defmodule DranWeb.Plugs.Auth do
       |> Phoenix.Component.assign(:page_counts, page_counts)
       |> Phoenix.Component.assign(:current_scope, current_user)
       |> Phoenix.Component.assign(:workspace, context)
+      |> Phoenix.Component.assign(:locale, locale)
       |> Phoenix.Component.assign(:impersonator, session["impersonator"])
 
     {socket, context}

@@ -25,12 +25,16 @@ defmodule DranWeb.WorkspaceSettingsLive do
   alias Dran.Workspace
   alias DranWeb.Plugs.Auth
 
-  # Ordered feature keys shown in the Features tab. All are stored in the
-  # `enabled_features` map; an empty map means "all on" (see
-  # `Workspace.feature_enabled?/2`). Only features with real entry points
-  # gated in `Layouts.workspace_groups/3` (sidebar): kanban/chat were removed
-  # products and "workers" was a typo for "workflows" (the gated key).
-  @features ~w(clusters graph journey collections activity search reports)
+  # Feature toggles shown in the Features tab, grouped the way a user thinks
+  # about them. All are stored in the `enabled_features` map; an empty map means
+  # "all on" (see `Workspace.feature_enabled?/2`). Only features with real entry
+  # points gated in `Layouts.workspace_groups/3` (sidebar): kanban/chat were
+  # removed products and "workers" was a typo for "workflows" (the gated key).
+  @feature_groups [
+    {"Knowledge base", ~w(search graph journey collections)},
+    {"Insights", ~w(clusters reports activity)}
+  ]
+  @features Enum.flat_map(@feature_groups, fn {_group, keys} -> keys end)
 
   # Brain tuning keys: worker limits + advanced semantic thresholds.
   @brain_keys ~w(worker_max_pages entity_linker_enabled summary_language)
@@ -63,6 +67,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         workspace_slug: slug,
         workspace_role: role,
         features: @features,
+        feature_groups: @feature_groups,
         active_tab: :general,
         user_search: "",
         workspace_members: [],
@@ -79,7 +84,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         if workspace_admin?(socket) do
           {:cont, socket}
         else
-          {:halt, put_flash(socket, :error, gettext("No autorizado."))}
+          {:halt, put_flash(socket, :error, gettext("Not authorized."))}
         end
       end)
 
@@ -160,7 +165,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
               <.features_section
                 workspace={@workspace}
                 form={@settings_form}
-                features={@features}
+                groups={@feature_groups}
               />
             </div>
 
@@ -218,42 +223,87 @@ defmodule DranWeb.WorkspaceSettingsLive do
   end
 
   # -- Custom page types ------------------------------------------------------
+  #
+  # The form is validated live (`phx-change`) so the JSON editor can report
+  # malformed `meta_fields` before submit. On a domain rejection the submitted
+  # values — JSON included — stay in the form: losing what you typed is the
+  # fastest way to make a config screen feel hostile.
+
+  @impl true
+  def handle_event("validate_custom_page_type", %{"workspace" => params}, socket) do
+    # Re-validates on every keystroke and clears the previous server-side
+    # error: the message must describe what is in the box right now.
+    {:noreply,
+     assign(socket, custom_type_form: to_form(params, as: :workspace), custom_type_error: nil)}
+  end
+
+  @impl true
+  def handle_event("load_meta_fields_example", %{"example" => key}, socket) do
+    case Enum.find(meta_field_examples(), fn example -> example.key == key end) do
+      nil ->
+        {:noreply, socket}
+
+      example ->
+        params =
+          custom_type_form_params(socket, "meta_fields", example.json)
+
+        {:noreply,
+         assign(socket, custom_type_form: to_form(params, as: :workspace), custom_type_error: nil)}
+    end
+  end
+
+  @impl true
+  def handle_event("clear_meta_fields", _params, socket) do
+    params = custom_type_form_params(socket, "meta_fields", "")
+
+    {:noreply,
+     assign(socket, custom_type_form: to_form(params, as: :workspace), custom_type_error: nil)}
+  end
 
   @impl true
   def handle_event("add_custom_page_type", %{"workspace" => params}, socket) do
     workspace = socket.assigns.workspace
 
-    entry = %{
-      "slug" => params["slug"],
-      "label" => params["label"],
-      "plural" => params["plural"],
-      "path" => params["path"],
-      "icon" => params["icon"],
-      "color" => params["color"],
-      "meta_fields" => parse_meta_fields(params["meta_fields"])
-    }
-
-    existing = Dran.Workspace.custom_page_types(workspace)
-
-    case Knowledge.update_workspace_settings(workspace, %{
-           workspace_page_types: existing ++ [entry]
-         }) do
-      {:ok, updated} ->
-        {:noreply,
-         socket
-         |> assign(workspace: updated, custom_type_error: nil)
-         |> assign_custom_type_form()
-         |> put_flash(:info, gettext("Page type added"))}
-
-      {:error, changeset} ->
-        # On failure keep the submitted values in the form (minus the server
-        # defaults) and surface the validation message — the entry is not
-        # persisted.
+    case parse_meta_fields(params["meta_fields"]) do
+      {:error, message} ->
         {:noreply,
          assign(socket,
-           custom_type_error: custom_type_message(changeset),
-           custom_type_form: to_form(Map.delete(params, "meta_fields"), as: :workspace)
+           custom_type_form: to_form(params, as: :workspace),
+           custom_type_error: message
          )}
+
+      {:ok, meta_fields} ->
+        entry = %{
+          "slug" => params["slug"],
+          "label" => params["label"],
+          "plural" => params["plural"],
+          "path" => params["path"],
+          "icon" => params["icon"],
+          "color" => params["color"],
+          "meta_fields" => meta_fields
+        }
+
+        existing = Dran.Workspace.custom_page_types(workspace)
+
+        case Knowledge.update_workspace_settings(workspace, %{
+               workspace_page_types: existing ++ [entry]
+             }) do
+          {:ok, updated} ->
+            {:noreply,
+             socket
+             |> assign(workspace: updated, custom_type_error: nil)
+             |> assign_custom_type_form()
+             |> put_flash(:info, gettext("Page type added"))}
+
+          {:error, changeset} ->
+            # Keep every submitted value (the JSON too) so the user can fix
+            # and resubmit instead of retyping the whole definition.
+            {:noreply,
+             assign(socket,
+               custom_type_error: custom_type_message(changeset),
+               custom_type_form: to_form(params, as: :workspace)
+             )}
+        end
     end
   end
 
@@ -397,7 +447,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   defp general_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
+    <section id="general-section" class="surface-2 rounded-2xl overflow-hidden">
       <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
         <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
           <.icon name="hero-cog-6-tooth" class="size-4 text-primary" />
@@ -405,46 +455,117 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("General")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Workspace name, visibility, and default status.")}
+            {gettext("What this workspace is called and who can reach it.")}
           </p>
         </div>
       </header>
 
       <div class="px-5 py-5">
-        <.form for={@form} id="workspace-general-form" phx-submit="save_general" class="space-y-4">
-          <.input
-            field={@form[:name]}
-            type="text"
-            label={gettext("Name")}
-            placeholder={gettext("p.ej. Personal")}
-            class="w-full"
-          />
+        <.form for={@form} id="workspace-general-form" phx-submit="save_general" class="space-y-6">
+          <%!-- Identity --%>
+          <div class="space-y-3">
+            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+              {gettext("Identity")}
+            </h3>
 
-          <div>
-            <label class="text-sm font-medium">{gettext("Visibility")}</label>
-            <select
-              name="workspace[visibility]"
-              class="select select-bordered select-sm w-full mt-1"
-            >
-              <option value="public" selected={@workspace.visibility == "public"}>
-                {gettext("Public")}
-              </option>
-              <option value="private" selected={@workspace.visibility == "private"}>
-                {gettext("Private")}
-              </option>
-            </select>
+            <div>
+              <.input
+                field={@form[:name]}
+                type="text"
+                label={gettext("Name")}
+                placeholder={gettext("e.g. Personal")}
+              />
+              <p class="text-xs text-base-content/50 mt-1.5">
+                {gettext("Shown in the workspace switcher, the sidebar and every breadcrumb.")}
+              </p>
+            </div>
+
+            <%!-- The slug is the URL identity of the workspace and is not
+                 editable here: changing it would break every existing link. --%>
+            <div>
+              <span class="block text-sm font-medium text-base-content/70 mb-1.5">
+                {gettext("Slug")}
+              </span>
+              <div class="flex items-center gap-2">
+                <code class="rounded-lg border border-base-300 bg-base-200/50 px-2 py-1.5 font-mono text-xs">
+                  {@workspace.slug}
+                </code>
+                <span class="text-xs text-base-content/50">{gettext("read-only")}</span>
+              </div>
+              <p class="text-xs text-base-content/50 mt-1.5">
+                {gettext(
+                  "The workspace identifier in every URL: /%{slug}/notes, /%{slug}/settings…",
+                  slug: @workspace.slug
+                )}
+              </p>
+            </div>
           </div>
 
-          <label class="flex items-center gap-2">
-            <input
-              type="checkbox"
-              name="workspace[is_default]"
-              value="true"
-              checked={@workspace.is_default}
-              class="checkbox checkbox-sm"
-            />
-            <span class="text-sm">{gettext("Default workspace (forces public visibility)")}</span>
-          </label>
+          <%!-- Access --%>
+          <div class="space-y-3">
+            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+              {gettext("Access")}
+            </h3>
+
+            <div>
+              <label
+                for="workspace-visibility"
+                class="block text-sm font-medium text-base-content/70 mb-1.5"
+              >
+                {gettext("Visibility")}
+              </label>
+              <select
+                id="workspace-visibility"
+                name="workspace[visibility]"
+                class="select select-bordered select-sm w-full sm:max-w-xs"
+              >
+                <option value="public" selected={@workspace.visibility == "public"}>
+                  {gettext("Public")}
+                </option>
+                <option value="private" selected={@workspace.visibility == "private"}>
+                  {gettext("Private")}
+                </option>
+              </select>
+              <p class="text-xs text-base-content/50 mt-1.5">
+                {if @workspace.visibility == "private",
+                  do:
+                    gettext(
+                      "Private: only members see this workspace. It is absent from other users' workspace lists."
+                    ),
+                  else:
+                    gettext(
+                      "Public: every user of this instance can open and read this workspace; only members can edit it."
+                    )}
+              </p>
+            </div>
+
+            <div>
+              <input type="hidden" name="workspace[is_default]" value="false" />
+              <label
+                for="workspace-is-default"
+                class="flex items-start gap-3 cursor-pointer rounded-xl border border-base-content/10 px-3 py-2.5 transition-colors duration-150 hover:bg-base-200/40"
+              >
+                <input
+                  type="checkbox"
+                  id="workspace-is-default"
+                  name="workspace[is_default]"
+                  value="true"
+                  checked={@workspace.is_default}
+                  class="mt-0.5 size-4 rounded border-base-300 text-primary focus:ring-1 focus:ring-primary"
+                />
+                <span class="min-w-0">
+                  <span class="block text-sm font-medium text-base-content">
+                    {gettext("Default workspace")}
+                  </span>
+                  <span class="block text-xs text-base-content/60 mt-1">
+                    {gettext(
+                      "Where users land when they have no last-visited workspace. Forces public visibility, and only one workspace can be the default."
+                    )}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
 
           <div class="flex justify-end pt-3 border-t border-base-content/10">
             <button
@@ -468,7 +589,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   defp page_types_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
+    <section id="page-types-section" class="surface-2 rounded-2xl overflow-hidden">
       <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
         <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
           <.icon name="hero-document-text" class="size-4 text-primary" />
@@ -476,99 +597,298 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Page types")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Toggle which page types can be created in this workspace.")}
+            {gettext("Which kinds of page this workspace can hold, and which of them are enabled.")}
           </p>
         </div>
       </header>
 
-      <div class="px-5 py-5 space-y-3">
-        <%!-- Effective types = 4 built-in ∪ custom; custom ones cannot collide
-             with a built-in, so one loop covers both. --%>
-        <%= for type <- effective_page_types(@workspace) do %>
-          <div class="flex items-center justify-between gap-4">
-            <div>
-              <div class="text-sm font-medium">
-                {page_type_label(@workspace, type)}
-                <span
-                  :if={Dran.Workspace.custom_page_type?(@workspace, type)}
-                  class="ml-1 text-[10px] uppercase tracking-wide text-base-content/40"
-                >
-                  {gettext("custom")}
+      <%!-- Effective types = 4 built-in ∪ custom; custom ones cannot collide
+           with a built-in, so one loop covers both. --%>
+      <div class="px-5 py-5">
+        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
+          {gettext("Available types")}
+        </h3>
+
+        <div class="space-y-2">
+          <%= for type <- effective_page_types(@workspace) do %>
+            <% custom? = Dran.Workspace.custom_page_type?(@workspace, type)
+            enabled? = type not in (@workspace.disabled_page_types || [])
+            ui = Dran.Workspace.page_type_ui(@workspace, type) %>
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-base-content/10 px-3 py-2.5 transition-colors duration-150 hover:bg-base-200/40">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-base-200/70">
+                  <.icon name={ui.icon} class="size-4 text-base-content/70" />
                 </span>
+                <span class="shrink-0 size-2 rounded-full" style={"background-color: #{ui.color}"}></span>
+                <div class="min-w-0">
+                  <div class="text-sm font-medium flex items-center gap-2 flex-wrap">
+                    {ui.label}
+                    <span class="text-xs font-normal text-base-content/40">{ui.plural}</span>
+                    <span :if={custom?} class="badge badge-ghost badge-xs">
+                      {gettext("custom")}
+                    </span>
+                  </div>
+                  <div class="text-xs text-base-content/50 font-mono truncate">
+                    /{ui.path}
+                  </div>
+                </div>
               </div>
-              <div class="text-xs text-base-content/60">{page_type_impact(@workspace, type)}</div>
+
+              <div class="flex items-center gap-3 shrink-0">
+                <span class={[
+                  "text-xs hidden sm:inline",
+                  enabled? && "text-success",
+                  !enabled? && "text-base-content/40"
+                ]}>
+                  {if enabled?, do: gettext("Enabled"), else: gettext("Disabled")}
+                </span>
+                <button
+                  :if={custom?}
+                  type="button"
+                  phx-click="remove_custom_page_type"
+                  phx-value-slug={type}
+                  data-confirm={
+                    gettext(
+                      "Remove the “%{label}” page type? Its pages are kept, but they lose their section and list.",
+                      label: ui.label
+                    )
+                  }
+                  class="text-xs text-error/80 hover:text-error transition-colors duration-150"
+                >
+                  {gettext("Remove")}
+                </button>
+                <input
+                  type="checkbox"
+                  id={"page-type-#{type}"}
+                  checked={enabled?}
+                  phx-click="toggle_page_type"
+                  phx-value-page_type={type}
+                  class="toggle toggle-sm toggle-primary"
+                />
+              </div>
             </div>
-            <div class="flex items-center gap-3">
-              <button
-                :if={Dran.Workspace.custom_page_type?(@workspace, type)}
-                type="button"
-                phx-click="remove_custom_page_type"
-                phx-value-slug={type}
-                class="text-xs text-error/80 hover:text-error"
-              >
-                {gettext("Remove")}
-              </button>
-              <input
-                type="checkbox"
-                id={"page-type-#{type}"}
-                checked={type not in (@workspace.disabled_page_types || [])}
-                phx-click="toggle_page_type"
-                phx-value-page_type={type}
-                class="toggle toggle-sm toggle-primary"
-              />
-            </div>
-          </div>
-        <% end %>
+          <% end %>
+        </div>
       </div>
 
-      <%!-- Custom types: slug/label/plural/path/icon/color are form fields.
-           `meta_fields` stays raw JSON for now (documented decision): the
-           editor tuple format is an internal shape, and a dedicated builder
-           belongs with the W5 agent-facing work. --%>
-      <div class="border-t border-base-content/10 px-5 py-5 space-y-3">
+      <%!-- Declaring a new type: guided fields for the common case, plus a
+           validated JSON editor for the editor `meta_fields`. --%>
+      <div class="border-t border-base-content/10 px-5 py-5 space-y-5">
         <div>
-          <h3 class="text-sm font-medium">{gettext("Add a custom page type")}</h3>
+          <h3 class="text-sm font-semibold">{gettext("Add a custom page type")}</h3>
           <p class="text-caption mt-1">
             {gettext(
-              "slug and path are explicit and must be unique in this workspace; a slug cannot repeat a built-in type."
+              "Gets its own sidebar section, list, graph colour and editor fields. The four built-in types cannot be redefined."
             )}
           </p>
         </div>
 
-        <.form for={@custom_type_form} phx-submit="add_custom_page_type" class="space-y-3">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <.input field={@custom_type_form[:slug]} label={gettext("Slug")} placeholder="recipe" />
-            <.input
-              field={@custom_type_form[:path]}
-              label={gettext("URL path")}
-              placeholder="recipes"
-            />
-            <.input field={@custom_type_form[:label]} label={gettext("Label")} placeholder="Receta" />
-            <.input
-              field={@custom_type_form[:plural]}
-              label={gettext("Plural")}
-              placeholder="Recetas"
-            />
-            <.input
-              field={@custom_type_form[:icon]}
-              label={gettext("Icon")}
-              placeholder="hero-beaker"
-            />
-            <.input field={@custom_type_form[:color]} label={gettext("Color")} placeholder="amber" />
+        <.form
+          for={@custom_type_form}
+          id="custom-page-type-form"
+          phx-change="validate_custom_page_type"
+          phx-submit="add_custom_page_type"
+          phx-debounce="300"
+          class="space-y-6"
+        >
+          <%!-- Computed once, at the top: the URL hint below and the preview
+               card both read from it, so they can never disagree. --%>
+          <% preview = custom_type_preview(@custom_type_form.params) %>
+
+          <%!-- Identity --%>
+          <div class="space-y-3">
+            <h4 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+              {gettext("Identity")}
+            </h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+              <div>
+                <.input
+                  field={@custom_type_form[:slug]}
+                  label={gettext("Slug")}
+                  placeholder="recipe"
+                />
+                <p class="text-xs text-base-content/50 mt-1.5">
+                  {gettext(
+                    "Identifier used by the API and by filters. Lowercase letters, digits, “_” or “-”."
+                  )}
+                </p>
+              </div>
+              <div>
+                <.input
+                  field={@custom_type_form[:path]}
+                  label={gettext("URL path")}
+                  placeholder="recipes"
+                />
+                <p class="text-xs text-base-content/50 mt-1.5">
+                  {gettext(
+                    "URL segment — pages will live at /workspace/%{path}/slug. Must be unique and cannot collide with a reserved route.",
+                    path: preview.path || "recipes"
+                  )}
+                </p>
+              </div>
+              <div>
+                <.input
+                  field={@custom_type_form[:label]}
+                  label={gettext("Label")}
+                  placeholder="Recipe"
+                />
+                <p class="text-xs text-base-content/50 mt-1.5">
+                  {gettext("Singular name, used in the sidebar and on buttons.")}
+                </p>
+              </div>
+              <div>
+                <.input
+                  field={@custom_type_form[:plural]}
+                  label={gettext("Plural")}
+                  placeholder="Recipes"
+                />
+                <p class="text-xs text-base-content/50 mt-1.5">
+                  {gettext("Plural name, used for lists and counters.")}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <.input
-            field={@custom_type_form[:meta_fields]}
-            type="textarea"
-            label={gettext("Meta fields (JSON, optional)")}
-            placeholder='[["text", "cuisine", "Cocina"]]'
-          />
+          <%!-- Presentation --%>
+          <div class="space-y-3">
+            <h4 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+              {gettext("Presentation")}
+            </h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+              <div>
+                <.input
+                  field={@custom_type_form[:icon]}
+                  label={gettext("Icon")}
+                  placeholder="hero-beaker"
+                />
+                <p class="text-xs text-base-content/50 mt-1.5">
+                  {gettext("Heroicons name. The “hero-” prefix is added automatically.")}
+                </p>
+              </div>
+              <div>
+                <.input
+                  field={@custom_type_form[:color]}
+                  label={gettext("Color")}
+                  placeholder="#F59E0B"
+                />
+                <p class="text-xs text-base-content/50 mt-1.5">
+                  {gettext("Hex colour for the graph node, the legend and the type dot.")}
+                </p>
+              </div>
+            </div>
+          </div>
 
-          <div :if={@custom_type_error} class="text-sm text-error">{@custom_type_error}</div>
+          <%!-- Live preview of everything above --%>
+          <div class="rounded-xl border border-base-content/10 bg-base-200/30 px-4 py-3">
+            <p class="text-caption font-semibold text-base-content/50 uppercase tracking-wider mb-2">
+              {gettext("Preview")}
+            </p>
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-base-100">
+                <.icon name={preview.icon} class="size-4 text-base-content/70" />
+              </span>
+              <span class="shrink-0 size-2 rounded-full" style={"background-color: #{preview.color}"}></span>
+              <div class="min-w-0">
+                <p class="text-sm font-medium">
+                  {preview.label}
+                  <span class="text-xs font-normal text-base-content/40">{preview.plural}</span>
+                </p>
+                <p class="text-xs text-base-content/50 font-mono truncate">
+                  /{preview.path || "—"} · {preview.slug || "—"}
+                </p>
+              </div>
+            </div>
+          </div>
 
-          <button type="submit" class="btn btn-sm btn-primary">
-            {gettext("Add page type")}
-          </button>
+          <%!-- Meta fields: validated JSON editor --%>
+          <% feedback = meta_fields_feedback(@custom_type_form[:meta_fields].value) %>
+          <div class="space-y-2">
+            <div class="flex items-baseline justify-between gap-3">
+              <h4 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+                {gettext("Meta fields")}
+              </h4>
+              <span class="text-xs text-base-content/40">{gettext("optional")}</span>
+            </div>
+
+            <p class="text-xs text-base-content/60">
+              {gettext(
+                "Extra fields the editor renders for this type. One JSON array per field: [type, key, label] with type one of %{types}.",
+                types: "text, date, props"
+              )}
+            </p>
+
+            <.input
+              field={@custom_type_form[:meta_fields]}
+              type="textarea"
+              rows="6"
+              placeholder={~s([["text", "cuisine", "Cuisine"]])}
+              class="w-full rounded-lg border border-base-300 bg-base-100 px-3 py-2 font-mono text-xs leading-relaxed transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-base-content/30"
+            />
+
+            <%= case feedback do %>
+              <% {:empty, _} -> %>
+                <p class="text-xs text-base-content/50">
+                  {gettext("Empty is fine — the type simply gets no extra fields.")}
+                </p>
+              <% {:ok, fields} -> %>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <.icon name="hero-check-circle" class="size-3.5 text-success shrink-0" />
+                  <span class="text-xs text-success">
+                    {ngettext("%{count} valid field", "%{count} valid fields", length(fields))}
+                  </span>
+                  <span
+                    :for={field <- fields}
+                    class="badge badge-ghost badge-sm font-mono text-[10px]"
+                  >
+                    {meta_field_chip(field)}
+                  </span>
+                </div>
+              <% {:error, message} -> %>
+                <p class="flex items-start gap-1.5 text-xs text-error">
+                  <.icon name="hero-exclamation-circle" class="size-3.5 mt-px shrink-0" />
+                  <span>{message}</span>
+                </p>
+            <% end %>
+
+            <div class="flex flex-wrap items-center gap-1.5 pt-1">
+              <span class="text-xs text-base-content/50">{gettext("Load an example:")}</span>
+              <button
+                :for={example <- meta_field_examples()}
+                type="button"
+                phx-click="load_meta_fields_example"
+                phx-value-example={example.key}
+                class="btn btn-ghost btn-xs"
+              >
+                {example.label}
+              </button>
+              <button
+                type="button"
+                phx-click="clear_meta_fields"
+                class="btn btn-ghost btn-xs text-base-content/50"
+              >
+                {gettext("Clear")}
+              </button>
+            </div>
+          </div>
+
+          <div
+            :if={@custom_type_error}
+            class="flex items-start gap-2 rounded-xl border border-error/30 bg-error/5 px-3 py-2.5 text-sm text-error"
+          >
+            <.icon name="hero-exclamation-triangle" class="size-4 mt-0.5 shrink-0" />
+            <span>{@custom_type_error}</span>
+          </div>
+
+          <div class="flex justify-end pt-3 border-t border-base-content/10">
+            <button
+              type="submit"
+              class="btn btn-sm btn-primary transition-colors active:scale-95"
+              phx-disable-with={gettext("Adding…")}
+            >
+              <.icon name="hero-plus" class="size-4" />
+              {gettext("Add page type")}
+            </button>
+          </div>
         </.form>
       </div>
     </section>
@@ -577,11 +897,11 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   attr :workspace, Workspace, required: true
   attr :form, :any, required: true
-  attr :features, :list, default: []
+  attr :groups, :list, default: []
 
   defp features_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
+    <section id="features-section" class="surface-2 rounded-2xl overflow-hidden">
       <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
         <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-accent/10">
           <.icon name="hero-puzzle-piece" class="size-4 text-accent" />
@@ -590,7 +910,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
           <h2 class="text-heading">{gettext("Features")}</h2>
           <p class="text-caption mt-1">
             {gettext(
-              "Enable or disable workspace features. Disabled features hide their entry points."
+              "Turn parts of this workspace on or off. Disabling a feature only removes its entry point — no page, relation or summary is ever deleted."
             )}
           </p>
         </div>
@@ -598,19 +918,46 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
       <div class="px-5 py-5">
         <.form for={@form} id="workspace-features-form" phx-submit="save" class="space-y-6">
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <%= for feature <- @features do %>
-              <label class="flex items-center gap-3 rounded-xl border border-base-content/10 px-3 py-2.5 cursor-pointer hover:bg-base-200/50 transition-colors">
+          <div :for={{group, features} <- @groups} class="space-y-3">
+            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+              {group_label(group)}
+            </h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                :for={feature <- features}
+                class="flex items-start gap-3 rounded-xl border border-base-content/10 px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:bg-base-200/40"
+              >
                 <input
                   type="checkbox"
+                  id={"feature-#{feature}"}
                   name={"enabled_features[#{feature}]"}
                   value="true"
                   checked={Workspace.feature_enabled?(@workspace, feature)}
-                  class="checkbox checkbox-sm checkbox-primary"
+                  class="mt-0.5 size-4 rounded border-base-300 text-primary focus:ring-1 focus:ring-primary"
                 />
-                <span class="text-sm">{feature_label(feature)}</span>
+                <span class="min-w-0">
+                  <span class="flex items-center gap-2">
+                    <span class="text-sm font-medium">{feature_label(feature)}</span>
+                    <%!-- Same vocabulary as the Page types list: one state, one
+                         word. (A bare "on"/"off" msgid is also a trap: it is
+                         already polluted in the catalog by a fuzzy match.) --%>
+                    <span class={[
+                      "text-[10px] uppercase tracking-wide",
+                      Workspace.feature_enabled?(@workspace, feature) && "text-success",
+                      !Workspace.feature_enabled?(@workspace, feature) && "text-base-content/40"
+                    ]}>
+                      {if Workspace.feature_enabled?(@workspace, feature),
+                        do: gettext("Enabled"),
+                        else: gettext("Disabled")}
+                    </span>
+                  </span>
+                  <span class="block text-xs text-base-content/60 mt-1">
+                    {feature_description(feature)}
+                  </span>
+                </span>
               </label>
-            <% end %>
+            </div>
           </div>
 
           <div class="flex justify-end pt-3 border-t border-base-content/10">
@@ -634,7 +981,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   defp brain_tuning_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
+    <section id="automation-section" class="surface-2 rounded-2xl overflow-hidden">
       <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
         <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-secondary/10">
           <.icon name="hero-adjustments-horizontal" class="size-4 text-secondary" />
@@ -657,7 +1004,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
           class="space-y-6"
         >
           <%!-- Worker limits --%>
-          <div class="space-y-2">
+          <div class="space-y-3">
             <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
               {gettext("Worker limits")}
             </h3>
@@ -703,9 +1050,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
           </div>
 
           <%!-- Read sharing policy --%>
-          <div class="space-y-2">
+          <div class="space-y-3">
             <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-              {gettext("Compartir lectura")}
+              {gettext("Share read access")}
             </h3>
             <div class="space-y-4">
               <div>
@@ -714,7 +1061,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
                   name="workspace[share_memory]"
                   value="false"
                 />
-                <label class="flex items-start gap-3 cursor-pointer">
+                <label
+                  for="workspace-share-memory"
+                  class="flex items-start gap-3 cursor-pointer rounded-xl border border-base-content/10 px-3 py-2.5 transition-colors duration-150 hover:bg-base-200/40"
+                >
                   <input
                     id="workspace-share-memory"
                     type="checkbox"
@@ -725,11 +1075,11 @@ defmodule DranWeb.WorkspaceSettingsLive do
                   />
                   <span class="min-w-0">
                     <span class="block text-sm font-medium text-base-content">
-                      {gettext("Compartir memoria entre los usuarios del workspace")}
+                      {gettext("Share memory between workspace users")}
                     </span>
                     <span class="block text-xs text-base-content/60 mt-1">
                       {gettext(
-                        "Si se desactiva, cada usuario (y sus agentes) ve solo los hechos que le pertenecen; owner y admin del workspace conservan la vista completa."
+                        "When disabled, each user (and their agents) only sees the facts that belong to them; workspace owners and admins keep the full view."
                       )}
                     </span>
                   </span>
@@ -741,7 +1091,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
                   name="workspace[share_pages]"
                   value="false"
                 />
-                <label class="flex items-start gap-3 cursor-pointer">
+                <label
+                  for="workspace-share-pages"
+                  class="flex items-start gap-3 cursor-pointer rounded-xl border border-base-content/10 px-3 py-2.5 transition-colors duration-150 hover:bg-base-200/40"
+                >
                   <input
                     id="workspace-share-pages"
                     type="checkbox"
@@ -752,11 +1105,11 @@ defmodule DranWeb.WorkspaceSettingsLive do
                   />
                   <span class="min-w-0">
                     <span class="block text-sm font-medium text-base-content">
-                      {gettext("Compartir páginas entre los usuarios del workspace")}
+                      {gettext("Share pages between workspace users")}
                     </span>
                     <span class="block text-xs text-base-content/60 mt-1">
                       {gettext(
-                        "Si se desactiva, cada usuario ve solo las páginas que le pertenecen; el grafo solo pinta nodos y aristas visibles."
+                        "When disabled, each user only sees the pages that belong to them; the graph only draws visible nodes and edges."
                       )}
                     </span>
                   </span>
@@ -774,7 +1127,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
               />
               <.icon name="hero-adjustments-horizontal" class="size-4 text-base-content/40" />
               <span class="text-sm font-semibold text-base-content/70">
-                {gettext("Avanzado")}
+                {gettext("Advanced")}
               </span>
             </summary>
             <div class="mt-4 space-y-2">
@@ -833,7 +1186,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   defp users_section(assigns) do
     ~H"""
-    <section class="surface-2 rounded-2xl overflow-hidden">
+    <section id="users-section" class="surface-2 rounded-2xl overflow-hidden">
       <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
         <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
           <.icon name="hero-users" class="size-4 text-primary" />
@@ -841,7 +1194,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Users")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Manage which instance users have access to this workspace.")}
+            {gettext("Who can open this workspace, and with which role.")}
           </p>
         </div>
       </header>
@@ -849,9 +1202,17 @@ defmodule DranWeb.WorkspaceSettingsLive do
       <div class="px-5 py-5 space-y-6">
         <%!-- Current members --%>
         <div>
-          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
+          <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-1">
             {gettext("Members")} ({length(@members)})
           </h3>
+
+          <%!-- What each role means. Picking a role is a permission decision;
+               the select's options are otherwise just four words. --%>
+          <ul class="mb-3 space-y-0.5">
+            <li :for={role <- ~w(owner admin editor viewer)} class="text-xs text-base-content/50">
+              {role_description(role)}
+            </li>
+          </ul>
 
           <div :if={@members == []} class="text-sm text-base-content/50 py-4 text-center">
             {gettext("No users have access to this workspace yet.")}
@@ -874,22 +1235,26 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
               <div class="flex items-center gap-2">
                 <select
+                  id={"member-role-#{member.id}"}
                   name={"role-#{member.id}"}
                   class="select select-bordered select-xs"
                   phx-change="set_member_role"
                   phx-value-user_id={member.id}
                 >
-                  <%= for role <- ~w(owner admin editor viewer) do %>
-                    <option value={role} selected={member.role == role}>
-                      {String.capitalize(role)}
-                    </option>
-                  <% end %>
+                  <option
+                    :for={role <- ~w(owner admin editor viewer)}
+                    value={role}
+                    selected={member.role == role}
+                  >
+                    {role_label(role)}
+                  </option>
                 </select>
 
                 <button
                   type="button"
                   phx-click="toggle_member"
                   phx-value-user_id={member.id}
+                  data-confirm={gettext("Remove %{user} from this workspace?", user: member.email)}
                   class="btn btn-ghost btn-xs btn-circle text-error"
                   title={gettext("Remove from workspace")}
                 >
@@ -906,7 +1271,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
             {gettext("Add users")}
           </h3>
 
-          <form phx-change="search_users" class="relative">
+          <%!-- The id keeps LiveView form recovery working (it is the field the
+               form is about, and the one a crash would lose). --%>
+          <form id="user-search-form" phx-change="search_users" class="relative">
             <.icon
               name="hero-magnifying-glass"
               class="absolute left-3 top-2.5 size-4 text-base-content/50"
@@ -996,25 +1363,194 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
   defp assign_custom_type_form(socket) do
     assign(socket,
-      custom_type_form: to_form(%{"meta_fields" => ""}, as: :workspace),
+      custom_type_form: to_form(blank_custom_type_params(), as: :workspace),
       custom_type_error: nil
     )
   end
 
-  # meta_fields is raw JSON for now (array-of-arrays, one per field). Empty
-  # input means "no custom fields" — not an error.
-  defp parse_meta_fields(nil), do: []
-  defp parse_meta_fields(""), do: []
+  # Values of the "add a custom page type" form. Kept as plain string-keyed
+  # params so a rejected submit can be re-fed verbatim into `to_form/2`
+  # (values survive the round-trip).
+  defp blank_custom_type_params do
+    Map.new(~w(slug label plural path icon color meta_fields), &{&1, ""})
+  end
 
-  defp parse_meta_fields(raw) when is_binary(raw) do
-    case Jason.decode(String.trim(raw)) do
-      {:ok, list} when is_list(list) -> list
-      _ -> []
+  # Same map, with one field replaced — used by the example/clear buttons.
+  defp custom_type_form_params(socket, key, value) do
+    case socket.assigns[:custom_type_form] do
+      %{params: params} when is_map(params) ->
+        params |> stringify_keys() |> Map.put(key, value)
+
+      _ ->
+        Map.put(blank_custom_type_params(), key, value)
     end
   end
 
-  defp parse_meta_fields(other) when is_list(other), do: other
-  defp parse_meta_fields(_other), do: []
+  defp stringify_keys(map), do: Map.new(map, fn {k, v} -> {to_string(k), v} end)
+
+  # ── meta_fields: JSON editor parsing ──────────────────────────────────────
+  #
+  # The stored shape is the editor's internal array form: one array per field,
+  # `[type, key, label]` (optionally with extra opts). Empty input means "no
+  # custom fields" — not an error. Anything else that does not decode, or does
+  # not describe a field, is reported with the reason instead of being silently
+  # dropped (the old behaviour turned a typo into "no fields, saved fine").
+
+  @meta_field_types ~w(text date props)
+
+  defp parse_meta_fields(nil), do: {:ok, []}
+  defp parse_meta_fields(""), do: {:ok, []}
+
+  defp parse_meta_fields(raw) when is_binary(raw) do
+    case String.trim(raw) do
+      "" -> {:ok, []}
+      trimmed -> decode_meta_fields(trimmed)
+    end
+  end
+
+  defp parse_meta_fields(other) when is_list(other), do: {:ok, other}
+  defp parse_meta_fields(_other), do: {:ok, []}
+
+  defp decode_meta_fields(raw) do
+    case Jason.decode(raw) do
+      {:ok, list} when is_list(list) -> validate_meta_fields(list)
+      {:ok, _other} -> {:error, gettext("Meta fields must be a JSON array of fields.")}
+      {:error, %Jason.DecodeError{} = error} -> {:error, json_error_message(error)}
+    end
+  end
+
+  defp validate_meta_fields(fields) do
+    fields
+    |> Enum.with_index(1)
+    |> Enum.find_value(fn {field, index} -> meta_field_error(field, index) end)
+    |> case do
+      nil -> {:ok, fields}
+      error -> {:error, error}
+    end
+  end
+
+  defp meta_field_error(field, index) when is_list(field) do
+    case field do
+      # Two elements is enough to tell which piece is missing.
+      [type, key | rest] ->
+        label = List.first(rest)
+
+        cond do
+          type not in @meta_field_types ->
+            gettext("Field %{index}: unknown type %{type}. Allowed types: %{allowed}.",
+              index: index,
+              type: inspect(type),
+              allowed: Enum.join(@meta_field_types, ", ")
+            )
+
+          not (is_binary(key) and String.trim(key) != "") ->
+            gettext("Field %{index}: the key must be a non-empty string.", index: index)
+
+          not (is_binary(label) and String.trim(label) != "") ->
+            gettext("Field %{index}: the label must be a non-empty string.", index: index)
+
+          true ->
+            nil
+        end
+
+      _ ->
+        gettext(
+          "Field %{index}: each field is a JSON array like [\"text\", \"cuisine\", \"Cuisine\"].",
+          index: index
+        )
+    end
+  end
+
+  defp meta_field_error(_field, index) do
+    gettext(
+      "Field %{index}: each field is a JSON array like [\"text\", \"cuisine\", \"Cuisine\"].",
+      index: index
+    )
+  end
+
+  defp json_error_message(%Jason.DecodeError{} = error) do
+    gettext("Invalid JSON: %{detail}", detail: Jason.DecodeError.message(error))
+  end
+
+  # Decoded view of what the editor currently holds, for the inline feedback
+  # under the JSON box: `{:empty, []}`, `{:ok, fields}` or `{:error, message}`.
+  defp meta_fields_feedback(nil), do: {:empty, []}
+  defp meta_fields_feedback(""), do: {:empty, []}
+
+  defp meta_fields_feedback(raw) when is_binary(raw) do
+    case parse_meta_fields(raw) do
+      {:ok, []} -> {:empty, []}
+      {:ok, fields} -> {:ok, fields}
+      {:error, message} -> {:error, message}
+    end
+  end
+
+  defp meta_fields_feedback(_other), do: {:empty, []}
+
+  # Ready-to-load templates. `key` is the DOM value, `json` goes straight into
+  # the textarea so the shape is learned by example, not by documentation.
+  defp meta_field_examples do
+    [
+      %{
+        key: "text",
+        label: gettext("Text field"),
+        json: ~s([[\"text\", \"cuisine\", \"Cuisine\"]])
+      },
+      %{
+        key: "date_url",
+        label: gettext("Date + URL"),
+        json:
+          ~s([[\"date\", \"published_at\", \"Published at\"], [\"text\", \"source_url\", \"Source URL\"]])
+      },
+      %{
+        key: "props",
+        label: gettext("Custom properties"),
+        json: ~s([[\"props\", \"props\", \"Custom properties\"]])
+      }
+    ]
+  end
+
+  # Live preview of the type being defined, computed from the form values.
+  # `slug`/`path` stay nil when blank so callers can show their own default.
+  defp custom_type_preview(params) when is_map(params) do
+    params = stringify_keys(params)
+    label = blank_to_nil(params["label"]) || gettext("New type")
+    plural = blank_to_nil(params["plural"]) || label <> "s"
+
+    %{
+      label: label,
+      plural: plural,
+      slug: blank_to_nil(params["slug"]),
+      path: blank_to_nil(params["path"]),
+      icon: preview_icon(params["icon"]),
+      color: preview_color(params["color"])
+    }
+  end
+
+  defp custom_type_preview(_), do: custom_type_preview(%{})
+
+  # Mirrors `Dran.Workspace.normalize_icon/1` so the preview shows the icon
+  # that will actually be stored (the `hero-` prefix is added automatically).
+  defp preview_icon(nil), do: "hero-document-text"
+
+  defp preview_icon(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> "hero-document-text"
+      "hero-" <> _ = icon -> icon
+      other -> "hero-" <> other
+    end
+  end
+
+  defp preview_icon(_), do: "hero-document-text"
+
+  defp preview_color(nil), do: "#94A3B8"
+  defp preview_color(""), do: "#94A3B8"
+  defp preview_color(value) when is_binary(value), do: String.trim(value)
+  defp preview_color(_), do: "#94A3B8"
+
+  # One-line description of a parsed meta field for the editor chips.
+  defp meta_field_chip([type, key | _rest]), do: "#{type} · #{key}"
+  defp meta_field_chip(other), do: inspect(other)
 
   defp custom_type_message(changeset) do
     changeset
@@ -1100,7 +1636,15 @@ defmodule DranWeb.WorkspaceSettingsLive do
     Map.get(ws_params, key) == "true"
   end
 
-  defp blank_to_nil(""), do: nil
+  # Blank form values become nil so callers can fall back to a default.
+  # Trims first: a field holding only spaces is blank, not a value.
+  defp blank_to_nil(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
   defp blank_to_nil(value), do: value
 
   # Select options for the summary language pin. "Auto" keeps the model
@@ -1113,18 +1657,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
     ]
   end
 
-  # Effective types come from the workspace (4 built-in ∪ custom); labels and
-  # paths resolve through it too, so a custom type shows its declared values.
+  # Effective types come from the workspace (4 built-in ∪ custom); labels,
+  # icons, colours and paths all resolve through `Dran.Workspace.page_type_ui/2`
+  # in the template, so a custom type shows its declared values.
   defp effective_page_types(workspace), do: Dran.Knowledge.effective_page_types(workspace)
-
-  defp page_type_label(workspace, type), do: Dran.Workspace.page_type_label(workspace, type)
-
-  defp page_type_impact(workspace, type) do
-    gettext("%{plural} section and %{path} list",
-      plural: Dran.Workspace.page_type_plural(workspace, type),
-      path: Dran.Workspace.page_type_path(workspace, type)
-    )
-  end
 
   defp feature_label("clusters"), do: gettext("Clusters")
   defp feature_label("graph"), do: gettext("Graph")
@@ -1134,4 +1670,58 @@ defmodule DranWeb.WorkspaceSettingsLive do
   defp feature_label("search"), do: gettext("Search")
   defp feature_label("reports"), do: gettext("Reports")
   defp feature_label(other), do: other
+
+  # What the user loses by turning the feature off — the caption next to each
+  # toggle. Written as "what it gives you", because that is the decision the
+  # toggle asks for.
+  defp feature_description("search"),
+    do: gettext("Full-text and semantic search across this workspace's pages.")
+
+  defp feature_description("graph"),
+    do: gettext("The relationship map of this workspace's pages.")
+
+  defp feature_description("journey"),
+    do: gettext("Timeline of how this workspace's knowledge grew over time.")
+
+  defp feature_description("collections"),
+    do: gettext("Curated and smart page lists that update as the workspace changes.")
+
+  defp feature_description("clusters"),
+    do: gettext("Related pages grouped into themes by the nightly job.")
+
+  defp feature_description("reports"),
+    do: gettext("Generated reports written from this workspace's content.")
+
+  defp feature_description("activity"),
+    do: gettext("Log of the recent changes to this workspace's pages.")
+
+  defp feature_description(_other), do: ""
+
+  defp group_label("Knowledge base"), do: gettext("Knowledge base")
+  defp group_label("Insights"), do: gettext("Insights")
+  defp group_label(other), do: other
+
+  # Role labels come from gettext instead of `String.capitalize/1`: the raw
+  # role slugs ("owner", "viewer") are stored values, not user-facing text.
+  defp role_label("owner"), do: gettext("Owner")
+  defp role_label("admin"), do: gettext("Admin")
+  defp role_label("editor"), do: gettext("Editor")
+  defp role_label("viewer"), do: gettext("Viewer")
+  defp role_label(other), do: other
+
+  # One line per role, rendered as a legend above the member list: picking a
+  # role is a permission decision and the options are otherwise just words.
+  defp role_description("owner"),
+    do: gettext("Owner: settings, members and content.")
+
+  defp role_description("admin"),
+    do: gettext("Admin: settings and members, plus content.")
+
+  defp role_description("editor"),
+    do: gettext("Editor: create and edit pages, no access to settings.")
+
+  defp role_description("viewer"),
+    do: gettext("Viewer: read pages only.")
+
+  defp role_description(_other), do: ""
 end

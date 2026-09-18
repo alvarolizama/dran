@@ -18,7 +18,7 @@ defmodule DranWeb.AdminUsersLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Usuarios"), workspace_slug: nil)
+      |> assign(active_nav: "admin", page_title: gettext("Users"), workspace_slug: nil)
       |> assign_users()
       |> assign_workspaces()
       |> assign(
@@ -260,13 +260,13 @@ defmodule DranWeb.AdminUsersLive do
           </div>
 
           <%!-- Users list --%>
-          <.section :if={@users != []} title={gettext("Usuarios")} icon="hero-users">
+          <.section :if={@users != []} title={gettext("Users")} icon="hero-users">
             <div class="overflow-x-auto">
               <table class="table table-sm">
                 <thead>
                   <tr>
                     <th>{gettext("Email")}</th>
-                    <th>{gettext("Nombre")}</th>
+                    <th>{gettext("Name")}</th>
                     <th>{gettext("Admin")}</th>
                     <th>{gettext("Contexts")}</th>
                     <th>{gettext("Default context")}</th>
@@ -342,6 +342,7 @@ defmodule DranWeb.AdminUsersLive do
                           POST /admin/impersonate/:id.
                         --%>
                         <form
+                          id={"impersonate-#{user.id}"}
                           action={"/admin/impersonate/#{user.id}"}
                           method="post"
                           data-confirm={gettext("Impersonate this user?")}
@@ -407,7 +408,7 @@ defmodule DranWeb.AdminUsersLive do
         <.form for={@user_form} phx-submit="save_user" class="space-y-4">
           <div class="grid grid-cols-2 gap-3">
             <.input field={@user_form[:email]} label={gettext("Email")} type="email" required />
-            <.input field={@user_form[:name]} label={gettext("Nombre")} />
+            <.input field={@user_form[:name]} label={gettext("Name")} />
           </div>
 
           <div>
@@ -432,14 +433,14 @@ defmodule DranWeb.AdminUsersLive do
               phx-click="close_user_modal"
               class="btn btn-ghost btn-sm"
             >
-              {gettext("Cancelar")}
+              {gettext("Cancel")}
             </button>
             <button
               type="submit"
               class="btn btn-primary btn-sm"
               phx-disable-with={gettext("Guardando…")}
             >
-              {gettext("Guardar")}
+              {gettext("Save")}
             </button>
           </div>
         </.form>

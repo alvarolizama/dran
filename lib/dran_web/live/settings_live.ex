@@ -65,6 +65,7 @@ defmodule DranWeb.SettingsLive do
         profile_form: to_form(Dran.Accounts.User.profile_changeset(user, %{}), as: :profile),
         password_form:
           to_form(Dran.Accounts.User.update_password_changeset(user, %{}), as: :password),
+        locale_form: locale_form(socket.assigns.locale),
         google_linked: Dran.Accounts.google_linked?(user)
       )
 
@@ -187,7 +188,7 @@ defmodule DranWeb.SettingsLive do
 
       {:noreply, socket}
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -217,7 +218,7 @@ defmodule DranWeb.SettingsLive do
           {:noreply, put_flash(socket, :error, gettext("Could not update the access"))}
       end
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -250,7 +251,7 @@ defmodule DranWeb.SettingsLive do
           {:noreply, put_flash(socket, :error, gettext("Could not update the access"))}
       end
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -263,7 +264,7 @@ defmodule DranWeb.SettingsLive do
        |> assign(api_keys: current_api_keys(socket))
        |> put_flash(:info, gettext("API key revoked"))}
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -276,7 +277,7 @@ defmodule DranWeb.SettingsLive do
        |> assign(api_keys: current_api_keys(socket))
        |> put_flash(:info, gettext("API key restored"))}
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -292,7 +293,7 @@ defmodule DranWeb.SettingsLive do
        )
        |> put_flash(:info, gettext("API key regenerated — copy the new token now"))}
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -305,7 +306,7 @@ defmodule DranWeb.SettingsLive do
        |> assign(api_keys: current_api_keys(socket))
        |> put_flash(:info, gettext("API key deleted"))}
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -316,7 +317,7 @@ defmodule DranWeb.SettingsLive do
     with {:ok, key} <- owned_api_key(id, socket) do
       {:noreply, push_event(socket, "copy_to_clipboard", %{text: key.token_prefix})}
     else
-      _ -> {:noreply, put_flash(socket, :error, gettext("No autorizado."))}
+      _ -> {:noreply, put_flash(socket, :error, gettext("Not authorized."))}
     end
   end
 
@@ -379,6 +380,50 @@ defmodule DranWeb.SettingsLive do
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, gettext("Could not unlink Google account"))}
     end
+  end
+
+  # ── Language ──────────────────────────────────────────────────────────────
+  #
+  # The preference is durable (users.locale). Changing it changes the language
+  # of *every* string on the page — including the ones inside the layout and
+  # the components, which LiveView's in-place diffing does not always carry —
+  # so the honest move is to remount: `push_navigate` to this same tab makes
+  # the LiveView mount again, read `users.locale` and render the whole page in
+  # the new language. The flash is translated after the switch, so it lands in
+  # the language the user just picked.
+  @impl true
+  def handle_event("save_locale", %{"locale" => %{"locale" => locale}}, socket) do
+    case Dran.Accounts.update_locale(socket.assigns.current_user_struct, locale) do
+      {:ok, updated_user} ->
+        Gettext.put_locale(DranWeb.Gettext, updated_user.locale)
+
+        {:noreply,
+         socket
+         |> assign(
+           current_user_struct: updated_user,
+           locale: updated_user.locale,
+           locale_form: locale_form(updated_user.locale)
+         )
+         |> put_flash(:info, gettext("Language updated"))
+         |> push_navigate(to: ~p"/settings/account")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not save the preference"))}
+    end
+  end
+
+  # One-field form driving the language select. Values are the locale codes the
+  # app ships catalogs for; the labels stay in their own language on purpose.
+  defp locale_form(locale) do
+    to_form(%{"locale" => locale || DranWeb.Gettext.app_default_locale()}, as: :locale)
+  end
+
+  defp locale_options do
+    Enum.map(DranWeb.Gettext.supported_locales(), fn
+      "en" -> {"English", "en"}
+      "es" -> {"Español", "es"}
+      other -> {other, other}
+    end)
   end
 
   # Form params for the workspace×level matrix modals. `key` (optional) is
@@ -504,6 +549,32 @@ defmodule DranWeb.SettingsLive do
                   >
                     {gettext("Change password")}
                   </button>
+                </.form>
+              </.section>
+
+              <.section
+                title={gettext("Language")}
+                caption={gettext("Interface language for your account.")}
+                icon="hero-language"
+              >
+                <.form
+                  for={@locale_form}
+                  id="locale-form"
+                  phx-change="save_locale"
+                  class="space-y-3"
+                >
+                  <.input
+                    field={@locale_form[:locale]}
+                    type="select"
+                    label={gettext("Language")}
+                    options={locale_options()}
+                    class="w-full sm:max-w-xs"
+                  />
+                  <p class="text-xs text-base-content/60">
+                    {gettext(
+                      "English is the default. Your choice is saved to your account and applies to every workspace."
+                    )}
+                  </p>
                 </.form>
               </.section>
 

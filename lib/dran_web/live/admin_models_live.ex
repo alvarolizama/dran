@@ -172,7 +172,7 @@ defmodule DranWeb.AdminModelsLive do
     do: gettext("HTTP %{status}", status: status)
 
   defp format_model_error(%Req.TransportError{reason: reason}), do: inspect(reason)
-  defp format_model_error(:not_configured), do: gettext("API no configurada")
+  defp format_model_error(:not_configured), do: gettext("API not configured")
   defp format_model_error(other), do: inspect(other)
 
   @impl true
@@ -231,7 +231,7 @@ defmodule DranWeb.AdminModelsLive do
       >
         <p :if={match?({:error, _}, @models_result)} class="text-xs text-base-content/60">
           {gettext(
-            "API no disponible — los modelos no pueden listarse. Aún puedes escribir un override manual, o revisa DRAN_INFERENCE_API_URL."
+            "API unavailable — models cannot be listed. You can still write a manual override, or check DRAN_INFERENCE_API_URL."
           )}
         </p>
 
@@ -250,7 +250,7 @@ defmodule DranWeb.AdminModelsLive do
                     label={label_fn.()}
                     options={options}
                     value={current}
-                    prompt={gettext("Selecciona un modelo")}
+                    prompt={gettext("Select a model")}
                   />
                 </div>
                 <button
@@ -270,7 +270,7 @@ defmodule DranWeb.AdminModelsLive do
                     name={if test_status == :testing, do: "hero-arrow-path", else: "hero-bolt"}
                     class={"size-3.5 #{if test_status == :testing, do: "animate-spin", else: ""}"}
                   />
-                  {if test_status == :testing, do: gettext("Probando..."), else: gettext("Probar")}
+                  {if test_status == :testing, do: gettext("Testing..."), else: gettext("Test")}
                 </button>
               </div>
               <p class="text-xs text-base-content/60 mt-1.5">

@@ -273,7 +273,7 @@ defmodule DranWeb.MarkdownEditorComponents do
           name={"page[meta][#{@key}]"}
           value={@value}
           options={options}
-          prompt={gettext("Ninguno")}
+          prompt={gettext("None")}
           label={@label}
         />
       <% :slug_select -> %>
@@ -287,9 +287,9 @@ defmodule DranWeb.MarkdownEditorComponents do
         <% options = Enum.map(pages, fn p -> {p.title, p.slug} end) %>
         <% prompt =
           case slug_type do
-            "project" -> gettext("Sin proyecto")
-            "plan" -> gettext("Sin plan")
-            _ -> gettext("Ninguno")
+            "project" -> gettext("No project")
+            "plan" -> gettext("No plan")
+            _ -> gettext("None")
           end %>
         <.input
           type="select"

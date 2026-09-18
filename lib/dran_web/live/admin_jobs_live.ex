@@ -75,7 +75,7 @@ defmodule DranWeb.AdminJobsLive do
       socket
       |> assign(running_jobs: MapSet.delete(socket.assigns.running_jobs, key))
       |> assign_jobs()
-      |> put_flash(:error, gettext("Job falló: %{label}", label: job_label(key)))
+      |> put_flash(:error, gettext("Job failed: %{label}", label: job_label(key)))
 
     {:noreply, socket}
   end
@@ -119,7 +119,7 @@ defmodule DranWeb.AdminJobsLive do
             <h1 class="text-title">{gettext("Jobs")}</h1>
             <p class="text-caption mt-0.5">
               {gettext(
-                "Activa o desactiva los jobs recurrentes del cerebro. El toggle afecta solo las corridas programadas — \"Correr ahora\" siempre ejecuta."
+                "Enable or disable the brain's recurring jobs. The toggle only affects scheduled runs — \"Run now\" always executes."
               )}
             </p>
           </div>
@@ -143,7 +143,7 @@ defmodule DranWeb.AdminJobsLive do
       icon="hero-clock"
       caption={
         gettext(
-          "Activa o desactiva los jobs recurrentes del cerebro. El toggle afecta solo las corridas programadas — \"Correr ahora\" siempre ejecuta."
+          "Enable or disable the brain's recurring jobs. The toggle only affects scheduled runs — \"Run now\" always executes."
         )
       }
     >
@@ -153,8 +153,8 @@ defmodule DranWeb.AdminJobsLive do
             <tr>
               <th>{gettext("Job")}</th>
               <th>{gettext("Schedule")}</th>
-              <th>{gettext("Activo")}</th>
-              <th>{gettext("Último run")}</th>
+              <th>{gettext("Active")}</th>
+              <th>{gettext("Last run")}</th>
               <th></th>
             </tr>
           </thead>
@@ -192,7 +192,7 @@ defmodule DranWeb.AdminJobsLive do
                     </span>
                   </div>
                 <% else %>
-                  <span class="badge badge-ghost badge-sm">{gettext("Nunca")}</span>
+                  <span class="badge badge-ghost badge-sm">{gettext("Never")}</span>
                 <% end %>
               </td>
               <td>

@@ -88,6 +88,24 @@ defmodule Dran.Accounts do
     |> Repo.update()
   end
 
+  @doc """
+  Change the user's UI language (`"en"` | `"es"`).
+
+  English is the app default; a `nil`/blank value falls back to it instead of
+  erroring, so a malformed submit never leaves the account without a locale.
+  """
+  def update_locale(%User{} = user, locale) do
+    locale =
+      case DranWeb.Gettext.normalize_locale(locale) do
+        nil -> DranWeb.Gettext.app_default_locale()
+        normalized -> normalized
+      end
+
+    user
+    |> User.locale_changeset(%{locale: locale})
+    |> Repo.update()
+  end
+
   @doc "Unlink the Google account: clears google_id and avatar_url."
   def unlink_google(%User{} = user) do
     user

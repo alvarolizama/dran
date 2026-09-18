@@ -28,7 +28,7 @@ defmodule DranWeb.JourneyLive do
        journey: journey,
        type_colors: Journey.type_colors(context),
        active_nav: "journey",
-       page_title: gettext("Trayectoria")
+       page_title: gettext("Trajectory")
      )}
   end
 
@@ -74,9 +74,9 @@ defmodule DranWeb.JourneyLive do
     ~H"""
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-title">{gettext("Trayectoria")}</h1>
+        <h1 class="text-title">{gettext("Trajectory")}</h1>
         <p class="text-caption mt-1">
-          {gettext("Crecimiento de tu segundo cerebro en el tiempo")}
+          {gettext("Growth of your second brain over time")}
         </p>
       </div>
     </div>
@@ -89,26 +89,26 @@ defmodule DranWeb.JourneyLive do
     ~H"""
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       <.stat_card
-        label={gettext("Total páginas")}
+        label={gettext("Total pages")}
         value={@stats.total_pages}
         icon="hero-document-duplicate"
         color="text-primary"
       />
       <.stat_card
-        label={gettext("Tipos")}
+        label={gettext("Types")}
         value={map_size(@stats.by_type)}
         icon="hero-tag"
         color="text-secondary"
       />
       <.stat_card
-        label={gettext("Período pico")}
+        label={gettext("Peak period")}
         value={@stats.busiest_period || "—"}
         icon="hero-fire"
         color="text-warning"
         small={true}
       />
       <.stat_card
-        label={gettext("Páginas pico")}
+        label={gettext("Peak pages")}
         value={@stats.busiest_count}
         icon="hero-chart-bar"
         color="text-info"
@@ -251,7 +251,7 @@ defmodule DranWeb.JourneyLive do
 
     ~H"""
     <div class="flex flex-wrap items-center gap-3">
-      <span class="text-caption text-base-content/50">{gettext("Tipos:")}</span>
+      <span class="text-caption text-base-content/50">{gettext("Types:")}</span>
       <span
         :for={{type, count, color} <- @sorted}
         class="inline-flex items-center gap-1.5 text-xs"
@@ -295,9 +295,9 @@ defmodule DranWeb.JourneyLive do
         <.icon name="hero-map" class="size-8 text-base-content/30" />
       </div>
       <div>
-        <h3 class="text-heading">{gettext("Sin páginas aún")}</h3>
+        <h3 class="text-heading">{gettext("No pages yet")}</h3>
         <p class="text-caption mt-1">
-          {gettext("Crea algunas páginas para ver la trayectoria de tu cerebro.")}
+          {gettext("Create some pages to see your brain's trajectory.")}
         </p>
       </div>
     </div>

@@ -216,6 +216,12 @@ Then point the agent at them from its system prompt:
 ```
 ## Frameworks — activation lines
 
+- **Riel (steering)** — when opening or maintaining any LLM conversation or
+  task, load `riel-protocol` and whichever apply: `riel-ledger` (state for
+  multi-phase work), `riel-contract` (the plan as a mermaid DAG),
+  `riel-briefs` / `riel-delegate` (delegation packets), `riel-cli` (drive the
+  ledger and instantiate packets with `rielctl`). Riel creates no capability —
+  it stops capability from being lost.
 - **Dran (second brain)** — when operating the Dran workspace (knowledge
   pages, typed relations, memories, or its workers), load the `dran` skill
   and whichever apply: `dran-knowledge-flow` (pages), `dran-relations-flow`

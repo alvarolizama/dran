@@ -5,8 +5,8 @@ defmodule DranWeb.DashboardLiveTest do
   alias Dran.Knowledge
   alias Dran.Repo
 
-  # Gettext wrapper — the app default locale is "es", so assertions must
-  # match the translated strings, not the English msgids.
+  # Gettext wrapper. English is the app default locale, so the msgid is
+  # what the app renders unless a test pins another locale.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
   defp owner_conn(conn) do
@@ -67,9 +67,9 @@ defmodule DranWeb.DashboardLiveTest do
 
       assert html =~ t("Dashboard")
       assert html =~ t("New workspace")
-      # The header shows instance totals (es locale renders the translations).
-      assert html =~ "espacio de trabajo"
-      assert html =~ "página"
+      # The header shows instance totals (English is the default locale).
+      assert html =~ "workspace"
+      assert html =~ "page"
       # The default workspace is listed with a link into it
       assert html =~ ~s(href="/personal")
       assert html =~ "personal"

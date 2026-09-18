@@ -74,7 +74,7 @@ defmodule DranWeb.AdminSystemLive do
          put_flash(
            socket,
            :error,
-           gettext("Slug inválido: usa minúsculas, dígitos y guiones.")
+           gettext("Invalid slug: use lowercase letters, digits and hyphens.")
          )}
 
       true ->
@@ -89,7 +89,7 @@ defmodule DranWeb.AdminSystemLive do
         {:noreply,
          socket
          |> assign_instance_form()
-         |> put_flash(:info, gettext("Configuración de instancia guardada."))}
+         |> put_flash(:info, gettext("Instance configuration saved."))}
     end
   end
 
@@ -102,7 +102,7 @@ defmodule DranWeb.AdminSystemLive do
      socket
      |> assign_instance_form()
      |> push_event("copy_to_clipboard", %{text: token})
-     |> put_flash(:info, gettext("Token generado y copiado al portapapeles."))}
+     |> put_flash(:info, gettext("Token generated and copied to the clipboard."))}
   end
 
   @impl true
@@ -168,20 +168,16 @@ defmodule DranWeb.AdminSystemLive do
           <div>
             <h1 class="text-title">{gettext("Sistema")}</h1>
             <p class="text-caption mt-0.5">
-              {gettext("Monitoreo, configuración de instancia y entorno.")}
+              {gettext("Monitoring, instance configuration and environment.")}
             </p>
           </div>
 
           <.monitoring_widgets monitoring={@monitoring} />
 
           <.section
-            title={gettext("Instancia")}
+            title={gettext("Instance")}
             icon="hero-adjustments-horizontal"
-            caption={
-              gettext(
-                "Workspace por defecto y token admin del API — persistidos en la base de datos."
-              )
-            }
+            caption={gettext("Default workspace and API admin token — persisted in the database.")}
           >
             <.form
               for={@instance_form}
@@ -193,19 +189,19 @@ defmodule DranWeb.AdminSystemLive do
                 <.input
                   field={@instance_form[:default_workspace_slug]}
                   type="text"
-                  label={gettext("Workspace por defecto (slug)")}
+                  label={gettext("Default workspace (slug)")}
                   placeholder="personal"
                 />
                 <.input
                   field={@instance_form[:default_workspace_name]}
                   type="text"
-                  label={gettext("Workspace por defecto (nombre)")}
+                  label={gettext("Default workspace (name)")}
                   placeholder="Personal"
                 />
               </div>
               <p class="text-xs text-base-content/60">
                 {gettext(
-                  "Workspace usado cuando un usuario no tiene workspace propio ni sesión activa. Se crea al guardar si no existe. Vacío = \"personal\"."
+                  "Workspace used when a user has no workspace of their own and no active session. Created on save if it does not exist. Blank = \"personal\"."
                 )}
               </p>
 
@@ -213,12 +209,12 @@ defmodule DranWeb.AdminSystemLive do
                 <.input
                   field={@instance_form[:api_token]}
                   type="text"
-                  label={gettext("Token admin del API")}
-                  placeholder={gettext("(vacío = deshabilitado)")}
+                  label={gettext("API admin token")}
+                  placeholder={gettext("(blank = disabled)")}
                 />
                 <p class="text-xs text-base-content/60 mt-1.5">
                   {gettext(
-                    "Bearer legacy para el API con acceso full-owner. Vacío = deshabilitado; los tokens por usuario siguen funcionando."
+                    "Legacy bearer for the API with full-owner access. Blank = disabled; per-user tokens keep working."
                   )}
                 </p>
                 <button
@@ -227,13 +223,13 @@ defmodule DranWeb.AdminSystemLive do
                   class="btn btn-xs btn-ghost hover:bg-primary/10 mt-2 gap-1.5"
                 >
                   <.icon name="hero-key" class="size-3.5" />
-                  {gettext("Generar token")}
+                  {gettext("Generate token")}
                 </button>
               </div>
 
               <div class="flex justify-end">
                 <button type="submit" class="btn btn-primary btn-sm">
-                  {gettext("Guardar")}
+                  {gettext("Save")}
                 </button>
               </div>
             </.form>
@@ -272,8 +268,8 @@ defmodule DranWeb.AdminSystemLive do
                     class={"size-4 #{if @inference_test == :testing, do: "animate-spin", else: ""}"}
                   />
                   {if @inference_test == :testing,
-                    do: gettext("Probando..."),
-                    else: gettext("Probar conexión")}
+                    do: gettext("Testing..."),
+                    else: gettext("Test connection")}
                 </button>
               </div>
             </.config_row>
@@ -447,7 +443,7 @@ defmodule DranWeb.AdminSystemLive do
           class="btn btn-xs btn-ghost hover:bg-primary/10 gap-1.5"
         >
           <.icon name="hero-arrow-path" class="size-3.5" />
-          {gettext("Actualizar")}
+          {gettext("Refresh")}
         </button>
       </div>
     </div>
@@ -473,9 +469,9 @@ defmodule DranWeb.AdminSystemLive do
 
   defp monitor_cards(nil) do
     [
-      %{label: gettext("Base de datos"), value: "—", sub: nil, icon: "hero-circle-stack"},
-      %{label: gettext("Disco"), value: "—", sub: nil, icon: "hero-server"},
-      %{label: gettext("Memoria BEAM"), value: "—", sub: nil, icon: "hero-cpu-chip"},
+      %{label: gettext("Database"), value: "—", sub: nil, icon: "hero-circle-stack"},
+      %{label: gettext("Disk"), value: "—", sub: nil, icon: "hero-server"},
+      %{label: gettext("BEAM memory"), value: "—", sub: nil, icon: "hero-cpu-chip"},
       %{label: gettext("Uptime"), value: "—", sub: nil, icon: "hero-clock"}
     ]
   end
@@ -483,19 +479,19 @@ defmodule DranWeb.AdminSystemLive do
   defp monitor_cards(m) do
     [
       %{
-        label: gettext("Base de datos"),
+        label: gettext("Database"),
         value: m.db_size,
-        sub: "#{m.table_count} tablas",
+        sub: ngettext("%{count} table", "%{count} tables", m.table_count),
         icon: "hero-circle-stack"
       },
       %{
-        label: gettext("Disco"),
+        label: gettext("Disk"),
         value: m.disk_free,
-        sub: "#{m.disk_percent}% usado · #{m.disk_total}",
+        sub: gettext("%{percent}% used · %{total}", percent: m.disk_percent, total: m.disk_total),
         icon: "hero-server"
       },
       %{
-        label: gettext("Memoria BEAM"),
+        label: gettext("BEAM memory"),
         value: m.memory_used,
         sub: "#{m.memory_percent}% de #{m.memory_total}",
         icon: "hero-cpu-chip"
@@ -646,7 +642,7 @@ defmodule DranWeb.AdminSystemLive do
       <%= cond do %>
         <% @test == :testing -> %>
           <span class="loading loading-dots loading-xs text-info"></span>
-          <span class="text-info text-xs font-medium">{gettext("Probando...")}</span>
+          <span class="text-info text-xs font-medium">{gettext("Testing...")}</span>
         <% match?({:ok, _}, @test) -> %>
           <% {:ok, r} = @test %>
           <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-success/15 text-success">
@@ -660,7 +656,7 @@ defmodule DranWeb.AdminSystemLive do
           <% {:error, reason} = @test %>
           <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-error/15 text-error">
             <.icon name="hero-x-circle" class="size-3" />
-            {gettext("Sin conexión")}
+            {gettext("Offline")}
           </span>
           <span class="text-xs text-error/70">
             {format_inference_error(reason)}
@@ -668,25 +664,25 @@ defmodule DranWeb.AdminSystemLive do
         <% @configured -> %>
           <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-info/15 text-info">
             <.icon name="hero-server" class="size-3" />
-            {gettext("Configurada")}
+            {gettext("Configured")}
           </span>
         <% true -> %>
           <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-base-200 text-base-content/50">
             <.icon name="hero-x-mark" class="size-3" />
-            {gettext("No configurada")}
+            {gettext("Not configured")}
           </span>
       <% end %>
     </div>
     """
   end
 
-  defp format_inference_error(:not_configured), do: gettext("API no configurada")
+  defp format_inference_error(:not_configured), do: gettext("API not configured")
 
   defp format_inference_error(%Req.TransportError{reason: reason}) do
     case reason do
-      :econnrefused -> gettext("Connection refused — el servidor no responde")
-      :timeout -> gettext("Timeout — el servidor tardó demasiado")
-      :nxdomain -> gettext("Dominio no resuelto")
+      :econnrefused -> gettext("Connection refused — the server is not responding")
+      :timeout -> gettext("Timeout — the server took too long")
+      :nxdomain -> gettext("Domain not resolved")
       _ -> gettext("TransportError: %{detail}", detail: inspect(reason))
     end
   end

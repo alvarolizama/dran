@@ -2,6 +2,12 @@ defmodule Dran.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
+  use Gettext, backend: DranWeb.Gettext
+
+  # Idiomas que la UI ofrece en Account settings. El inglés es el default de la
+  # app (`DranWeb.Gettext.app_default_locale/0`); el español es el secundario.
+  @locales ~w(en es)
+
   schema "users" do
     field :email, :string
     field :name, :string
@@ -11,6 +17,10 @@ defmodule Dran.Accounts.User do
     field :api_token, :string
     field :password_hash, :string
     field :default_workspace_slug, :string
+
+    # UI language: "en" (default) or "es". Read by DranWeb.Plugs.Locale and
+    # DranWeb.Plugs.Auth.assign_to_socket/3 to pin Gettext per request.
+    field :locale, :string, default: "en"
 
     # The user's global identity actor (kind: user). Backfilled 1:1 from
     # email; nullable until the actor row exists (see actors migration).
@@ -65,7 +75,7 @@ defmodule Dran.Accounts.User do
   def update_password_changeset(user, attrs) do
     user
     |> cast(attrs, [:password, :current_password])
-    |> validate_required([:password], message: "Ingresa una nueva contraseña")
+    |> validate_required([:password], message: gettext("Enter a new password"))
     |> validate_length(:password, min: 8)
     |> validate_current_password()
     |> put_password_hash()
@@ -82,13 +92,13 @@ defmodule Dran.Accounts.User do
 
       # Must verify the current password when one exists.
       is_nil(current) ->
-        add_error(changeset, :current_password, "Ingresa tu contraseña actual")
+        add_error(changeset, :current_password, gettext("Enter your current password"))
 
       Bcrypt.verify_pass(current, stored) ->
         changeset
 
       true ->
-        add_error(changeset, :current_password, "La contraseña actual es incorrecta")
+        add_error(changeset, :current_password, gettext("The current password is incorrect"))
     end
   end
 
@@ -97,6 +107,22 @@ defmodule Dran.Accounts.User do
     user
     |> cast(attrs, [:name, :avatar_url, :google_id])
   end
+
+  @doc """
+  Changeset for the UI language preference.
+
+  Only the two shipped locales are accepted; anything else is rejected so a
+  stray value can never leave the app without translations.
+  """
+  def locale_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:locale])
+    |> validate_required([:locale])
+    |> validate_inclusion(:locale, @locales)
+  end
+
+  @doc "Idiomas ofrecidos en la UI (inglés por defecto)."
+  def locales, do: @locales
 
   defp put_password_hash(%Ecto.Changeset{valid?: true, changes: %{password: pass}} = changeset) do
     put_change(changeset, :password_hash, Bcrypt.hash_pwd_salt(pass))

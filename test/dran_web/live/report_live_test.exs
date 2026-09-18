@@ -4,8 +4,8 @@ defmodule DranWeb.ReportLiveTest do
   alias Dran.Knowledge
 
   alias Dran.Reports
-  # Gettext wrapper — the app default locale is "es", so assertions must
-  # match the translated strings, not the English msgids.
+  # Gettext wrapper. English is the app default locale, so the msgid is
+  # what the app renders unless a test pins another locale.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
   setup %{conn: conn} do

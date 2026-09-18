@@ -19,7 +19,7 @@ defmodule Dran.PageMetaGettextTest do
   alias Dran.Knowledge.PageMeta
 
   # meta_fields_for/1,2 resolves gettext at call time against the CURRENT
-  # process locale. The app default is "es", so labels come back translated.
+  # process locale. English is the default, so we pin the locale explicitly.
   # We assert against the msgids in default.pot (English source strings), so
   # each assertion helper pins the process locale to "en" while collecting.
   defp with_en_locale(fun) do

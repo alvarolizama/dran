@@ -55,7 +55,7 @@ defmodule DranWeb.ClusterLive do
       <div>
         <h1 class="text-title">{gettext("Clusters")}</h1>
         <p class="text-caption mt-1">
-          {gettext("Clusters de páginas relacionadas en tu cerebro")}
+          {gettext("Clusters of related pages in your brain")}
         </p>
       </div>
       <button
@@ -93,7 +93,7 @@ defmodule DranWeb.ClusterLive do
               </h2>
             </div>
             <span class="text-xs text-base-content/50 bg-base-200 px-2 py-0.5 rounded-full">
-              {summary.page_count} {ngettext("página", "páginas", summary.page_count)}
+              {summary.page_count} {ngettext("page", "pages", summary.page_count)}
             </span>
           </div>
 
@@ -112,7 +112,7 @@ defmodule DranWeb.ClusterLive do
               :if={length(summary.top_pages) > 4}
               class="text-xs text-base-content/40"
             >
-              +{length(summary.top_pages) - 4} {gettext("más")}
+              +{length(summary.top_pages) - 4} {gettext("more")}
             </span>
           </div>
 
@@ -154,9 +154,9 @@ defmodule DranWeb.ClusterLive do
             </h1>
           </div>
           <p class="text-caption">
-            {@summary.page_count} {ngettext("página", "páginas", @summary.page_count)}
+            {@summary.page_count} {ngettext("page", "pages", @summary.page_count)}
             <span :if={@summary.generated_at} class="text-base-content/40 ml-2">
-              · {gettext("Generada")} {Calendar.strftime(@summary.generated_at, "%b %d, %Y")}
+              · {gettext("Generated")} {Calendar.strftime(@summary.generated_at, "%b %d, %Y")}
             </span>
           </p>
         </div>
@@ -166,7 +166,7 @@ defmodule DranWeb.ClusterLive do
       </div>
 
       <div :if={@summary.summary} class="surface-2 rounded-lg p-5 mb-6">
-        <h3 class="text-sm font-semibold mb-2">{gettext("Resumen")}</h3>
+        <h3 class="text-sm font-semibold mb-2">{gettext("Summary")}</h3>
         <p class="text-sm text-base-content/80 leading-relaxed">
           {@summary.summary}
         </p>
@@ -174,7 +174,7 @@ defmodule DranWeb.ClusterLive do
 
       <div :if={@summary.top_pages != []} class="mb-6">
         <h3 class="text-sm font-semibold text-base-content/70 mb-3">
-          {gettext("Páginas principales")}
+          {gettext("Top pages")}
         </h3>
         <div class="flex flex-wrap gap-2">
           <span
@@ -190,7 +190,7 @@ defmodule DranWeb.ClusterLive do
 
       <div>
         <h3 class="text-sm font-semibold text-base-content/70 mb-3">
-          {gettext("Todas las páginas")} ({length(@cluster_pages)})
+          {gettext("All pages")} ({length(@cluster_pages)})
         </h3>
         <div class="space-y-2">
           <div

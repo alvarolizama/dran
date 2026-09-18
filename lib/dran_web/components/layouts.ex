@@ -129,7 +129,14 @@ defmodule DranWeb.Layouts do
         </div>
 
         <div :if={@workspace_slug} class="p-3 border-b border-base-300">
-          <form action={~p"/#{@workspace_slug}/search"} method="get" class="relative">
+          <%!-- The id is not decorative: without it LiveView cannot restore the
+               field after a crash/reconnect and warns on every page load. --%>
+          <form
+            id="sidebar-search-form"
+            action={~p"/#{@workspace_slug}/search"}
+            method="get"
+            class="relative"
+          >
             <.icon
               name="hero-magnifying-glass"
               class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
@@ -384,9 +391,9 @@ defmodule DranWeb.Layouts do
     # Inicio arriba, Grafo, Journey y Memory directo debajo.
     home_items =
       [
-        %{key: "home", label: gettext("Inicio"), icon: "hero-home", path: base},
+        %{key: "home", label: gettext("Home"), icon: "hero-home", path: base},
         enabled?.("graph") &&
-          %{key: "graph", label: gettext("Grafo"), icon: "hero-share", path: base <> "/graph"},
+          %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: base <> "/graph"},
         enabled?.("journey") &&
           %{
             key: "journey",
@@ -496,10 +503,10 @@ defmodule DranWeb.Layouts do
           <button
             type="submit"
             class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-            title={gettext("Logout")}
+            title={gettext("Log out")}
           >
             <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
-            {gettext("Logout")}
+            {gettext("Log out")}
           </button>
         </form>
       </nav>
@@ -669,7 +676,9 @@ defmodule DranWeb.Layouts do
   def workspace_selector(assigns) do
     ~H"""
     <div :if={length(@workspaces) > 0} class="flex-1">
-      <form action={~p"/workspace"} method="post">
+      <%!-- The id is not decorative: LiveView needs it to restore the selection
+           after a crash/reconnect, and warns on every mount without it. --%>
+      <form id="workspace-selector-form" action={~p"/workspace"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <select
           id="context-selector"
@@ -710,7 +719,7 @@ defmodule DranWeb.Layouts do
         <button
           type="submit"
           class="btn btn-ghost btn-xs transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
-          title={gettext("Logout")}
+          title={gettext("Log out")}
         >
           <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
         </button>

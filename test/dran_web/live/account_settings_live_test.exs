@@ -91,7 +91,7 @@ defmodule DranWeb.AccountSettingsLiveTest do
       })
       |> render_submit()
 
-      assert render(view) =~ "La contraseña actual es incorrecta"
+      assert render(view) =~ "The current password is incorrect"
       assert {:ok, _user} = Accounts.authenticate_user("account@test.dev", "password123")
     end
 
@@ -109,6 +109,108 @@ defmodule DranWeb.AccountSettingsLiveTest do
 
       assert render(view) =~ t("Google account unlinked")
       assert Accounts.get_user_by_email("account@test.dev").google_id == nil
+    end
+  end
+
+  # ── language preference ────────────────────────────────────────────────────
+
+  # Decodes the payload of a signed flash carried by a live navigation
+  # ("HS256.<payload>.<signature>").
+  defp flash_payload(signed) do
+    signed
+    |> String.split(".")
+    |> Enum.at(1)
+    |> Base.url_decode64!(padding: false)
+  end
+
+  describe "language preference" do
+    test "a new account defaults to English", %{conn: conn} do
+      {user, _attrs} = create_user()
+      assert user.locale == "en"
+
+      {:ok, view, html} = live(owner_conn(conn), ~p"/settings/account")
+
+      assert html =~ t("Language")
+      assert has_element?(view, "#locale-form")
+      # Both shipped languages are offered, and English is the selected one.
+      assert html =~ "English"
+      assert html =~ "Español"
+      assert has_element?(view, "#locale_locale option[value='en'][selected]")
+    end
+
+    test "switching to Spanish persists it and re-renders in Spanish", %{conn: conn} do
+      {_user, _attrs} = create_user()
+
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/settings/account")
+
+      # Switching the language remounts the tab: the whole page (layout and
+      # components included) has to come out in the new language, and an
+      # in-place diff does not carry all of it.
+      redirected =
+        view
+        |> form("#locale-form", %{"locale" => %{"locale" => "es"}})
+        |> render_change()
+
+      assert {:error, {:live_redirect, opts}} = redirected
+      assert opts.to == "/settings/account"
+      # The flash travels with the navigation in the language that was just
+      # picked, not the old one. LiveView ships it signed (Plug.Crypto), so the
+      # payload is decoded rather than compared as a map.
+      assert flash_payload(opts.flash) =~ "Idioma actualizado"
+
+      assert Accounts.get_user_by_email("account@test.dev").locale == "es"
+
+      # The remount renders the whole page in Spanish — the same path the
+      # browser takes after following the navigate.
+      {:ok, view, html} = live(owner_conn(conn), ~p"/settings/account")
+      assert html =~ "Cuenta"
+      assert html =~ "Perfil"
+      assert html =~ "Idioma"
+      assert has_element?(view, "#locale_locale option[value='es'][selected]")
+    end
+
+    test "an unsupported locale is rejected at the domain layer", %{conn: conn} do
+      # The selector only renders the shipped locales, so a client cannot even
+      # submit "fr" (LiveViewTest refuses it too). The guarantee has to hold
+      # below the UI as well: nothing unsupported ever reaches users.locale.
+      {user, _attrs} = create_user()
+
+      {:ok, updated} = Accounts.update_locale(user, "fr")
+      assert updated.locale == "en"
+
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/settings/account")
+      assert has_element?(view, "#locale_locale option[value='en'][selected]")
+    end
+
+    test "an account saved as Spanish loads the Spanish UI on a fresh mount", %{conn: conn} do
+      {user, _attrs} = create_user()
+      {:ok, _user} = Accounts.update_locale(user, "es")
+
+      {:ok, _view, html} = live(owner_conn(conn), ~p"/settings/account")
+
+      assert html =~ "Cuenta"
+      refute html =~ ">Account<"
+    end
+
+    test "the document language follows the resolved locale", %{conn: conn} do
+      # The `<html lang>` attribute drives screen readers, hyphenation and the
+      # browser's own spell-checking — it has to match what is on the page.
+      {user, _attrs} = create_user()
+
+      {:ok, _view, html} = live(owner_conn(conn), ~p"/settings/account")
+      assert html =~ ~s(lang="en")
+
+      {:ok, _user} = Accounts.update_locale(user, "es")
+
+      {:ok, _view, html} = live(owner_conn(conn), ~p"/settings/account")
+      assert html =~ ~s(lang="es")
+    end
+
+    test "the locale is normalized from region variants" do
+      {user, _attrs} = create_user()
+      {:ok, updated} = Accounts.update_locale(user, "es-AR")
+
+      assert updated.locale == "es"
     end
   end
 end

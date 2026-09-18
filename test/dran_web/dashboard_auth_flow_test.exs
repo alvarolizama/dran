@@ -3,7 +3,8 @@ defmodule DranWeb.DashboardAuthFlowTest do
 
   alias Dran.Accounts
 
-  # Gettext wrapper — the app default locale is "es".
+  # Gettext wrapper. English is the app default locale, so `t/1` returns
+  # the msgid unless the process locale is switched.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
   setup %{conn: conn} do

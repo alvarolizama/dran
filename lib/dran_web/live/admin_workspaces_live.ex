@@ -26,7 +26,7 @@ defmodule DranWeb.AdminWorkspacesLive do
         slug_touched: false,
         show_workspace_modal: false,
         editing_workspace: nil,
-        form_modal_title: gettext("Nuevo contexto"),
+        form_modal_title: gettext("New workspace"),
         managing_workspace_id: nil,
         workspace_user_search: "",
         page_types_workspace_id: nil
@@ -55,7 +55,7 @@ defmodule DranWeb.AdminWorkspacesLive do
      assign(socket,
        editing_workspace: nil,
        workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
-       form_modal_title: gettext("Nuevo contexto"),
+       form_modal_title: gettext("New workspace"),
        show_workspace_modal: true
      )}
   end
@@ -68,7 +68,7 @@ defmodule DranWeb.AdminWorkspacesLive do
      assign(socket,
        editing_workspace: ws,
        workspace_form: to_form(Dran.Workspace.changeset(ws, %{}), as: :context),
-       form_modal_title: gettext("Editar contexto"),
+       form_modal_title: gettext("Edit workspace"),
        show_workspace_modal: true
      )}
   end
@@ -112,7 +112,7 @@ defmodule DranWeb.AdminWorkspacesLive do
          |> assign_workspaces()
          |> assign_workspace_form()
          |> assign(slug_touched: false, editing_workspace: nil, show_workspace_modal: false)
-         |> put_flash(:info, gettext("Workspace guardado"))}
+         |> put_flash(:info, gettext("Workspace saved"))}
 
       {:error, changeset} ->
         {:noreply, assign(socket, workspace_form: to_form(changeset, as: :context))}
@@ -230,7 +230,7 @@ defmodule DranWeb.AdminWorkspacesLive do
             </div>
             <button phx-click="new_workspace" class="btn btn-primary btn-sm gap-1.5">
               <.icon name="hero-plus" class="size-4" />
-              {gettext("Nuevo contexto")}
+              {gettext("New workspace")}
             </button>
           </div>
 
@@ -280,7 +280,7 @@ defmodule DranWeb.AdminWorkspacesLive do
                           phx-click="edit_workspace"
                           phx-value-id={ctx.id}
                           class="btn btn-ghost btn-xs p-1"
-                          title={gettext("Editar")}
+                          title={gettext("Edit")}
                         >
                           <.icon name="hero-pencil" class="size-4" />
                         </button>
@@ -290,7 +290,7 @@ defmodule DranWeb.AdminWorkspacesLive do
                           class="btn btn-ghost btn-xs gap-1"
                         >
                           <.icon name="hero-users" class="size-3.5" />
-                          {gettext("Usuarios")}
+                          {gettext("Users")}
                         </button>
                         <button
                           phx-click="manage_page_types"
@@ -298,12 +298,12 @@ defmodule DranWeb.AdminWorkspacesLive do
                           class="btn btn-ghost btn-xs gap-1"
                         >
                           <.icon name="hero-squares-2x2" class="size-3.5" />
-                          {gettext("Tipos")}
+                          {gettext("Types")}
                         </button>
                         <.link
                           navigate={"/#{ctx.slug}/settings"}
                           class="btn btn-ghost btn-xs gap-1"
-                          title={gettext("Configuración")}
+                          title={gettext("Configuration")}
                         >
                           <.icon name="hero-cog-6-tooth" class="size-3.5" />
                           {gettext("Config")}
@@ -311,9 +311,9 @@ defmodule DranWeb.AdminWorkspacesLive do
                         <button
                           phx-click="delete_workspace"
                           phx-value-id={ctx.id}
-                          data-confirm={gettext("¿Eliminar este workspace?")}
+                          data-confirm={gettext("Delete this workspace?")}
                           class="btn btn-ghost btn-xs p-1 text-error"
-                          title={gettext("Eliminar")}
+                          title={gettext("Delete")}
                         >
                           <.icon name="hero-trash" class="size-4" />
                         </button>
@@ -346,8 +346,8 @@ defmodule DranWeb.AdminWorkspacesLive do
               <.input
                 field={@workspace_form[:name]}
                 type="text"
-                label={gettext("Nombre")}
-                placeholder={gettext("p.ej. Personal")}
+                label={gettext("Name")}
+                placeholder={gettext("e.g. Personal")}
                 class="w-full"
                 autofocus
               />
@@ -359,7 +359,7 @@ defmodule DranWeb.AdminWorkspacesLive do
                   checked={@editing_workspace && @editing_workspace.is_default}
                   class="checkbox checkbox-sm"
                 />
-                <span class="text-sm">{gettext("Workspace por defecto")}</span>
+                <span class="text-sm">{gettext("Default workspace")}</span>
               </label>
 
               <div>
@@ -385,14 +385,14 @@ defmodule DranWeb.AdminWorkspacesLive do
 
               <div class="flex justify-end gap-2 pt-2">
                 <button type="button" phx-click="close_context_modal" class="btn btn-ghost btn-sm">
-                  {gettext("Cancelar")}
+                  {gettext("Cancel")}
                 </button>
                 <button
                   type="submit"
                   class="btn btn-primary btn-sm"
                   phx-disable-with={gettext("Guardando…")}
                 >
-                  {gettext("Guardar")}
+                  {gettext("Save")}
                 </button>
               </div>
             </.form>
@@ -455,7 +455,11 @@ defmodule DranWeb.AdminWorkspacesLive do
             <% managing_ctx = Enum.find(@all_workspaces, &(&1.id == @managing_workspace_id)) %>
             <p class="text-caption mt-1">{if managing_ctx, do: managing_ctx.name, else: ""}</p>
 
-            <form phx-change="search_context_users" class="relative mt-3">
+            <form
+              id="context-user-search-form"
+              phx-change="search_context_users"
+              class="relative mt-3"
+            >
               <.icon
                 name="hero-magnifying-glass"
                 class="absolute left-2.5 top-2.5 size-4 text-base-content/50"

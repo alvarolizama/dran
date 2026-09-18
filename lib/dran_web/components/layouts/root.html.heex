@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="night">
+<html lang={Gettext.get_locale(DranWeb.Gettext)} data-theme="night">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -19,7 +19,7 @@
     >
       <span class="text-sm font-medium">
         <.icon name="hero-user" class="size-4 inline-block mr-1.5 -mt-0.5" />
-        {gettext("Estás impersonando a")} {assigns[:current_user]}
+        {gettext("You are impersonating")} {assigns[:current_user]}
       </span>
       <form action={~p"/admin/impersonate"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
@@ -30,7 +30,7 @@
           title={gettext("Stop impersonating")}
         >
           <.icon name="hero-arrow-left-on-rectangle" class="size-3.5" />
-          {gettext("Salir")}
+          {gettext("Log out")}
         </button>
       </form>
     </div>

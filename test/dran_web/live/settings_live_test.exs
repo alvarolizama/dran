@@ -6,9 +6,13 @@ defmodule DranWeb.SettingsLiveTest do
   alias Dran.Accounts
   alias Dran.Knowledge
 
-  # Gettext wrapper — the app default locale is "es", so assertions must
-  # match the translated strings, not the English msgids.
+  # Gettext wrapper. English is the app default locale, so the msgid is
+  # what the app renders unless a test pins another locale.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
+
+  # HEEx escapes text nodes (apostrophes become &#39;), so any assertion on a
+  # sentence copied from the UI has to compare against the escaped form.
+  defp esc(text), do: text |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
 
   setup %{conn: conn} do
     # Create (or fetch) an admin user whose email matches the session value the
@@ -229,7 +233,7 @@ defmodule DranWeb.SettingsLiveTest do
 
       html = render_click(view, "copy_api_key_prefix", %{"id" => foreign_key.id})
 
-      assert html =~ t("No autorizado.")
+      assert html =~ t("Not authorized.")
     end
   end
 
@@ -371,7 +375,7 @@ defmodule DranWeb.SettingsLiveTest do
       end
 
       # Advanced thresholds tucked behind the details toggle
-      assert html =~ "Avanzado"
+      assert html =~ "Advanced"
 
       for name <- ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long) do
         assert html =~ name
@@ -442,6 +446,167 @@ defmodule DranWeb.SettingsLiveTest do
       assert html =~ t("Max pages per run")
     end
   end
+
+  # ── clarity of the workspace configuration screen ─────────────────────────
+
+  describe "workspace settings tabs are self-explanatory" do
+    setup do
+      unique = System.unique_integer([:positive])
+
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "Clarity #{unique}", slug: "clarity-#{unique}"})
+
+      user = Accounts.get_user_by_email("test_user")
+      Accounts.add_user_to_workspace(user, ws)
+
+      {:ok, ws: ws}
+    end
+
+    test "the General tab shows the slug, explains visibility and the default flag", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      assert has_element?(view, "#general-section")
+      # The workspace slug is the URL identity: visible, and clearly read-only.
+      assert html =~ ws.slug
+      assert html =~ t("read-only")
+      assert has_element?(view, "#workspace-visibility")
+      assert has_element?(view, "#workspace-is-default")
+
+      # The visibility help describes the CURRENT value, not both options.
+      assert html =~
+               t(
+                 "Public: every user of this instance can open and read this workspace; only members can edit it."
+               )
+
+      refute html =~
+               esc(
+                 t(
+                   "Private: only members see this workspace. It is absent from other users' workspace lists."
+                 )
+               )
+    end
+
+    test "switching to private explains the new value on save", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      html =
+        view
+        |> form("#workspace-general-form", %{
+          "workspace" => %{"name" => ws.name, "visibility" => "private", "is_default" => "false"}
+        })
+        |> render_submit()
+
+      assert html =~ t("Workspace saved")
+      assert Knowledge.get_workspace!(ws.id).visibility == "private"
+
+      assert html =~
+               esc(
+                 t(
+                   "Private: only members see this workspace. It is absent from other users' workspace lists."
+                 )
+               )
+    end
+
+    test "the Features tab groups the toggles and explains each one", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      html =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='features']")
+        |> render_click()
+
+      assert has_element?(view, "#features-section")
+      assert html =~ t("Knowledge base")
+      assert html =~ t("Insights")
+
+      # Every toggle has a stable id and a caption saying what it gives you.
+      for feature <- ~w(search graph journey collections clusters reports activity) do
+        assert has_element?(view, "#feature-#{feature}")
+        assert html =~ esc(t(feature_description(feature)))
+      end
+
+      # And its current state is spelled out, with the same word used by the
+      # Page types list.
+      assert html =~ t("Enabled")
+    end
+
+    test "turning a feature off is persisted and shown as disabled", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      _ =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='features']")
+        |> render_click()
+
+      # LiveViewTest refuses an arbitrary value for a checkbox (`value="true"` is
+      # the only one it accepts), so the event is submitted directly — exactly
+      # what a browser sends: only the checked boxes appear, unchecked ones are
+      # absent from the params.
+      html =
+        render_submit(view, "save", %{
+          "workspace" => %{},
+          "enabled_features" => %{"graph" => "true"}
+        })
+
+      assert html =~ t("Settings saved")
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+      refute Dran.Workspace.feature_enabled?(reloaded, "search")
+      assert Dran.Workspace.feature_enabled?(reloaded, "graph")
+      # Nothing is deleted by a toggle — that is what the caption promises.
+      assert Knowledge.page_types(reloaded) == ~w(note entity concept reference)
+    end
+
+    test "the Users tab explains what each role can do", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+
+      html =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='users']")
+        |> render_click()
+
+      assert has_element?(view, "#users-section")
+
+      # One legend line per role, so the select's four options are not just words.
+      for role <- ~w(owner admin editor viewer) do
+        assert html =~ t(role_description(role))
+      end
+
+      # The member row carries a role select with an id and a confirmed removal.
+      assert has_element?(view, "#member-role-#{Accounts.get_user_by_email("test_user").id}")
+      assert has_element?(view, "#user-search-form")
+      assert html =~ t("Remove from workspace")
+    end
+  end
+
+  # Mirrors the private helpers in the LiveView, so the test asserts the copy
+  # that actually ships rather than a second copy written by hand.
+  defp feature_description("search"),
+    do: "Full-text and semantic search across this workspace's pages."
+
+  defp feature_description("graph"), do: "The relationship map of this workspace's pages."
+
+  defp feature_description("journey"),
+    do: "Timeline of how this workspace's knowledge grew over time."
+
+  defp feature_description("collections"),
+    do: "Curated and smart page lists that update as the workspace changes."
+
+  defp feature_description("clusters"),
+    do: "Related pages grouped into themes by the nightly job."
+
+  defp feature_description("reports"),
+    do: "Generated reports written from this workspace's content."
+
+  defp feature_description("activity"), do: "Log of the recent changes to this workspace's pages."
+
+  defp role_description("owner"), do: "Owner: settings, members and content."
+  defp role_description("admin"), do: "Admin: settings and members, plus content."
+  defp role_description("editor"), do: "Editor: create and edit pages, no access to settings."
+  defp role_description("viewer"), do: "Viewer: read pages only."
 
   describe "custom page types per workspace (W2)" do
     setup do
@@ -603,14 +768,179 @@ defmodule DranWeb.SettingsLiveTest do
     end
   end
 
+  # ── the meta_fields JSON editor ────────────────────────────────────────────
+
+  describe "custom page type meta fields editor" do
+    setup do
+      unique = System.unique_integer([:positive])
+
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "Editor #{unique}", slug: "editor-#{unique}"})
+
+      user = Accounts.get_user_by_email("test_user")
+      Accounts.add_user_to_workspace(user, ws)
+
+      {:ok, ws: ws}
+    end
+
+    test "valid JSON is reported live as parsed fields", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      html =
+        view
+        |> form("#custom-page-type-form", %{
+          "workspace" => type_params(meta_fields: ~s([["text", "cuisine", "Cuisine"]]))
+        })
+        |> render_change()
+
+      assert html =~ "1 valid field"
+      assert html =~ "text · cuisine"
+      refute html =~ t("Invalid JSON")
+    end
+
+    test "malformed JSON is reported live and never persisted", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      params = %{"workspace" => type_params(meta_fields: ~s([["text", ]]))}
+
+      html = view |> form("#custom-page-type-form", params) |> render_change()
+      assert html =~ t("Invalid JSON")
+
+      # Submitting refuses too, and the workspace is untouched.
+      html = view |> form("#custom-page-type-form", params) |> render_submit()
+      assert html =~ t("Invalid JSON")
+      assert Dran.Workspace.custom_page_type_slugs(Knowledge.get_workspace!(ws.id)) == []
+    end
+
+    test "a JSON object (not an array) is rejected", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      html =
+        view
+        |> form("#custom-page-type-form", %{
+          "workspace" => type_params(meta_fields: ~s({"text": "x"}))
+        })
+        |> render_change()
+
+      assert html =~ t("Meta fields must be a JSON array of fields.")
+    end
+
+    test "an unknown field type is rejected naming the type and the allowed ones", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      html =
+        view
+        |> form("#custom-page-type-form", %{
+          "workspace" => type_params(meta_fields: ~s([["number", "cook_time", "Cook time"]]))
+        })
+        |> render_change()
+
+      assert html =~ "unknown type"
+      assert html =~ "text, date, props"
+    end
+
+    test "a field missing its label is rejected", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      html =
+        view
+        |> form("#custom-page-type-form", %{
+          "workspace" => type_params(meta_fields: ~s([["text", "cuisine"]]))
+        })
+        |> render_change()
+
+      assert html =~ "Field 1: the label must be a non-empty string."
+    end
+
+    test "loading an example fills the editor with a valid template", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      # The example is relative to what is already in the form, so seed a value
+      # first to prove the button replaces bytes rather than appending.
+      view
+      |> form("#custom-page-type-form", %{"workspace" => type_params(meta_fields: "garbage")})
+      |> render_change()
+
+      html = render_click(view, "load_meta_fields_example", %{"example" => "date_url"})
+
+      assert html =~ "date · published_at"
+      assert html =~ "text · source_url"
+
+      # And it is submittable as-is.
+      html =
+        render_submit(view, "add_custom_page_type", %{
+          "workspace" =>
+            type_params(meta_fields: Jason.encode!([["date", "published_at", "Published at"]]))
+        })
+
+      assert html =~ t("Page type added")
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+      [entry] = Dran.Workspace.custom_page_types(reloaded)
+      assert entry["meta_fields"] == [["date", "published_at", "Published at"]]
+    end
+
+    test "clearing the editor is not an error", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      html = render_click(view, "clear_meta_fields")
+
+      assert html =~ t("Empty is fine — the type simply gets no extra fields.")
+    end
+
+    test "the built-in fields and the live preview are present", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      open_page_types_tab(view)
+
+      assert has_element?(view, "#custom-page-type-form")
+      assert has_element?(view, "#workspace_slug")
+      assert has_element?(view, "#workspace_path")
+      assert has_element?(view, "#workspace_meta_fields")
+      assert has_element?(view, "#page-types-section")
+      assert has_element?(view, "#custom-page-type-form button[type=submit]")
+    end
+  end
+
+  defp open_page_types_tab(view) do
+    view
+    |> element("button[phx-click='select_tab'][phx-value-tab='page_types']")
+    |> render_click()
+  end
+
+  # A valid custom page type payload, with `meta_fields` overridable.
+  defp type_params(opts) do
+    Map.merge(
+      %{
+        "slug" => "recipe",
+        "label" => "Recipe",
+        "plural" => "Recipes",
+        "path" => "recipes",
+        "icon" => "hero-beaker",
+        "color" => "#F59E0B",
+        "meta_fields" => ""
+      },
+      Map.new(opts, fn {k, v} -> {to_string(k), v} end)
+    )
+  end
+
   # Tests L222, L229, L236 → /admin/system
   test "the Sistema header exists with monitoring and instance sections", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/admin/system")
 
     assert html =~ t("Sistema")
-    assert html =~ t("Monitoreo, configuración de instancia y entorno.")
-    assert html =~ t("Instancia")
-    assert html =~ t("Base de datos")
+    assert html =~ t("Monitoring, instance configuration and environment.")
+    assert html =~ t("Instance")
+    assert html =~ t("Database")
     assert html =~ t("Uptime")
   end
 
@@ -618,15 +948,15 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, _view, html} = live(conn, ~p"/admin/system")
 
     assert html =~ ~s(phx-click="test_inference")
-    assert html =~ t("Probar conexión")
+    assert html =~ t("Test connection")
   end
 
   test "clicking the test button shows the testing state", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/admin/system")
 
     html = render_click(view, "test_inference")
-    # The button immediately switches to "Probando..." state
-    assert html =~ t("Probando...")
+    # The button immediately switches to the "Testing..." state
+    assert html =~ t("Testing...")
     # The button is disabled while testing
     assert html =~ "disabled"
   end
@@ -647,9 +977,9 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/admin/system")
 
       html = render_click(view, "refresh_monitoring")
-      # table count appears after a real collect_monitoring run
-      assert html =~ "tablas"
-      assert html =~ t("% usado")
+      # Table count and disk usage appear after a real collect_monitoring run.
+      assert html =~ t("tables")
+      assert html =~ "used ·"
     end
 
     test "save_instance persists settings and creates the default workspace", %{conn: conn} do
@@ -664,7 +994,7 @@ defmodule DranWeb.SettingsLiveTest do
           }
         })
 
-      assert html =~ t("Configuración de instancia guardada.")
+      assert html =~ t("Instance configuration saved.")
       assert Dran.Settings.get("default_workspace_slug") == "instancia-test"
       assert Dran.Settings.get("default_workspace_name") == "Instancia Test"
       assert Dran.Auth.default_workspace_slug() == "instancia-test"
@@ -686,7 +1016,7 @@ defmodule DranWeb.SettingsLiveTest do
           }
         })
 
-      assert html =~ t("Slug inválido: usa minúsculas, dígitos y guiones.")
+      assert html =~ t("Invalid slug: use lowercase letters, digits and hyphens.")
       assert is_nil(Dran.Settings.get("default_workspace_slug"))
     end
 
@@ -695,7 +1025,7 @@ defmodule DranWeb.SettingsLiveTest do
 
       html = render_click(view, "generate_token")
 
-      assert html =~ t("Token generado y copiado al portapapeles.")
+      assert html =~ t("Token generated and copied to the clipboard.")
       token = Dran.Settings.get("api_token")
       assert is_binary(token) and byte_size(token) >= 20
       assert Dran.Auth.valid_token?(token)
@@ -732,7 +1062,7 @@ defmodule DranWeb.SettingsLiveTest do
       assert html =~ "data-model-key=\"#{purpose}\""
     end
 
-    assert html =~ t("Probar")
+    assert html =~ t("Test")
   end
 
   # Tests L283, L301, L314, L334, L342 → /admin/jobs
@@ -777,7 +1107,7 @@ defmodule DranWeb.SettingsLiveTest do
       end
 
       # No runs yet — gray "Nunca" badge and an enabled "Correr ahora" per job
-      assert html =~ t("Nunca")
+      assert html =~ t("Never")
       assert html =~ t("Correr ahora")
     end
 
@@ -819,7 +1149,7 @@ defmodule DranWeb.SettingsLiveTest do
 
       send(view.pid, {:job_run_done, :curator_daily, {:error, :boom}})
 
-      assert render(view) =~ "Job falló: Curator"
+      assert render(view) =~ "Job failed: Curator"
     end
 
     test "shows the last run with badge, relative time, duration and report link", %{conn: conn} do

@@ -18,6 +18,9 @@ defmodule DranWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug DranWeb.Plugs.Auth, :fetch_context_cookie
+    # Pin the request language for Gettext (user preference → Accept-Language →
+    # English). LiveViews re-pin it in their own process, see the plug docs.
+    plug DranWeb.Plugs.Locale
   end
 
   pipeline :api do

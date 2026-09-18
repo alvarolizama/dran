@@ -80,7 +80,7 @@ defmodule DranWeb.MemoryLive do
          |> reload_memories()}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("No se pudo guardar la preferencia"))}
+        {:noreply, put_flash(socket, :error, gettext("Could not save the preference"))}
     end
   end
 
@@ -109,7 +109,7 @@ defmodule DranWeb.MemoryLive do
       {:noreply, replace_memory(socket, updated)}
     else
       _ ->
-        {:noreply, put_flash(socket, :error, gettext("Memory no encontrada"))}
+        {:noreply, put_flash(socket, :error, gettext("Memory not found"))}
     end
   end
 
@@ -123,7 +123,7 @@ defmodule DranWeb.MemoryLive do
       {:noreply, reload_memories(socket)}
     else
       _ ->
-        {:noreply, put_flash(socket, :error, gettext("Memory no encontrada"))}
+        {:noreply, put_flash(socket, :error, gettext("Memory not found"))}
     end
   end
 
@@ -135,7 +135,7 @@ defmodule DranWeb.MemoryLive do
       {:noreply, reload_memories(socket)}
     else
       _ ->
-        {:noreply, put_flash(socket, :error, gettext("Memory no encontrada"))}
+        {:noreply, put_flash(socket, :error, gettext("Memory not found"))}
     end
   end
 
@@ -144,12 +144,12 @@ defmodule DranWeb.MemoryLive do
 
     case Memory.purge_superseded(context.id) do
       {0, _} ->
-        {:noreply, put_flash(socket, :info, gettext("No hay memorias obsoletas que borrar"))}
+        {:noreply, put_flash(socket, :info, gettext("No stale memories to delete"))}
 
       {count, _} ->
         {:noreply,
          socket
-         |> put_flash(:info, gettext("%{count} memorias borradas permanentemente", count: count))
+         |> put_flash(:info, gettext("%{count} memories permanently deleted", count: count))
          |> reload_memories()}
     end
   end
@@ -195,32 +195,32 @@ defmodule DranWeb.MemoryLive do
                 name="q"
                 value={@query}
                 phx-debounce="300"
-                placeholder={gettext("Buscar en la memoria de los workers...")}
+                placeholder={gettext("Search worker memory...")}
                 class="w-full py-2 pl-9 pr-3 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </form>
 
             <div
               role="group"
-              aria-label={gettext("Filtrar por estado")}
+              aria-label={gettext("Filter by status")}
               class="inline-flex rounded-lg bg-base-200 p-1 self-start"
             >
               <.status_filter_button
                 id="memory-filter-active"
                 value="active"
-                label={gettext("Activos")}
+                label={gettext("Active")}
                 active={@status_filter == "active"}
               />
               <.status_filter_button
                 id="memory-filter-superseded"
                 value="superseded"
-                label={gettext("Obsoletos")}
+                label={gettext("Stale")}
                 active={@status_filter == "superseded"}
               />
               <.status_filter_button
                 id="memory-filter-all"
                 value="all"
-                label={gettext("Todos")}
+                label={gettext("All")}
                 active={@status_filter == "all"}
               />
             </div>
@@ -229,20 +229,20 @@ defmodule DranWeb.MemoryLive do
               :if={@show_scope_toggle}
               id="memory-scope-toggle"
               role="group"
-              aria-label={gettext("Alcance de la memoria")}
+              aria-label={gettext("Memory scope")}
               class="inline-flex rounded-lg bg-base-200 p-1 self-start"
             >
               <.scope_button
                 id="memory-scope-all"
                 value="all"
-                label={gettext("Todo")}
+                label={gettext("All")}
                 icon="hero-users"
                 active={@content_scope == "all"}
               />
               <.scope_button
                 id="memory-scope-own"
                 value="own"
-                label={gettext("Solo míos")}
+                label={gettext("Only mine")}
                 icon="hero-user"
                 active={@content_scope == "own"}
               />
@@ -252,12 +252,12 @@ defmodule DranWeb.MemoryLive do
               :if={@status_filter in ["superseded", "all"] and @query == ""}
               id="memory-purge-superseded"
               phx-click="purge_superseded"
-              data-confirm={gettext("¿Borrar permanentemente TODAS las memorias obsoletas?")}
+              data-confirm={gettext("Permanently delete ALL stale memories?")}
               class="inline-flex items-center gap-1 rounded-lg border border-base-300 bg-base-100 px-3 py-1.5 text-xs font-medium text-base-content/70 shadow-sm transition-colors duration-150 hover:bg-error/10 hover:text-error"
-              title={gettext("Borrado permanente — no se puede deshacer")}
+              title={gettext("Permanent deletion — cannot be undone")}
             >
               <.icon name="hero-trash" class="size-3.5" />
-              {gettext("Borrar obsoletos")}
+              {gettext("Delete stale")}
             </button>
           </div>
 
@@ -275,11 +275,9 @@ defmodule DranWeb.MemoryLive do
             <.empty_state
               :if={@memories == []}
               icon="hero-cpu-chip"
-              title={gettext("Sin memorias")}
+              title={gettext("No memories")}
               caption={
-                gettext(
-                  "Los workers almacenan hechos aquí vía la API /api/memory; aparecerán en vivo."
-                )
+                gettext("Workers store facts here through the /api/memory API; they appear live.")
               }
               class="surface-2 rounded-2xl"
             />
@@ -287,7 +285,7 @@ defmodule DranWeb.MemoryLive do
 
           <div :if={@has_more and @query == ""} class="flex justify-center">
             <button id="memory-load-more" phx-click="load_more" class="btn btn-ghost btn-sm">
-              {gettext("Cargar más")}
+              {gettext("Load more")}
             </button>
           </div>
         </div>
@@ -432,7 +430,7 @@ defmodule DranWeb.MemoryLive do
     end
   end
 
-  # "Solo míos" no se ofrece cuando el workspace ya está aislado: la política
+  # "Only mine" no se ofrece cuando el workspace ya está aislado: la política
   # fuerza ese scope para todos, así que un toggle sería mentira.
   defp show_scope_toggle?(context) do
     case context do
@@ -441,8 +439,8 @@ defmodule DranWeb.MemoryLive do
     end
   end
 
-  defp scope_label("own"), do: gettext("Mostrando solo tus memorias")
-  defp scope_label(_), do: gettext("Mostrando todo el workspace")
+  defp scope_label("own"), do: gettext("Showing only your memories")
+  defp scope_label(_), do: gettext("Showing the whole workspace")
 
   defp blank?(nil), do: true
   defp blank?(""), do: true
@@ -459,7 +457,7 @@ defmodule DranWeb.MemoryLive do
       <div>
         <h1 class="text-title">{gettext("Memory")}</h1>
         <p class="text-caption mt-1">
-          {gettext("Hechos atómicos compartidos por los workers de %{name}.",
+          {gettext("Atomic facts shared by %{name}'s workers.",
             name: workspace_name(@workspace)
           )}
         </p>
@@ -468,17 +466,17 @@ defmodule DranWeb.MemoryLive do
         <span class="size-2 rounded-full bg-success animate-pulse"></span>
         {gettext("Live")}
         <span class="ml-2 px-2 py-0.5 rounded-md bg-base-200 text-xs">
-          {@count} {gettext("activos")}
+          {@count} {gettext("active")}
         </span>
       </div>
     </div>
     """
   end
 
-  defp workspace_name(nil), do: gettext("este workspace")
+  defp workspace_name(nil), do: gettext("this workspace")
 
   defp workspace_name(%{name: name}) when is_binary(name), do: name
-  defp workspace_name(_), do: gettext("este workspace")
+  defp workspace_name(_), do: gettext("this workspace")
 
   attr :id, :string, required: true
   attr :value, :string, required: true
@@ -536,7 +534,7 @@ defmodule DranWeb.MemoryLive do
   defp search_notice(assigns) do
     ~H"""
     <p class="text-caption text-base-content/60">
-      {gettext("%{count} resultados para “%{query}” — la búsqueda cubre los hechos activos.",
+      {gettext("%{count} results for “%{query}” — search covers active facts.",
         count: @count,
         query: @query
       )}
@@ -566,10 +564,10 @@ defmodule DranWeb.MemoryLive do
       >
         <span
           class="inline-flex items-center gap-1 shrink-0"
-          title={gettext("Hechos relacionados derivados automáticamente (semantic)")}
+          title={gettext("Related facts derived automatically (semantic)")}
         >
           <.icon name="hero-arrows-right-left" class="size-3.5" />
-          {gettext("Relacionados:")}
+          {gettext("Related:")}
         </span>
         <span
           :for={rel <- @related}
@@ -607,7 +605,7 @@ defmodule DranWeb.MemoryLive do
           {Float.round(@memory.trust_score * 1.0, 2)}
         </span>
 
-        <span :if={@memory.helpful_count > 0} title={gettext("Feedback útil recibido")}>
+        <span :if={@memory.helpful_count > 0} title={gettext("Helpful feedback received")}>
           <.icon name="hero-hand-thumb-up" class="size-3.5 inline" /> {@memory.helpful_count}
         </span>
 
@@ -629,7 +627,7 @@ defmodule DranWeb.MemoryLive do
             phx-value-id={@memory.id}
             phx-value-helpful="true"
             class="btn btn-ghost btn-xs"
-            title={gettext("Útil (+0.05 trust)")}
+            title={gettext("Helpful (+0.05 trust)")}
           >
             <.icon name="hero-hand-thumb-up" class="size-3.5" />
           </button>
@@ -639,7 +637,7 @@ defmodule DranWeb.MemoryLive do
             phx-value-id={@memory.id}
             phx-value-helpful="false"
             class="btn btn-ghost btn-xs"
-            title={gettext("No útil (−0.10 trust)")}
+            title={gettext("Not helpful (−0.10 trust)")}
           >
             <.icon name="hero-hand-thumb-down" class="size-3.5" />
           </button>
@@ -648,7 +646,7 @@ defmodule DranWeb.MemoryLive do
             phx-click="delete"
             phx-value-id={@memory.id}
             class="btn btn-ghost btn-xs text-base-content/50 hover:text-error"
-            title={gettext("Marcar como obsoleto")}
+            title={gettext("Mark as stale")}
           >
             <.icon name="hero-trash" class="size-3.5" />
           </button>
@@ -657,9 +655,9 @@ defmodule DranWeb.MemoryLive do
             id={"memory-purge-#{@memory.id}"}
             phx-click="purge"
             phx-value-id={@memory.id}
-            data-confirm={gettext("¿Borrar permanentemente esta memoria? No se puede deshacer.")}
+            data-confirm={gettext("Permanently delete this memory? This cannot be undone.")}
             class="btn btn-ghost btn-xs text-base-content/40 hover:text-error"
-            title={gettext("Borrar permanentemente")}
+            title={gettext("Delete permanently")}
           >
             <.icon name="hero-x-mark" class="size-3.5" />
           </button>
