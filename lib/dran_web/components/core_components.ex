@@ -174,7 +174,7 @@ defmodule DranWeb.CoreComponents do
   attr :type, :string,
     default: "text",
     values: ~w(checkbox color date datetime-local email file month number password
-               search select tel text textarea time url week hidden)
+               search select tel text textarea time url week hidden datalist)
 
   attr :field, Phoenix.HTML.FormField,
     doc: "a form field struct retrieved from the form, for example: @form[:email]"
@@ -186,6 +186,7 @@ defmodule DranWeb.CoreComponents do
   attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
   attr :class, :any, default: nil, doc: "the input class to use over defaults"
   attr :error_class, :any, default: nil, doc: "the input error class to use over defaults"
+  attr :hint, :string, default: nil, doc: "help text shown below the input"
 
   attr :rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
@@ -238,6 +239,7 @@ defmodule DranWeb.CoreComponents do
         </span>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
+      <p :if={@hint} class="text-xs text-base-content/50 mt-1">{@hint}</p>
     </div>
     """
   end
@@ -262,6 +264,7 @@ defmodule DranWeb.CoreComponents do
         </select>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
+      <p :if={@hint} class="text-xs text-base-content/50 mt-1">{@hint}</p>
     </div>
     """
   end
@@ -282,6 +285,39 @@ defmodule DranWeb.CoreComponents do
         >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
+      <p :if={@hint} class="text-xs text-base-content/50 mt-1">{@hint}</p>
+    </div>
+    """
+  end
+
+  # Texto libre con sugerencias (HTML5 <datalist>): el usuario elige de la
+  # lista O escribe cualquier valor — para catálogos largos (Commons C8.2).
+  def input(%{type: "datalist"} = assigns) do
+    ~H"""
+    <div class="fieldset mb-3">
+      <label for={@id} class="block">
+        <span :if={@label} class="block text-sm font-medium text-base-content/70 mb-1.5">{@label}</span>
+        <input
+          type="text"
+          id={@id}
+          name={@name}
+          value={Phoenix.HTML.Form.normalize_value("text", @value)}
+          list={@id <> "-list"}
+          class={[
+            "input w-full rounded-lg border-base-300 bg-base-100 transition",
+            "focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none",
+            "placeholder:text-base-content/30",
+            @class,
+            @errors != [] && (@error_class || "input-error")
+          ]}
+          {@rest}
+        />
+        <datalist id={@id <> "-list"}>
+          <option :for={opt <- @options} value={opt} />
+        </datalist>
+      </label>
+      <.error :for={msg <- @errors}>{msg}</.error>
+      <p :if={@hint} class="text-xs text-base-content/50 mt-1">{@hint}</p>
     </div>
     """
   end
@@ -308,6 +344,7 @@ defmodule DranWeb.CoreComponents do
         />
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
+      <p :if={@hint} class="text-xs text-base-content/50 mt-1">{@hint}</p>
     </div>
     """
   end
@@ -674,7 +711,6 @@ defmodule DranWeb.CoreComponents do
   """
   attr :id, :string, required: true
   attr :title, :string, required: true
-  attr :show, :boolean, default: false
   attr :on_close, :string, required: true, doc: "LiveView event fired by ✕, Escape and click-away"
   attr :max_w, :string, default: "max-w-lg", doc: "ancho máximo del card (max-w-md|lg|2xl…)"
   slot :inner_block, required: true
@@ -682,16 +718,13 @@ defmodule DranWeb.CoreComponents do
   def modal(assigns) do
     ~H"""
     <div
-      :if={@show}
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      id={@id}
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
       phx-window-keydown={@on_close}
       phx-key="Escape"
     >
-      <div
-        id={@id}
-        class={["card bg-base-100 border border-base-300 shadow-xl w-full", @max_w]}
-        phx-click-away={@on_close}
-      >
+      <div class="absolute inset-0 bg-black/50" phx-click={@on_close} />
+      <div class={["relative card bg-base-100 border border-base-300 shadow-xl w-full", @max_w]}>
         <div class="card-body p-6">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-lg font-semibold">{@title}</h3>

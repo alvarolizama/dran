@@ -15,22 +15,18 @@
   <body>
     <div
       :if={assigns[:impersonator]}
-      class="flex items-center justify-between gap-4 px-4 py-2 bg-warning/20 border-b border-warning/30"
+      id="impersonation-banner"
+      class="bg-warning text-warning-content px-4 py-2 flex flex-wrap items-center justify-center gap-3 text-sm"
     >
-      <span class="text-sm font-medium">
-        <.icon name="hero-user" class="size-4 inline-block mr-1.5 -mt-0.5" />
-        {gettext("You are impersonating")} {assigns[:current_user]}
+      <.icon name="hero-eye" class="size-4" />
+      <span>
+        {gettext("You are impersonating")} <strong>{assigns[:current_user]}</strong>
       </span>
       <form action={~p"/admin/impersonate"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
         <input type="hidden" name="_method" value="delete" />
-        <button
-          type="submit"
-          class="btn btn-xs btn-error gap-1"
-          title={gettext("Stop impersonating")}
-        >
-          <.icon name="hero-arrow-left-on-rectangle" class="size-3.5" />
-          {gettext("Log out")}
+        <button type="submit" class="btn btn-xs btn-neutral" id="stop-impersonating">
+          {gettext("Stop impersonating")}
         </button>
       </form>
     </div>

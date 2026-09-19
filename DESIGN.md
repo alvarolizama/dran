@@ -114,13 +114,20 @@ cualquier LiveView las tenga por `use DranWeb, :html`, sin imports):
 | `<.nav_group>` | rótulo de grupo + sus enlaces | `label` + slot |
 | `<.menu_item>` | entrada de menú (dropdown, menú de usuario) | `href` · `icon` · `label` · `active` |
 | `<.section>` | sección: caja con header (badge + título + caption) | `title` · `icon` · `caption` + slot |
-| `<.modal>` | modal compacto (C7.1): ✕ / Escape / click-away | `id` · `title` · `show` · `on_close` · `max_w` + slot |
+| `<.modal>` | modal compacto (C7.1): ✕ / Escape / click-away | `id` · `title` · `on_close` · `max_w` + slot (el caller lo gatea con `:if`) |
 | `<.empty_state>` | estado vacío canónico (C6) | `icon` · `title` · `caption` · `class` + slot CTA |
 
 Nacieron en admin/settings y en el shell y se promovieron a `CoreComponents`
 para que no exista una segunda copia: si una pantalla necesita un enlace de nav,
 una sección, un modal o un estado vacío, **usa el componente compartido** — no
 escribas markup nuevo ni un helper local.
+
+**Botones de crear (paridad de familia).** La acción de crear de una página es
+`<.button phx-click="new_x" id="new-x-btn">` + icono `hero-plus`: el componente
+emite `btn-primary btn-soft` (default) y el **id kebab `new-*-btn` es el ancla
+estable para tests**. Los `submit` de un form quedan como
+`<button type="submit" class="btn btn-primary btn-sm">` (sólido, como en
+TokenGate) porque ahí el sólido es el CTA del formulario, no el de la página.
 
 **`btn-outline` es legítimo para "otra vía"** — misma jerarquía que el
 primario, camino alternativo (p. ej. "Continuar con Google"), no una variante
@@ -522,6 +529,24 @@ Forma del tema: `color-scheme: dark` · radios `box 1rem` /
 > esperado, no un bug de CSS. Para otro color usá la utilidad explícita
 > (`btn-secondary`, `btn-accent`) — **no** redefinas el primary del tema.
 
+### Marca (logo y favicon)
+
+Misma marca que el resto de la familia (TokenGate, Skema): el mark de Dran es un
+grafo hub-and-spokes con los **colores de TokenGate**, no con el primary del
+tema:
+
+| Uso | Color |
+|---|---|
+| trazos (radiales + hub) | gradiente `#9fe88d → #62efbd` (`linearGradient`, userSpaceOnUse) |
+| nodos | `#9fe88d` · `#62efbd` · `#6fbb5c` |
+| core del hub | `#c9f7be` |
+| halo del hub | `#9fe88d` al 20% |
+
+Archivos que van juntos en el mismo commit: `priv/static/favicon.svg` (fuente),
+`priv/static/logo.png` (512 con alpha) y `priv/static/favicon.ico` (16/32/48).
+El mark **no** se recolorea cuando cambia el tema: es la marca, y así el verde
+de la familia se reconoce aunque el primary del tema sea otro.
+
 ### T1. `app.css` (561 líneas) — el design system de Dran
 
 Sólo tema + heroicons + typography + `@custom-variant` de LiveView +
@@ -575,6 +600,7 @@ Transiciones `transition-all duration-150`; desplazamientos `hover:translate-x-0
 | `.agent-step` (+ `slide-in`) | animación de pasos del worker |
 | "DRAN DESIGN SYSTEM": `text-*` · `.surface-*` · `.skeleton` · `.lift` · `.focus-ring` · `:root` vars | escala tipográfica, superficies, estados |
 | `.table tbody tr:hover`, `transition` (§C6) | hover de fila unificado |
+| `.shell-sidebar` / `.shell-reveal` + las dos reglas de `#sidebar-collapse` (dentro de `@media (min-width: 64rem)`) | sidebar colapsable en desktop (§T2): el checkbox es el estado, el CSS lo aplica |
 
 **Regla: ningún bloque propio declara color hardcodeado.** Todo color del CSS
 custom sale de `var(--color-…)` o `oklch(from var(--color-…) …)` — el tema
@@ -596,11 +622,22 @@ tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
 
 ### T2. Shell
 
-`Layouts.app/1` — `flex h-screen` con **sidebar a la izquierda**
-(`w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col`) y contenido
-`flex-1 overflow-y-auto`. Densidad del sidebar (patrón de familia, igual al
-mockup de skema): header `p-3`, bloque de búsqueda `p-3`, nav
-`flex-1 overflow-y-auto p-2 flex flex-col gap-4`, pie `p-3 border-t`.
+`Layouts.app/1` — raíz `h-screen` y **daisyUI `drawer lg:drawer-open h-full`**:
+
+- **Móvil (`< lg`):** la sidebar vive en la gaveta del drawer
+  (`drawer-side` + `drawer-overlay`), y el contenido abre con una barra
+  `header.lg:hidden h-14` con **hamburguesa** (`label for="app-drawer"`) + logo.
+  Cerrar = overlay o navegar.
+- **Desktop (`≥ lg`):** la sidebar queda fija a la izquierda y el contenido se
+  puede **colapsar** con la flecha del header del sidebar
+  (`label for="sidebar-collapse"`). El estado es el checkbox
+  `#sidebar-collapse` (hermano del `.drawer`, ver reglas en §T1) y al colapsar
+  aparece una **barra reveal en flujo** (`.shell-reveal`, `lg:flex`) con el botón
+  para volver a mostrarla — **en flujo, nunca flotando**: un botón `fixed`
+  tapaba el título de la página.
+- Sidebar `w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col`
+  con densidad de familia (header `p-3`, búsqueda `p-3`, nav
+  `flex-1 overflow-y-auto p-2 flex flex-col gap-4`, pie `p-3 border-t`).
 
 - **Sidebar (workspace):** header con logo + `<.workspace_selector>`
   (`id="context-selector"`, `select select-xs`) en la misma fila; buscador del
@@ -629,8 +666,10 @@ mockup de skema): header `p-3`, bloque de búsqueda `p-3`, nav
 - **Rótulos de grupo:** `text-xs font-semibold uppercase tracking-wider
   text-base-content/70`, `px-3 pt-1 pb-1`; grupos separados con `gap-4` en el
   `<nav>` y `gap-1` entre links.
-- **Banner de impersonación** (`root.html.heex`): `bg-warning/20 border-warning/30`
-  con botón `btn-xs btn-error` para salir.
+- **Banner de impersonación** (`root.html.heex`, `id="impersonation-banner"`):
+  `bg-warning text-warning-content`, centrado, icono `hero-eye` y botón
+  `btn-xs btn-neutral` (`id="stop-impersonating"`) — el mismo tratamiento que
+  TokenGate (antes era un tinte `bg-warning/20` con botón `btn-error`).
 - **Opciones del shell:** `nav={:workspace}` (default) | `nav={:instance}`
   (el sidebar renderea `<.instance_nav>`: Workspaces arriba, grupo Account con
   Profile/API keys, grupo Admin con sus sub-páginas para owners — **sin item
@@ -813,4 +852,7 @@ grep -rn 'app_topbar\|sidebar_footer_icons' lib/                      # 0 (shell
 grep -n 'do: "p-6 pb-16"' lib/dran_web/components/layouts.ex           # padding de instancia
 grep -c 'btn-soft' lib/dran_web/components/layouts.ex                  # 0 (el activo usa bg-primary/15)
 mix tailwind dran && grep -c 'data-theme=dim' priv/static/assets/css/app.css  # 1
+grep -n 'drawer lg:drawer-open' lib/dran_web/components/layouts.ex      # shell responsive
+grep -n 'shell-reveal' assets/css/app.css                              # colapso desktop
+grep -c '<.button' lib/dran_web/live/*.ex                               # CTAs de crear como componente
 ```

@@ -46,14 +46,14 @@ defmodule DranWeb.DashboardLive do
               )} · {ngettext("%{count} page", "%{count} pages", @instance.total_pages)}
             </p>
           </div>
-          <button
+          <.button
             :if={@can_create_workspace}
             phx-click="open_context_modal"
-            class="btn btn-primary btn-sm gap-1.5 transition-colors active:scale-95"
+            id="new-workspace-btn"
           >
             <.icon name="hero-plus" class="size-4" />
             {gettext("New workspace")}
-          </button>
+          </.button>
         </div>
 
         <div class="space-y-4">
@@ -86,14 +86,14 @@ defmodule DranWeb.DashboardLive do
                     )}
               </p>
             </div>
-            <button
+            <.button
               :if={@can_create_workspace}
               phx-click="open_context_modal"
-              class="btn btn-primary btn-sm gap-1.5 transition-colors active:scale-95"
+              id="new-workspace-empty-btn"
             >
               <.icon name="hero-plus" class="size-4" />
               {gettext("New workspace")}
-            </button>
+            </.button>
           </div>
 
           <div :if={@workspaces != []} class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -108,62 +108,48 @@ defmodule DranWeb.DashboardLive do
       </div>
 
       <%!-- New workspace modal (owner-only) --%>
-      <div
+      <.modal
         :if={@show_workspace_modal}
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        phx-window-keydown="close_context_modal"
-        phx-key="Escape"
+        id="workspace-modal"
+        title={gettext("New workspace")}
+        on_close="close_context_modal"
       >
-        <div
-          class="card bg-base-100 border border-base-300 shadow-xl w-full max-w-lg"
-          phx-click-away="close_context_modal"
+        <.form
+          for={@new_workspace_form}
+          id="context-form"
+          phx-change="validate_context"
+          phx-submit="create_workspace"
+          class="space-y-4"
         >
-          <div class="card-body">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-lg font-semibold">{gettext("New workspace")}</h3>
-              <button phx-click="close_context_modal" class="btn btn-ghost btn-xs btn-circle">
-                <.icon name="hero-x-mark" class="size-4" />
-              </button>
-            </div>
+          <.input
+            field={@new_workspace_form[:name]}
+            type="text"
+            label={gettext("Name")}
+            placeholder={gettext("e.g. Personal")}
+            class="w-full"
+            autofocus
+          />
 
-            <.form
-              for={@new_workspace_form}
-              id="context-form"
-              phx-change="validate_context"
-              phx-submit="create_workspace"
-              class="space-y-4"
+          <p class="text-caption">
+            {gettext("Slug is generated automatically from the name:")}
+            <code class="font-mono text-base-content/70">{@suggested_slug}</code>
+          </p>
+
+          <div class="flex justify-end gap-2 pt-1">
+            <button type="button" phx-click="close_context_modal" class="btn btn-ghost btn-sm">
+              {gettext("Cancel")}
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm transition-colors active:scale-95"
+              phx-disable-with={gettext("Creating…")}
             >
-              <.input
-                field={@new_workspace_form[:name]}
-                type="text"
-                label={gettext("Name")}
-                placeholder={gettext("e.g. Personal")}
-                class="w-full"
-                autofocus
-              />
-
-              <p class="text-caption">
-                {gettext("Slug is generated automatically from the name:")}
-                <code class="font-mono text-base-content/70">{@suggested_slug}</code>
-              </p>
-
-              <div class="flex justify-end gap-2 pt-1">
-                <button type="button" phx-click="close_context_modal" class="btn btn-ghost btn-sm">
-                  {gettext("Cancel")}
-                </button>
-                <button
-                  type="submit"
-                  class="btn btn-primary btn-sm transition-colors active:scale-95"
-                  phx-disable-with={gettext("Creating…")}
-                >
-                  <.icon name="hero-plus" class="size-4" />
-                  {gettext("Create")}
-                </button>
-              </div>
-            </.form>
+              <.icon name="hero-plus" class="size-4" />
+              {gettext("Create")}
+            </button>
           </div>
-        </div>
-      </div>
+        </.form>
+      </.modal>
     </Layouts.app>
     """
   end

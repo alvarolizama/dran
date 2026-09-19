@@ -551,6 +551,22 @@
    div (`.graph-hover-overlay`), so it needs no rules here. Kept as a
    placeholder for potential future tooltip styling. */
 
+/* ── Shell: sidebar colapsable (desktop) ──────────────────────────────────
+   El checkbox #sidebar-collapse es el estado; estas dos reglas lo aplican
+   sobre el aside (.shell-sidebar) y la barra reveal (.shell-reveal, en flujo
+   sobre el contenido — nunca flotando encima del texto).
+   Viven dentro del media query de lg porque en móvil la gaveta la gobierna
+   el drawer de daisyUI (overlay + hamburguesa), no este checkbox. */
+@media (min-width: 64rem) {
+  #sidebar-collapse:checked ~ .drawer .shell-sidebar {
+    display: none;
+  }
+
+  #sidebar-collapse:not(:checked) ~ .shell-reveal {
+    display: none;
+  }
+}
+
 /* ── Tablas: hover de fila global (§C6) ── */
 
 .table tbody tr {

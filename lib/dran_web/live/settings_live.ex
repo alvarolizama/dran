@@ -654,15 +654,10 @@ defmodule DranWeb.SettingsLive do
           </p>
         </div>
 
-        <button
-          type="button"
-          id="new-api-key-btn"
-          phx-click="open_create_key_modal"
-          class="btn btn-primary btn-sm gap-1.5"
-        >
+        <.button id="new-api-key-btn" phx-click="open_create_key_modal">
           <.icon name="hero-plus" class="size-4" />
           {gettext("New API key")}
-        </button>
+        </.button>
       </div>
 
       <%!-- Newly created / regenerated token — shown ONCE --%>
@@ -926,7 +921,6 @@ defmodule DranWeb.SettingsLive do
       <.modal
         :if={@show_create_key_modal && @create_key_form}
         id="create-key-modal"
-        show={true}
         title={gettext("Create API key")}
         on_close="close_create_key_modal"
         max_w="max-w-2xl"
@@ -945,7 +939,6 @@ defmodule DranWeb.SettingsLive do
       <.modal
         :if={@editing_key_id && @edit_key_form}
         id="edit-key-modal"
-        show={true}
         title={gettext("Workspaces and levels")}
         on_close="close_edit_key_modal"
         max_w="max-w-2xl"

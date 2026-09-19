@@ -228,10 +228,10 @@ defmodule DranWeb.AdminWorkspacesLive do
                 {gettext("Create contexts and manage context access per user.")}
               </p>
             </div>
-            <button phx-click="new_workspace" class="btn btn-primary btn-sm gap-1.5">
+            <.button phx-click="new_workspace" id="new-workspace-admin-btn">
               <.icon name="hero-plus" class="size-4" />
               {gettext("New workspace")}
-            </button>
+            </.button>
           </div>
 
           <%!-- Workspace list --%>
@@ -331,8 +331,8 @@ defmodule DranWeb.AdminWorkspacesLive do
 
           <%!-- Add / edit context modal --%>
           <.modal
+            :if={@show_workspace_modal}
             id="context-modal"
-            show={@show_workspace_modal}
             title={@form_modal_title}
             on_close="close_context_modal"
           >
@@ -400,8 +400,8 @@ defmodule DranWeb.AdminWorkspacesLive do
 
           <%!-- Page types modal --%>
           <.modal
+            :if={@page_types_workspace_id != nil}
             id="page-types-modal"
-            show={@page_types_workspace_id != nil}
             title={gettext("Page types")}
             on_close="close_page_types"
             max_w="max-w-md"
@@ -446,8 +446,8 @@ defmodule DranWeb.AdminWorkspacesLive do
 
           <%!-- Manage users modal --%>
           <.modal
+            :if={@managing_workspace_id != nil}
             id="context-users-modal"
-            show={@managing_workspace_id != nil}
             title={gettext("Users")}
             on_close="close_context_users"
             max_w="max-w-md"

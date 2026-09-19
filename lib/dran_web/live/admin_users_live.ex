@@ -223,10 +223,10 @@ defmodule DranWeb.AdminUsersLive do
               <h1 class="text-title">{gettext("Users")}</h1>
               <p class="text-caption mt-1">{gettext("Manage users and their workspace access.")}</p>
             </div>
-            <button phx-click="new_user" class="btn btn-primary btn-sm gap-1.5">
+            <.button phx-click="new_user" id="new-user-btn">
               <.icon name="hero-plus" class="size-4" />
               {gettext("Add User")}
-            </button>
+            </.button>
           </div>
 
           <%!-- Google open signup toggle --%>
@@ -401,7 +401,7 @@ defmodule DranWeb.AdminUsersLive do
       </div>
 
       <%!-- Add / edit user modal --%>
-      <.modal id="user-modal" show={@show_user_modal} title={@modal_title} on_close="close_user_modal">
+      <.modal :if={@show_user_modal} id="user-modal" title={@modal_title} on_close="close_user_modal">
         <.form for={@user_form} phx-submit="save_user" class="space-y-4">
           <div class="grid grid-cols-2 gap-3">
             <.input field={@user_form[:email]} label={gettext("Email")} type="email" required />

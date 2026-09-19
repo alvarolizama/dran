@@ -104,13 +104,26 @@ defmodule DranWeb.Layouts do
       )
 
     ~H"""
-    <div class="flex h-screen bg-base-100 text-base-content">
-      <aside
-        :if={@sidebar}
-        class="w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col"
-      >
-        <div class="p-3 border-b border-base-300">
-          <div class="flex items-center gap-2">
+    <div class="h-screen bg-base-100 text-base-content">
+      <%!-- Shell colapsable (desktop): el checkbox ES el estado y el CSS de
+           app.css lo aplica sobre .shell-sidebar / .shell-reveal. Vive acá
+           —fuera del drawer— para que las reglas funcionen por hermandad. --%>
+      <input id="sidebar-collapse" type="checkbox" class="hidden" />
+
+      <div class="drawer lg:drawer-open h-full">
+        <%!-- Móvil: el drawer-toggle abre/cierra la gaveta con overlay --%>
+        <input id="app-drawer" type="checkbox" class="drawer-toggle" />
+
+        <div class="drawer-content flex flex-col min-w-0 h-full">
+          <%!-- Barra móvil (< lg): hamburguesa + logo --%>
+          <header class="lg:hidden flex items-center gap-2 h-14 px-3 shrink-0 border-b border-base-300 bg-base-100/80 backdrop-blur">
+            <label
+              for="app-drawer"
+              class="btn btn-ghost btn-sm btn-square"
+              aria-label={gettext("Menu")}
+            >
+              <.icon name="hero-bars-3" class="size-5" />
+            </label>
             <a
               href={~p"/"}
               class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
@@ -118,77 +131,114 @@ defmodule DranWeb.Layouts do
               <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
-            <.workspace_selector
-              :if={not @instance_nav? and @workspace_slug}
-              workspace_slug={@workspace_slug}
-              workspaces={@workspaces}
-              page_counts={@page_counts}
-            />
+          </header>
+
+          <%!-- Reveal (desktop, colapsado): barra en flujo — así el botón de
+               volver a mostrar el sidebar nunca tapa el contenido. --%>
+          <div class="shell-reveal hidden lg:flex items-center h-12 px-3 shrink-0 border-b border-base-300 bg-base-100/80 backdrop-blur">
+            <label
+              for="sidebar-collapse"
+              class="btn btn-ghost btn-sm btn-square"
+              title={gettext("Show sidebar")}
+            >
+              <.icon name="hero-bars-3" class="size-5" />
+            </label>
           </div>
+
+          <main class={[
+            "flex-1 min-h-0 overflow-y-auto flex flex-col w-full",
+            !@sidebar && "items-center"
+          ]}>
+            <div class={[
+              "w-full",
+              if(@instance_nav? or not @sidebar, do: "p-6 pb-16", else: "contents")
+            ]}>
+              {render_slot(@inner_block)}
+            </div>
+          </main>
         </div>
 
-        <div :if={not @instance_nav? and @workspace_slug} class="p-3 border-b border-base-300">
-          <%!-- The id is not decorative: without it LiveView cannot restore the
+        <div :if={@sidebar} class="drawer-side z-40">
+          <label for="app-drawer" class="drawer-overlay"></label>
+          <aside class="shell-sidebar w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col h-full">
+            <div class="p-3 border-b border-base-300">
+              <div class="flex items-center gap-2">
+                <a
+                  href={~p"/"}
+                  class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
+                >
+                  <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
+                  <span class="text-lg font-bold tracking-tight">Dran</span>
+                </a>
+                <.workspace_selector
+                  :if={not @instance_nav? and @workspace_slug}
+                  workspace_slug={@workspace_slug}
+                  workspaces={@workspaces}
+                  page_counts={@page_counts}
+                />
+                <%!-- Colapsar (desktop): el reveal queda flotando en el contenido --%>
+                <label
+                  for="sidebar-collapse"
+                  class="hidden lg:inline-flex btn btn-ghost btn-xs btn-square shrink-0"
+                  title={gettext("Hide sidebar")}
+                >
+                  <.icon name="hero-chevron-double-left" class="size-3.5" />
+                </label>
+              </div>
+            </div>
+
+            <div :if={not @instance_nav? and @workspace_slug} class="p-3 border-b border-base-300">
+              <%!-- The id is not decorative: without it LiveView cannot restore the
                field after a crash/reconnect and warns on every page load. --%>
-          <form
-            id="sidebar-search-form"
-            action={~p"/#{@workspace_slug}/search"}
-            method="get"
-            class="relative"
-          >
-            <.icon
-              name="hero-magnifying-glass"
-              class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
-            />
-            <input
-              type="text"
-              name="q"
-              placeholder={gettext("Search...")}
-              class="w-full pl-8 pr-12 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
-            />
-            <kbd class="absolute right-2.5 top-2 text-[10px] font-mono text-base-content/40 border border-base-300 rounded px-1">
-              ⌘K
-            </kbd>
-          </form>
-        </div>
+              <form
+                id="sidebar-search-form"
+                action={~p"/#{@workspace_slug}/search"}
+                method="get"
+                class="relative"
+              >
+                <.icon
+                  name="hero-magnifying-glass"
+                  class="absolute left-2.5 top-2.5 size-4 text-base-content/50"
+                />
+                <input
+                  type="text"
+                  name="q"
+                  placeholder={gettext("Search...")}
+                  class="w-full pl-8 pr-12 py-1.5 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
+                />
+                <kbd class="absolute right-2.5 top-2 text-[10px] font-mono text-base-content/40 border border-base-300 rounded px-1">
+                  ⌘K
+                </kbd>
+              </form>
+            </div>
 
-        <nav class="flex-1 overflow-y-auto p-2 flex flex-col gap-4">
-          <%= if @instance_nav? do %>
-            <.instance_nav active={@active_nav} is_owner={@is_owner} />
-          <% else %>
-            <.sidebar_nav
-              active={@active_nav}
-              counts={@counts}
-              is_owner={@is_owner}
-              workspace_slug={@workspace_slug}
-              workspace_role={assigns[:workspace_role]}
-            />
-          <% end %>
-        </nav>
+            <nav class="flex-1 overflow-y-auto p-2 flex flex-col gap-4">
+              <%= if @instance_nav? do %>
+                <.instance_nav active={@active_nav} is_owner={@is_owner} />
+              <% else %>
+                <.sidebar_nav
+                  active={@active_nav}
+                  counts={@counts}
+                  is_owner={@is_owner}
+                  workspace_slug={@workspace_slug}
+                  workspace_role={assigns[:workspace_role]}
+                />
+              <% end %>
+            </nav>
 
-        <div class="p-3 border-t border-base-300">
-          <.user_footer
-            current_user={@current_user}
-            user={@user}
-            workspace_slug={@workspace_slug}
-            workspace_role={assigns[:workspace_role]}
-            is_owner={@is_owner}
-            active={@active_nav}
-          />
+            <div class="p-3 border-t border-base-300">
+              <.user_footer
+                current_user={@current_user}
+                user={@user}
+                workspace_slug={@workspace_slug}
+                workspace_role={assigns[:workspace_role]}
+                is_owner={@is_owner}
+                active={@active_nav}
+              />
+            </div>
+          </aside>
         </div>
-      </aside>
-
-      <main class={[
-        "flex-1 overflow-y-auto flex flex-col w-full",
-        !@sidebar && "items-center"
-      ]}>
-        <div class={[
-          "w-full",
-          if(@instance_nav? or not @sidebar, do: "p-6 pb-16", else: "contents")
-        ]}>
-          {render_slot(@inner_block)}
-        </div>
-      </main>
+      </div>
 
       <.live_component
         module={DranWeb.CommandPalette}
