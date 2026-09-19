@@ -971,12 +971,19 @@ defmodule DranWeb.SettingsLiveTest do
       assert has_element?(view, "#instance_api_token")
       assert has_element?(view, "button[phx-click='generate_token']")
       assert has_element?(view, "button[phx-click='refresh_monitoring']")
+    end
 
-      # The default workspace is read-only here — it is the workspace flagged as
-      # default in /admin/workspaces, not a form field.
-      assert has_element?(view, "#instance-default-workspace")
+    test "carries no default-workspace control — that lives in /admin/workspaces", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/admin/system")
+
+      # No panel, no read-only display and no form field: the instance default
+      # is the workspace flagged as default, set from /admin/workspaces.
+      refute has_element?(view, "#instance-default-workspace")
+      refute has_element?(view, "#instance-default-workspace-source")
       refute has_element?(view, "#instance_default_workspace_slug")
       refute has_element?(view, "#instance_default_workspace_name")
+      refute html =~ t("Default workspace")
+      refute html =~ t("Used when a user has no workspace of their own and no active session.")
     end
 
     test "refresh_monitoring populates the widgets", %{conn: conn} do
@@ -998,37 +1005,10 @@ defmodule DranWeb.SettingsLiveTest do
 
       assert html =~ t("Instance configuration saved.")
       assert Dran.Settings.get("api_token") == "instancia-test-token"
-      # The default workspace is not configured from this form anymore.
+      # The default workspace is not configured from this form — nor from any
+      # settings key: the legacy override is gone.
       assert is_nil(Dran.Settings.get("default_workspace_slug"))
       refute Dran.Settings.get("default_workspace_name")
-    end
-
-    test "the read-only default follows the flagged workspace", %{conn: conn} do
-      unique = System.unique_integer([:positive])
-
-      {:ok, ws} =
-        Knowledge.create_workspace(%{name: "Flagged #{unique}", slug: "flagged-#{unique}"})
-
-      {:ok, _} = Knowledge.update_workspace(ws, %{is_default: true})
-
-      {:ok, view, html} = live(conn, ~p"/admin/system")
-
-      assert html =~ "flagged-#{unique}"
-      assert html =~ t("Set by the workspace flagged as default.")
-      assert has_element?(view, "#instance-default-workspace")
-      assert Dran.Auth.default_workspace_slug() == "flagged-#{unique}"
-      assert Dran.Auth.default_workspace_name() == "Flagged #{unique}"
-    end
-
-    @tag :no_default_workspace
-    test "with no flagged workspace the page points at Workspaces", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/admin/system")
-
-      assert html =~
-               t("No workspace is flagged as default — flag one in Workspaces to control this.")
-
-      # With no flag, the effective default is the built-in "personal".
-      assert html =~ "personal"
     end
 
     test "generate_token stores a random token in settings", %{conn: conn} do

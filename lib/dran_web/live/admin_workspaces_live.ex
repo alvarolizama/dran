@@ -355,15 +355,20 @@ defmodule DranWeb.AdminWorkspacesLive do
                 autofocus
               />
 
-              <label class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="workspace[is_default]"
-                  checked={@editing_workspace && @editing_workspace.is_default}
-                  class="checkbox checkbox-sm"
-                />
-                <span class="text-sm">{gettext("Default workspace")}</span>
-              </label>
+              <div>
+                <label class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="workspace[is_default]"
+                    checked={@editing_workspace && @editing_workspace.is_default}
+                    class="checkbox checkbox-sm"
+                  />
+                  <span class="text-sm">{gettext("Default workspace")}</span>
+                </label>
+                <p class="text-xs text-base-content/60 mt-1">
+                  {gettext("Used when a user has no workspace of their own and no active session.")}
+                </p>
+              </div>
 
               <div>
                 <label class="text-sm font-medium">{gettext("Visibility")}</label>
