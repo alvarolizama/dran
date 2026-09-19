@@ -284,4 +284,20 @@ defmodule DranWeb.MemoryLiveTest do
     assert html =~ "El proyecto Dran usa Postgres con pgvector"
     assert html =~ "agent-riel"
   end
+
+  test "set_mode keeps the current mode for unknown client-sent modes", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/personal/search?q=pgvector")
+
+    active_btn = "button[phx-value-mode='semantic']"
+
+    # A valid mode switches (button gets the active classes); an arbitrary
+    # string must be rejected (it feeds String.to_atom on the next search)
+    # and leave the mode untouched.
+    render_hook(view, "set_mode", %{"mode" => "semantic"})
+    assert has_element?(view, active_btn, t("Semantic"))
+
+    html = render_hook(view, "set_mode", %{"mode" => "evil-mode-#{System.unique_integer()}"})
+    # Still on semantic: the active classes survive the bogus event.
+    assert html =~ ~s(bg-base-100 shadow-sm font-medium)
+  end
 end

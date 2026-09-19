@@ -24,6 +24,8 @@ defmodule DranWeb.SearchLive do
     {"graph", gettext("Graph")}
   ]
 
+  @mode_strings for {mode, _label} <- @search_modes, do: mode
+
   @impl true
   def mount(params, session, socket) do
     # The URL slug wins over the session (see Plugs.Auth.assign_to_socket/3).
@@ -116,8 +118,14 @@ defmodule DranWeb.SearchLive do
   end
 
   @impl true
-  def handle_event("set_mode", %{"mode" => mode}, socket) do
+  def handle_event("set_mode", %{"mode" => mode}, socket) when mode in @mode_strings do
     {:noreply, assign(socket, search_mode: mode)}
+  end
+
+  def handle_event("set_mode", _params, socket) do
+    # Unknown modes keep the current one — a hostile client cannot feed
+    # arbitrary strings downstream (they reach String.to_atom on search).
+    {:noreply, socket}
   end
 
   # Graph-mode node click → workspace-scoped page route. Nodes carry the
@@ -172,7 +180,7 @@ defmodule DranWeb.SearchLive do
       active_nav={@active_nav}
     >
       <div class="p-6 overflow-y-auto w-full">
-        <form phx-submit="search" class="mb-4">
+        <form phx-submit="search" id="search-form" class="mb-4">
           <div class="relative">
             <.icon
               name="hero-magnifying-glass"
