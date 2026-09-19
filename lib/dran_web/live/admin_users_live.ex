@@ -69,7 +69,9 @@ defmodule DranWeb.AdminUsersLive do
     {:noreply,
      assign(socket,
        editing_user: user,
-       user_form: to_form(%{email: user.email, name: user.name}, as: :user),
+       # Claves string: un mapa con átomos no es un formulario válido para
+       # Phoenix (`to_form` avisa y lo trata como params de todos modos).
+       user_form: to_form(%{"email" => user.email, "name" => user.name}, as: :user),
        form_workspace_ids: ids,
        modal_title: gettext("Edit User"),
        show_user_modal: true
@@ -83,24 +85,30 @@ defmodule DranWeb.AdminUsersLive do
 
   @impl true
   def handle_event("save_user", %{"user" => params}, socket) do
-    email = params["email"] || ""
-    name = params["name"] || ""
     ws_ids = params |> Map.get("workspace_ids", []) |> List.wrap()
 
-    case save_user(socket.assigns.editing_user, %{email: email, name: name}, ws_ids) do
+    # `params` goes to the changeset AS IT CAME (string keys and all) on
+    # purpose: Phoenix.HTML.FormData exposes a changeset's errors only when the
+    # changeset carries an `action` (Repo.insert/update set it) AND
+    # `Phoenix.Component.used_input?/1` finds the field in `form.params`. Both
+    # are keyed by string — hand the changeset a map of atoms and the error is
+    # built, dropped and never rendered, which is exactly the silent failure
+    # this form used to have.
+    case save_user(socket.assigns.editing_user, params, ws_ids) do
       {:ok, label} ->
         {:noreply,
          socket
          |> assign_users()
-         |> assign(show_user_modal: false)
+         |> assign(show_user_modal: false, editing_user: nil)
          |> put_flash(:info, gettext("User saved: %{email}", email: label))}
 
       {:error, changeset} ->
         {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("Could not save user: %{errors}", errors: inspect(changeset.errors))
+         socket
+         |> assign(
+           user_form: to_form(changeset, as: :user),
+           form_workspace_ids: ws_ids,
+           show_user_modal: true
          )}
     end
   end
@@ -199,8 +207,13 @@ defmodule DranWeb.AdminUsersLive do
     {:noreply, assign(socket, wiki_google_open_signup: !current)}
   end
 
+  # Creating asks for a password (the modal renders the field, `required`) and
+  # goes through `create_user_with_password/1`. `Dran.Accounts.create_user/1`
+  # would happily build the row without one — and an account with no password
+  # and no google_id can never sign in, so inviting that person to a workspace
+  # would hand them a door with no key.
   defp save_user(nil, attrs, ws_ids) do
-    with {:ok, user} <- Dran.Accounts.create_user(attrs) do
+    with {:ok, user} <- Dran.Accounts.create_user_with_password(attrs) do
       for id <- ws_ids do
         Dran.Accounts.add_user_to_workspace(user, Dran.Knowledge.get_workspace!(id))
       end
@@ -459,11 +472,28 @@ defmodule DranWeb.AdminUsersLive do
 
       <%!-- Add / edit user modal --%>
       <.modal :if={@show_user_modal} id="user-modal" title={@modal_title} on_close="close_user_modal">
-        <.form for={@user_form} phx-submit="save_user" class="space-y-4">
+        <.form for={@user_form} id="user-form" phx-submit="save_user" class="space-y-4">
           <div class="grid grid-cols-2 gap-3">
             <.input field={@user_form[:email]} label={gettext("Email")} type="email" required />
             <.input field={@user_form[:name]} label={gettext("Name")} />
           </div>
+
+          <%!--
+            La contraseña se pide SOLO al crear: sin ella la cuenta no tiene
+            forma de entrar (no hay password_hash, no hay google_id) y la
+            invitación al workspace no sirve para nada. Al editar no se ofrece
+            a propósito — la contraseña de otro se cambia desde su propia
+            cuenta, en /settings/account, y ahí se exige la actual.
+          --%>
+          <.input
+            :if={is_nil(@editing_user)}
+            field={@user_form[:password]}
+            type="password"
+            label={gettext("Password")}
+            hint={gettext("Minimum 8 characters. Share it with them: it is how they sign in.")}
+            autocomplete="new-password"
+            required
+          />
 
           <div>
             <label class="text-sm font-medium">{gettext("Contexts")}</label>
