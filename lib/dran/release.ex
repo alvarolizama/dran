@@ -103,12 +103,12 @@ defmodule Dran.Release do
   end
 
   @doc """
-  Create only the default context if it does not exist.
+  Create only the default workspace if it does not exist.
 
-  Skipped unless a default workspace is configured — flagged as default in
-  /admin/workspaces, or present in the legacy settings override
-  (see `Dran.Auth.default_workspace_configured?/0`). A deleted context stays
-  deleted across deploys when nothing is configured.
+  Skipped unless a default workspace is configured — a workspace flagged as
+  default in /admin/workspaces (see
+  `Dran.Auth.default_workspace_configured?/0`). A deleted workspace stays
+  deleted across deploys when nothing is flagged.
 
   Safe for production: does not create demo pages, todos, or relations.
   Used by `setup/0` so a fresh prod deploy gets a working context without

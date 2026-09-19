@@ -397,29 +397,54 @@ defmodule Dran.WorkspaceTest do
     end
 
     @tag :no_default_workspace
-    test "the flag wins over the legacy settings override" do
+    test "the legacy settings override no longer resolves the default" do
       Settings.put("default_workspace_slug", "legacy-slug")
       Settings.put("default_workspace_name", "Legacy Name")
 
-      {:ok, flagged} =
-        Dran.Knowledge.create_workspace(%{name: "Flagged", slug: "flagged-ws", is_default: true})
-
-      assert Dran.Auth.default_workspace_slug() == flagged.slug
-      assert Dran.Auth.default_workspace_name() == "Flagged"
-    end
-
-    @tag :no_default_workspace
-    test "without a flagged workspace the legacy setting resolves, then falls back to personal" do
+      # The flag is the only control: settings rows are ignored (and do not
+      # count as a configured default either).
       assert Dran.Auth.default_workspace_slug() == "personal"
       assert Dran.Auth.default_workspace_name() == "Personal"
       refute Dran.Auth.default_workspace_configured?()
+    end
 
-      Settings.put("default_workspace_slug", "legacy-slug")
-      Settings.put("default_workspace_name", "Legacy Name")
+    @tag :no_default_workspace
+    test "with nothing flagged and no workspace at all, the default is the personal literal" do
+      assert Dran.Auth.default_workspace_slug() == "personal"
+      assert Dran.Auth.default_workspace_name() == "Personal"
+      refute Dran.Auth.default_workspace_configured?()
+    end
 
-      assert Dran.Auth.default_workspace_slug() == "legacy-slug"
-      assert Dran.Auth.default_workspace_name() == "Legacy Name"
-      assert Dran.Auth.default_workspace_configured?()
+    @tag :no_default_workspace
+    test "with nothing flagged, the ONLY workspace is the default" do
+      {:ok, only} = Dran.Knowledge.create_workspace(%{name: "Solo", slug: "solo-ws"})
+      # Creation bootstraps the flag; drop it to prove the single-workspace
+      # rule answers on its own.
+      {:ok, _} = Dran.Knowledge.update_workspace(only, %{is_default: false})
+
+      refute Dran.Knowledge.get_default_workspace()
+      assert Dran.Auth.default_workspace_slug() == "solo-ws"
+      assert Dran.Auth.default_workspace_name() == "Solo"
+    end
+
+    @tag :no_default_workspace
+    test "with several workspaces and none flagged, the default stays personal" do
+      {:ok, first} = Dran.Knowledge.create_workspace(%{name: "Uno", slug: "uno-ws"})
+      {:ok, _second} = Dran.Knowledge.create_workspace(%{name: "Dos", slug: "dos-ws"})
+      {:ok, _} = Dran.Knowledge.update_workspace(first, %{is_default: false})
+
+      refute Dran.Knowledge.get_default_workspace()
+      assert Dran.Auth.default_workspace_slug() == "personal"
+    end
+
+    @tag :no_default_workspace
+    test "the flag wins over the single-workspace rule" do
+      {:ok, first} = Dran.Knowledge.create_workspace(%{name: "First", slug: "first-ws"})
+      {:ok, _second} = Dran.Knowledge.create_workspace(%{name: "Second", slug: "second-ws"})
+      {:ok, _} = Dran.Knowledge.update_workspace(first, %{is_default: true})
+
+      assert Dran.Auth.default_workspace_slug() == "first-ws"
+      assert Dran.Auth.default_workspace_name() == "First"
     end
 
     @tag :no_default_workspace

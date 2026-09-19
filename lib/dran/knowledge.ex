@@ -98,7 +98,8 @@ defmodule Dran.Knowledge do
   At most one row can hold the flag — the partial unique index
   `workspaces_is_default_index` guarantees it. This is the single source of
   truth for the instance default: `Dran.Auth.default_workspace_slug/0` reads it
-  first and only then falls back to the legacy settings override.
+  first and only then falls back to the only-workspace rule and finally the
+  `"personal"` literal.
   """
   def get_default_workspace do
     Repo.one(from w in Workspace, where: w.is_default == true, limit: 1)
@@ -159,11 +160,11 @@ defmodule Dran.Knowledge do
   end
 
   # Bootstrap rule: while nothing is flagged as default, the workspace being
-  # created takes the flag. Without it a clean install (no flag, no legacy
-  # setting) resolves the default slug to "personal" — a workspace nobody
-  # created — and every fallback (session, cookie, seeds, release, jobs) points
-  # at the void. An incoming `is_default` is dropped in this case: with no
-  # default to begin with there is nothing for a `false` to be relative to.
+  # created takes the flag. Without it a clean install (no flag) resolves the
+  # default slug to "personal" — a workspace nobody created — and every
+  # fallback (session, cookie, seeds, release, jobs) points at the void. An
+  # incoming `is_default` is dropped in this case: with no default to begin
+  # with there is nothing for a `false` to be relative to.
   # Any later workspace is created unflagged, so a false from the UI is honored
   # there.
   #

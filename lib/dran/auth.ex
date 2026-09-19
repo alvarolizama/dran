@@ -1,15 +1,15 @@
 defmodule Dran.Auth do
   @moduledoc """
-  Instance-level auth and default-context helpers, backed by `Dran.Settings`
-  (DB) and configurable from `/admin/system`. No environment variables.
+  Instance-level auth and default-workspace helpers. Everything lives in the
+  database — there are no environment variables behind any of it.
 
     * Admin API token — Settings key `"api_token"`. Legacy bearer token for
       API/agent access (full owner, no user row). Unset = disabled.
-    * Default context — the workspace flagged as default (`is_default`, set from
-      /admin/workspaces), with the legacy Settings keys
-      `"default_workspace_slug"` / `"default_workspace_name"` as fallback. Used
-      as the workspace slug when a user has no session/cookie and no personal
-      default, and as the context auto-created by release setup / seeds.
+    * Default workspace — the workspace flagged as default (`is_default`, set
+      from /admin/workspaces). Used as the workspace slug when a user has no
+      session/cookie and no personal default, and as the workspace auto-created
+      by release setup / seeds. No other control exists: no env var, no
+      settings override.
 
   Web login is handled entirely by `Dran.Accounts` (email + bcrypt password)
   and the first-run `/setup` flow — there are no env-var login credentials.
@@ -36,48 +36,51 @@ defmodule Dran.Auth do
   end
 
   @doc """
-  The default context slug, resolved in this order:
+  The default workspace slug, resolved in this order:
 
     1. the workspace flagged as the instance default (`is_default = true`,
        toggled from /admin/workspaces),
-    2. the legacy settings override `"default_workspace_slug"` — kept as a
-       fallback for installs configured before the flag became the control,
-    3. the built-in `"personal"`.
+    2. the only workspace in the instance when there is exactly one — with a
+       single workspace there is nothing to choose, flag or not,
+    3. the built-in `"personal"` literal.
+
+  Per-user resolution (a user who can only reach one workspace) is
+  `Dran.Accounts.session_workspace_slug/1`.
   """
   def default_workspace_slug do
     case default_workspace() do
       %{slug: slug} when is_binary(slug) and slug != "" -> slug
-      _ -> configured_workspace_slug()
+      _ -> sole_workspace_slug() || @fallback_workspace_slug
     end
   end
 
   @doc """
-  The default context display name: the flagged default's name, else the
-  legacy settings override, else the slug-derived default.
+  The default workspace display name: the flagged workspace's name, else the
+  only workspace's, else the slug-derived default.
   """
   def default_workspace_name do
     case default_workspace() do
       %{name: name} when is_binary(name) and name != "" -> name
-      _ -> configured_workspace_name()
+      _ -> sole_workspace_name() || String.capitalize(@fallback_workspace_slug)
     end
   end
 
   @doc """
-  True when the default context was explicitly configured — a workspace carries
-  the default flag, or a legacy settings override is set. Only then should the
-  context be auto-created (seeds, release setup): a deleted context stays
-  deleted across deploys when nothing is configured.
+  True when the default workspace was explicitly configured — a workspace
+  carries the default flag. Only then should it be auto-created (seeds,
+  release setup): a deleted workspace stays deleted across deploys when
+  nothing is flagged.
   """
   def default_workspace_configured? do
-    not is_nil(default_workspace()) or
-      not blank?(Dran.Settings.get("default_workspace_slug")) or
-      not blank?(Dran.Settings.get("default_workspace_name"))
+    not is_nil(default_workspace())
   rescue
     _ -> false
+  catch
+    :exit, _ -> false
   end
 
   # The flagged default lives in the DB: a missing or unavailable repo must
-  # never break resolution — the settings fallback and "personal" still answer.
+  # never break resolution — the fallbacks still answer.
   defp default_workspace do
     Dran.Knowledge.get_default_workspace()
   rescue
@@ -86,27 +89,31 @@ defmodule Dran.Auth do
     :exit, _ -> nil
   end
 
-  defp configured_workspace_slug do
-    case Dran.Settings.get("default_workspace_slug") do
-      slug when is_binary(slug) and slug != "" -> slug
-      _ -> @fallback_workspace_slug
+  # Exactly one workspace in the instance: it is the default by definition.
+  defp sole_workspace_slug do
+    case sole_workspace() do
+      %{slug: slug} when is_binary(slug) and slug != "" -> slug
+      _ -> nil
     end
-  rescue
-    _ -> @fallback_workspace_slug
   end
 
-  defp configured_workspace_name do
-    case Dran.Settings.get("default_workspace_name") do
-      name when is_binary(name) and name != "" -> name
-      _ -> String.capitalize(configured_workspace_slug())
+  defp sole_workspace_name do
+    case sole_workspace() do
+      %{name: name} when is_binary(name) and name != "" -> name
+      _ -> nil
     end
-  rescue
-    _ -> String.capitalize(configured_workspace_slug())
   end
 
-  defp blank?(nil), do: true
-  defp blank?(""), do: true
-  defp blank?(_), do: false
+  defp sole_workspace do
+    case Dran.Knowledge.list_workspaces() do
+      [workspace] -> workspace
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  catch
+    :exit, _ -> nil
+  end
 
   @doc """
   Checks a bearer token against the configured legacy API token (admin).
