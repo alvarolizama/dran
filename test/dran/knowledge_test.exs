@@ -545,6 +545,59 @@ defmodule Dran.KnowledgeTest do
       assert graph.total_edges == 3
     end
 
+    test "max_nodes reserva lugar para las páginas recién agregadas (sin relaciones)", %{
+      context: ctx
+    } do
+      # 8 páginas viejas encadenadas: entran por grado, no por "recientes".
+      old =
+        for i <- 1..8 do
+          {:ok, page} =
+            Knowledge.create_page(%{
+              workspace_id: ctx.id,
+              title: "Old #{i}",
+              slug: "old-#{i}",
+              page_type: "note"
+            })
+
+          page
+        end
+
+      old
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.each(fn [a, b] ->
+        {:ok, _} =
+          Knowledge.create_relation(%{
+            source_id: a.id,
+            target_id: b.id,
+            relation_type: "related"
+          })
+      end)
+
+      # `inserted_at` es timestamp(0) — sin segundo propio, "la más nueva" no
+      # sería determinista. Se fija a mano para que la prueba no dependa del
+      # orden de inserción dentro del mismo segundo.
+      Repo.update_all(
+        from(p in Dran.Knowledge.Page, where: p.workspace_id == ^ctx.id),
+        set: [inserted_at: ~N[2026-01-01 00:00:00]]
+      )
+
+      # La página recién agregada: 0 relaciones, así que sólo entra por el lugar
+      # que el cap reserva a las nuevas.
+      {:ok, fresh} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.id,
+          title: "Recién agregada",
+          slug: "fresh",
+          page_type: "note"
+        })
+
+      graph = Knowledge.graph_data(ctx.id, max_nodes: 4)
+
+      assert length(graph.nodes) == 4
+      assert Enum.any?(graph.nodes, &(&1.id == fresh.id))
+      assert graph.total_nodes == 9
+    end
+
     test "max_nodes above the page count returns everything (no cap artifacts)", %{context: ctx} do
       {:ok, _a} = Knowledge.create_page(%{workspace_id: ctx.id, title: "A", page_type: "note"})
       {:ok, _b} = Knowledge.create_page(%{workspace_id: ctx.id, title: "B", page_type: "note"})

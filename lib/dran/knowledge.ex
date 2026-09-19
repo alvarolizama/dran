@@ -1261,14 +1261,21 @@ defmodule Dran.Knowledge do
   - `:exclude_types` — page types excluded from the graph entirely. Filtered
     in SQL so the operational layer never leaves the database.
   - `:max_nodes` — hard cap: when the context has more visible pages than
-    this, only the N most-connected pages (highest degree, counting inbound
-    + outbound relations) are returned, plus the edges between them. The
-    `total_nodes` always reports the real count; `total_edges` reports the
-    real count when capped (otherwise it reflects the fetched edges, capped
-    at 2500). The UI can show "showing X of Y". Keeps the 3D view fluid on
-    large brains.
+    this, only the newest pages plus the most-connected ones (highest degree,
+    counting inbound + outbound relations) are returned, plus the edges
+    between them. The `total_nodes` always reports the real count;
+    `total_edges` reports the real count when capped (otherwise it reflects
+    the fetched edges, capped at 2500). The UI can show "showing X of Y".
+    Keeps the 3D view fluid on large brains.
   """
   @max_graph_edges 2500
+
+  # Room reserved inside a capped graph for the NEWEST pages (a quarter of the
+  # cap, never more than this). A page added a minute ago has no relations yet,
+  # so a pure "most-connected" selection would hide it from the graph until the
+  # augmenter links it. Adding a page and seeing it in the graph must not depend
+  # on that.
+  @graph_recent_nodes 50
 
   def graph_data(workspace_id, opts \\ []) do
     exclude_types = Keyword.get(opts, :exclude_types, [])
@@ -1307,14 +1314,14 @@ defmodule Dran.Knowledge do
                   select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
               )
             else
-              top_ids = top_connected_ids(workspace_id, exclude_types, max_nodes)
+              ids = capped_graph_ids(workspace_id, exclude_types, scope_pages, max_nodes)
 
-              if top_ids == [] do
+              if ids == [] do
                 []
               else
                 Repo.all(
                   from p in graph_base(workspace_id, exclude_types, scope_pages),
-                    where: p.id in ^top_ids,
+                    where: p.id in ^ids,
                     select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
                 )
               end
@@ -1472,6 +1479,32 @@ defmodule Dran.Knowledge do
     else
       String.slice(first_line, 0, 77) <> "..."
     end
+  end
+
+  # Node ids for a capped graph: the newest pages first, then the most-connected
+  # ones to fill the cap. The order matters — `take/2` keeps the newest even when
+  # they have no relations yet, which is the whole point: a page that was just
+  # added must be visible, not only well connected. `max_nodes` is still a hard
+  # bound (the union is deduped before the take, so no node counts twice).
+  defp capped_graph_ids(workspace_id, exclude_types, scope, max_nodes) do
+    recent_budget = min(@graph_recent_nodes, div(max_nodes, 4))
+    recent_ids = recent_graph_ids(workspace_id, exclude_types, scope, recent_budget)
+    top_ids = top_connected_ids(workspace_id, exclude_types, max_nodes)
+
+    (recent_ids ++ top_ids) |> Enum.uniq() |> Enum.take(max_nodes)
+  end
+
+  # The newest pages of the graph base, most recent first. `inserted_at` has
+  # second precision, so several pages created in the same second tie: `id` as
+  # a second key keeps the selection STABLE between refetches (a page that ties
+  # never flickers in and out of the graph).
+  defp recent_graph_ids(workspace_id, exclude_types, scope, limit) do
+    from(p in graph_base(workspace_id, exclude_types, scope),
+      order_by: [desc: p.inserted_at, desc: p.id],
+      limit: ^limit,
+      select: p.id
+    )
+    |> Repo.all()
   end
 
   # The N most-connected page ids in the context, ranked by total degree
