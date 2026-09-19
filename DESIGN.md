@@ -10,6 +10,12 @@ visual**. El documento tiene dos partes:
   del Commons: ante la duda de cómo se ve un control, mira un LiveView de
   TokenGate antes de inventar.
 
+**Criterio de reparto:** todo lo que se pueda compartir vive en **Commons**
+(tema y marca, layout y responsive, shell/sidebar/menús, elementos y **botones
+por contexto**, cards, tablas, modales, buscadores, gráficas, estados). Custom es
+la excepción y cada bloque suyo dice **por qué** no es compartible (marca la
+diferencia real, no el gusto). Si dudas, va a Commons.
+
 > **Regla de oro de este doc: refleja el código.** Todo lo que se afirma aquí debe
 > poder señalarse en `lib/dran_web/…` o `assets/css/app.css`. Si el código
 > cambia, este archivo cambia con él.
@@ -23,10 +29,11 @@ visual**. El documento tiene dos partes:
 1. **daisyUI nativo + Tailwind.** No inventes componentes si daisyUI ya trae
    (`btn`, `card`, `table`, `badge`, `input`, `select`, `alert`, `modal`,
    `dropdown`, `tabs`). CSS propio sólo para convenciones **globales**.
-2. **Un solo tema por app, elegido en `app.css`.** La convención familiar es
-   daisyUI `dark --default`; **Dran corre `dim --default`** (excepción
-   consciente, §Custom). Nada de hex/oklch hardcodeado en plantillas: siempre
-   las vars del tema.
+2. **Un solo tema por app, elegido en `app.css`.** La familia corre daisyUI
+   **`dim --default`** (TokenGate, Skema y Dran), declarado en `app.css` y
+   `data-theme` de `root.html.heex`; los valores concretos del tema en uso se
+   documentan en **Custom** (§Paleta real). Nada de hex/oklch hardcodeado en
+   plantillas: siempre las vars del tema.
 3. **Reusar antes de crear.** Mira `*Web.CoreComponents` antes de escribir markup
    a mano: inputs, tablas, headers, iconos ya están.
 4. **Verificable.** Todo control interactivo lleva `id` estable para tests
@@ -72,10 +79,28 @@ Colores semánticos (usar SIEMPRE las vars, nunca hex/oklch a mano):
 Radios y bordes salen del tema (`--radius-box`, `--radius-field`, `--border`).
 No los hardcodees.
 
+**El tema manda.** Todos los colores de la app —incluidos los del **logo del
+tema** (favicon/iconos que sigan el tema) y los de gráficas— salen de los tokens
+daisyUI del tema declarado en `app.css`; ninguna vista escribe hex/oklch. Cambiar
+de tema = cambiar **una línea** (`themes: <tema> --default`) + `data-theme` en
+`root.html.heex`: las vistas no se tocan. Los valores concretos del tema en uso
+los documenta cada app en **Custom** (§Paleta real). La única excepción son los
+colores de la **marca** (§C2.1), que no siguen el tema.
+
+
+#### C2.1 Marca (logo y favicon)
+
+El mark de cada app es **de la familia** y no sigue el primary del tema: usa los
+colores de marca en un gradiente `#9fe88d → #62efbd` (trazos) con nodos
+`#9fe88d` / `#62efbd` / `#6fbb5c` y core `#c9f7be`. Van juntos en el mismo
+commit: `priv/static/favicon.svg` (fuente), `logo.png` (512 con alpha) y
+`favicon.ico` (16/32/48). Si el tema cambia, el mark **no** se recolorea: el
+verde de la familia es lo que hace reconocible la app.
+
 ### C3. Layout base
 
 - El contenido principal va en un `<main>`; el **shell** (sidebar, gaveta, rail)
-  es de cada app → ver **Custom** (§T2).
+  es familia → **§C12** (cada app declara sólo sus secciones y opciones).
 - **Header de página:** `<.header>` — título (`:inner_block`) + `:subtitle` +
   `:actions`.
 - **Filtros y acciones, alineados a la DERECHA** (slot `:actions` o
@@ -89,7 +114,7 @@ el punto de partida.
 
 | Regla | Cómo |
 |---|---|
-| **Corte del shell** | **`lg` (64rem)**: debajo, la navegación va en **gaveta** (overlay + hamburguesa); arriba, fija y colapsable a **rail** de iconos (§T2) |
+| **Corte del shell** | **`lg` (64rem)**: debajo, la navegación va en **gaveta** (overlay + hamburguesa); arriba, fija y colapsable a **rail** de iconos (§C12) |
 | **Padding del contenido** | `p-4 pb-16 sm:p-6` — en móvil más ajustado |
 | **Headers de página** | `flex flex-wrap items-center justify-between gap-3`: las acciones bajan de línea en pantallas chicas |
 | **Tablas** | siempre `overflow-x-auto` (§C6): scrollean en horizontal, nunca rompen el layout |
@@ -139,12 +164,21 @@ para que no exista una segunda copia: si una pantalla necesita un enlace de nav,
 una sección, un modal o un estado vacío, **usa el componente compartido** — no
 escribas markup nuevo ni un helper local.
 
-**Botones de crear (paridad de familia).** La acción de crear de una página es
-`<.button phx-click="new_x" id="new-x-btn">` + icono `hero-plus`: el componente
-emite `btn-primary btn-soft` (default) y el **id kebab `new-*-btn` es el ancla
-estable para tests**. Los `submit` de un form quedan como
-`<button type="submit" class="btn btn-primary btn-sm">` (sólido, como en
-TokenGate) porque ahí el sólido es el CTA del formulario, no el de la página.
+#### C4.1 Botones por contexto
+
+El mismo `btn` cambia de forma según dónde viva; no hay un "botón estándar"
+único:
+
+| Contexto | Forma |
+|---|---|
+| **CTA de la página (crear)** | `<.button phx-click="new_x" id="new-x-btn">` + icono `hero-plus` (default = `btn-primary btn-soft`); id kebab `new-*-btn` = ancla de tests |
+| **Submit de un form** | `<button type="submit" class="btn btn-primary btn-sm">` (sólido: ahí el sólido ES el CTA del formulario) |
+| **Cancelar / cerrar** | `btn btn-ghost btn-sm` |
+| **Acción de fila** | `btn btn-xs btn-ghost` + `title` (§C6) |
+| **Destructivo** | `btn … text-error` + `data-confirm="¿…? Esta acción no se puede deshacer."` |
+| **Toggle de filtro / periodo** | `btn-ghost`; activo `btn-primary` |
+| **Otra vía** (login social) | `btn btn-outline` |
+| **Navegación** | `<.nav_link>` (§C12.3) |
 
 **`btn-outline` es legítimo para "otra vía"** — misma jerarquía que el
 primario, camino alternativo (p. ej. "Continuar con Google"), no una variante
@@ -175,6 +209,17 @@ Una sola forma de "caja" en toda la familia.
   tiene → ver **Custom** (Dran: `.surface-2`, §T1).
 - **Card de modal:** `shadow-xl` en vez de `shadow-sm` (ver C7).
 - Sombras y radios del tema (`--radius-box`, `shadow-sm/md/xl`); no a mano.
+
+**La misma card según dónde esté:**
+
+| Lugar | Forma |
+|---|---|
+| Página / sección con header | `.surface-2` (badge de icono + título + caption) — la caja de sección de cada app (§Custom) |
+| Contenedora de tabla | `catch` + `overflow-x-auto` (§C6) |
+| Lista / filas | `card-body p-4` denso, hover de fila, sin zebra |
+| KPI / stat | `card-body p-4`, número `text-2xl font-semibold`, label `text-caption` |
+| Modal | `shadow-xl` + `card-body p-6` (§C7) |
+| Estado vacío | `card` centrada con `<.empty_state>` (§C10) |
 
 ### C6. Tablas
 
@@ -491,6 +536,68 @@ Reglas:
 - **i18n:** `Gettext`.
 - Cierra siempre con **`mix precommit`** (alias en `mix.exs`).
 
+
+### C12. Shell (sidebar, navegación y menús)
+
+El shell de la familia es **sidebar + barra de contenido** (sin topbar de
+escritorio). Cada app declara su tema y sus secciones en **Custom**; la mecánica
+es esta — Dran es la implementación de referencia.
+
+#### C12.1 Estructura
+
+- Raíz `h-screen` + **daisyUI `drawer lg:drawer-open h-full`**.
+- **Barra del contenido (`h-14`), siempre visible: es el ÚNICO sitio del toggle
+  de navegación.** En `< lg` es la hamburguesa (`label for="app-drawer"`) que
+  abre la gaveta; en `≥ lg`, el mismo botón en la misma posición
+  colapsa/expande la sidebar (`label for="sidebar-collapse"`). **Nunca dos
+  controles**: el sidebar no lleva chevron propio.
+- **Móvil (`< lg`):** la sidebar vive en la gaveta (`drawer-side` +
+  `drawer-overlay`); cerrar = overlay o navegar. La gaveta no se persiste.
+- **Desktop (`≥ lg`):** sidebar fija, **colapsable a rail de iconos** (4rem) con
+  el checkbox `#sidebar-collapse` (hermano del `.drawer`): se angosta, los
+  textos con `.shell-hide` desaparecen (marca, selector, buscador, labels de
+  enlaces y grupos, badges, nombre/email) y quedan **logo + iconos** centrados
+  con `title` (tooltip). **No** se oculta la sidebar ni se usa botón flotante:
+  un `fixed` tapa el título de la página. En el rail el menú de usuario abre
+  hacia la derecha y el `.drawer-side` pierde el recorte (`overflow: visible`) —
+  el scroll lo lleva el `<nav>` interno del aside.
+- Sidebar `w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col`.
+  Densidad: header `p-3`, búsqueda `p-3`, nav `flex-1 overflow-y-auto p-2 flex
+  flex-col gap-4`, pie `p-3 border-t`.
+
+#### C12.2 Anatomía de la sidebar
+
+| Zona | Contenido |
+|---|---|
+| header | logo + wordmark · selector de contexto (`select select-xs`) |
+| búsqueda | form GET del contexto con hint `⌘K` |
+| nav | entradas siempre visibles + grupos (`<.nav_group>`) |
+| pie | `<.user_footer>`: avatar + nombre/email + menú |
+
+#### C12.3 Navegación y menús
+
+- **`<.nav_link>`**: `btn btn-sm w-full justify-between font-normal`; inactivo
+  `btn-ghost text-base-content/80`; **activo `bg-primary/15 text-primary
+  font-medium hover:bg-primary/20` + `aria-current="page"`**. **No** usar
+  `btn-primary btn-soft` para el activo: mezcla sólo 8% del color con `base-100`
+  y el pill se lee gris. Badge `badge badge-sm` (ghost; primary si activo).
+  `title` con el label — es el tooltip del rail.
+- **`<.nav_group>`**: rótulo `text-xs font-semibold uppercase tracking-wider
+  text-base-content/70`, `px-3 pt-1 pb-1`; grupos con `gap-4`, links con `gap-1`.
+- **Menú de usuario** (`#user-menu`, `<.menu_item>`), anclado abajo-izquierda:
+  **Workspaces** (→ `/`, siempre: es la vuelta al listado desde cualquier URL) ·
+  Profile · API keys · *(divider, sólo con contexto)* entradas del contexto ·
+  *(divider)* Log out. El entry activo: `aria-current="page"` + `text-primary`.
+- **Sin navegación duplicada:** si el sidebar ya lleva a una sección, la página
+  no la repite adentro; las acciones de contexto van en el menú de usuario, no
+  en el nav. La identidad de una página la dan su `<h1>` + caption.
+
+#### C12.4 Padding del contenido
+
+Lo pone el layout: `p-4 pb-16 sm:p-6`. El `pb-16` es el aire final del scroll
+(la última card nunca queda pegada al borde). Nunca dejar el contenido sin
+padding.
+
 ---
 
 ## Custom — Dran
@@ -546,23 +653,12 @@ Forma del tema: `color-scheme: dark` · radios `box 1rem` /
 > esperado, no un bug de CSS. Para otro color usá la utilidad explícita
 > (`btn-secondary`, `btn-accent`) — **no** redefinas el primary del tema.
 
-### Marca (logo y favicon)
+### Marca (logo y favicon) — ver §C2.1
 
-Misma marca que el resto de la familia (TokenGate, Skema): el mark de Dran es un
-grafo hub-and-spokes con los **colores de TokenGate**, no con el primary del
-tema:
-
-| Uso | Color |
-|---|---|
-| trazos (radiales + hub) | gradiente `#9fe88d → #62efbd` (`linearGradient`, userSpaceOnUse) |
-| nodos | `#9fe88d` · `#62efbd` · `#6fbb5c` |
-| core del hub | `#c9f7be` |
-| halo del hub | `#9fe88d` al 20% |
-
-Archivos que van juntos en el mismo commit: `priv/static/favicon.svg` (fuente),
-`priv/static/logo.png` (512 con alpha) y `priv/static/favicon.ico` (16/32/48).
-El mark **no** se recolorea cuando cambia el tema: es la marca, y así el verde
-de la familia se reconoce aunque el primary del tema sea otro.
+Dran usa la marca de la familia (grafo hub-and-spokes) con los **colores de
+marca**, no con el primary del tema: gradiente `#9fe88d → #62efbd` en trazos y
+halo, nodos `#9fe88d` · `#62efbd` · `#6fbb5c`, core `#c9f7be` (detalle y regla
+de los tres archivos en §C2.1). No se recolorea al cambiar el tema.
 
 ### T1. `app.css` (561 líneas) — el design system de Dran
 
@@ -617,7 +713,7 @@ Transiciones `transition-all duration-150`; desplazamientos `hover:translate-x-0
 | `.agent-step` (+ `slide-in`) | animación de pasos del worker |
 | "DRAN DESIGN SYSTEM": `text-*` · `.surface-*` · `.skeleton` · `.lift` · `.focus-ring` · `:root` vars | escala tipográfica, superficies, estados |
 | `.table tbody tr:hover`, `transition` (§C6) | hover de fila unificado |
-| reglas de `#sidebar-collapse` sobre `.shell-sidebar` / `.shell-hide` / `.nav-link` / `.shell-sidebar-header` / `.shell-user-footer` (dentro de `@media (min-width: 64rem)`) | colapso a rail de iconos en desktop (§T2): el checkbox es el estado, el CSS lo aplica |
+| reglas de `#sidebar-collapse` sobre `.shell-sidebar` / `.shell-hide` / `.nav-link` / `.shell-sidebar-header` / `.shell-user-footer` (dentro de `@media (min-width: 64rem)`) | colapso a rail de iconos en desktop (§C12.1): el checkbox es el estado, el CSS lo aplica |
 
 **Regla: ningún bloque propio declara color hardcodeado.** Todo color del CSS
 custom sale de `var(--color-…)` o `oklch(from var(--color-…) …)` — el tema
@@ -637,116 +733,34 @@ tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
   paleta de marca `#9fe88d`/`#62efbd`/`#6fbb5c`/`#c9f7be` (§Custom). Al cambiar
   el primary del tema, actualizarlos en el mismo commit.
 
-### T2. Shell
+### T2. Shell — lo exclusivo de Dran
 
-`Layouts.app/1` — raíz `h-screen` y **daisyUI `drawer lg:drawer-open h-full`**:
+La mecánica del shell (drawer, barra con el toggle único, rail, anatomía de la
+sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
 
-- **Móvil (`< lg`):** la sidebar vive en la gaveta del drawer
-  (`drawer-side` + `drawer-overlay`), y el contenido abre con una barra
-  `header.lg:hidden h-14` con **hamburguesa** (`label for="app-drawer"`) + logo.
-  Cerrar = overlay o navegar.
-- **Barra del contenido (`h-14`, siempre visible):** es el **único** sitio del
-  toggle de navegación — en móvil es la hamburguesa (`label for="app-drawer"`)
-  y en desktop el mismo botón en la misma posición colapsa/expande la sidebar
-  (`label for="sidebar-collapse"`, `hidden lg:inline-flex`). **Nunca hay dos
-  controles**: el sidebar no lleva chevron propio (antes lo tenía y se veían
-  dos botones para lo mismo).
-- **Desktop (`≥ lg`):** la sidebar queda fija a la izquierda y se puede
-  **colapsar a un rail de iconos** (4rem). El estado es el checkbox
-  `#sidebar-collapse` (hermano del `.drawer`) y las reglas de §T1 hacen el
-  resto: la sidebar se angosta, los textos con `.shell-hide` desaparecen
-  (marca, selector, buscador, labels de enlaces y de grupo, badges, nombre y
-  email) y quedan **logo + iconos**, centrados y con `title` para el tooltip.
-  El pie muestra el avatar con su menú, apilado, y **el menú abre hacia la
-  derecha** (en el rail, anclado a la derecha caía fuera de pantalla): el
-  `.drawer-side` pierde el recorte (`overflow: visible`) mientras está colapsado
-  — el scroll lo lleva el `<nav>` interno del aside. **No** se oculta la sidebar ni
-  se usa un botón flotante: un `fixed` tapaba el título de la página.
-- Sidebar `w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col`
-  con densidad de familia (header `p-3`, búsqueda `p-3`, nav
-  `flex-1 overflow-y-auto p-2 flex flex-col gap-4`, pie `p-3 border-t`).
-
-**Definición de la sidebar (de arriba a abajo):**
-
-| Zona | Contenido |
-|---|---|
-| header | logo + "Dran" · `<.workspace_selector>` (`select select-xs`, sólo si hay workspace) · toggle de colapso (sólo desktop) |
-| búsqueda | form `GET /:slug/search` con `⌘K` (sólo workspace) |
-| nav | **workspace:** Home · Graph · Journey · Memory + grupo *Knowledge base* (tipos + Clusters) — **instancia:** Workspaces · grupo *Account* (Profile, API keys) · grupo *Admin* (Users, All workspaces, Models, System, Jobs) |
-| pie | `<.user_footer>`: avatar + nombre/email + menú |
-
-**Definición de los menús:**
-
-- **Nav (`<.nav_link>`, `<.nav_group>`):** activo = `bg-primary/15 text-primary` +
-  `aria-current="page"`; badge `badge-sm` (ghost, primary si activo); `title` con
-  el label para el rail.
-- **Menú de usuario (`#user-menu`, `<.menu_item>`):** Workspaces (`/`, siempre) ·
-  Profile · API keys · *(divider, sólo con workspace)* Activity · Workspace
-  settings (gated owner/admin) · *(divider)* Log out.
-
-**Responsive del shell:** `lg` separa los dos modos — por debajo, gaveta con
-overlay y barra `h-14` (hamburguesa + logo); por encima, sidebar fija que se
-colapsa a rail de 4rem (logo + iconos con tooltip + avatar). La gaveta **no**
-se persiste: cerrarla es overlay o navegar.
-
-- **Sidebar (workspace):** header con logo + `<.workspace_selector>`
-  (`id="context-selector"`, `select select-xs`) en la misma fila; buscador del
-  workspace (`GET /:slug/search`, icono + `kbd ⌘K`); nav con
-  Home/Grafo/Journey/Memory + grupo Knowledge base en `<details open>`
-  colapsables (chevron `group-open:rotate-90`); pie con `<.user_footer>`.
-  **El nav no lleva acciones de workspace:** Activity y Workspace settings
-  viven en el menú de usuario.
-- **Nav link (`nav_link/1`):** `btn btn-sm w-full justify-between font-normal`,
-  inactivo `btn-ghost text-base-content/80`; **activo = `bg-primary/15
-  text-primary font-medium hover:bg-primary/20` + `aria-current="page"`**
-  (el test lee `aria-current`, no la clase). **No usar `btn-primary btn-soft`
-  para el activo:** `btn-soft` mezcla sólo 8% del color con `base-100`, así que
-  el pill se lee gris (bug real, verificado con captura). Badge =
-  `badge badge-sm badge-ghost` (activo `badge-primary`).
-- **Pie de usuario (`user_footer/1`):** fila `p-2` con hover; avatar `size-8
-  rounded-full bg-primary text-primary-content` con la inicial, nombre + email
-  truncados (`text-sm font-medium` / `text-xs text-base-content/50`, el email
-  con `title` para leerlo completo) y `<details>` `id="user-menu"` hacia arriba
-  (`absolute bottom-full right-0 w-48 … shadow-lg`). **Menú, en este orden:**
-  Workspaces (→ `/`, siempre: es el regreso al listado desde cualquier URL,
-  incluida `/settings/account`) · Profile · API keys · *(divider, sólo con
-  workspace)* Activity · Workspace settings (gated: owner de instancia o rol
-  owner/admin) · *(divider)* Log out. El entry activo se marca con
-  `aria-current="page"` + `text-primary`.
-- **Rótulos de grupo:** `text-xs font-semibold uppercase tracking-wider
-  text-base-content/70`, `px-3 pt-1 pb-1`; grupos separados con `gap-4` en el
-  `<nav>` y `gap-1` entre links.
+- **Opciones del shell:** `nav={:workspace}` (default) | `nav={:instance}` |
+  `sidebar={false}` (sólo login/setup) y `active_nav`.
+- **Nav de workspace:** Home · Graph · Journey · Memory + grupo *Knowledge base*
+  (tipos de página + Clusters). **Ninguna acción de workspace en el nav**:
+  Activity y Workspace settings viven en el menú de usuario.
+- **Nav de instancia (`nav={:instance}`):** Workspaces arriba; grupo *Account*
+  (Profile, API keys); grupo *Admin* (Users, All workspaces, Models, System,
+  Jobs) — visible para owners. **Sin item Overview**: `/admin` sigue existiendo
+  como ruta (impersonation redirige ahí) pero el index de cards no es destino.
 - **Banner de impersonación** (`root.html.heex`, `id="impersonation-banner"`):
   `bg-warning text-warning-content`, centrado, icono `hero-eye` y botón
-  `btn-xs btn-neutral` (`id="stop-impersonating"`) — el mismo tratamiento que
-  TokenGate (antes era un tinte `bg-warning/20` con botón `btn-error`).
-- **Opciones del shell:** `nav={:workspace}` (default) | `nav={:instance}`
-  (el sidebar renderea `<.instance_nav>`: Workspaces arriba, grupo Account con
-  Profile/API keys, grupo Admin con sus sub-páginas para owners — **sin item
-  Overview**: `/admin` sigue existiendo como ruta (impersonation redirige ahí)
-  pero el index de cards no es un destino del nav), `sidebar={false}`
-  (sólo login/setup), `active_nav`.
-- **Padding del contenido:** lo pone el layout — `p-6 pb-16` en las páginas de
-  instancia (`nav={:instance}`); las páginas de workspace se autopaddean con
-  `p-6` (`p-6 space-y-8` cuando llevan ritmo vertical). El `pb-16` es el aire
-  final del scroll (la última card nunca queda pegada al borde). No dejar el
-  contenido sin padding: es el bug que apareció al unificar el shell.
-- **Sin navegación duplicada:** si el sidebar ya lleva a una sección, la página
-  no repite esa navegación adentro. `/settings/*` tenía una fila de tabs
-  Account/API keys que duplicaba los items del sidebar de instancia: se eliminó
-  (el estado activo lo marca el sidebar). El home del workspace
-  (`home_live`) tenía una fila de links Activity/Settings/Workspaces al pie: se
-  eliminó — las dos primeras viven en el menú de usuario y "Workspaces" en el
-  logo / item de instancia. La identidad de sección la dan el
-  `<h1 class="text-title">` + `text-caption` de cada página.
-- **Un solo shell para toda la app:** las páginas de instancia (`/`,
-  `/settings/*`, `/admin/*`) usan el mismo sidebar con `nav={:instance}` — el
-  flujo topbar (`<.app_topbar>`) fue eliminado; `topbar`/`topbar_active` quedan
-  como attrs deprecados no-op.
+  `btn-xs btn-neutral` (`id="stop-impersonating"`) — mismo tratamiento que
+  TokenGate.
 - **Command palette:** `DranWeb.CommandPalette` (`#command-palette`, `phx-hook`,
   ⌘K) — overlay `fixed inset-0 z-50 bg-black/50 backdrop-blur-sm`, panel
   `mx-auto max-w-lg rounded-xl border border-base-300 bg-base-100 shadow-2xl`
   (margen superior 15vh), selección `bg-primary/10`.
+- **Un solo shell para toda la app:** las páginas de instancia (`/`,
+  `/settings/*`, `/admin/*`) usan el mismo sidebar con `nav={:instance}`; el
+  flujo topbar (`<.app_topbar>`) fue eliminado y `topbar`/`topbar_active` quedan
+  como attrs deprecados no-op.
+- **CSS del shell en `app.css`:** el bloque de `#sidebar-collapse` /
+  `.shell-hide` / `.shell-collapse-icon` que implementa el rail (§T1).
 
 ### T3. Componentes extra
 
@@ -907,4 +921,9 @@ grep -n 'shell-hide' assets/css/app.css                                # colapso
 grep -c '<.button' lib/dran_web/live/*.ex                               # CTAs de crear como componente
 grep -rn 'flex-wrap items-center justify-between' lib/dran_web/live/   # headers que envuelven
 grep -rn 'p-4 sm:p-6' lib/dran_web/                                    # padding mobile-first
+grep -c 'for="sidebar-collapse"' lib/dran_web/components/layouts.ex     # 1 (toggle único, en la barra)
+grep -c 'aside[^>]*label for="sidebar' lib/dran_web/components/layouts.ex  # 0 (el sidebar no lleva toggle propio)
+grep -n 'user-menu' assets/css/app.css                                  # el menú del rail abre a la derecha
+grep -n '^### C12' DESIGN.md                                            # shell en Commons
+grep -n '^## Custom' DESIGN.md                                          # sólo lo exclusivo de Dran
 ```
