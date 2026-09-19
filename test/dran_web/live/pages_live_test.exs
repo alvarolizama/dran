@@ -199,6 +199,50 @@ defmodule DranWeb.PagesLiveTest do
     end
   end
 
+  describe "show — autoría" do
+    test "se pinta el nombre de la persona, no el correo con el que se guarda", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, _autora} =
+        Dran.Accounts.create_user_with_password(%{
+          email: "autora@example.com",
+          name: "Marta Ruiz",
+          password: "contrasena-larga-123"
+        })
+
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Nota con autora",
+          page_type: "note",
+          created_by: "autora@example.com"
+        })
+
+      # La BD sigue guardando el identificador; la pantalla resuelve la etiqueta.
+      assert page.created_by == "autora@example.com"
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}")
+
+      assert html =~ "Marta Ruiz"
+      refute html =~ "autora@example.com"
+    end
+
+    test "un actor-agente conserva su nombre: no hay persona detrás", %{conn: conn, ws: ws} do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Nota de un agente",
+          page_type: "note",
+          created_by: "agent-hermes"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}")
+
+      assert html =~ "agent-hermes"
+    end
+  end
+
   describe "new — create a page (resource modal)" do
     test "renders the creation modal (over the list)", %{conn: conn, ws: ws} do
       {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")

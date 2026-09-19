@@ -64,6 +64,41 @@ defmodule Dran.Actors do
   end
 
   @doc """
+  Display labels for a batch of `created_by` values: TWO queries for the whole
+  list, however long it is. One-by-one resolution inside a row component is the
+  N+1 this exists to avoid.
+
+  The stored attribution stays the IDENTIFIER — a user's email, an API key's
+  name — because that is the join key and what the API returns. This is only
+  what the SCREEN shows: the person's name when the identifier is a user's
+  email, then the actor's `display_name`, and the identifier itself when there
+  is nothing friendlier (key and system actors keep their name).
+  """
+  def creator_labels(names) when is_list(names) do
+    names = names |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    labels =
+      from(a in Actor, where: a.name in ^names, where: not is_nil(a.display_name))
+      |> Repo.all()
+      |> Map.new(&{&1.name, &1.display_name})
+
+    # El nombre del usuario manda sobre el display_name del actor: es el campo
+    # que la persona (o un admin) edita en la UI; el actor queda de respaldo.
+    from(u in Dran.Accounts.User,
+      where: u.email in ^names,
+      where: not is_nil(u.name) and u.name != ""
+    )
+    |> Repo.all()
+    |> Enum.reduce(labels, fn user, acc -> Map.put(acc, user.email, user.name) end)
+  end
+
+  def creator_labels(_names), do: %{}
+
+  @doc "The label for one `created_by` value; the identifier itself if unknown."
+  def creator_label(labels, name) when is_map(labels), do: Map.get(labels, name) || name
+  def creator_label(_labels, name), do: name
+
+  @doc """
   Create a user/agent actor. Refuses system kind — system actors are
   code-managed only (see `ensure_system_actors!/0`).
   """

@@ -19,6 +19,7 @@ defmodule DranWeb.MemoryLive do
   use DranWeb, :live_view
 
   alias Dran.Memory
+  alias Dran.Actors
   alias DranWeb.Plugs.Auth
 
   @page_size 30
@@ -41,6 +42,7 @@ defmodule DranWeb.MemoryLive do
         status_filter: "active",
         page: 0,
         memories: [],
+        creator_labels: %{},
         memory_count: safe_count(context, nil),
         has_more: false,
         # Toggle "todo el workspace | solo míos": solo se ofrece cuando el
@@ -270,6 +272,7 @@ defmodule DranWeb.MemoryLive do
               memory={entry.memory}
               score={entry.score}
               related={Map.get(entry, :related, [])}
+              labels={@creator_labels}
             />
 
             <.empty_state
@@ -328,7 +331,19 @@ defmodule DranWeb.MemoryLive do
     # lookups would be N+1 on a list that grows live.
     entries = attach_related(entries, context, socket)
 
-    assign(socket, memories: entries.memories, has_more: entries.has_more, page: 0)
+    assign(socket,
+      memories: entries.memories,
+      has_more: entries.has_more,
+      page: 0,
+      creator_labels: creator_labels_for(entries.memories)
+    )
+  end
+
+  # Nombre para pintar la autoría de cada hecho: UNA query para toda la página,
+  # no una por tarjeta (ver Dran.Actors.creator_labels/1). Lo guardado sigue
+  # siendo el identificador; esto es solo lo que se muestra.
+  defp creator_labels_for(entries) do
+    Actors.creator_labels(Enum.map(entries, & &1.memory.created_by))
   end
 
   # Attach each memory's related-fact snippets to the entries map. Only
@@ -363,7 +378,9 @@ defmodule DranWeb.MemoryLive do
     assign(socket,
       memories: socket.assigns.memories ++ entries.memories,
       has_more: entries.has_more,
-      page: next_page
+      page: next_page,
+      creator_labels:
+        Map.merge(socket.assigns.creator_labels, creator_labels_for(entries.memories))
     )
   end
 
@@ -546,6 +563,7 @@ defmodule DranWeb.MemoryLive do
   attr :memory, :map, required: true
   attr :score, :float, default: nil
   attr :related, :list, default: []
+  attr :labels, :map, default: %{}
 
   defp memory_card(assigns) do
     ~H"""
@@ -582,7 +600,7 @@ defmodule DranWeb.MemoryLive do
       <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-base-content/60">
         <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-base-200">
           <.icon name="hero-cpu-chip" class="size-3.5" />
-          {@memory.created_by}
+          {Actors.creator_label(@labels, @memory.created_by)}
         </span>
 
         <span title={absolute_timestamp(@memory.inserted_at)}>{relative_time(@memory.inserted_at)}</span>

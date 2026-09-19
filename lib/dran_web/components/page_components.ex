@@ -13,6 +13,7 @@ defmodule DranWeb.PageComponents do
 
   import DranWeb.ResourceComponents, only: [markdown_body_field: 1]
 
+  alias Dran.Actors
   alias Dran.Knowledge
   alias DranWeb.PageTypes
 
@@ -24,6 +25,10 @@ defmodule DranWeb.PageComponents do
   attr :workspace_slug, :string, default: "personal"
   attr :rendered_body, :any, default: nil
   attr :editing, :boolean, default: false
+
+  attr :creator_labels, :map,
+    default: %{},
+    doc: "display labels for created_by/updated_by (see Dran.Actors.creator_labels/1)"
 
   attr :content_hidden, :boolean,
     default: false,
@@ -260,11 +265,11 @@ defmodule DranWeb.PageComponents do
                 </div>
                 <div class="flex justify-between gap-2 py-2 text-sm">
                   <span class="text-base-content/60">{gettext("Created by")}</span>
-                  <span>{@page.created_by}</span>
+                  <span>{Actors.creator_label(@creator_labels, @page.created_by)}</span>
                 </div>
                 <div :if={@page.updated_by} class="flex justify-between gap-2 py-2 text-sm">
                   <span class="text-base-content/60">{gettext("Updated by")}</span>
-                  <span>{@page.updated_by}</span>
+                  <span>{Actors.creator_label(@creator_labels, @page.updated_by)}</span>
                 </div>
                 <div
                   :for={

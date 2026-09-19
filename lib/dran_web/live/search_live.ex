@@ -10,6 +10,7 @@ defmodule DranWeb.SearchLive do
   use DranWeb, :live_view
 
   alias Dran.Knowledge
+  alias Dran.Actors
   alias Dran.Memory
   alias Dran.Workspace
   alias DranWeb.GraphHelpers
@@ -43,7 +44,8 @@ defmodule DranWeb.SearchLive do
        graph_edges: [],
        search_mode: "auto",
        search_modes: @search_modes,
-       memory_results: []
+       memory_results: [],
+       creator_labels: %{}
      )}
   end
 
@@ -68,6 +70,8 @@ defmodule DranWeb.SearchLive do
            query: q,
            results: results,
            memory_results: memory_results,
+           creator_labels:
+             Actors.creator_labels(Enum.map(memory_results, & &1.memory.created_by)),
            graph_nodes: graph_nodes,
            graph_edges: graph_edges
          )}
@@ -78,6 +82,7 @@ defmodule DranWeb.SearchLive do
            query: "",
            results: [],
            memory_results: [],
+           creator_labels: %{},
            graph_nodes: [],
            graph_edges: []
          )}
@@ -112,6 +117,7 @@ defmodule DranWeb.SearchLive do
        query: q,
        results: results,
        memory_results: memory_results,
+       creator_labels: Actors.creator_labels(Enum.map(memory_results, & &1.memory.created_by)),
        graph_nodes: graph_nodes,
        graph_edges: graph_edges
      )}
@@ -241,6 +247,7 @@ defmodule DranWeb.SearchLive do
           <.memory_results_section
             :if={@query != "" && @memory_results != [] && @search_mode != "graph"}
             memory_results={@memory_results}
+            labels={@creator_labels}
           />
         </div>
 
@@ -296,6 +303,7 @@ defmodule DranWeb.SearchLive do
   end
 
   attr :memory_results, :list, required: true
+  attr :labels, :map, default: %{}
 
   defp memory_results_section(assigns) do
     ~H"""
@@ -311,13 +319,14 @@ defmodule DranWeb.SearchLive do
       </div>
 
       <div class="space-y-2">
-        <.memory_result_card :for={entry <- @memory_results} entry={entry} />
+        <.memory_result_card :for={entry <- @memory_results} entry={entry} labels={@labels} />
       </div>
     </div>
     """
   end
 
   attr :entry, :map, required: true
+  attr :labels, :map, default: %{}
 
   defp memory_result_card(assigns) do
     ~H"""
@@ -326,7 +335,7 @@ defmodule DranWeb.SearchLive do
       <div class="mt-2 flex items-center gap-3 text-xs text-base-content/60">
         <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-base-200">
           <.icon name="hero-cpu-chip" class="size-3" />
-          {@entry.memory.created_by}
+          {Actors.creator_label(@labels, @entry.memory.created_by)}
         </span>
         <span>{Calendar.strftime(@entry.memory.inserted_at, "%d %b %Y")}</span>
         <span class="ml-auto px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">

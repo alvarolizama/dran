@@ -36,6 +36,7 @@ defmodule DranWeb.PagesLive do
       <div :if={@live_action == :show}>
         <.page_detail
           page={@page}
+          creator_labels={@creator_labels}
           relations={@relations}
           versions={@versions}
           compare_version={@compare_version}

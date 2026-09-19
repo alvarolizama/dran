@@ -130,7 +130,11 @@ defmodule DranWeb.PageDetail do
          form: Knowledge.change_page(page) |> to_form(as: :page),
          workspace_id: context.id,
          save_status: "idle",
-         rendered_body: render_body(page)
+         rendered_body: render_body(page),
+         # Las vistas muestran el nombre de la persona, no el correo con el que
+         # se guarda la autoría: una query para los dos valores (ver
+         # Dran.Actors.creator_labels/1).
+         creator_labels: Dran.Actors.creator_labels([page.created_by, page.updated_by])
        )}
     else
       _ -> {:noreply, push_navigate(socket, to: redirect_to)}
