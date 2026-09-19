@@ -4,8 +4,9 @@ defmodule DranWeb.AdminSystemLive do
 
     * Monitoreo — DB size, table count, disk, BEAM memory, uptime and process
       counts, refreshed on demand.
-    * Instancia — editable: default workspace slug/name and the legacy admin
-      API token (Settings keys, persisted in DB).
+    * Instancia — the default workspace (read-only here: it is the workspace
+      flagged as default in /admin/workspaces) and the legacy admin API token
+      (Settings key, persisted in DB).
     * Entorno — read-only inference/workers/uploads config loaded from env
       vars at startup, plus an inference connection test button.
   """
@@ -17,8 +18,6 @@ defmodule DranWeb.AdminSystemLive do
   alias Dran.Knowledge
   alias Dran.Settings
   alias DranWeb.Plugs.Auth
-
-  @slug_format ~r/^[a-z0-9]+(-[a-z0-9]+)*$/
 
   @impl true
   def mount(_params, session, socket) do
@@ -37,17 +36,20 @@ defmodule DranWeb.AdminSystemLive do
   # ── Instance settings (Settings-backed, editable) ─────────────────────────
 
   defp assign_instance_form(socket) do
+    flagged = Knowledge.get_default_workspace()
+
     assign(
       socket,
       instance_form:
         to_form(
-          %{
-            "default_workspace_slug" => setting_or_empty("default_workspace_slug"),
-            "default_workspace_name" => setting_or_empty("default_workspace_name"),
-            "api_token" => setting_or_empty("api_token")
-          },
+          %{"api_token" => setting_or_empty("api_token")},
           as: :instance
-        )
+        ),
+      default_context: %{
+        flagged?: not is_nil(flagged),
+        name: Dran.Auth.default_workspace_name(),
+        slug: Dran.Auth.default_workspace_slug()
+      }
     )
   end
 
@@ -62,33 +64,13 @@ defmodule DranWeb.AdminSystemLive do
 
   @impl true
   def handle_event("save_instance", %{"instance" => params}, socket) do
-    slug = normalize(params["default_workspace_slug"])
-    name = normalize(params["default_workspace_name"])
     token = normalize(params["api_token"])
+    put_or_delete("api_token", token)
 
-    cond do
-      slug != "" and not Regex.match?(@slug_format, slug) ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           gettext("Invalid slug: use lowercase letters, digits and hyphens.")
-         )}
-
-      true ->
-        put_or_delete("default_workspace_slug", slug)
-        put_or_delete("default_workspace_name", name)
-        put_or_delete("api_token", token)
-
-        # Mirror the release setup behaviour: when a default workspace is
-        # explicitly configured, make sure it actually exists (first-run).
-        maybe_create_default_workspace(slug, name)
-
-        {:noreply,
-         socket
-         |> assign_instance_form()
-         |> put_flash(:info, gettext("Instance configuration saved."))}
-    end
+    {:noreply,
+     socket
+     |> assign_instance_form()
+     |> put_flash(:info, gettext("Instance configuration saved."))}
   end
 
   @impl true
@@ -131,19 +113,6 @@ defmodule DranWeb.AdminSystemLive do
 
   defp put_or_delete(key, value), do: Settings.put(key, value)
 
-  defp maybe_create_default_workspace("", _name), do: :ok
-
-  defp maybe_create_default_workspace(slug, name) do
-    if is_nil(Knowledge.get_workspace_by_slug(slug)) do
-      {:ok, _ws} = Knowledge.create_workspace(%{name: name_or_slug(name, slug), slug: slug})
-    end
-
-    :ok
-  end
-
-  defp name_or_slug("", slug), do: String.capitalize(slug)
-  defp name_or_slug(name, _slug), do: name
-
   # ── Render ─────────────────────────────────────────────────────────────────
 
   @impl true
@@ -173,62 +142,72 @@ defmodule DranWeb.AdminSystemLive do
           <.section
             title={gettext("Instance")}
             icon="hero-adjustments-horizontal"
-            caption={gettext("Default workspace and API admin token — persisted in the database.")}
+            caption={gettext("API admin token and the instance default workspace.")}
           >
-            <.form
-              for={@instance_form}
-              id="instance-form"
-              phx-submit="save_instance"
-              class="px-5 py-5 space-y-5"
-            >
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <.input
-                  field={@instance_form[:default_workspace_slug]}
-                  type="text"
-                  label={gettext("Default workspace (slug)")}
-                  placeholder="personal"
-                />
-                <.input
-                  field={@instance_form[:default_workspace_name]}
-                  type="text"
-                  label={gettext("Default workspace (name)")}
-                  placeholder="Personal"
-                />
-              </div>
-              <p class="text-xs text-base-content/60">
-                {gettext(
-                  "Workspace used when a user has no workspace of their own and no active session. Created on save if it does not exist. Blank = \"personal\"."
-                )}
-              </p>
-
-              <div class="border-t border-base-content/10 pt-4">
-                <.input
-                  field={@instance_form[:api_token]}
-                  type="text"
-                  label={gettext("API admin token")}
-                  placeholder={gettext("(blank = disabled)")}
-                />
-                <p class="text-xs text-base-content/60 mt-1.5">
-                  {gettext(
-                    "Legacy bearer for the API with full-owner access. Blank = disabled; per-user tokens keep working."
-                  )}
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <p class="text-sm font-medium">{gettext("Default workspace")}</p>
+                <p class="text-xs text-base-content/60 mt-1">
+                  {gettext("Used when a user has no workspace of their own and no active session.")}
                 </p>
-                <button
-                  type="button"
-                  phx-click="generate_token"
-                  class="btn btn-xs btn-ghost hover:bg-primary/10 mt-2 gap-1.5"
-                >
-                  <.icon name="hero-key" class="size-3.5" />
-                  {gettext("Generate token")}
-                </button>
               </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span id="instance-default-workspace" class="text-sm font-medium">
+                  {@default_context.name}
+                  <code class="text-xs text-base-content/60">({@default_context.slug})</code>
+                </span>
+                <.link navigate={~p"/admin/workspaces"} class="btn btn-xs btn-ghost gap-1.5">
+                  <.icon name="hero-arrow-top-right-on-square" class="size-3.5" />
+                  {gettext("Workspaces")}
+                </.link>
+              </div>
+            </div>
+            <p id="instance-default-workspace-source" class="text-xs text-base-content/60 mt-2">
+              <%= if @default_context.flagged? do %>
+                {gettext("Set by the workspace flagged as default.")}
+              <% else %>
+                {gettext(
+                  "No workspace is flagged as default — flag one in Workspaces to control this."
+                )}
+              <% end %>
+            </p>
 
-              <div class="flex justify-end">
-                <button type="submit" class="btn btn-primary btn-sm">
-                  {gettext("Save")}
-                </button>
-              </div>
-            </.form>
+            <div class="border-t border-base-content/10 mt-5 pt-5">
+              <.form
+                for={@instance_form}
+                id="instance-form"
+                phx-submit="save_instance"
+                class="space-y-5"
+              >
+                <div>
+                  <.input
+                    field={@instance_form[:api_token]}
+                    type="text"
+                    label={gettext("API admin token")}
+                    placeholder={gettext("(blank = disabled)")}
+                  />
+                  <p class="text-xs text-base-content/60 mt-1.5">
+                    {gettext(
+                      "Legacy bearer for the API with full-owner access. Blank = disabled; per-user tokens keep working."
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    phx-click="generate_token"
+                    class="btn btn-xs btn-ghost hover:bg-primary/10 mt-2 gap-1.5"
+                  >
+                    <.icon name="hero-key" class="size-3.5" />
+                    {gettext("Generate token")}
+                  </button>
+                </div>
+
+                <div class="flex justify-end">
+                  <button type="submit" class="btn btn-primary btn-sm">
+                    {gettext("Save")}
+                  </button>
+                </div>
+              </.form>
+            </div>
           </.section>
 
           <.config_section

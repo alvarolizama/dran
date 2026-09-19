@@ -93,33 +93,92 @@ defmodule Dran.Knowledge do
   def get_workspace!(id), do: Repo.get!(Workspace, id)
 
   @doc """
+  The workspace flagged as the instance default (`is_default = true`), or `nil`.
+
+  At most one row can hold the flag — the partial unique index
+  `workspaces_is_default_index` guarantees it. This is the single source of
+  truth for the instance default: `Dran.Auth.default_workspace_slug/0` reads it
+  first and only then falls back to the legacy settings override.
+  """
+  def get_default_workspace do
+    Repo.one(from w in Workspace, where: w.is_default == true, limit: 1)
+  end
+
+  @doc """
   Create a new workspace. The slug is auto-managed: an explicit non-blank
   `slug` in attrs wins (API); otherwise it is derived from the name,
   suffixed with a random hex while it collides with another workspace.
+
+  Setting `is_default` clears the previous default first (the flag is
+  exclusive — see `clear_default_flag/1`), inside the same transaction.
   """
   def create_workspace(attrs) do
-    attrs
-    |> Dran.Slug.inject_create(
-      field: "name",
-      fallback: "workspace",
-      taken?: &get_workspace_by_slug/1
-    )
-    |> then(&(%Workspace{} |> Workspace.changeset(&1) |> Repo.insert()))
+    attrs =
+      Dran.Slug.inject_create(attrs,
+        field: "name",
+        fallback: "workspace",
+        taken?: &get_workspace_by_slug/1
+      )
+
+    changeset = Workspace.changeset(%Workspace{}, attrs)
+
+    Repo.transaction(fn ->
+      clear_default_flag(changeset)
+      insert_or_rollback(changeset)
+    end)
   end
 
   @doc """
   Update a workspace. When the name changes and no explicit slug arrived,
   the slug is regenerated from the new name (suffixed with a random hex if
   it collides with another workspace). An explicit slug always wins.
+
+  Setting `is_default` clears the previous default first, inside the same
+  transaction.
   """
   def update_workspace(%Workspace{} = context, attrs) do
-    attrs
-    |> Dran.Slug.inject_update(context,
-      field: "name",
-      fallback: "workspace",
-      lookup: &get_workspace_by_slug/1
-    )
-    |> then(&(context |> Workspace.changeset(&1) |> Repo.update()))
+    attrs =
+      Dran.Slug.inject_update(attrs, context,
+        field: "name",
+        fallback: "workspace",
+        lookup: &get_workspace_by_slug/1
+      )
+
+    changeset = Workspace.changeset(context, attrs)
+
+    Repo.transaction(fn ->
+      clear_default_flag(changeset)
+      update_or_rollback(changeset)
+    end)
+  end
+
+  # The default flag is exclusive by DB constraint. Flipping it on one
+  # workspace clears the previous holder so the admin UI's single checkbox
+  # behaves as a switch instead of failing on the unique index. Must run inside
+  # the same transaction as the write it belongs to.
+  defp clear_default_flag(%Ecto.Changeset{} = changeset) do
+    if Ecto.Changeset.get_change(changeset, :is_default) == true do
+      except_id = Ecto.Changeset.get_field(changeset, :id)
+      query = from(w in Workspace, where: w.is_default == true)
+      query = if is_nil(except_id), do: query, else: from(w in query, where: w.id != ^except_id)
+      Repo.update_all(query, set: [is_default: false])
+    end
+
+    :ok
+  end
+
+  defp insert_or_rollback(changeset) do
+    case Repo.insert(changeset) do
+      {:ok, workspace} -> workspace
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
+
+  defp update_or_rollback(changeset) do
+    case Repo.update(changeset) do
+      {:ok, workspace} -> workspace
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
   end
 
   @doc """
@@ -486,9 +545,12 @@ defmodule Dran.Knowledge do
 
   @doc "Update a context's settings (e.g. disabled_page_types)."
   def update_workspace_settings(%Workspace{} = context, attrs) do
-    context
-    |> Workspace.settings_changeset(attrs)
-    |> Repo.update()
+    changeset = Workspace.settings_changeset(context, attrs)
+
+    Repo.transaction(fn ->
+      clear_default_flag(changeset)
+      update_or_rollback(changeset)
+    end)
   end
 
   @doc """

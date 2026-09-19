@@ -15,14 +15,14 @@ alias Dran.Knowledge
 alias Dran.Workspace
 
 # ──────────────────────────────────────────────────────────────────────────
-# Seeds only run when the default context is explicitly configured in the
-# settings table (see Dran.Auth.default_context_configured?/0, configured
-# from /admin/system) — otherwise a deleted "personal" context would keep
-# coming back from the dead.
+# Seeds only run when the default context is configured — a workspace flagged
+# as default in /admin/workspaces, or the legacy settings override
+# (see Dran.Auth.default_workspace_configured?/0). Otherwise a deleted
+# "personal" context would keep coming back from the dead.
 # ──────────────────────────────────────────────────────────────────────────
 
-unless Dran.Auth.default_context_configured?() do
-  IO.puts("Default workspace not configured in settings — skipping seeds.")
+unless Dran.Auth.default_workspace_configured?() do
+  IO.puts("Default workspace not configured — skipping seeds.")
   exit(:normal)
 end
 

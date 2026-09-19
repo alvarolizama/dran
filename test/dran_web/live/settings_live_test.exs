@@ -965,13 +965,18 @@ defmodule DranWeb.SettingsLiveTest do
   # Instance settings (Settings-backed) + monitoring on /admin/system
   describe "admin system: instancia y monitoreo" do
     test "renders the instance form and monitoring widgets", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/admin/system")
+      {:ok, view, _html} = live(conn, ~p"/admin/system")
 
       assert has_element?(view, "#instance-form")
-      assert has_element?(view, "#instance_default_workspace_slug")
       assert has_element?(view, "#instance_api_token")
       assert has_element?(view, "button[phx-click='generate_token']")
       assert has_element?(view, "button[phx-click='refresh_monitoring']")
+
+      # The default workspace is read-only here — it is the workspace flagged as
+      # default in /admin/workspaces, not a form field.
+      assert has_element?(view, "#instance-default-workspace")
+      refute has_element?(view, "#instance_default_workspace_slug")
+      refute has_element?(view, "#instance_default_workspace_name")
     end
 
     test "refresh_monitoring populates the widgets", %{conn: conn} do
@@ -983,42 +988,46 @@ defmodule DranWeb.SettingsLiveTest do
       assert html =~ "used ·"
     end
 
-    test "save_instance persists settings and creates the default workspace", %{conn: conn} do
+    test "save_instance persists the admin token only", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/system")
 
       html =
         render_submit(view, "save_instance", %{
-          "instance" => %{
-            "default_workspace_slug" => "instancia-test",
-            "default_workspace_name" => "Instancia Test",
-            "api_token" => ""
-          }
+          "instance" => %{"api_token" => "instancia-test-token"}
         })
 
       assert html =~ t("Instance configuration saved.")
-      assert Dran.Settings.get("default_workspace_slug") == "instancia-test"
-      assert Dran.Settings.get("default_workspace_name") == "Instancia Test"
-      assert Dran.Auth.default_workspace_slug() == "instancia-test"
-      assert Dran.Auth.default_workspace_name() == "Instancia Test"
-      assert Dran.Auth.default_context_configured?()
-      # The workspace is created on save (mirrors release setup behaviour)
-      assert Dran.Knowledge.get_workspace_by_slug("instancia-test")
+      assert Dran.Settings.get("api_token") == "instancia-test-token"
+      # The default workspace is not configured from this form anymore.
+      assert is_nil(Dran.Settings.get("default_workspace_slug"))
+      refute Dran.Settings.get("default_workspace_name")
     end
 
-    test "save_instance rejects an invalid slug", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/admin/system")
+    test "the read-only default follows the flagged workspace", %{conn: conn} do
+      unique = System.unique_integer([:positive])
 
-      html =
-        render_submit(view, "save_instance", %{
-          "instance" => %{
-            "default_workspace_slug" => "Invalid Slug!!",
-            "default_workspace_name" => "",
-            "api_token" => ""
-          }
-        })
+      {:ok, ws} =
+        Knowledge.create_workspace(%{name: "Flagged #{unique}", slug: "flagged-#{unique}"})
 
-      assert html =~ t("Invalid slug: use lowercase letters, digits and hyphens.")
-      assert is_nil(Dran.Settings.get("default_workspace_slug"))
+      {:ok, _} = Knowledge.update_workspace(ws, %{is_default: true})
+
+      {:ok, view, html} = live(conn, ~p"/admin/system")
+
+      assert html =~ "flagged-#{unique}"
+      assert html =~ t("Set by the workspace flagged as default.")
+      assert has_element?(view, "#instance-default-workspace")
+      assert Dran.Auth.default_workspace_slug() == "flagged-#{unique}"
+      assert Dran.Auth.default_workspace_name() == "Flagged #{unique}"
+    end
+
+    test "with no flagged workspace the page points at Workspaces", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/admin/system")
+
+      assert html =~
+               t("No workspace is flagged as default — flag one in Workspaces to control this.")
+
+      # With no flag, the effective default is the built-in "personal".
+      assert html =~ "personal"
     end
 
     test "generate_token stores a random token in settings", %{conn: conn} do
@@ -1038,11 +1047,7 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/admin/system")
 
       render_submit(view, "save_instance", %{
-        "instance" => %{
-          "default_workspace_slug" => "",
-          "default_workspace_name" => "",
-          "api_token" => ""
-        }
+        "instance" => %{"api_token" => ""}
       })
 
       assert is_nil(Dran.Settings.get("api_token"))

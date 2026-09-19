@@ -105,16 +105,17 @@ defmodule Dran.Release do
   @doc """
   Create only the default context if it does not exist.
 
-  Skipped unless a default workspace is explicitly configured in the settings
-  (via /admin/system — see `Dran.Auth.default_context_configured?/0`) — a
-  deleted context stays deleted across deploys when no override is set.
+  Skipped unless a default workspace is configured — flagged as default in
+  /admin/workspaces, or present in the legacy settings override
+  (see `Dran.Auth.default_workspace_configured?/0`). A deleted context stays
+  deleted across deploys when nothing is configured.
 
   Safe for production: does not create demo pages, todos, or relations.
   Used by `setup/0` so a fresh prod deploy gets a working context without
   polluting the brain with seed content.
   """
   def seed_context do
-    if Dran.Auth.default_context_configured?() do
+    if Dran.Auth.default_workspace_configured?() do
       do_seed_context()
     else
       Logger.info(

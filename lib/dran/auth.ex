@@ -5,10 +5,11 @@ defmodule Dran.Auth do
 
     * Admin API token — Settings key `"api_token"`. Legacy bearer token for
       API/agent access (full owner, no user row). Unset = disabled.
-    * Default context — Settings keys `"default_workspace_slug"` /
-      `"default_workspace_name"`. Used as the fallback workspace slug when a
-      user has no session/cookie and no personal default, and as the context
-      auto-created by release setup / seeds.
+    * Default context — the workspace flagged as default (`is_default`, set from
+      /admin/workspaces), with the legacy Settings keys
+      `"default_workspace_slug"` / `"default_workspace_name"` as fallback. Used
+      as the workspace slug when a user has no session/cookie and no personal
+      default, and as the context auto-created by release setup / seeds.
 
   Web login is handled entirely by `Dran.Accounts` (email + bcrypt password)
   and the first-run `/setup` flow — there are no env-var login credentials.
@@ -35,10 +36,57 @@ defmodule Dran.Auth do
   end
 
   @doc """
-  The default context slug — the settings override, falling back to
-  `"personal"` when unset.
+  The default context slug, resolved in this order:
+
+    1. the workspace flagged as the instance default (`is_default = true`,
+       toggled from /admin/workspaces),
+    2. the legacy settings override `"default_workspace_slug"` — kept as a
+       fallback for installs configured before the flag became the control,
+    3. the built-in `"personal"`.
   """
   def default_workspace_slug do
+    case default_workspace() do
+      %{slug: slug} when is_binary(slug) and slug != "" -> slug
+      _ -> configured_workspace_slug()
+    end
+  end
+
+  @doc """
+  The default context display name: the flagged default's name, else the
+  legacy settings override, else the slug-derived default.
+  """
+  def default_workspace_name do
+    case default_workspace() do
+      %{name: name} when is_binary(name) and name != "" -> name
+      _ -> configured_workspace_name()
+    end
+  end
+
+  @doc """
+  True when the default context was explicitly configured — a workspace carries
+  the default flag, or a legacy settings override is set. Only then should the
+  context be auto-created (seeds, release setup): a deleted context stays
+  deleted across deploys when nothing is configured.
+  """
+  def default_workspace_configured? do
+    not is_nil(default_workspace()) or
+      not blank?(Dran.Settings.get("default_workspace_slug")) or
+      not blank?(Dran.Settings.get("default_workspace_name"))
+  rescue
+    _ -> false
+  end
+
+  # The flagged default lives in the DB: a missing or unavailable repo must
+  # never break resolution — the settings fallback and "personal" still answer.
+  defp default_workspace do
+    Dran.Knowledge.get_default_workspace()
+  rescue
+    _ -> nil
+  catch
+    :exit, _ -> nil
+  end
+
+  defp configured_workspace_slug do
     case Dran.Settings.get("default_workspace_slug") do
       slug when is_binary(slug) and slug != "" -> slug
       _ -> @fallback_workspace_slug
@@ -47,32 +95,13 @@ defmodule Dran.Auth do
     _ -> @fallback_workspace_slug
   end
 
-  @doc """
-  The default context display name — the settings override, falling back to
-  the slug-derived default.
-  """
-  def default_workspace_name do
+  defp configured_workspace_name do
     case Dran.Settings.get("default_workspace_name") do
       name when is_binary(name) and name != "" -> name
-      _ -> String.capitalize(default_workspace_slug())
+      _ -> String.capitalize(configured_workspace_slug())
     end
   rescue
-    _ -> String.capitalize(@fallback_workspace_slug)
-  end
-
-  @doc """
-  True when the default context was explicitly configured (via /admin/system).
-  Only then should the context be auto-created (seeds, release setup) — a
-  deleted context stays deleted across deploys when no override is set.
-  """
-  def default_context_configured? do
-    configured =
-      not blank?(Dran.Settings.get("default_workspace_slug")) or
-        not blank?(Dran.Settings.get("default_workspace_name"))
-
-    configured
-  rescue
-    _ -> false
+    _ -> String.capitalize(configured_workspace_slug())
   end
 
   defp blank?(nil), do: true
