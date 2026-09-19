@@ -1020,6 +1020,7 @@ defmodule DranWeb.SettingsLiveTest do
       assert Dran.Auth.default_workspace_name() == "Flagged #{unique}"
     end
 
+    @tag :no_default_workspace
     test "with no flagged workspace the page points at Workspaces", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/admin/system")
 

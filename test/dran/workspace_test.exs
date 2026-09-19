@@ -330,6 +330,48 @@ defmodule Dran.WorkspaceTest do
     end
 
     @tag :no_default_workspace
+    test "the first workspace created becomes the default" do
+      {:ok, ws} = Dran.Knowledge.create_workspace(%{name: "Trabajo"})
+
+      assert Dran.Knowledge.get_default_workspace().id == ws.id
+      assert Dran.Auth.default_workspace_slug() == ws.slug
+      assert Dran.Auth.default_workspace_name() == "Trabajo"
+      assert Dran.Auth.default_workspace_configured?()
+    end
+
+    @tag :no_default_workspace
+    test "the bootstrap flag ignores an incoming is_default: false — first only" do
+      # With no default at all, a false has nothing to be relative to.
+      {:ok, first} = Dran.Knowledge.create_workspace(%{name: "Primero", is_default: false})
+      assert Dran.Knowledge.get_default_workspace().id == first.id
+
+      # Once one is flagged, a later workspace honors the explicit false.
+      {:ok, second} = Dran.Knowledge.create_workspace(%{name: "Segundo", is_default: false})
+      refute Dran.Repo.get!(Workspace, second.id).is_default
+      assert Dran.Knowledge.get_default_workspace().id == first.id
+    end
+
+    @tag :no_default_workspace
+    test "a first workspace explicitly requested private is left alone" do
+      {:ok, ws} = Dran.Knowledge.create_workspace(%{name: "Privada", visibility: "private"})
+
+      # The default is always public, so flagging it would silently flip the
+      # visibility the caller asked for — no flag, and the instance says so.
+      refute ws.is_default
+      refute Dran.Knowledge.get_default_workspace()
+      assert Dran.Repo.get!(Workspace, ws.id).visibility == "private"
+    end
+
+    @tag :no_default_workspace
+    test "a workspace created after the bootstrap does not steal the flag" do
+      {:ok, first} = Dran.Knowledge.create_workspace(%{"name" => "Uno"})
+      {:ok, second} = Dran.Knowledge.create_workspace(%{"name" => "Dos"})
+
+      assert Dran.Knowledge.get_default_workspace().id == first.id
+      refute Dran.Repo.get!(Workspace, second.id).is_default
+    end
+
+    @tag :no_default_workspace
     test "flagging a second workspace clears the first (the flag is a switch)" do
       {:ok, first} = Dran.Knowledge.create_workspace(%{name: "First", slug: "first-ws"})
       {:ok, second} = Dran.Knowledge.create_workspace(%{name: "Second", slug: "second-ws"})

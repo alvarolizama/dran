@@ -109,12 +109,18 @@ defmodule Dran.Knowledge do
   `slug` in attrs wins (API); otherwise it is derived from the name,
   suffixed with a random hex while it collides with another workspace.
 
-  Setting `is_default` clears the previous default first (the flag is
-  exclusive — see `clear_default_flag/1`), inside the same transaction.
+  Bootstrap rule: with nothing flagged as default yet, the workspace being
+  created becomes THE default (see `maybe_flag_first_default/1`) — unless it is
+  explicitly requested as private, which the always-public default invariant
+  cannot honor. With a default in place, an explicit `is_default: true` clears
+  the previous holder first (the flag is exclusive) — both inside the same
+  transaction.
   """
   def create_workspace(attrs) do
     attrs =
-      Dran.Slug.inject_create(attrs,
+      attrs
+      |> maybe_flag_first_default()
+      |> Dran.Slug.inject_create(
         field: "name",
         fallback: "workspace",
         taken?: &get_workspace_by_slug/1
@@ -151,6 +157,45 @@ defmodule Dran.Knowledge do
       update_or_rollback(changeset)
     end)
   end
+
+  # Bootstrap rule: while nothing is flagged as default, the workspace being
+  # created takes the flag. Without it a clean install (no flag, no legacy
+  # setting) resolves the default slug to "personal" — a workspace nobody
+  # created — and every fallback (session, cookie, seeds, release, jobs) points
+  # at the void. An incoming `is_default` is dropped in this case: with no
+  # default to begin with there is nothing for a `false` to be relative to.
+  # Any later workspace is created unflagged, so a false from the UI is honored
+  # there.
+  #
+  # Exception: a workspace explicitly requested as private is left alone. The
+  # default is always public (the partial unique index backs that invariant), so
+  # flagging it would silently flip the visibility the caller asked for — worse
+  # than an instance with no default yet.
+  #
+  # The flag is written with the SAME key style as the incoming params: the UI
+  # posts string keys and the domain callers pass atoms, and Ecto.cast/3 raises
+  # on a mixed-key map.
+  defp maybe_flag_first_default(attrs) do
+    cond do
+      not is_nil(get_default_workspace()) ->
+        attrs
+
+      private_requested?(attrs) ->
+        attrs
+
+      string_keyed?(attrs) ->
+        attrs |> Map.drop(["is_default"]) |> Map.put("is_default", true)
+
+      true ->
+        attrs |> Map.drop([:is_default]) |> Map.put(:is_default, true)
+    end
+  end
+
+  defp private_requested?(attrs) do
+    Map.get(attrs, "visibility") == "private" or Map.get(attrs, :visibility) == "private"
+  end
+
+  defp string_keyed?(attrs), do: Enum.all?(Map.keys(attrs), &is_binary/1)
 
   # The default flag is exclusive by DB constraint. Flipping it on one
   # workspace clears the previous holder so the admin UI's single checkbox
