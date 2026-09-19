@@ -657,46 +657,7 @@ defmodule DranWeb.HomeLive do
           </.link>
         </div>
       </div>
-
-      <%!-- Secondary options — row below the index (no inter-item gap) --%>
-      <div class="pt-2 border-t border-base-content/10 flex flex-wrap items-center justify-center gap-0">
-        <.footer_link
-          href={~p"/#{@workspace.slug}/activity"}
-          icon="hero-signal"
-          label={gettext("Activity")}
-          active={@active_nav == "activity"}
-        />
-        <.footer_link
-          :if={@is_owner or @workspace_role in ~w(owner admin)}
-          href={~p"/#{@workspace.slug}/settings"}
-          icon="hero-cog-6-tooth"
-          label={gettext("Settings")}
-          active={@active_nav == "workspace_settings"}
-        />
-        <.footer_link href={~p"/"} icon="hero-squares-2x2" label={gettext("Workspaces")} />
-      </div>
     </div>
-    """
-  end
-
-  attr :href, :string, required: true
-  attr :icon, :string, required: true
-  attr :label, :string, required: true
-  attr :active, :boolean, default: false
-
-  defp footer_link(assigns) do
-    ~H"""
-    <a
-      href={@href}
-      class={[
-        "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-        @active && "bg-primary/10 text-primary",
-        !@active && "text-base-content/60 hover:text-base-content hover:bg-base-200"
-      ]}
-    >
-      <.icon name={@icon} class="size-4" />
-      {@label}
-    </a>
     """
   end
 

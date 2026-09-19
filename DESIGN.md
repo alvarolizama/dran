@@ -25,8 +25,8 @@ visual**. El documento tiene dos partes:
    `dropdown`, `tabs`). CSS propio sólo para convenciones **globales**.
 2. **Un solo tema por app, elegido en `app.css`.** La convención familiar es
    daisyUI `dark --default`; **Dran corre `dim --default`** (excepción
-   consciente, §Custom — la misma que TokenGate). Nada de hex/oklch
-   hardcodeado en plantillas: siempre las vars del tema.
+   consciente, §Custom). Nada de hex/oklch hardcodeado en plantillas: siempre
+   las vars del tema.
 3. **Reusar antes de crear.** Mira `*Web.CoreComponents` antes de escribir markup
    a mano: inputs, tablas, headers, iconos ya están.
 4. **Verificable.** Todo control interactivo lleva `id` estable para tests
@@ -466,10 +466,10 @@ Este `DESIGN.md` es de **Dran**. Tema **`dim` (único)**:
 @plugin "../vendor/daisyui" { themes: dim --default; }
 ```
 
-> Excepción consciente a la convención familiar (`dark`): Dran corre `dim`, el
-> mismo tema que TokenGate (misma paleta, mismo primary verde lima).
-> Historial: `night --default` → `dim` (alineación con TokenGate). El logo y el
-> favicon siguen la paleta (`#9fe88d` / `#62efbd` / `#6fbb5c` / `#c9f7be`).
+> Excepción consciente a la convención familiar (`dark`): Dran corre `dim`.
+> El **logo y el favicon** conservan la paleta verde de la familia
+> (`#9fe88d` / `#62efbd` / `#6fbb5c` / `#c9f7be`): son la marca, no un color de
+> UI — si el primary del tema cambia, la marca **no** se recolorea sola.
 
 ### Paleta real de `dim`
 
@@ -480,32 +480,30 @@ gamut-mapping), sólo para leer la tabla. Contraste = WCAG del par con su
 
 | Token | oklch | ≈hex | Rol · contraste |
 |---|---|---|---|
-| `--color-base-100` | `oklch(30.857% 0.023 264.149)` | `#2a303c` | fondo de app · texto 7.9:1 ✅ |
-| `--color-base-200` | `oklch(28.036% 0.019 264.182)` | `#242933` | paneles / hover de fila · 8.7:1 ✅ |
-| `--color-base-300` | `oklch(26.346% 0.018 262.177)` | `#20252e` | chips, bordes · 9.2:1 ✅ |
-| `--color-base-content` | `oklch(82.901% 0.031 222.959)` | `#b2ccd6` | texto principal |
-| `--color-primary` | `oklch(86.133% 0.141 139.549)` | `#9fe88d` | verde lima (el botón por defecto) · 13.0:1 ✅ |
-| `--color-secondary` | `oklch(73.375% 0.165 35.353)` | `#ff7d5d` | coral · 7.9:1 ✅ |
-| `--color-accent` | `oklch(74.229% 0.133 311.379)` | `#c792e9` | lila · 8.2:1 ✅ |
-| `--color-neutral` | `oklch(24.731% 0.02 264.094)` | `#1c212b` | panels/chips oscuros · 9.6:1 ✅ |
-| `--color-success` | `oklch(86.171% 0.142 166.534)` | `#62efbd` | ok, en vivo · 13.2:1 ✅ |
-| `--color-warning` | `oklch(86.163% 0.142 94.818)` | `#efd057` | aviso · 12.5:1 ✅ |
-| `--color-error` | `oklch(82.418% 0.099 33.756)` | `#ffae9b` | destructivo · 10.9:1 ✅ |
-| `--color-info` | `oklch(86.078% 0.142 206.182)` | `#28ebff` | informativo · 13.0:1 ✅ |
+| `--color-base-100` | `oklch(30.857% 0.023 264.149)` | `#2a303c` | fondo de app  |
+| `--color-base-200` | `oklch(28.036% 0.019 264.182)` | `#242933` | paneles / hover de fila  |
+| `--color-base-300` | `oklch(26.346% 0.018 262.177)` | `#20252e` | chips, bordes  |
+| `--color-base-content` | `oklch(82.901% 0.031 222.959)` | `#b2ccd6` | texto principal · texto 7.9:1 vs base-100 |
+| `--color-primary` | `oklch(86.133% 0.141 139.549)` | `#9fe88d` | **acción principal** (botón por defecto) · 13.0:1 |
+| `--color-secondary` | `oklch(73.375% 0.165 35.353)` | `#ff7d5d` | acento de marca · 7.9:1 |
+| `--color-accent` | `oklch(74.229% 0.133 311.379)` | `#c792e9` | acento "extra" · 8.2:1 |
+| `--color-neutral` | `oklch(24.731% 0.02 264.094)` | `#1c212b` | panels/chips oscuros · 9.6:1 |
+| `--color-success` | `oklch(86.171% 0.142 166.534)` | `#62efbd` | ok, activo · 13.2:1 |
+| `--color-warning` | `oklch(86.163% 0.142 94.818)` | `#efd057` | aviso · 12.5:1 |
+| `--color-error` | `oklch(82.418% 0.099 33.756)` | `#ffae9b` | destructivo · 10.8:1 |
+| `--color-info` | `oklch(86.078% 0.142 206.182)` | `#28ebff` | informativo · 13.0:1 |
 
-Pares `*-content` (texto sobre cada token): `primary-content`
-`oklch(17.226% 0.028 139.549)` · `secondary-content` `oklch(14.675% 0.033 35.353)`
-· `accent-content` `oklch(14.845% 0.026 311.379)` · `neutral-content` =
-`base-content` · y el resto en la misma banda (~17%).
+Pares `*-content`: `primary-content` `oklch(17.226% 0.028 139.549)` · `secondary-content` `oklch(14.675% 0.033 35.353)` · `accent-content` `oklch(14.845% 0.026 311.379)` · el resto de los semánticos también lleva su par.
 
-Forma del tema: `color-scheme: dark` · radios `box 1rem` / `field 0.5rem` /
-`selector 1rem` · `--border 1px` · `--depth 0` · `--noise 0`.
+Forma del tema: `color-scheme: dark` · radios `box 1rem` /
+`field 0.5rem` / `selector 1rem` ·
+`--border 1px` · `--depth 0` · `--noise 0`.
+
 
 > **El primary pinta todos los botones por defecto.** `CoreComponents.button/1`
-> sin `variant` emite `btn-primary btn-soft`, así que el verde `#9fe88d` es el
-> color esperado, no un bug de CSS. Para otro color usá la utilidad explícita
-> (`btn-secondary` coral, `btn-accent` lila) — **no** redefinas el primary del
-> tema. En `dim` TODOS los pares `color/content` pasan AA (≥7.9:1).
+> sin `variant` emite `btn-primary btn-soft`, así que el color del primary es el
+> esperado, no un bug de CSS. Para otro color usá la utilidad explícita
+> (`btn-secondary`, `btn-accent`) — **no** redefinas el primary del tema.
 
 ### T1. `app.css` (561 líneas) — el design system de Dran
 
@@ -590,21 +588,27 @@ mockup de skema): header `p-3`, bloque de búsqueda `p-3`, nav
 - **Sidebar (workspace):** header con logo + `<.workspace_selector>`
   (`id="context-selector"`, `select select-xs`) en la misma fila; buscador del
   workspace (`GET /:slug/search`, icono + `kbd ⌘K`); nav con
-  Home/Grafo/Journey/Memory/**Activity**/**Workspace settings** (los dos últimos
-  subieron del viejo footer de íconos — ya no existe) agrupado en `<details open>`
+  Home/Grafo/Journey/Memory + grupo Knowledge base en `<details open>`
   colapsables (chevron `group-open:rotate-90`); pie con `<.user_footer>`.
+  **El nav no lleva acciones de workspace:** Activity y Workspace settings
+  viven en el menú de usuario.
 - **Nav link (`nav_link/1`):** `btn btn-sm w-full justify-between font-normal`,
   inactivo `btn-ghost text-base-content/80`; **activo = `bg-primary/15
   text-primary font-medium hover:bg-primary/20` + `aria-current="page"`**
   (el test lee `aria-current`, no la clase). **No usar `btn-primary btn-soft`
-  para el activo:** `btn-soft` mezcla sólo 8% del color con `base-100` y en
-  `dim` el pill se lee gris (bug real, verificado con captura). Badge =
+  para el activo:** `btn-soft` mezcla sólo 8% del color con `base-100`, así que
+  el pill se lee gris (bug real, verificado con captura). Badge =
   `badge badge-sm badge-ghost` (activo `badge-primary`).
 - **Pie de usuario (`user_footer/1`):** fila `p-2` con hover; avatar `size-8
   rounded-full bg-primary text-primary-content` con la inicial, nombre + email
   truncados (`text-sm font-medium` / `text-xs text-base-content/50`, el email
   con `title` para leerlo completo) y `<details>` `id="user-menu"` hacia arriba
-  (`absolute bottom-full right-0 … shadow-lg`) con Profile · API keys · Log out.
+  (`absolute bottom-full right-0 w-48 … shadow-lg`). **Menú, en este orden:**
+  Workspaces (→ `/`, siempre: es el regreso al listado desde cualquier URL,
+  incluida `/settings/account`) · Profile · API keys · *(divider, sólo con
+  workspace)* Activity · Workspace settings (gated: owner de instancia o rol
+  owner/admin) · *(divider)* Log out. El entry activo se marca con
+  `aria-current="page"` + `text-primary`.
 - **Rótulos de grupo:** `text-xs font-semibold uppercase tracking-wider
   text-base-content/70`, `px-3 pt-1 pb-1`; grupos separados con `gap-4` en el
   `<nav>` y `gap-1` entre links.
@@ -612,7 +616,9 @@ mockup de skema): header `p-3`, bloque de búsqueda `p-3`, nav
   con botón `btn-xs btn-error` para salir.
 - **Opciones del shell:** `nav={:workspace}` (default) | `nav={:instance}`
   (el sidebar renderea `<.instance_nav>`: Workspaces arriba, grupo Account con
-  Profile/API keys, grupo Admin con sus sub-páginas para owners), `sidebar={false}`
+  Profile/API keys, grupo Admin con sus sub-páginas para owners — **sin item
+  Overview**: `/admin` sigue existiendo como ruta (impersonation redirige ahí)
+  pero el index de cards no es un destino del nav), `sidebar={false}`
   (sólo login/setup), `active_nav`.
 - **Padding del contenido:** lo pone el layout — `p-6 pb-16` en las páginas de
   instancia (`nav={:instance}`); las páginas de workspace se autopaddean con
@@ -622,7 +628,10 @@ mockup de skema): header `p-3`, bloque de búsqueda `p-3`, nav
 - **Sin navegación duplicada:** si el sidebar ya lleva a una sección, la página
   no repite esa navegación adentro. `/settings/*` tenía una fila de tabs
   Account/API keys que duplicaba los items del sidebar de instancia: se eliminó
-  (el estado activo lo marca el sidebar). La identidad de sección la dan el
+  (el estado activo lo marca el sidebar). El home del workspace
+  (`home_live`) tenía una fila de links Activity/Settings/Workspaces al pie: se
+  eliminó — las dos primeras viven en el menú de usuario y "Workspaces" en el
+  logo / item de instancia. La identidad de sección la dan el
   `<h1 class="text-title">` + `text-caption` de cada página.
 - **Un solo shell para toda la app:** las páginas de instancia (`/`,
   `/settings/*`, `/admin/*`) usan el mismo sidebar con `nav={:instance}` — el

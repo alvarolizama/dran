@@ -123,8 +123,8 @@ defmodule DranWeb.SidebarNavTest do
     end
   end
 
-  describe "workspace nav: Activity & Settings links (moved from footer icons)" do
-    test "Activity link present for every workspace" do
+  describe "workspace nav: Activity & Workspace settings NO van en el nav" do
+    test "Activity no longer renders as a nav link (vive en #user-menu)" do
       html =
         render_component(&Layouts.sidebar_nav/1, %{
           active: "activity",
@@ -133,49 +133,103 @@ defmodule DranWeb.SidebarNavTest do
           workspace_role: "viewer"
         })
 
-      assert html =~ ~s(href="/personal/activity")
-      assert html =~ t("Activity")
-      # Active highlight on the activity link
-      {pos, _} = :binary.match(html, ~s(href="/personal/activity"))
-      {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
-      anchor = binary_part(html, pos, end_pos - pos)
-      assert anchor =~ ~s(aria-current="page")
-      assert anchor =~ "bg-primary/15 text-primary"
+      refute html =~ ~s(href="/personal/activity")
+      refute html =~ t("Activity")
     end
 
-    test "Workspace settings link gated by role" do
-      owner_html =
+    test "Workspace settings no longer renders as a nav link either" do
+      html =
         render_component(&Layouts.sidebar_nav/1, %{
           active: "workspace_settings",
-          is_owner: false,
+          is_owner: true,
           workspace_slug: "personal",
           workspace_role: "owner"
         })
 
-      assert owner_html =~ ~s(href="/personal/settings")
-      assert owner_html =~ t("Workspace settings")
+      refute html =~ ~s(href="/personal/settings")
+      refute html =~ t("Workspace settings")
+    end
+  end
 
-      viewer_html =
-        render_component(&Layouts.sidebar_nav/1, %{
-          active: "home",
-          is_owner: false,
-          workspace_slug: "personal",
-          workspace_role: "viewer"
-        })
+  describe "user_footer menu (workspace-scoped entries)" do
+    defp menu(assigns) do
+      assigns =
+        assigns
+        |> Map.put_new(:current_user, "owner@test.dev")
+        |> Map.put_new(:user, nil)
 
-      refute viewer_html =~ ~s(href="/personal/settings")
+      render_component(&Layouts.user_footer/1, assigns)
     end
 
-    test "instance owner sees workspace settings even without a workspace role" do
-      html =
-        render_component(&Layouts.sidebar_nav/1, %{
-          active: "home",
-          is_owner: true,
-          workspace_slug: "personal",
-          workspace_role: "viewer"
-        })
+    test "Workspaces (back to the list) is always in the menu" do
+      for assigns <- [
+            %{workspace_slug: nil, is_owner: true},
+            %{workspace_slug: "personal", workspace_role: "viewer", is_owner: false}
+          ] do
+        html = menu(assigns)
+
+        assert html =~ ~s(href="/")
+        assert html =~ t("Workspaces")
+      end
+    end
+
+    test "Workspaces is marked active on the dashboard" do
+      html = menu(%{workspace_slug: nil, is_owner: true, active: "dashboard"})
+
+      {pos, _} = :binary.match(html, ~s(href="/"))
+      {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
+      anchor = binary_part(html, pos, end_pos - pos)
+      assert anchor =~ ~s(aria-current="page")
+    end
+
+    test "workspace owner sees Activity + Workspace settings after a divider" do
+      html = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: false})
+
+      assert html =~ ~s(href="/personal/activity")
+      assert html =~ t("Activity")
+      assert html =~ ~s(href="/personal/settings")
+      assert html =~ t("Workspace settings")
+      # account links siguen arriba
+      assert html =~ ~s(href="/settings/account")
+      assert html =~ ~s(href="/settings/api-keys")
+      assert html =~ ~s(id="logout-form")
+    end
+
+    test "viewer sees Activity but not Workspace settings" do
+      html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: false})
+
+      assert html =~ ~s(href="/personal/activity")
+      refute html =~ ~s(href="/personal/settings")
+    end
+
+    test "instance owner sees Workspace settings regardless of role" do
+      html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: true})
 
       assert html =~ ~s(href="/personal/settings")
+    end
+
+    test "outside a workspace the menu has the account + Workspaces entries only" do
+      html = menu(%{workspace_slug: nil, is_owner: true})
+
+      refute html =~ "/activity"
+      refute html =~ ~s(href="/personal/settings")
+      assert html =~ ~s(href="/")
+      assert html =~ ~s(href="/settings/account")
+      assert html =~ ~s(href="/settings/api-keys")
+    end
+
+    test "the active workspace entry is marked" do
+      html =
+        menu(%{
+          workspace_slug: "personal",
+          workspace_role: "owner",
+          active: "workspace_settings"
+        })
+
+      {pos, _} = :binary.match(html, ~s(href="/personal/settings"))
+      {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
+      anchor = binary_part(html, pos, end_pos - pos)
+      assert anchor =~ ~s(aria-current="page")
     end
   end
 end
