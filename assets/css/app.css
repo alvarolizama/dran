@@ -577,6 +577,22 @@
   #sidebar-collapse:checked ~ .drawer .shell-sidebar .nav-link {
     justify-content: center;
   }
+  /* El drawer-side recorta en horizontal (daisyUI: overflow hidden/auto) y el
+     panel del menú quedaba clipeado fuera del rail. El scroll no se pierde: lo
+     lleva el <nav> interno del aside. */
+  #sidebar-collapse:checked ~ .drawer .drawer-side {
+    overflow: visible;
+  }
+
+  /* El menú de usuario en el rail abre HACIA LA DERECHA: anclado a la derecha
+     del contenedor caía fuera de pantalla (x negativo) y quedaba invisible. */
+  #sidebar-collapse:checked ~ .drawer .shell-sidebar #user-menu > div {
+    left: 100%;
+    right: auto;
+    bottom: 0;
+    margin-left: 0.5rem;
+    margin-bottom: 0;
+  }
 }
 
 /* ── Tablas: hover de fila global (§C6) ── */

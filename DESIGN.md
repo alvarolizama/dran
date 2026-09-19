@@ -657,7 +657,10 @@ tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
   resto: la sidebar se angosta, los textos con `.shell-hide` desaparecen
   (marca, selector, buscador, labels de enlaces y de grupo, badges, nombre y
   email) y quedan **logo + iconos**, centrados y con `title` para el tooltip.
-  El pie muestra el avatar con su menú, apilado. **No** se oculta la sidebar ni
+  El pie muestra el avatar con su menú, apilado, y **el menú abre hacia la
+  derecha** (en el rail, anclado a la derecha caía fuera de pantalla): el
+  `.drawer-side` pierde el recorte (`overflow: visible`) mientras está colapsado
+  — el scroll lo lleva el `<nav>` interno del aside. **No** se oculta la sidebar ni
   se usa un botón flotante: un `fixed` tapaba el título de la página.
 - Sidebar `w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col`
   con densidad de familia (header `p-3`, búsqueda `p-3`, nav
