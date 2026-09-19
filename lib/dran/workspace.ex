@@ -47,7 +47,14 @@ defmodule Dran.Workspace do
     timestamps(type: :utc_datetime, updated_at: false)
   end
 
-  @doc "Changeset for creating a workspace"
+  @doc """
+  Changeset for creating a workspace.
+
+  `name` is a LABEL, not an identifier: it is not unique, so two workspaces can
+  be called "Personal" (two people on the same instance, or one person with two
+  projects). Only `slug` is the identity, and only because it sits in the URL —
+  it stays globally unique and `create_workspace/2` suffixes it on collision.
+  """
   def changeset(context, attrs) do
     context
     |> cast(attrs, [:name, :slug, :is_default])
@@ -55,7 +62,6 @@ defmodule Dran.Workspace do
     |> validate_required([:name, :slug])
     |> validate_length(:name, max: 100)
     |> validate_length(:slug, max: 100)
-    |> unique_constraint(:name)
     |> unique_constraint(:slug)
     |> unique_constraint(:is_default)
   end

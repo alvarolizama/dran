@@ -235,17 +235,15 @@ defmodule Dran.Accounts do
   defp do_ensure_personal_workspace(%User{} = user), do: create_personal_workspace(user)
 
   defp create_personal_workspace(%User{} = user) do
-    # BOTH name and slug are globally unique on `workspaces` (see the 001
-    # migration), and two users legitimately share a display name ("Alice"), so
-    # the name has to be made unique here — the slug is then derived from it by
-    # create_workspace/2, which suffixes on collision on its own.
-    # Private on purpose: a personal workspace is never the instance default
-    # (the default is always public) and never shows up in another user's
-    # workspace list.
-    attrs = %{
-      "name" => Dran.Slug.ensure_unique(personal_workspace_name(user), &workspace_name_taken?/1),
-      "visibility" => "private"
-    }
+    # The display name is NOT uniquified: `workspaces.name` stopped being unique
+    # once every account got a personal workspace, because two people called
+    # "Alice" are two people called "Alice". The slug — the URL identity — is
+    # derived from it by create_workspace/2, which suffixes it on collision, so
+    # the second "Alice" gets /alice-3f9a2b.
+    #
+    # Private on purpose: a personal workspace is never the instance default and
+    # never shows up in another user's workspace list.
+    attrs = %{"name" => personal_workspace_name(user), "visibility" => "private"}
 
     case Dran.Knowledge.create_workspace(attrs, owner_user_id: user.id) do
       {:ok, %Workspace{} = workspace} ->
@@ -263,9 +261,6 @@ defmodule Dran.Accounts do
         {:error, reason}
     end
   end
-
-  # `workspaces.name` carries a plain unique index (not scoped to anything).
-  defp workspace_name_taken?(name), do: Repo.exists?(from w in Workspace, where: w.name == ^name)
 
   # Seed the landing workspace only when nothing was chosen: a default the user
   # (or an admin) set on purpose always wins.

@@ -721,10 +721,10 @@ defmodule Dran.AccountsTest do
       pb = Accounts.personal_workspace(b)
 
       assert pa.id != pb.id
+      # The NAME is allowed to repeat — it is a label. What cannot repeat is the
+      # slug, because it is the URL identity, so the second one is suffixed.
+      assert pa.name == pb.name
       assert pa.slug != pb.slug
-      # `workspaces.name` is globally unique (001 migration), so the second one
-      # has to be suffixed — the reason the name is uniquified before insert.
-      assert pa.name != pb.name
     end
 
     test "backfill_personal_workspaces/0 covers accounts that lack one" do
@@ -804,13 +804,27 @@ defmodule Dran.AccountsTest do
       assert {:ok, user} = Accounts.create_user(@user_attrs)
       assert {:ok, granted} = Accounts.update_user(user, %{can_create_workspaces: true})
 
-      # Name collides with the "Personal" fixture: the insert fails, so the
-      # owner membership must not be written either.
+      # The SLUG is what is unique ("personal" is the fixture's), so the insert
+      # fails there — and the owner membership must not be written either. A
+      # repeated NAME would no longer fail at all.
       assert {:error, %Ecto.Changeset{}} =
-               Accounts.create_workspace_for(granted, %{name: "Personal", slug: "otra-personal"})
+               Accounts.create_workspace_for(granted, %{name: "Otra", slug: "personal"})
 
-      refute Dran.Knowledge.get_workspace_by_slug("otra-personal")
       assert length(Accounts.list_user_workspaces(granted)) == 1
+    end
+
+    test "a repeated name is fine, the slug is what gets suffixed" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      assert {:ok, granted} = Accounts.update_user(user, %{can_create_workspaces: true})
+
+      # Same display name as the "Personal" fixture: allowed. The slug is
+      # derived from the name and suffix on collision.
+      assert {:ok, twin} = Accounts.create_workspace_for(granted, %{name: "Personal"})
+
+      assert twin.name == "Personal"
+      assert twin.slug != "personal"
+      assert Dran.Knowledge.get_workspace_by_slug(twin.slug).id == twin.id
+      assert Accounts.user_role_in_workspace(granted, twin) == "owner"
     end
   end
 
