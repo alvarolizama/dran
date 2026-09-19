@@ -342,14 +342,14 @@ defmodule DranWeb.E2EAuthTest do
 
       {:ok, view, html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
 
-      # The workspaces table lists existing contexts and their controls
+      # The workspaces table lists existing workspaces and their controls
       assert html =~ ctx1.slug
       # Manage users button per workspace
-      assert html =~ "manage_context_users"
+      assert html =~ "manage_workspace_users"
 
-      # Opening the "New context" modal exposes the create form
+      # Opening the "New workspace" modal exposes the create form
       html = Phoenix.LiveViewTest.render_click(view, "new_workspace")
-      assert html =~ "context-form"
+      assert html =~ "workspace-form"
     end
 
     test "manage users modal opens with user checkboxes", %{
@@ -365,16 +365,16 @@ defmodule DranWeb.E2EAuthTest do
       {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
 
       # Open the modal for ctx1
-      html = Phoenix.LiveViewTest.render_click(view, "manage_context_users", %{"id" => ctx1.id})
+      html = Phoenix.LiveViewTest.render_click(view, "manage_workspace_users", %{"id" => ctx1.id})
 
       # Modal shows users with checkboxes
-      assert html =~ "toggle_context_user"
+      assert html =~ "toggle_workspace_user"
       assert html =~ user.email
-      assert html =~ "close_context_users"
+      assert html =~ "close_workspace_users"
 
       # Close the modal
-      html = Phoenix.LiveViewTest.render_click(view, "close_context_users")
-      refute html =~ "toggle_context_user"
+      html = Phoenix.LiveViewTest.render_click(view, "close_workspace_users")
+      refute html =~ "toggle_workspace_user"
     end
 
     test "admin session sees the sidebars links and all workspaces", %{

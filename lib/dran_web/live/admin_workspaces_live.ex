@@ -12,7 +12,7 @@ defmodule DranWeb.AdminWorkspacesLive do
 
   @impl true
   def mount(_params, session, socket) do
-    {socket, _context} = Auth.assign_to_socket(socket, session)
+    {socket, _workspace} = Auth.assign_to_socket(socket, session)
 
     socket =
       socket
@@ -47,7 +47,7 @@ defmodule DranWeb.AdminWorkspacesLive do
 
   defp assign_workspace_form(socket) do
     assign(socket,
-      workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context)
+      workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :workspace)
     )
   end
 
@@ -56,7 +56,7 @@ defmodule DranWeb.AdminWorkspacesLive do
     {:noreply,
      assign(socket,
        editing_workspace: nil,
-       workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
+       workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :workspace),
        form_modal_title: gettext("New workspace"),
        show_workspace_modal: true
      )}
@@ -64,29 +64,29 @@ defmodule DranWeb.AdminWorkspacesLive do
 
   @impl true
   def handle_event("edit_workspace", %{"id" => id}, socket) do
-    ws = Dran.Knowledge.get_workspace!(id)
+    workspace = Dran.Knowledge.get_workspace!(id)
 
     {:noreply,
      assign(socket,
-       editing_workspace: ws,
-       workspace_form: to_form(Dran.Workspace.changeset(ws, %{}), as: :context),
+       editing_workspace: workspace,
+       workspace_form: to_form(Dran.Workspace.changeset(workspace, %{}), as: :workspace),
        form_modal_title: gettext("Edit workspace"),
        show_workspace_modal: true
      )}
   end
 
   @impl true
-  def handle_event("close_context_modal", _params, socket) do
+  def handle_event("close_workspace_modal", _params, socket) do
     {:noreply, assign(socket, show_workspace_modal: false)}
   end
 
   @impl true
-  def handle_event("validate_context", %{"context" => params, "_target" => target}, socket) do
+  def handle_event("validate_workspace", %{"workspace" => params, "_target" => target}, socket) do
     name = params["name"] || ""
     slug_touched = socket.assigns[:slug_touched] || false
 
     slug_touched =
-      if target == ["context", "slug"], do: true, else: slug_touched
+      if target == ["workspace", "slug"], do: true, else: slug_touched
 
     params =
       if slug_touched do
@@ -95,12 +95,12 @@ defmodule DranWeb.AdminWorkspacesLive do
         Map.put(params, "slug", Slug.slugify(name))
       end
 
-    form = %Dran.Workspace{} |> Dran.Workspace.changeset(params) |> to_form(as: :context)
+    form = %Dran.Workspace{} |> Dran.Workspace.changeset(params) |> to_form(as: :workspace)
     {:noreply, assign(socket, workspace_form: form, slug_touched: slug_touched)}
   end
 
   @impl true
-  def handle_event("save_workspace", %{"context" => params}, socket) do
+  def handle_event("save_workspace", %{"workspace" => params}, socket) do
     attrs = %{
       name: params["name"],
       visibility: params["visibility"],
@@ -108,7 +108,7 @@ defmodule DranWeb.AdminWorkspacesLive do
     }
 
     case save_workspace(socket.assigns.editing_workspace, attrs) do
-      {:ok, _context} ->
+      {:ok, _workspace} ->
         {:noreply,
          socket
          |> assign_workspaces()
@@ -117,24 +117,27 @@ defmodule DranWeb.AdminWorkspacesLive do
          |> put_flash(:info, gettext("Workspace saved"))}
 
       {:error, changeset} ->
-        {:noreply, assign(socket, workspace_form: to_form(changeset, as: :context))}
+        {:noreply, assign(socket, workspace_form: to_form(changeset, as: :workspace))}
     end
   end
 
   @impl true
   def handle_event("delete_workspace", %{"id" => id}, socket) do
-    context = Enum.find(socket.assigns.all_workspaces, &(&1.id == id))
+    workspace = Enum.find(socket.assigns.all_workspaces, &(&1.id == id))
 
-    if context do
-      case Dran.Knowledge.delete_workspace(context) do
+    if workspace do
+      case Dran.Knowledge.delete_workspace(workspace) do
         {:ok, _} ->
           {:noreply,
            socket
            |> assign_workspaces()
-           |> put_flash(:info, gettext(~s(Context "%{name}" deleted), name: context.name))}
+           |> put_flash(
+             :info,
+             gettext(~s(Workspace "%{name}" deleted), name: workspace.name)
+           )}
 
         {:error, _} ->
-          {:noreply, put_flash(socket, :error, gettext("Could not delete context"))}
+          {:noreply, put_flash(socket, :error, gettext("Could not delete workspace"))}
       end
     else
       {:noreply, socket}
@@ -142,12 +145,12 @@ defmodule DranWeb.AdminWorkspacesLive do
   end
 
   @impl true
-  def handle_event("manage_context_users", %{"id" => id}, socket) do
+  def handle_event("manage_workspace_users", %{"id" => id}, socket) do
     {:noreply, assign(socket, managing_workspace_id: id, workspace_user_search: "")}
   end
 
   @impl true
-  def handle_event("close_context_users", _params, socket) do
+  def handle_event("close_workspace_users", _params, socket) do
     {:noreply, assign(socket, managing_workspace_id: nil, workspace_user_search: "")}
   end
 
@@ -167,8 +170,8 @@ defmodule DranWeb.AdminWorkspacesLive do
         %{"workspace_id" => workspace_id, "page_type" => page_type},
         socket
       ) do
-    context = Dran.Knowledge.get_workspace!(workspace_id)
-    disabled = context.disabled_page_types || []
+    workspace = Dran.Knowledge.get_workspace!(workspace_id)
+    disabled = workspace.disabled_page_types || []
 
     new_disabled =
       if page_type in disabled do
@@ -177,30 +180,30 @@ defmodule DranWeb.AdminWorkspacesLive do
         disabled ++ [page_type]
       end
 
-    case Dran.Knowledge.update_workspace_settings(context, %{disabled_page_types: new_disabled}) do
+    case Dran.Knowledge.update_workspace_settings(workspace, %{disabled_page_types: new_disabled}) do
       {:ok, _} -> {:noreply, assign_workspaces(socket)}
       {:error, _} -> {:noreply, put_flash(socket, :error, gettext("Could not update page types"))}
     end
   end
 
   @impl true
-  def handle_event("search_context_users", %{"q" => q}, socket) do
+  def handle_event("search_workspace_users", %{"q" => q}, socket) do
     {:noreply, assign(socket, workspace_user_search: q)}
   end
 
   @impl true
   def handle_event(
-        "toggle_context_user",
+        "toggle_workspace_user",
         %{"workspace_id" => workspace_id, "user_id" => user_id},
         socket
       ) do
     user = Dran.Accounts.get_user!(user_id)
-    context = Dran.Knowledge.get_workspace!(workspace_id)
+    workspace = Dran.Knowledge.get_workspace!(workspace_id)
 
-    if Dran.Accounts.user_in_workspace?(user, context) do
-      Dran.Accounts.remove_user_from_workspace(user, context)
+    if Dran.Accounts.user_in_workspace?(user, workspace) do
+      Dran.Accounts.remove_user_from_workspace(user, workspace)
     else
-      Dran.Accounts.add_user_to_workspace(user, context)
+      Dran.Accounts.add_user_to_workspace(user, workspace)
     end
 
     {:noreply, assign_users(socket)}
@@ -225,7 +228,7 @@ defmodule DranWeb.AdminWorkspacesLive do
             <div>
               <h1 class="text-title">{gettext("Workspaces")}</h1>
               <p class="text-caption mt-1">
-                {gettext("Create contexts and manage context access per user.")}
+                {gettext("Create workspaces and manage access per user.")}
               </p>
             </div>
             <.button phx-click="new_workspace" id="new-workspace-admin-btn">
@@ -245,32 +248,32 @@ defmodule DranWeb.AdminWorkspacesLive do
                 <thead>
                   <tr>
                     <th>{gettext("Workspace")}</th>
-                    <th>{gettext("Visibilidad")}</th>
-                    <th>{gettext("Miembros")}</th>
+                    <th>{gettext("Visibility")}</th>
+                    <th>{gettext("Members")}</th>
                     <th>{gettext("Default")}</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr :for={ctx <- @all_workspaces} id={"ws-#{ctx.id}"}>
+                  <tr :for={ws <- @all_workspaces} id={"ws-#{ws.id}"}>
                     <td>
-                      <div class="font-medium">{ctx.name}</div>
-                      <code class="text-xs text-base-content/60">{ctx.slug}</code>
+                      <div class="font-medium">{ws.name}</div>
+                      <code class="text-xs text-base-content/60">{ws.slug}</code>
                     </td>
                     <td>
                       <span class={[
                         "badge badge-sm",
-                        ctx.visibility == "public" && "badge-success",
-                        ctx.visibility != "public" && "badge-warning"
+                        ws.visibility == "public" && "badge-success",
+                        ws.visibility != "public" && "badge-warning"
                       ]}>
-                        {if ctx.visibility == "public",
+                        {if ws.visibility == "public",
                           do: gettext("Public"),
                           else: gettext("Private")}
                       </span>
                     </td>
-                    <td>{Enum.count(@users, &Dran.Accounts.user_in_workspace?(&1, ctx))}</td>
+                    <td>{Enum.count(@users, &Dran.Accounts.user_in_workspace?(&1, ws))}</td>
                     <td>
-                      <span :if={ctx.is_default} class="badge badge-primary badge-sm">
+                      <span :if={ws.is_default} class="badge badge-primary badge-sm">
                         {gettext("default")}
                       </span>
                     </td>
@@ -278,15 +281,15 @@ defmodule DranWeb.AdminWorkspacesLive do
                       <div class="flex items-center gap-1 justify-end">
                         <button
                           phx-click="edit_workspace"
-                          phx-value-id={ctx.id}
+                          phx-value-id={ws.id}
                           class="btn btn-ghost btn-xs p-1"
                           title={gettext("Edit")}
                         >
                           <.icon name="hero-pencil" class="size-4" />
                         </button>
                         <button
-                          phx-click="manage_context_users"
-                          phx-value-id={ctx.id}
+                          phx-click="manage_workspace_users"
+                          phx-value-id={ws.id}
                           class="btn btn-ghost btn-xs gap-1"
                         >
                           <.icon name="hero-users" class="size-3.5" />
@@ -294,14 +297,14 @@ defmodule DranWeb.AdminWorkspacesLive do
                         </button>
                         <button
                           phx-click="manage_page_types"
-                          phx-value-id={ctx.id}
+                          phx-value-id={ws.id}
                           class="btn btn-ghost btn-xs gap-1"
                         >
                           <.icon name="hero-squares-2x2" class="size-3.5" />
                           {gettext("Types")}
                         </button>
                         <.link
-                          navigate={"/#{ctx.slug}/settings"}
+                          navigate={"/#{ws.slug}/settings"}
                           class="btn btn-ghost btn-xs gap-1"
                           title={gettext("Configuration")}
                         >
@@ -310,7 +313,7 @@ defmodule DranWeb.AdminWorkspacesLive do
                         </.link>
                         <button
                           phx-click="delete_workspace"
-                          phx-value-id={ctx.id}
+                          phx-value-id={ws.id}
                           data-confirm={gettext("Delete this workspace?")}
                           class="btn btn-ghost btn-xs p-1 text-error"
                           title={gettext("Delete")}
@@ -329,17 +332,17 @@ defmodule DranWeb.AdminWorkspacesLive do
             {gettext("No workspaces yet — create one with the button above.")}
           </div>
 
-          <%!-- Add / edit context modal --%>
+          <%!-- Add / edit workspace modal --%>
           <.modal
             :if={@show_workspace_modal}
-            id="context-modal"
+            id="workspace-modal"
             title={@form_modal_title}
-            on_close="close_context_modal"
+            on_close="close_workspace_modal"
           >
             <.form
               for={@workspace_form}
-              id="context-form"
-              phx-change="validate_context"
+              id="workspace-form"
+              phx-change="validate_workspace"
               phx-submit="save_workspace"
               class="space-y-4"
             >
@@ -355,7 +358,7 @@ defmodule DranWeb.AdminWorkspacesLive do
               <label class="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  name="context[is_default]"
+                  name="workspace[is_default]"
                   checked={@editing_workspace && @editing_workspace.is_default}
                   class="checkbox checkbox-sm"
                 />
@@ -363,9 +366,9 @@ defmodule DranWeb.AdminWorkspacesLive do
               </label>
 
               <div>
-                <label class="text-sm font-medium">{gettext("Visibilidad")}</label>
+                <label class="text-sm font-medium">{gettext("Visibility")}</label>
                 <select
-                  name="context[visibility]"
+                  name="workspace[visibility]"
                   class="select select-bordered select-sm w-full mt-1"
                 >
                   <option
@@ -384,13 +387,13 @@ defmodule DranWeb.AdminWorkspacesLive do
               </div>
 
               <div class="flex justify-end gap-2 pt-2">
-                <button type="button" phx-click="close_context_modal" class="btn btn-ghost btn-sm">
+                <button type="button" phx-click="close_workspace_modal" class="btn btn-ghost btn-sm">
                   {gettext("Cancel")}
                 </button>
                 <button
                   type="submit"
                   class="btn btn-primary btn-sm"
-                  phx-disable-with={gettext("Guardando…")}
+                  phx-disable-with={gettext("Saving…")}
                 >
                   {gettext("Save")}
                 </button>
@@ -406,12 +409,12 @@ defmodule DranWeb.AdminWorkspacesLive do
             on_close="close_page_types"
             max_w="max-w-md"
           >
-            <% pt_ctx = Enum.find(@all_workspaces, &(&1.id == @page_types_workspace_id)) %>
-            <p class="text-caption mt-1">{if pt_ctx, do: pt_ctx.name, else: ""}</p>
+            <% pt_ws = Enum.find(@all_workspaces, &(&1.id == @page_types_workspace_id)) %>
+            <p class="text-caption mt-1">{if pt_ws, do: pt_ws.name, else: ""}</p>
 
             <p class="text-caption mt-1">
               {gettext(
-                "Disabled types are hidden in the web UI and rejected by the agent tools for this context."
+                "Disabled types are hidden in the web UI and rejected by the agent tools for this workspace."
               )}
             </p>
 
@@ -423,7 +426,7 @@ defmodule DranWeb.AdminWorkspacesLive do
                 <div class="min-w-0">
                   <p class="text-sm font-medium">{Dran.PageRegistry.label(page_type)}</p>
                   <p
-                    :if={pt_ctx && page_type in (pt_ctx.disabled_page_types || [])}
+                    :if={pt_ws && page_type in (pt_ws.disabled_page_types || [])}
                     class="text-xs text-error"
                   >
                     {gettext("Disabled")}
@@ -434,7 +437,7 @@ defmodule DranWeb.AdminWorkspacesLive do
                 </div>
                 <input
                   type="checkbox"
-                  checked={pt_ctx && page_type not in (pt_ctx.disabled_page_types || [])}
+                  checked={pt_ws && page_type not in (pt_ws.disabled_page_types || [])}
                   phx-click="toggle_page_type"
                   phx-value-workspace_id={@page_types_workspace_id}
                   phx-value-page_type={page_type}
@@ -447,17 +450,17 @@ defmodule DranWeb.AdminWorkspacesLive do
           <%!-- Manage users modal --%>
           <.modal
             :if={@managing_workspace_id != nil}
-            id="context-users-modal"
+            id="workspace-users-modal"
             title={gettext("Users")}
-            on_close="close_context_users"
+            on_close="close_workspace_users"
             max_w="max-w-md"
           >
-            <% managing_ctx = Enum.find(@all_workspaces, &(&1.id == @managing_workspace_id)) %>
-            <p class="text-caption mt-1">{if managing_ctx, do: managing_ctx.name, else: ""}</p>
+            <% managing_ws = Enum.find(@all_workspaces, &(&1.id == @managing_workspace_id)) %>
+            <p class="text-caption mt-1">{if managing_ws, do: managing_ws.name, else: ""}</p>
 
             <form
-              id="context-user-search-form"
-              phx-change="search_context_users"
+              id="workspace-user-search-form"
+              phx-change="search_workspace_users"
               class="relative mt-3"
             >
               <.icon
@@ -493,8 +496,8 @@ defmodule DranWeb.AdminWorkspacesLive do
                 </div>
                 <input
                   type="checkbox"
-                  checked={managing_ctx && Dran.Accounts.user_in_workspace?(user, managing_ctx)}
-                  phx-click="toggle_context_user"
+                  checked={managing_ws && Dran.Accounts.user_in_workspace?(user, managing_ws)}
+                  phx-click="toggle_workspace_user"
                   phx-value-workspace_id={@managing_workspace_id}
                   phx-value-user_id={user.id}
                   class="checkbox checkbox-sm"
