@@ -90,9 +90,13 @@ flowchart TD
   U3 --> W
 ```
 
-- The instance default workspace (`Dran.Auth.default_workspace_slug/0`,
-  Settings → /admin/system, fallback `personal`) is what web/seeds use —
-  NOT necessarily what your key reaches.
+- The instance default workspace (`Dran.Auth.default_workspace_slug/0`) is the
+  workspace flagged as default in Settings → Workspaces — no env var and no
+  settings key; with nothing flagged it is the instance's only workspace, else
+  the `personal` literal. It is what web/seeds use — NOT necessarily what your
+  key reaches. A logged-in session lands per-user instead
+  (`Dran.Accounts.session_workspace_slug/1`: their own default, the instance
+  default, else the only workspace they can reach).
 - One key = one credential with its own workspace matrix (Dran → Settings →
   API Keys). The key creates **no actor**: attribution comes from the key name
   and the `X-Hermes-Agent` header, and `owner_user_id` is the user that owns

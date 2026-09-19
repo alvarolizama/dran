@@ -122,7 +122,8 @@ endpoint; powers embeddings, summaries, semantic search and the workers —
 without it Dran still works, minus those features).
 
 Not env vars (stored in the database, edited in the UI): the default workspace
-and the legacy admin API token live in `/admin/system`; per-user tokens in
+is the workspace flagged as default in **Settings → Workspaces**; the legacy
+admin API token lives in `/admin/system`; per-user tokens in
 `/admin/users`; workspace-scoped keys in each workspace's settings.
 
 ### 2 · The Hermes plugin

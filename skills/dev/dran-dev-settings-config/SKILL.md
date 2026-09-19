@@ -7,11 +7,19 @@ description: "Use when editing Dran settings-backed config."
 
 Dran instance/runtime config lives in the `settings` table via
 `Dran.Settings.get/put/delete`; the `@defaults` map supplies fallbacks.
-Models, tuning thresholds, the legacy admin API token and the default
-workspace all follow this pattern. Env vars remain ONLY for boot-critical
+Models, tuning thresholds and the legacy admin API token follow this
+pattern. Env vars remain ONLY for boot-critical
 config (DATABASE_URL, secrets, inference endpoint, uploads, workers) — do
 not reintroduce env-var reads for instance config, and do not migrate
 boot-critical ones into the DB.
+
+The **default workspace is not a setting**: it is the `is_default` flag on a
+workspace row, set from `/admin/workspaces` and read by
+`Dran.Knowledge.get_default_workspace/0`. Never reintroduce env vars or
+settings keys (`default_workspace_slug` / `default_workspace_name`, removed)
+for it; the readers fall back to the only-workspace rule and then the
+`"personal"` literal. Per-user landing is
+`Dran.Accounts.session_workspace_slug/1`.
 
 ## Adding an editable setting
 
@@ -33,6 +41,26 @@ boot-critical ones into the DB.
    workspace stays deleted when no override is set.
 5. Slug-type values are URL identifiers: validate `^[a-z0-9]+(-[a-z0-9]+)*$`
    server-side and reject with a flash before writing anything.
+
+## Retiring a setting
+
+Removing a setting is a sweep, not a delete: a leftover read keeps the old
+value alive behind the UI. Touch all of it in one change:
+
+1. Every reader (e.g. `Dran.Auth`) — the resolution chain, its `@doc` and the
+   module `@moduledoc`; grep the key name repo-wide afterwards.
+2. The admin UI control AND its assigns/moduledoc, plus any `..._configured?`
+   gate that the removed overlay fed.
+3. The docs that name the old home: README, `.env.example`, `priv/repo/seeds.exs`,
+   the `dran`/`dran-dev-*` skills.
+4. Gettext: `mix gettext.extract --merge` drops the obsolete msgids — then fix
+   `scripts/fill_es_gettext.py` (add the new strings, delete the dead keys) and
+   re-run it, or the Spanish catalog ships an empty msgstr.
+5. A regression test that PRE-SETS the retired key and asserts the new behavior
+   (the value is ignored, not merely unwritten) — otherwise a lingering read
+   passes every test that only exercises the set path.
+6. When the control moves to another page, move its explanation with it: the
+   helper text under the new control, not deleted with the old panel.
 
 ## Verification
 
