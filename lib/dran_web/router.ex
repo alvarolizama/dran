@@ -17,7 +17,13 @@ defmodule DranWeb.Router do
     plug :put_root_layout, html: {DranWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug DranWeb.Plugs.Auth, :fetch_context_cookie
+    # Restores the active workspace from the signed `dran_last_workspace`
+    # cookie when the session has none. The name here MUST match the clause
+    # implemented in DranWeb.Plugs.Auth.call/2: it used to say
+    # `:fetch_context_cookie` — a leftover from the contexts→workspaces rename —
+    # which fell through to the catch-all `call(conn, _opts) -> conn` and made
+    # this plug a silent no-op.
+    plug DranWeb.Plugs.Auth, :fetch_workspace_cookie
     # Pin the request language for Gettext (user preference → Accept-Language →
     # English). LiveViews re-pin it in their own process, see the plug docs.
     plug DranWeb.Plugs.Locale

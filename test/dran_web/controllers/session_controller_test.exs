@@ -121,6 +121,36 @@ defmodule DranWeb.SessionControllerTest do
       # Session context is preserved (personal from setup)
       assert Plug.Conn.get_session(conn, :workspace_slug) == "personal"
     end
+
+    test "the :browser pipeline restores it (regression: the plug was wired to a name that no longer exists)",
+         %{conn: conn} do
+      secret_key_base = DranWeb.Endpoint.config(:secret_key_base)
+
+      signed_cookie =
+        %{conn | secret_key_base: secret_key_base}
+        |> Plug.Test.init_test_session(%{})
+        |> Auth.put_workspace("work")
+        |> Plug.Conn.send_resp(200, "")
+        |> Map.fetch!(:resp_cookies)
+        |> Map.fetch!("dran_last_workspace")
+        |> Map.fetch!(:value)
+
+      # A session with NO workspace slug: only the plug in the :browser pipeline
+      # can set it. It used to be wired as `:fetch_context_cookie`, which
+      # DranWeb.Plugs.Auth.call/2 does not implement, so it fell through to the
+      # catch-all and did nothing at all.
+      fresh =
+        Phoenix.ConnTest.build_conn()
+        |> Plug.Test.init_test_session(%{})
+        |> then(&%{&1 | secret_key_base: secret_key_base})
+        |> Plug.Test.put_req_cookie("dran_last_workspace", signed_cookie)
+        |> get(~p"/")
+
+      # No session user, so the request ends at /login — but it went THROUGH the
+      # pipeline, and that is what the cookie had to survive.
+      assert redirected_to(fresh) == "/login"
+      assert Plug.Conn.get_session(fresh, :workspace_slug) == "work"
+    end
   end
 
   describe "page counts in context selector" do
@@ -203,6 +233,27 @@ defmodule DranWeb.SessionControllerTest do
       # The onboarding default landing: the account's own personal workspace.
       assert owner.default_workspace_slug == personal.slug
       assert get_session(conn, "workspace_slug") == personal.slug
+    end
+
+    @tag :no_default_workspace
+    test "an instance with no users sends visitors to /setup" do
+      # A FRESH conn: this file's setup already logs test_user in, and a session
+      # user skips the first-run branch entirely.
+      conn = Phoenix.ConnTest.build_conn()
+
+      # No users at all: /setup is the only door in. This is exactly where
+      # DRAN_RESET=1 leaves the instance, so it has to happen by itself.
+      refute Dran.Accounts.any_users?()
+      assert redirected_to(get(conn, ~p"/")) == "/setup"
+      assert redirected_to(get(conn, ~p"/settings/account")) == "/setup"
+    end
+
+    test "an instance with users sends anonymous visitors to /login" do
+      conn = Phoenix.ConnTest.build_conn()
+
+      # The ConnCase fixture created test_user, so the instance is set up.
+      assert Dran.Accounts.any_users?()
+      assert redirected_to(get(conn, ~p"/")) == "/login"
     end
   end
 end
