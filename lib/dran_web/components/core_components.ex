@@ -522,4 +522,218 @@ defmodule DranWeb.CoreComponents do
       Gettext.dgettext(DranWeb.Gettext, "errors", msg, opts)
     end
   end
+
+  ## ── Navegación y superficies compartidas ─────────────────────────────────
+  #
+  # Primitivas que comparten el shell (sidebar y menú de usuario), las páginas
+  # de instancia y las de admin/settings. Viven acá —no en Layouts— para que
+  # cualquier LiveView las tenga por el `use DranWeb, :html`, sin imports.
+
+  @doc """
+  Enlace de navegación para sidebars y rails: icono + label + badge opcional.
+
+  Estados: activo = `bg-primary/15 text-primary font-medium` + `aria-current`;
+  libre = `btn-ghost`. **No** se usa `btn-soft` para el activo: mezcla sólo 8%
+  del color con `base-100` y el pill se lee gris.
+
+  ## Ejemplo
+
+      <.nav_link label={gettext("Home")} icon="hero-home" path={~p"/"} active={@active == "home"} />
+  """
+  attr :label, :string, required: true
+  attr :icon, :string, required: true, doc: "hero icon name, e.g. \"hero-home\""
+  attr :path, :any, required: true, doc: "href of the destination"
+  attr :active, :boolean, default: false, doc: "marks the current page (aria-current)"
+  attr :badge, :any, default: nil, doc: "optional count; renders only when > 0"
+
+  def nav_link(assigns) do
+    ~H"""
+    <a
+      href={@path}
+      aria-current={@active && "page"}
+      class={[
+        "btn btn-sm w-full justify-between gap-2 font-normal transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        @active && "bg-primary/15 text-primary font-medium hover:bg-primary/20",
+        !@active && "btn-ghost text-base-content/80 hover:text-base-content"
+      ]}
+    >
+      <span class="flex items-center gap-2 min-w-0">
+        <.icon name={@icon} class="size-4 shrink-0" />
+        <span class="truncate">{@label}</span>
+      </span>
+      <span
+        :if={@badge && @badge > 0}
+        class={["badge badge-sm", if(@active, do: "badge-primary", else: "badge-ghost")]}
+      >
+        {@badge}
+      </span>
+    </a>
+    """
+  end
+
+  @doc """
+  Rótulo de grupo de navegación + sus enlaces (Account, Admin, Knowledge base…).
+
+  ## Ejemplo
+
+      <.nav_group label={gettext("Account")}>
+        <.nav_link label={gettext("Profile")} icon="hero-user" path={~p"/settings/account"} />
+      </.nav_group>
+  """
+  attr :label, :string, required: true
+  slot :inner_block, required: true
+
+  def nav_group(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-1">
+      <div class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70">
+        {@label}
+      </div>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
+  Entrada de un menú (dropdown del shell, menú de usuario).
+
+  El activo se marca con `aria-current="page"` + `text-primary`.
+
+  ## Ejemplo
+
+      <.menu_item href={~p"/settings/account"} icon="hero-user" label={gettext("Profile")} />
+  """
+  attr :href, :string, required: true
+  attr :icon, :string, required: true, doc: "hero icon name"
+  attr :label, :string, required: true
+  attr :active, :boolean, default: false
+
+  def menu_item(assigns) do
+    ~H"""
+    <a
+      href={@href}
+      aria-current={@active && "page"}
+      class={[
+        "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200 transition-colors",
+        @active && "text-primary"
+      ]}
+    >
+      <.icon name={@icon} class="size-4 opacity-70" />
+      {@label}
+    </a>
+    """
+  end
+
+  @doc """
+  Sección: caja canónica de Dran (`surface-2 rounded-2xl`) con header de
+  badge + título + caption opcional. Es la forma de agrupar contenido en las
+  páginas de instancia (settings/admin) y en cualquier página nueva.
+
+  ## Ejemplo
+
+      <.section title={gettext("Existing Users")} icon="hero-users">
+        <table class="table table-sm">…</table>
+      </.section>
+  """
+  attr :title, :string, required: true
+  attr :caption, :string, default: nil
+  attr :icon, :string, required: true, doc: "hero icon name for the header badge"
+  slot :inner_block, required: true
+
+  def section(assigns) do
+    ~H"""
+    <section class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-6 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+          <.icon name={@icon} class="size-4 text-primary" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-heading">{@title}</h2>
+          <p :if={@caption} class="text-caption mt-0.5">{@caption}</p>
+        </div>
+      </header>
+      <div class="p-6">
+        {render_slot(@inner_block)}
+      </div>
+    </section>
+    """
+  end
+
+  @doc """
+  Modal compacto (Commons C7.1): overlay + card, cierre por ✕, Escape y
+  click-away. Para modales grandes de dos columnas usar
+  `DranWeb.ResourceComponents.resource_modal/1` (C7.2).
+
+  El form (con su footer de cancelar/guardar) va en el slot por defecto.
+
+  ## Ejemplo
+
+      <.modal id="user-modal" :if={@show_user_modal} title={gettext("Add User")} on_close="close_user_modal">
+        <.form for={@user_form} phx-submit="save_user">…</.form>
+      </.modal>
+  """
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :show, :boolean, default: false
+  attr :on_close, :string, required: true, doc: "LiveView event fired by ✕, Escape and click-away"
+  attr :max_w, :string, default: "max-w-lg", doc: "ancho máximo del card (max-w-md|lg|2xl…)"
+  slot :inner_block, required: true
+
+  def modal(assigns) do
+    ~H"""
+    <div
+      :if={@show}
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      phx-window-keydown={@on_close}
+      phx-key="Escape"
+    >
+      <div
+        id={@id}
+        class={["card bg-base-100 border border-base-300 shadow-xl w-full", @max_w]}
+        phx-click-away={@on_close}
+      >
+        <div class="card-body p-6">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-lg font-semibold">{@title}</h3>
+            <button type="button" phx-click={@on_close} class="btn btn-ghost btn-xs btn-circle">
+              <.icon name="hero-x-mark" class="size-4" />
+            </button>
+          </div>
+          {render_slot(@inner_block)}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Estado vacío canónico (Commons C6): badge de icono + título + caption y un
+  slot para el CTA. Va **fuera** de la tabla/colección, nunca dentro.
+
+  ## Ejemplo
+
+      <.empty_state icon="hero-folder-plus" title={gettext("No collections yet")} caption={gettext("Group pages into smart collections.")}>
+        <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm">…</.link>
+      </.empty_state>
+  """
+  attr :icon, :string, required: true, doc: "hero icon name, e.g. \"hero-folder-plus\""
+  attr :title, :string, required: true
+  attr :caption, :string, default: nil
+  attr :class, :string, default: nil, doc: "extra classes for the outer wrapper"
+  slot :inner_block, doc: "optional CTA / action block rendered below the caption"
+
+  def empty_state(assigns) do
+    ~H"""
+    <div class={["flex flex-col items-center justify-center text-center py-16", @class]}>
+      <div class="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <.icon name={@icon} class="size-8 text-primary" />
+      </div>
+      <h2 class="text-title mt-5">{@title}</h2>
+      <p :if={@caption} class="text-caption mt-2 max-w-sm">
+        {@caption}
+      </p>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
 end

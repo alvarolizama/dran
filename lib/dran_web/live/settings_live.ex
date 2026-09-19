@@ -24,8 +24,6 @@ defmodule DranWeb.SettingsLive do
 
   use DranWeb, :live_view
 
-  import DranWeb.Admin
-
   alias DranWeb.Plugs.Auth
 
   # Workspaces the user may attach to a NEW api key: those where they are a

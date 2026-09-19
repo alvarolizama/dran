@@ -8,8 +8,6 @@ defmodule DranWeb.AdminUsersLive do
 
   use DranWeb, :live_view
 
-  import DranWeb.Admin
-
   alias DranWeb.Plugs.Auth
 
   @impl true

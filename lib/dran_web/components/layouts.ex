@@ -433,37 +433,6 @@ defmodule DranWeb.Layouts do
     ws |> Dran.Workspace.page_type_path(type) |> String.to_atom()
   end
 
-  attr :label, :string, required: true
-  attr :icon, :string, required: true
-  attr :path, :any, required: true
-  attr :active, :boolean, default: false
-  attr :badge, :any, default: nil
-
-  def nav_link(assigns) do
-    ~H"""
-    <a
-      href={@path}
-      aria-current={@active && "page"}
-      class={[
-        "btn btn-sm w-full justify-between gap-2 font-normal transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-        @active && "bg-primary/15 text-primary font-medium hover:bg-primary/20",
-        !@active && "btn-ghost text-base-content/80 hover:text-base-content"
-      ]}
-    >
-      <span class="flex items-center gap-2 min-w-0">
-        <.icon name={@icon} class="size-4 shrink-0" />
-        <span class="truncate">{@label}</span>
-      </span>
-      <span
-        :if={@badge && @badge > 0}
-        class={["badge badge-sm", if(@active, do: "badge-primary", else: "badge-ghost")]}
-      >
-        {@badge}
-      </span>
-    </a>
-    """
-  end
-
   # ── Instance nav (/, /settings/*, /admin/*) ───────────────────────────────
   #
   # The sidebar nav for instance-level pages: Workspaces at the top, then
@@ -485,7 +454,7 @@ defmodule DranWeb.Layouts do
         />
       </div>
 
-      <.instance_group label={gettext("Account")}>
+      <.nav_group label={gettext("Account")}>
         <.nav_link
           label={gettext("Profile")}
           icon="hero-user"
@@ -498,9 +467,9 @@ defmodule DranWeb.Layouts do
           path={~p"/settings/api-keys"}
           active={@active == "api_keys"}
         />
-      </.instance_group>
+      </.nav_group>
 
-      <.instance_group :if={@is_owner} label={gettext("Admin")}>
+      <.nav_group :if={@is_owner} label={gettext("Admin")}>
         <.nav_link
           label={gettext("Users")}
           icon="hero-users"
@@ -531,21 +500,7 @@ defmodule DranWeb.Layouts do
           path={~p"/admin/jobs"}
           active={@active == "admin_jobs"}
         />
-      </.instance_group>
-    </div>
-    """
-  end
-
-  attr :label, :string, required: true
-  slot :inner_block, required: true
-
-  defp instance_group(assigns) do
-    ~H"""
-    <div class="flex flex-col gap-1">
-      <div class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70">
-        {@label}
-      </div>
-      {render_slot(@inner_block)}
+      </.nav_group>
     </div>
     """
   end
@@ -690,32 +645,32 @@ defmodule DranWeb.Layouts do
           <.icon name="hero-chevron-up" class="size-3" />
         </summary>
         <div class="absolute bottom-full right-0 mb-1 w-48 bg-base-100 border border-base-300 rounded-lg shadow-lg py-1 z-50">
-          <.user_menu_link
+          <.menu_item
             href={~p"/"}
             icon="hero-squares-2x2"
             label={gettext("Workspaces")}
             active={@active == "dashboard"}
           />
-          <.user_menu_link
+          <.menu_item
             href={~p"/settings/account"}
             icon="hero-user"
             label={gettext("Profile")}
           />
-          <.user_menu_link
+          <.menu_item
             href={~p"/settings/api-keys"}
             icon="hero-key"
             label={gettext("API keys")}
           />
 
           <div :if={@workspace_slug} class="border-t border-base-300 my-1"></div>
-          <.user_menu_link
+          <.menu_item
             :if={@workspace_slug}
             href={~p"/#{@workspace_slug}/activity"}
             icon="hero-signal"
             label={gettext("Activity")}
             active={@active == "activity"}
           />
-          <.user_menu_link
+          <.menu_item
             :if={@workspace_slug && @can_config}
             href={~p"/#{@workspace_slug}/settings"}
             icon="hero-cog-6-tooth"
@@ -738,27 +693,6 @@ defmodule DranWeb.Layouts do
         </div>
       </details>
     </div>
-    """
-  end
-
-  attr :href, :string, required: true
-  attr :icon, :string, required: true
-  attr :label, :string, required: true
-  attr :active, :boolean, default: false
-
-  defp user_menu_link(assigns) do
-    ~H"""
-    <a
-      href={@href}
-      aria-current={@active && "page"}
-      class={[
-        "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200 transition-colors",
-        @active && "text-primary"
-      ]}
-    >
-      <.icon name={@icon} class="size-4 opacity-70" />
-      {@label}
-    </a>
     """
   end
 

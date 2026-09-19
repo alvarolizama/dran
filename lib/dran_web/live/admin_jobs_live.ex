@@ -7,8 +7,6 @@ defmodule DranWeb.AdminJobsLive do
 
   use DranWeb, :live_view
 
-  import DranWeb.Admin
-
   alias Dran.Jobs
   alias DranWeb.Plugs.Auth
 

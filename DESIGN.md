@@ -105,6 +105,23 @@ compone de esto.
 - `flash` · `button` (con `variant="primary" | nil`) · `input` · `header` ·
   `table` · `list` · `icon` · `show`/`hide` · `translate_error`/`translate_errors`.
 
+**Primitivas de navegación y superficie** (también en `CoreComponents`, para que
+cualquier LiveView las tenga por `use DranWeb, :html`, sin imports):
+
+| Componente | Qué es | Atributos |
+|---|---|---|
+| `<.nav_link>` | enlace de sidebar/rail: icono + label + badge | `label` · `icon` · `path` · `active` · `badge` |
+| `<.nav_group>` | rótulo de grupo + sus enlaces | `label` + slot |
+| `<.menu_item>` | entrada de menú (dropdown, menú de usuario) | `href` · `icon` · `label` · `active` |
+| `<.section>` | sección: caja con header (badge + título + caption) | `title` · `icon` · `caption` + slot |
+| `<.modal>` | modal compacto (C7.1): ✕ / Escape / click-away | `id` · `title` · `show` · `on_close` · `max_w` + slot |
+| `<.empty_state>` | estado vacío canónico (C6) | `icon` · `title` · `caption` · `class` + slot CTA |
+
+Nacieron en admin/settings y en el shell y se promovieron a `CoreComponents`
+para que no exista una segunda copia: si una pantalla necesita un enlace de nav,
+una sección, un modal o un estado vacío, **usa el componente compartido** — no
+escribas markup nuevo ni un helper local.
+
 **`btn-outline` es legítimo para "otra vía"** — misma jerarquía que el
 primario, camino alternativo (p. ej. "Continuar con Google"), no una variante
 de color.
@@ -646,19 +663,20 @@ mockup de skema): header `p-3`, bloque de búsqueda `p-3`, nav
 
 | Componente | Qué es |
 |---|---|
-| `DranWeb.Admin.section/1` | sección: `.surface-2 rounded-2xl` con header (icono en `bg-primary/10` + `text-heading` + `text-caption`) |
-| `DranWeb.Admin.modal/1` | modal compacto: overlay `bg-black/50`, `card`, `phx-click-away`, `max_w` (`max-w-lg` por defecto) |
 | `DranWeb.ResourceComponents.resource_modal/1` | modal **casi full-screen** (`h-[calc(100vh-3rem)]`, `max-w-5xl`) — implementación Dran del patrón **C7.2** (§T3.1) |
 | `DranWeb.ResourceComponents.resource_header/1` · `form_actions/1` · `markdown_body_field/1` | header con back-link, fila cancelar/guardar, campo body con editor |
 | `DranWeb.MarkdownEditorComponents.markdown_editor/1` | editor TipTap |
 | `DranWeb.PageListComponents.page_list/1` · `page_card/1` · `type_badge_label/1` | lista de páginas (agrupada o plana), card de página y badge de tipo |
 | `DranWeb.PageComponents.backlinks_section/1` | backlinks de una página |
 | `DranWeb.PageComponents.tabs_bar/1` | tabs del detalle (`tab-<tab>`) |
-| `DranWeb.PageComponents.empty_state/1` | estado vacío canónico (§C6) |
 | `DranWeb.PageComponents.graph_3d/1` | hook `Graph3D` (payload JSON + `type_paths`, ver §T6) |
 | `DranWeb.PageComponents.page_attributes/1` | panel de atributos/metadata de la página |
 | `DranWeb.PageComponents.page_edit_form/1` · `page_new_form/1` | forms de edición y creación de página |
 | `DranWeb.VersionDiffComponent` | diff de versiones |
+
+> Las primitivas de navegación/superficie (`nav_link`, `nav_group`, `menu_item`,
+> `section`, `modal`, `empty_state`) viven en `CoreComponents` (§C4), no acá:
+> las comparten shell, admin y settings.
 
 #### T3.1 `<.resource_modal>` — modal de recurso (C7.2)
 
@@ -756,11 +774,11 @@ Sin librería (ver **Commons C9**). Tres formas reales:
 - `lib/dran_web/components/core_components.ex` — `flash`, `button`
   (`variant` primary/nil), `input`, `header` (título `text-title`, §T1),
   `table` (`table-sm`, stream), `list`, `icon`, `show`/`hide`,
-  `translate_error(s)`.
+  `translate_error(s)` y las primitivas compartidas `nav_link`, `nav_group`,
+  `menu_item`, `section`, `modal`, `empty_state` (§C4).
 - `lib/dran_web/components/layouts.ex` — shell `app/1`, `sidebar_nav`,
   `nav_link`, `instance_nav`, `workspace_selector`,
   `user_footer`, `flash_group`.
-- `lib/dran_web/components/admin.ex` — `DranWeb.Admin.modal/1`, `section/1`.
 - `lib/dran_web/components/resource_components.ex` — `resource_modal` (§T3.1),
   `resource_header`, `form_actions`, `markdown_body_field`.
 - `lib/dran_web/components/command_palette.ex` — `DranWeb.CommandPalette` (⌘K).

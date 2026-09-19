@@ -12,8 +12,6 @@ defmodule DranWeb.AdminSystemLive do
 
   use DranWeb, :live_view
 
-  import DranWeb.Admin
-
   alias Dran.Inference.Client
   alias Dran.Inference.Config
   alias Dran.Knowledge

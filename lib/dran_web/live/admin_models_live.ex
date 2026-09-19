@@ -8,8 +8,6 @@ defmodule DranWeb.AdminModelsLive do
 
   use DranWeb, :live_view
 
-  import DranWeb.Admin
-
   alias Dran.Inference.Client
   alias Dran.Inference.Config
   alias Dran.Settings
