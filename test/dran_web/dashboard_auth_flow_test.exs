@@ -48,6 +48,66 @@ defmodule DranWeb.DashboardAuthFlowTest do
     assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Invalid"
   end
 
+  test "login opens the session on the flagged instance default", %{conn: conn, user: user} do
+    unique = System.unique_integer([:positive])
+
+    {:ok, flagged} =
+      Dran.Knowledge.create_workspace(%{name: "Landing #{unique}", slug: "landing-#{unique}"})
+
+    {:ok, _} = Dran.Knowledge.update_workspace(flagged, %{is_default: true})
+
+    conn = get(conn, ~p"/login")
+    csrf = conn.private.plug_session["_csrf_token"]
+
+    conn =
+      post(conn, ~p"/session", %{
+        "_csrf_token" => csrf,
+        "login" => %{"username" => user.email, "password" => "supersecret123"}
+      })
+
+    assert get_session(conn, "workspace_slug") == flagged.slug
+  end
+
+  @tag :no_default_workspace
+  test "login lands a user on the only workspace they can reach", %{conn: conn} do
+    unique = System.unique_integer([:positive])
+
+    {:ok, restricted} =
+      Accounts.create_user_with_password(%{
+        email: "restricted-#{unique}@example.com",
+        password: "supersecret123"
+      })
+
+    # Two private workspaces and nothing flagged: without the per-user rule the
+    # session would open on the "personal" literal, a workspace nobody created.
+    {:ok, mine} =
+      Dran.Knowledge.create_workspace(%{
+        name: "Solo #{unique}",
+        slug: "solo-#{unique}",
+        visibility: "private"
+      })
+
+    {:ok, _other} =
+      Dran.Knowledge.create_workspace(%{
+        name: "Other #{unique}",
+        slug: "other-#{unique}",
+        visibility: "private"
+      })
+
+    {:ok, _} = Accounts.add_user_to_workspace(restricted, mine)
+
+    conn = get(conn, ~p"/login")
+    csrf = conn.private.plug_session["_csrf_token"]
+
+    conn =
+      post(conn, ~p"/session", %{
+        "_csrf_token" => csrf,
+        "login" => %{"username" => restricted.email, "password" => "supersecret123"}
+      })
+
+    assert get_session(conn, "workspace_slug") == mine.slug
+  end
+
   test "dashboard renders the instance overview and never leaks the api token", %{
     conn: conn,
     user: user

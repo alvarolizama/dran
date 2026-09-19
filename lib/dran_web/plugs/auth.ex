@@ -53,16 +53,28 @@ defmodule DranWeb.Plugs.Auth do
 
   # ── Session management (for controllers) ──
 
-  def login(conn, username, workspace_slug \\ Auth.default_workspace_slug()) do
+  @doc """
+  Opens a session for `username`.
+
+  The workspace is resolved per-user when the caller does not pass one
+  explicitly (`Dran.Accounts.session_workspace_slug/1`), which keeps the
+  landing workspace consistent for every entry point: login form, Google
+  OAuth, first-run setup and impersonation.
+  """
+  def login(conn, username, workspace_slug \\ nil) do
     # Cache `is_owner` in the session so router pipelines don't hit the DB on
     # every request. SEC-002: fail closed — a session user with no row in the
     # users table is NOT owner (previously nil -> true, which escalated deleted
     # users to full admin).
+    user = Dran.Accounts.get_user_by_email(username)
+
     is_owner =
-      case Dran.Accounts.get_user_by_email(username) do
+      case user do
         nil -> false
         %{is_owner: owner?} -> owner?
       end
+
+    workspace_slug = workspace_slug || Dran.Accounts.session_workspace_slug(user)
 
     conn
     # A fresh login must always drop any stale impersonation session (F6): the
@@ -132,38 +144,40 @@ defmodule DranWeb.Plugs.Auth do
   Returns `{socket, context}` where `context` is the loaded Knowledge.Context.
   """
   def assign_to_socket(socket, session, params \\ nil) when is_map(session) do
-    %{
-      current_user: current_user,
-      workspace_slug: session_slug
-    } = from_session(session)
-
-    # The URL wins over the session: a LiveView mounted at
-    # /:workspace_slug/... must always show THAT workspace, even when the
-    # session still points elsewhere (e.g. login defaulted to "personal").
-    # Falls back to the session slug for mounts without params.
-    workspace_slug =
-      case params do
-        %{"workspace_slug" => url_slug} when is_binary(url_slug) and url_slug != "" ->
-          url_slug
-
-        _ ->
-          session_slug
-      end
-
-    context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
-    page_counts = Dran.Knowledge.page_counts_by_workspace()
+    %{current_user: current_user} = from_session(session)
 
     # Per-user scoping: a DB user (created via Dran.Accounts) sees their
     # assigned workspaces PLUS all public workspaces of the instance (F2).
     # SEC-002: fail closed — a session user with no row in the users table gets
     # NO workspaces and is NOT owner (previously nil -> {all_workspaces, true},
     # which escalated deleted users to full admin).
+    #
+    # Loaded BEFORE the workspace: with no slug in the session, where the mount
+    # lands depends on the user (their own default, the instance default, or the
+    # only workspace they can reach).
     {user, user_workspaces, is_owner} =
       case Dran.Accounts.get_user_by_email(current_user) do
         nil -> {nil, [], false}
         %{is_owner: true} = user -> {user, Dran.Accounts.accessible_workspaces(user), true}
         user -> {user, Dran.Accounts.accessible_workspaces(user), false}
       end
+
+    # The URL wins over the session: a LiveView mounted at
+    # /:workspace_slug/... must always show THAT workspace, even when the
+    # session still points elsewhere (e.g. login defaulted to "personal").
+    # With no session slug either, resolve per-user (the bare instance default
+    # would drop a user on a workspace they cannot reach).
+    workspace_slug =
+      case params do
+        %{"workspace_slug" => url_slug} when is_binary(url_slug) and url_slug != "" ->
+          url_slug
+
+        _ ->
+          session["workspace_slug"] || session_workspace_slug(user)
+      end
+
+    context = Dran.Knowledge.get_workspace_by_slug(workspace_slug)
+    page_counts = Dran.Knowledge.page_counts_by_workspace()
 
     # F2: the user's role in the CURRENT workspace (from the session slug).
     # The instance owner is owner everywhere; every other logged-in user uses
@@ -215,6 +229,13 @@ defmodule DranWeb.Plugs.Auth do
     }
   end
 
+  # The landing workspace for a mount with no slug in the session: the user's
+  # own resolution when they have a row, else the instance default.
+  defp session_workspace_slug(%Dran.Accounts.User{} = user),
+    do: Dran.Accounts.session_workspace_slug(user)
+
+  defp session_workspace_slug(_user), do: Auth.default_workspace_slug()
+
   # Owner / created_by resolution lives in Dran.Auth (domain layer, no web deps).
   # See Dran.Auth.resolve_owner/1 and Dran.Auth.resolve_created_by/1.
 
@@ -238,9 +259,10 @@ defmodule DranWeb.Plugs.Auth do
           put_session(conn, @workspace_key, slug)
 
         _ ->
-          # No cookie either — fall back to the user's default context (if
-          # their account has one set) before the global default.
-          case user_default_context(conn) do
+          # No cookie either — resolve the workspace for the logged-in user
+          # (their own default, the instance default, or the only workspace
+          # they can reach). Anonymous requests keep no session slug.
+          case user_session_workspace(conn) do
             nil -> conn
             slug -> put_session(conn, @workspace_key, slug)
           end
@@ -248,15 +270,16 @@ defmodule DranWeb.Plugs.Auth do
     end
   end
 
-  # The logged-in user's configured default context slug, or nil.
-  defp user_default_context(conn) do
+  # The landing workspace for the session user, or nil when there is no user
+  # row (fail-closed: a stale session must not pin a workspace).
+  defp user_session_workspace(conn) do
     case get_session(conn, @session_key) do
       nil ->
         nil
 
       email ->
         case Dran.Accounts.get_user_by_email(email) do
-          %{default_workspace_slug: slug} when is_binary(slug) and slug != "" -> slug
+          %Dran.Accounts.User{} = user -> Dran.Accounts.session_workspace_slug(user)
           _ -> nil
         end
     end

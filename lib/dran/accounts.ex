@@ -226,6 +226,58 @@ defmodule Dran.Accounts do
 
   def accessible_workspaces(_), do: []
 
+  @doc """
+  The workspace a session should open for `%User{}` — the ONE place that
+  decides where a user lands (login, cookie restoration, LiveView mounts,
+  impersonation).
+
+  For the instance owner: their own `default_workspace_slug` when it still
+  exists, else the instance default (`Dran.Auth.default_workspace_slug/0` —
+  flagged, else the only workspace, else `"personal"`). The owner reaches
+  every workspace (see `require_workspace/2`), so memberships never narrow
+  their landing workspace.
+
+  For everyone else, in order:
+
+    1. their own `default_workspace_slug`, when they still have access,
+    2. the instance default, when they have access,
+    3. the ONLY workspace they can access — no reason to drop them on an
+       empty page because the flagged default is someone else's workspace,
+    4. the instance default, accessible or not (fail-open to the same slug the
+       app has always used; the caller decides how to render a missing
+       workspace).
+
+  A nil / unknown user resolves to the instance default.
+  """
+  def session_workspace_slug(%User{is_owner: true} = user) do
+    user_default_workspace(user) || Dran.Auth.default_workspace_slug()
+  end
+
+  def session_workspace_slug(%User{} = user) do
+    accessible = accessible_workspaces(user)
+    slugs = Enum.map(accessible, & &1.slug)
+    instance = Dran.Auth.default_workspace_slug()
+
+    cond do
+      user.default_workspace_slug in slugs -> user.default_workspace_slug
+      instance in slugs -> instance
+      true -> only_accessible_slug(accessible, instance)
+    end
+  end
+
+  def session_workspace_slug(_), do: Dran.Auth.default_workspace_slug()
+
+  # The user's configured default, only while the workspace still exists.
+  defp user_default_workspace(%User{default_workspace_slug: slug})
+       when is_binary(slug) and slug != "" do
+    if Dran.Knowledge.get_workspace_by_slug(slug), do: slug, else: nil
+  end
+
+  defp user_default_workspace(_), do: nil
+
+  defp only_accessible_slug([%{slug: slug}], _instance), do: slug
+  defp only_accessible_slug(_accessible, instance), do: instance
+
   # ── Owner / Role-based access ──
 
   def owner_user do

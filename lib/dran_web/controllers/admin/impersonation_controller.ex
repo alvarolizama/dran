@@ -57,10 +57,10 @@ defmodule DranWeb.ImpersonationController do
         admin_workspace_slug = get_session(conn, "workspace_slug")
 
         # The target's session is established via Auth.login (recomputes
-        # is_owner fail-closed) and reset to the target's default workspace
-        # (or their first accessible workspace, or the global default).
-        target_slug =
-          target_default_workspace_slug(target_user) || Dran.Auth.default_workspace_slug()
+        # is_owner fail-closed) and reset to the workspace that user actually
+        # lands in — their default when reachable, else the instance default
+        # when reachable, else the only workspace they can access.
+        target_slug = Dran.Accounts.session_workspace_slug(target_user)
 
         conn =
           conn
@@ -112,30 +112,6 @@ defmodule DranWeb.ImpersonationController do
     end
   end
 
-  # The target's default workspace (their configured default if they still
-  # have access, otherwise their first accessible workspace, otherwise nil).
-  defp target_default_workspace_slug(%{default_workspace_slug: slug} = user)
-       when is_binary(slug) and slug != "" do
-    case Dran.Knowledge.get_workspace_by_slug(slug) do
-      %{} = _ws ->
-        # Verify it's actually accessible to the target.
-        if slug in Enum.map(Dran.Accounts.accessible_workspaces(user), & &1.slug) do
-          slug
-        else
-          first_accessible_slug(user)
-        end
-
-      nil ->
-        first_accessible_slug(user)
-    end
-  end
-
-  defp target_default_workspace_slug(user), do: first_accessible_slug(user)
-
-  defp first_accessible_slug(user) do
-    case Dran.Accounts.accessible_workspaces(user) do
-      [%{slug: slug} | _] -> slug
-      _ -> nil
-    end
-  end
+  # The target's landing workspace lives in Dran.Accounts.session_workspace_slug/1
+  # — one resolver for login, mounts and impersonation. Nothing local here.
 end

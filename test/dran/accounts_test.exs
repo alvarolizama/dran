@@ -494,4 +494,148 @@ defmodule Dran.AccountsTest do
                Accounts.replace_api_key_workspaces(key, [{ctx2.id, "read"}], non_member)
     end
   end
+
+  describe "session_workspace_slug/1 — where a logged-in session lands" do
+    test "an unknown user resolves to the instance default" do
+      assert Accounts.session_workspace_slug(nil) == Dran.Auth.default_workspace_slug()
+    end
+
+    test "the owner lands on the instance default, not narrowed by memberships" do
+      unique = System.unique_integer([:positive])
+
+      {:ok, owner} =
+        Accounts.create_user(%{
+          email: "landing-owner-#{unique}@example.com",
+          name: "Owner",
+          is_owner: true
+        })
+
+      {:ok, flagged} =
+        Knowledge.create_workspace(%{name: "Flagged #{unique}", slug: "landing-flag-#{unique}"})
+
+      {:ok, _} = Knowledge.update_workspace(flagged, %{is_default: true})
+
+      # Member of nothing: require_workspace/2 still lets the owner into every
+      # workspace, so the instance default decides where they land.
+      assert Accounts.list_user_workspaces(owner) == []
+      assert Accounts.session_workspace_slug(owner) == flagged.slug
+    end
+
+    test "the owner's own default wins while the workspace still exists" do
+      unique = System.unique_integer([:positive])
+
+      {:ok, owner} =
+        Accounts.create_user(%{
+          email: "landing-owner2-#{unique}@example.com",
+          name: "Owner",
+          is_owner: true
+        })
+
+      {:ok, mine} =
+        Knowledge.create_workspace(%{name: "Mine #{unique}", slug: "landing-mine-#{unique}"})
+
+      {:ok, _} = Accounts.set_default_context(owner, mine.slug)
+
+      {:ok, flagged} =
+        Knowledge.create_workspace(%{name: "Flagged #{unique}", slug: "landing-flag2-#{unique}"})
+
+      {:ok, _} = Knowledge.update_workspace(flagged, %{is_default: true})
+
+      reloaded = Accounts.get_user_by_email(owner.email)
+      assert Accounts.session_workspace_slug(reloaded) == mine.slug
+    end
+
+    test "a stale personal default is dropped" do
+      unique = System.unique_integer([:positive])
+
+      {:ok, user} =
+        Accounts.create_user(%{email: "landing-stale-#{unique}@example.com", name: "Stale"})
+
+      {:ok, _} = Accounts.set_default_context(user, "workspace-que-ya-no-existe")
+
+      # Rule 1 needs a live workspace: the dead slug is dropped and the
+      # instance default answers (the fixture flags "personal").
+      assert Dran.Auth.default_workspace_slug() == "personal"
+      assert Accounts.session_workspace_slug(Accounts.get_user_by_email(user.email)) == "personal"
+    end
+
+    test "a flagged public default wins for a user who can reach it" do
+      unique = System.unique_integer([:positive])
+
+      {:ok, user} =
+        Accounts.create_user(%{email: "landing-public-#{unique}@example.com", name: "Public"})
+
+      {:ok, flagged} =
+        Knowledge.create_workspace(%{name: "Flagged #{unique}", slug: "landing-flag3-#{unique}"})
+
+      {:ok, _} = Knowledge.update_workspace(flagged, %{is_default: true})
+
+      # Public workspaces are reachable without a membership (F2), so the
+      # flagged default is a valid landing place even for a non-member.
+      assert Accounts.session_workspace_slug(Accounts.get_user_by_email(user.email)) ==
+               flagged.slug
+    end
+
+    @tag :no_default_workspace
+    test "a user reaching exactly ONE workspace lands there, with nothing flagged" do
+      unique = System.unique_integer([:positive])
+
+      {:ok, user} =
+        Accounts.create_user(%{email: "landing-single-#{unique}@example.com", name: "Single"})
+
+      # Both workspaces private and none flagged: the instance default is the
+      # "personal" literal — a workspace nobody created. The one workspace the
+      # user actually reaches must win over that dead slug.
+      {:ok, mine} =
+        Knowledge.create_workspace(%{
+          name: "Mine #{unique}",
+          slug: "landing-solo-#{unique}",
+          visibility: "private"
+        })
+
+      {:ok, _other} =
+        Knowledge.create_workspace(%{
+          name: "Other #{unique}",
+          slug: "landing-other-#{unique}",
+          visibility: "private"
+        })
+
+      {:ok, _} = Accounts.add_user_to_workspace(user, mine)
+
+      refute Dran.Knowledge.get_default_workspace()
+      assert Dran.Auth.default_workspace_slug() == "personal"
+
+      assert Accounts.session_workspace_slug(Accounts.get_user_by_email(user.email)) == mine.slug
+    end
+
+    @tag :no_default_workspace
+    test "a user reaching several workspaces stays on the instance default" do
+      unique = System.unique_integer([:positive])
+
+      {:ok, user} =
+        Accounts.create_user(%{email: "landing-many-#{unique}@example.com", name: "Many"})
+
+      {:ok, one} =
+        Knowledge.create_workspace(%{
+          name: "One #{unique}",
+          slug: "landing-one-#{unique}",
+          visibility: "private"
+        })
+
+      {:ok, two} =
+        Knowledge.create_workspace(%{
+          name: "Two #{unique}",
+          slug: "landing-two-#{unique}",
+          visibility: "private"
+        })
+
+      {:ok, _} = Accounts.add_user_to_workspace(user, one)
+      {:ok, _} = Accounts.add_user_to_workspace(user, two)
+
+      reloaded = Accounts.get_user_by_email(user.email)
+
+      refute Dran.Knowledge.get_default_workspace()
+      assert Accounts.session_workspace_slug(reloaded) == "personal"
+    end
+  end
 end
