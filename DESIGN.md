@@ -645,9 +645,14 @@ tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
   (`drawer-side` + `drawer-overlay`), y el contenido abre con una barra
   `header.lg:hidden h-14` con **hamburguesa** (`label for="app-drawer"`) + logo.
   Cerrar = overlay o navegar.
+- **Barra del contenido (`h-14`, siempre visible):** es el **único** sitio del
+  toggle de navegación — en móvil es la hamburguesa (`label for="app-drawer"`)
+  y en desktop el mismo botón en la misma posición colapsa/expande la sidebar
+  (`label for="sidebar-collapse"`, `hidden lg:inline-flex`). **Nunca hay dos
+  controles**: el sidebar no lleva chevron propio (antes lo tenía y se veían
+  dos botones para lo mismo).
 - **Desktop (`≥ lg`):** la sidebar queda fija a la izquierda y se puede
-  **colapsar a un rail de iconos** (4rem) con la flecha del header
-  (`label for="sidebar-collapse"`). El estado es el checkbox
+  **colapsar a un rail de iconos** (4rem). El estado es el checkbox
   `#sidebar-collapse` (hermano del `.drawer`) y las reglas de §T1 hacen el
   resto: la sidebar se angosta, los textos con `.shell-hide` desaparecen
   (marca, selector, buscador, labels de enlaces y de grupo, badges, nombre y

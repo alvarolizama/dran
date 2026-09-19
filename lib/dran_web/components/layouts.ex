@@ -115,18 +115,28 @@ defmodule DranWeb.Layouts do
         <input id="app-drawer" type="checkbox" class="drawer-toggle" />
 
         <div class="drawer-content flex flex-col min-w-0 h-full">
-          <%!-- Barra móvil (< lg): hamburguesa + logo --%>
-          <header class="lg:hidden flex items-center gap-2 h-14 px-3 shrink-0 border-b border-base-300 bg-base-100/80 backdrop-blur">
+          <%!-- Barra del contenido: SIEMPRE visible y con el ÚNICO toggle de la
+               navegación, en el mismo sitio en todos los anchos. En móvil abre
+               la gaveta; en desktop colapsa la sidebar a rail. (Antes había dos
+               controles: hamburguesa en móvil + chevron dentro del sidebar.) --%>
+          <header class="flex items-center gap-2 h-14 px-3 shrink-0 border-b border-base-300 bg-base-100/80 backdrop-blur">
             <label
               for="app-drawer"
-              class="btn btn-ghost btn-sm btn-square"
-              aria-label={gettext("Menu")}
+              class="lg:hidden btn btn-ghost btn-sm btn-square"
+              title={gettext("Menu")}
+            >
+              <.icon name="hero-bars-3" class="size-5" />
+            </label>
+            <label
+              for="sidebar-collapse"
+              class="hidden lg:inline-flex btn btn-ghost btn-sm btn-square"
+              title={gettext("Collapse or expand the sidebar")}
             >
               <.icon name="hero-bars-3" class="size-5" />
             </label>
             <a
               href={~p"/"}
-              class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
+              class="lg:hidden flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
             >
               <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
               <span class="text-lg font-bold tracking-tight">Dran</span>
@@ -164,14 +174,6 @@ defmodule DranWeb.Layouts do
                   workspaces={@workspaces}
                   page_counts={@page_counts}
                 />
-                <%!-- Colapsar (desktop): deja el rail de iconos --%>
-                <label
-                  for="sidebar-collapse"
-                  class="hidden lg:inline-flex btn btn-ghost btn-xs btn-square shrink-0"
-                  title={gettext("Collapse sidebar")}
-                >
-                  <.icon name="hero-chevron-double-left" class="shell-collapse-icon size-3.5" />
-                </label>
               </div>
             </div>
 

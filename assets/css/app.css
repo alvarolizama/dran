@@ -577,10 +577,6 @@
   #sidebar-collapse:checked ~ .drawer .shell-sidebar .nav-link {
     justify-content: center;
   }
-
-  #sidebar-collapse:checked ~ .drawer .shell-sidebar .shell-collapse-icon {
-    transform: rotate(180deg);
-  }
 }
 
 /* ── Tablas: hover de fila global (§C6) ── */
