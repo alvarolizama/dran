@@ -136,5 +136,22 @@ key and the `X-Hermes-Agent` header — never client-settable.
   cambio".** Sin sacarlo de `changes` (`delete_change/2`), `validate_length` lo
   rechaza y `put_password_hash/1` guarda el hash de la cadena vacía. En el mismo
   changeset: quitar el blanco, DESPUÉS validar el mínimo, DESPUÉS hashear.
+- **El alta de una PERSONA exige NOMBRE** (`User.registration_changeset/2`:
+  email + name + password), y el nombre no es decorativo: es lo que nombra su
+  workspace personal. `personal_workspace_name/1` = el nombre, o `"Personal"` si
+  no lo hay — **nunca la parte del correo**, que es lo que hacía antes
+  (`nekrox@gmail.com` → "Nekrox" en `/nekrox`, o sea el correo eligiendo la URL).
+  `/setup` y el modal de /admin/users lo piden obligatorio; `create_user/1` (el
+  camino de Google/API) no lo exige, así que puede haber cuentas sin nombre y su
+  personal se llama "Personal". Ojo: el slug SALE del nombre
+  (`Slug.inject_create(field: "name")`) y renombrar el workspace NO lo cambia.
+- **La autoría se guarda como identificador y se PINTA como nombre.** La columna
+  `created_by` sigue llevando el correo del usuario (o el nombre de la key)
+  porque es la clave de unión y lo que devuelve la API; lo que ve el usuario lo
+  resuelve la vista con `Dran.Actors.creator_labels/1` (+ `creator_label/2`) en
+  DOS queries por lote — un lookup por fila dentro de una tarjeta es el N+1 que
+  esa función existe para evitar. Precedencia: nombre del usuario →
+  `display_name` del actor → el identificador. No "arregles" lo que se ve
+  cambiando la columna.
 
 Legacy columns, backfills and fallback rules: `references/attribution-legacy.md`.
