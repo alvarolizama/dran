@@ -45,6 +45,24 @@ function cssColor(varName, fallback) {
   return toRgb(resolved) || fallback
 }
 
+// Resolve a CSS custom property to an rgba() string with the given alpha —
+// same probe technique as cssColor(), for DOM styles (overlay, tooltip) that
+// need translucency from theme tokens instead of hardcoded rgba.
+function oklchAlpha(varName, alpha) {
+  const probe = document.createElement("div")
+  probe.style.color = `var(${varName})`
+  probe.style.display = "none"
+  document.body.appendChild(probe)
+  const resolved = getComputedStyle(probe).color
+  probe.remove()
+
+  if (!resolved) return `rgba(148, 163, 184, ${alpha})`
+  const rgb = toRgb(resolved)
+  if (!rgb) return `rgba(148, 163, 184, ${alpha})`
+  const [r, g, b] = rgb.match(/\d+/g).map(Number)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 // ── Named palette ─────────────────────────────────────────────────────
 // Node and edge colors arrive in the data, computed server-side from the
 // type registry / workspace config (never a per-slug table). This neutral
@@ -506,8 +524,8 @@ const Graph3D = {
         "max-width: 320px",
         "padding: 10px 14px",
         "border-radius: 12px",
-        "background: rgba(10, 14, 39, 0.88)",
-        "border: 1px solid rgba(148, 163, 184, 0.25)",
+        "background: " + oklchAlpha("--color-base-100", 0.88),
+        "border: 1px solid " + oklchAlpha("--color-base-content", 0.25),
         "backdrop-filter: blur(8px)",
         "font-family: ui-sans-serif, system-ui, sans-serif",
         "pointer-events: auto",
@@ -542,18 +560,24 @@ const Graph3D = {
     typeRow.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:4px;"
     const typeSpan = document.createElement("span")
     typeSpan.style.cssText =
-      "font-size:11px;color:rgba(148,163,184,0.7);text-transform:uppercase;letter-spacing:0.05em;"
+      "font-size:11px;color:" +
+      cssColor("--color-base-content", "#94A3B8") +
+      ";text-transform:uppercase;letter-spacing:0.05em;opacity:0.7;"
     typeSpan.textContent = node.type || "page"
     typeRow.appendChild(typeSpan)
 
     const titleDiv = document.createElement("div")
     titleDiv.style.cssText =
-      "font-size:14px;font-weight:600;color:#f1f5f9;line-height:1.35;margin-bottom:8px;"
+      "font-size:14px;font-weight:600;color:" +
+      cssColor("--color-base-content", "#f1f5f9") +
+      ";line-height:1.35;margin-bottom:8px;"
     titleDiv.textContent = node.label
 
     const link = document.createElement("a")
     link.style.cssText =
-      "display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#60a5fa;text-decoration:none;"
+      "display:inline-flex;align-items:center;gap:4px;font-size:12px;color:" +
+      cssColor("--color-primary", "#9fe88d") +
+      ";text-decoration:none;"
     link.textContent = "Open page →"
     // Only allow the in-app path we just built; never an arbitrary/scheme URL.
     if (typeof href === "string" && href.startsWith("/")) {
@@ -638,7 +662,7 @@ const Graph3D = {
     if (!this.selectedNode) return link.color || NEUTRAL_COLOR
     return this.highlightLinks.has(link)
       ? link.color || NEUTRAL_COLOR
-      : "rgba(148, 163, 184, 0.05)"
+      : oklchAlpha("--color-base-content", 0.05)
   },
 
   handleEngineStop() {

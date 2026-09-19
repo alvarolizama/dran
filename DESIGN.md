@@ -1,55 +1,51 @@
 # DESIGN.md — sistema de UI
 
 Estándar de interfaz de la familia de apps que comparten un **mismo lenguaje
-visual**.
+visual**. El documento tiene dos partes:
 
-El documento tiene dos partes:
+- **Commons** — la base compartida por todas las apps: tema y tokens, elementos
+  básicos, composición, estados y convenciones. Es idéntica en todos los repos:
+  si cambias algo aquí, cámbialo en los tres `DESIGN.md`.
+- **Custom** — lo específico de **esta** app (Dran). TokenGate es la referencia
+  del Commons: ante la duda de cómo se ve un control, mira un LiveView de
+  TokenGate antes de inventar.
 
-- **Commons** — la base compartida por todas las apps (tema, tokens, componentes,
-  tarjetas, tablas, modales, pickers, gráficas, estados y convenciones). Es
-  idéntica en todos los repos: si cambias algo aquí, cámbialo en los tres
-  `DESIGN.md`.
-- **Custom** — lo específico de **esta** app. Cada repo declara de qué proyecto es
-  su `DESIGN.md` al inicio de la sección **Custom**.
+> **Regla de oro de este doc: refleja el código.** Todo lo que se afirma aquí debe
+> poder señalarse en `lib/dran_web/…` o `assets/css/app.css`. Si el código
+> cambia, este archivo cambia con él.
 
 ---
 
 ## Commons — base compartida de la familia
-
-Contrato visual común a todas las apps de la familia. Todo lo de esta sección es
-idéntico entre apps; lo específico de cada una vive en **Custom**.
 
 ### C1. Principios
 
 1. **daisyUI nativo + Tailwind.** No inventes componentes si daisyUI ya trae
    (`btn`, `card`, `table`, `badge`, `input`, `select`, `alert`, `modal`,
    `dropdown`, `tabs`). CSS propio sólo para convenciones **globales**.
-2. **Un tema built-in por app, declarado en Custom.** Cada app fija **un** tema
-   daisyUI por defecto (`themes: <tema> --default`) y lo refleja en `data-theme`
-   de `root.html.heex`. No hay switcher ni temas por bloque. Nada de hex/oklch
+2. **Un solo tema por app, elegido en `app.css`.** La convención familiar es
+   daisyUI `dark --default`; **Dran corre `dim --default`** (excepción
+   consciente, §Custom — la misma que TokenGate). Nada de hex/oklch
    hardcodeado en plantillas: siempre las vars del tema.
 3. **Reusar antes de crear.** Mira `*Web.CoreComponents` antes de escribir markup
-   a mano (inputs, tablas, headers, iconos ya están).
+   a mano: inputs, tablas, headers, iconos ya están.
 4. **Verificable.** Todo control interactivo lleva `id` estable para tests
    (`has_element?/2`).
 
 ### C2. Tema y tokens
 
 ```css
-/* assets/css/app.css — el tema lo declara CADA app, no la familia */
+/* assets/css/app.css */
 @plugin "../vendor/heroicons";
 @plugin "../vendor/daisyui" {
-  themes: <tema> --default;   /* ← el tema built-in de ESTA app */
+  themes: dim --default;   /* ← tema ÚNICO de la familia (Dran: dim, §Custom) */
 }
 ```
 
 ```heex
-<%!-- lib/<app>_web/components/layouts/root.html.heex --%>
-<html data-theme="<tema>">
+<%!-- lib/dran_web/components/layouts/root.html.heex — Dran: data-theme="dim" --%>
+<html data-theme="dim">
 ```
-
-El tema es **uno solo por app** y se declara en **Custom** (Dran → `night`, ver
-Custom). No hay selector de tema ni `data-theme` por bloque.
 
 **Regla del scaffold:** si `app.css` venía con `themes: false` + bloques
 `@plugin "../vendor/daisyui-theme"`, hay que **borrar** esos bloques (y el JS del
@@ -65,57 +61,57 @@ Colores semánticos (usar SIEMPRE las vars, nunca hex/oklch a mano):
 | Superficie 3 | `bg-base-300` | `--color-base-300` | bordes, chips |
 | Texto | `text-base-content` | `--color-base-content` | + `/50` `/40` para secundario |
 | Primario | `btn-primary`, `text-primary` | `--color-primary` | acción principal, links |
+| Secundario | `btn-secondary` | `--color-secondary` | acento de marca |
+| Acento | `btn-accent` | `--color-accent` | "extra" / activo no primario |
+| Neutro | `badge-ghost` | `--color-neutral` | global / sin estado |
 | Éxito | `badge-success` | `--color-success` | ok, activo |
 | Aviso | `badge-warning` | `--color-warning` | warning / aviso |
 | Error | `badge-error`, `text-error` | `--color-error` | destructivo |
-| Info | `badge-info` | `--color-info` | entradas / exclusivo-grupo |
-| Neutro | `badge-ghost` | `--color-neutral` | global / sin estado |
+| Info | `badge-info` | `--color-info` | informativo |
 
 Radios y bordes salen del tema (`--radius-box`, `--radius-field`, `--border`).
 No los hardcodees.
 
 ### C3. Layout base
 
-- El contenido principal va en un `<main>`; el **shell** (sidebar/topbar) es de
-  cada app → ver **Custom**.
-- **Header de página:** `<.header>` — título + `:subtitle` + `:actions`. La
-  escala del título sale de la app (Dran: `text-title`, ver D1). Un `<h1>` suelto
-  no es un header de página.
-- **Filtros y acciones, alineados a la DERECHA** (slot `:actions` o `justify-end`).
-  Nunca a la izquierda.
+- El contenido principal va en un `<main>`; el **shell** (navbar/sidebar/topbar)
+  es de cada app → ver **Custom**.
+- **Header de página:** `<.header>` — título (`:inner_block`) + `:subtitle` +
+  `:actions`.
+- **Filtros y acciones, alineados a la DERECHA** (slot `:actions` o
+  `justify-end`). Nunca a la izquierda.
 - **Contenedores anchos** (tablas/paneles) envueltos en `overflow-x-auto`.
 
-### C4. Componentes base
+### C4. Elementos básicos
+
+Los controles primitivos. Todo lo demás (cards, tablas, modales, pickers) se
+compone de esto.
 
 | Elemento | Clase estándar |
 |---|---|
 | Botón primario | `btn btn-primary` (o `<.button variant="primary">`) |
-| Botón secundario | `btn btn-primary btn-soft` |
+| Botón secundario | `btn btn-primary btn-soft` (default de `<.button>`) |
 | Botón neutro / cancelar | `btn btn-ghost` |
 | Acción de fila | `btn btn-xs btn-ghost` (+ `title=`) |
 | Destructivo | `btn ... text-error` + `data-confirm="…"` |
 | Badge | `badge badge-sm` + semántico (`badge-primary/success/warning/error/info/ghost/outline/accent`) |
 | Chip removible | `badge badge-sm` con `<button>` interno |
-| Card | `card bg-base-100 border border-base-300 shadow-sm` (ver C5) |
-| Toast (flash) | `toast toast-top toast-end z-50` + `alert alert-info/alert-error` |
+| Input de texto | `<.input field={@form[:x]} />` (nunca `<input>` a mano) |
 | Icono | `<.icon name="hero-…" class="size-4" />` (heroicons, NO SVG suelto) |
+| Toast (flash) | `toast toast-top toast-end z-50` + `alert alert-info/alert-error` |
 
-- **Botón secundario:** `btn btn-primary btn-soft` (misma acción, menos peso).
-  **`btn-outline` es legítimo para "otra vía"** — misma jerarquía que el
-  primario, camino alternativo (p. ej. "Continuar con Google"), no una variante
-  de color.
+**Todo pasa por `CoreComponents`** — no armes el `<input>` ni el flash a mano:
 
-Componentes en `CoreComponents`: `flash`, `button`, `input`, `header`, `table`,
-`list`, `icon`, `show/hide`. **Usa `<.input>`**, no armes el `<input>` a mano.
+- `flash` · `button` (con `variant="primary" | nil`) · `input` · `header` ·
+  `table` · `list` · `icon` · `show`/`hide` · `translate_error`/`translate_errors`.
+
+**`btn-outline` es legítimo para "otra vía"** — misma jerarquía que el
+primario, camino alternativo (p. ej. "Continuar con Google"), no una variante
+de color.
 
 ### C5. Tarjetas (cards)
 
-Una sola forma de "caja" en cada app.
-
-- **La forma canónica la declara cada app en Custom** (Dran: `.surface-2`, ver
-  D1) y el resto de las cajas se derivan de ella. Lo que no se admite es tener
-  dos formas conviviendo: el `card` del scaffold queda para modales y contenedores
-  con `card-body` propio.
+Una sola forma de "caja" en toda la familia.
 
 ```heex
 <div class="card bg-base-100 border border-base-300 shadow-sm">
@@ -130,12 +126,12 @@ Una sola forma de "caja" en cada app.
 ```
 
 - **Base:** `card bg-base-100 border border-base-300 shadow-sm` + `card-body`.
-- **Densidad del `card-body`** (elegir según el contenido, no al azar):
-  `p-4` (denso: listas, KPIs) · `p-5` (medio) · `p-6` (forms) · `p-8` (hero).
+- **Densidad del `card-body`** (elegir según el contenido): `p-4` (denso: listas,
+  KPIs) · `p-5` (medio) · `p-6` (forms) · `p-8` (hero).
 - **Título:** `card-title text-base` + icono `size-5 text-base-content/60`.
 - **Card interactiva (clicable):** `hover:shadow-md transition-shadow`.
 - **Card de sección con header** (badge de icono + título + caption): cada app la
-  tiene → ver **Custom**.
+  tiene → ver **Custom** (Dran: `.surface-2`, §T1).
 - **Card de modal:** `shadow-xl` en vez de `shadow-sm` (ver C7).
 - Sombras y radios del tema (`--radius-box`, `shadow-sm/md/xl`); no a mano.
 
@@ -168,11 +164,12 @@ Estructura canónica (una sola forma en toda la familia):
 
 Reglas:
 
-- **`table table-sm` siempre.** Envuelta en `overflow-x-auto` + card.
-- **Hover de fila, sin zebra** — regla global (una vez por app):
+- **`table table-sm` siempre.** Envuelta en `overflow-x-auto` + card. Columnas de
+  ancho fijo: `table table-sm table-fixed w-full`.
+- **Hover de fila, sin zebra** — regla global, una vez por app:
   ```css
   .table tbody tr { transition: background-color 150ms ease; }
-  .table tbody tr:hover { background-color: color-mix(in oklab, var(--b2) 60%, transparent); }
+  .table tbody tr:hover { background-color: color-mix(in oklab, var(--color-base-200) 60%, transparent); }
   ```
 - **Colecciones con `stream` + `phx-update="stream"`** (nunca listas grandes
   asignadas). El `id` de cada fila es el del item.
@@ -441,16 +438,15 @@ Reglas:
   Form: `id="thing-form"`; fila: `id={id}` (del stream). **El `id` es la
   convención primaria de toda la familia.**
 - **`data-testid` sólo donde no hay id natural:** contenedores y estados sin
-  `<form>`/fila/stream detrás (`page-card-<slug>`, `empty-state`,
-  `search-results`, `memory-results`). `kebab-case`, la parte variable al final
-  tras un guion, y nunca como sustituto de un `id` que ya existe. **Todo testid
-  nuevo nace con su consumidor en `test/`**: un testid que ningún test lee es
-  ruido, y agregarlo "por si acaso" está prohibido.
+  `<form>`/fila/stream detrás. `kebab-case`, la parte variable al final tras un
+  guion, y nunca como sustituto de un `id` que ya existe. **Todo testid nuevo
+  nace con su consumidor en `test/`**: un testid que ningún test lee es ruido.
 - **Assigns por picker:** `<kind>_search` / `<kind>_open` / `current_<kind>_id(s)`.
 - **Filtros** alineados a la **derecha** del header, siempre.
 - **Modales** = overlay div; cierre por assign.
 - **Datos crudos nunca en pantalla:** formatters.
-- **Tema:** sólo vars del tema; cero hex/oklch hardcodeado.
+- **Tema:** sólo vars del tema; cero hex/oklch hardcodeado (en HEEx y en los
+  hooks JS: usar `cssColor("--color-…", fallback)`, nunca hex fijo).
 - **i18n:** `Gettext`.
 - Cierra siempre con **`mix precommit`** (alias en `mix.exs`).
 
@@ -458,46 +454,79 @@ Reglas:
 
 ## Custom — Dran
 
-Este `DESIGN.md` es de **Dran**. Tema `night` (único) · `<html lang="es" data-theme="night">`; es la app con el
-sistema de tokens propio más completo y el editor de contenido.
+Este `DESIGN.md` es de **Dran**. Tema **`dim` (único)**:
 
-> **Dran declara `night`** (commits `0366b01`, `fb2cf8f`): `app.css:24` →
-> `themes: night --default;` y `root.html.heex:2` → `data-theme="night"`. Los otros
-> repos de la familia declaran el suyo (gorim `dark`, TokenGate `dim`); las tres
-> apps usan un solo tema built-in, y eso es lo que dice §C1/§C2. El tema no se
-> cambia: todo lo demás de §C2 (usar las vars, nunca hex suelto) aplica igual.
+```heex
+<%!-- lib/dran_web/components/layouts/root.html.heex --%>
+<html lang={Gettext.get_locale(DranWeb.Gettext)} data-theme="dim">
+```
 
-### D1. Sistema propio de tokens (`app.css`, bloque "DRAN DESIGN SYSTEM")
+```css
+/* assets/css/app.css */
+@plugin "../vendor/daisyui" { themes: dim --default; }
+```
+
+> Excepción consciente a la convención familiar (`dark`): Dran corre `dim`, el
+> mismo tema que TokenGate (misma paleta, mismo primary verde lima).
+> Historial: `night --default` → `dim` (alineación con TokenGate). El logo y el
+> favicon siguen la paleta (`#9fe88d` / `#62efbd` / `#6fbb5c` / `#c9f7be`).
+
+### Paleta real de `dim`
+
+Fuente de verdad: los `oklch()` que el plugin emite en
+`priv/static/assets/css/app.css`. Los hex son conversión aproximada (sin
+gamut-mapping), sólo para leer la tabla. Contraste = WCAG del par con su
+`*-content`.
+
+| Token | oklch | ≈hex | Rol · contraste |
+|---|---|---|---|
+| `--color-base-100` | `oklch(30.857% 0.023 264.149)` | `#2a303c` | fondo de app · texto 7.9:1 ✅ |
+| `--color-base-200` | `oklch(28.036% 0.019 264.182)` | `#242933` | paneles / hover de fila · 8.7:1 ✅ |
+| `--color-base-300` | `oklch(26.346% 0.018 262.177)` | `#20252e` | chips, bordes · 9.2:1 ✅ |
+| `--color-base-content` | `oklch(82.901% 0.031 222.959)` | `#b2ccd6` | texto principal |
+| `--color-primary` | `oklch(86.133% 0.141 139.549)` | `#9fe88d` | verde lima (el botón por defecto) · 13.0:1 ✅ |
+| `--color-secondary` | `oklch(73.375% 0.165 35.353)` | `#ff7d5d` | coral · 7.9:1 ✅ |
+| `--color-accent` | `oklch(74.229% 0.133 311.379)` | `#c792e9` | lila · 8.2:1 ✅ |
+| `--color-neutral` | `oklch(24.731% 0.02 264.094)` | `#1c212b` | panels/chips oscuros · 9.6:1 ✅ |
+| `--color-success` | `oklch(86.171% 0.142 166.534)` | `#62efbd` | ok, en vivo · 13.2:1 ✅ |
+| `--color-warning` | `oklch(86.163% 0.142 94.818)` | `#efd057` | aviso · 12.5:1 ✅ |
+| `--color-error` | `oklch(82.418% 0.099 33.756)` | `#ffae9b` | destructivo · 10.9:1 ✅ |
+| `--color-info` | `oklch(86.078% 0.142 206.182)` | `#28ebff` | informativo · 13.0:1 ✅ |
+
+Pares `*-content` (texto sobre cada token): `primary-content`
+`oklch(17.226% 0.028 139.549)` · `secondary-content` `oklch(14.675% 0.033 35.353)`
+· `accent-content` `oklch(14.845% 0.026 311.379)` · `neutral-content` =
+`base-content` · y el resto en la misma banda (~17%).
+
+Forma del tema: `color-scheme: dark` · radios `box 1rem` / `field 0.5rem` /
+`selector 1rem` · `--border 1px` · `--depth 0` · `--noise 0`.
+
+> **El primary pinta todos los botones por defecto.** `CoreComponents.button/1`
+> sin `variant` emite `btn-primary btn-soft`, así que el verde `#9fe88d` es el
+> color esperado, no un bug de CSS. Para otro color usá la utilidad explícita
+> (`btn-secondary` coral, `btn-accent` lila) — **no** redefinas el primary del
+> tema. En `dim` TODOS los pares `color/content` pasan AA (≥7.9:1).
+
+### T1. `app.css` (561 líneas) — el design system de Dran
+
+Sólo tema + heroicons + typography + `@custom-variant` de LiveView +
+`[data-phx-session]`, **la regla global de tablas** (que es exactamente la de
+§C6), el bloque TipTap/mermaid (§T7) y el bloque **"DRAN DESIGN SYSTEM"**:
 
 **Escala tipográfica** (usar estas clases, no tamaños sueltos):
 
 | Clase | Tamaño / peso | Uso real |
 |---|---|---|
 | `text-display` | 2.25rem / 800, `-0.02em` | hero del dashboard |
-| `text-title` | 1.5rem / 700, `-0.01em` | título de página |
+| `text-title` | 1.5rem / 700, `-0.01em` | título de página (`<.header>`) |
 | `text-heading` | 1.125rem / 600 | título de card/sección |
 | `text-body` | 0.875rem / 400 | cuerpo |
 | `text-caption` | 0.75rem / 500, `content/55%` | metadata, hints |
 
-Uso observado: `text-caption` (75×), `text-title` (26×), `text-heading` (10×).
-Para el resto, utilidades Tailwind directas.
+Uso observado: `text-caption` (86×), `text-title` (33×), `text-heading` (10×),
+`text-display` (4×). Un `<h1>` con `text-lg/xl/2xl/3xl` suelto es deuda.
 
-**Cabeceras:** el `<h1>` de página usa `text-title`. No `text-2xl/3xl font-bold`
-(la escala ya fija tamaño y peso) ni `text-lg font-semibold` (escala del
-scaffold, no la de Dran). `<.header>` —el header del Commons— quedó alineado a
-`text-title` aquí: es un **override de Custom** sobre el componente compartido.
-El resto de los `<h1>` ya usa la escala: `text-title` para títulos de página y
-`text-display` para el hero del dashboard y el masthead de autenticación. Un
-`<h1>` con `text-lg/xl/2xl/3xl` suelto es deuda.
-
-**Superficies y elevación:**
-
-```css
-:root {
-  --shadow-surface-2: 0 1px 2px oklch(0% 0 0 / 0.08);
-  --shadow-surface-3: 0 4px 12px oklch(0% 0 0 / 0.12);
-}
-```
+**Superficies y elevación** (la caja canónica de Dran):
 
 | Clase | Fondo | Sombra | Uso |
 |---|---|---|---|
@@ -505,64 +534,96 @@ El resto de los `<h1>` ya usa la escala: `text-title` para títulos de página y
 | `.surface-2` | `--color-base-100` | `--shadow-surface-2` | **caja canónica de Dran** (29×) |
 | `.surface-3` | `--color-base-100` | `--shadow-surface-3` | popovers / destacados |
 
-**Una sola forma de caja.** `.surface-2` (`rounded-2xl` cuando la caja es de
-sección) es *la* caja de Dran: resuelto en §D8 (gana 29–11 en uso y D1 ya la
-llamaba "card estándar"). El `card bg-base-100 border border-base-300 shadow-sm`
-del Commons §C5 no se usa en Dran; `card` + `shadow-xl/2xl` queda reservado a
-**modales** (§C7).
+`.surface-2` (`rounded-2xl` cuando la caja es de sección) es *la* caja de Dran;
+el `card bg-base-100 …` del Commons §C5 no se usa en Dran para secciones, y
+`card` + `shadow-xl/2xl` queda reservado a **modales** (§C7).
 
 **Micro-interacciones propias:** `.lift` (translateY −0.5px + shadow-3),
 `.skeleton` (shimmer, respeta `prefers-reduced-motion`), `.focus-ring`, y la
 regla global `:focus-visible { outline: 2px solid var(--color-primary) }`.
 Transiciones `transition-all duration-150`; desplazamientos `hover:translate-x-0.5`.
 
-### D2. Shell
+#### ¿Qué hay de CSS propio? (inventario)
 
-`Layouts.app` — `flex h-screen` con **sidebar a la izquierda**
-(`w-64 border-r border-base-300 bg-base-200/50`) y contenido `flex-1 overflow-y-auto`.
+| Bloque | Para qué |
+|---|---|
+| `@import "tailwindcss" source(none)` + `@source` ×4 | escaneo explícito de clases (v4 no autodescubre) |
+| `@import "phoenix-colocated/…"` + `@source` de `_build/dev/phoenix-colocated` | CSS de hooks colocados en LiveView (dev) |
+| `@plugin "../vendor/heroicons"` | `<.icon name="hero-…">` |
+| `@plugin "../vendor/daisyui" { themes: dim --default }` | el tema |
+| `@plugin "@tailwindcss/typography"` | `prose` para el markdown de lectura |
+| `@custom-variant phx-click-loading` / `phx-submit-loading` / `phx-change-loading` | estados de carga de LiveView |
+| `[data-phx-session], [data-phx-teleported-src] { display: contents }` | que los wrappers de LiveView no rompan el layout |
+| `.md-editor` · `.editor-toolbar` · `.tb-btn` · `.tiptap …` | editor TipTap (§T7) |
+| `.mermaid-rendered` · `.mermaid-codeblock …` | mermaid en lectura y preview (§T7) |
+| `.inline-link` · `.wikilink*` · `.embed*` · `.tag-link*` | markdown renderizado y tags (§T7) |
+| `.agent-step` (+ `slide-in`) | animación de pasos del worker |
+| "DRAN DESIGN SYSTEM": `text-*` · `.surface-*` · `.skeleton` · `.lift` · `.focus-ring` · `:root` vars | escala tipográfica, superficies, estados |
+| `.table tbody tr:hover`, `transition` (§C6) | hover de fila unificado |
+
+**Regla: ningún bloque propio declara color hardcodeado.** Todo color del CSS
+custom sale de `var(--color-…)` o `oklch(from var(--color-…) …)` — el tema
+provee, el bloque deriva. Si hace falta un color, se usa el token/utility del
+tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
+
+**Excepciones documentadas** (las únicas):
+
+- **Paleta nombrada del grafo.** Los colores que no son del tema viven en un
+  mapa con nombre: `DranWeb.GraphHelpers` (`@neutral_color` `#94A3B8`,
+  `@edge_colors`, `@fallback_color`, `@hidden_type_color`) y su espejo en el
+  hook (`assets/js/hooks/graph_3d.js` → `NEUTRAL_COLOR`). Es intencional: el
+  canvas WebGL no lee vars CSS; el hook las resuelve con `cssColor()`/`oklchAlpha()`
+  y los fallbacks son sólo eso, fallbacks. El hex de un **tipo** de página vive
+  en el registry o en la config del workspace, nunca aquí.
+- **Logo/favicon** (`priv/static/favicon.svg`, `logo.png`, `favicon.ico`): la
+  paleta de marca `#9fe88d`/`#62efbd`/`#6fbb5c`/`#c9f7be` (§Custom). Al cambiar
+  el primary del tema, actualizarlos en el mismo commit.
+
+### T2. Shell
+
+`Layouts.app/1` — `flex h-screen` con **sidebar a la izquierda**
+(`w-64 shrink-0 border-r border-base-300 bg-base-200/50`) y contenido
+`flex-1 overflow-y-auto`:
 
 - **Sidebar:** logo + `<.workspace_selector>` (`id="context-selector"`,
   `select select-sm`), buscador del workspace (`GET /:slug/search`, icono +
   `kbd ⌘K`), nav en `<details open>` colapsables (chevron `group-open:rotate-90`),
   `sidebar_footer_icons` y `user_footer`.
 - **Nav link activo:** `bg-primary/10 text-primary font-medium border-l-2 border-primary`.
+- **Banner de impersonación** (`root.html.heex`): `bg-warning/20 border-warning/30`
+  con botón `btn-xs btn-error` para salir.
 - **Opciones del shell:** `sidebar={false}` (oculta el `aside`), `topbar` +
   `topbar_active={:dashboard | :account | :admin}` (barra `<.app_topbar>` con el
-  logo a la izquierda y el menú de opciones —Workspaces, Account, Admin y
-  Salir— arriba a la derecha, con la opción activa resaltada), `fluid` (contenido
-  sin padding interno), `active_nav`.
-- **Shell sin sidebar:** lo comparten las tres opciones de instancia y sus
-  subpáginas — `/`, `/settings/account`, `/settings/api-keys` y todo `/admin/*` —
-  vía `sidebar={false}` + `topbar`. El contenido lo paddea el layout
-  (`px-6 pt-6 pb-16`) y la opción Admin solo aparece para owners.
-- **Command palette:** `DranWeb.CommandPalette` (`#command-palette`, `phx-hook`, ⌘K) —
-  overlay `fixed inset-0 z-50 bg-black/50 backdrop-blur-sm`, panel
+  logo a la izquierda y el menú —Workspaces, Account, Admin y Salir— arriba a la
+  derecha, opción activa resaltada), `fluid` (contenido sin padding interno),
+  `active_nav`.
+- **Shell sin sidebar:** lo comparten `/`, `/settings/*` y todo `/admin/*` vía
+  `sidebar={false}` + `topbar`. El contenido lo paddea el layout (`px-6 pt-6 pb-16`)
+  y la opción Admin solo aparece para owners.
+- **Command palette:** `DranWeb.CommandPalette` (`#command-palette`, `phx-hook`,
+  ⌘K) — overlay `fixed inset-0 z-50 bg-black/50 backdrop-blur-sm`, panel
   `mx-auto max-w-lg rounded-xl border border-base-300 bg-base-100 shadow-2xl`
   (margen superior 15vh), selección `bg-primary/10`.
 
-### D3. Componentes extra
+### T3. Componentes extra
 
 | Componente | Qué es |
 |---|---|
 | `DranWeb.Admin.section/1` | sección: `.surface-2 rounded-2xl` con header (icono en `bg-primary/10` + `text-heading` + `text-caption`) |
 | `DranWeb.Admin.modal/1` | modal compacto: overlay `bg-black/50`, `card`, `phx-click-away`, `max_w` (`max-w-lg` por defecto) |
-| `DranWeb.ResourceComponents.resource_modal/1` | modal **casi full-screen** (`h-[calc(100vh-3rem)]`, `max-w-5xl`) |
+| `DranWeb.ResourceComponents.resource_modal/1` | modal **casi full-screen** (`h-[calc(100vh-3rem)]`, `max-w-5xl`) — implementación Dran del patrón **C7.2** (§T3.1) |
 | `DranWeb.ResourceComponents.resource_header/1` · `form_actions/1` · `markdown_body_field/1` | header con back-link, fila cancelar/guardar, campo body con editor |
 | `DranWeb.MarkdownEditorComponents.markdown_editor/1` | editor TipTap |
 | `DranWeb.PageListComponents.page_list/1` · `page_card/1` · `type_badge_label/1` | lista de páginas (agrupada o plana), card de página y badge de tipo |
 | `DranWeb.PageComponents.backlinks_section/1` | backlinks de una página |
 | `DranWeb.PageComponents.tabs_bar/1` | tabs del detalle (`tab-<tab>`) |
 | `DranWeb.PageComponents.empty_state/1` | estado vacío canónico (§C6) |
-| `DranWeb.PageComponents.graph_3d/1` | hook `Graph3D` (payload JSON + `type_paths`, ver §D7) |
+| `DranWeb.PageComponents.graph_3d/1` | hook `Graph3D` (payload JSON + `type_paths`, ver §T6) |
 | `DranWeb.PageComponents.page_attributes/1` | panel de atributos/metadata de la página |
 | `DranWeb.PageComponents.page_edit_form/1` · `page_new_form/1` | forms de edición y creación de página |
 | `DranWeb.VersionDiffComponent` | diff de versiones |
 
-### D4. Modal de recurso (crear/editar) — `<.resource_modal>`
-
-Implementación Dran del patrón **Commons C7.2** (modal de dos columnas): casi
-full-screen, header (pill + título + ✕), cuerpo a dos columnas (contenido + slot
-`:sidebar` metadata) y footer.
+#### T3.1 `<.resource_modal>` — modal de recurso (C7.2)
 
 ```heex
 <.resource_modal id="page-modal" title="Nueva página" pill="Nota"
@@ -577,7 +638,44 @@ full-screen, header (pill + título + ✕), cuerpo a dos columnas (contenido + s
 - El botón **Guardar vive FUERA del `<form>`** (footer) y lo apunta con
   `form={@form_id}` → `form_id` debe coincidir con el `id` del `<.form>`.
 
-### D5. Contenido enriquecido
+### T4. Pickers y buscadores: implementación de referencia
+
+Implementación real del patrón **Commons C8** en Dran:
+
+- **Command palette (⌘K):** `command_palette.ex` — input `phx-debounce="200"`,
+  `phx-click-away="close"`, resultados agrupados por tipo con el color del tipo,
+  selección `bg-primary/10`. Cumple las reglas duras 1–5 de §C8.
+- **Autocomplete de memoria:** `memory_live.ex` — `phx-debounce="300"`.
+- **Select de workspace:** `<.workspace_selector>` (`layouts.ex`) — select nativo
+  `select select-bordered select-sm` (C8.1), submit on-change.
+- Los colores de chip/icono/badge de un resultado **salen del dato del tipo**
+  (`Workspace.page_type_color/2`), nunca de una tabla de casos por slug (§T8).
+
+### T5. Tabla canónica
+
+`<.table>` de `core_components.ex` rendea `table table-sm` (sin zebra; se corrigió
+en el commit `6ac1e56`) con soporte `:col`/`:action` e ids de fila por item. La
+regla global de hover (§C6) vive una vez en `app.css` con
+`var(--color-base-200)` — en daisyUI 5 los alias `--b1/--b2/--b3` ya no existen.
+Envolver en `overflow-x-auto` + caja (§T1: `.surface-2` o `card`) según contexto.
+
+### T6. Gráficas (implementación Dran)
+
+Sin librería (ver **Commons C9**). Tres formas reales:
+
+- **Barras horizontales:** `journey_live.ex` — `style="width: …%; background-color:
+  <type color>"` dentro de altura fija; el color viene de `@type_colors` del
+  registry (paleta nombrada). Contenedor `.surface-2 p-5 rounded-2xl`.
+- **Sparkline:** `journey_live.ex` — `<svg viewBox="0 0 200 30">` + `<polyline
+  class="text-primary/40">`; las escalas (`bucket_width/2`, `build_sparkline/1`)
+  se calculan en el servidor.
+- **Grafo 3D:** `PageComponents.graph_3d/1` + hook `graph_3d.js` (force-graph).
+  El payload (nodos con `color` por tipo, links con color de relación) se arma
+  server-side en `GraphHelpers.build_page_subgraph/2`; el hook nunca inventa
+  colores — sólo `cssColor()` para vars del tema (fondo del canvas, tooltip,
+  links atenuados) y la paleta nombrada espejo (§T1 excepciones).
+
+### T7. Contenido enriquecido
 
 - **Editor TipTap:** estilos `.md-editor`, `.editor-toolbar` (sticky + blur),
   `.tb-btn` (`.is-active` = `bg-primary`), `.tiptap` (tipografía tipo Notion,
@@ -587,119 +685,74 @@ full-screen, header (pill + título + ✕), cuerpo a dos columnas (contenido + s
 - **Solo lectura:** `prose` (plugin `@tailwindcss/typography` cargado) + clases
   propias `.inline-link`, `.wikilink`, `.wikilink-broken`, `.embed` / `.embed-broken`.
 - **Tags:** `.tag-link`, `.tag-link-exists` (primary), `.tag-link-missing` (warning).
-- **Gráficas:** `journey_live.ex` — barras horizontales
-  (`style="width: …%; background-color: <type color>"`) + sparkline SVG
-  (`viewBox="0 0 200 30"`, `<polyline class="text-primary/40">`); escalas en
-  helpers (`bucket_width/2`, `build_sparkline/1`). Contenedor `.surface-2 p-5 rounded-2xl`.
 
-### D6. ✅ Discordancia resuelta
+### T8. Modelo de página (4 tipos + custom por workspace)
 
-El `<.table>` de `core_components.ex` rendía `table table-zebra` y `app.css` no tenía
-la regla global de hover de §C6. **Ambas cosas están corregidas** (commit `6ac1e56`):
-
-- `lib/dran_web/components/core_components.ex:380` → `table table-sm` (sin zebra).
-- `assets/css/app.css:556-562` → `.table tbody tr` + `.table tbody tr:hover`
-  (`color-mix(in oklab, var(--color-base-200) 60%, transparent)`).
-
-Verificar con:
-```bash
-grep -n 'table table-sm' lib/dran_web/components/core_components.ex
-grep -n 'tbody tr:hover' assets/css/app.css
-```
-
-### D7. Modelo de página (4 tipos + tipos custom por workspace)
-
-El vocabulario de páginas quedó reducido y movido:
-
-- **Cuatro tipos built-in**: `note`, `reference`, `entity`, `concept`. Son los únicos
-  valores de `Dran.PageRegistry.types/0`.
-- **`meta.kind` NO existe.** Se fueron el select de kind del editor, el filtro `?kind=`
-  de las listas, la validación por kind, `kind_labels/0` y `kind_options/*`.
-  `meta.props` **se queda** (bolsa libre de propiedades, ortogonal, con
-  `PropsMaterializer`).
+- **Cuatro tipos built-in**: `note`, `reference`, `entity`, `concept`. Son los
+  únicos valores de `Dran.PageRegistry.types/0`.
+- **`meta.kind` NO existe.** Se fueron el select de kind, el filtro `?kind=`, la
+  validación por kind y `kind_labels/0`. `meta.props` **se queda** (bolsa libre,
+  con `PropsMaterializer`).
 - **Tipos custom por workspace**: `workspaces.workspace_page_types` (jsonb, lista
   ordenada de `{slug, label, plural, path, icon, color, meta_fields}`). Los tipos
-  efectivos de un workspace = 4 built-in ∪ custom. El `path` es explícito y único dentro
-  del workspace (el sidebar y la leyenda del grafo iteran la lista, y el orden importa).
+  efectivos = 4 built-in ∪ custom. El `path` es explícito y único.
 
 **Reglas de UI que se derivan:**
 
-- **El sidebar y la leyenda de tipo iteran los tipos efectivos del workspace**, nunca
-  `PageRegistry.types()` a secas: un tipo custom debe aparecer con la misma dignidad que
-  un built-in. El color del nodo y del chip salen de `ui.color` del tipo (built-in del
-  registry, custom de la config del workspace).
-- **Sin cláusulas por tipo.** Un helper con una cláusula por slug (el patrón
-  `type_chip_bg/1`, `type_icon_color/1`, `type_badge/1` de `search_live.ex:509-538`)
-  está prohibido: un tipo custom nace sin cláusula y cae al fallback. El color viaja en
-  el dato del tipo, no en una tabla de casos.
+- **El sidebar, la leyenda y los filtros iteran los tipos efectivos del
+  workspace**, nunca `PageRegistry.types()` a secas: un tipo custom aparece con
+  la misma dignidad que un built-in.
+- **Sin cláusulas por tipo.** Un helper con una cláusula por slug está prohibido:
+  un tipo custom nace sin cláusula y cae al fallback. El color viaja en el dato
+  del tipo (`Workspace.page_type_color/2`), no en una tabla de casos.
 - **La excepción son las relaciones, no los tipos.** Los tipos de relación son un
-  conjunto cerrado del dominio (no los extiende el usuario), así que una tabla de casos
-  por relación sí es legítima — hoy `PageComponents.relation_type_badge_class/1`
-  (`page_components.ex:431-443`, clases semánticas) y `GraphHelpers.edge_colors/0`
-  (hex para el canvas). Quedan como **deuda menor declarada** (§D8): dos mapas para el
-  mismo hecho, unificables en la paleta nombrada.
-- **Iconos de tipo custom**: los `.hero-*` solo compilan si `app.css` los escanea. El
-  `@source` debe cubrir el directorio donde vive el registry **y** cualquier icono
-  elegible en el formulario de tipos custom, o el icono rinde vacío sin diagnóstico.
-- **Paleta nombrada, no hex en el call site.** Los colores que **no** son de un tipo
-  (relaciones, neutro, tipos ocultos) viven en un solo mapa con nombre:
-  `DranWeb.GraphHelpers` (`@neutral_color`, `@edge_colors`, `@fallback_color`,
-  `@hidden_type_color`) y su espejo en el hook
-  (`assets/js/hooks/graph_3d.js` → `NEUTRAL_COLOR`, único hex del archivo). El hex
-  de un tipo sigue viviendo en el registry o en la config del workspace, nunca acá.
-- **Los controles de búsqueda y filtros se arman con los tipos efectivos del
-  workspace**, igual que el sidebar y la leyenda: una pestaña o un filtro por tipo
-  (built-in ∪ custom), nunca un filtro `?kind=` ni un grupo de tipos hardcodeado.
+  conjunto cerrado del dominio, así que una tabla de casos por relación sí es
+  legítima — hoy `PageComponents.relation_type_badge_class/1` (clases
+  semánticas) y `GraphHelpers.edge_colors/0` (hex para el canvas). Deuda menor
+  declarada: dos mapas para el mismo hecho, unificables en la paleta nombrada.
+- **Iconos de tipo custom**: los `.hero-*` solo compilan si `app.css` los
+  escanea. El `@source` debe cubrir el directorio del registry y cualquier
+  icono elegible en el formulario de tipos custom.
 
-### D8. Estandarización — estado (medido en W4)
+### T9. Referencias (código real)
 
-Las discordancias medidas en §D8 quedaron **resueltas en W4**: la UI se alineó al
-estándar y `DESIGN.md` documenta el modelo y las reglas que faltaban.
-
-| Regla | Estado | Resultado |
-|---|---|---|
-| C1/C2 — tema | **✅ resuelto** | El Commons dejó de decir "un solo tema `dark`": §C1/§C2 dicen "un tema built-in por app, declarado en Custom", y las tres apps declaran el suyo. Dran declara `night`: `root.html.heex:2` → `data-theme="night"`; `app.css:24` → `themes: night --default;`. **El tema no se tocó** (verificado antes y después) |
-| C3 — header de página | **✅ resuelto** | El header de página es el `<h1>` con la escala propia: `<.header>` (`core_components.ex`) usa `text-title`, no `text-lg font-semibold`. El `<.header>` del Commons no se modificó: el cambio es local a Dran (**override de Custom**) y no sube al Commons |
-| C4 — botón secundario | **✅ resuelto** | Regla escrita en §C4: `btn-soft` = otra versión de la misma acción; `btn-outline` = "otra vía" (login social, ver `login_live.ex:71`, `settings_live.ex:540`). `btn-outline` deja de ser discordancia |
-| C5 — una sola forma de caja | **✅ resuelto (`?06`)** | `surface-2` es **la** caja canónica de Dran (§D1, 29 usos); `card` + `shadow-xl/2xl` queda para modales. No se colapsa `surface-2` a `card` en el código |
-| C7 — verbo del CTA | **✅ resuelto** | Regla escrita en §C7: el label dice la acción (cierre = "Cancelar"/"← Volver", unión de recurso ≠ "Crear"), no el color |
-| C9/C11 — color de serie y por tipo | **✅ resuelto** | Paleta nombrada en `graph_helpers.ex` (relaciones vía `@neutral_color`, + `@fallback_color`, `@hidden_type_color`) y en `graph_3d.js` (`NEUTRAL_COLOR`); las cláusulas por slug de `search_live.ex` (`type_chip_bg/1`, `type_icon_color/1`, `type_badge/1`) se eliminaron: el color sale de `Workspace.page_type_color/2` sobre el dato del tipo. 0 `@apply` |
-| C11 — ids estables | **✅ resuelto (`?02`)** | Convención escrita en §C11: `id` es la primaria, `data-testid` (kebab-case, `page-card-<slug>`) sólo donde no hay id natural, y todo testid **nuevo** nace con su consumidor en `test/`. Los 5 testids de kind (`kind-filters`, `kind-option-*`, `kind-clear`, `kind-filter-toggle`, `kind-filter-menu`) se retiraron con el vocabulario de kinds: **la cobertura migró a tipos custom** (`pages_live_test.exs`: resolución de path custom, listado en su propio path, y los `refute` que aseguran que el filtro de kind no vuelve). Deuda menor declarada: de 19 `data-testid` en `lib/`, 13 no tienen lector en `test/` (medido con `grep -rF`) — se auditan en la ola de UI, no bloquean el modelo |
-| D3 — componentes extra | **✅ resuelto** | `admin.ex` documenta `<.section …>` (era `<.admin_section …>`, que no existe) y §D3 lista los componentes de `page_components.ex` (`backlinks_section/1`, `tabs_bar/1`, `empty_state/1`, `graph_3d/1`, `page_attributes/1`, `page_edit_form/1`, `page_new_form/1`) |
-| D7 — cláusulas por slug | **✅ resuelto** | §D7 prohíbe el helper con una cláusula por slug de tipo, agrega la regla de paleta nombrada, la de filtros por tipos efectivos y la excepción de relaciones (conjunto cerrado del dominio). `search_live.ex:511-547` → 0 cláusulas por slug (el chip, el icono y el badge salen de `Workspace.page_type_color/2`) |
-| D9 — referencias | **✅ resuelto** | §D9 lista `page_registry.ex`, `workspace.ex`, `graph_helpers.ex` (paleta) y `search_live.ex`: las referencias del modelo de tipos y de la paleta ya no hay que adivinarlas |
-
-Sin discordancias pendientes: lo que queda abierto es deuda **de la familia**
-(cambios que tocarían el Commons compartido con `tokengate`/`gorim`) y lo
-específico de cada app se resuelve como override de Custom. Verificar:
-
-```bash
-grep -n 'data-theme' lib/dran_web/components/layouts/root.html.heex   # night
-grep -n 'themes:' assets/css/app.css                                   # night --default
-grep -rn '@apply' assets/css/                                          # 0
-grep -rnE 'type_chip_bg|type_icon_color|defp type_badge' lib/           # 0
-```
-
-### D9. Referencias (código real)
-
-- `lib/dran_web/components/core_components.ex` — `flash`, `button`, `input`,
-  `header`, `table`, `list`, `icon`, `show/hide`.
+- `lib/dran_web/components/core_components.ex` — `flash`, `button`
+  (`variant` primary/nil), `input`, `header` (título `text-title`, §T1),
+  `table` (`table-sm`, stream), `list`, `icon`, `show`/`hide`,
+  `translate_error(s)`.
+- `lib/dran_web/components/layouts.ex` — shell `app/1`, `sidebar_nav`,
+  `nav_link`, `sidebar_footer_icons`, `app_topbar`, `workspace_selector`,
+  `user_footer`, `flash_group`.
 - `lib/dran_web/components/admin.ex` — `DranWeb.Admin.modal/1`, `section/1`.
-- `lib/dran_web/components/resource_components.ex` — `resource_modal`,
+- `lib/dran_web/components/resource_components.ex` — `resource_modal` (§T3.1),
   `resource_header`, `form_actions`, `markdown_body_field`.
 - `lib/dran_web/components/command_palette.ex` — `DranWeb.CommandPalette` (⌘K).
-- `lib/dran_web/components/layouts.ex` — shell `app/1`, `sidebar_nav`, `nav_link`,
-  `sidebar_footer_icons`, `workspace_selector`, `user_footer`.
-- `lib/dran/page_registry.ex` — 4 tipos built-in: `types/0`, `ui/1` (path, label,
-  icon, color, plural) y `type_colors/0`.
-- `lib/dran/workspace.ex` — tipos custom por workspace: `custom_page_types/1`,
-  `page_type_ui/2` y los accesos `page_type_{path,label,plural,icon,color}`.
-  Toda superficie que pinta un tipo pasa por acá (built-in ∪ custom).
-- `lib/dran_web/graph_helpers.ex` — paleta nombrada (relaciones, neutro, ocultos)
-  y `build_page_subgraph/2`.
-- `lib/dran_web/live/search_live.ex` — resultados de búsqueda; chip/icono/badge del
-  resultado toman el color del tipo.
-- `lib/dran_web/components/layouts/root.html.heex` — `data-theme="night"`, `lang="es"`.
-- `assets/css/app.css` — escala tipográfica, superficies, skeleton, lift, foco,
-  TipTap, mermaid, wikilinks/tags/embeds.
+- `lib/dran/page_registry.ex` — 4 tipos built-in: `types/0`, `ui/1` (path,
+  label, icon, color, plural) y `type_colors/0` (paleta nombrada).
+- `lib/dran/workspace.ex` — tipos custom: `custom_page_types/1`, `page_type_ui/2`
+  y los accesos `page_type_{path,label,plural,icon,color}`. Toda superficie que
+  pinta un tipo pasa por acá (built-in ∪ custom).
+- `lib/dran_web/graph_helpers.ex` — paleta nombrada (relaciones, neutro,
+  ocultos) y `build_page_subgraph/2`.
+- `lib/dran_web/live/journey_live.ex` — barras + sparkline (§T6).
+- `lib/dran_web/live/search_live.ex` — resultados de búsqueda; chip/icono/badge
+  del resultado toman el color del tipo.
+- `lib/dran_web/components/layouts/root.html.heex` — `data-theme="dim"`.
+- `assets/css/app.css` — tema `dim --default`, escala tipográfica, superficies,
+  skeleton, lift, foco, regla global de tablas, TipTap, mermaid,
+  wikilinks/tags/embeds. Inventario de CSS propio en §T1.
+- `assets/js/hooks/graph_3d.js` — `cssColor()`/`oklchAlpha()` (vars del tema al
+  canvas), paleta nombrada espejo, tooltip HTML con `textContent` (no
+  `innerHTML`).
 - Skills: `liveview-ui-wiring` (pickers), `phoenix-daisyui-theming` (tema).
+
+### Verificar
+
+```bash
+grep -n 'data-theme' lib/dran_web/components/layouts/root.html.heex   # dim
+grep -n 'themes:' assets/css/app.css                                   # dim --default
+grep -rn '@apply' assets/css/                                          # 0 (sólo el comentario del título)
+grep -rnE 'type_chip_bg|type_icon_color|defp type_badge\b' lib/        # 0 (type_badge_label es legítimo: delega a ui_label)
+grep -rn 'table-zebra' lib/                                            # 0
+mix tailwind dran && grep -c 'data-theme=dim' priv/static/assets/css/app.css  # 1
+```

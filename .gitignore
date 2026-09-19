@@ -41,6 +41,7 @@ npm-debug.log
 # phx.digest output — regenerated at deploy time. Keep the source files only.
 /priv/static/**/*.gz
 /priv/static/favicon-*.svg
+/priv/static/logo-*.png
 /priv/static/favicon-*.ico
 /priv/static/images/logo-*.svg
 
