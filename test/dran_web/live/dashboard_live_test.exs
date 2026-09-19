@@ -111,6 +111,48 @@ defmodule DranWeb.DashboardLiveTest do
       assert Phoenix.LiveViewTest.render(view) =~ t("Workspace created")
     end
 
+    test "rejects a name already in your own list, on the field", %{conn: conn} do
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/")
+
+      Phoenix.LiveViewTest.render_click(view, "open_context_modal")
+
+      view
+      |> Phoenix.LiveViewTest.element("#context-form")
+      |> Phoenix.LiveViewTest.render_submit(%{"context" => %{"name" => "Personal"}})
+
+      # test_user is a member of the "personal" fixture, so that name is already
+      # in their own list: the answer is a message, not a silent /personal-3f9a2b.
+      modal =
+        view |> Phoenix.LiveViewTest.element("#workspace-modal") |> Phoenix.LiveViewTest.render()
+
+      assert modal =~ t("You already have a workspace with this name.")
+      assert Enum.count(Knowledge.list_workspaces(), &(&1.name == "Personal")) == 1
+    end
+
+    test "the modal previews the slug it will really get, suffix included", %{conn: conn} do
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/")
+
+      Phoenix.LiveViewTest.render_click(view, "open_context_modal")
+
+      # A freshly opened modal is clean: nothing to complain about before typing.
+      refute view
+             |> Phoenix.LiveViewTest.element("#workspace-modal")
+             |> Phoenix.LiveViewTest.render() =~
+               "can't be blank"
+
+      view
+      |> Phoenix.LiveViewTest.element("#context-form")
+      |> Phoenix.LiveViewTest.render_change(%{"context" => %{"name" => "Personal"}})
+
+      # "personal" is taken by the fixture, so the honest preview carries the
+      # suffix. It used to promise the bare slug and then create something else.
+      modal =
+        view |> Phoenix.LiveViewTest.element("#workspace-modal") |> Phoenix.LiveViewTest.render()
+
+      assert modal =~ ~r|>personal-[0-9a-f]{6}</code>|
+      refute modal =~ ~r|>personal</code>|
+    end
+
     @tag :no_default_workspace
     test "empty instance shows the create CTA", %{conn: conn} do
       {:ok, owner} =

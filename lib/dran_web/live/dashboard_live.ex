@@ -196,7 +196,6 @@ defmodule DranWeb.DashboardLive do
         new_workspace_form:
           to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
         show_workspace_modal: false,
-        slug_touched: false,
         suggested_slug: "",
         active_nav: "dashboard",
         page_title: gettext("Dashboard"),
@@ -221,43 +220,33 @@ defmodule DranWeb.DashboardLive do
   end
 
   @impl true
-  def handle_event("validate_context", %{"context" => params} = event, socket) do
-    # LiveView includes "_target" on form events; guard for tests or hand
-    # crafted events that omit it.
-    target = Map.get(event, "_target", [])
+  def handle_event("validate_context", %{"context" => params}, socket) do
     name = params["name"] || ""
-    slug_touched = socket.assigns[:slug_touched] || false || target == ["context", "slug"]
 
-    params =
-      if slug_touched do
-        params
-      else
-        Map.put(params, "slug", Slug.slugify(name))
-      end
+    # The preview shows the slug the workspace will ACTUALLY get, suffix
+    # included. It used to show the bare slugified name, so typing "Personal"
+    # promised /personal and then produced /personal-3f9a2b — a lie the user only
+    # discovered once the URL existed. There is deliberately no slug field in this
+    # form: you type a name, the server derives the URL, and you can read it here
+    # before creating.
+    suggested_slug = suggested_slug_for(name)
 
-    form = %Dran.Workspace{} |> Dran.Workspace.changeset(params) |> to_form(as: :context)
+    form =
+      %Dran.Workspace{}
+      |> Dran.Workspace.changeset(Map.put(params, "slug", suggested_slug))
+      |> to_form(as: :context)
 
-    {:noreply,
-     assign(socket,
-       new_workspace_form: form,
-       slug_touched: slug_touched,
-       suggested_slug: Slug.slugify(name)
-     )}
+    {:noreply, assign(socket, new_workspace_form: form, suggested_slug: suggested_slug)}
   end
 
   @impl true
   def handle_event("create_workspace", %{"context" => params}, socket) do
     # Permission enforced server-side too (the button is hidden without it).
     if socket.assigns[:can_create_workspace] do
-      # An untouched slug field means it was auto-suggested from the name —
-      # drop it so Knowledge.create_workspace regenerates it with a random
-      # suffix on collision. A user-typed slug always wins.
-      params =
-        if (socket.assigns[:slug_touched] || is_nil(params["slug"])) or params["slug"] == "" do
-          Map.drop(params, ["slug"])
-        else
-          params
-        end
+      # The form carries no slug field, so whatever `slug` arrived is the
+      # preview's, not the user's. Drop it and let the server derive the URL
+      # (with its own collision suffix): nothing sent by the client picks it.
+      params = Map.drop(params, ["slug"])
 
       case Dran.Accounts.create_workspace_for(socket.assigns[:user], params) do
         {:ok, _workspace} ->
@@ -267,6 +256,28 @@ defmodule DranWeb.DashboardLive do
            |> assign_new_form()
            |> assign(show_workspace_modal: false, suggested_slug: "")
            |> put_flash(:info, gettext("Workspace created"))}
+
+        {:error, :name_taken} ->
+          # The name is not unique in the database (two people may both have a
+          # "Personal"), but repeating one INSIDE your own list is a mistake:
+          # it would silently hand you a suffixed URL you never chose. Say so on
+          # the field instead of creating something else than what was asked.
+          changeset =
+            %Dran.Workspace{}
+            |> Dran.Workspace.changeset(
+              Map.put(params, "slug", suggested_slug_for(params["name"] || ""))
+            )
+            |> Ecto.Changeset.add_error(
+              :name,
+              gettext("You already have a workspace with this name.")
+            )
+            # `action` is what decides whether the error is VISIBLE:
+            # Phoenix.HTML.FormData only exposes a changeset's errors while it has
+            # an action, so with the default nil `to_form/2` hands back fields with
+            # no errors at all and the message is swallowed without a trace.
+            |> Map.put(:action, :validate)
+
+          {:noreply, assign(socket, new_workspace_form: to_form(changeset, as: :context))}
 
         {:error, :forbidden} ->
           {:noreply, put_flash(socket, :error, gettext("Insufficient permissions"))}
@@ -331,10 +342,19 @@ defmodule DranWeb.DashboardLive do
   defp org_workspaces(_user, _my_workspaces), do: []
 
   defp assign_new_form(socket) do
-    assign(socket,
-      new_workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
-      slug_touched: false
+    assign(
+      socket,
+      new_workspace_form: to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context)
     )
+  end
+
+  # The slug the server will ACTUALLY produce: the same base create_workspace/2
+  # derives from the name (`base_from_title(name, "workspace")`) uniquified the
+  # same way, so the modal's preview can never disagree with the result.
+  defp suggested_slug_for(name) do
+    name
+    |> Slug.base_from_title("workspace")
+    |> Dran.Slug.ensure_unique(&Dran.Knowledge.get_workspace_by_slug/1)
   end
 
   defp workspace_metrics([]), do: %{}
