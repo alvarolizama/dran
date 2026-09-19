@@ -121,6 +121,34 @@ defmodule DranWeb.SidebarNavTest do
       assert anchor =~ ~s(aria-current="page")
       assert anchor =~ "bg-primary/15 text-primary"
     end
+
+    test "Memory abre su propio bloque: el hueco del nav queda entre Journey y Memory" do
+      html = workspace_nav()
+
+      views_pos = pos(html, ~s(data-nav-block="views"))
+      memory_block_pos = pos(html, ~s(data-nav-block="memory"))
+      journey_pos = pos(html, ~s(href="/personal/journey"))
+      memory_pos = pos(html, ~s(href="/personal/memory"))
+
+      # Bloques hermanos dentro del nav (que los separa con gap-4): primero las
+      # vistas, después Memory, y el grupo Knowledge base al final.
+      assert views_pos < journey_pos
+      assert journey_pos < memory_block_pos
+      assert memory_block_pos < memory_pos
+      assert memory_pos < pos(html, "<summary")
+
+      # Memory no comparte bloque con las vistas.
+      {summary_pos, _len} =
+        :binary.match(html, "<summary",
+          scope: {memory_block_pos, byte_size(html) - memory_block_pos}
+        )
+
+      memory_block = binary_part(html, memory_block_pos, summary_pos - memory_block_pos)
+
+      assert memory_block =~ ~s(href="/personal/memory")
+      refute memory_block =~ ~s(href="/personal/journey")
+      refute memory_block =~ ~s(href="/personal/graph")
+    end
   end
 
   describe "workspace nav: Activity & Workspace settings NO van en el nav" do

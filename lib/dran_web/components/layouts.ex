@@ -330,8 +330,9 @@ defmodule DranWeb.Layouts do
 
   def sidebar_nav(assigns) do
     # Unified workspace sidebar: when a workspace_slug is present the nav shows
-    # the always-visible entries (Inicio/Grafo/Journey/Memory) followed by the
-    # page types under a labelled "Knowledge base" group; without a workspace
+    # the always-visible entries (Inicio/Grafo/Journey) in one block, Memory in
+    # its own block (the nav separates blocks with a gap), and the page types
+    # under a labelled "Knowledge base" group; without a workspace
     # (dashboard/admin/account) the nav is empty and only the footer icons show.
     slug = assigns[:workspace_slug]
 
@@ -350,8 +351,8 @@ defmodule DranWeb.Layouts do
     assigns = assign(assigns, :groups, groups)
 
     ~H"""
-    <div :for={group <- @groups} class="flex flex-col">
-      <div :if={!group.label} class="flex flex-col gap-1">
+    <div :for={group <- @groups} data-nav-block={group[:key]} class="flex flex-col">
+      <div :if={!group.label && group.items != []} class="flex flex-col gap-1">
         <.nav_link
           :for={item <- group.items}
           label={item.label}
@@ -434,10 +435,13 @@ defmodule DranWeb.Layouts do
          ])
       |> Enum.reject(&(!&1))
 
-    # Sin etiqueta (siempre visibles, sin <details> colapsable):
-    # Inicio, Grafo, Journey y Memory. Activity y Workspace settings viven en
-    # el menú de usuario (#user-menu), no en el nav.
-    home_items =
+    # Sin etiqueta (siempre visibles): Inicio, Grafo y Journey comparten bloque;
+    # **Memory va en su propio bloque** para que el nav deje el hueco de 1rem
+    # entre ambos (los bloques del nav se separan con el `gap-4` del contenedor).
+    # Memory no es una vista de páginas — son hechos de los workers — así que no
+    # debe leerse como continuación del timeline. Activity y Workspace settings
+    # viven en el menú de usuario (#user-menu), no en el nav.
+    view_items =
       [
         %{key: "home", label: gettext("Home"), icon: "hero-home", path: base},
         enabled?.("graph") &&
@@ -448,22 +452,26 @@ defmodule DranWeb.Layouts do
             label: gettext("Journey"),
             icon: "hero-clock",
             path: base <> "/journey"
-          },
-        # Memory no es un feature gestionable (no está en @features de
-        # WorkspaceSettingsLive), así que no lleva gate — siempre visible.
-        %{
-          key: "memory",
-          label: gettext("Memory"),
-          icon: "hero-cpu-chip",
-          path: base <> "/memory",
-          badge: counts[:memory] || 0
-        }
+          }
       ]
       |> Enum.reject(&(!&1))
 
+    # Memory no es un feature gestionable (no está en @features de
+    # WorkspaceSettingsLive), así que no lleva gate — siempre visible.
+    memory_items = [
+      %{
+        key: "memory",
+        label: gettext("Memory"),
+        icon: "hero-cpu-chip",
+        path: base <> "/memory",
+        badge: counts[:memory] || 0
+      }
+    ]
+
     [
-      %{label: nil, items: home_items},
-      %{label: gettext("Knowledge base"), items: page_type_items}
+      %{key: "views", label: nil, items: view_items},
+      %{key: "memory", label: nil, items: memory_items},
+      %{key: "knowledge-base", label: gettext("Knowledge base"), items: page_type_items}
     ]
   end
 

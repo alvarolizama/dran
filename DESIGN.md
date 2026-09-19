@@ -740,9 +740,12 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
 
 - **Opciones del shell:** `nav={:workspace}` (default) | `nav={:instance}` |
   `sidebar={false}` (sólo login/setup) y `active_nav`.
-- **Nav de workspace:** Home · Graph · Journey · Memory + grupo *Knowledge base*
-  (tipos de página + Clusters). **Ninguna acción de workspace en el nav**:
-  Activity y Workspace settings viven en el menú de usuario.
+- **Nav de workspace:** bloque de vistas — Home · Graph · Journey — y **Memory en
+  su propio bloque** (el nav separa bloques con su `gap`, así que entre Journey y
+  Memory queda un hueco: Memory son hechos de los workers, no una vista de
+  páginas) + grupo *Knowledge base* (tipos de página + Clusters). **Ninguna acción
+  de workspace en el nav**: Activity y Workspace settings viven en el menú de
+  usuario.
 - **Nav de instancia (`nav={:instance}`):** Workspaces arriba; grupo *Account*
   (Profile, API keys); grupo *Admin* (Users, All workspaces, Models, System,
   Jobs) — visible para owners. **Sin item Overview**: `/admin` sigue existiendo
