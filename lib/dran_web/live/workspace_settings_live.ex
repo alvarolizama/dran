@@ -1,7 +1,7 @@
 defmodule DranWeb.WorkspaceSettingsLive do
   @moduledoc """
-  Workspace configuration page with tabbed settings: General (name,
-  visibility), Page types, Features, Automation (worker limits + semantic
+  Workspace configuration page with tabbed settings: General (name, default
+  flag), Page types, Features, Automation (worker limits + semantic
   membership).
 
   Access is enforced by the `:workspace_admin` router pipeline (owner/admin
@@ -204,7 +204,6 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
     attrs = %{
       "name" => params["name"],
-      "visibility" => params["visibility"],
       "is_default" => params["is_default"] == "true"
     }
 
@@ -547,36 +546,23 @@ defmodule DranWeb.WorkspaceSettingsLive do
               {gettext("Access")}
             </h3>
 
-            <div>
-              <label
-                for="workspace-visibility"
-                class="block text-sm font-medium text-base-content/70 mb-1.5"
-              >
-                {gettext("Visibility")}
-              </label>
-              <select
-                id="workspace-visibility"
-                name="workspace[visibility]"
-                class="select select-bordered select-sm w-full sm:max-w-xs"
-              >
-                <option value="public" selected={@workspace.visibility == "public"}>
-                  {gettext("Public")}
-                </option>
-                <option value="private" selected={@workspace.visibility == "private"}>
+            <%!-- There is no visibility control any more: every workspace is
+                 private and access is granted one account at a time from the
+                 Users tab. The old public/private select was removed rather
+                 than left disabled, so nothing suggests a discoverable tier
+                 that no longer exists. --%>
+            <div class="flex items-start gap-3 rounded-xl border border-base-content/10 px-3 py-2.5">
+              <.icon name="hero-lock-closed" class="size-4 mt-0.5 shrink-0 text-base-content/50" />
+              <div class="min-w-0">
+                <span class="block text-sm font-medium text-base-content">
                   {gettext("Private")}
-                </option>
-              </select>
-              <p class="text-xs text-base-content/50 mt-1.5">
-                {if @workspace.visibility == "private",
-                  do:
-                    gettext(
-                      "Private: only members see this workspace. It is absent from other users' workspace lists."
-                    ),
-                  else:
-                    gettext(
-                      "Public: every user of this instance can open and read this workspace; only members can edit it."
-                    )}
-              </p>
+                </span>
+                <span class="block text-xs text-base-content/60 mt-1">
+                  {gettext(
+                    "Only the people you add from the Users tab can open this workspace, and it never appears in anyone else's list. There is no public, discoverable tier."
+                  )}
+                </span>
+              </div>
             </div>
 
             <div>
@@ -599,7 +585,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
                   </span>
                   <span class="block text-xs text-base-content/60 mt-1">
                     {gettext(
-                      "Where users land when they have no last-visited workspace. Forces public visibility, and only one workspace can be the default."
+                      "Where an account lands when it has no personal workspace of its own. Only one workspace can be the default."
                     )}
                   </span>
                 </span>

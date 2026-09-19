@@ -146,8 +146,9 @@ defmodule DranWeb.Plugs.Auth do
   def assign_to_socket(socket, session, params \\ nil) when is_map(session) do
     %{current_user: current_user} = from_session(session)
 
-    # Per-user scoping: a DB user (created via Dran.Accounts) sees their
-    # assigned workspaces PLUS all public workspaces of the instance (F2).
+    # Per-user scoping: a DB user (created via Dran.Accounts) sees the
+    # workspaces they are a member of (their personal one first). Every
+    # workspace is private, so there is no public tier to add on top (F2).
     # SEC-002: fail closed — a session user with no row in the users table gets
     # NO workspaces and is NOT owner (previously nil -> {all_workspaces, true},
     # which escalated deleted users to full admin).

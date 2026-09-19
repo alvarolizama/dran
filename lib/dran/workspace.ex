@@ -34,7 +34,7 @@ defmodule Dran.Workspace do
     # are explicit and unique within the workspace (see normalize_page_types/1).
     field :workspace_page_types, {:array, :map}, default: []
     field :is_default, :boolean, default: false
-    field :visibility, :string, default: "public"
+    field :visibility, :string, default: "private"
     field :enabled_features, :map, default: %{}
     field :semantic_threshold_short, :float
     field :semantic_threshold_mid, :float
@@ -50,12 +50,11 @@ defmodule Dran.Workspace do
   @doc "Changeset for creating a workspace"
   def changeset(context, attrs) do
     context
-    |> cast(attrs, [:name, :slug, :is_default, :visibility])
+    |> cast(attrs, [:name, :slug, :is_default])
+    |> force_private_visibility()
     |> validate_required([:name, :slug])
     |> validate_length(:name, max: 100)
     |> validate_length(:slug, max: 100)
-    |> validate_inclusion(:visibility, ~w(public private))
-    |> force_public_when_default()
     |> unique_constraint(:name)
     |> unique_constraint(:slug)
     |> unique_constraint(:is_default)
@@ -69,7 +68,6 @@ defmodule Dran.Workspace do
       :workspace_page_types,
       :enabled_features,
       :is_default,
-      :visibility,
       :semantic_threshold_short,
       :semantic_threshold_mid,
       :semantic_threshold_long,
@@ -79,10 +77,9 @@ defmodule Dran.Workspace do
       :share_memory,
       :share_pages
     ])
+    |> force_private_visibility()
     |> validate_page_types()
     |> validate_disabled_page_types()
-    |> validate_inclusion(:visibility, ~w(public private))
-    |> force_public_when_default()
     |> validate_number(:worker_max_pages, greater_than: 0)
     |> validate_inclusion(:summary_language, ~w(auto es en))
     |> validate_threshold(:semantic_threshold_short)
@@ -555,15 +552,17 @@ defmodule Dran.Workspace do
 
   def custom_page_type?(_ws, _page_type), do: false
 
-  # Invariant (decided): a default workspace is ALWAYS public. Setting
-  # is_default=true forces visibility to "public" so the unique partial
-  # index (workspaces_is_default_index) can never hold a private default.
-  defp force_public_when_default(changeset) do
-    if get_field(changeset, :is_default) == true do
-      put_change(changeset, :visibility, "public")
-    else
-      changeset
-    end
+  # Every workspace is PRIVATE. Access is by membership — you are added by
+  # whoever administers it (or you created it) — or by being the instance owner
+  # (see DranWeb.Router.require_workspace_access/2). There is no public,
+  # discoverable tier any more, so `visibility` is not settable from anywhere:
+  # every write pins it to "private", which also normalizes rows created while
+  # the public/private split still existed.
+  #
+  # The column stays (the API payload still carries it, and dropping it is a
+  # separate, destructive step), but nothing reads it to decide access.
+  defp force_private_visibility(changeset) do
+    put_change(changeset, :visibility, "private")
   end
 
   # Semantic thresholds are cosine-distances in [0, 1]. Only validated when

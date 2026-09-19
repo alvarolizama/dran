@@ -5,45 +5,30 @@ defmodule Dran.WorkspaceTest do
   alias Dran.Workspace
   alias Dran.Settings
 
-  describe "changeset/2 — invariant: default ⇒ public" do
-    test "is_default=true forces visibility to public, even when private was passed" do
-      attrs = %{name: "Test", slug: "test-ws", is_default: true, visibility: "private"}
+  describe "changeset/2 — invariant: every workspace is private" do
+    test "visibility is pinned to private whatever the caller passes" do
+      changeset =
+        Workspace.changeset(%Workspace{}, %{
+          name: "Test",
+          slug: "test-ws",
+          visibility: "public"
+        })
 
-      changeset = Workspace.changeset(%Workspace{}, attrs)
-
-      # get_field (not get_change): when the forced value equals the schema
-      # default, Ecto drops the change — the effective value is what matters.
-      assert Ecto.Changeset.get_field(changeset, :visibility) == "public"
+      assert Ecto.Changeset.get_field(changeset, :visibility) == "private"
       assert changeset.valid?
     end
 
-    test "is_default=false keeps the requested visibility" do
-      attrs = %{name: "Test", slug: "test-ws", is_default: false, visibility: "private"}
+    test "private is the value on create, with or without the is_default flag" do
+      for attrs <- [
+            %{name: "Test", slug: "test-ws"},
+            %{name: "Test", slug: "test-ws", is_default: true},
+            %{name: "Test", slug: "test-ws", visibility: "private"}
+          ] do
+        changeset = Workspace.changeset(%Workspace{}, attrs)
 
-      changeset = Workspace.changeset(%Workspace{}, attrs)
-
-      assert Ecto.Changeset.get_change(changeset, :visibility) == "private"
-      assert changeset.valid?
-    end
-
-    test "default visibility is public when not specified" do
-      attrs = %{name: "Test", slug: "test-ws"}
-
-      changeset = Workspace.changeset(%Workspace{}, attrs)
-
-      # No explicit visibility cast → the schema default ("public") applies
-      refute Ecto.Changeset.get_change(changeset, :visibility)
-      assert changeset.valid?
-    end
-
-    test "invalid visibility value is rejected" do
-      # cast silently ignores unknown values, but validate_inclusion will fail
-      attrs = %{name: "Test", slug: "test-ws", visibility: "secret"}
-
-      changeset = Workspace.changeset(%Workspace{}, attrs)
-
-      refute changeset.valid?
-      assert %{visibility: _} = errors_on(changeset)
+        assert Ecto.Changeset.get_field(changeset, :visibility) == "private"
+        assert changeset.valid?
+      end
     end
   end
 
@@ -95,12 +80,12 @@ defmodule Dran.WorkspaceTest do
       assert changeset.valid?
     end
 
-    test "is_default and visibility can be set via settings_changeset" do
-      attrs = %{is_default: true, visibility: "private"}
+    test "is_default can be set via settings_changeset and visibility stays private" do
+      attrs = %{is_default: true, visibility: "public"}
       changeset = Workspace.settings_changeset(%Workspace{}, attrs)
 
-      # Invariant: is_default=true forces visibility to public
-      assert Ecto.Changeset.get_field(changeset, :visibility) == "public"
+      assert Ecto.Changeset.get_field(changeset, :is_default) == true
+      assert Ecto.Changeset.get_field(changeset, :visibility) == "private"
       assert changeset.valid?
     end
   end
@@ -166,7 +151,7 @@ defmodule Dran.WorkspaceTest do
       ws = %Workspace{}
 
       assert ws.is_default == false
-      assert ws.visibility == "public"
+      assert ws.visibility == "private"
       assert ws.enabled_features == %{}
       assert ws.workspace_page_types == []
       refute ws.semantic_threshold_short
@@ -352,13 +337,13 @@ defmodule Dran.WorkspaceTest do
     end
 
     @tag :no_default_workspace
-    test "a first workspace explicitly requested private is left alone" do
+    test "a first workspace takes the default flag, private or not" do
       {:ok, ws} = Dran.Knowledge.create_workspace(%{name: "Privada", visibility: "private"})
 
-      # The default is always public, so flagging it would silently flip the
-      # visibility the caller asked for — no flag, and the instance says so.
-      refute ws.is_default
-      refute Dran.Knowledge.get_default_workspace()
+      # The flag no longer collides with visibility — everything is private — so
+      # the bootstrap rule applies to the first workspace like any other.
+      assert ws.is_default
+      assert Dran.Knowledge.get_default_workspace().id == ws.id
       assert Dran.Repo.get!(Workspace, ws.id).visibility == "private"
     end
 

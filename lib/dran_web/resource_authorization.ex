@@ -46,7 +46,7 @@ defmodule DranWeb.ResourceAuthorization do
 
   defp do_authorize(%{is_owner: true}, _mode, _ws_id), do: :ok
 
-  # ── Real user (per-user token): members ∪ public workspaces ───────────────
+  # ── Real user (per-user token): the workspaces they are a member of ──────
 
   defp do_authorize(%Accounts.User{} = user, mode, ws_id) do
     ws = Enum.find(Accounts.accessible_workspaces(user), &(&1.id == ws_id))

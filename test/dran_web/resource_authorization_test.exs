@@ -81,12 +81,26 @@ defmodule DranWeb.ResourceAuthorizationTest do
       assert {:error, :forbidden} = Authz.authorize(user, :write, ws_from_setup().id)
     end
 
-    test "public non-member: read allowed (viewer fallback), write denied" do
+    test "non-member of a workspace: read and write denied (no public fallback)" do
       {:ok, user} = Accounts.create_user(%{email: uniq_email()})
 
-      # setup workspace is public by default
-      assert Authz.authorize(user, :read, ws_from_setup().id) == :ok
-      assert {:error, :forbidden} = Authz.authorize(user, :write, ws_from_setup().id)
+      # Every workspace is private, so not being a member means no access at
+      # all. There used to be a viewer fallback for public workspaces.
+      ws = ws_from_setup()
+      assert ws.visibility == "private"
+
+      assert {:error, :forbidden} = Authz.authorize(user, :read, ws.id)
+      assert {:error, :forbidden} = Authz.authorize(user, :write, ws.id)
+    end
+
+    test "member of another workspace: denied on this one", %{} do
+      {:ok, user} = Accounts.create_user(%{email: uniq_email()})
+
+      {:ok, other} = Knowledge.create_workspace(%{name: "Other", slug: "authz-other"})
+      {:ok, _} = Accounts.add_user_to_workspace(user, other)
+
+      # Membership is per workspace: being in one grants nothing in another.
+      assert {:error, :forbidden} = Authz.authorize(user, :read, ws_from_setup().id)
     end
 
     test "private workspace non-member: read and write denied" do

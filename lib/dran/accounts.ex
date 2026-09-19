@@ -377,44 +377,26 @@ defmodule Dran.Accounts do
   end
 
   @doc """
-  Returns every workspace the user can access: their assigned (member)
-  workspaces spliced together with all public workspaces of the instance.
-  Owners see all workspaces. Public non-members see member + public workspaces,
-  with public workspaces they are not a member of carrying `role: "viewer"`.
+  Returns every workspace the user can reach: their MEMBERSHIPS only — the
+  workspaces they were added to, plus their own personal one, which leads the
+  list.
+
+  Every workspace is private (`Dran.Workspace.changeset/2`), so there is nothing
+  to discover: being able to open a workspace means somebody put you in it.
+
+  Note the asymmetry with `DranWeb.Router.require_workspace_access/2` — the
+  INSTANCE OWNER reaches every workspace of the instance, and that is where "the
+  owner sees all" lives. This list carries only the owner's own memberships,
+  which is exactly what the landing resolution and the org/propios split depend
+  on.
 
   `nil` (no user row) yields `[]` — fail-closed, a session user with no DB row
-  has no accessible workspaces. The owner branch reuses `list_user_workspaces`
-  (owner sees all), the member role merge mirrors that same pattern.
+  has no accessible workspaces.
   """
-  def accessible_workspaces(%User{is_owner: true} = user) do
+  def accessible_workspaces(%User{} = user) do
     user
     |> list_user_workspaces()
     |> order_personal_first(user.personal_workspace_id)
-  end
-
-  def accessible_workspaces(%User{id: user_id, personal_workspace_id: personal_id}) do
-    # Member workspaces with their real role (same merge as list_user_workspaces).
-    memberships =
-      UserWorkspace
-      |> where([uw], uw.user_id == ^user_id)
-      |> order_by([uw], uw.inserted_at)
-      |> Repo.all()
-      |> Repo.preload(:workspace)
-      |> Enum.map(fn uw -> Map.put(uw.workspace, :role, uw.role) end)
-      |> order_personal_first(personal_id)
-
-    member_ids = Enum.map(memberships, & &1.id)
-
-    # Public workspaces the user is NOT a member of, defaulted to viewer role.
-    public_others =
-      Workspace
-      |> where([ws], ws.visibility == "public")
-      |> where([ws], ws.id not in ^member_ids)
-      |> order_by([ws], ws.inserted_at)
-      |> Repo.all()
-      |> Enum.map(&Map.put(&1, :role, "viewer"))
-
-    memberships ++ public_others
   end
 
   def accessible_workspaces(_), do: []

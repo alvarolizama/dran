@@ -111,11 +111,12 @@ defmodule Dran.Knowledge do
   suffixed with a random hex while it collides with another workspace.
 
   Bootstrap rule: with nothing flagged as default yet, the workspace being
-  created becomes THE default (see `maybe_flag_first_default/1`) — unless it is
-  explicitly requested as private, which the always-public default invariant
-  cannot honor. With a default in place, an explicit `is_default: true` clears
-  the previous holder first (the flag is exclusive) — both inside the same
-  transaction.
+  created becomes THE default (see `maybe_flag_first_default/1`). With a default
+  in place, an explicit `is_default: true` clears the previous holder first (the
+  flag is exclusive) — both inside the same transaction.
+
+  Every workspace is created PRIVATE (see `Dran.Workspace.changeset/2`): access
+  is by membership or by being the instance owner, never by being discoverable.
 
   ## Options
 
@@ -197,10 +198,9 @@ defmodule Dran.Knowledge do
   # Any later workspace is created unflagged, so a false from the UI is honored
   # there.
   #
-  # Exception: a workspace explicitly requested as private is left alone. The
-  # default is always public (the partial unique index backs that invariant), so
-  # flagging it would silently flip the visibility the caller asked for — worse
-  # than an instance with no default yet.
+  # The visibility no longer enters into it: every workspace is private now, so
+  # there is no invariant the flag could contradict (it used to be skipped for
+  # workspaces requested as private, back when the default had to be public).
   #
   # The flag is written with the SAME key style as the incoming params: the UI
   # posts string keys and the domain callers pass atoms, and Ecto.cast/3 raises
@@ -210,19 +210,12 @@ defmodule Dran.Knowledge do
       not is_nil(get_default_workspace()) ->
         attrs
 
-      private_requested?(attrs) ->
-        attrs
-
       string_keyed?(attrs) ->
         attrs |> Map.drop(["is_default"]) |> Map.put("is_default", true)
 
       true ->
         attrs |> Map.drop([:is_default]) |> Map.put(:is_default, true)
     end
-  end
-
-  defp private_requested?(attrs) do
-    Map.get(attrs, "visibility") == "private" or Map.get(attrs, :visibility) == "private"
   end
 
   defp string_keyed?(attrs), do: Enum.all?(Map.keys(attrs), &is_binary/1)

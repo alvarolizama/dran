@@ -576,7 +576,7 @@ defmodule Dran.AccountsTest do
       refute Accounts.session_workspace_slug(reloaded) == "personal"
     end
 
-    test "a flagged public default does not override the personal workspace" do
+    test "a workspace you are not a member of is not reachable, flagged or not" do
       unique = System.unique_integer([:positive])
 
       {:ok, user} =
@@ -587,12 +587,12 @@ defmodule Dran.AccountsTest do
 
       {:ok, _} = Knowledge.update_workspace(flagged, %{is_default: true})
 
-      # The user CAN reach the flagged public workspace (public non-members do),
-      # but the personal workspace is the landing place: public reachability is
-      # not the same thing as being where you start.
       reloaded = Accounts.get_user_by_email(user.email)
 
-      assert Accounts.accessible_workspaces(reloaded)
+      # Every workspace is private: being the instance default grants nobody
+      # access, so the flagged workspace is not even in this user's list — and
+      # the personal workspace keeps being the landing place.
+      refute Accounts.accessible_workspaces(reloaded)
              |> Enum.map(& &1.slug)
              |> Enum.member?(flagged.slug)
 
@@ -610,15 +610,13 @@ defmodule Dran.AccountsTest do
       {:ok, one} =
         Knowledge.create_workspace(%{
           name: "One #{unique}",
-          slug: "landing-one-#{unique}",
-          visibility: "private"
+          slug: "landing-one-#{unique}"
         })
 
       {:ok, two} =
         Knowledge.create_workspace(%{
           name: "Two #{unique}",
-          slug: "landing-two-#{unique}",
-          visibility: "private"
+          slug: "landing-two-#{unique}"
         })
 
       {:ok, _} = Accounts.add_user_to_workspace(user, one)
@@ -626,16 +624,13 @@ defmodule Dran.AccountsTest do
 
       reloaded = Accounts.get_user_by_email(user.email)
 
-      refute Dran.Knowledge.get_default_workspace()
+      # The personal workspace is the landing place even with the other two
+      # reachable: reachability is not the same thing as being where you start.
+      assert Accounts.accessible_workspaces(reloaded) |> Enum.map(& &1.slug) |> Enum.sort() ==
+               Enum.sort([Accounts.personal_workspace(reloaded).slug, one.slug, two.slug])
 
       assert Accounts.session_workspace_slug(reloaded) ==
                Accounts.personal_workspace(reloaded).slug
-
-      # Fallback chain (an account from before personal workspaces, or one whose
-      # personal workspace was deleted): with nothing personal and nothing
-      # flagged, the instance-default literal is dead and rules 3-5 answer.
-      bare = %{reloaded | personal_workspace_id: nil, default_workspace_slug: nil}
-      assert Accounts.session_workspace_slug(bare) == "personal"
     end
 
     @tag :no_default_workspace
@@ -645,21 +640,19 @@ defmodule Dran.AccountsTest do
       {:ok, user} =
         Accounts.create_user(%{email: "landing-single-#{unique}@example.com", name: "Single"})
 
-      # Both workspaces private and none flagged: the instance default is the
-      # "personal" literal — a workspace nobody created. The one workspace the
-      # user actually reaches must win over that dead slug.
+      # Both workspaces are private and only `mine` is a membership: the one
+      # workspace the account actually reaches must win over the instance
+      # default it cannot open.
       {:ok, mine} =
         Knowledge.create_workspace(%{
           name: "Mine #{unique}",
-          slug: "landing-solo-#{unique}",
-          visibility: "private"
+          slug: "landing-solo-#{unique}"
         })
 
       {:ok, _other} =
         Knowledge.create_workspace(%{
           name: "Other #{unique}",
-          slug: "landing-other-#{unique}",
-          visibility: "private"
+          slug: "landing-other-#{unique}"
         })
 
       # Simulate a pre-personal-workspaces account: the personal membership AND
@@ -668,11 +661,13 @@ defmodule Dran.AccountsTest do
       {:ok, _} = Accounts.add_user_to_workspace(user, mine)
       {:ok, _} = Accounts.update_user(user, %{default_workspace_slug: nil})
 
+      # The account's own personal workspace was the first workspace created
+      # here, so the bootstrap rule flagged it as the instance default; that
+      # default is unreachable for this account now (membership only), which is
+      # exactly why the only-reachable rule has to answer.
       reloaded = Accounts.get_user_by_email(user.email)
       bare = %{reloaded | personal_workspace_id: nil}
-
-      refute Dran.Knowledge.get_default_workspace()
-      assert Dran.Auth.default_workspace_slug() == "personal"
+      assert Dran.Auth.default_workspace_slug() != mine.slug
       assert Accounts.session_workspace_slug(bare) == mine.slug
     end
   end
@@ -754,6 +749,26 @@ defmodule Dran.AccountsTest do
 
       assert [first | _] = Accounts.accessible_workspaces(Accounts.get_user_by_email(user.email))
       assert first.id == user.personal_workspace_id
+    end
+
+    test "a workspace is reachable only by its members" do
+      assert {:ok, member} = Accounts.create_user(%{email: "member@example.com", name: "Member"})
+      assert {:ok, outsider} = Accounts.create_user(%{email: "outside@example.com", name: "Out"})
+
+      {:ok, ws} = Knowledge.create_workspace(%{name: "Compartida", slug: "compartida"})
+      {:ok, _} = Accounts.add_user_to_workspace(member, ws)
+
+      reachable = fn user ->
+        Accounts.get_user_by_email(user.email)
+        |> Accounts.accessible_workspaces()
+        |> Enum.map(& &1.id)
+      end
+
+      assert ws.id in reachable.(member)
+      # Every workspace is private: there is no public tier that would put it in
+      # a stranger's list.
+      refute ws.id in reachable.(outsider)
+      assert ws.visibility == "private"
     end
   end
 

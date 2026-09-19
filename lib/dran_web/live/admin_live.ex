@@ -54,7 +54,7 @@ defmodule DranWeb.AdminLive do
               href={~p"/admin/workspaces"}
               icon="hero-building-office-2"
               title={gettext("Workspaces")}
-              description={gettext("Create, delete, set default, toggle visibility.")}
+              description={gettext("Create, delete, set default, add members.")}
             />
 
             <.admin_card

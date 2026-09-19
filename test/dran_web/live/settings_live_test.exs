@@ -463,7 +463,7 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, ws: ws}
     end
 
-    test "the General tab shows the slug, explains visibility and the default flag", %{
+    test "the General tab shows the slug, the private access note and the default flag", %{
       conn: conn,
       ws: ws
     } do
@@ -473,42 +473,34 @@ defmodule DranWeb.SettingsLiveTest do
       # The workspace slug is the URL identity: visible, and clearly read-only.
       assert html =~ ws.slug
       assert html =~ t("read-only")
-      assert has_element?(view, "#workspace-visibility")
       assert has_element?(view, "#workspace-is-default")
 
-      # The visibility help describes the CURRENT value, not both options.
-      assert html =~
-               t(
-                 "Public: every user of this instance can open and read this workspace; only members can edit it."
-               )
+      # No visibility control any more: the section states the invariant (every
+      # workspace is private, access is granted from the Users tab) instead of
+      # offering a public/private choice that no longer exists.
+      refute has_element?(view, "#workspace-visibility")
+      refute html =~ t("Public")
 
-      refute html =~
+      assert html =~
                esc(
                  t(
-                   "Private: only members see this workspace. It is absent from other users' workspace lists."
+                   "Only the people you add from the Users tab can open this workspace, and it never appears in anyone else's list. There is no public, discoverable tier."
                  )
                )
     end
 
-    test "switching to private explains the new value on save", %{conn: conn, ws: ws} do
+    test "saving the General tab keeps the workspace private", %{conn: conn, ws: ws} do
       {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
 
       html =
         view
         |> form("#workspace-general-form", %{
-          "workspace" => %{"name" => ws.name, "visibility" => "private", "is_default" => "false"}
+          "workspace" => %{"name" => ws.name, "is_default" => "false"}
         })
         |> render_submit()
 
       assert html =~ t("Workspace saved")
       assert Knowledge.get_workspace!(ws.id).visibility == "private"
-
-      assert html =~
-               esc(
-                 t(
-                   "Private: only members see this workspace. It is absent from other users' workspace lists."
-                 )
-               )
     end
 
     test "the Features tab groups the toggles and explains each one", %{conn: conn, ws: ws} do

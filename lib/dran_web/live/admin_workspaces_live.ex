@@ -1,8 +1,11 @@
 defmodule DranWeb.AdminWorkspacesLive do
   @moduledoc """
   Admin workspace management (owner-only). Create/delete workspaces, toggle
-  default, set visibility (public/private), toggle page types (disabled_page_types),
-  and link to the per-workspace settings page at /:ws/settings.
+  default, toggle page types (disabled_page_types), and link to the
+  per-workspace settings page at /:ws/settings.
+
+  No visibility control: every workspace is private and access is granted per
+  account (see `Dran.Workspace.changeset/2`).
   """
 
   use DranWeb, :live_view
@@ -103,7 +106,6 @@ defmodule DranWeb.AdminWorkspacesLive do
   def handle_event("save_workspace", %{"workspace" => params}, socket) do
     attrs = %{
       name: params["name"],
-      visibility: params["visibility"],
       is_default: not is_nil(params["is_default"])
     }
 
@@ -248,7 +250,6 @@ defmodule DranWeb.AdminWorkspacesLive do
                 <thead>
                   <tr>
                     <th>{gettext("Workspace")}</th>
-                    <th>{gettext("Visibility")}</th>
                     <th>{gettext("Members")}</th>
                     <th>{gettext("Default")}</th>
                     <th></th>
@@ -259,17 +260,6 @@ defmodule DranWeb.AdminWorkspacesLive do
                     <td>
                       <div class="font-medium">{ws.name}</div>
                       <code class="text-xs text-base-content/60">{ws.slug}</code>
-                    </td>
-                    <td>
-                      <span class={[
-                        "badge badge-sm",
-                        ws.visibility == "public" && "badge-success",
-                        ws.visibility != "public" && "badge-warning"
-                      ]}>
-                        {if ws.visibility == "public",
-                          do: gettext("Public"),
-                          else: gettext("Private")}
-                      </span>
                     </td>
                     <td>{Enum.count(@users, &Dran.Accounts.user_in_workspace?(&1, ws))}</td>
                     <td>
@@ -368,27 +358,6 @@ defmodule DranWeb.AdminWorkspacesLive do
                 <p class="text-xs text-base-content/60 mt-1">
                   {gettext("Used when a user has no workspace of their own and no active session.")}
                 </p>
-              </div>
-
-              <div>
-                <label class="text-sm font-medium">{gettext("Visibility")}</label>
-                <select
-                  name="workspace[visibility]"
-                  class="select select-bordered select-sm w-full mt-1"
-                >
-                  <option
-                    value="public"
-                    selected={@editing_workspace == nil || @editing_workspace.visibility == "public"}
-                  >
-                    {gettext("Public")}
-                  </option>
-                  <option
-                    value="private"
-                    selected={@editing_workspace && @editing_workspace.visibility == "private"}
-                  >
-                    {gettext("Private")}
-                  </option>
-                </select>
               </div>
 
               <div class="flex justify-end gap-2 pt-2">
