@@ -582,24 +582,52 @@ tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
 ### T2. Shell
 
 `Layouts.app/1` — `flex h-screen` con **sidebar a la izquierda**
-(`w-64 shrink-0 border-r border-base-300 bg-base-200/50`) y contenido
-`flex-1 overflow-y-auto`:
+(`w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col`) y contenido
+`flex-1 overflow-y-auto`. Densidad del sidebar (patrón de familia, igual al
+mockup de skema): header `p-3`, bloque de búsqueda `p-3`, nav
+`flex-1 overflow-y-auto p-2 flex flex-col gap-4`, pie `p-3 border-t`.
 
-- **Sidebar:** logo + `<.workspace_selector>` (`id="context-selector"`,
-  `select select-sm`), buscador del workspace (`GET /:slug/search`, icono +
-  `kbd ⌘K`), nav en `<details open>` colapsables (chevron `group-open:rotate-90`),
-  `sidebar_footer_icons` y `user_footer`.
-- **Nav link activo:** `bg-primary/10 text-primary font-medium border-l-2 border-primary`.
+- **Sidebar (workspace):** header con logo + `<.workspace_selector>`
+  (`id="context-selector"`, `select select-xs`) en la misma fila; buscador del
+  workspace (`GET /:slug/search`, icono + `kbd ⌘K`); nav con
+  Home/Grafo/Journey/Memory/**Activity**/**Workspace settings** (los dos últimos
+  subieron del viejo footer de íconos — ya no existe) agrupado en `<details open>`
+  colapsables (chevron `group-open:rotate-90`); pie con `<.user_footer>`.
+- **Nav link (`nav_link/1`):** `btn btn-sm w-full justify-between font-normal`,
+  inactivo `btn-ghost text-base-content/80`; **activo = `bg-primary/15
+  text-primary font-medium hover:bg-primary/20` + `aria-current="page"`**
+  (el test lee `aria-current`, no la clase). **No usar `btn-primary btn-soft`
+  para el activo:** `btn-soft` mezcla sólo 8% del color con `base-100` y en
+  `dim` el pill se lee gris (bug real, verificado con captura). Badge =
+  `badge badge-sm badge-ghost` (activo `badge-primary`).
+- **Pie de usuario (`user_footer/1`):** fila `p-2` con hover; avatar `size-8
+  rounded-full bg-primary text-primary-content` con la inicial, nombre + email
+  truncados (`text-sm font-medium` / `text-xs text-base-content/50`, el email
+  con `title` para leerlo completo) y `<details>` `id="user-menu"` hacia arriba
+  (`absolute bottom-full right-0 … shadow-lg`) con Profile · API keys · Log out.
+- **Rótulos de grupo:** `text-xs font-semibold uppercase tracking-wider
+  text-base-content/70`, `px-3 pt-1 pb-1`; grupos separados con `gap-4` en el
+  `<nav>` y `gap-1` entre links.
 - **Banner de impersonación** (`root.html.heex`): `bg-warning/20 border-warning/30`
   con botón `btn-xs btn-error` para salir.
-- **Opciones del shell:** `sidebar={false}` (oculta el `aside`), `topbar` +
-  `topbar_active={:dashboard | :account | :admin}` (barra `<.app_topbar>` con el
-  logo a la izquierda y el menú —Workspaces, Account, Admin y Salir— arriba a la
-  derecha, opción activa resaltada), `fluid` (contenido sin padding interno),
-  `active_nav`.
-- **Shell sin sidebar:** lo comparten `/`, `/settings/*` y todo `/admin/*` vía
-  `sidebar={false}` + `topbar`. El contenido lo paddea el layout (`px-6 pt-6 pb-16`)
-  y la opción Admin solo aparece para owners.
+- **Opciones del shell:** `nav={:workspace}` (default) | `nav={:instance}`
+  (el sidebar renderea `<.instance_nav>`: Workspaces arriba, grupo Account con
+  Profile/API keys, grupo Admin con sus sub-páginas para owners), `sidebar={false}`
+  (sólo login/setup), `active_nav`.
+- **Padding del contenido:** lo pone el layout — `p-6 pb-16` en las páginas de
+  instancia (`nav={:instance}`); las páginas de workspace se autopaddean con
+  `p-6` (`p-6 space-y-8` cuando llevan ritmo vertical). El `pb-16` es el aire
+  final del scroll (la última card nunca queda pegada al borde). No dejar el
+  contenido sin padding: es el bug que apareció al unificar el shell.
+- **Sin navegación duplicada:** si el sidebar ya lleva a una sección, la página
+  no repite esa navegación adentro. `/settings/*` tenía una fila de tabs
+  Account/API keys que duplicaba los items del sidebar de instancia: se eliminó
+  (el estado activo lo marca el sidebar). La identidad de sección la dan el
+  `<h1 class="text-title">` + `text-caption` de cada página.
+- **Un solo shell para toda la app:** las páginas de instancia (`/`,
+  `/settings/*`, `/admin/*`) usan el mismo sidebar con `nav={:instance}` — el
+  flujo topbar (`<.app_topbar>`) fue eliminado; `topbar`/`topbar_active` quedan
+  como attrs deprecados no-op.
 - **Command palette:** `DranWeb.CommandPalette` (`#command-palette`, `phx-hook`,
   ⌘K) — overlay `fixed inset-0 z-50 bg-black/50 backdrop-blur-sm`, panel
   `mx-auto max-w-lg rounded-xl border border-base-300 bg-base-100 shadow-2xl`
@@ -647,7 +675,7 @@ Implementación real del patrón **Commons C8** en Dran:
   selección `bg-primary/10`. Cumple las reglas duras 1–5 de §C8.
 - **Autocomplete de memoria:** `memory_live.ex` — `phx-debounce="300"`.
 - **Select de workspace:** `<.workspace_selector>` (`layouts.ex`) — select nativo
-  `select select-bordered select-sm` (C8.1), submit on-change.
+  `select select-xs` (C8.1), submit on-change.
 - Los colores de chip/icono/badge de un resultado **salen del dato del tipo**
   (`Workspace.page_type_color/2`), nunca de una tabla de casos por slug (§T8).
 
@@ -721,7 +749,7 @@ Sin librería (ver **Commons C9**). Tres formas reales:
   `table` (`table-sm`, stream), `list`, `icon`, `show`/`hide`,
   `translate_error(s)`.
 - `lib/dran_web/components/layouts.ex` — shell `app/1`, `sidebar_nav`,
-  `nav_link`, `sidebar_footer_icons`, `app_topbar`, `workspace_selector`,
+  `nav_link`, `instance_nav`, `workspace_selector`,
   `user_footer`, `flash_group`.
 - `lib/dran_web/components/admin.ex` — `DranWeb.Admin.modal/1`, `section/1`.
 - `lib/dran_web/components/resource_components.ex` — `resource_modal` (§T3.1),
@@ -754,5 +782,8 @@ grep -n 'themes:' assets/css/app.css                                   # dim --d
 grep -rn '@apply' assets/css/                                          # 0 (sólo el comentario del título)
 grep -rnE 'type_chip_bg|type_icon_color|defp type_badge\b' lib/        # 0 (type_badge_label es legítimo: delega a ui_label)
 grep -rn 'table-zebra' lib/                                            # 0
+grep -rn 'app_topbar\|sidebar_footer_icons' lib/                      # 0 (shell topbar eliminado)
+grep -n 'do: "p-6 pb-16"' lib/dran_web/components/layouts.ex           # padding de instancia
+grep -c 'btn-soft' lib/dran_web/components/layouts.ex                  # 0 (el activo usa bg-primary/15)
 mix tailwind dran && grep -c 'data-theme=dim' priv/static/assets/css/app.css  # 1
 ```

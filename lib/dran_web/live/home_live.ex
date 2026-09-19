@@ -464,7 +464,7 @@ defmodule DranWeb.HomeLive do
 
   defp search_results_view(assigns) do
     ~H"""
-    <div class="px-6 py-8">
+    <div class="p-6">
       <div class="mb-6">
         <h1 class="text-title">{gettext("Search results")}</h1>
         <p class="text-base-content/60 mt-1">
@@ -511,7 +511,7 @@ defmodule DranWeb.HomeLive do
 
   defp index_view(assigns) do
     ~H"""
-    <div class="px-6 py-10">
+    <div class="p-6">
       <div class="mb-8">
         <h1 class="text-display">Wiki</h1>
         <p class="text-base-content/60 mt-2">
@@ -561,7 +561,7 @@ defmodule DranWeb.HomeLive do
 
   defp context_home_view(assigns) do
     ~H"""
-    <div class="px-6 py-8 space-y-10">
+    <div class="p-6 space-y-8">
       <%!-- Context header --%>
       <div>
         <h1 class="text-display">{@workspace.name}</h1>
@@ -707,7 +707,7 @@ defmodule DranWeb.HomeLive do
 
   defp type_list_view(assigns) do
     ~H"""
-    <div class="px-6 py-8">
+    <div class="p-6">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
           <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
@@ -760,7 +760,7 @@ defmodule DranWeb.HomeLive do
 
   defp page_show_view(assigns) do
     ~H"""
-    <div class="px-6 py-8">
+    <div class="p-6">
       <%!-- Breadcrumb --%>
       <div class="flex items-center gap-2 mb-4 text-sm text-base-content/50">
         <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
@@ -869,7 +869,7 @@ defmodule DranWeb.HomeLive do
 
   defp collection_view(assigns) do
     ~H"""
-    <div class="px-6 py-8">
+    <div class="p-6">
       <div class="mb-6">
         <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
           <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
@@ -1055,7 +1055,7 @@ defmodule DranWeb.HomeLive do
 
   defp letter_view(assigns) do
     ~H"""
-    <div class="px-6 py-8">
+    <div class="p-6">
       <div class="flex items-center gap-2 mb-2 text-sm text-base-content/50">
         <.link navigate={~p"/#{@workspace.slug}"} class="hover:underline">
           {@workspace.name}

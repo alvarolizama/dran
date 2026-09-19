@@ -75,7 +75,7 @@ defmodule DranWeb.MemoryLiveTest do
 
     assert html =~ ~s(href="/personal/memory")
     # active nav highlight on the memory item
-    assert html =~ ~s(border-l-2 border-primary)
+    assert html =~ ~s(aria-current="page")
   end
 
   test "search filters memories via the hybrid search", %{conn: conn} do

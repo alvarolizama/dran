@@ -79,12 +79,12 @@ defmodule DranWeb.SettingsLive do
 
   defp apply_tab(socket, :account, _params) do
     socket
-    |> assign(active_tab: :account, page_title: gettext("Account"))
+    |> assign(active_tab: :account, active_nav: "settings", page_title: gettext("Account"))
   end
 
   defp apply_tab(socket, :api_keys, _params) do
     socket
-    |> assign(active_tab: :api_keys, page_title: gettext("API keys"))
+    |> assign(active_tab: :api_keys, active_nav: "api_keys", page_title: gettext("API keys"))
     |> assign(
       api_keys: current_api_keys(socket),
       show_create_key_modal: false,
@@ -96,7 +96,7 @@ defmodule DranWeb.SettingsLive do
 
   defp apply_tab(socket, _action, _params) do
     socket
-    |> assign(active_tab: :api_keys, page_title: gettext("API keys"))
+    |> assign(active_tab: :api_keys, active_nav: "api_keys", page_title: gettext("API keys"))
   end
 
   # Resolves the %User{} (or nil) behind the LiveView session. The session
@@ -475,19 +475,19 @@ defmodule DranWeb.SettingsLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:account}
+      nav={:instance}
     >
-      <div class="flex-1 overflow-y-auto">
-        <div class="w-full space-y-6">
-          <div class="flex items-center gap-1 border-b border-base-300">
-            <.tab_link active={@active_tab == :account} to={~p"/settings/account"}>
-              {gettext("Account")}
-            </.tab_link>
-            <.tab_link active={@active_tab == :api_keys} to={~p"/settings/api-keys"}>
-              {gettext("API keys")}
-            </.tab_link>
+      <div class="w-full">
+        <div class="w-full space-y-8">
+          <div>
+            <h1 class="text-title">
+              {if @active_tab == :api_keys, do: gettext("API keys"), else: gettext("Account")}
+            </h1>
+            <p class="text-caption mt-1">
+              {if @active_tab == :api_keys,
+                do: gettext("Personal keys for the Dran REST API."),
+                else: gettext("Your profile, password and connected accounts.")}
+            </p>
           </div>
 
           <%= if @active_tab == :account do %>
@@ -634,25 +634,6 @@ defmodule DranWeb.SettingsLive do
   end
 
   # ── Tabs ──
-
-  attr :active, :boolean, default: false
-  attr :to, :any, required: true
-  slot :inner_block, required: true
-
-  defp tab_link(assigns) do
-    ~H"""
-    <.link
-      patch={@to}
-      class={[
-        "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150",
-        @active && "border-primary text-primary",
-        !@active && "border-transparent text-base-content/60 hover:text-base-content"
-      ]}
-    >
-      {render_slot(@inner_block)}
-    </.link>
-    """
-  end
 
   attr :api_keys, :list, required: true
   attr :api_key_workspaces, :list, default: []

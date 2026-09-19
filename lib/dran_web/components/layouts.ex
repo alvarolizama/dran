@@ -34,26 +34,23 @@ defmodule DranWeb.Layouts do
     default: nil,
     doc: "the active sidebar nav key, used for highlighting"
 
-  attr :fluid, :boolean,
-    default: false,
-    doc: "when true, the main content area skips internal padding/constraints"
-
   attr :impersonator, :string,
     default: nil,
     doc: "the email of the admin who is impersonating the current user"
 
   attr :sidebar, :boolean,
     default: true,
-    doc: "when false, hides the sidebar entirely (e.g. the / workspace launcher)"
+    doc: "when false, hides the sidebar entirely (login/setup only)"
+
+  attr :nav, :atom,
+    values: [:workspace, :instance],
+    default: :workspace,
+    doc:
+      "which nav the sidebar renders: :workspace (per-workspace links, default) | :instance (Workspaces/Account/Admin). The instance pages (/, /settings/*, /admin/*) use :instance — one shell for the whole app, no topbar flow."
 
   attr :topbar, :boolean,
     default: false,
-    doc:
-      "when true, renders the app top bar (logo + options menu top-right) inside the content area. Pair it with `sidebar={false}` for the shell-less pages: / , /settings/* and /admin/*"
-
-  attr :topbar_active, :atom,
-    default: nil,
-    doc: "which top bar option to highlight: :dashboard | :account | :admin"
+    doc: "DEPRECATED, no-op: instance pages use nav={:instance} now"
 
   slot :inner_block, required: true
 
@@ -75,16 +72,17 @@ defmodule DranWeb.Layouts do
 
     # If the caller didn't forward page_counts, compute them here so the
     # sidebar context selector never silently shows "Context (0)".
-    # Shell-less pages (sidebar={false}) never render the selector, so the
-    # aggregate is skipped there.
+    # Instance nav pages never render the selector, so the aggregate is
+    # skipped there.
     sidebar? = assigns[:sidebar] != false
+    instance_nav? = assigns[:nav] == :instance
 
     page_counts =
       case assigns[:page_counts] do
         counts_by_context when is_map(counts_by_context) and map_size(counts_by_context) > 0 ->
           counts_by_context
 
-        _ when not sidebar? ->
+        _ when not sidebar? or instance_nav? ->
           %{}
 
         _ ->
@@ -101,16 +99,17 @@ defmodule DranWeb.Layouts do
       assign(assigns,
         counts: counts,
         page_counts: page_counts,
-        is_owner: is_owner
+        is_owner: is_owner,
+        instance_nav?: instance_nav?
       )
 
     ~H"""
     <div class="flex h-screen bg-base-100 text-base-content">
       <aside
         :if={@sidebar}
-        class="w-64 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col"
+        class="w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col"
       >
-        <div class="p-4 border-b border-base-300">
+        <div class="p-3 border-b border-base-300">
           <div class="flex items-center gap-2">
             <a
               href={~p"/"}
@@ -120,7 +119,7 @@ defmodule DranWeb.Layouts do
               <span class="text-lg font-bold tracking-tight">Dran</span>
             </a>
             <.workspace_selector
-              :if={@workspace_slug}
+              :if={not @instance_nav? and @workspace_slug}
               workspace_slug={@workspace_slug}
               workspaces={@workspaces}
               page_counts={@page_counts}
@@ -128,7 +127,7 @@ defmodule DranWeb.Layouts do
           </div>
         </div>
 
-        <div :if={@workspace_slug} class="p-3 border-b border-base-300">
+        <div :if={not @instance_nav? and @workspace_slug} class="p-3 border-b border-base-300">
           <%!-- The id is not decorative: without it LiveView cannot restore the
                field after a crash/reconnect and warns on every page load. --%>
           <form
@@ -153,24 +152,22 @@ defmodule DranWeb.Layouts do
           </form>
         </div>
 
-        <nav class="flex-1 overflow-y-auto p-2 space-y-4 flex flex-col">
-          <.sidebar_nav
-            active={@active_nav}
-            counts={@counts}
-            is_owner={@is_owner}
-            workspace_slug={@workspace_slug}
-            workspace_role={assigns[:workspace_role]}
-          />
-          <.sidebar_footer_icons
-            is_owner={@is_owner}
-            workspace_slug={@workspace_slug}
-            workspace_role={assigns[:workspace_role]}
-            active={@active_nav}
-          />
+        <nav class="flex-1 overflow-y-auto p-2 flex flex-col gap-4">
+          <%= if @instance_nav? do %>
+            <.instance_nav active={@active_nav} is_owner={@is_owner} />
+          <% else %>
+            <.sidebar_nav
+              active={@active_nav}
+              counts={@counts}
+              is_owner={@is_owner}
+              workspace_slug={@workspace_slug}
+              workspace_role={assigns[:workspace_role]}
+            />
+          <% end %>
         </nav>
 
-        <div class="p-3 border-t border-base-300 space-y-2">
-          <.user_footer current_user={@current_user} />
+        <div class="p-3 border-t border-base-300">
+          <.user_footer current_user={@current_user} user={@user} />
         </div>
       </aside>
 
@@ -178,8 +175,10 @@ defmodule DranWeb.Layouts do
         "flex-1 overflow-y-auto flex flex-col w-full",
         !@sidebar && "items-center"
       ]}>
-        <div class={if @sidebar, do: "contents", else: "w-full px-6 pt-6 pb-16"}>
-          <.app_topbar :if={@topbar} is_owner={@is_owner} active={@topbar_active} />
+        <div class={[
+          "w-full",
+          if(@instance_nav? or not @sidebar, do: "p-6 pb-16", else: "contents")
+        ]}>
           {render_slot(@inner_block)}
         </div>
       </main>
@@ -295,7 +294,14 @@ defmodule DranWeb.Layouts do
         # still have the slug from the URL, which is all we need to build
         # nav paths. workspace_groups handles ws=nil gracefully.
         ws = resolve_workspace(slug)
-        workspace_groups(ws, slug, assigns[:counts])
+
+        workspace_groups(
+          ws,
+          slug,
+          assigns[:counts],
+          assigns[:is_owner] == true,
+          assigns[:workspace_role]
+        )
       else
         []
       end
@@ -304,7 +310,7 @@ defmodule DranWeb.Layouts do
 
     ~H"""
     <div :for={group <- @groups} class="flex flex-col">
-      <div :if={!group.label} class="space-y-1">
+      <div :if={!group.label} class="flex flex-col gap-1">
         <.nav_link
           :for={item <- group.items}
           label={item.label}
@@ -315,14 +321,14 @@ defmodule DranWeb.Layouts do
         />
       </div>
       <details :if={group.label && group.items != []} open class="group">
-        <summary class="flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/50 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/70 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
+        <summary class="flex items-center gap-1 px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
           <.icon
             name="hero-chevron-right"
             class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
           />
           {group.label}
         </summary>
-        <div class="space-y-1 mt-1">
+        <div class="flex flex-col gap-1 mt-1">
           <.nav_link
             :for={item <- group.items}
             label={item.label}
@@ -349,7 +355,7 @@ defmodule DranWeb.Layouts do
   # Builds the workspace nav: the always-visible entries (Inicio, Grafo,
   # Journey, Memory) plus the labelled Knowledge base group, gated by feature
   # flags.
-  defp workspace_groups(ws, slug, counts) do
+  defp workspace_groups(ws, slug, counts, is_owner, workspace_role) do
     enabled? = fn feature ->
       case ws do
         nil -> true
@@ -360,6 +366,10 @@ defmodule DranWeb.Layouts do
     base = "/#{slug}"
 
     disabled = (ws && ws.disabled_page_types) || []
+
+    # Same gate as the old footer config icon: instance owner or workspace
+    # owner/admin may open workspace settings.
+    can_config = is_owner or workspace_role in ~w(owner admin)
 
     # Types come from the workspace (built-in ∪ custom) so a custom type is
     # navigable as soon as it is declared.
@@ -388,7 +398,8 @@ defmodule DranWeb.Layouts do
       |> Enum.reject(&(!&1))
 
     # Sin etiqueta (siempre visibles, sin <details> colapsable):
-    # Inicio arriba, Grafo, Journey y Memory directo debajo.
+    # Inicio arriba, Grafo, Journey y Memory directo debajo, y al final
+    # Activity y Workspace settings (subieron del footer de iconos).
     home_items =
       [
         %{key: "home", label: gettext("Home"), icon: "hero-home", path: base},
@@ -409,7 +420,20 @@ defmodule DranWeb.Layouts do
           icon: "hero-cpu-chip",
           path: base <> "/memory",
           badge: counts[:memory] || 0
-        }
+        },
+        %{
+          key: "activity",
+          label: gettext("Activity"),
+          icon: "hero-signal",
+          path: base <> "/activity"
+        },
+        can_config &&
+          %{
+            key: "workspace_settings",
+            label: gettext("Workspace settings"),
+            icon: "hero-cog-6-tooth",
+            path: base <> "/settings"
+          }
       ]
       |> Enum.reject(&(!&1))
 
@@ -435,17 +459,20 @@ defmodule DranWeb.Layouts do
     ~H"""
     <a
       href={@path}
+      aria-current={@active && "page"}
       class={[
-        "flex items-center gap-2 py-1.5 rounded-lg text-sm transition-all duration-150 hover:translate-x-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-        @active && "bg-primary/10 text-primary font-medium border-l-2 border-primary pl-2.5 pr-2",
-        !@active && "text-base-content/80 hover:bg-base-200 hover:text-base-content pl-3 pr-2"
+        "btn btn-sm w-full justify-between gap-2 font-normal transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        @active && "bg-primary/15 text-primary font-medium hover:bg-primary/20",
+        !@active && "btn-ghost text-base-content/80 hover:text-base-content"
       ]}
     >
-      <.icon name={@icon} class="size-4 shrink-0" />
-      <span>{@label}</span>
+      <span class="flex items-center gap-2 min-w-0">
+        <.icon name={@icon} class="size-4 shrink-0" />
+        <span class="truncate">{@label}</span>
+      </span>
       <span
         :if={@badge && @badge > 0}
-        class="ml-auto text-xs font-medium px-1.5 py-0.5 rounded-md bg-base-300 text-base-content/60"
+        class={["badge badge-sm", if(@active, do: "badge-primary", else: "badge-ghost")]}
       >
         {@badge}
       </span>
@@ -453,162 +480,94 @@ defmodule DranWeb.Layouts do
     """
   end
 
-  # ── Top bar (shell-less pages: / , /settings/* and /admin/*) ─────────────
+  # ── Instance nav (/, /settings/*, /admin/*) ───────────────────────────────
   #
-  # One bar for every page outside the workspace sidebar: the logo on the
-  # left, the three instance-level options (Workspaces, Account, Admin) plus
-  # logout on the right. `active` highlights the current option.
+  # The sidebar nav for instance-level pages: Workspaces at the top, then
+  # Account (with its two tabs), then Admin for owners (with its sub-pages).
+  # Same link style as sidebar_nav's nav_link, so both navs read as one shell.
 
+  attr :active, :string, default: nil
   attr :is_owner, :boolean, default: false
-  attr :active, :atom, default: nil
 
-  def app_topbar(assigns) do
+  def instance_nav(assigns) do
     ~H"""
-    <div id="app-topbar" class="flex flex-wrap items-center justify-between gap-4 pt-2 mb-8">
-      <a
-        href={~p"/"}
-        class="flex items-center gap-2 shrink-0 transition-opacity duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
-      >
-        <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
-        <span class="text-lg font-bold tracking-tight">Dran</span>
-      </a>
-
-      <nav class="flex flex-wrap items-center gap-0" aria-label={gettext("Options")}>
-        <.topbar_option
-          id="topbar-dashboard"
-          href={~p"/"}
-          icon="hero-squares-2x2"
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1">
+        <.nav_link
           label={gettext("Workspaces")}
-          active={@active == :dashboard}
+          icon="hero-squares-2x2"
+          path={~p"/"}
+          active={@active == "dashboard"}
         />
-        <.topbar_option
-          id="topbar-account"
-          href={~p"/settings/account"}
-          icon="hero-user"
-          label={gettext("Account")}
-          active={@active == :account}
-        />
-        <.topbar_option
-          :if={@is_owner}
-          id="topbar-admin"
-          href={~p"/admin"}
-          icon="hero-shield-check"
-          label={gettext("Admin")}
-          active={@active == :admin}
-        />
+      </div>
 
-        <form id="logout-form" action={~p"/session"} method="post">
-          <input type="hidden" name="_method" value="delete" />
-          <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-          <button
-            type="submit"
-            class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm text-base-content/60 hover:text-base-content hover:bg-base-200 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-            title={gettext("Log out")}
-          >
-            <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
-            {gettext("Log out")}
-          </button>
-        </form>
-      </nav>
+      <.instance_group label={gettext("Account")}>
+        <.nav_link
+          label={gettext("Profile")}
+          icon="hero-user"
+          path={~p"/settings/account"}
+          active={@active == "settings"}
+        />
+        <.nav_link
+          label={gettext("API keys")}
+          icon="hero-key"
+          path={~p"/settings/api-keys"}
+          active={@active == "api_keys"}
+        />
+      </.instance_group>
+
+      <.instance_group :if={@is_owner} label={gettext("Admin")}>
+        <.nav_link
+          label={gettext("Overview")}
+          icon="hero-shield-check"
+          path={~p"/admin"}
+          active={@active == "admin"}
+        />
+        <.nav_link
+          label={gettext("Users")}
+          icon="hero-users"
+          path={~p"/admin/users"}
+          active={@active == "admin_users"}
+        />
+        <.nav_link
+          label={gettext("All workspaces")}
+          icon="hero-building-office-2"
+          path={~p"/admin/workspaces"}
+          active={@active == "admin_workspaces"}
+        />
+        <.nav_link
+          label={gettext("Models")}
+          icon="hero-cpu-chip"
+          path={~p"/admin/models"}
+          active={@active == "admin_models"}
+        />
+        <.nav_link
+          label={gettext("System")}
+          icon="hero-server-stack"
+          path={~p"/admin/system"}
+          active={@active == "admin_system"}
+        />
+        <.nav_link
+          label={gettext("Jobs")}
+          icon="hero-clock"
+          path={~p"/admin/jobs"}
+          active={@active == "admin_jobs"}
+        />
+      </.instance_group>
     </div>
     """
   end
 
-  attr :id, :string, required: true
-  attr :href, :string, required: true
-  attr :icon, :string, required: true
   attr :label, :string, required: true
-  attr :active, :boolean, default: false
+  slot :inner_block, required: true
 
-  defp topbar_option(assigns) do
+  defp instance_group(assigns) do
     ~H"""
-    <a
-      id={@id}
-      href={@href}
-      aria-current={@active && "page"}
-      class={[
-        "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
-        @active && "bg-primary/10 text-primary font-medium",
-        !@active && "text-base-content/60 hover:text-base-content hover:bg-base-200"
-      ]}
-    >
-      <.icon name={@icon} class="size-4" />
-      {@label}
-    </a>
-    """
-  end
-
-  # ── Sidebar footer (Dashboard, Workspace, Activity, Admin, Account) ──────
-
-  attr :is_owner, :boolean, default: false
-  attr :workspace_slug, :string, default: nil
-  attr :workspace_role, :string, default: nil
-  attr :active, :string, default: nil
-
-  def sidebar_footer_icons(assigns) do
-    can_config = assigns[:is_owner] || assigns[:workspace_role] in ~w(owner admin)
-    assigns = assign(assigns, :can_config, can_config)
-
-    ~H"""
-    <div class="mt-auto flex items-center justify-center gap-0 pt-2 border-t border-base-300">
-      <div class="flex items-center gap-0">
-        <a
-          href={~p"/"}
-          class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-          title={gettext("Dashboard")}
-        >
-          <.icon name="hero-squares-2x2" class="size-4" />
-        </a>
-        <a
-          href={~p"/settings/account"}
-          class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-          title={gettext("Account")}
-        >
-          <.icon name="hero-user" class="size-4" />
-        </a>
-        <a
-          :if={@is_owner}
-          href={~p"/admin"}
-          class="flex items-center justify-center size-8 rounded-lg text-base-content/60 hover:bg-base-200 hover:text-base-content transition-all duration-150 hover:translate-x-0.5"
-          title={gettext("Admin")}
-        >
-          <.icon name="hero-shield-check" class="size-4" />
-        </a>
+    <div class="flex flex-col gap-1">
+      <div class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70">
+        {@label}
       </div>
-      <div
-        :if={@workspace_slug}
-        class="self-stretch my-1.5 mx-1 w-px bg-base-300"
-        aria-hidden="true"
-      >
-      </div>
-      <div class="flex items-center gap-0">
-        <a
-          :if={@workspace_slug}
-          href={~p"/#{@workspace_slug}/activity"}
-          class={[
-            "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
-            @active == "activity" && "bg-primary/10 text-primary",
-            @active != "activity" &&
-              "text-base-content/60 hover:bg-base-200 hover:text-base-content"
-          ]}
-          title={gettext("Activity")}
-        >
-          <.icon name="hero-signal" class="size-4" />
-        </a>
-        <a
-          :if={@workspace_slug && @can_config}
-          href={~p"/#{@workspace_slug}/settings"}
-          class={[
-            "flex items-center justify-center size-8 rounded-lg transition-all duration-150 hover:translate-x-0.5",
-            @active == "workspace_settings" && "bg-primary/10 text-primary",
-            @active != "workspace_settings" &&
-              "text-base-content/60 hover:bg-base-200 hover:text-base-content"
-          ]}
-          title={gettext("Workspace")}
-        >
-          <.icon name="hero-cog-6-tooth" class="size-4" />
-        </a>
-      </div>
+      {render_slot(@inner_block)}
     </div>
     """
   end
@@ -684,7 +643,7 @@ defmodule DranWeb.Layouts do
           id="context-selector"
           name="context_slug"
           onchange="this.form.submit()"
-          class="select select-bordered select-sm w-full"
+          class="select select-xs w-full"
         >
           <option :for={ctx <- @workspaces} value={ctx.slug} selected={ctx.slug == @workspace_slug}>
             {ctx.name} ({Map.get(@page_counts, ctx.id, 0)})
@@ -696,35 +655,87 @@ defmodule DranWeb.Layouts do
   end
 
   @doc """
-  Shows the current user (link to account settings) and a logout button.
+  Shows the current user row at the bottom of the sidebar: avatar with the
+  initial, name + email truncated, and a menu (Profile · Settings · Log out).
+
+  `user` is the DB struct when available (provides the display name); the
+  email always comes from `current_user`.
   """
   attr :current_user, :string, default: nil
+  attr :user, :map, default: nil
 
   def user_footer(assigns) do
+    name = display_name(assigns[:user], assigns[:current_user])
+    assigns = assign(assigns, :display_name, name)
+
     ~H"""
-    <div :if={@current_user} class="flex items-center justify-between">
+    <div
+      :if={@current_user}
+      class="rounded-lg p-2 hover:bg-base-200 transition-colors duration-150 flex items-center gap-2.5"
+    >
       <a
         href={~p"/settings/account"}
-        class="flex items-center gap-2 text-sm text-base-content/70 hover:text-base-content min-w-0 transition-colors duration-150"
+        class="flex items-center gap-2.5 min-w-0 flex-1"
         title={gettext("Account settings")}
       >
-        <span class="size-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold uppercase shrink-0">
-          {String.first(@current_user)}
+        <span class="size-8 rounded-full bg-primary text-primary-content flex items-center justify-center text-xs font-semibold uppercase shrink-0">
+          {String.first(@display_name || @current_user)}
         </span>
-        <span class="truncate">{@current_user}</span>
+        <span class="flex-1 min-w-0 leading-tight">
+          <span class="block text-sm font-medium truncate">{@display_name}</span>
+          <span class="block text-xs text-base-content/50 truncate mt-0.5" title={@current_user}>
+            {@current_user}
+          </span>
+        </span>
       </a>
-      <form id="logout-form" action={~p"/session"} method="post">
-        <input type="hidden" name="_method" value="delete" />
-        <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-        <button
-          type="submit"
-          class="btn btn-ghost btn-xs transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
-          title={gettext("Log out")}
+
+      <details class="relative" id="user-menu">
+        <summary
+          class="btn btn-ghost btn-xs btn-circle list-none"
+          aria-label={gettext("Account menu")}
         >
-          <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
-        </button>
-      </form>
+          <.icon name="hero-chevron-up" class="size-3" />
+        </summary>
+        <div class="absolute bottom-full right-0 mb-1 w-44 bg-base-100 border border-base-300 rounded-lg shadow-lg py-1 z-50">
+          <a
+            href={~p"/settings/account"}
+            class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200 transition-colors"
+          >
+            <.icon name="hero-user" class="size-4 opacity-70" />
+            {gettext("Profile")}
+          </a>
+          <a
+            href={~p"/settings/api-keys"}
+            class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-base-200 transition-colors"
+          >
+            <.icon name="hero-key" class="size-4 opacity-70" />
+            {gettext("API keys")}
+          </a>
+          <div class="border-t border-base-300 my-1"></div>
+          <form id="logout-form" action={~p"/session"} method="post">
+            <input type="hidden" name="_method" value="delete" />
+            <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+            <button
+              type="submit"
+              class="flex items-center gap-2 px-3 py-1.5 text-sm w-full text-left text-error hover:bg-base-200 transition-colors"
+            >
+              <.icon name="hero-arrow-right-on-rectangle" class="size-4" />
+              {gettext("Log out")}
+            </button>
+          </form>
+        </div>
+      </details>
     </div>
     """
   end
+
+  # Display name for the sidebar footer: the user's name when present,
+  # otherwise the email local part (never an empty row).
+  defp display_name(%{name: name}, _email) when is_binary(name) and name != "", do: name
+
+  defp display_name(_user, email) when is_binary(email) do
+    email |> String.split("@") |> List.first()
+  end
+
+  defp display_name(_user, _email), do: nil
 end

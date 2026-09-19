@@ -18,7 +18,11 @@ defmodule DranWeb.AdminWorkspacesLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Workspaces"), workspace_slug: nil)
+      |> assign(
+        active_nav: "admin_workspaces",
+        page_title: gettext("Workspaces"),
+        workspace_slug: nil
+      )
       |> assign_workspaces()
       |> assign_users()
       |> assign_workspace_form()
@@ -215,11 +219,9 @@ defmodule DranWeb.AdminWorkspacesLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:admin}
+      nav={:instance}
     >
-      <div class="flex-1 overflow-y-auto">
+      <div class="w-full">
         <div class="w-full space-y-6">
           <div class="flex items-center justify-between">
             <div>

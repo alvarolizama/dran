@@ -82,7 +82,7 @@ defmodule DranWeb.Admin do
   def section(assigns) do
     ~H"""
     <section class="surface-2 rounded-2xl overflow-hidden">
-      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+      <header class="flex items-start gap-3 px-6 py-4 border-b border-base-content/10">
         <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
           <.icon name={@icon} class="size-4 text-primary" />
         </div>
@@ -91,7 +91,7 @@ defmodule DranWeb.Admin do
           <p :if={@caption} class="text-caption mt-0.5">{@caption}</p>
         </div>
       </header>
-      <div class="p-5">
+      <div class="p-6">
         {render_slot(@inner_block)}
       </div>
     </section>

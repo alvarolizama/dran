@@ -36,7 +36,7 @@ defmodule DranWeb.AdminModelsLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Modelos"), workspace_slug: nil)
+      |> assign(active_nav: "admin_models", page_title: gettext("Modelos"), workspace_slug: nil)
       |> assign(model_test_status: %{})
       |> assign_models()
 
@@ -186,11 +186,9 @@ defmodule DranWeb.AdminModelsLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:admin}
+      nav={:instance}
     >
-      <div class="flex-1 overflow-y-auto">
+      <div class="w-full">
         <div class="w-full space-y-6">
           <div>
             <h1 class="text-title">{gettext("Modelos")}</h1>

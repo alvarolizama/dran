@@ -28,7 +28,7 @@ defmodule DranWeb.AdminSystemLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Sistema"), workspace_slug: nil)
+      |> assign(active_nav: "admin_system", page_title: gettext("Sistema"), workspace_slug: nil)
       |> assign(inference_test: nil)
       |> assign(monitoring: nil)
       |> assign_instance_form()
@@ -159,11 +159,9 @@ defmodule DranWeb.AdminSystemLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:admin}
+      nav={:instance}
     >
-      <div class="flex-1 overflow-y-auto">
+      <div class="w-full">
         <div class="w-full space-y-6">
           <div>
             <h1 class="text-title">{gettext("Sistema")}</h1>

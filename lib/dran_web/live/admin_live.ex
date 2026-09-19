@@ -31,12 +31,10 @@ defmodule DranWeb.AdminLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:admin}
+      nav={:instance}
     >
-      <div class="flex-1 overflow-y-auto">
-        <div class="w-full space-y-8">
+      <div class="w-full">
+        <div class="w-full space-y-6">
           <div>
             <h1 class="text-title">{gettext("Admin")}</h1>
             <p class="text-caption mt-1">

@@ -1,8 +1,10 @@
 defmodule DranWeb.InstanceShellTest do
   @moduledoc """
-  The three instance-level options — Workspaces (`/`), Account
-  (`/settings/*`) and Admin (`/admin/*`) — share one shell-less layout: no
-  sidebar, with the options menu pinned top-right.
+  The instance-level pages — `/` (workspaces), `/settings/*` (account) and
+  `/admin/*` — share the same sidebar shell as the workspace pages via
+  `nav={:instance}`: the sidebar renders the instance nav (Workspaces /
+  Account / Admin groups) instead of the workspace nav, and there is no
+  topbar anymore.
   """
 
   use DranWeb.ConnCase, async: false
@@ -28,45 +30,53 @@ defmodule DranWeb.InstanceShellTest do
     |> Plug.Conn.put_session(:is_owner, true)
   end
 
-  # {path, id of the option that must be marked as current}
+  # {path, active nav key}
   @pages [
-    {"/", "topbar-dashboard"},
-    {"/settings/account", "topbar-account"},
-    {"/settings/api-keys", "topbar-account"},
-    {"/admin", "topbar-admin"},
-    {"/admin/users", "topbar-admin"},
-    {"/admin/workspaces", "topbar-admin"},
-    {"/admin/models", "topbar-admin"},
-    {"/admin/system", "topbar-admin"},
-    {"/admin/jobs", "topbar-admin"}
+    {"/", "dashboard"},
+    {"/settings/account", "settings"},
+    {"/settings/api-keys", "api_keys"},
+    {"/admin", "admin"},
+    {"/admin/users", "admin_users"},
+    {"/admin/workspaces", "admin_workspaces"},
+    {"/admin/models", "admin_models"},
+    {"/admin/system", "admin_system"},
+    {"/admin/jobs", "admin_jobs"}
   ]
 
-  for {path, active_id} <- @pages do
-    test "#{path} renders the shell-less layout with #{active_id} active", %{conn: conn} do
+  for {path, active_key} <- @pages do
+    test "#{path} renders the instance sidebar with #{active_key} active", %{conn: conn} do
       conn = owner_conn(conn, "shell_owner@test.dev")
-      {:ok, view, html} = live(conn, unquote(path))
+      {:ok, view, _html} = live(conn, unquote(path))
 
-      # No sidebar — the `aside` was the old shell's left column.
-      refute has_element?(view, "aside")
-      refute html =~ "w-64 shrink-0"
+      # The sidebar is present (one shell for the whole app) with the
+      # instance nav: Workspaces, Account group, Admin group.
+      assert has_element?(view, "aside")
+      assert has_element?(view, "a[href='/']")
+      assert has_element?(view, "a[href='/settings/account']")
+      assert has_element?(view, "a[href='/settings/api-keys']")
+      assert has_element?(view, "a[href='/admin']")
+      assert has_element?(view, "a[href='/admin/users']")
+      assert has_element?(view, "a[href='/admin/system']")
 
-      # The options menu lives in the top bar, with the three options.
-      assert has_element?(view, "#app-topbar")
-      assert has_element?(view, "#topbar-dashboard")
-      assert has_element?(view, "#topbar-account")
-      assert has_element?(view, "#topbar-admin")
+      # The old topbar flow is gone.
+      refute has_element?(view, "#app-topbar")
 
-      # The current option is marked; the others are not.
-      assert has_element?(view, "##{unquote(active_id)}[aria-current=\"page\"]")
+      # The current page's nav link is marked; the others are not.
+      assert has_element?(view, "a[aria-current='page'][href='#{unquote(path)}']")
 
-      for id <- ["topbar-dashboard", "topbar-account", "topbar-admin"],
-          id != unquote(active_id) do
-        refute has_element?(view, "##{id}[aria-current=\"page\"]")
+      for {_, key} <- @pages, key != unquote(active_key) do
+        refute has_element?(view, "a[aria-current='page'][href='#{path_for(key)}']")
       end
     end
   end
 
-  test "the Admin option is hidden for non-owners", %{conn: conn} do
+  defp path_for("dashboard"), do: "/"
+  defp path_for("settings"), do: "/settings/account"
+  defp path_for("api_keys"), do: "/settings/api-keys"
+  defp path_for("admin"), do: "/admin"
+  defp path_for(key), do: "/admin/" <> String.replace(key, "admin_", "")
+
+  test "the Admin group is hidden for non-owners", %{conn: conn} do
     {:ok, _user} =
       Accounts.create_user(%{email: "shell_plain@test.dev", name: "Plain", is_owner: false})
 
@@ -78,9 +88,9 @@ defmodule DranWeb.InstanceShellTest do
 
     {:ok, view, _html} = live(conn, ~p"/settings/account")
 
-    assert has_element?(view, "#app-topbar")
-    assert has_element?(view, "#topbar-dashboard")
-    assert has_element?(view, "#topbar-account")
-    refute has_element?(view, "#topbar-admin")
+    assert has_element?(view, "a[href='/']")
+    assert has_element?(view, "a[href='/settings/account']")
+    refute has_element?(view, "a[href='/admin']")
+    refute has_element?(view, "a[href='/admin/users']")
   end
 end

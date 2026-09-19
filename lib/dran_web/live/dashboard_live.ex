@@ -32,13 +32,11 @@ defmodule DranWeb.DashboardLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:dashboard}
+      nav={:instance}
     >
-      <div class="w-full space-y-8">
-        <div class="flex items-center justify-between gap-4">
-          <div class="space-y-1">
+      <div class="w-full space-y-6">
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-1.5">
             <h1 class="text-title">{greeting()}</h1>
             <p class="text-caption">
               {format_today()} · {ngettext(
@@ -377,23 +375,23 @@ defmodule DranWeb.DashboardLive do
           >
             <.icon name="hero-cog-6-tooth" class="size-4" />
           </.link>
-          <.link navigate={~p"/#{@ws.slug}"} class="btn btn-primary btn-xs gap-1">
+          <.link navigate={~p"/#{@ws.slug}"} class="btn btn-primary btn-soft btn-xs gap-1">
             {gettext("Open")}
             <.icon name="hero-arrow-right" class="size-3.5" />
           </.link>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 border-t border-base-300 pt-3">
-        <div class="text-center">
+      <div class="flex items-stretch gap-6 border-t border-base-300 pt-3">
+        <div>
           <div class="text-lg font-bold tabular-nums leading-tight">{@metrics.pages}</div>
-          <div class="text-caption">{gettext("pages")}</div>
+          <div class="text-caption mt-0.5">{gettext("pages")}</div>
         </div>
-        <div class="text-center">
+        <div class="border-l border-base-300 pl-6">
           <div class="text-sm font-semibold tabular-nums leading-tight">
             {last_updated_label(@metrics.last_updated)}
           </div>
-          <div class="text-caption">{gettext("updated")}</div>
+          <div class="text-caption mt-0.5">{gettext("updated")}</div>
         </div>
       </div>
     </div>
@@ -435,7 +433,7 @@ defmodule DranWeb.DashboardLive do
     Calendar.strftime(Date.utc_today(), "%A, %B %d, %Y")
   end
 
-  defp last_updated_label(nil), do: "—"
+  defp last_updated_label(nil), do: gettext("Never")
 
   defp last_updated_label(%mod{} = dt) when mod in [DateTime, NaiveDateTime, Date] do
     Calendar.strftime(dt, "%b %d")

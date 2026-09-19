@@ -7,7 +7,7 @@ defmodule DranWeb.SidebarNavTest do
 
   alias DranWeb.Layouts
 
-  describe "sidebar_nav (empty — links moved to footer)" do
+  describe "sidebar_nav (instance pages — no workspace)" do
     test "renders nothing (groups = [])" do
       html =
         render_component(&Layouts.sidebar_nav/1, %{
@@ -16,30 +16,16 @@ defmodule DranWeb.SidebarNavTest do
           workspace_slug: nil
         })
 
-      # No nav items — all links live in the footer icons now.
+      # No nav items — instance pages render instance_nav instead.
       refute html =~ t("Dashboard")
       refute html =~ ~s(href="/")
       refute html =~ ~s(href="/admin")
       refute html =~ ~s(href="/settings/account")
-      refute html =~ ~s(href="/docs")
       refute html =~ ~s(href="/personal/settings")
       refute html =~ t("Workspace")
     end
 
-    test "empty inside a workspace too" do
-      html =
-        render_component(&Layouts.sidebar_nav/1, %{
-          active: "dashboard",
-          is_owner: true,
-          workspace_slug: "personal",
-          workspace_role: "owner"
-        })
-
-      refute html =~ t("Workspace")
-      refute html =~ ~s(href="/personal/settings")
-    end
-
-    test "renders empty (no mt-auto needed — footer icons own it)" do
+    test "renders empty (no mt-auto needed — footer owns it)" do
       html =
         render_component(&Layouts.sidebar_nav/1, %{
           active: "dashboard",
@@ -47,7 +33,6 @@ defmodule DranWeb.SidebarNavTest do
           workspace_slug: nil
         })
 
-      # sidebar_nav renders nothing; mt-auto lives in sidebar_footer_icons.
       assert html == ""
     end
   end
@@ -133,98 +118,64 @@ defmodule DranWeb.SidebarNavTest do
       p = pos(html, ~s(href="/personal/memory"))
       {end_pos, _len} = :binary.match(html, "</a>", scope: {p, byte_size(html) - p})
       anchor = binary_part(html, p, end_pos - p)
-      assert anchor =~ "bg-primary/10"
+      assert anchor =~ ~s(aria-current="page")
+      assert anchor =~ "bg-primary/15 text-primary"
     end
   end
 
-  describe "sidebar_footer_icons" do
-    test "renders all footer icons for owner" do
+  describe "workspace nav: Activity & Settings links (moved from footer icons)" do
+    test "Activity link present for every workspace" do
       html =
-        render_component(&Layouts.sidebar_footer_icons/1, %{
-          is_owner: true,
-          workspace_slug: nil
-        })
-
-      assert html =~ ~s(href="/")
-      assert html =~ ~s(href="/admin")
-      assert html =~ ~s(href="/settings/account")
-      refute html =~ ~s(href="/docs")
-      assert html =~ "hero-squares-2x2"
-      assert html =~ "hero-shield-check"
-      assert html =~ "hero-user"
-      refute html =~ "hero-book-open"
-    end
-
-    test "hides admin icon for non-owner" do
-      html =
-        render_component(&Layouts.sidebar_footer_icons/1, %{
-          is_owner: false,
-          workspace_slug: nil
-        })
-
-      assert html =~ ~s(href="/")
-      refute html =~ ~s(href="/admin")
-      assert html =~ ~s(href="/settings/account")
-    end
-
-    test "shows workspace Config icon for workspace owner" do
-      html =
-        render_component(&Layouts.sidebar_footer_icons/1, %{
-          is_owner: false,
-          workspace_slug: "personal",
-          workspace_role: "owner",
-          active: "workspace_settings"
-        })
-
-      assert html =~ ~s(href="/personal/settings")
-      assert html =~ "hero-cog-6-tooth"
-      # Active highlight
-      {pos, _} = :binary.match(html, ~s(href="/personal/settings"))
-      {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
-      anchor = binary_part(html, pos, end_pos - pos)
-      assert anchor =~ "bg-primary/10"
-    end
-
-    test "hides workspace Config for viewer" do
-      html =
-        render_component(&Layouts.sidebar_footer_icons/1, %{
+        render_component(&Layouts.sidebar_nav/1, %{
+          active: "activity",
           is_owner: false,
           workspace_slug: "personal",
           workspace_role: "viewer"
         })
 
-      refute html =~ ~s(href="/personal/settings")
-      assert html =~ ~s(href="/")
-    end
-
-    test "footer icons centered in one row with divider between groups" do
-      html =
-        render_component(&Layouts.sidebar_footer_icons/1, %{
-          is_owner: true,
-          workspace_slug: "personal"
-        })
-
-      # The whole row is centered and the items sit flush (no inter-item gap).
-      assert html =~ "justify-center"
-      assert html =~ "gap-0"
-      # A vertical divider separates the global icons from the workspace ones.
-      assert html =~ "w-px"
-      refute html =~ "ml-auto"
-      assert html =~ ~s(href="/")
       assert html =~ ~s(href="/personal/activity")
-      assert html =~ ~s(href="/admin")
-      assert html =~ ~s(href="/settings/account")
+      assert html =~ t("Activity")
+      # Active highlight on the activity link
+      {pos, _} = :binary.match(html, ~s(href="/personal/activity"))
+      {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
+      anchor = binary_part(html, pos, end_pos - pos)
+      assert anchor =~ ~s(aria-current="page")
+      assert anchor =~ "bg-primary/15 text-primary"
     end
 
-    test "border-t separator present" do
-      html =
-        render_component(&Layouts.sidebar_footer_icons/1, %{
-          is_owner: true,
-          workspace_slug: nil
+    test "Workspace settings link gated by role" do
+      owner_html =
+        render_component(&Layouts.sidebar_nav/1, %{
+          active: "workspace_settings",
+          is_owner: false,
+          workspace_slug: "personal",
+          workspace_role: "owner"
         })
 
-      assert html =~ "border-t"
-      assert html =~ "mt-auto"
+      assert owner_html =~ ~s(href="/personal/settings")
+      assert owner_html =~ t("Workspace settings")
+
+      viewer_html =
+        render_component(&Layouts.sidebar_nav/1, %{
+          active: "home",
+          is_owner: false,
+          workspace_slug: "personal",
+          workspace_role: "viewer"
+        })
+
+      refute viewer_html =~ ~s(href="/personal/settings")
+    end
+
+    test "instance owner sees workspace settings even without a workspace role" do
+      html =
+        render_component(&Layouts.sidebar_nav/1, %{
+          active: "home",
+          is_owner: true,
+          workspace_slug: "personal",
+          workspace_role: "viewer"
+        })
+
+      assert html =~ ~s(href="/personal/settings")
     end
   end
 end

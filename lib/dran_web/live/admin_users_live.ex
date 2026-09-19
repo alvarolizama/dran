@@ -18,7 +18,7 @@ defmodule DranWeb.AdminUsersLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Users"), workspace_slug: nil)
+      |> assign(active_nav: "admin_users", page_title: gettext("Users"), workspace_slug: nil)
       |> assign_users()
       |> assign_workspaces()
       |> assign(
@@ -216,11 +216,9 @@ defmodule DranWeb.AdminUsersLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:admin}
+      nav={:instance}
     >
-      <div class="flex-1 overflow-y-auto" id="users-tab" phx-hook=".CopyUserToken">
+      <div class="w-full" id="users-tab" phx-hook=".CopyUserToken">
         <div class="w-full space-y-6">
           <div class="flex items-center justify-between">
             <div>
@@ -284,11 +282,12 @@ defmodule DranWeb.AdminUsersLive do
                       </span>
                     </td>
                     <td>
-                      <div class="flex flex-wrap gap-1">
+                      <div :if={user.workspaces != []} class="flex flex-wrap gap-1">
                         <span :for={ctx <- user.workspaces} class="badge badge-ghost badge-sm">
                           {ctx.name}
                         </span>
                       </div>
+                      <span :if={user.workspaces == []} class="text-base-content/40 text-xs">—</span>
                     </td>
                     <td>
                       <form phx-change="set_default_context" id={"default-context-form-#{user.id}"}>

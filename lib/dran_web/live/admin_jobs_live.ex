@@ -18,7 +18,7 @@ defmodule DranWeb.AdminJobsLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin", page_title: gettext("Jobs"), workspace_slug: nil)
+      |> assign(active_nav: "admin_jobs", page_title: gettext("Jobs"), workspace_slug: nil)
       |> assign(running_jobs: MapSet.new())
       |> assign_jobs()
 
@@ -109,11 +109,9 @@ defmodule DranWeb.AdminJobsLive do
       workspace_slug={@workspace_slug}
       workspaces={@workspaces}
       active_nav={@active_nav}
-      sidebar={false}
-      topbar
-      topbar_active={:admin}
+      nav={:instance}
     >
-      <div class="flex-1 overflow-y-auto">
+      <div class="w-full">
         <div class="w-full space-y-6">
           <div>
             <h1 class="text-title">{gettext("Jobs")}</h1>

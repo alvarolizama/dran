@@ -387,13 +387,18 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      # Workspace-scoped page: admin sees the workspace Config link + Account (entry
-      # point of the personal settings tabs, incl. API Keys) in the sidebar
+      # Workspace-scoped page: admin sees the workspace Config link in the
+      # sidebar nav. Instance links (/admin, /settings/account) now live in
+      # the instance sidebar (nav={:instance}), not in the workspace sidebar.
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
       assert html =~ ~p"/#{ctx1.slug}/settings"
-      assert html =~ ~p"/settings/account"
-      assert html =~ ~p"/admin"
+      assert html =~ ~p"/#{ctx1.slug}/activity"
       assert html =~ ctx1.slug
+
+      # The instance sidebar carries the instance-level links for admins
+      {:ok, _view, dash_html} = Phoenix.LiveViewTest.live(conn, ~p"/")
+      assert dash_html =~ ~p"/admin"
+      assert dash_html =~ ~p"/settings/account"
 
       # /admin/workspaces lists ALL workspaces for the instance owner
       {:ok, _view, ws_html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
