@@ -199,6 +199,28 @@ defmodule DranWeb.SessionControllerTest do
       assert html =~ ~s(name="workspace_slug")
       refute html =~ ~s(name="context_slug")
     end
+
+    test "desambiguates two workspaces that share a name" do
+      html =
+        render_component(&DranWeb.Layouts.workspace_selector/1, %{
+          workspaces: [
+            %{id: "1", name: "Personal", slug: "personal"},
+            %{id: "2", name: "Personal", slug: "personal-3f9a2b"},
+            %{id: "3", name: "Trabajo", slug: "trabajo"}
+          ],
+          workspace_slug: "personal",
+          page_counts: %{}
+        })
+
+      # Now that the name is not unique, a repeated one has to show the slug —
+      # two identical rows in a dropdown is a coin toss.
+      assert html =~ "Personal · personal (0)"
+      assert html =~ "Personal · personal-3f9a2b (0)"
+
+      # A unique name stays clean: no noise added where there is no ambiguity.
+      assert html =~ "Trabajo (0)"
+      refute html =~ "Trabajo · trabajo"
+    end
   end
 
   describe "POST /setup — first-run onboarding" do

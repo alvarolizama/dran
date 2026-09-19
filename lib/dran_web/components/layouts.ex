@@ -614,6 +614,12 @@ defmodule DranWeb.Layouts do
   attr :page_counts, :map, default: %{}
 
   def workspace_selector(assigns) do
+    # `workspaces.name` stopped being unique, so two workspaces can share a
+    # display name. When they do, the row shows the slug as well — otherwise the
+    # dropdown offers two identical entries and picking one is a coin toss.
+    assigns =
+      assign(assigns, :name_counts, Enum.frequencies_by(assigns.workspaces, & &1.name))
+
     ~H"""
     <div :if={length(@workspaces) > 0} class="shell-hide flex-1">
       <%!-- The id is not decorative: LiveView needs it to restore the selection
@@ -631,12 +637,23 @@ defmodule DranWeb.Layouts do
           class="select select-xs w-full"
         >
           <option :for={ctx <- @workspaces} value={ctx.slug} selected={ctx.slug == @workspace_slug}>
-            {ctx.name} ({Map.get(@page_counts, ctx.id, 0)})
+            {selector_label(ctx, @name_counts, @page_counts)}
           </option>
         </select>
       </form>
     </div>
     """
+  end
+
+  # "Personal (12)" — or "Personal · personal-3f9a2b (12)" when the name alone
+  # does not identify the workspace.
+  defp selector_label(workspace, name_counts, page_counts) do
+    base =
+      if Map.get(name_counts, workspace.name, 0) > 1,
+        do: "#{workspace.name} · #{workspace.slug}",
+        else: workspace.name
+
+    "#{base} (#{Map.get(page_counts, workspace.id, 0)})"
   end
 
   @doc """

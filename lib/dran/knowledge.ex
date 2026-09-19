@@ -166,21 +166,22 @@ defmodule Dran.Knowledge do
   end
 
   @doc """
-  Update a workspace. When the name changes and no explicit slug arrived,
-  the slug is regenerated from the new name (suffixed with a random hex if
-  it collides with another workspace). An explicit slug always wins.
+  Update a workspace. The SLUG is the workspace's URL identity and does NOT
+  follow the name: renaming keeps the URL, so links, bookmarks and the
+  `dran_last_workspace` cookie survive. An explicit `slug` in attrs still wins
+  (`Workspace.changeset/2` casts it) — moving a workspace's URL has to be asked
+  for, never a side effect of a rename.
+
+  This used to regenerate the slug from the new name (via
+  `Dran.Slug.inject_update/3`), so renaming from /admin/workspaces or from the
+  API silently moved the workspace's URL — while the same rename from
+  /:slug/settings (which goes through `Workspace.changeset/2` directly) did not.
+  Same field, two behaviors; now there is one.
 
   Setting `is_default` clears the previous default first, inside the same
   transaction.
   """
   def update_workspace(%Workspace{} = context, attrs) do
-    attrs =
-      Dran.Slug.inject_update(attrs, context,
-        field: "name",
-        fallback: "workspace",
-        lookup: &get_workspace_by_slug/1
-      )
-
     changeset = Workspace.changeset(context, attrs)
 
     Repo.transaction(fn ->

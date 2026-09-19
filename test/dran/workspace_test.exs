@@ -90,6 +90,47 @@ defmodule Dran.WorkspaceTest do
     end
   end
 
+  describe "update_workspace/2 — el slug es la identidad de URL" do
+    test "renaming does NOT move the URL" do
+      {:ok, ws} = Dran.Knowledge.create_workspace(%{name: "Trabajo", slug: "trabajo"})
+
+      {:ok, renamed} = Dran.Knowledge.update_workspace(ws, %{name: "Proyecto"})
+
+      assert renamed.name == "Proyecto"
+      assert renamed.slug == "trabajo"
+      assert Dran.Knowledge.get_workspace_by_slug("trabajo").id == ws.id
+    end
+
+    test "an explicit slug does move it" do
+      {:ok, ws} = Dran.Knowledge.create_workspace(%{name: "Trabajo", slug: "trabajo"})
+
+      {:ok, moved} = Dran.Knowledge.update_workspace(ws, %{slug: "nueva-url"})
+
+      assert moved.slug == "nueva-url"
+      assert Dran.Knowledge.get_workspace_by_slug("nueva-url").id == ws.id
+    end
+
+    test "the admin path and the settings path behave the same" do
+      # This is the pair that used to disagree: /admin/workspaces went through
+      # update_workspace/2 (which regenerated the slug) and /:slug/settings went
+      # through Workspace.changeset/2 directly (which did not).
+      {:ok, via_admin} = Dran.Knowledge.create_workspace(%{name: "Uno", slug: "uno-ws"})
+      {:ok, after_admin} = Dran.Knowledge.update_workspace(via_admin, %{name: "Uno Bis"})
+
+      {:ok, via_settings} = Dran.Knowledge.create_workspace(%{name: "Dos", slug: "dos-ws"})
+
+      {:ok, after_settings} =
+        via_settings
+        |> Dran.Workspace.changeset(%{"name" => "Dos Bis"})
+        |> Dran.Repo.update()
+
+      assert after_admin.name == "Uno Bis"
+      assert after_settings.name == "Dos Bis"
+      assert after_admin.slug == "uno-ws"
+      assert after_settings.slug == "dos-ws"
+    end
+  end
+
   describe "feature_enabled?/2" do
     test "empty enabled_features (default) → all features ON" do
       ws = %Workspace{enabled_features: %{}}

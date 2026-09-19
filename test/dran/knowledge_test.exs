@@ -50,20 +50,25 @@ defmodule Dran.KnowledgeTest do
       assert explicit.slug == "slug-manual"
     end
 
-    test "update_workspace/2 regenerates slug when name changes", %{context: ctx} do
+    test "update_workspace/2 keeps the slug when the name changes", %{context: ctx} do
+      # The slug is the workspace's URL identity: renaming must NOT move it,
+      # because links, bookmarks and the dran_last_workspace cookie all point at
+      # it. It used to be regenerated from the new name.
       {:ok, renamed} = Knowledge.update_workspace(ctx, %{name: "Personal Renombrado"})
-      assert renamed.slug == "personal-renombrado"
+      assert renamed.name == "Personal Renombrado"
+      assert renamed.slug == ctx.slug
 
-      # Name unchanged → slug untouched
-      {:ok, same} = Knowledge.update_workspace(renamed, %{visibility: "private"})
-      assert same.slug == "personal-renombrado"
+      # Name unchanged → slug untouched, obviously.
+      {:ok, same} = Knowledge.update_workspace(renamed, %{name: "Personal Renombrado"})
+      assert same.slug == ctx.slug
 
-      # Collision on rename → random hex suffix
-      {:ok, _other} = Knowledge.create_workspace(%{name: "X", slug: "choque"})
-      {:ok, colliding} = Knowledge.update_workspace(renamed, %{name: "Choque"})
-      assert String.starts_with?(colliding.slug, "choque-")
+      # A collision on the NAME is now fine too (the name is not unique), so
+      # only an explicit slug is what moves the URL — and it still wins.
+      {:ok, _other} = Knowledge.create_workspace(%{name: "Choque", slug: "choque"})
+      {:ok, same_name} = Knowledge.update_workspace(renamed, %{name: "Choque"})
+      assert same_name.name == "Choque"
+      assert same_name.slug == ctx.slug
 
-      # Explicit slug always wins on update too
       {:ok, forced} = Knowledge.update_workspace(renamed, %{name: "Nuevo", slug: "slug-fijo"})
       assert forced.slug == "slug-fijo"
     end
