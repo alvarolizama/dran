@@ -127,6 +127,22 @@ defmodule Dran.Accounts do
   end
 
   @doc """
+  Update an account from the instance-owner surface (/admin/users): email, name
+  and an optional password RESET, with no `current_password` check — see
+  `User.admin_changeset/2` for why that is the point, not an oversight.
+
+  Deliberately narrower than `update_user/2`: only the fields that surface edits
+  are castable. The instance-level flags (`is_owner`, `can_create_workspaces`,
+  `default_workspace_slug`…) keep going through their own functions, and the
+  whole thing is unreachable outside the `:admin` scope.
+  """
+  def update_user_as_admin(%User{} = user, attrs) do
+    user
+    |> User.admin_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
   Change the user's UI language (`"en"` | `"es"`).
 
   English is the app default; a `nil`/blank value falls back to it instead of

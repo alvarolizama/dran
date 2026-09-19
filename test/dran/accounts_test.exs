@@ -985,4 +985,53 @@ defmodule Dran.AccountsTest do
       assert Dran.Actors.get_actor_by_name("vinculo@example.com").id == user.actor_id
     end
   end
+
+  describe "reset de contraseña desde /admin/users" do
+    test "da entrada a una cuenta que no la tenía, sin pedir la contraseña anterior" do
+      assert {:ok, user} = Accounts.create_user(%{email: "rescatada@example.com"})
+      assert is_nil(user.password_hash)
+
+      assert {:ok, updated} =
+               Accounts.update_user_as_admin(user, %{
+                 "email" => "rescatada@example.com",
+                 "name" => "Rescatada",
+                 "password" => "nueva-larga-123"
+               })
+
+      assert updated.name == "Rescatada"
+      assert {:ok, _} = Accounts.authenticate_user("rescatada@example.com", "nueva-larga-123")
+    end
+
+    test "en blanco no la toca — ni la deja con el hash de la cadena vacía" do
+      {:ok, user} =
+        Accounts.create_user_with_password(%{
+          email: "intacta@example.com",
+          password: "original-larga-123"
+        })
+
+      assert {:ok, updated} =
+               Accounts.update_user_as_admin(user, %{"name" => "Otro", "password" => ""})
+
+      assert updated.name == "Otro"
+      assert updated.password_hash == user.password_hash
+      assert {:ok, _} = Accounts.authenticate_user("intacta@example.com", "original-larga-123")
+    end
+
+    test "una contraseña corta devuelve el error y no guarda ni el nombre" do
+      {:ok, user} =
+        Accounts.create_user_with_password(%{
+          email: "corta@example.com",
+          password: "original-larga-123"
+        })
+
+      assert {:error, changeset} =
+               Accounts.update_user_as_admin(user, %{"name" => "Corto", "password" => "corta"})
+
+      assert "should be at least 8 character(s)" in errors_on(changeset).password
+
+      reloaded = Accounts.get_user!(user.id)
+      assert reloaded.name == user.name
+      assert reloaded.password_hash == user.password_hash
+    end
+  end
 end

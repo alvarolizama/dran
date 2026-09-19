@@ -127,9 +127,36 @@ defmodule DranWeb.AdminUsersLiveTest do
     end
   end
 
-  describe "editar una cuenta" do
-    test "no ofrece la contraseña ni la toca al guardar", %{conn: conn} do
-      email = "editar-#{uniq()}@test.dev"
+  describe "resetear la contraseña (admin)" do
+    test "el reset devuelve la entrada a una cuenta que no la tenía", %{conn: conn} do
+      email = "rescatada-#{uniq()}@test.dev"
+
+      # Cuenta que NO puede entrar: nació por el camino sin credenciales.
+      {:ok, user} = Accounts.create_user(%{email: email, name: "Sin Entrada"})
+      assert is_nil(user.password_hash)
+      assert {:error, :unauthorized} = Accounts.authenticate_user(email, "lo-que-sea")
+
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/admin/users")
+
+      Phoenix.LiveViewTest.render_click(view, "edit_user", %{"id" => user.id})
+
+      # El modal de edición ofrece el reset; no exige la contraseña anterior
+      # (el admin no la conoce — ese es justo el caso).
+      assert has_element?(view, "#user-form input[name='user[password]']")
+
+      submit_user(view, %{
+        "email" => email,
+        "name" => "Rescatada",
+        "password" => "nueva-clave-larga-123"
+      })
+
+      assert {:ok, _} = Accounts.authenticate_user(email, "nueva-clave-larga-123")
+      assert Accounts.get_user!(user.id).name == "Rescatada"
+      refute has_element?(view, "#user-modal")
+    end
+
+    test "en blanco significa «no la toques»", %{conn: conn} do
+      email = "intacta-#{uniq()}@test.dev"
 
       {:ok, user} =
         Accounts.create_user_with_password(%{email: email, password: "original-larga-123"})
@@ -138,21 +165,35 @@ defmodule DranWeb.AdminUsersLiveTest do
 
       Phoenix.LiveViewTest.render_click(view, "edit_user", %{"id" => user.id})
 
-      assert has_element?(view, "#user-form input[name='user[email]']")
-      refute has_element?(view, "#user-form input[name='user[password]']")
-
-      # Aunque un cliente mande una contraseña, editando no cambia: no está en
-      # el cast de `User.changeset/2`. Cambiar la contraseña de otro vive en su
-      # propia cuenta, donde se exige la actual.
-      submit_user(view, %{
-        "email" => email,
-        "name" => "Renombrado",
-        "password" => "intento-de-cambio-123"
-      })
+      # Un input vacío llega como "" (la clave está en los params): para el cast
+      # eso NO es "sin cambio", así que el changeset tiene que sacarlo.
+      submit_user(view, %{"email" => email, "name" => "Solo Nombre", "password" => ""})
 
       updated = Accounts.get_user!(user.id)
-      assert updated.name == "Renombrado"
+      assert updated.name == "Solo Nombre"
       assert updated.password_hash == user.password_hash
+      assert {:ok, _} = Accounts.authenticate_user(email, "original-larga-123")
+    end
+
+    test "una contraseña corta se rechaza en el campo y no guarda nada", %{conn: conn} do
+      email = "corta-reset-#{uniq()}@test.dev"
+
+      {:ok, user} =
+        Accounts.create_user_with_password(%{email: email, password: "original-larga-123"})
+
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/admin/users")
+
+      Phoenix.LiveViewTest.render_click(view, "edit_user", %{"id" => user.id})
+
+      submit_user(view, %{"email" => email, "name" => "Corto", "password" => "corta"})
+
+      assert modal(view) =~ et("should be at least 8 character(s)")
+
+      # Un solo changeset por submit: si la contraseña no valida, el nombre
+      # tampoco entra (nada de guardados a medias).
+      updated = Accounts.get_user!(user.id)
+      assert updated.password_hash == user.password_hash
+      assert updated.name == user.name
       assert {:ok, _} = Accounts.authenticate_user(email, "original-larga-123")
     end
   end

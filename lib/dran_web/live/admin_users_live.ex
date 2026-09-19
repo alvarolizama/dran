@@ -222,8 +222,11 @@ defmodule DranWeb.AdminUsersLive do
     end
   end
 
+  # Editing goes through `update_user_as_admin/2`: the optional password field of
+  # the modal is a RESET (no current password — the admin does not know it), which
+  # is how an account that cannot sign in gets back in.
   defp save_user(user, attrs, ws_ids) do
-    with {:ok, user} <- Dran.Accounts.update_user(user, attrs) do
+    with {:ok, user} <- Dran.Accounts.update_user_as_admin(user, attrs) do
       for ws <- Dran.Knowledge.list_workspaces() do
         is_member = Dran.Accounts.user_in_workspace?(user, ws)
         wanted = to_string(ws.id) in ws_ids
@@ -479,11 +482,12 @@ defmodule DranWeb.AdminUsersLive do
           </div>
 
           <%!--
-            La contraseña se pide SOLO al crear: sin ella la cuenta no tiene
-            forma de entrar (no hay password_hash, no hay google_id) y la
-            invitación al workspace no sirve para nada. Al editar no se ofrece
-            a propósito — la contraseña de otro se cambia desde su propia
-            cuenta, en /settings/account, y ahí se exige la actual.
+            La contraseña se pide al CREAR (sin ella la cuenta no tiene forma de
+            entrar: no hay password_hash, no hay google_id, y la invitación al
+            workspace no sirve para nada) y se OFRECE al editar como reset.
+            Al editar es opcional y en blanco significa "no la toques" — así el
+            admin puede devolverle la entrada a una cuenta que la perdió, o
+            dársela a una que nació sin ella, sin conocer la anterior.
           --%>
           <.input
             :if={is_nil(@editing_user)}
@@ -493,6 +497,19 @@ defmodule DranWeb.AdminUsersLive do
             hint={gettext("Minimum 8 characters. Share it with them: it is how they sign in.")}
             autocomplete="new-password"
             required
+          />
+
+          <.input
+            :if={@editing_user}
+            field={@user_form[:password]}
+            type="password"
+            label={gettext("New password")}
+            hint={
+              gettext(
+                "Leave it empty to keep the current one. Set it to give access back to an account that cannot sign in."
+              )
+            }
+            autocomplete="new-password"
           />
 
           <div>

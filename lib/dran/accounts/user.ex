@@ -129,6 +129,37 @@ defmodule Dran.Accounts.User do
     end
   end
 
+  @doc """
+  Changeset for the ADMIN edition of an account (/admin/users): email, name and
+  an OPTIONAL password reset.
+
+  There is no `current_password` check here (unlike `update_password_changeset/2`)
+  on purpose: the admin does not know the old one, and this is the way back in for
+  an account that cannot sign in — created without a password, or the person lost
+  it. A blank password means "leave it alone": that is what an empty input sends,
+  and the 8-character minimum only applies when a new one is actually set.
+  """
+  def admin_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:email, :name, :password])
+    |> validate_required([:email])
+    |> unique_constraint(:email)
+    |> drop_blank_password()
+    |> validate_length(:password, min: 8)
+    |> put_password_hash()
+  end
+
+  # Un input de contraseña vacío llega como "" (la clave viaja en los params,
+  # fiel al formulario). Para el cast "" NO es "sin cambio": sin sacarlo de
+  # `changes`, `validate_length` lo rechazaría y `put_password_hash` guardaría el
+  # hash de la cadena vacía.
+  defp drop_blank_password(changeset) do
+    case get_change(changeset, :password) do
+      "" -> delete_change(changeset, :password)
+      _ -> changeset
+    end
+  end
+
   @doc "Changeset for profile updates: name, avatar_url, google_id (unlink)."
   def profile_changeset(user, attrs) do
     user
