@@ -10,27 +10,29 @@
 #
 # Env vars:
 #   SKIP_MIGRATIONS=1   bypass setup entirely (one-off task containers).
-#   DRAN_RESET=wipe     DESTRUCTIVE: drop the whole database schema (every
+#   DRAN_RESET=1        DESTRUCTIVE: drop the whole database schema (every
 #                       workspace with its content, every user, key and
-#                       setting) and rebuild it empty, so the instance is back
-#                       at /setup and you can onboard from scratch.
-#                       The value must be exactly "wipe" — anything else is
-#                       ignored, so a half-set variable can never destroy data.
+#                       setting) and rebuild it empty. The instance comes back
+#                       up at /setup — the first-run screen that creates the
+#                       owner — so you onboard from scratch, and that flow gives
+#                       the new owner its own personal workspace.
+#                       The value must be exactly "1"; anything else is ignored,
+#                       so a half-set variable can never destroy data.
 #                       ⚠️  It runs on EVERY container start while it is set:
 #                       unset it (or drop it from your deploy config) as soon as
 #                       the first boot finishes, or the next restart wipes the
 #                       instance again. For a one-shot wipe prefer an ephemeral
 #                       container:
-#                           docker run --rm -e DRAN_RESET=wipe <image>
+#                           docker run --rm -e DRAN_RESET=1 <image>
 set -e
 
 if [ -n "$DRAN_RESET" ]; then
-  if [ "$DRAN_RESET" = "wipe" ]; then
-    echo "[entrypoint] ⚠️  DRAN_RESET=wipe — DESTROYING all instance data and re-running setup."
+  if [ "$DRAN_RESET" = "1" ]; then
+    echo "[entrypoint] ⚠️  DRAN_RESET=1 — DESTROYING all instance data and re-running setup."
     echo "[entrypoint] ⚠️  Unset DRAN_RESET now, or the next container start will wipe again."
     bin/dran eval "Dran.Release.reset"
   else
-    echo "[entrypoint] DRAN_RESET is set to '$DRAN_RESET' but the only accepted value is 'wipe' — ignoring."
+    echo "[entrypoint] DRAN_RESET is set to '$DRAN_RESET' but only '1' triggers the reset — ignoring."
   fi
 fi
 

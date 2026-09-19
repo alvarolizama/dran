@@ -54,6 +54,9 @@ defmodule Dran.Release do
   Afterwards the instance is back at `/setup`, the first-run screen that
   creates the owner account, and that account gets its own personal workspace.
 
+  The container entrypoint triggers this with `DRAN_RESET=1` (see
+  docker/entrypoint.sh).
+
   Uploaded files on disk are NOT deleted — they become orphaned blobs, which
   is harmless; deleting them is a separate, deliberate operation.
   """
