@@ -44,13 +44,23 @@ defmodule DranWeb.E2EAuthTest do
 
   test "owner can access all contexts", %{admin: admin, ctx1: _ctx1, ctx2: _ctx2} do
     assert Accounts.is_owner?(admin)
-    assert Accounts.list_user_workspaces(admin) == []
+
+    # Creating the owner created the owner's OWN personal workspace, so that is
+    # the only membership it has. "The owner reaches every workspace" is a rule
+    # of require_workspace_access/2, not of list_user_workspaces/1.
+    assert [personal] = Accounts.list_user_workspaces(admin)
+    assert personal.id == admin.personal_workspace_id
   end
 
   test "regular user only sees assigned contexts", %{user: user, ctx1: ctx1, ctx2: ctx2} do
     contexts = Accounts.list_user_workspaces(user)
-    assert length(contexts) == 1
-    assert hd(contexts).id == ctx1.id
+
+    # The account's own personal workspace (created with it) plus the one it was
+    # assigned to — and neither of them is the private context it has no
+    # membership in.
+    assert Enum.map(contexts, & &1.id) |> Enum.sort() ==
+             Enum.sort([user.personal_workspace_id, ctx1.id])
+
     refute Enum.map(contexts, & &1.id) |> Enum.member?(ctx2.id)
   end
 

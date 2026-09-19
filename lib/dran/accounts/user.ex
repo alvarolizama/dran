@@ -18,6 +18,17 @@ defmodule Dran.Accounts.User do
     field :password_hash, :string
     field :default_workspace_slug, :string
 
+    # The user's own workspace (created with the account, private). It is the
+    # default landing workspace — see `Dran.Accounts.session_workspace_slug/1`.
+    # Set programmatically by `Dran.Accounts.ensure_personal_workspace/1`,
+    # never castable from params.
+    field :personal_workspace_id, :binary_id
+
+    # Permission to create ADDITIONAL workspaces (the personal one is exempt).
+    # Defaults to false: only the instance owner — or a user explicitly granted
+    # this from /admin/users — can create workspaces.
+    field :can_create_workspaces, :boolean, default: false
+
     # UI language: "en" (default) or "es". Read by DranWeb.Plugs.Locale and
     # DranWeb.Plugs.Auth.assign_to_socket/3 to pin Gettext per request.
     field :locale, :string, default: "en"
@@ -34,6 +45,10 @@ defmodule Dran.Accounts.User do
     has_many :workspaces, through: [:user_workspaces, :workspace]
     belongs_to :actor, Dran.Actors.Actor, define_field: false, foreign_key: :actor_id
 
+    belongs_to :personal_workspace, Dran.Workspace,
+      define_field: false,
+      foreign_key: :personal_workspace_id
+
     timestamps()
   end
 
@@ -46,13 +61,25 @@ defmodule Dran.Accounts.User do
       :avatar_url,
       :is_owner,
       :api_token,
-      :default_workspace_slug
+      :default_workspace_slug,
+      :can_create_workspaces
     ])
     |> validate_required([:email])
     |> unique_constraint(:email)
     |> unique_constraint(:google_id)
     |> unique_constraint(:api_token)
   end
+
+  @doc """
+  True when the user may create ADDITIONAL workspaces.
+
+  The instance owner always may; everyone else only with the explicit
+  `can_create_workspaces` grant. Personal workspaces are created by the system
+  and never go through this check.
+  """
+  def can_create_workspaces?(%__MODULE__{is_owner: true}), do: true
+  def can_create_workspaces?(%__MODULE__{can_create_workspaces: true}), do: true
+  def can_create_workspaces?(_user), do: false
 
   @doc "Changeset for password-based registration. Requires email + password."
   def registration_changeset(user, attrs) do

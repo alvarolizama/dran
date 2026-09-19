@@ -5,10 +5,11 @@ defmodule Dran.Release do
 
   All public functions are safe to call from a release container:
 
-    * `setup/0`         — create DB (if missing) → migrate → seed context. Idempotent.
+    * `setup/0`         — create DB (if missing) → migrate → seed context → backfill personal workspaces. Idempotent.
     * `migrate/0`       — run pending migrations.
     * `seed/0`          — run priv/repo/seeds.exs (full demo content). Dev/test only.
     * `seed_context/0`  — create the default context only. Safe for prod.
+    * `backfill_personal_workspaces/0` — give accounts that lack one their personal workspace. Idempotent.
     * `rollback/2`      — roll a single repo back to a given version.
 
   All commands start only the dependencies they need (the Ecto repo and its
@@ -36,6 +37,38 @@ defmodule Dran.Release do
     create()
     migrate()
     seed_context()
+    backfill_personal_workspaces()
+    :ok
+  end
+
+  @doc """
+  Give every account that lacks one a personal workspace.
+
+  Idempotent — safe on every deploy. Covers instances that existed before
+  personal workspaces (and any account whose creation-time workspace failed).
+  """
+  def backfill_personal_workspaces do
+    load_config()
+
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(
+          repo,
+          fn _repo ->
+            case Dran.Accounts.backfill_personal_workspaces() do
+              {0, 0} ->
+                Logger.info("[release] personal workspaces: nothing to backfill")
+
+              {created, failed} ->
+                Logger.info(
+                  "[release] personal workspaces backfilled: #{created} created, #{failed} failed"
+                )
+            end
+          end,
+          timeout: @start_timeout
+        )
+    end
+
     :ok
   end
 

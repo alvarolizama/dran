@@ -42,7 +42,11 @@ defmodule Dran.AccountsTest do
 
       found = Accounts.get_user_by_email(user.email)
       assert found.id == user.id
-      assert [_ctx] = found.workspaces
+
+      # Every account is created with its own personal workspace, so the
+      # memberships on the struct are that one plus the context added here.
+      assert Enum.sort(Enum.map(found.workspaces, & &1.id)) ==
+               Enum.sort([user.personal_workspace_id, context.id])
     end
 
     test "get_user_by_email/1 returns nil when not found" do
@@ -89,7 +93,9 @@ defmodule Dran.AccountsTest do
 
       assert [found] = Accounts.list_users()
       assert found.id == user.id
-      assert [_ctx] = found.workspaces
+
+      assert Enum.sort(Enum.map(found.workspaces, & &1.id)) ==
+               Enum.sort([user.personal_workspace_id, context.id])
     end
 
     test "update_user/2 updates a user" do
@@ -223,7 +229,9 @@ defmodule Dran.AccountsTest do
       {:ok, _} = Accounts.add_user_to_workspace(user, other)
 
       ids = Accounts.list_user_workspaces(user) |> Enum.map(& &1.id)
-      assert Enum.sort(ids) == Enum.sort([context.id, other.id])
+
+      assert Enum.sort(ids) ==
+               Enum.sort([user.personal_workspace_id, context.id, other.id])
     end
   end
 
@@ -277,7 +285,7 @@ defmodule Dran.AccountsTest do
       assert {:ok, authed} = Accounts.valid_token?(user.api_token)
 
       assert Enum.map(authed.workspaces, & &1.id) |> Enum.sort() ==
-               Enum.sort([ctx1.id, ctx2.id])
+               Enum.sort([user.personal_workspace_id, ctx1.id, ctx2.id])
     end
   end
 
@@ -500,7 +508,7 @@ defmodule Dran.AccountsTest do
       assert Accounts.session_workspace_slug(nil) == Dran.Auth.default_workspace_slug()
     end
 
-    test "the owner lands on the instance default, not narrowed by memberships" do
+    test "the owner lands on their personal workspace, ahead of the flagged default" do
       unique = System.unique_integer([:positive])
 
       {:ok, owner} =
@@ -515,10 +523,13 @@ defmodule Dran.AccountsTest do
 
       {:ok, _} = Knowledge.update_workspace(flagged, %{is_default: true})
 
-      # Member of nothing: require_workspace/2 still lets the owner into every
-      # workspace, so the instance default decides where they land.
-      assert Accounts.list_user_workspaces(owner) == []
-      assert Accounts.session_workspace_slug(owner) == flagged.slug
+      # Creating the account created its personal workspace, and that is where
+      # the owner lands: the instance-wide flagged default no longer decides.
+      personal = Accounts.personal_workspace(owner)
+      assert personal
+      assert owner.default_workspace_slug == personal.slug
+      assert Accounts.session_workspace_slug(owner) == personal.slug
+      refute Accounts.session_workspace_slug(owner) == flagged.slug
     end
 
     test "the owner's own default wins while the workspace still exists" do
@@ -553,13 +564,19 @@ defmodule Dran.AccountsTest do
 
       {:ok, _} = Accounts.set_default_context(user, "workspace-que-ya-no-existe")
 
-      # Rule 1 needs a live workspace: the dead slug is dropped and the
-      # instance default answers (the fixture flags "personal").
+      # Rule 1 needs a live workspace: the dead slug is dropped, and the
+      # personal workspace answers next instead of the instance default.
+      reloaded = Accounts.get_user_by_email(user.email)
+
       assert Dran.Auth.default_workspace_slug() == "personal"
-      assert Accounts.session_workspace_slug(Accounts.get_user_by_email(user.email)) == "personal"
+
+      assert Accounts.session_workspace_slug(reloaded) ==
+               Accounts.personal_workspace(reloaded).slug
+
+      refute Accounts.session_workspace_slug(reloaded) == "personal"
     end
 
-    test "a flagged public default wins for a user who can reach it" do
+    test "a flagged public default does not override the personal workspace" do
       unique = System.unique_integer([:positive])
 
       {:ok, user} =
@@ -570,46 +587,21 @@ defmodule Dran.AccountsTest do
 
       {:ok, _} = Knowledge.update_workspace(flagged, %{is_default: true})
 
-      # Public workspaces are reachable without a membership (F2), so the
-      # flagged default is a valid landing place even for a non-member.
-      assert Accounts.session_workspace_slug(Accounts.get_user_by_email(user.email)) ==
-               flagged.slug
+      # The user CAN reach the flagged public workspace (public non-members do),
+      # but the personal workspace is the landing place: public reachability is
+      # not the same thing as being where you start.
+      reloaded = Accounts.get_user_by_email(user.email)
+
+      assert Accounts.accessible_workspaces(reloaded)
+             |> Enum.map(& &1.slug)
+             |> Enum.member?(flagged.slug)
+
+      assert Accounts.session_workspace_slug(reloaded) ==
+               Accounts.personal_workspace(reloaded).slug
     end
 
     @tag :no_default_workspace
-    test "a user reaching exactly ONE workspace lands there, with nothing flagged" do
-      unique = System.unique_integer([:positive])
-
-      {:ok, user} =
-        Accounts.create_user(%{email: "landing-single-#{unique}@example.com", name: "Single"})
-
-      # Both workspaces private and none flagged: the instance default is the
-      # "personal" literal — a workspace nobody created. The one workspace the
-      # user actually reaches must win over that dead slug.
-      {:ok, mine} =
-        Knowledge.create_workspace(%{
-          name: "Mine #{unique}",
-          slug: "landing-solo-#{unique}",
-          visibility: "private"
-        })
-
-      {:ok, _other} =
-        Knowledge.create_workspace(%{
-          name: "Other #{unique}",
-          slug: "landing-other-#{unique}",
-          visibility: "private"
-        })
-
-      {:ok, _} = Accounts.add_user_to_workspace(user, mine)
-
-      refute Dran.Knowledge.get_default_workspace()
-      assert Dran.Auth.default_workspace_slug() == "personal"
-
-      assert Accounts.session_workspace_slug(Accounts.get_user_by_email(user.email)) == mine.slug
-    end
-
-    @tag :no_default_workspace
-    test "a user reaching several workspaces stays on the instance default" do
+    test "a personal workspace wins even with several workspaces reachable" do
       unique = System.unique_integer([:positive])
 
       {:ok, user} =
@@ -635,7 +627,175 @@ defmodule Dran.AccountsTest do
       reloaded = Accounts.get_user_by_email(user.email)
 
       refute Dran.Knowledge.get_default_workspace()
-      assert Accounts.session_workspace_slug(reloaded) == "personal"
+
+      assert Accounts.session_workspace_slug(reloaded) ==
+               Accounts.personal_workspace(reloaded).slug
+
+      # Fallback chain (an account from before personal workspaces, or one whose
+      # personal workspace was deleted): with nothing personal and nothing
+      # flagged, the instance-default literal is dead and rules 3-5 answer.
+      bare = %{reloaded | personal_workspace_id: nil, default_workspace_slug: nil}
+      assert Accounts.session_workspace_slug(bare) == "personal"
+    end
+
+    @tag :no_default_workspace
+    test "without a personal workspace, a user reaching exactly ONE lands there" do
+      unique = System.unique_integer([:positive])
+
+      {:ok, user} =
+        Accounts.create_user(%{email: "landing-single-#{unique}@example.com", name: "Single"})
+
+      # Both workspaces private and none flagged: the instance default is the
+      # "personal" literal — a workspace nobody created. The one workspace the
+      # user actually reaches must win over that dead slug.
+      {:ok, mine} =
+        Knowledge.create_workspace(%{
+          name: "Mine #{unique}",
+          slug: "landing-solo-#{unique}",
+          visibility: "private"
+        })
+
+      {:ok, _other} =
+        Knowledge.create_workspace(%{
+          name: "Other #{unique}",
+          slug: "landing-other-#{unique}",
+          visibility: "private"
+        })
+
+      # Simulate a pre-personal-workspaces account: the personal membership AND
+      # the pointer are gone, so `mine` really is the only workspace it reaches.
+      {1, _} = Accounts.remove_user_from_workspace(user, Accounts.personal_workspace(user))
+      {:ok, _} = Accounts.add_user_to_workspace(user, mine)
+      {:ok, _} = Accounts.update_user(user, %{default_workspace_slug: nil})
+
+      reloaded = Accounts.get_user_by_email(user.email)
+      bare = %{reloaded | personal_workspace_id: nil}
+
+      refute Dran.Knowledge.get_default_workspace()
+      assert Dran.Auth.default_workspace_slug() == "personal"
+      assert Accounts.session_workspace_slug(bare) == mine.slug
+    end
+  end
+
+  describe "personal workspaces" do
+    test "every account is created with its own private personal workspace" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+
+      assert user.personal_workspace_id
+      personal = Accounts.personal_workspace(user)
+      assert personal
+      assert personal.visibility == "private"
+      refute personal.is_default
+
+      # Linked as an owner membership too, so every existing access check works.
+      assert Accounts.user_in_workspace?(user, personal)
+      assert Accounts.user_role_in_workspace(user, personal) == "owner"
+    end
+
+    test "the personal workspace seeds the landing slug but never clobbers an explicit choice" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      personal = Accounts.personal_workspace(user)
+      assert user.default_workspace_slug == personal.slug
+
+      other = context_fixture()
+      {:ok, _} = Accounts.set_default_context(user, other.slug)
+
+      assert {:ok, _} =
+               Accounts.ensure_personal_workspace(Accounts.get_user_by_email(user.email))
+
+      assert Accounts.get_user_by_email(user.email).default_workspace_slug == other.slug
+    end
+
+    @tag :no_default_workspace
+    test "ensure_personal_workspace/1 is idempotent" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      personal = Accounts.personal_workspace(user)
+
+      assert {:ok, ensured} =
+               Accounts.ensure_personal_workspace(Accounts.get_user_by_email(user.email))
+
+      assert ensured.id == personal.id
+      assert Repo.aggregate(Dran.Workspace, :count, :id) == 1
+    end
+
+    test "two accounts sharing a display name get distinct personal workspaces" do
+      assert {:ok, a} = Accounts.create_user(%{email: "same-a@example.com", name: "Same"})
+      assert {:ok, b} = Accounts.create_user(%{email: "same-b@example.com", name: "Same"})
+
+      pa = Accounts.personal_workspace(a)
+      pb = Accounts.personal_workspace(b)
+
+      assert pa.id != pb.id
+      assert pa.slug != pb.slug
+      # `workspaces.name` is globally unique (001 migration), so the second one
+      # has to be suffixed — the reason the name is uniquified before insert.
+      assert pa.name != pb.name
+    end
+
+    test "backfill_personal_workspaces/0 covers accounts that lack one" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+
+      # Shaped like a pre-personal-workspaces account: no membership and no
+      # pointer (deleting the workspace NILIFIES users.personal_workspace_id).
+      personal = Accounts.personal_workspace(user)
+      {1, _} = Accounts.remove_user_from_workspace(user, personal)
+      {:ok, _} = Dran.Knowledge.delete_workspace(personal)
+
+      assert Accounts.get_user_by_email(user.email).personal_workspace_id == nil
+      assert Accounts.backfill_personal_workspaces() == {1, 0}
+      assert Accounts.personal_workspace(Accounts.get_user_by_email(user.email))
+      assert Accounts.backfill_personal_workspaces() == {0, 0}
+    end
+
+    test "accessible_workspaces/1 lists the personal workspace first" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      other = context_fixture()
+      {:ok, _} = Accounts.add_user_to_workspace(user, other)
+
+      assert [first | _] = Accounts.accessible_workspaces(Accounts.get_user_by_email(user.email))
+      assert first.id == user.personal_workspace_id
+    end
+  end
+
+  describe "create_workspace_for/2 (creation permission)" do
+    test "is denied by default" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      refute Accounts.can_create_workspaces?(user)
+
+      assert {:error, :forbidden} =
+               Accounts.create_workspace_for(user, %{name: "Hers", slug: "hers"})
+
+      refute Dran.Knowledge.get_workspace_by_slug("hers")
+    end
+
+    test "a granted user creates one and becomes its owner member" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      assert {:ok, granted} = Accounts.update_user(user, %{can_create_workspaces: true})
+      assert Accounts.can_create_workspaces?(granted)
+
+      assert {:ok, ws} = Accounts.create_workspace_for(granted, %{name: "Hers", slug: "hers"})
+      assert ws.slug == "hers"
+      assert Accounts.user_in_workspace?(granted, ws)
+      assert Accounts.user_role_in_workspace(granted, ws) == "owner"
+    end
+
+    test "the instance owner always may" do
+      assert {:ok, owner} = Accounts.create_user(Map.put(@user_attrs, :is_owner, true))
+      assert Accounts.can_create_workspaces?(owner)
+      assert {:ok, _ws} = Accounts.create_workspace_for(owner, %{name: "Ours", slug: "ours"})
+    end
+
+    test "a failed workspace insert leaves no membership behind (same transaction)" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      assert {:ok, granted} = Accounts.update_user(user, %{can_create_workspaces: true})
+
+      # Name collides with the "Personal" fixture: the insert fails, so the
+      # owner membership must not be written either.
+      assert {:error, %Ecto.Changeset{}} =
+               Accounts.create_workspace_for(granted, %{name: "Personal", slug: "otra-personal"})
+
+      refute Dran.Knowledge.get_workspace_by_slug("otra-personal")
+      assert length(Accounts.list_user_workspaces(granted)) == 1
     end
   end
 end

@@ -8,7 +8,11 @@ defmodule DranWeb.DashboardLive do
   - Instance owner (admin): sees every workspace, instance-level totals
     (workspaces, pages, users) and a "New workspace" button that opens the
     same creation modal as the admin area. The submit handler is guarded
-    server-side by `can_create_workspace`.
+    server-side by the `can_create_workspaces` permission.
+  - Users granted `can_create_workspaces` (off by default, toggled from
+    /admin/users): see only the workspaces they can access — their personal
+    one first — plus the "New workspace" button. Workspaces they create are
+    theirs (they become the owner member).
   - Regular users: see only their accessible workspaces (memberships +
     public), a few metrics per workspace (pages, todo items, last update)
     and a direct link into each one. No create controls.
@@ -158,12 +162,13 @@ defmodule DranWeb.DashboardLive do
   def mount(_params, session, socket) do
     {socket, _context} = Auth.assign_to_socket(socket, session)
 
-    is_owner = socket.assigns[:is_owner] || false
-
+    # `:user` is the DB struct loaded by assign_to_socket (nil when the session
+    # has no matching row). The permission is the real gate, not "is the
+    # instance owner": a user granted `can_create_workspaces` may create too.
     socket =
       socket
       |> assign(
-        can_create_workspace: is_owner,
+        can_create_workspace: Dran.Accounts.can_create_workspaces?(socket.assigns[:user]),
         new_workspace_form:
           to_form(Dran.Workspace.changeset(%Dran.Workspace{}, %{}), as: :context),
         show_workspace_modal: false,
@@ -218,7 +223,7 @@ defmodule DranWeb.DashboardLive do
 
   @impl true
   def handle_event("create_workspace", %{"context" => params}, socket) do
-    # Owner-only, enforced server-side (the button is hidden for everyone else).
+    # Permission enforced server-side too (the button is hidden without it).
     if socket.assigns[:can_create_workspace] do
       # An untouched slug field means it was auto-suggested from the name —
       # drop it so Knowledge.create_workspace regenerates it with a random
@@ -230,7 +235,7 @@ defmodule DranWeb.DashboardLive do
           params
         end
 
-      case Dran.Knowledge.create_workspace(params) do
+      case Dran.Accounts.create_workspace_for(socket.assigns[:user], params) do
         {:ok, _workspace} ->
           {:noreply,
            socket
@@ -238,6 +243,9 @@ defmodule DranWeb.DashboardLive do
            |> assign_new_form()
            |> assign(show_workspace_modal: false, suggested_slug: "")
            |> put_flash(:info, gettext("Workspace created"))}
+
+        {:error, :forbidden} ->
+          {:noreply, put_flash(socket, :error, gettext("Insufficient permissions"))}
 
         {:error, changeset} ->
           {:noreply, assign(socket, new_workspace_form: to_form(changeset, as: :context))}
@@ -250,16 +258,19 @@ defmodule DranWeb.DashboardLive do
   # ── Data ─────────────────────────────────────────────────────────────────
 
   defp reload_workspaces(socket) do
-    is_owner = socket.assigns[:can_create_workspace] || false
-    current_user = socket.assigns[:current_user]
-    db_user = current_user && Dran.Accounts.get_user_by_email(current_user)
+    user = socket.assigns[:user]
+    is_instance_owner = Dran.Accounts.is_owner?(user)
 
+    # The instance owner reaches every workspace in the instance, so the
+    # dashboard shows them all; anyone else sees exactly what they can access
+    # (their personal workspace, the ones they are a member of, the public
+    # ones) — same list the switcher uses.
     workspaces =
-      if is_owner do
+      if is_instance_owner do
         Dran.Knowledge.list_workspaces()
         |> Enum.map(&Map.put_new(&1, :role, "owner"))
       else
-        (db_user && Dran.Accounts.accessible_workspaces(db_user)) || []
+        (user && Dran.Accounts.accessible_workspaces(user)) || []
       end
 
     ws_metrics = workspace_metrics(workspaces)
@@ -273,7 +284,7 @@ defmodule DranWeb.DashboardLive do
     instance = %{
       total_workspaces: length(workspaces),
       total_pages: total_pages,
-      total_users: if(is_owner, do: length(Dran.Accounts.list_users()), else: 0)
+      total_users: if(is_instance_owner, do: length(Dran.Accounts.list_users()), else: 0)
     }
 
     socket

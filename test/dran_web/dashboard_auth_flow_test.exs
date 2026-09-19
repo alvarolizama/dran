@@ -7,6 +7,13 @@ defmodule DranWeb.DashboardAuthFlowTest do
   # the msgid unless the process locale is switched.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
+  # Deletes the account's personal workspace, simulating an account that has
+  # none (created before personal workspaces existed, or whose workspace was
+  # deleted) so the landing fallback chain can be exercised.
+  defp drop_personal_workspace(user) do
+    user |> Accounts.personal_workspace() |> Dran.Knowledge.delete_workspace()
+  end
+
   setup %{conn: conn} do
     {:ok, user} =
       Accounts.create_user_with_password(%{
@@ -48,9 +55,14 @@ defmodule DranWeb.DashboardAuthFlowTest do
     assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Invalid"
   end
 
-  test "login opens the session on the flagged instance default", %{conn: conn, user: user} do
+  test "login opens the session on the personal workspace, not the flagged default", %{
+    conn: conn,
+    user: user
+  } do
     unique = System.unique_integer([:positive])
 
+    # A workspace flagged as the instance default used to decide where a session
+    # opened; the account's personal workspace is the landing place now.
     {:ok, flagged} =
       Dran.Knowledge.create_workspace(%{name: "Landing #{unique}", slug: "landing-#{unique}"})
 
@@ -65,7 +77,10 @@ defmodule DranWeb.DashboardAuthFlowTest do
         "login" => %{"username" => user.email, "password" => "supersecret123"}
       })
 
-    assert get_session(conn, "workspace_slug") == flagged.slug
+    personal = Accounts.personal_workspace(Accounts.get_user_by_email(user.email))
+    assert personal
+    assert get_session(conn, "workspace_slug") == personal.slug
+    refute get_session(conn, "workspace_slug") == flagged.slug
   end
 
   @tag :no_default_workspace
@@ -93,6 +108,11 @@ defmodule DranWeb.DashboardAuthFlowTest do
         slug: "other-#{unique}",
         visibility: "private"
       })
+
+    # Drop the personal workspace the account was created with, so the
+    # only-reachable fallback is what decides the landing (the shape of an
+    # account from before personal workspaces existed).
+    drop_personal_workspace(restricted)
 
     {:ok, _} = Accounts.add_user_to_workspace(restricted, mine)
 

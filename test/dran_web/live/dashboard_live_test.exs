@@ -9,6 +9,13 @@ defmodule DranWeb.DashboardLiveTest do
   # what the app renders unless a test pins another locale.
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
+  # Deletes the account's personal workspace, simulating an account with no
+  # workspaces at all (the shape of one created before personal workspaces
+  # existed, or whose personal workspace was deleted).
+  defp drop_personal_workspace(user) do
+    user |> Accounts.personal_workspace() |> Knowledge.delete_workspace()
+  end
+
   defp owner_conn(conn) do
     conn
     |> Plug.Test.init_test_session(%{})
@@ -94,12 +101,16 @@ defmodule DranWeb.DashboardLiveTest do
 
     @tag :no_default_workspace
     test "empty instance shows the create CTA", %{conn: conn} do
-      {:ok, _owner} =
+      {:ok, owner} =
         Accounts.create_user(%{
           email: "owner@test.dev",
           name: "Owner",
           is_owner: true
         })
+
+      # Every account is created with its own personal workspace, so the
+      # instance is only truly empty for an account that has none.
+      {:ok, _} = drop_personal_workspace(owner)
 
       conn =
         conn
@@ -136,12 +147,16 @@ defmodule DranWeb.DashboardLiveTest do
 
     @tag :no_default_workspace
     test "with no memberships nor public workspaces shows the empty state", %{conn: conn} do
-      {:ok, _user} =
+      {:ok, user} =
         Accounts.create_user(%{
           email: "none@test.dev",
           name: "Nobody",
           is_owner: false
         })
+
+      # The account's personal workspace is its own silo, so "nothing assigned"
+      # only happens for an account without one.
+      {:ok, _} = drop_personal_workspace(user)
 
       # A private workspace the user is not a member of
       {:ok, _ws} =

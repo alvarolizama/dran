@@ -147,4 +147,39 @@ defmodule DranWeb.SessionControllerTest do
       assert counts[personal.id] >= 2
     end
   end
+
+  describe "POST /setup — first-run onboarding" do
+    # No users at all (that is what /setup is for) and no pre-made workspaces,
+    # so the owner's personal workspace is created by this very flow.
+    @tag :no_default_workspace
+    test "creates the owner WITH its personal workspace and lands there", %{conn: conn} do
+      conn = get(conn, ~p"/setup")
+      csrf = conn.private.plug_session["_csrf_token"]
+
+      conn =
+        post(conn, ~p"/setup", %{
+          "_csrf_token" => csrf,
+          "setup" => %{
+            "email" => "founder@example.com",
+            "password" => "supersecret123",
+            "password_confirmation" => "supersecret123"
+          }
+        })
+
+      assert redirected_to(conn, 302) == "/"
+
+      owner = Dran.Accounts.get_user_by_email("founder@example.com")
+      assert owner.is_owner
+
+      personal = Dran.Accounts.personal_workspace(owner)
+      assert personal
+      assert personal.visibility == "private"
+      refute personal.is_default
+      assert Dran.Accounts.user_role_in_workspace(owner, personal) == "owner"
+
+      # The onboarding default landing: the account's own personal workspace.
+      assert owner.default_workspace_slug == personal.slug
+      assert get_session(conn, "workspace_slug") == personal.slug
+    end
+  end
 end

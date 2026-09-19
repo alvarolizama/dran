@@ -169,6 +169,29 @@ defmodule DranWeb.AdminUsersLive do
     end
   end
 
+  @doc """
+  Grant or revoke the `can_create_workspaces` permission.
+
+  Off by default: creating workspaces is a privilege, not something every
+  account has. The personal workspace is exempt (the system creates it) and the
+  instance owner always has it, so the toggle is not rendered for them.
+  """
+  @impl true
+  def handle_event("toggle_can_create_workspaces", %{"id" => id}, socket) do
+    user = Dran.Accounts.get_user!(id)
+
+    case Dran.Accounts.update_user(user, %{can_create_workspaces: not user.can_create_workspaces}) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign_users()
+         |> put_flash(:info, gettext("Permission updated"))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not update the permission"))}
+    end
+  end
+
   @impl true
   def handle_event("toggle_wiki_google_signup", _params, socket) do
     current = Dran.Settings.get("wiki_google_open_signup") == true
@@ -266,6 +289,7 @@ defmodule DranWeb.AdminUsersLive do
                     <th>{gettext("Admin")}</th>
                     <th>{gettext("Contexts")}</th>
                     <th>{gettext("Default context")}</th>
+                    <th>{gettext("New workspaces")}</th>
                     <th>{gettext("API Token")}</th>
                     <th></th>
                   </tr>
@@ -281,8 +305,26 @@ defmodule DranWeb.AdminUsersLive do
                     </td>
                     <td>
                       <div :if={user.workspaces != []} class="flex flex-wrap gap-1">
-                        <span :for={ctx <- user.workspaces} class="badge badge-ghost badge-sm">
+                        <span
+                          :for={ctx <- user.workspaces}
+                          class={[
+                            "badge badge-sm",
+                            if(ctx.id == user.personal_workspace_id,
+                              do: "badge-primary",
+                              else: "badge-ghost"
+                            )
+                          ]}
+                          title={
+                            if(ctx.id == user.personal_workspace_id,
+                              do: gettext("This user's personal workspace"),
+                              else: nil
+                            )
+                          }
+                        >
                           {ctx.name}
+                          <span :if={ctx.id == user.personal_workspace_id} class="ml-1 opacity-70">
+                            {gettext("personal")}
+                          </span>
                         </span>
                       </div>
                       <span :if={user.workspaces == []} class="text-base-content/40 text-xs">—</span>
@@ -307,6 +349,21 @@ defmodule DranWeb.AdminUsersLive do
                           </option>
                         </select>
                       </form>
+                    </td>
+                    <td>
+                      <span :if={user.is_owner} class="text-xs text-base-content/50">
+                        {gettext("always (admin)")}
+                      </span>
+                      <input
+                        :if={not user.is_owner}
+                        type="checkbox"
+                        id={"can-create-workspaces-#{user.id}"}
+                        checked={user.can_create_workspaces}
+                        phx-click="toggle_can_create_workspaces"
+                        phx-value-id={user.id}
+                        class="toggle toggle-sm toggle-primary"
+                        title={gettext("Allow this user to create workspaces")}
+                      />
                     </td>
                     <td>
                       <div class="flex items-center gap-1">

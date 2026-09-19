@@ -116,8 +116,17 @@ defmodule Dran.Knowledge do
   cannot honor. With a default in place, an explicit `is_default: true` clears
   the previous holder first (the flag is exclusive) — both inside the same
   transaction.
+
+  ## Options
+
+    * `:owner_user_id` — when given, the created workspace is linked to that
+      user as its `owner` member, in the SAME transaction (either both rows
+      exist or neither does). Callers that create a workspace *for* a user must
+      pass it: without a membership the creator of a private workspace could not
+      reach their own workspace (see `Dran.Accounts.create_workspace_for/2`).
+      System callers (release seeding) omit it.
   """
-  def create_workspace(attrs) do
+  def create_workspace(attrs, opts \\ []) do
     attrs =
       attrs
       |> maybe_flag_first_default()
@@ -131,8 +140,28 @@ defmodule Dran.Knowledge do
 
     Repo.transaction(fn ->
       clear_default_flag(changeset)
-      insert_or_rollback(changeset)
+      workspace = insert_or_rollback(changeset)
+      insert_owner_membership(workspace, Keyword.get(opts, :owner_user_id))
+      workspace
     end)
+  end
+
+  # Links the workspace to its creating user as `owner`, inside the caller's
+  # transaction. Rollback (not raise) on failure so the outer transaction
+  # returns the changeset, matching every other write in this context.
+  defp insert_owner_membership(_workspace, nil), do: :ok
+
+  defp insert_owner_membership(%Workspace{id: workspace_id}, user_id) do
+    case Repo.insert(
+           Dran.Accounts.UserWorkspace.changeset(%Dran.Accounts.UserWorkspace{}, %{
+             user_id: user_id,
+             workspace_id: workspace_id,
+             role: "owner"
+           })
+         ) do
+      {:ok, _membership} -> :ok
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
   end
 
   @doc """
