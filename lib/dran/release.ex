@@ -11,6 +11,7 @@ defmodule Dran.Release do
     * `seed_context/0`  — create the default context only. Safe for prod.
     * `backfill_personal_workspaces/0` — give accounts that lack one their personal workspace. Idempotent.
     * `rollback/2`      — roll a single repo back to a given version.
+    * `reset/0`         — DESTRUCTIVE: drop the `public` schema (all data) and run setup/0 again, for a from-scratch onboarding.
 
   All commands start only the dependencies they need (the Ecto repo and its
   adapter); they intentionally do NOT start the full application supervision
@@ -38,6 +39,37 @@ defmodule Dran.Release do
     migrate()
     seed_context()
     backfill_personal_workspaces()
+    :ok
+  end
+
+  @doc """
+  DESTROY the instance and start over from an empty database.
+
+  Drops the `public` schema — every table, so every workspace (personal
+  included) with its content, every user, API key and setting — recreates it
+  and runs the normal `setup/0` (create → migrate → seed default context →
+  backfill personal workspaces). Extensions (`pg_trgm`, `unaccent`, `pgcrypto`,
+  `vector`) live in the same schema and are recreated by the migrations.
+
+  Afterwards the instance is back at `/setup`, the first-run screen that
+  creates the owner account, and that account gets its own personal workspace.
+
+  Uploaded files on disk are NOT deleted — they become orphaned blobs, which
+  is harmless; deleting them is a separate, deliberate operation.
+  """
+  def reset do
+    Logger.warning(
+      "[release] RESET: dropping schema public — ALL instance data (workspaces, " <>
+        "pages, memories, users, keys, settings) is destroyed"
+    )
+
+    drop_schema()
+    setup()
+
+    Logger.warning(
+      "[release] RESET done: the instance is empty. Open /setup to create the owner."
+    )
+
     :ok
   end
 
@@ -70,6 +102,25 @@ defmodule Dran.Release do
     end
 
     :ok
+  end
+
+  # Drops and recreates `public`. Runs inside the repo's own connection (the
+  # schema is not something Ecto can express), before any migration so the
+  # version table starts empty and every migration re-runs.
+  defp drop_schema do
+    load_config()
+
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(
+          repo,
+          fn _repo ->
+            Ecto.Adapters.SQL.query!(repo, "DROP SCHEMA IF EXISTS public CASCADE")
+            Ecto.Adapters.SQL.query!(repo, "CREATE SCHEMA public")
+          end,
+          timeout: @start_timeout
+        )
+    end
   end
 
   @doc """
