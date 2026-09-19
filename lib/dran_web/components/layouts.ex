@@ -139,7 +139,7 @@ defmodule DranWeb.Layouts do
           ]}>
             <div class={[
               "w-full",
-              if(@instance_nav? or not @sidebar, do: "p-6 pb-16", else: "contents")
+              if(@instance_nav? or not @sidebar, do: "p-4 pb-16 sm:p-6", else: "contents")
             ]}>
               {render_slot(@inner_block)}
             </div>

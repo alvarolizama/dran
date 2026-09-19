@@ -74,13 +74,30 @@ No los hardcodees.
 
 ### C3. Layout base
 
-- El contenido principal va en un `<main>`; el **shell** (navbar/sidebar/topbar)
-  es de cada app → ver **Custom**.
+- El contenido principal va en un `<main>`; el **shell** (sidebar, gaveta, rail)
+  es de cada app → ver **Custom** (§T2).
 - **Header de página:** `<.header>` — título (`:inner_block`) + `:subtitle` +
   `:actions`.
 - **Filtros y acciones, alineados a la DERECHA** (slot `:actions` o
   `justify-end`). Nunca a la izquierda.
 - **Contenedores anchos** (tablas/paneles) envueltos en `overflow-x-auto`.
+
+#### C3.1 Responsive (mobile-first)
+
+Toda superficie nueva nace usable en teléfono; el escritorio es la mejora, no
+el punto de partida.
+
+| Regla | Cómo |
+|---|---|
+| **Corte del shell** | **`lg` (64rem)**: debajo, la navegación va en **gaveta** (overlay + hamburguesa); arriba, fija y colapsable a **rail** de iconos (§T2) |
+| **Padding del contenido** | `p-4 pb-16 sm:p-6` — en móvil más ajustado |
+| **Headers de página** | `flex flex-wrap items-center justify-between gap-3`: las acciones bajan de línea en pantallas chicas |
+| **Tablas** | siempre `overflow-x-auto` (§C6): scrollean en horizontal, nunca rompen el layout |
+| **Grids** | mobile-first: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`; **nunca** arrancar en 2+ columnas |
+| **Anchos** | `w-full min-w-0`; los `max-w-*` son para modales y textos, no para el contenido |
+| **Modales** | overlay `p-4` + card `w-full max-w-*`; las columnas de metadata van `hidden md:flex` (§C7.2) |
+| **Texto** | sin truncados duros fuera de tablas/celdas; lo truncado lleva `title` |
+| **Acciones** | `btn-xs`+ (target táctil); las de fila conservan `title` (§C6) |
 
 ### C4. Elementos básicos
 
@@ -641,6 +658,29 @@ tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
   con densidad de familia (header `p-3`, búsqueda `p-3`, nav
   `flex-1 overflow-y-auto p-2 flex flex-col gap-4`, pie `p-3 border-t`).
 
+**Definición de la sidebar (de arriba a abajo):**
+
+| Zona | Contenido |
+|---|---|
+| header | logo + "Dran" · `<.workspace_selector>` (`select select-xs`, sólo si hay workspace) · toggle de colapso (sólo desktop) |
+| búsqueda | form `GET /:slug/search` con `⌘K` (sólo workspace) |
+| nav | **workspace:** Home · Graph · Journey · Memory + grupo *Knowledge base* (tipos + Clusters) — **instancia:** Workspaces · grupo *Account* (Profile, API keys) · grupo *Admin* (Users, All workspaces, Models, System, Jobs) |
+| pie | `<.user_footer>`: avatar + nombre/email + menú |
+
+**Definición de los menús:**
+
+- **Nav (`<.nav_link>`, `<.nav_group>`):** activo = `bg-primary/15 text-primary` +
+  `aria-current="page"`; badge `badge-sm` (ghost, primary si activo); `title` con
+  el label para el rail.
+- **Menú de usuario (`#user-menu`, `<.menu_item>`):** Workspaces (`/`, siempre) ·
+  Profile · API keys · *(divider, sólo con workspace)* Activity · Workspace
+  settings (gated owner/admin) · *(divider)* Log out.
+
+**Responsive del shell:** `lg` separa los dos modos — por debajo, gaveta con
+overlay y barra `h-14` (hamburguesa + logo); por encima, sidebar fija que se
+colapsa a rail de 4rem (logo + iconos con tooltip + avatar). La gaveta **no**
+se persiste: cerrarla es overlay o navegar.
+
 - **Sidebar (workspace):** header con logo + `<.workspace_selector>`
   (`id="context-selector"`, `select select-xs`) en la misma fila; buscador del
   workspace (`GET /:slug/search`, icono + `kbd ⌘K`); nav con
@@ -857,4 +897,6 @@ mix tailwind dran && grep -c 'data-theme=dim' priv/static/assets/css/app.css  # 
 grep -n 'drawer lg:drawer-open' lib/dran_web/components/layouts.ex      # shell responsive
 grep -n 'shell-hide' assets/css/app.css                                # colapso a rail (desktop)
 grep -c '<.button' lib/dran_web/live/*.ex                               # CTAs de crear como componente
+grep -rn 'flex-wrap items-center justify-between' lib/dran_web/live/   # headers que envuelven
+grep -rn 'p-4 sm:p-6' lib/dran_web/                                    # padding mobile-first
 ```

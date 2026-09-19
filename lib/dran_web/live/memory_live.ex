@@ -453,7 +453,7 @@ defmodule DranWeb.MemoryLive do
 
   defp memory_header(assigns) do
     ~H"""
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-title">{gettext("Memory")}</h1>
         <p class="text-caption mt-1">

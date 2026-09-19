@@ -72,7 +72,7 @@ defmodule DranWeb.JourneyLive do
 
   defp page_header(assigns) do
     ~H"""
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-title">{gettext("Trajectory")}</h1>
         <p class="text-caption mt-1">

@@ -51,7 +51,7 @@ defmodule DranWeb.ClusterLive do
 
   defp index_view(assigns) do
     ~H"""
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
       <div>
         <h1 class="text-title">{gettext("Clusters")}</h1>
         <p class="text-caption mt-1">
@@ -145,7 +145,7 @@ defmodule DranWeb.ClusterLive do
   defp show_view(assigns) do
     ~H"""
     <div :if={@summary}>
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <div class="flex items-center gap-2 mb-1">
             <.icon name="hero-squares-2x2" class="w-6 h-6 text-primary/70" />

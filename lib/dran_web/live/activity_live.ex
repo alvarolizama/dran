@@ -93,7 +93,7 @@ defmodule DranWeb.ActivityLive do
 
   defp header_section(assigns) do
     ~H"""
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-title">{gettext("Activity")}</h1>
         <p class="text-caption mt-1">

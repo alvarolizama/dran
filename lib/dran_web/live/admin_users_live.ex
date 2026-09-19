@@ -218,7 +218,7 @@ defmodule DranWeb.AdminUsersLive do
     >
       <div class="w-full" id="users-tab" phx-hook=".CopyUserToken">
         <div class="w-full space-y-6">
-          <div class="flex items-center justify-between">
+          <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 class="text-title">{gettext("Users")}</h1>
               <p class="text-caption mt-1">{gettext("Manage users and their workspace access.")}</p>

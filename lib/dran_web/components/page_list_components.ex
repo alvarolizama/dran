@@ -118,7 +118,7 @@ defmodule DranWeb.PageListComponents do
   def page_list(assigns) do
     ~H"""
     <div class="p-6">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h1 class="text-title">
           {if @page_type, do: ui_plural(@context, @page_type), else: gettext("All Pages")}
         </h1>
@@ -165,7 +165,7 @@ defmodule DranWeb.PageListComponents do
       <%= if @show_archived do %>
         <%!-- Switch ON: show only archived pages --%>
         <div class="rounded-xl border border-base-300 bg-base-200/30" data-testid="archived-section">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-base-300">
+          <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-base-300">
             <div class="flex items-center gap-2 text-sm font-semibold text-base-content/60">
               <.icon name="hero-archive-box" class="size-4" />
               {gettext("Archived")}
