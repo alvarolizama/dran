@@ -309,7 +309,10 @@ defmodule Dran.JobsTest do
   end
 
   defp clear_disabled_jobs! do
+    # Settings.delete (not a raw Repo.delete_all) — it also invalidates the
+    # ETS cache, which outlives each test's sandbox transaction.
     Repo.delete_all(from s in "settings", where: s.key == "disabled_jobs")
+    Dran.Settings.delete("disabled_jobs")
   end
 
   # Defensive: Jobs.execute/3 always writes run reports to the shared default

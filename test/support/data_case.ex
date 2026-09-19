@@ -30,6 +30,10 @@ defmodule Dran.DataCase do
   setup tags do
     Dran.DataCase.setup_sandbox(tags)
 
+    # The sandbox rolls the DB back after each test, but Dran.Settings' ETS
+    # cache survives — drop it so no test reads another test's settings.
+    Dran.Settings.clear_cache()
+
     # Many tests assume the default "personal" workspace exists (created by
     # seeds in dev, absent in test). Create it by default unless a test opts
     # out with `@tag :no_default_workspace`.

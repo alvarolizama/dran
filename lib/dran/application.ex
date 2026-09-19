@@ -9,6 +9,8 @@ defmodule Dran.Application do
   def start(_type, _args) do
     children = [
       DranWeb.Telemetry,
+      # Settings ETS cache — before anything reads Dran.Settings.get/1.
+      Dran.Settings,
       Dran.Repo,
       # System actors are code-managed: upsert idempotently on every boot,
       # after the Repo is up. Task exits normally when done (temporary).

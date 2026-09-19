@@ -80,4 +80,29 @@ defmodule Dran.SettingsTest do
       assert defaults["worker_max_sources"] == 10
     end
   end
+
+  describe "ETS cache" do
+    test "get serves from cache after first read (no DB row created)" do
+      assert Settings.get("semantic_threshold_short") == 0.15
+      # Second read hits the ETS cache — same value, and the cache holds it.
+      assert Settings.get("semantic_threshold_short") == 0.15
+
+      assert :ets.lookup(Dran.Settings, "semantic_threshold_short") == [
+               {"semantic_threshold_short", 0.15}
+             ]
+    end
+
+    test "put invalidates the cached value" do
+      assert Settings.get("worker_max_pages") == 10
+      Settings.put("worker_max_pages", 7)
+      assert Settings.get("worker_max_pages") == 7
+    end
+
+    test "delete invalidates the cached value back to default" do
+      Settings.put("worker_max_pages", 7)
+      assert Settings.get("worker_max_pages") == 7
+      Settings.delete("worker_max_pages")
+      assert Settings.get("worker_max_pages") == 10
+    end
+  end
 end

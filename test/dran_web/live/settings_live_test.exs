@@ -295,6 +295,7 @@ defmodule DranWeb.SettingsLiveTest do
       on_exit(fn ->
         Application.delete_env(:dran, :google_oauth)
         Dran.Repo.delete_all(from s in "settings", where: s.key == "wiki_google_open_signup")
+        Dran.Settings.delete("wiki_google_open_signup")
       end)
 
       :ok
@@ -1167,6 +1168,7 @@ defmodule DranWeb.SettingsLiveTest do
 
     defp clear_disabled_jobs! do
       Dran.Repo.delete_all(from s in "settings", where: s.key == "disabled_jobs")
+      Dran.Settings.delete("disabled_jobs")
     end
 
     defp delete_job_reports!(workspace_id) do

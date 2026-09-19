@@ -35,6 +35,9 @@ defmodule DranWeb.ConnCase do
   setup tags do
     Dran.DataCase.setup_sandbox(tags)
 
+    # Same as DataCase: the settings ETS cache survives the sandbox rollback.
+    Dran.Settings.clear_cache()
+
     # Many LiveView tests assume the default "personal" workspace exists AND
     # that the "test_user" session user has owner access (the old behavior
     # treated pre-multi-user sessions as full admin). Create both by default
