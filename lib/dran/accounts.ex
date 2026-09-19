@@ -312,10 +312,49 @@ defmodule Dran.Accounts do
 
   # ── Context membership ──
 
-  def add_user_to_workspace(%User{} = user, %Workspace{} = context) do
+  @doc """
+  Add `user` to `workspace` with `role` (default `"viewer"`).
+  """
+  def add_user_to_workspace(%User{} = user, %Workspace{} = context, role \\ "viewer") do
     %UserWorkspace{}
-    |> UserWorkspace.changeset(%{user_id: user.id, workspace_id: context.id})
+    |> UserWorkspace.changeset(%{user_id: user.id, workspace_id: context.id, role: role})
     |> Repo.insert()
+  end
+
+  @doc """
+  Add an EXISTING account to a workspace, looked up by email — this is what the
+  UI calls "invite". Dran has no invitation emails: the person must already have
+  an account on this instance.
+
+  The lookup is case-insensitive (people retype their own address in any case),
+  the stored email is untouched.
+
+  Returns `{:ok, %UserWorkspace{}}`, `{:error, :user_not_found}` (no such
+  account), `{:error, :already_member}`, or `{:error, changeset}`.
+  """
+  def add_member_by_email(%Workspace{} = workspace, email, role \\ "viewer")
+      when is_binary(email) do
+    case find_user_by_email_ci(String.trim(email)) do
+      nil ->
+        {:error, :user_not_found}
+
+      %User{} = user ->
+        if user_in_workspace?(user, workspace) do
+          {:error, :already_member}
+        else
+          add_user_to_workspace(user, workspace, role)
+        end
+    end
+  end
+
+  defp find_user_by_email_ci(""), do: nil
+
+  defp find_user_by_email_ci(email) do
+    Repo.one(
+      from u in User,
+        where: fragment("lower(?) = lower(?)", u.email, ^email),
+        limit: 1
+    )
   end
 
   def remove_user_from_workspace(%User{} = user, %Workspace{} = context) do

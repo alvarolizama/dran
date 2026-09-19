@@ -798,4 +798,38 @@ defmodule Dran.AccountsTest do
       assert length(Accounts.list_user_workspaces(granted)) == 1
     end
   end
+
+  describe "add_member_by_email/3 (inviting an existing account)" do
+    test "adds an existing account with the given role" do
+      ws = context_fixture()
+      assert {:ok, member} = Accounts.create_user(%{email: "member@example.com", name: "Member"})
+
+      assert {:ok, %Dran.Accounts.UserWorkspace{}} =
+               Accounts.add_member_by_email(ws, "member@example.com", "editor")
+
+      assert Accounts.user_in_workspace?(member, ws)
+      assert Accounts.user_role_in_workspace(member, ws) == "editor"
+    end
+
+    test "is case-insensitive and trims the submitted email" do
+      ws = context_fixture()
+      assert {:ok, _member} = Accounts.create_user(%{email: "Mixed@Example.com", name: "Mixed"})
+
+      assert {:ok, _} = Accounts.add_member_by_email(ws, "  mIXED@example.COM  ", "viewer")
+    end
+
+    test "refuses an email with no account — Dran has no invitation emails" do
+      ws = context_fixture()
+      assert {:error, :user_not_found} = Accounts.add_member_by_email(ws, "ghost@example.com")
+      assert {:error, :user_not_found} = Accounts.add_member_by_email(ws, "")
+    end
+
+    test "reports an existing membership instead of a raw constraint error" do
+      ws = context_fixture()
+      assert {:ok, _member} = Accounts.create_user(%{email: "dup@example.com", name: "Dup"})
+
+      assert {:ok, _} = Accounts.add_member_by_email(ws, "dup@example.com")
+      assert {:error, :already_member} = Accounts.add_member_by_email(ws, "dup@example.com")
+    end
+  end
 end

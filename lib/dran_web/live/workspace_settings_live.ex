@@ -70,6 +70,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         feature_groups: @feature_groups,
         active_tab: :general,
         user_search: "",
+        invite_form: to_form(%{"email" => "", "role" => "viewer"}, as: :invite),
         workspace_members: [],
         all_users: []
       )
@@ -179,6 +180,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 members={@workspace_members}
                 all_users={@all_users}
                 user_search={@user_search}
+                invite_form={@invite_form}
               />
             </div>
           </div>
@@ -414,6 +416,44 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, gettext("Could not update role"))}
+    end
+  end
+
+  # "Invite" in Dran means: give an EXISTING account access to this workspace.
+  # There is no invitation email and no pending-invitation state — the person
+  # must already have an account on this instance, and the membership exists as
+  # soon as this returns. Hence the explicit not-found message.
+  @impl true
+  def handle_event("invite_member", %{"invite" => params}, socket) do
+    workspace = socket.assigns.workspace
+    email = params["email"] || ""
+    role = params["role"] || "viewer"
+
+    case Accounts.add_member_by_email(workspace, email, role) do
+      {:ok, _membership} ->
+        {:noreply,
+         socket
+         |> assign(invite_form: to_form(%{"email" => "", "role" => role}, as: :invite))
+         |> assign_workspace_members()
+         |> assign_all_users()
+         |> put_flash(:info, gettext("%{email} now has access to this workspace", email: email))}
+
+      {:error, :user_not_found} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext(
+             "No account with that email exists on this instance. Only existing users can be added."
+           )
+         )}
+
+      {:error, :already_member} ->
+        {:noreply,
+         put_flash(socket, :info, gettext("That user already has access to this workspace."))}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not add the user"))}
     end
   end
 
@@ -1183,6 +1223,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
   attr :members, :list, required: true
   attr :all_users, :list, required: true
   attr :user_search, :string, required: true
+  attr :invite_form, :any, required: true
 
   defp users_section(assigns) do
     ~H"""
@@ -1270,6 +1311,45 @@ defmodule DranWeb.WorkspaceSettingsLive do
           <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
             {gettext("Add users")}
           </h3>
+
+          <p class="text-xs text-base-content/60 mb-3">
+            {gettext(
+              "Give an existing account access to this workspace. People must already have a Dran account — there is no invitation email, access is granted as soon as you add them."
+            )}
+          </p>
+
+          <%!-- Add by email (works for anyone, no need to search first) --%>
+          <.form
+            for={@invite_form}
+            id="invite-member-form"
+            phx-submit="invite_member"
+            class="flex flex-wrap items-end gap-3 mb-4"
+          >
+            <div class="flex-1 min-w-56">
+              <.input
+                field={@invite_form[:email]}
+                type="email"
+                label={gettext("Email")}
+                placeholder="ana@example.com"
+              />
+            </div>
+            <div class="w-40">
+              <.input
+                field={@invite_form[:role]}
+                type="select"
+                label={gettext("Role")}
+                options={role_options()}
+              />
+            </div>
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm mb-2 transition-colors active:scale-95"
+              phx-disable-with={gettext("Adding…")}
+            >
+              <.icon name="hero-plus" class="size-4" />
+              {gettext("Add")}
+            </button>
+          </.form>
 
           <%!-- The id keeps LiveView form recovery working (it is the field the
                form is about, and the one a crash would lose). --%>
@@ -1708,6 +1788,13 @@ defmodule DranWeb.WorkspaceSettingsLive do
   defp role_label("editor"), do: gettext("Editor")
   defp role_label("viewer"), do: gettext("Viewer")
   defp role_label(other), do: other
+
+  # Options for the invite form. "owner" is deliberately absent: the workspace
+  # already has an owner (whoever created it), and handing out ownership is a
+  # deliberate two-step decision from the member list — not a dropdown default.
+  defp role_options do
+    Enum.map(~w(admin editor viewer), &{role_label(&1), &1})
+  end
 
   # One line per role, rendered as a legend above the member list: picking a
   # role is a permission decision and the options are otherwise just words.
