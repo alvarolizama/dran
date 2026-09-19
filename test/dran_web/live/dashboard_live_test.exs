@@ -82,6 +82,18 @@ defmodule DranWeb.DashboardLiveTest do
       assert html =~ "personal"
     end
 
+    test "lists your own workspaces apart from the rest of the instance", %{conn: conn} do
+      # A workspace test_user (the owner) is NOT a member of.
+      {:ok, _other} = Knowledge.create_workspace(%{name: "Ajena", slug: "ajena"})
+
+      {:ok, _view, html} = live(owner_conn(conn), ~p"/")
+
+      assert html =~ t("Your workspaces")
+      assert html =~ t("Organization")
+      assert html =~ ~s(href="/personal")
+      assert html =~ ~s(href="/ajena")
+    end
+
     test "creates a workspace from the modal", %{conn: conn} do
       {:ok, view, html} = live(owner_conn(conn), ~p"/")
 
@@ -145,6 +157,25 @@ defmodule DranWeb.DashboardLiveTest do
       refute html =~ t("Users")
     end
 
+    test "never sees the Organization section, even for workspaces they cannot open", %{
+      conn: conn
+    } do
+      {:ok, user} =
+        Accounts.create_user(%{email: "member9@test.dev", name: "Member9", is_owner: false})
+
+      ws = Knowledge.get_workspace_by_slug("personal")
+      Accounts.add_user_to_workspace(user, ws)
+
+      # A workspace they are not a member of: not theirs, and not reachable.
+      {:ok, _other} = Knowledge.create_workspace(%{name: "Cerrada", slug: "cerrada"})
+
+      {:ok, _view, html} = live(user_conn(conn, "member9@test.dev"), ~p"/")
+
+      assert html =~ t("Your workspaces")
+      refute html =~ t("Organization")
+      refute html =~ ~s(href="/cerrada")
+    end
+
     @tag :no_default_workspace
     test "with no memberships nor public workspaces shows the empty state", %{conn: conn} do
       {:ok, user} =
@@ -170,6 +201,17 @@ defmodule DranWeb.DashboardLiveTest do
   end
 
   describe "access control" do
+    test "a non-member cannot open a workspace by URL", %{conn: conn} do
+      {:ok, _user} =
+        Accounts.create_user(%{email: "outside@test.dev", name: "Outside", is_owner: false})
+
+      {:ok, _ws} = Knowledge.create_workspace(%{name: "Cerrada2", slug: "cerrada-2"})
+
+      # Every workspace is private: no membership, no entry — even by URL.
+      assert {:error, {:redirect, %{to: "/"}}} =
+               live(user_conn(conn, "outside@test.dev"), ~p"/cerrada-2")
+    end
+
     test "create_workspace event is rejected for non-owners", %{conn: conn} do
       {:ok, user} =
         Accounts.create_user(%{

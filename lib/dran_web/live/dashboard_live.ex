@@ -7,15 +7,17 @@ defmodule DranWeb.DashboardLive do
 
   - Instance owner (admin): sees every workspace, instance-level totals
     (workspaces, pages, users) and a "New workspace" button that opens the
-    same creation modal as the admin area. The submit handler is guarded
-    server-side by the `can_create_workspaces` permission.
+    same creation modal as the admin area. Their own workspaces (memberships)
+    come first under "Your workspaces", and the rest of the instance — which
+    they can reach only because they own it — under "Organization". The submit
+    handler is guarded server-side by the `can_create_workspaces` permission.
   - Users granted `can_create_workspaces` (off by default, toggled from
     /admin/users): see only the workspaces they can access — their personal
     one first — plus the "New workspace" button. Workspaces they create are
     theirs (they become the owner member).
-  - Regular users: see only their accessible workspaces (memberships +
-    public), a few metrics per workspace (pages, todo items, last update)
-    and a direct link into each one. No create controls.
+  - Regular users: see only their accessible workspaces (their memberships),
+    a few metrics per workspace (pages, todo items, last update) and a direct
+    link into each one. No create controls.
   - Empty instance: the owner gets a create-workspace CTA; other users get
     a "nothing assigned yet" state.
   """
@@ -61,12 +63,10 @@ defmodule DranWeb.DashboardLive do
         </div>
 
         <div class="space-y-4">
-          <h2 class="text-heading">
-            {if @can_create_workspace, do: gettext("Workspaces"), else: gettext("Your workspaces")}
-          </h2>
+          <h2 class="text-heading">{gettext("Your workspaces")}</h2>
 
           <div
-            :if={@workspaces == []}
+            :if={@my_workspaces == []}
             class="surface-2 p-12 rounded-2xl flex flex-col items-center gap-4 text-center"
           >
             <div class="size-14 rounded-full bg-base-200 flex items-center justify-center">
@@ -86,7 +86,7 @@ defmodule DranWeb.DashboardLive do
                   do: gettext("Create the first workspace to start building your second brain."),
                   else:
                     gettext(
-                      "Ask the instance owner to add you to a workspace, or browse public workspaces from the Wiki."
+                      "Ask the administrator of a workspace to add you by email. Every workspace is private — there is nothing to browse."
                     )}
               </p>
             </div>
@@ -100,12 +100,36 @@ defmodule DranWeb.DashboardLive do
             </.button>
           </div>
 
-          <div :if={@workspaces != []} class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div :if={@my_workspaces != []} class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <.workspace_card
-              :for={ws <- @workspaces}
+              :for={ws <- @my_workspaces}
               ws={ws}
               metrics={Map.get(@workspace_metrics, ws.id, %{pages: 0, last_updated: nil})}
               can_manage={@can_create_workspace or Map.get(ws, :role) in ~w(owner admin)}
+            />
+          </div>
+        </div>
+
+        <%!-- The instance owner reaches every workspace of the instance (see
+             require_workspace_access/2), so the ones they are NOT a member of are
+             listed apart instead of mixed in with their own: one card per user in
+             the same list makes your own workspace hard to find. --%>
+        <div :if={@org_workspaces != []} class="space-y-4">
+          <div class="space-y-1">
+            <h2 class="text-heading">{gettext("Organization")}</h2>
+            <p class="text-caption">
+              {gettext(
+                "Workspaces you are not a member of. You can reach them because you own this instance."
+              )}
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <.workspace_card
+              :for={ws <- @org_workspaces}
+              ws={ws}
+              metrics={Map.get(@workspace_metrics, ws.id, %{pages: 0, last_updated: nil})}
+              can_manage={true}
             />
           </div>
         </div>
@@ -261,17 +285,16 @@ defmodule DranWeb.DashboardLive do
     user = socket.assigns[:user]
     is_instance_owner = Dran.Accounts.is_owner?(user)
 
-    # The instance owner reaches every workspace in the instance, so the
-    # dashboard shows them all; anyone else sees exactly what they can access
-    # (their personal workspace, the ones they are a member of, the public
-    # ones) — same list the switcher uses.
-    workspaces =
-      if is_instance_owner do
-        Dran.Knowledge.list_workspaces()
-        |> Enum.map(&Map.put_new(&1, :role, "owner"))
-      else
-        (user && Dran.Accounts.accessible_workspaces(user)) || []
-      end
+    # "Propios": the workspaces the user was added to, their personal one first.
+    # Same list the switcher uses.
+    my_workspaces = (user && Dran.Accounts.accessible_workspaces(user)) || []
+
+    # "De la organización": only the instance owner has any. They reach every
+    # workspace of the instance (require_workspace_access/2), so the ones they
+    # are NOT a member of are shown apart instead of mixed in with their own.
+    org_workspaces = org_workspaces(user, my_workspaces)
+
+    workspaces = my_workspaces ++ org_workspaces
 
     ws_metrics = workspace_metrics(workspaces)
 
@@ -290,10 +313,22 @@ defmodule DranWeb.DashboardLive do
     socket
     |> assign(
       workspaces: workspaces,
+      my_workspaces: my_workspaces,
+      org_workspaces: org_workspaces,
       workspace_metrics: ws_metrics,
       instance: instance
     )
   end
+
+  defp org_workspaces(%{is_owner: true}, my_workspaces) do
+    mine = MapSet.new(my_workspaces, & &1.id)
+
+    Dran.Knowledge.list_workspaces()
+    |> Enum.reject(&MapSet.member?(mine, &1.id))
+    |> Enum.map(&Map.put_new(&1, :role, "owner"))
+  end
+
+  defp org_workspaces(_user, _my_workspaces), do: []
 
   defp assign_new_form(socket) do
     assign(socket,
@@ -354,13 +389,6 @@ defmodule DranWeb.DashboardLive do
           <div class="flex flex-wrap items-center gap-2 mt-1">
             <code class="text-xs text-base-content/50 font-mono">{@ws.slug}</code>
             <.role_badge role={Map.get(@ws, :role, "owner")} />
-            <span class="inline-flex items-center gap-1 text-xs text-base-content/60">
-              <.icon
-                name={if @ws.visibility == "public", do: "hero-globe-alt", else: "hero-lock-closed"}
-                class="size-3"
-              />
-              {if @ws.visibility == "public", do: gettext("Public"), else: gettext("Private")}
-            </span>
           </div>
         </div>
         <div class="flex gap-1.5 shrink-0">
