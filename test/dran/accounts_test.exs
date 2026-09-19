@@ -928,4 +928,61 @@ defmodule Dran.AccountsTest do
       assert {:error, :already_member} = Accounts.add_member_by_email(ws, "dup@example.com")
     end
   end
+
+  describe "credenciales y vínculo de identidad de una cuenta nueva" do
+    test "create_user_with_password/1 deja la contraseña con la que la persona entra" do
+      assert {:ok, user} =
+               Accounts.create_user_with_password(%{
+                 email: "invitado@example.com",
+                 password: "contrasena-larga-123"
+               })
+
+      assert is_binary(user.password_hash)
+      assert {:ok, _} = Accounts.authenticate_user("invitado@example.com", "contrasena-larga-123")
+      assert {:error, :unauthorized} = Accounts.authenticate_user("invitado@example.com", "otra")
+    end
+
+    test "exige contraseña: sin ella devuelve el error, no una cuenta sin entrada" do
+      assert {:error, changeset} =
+               Accounts.create_user_with_password(%{email: "sin-clave@example.com"})
+
+      assert "can't be blank" in errors_on(changeset).password
+      refute Accounts.get_user_by_email("sin-clave@example.com")
+    end
+
+    test "acepta los params del formulario tal cual, con claves string" do
+      # Los params de una LiveView llegan con claves string y el changeset tiene
+      # que llevarlos así para que Phoenix pinte los errores en el campo
+      # (`used_input?` busca la clave string dentro de form.params).
+      assert {:ok, user} =
+               Accounts.create_user_with_password(%{
+                 "email" => "params@example.com",
+                 "password" => "contrasena-larga-123"
+               })
+
+      assert is_binary(user.api_token)
+      assert {:ok, _} = Accounts.authenticate_user("params@example.com", "contrasena-larga-123")
+    end
+
+    test "create_user/1 no da credenciales: es el camino de Google/API, no el de una persona" do
+      assert {:ok, user} = Accounts.create_user(%{email: "sin-credenciales@example.com"})
+
+      assert is_nil(user.password_hash)
+
+      assert {:error, :unauthorized} =
+               Accounts.authenticate_user("sin-credenciales@example.com", "lo-que-sea")
+    end
+
+    test "la cuenta queda enlazada a su actor de identidad" do
+      # `Map.put(attrs, :actor_id, ...)` no bastaba: `User.changeset/2` no castea
+      # :actor_id, así que el valor se perdía en silencio — la fila en `actors`
+      # se creaba y users.actor_id quedaba NULL, con lo que el guard de
+      # `Dran.Actors.delete_actor/1` sobre la identidad de un usuario nunca se
+      # activaba.
+      assert {:ok, user} = Accounts.create_user(%{email: "vinculo@example.com"})
+
+      assert user.actor_id
+      assert Dran.Actors.get_actor_by_name("vinculo@example.com").id == user.actor_id
+    end
+  end
 end

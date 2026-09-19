@@ -36,25 +36,60 @@ defmodule Dran.Accounts do
     Repo.get_by(User, api_token: token) |> Repo.preload(:workspaces)
   end
 
-  def create_user(attrs) do
-    attrs = Map.put(attrs, :actor_id, resolve_or_create_user_actor(attrs[:email]))
+  @doc """
+  Creates an account WITHOUT a password.
 
+  This is the identity-only path: Google auto-signup (`DranWeb.OAuthController`)
+  creates the row and the person gets in with Google
+  (`find_or_link_from_google/1` links by email).
+
+  It is NOT how an admin gives an account to somebody. A row with no
+  `password_hash` and no `google_id` has no way in — `authenticate_user/2`
+  answers `{:error, :unauthorized}` for it, always — so the account is dead
+  weight and an invitation to a workspace pointing at it leads nowhere. For a
+  person who has to sign in, use `create_user_with_password/1` (what the
+  /admin/users UI does).
+  """
+  def create_user(attrs) do
     %User{}
     |> User.changeset(attrs)
-    |> Ecto.Changeset.put_change(:api_token, User.generate_api_token())
-    |> Repo.insert()
-    |> with_personal_workspace()
+    |> insert_user(attrs)
   end
 
-  def create_user_with_password(%{email: _email, password: _pass} = attrs) do
-    attrs = Map.put(attrs, :actor_id, resolve_or_create_user_actor(attrs[:email]))
+  @doc """
+  Creates an account WITH a password: the person signs in with email + password
+  at /login as soon as this returns.
 
+  The password is required by validation (see `User.registration_changeset/2`:
+  email format, 8 characters minimum, bcrypt hash), so a call without one comes
+  back as a changeset error instead of an account nobody can enter.
+  """
+  def create_user_with_password(attrs) do
     %User{}
     |> User.registration_changeset(attrs)
+    |> insert_user(attrs)
+  end
+
+  # One insert path for both creations: the identity actor, the api_token and
+  # the personal workspace happen the same way whichever changeset — password or
+  # not — built the row, so the two cannot drift apart.
+  #
+  # The `put_change/3` calls are NOT redundant: `User.changeset/2` casts neither
+  # `:actor_id` nor `:password`, so putting them in the attrs is dropped in
+  # silence. That is exactly what happened to the actor link: the row in `actors`
+  # was created and the users.actor_id that resolves it was thrown away.
+  defp insert_user(changeset, attrs) do
+    changeset
+    |> Ecto.Changeset.put_change(:actor_id, resolve_or_create_user_actor(email_from(attrs)))
     |> Ecto.Changeset.put_change(:api_token, User.generate_api_token())
     |> Repo.insert()
     |> with_personal_workspace()
   end
+
+  # Attrs arrive with atom keys (release setup, OAuth, tests) or with string
+  # keys (a form's params, exactly as the client sent them — see the comment in
+  # AdminUsersLive.handle_event/3 about why that matters).
+  defp email_from(attrs), do: Map.get(attrs, :email) || Map.get(attrs, "email")
 
   def authenticate_user(email, password) when is_binary(email) and is_binary(password) do
     case get_user_by_email(email) do
