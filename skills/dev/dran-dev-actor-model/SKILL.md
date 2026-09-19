@@ -97,5 +97,44 @@ key and the `X-Hermes-Agent` header — never client-settable.
   `:actor_is_user_identity`). `attribution_count/1` previews pages +
   memories. Since the key no longer creates actors, historical
   `kind: agent` rows are the main things those guards still protect.
+- **`users.actor_id` no lo escribe ningún cast.** `User.changeset/2` NO castea
+  `:actor_id`, así que meterlo en los attrs (`Map.put(attrs, :actor_id, …)`) se
+  descarta SIN aviso: la fila en `actors` se creaba y el vínculo quedaba NULL.
+  Como solo la migración `20260901062734` backfilleó las filas de su momento, el
+  guard `:actor_is_user_identity` de `delete_actor/1` no veía la identidad de
+  ninguna cuenta nueva. Va con `put_change/3` post-changeset, en
+  `Accounts.insert_user/2` (el único camino de inserción de cuentas, compartido
+  por los dos `create_user*`). Antes de razonar sobre ese guard:
+  `select count(*), count(actor_id) from users`.
+- **Mismo mecanismo, credenciales: `User.changeset/2` tampoco castea `:password`.**
+  `create_user/1` construye la fila y tira el password que le pasen → cuenta sin
+  `password_hash` y sin `google_id`, o sea sin entrada (`authenticate_user/2` la
+  rechaza siempre), y una invitación a un workspace que no lleva a ninguna parte.
+  Para una persona va `create_user_with_password/1` (`registration_changeset`:
+  email con formato, 8 mínimo, hash bcrypt). `create_user/1` es solo el alta de
+  Google, donde el acceso lo da `google_id`.
+
+## Cuentas: quién agrega a quién y quién resetea una contraseña
+
+- No hay invitaciones por correo y no las hay sin montar el envío: `Dran.Mailer`
+  existe (Swoosh, adapter `Local` en config, `Test` en test) y **no tiene un solo
+  llamador** en `lib/`. Agregar gente es meter una cuenta que YA existe:
+  `add_member_by_email/3` busca por email (case-insensitive) y responde
+  `{:error, :user_not_found}` si no la hay.
+- Puertas del alta de miembros (todas en la ruta, no en el handler):
+  `/:ws/settings` pasa por `:workspace_admin` = dueño de la instancia (sesión
+  `is_owner`) ∪ rol `owner`/`admin` de ESE workspace; el CREADOR queda con rol
+  `owner` por `insert_owner_membership/2` (`knowledge.ex:145-166`). Un `editor`
+  trabaja dentro del workspace pero no entra a configuración.
+- El RESET de la contraseña de otra cuenta vive en `/admin/users` (scope `:admin`
+  = dueño de instancia) porque poder cambiarla es poder entrar como esa persona:
+  privilegio de instancia, no de workspace. `Accounts.update_user_as_admin/2` +
+  `User.admin_changeset/2`, SIN `current_password` (el admin no la conoce: ese es
+  el punto) y con un solo `Repo.update` por submit — si la contraseña no valida,
+  el nombre tampoco se guarda.
+- **Un input de contraseña vacío llega como `""`, y para el cast `""` NO es "sin
+  cambio".** Sin sacarlo de `changes` (`delete_change/2`), `validate_length` lo
+  rechaza y `put_password_hash/1` guarda el hash de la cadena vacía. En el mismo
+  changeset: quitar el blanco, DESPUÉS validar el mínimo, DESPUÉS hashear.
 
 Legacy columns, backfills and fallback rules: `references/attribution-legacy.md`.
