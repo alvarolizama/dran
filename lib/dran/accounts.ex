@@ -224,15 +224,40 @@ defmodule Dran.Accounts do
   # (Re-fetching with `get_user/1` would preload `:workspaces`/`:user_workspaces`
   # and `Repo.preload/2` never reloads an already-loaded association, so a later
   # `list_user_workspaces(user)` on that struct would report stale memberships.)
-  defp do_ensure_personal_workspace(%User{personal_workspace_id: id} = user)
-       when is_binary(id) do
-    case Repo.get(Workspace, id) do
-      %Workspace{} = workspace -> {:ok, workspace, user}
-      nil -> create_personal_workspace(user)
+  #
+  # The account row is locked FOR UPDATE and re-read INSIDE the transaction. That
+  # is what turns "one personal workspace per account" into a guarantee instead
+  # of a hope: without it, two concurrent calls — a signup racing the release
+  # backfill, a double submit, two devices — both read
+  # `personal_workspace_id = nil`, both create a workspace, and the loser's row
+  # stays behind as an orphan the user still sees in their list. With the lock
+  # the loser waits, re-reads, finds the winner's id and creates nothing.
+  defp do_ensure_personal_workspace(%User{id: user_id}) do
+    outcome =
+      Repo.transaction(fn ->
+        case Repo.one(from u in User, where: u.id == ^user_id, lock: "FOR UPDATE") do
+          nil ->
+            Repo.rollback(:user_not_found)
+
+          user ->
+            case user.personal_workspace_id && Repo.get(Workspace, user.personal_workspace_id) do
+              %Workspace{} = workspace ->
+                {:ok, workspace, user}
+
+              nil ->
+                case create_personal_workspace(user) do
+                  {:ok, workspace, updated_user} -> {:ok, workspace, updated_user}
+                  {:error, reason} -> Repo.rollback(reason)
+                end
+            end
+        end
+      end)
+
+    case outcome do
+      {:ok, result} -> result
+      {:error, reason} -> {:error, reason}
     end
   end
-
-  defp do_ensure_personal_workspace(%User{} = user), do: create_personal_workspace(user)
 
   defp create_personal_workspace(%User{} = user) do
     # The display name is NOT uniquified: `workspaces.name` stopped being unique
@@ -292,18 +317,49 @@ defmodule Dran.Accounts do
   Create a workspace FOR `user`: they become its `owner` member in the same
   transaction as the workspace row.
 
-  Enforces the creation permission server-side (never only in the UI):
-  `{:error, :forbidden}` for a user without it. The personal workspace is
-  exempt from this permission — it is created by `ensure_personal_workspace/1`,
-  never through here.
+  Two refusals, both enforced here and not only in the UI:
+
+    * `{:error, :forbidden}` — the user has no `can_create_workspaces`
+      permission. The personal workspace is exempt from it: that one is created
+      by `ensure_personal_workspace/1`, never through here.
+    * `{:error, :name_taken}` — they ALREADY have a workspace with that name in
+      their own list. Names are not unique in the database (two people may both
+      have a "Personal"), so the check is scoped to what this user can reach:
+      refusing because of a workspace they cannot even open would leak its
+      existence and help nobody. Inside their own list the repetition is a
+      mistake worth catching — the alternative is silently handing them
+      /trabajo-3f9a2b for a URL they never chose.
   """
   def create_workspace_for(%User{} = user, attrs) do
-    if can_create_workspaces?(user) do
-      Dran.Knowledge.create_workspace(attrs, owner_user_id: user.id)
-    else
-      {:error, :forbidden}
+    cond do
+      not can_create_workspaces?(user) -> {:error, :forbidden}
+      name_taken_for?(user, attrs) -> {:error, :name_taken}
+      true -> Dran.Knowledge.create_workspace(attrs, owner_user_id: user.id)
     end
   end
+
+  # Case-insensitive and trimmed: to the person typing it, "Trabajo" and
+  # " trabajo " are the same workspace — and they slugify to the same URL.
+  defp name_taken_for?(%User{} = user, attrs) do
+    case attrs_name(attrs) do
+      nil ->
+        false
+
+      name ->
+        wanted = normalize_name(name)
+        Enum.any?(accessible_workspaces(user), &(normalize_name(&1.name) == wanted))
+    end
+  end
+
+  defp attrs_name(attrs) do
+    case Map.get(attrs, "name") || Map.get(attrs, :name) do
+      name when is_binary(name) and name != "" -> name
+      _ -> nil
+    end
+  end
+
+  defp normalize_name(name) when is_binary(name), do: name |> String.trim() |> String.downcase()
+  defp normalize_name(_name), do: ""
 
   # ── Context membership ──
 

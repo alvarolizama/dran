@@ -713,6 +713,36 @@ defmodule Dran.AccountsTest do
       assert Repo.aggregate(Dran.Workspace, :count, :id) == 1
     end
 
+    test "a stale struct cannot create a second personal workspace" do
+      assert {:ok, user} = Accounts.create_user(@user_attrs)
+      personal = Accounts.personal_workspace(user)
+      before = Repo.aggregate(Dran.Workspace, :count, :id)
+
+      # Exactly what the losing half of a race looks like: our copy of the
+      # account still says "no personal workspace" while the row already has one.
+      # The function trusts the locked row, not the struct it was handed, so the
+      # loser creates nothing instead of leaving an orphan in the user's list.
+      stale = %{user | personal_workspace_id: nil}
+
+      assert {:ok, ensured} = Accounts.ensure_personal_workspace(stale)
+      assert ensured.id == personal.id
+      assert Repo.aggregate(Dran.Workspace, :count, :id) == before
+    end
+
+    test "the database refuses to hand one workspace to two accounts" do
+      assert {:ok, a} = Accounts.create_user(%{email: "pa@example.com", name: "PA"})
+      assert {:ok, b} = Accounts.create_user(%{email: "pb@example.com", name: "PB"})
+
+      # `ensure_personal_workspace/1` holds the application half of the
+      # invariant (the row lock); this is the schema half, and it is real: no
+      # raw write can point two accounts at the same personal workspace.
+      assert_raise Ecto.ConstraintError, fn ->
+        b
+        |> Ecto.Changeset.change(personal_workspace_id: a.personal_workspace_id)
+        |> Repo.update()
+      end
+    end
+
     test "two accounts sharing a display name get distinct personal workspaces" do
       assert {:ok, a} = Accounts.create_user(%{email: "same-a@example.com", name: "Same"})
       assert {:ok, b} = Accounts.create_user(%{email: "same-b@example.com", name: "Same"})
@@ -825,6 +855,43 @@ defmodule Dran.AccountsTest do
       assert twin.slug != "personal"
       assert Dran.Knowledge.get_workspace_by_slug(twin.slug).id == twin.id
       assert Accounts.user_role_in_workspace(granted, twin) == "owner"
+    end
+
+    test "refuses a name the creator already has in their list" do
+      assert {:ok, user} = Accounts.create_user(%{email: "dupe@example.com", name: "Dupe"})
+      assert {:ok, granted} = Accounts.update_user(user, %{can_create_workspaces: true})
+
+      personal = Accounts.personal_workspace(granted)
+
+      # Their personal workspace is in their list, so its name is taken — and the
+      # point is that they get told, instead of silently receiving /dupe-3f9a2b.
+      assert {:error, :name_taken} =
+               Accounts.create_workspace_for(granted, %{name: personal.name})
+
+      # Case and surrounding blanks do not buy a second one.
+      assert {:error, :name_taken} =
+               Accounts.create_workspace_for(granted, %{
+                 name: "  #{String.upcase(personal.name)}  "
+               })
+
+      # Nor does it create anything on the way out.
+      assert Enum.count(Dran.Knowledge.list_workspaces(), &(&1.name == personal.name)) == 1
+    end
+
+    test "another account may still use the same name" do
+      assert {:ok, alice} = Accounts.create_user(%{email: "alice@example.com", name: "Alice"})
+      assert {:ok, bob} = Accounts.create_user(%{email: "bob@example.com", name: "Bob"})
+      assert {:ok, alice} = Accounts.update_user(alice, %{can_create_workspaces: true})
+      assert {:ok, bob} = Accounts.update_user(bob, %{can_create_workspaces: true})
+
+      # The check is scoped to the creator's own list. Two people can both run a
+      # "Trabajo", and the database does not stand in the way: names are labels.
+      assert {:ok, a_ws} = Accounts.create_workspace_for(alice, %{name: "Trabajo"})
+      assert {:ok, b_ws} = Accounts.create_workspace_for(bob, %{name: "Trabajo"})
+
+      assert a_ws.name == b_ws.name
+      assert a_ws.slug != b_ws.slug
+      refute Accounts.user_in_workspace?(bob, a_ws)
     end
   end
 
