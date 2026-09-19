@@ -148,6 +148,29 @@ defmodule DranWeb.SessionControllerTest do
     end
   end
 
+  describe "sidebar workspace selector" do
+    # Regression: the selector form posted the field as "context_slug" — a
+    # leftover from the contexts→workspaces rename — while
+    # SessionController.switch_workspace/2 reads "workspace_slug". Every switch
+    # therefore fell through to the catch-all ("Context slug is required") and
+    # the active workspace never changed. The two names must stay in sync.
+    test "posts the field name the switch controller reads" do
+      html =
+        render_component(&DranWeb.Layouts.workspace_selector/1, %{
+          workspaces: [
+            %{id: "1", name: "Personal", slug: "personal"},
+            %{id: "2", name: "Work", slug: "work"}
+          ],
+          workspace_slug: "personal",
+          page_counts: %{}
+        })
+
+      assert html =~ ~s(action="/workspace")
+      assert html =~ ~s(name="workspace_slug")
+      refute html =~ ~s(name="context_slug")
+    end
+  end
+
   describe "POST /setup — first-run onboarding" do
     # No users at all (that is what /setup is for) and no pre-made workspaces,
     # so the owner's personal workspace is created by this very flow.

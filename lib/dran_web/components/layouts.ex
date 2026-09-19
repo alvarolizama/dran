@@ -620,9 +620,13 @@ defmodule DranWeb.Layouts do
            after a crash/reconnect, and warns on every mount without it. --%>
       <form id="workspace-selector-form" action={~p"/workspace"} method="post">
         <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+        <%!-- The field name must match what SessionController.switch_workspace/2
+             reads ("workspace_slug"). It used to post "context_slug", a leftover
+             from the rename, so EVERY switch fell through to the catch-all and
+             flashed "Context slug is required" while the selection stayed put. --%>
         <select
           id="context-selector"
-          name="context_slug"
+          name="workspace_slug"
           onchange="this.form.submit()"
           class="select select-xs w-full"
         >
