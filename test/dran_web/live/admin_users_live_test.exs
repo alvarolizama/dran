@@ -111,16 +111,51 @@ defmodule DranWeb.AdminUsersLiveTest do
       assert modal(view) =~ et("should be at least 8 character(s)")
     end
 
-    test "el email repetido se avisa en el campo, no en un flash con inspect", %{conn: conn} do
-      email = "repetido-#{uniq()}@test.dev"
-
-      {:ok, _existing} =
-        Accounts.create_user_with_password(%{email: email, password: "primera-larga-123"})
+    test "el nombre es obligatorio y es el que da nombre al workspace personal", %{conn: conn} do
+      email = "con-nombre-#{uniq()}@test.dev"
 
       {:ok, view, _html} = live(owner_conn(conn), ~p"/admin/users")
       open_new_user_modal(view)
 
-      submit_user(view, %{"email" => email, "password" => "segunda-larga-123"})
+      # Sin nombre no hay cuenta: es con lo que se nombra su workspace personal
+      # (y de donde sale su URL).
+      submit_user(view, %{"email" => email, "name" => "", "password" => "contrasena-larga-123"})
+
+      refute Accounts.get_user_by_email(email)
+      assert modal(view) =~ esc(et("can't be blank"))
+
+      submit_user(view, %{
+        "email" => email,
+        "name" => "Marta Ruiz",
+        "password" => "contrasena-larga-123"
+      })
+
+      user = Accounts.get_user_by_email(email)
+      assert user.name == "Marta Ruiz"
+
+      personal = Accounts.personal_workspace(user)
+      assert personal.name == "Marta Ruiz"
+      assert personal.slug == "marta-ruiz"
+    end
+
+    test "el email repetido se avisa en el campo, no en un flash con inspect", %{conn: conn} do
+      email = "repetido-#{uniq()}@test.dev"
+
+      {:ok, _existing} =
+        Accounts.create_user_with_password(%{
+          email: email,
+          name: "Repetido",
+          password: "primera-larga-123"
+        })
+
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/admin/users")
+      open_new_user_modal(view)
+
+      submit_user(view, %{
+        "email" => email,
+        "name" => "Repetido",
+        "password" => "segunda-larga-123"
+      })
 
       assert modal(view) =~ esc(et("has already been taken"))
       assert Enum.count(Dran.Accounts.list_users(), &(&1.email == email)) == 1
@@ -159,7 +194,11 @@ defmodule DranWeb.AdminUsersLiveTest do
       email = "intacta-#{uniq()}@test.dev"
 
       {:ok, user} =
-        Accounts.create_user_with_password(%{email: email, password: "original-larga-123"})
+        Accounts.create_user_with_password(%{
+          email: email,
+          name: "Persona",
+          password: "original-larga-123"
+        })
 
       {:ok, view, _html} = live(owner_conn(conn), ~p"/admin/users")
 
@@ -179,7 +218,11 @@ defmodule DranWeb.AdminUsersLiveTest do
       email = "corta-reset-#{uniq()}@test.dev"
 
       {:ok, user} =
-        Accounts.create_user_with_password(%{email: email, password: "original-larga-123"})
+        Accounts.create_user_with_password(%{
+          email: email,
+          name: "Persona",
+          password: "original-larga-123"
+        })
 
       {:ok, view, _html} = live(owner_conn(conn), ~p"/admin/users")
 

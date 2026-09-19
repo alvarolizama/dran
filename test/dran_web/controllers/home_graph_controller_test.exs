@@ -107,6 +107,7 @@ defmodule DranWeb.HomeGraphControllerTest do
     {:ok, _user} =
       Dran.Accounts.create_user_with_password(%{
         email: "graph-json-test@example.com",
+        name: "Graph",
         password: "supersecret123"
       })
 

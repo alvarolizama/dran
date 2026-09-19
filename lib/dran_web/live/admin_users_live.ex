@@ -478,7 +478,16 @@ defmodule DranWeb.AdminUsersLive do
         <.form for={@user_form} id="user-form" phx-submit="save_user" class="space-y-4">
           <div class="grid grid-cols-2 gap-3">
             <.input field={@user_form[:email]} label={gettext("Email")} type="email" required />
-            <.input field={@user_form[:name]} label={gettext("Name")} />
+            <.input
+              field={@user_form[:name]}
+              label={gettext("Name")}
+              hint={
+                if @editing_user,
+                  do: nil,
+                  else: gettext("Their personal workspace is created with this name.")
+              }
+              required
+            />
           </div>
 
           <%!--

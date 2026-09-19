@@ -235,6 +235,7 @@ defmodule DranWeb.SessionControllerTest do
         post(conn, ~p"/setup", %{
           "_csrf_token" => csrf,
           "setup" => %{
+            "name" => "Álvaro Lizama",
             "email" => "founder@example.com",
             "password" => "supersecret123",
             "password_confirmation" => "supersecret123"
@@ -245,6 +246,7 @@ defmodule DranWeb.SessionControllerTest do
 
       owner = Dran.Accounts.get_user_by_email("founder@example.com")
       assert owner.is_owner
+      assert owner.name == "Álvaro Lizama"
 
       personal = Dran.Accounts.personal_workspace(owner)
       assert personal
@@ -252,9 +254,37 @@ defmodule DranWeb.SessionControllerTest do
       refute personal.is_default
       assert Dran.Accounts.user_role_in_workspace(owner, personal) == "owner"
 
+      # El workspace personal se llama como la PERSONA y su URL sale del nombre,
+      # no del correo: con el correo founder@example.com el nombre se inventaba
+      # a partir de la dirección y la URL acababa siendo /founder.
+      assert personal.name == "Álvaro Lizama"
+      assert personal.slug == "alvaro-lizama"
+      refute personal.slug =~ "founder"
+      refute personal.name =~ "@"
+
       # The onboarding default landing: the account's own personal workspace.
       assert owner.default_workspace_slug == personal.slug
       assert get_session(conn, "workspace_slug") == personal.slug
+    end
+
+    @tag :no_default_workspace
+    test "sin nombre no crea el owner — el nombre no es decorativo", %{conn: conn} do
+      conn = get(conn, ~p"/setup")
+      csrf = conn.private.plug_session["_csrf_token"]
+
+      conn =
+        post(conn, ~p"/setup", %{
+          "_csrf_token" => csrf,
+          "setup" => %{
+            "email" => "sinnombre@example.com",
+            "password" => "supersecret123",
+            "password_confirmation" => "supersecret123"
+          }
+        })
+
+      assert redirected_to(conn, 302) == "/setup"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "name"
+      refute Dran.Accounts.get_user_by_email("sinnombre@example.com")
     end
 
     @tag :no_default_workspace

@@ -18,6 +18,7 @@ defmodule DranWeb.DashboardAuthFlowTest do
     {:ok, user} =
       Accounts.create_user_with_password(%{
         email: "flow@example.com",
+        name: "Flow",
         password: "supersecret123"
       })
 
@@ -90,6 +91,7 @@ defmodule DranWeb.DashboardAuthFlowTest do
     {:ok, restricted} =
       Accounts.create_user_with_password(%{
         email: "restricted-#{unique}@example.com",
+        name: "Restricted",
         password: "supersecret123"
       })
 

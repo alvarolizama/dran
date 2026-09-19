@@ -51,24 +51,23 @@ defmodule DranWeb.SessionController do
   defp client_ip(conn), do: conn.remote_ip |> :inet.ntoa() |> to_string()
 
   @doc "POST /setup — first-run admin creation (only while users table is empty)"
-  def setup(conn, %{
-        "setup" => %{
-          "email" => email,
-          "password" => password,
-          "password_confirmation" => confirmation
-        }
-      }) do
+  def setup(conn, %{"setup" => params}) do
     cond do
       Accounts.any_users?() ->
         redirect(conn, to: ~p"/login")
 
-      password != confirmation ->
+      params["password"] != params["password_confirmation"] ->
         conn
         |> put_flash(:error, "Passwords don't match")
         |> redirect(to: ~p"/setup")
 
       true ->
-        case Accounts.create_user_with_password(%{email: email, password: password}) do
+        # Los params van tal cual al changeset (con claves string), que es como
+        # los mandó el navegador: así el nombre y la contraseña se validan en un
+        # solo sitio y el error se puede leer en el flash. El owner nace con
+        # nombre porque su workspace personal se llama como él (y su URL sale
+        # de ahí, no del correo).
+        case Accounts.create_user_with_password(params) do
           {:ok, user} ->
             {:ok, user} = Accounts.update_user(user, %{is_owner: true})
 

@@ -346,11 +346,15 @@ defmodule Dran.Accounts do
 
   defp seed_default_slug(_user, fallback), do: fallback
 
-  defp personal_workspace_name(%User{name: name}) when is_binary(name) and name != "",
-    do: name
-
-  defp personal_workspace_name(%User{email: email}) when is_binary(email) do
-    email |> String.split("@") |> List.first() |> String.capitalize()
+  # El workspace personal se llama como la PERSONA; "Personal" cuando la cuenta
+  # no tiene nombre. NUNCA la parte del correo, que es lo que hacía antes: con
+  # nekrox@gmail.com nacía "Nekrox" y el slug salía de ahí, o sea que el correo
+  # acababa eligiendo la URL del workspace.
+  defp personal_workspace_name(%User{name: name}) when is_binary(name) do
+    case String.trim(name) do
+      "" -> "Personal"
+      trimmed -> trimmed
+    end
   end
 
   defp personal_workspace_name(_user), do: "Personal"

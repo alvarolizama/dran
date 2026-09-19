@@ -40,6 +40,21 @@ defmodule DranWeb.SetupLive do
             <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
 
             <div>
+              <label class="text-sm font-medium text-base-content/70 block mb-1">Name</label>
+              <input
+                type="text"
+                name="setup[name]"
+                placeholder="Your name"
+                autocomplete="name"
+                required
+                class="w-full px-3 py-2 rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <p class="text-xs text-base-content/50 mt-1">
+                Your personal workspace is created with this name.
+              </p>
+            </div>
+
+            <div>
               <label class="text-sm font-medium text-base-content/70 block mb-1">Email</label>
               <input
                 type="email"

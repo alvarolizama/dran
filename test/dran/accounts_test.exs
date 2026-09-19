@@ -934,6 +934,7 @@ defmodule Dran.AccountsTest do
       assert {:ok, user} =
                Accounts.create_user_with_password(%{
                  email: "invitado@example.com",
+                 name: "Invitado",
                  password: "contrasena-larga-123"
                })
 
@@ -944,7 +945,10 @@ defmodule Dran.AccountsTest do
 
     test "exige contraseña: sin ella devuelve el error, no una cuenta sin entrada" do
       assert {:error, changeset} =
-               Accounts.create_user_with_password(%{email: "sin-clave@example.com"})
+               Accounts.create_user_with_password(%{
+                 email: "sin-clave@example.com",
+                 name: "Sin Clave"
+               })
 
       assert "can't be blank" in errors_on(changeset).password
       refute Accounts.get_user_by_email("sin-clave@example.com")
@@ -957,6 +961,7 @@ defmodule Dran.AccountsTest do
       assert {:ok, user} =
                Accounts.create_user_with_password(%{
                  "email" => "params@example.com",
+                 "name" => "Params",
                  "password" => "contrasena-larga-123"
                })
 
@@ -986,6 +991,43 @@ defmodule Dran.AccountsTest do
     end
   end
 
+  describe "el nombre manda: el workspace personal no nace del correo" do
+    test "lleva el nombre de la persona y su slug sale de ahí, no del correo" do
+      {:ok, user} =
+        Accounts.create_user_with_password(%{
+          email: "alvaro@local.dev",
+          name: "Álvaro Lizama",
+          password: "contrasena-larga-123"
+        })
+
+      workspace = Accounts.personal_workspace(user)
+      assert workspace.name == "Álvaro Lizama"
+      assert workspace.slug == "alvaro-lizama"
+      refute workspace.slug =~ "local"
+      refute workspace.name =~ "@"
+    end
+
+    test "sin nombre es \"Personal\": el correo no aparece en nombre ni slug" do
+      {:ok, user} = Accounts.create_user(%{email: "nekrox@gmail.com"})
+
+      workspace = Accounts.personal_workspace(user)
+      assert workspace.name == "Personal"
+      refute workspace.slug =~ "nekrox"
+      refute workspace.slug =~ "gmail"
+    end
+
+    test "registrar sin nombre no crea la cuenta" do
+      assert {:error, changeset} =
+               Accounts.create_user_with_password(%{
+                 email: "sin-nombre@example.com",
+                 password: "contrasena-larga-123"
+               })
+
+      assert "can't be blank" in errors_on(changeset).name
+      refute Accounts.get_user_by_email("sin-nombre@example.com")
+    end
+  end
+
   describe "reset de contraseña desde /admin/users" do
     test "da entrada a una cuenta que no la tenía, sin pedir la contraseña anterior" do
       assert {:ok, user} = Accounts.create_user(%{email: "rescatada@example.com"})
@@ -1006,6 +1048,7 @@ defmodule Dran.AccountsTest do
       {:ok, user} =
         Accounts.create_user_with_password(%{
           email: "intacta@example.com",
+          name: "Intacta",
           password: "original-larga-123"
         })
 
@@ -1021,6 +1064,7 @@ defmodule Dran.AccountsTest do
       {:ok, user} =
         Accounts.create_user_with_password(%{
           email: "corta@example.com",
+          name: "Corta",
           password: "original-larga-123"
         })
 

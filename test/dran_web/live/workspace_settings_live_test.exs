@@ -105,6 +105,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
       {:ok, creator} =
         Accounts.create_user_with_password(%{
           email: "creador-#{unique}@example.com",
+          name: "Creador",
           password: "creador-larga-123"
         })
 

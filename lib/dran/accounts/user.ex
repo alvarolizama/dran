@@ -81,11 +81,18 @@ defmodule Dran.Accounts.User do
   def can_create_workspaces?(%__MODULE__{can_create_workspaces: true}), do: true
   def can_create_workspaces?(_user), do: false
 
-  @doc "Changeset for password-based registration. Requires email + password."
+  @doc """
+  Changeset for password-based registration: the account of a PERSON.
+
+  Requires email + NAME + password. The name is not decoration: it is what the
+  account's personal workspace is called, and its URL comes from it (see
+  `Dran.Accounts.ensure_personal_workspace/1`). Without it there is nothing to
+  name that workspace with, and the email would end up deciding the URL.
+  """
   def registration_changeset(user, attrs) do
     user
     |> cast(attrs, [:email, :name, :password])
-    |> validate_required([:email, :password])
+    |> validate_required([:email, :name, :password])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/)
     |> validate_length(:password, min: 8)
     |> unique_constraint(:email)
