@@ -133,18 +133,6 @@ defmodule DranWeb.Layouts do
             </a>
           </header>
 
-          <%!-- Reveal (desktop, colapsado): barra en flujo — así el botón de
-               volver a mostrar el sidebar nunca tapa el contenido. --%>
-          <div class="shell-reveal hidden lg:flex items-center h-12 px-3 shrink-0 border-b border-base-300 bg-base-100/80 backdrop-blur">
-            <label
-              for="sidebar-collapse"
-              class="btn btn-ghost btn-sm btn-square"
-              title={gettext("Show sidebar")}
-            >
-              <.icon name="hero-bars-3" class="size-5" />
-            </label>
-          </div>
-
           <main class={[
             "flex-1 min-h-0 overflow-y-auto flex flex-col w-full",
             !@sidebar && "items-center"
@@ -162,13 +150,13 @@ defmodule DranWeb.Layouts do
           <label for="app-drawer" class="drawer-overlay"></label>
           <aside class="shell-sidebar w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col h-full">
             <div class="p-3 border-b border-base-300">
-              <div class="flex items-center gap-2">
+              <div class="shell-sidebar-header flex items-center gap-2">
                 <a
                   href={~p"/"}
                   class="flex items-center gap-2 shrink-0 transition-colors duration-150 hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded"
                 >
                   <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
-                  <span class="text-lg font-bold tracking-tight">Dran</span>
+                  <span class="shell-hide text-lg font-bold tracking-tight">Dran</span>
                 </a>
                 <.workspace_selector
                   :if={not @instance_nav? and @workspace_slug}
@@ -176,13 +164,13 @@ defmodule DranWeb.Layouts do
                   workspaces={@workspaces}
                   page_counts={@page_counts}
                 />
-                <%!-- Colapsar (desktop): el reveal queda flotando en el contenido --%>
+                <%!-- Colapsar (desktop): deja el rail de iconos --%>
                 <label
                   for="sidebar-collapse"
                   class="hidden lg:inline-flex btn btn-ghost btn-xs btn-square shrink-0"
-                  title={gettext("Hide sidebar")}
+                  title={gettext("Collapse sidebar")}
                 >
-                  <.icon name="hero-chevron-double-left" class="size-3.5" />
+                  <.icon name="hero-chevron-double-left" class="shell-collapse-icon size-3.5" />
                 </label>
               </div>
             </div>
@@ -372,7 +360,7 @@ defmodule DranWeb.Layouts do
         />
       </div>
       <details :if={group.label && group.items != []} open class="group">
-        <summary class="flex items-center gap-1 px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
+        <summary class="shell-hide flex items-center gap-1 px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70 cursor-pointer select-none transition-colors duration-150 hover:text-base-content/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded">
           <.icon
             name="hero-chevron-right"
             class="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
@@ -617,7 +605,7 @@ defmodule DranWeb.Layouts do
 
   def workspace_selector(assigns) do
     ~H"""
-    <div :if={length(@workspaces) > 0} class="flex-1">
+    <div :if={length(@workspaces) > 0} class="shell-hide flex-1">
       <%!-- The id is not decorative: LiveView needs it to restore the selection
            after a crash/reconnect, and warns on every mount without it. --%>
       <form id="workspace-selector-form" action={~p"/workspace"} method="post">
@@ -669,7 +657,7 @@ defmodule DranWeb.Layouts do
     ~H"""
     <div
       :if={@current_user}
-      class="rounded-lg p-2 hover:bg-base-200 transition-colors duration-150 flex items-center gap-2.5"
+      class="shell-user-footer rounded-lg p-2 hover:bg-base-200 transition-colors duration-150 flex items-center gap-2.5"
     >
       <a
         href={~p"/settings/account"}
@@ -679,7 +667,7 @@ defmodule DranWeb.Layouts do
         <span class="size-8 rounded-full bg-primary text-primary-content flex items-center justify-center text-xs font-semibold uppercase shrink-0">
           {String.first(@display_name || @current_user)}
         </span>
-        <span class="flex-1 min-w-0 leading-tight">
+        <span class="shell-hide flex-1 min-w-0 leading-tight">
           <span class="block text-sm font-medium truncate">{@display_name}</span>
           <span class="block text-xs text-base-content/50 truncate mt-0.5" title={@current_user}>
             {@current_user}

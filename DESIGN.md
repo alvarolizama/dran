@@ -600,7 +600,7 @@ Transiciones `transition-all duration-150`; desplazamientos `hover:translate-x-0
 | `.agent-step` (+ `slide-in`) | animación de pasos del worker |
 | "DRAN DESIGN SYSTEM": `text-*` · `.surface-*` · `.skeleton` · `.lift` · `.focus-ring` · `:root` vars | escala tipográfica, superficies, estados |
 | `.table tbody tr:hover`, `transition` (§C6) | hover de fila unificado |
-| `.shell-sidebar` / `.shell-reveal` + las dos reglas de `#sidebar-collapse` (dentro de `@media (min-width: 64rem)`) | sidebar colapsable en desktop (§T2): el checkbox es el estado, el CSS lo aplica |
+| reglas de `#sidebar-collapse` sobre `.shell-sidebar` / `.shell-hide` / `.nav-link` / `.shell-sidebar-header` / `.shell-user-footer` (dentro de `@media (min-width: 64rem)`) | colapso a rail de iconos en desktop (§T2): el checkbox es el estado, el CSS lo aplica |
 
 **Regla: ningún bloque propio declara color hardcodeado.** Todo color del CSS
 custom sale de `var(--color-…)` o `oklch(from var(--color-…) …)` — el tema
@@ -628,13 +628,15 @@ tema — nunca hex, oklch crudo ni la paleta cruda de Tailwind.
   (`drawer-side` + `drawer-overlay`), y el contenido abre con una barra
   `header.lg:hidden h-14` con **hamburguesa** (`label for="app-drawer"`) + logo.
   Cerrar = overlay o navegar.
-- **Desktop (`≥ lg`):** la sidebar queda fija a la izquierda y el contenido se
-  puede **colapsar** con la flecha del header del sidebar
+- **Desktop (`≥ lg`):** la sidebar queda fija a la izquierda y se puede
+  **colapsar a un rail de iconos** (4rem) con la flecha del header
   (`label for="sidebar-collapse"`). El estado es el checkbox
-  `#sidebar-collapse` (hermano del `.drawer`, ver reglas en §T1) y al colapsar
-  aparece una **barra reveal en flujo** (`.shell-reveal`, `lg:flex`) con el botón
-  para volver a mostrarla — **en flujo, nunca flotando**: un botón `fixed`
-  tapaba el título de la página.
+  `#sidebar-collapse` (hermano del `.drawer`) y las reglas de §T1 hacen el
+  resto: la sidebar se angosta, los textos con `.shell-hide` desaparecen
+  (marca, selector, buscador, labels de enlaces y de grupo, badges, nombre y
+  email) y quedan **logo + iconos**, centrados y con `title` para el tooltip.
+  El pie muestra el avatar con su menú, apilado. **No** se oculta la sidebar ni
+  se usa un botón flotante: un `fixed` tapaba el título de la página.
 - Sidebar `w-60 shrink-0 border-r border-base-300 bg-base-200/50 flex flex-col`
   con densidad de familia (header `p-3`, búsqueda `p-3`, nav
   `flex-1 overflow-y-auto p-2 flex flex-col gap-4`, pie `p-3 border-t`).
@@ -853,6 +855,6 @@ grep -n 'do: "p-6 pb-16"' lib/dran_web/components/layouts.ex           # padding
 grep -c 'btn-soft' lib/dran_web/components/layouts.ex                  # 0 (el activo usa bg-primary/15)
 mix tailwind dran && grep -c 'data-theme=dim' priv/static/assets/css/app.css  # 1
 grep -n 'drawer lg:drawer-open' lib/dran_web/components/layouts.ex      # shell responsive
-grep -n 'shell-reveal' assets/css/app.css                              # colapso desktop
+grep -n 'shell-hide' assets/css/app.css                                # colapso a rail (desktop)
 grep -c '<.button' lib/dran_web/live/*.ex                               # CTAs de crear como componente
 ```

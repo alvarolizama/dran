@@ -587,20 +587,21 @@ defmodule DranWeb.CoreComponents do
     ~H"""
     <a
       href={@path}
+      title={@label}
       aria-current={@active && "page"}
       class={[
-        "btn btn-sm w-full justify-between gap-2 font-normal transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+        "nav-link btn btn-sm w-full justify-between gap-2 font-normal transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
         @active && "bg-primary/15 text-primary font-medium hover:bg-primary/20",
         !@active && "btn-ghost text-base-content/80 hover:text-base-content"
       ]}
     >
       <span class="flex items-center gap-2 min-w-0">
         <.icon name={@icon} class="size-4 shrink-0" />
-        <span class="truncate">{@label}</span>
+        <span class="truncate shell-hide">{@label}</span>
       </span>
       <span
         :if={@badge && @badge > 0}
-        class={["badge badge-sm", if(@active, do: "badge-primary", else: "badge-ghost")]}
+        class={["badge badge-sm shell-hide", if(@active, do: "badge-primary", else: "badge-ghost")]}
       >
         {@badge}
       </span>
@@ -623,7 +624,7 @@ defmodule DranWeb.CoreComponents do
   def nav_group(assigns) do
     ~H"""
     <div class="flex flex-col gap-1">
-      <div class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70">
+      <div class="shell-hide px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/70">
         {@label}
       </div>
       {render_slot(@inner_block)}
