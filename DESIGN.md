@@ -545,7 +545,9 @@ es esta — Dran es la implementación de referencia.
 
 #### C12.1 Estructura
 
-- Raíz `h-screen` + **daisyUI `drawer lg:drawer-open h-full`**.
+- Raíz `h-screen` + **daisyUI `drawer lg:drawer-open lg:grid-rows-1 h-full`**. Las
+  **dos** clases `lg:` son estructurales: la de la fila tiene su propia regla
+  dura en **§C12.5** (sin ella el shell scrollea entero).
 - **Barra del contenido (`h-14`), siempre visible: es el ÚNICO sitio del toggle
   de navegación.** En `< lg` es la hamburguesa (`label for="app-drawer"`) que
   abre la gaveta; en `≥ lg`, el mismo botón en la misma posición
@@ -597,6 +599,43 @@ es esta — Dran es la implementación de referencia.
 Lo pone el layout: `p-4 pb-16 sm:p-6`. El `pb-16` es el aire final del scroll
 (la última card nunca queda pegada al borde). Nunca dejar el contenido sin
 padding.
+
+#### C12.5 Reglas duras del shell (vienen de bugs reales)
+
+1. **La fila del `.drawer` va acotada: `lg:grid-rows-1`.** El `drawer` de daisyUI
+   es un grid y declara **sólo `grid-auto-columns`**: la fila queda **implícita**
+   y su alto lo decide `grid-auto-rows` (default `auto`), así que **se infla con
+   el contenido de la página**. Con contenido largo scrollea el shell ENTERO — la
+   barra del contenido y la sidebar se van con la rueda, y `main` se queda sin
+   scroll propio — en lugar de scrollear el contenido por dentro con la sidebar
+   fija. `repeat(1, minmax(0, 1fr))` acota la fila al viewport: el `minmax(0, …)`
+   es lo que permite bajar por debajo del contenido, y funciona porque daisyUI
+   (≥5.5) ya pone `grid-row-start: 1` en `.drawer-content` y `.drawer-side`.
+   **Scope `lg`**, no negociable: en `< lg` el `.drawer-side` es overlay
+   `position: fixed` y no hay columna que acotar (móvil se comporta igual con y
+   sin la clase).
+2. **No lo tapes con `overflow: hidden` en `.drawer`.** La fila seguiría
+   creciendo (recortar no acota el tamaño) y mataría el menú de usuario del rail,
+   que abre hacia la derecha y necesita `overflow: visible` en `.drawer-side`
+   (§C12.1).
+3. **El que scrollea es `main`** (`flex-1 min-h-0 overflow-y-auto`), no el
+   documento. La barra del contenido (`h-14 shrink-0`) y la sidebar quedan fijos.
+
+Cómo se verifica (se mide, no se mira) — con el CSS **compilado** y contenido
+largo, a 1440×900 y 1280×800, expandido y en rail:
+
+- `documentElement.scrollHeight == innerHeight` (el documento no scrollea);
+- `main.scrollHeight > main.clientHeight` (el scroll vive dentro de `main`);
+- con la **ventana** scrolleada 400px, el `getBoundingClientRect().top` de la
+  sidebar sigue en `0` y el de la barra del contenido también.
+
+Medición en Dran (contenido 2968px, ventana 900px, `assets/css/app.css`
+compilado): **sin** la clase, fila del drawer `3024px`, documento `3024`, `main`
+`2968/2968` (sin scroll interno) y sidebar `top: -400` con la ventana scrolleada;
+**con** la clase, fila `900`, documento `900`, `main` `844/2968` con scroll
+interno y sidebar `top: 0` / bottom `900`. Igual en rail (sidebar 240 → 64px) y
+sin diferencias en móvil 500×800. El invariante está pinchado en
+`test/dran_web/live/instance_shell_test.exs`.
 
 ---
 
@@ -920,6 +959,7 @@ grep -n 'do: "p-6 pb-16"' lib/dran_web/components/layouts.ex           # padding
 grep -c 'btn-soft' lib/dran_web/components/layouts.ex                  # 0 (el activo usa bg-primary/15)
 mix tailwind dran && grep -c 'data-theme=dim' priv/static/assets/css/app.css  # 1
 grep -n 'drawer lg:drawer-open' lib/dran_web/components/layouts.ex      # shell responsive
+grep -c 'class="drawer lg:drawer-open lg:grid-rows-1' lib/dran_web/components/layouts.ex  # 1 (fila acotada, §C12.5)
 grep -n 'shell-hide' assets/css/app.css                                # colapso a rail (desktop)
 grep -c '<.button' lib/dran_web/live/*.ex                               # CTAs de crear como componente
 grep -rn 'flex-wrap items-center justify-between' lib/dran_web/live/   # headers que envuelven
