@@ -1,8 +1,12 @@
 # Dran memory — plugin Hermes
 
-Memoria compartida multi-agente respaldada por un workspace de Dran. El plugin
+Memoria compartida multi-agente respaldada por tu instancia de Dran. El plugin
 es transporte delgado: dedupe, trust, search híbrido y extracción de facts
 viven server-side en Dran (`/api/memory`).
+
+> **Single-workspace (W5):** la instancia de Dran ES el workspace — no hay
+> elección de workspace ni matriz workspaces×nivel. Toda llamada apunta a la
+> instancia; el setting `workspace` queda solo como valor informativo.
 
 ## Configuración — con UI en el dashboard de Hermes
 
@@ -15,32 +19,29 @@ También funciona `hermes memory setup` → elegir "dran".
 Se persiste en `$HERMES_HOME/dran/config.json` (la API key al `.env` del
 perfil — `DRAN_API_KEY`, single source of truth para todas las tools).
 
-## Workspace de memoria — se elige AQUÍ, en Hermes
+## La instancia es el workspace
 
-El workspace donde este agente guarda sus facts se configura en el panel
-(arriba) o en `dran/config.json` (`"workspace": "..."`), eligiendo entre los
-que la API key del agente puede alcanzar (matriz workspaces×nivel en Dran →
-Settings → API Keys). Al arrancar — y cada 5 min — el plugin consulta
-`GET /api/agent/config` para **validar** la elección: si la key ya no alcanza
-ese workspace (la matriz cambió en Dran), cae al primero permitido y lo
-loguea con warning. Si Dran no responde, se usa la config local sin validar.
+El agente guarda sus facts y páginas en la instancia que sirve su `base_url`,
+sin más. La API key define el alcance: la key lee y escribe **exactamente lo
+que su dueño** (lo privado del dueño, lo público, y lo compartido con él). El
+campo `workspace` de la config queda aceptado pero Dran no decide nada con él.
 
-La misma respuesta trae los **page types efectivos** del workspace
+La misma respuesta trae los **page types efectivos** de la instancia
 (`page_types` y `page_type_defs`: los 4 built-in — `note`, `entity`, `concept`,
-`reference` — más los tipos custom que el workspace declare). El plugin los lee
+`reference` — más los tipos custom que la instancia declare). El plugin los lee
 para renderizar el vocabulario en sus tools en vez de hardcodear la lista, y
 valida `page_type` contra ellos antes de crear una página (fail-closed); sin
 servidor cae a los 4 built-in.
 
 La tool `dran_list_page_types` expone esa lista al agente con las definiciones
 completas (slug, label, plural, path, icon, color, meta fields) vía
-`GET /api/workspaces/:slug/page-types` — alcanzable por cualquier token con
+`GET /api/workspaces/instance/page-types` — alcanzable por cualquier token con
 read, no solo por agent keys (a diferencia de `/api/agent/config`).
 
 ## Setup (por perfil de Hermes)
 
-1. En Dran → Settings → API Keys: crea la key eligiendo la matriz
-   workspaces×nivel (la key necesita `write` en el workspace de memoria). La
+1. En Dran → Settings → API Keys: crea la key con nivel `write` (la key lee
+   y escribe exactamente lo que su dueño). La
    key **no crea un actor**: el `created_by` de cada recuerdo lo resuelve el
    servidor — el header `X-Hermes-Agent` si viene, si no el **nombre de la
    key** — y `owner_user_id` es el usuario dueño de la key.
@@ -62,6 +63,7 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
    {
      "base_url": "http://localhost:4000",
      "workspace": "personal",
+
      "auto_recall": true,
      "auto_capture": true,
      "max_recall_results": 5,
@@ -118,7 +120,7 @@ estas tools son el consumo del agente.
 |---|---|
 | `dran_search` | Busca páginas (fts / fuzzy / semantic / hybrid) |
 | `dran_list_pages` | Lista páginas, filtrable por tipo (los válidos son los efectivos del workspace, leídos de `/api/agent/config`) |
-| `dran_list_page_types` | Lista los page types efectivos (4 built-in + custom) con sus definiciones — slug, label, plural, path, icon, color, meta fields — vía `GET /api/workspaces/:slug/page-types` |
+| `dran_list_page_types` | Lista los page types efectivos (4 built-in + custom) con sus definiciones — slug, label, plural, path, icon, color, meta fields — vía `GET /api/workspaces/instance/page-types` |
 | `dran_get_page` | Lee el cuerpo completo por slug |
 | `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas (`page_type` se valida fail-closed contra los tipos efectivos del workspace) |
 | `dran_get_links` | Relaciones entrantes/salientes de una página |

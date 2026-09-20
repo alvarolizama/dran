@@ -20,11 +20,11 @@ Two things live inside, and they are different on purpose:
 
 - **Knowledge** — a typed graph of **pages** joined by typed relations.
   Every page has one of the **4 built-in types** (`note`, `entity`, `concept`,
-  `reference`) or a **custom type declared by its workspace**. Curated,
+  `reference`) or a **custom type declared by the instance**. Curated,
   editable, versioned. Think "the wiki".
-- **Memory** — atomic **facts** with trust scores, deduplicated per
-  workspace. Written by agents as they learn; never hand-edited. Think
-  "what the swarm knows".
+- **Memory** — atomic **facts** with trust scores, deduplicated per owner.
+  Written by agents as they learn; never hand-edited, always private on
+  creation. Think "what the swarm knows".
 
 ## What it is for
 
@@ -34,15 +34,16 @@ Two things live inside, and they are different on purpose:
   available to all; the graph keeps them linked.
 - **Agent output you can actually read** — reports, notes and entities land
   in a graph you browse, not in a folder of markdown files.
-- **Multi-tenant by workspace** — separate silos (personal, work, a project)
-  with per-workspace visibility and sharing policy.
+- **Per-item visibility** — every page, memory, collection and report is
+  `private` (default), `public`, or `shared` with specific users and groups.
+  An API key reads exactly what its owner reads. See
+  [Visibility](#visibility).
 
 ## Features
 
 **Knowledge**
 - **4 built-in page types** (`note`, `reference`, `entity`, `concept`) plus
-  **custom types per workspace** (declared in the workspace config with their own
-  slug, path, icon and color). Type-specific meta fields live in one place —
+  **custom types declared by the instance** (own slug, path, icon, color). Type-specific meta fields live in one place —
   `Dran.PageRegistry`. Every page also takes `meta.props`, a free-form indexed
   key-value bag. See [docs/page-types.md](docs/page-types.md).
 - **13 relation types**: 5 you set by hand (`related`, `contradicts`,
@@ -73,10 +74,10 @@ Two things live inside, and they are different on purpose:
 - **Entity linker** — auto-creates entity pages from names in page bodies.
 
 **App**
-- Wiki at `/:workspace_slug`; memory at `/:ws/memory`; 3D graph at
+- Wiki at `/`; memory at `/memory`; 3D graph at
   `/:ws/graph`; clusters with LLM summaries; smart collections; activity feed;
   journey timeline.
-- Admin (owner-only) at `/admin`: users, workspaces, models, system, jobs.
+- Admin (owner-only) at `/admin`: users, groups, models, system, jobs.
 
 ## Architecture
 
@@ -112,7 +113,8 @@ mix setup && mix phx.server
 ```
 
 Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup`
-to create the owner account. Then create a workspace and, in **Settings →
+to create the owner account. The instance IS the workspace — everything
+lives in one place. Manage types and features in **Settings →
 API Keys**, an API key (see below).
 
 **Configuration:** environment variables — [`.env.example`](.env.example) has the
@@ -122,18 +124,18 @@ endpoint; powers embeddings, summaries, semantic search and the workers —
 without it Dran still works, minus those features).
 
 Not env vars (stored in the database, edited in the UI): the default workspace
-is the workspace flagged as default in **Settings → Workspaces**; the legacy
+resolves automatically (single instance); the legacy
 admin API token lives in `/admin/system`; per-user tokens in
-`/admin/users`; workspace-scoped keys in each workspace's settings.
+`/admin/users`; keys are personal (per-user, `/settings/api-keys`).
 
 ### 2 · The Hermes plugin
 
 Gives an agent the tools (`dran_*`, 17) **and** the memory provider
-(`dran_memory_*`, 4) — one key, one attribution, one workspace.
+(`dran_memory_*`, 4) — one key, one attribution, its owner's reach.
 
 **a. Create the credential.** In Dran → **Settings → API Keys**: create the key
-and pick its access, ticking the **workspace × access-level matrix** (`write` on
-the workspace that will hold its content). The token is shown once. A key
+and pick its access level (`read` | `write` — a key reads and writes with
+exactly its owner's reach). The token is shown once. A key
 creates no actor: every write is attributed server-side to the key (or to the
 `X-Hermes-Agent` header when the client sends one).
 
@@ -163,7 +165,7 @@ memory:
 **d. Configure it.** Values live in `$HERMES_HOME/dran/config.json`; the API key
 stays in `.env`. Either:
 
-- the desktop panel — **Memory → Dran** (base URL, workspace, recall/capture
+- the desktop panel — **Memory → Dran** (base URL, recall/capture
   toggles), or
 - `hermes memory setup dran` (terminal, same fields), or
 - edit the JSON directly:
@@ -171,7 +173,7 @@ stays in `.env`. Either:
 ```json
 {
   "base_url": "http://localhost:4000",
-  "workspace": "personal",
+  "workspace": "personal",  # deprecated — informational only
   "auto_recall": true,
   "auto_capture": true,
   "max_recall_results": 5,
@@ -180,10 +182,9 @@ stays in `.env`. Either:
 }
 ```
 
-> **`workspace` applies to both surfaces.** Pages created by the agent land in
-> the same workspace its facts go to. The key must be able to reach it — the
-> plugin validates against `GET /api/agent/config` on connect and falls back to
-> the first permitted workspace (with a warning) if the matrix changes.
+> **`workspace` is deprecated (informational only).** Dran is single-workspace:
+> the instance IS the workspace and every call targets it regardless of this
+> value. The setting stays so existing config files keep loading.
 
 **e. Restart the session** and verify: ask it to *"list my pages"* (tools) and
 *"what do you remember about…"* (memory).
@@ -244,11 +245,32 @@ The same block lives at [`system-prompt.md`](system-prompt.md).
 ### Security
 
 - First-run `/setup` creates the owner; Google OAuth optional
-- Instance owner + per-workspace roles (`owner` / `admin` / `editor` / `viewer`)
-- Per-user API keys, read-only by default, scoped to the creator's workspaces
-- Reads filtered by workspace policy (`share_memory` / `share_pages`), further
-  narrowable per user (`content_scope`: "all" | "own")
+- Instance owner + instance roles (`owner` / `admin` / `editor` / `viewer`)
+- Per-user API keys (`read` | `write`): a key reads and writes exactly as its
+  owner
+- Per-item visibility: every page/memory/collection/report is `private`
+  (default), `public`, or `shared` with users and groups; the read filter is
+  one module (`Dran.ContentVisibility`)
+- Memory visibility is web-only: tools/API create private facts and a
+  `visibility` param is rejected with 422
 - Row-level auth on resources; `sobelow` + `deps.audit` in precommit
+
+### Visibility
+
+The instance is one workspace; isolation lives on the ITEM:
+
+| Value | Who reads it |
+|---|---|
+| `private` (default) | its owner and instance admins |
+| `public` | every user of the instance |
+| `shared` | the owner, admins, and the users/groups holding a share grant |
+
+- **Share grants** (read-only) are managed from the web UI — the Share dialog
+  on any page, and user groups from `/admin/groups`.
+- **Pages** may set `visibility` at creation via the API/plugin
+  (`dran_create_page(visibility: "public")`).
+- **Memories** are always created `private` by tools/API; visibility changes
+  happen only in the web UI (a `visibility` param returns 422).
 
 ### Production
 

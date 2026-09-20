@@ -13,11 +13,11 @@ metadata:
 # dran-knowledge-flow — Create and edit knowledge pages
 
 Pages are the unit of knowledge. There are **four built-in page types** —
-`note`, `entity`, `concept`, `reference` — and a workspace may declare **its
+`note`, `entity`, `concept`, `reference` — and the instance may declare **its
 own** (`recipe`, `trip`, …). There is no `meta.kind`: the type is the only
 classifier. This flow owns the write loop: search first, then create or
 update, then verify by readback. When the type was not named, list the
-workspace's types first and decide before creating.
+instance's types first and decide before creating.
 
 The tools come from the Dran Hermes plugin (`dran_*`), which talks to Dran
 over its REST API.
@@ -65,14 +65,14 @@ flowchart TD
 ## Notes on the calls
 
 - **List the types before creating when the type was not named.** Run
-  `dran_list_page_types` — it returns the workspace's effective types with
+  `dran_list_page_types` — it returns the instance's effective types with
   their full definitions (slug, label, plural, path, icon, color, meta
   fields) — then pick the best fit. `note` is the safe default only when
   nothing more specific matches.
-- `page_type` must be one of the workspace's **effective** types: the four
-  built-in (`note`, `entity`, `concept`, `reference`) ∪ the workspace's custom
+- `page_type` must be one of the instance's **effective** types: the four
+  built-in (`note`, `entity`, `concept`, `reference`) ∪ the instance's custom
   types. Validation is fail-closed — an unknown type (a retired slug, or
-  another workspace's custom type) is refused, and the error lists the valid
+  an unknown type) is refused, and the error lists the valid
   ones. There is **no `meta.kind`**; the type is the only classifier, and
   `meta.props` is a free key-value bag available on every type. When unsure
   which type fits, follow the decision tree in `docs/page-types.md`:
@@ -83,7 +83,7 @@ flowchart TD
     (meta: domain, parent_concept)
   - `reference` — an external source you point at
     (meta: source_url, published_at)
-  - a custom type — whatever the workspace declares (e.g. `recipe`); use it
+  - a custom type — whatever the instance declares (e.g. `recipe`); use it
     when `dran_list_pages` or the error message shows it exists.
 - **`dran_update_page` only changes the fields you pass** — send the fields
   to change and leave the rest out.

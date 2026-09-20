@@ -49,7 +49,7 @@ The flows above are for USING Dran. To CHANGE its code, load the matching
 | --- | --- |
 | `dran-dev-actor-model` | identity/ownership: actors, keys, attribution |
 | `dran-dev-auth-surface` | REST authorization layers + audit method |
-| `dran-dev-page-types` | changing built-in page types or workspace custom types |
+| `dran-dev-page-types` | changing built-in page types or instance custom types |
 | `dran-dev-settings-config` | settings-backed config and admin forms |
 | `dran-dev-slug-management` | slug creation/update policy |
 | `dran-dev-ui-tweaks` | Web UI edits from inspector snippets |
@@ -65,7 +65,8 @@ repo, not operating a Dran instance.
   `~/.hermes/profiles/<perfil>/plugins/dran`.
 - The secret lives ONCE in the profile's `.env` (`DRAN_API_KEY`); the memory
   provider and the tools resolve the same var — one key, one credential.
-- Config comes from `$HERMES_HOME/dran/config.json` (base URL + workspace),
+- Config comes from `$HERMES_HOME/dran/config.json` (base URL; the
+  `workspace` field is informational only),
   the same file the memory panel writes.
 - **A key creates NO actor.** Attribution is derived server-side — never
   client-settable: `created_by` is the `X-Hermes-Agent` header (the active
@@ -76,37 +77,24 @@ repo, not operating a Dran instance.
   knowledge tools (`dran_search`, `dran_create_page`, …) come from the same
   plugin's toolset.
 
-## Workspace selection (every call is workspace-scoped)
+## Single workspace (W5 — no selection)
 
 ```mermaid
 flowchart TD
-  S([page/memory tool call]) --> G1{"user named a\nworkspace?"}
-  G1 -->|yes| U1["use that slug"]
-  G1 -->|no| G2{"key reaches\nworkspaces?"}
-  G2 -->|"one / a list"| U2["omit 'workspace' — server injects\nthe FIRST workspace of the key"]
-  G2 -->|"owner / :all"| U3["no injection — ALWAYS name\nthe workspace explicitly"]
-  U1 --> W[run tool + readback]
-  U2 --> W
-  U3 --> W
+  S([page/memory tool call]) --> W["run tool — the instance IS the workspace\n(no slug to name, no matrix to check)"]
+  W --> R[readback]
 ```
 
-- The instance default workspace (`Dran.Auth.default_workspace_slug/0`) is the
-  workspace flagged as default in Settings → Workspaces — no env var and no
-  settings key; with nothing flagged it is the instance's only workspace, else
-  the `personal` literal. It is what web/seeds use — NOT necessarily what your
-  key reaches. A logged-in session lands per-user instead
-  (`Dran.Accounts.session_workspace_slug/1`: their own default, the instance
-  default, else the only workspace they can reach).
-- One key = one credential with its own workspace matrix (Dran → Settings →
-  API Keys). The key creates **no actor**: attribution comes from the key name
-  and the `X-Hermes-Agent` header, and `owner_user_id` is the user that owns
-  the key. Owner keys and `:all` keys get no injection — always name the
-  workspace explicitly with those.
-- The memory provider's workspace is configured in the panel and validated
-  against the key's matrix on connect; do not assume it equals the workspace
-  you use for pages.
-- Discover valid slugs with `dran_list_pages` (empty query) or `dran_search`;
-  a failing call answers `context 'x' not found`.
+- Every call targets the instance behind the plugin's `base_url`. There is no
+  workspace selection, no workspace matrix, and no `workspace` param to send.
+- A key reads and writes **exactly what its owner reads** (own ∪ public ∪
+  shared-with-the-owner). The key creates **no actor**: attribution comes from
+  the key name and the `X-Hermes-Agent` header, and `owner_user_id` is the
+  user that owns the key.
+- Pages accept `visibility` (`private` default | `public` | `shared`) at
+  creation and update. Memory facts are ALWAYS born private via tools — the
+  API rejects a `visibility` param with 422.
+- Discover the instance's effective page types with `dran_list_page_types`.
 
 ## General rules (every flow obeys them)
 

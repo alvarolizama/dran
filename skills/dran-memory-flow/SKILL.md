@@ -42,11 +42,11 @@ disappears in `GET /api/memory/search`). **Never writes memories by hand.**
 ```mermaid
 flowchart TD
   START([memory admin]) --> S1["RUN GET /api/memory/search\
-q + workspace, Bearer key"]
+q, Bearer key"]
   S1 --> G1{"target memory\
 found?"}
   G1 -->|"no"| S2["RUN GET /api/memory\
-workspace - browse list"]
+memories - browse list"]
   G1 -->|"yes"| G2{"delete\
 requested?"}
   S2 --> G2
@@ -57,9 +57,9 @@ permanent purge?"}
 durable data, irreversible"]
   G4 -->|"purge"| A2["ASK confirm PURGE -\
 hard delete, NO undo"]
-  A1 --> S3["RUN DELETE /api/memory/:id?workspace=WS\
+  A1 --> S3["RUN DELETE /api/memory/:id\
 write_access key required"]
-  A2 --> S3P["RUN DELETE /api/memory/:id?purge=true&workspace=WS"]
+  A2 --> S3P["RUN DELETE /api/memory/:id?purge=true"]
   S3 --> V1["VERIFY GET search\
 readback: gone from results"]
   S3P --> V2["VERIFY row gone -\
@@ -75,13 +75,13 @@ Repo.get returns nil"]
 | Route | Method | Access |
 | --- | --- | --- |
 | `/api/memory` | GET | key valid (read always allowed) |
-| `/api/memory/search` | GET (`q`, `workspace`, `limit`) | key valid |
+| `/api/memory/search` | GET (`q`, `limit`) | key valid |
 | `/api/memory` | POST | `write_access` — **plugin's job, not this flow's**; grey-zone match returns **409 + `near_duplicate: true`** (nothing stored) |
 | `/api/memory/:id` | PATCH | `write_access` — rewrite in place (trust/feedback counters preserved); **plugin's job (`dran_memory_update`)** |
 | `/api/memory/feedback` | POST | `write_access` — plugin's job |
 | `/api/memory/ingest` | POST | `write_access` — plugin's job (session end) |
-| `/api/memory/:id` | DELETE | `write_access` — soft-delete (superseded); **API keys MUST pass `?workspace=<slug>`** |
-| `/api/memory/:id?purge=true&workspace=<slug>` | DELETE | `write_access` — **hard delete, permanent** |
+| `/api/memory/:id` | DELETE | `write_access` — soft-delete (superseded); no `workspace` param needed (single instance) |
+| `/api/memory/:id?purge=true` | DELETE | `write_access` — **hard delete, permanent** |
 
 - Base URL is the profile's Dran (`$HERMES_HOME/dran_memory.json →
   base_url`); same `DRAN_API_KEY` as the plugin tools.
@@ -121,7 +121,7 @@ Repo.get returns nil"]
   with `offset` (loop until a page returns < 100) before claiming a
   total count; the first page lies about the size of the workspace.
 - **No bulk purge endpoint** — full wipe = per-id loop of
-  `DELETE /:id?purge=true&workspace=<slug>`, then re-enumerate until 0
+  `DELETE /:id?purge=true`, then re-enumerate until 0
   remain; the UI-only "Borrar obsoletos" covers superseded rows only.
 - **Deleting the whole workspace's recall on a bad review** — delete by
   specific id, one confirmation each.
@@ -142,5 +142,5 @@ Repo.get returns nil"]
 - [ ] Search + browse to locate exact ids before any delete
 - [ ] Delete confirmed by the human, verified by readback (gone)
 - [ ] Purge (`?purge=true`) explicitly flagged as permanent to the human
-- [ ] API-key DELETEs carry `?workspace=<slug>` (else 403)
+- [ ] API-key DELETEs need no `workspace` param (single instance)
 - [ ] Totals counted with offset pagination (limit caps at 100)

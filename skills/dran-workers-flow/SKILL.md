@@ -31,7 +31,7 @@ flowchart TD
 ## Parse contract
 
 CONSUMES: a maintenance or graph question mapped to a worker type +
-workspace + input. PRODUCES: a finished worker session whose report page or
+input. PRODUCES: a finished worker session whose report page or
 answer is read back and surfaced. **A fire-and-forget without poll is an
 unverified run.**
 
@@ -39,14 +39,14 @@ unverified run.**
 
 ```mermaid
 flowchart TD
-  START([maintain the brain]) --> S1["RUN dran_start_worker\nworker_type + workspace + input"]
+  START([maintain the brain]) --> S1["RUN dran_start_worker\nworker_type + input"]
   S1 --> S2["RUN dran_get_worker_session\nsession_id - poll"]
   S2 --> G1{"session\nfinished?"}
   G1 -->|"no, under 10 polls"| S2
   G1 -->|"no, 10+ polls"| A1["ASK[goal-changing] worker slow or stuck?"]
   G1 -->|"yes"| V1["VERIFY report page\ndran_get_page from summary"]
   V1 -->|"clean"| END([done])
-  V1 -->|"issues found"| S3["RUN dran_lint_brain\nworkspace - structural check"]
+  V1 -->|"issues found"| S3["RUN dran_lint_brain\nlint - structural check"]
   S3 --> END
 ```
 
