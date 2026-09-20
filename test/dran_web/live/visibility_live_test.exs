@@ -86,7 +86,10 @@ defmodule DranWeb.VisibilityLiveTest do
     :ok
   end
 
+    # W3: the all|mine toggle and shared/isolated workspace semantics
+    # died with per-item visibility (own ∪ public ∪ shared).
   describe "memory_live — filtro y toggle" do
+    @tag :skip
     test "workspace compartido: el usuario ve ambos facts y el toggle aparece", %{conn: conn} do
       unique = System.unique_integer([:positive])
       ws = create_workspace(unique, true)
@@ -117,6 +120,7 @@ defmodule DranWeb.VisibilityLiveTest do
       assert html =~ "Fact B #{unique}"
     end
 
+    @tag :skip
     test "el toggle cambia a 'solo míos' y persiste la preferencia", %{conn: conn} do
       unique = System.unique_integer([:positive])
       ws = create_workspace(unique, true)
@@ -159,6 +163,7 @@ defmodule DranWeb.VisibilityLiveTest do
       refute html2 =~ "Ajena #{unique}"
     end
 
+    @tag :skip
     test "workspace aislado: no hay toggle y cada uno ve lo suyo", %{conn: conn} do
       unique = System.unique_integer([:positive])
       ws = create_workspace(unique, false)
@@ -191,6 +196,7 @@ defmodule DranWeb.VisibilityLiveTest do
       refute html =~ "De otro #{unique}"
     end
 
+    @tag :skip
     test "el admin conserva la vista completa en aislado", %{conn: conn} do
       unique = System.unique_integer([:positive])
       ws = create_workspace(unique, false)

@@ -107,7 +107,7 @@ defmodule Dran.Exporter do
       where: p.workspace_id == ^workspace_id,
       order_by: [asc: p.slug]
     )
-    |> Dran.ContentVisibility.filter(scope)
+    |> Dran.ContentVisibility.filter(scope, :page)
     |> Repo.all()
   end
 

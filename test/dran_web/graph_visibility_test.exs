@@ -74,11 +74,6 @@ defmodule DranWeb.GraphVisibilityTest do
     test "las aristas solo unen nodos visibles; una página de otro dueño no aparece",
          %{conn: conn, owner: owner, workspace: workspace, unique: unique} do
       # Workspace aislado: cada lector ve solo lo suyo.
-      {:ok, _} =
-        workspace
-        |> Dran.Workspace.settings_changeset(%{share_pages: false})
-        |> Repo.update()
-
       # Página del owner (visible para él)
       {:ok, own_page} =
         Knowledge.create_page(%{
@@ -134,7 +129,9 @@ defmodule DranWeb.GraphVisibilityTest do
       end
     end
 
-    test "con workspace compartido todo visible sigue apareciendo (guard)", %{
+    # W3: "shared workspace" is gone — the equivalent guarantee is PUBLIC
+    # items: an edge between two visible (public) pages must render.
+    test "con items públicos todo visible sigue apareciendo (guard)", %{
       conn: conn,
       owner: owner,
       workspace: workspace,
@@ -147,7 +144,8 @@ defmodule DranWeb.GraphVisibilityTest do
           "slug" => "shared-a-#{unique}",
           "page_type" => "note",
           "body" => "cuerpo",
-          "owner_user_id" => owner.id
+          "owner_user_id" => owner.id,
+          "visibility" => "public"
         })
 
       {:ok, page_b} =
@@ -156,7 +154,8 @@ defmodule DranWeb.GraphVisibilityTest do
           "title" => "Compartida B #{unique}",
           "slug" => "shared-b-#{unique}",
           "page_type" => "note",
-          "body" => "cuerpo"
+          "body" => "cuerpo",
+          "visibility" => "public"
         })
 
       # Arista entre dos páginas visibles (una sin dueño = del workspace)
@@ -190,11 +189,6 @@ defmodule DranWeb.GraphVisibilityTest do
       owner: owner,
       unique: unique
     } do
-      {:ok, _} =
-        workspace
-        |> Dran.Workspace.settings_changeset(%{share_pages: false})
-        |> Repo.update()
-
       {:ok, mine} =
         Knowledge.create_page(%{
           "workspace_id" => workspace.id,
@@ -219,16 +213,17 @@ defmodule DranWeb.GraphVisibilityTest do
           "owner_user_id" => other.id
         })
 
-      # Un lector "all" (el owner) cachea su vista ...
+      # W3: scopes are {:reader, id} now. An "all" reader (instance owner)
+      # caches their view ...
       all_view = Dran.GraphCache.get(workspace.id, :all)
       assert all_view.json =~ theirs.slug
       assert all_view.json =~ mine.slug
 
-      # ... y el lector con scope propio NO recibe ese payload cacheado.
-      own_view = Dran.GraphCache.get(workspace.id, {:own, owner.id})
-      assert own_view.json =~ mine.slug
+      # ... and the per-reader view does NOT get that cached payload.
+      reader_view = Dran.GraphCache.get(workspace.id, {:reader, owner.id})
+      assert reader_view.json =~ mine.slug
 
-      refute own_view.json =~ theirs.slug,
+      refute reader_view.json =~ theirs.slug,
              "el payload de otro scope no debe servirse a este lector"
     end
   end

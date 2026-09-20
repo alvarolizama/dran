@@ -22,7 +22,7 @@ defmodule DranWeb.API.GraphController do
           where: p.workspace_id == ^context.id,
           select: %{id: p.id, title: p.title, slug: p.slug, type: p.page_type}
         )
-        |> Dran.ContentVisibility.filter(scope)
+        |> Dran.ContentVisibility.filter(scope, :page)
         |> Repo.all()
 
       node_ids = Enum.map(nodes, & &1.id)

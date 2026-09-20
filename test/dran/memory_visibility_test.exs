@@ -8,6 +8,12 @@ defmodule Dran.MemoryVisibilityTest do
   """
   use DranWeb.ConnCase, async: false
 
+  # W3 (contract-instance-visibility-20260919): the v1 sharing semantics died —
+  # share_memory/content_scope/workspace isolation are replaced by per-item
+  # visibility (own ∪ public ∪ shared). The live matrix is covered by
+  # test/dran/content_visibility_test.exs.
+  @moduletag :skip
+
   alias Dran.{ContentVisibility, Knowledge, Memory, Repo}
   alias Dran.Accounts.{ApiKey, User, UserWorkspace}
 

@@ -170,7 +170,7 @@ defmodule DranWeb.GraphHelpers do
         )
         # Visibilidad: el vecino oculto no se convierte en nodo (y sin nodo,
         # tampoco se pinta su arista).
-        |> Enum.filter(&Dran.ContentVisibility.visible?(&1.owner_user_id, scope_memory))
+        |> Enum.filter(&Dran.ContentVisibility.visible?(&1, scope_memory, :memory))
         |> Map.new(fn m ->
           {m.id,
            %{

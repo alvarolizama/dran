@@ -174,16 +174,10 @@ defmodule Dran.Memory do
     force? = Keyword.get(opts, :force, false)
     owner_id = Map.get(attrs, "owner_user_id")
 
-    # Dedupe scope: in a SHARED workspace it stays global (today's behaviour —
-    # one workspace, one fact). In an ISOLATED workspace it is per owner, so a
-    # 409 never reveals that another user already holds the same fact
-    # (P6: el near-duplicate no filtra facts ajenos).
+    # W3: dedupe is per owner (a private fact of another user must not
+    # 409-reveal its existence); unattributable producers dedupe globally.
     dedupe_scope =
-      if shared_workspace?(ws_id) do
-        :global
-      else
-        {:owner, owner_id}
-      end
+      if owner_id, do: {:owner, owner_id}, else: :global
 
     # Explicit dedupe first — cheap read beats a constraint race, and the
     # unique_constraint in the changeset catches the true insert race.
@@ -277,27 +271,8 @@ defmodule Dran.Memory do
 
   # ── Dedupe scoping ─────────────────────────────────────────────────────────
 
-  # Shared workspace (default) → dedupe is global: one fact per workspace,
-  # exactly as before this feature. Isolated → per owner.
-  defp shared_workspace?(workspace_id) do
-    case Dran.Knowledge.get_workspace_by_slug(workspace_id) ||
-           Repo.get(Dran.Workspace, workspace_id) do
-      nil -> true
-      workspace -> Dran.ContentVisibility.shared?(workspace, :memory)
-    end
-  end
-
   defp find_duplicate(ws_id, hash, :global) do
     Repo.get_by(__MODULE__, workspace_id: ws_id, content_hash: hash)
-  end
-
-  defp find_duplicate(ws_id, hash, {:owner, nil}) do
-    from(m in __MODULE__,
-      where:
-        m.workspace_id == ^ws_id and m.content_hash == ^hash and
-          is_nil(m.owner_user_id)
-    )
-    |> Repo.one()
   end
 
   defp find_duplicate(ws_id, hash, {:owner, owner_id}) do
@@ -560,7 +535,7 @@ defmodule Dran.Memory do
   # Read visibility: the scope comes from Dran.ContentVisibility (the single
   # policy module). No :scope opt ⇒ :all = pre-feature behaviour.
   defp maybe_filter_scope(query, nil), do: query
-  defp maybe_filter_scope(query, scope), do: Dran.ContentVisibility.filter(query, scope)
+  defp maybe_filter_scope(query, scope), do: Dran.ContentVisibility.filter(query, scope, :memory)
 
   defp maybe_filter_status(query, nil), do: query
   defp maybe_filter_status(query, status), do: where(query, [m], m.status == ^status)

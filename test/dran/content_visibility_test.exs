@@ -1,227 +1,206 @@
 defmodule Dran.ContentVisibilityTest do
   @moduledoc """
-  Gate W3 (P5): la política de visibilidad se decide en UN módulo
-  (`Dran.ContentVisibility`) y su matriz es la del contrato:
+  Gate W3 (contract-instance-visibility-20260919): the reader matrix.
 
-    | política workspace | content_scope | scope        |
-    |--------------------|---------------|--------------|
-    | shared (true)      | "all"         | :all         |
-    | shared (true)      | "own"         | {:own, id}   |
-    | isolated (false)   | cualquiera    | {:own, id}   |
+  The instance is one workspace; isolation is per ITEM. A reader sees:
 
-  owner/admin del workspace y el instance owner conservan vista completa.
+      own ∪ public ∪ shared-with-me (direct user share or via a group)
+
+    reader            | own | other-private | public | shared-with-me | shared-ungranted
+    ------------------|-----|---------------|--------|----------------|-----------------
+    plain user        | yes | no            | yes    | yes            | no
+    group member      | yes | no            | yes    | yes (via group)| no
+    instance admin    | yes | yes           | yes    | yes            | yes
+    api key (owner u) | exactly the owner's row
   """
-  use Dran.DataCase, async: false
 
-  alias Dran.{ContentVisibility, Knowledge, Repo}
-  alias Dran.Accounts.{ApiKey, User, UserWorkspace}
+  use Dran.DataCase, async: true
 
-  defp create_user do
-    unique = System.unique_integer([:positive])
+  import Ecto.Query
+  alias Dran.{Accounts, ContentVisibility, Knowledge, Repo, Sharing}
 
-    {:ok, user} =
-      %User{}
-      |> User.changeset(%{email: "vis-#{unique}@dran.test", api_token: "vis-#{unique}"})
-      |> Repo.insert()
+  setup do
+    ws = ensure_workspace!()
 
-    user
+    {:ok, owner} =
+      Accounts.create_user(%{email: "cv-owner-#{u()}@example.com", api_token: "t#{u()}"})
+
+    {:ok, other} =
+      Accounts.create_user(%{email: "cv-other-#{u()}@example.com", api_token: "t#{u()}"})
+
+    {:ok, admin} =
+      Accounts.create_user(%{email: "cv-admin-#{u()}@example.com", api_token: "t#{u()}"})
+
+    admin = admin |> Ecto.Changeset.change(instance_role: "admin") |> Repo.update!()
+
+    pages = %{
+      own: create_page!(ws, owner, "own", "private"),
+      other_private: create_page!(ws, other, "other-private", "private"),
+      public: create_page!(ws, other, "public", "public"),
+      shared_user: create_page!(ws, owner, "shared-user", "shared"),
+      shared_other: create_page!(ws, other, "shared-other", "shared")
+    }
+
+    :ok = share_with_user!(pages.shared_user, other)
+
+    {:ok, group} = Sharing.create_group(%{name: "CV Group #{u()}"})
+    {:ok, _} = Sharing.add_group_member(group, other.id)
+    group_page = create_page!(ws, owner, "shared-group", "shared")
+    :ok = share_with_group!(group_page, group)
+    pages = Map.put(pages, :shared_group, group_page)
+
+    {:ok, ws: ws, owner: owner, other: other, admin: admin, pages: pages}
   end
 
-  defp create_workspace(share_memory), do: create_workspace(share_memory, true)
+  describe "scope resolution" do
+    test "plain user reads as {:reader, id}", %{owner: owner} do
+      expected = {:reader, owner.id}
+      assert ^expected = ContentVisibility.scope(nil, owner, :pages)
+    end
 
-  defp create_workspace(share_memory, share_pages) do
-    unique = System.unique_integer([:positive])
+    test "instance admin and instance owner read as :all", ctx do
+      assert :all = ContentVisibility.scope(nil, ctx.admin, :pages)
 
-    {:ok, ws} =
-      Knowledge.create_workspace(%{name: "Vis #{unique}", slug: "vis-#{unique}"})
+      owner_flag = Map.put(ctx.owner, :is_owner, true)
+      assert :all = ContentVisibility.scope(nil, owner_flag, :pages)
+    end
 
-    {:ok, ws} =
-      ws
-      |> Dran.Workspace.settings_changeset(%{
-        share_memory: share_memory,
-        share_pages: share_pages
+    test "API-key identity reads as its owner (Rules#3)", %{owner: owner} do
+      expected = {:reader, owner.id}
+      assert ^expected = ContentVisibility.scope(nil, %{owner_user_id: owner.id}, :pages)
+    end
+
+    test "nil and unknown identities keep the legacy :all posture" do
+      assert :all = ContentVisibility.scope(nil, nil, :memory)
+      assert :all = ContentVisibility.scope(nil, %{key_name: "legacy"}, :memory)
+    end
+  end
+
+  describe "the reader matrix (pages)" do
+    test "owner: own + public + own shared rows; NOT other's ungranted shared", ctx do
+      # shared-other belongs to `other` and has no grant for owner — invisible
+      # to them even though its visibility is "shared".
+      assert visible_slugs(ctx.owner) == ~w(own public shared-group shared-user)
+    end
+
+    test "other user: own + public + shared-with-me (user AND group grants)", ctx do
+      # other owns other-private AND shared-other (ungranted shared reads
+      # private — but it is THEIRS, so still visible as own).
+      assert visible_slugs(ctx.other) ==
+               ~w(other-private public shared-group shared-other shared-user)
+    end
+
+    test "instance admin sees everything", ctx do
+      # :all bypasses the filter — the admin's full view (alphabetical).
+      assert query_slugs(:all) ==
+               ~w(other-private own public shared-group shared-other shared-user)
+
+      assert :all = ContentVisibility.scope(nil, ctx.admin, :pages)
+    end
+
+    test "api key reads exactly as its owner (query level)", %{other: other} do
+      identity = %{owner_user_id: other.id}
+      scope = ContentVisibility.resolve(nil, identity, :pages)
+      expected = {:reader, other.id}
+      assert ^expected = scope
+
+      assert query_slugs(scope) ==
+               ~w(other-private public shared-group shared-other shared-user)
+    end
+
+    test "visible?/3 agrees with filter/3 row by row", ctx do
+      scope = {:reader, ctx.other.id}
+      expected_for_other = ~w(other-private public shared-group shared-other shared-user)
+
+      for {key, page} <- ctx.pages do
+        assert ContentVisibility.visible?(page, scope, :page) ==
+                 (page.slug in expected_for_other),
+               "row #{key} (#{page.slug}) disagrees with the matrix"
+      end
+    end
+
+    test "unsharing revokes the read", ctx do
+      [share] = Sharing.list_shares("page", ctx.pages.shared_user.id)
+      :ok = Sharing.unshare(share.id)
+
+      refute ctx.pages.shared_user.slug in visible_slugs(ctx.other)
+      assert ctx.pages.shared_user.slug in visible_slugs(ctx.owner)
+    end
+  end
+
+  describe "memories follow the same matrix" do
+    test "private memory of another user is invisible; public is visible", ctx do
+      # Memory.add returns {:ok, mem} or {:ok, mem, status} depending on the
+      # dedupe path — accept both.
+      {:ok, mine, _} =
+        Dran.Memory.add(%{
+          "content" => "fact mine #{u()}",
+          "workspace_id" => ctx.ws.id,
+          "owner_user_id" => ctx.other.id,
+          "visibility" => "private"
+        })
+        |> then(fn
+          {:ok, m} -> {:ok, m, :created}
+          other -> other
+        end)
+
+      {:ok, pub, _} =
+        Dran.Memory.add(%{
+          "content" => "fact pub #{u()}",
+          "workspace_id" => ctx.ws.id,
+          "owner_user_id" => ctx.other.id,
+          "visibility" => "public"
+        })
+        |> then(fn
+          {:ok, m} -> {:ok, m, :created}
+          other -> other
+        end)
+
+      slugs = memory_contents(ctx.owner)
+      refute mine.content in slugs
+      assert pub.content in slugs
+    end
+  end
+
+  defp u, do: System.unique_integer([:positive])
+
+  defp create_page!(ws, owner, slug, visibility) do
+    {:ok, page} =
+      Knowledge.create_page(%{
+        workspace_id: ws.id,
+        title: slug,
+        slug: slug,
+        page_type: "note",
+        owner_user_id: owner.id,
+        visibility: visibility
       })
-      |> Repo.update()
 
-    ws
+    page
   end
 
-  defp member(user, workspace, role, content_scope \\ "all") do
-    {:ok, uw} =
-      %UserWorkspace{}
-      |> UserWorkspace.changeset(%{
-        user_id: user.id,
-        workspace_id: workspace.id,
-        role: role,
-        content_scope: content_scope
-      })
-      |> Repo.insert()
-
-    uw
+  defp share_with_user!(page, user) do
+    assert {:ok, :shared} = Sharing.share_with_user("page", page.id, user.id)
+    :ok
   end
 
-  describe "scope/3 — identidades sin privilegio" do
-    test "identidad nil ⇒ :all (comportamiento previo a la feature)" do
-      ws = create_workspace(false)
-      assert ContentVisibility.scope(ws, nil, :memory) == :all
-      assert ContentVisibility.scope(ws, nil, :pages) == :all
-    end
-
-    test "instance owner ⇒ :all incluso en workspace aislado" do
-      ws = create_workspace(false)
-      assert ContentVisibility.scope(ws, %{is_owner: true}, :memory) == :all
-    end
-
-    test "workspace compartido + content_scope 'all' ⇒ :all" do
-      ws = create_workspace(true)
-      user = create_user()
-      member(user, ws, "viewer", "all")
-
-      assert ContentVisibility.scope(ws, user, :memory) == :all
-    end
-
-    test "workspace compartido + content_scope 'own' ⇒ {:own, user_id}" do
-      ws = create_workspace(true, true)
-      user = create_user()
-      member(user, ws, "viewer", "own")
-
-      assert ContentVisibility.scope(ws, user, :memory) == {:own, user.id}
-      assert ContentVisibility.scope(ws, user, :pages) == {:own, user.id}
-    end
-
-    test "workspace aislado ⇒ {:own, user_id} sin importar content_scope" do
-      ws = create_workspace(false, false)
-      user = create_user()
-      member(user, ws, "editor", "all")
-
-      assert ContentVisibility.scope(ws, user, :memory) == {:own, user.id}
-      assert ContentVisibility.scope(ws, user, :pages) == {:own, user.id}
-    end
-
-    test "owner/admin del workspace conservan vista completa en aislado" do
-      ws = create_workspace(false, false)
-
-      owner = create_user()
-      member(owner, ws, "owner", "own")
-      assert ContentVisibility.scope(ws, owner, :memory) == :all
-
-      admin = create_user()
-      member(admin, ws, "admin", "all")
-      assert ContentVisibility.scope(ws, admin, :pages) == :all
-    end
-
-    test "editor/viewer NO conservan vista completa en aislado" do
-      ws = create_workspace(false, false)
-
-      editor = create_user()
-      member(editor, ws, "editor")
-      assert ContentVisibility.scope(ws, editor, :memory) == {:own, editor.id}
-
-      viewer = create_user()
-      member(viewer, ws, "viewer")
-      assert ContentVisibility.scope(ws, viewer, :pages) == {:own, viewer.id}
-    end
+  defp share_with_group!(page, group) do
+    assert {:ok, :shared} = Sharing.share_with_group("page", page.id, group.id)
+    :ok
   end
 
-  describe "scope/3 — identidad de agente (API key)" do
-    test "el agente hereda la preferencia de su dueño" do
-      ws = create_workspace(true, true)
-      owner = create_user()
-      member(owner, ws, "editor", "own")
+  defp visible_slugs(user), do: query_slugs({:reader, user.id})
 
-      actor = agent_actor("agent-#{System.unique_integer([:positive])}")
-      {:ok, actor} = actor |> Ecto.Changeset.change(%{owner_user_id: owner.id}) |> Repo.update()
-
-      identity = %{actor: actor}
-      assert ContentVisibility.scope(ws, identity, :memory) == {:own, owner.id}
-    end
-
-    test "agente sin dueño en workspace aislado ⇒ {:own, nil} (solo contenido del workspace)" do
-      ws = create_workspace(false, false)
-      actor = agent_actor("orphan-#{System.unique_integer([:positive])}")
-
-      assert ContentVisibility.scope(ws, %{actor: actor}, :memory) == {:own, nil}
-    end
-
-    test "agente sin dueño en workspace compartido ⇒ :all" do
-      ws = create_workspace(true, true)
-      actor = agent_actor("shared-#{System.unique_integer([:positive])}")
-
-      assert ContentVisibility.scope(ws, %{actor: actor}, :memory) == :all
-    end
+  defp query_slugs(scope) do
+    from(p in Knowledge.Page, order_by: p.slug)
+    |> ContentVisibility.filter(scope, :page)
+    |> Repo.all()
+    |> Enum.map(& &1.slug)
   end
 
-  describe "scope/3 — postura defensiva" do
-    test "un mapa autenticado sin ownership ⇒ :all (no rompe superficies viejas)" do
-      ws = create_workspace(false, false)
-      assert ContentVisibility.scope(ws, %{key_name: "legacy"}, :memory) == :all
-    end
-
-    test "workspace sin el campo share_* ⇒ compartido (pre-feature)" do
-      assert ContentVisibility.scope(%{}, nil, :memory) == :all
-    end
-  end
-
-  describe "filter/3" do
-    test "aplica el WHERE del dueño y es no-op en :all" do
-      import Ecto.Query
-
-      base = from(m in Dran.Memory)
-
-      assert ContentVisibility.filter(base, :all) == base
-
-      filtered = ContentVisibility.filter(base, {:own, 42})
-      assert inspect(filtered) =~ "owner_user_id"
-    end
-  end
-
-  describe "visible?/2" do
-    test "matriz de visibilidad de una fila" do
-      assert ContentVisibility.visible?(123, :all)
-      assert ContentVisibility.visible?(123, {:own, 123})
-      refute ContentVisibility.visible?(123, {:own, 456})
-      assert ContentVisibility.visible?(nil, {:own, nil})
-      refute ContentVisibility.visible?(nil, {:own, 456})
-      refute ContentVisibility.visible?(123, {:own, nil})
-    end
-  end
-
-  describe "shared?/2" do
-    test "lee la política por tipo de contenido" do
-      ws = create_workspace(false, true)
-      assert ContentVisibility.shared?(ws, :pages) == true
-      assert ContentVisibility.shared?(ws, :memory) == false
-    end
-  end
-
-  describe "content_scope_for/2" do
-    test "devuelve la preferencia guardada, 'all' cuando no hay membresía" do
-      ws = create_workspace(true)
-      user = create_user()
-      member(user, ws, "viewer", "own")
-
-      assert ContentVisibility.content_scope_for(user.id, ws.id) == "own"
-      assert ContentVisibility.content_scope_for(user.id, nil) == "all"
-      assert ContentVisibility.content_scope_for(nil, ws.id) == "all"
-    end
-  end
-
-  describe "resolve/3" do
-    test "acepta id o slug y resuelve la política" do
-      ws = create_workspace(false, false)
-      user = create_user()
-      member(user, ws, "viewer")
-
-      assert ContentVisibility.resolve(ws.id, user, :memory) == {:own, user.id}
-      assert ContentVisibility.resolve(ws.slug, user, :memory) == {:own, user.id}
-      assert ContentVisibility.resolve(nil, user, :memory) == :all
-    end
-  end
-
-  # W3: la key ya no crea actores; los tests de visibilidad construyen la
-  # identidad de agente con un actor explícito.
-  defp agent_actor(name) do
-    {:ok, actor} = Dran.Actors.create_actor(%{name: name, kind: "agent"})
-    actor
+  defp memory_contents(user) do
+    from(m in Dran.Memory)
+    |> ContentVisibility.filter({:reader, user.id}, :memory)
+    |> Repo.all()
+    |> Enum.map(& &1.content)
   end
 end

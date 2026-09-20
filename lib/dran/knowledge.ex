@@ -427,7 +427,7 @@ defmodule Dran.Knowledge do
   defp maybe_filter_visibility_scope(query, nil), do: query
 
   defp maybe_filter_visibility_scope(query, scope) do
-    Dran.ContentVisibility.filter(query, scope)
+    Dran.ContentVisibility.filter(query, scope, :page)
   end
 
   defp maybe_filter_pinned(query, nil), do: query
@@ -1477,7 +1477,7 @@ defmodule Dran.Knowledge do
         limit: 100,
         select: %{id: m.id, content: m.content, type: fragment("'memory'")}
       )
-      |> Dran.ContentVisibility.filter(scope_memory)
+      |> Dran.ContentVisibility.filter(scope_memory, :memory)
       |> Repo.all()
       |> Enum.map(fn m ->
         %{id: m.id, title: truncate_memory_label(m.content), slug: nil, type: m.type}
@@ -1598,7 +1598,7 @@ defmodule Dran.Knowledge do
           where: p.workspace_id == ^workspace_id and p.page_type not in ^exclude_types
       end
 
-    Dran.ContentVisibility.filter(query, scope)
+    Dran.ContentVisibility.filter(query, scope, :page)
   end
 
   @doc """
@@ -1794,7 +1794,7 @@ defmodule Dran.Knowledge do
         _ -> nil
       end
 
-    Dran.ContentVisibility.visible?(owner, scope)
+    Dran.ContentVisibility.visible?(owner, scope, :page)
   end
 
   # Post-query props filter for search results. Applied after normalize_results
@@ -2453,7 +2453,7 @@ defmodule Dran.Knowledge do
       order_by: [asc: p.title],
       select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
-    |> Dran.ContentVisibility.filter(Keyword.get(opts, :scope, :all), :owner_user_id)
+    |> Dran.ContentVisibility.filter(Keyword.get(opts, :scope, :all), :page)
     |> Repo.all()
   end
 
@@ -2467,7 +2467,7 @@ defmodule Dran.Knowledge do
       order_by: [asc: p.updated_at],
       select: %{slug: p.slug, title: p.title, page_type: p.page_type, updated_at: p.updated_at}
     )
-    |> Dran.ContentVisibility.filter(scope)
+    |> Dran.ContentVisibility.filter(scope, :page)
     |> Repo.all()
   end
 
@@ -2477,7 +2477,7 @@ defmodule Dran.Knowledge do
       order_by: [asc: p.title],
       select: %{slug: p.slug, title: p.title, page_type: p.page_type}
     )
-    |> Dran.ContentVisibility.filter(scope)
+    |> Dran.ContentVisibility.filter(scope, :page)
     |> Repo.all()
   end
 

@@ -1,268 +1,166 @@
 defmodule Dran.ContentVisibility do
   @moduledoc """
-  The single read-visibility policy for content (memories + knowledge pages).
+  The single read-visibility policy for content (memories + knowledge pages
+  + collections + reports).
 
-  Read visibility is decided in exactly ONE place. `Memory`, `Knowledge`, the
-  graph, REST and the LiveViews all funnel through `scope/3` and
-  `filter/3` — there are no ad-hoc checks per controller or per template.
+  Read visibility is decided in exactly ONE place. `Memory`, `Knowledge`,
+  `Collections`, `Reports`, the graph, REST and the LiveViews all funnel
+  through `scope/3` and `filter/3` — there are no ad-hoc checks per
+  controller or per template.
 
-  ## The one vocabulary: the scope
+  ## v2 — per-item visibility (W3, contract-instance-visibility-20260919)
 
-  A scope is either:
+  The instance is one workspace; isolation moved from the container to the
+  ITEM. Every content row carries `visibility`:
 
-    * `:all` — the reader sees every visible row of the workspace
-    * `{:own, user_id | nil}` — the reader sees only rows whose
-      `owner_user_id` matches. `{:own, nil}` means "only workspace content"
-      (rows with a NULL owner), which is what an unattributable agent sees
-      inside an isolated workspace.
+    * `"private"` — readable by its owner and instance admins
+    * `"public"`  — readable by every user of the instance
+    * `"shared"`  — readable by the owner, instance admins, and the users /
+      groups holding a `content_shares` row for it
 
-  ## The policy
+  A reader sees: **own ∪ public ∪ shared-with-me**. An API key reads with
+  exactly the reach of its owner (the user behind the actor).
 
-  Per workspace, two booleans decide the sharing policy of the instance:
+  ## The vocabulary: the scope
 
-    * `share_memory` — memories are shared across the workspace
-    * `share_pages`  — pages are shared across the workspace
+      {:reader, user_id}   a concrete user (or API-key owner) — the normal case
+      :all                 a privileged reader (instance owner/admin): everything
 
-  Per user, `user_workspaces.content_scope` (`"all"` | `"own"`) is the
-  personal preference: "todo el workspace" vs "solo míos". Agents inherit
-  the preference of their owner (the user that owns the actor behind the
-  API key), never a per-key setting.
+  `nil` identity (unknown shapes, legacy surfaces) resolves to `:all` only
+  on surfaces the authorization layer already authenticated; the callers
+  pass the resolved user. The pre-v2 fail-open posture is kept for shapes
+  this module does not understand (documented, tested).
 
-  Combining both, for a non-privileged reader:
+  ## Write vs read
 
-    | workspace policy | content_scope | scope           |
-    |------------------|---------------|-----------------|
-    | shared (true)    | "all"         | `:all`          |
-    | shared (true)    | "own"         | `{:own, id}`    |
-    | isolated (false) | any           | `{:own, id}`    |
-
-  The owner/admin of the workspace and the instance owner always keep the
-  full view (`:all`).
-
-  ## Posture
-
-  * `nil` identity → `:all`. This preserves the pre-existing read behaviour
-    (the authorization layer already decides whether the request reaches the
-    workspace at all) and keeps the legacy surfaces working.
-  * An unknown identity shape → `:all`, same reason. Only shapes this module
-    understands are narrowed.
-  * A missing `share_*` field (workspace struct not loaded with the column)
-    defaults to `true` = shared, the pre-feature behaviour.
+  Shares and visibility only move READ access. Writing stays with the owner
+  and instance admins (contract ?03, default applied read-only).
   """
 
   import Ecto.Query, only: [from: 2]
 
-  alias Dran.Accounts.UserWorkspace
-  alias Dran.Repo
+  alias Dran.Accounts.User
 
   @type kind :: :memory | :pages
-  @type scope :: :all | {:own, integer() | nil}
+  @type scope :: :all | {:reader, integer() | nil}
   @type identity :: struct() | map() | nil
 
   @roles_full_view ~w(owner admin)
-  @content_scopes ~w(all own)
+
+  # ── Resolution ────────────────────────────────────────────────────────────
 
   @doc """
-  Resolve the read scope of `identity` inside `workspace` for `kind`
-  (`:memory` | `:pages`).
+  Resolve the read scope of `identity` for `kind`.
 
-  `workspace` may be a `%Dran.Workspace{}` or any map carrying
-  `share_memory` / `share_pages`.
+  The `workspace` argument is kept for call-site compatibility (v1 resolved
+  the sharing policy from it) and is IGNORED in the single-workspace model.
   """
   @spec scope(map() | struct() | nil, identity(), kind()) :: scope()
   def scope(_workspace, nil, _kind), do: :all
 
-  # Instance owner / legacy admin identity shapes.
+  # Instance owner keeps the full view.
   def scope(_workspace, %{is_owner: true}, _kind), do: :all
 
-  # Per-user token: workspace members. owner/admin keep the full view.
-  def scope(workspace, %Dran.Accounts.User{id: user_id} = user, kind) do
-    case Dran.Accounts.user_role_in_workspace(user, workspace) do
-      role when role in @roles_full_view -> :all
-      _role -> non_admin_scope(workspace, user_id, kind)
-    end
-  end
+  # Instance admins (the new instance_role) read everything.
+  def scope(_workspace, %User{instance_role: role}, _kind) when role in @roles_full_view,
+    do: :all
 
-  # API key / agent identity: inherits the owner's preference.
-  def scope(workspace, %{actor: %Dran.Actors.Actor{owner_user_id: owner_id}}, kind)
+  # API-key / agent identity: reads with the reach of its owner.
+  def scope(_workspace, %{owner_user_id: owner_id} = identity, _kind)
       when not is_nil(owner_id) do
-    agent_scope(workspace, owner_id, kind)
+    if privileged_identity?(identity), do: :all, else: {:reader, owner_id}
   end
 
-  def scope(workspace, %{actor: %Dran.Actors.Actor{owner_user_id: nil}}, kind) do
-    # Unattributable agent: workspace content only. It can never claim
-    # someone else's facts, and outside isolation nothing changes (`:all`).
-    if shared?(workspace, kind), do: :all, else: {:own, nil}
-  end
+  # A plain user: the per-reader view.
+  def scope(_workspace, %User{id: id}, _kind), do: {:reader, id}
 
-  def scope(workspace, %{owner_user_id: owner_id} = identity, kind)
-      when not is_nil(owner_id) do
-    if privileged_identity?(identity) do
-      :all
-    else
-      agent_scope(workspace, owner_id, kind)
-    end
-  end
-
-  def scope(workspace, %{owner_user_id: nil} = identity, kind) do
-    if shared?(workspace, kind) or privileged_identity?(identity), do: :all, else: {:own, nil}
-  end
-
-  # Authenticated map without any ownership information — same behaviour the
-  # read path had before this feature existed.
+  # Authenticated map without ownership information — same behaviour the
+  # read path had before per-item visibility (documented fail-open).
   def scope(_workspace, _identity, _kind), do: :all
 
   @doc """
   Convenience resolver: like `scope/3` but accepting a workspace id, slug or
-  struct. Loads the workspace when only an id/slug is given, so every caller
-  (REST controller, plugin tool, LiveView) can resolve with what it already has.
+  struct (ignored in the single-workspace model).
   """
   @spec resolve(binary() | map() | struct() | nil, identity(), kind()) :: scope()
-  def resolve(workspace, identity, kind)
-
-  def resolve(nil, _identity, _kind), do: :all
-
-  def resolve(%{share_memory: _} = workspace, identity, kind) do
-    scope(workspace, identity, kind)
-  end
-
-  def resolve(%{share_pages: _} = workspace, identity, kind) do
-    scope(workspace, identity, kind)
-  end
-
-  def resolve(workspace_id, identity, kind) when is_binary(workspace_id) do
-    case Dran.Knowledge.get_workspace_by_slug(workspace_id) || get_workspace_by_uuid(workspace_id) do
-      nil -> :all
-      workspace -> scope(workspace, identity, kind)
-    end
-  end
-
-  def resolve(_workspace, _identity, _kind), do: :all
-
-  # A non-UUID string would raise a CastError inside Ecto; an unknown slug or
-  # malformed id simply resolves to no workspace (⇒ :all, fail-open on the
-  # policy, the authorization layer already gated the request).
-  defp get_workspace_by_uuid(value) do
-    case Ecto.UUID.cast(value) do
-      {:ok, uuid} -> Repo.get(Dran.Workspace, uuid)
-      :error -> nil
-    end
-  end
+  def resolve(_workspace, identity, kind), do: scope(nil, identity, kind)
 
   # ── Query helpers ─────────────────────────────────────────────────────────
 
   @doc """
-  Narrow an Ecto query to a scope, on the given owner column
-  (default `:owner_user_id`).
+  Narrow an Ecto query of CONTENT ROWS (pages, memories, collections,
+  reports — tables with `visibility` + `owner_user_id`) to a reader's scope.
 
-      from(m in Memory) |> ContentVisibility.filter(scope)
+      from(p in Page) |> ContentVisibility.filter(scope, :page)
+
+  The second argument is the resource type used to look up shares
+  (default `:page`).
   """
   @spec filter(Ecto.Queryable.t(), scope(), atom()) :: Ecto.Queryable.t()
-  def filter(queryable, scope, field \\ :owner_user_id)
+  def filter(queryable, :all, _resource), do: queryable
 
-  def filter(queryable, :all, _field), do: queryable
+  def filter(queryable, {:reader, reader_id}, resource) do
+    group_ids = Dran.Sharing.group_ids_for(reader_id)
 
-  # `field == nil` is forbidden in Ecto queries — {:own, nil} is the scope of
-  # an unattributable reader (workspace content only), so it becomes is_nil/1.
-  def filter(queryable, {:own, nil}, field) do
-    from(q in queryable, where: is_nil(field(q, ^field)))
-  end
-
-  def filter(queryable, {:own, owner_id}, field) do
-    from(q in queryable, where: field(q, ^field) == ^owner_id)
+    from(q in queryable,
+      where:
+        q.visibility == "public" or
+          q.owner_user_id == ^reader_id or
+          (q.visibility == "shared" and
+             fragment(
+               "EXISTS (SELECT 1 FROM content_shares s WHERE s.resource_type = ? AND s.resource_id = ? AND (s.user_id = ? OR s.user_group_id = ANY(?)))",
+               ^to_string(resource),
+               q.id,
+               ^reader_id,
+               ^group_ids
+             ))
+    )
   end
 
   @doc """
   Post-fetch check for a single row (graph nodes, cached entries): true when
-  a row owned by `owner_user_id` is readable under `scope`.
+  a row owned by `owner_user_id` with `visibility` is readable under `scope`.
   """
-  @spec visible?(integer() | nil, scope()) :: boolean()
-  def visible?(_owner_user_id, :all), do: true
-  def visible?(owner_user_id, {:own, expected}), do: owner_user_id == expected
+  @spec visible?(map() | struct() | nil, scope(), atom()) :: boolean()
+  def visible?(_row, :all, _resource), do: true
+
+  def visible?(row, {:reader, reader_id}, resource) when is_map(row) do
+    owner = Map.get(row, :owner_user_id)
+    visibility = Map.get(row, :visibility)
+
+    cond do
+      owner == reader_id -> true
+      visibility == "public" -> true
+      visibility == "shared" and is_binary(Map.get(row, :id)) ->
+        Dran.Sharing.shared_with?(to_string(resource), Map.get(row, :id), reader_id)
+
+      true -> false
+    end
+  end
+
+  def visible?(_row, _scope, _resource), do: false
 
   @doc """
-  True when `identity` is a privileged reader of the workspace (owner/admin
-  member or instance owner) — the readers that always keep the full view.
+  True when `identity` is a privileged reader (instance owner or an
+  admin/owner instance role) — the readers that always keep the full view.
   """
   @spec privileged?(map() | struct() | nil, map() | struct() | nil) :: boolean()
   def privileged?(nil, _workspace), do: false
   def privileged?(%{is_owner: true}, _workspace), do: true
 
-  def privileged?(%Dran.Accounts.User{} = user, workspace) do
-    Dran.Accounts.user_role_in_workspace(user, workspace) in @roles_full_view
-  end
+  def privileged?(%User{instance_role: role}, _workspace), do: role in @roles_full_view
 
   def privileged?(_identity, _workspace), do: false
 
-  @doc "True when the workspace shares `kind` content across its members."
-  @spec shared?(map() | struct(), kind()) :: boolean()
-  def shared?(workspace, :memory), do: boolean_field(workspace, :share_memory)
-
-  def shared?(workspace, :pages), do: boolean_field(workspace, :share_pages)
-
   @doc """
-  The personal content preference of `user_id` inside the workspace
-  (`"all"` | `"own"`), defaulting to `"all"` when there is no membership row.
+  The personal content preference of `user_id` (`"all"` | `"own"`), kept for
+  the memory LiveView toggle. With per-item visibility the default is
+  `"all"` — the filter already narrows to what the reader may see.
   """
   @spec content_scope_for(integer() | nil, binary() | nil) :: String.t()
-  def content_scope_for(nil, _workspace_id), do: "all"
-
-  def content_scope_for(user_id, workspace_id) when is_integer(user_id) do
-    case workspace_id do
-      nil ->
-        "all"
-
-      ws_id ->
-        case Repo.one(
-               from(uw in UserWorkspace,
-                 where: uw.user_id == ^user_id and uw.workspace_id == ^ws_id,
-                 select: uw.content_scope
-               )
-             ) do
-          scope when scope in @content_scopes -> scope
-          _ -> "all"
-        end
-    end
-  end
+  def content_scope_for(_user_id, _workspace_id), do: "all"
 
   # ── Internals ─────────────────────────────────────────────────────────────
 
-  # A user who is not owner/admin: the workspace policy decides. Isolated
-  # force-narrows to "solo míos"; shared honours the personal preference.
-  defp non_admin_scope(workspace, user_id, kind) do
-    if shared?(workspace, kind) do
-      case content_scope_for(user_id, workspace_id(workspace)) do
-        "own" -> {:own, user_id}
-        _ -> :all
-      end
-    else
-      {:own, user_id}
-    end
-  end
-
-  # An agent reads with the preference of its owner.
-  defp agent_scope(workspace, owner_id, kind) do
-    if shared?(workspace, kind) do
-      case content_scope_for(owner_id, workspace_id(workspace)) do
-        "own" -> {:own, owner_id}
-        _ -> :all
-      end
-    else
-      {:own, owner_id}
-    end
-  end
-
   defp privileged_identity?(identity), do: Map.get(identity, :is_owner) == true
-
-  defp workspace_id(%{id: id}), do: id
-  defp workspace_id(_), do: nil
-
-  defp boolean_field(workspace, field) do
-    case Map.get(workspace, field) do
-      false -> false
-      true -> true
-      # Column not loaded / map without the key → pre-feature behaviour.
-      _ -> true
-    end
-  end
 end
