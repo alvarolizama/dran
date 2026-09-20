@@ -16,7 +16,10 @@ defmodule DranWeb.API.PageController do
       |> maybe_put(:status, conn.query_params["status"])
       |> maybe_put(:owner, conn.query_params["owner"])
       |> maybe_put(:created_by, conn.query_params["created_by"])
-      |> maybe_put(:limit, conn.query_params["limit"] && String.to_integer(conn.query_params["limit"]))
+      |> maybe_put(
+        :limit,
+        conn.query_params["limit"] && String.to_integer(conn.query_params["limit"])
+      )
       |> maybe_put(:include_body, conn.query_params["include"] == "body")
 
     pages = Knowledge.list_pages(opts)

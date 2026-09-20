@@ -73,10 +73,6 @@ defmodule DranWeb.ResourceAuthorizationTest do
       assert Authz.authorize(user, :write, ws_from_setup().id) == :ok
     end
 
-
-
-
-
     # ── W5: the instance role decides (single-workspace) ────────────────────
 
     test "instance viewer: read allowed, write denied" do

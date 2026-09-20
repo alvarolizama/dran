@@ -47,6 +47,7 @@ defmodule DranWeb.PageComponents do
   attr :share_target, :boolean,
     default: false,
     doc: "renders the Share button (the detail view wires the share dialog)"
+
   slot :tabs
   slot :extra_tabs, doc: "extra server-side tabs rendered alongside Content"
   slot :extra_content, doc: "server-side tab content rendered outside the content panel"
@@ -114,7 +115,9 @@ defmodule DranWeb.PageComponents do
                 title={gettext("Item visibility")}
               >
                 <.icon
-                  name={if @page.visibility == "public", do: "hero-globe-alt", else: "hero-user-group"}
+                  name={
+                    if @page.visibility == "public", do: "hero-globe-alt", else: "hero-user-group"
+                  }
                   class="size-3"
                 />
                 {visibility_label(@page.visibility)}
@@ -921,7 +924,11 @@ defmodule DranWeb.PageComponents do
           {gettext("Shared")}
         </label>
       </div>
-      <input type="hidden" name="page[visibility]" value={Phoenix.HTML.Form.input_value(@form, :visibility) || "private"} />
+      <input
+        type="hidden"
+        name="page[visibility]"
+        value={Phoenix.HTML.Form.input_value(@form, :visibility) || "private"}
+      />
       <input
         :for={level <- ~w(private public shared)}
         type="radio"
@@ -932,7 +939,9 @@ defmodule DranWeb.PageComponents do
         class="hidden"
       />
       <p class="text-xs text-base-content/50 mt-1.5">
-        {gettext("Private: only you. Public: everyone on this instance. Shared: only the people you invite.")}
+        {gettext(
+          "Private: only you. Public: everyone on this instance. Shared: only the people you invite."
+        )}
       </p>
     </div>
     """

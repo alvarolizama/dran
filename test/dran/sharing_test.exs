@@ -46,10 +46,12 @@ defmodule Dran.SharingTest do
     test "duplicate names get distinct slugs (slug is the identity)", ctx do
       assert {:ok, a} = Sharing.create_group(%{name: "Ops"})
       assert {:error, changeset} = Sharing.create_group(%{name: "Ops"})
+
       assert Enum.any?(changeset.errors, fn
                {:slug, {"has already been taken", _}} -> true
                _ -> false
              end)
+
       assert a.slug == "ops"
       assert ctx.page.slug
     end

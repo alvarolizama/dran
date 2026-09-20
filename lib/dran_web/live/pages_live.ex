@@ -347,7 +347,11 @@ defmodule DranWeb.PagesLive do
   def handle_event("save_page", params, socket),
     do: PageEdit.handle_event("save_page", params, socket)
 
-  def handle_event("open_share", _params, %{assigns: %{page: %Dran.Knowledge.Page{} = page}} = socket) do
+  def handle_event(
+        "open_share",
+        _params,
+        %{assigns: %{page: %Dran.Knowledge.Page{} = page}} = socket
+      ) do
     {:noreply,
      socket
      |> assign(:share_open, true)
@@ -380,7 +384,11 @@ defmodule DranWeb.PagesLive do
 
   def handle_event("share_with_user", _params, socket), do: {:noreply, socket}
 
-  def handle_event("share_with_group", %{"group_id" => group_id}, %{assigns: %{page: page}} = socket)
+  def handle_event(
+        "share_with_group",
+        %{"group_id" => group_id},
+        %{assigns: %{page: page}} = socket
+      )
       when group_id != "" do
     case Dran.Sharing.share_with_group("page", page.id, String.to_integer(group_id)) do
       {:ok, :shared} ->

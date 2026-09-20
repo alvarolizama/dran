@@ -129,12 +129,17 @@ defmodule Dran.ContentVisibility do
     visibility = Map.get(row, :visibility)
 
     cond do
-      owner == reader_id -> true
-      visibility == "public" -> true
+      owner == reader_id ->
+        true
+
+      visibility == "public" ->
+        true
+
       visibility == "shared" and is_binary(Map.get(row, :id)) ->
         Dran.Sharing.shared_with?(to_string(resource), Map.get(row, :id), reader_id)
 
-      true -> false
+      true ->
+        false
     end
   end
 

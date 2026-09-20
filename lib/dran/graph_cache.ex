@@ -73,8 +73,12 @@ defmodule Dran.GraphCache do
     key = {slug, workspace_id}
 
     case :ets.lookup(@page_table, key) do
-      [{^key, :not_found}] -> nil
-      [{^key, page}] -> page
+      [{^key, :not_found}] ->
+        nil
+
+      [{^key, page}] ->
+        page
+
       # Caller's process — same sandbox rationale as get/2.
       [] ->
         page = Knowledge.get_page_by_slug(slug, workspace_id)

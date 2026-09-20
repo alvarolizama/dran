@@ -488,7 +488,8 @@ defmodule Dran.Knowledge do
 
   # W5: scope-aware fetch — a row outside the reader's scope is the same as a
   # missing row (404, no existence leak).
-  def get_page_by_slug(slug, workspace_id, scope: scope) when is_binary(slug) and is_binary(workspace_id) do
+  def get_page_by_slug(slug, workspace_id, scope: scope)
+      when is_binary(slug) and is_binary(workspace_id) do
     Page
     |> where(slug: ^slug, workspace_id: ^workspace_id)
     |> Dran.ContentVisibility.filter(scope, :page)

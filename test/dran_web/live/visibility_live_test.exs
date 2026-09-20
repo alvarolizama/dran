@@ -86,8 +86,8 @@ defmodule DranWeb.VisibilityLiveTest do
     :ok
   end
 
-    # W3: the all|mine toggle and shared/isolated workspace semantics
-    # died with per-item visibility (own ∪ public ∪ shared).
+  # W3: the all|mine toggle and shared/isolated workspace semantics
+  # died with per-item visibility (own ∪ public ∪ shared).
   describe "memory_live — filtro y toggle" do
     @tag :skip
     test "workspace compartido: el usuario ve ambos facts y el toggle aparece", %{conn: conn} do

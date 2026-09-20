@@ -51,9 +51,14 @@ defmodule Dran.ContentShare do
       {nil, nil} ->
         add_error(changeset, :user_id, "a share targets exactly one user or group")
 
-      {_, nil} -> changeset
-      {nil, _} -> changeset
-      _ -> add_error(changeset, :user_group_id, "a share targets exactly one user or group")
+      {_, nil} ->
+        changeset
+
+      {nil, _} ->
+        changeset
+
+      _ ->
+        add_error(changeset, :user_group_id, "a share targets exactly one user or group")
     end
   end
 end

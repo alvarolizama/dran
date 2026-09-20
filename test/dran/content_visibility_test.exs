@@ -114,7 +114,7 @@ defmodule Dran.ContentVisibilityTest do
 
       for {key, page} <- ctx.pages do
         assert ContentVisibility.visible?(page, scope, :page) ==
-                 (page.slug in expected_for_other),
+                 page.slug in expected_for_other,
                "row #{key} (#{page.slug}) disagrees with the matrix"
       end
     end

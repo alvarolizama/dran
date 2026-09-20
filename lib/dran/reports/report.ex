@@ -49,7 +49,16 @@ defmodule Dran.Reports.Report do
   @doc "Changeset for creating or updating a report"
   def changeset(report, attrs) do
     report
-    |> cast(attrs, [:workspace_id, :title, :slug, :body, :report_type, :meta, :archived, :visibility])
+    |> cast(attrs, [
+      :workspace_id,
+      :title,
+      :slug,
+      :body,
+      :report_type,
+      :meta,
+      :archived,
+      :visibility
+    ])
     |> validate_required([:workspace_id, :title, :slug])
     |> validate_length(:title, max: 500)
     |> validate_length(:slug, max: 500)

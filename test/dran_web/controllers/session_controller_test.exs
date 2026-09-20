@@ -34,7 +34,7 @@ defmodule DranWeb.SessionControllerTest do
     {:ok, conn: conn, personal: personal, work: work}
   end
 
-      describe "POST /context — switch_context" do
+  describe "POST /context — switch_context" do
     # W1: removed behavior (workspace switching / cookie restoration).
     @tag :skip
     test "sets the signed dran_last_workspace cookie", %{conn: conn} do
@@ -66,7 +66,7 @@ defmodule DranWeb.SessionControllerTest do
     end
   end
 
-      describe "cookie-based context restoration" do
+  describe "cookie-based context restoration" do
     # W1: removed behavior (workspace switching / cookie restoration).
     @tag :skip
     test "fetch_workspace_cookie restores context from signed cookie when session has none", %{
@@ -162,7 +162,7 @@ defmodule DranWeb.SessionControllerTest do
     end
   end
 
-      describe "page counts in context selector" do
+  describe "page counts in context selector" do
     # W1: removed behavior (workspace switching / cookie restoration).
     @tag :skip
     test "page_counts_by_workspace returns map of workspace_id => count", %{
@@ -189,7 +189,7 @@ defmodule DranWeb.SessionControllerTest do
     end
   end
 
-      describe "sidebar workspace selector" do
+  describe "sidebar workspace selector" do
     # W1: removed behavior (workspace switching / cookie restoration).
     @tag :skip
     # Regression: the selector form posted the field as "context_slug" — a

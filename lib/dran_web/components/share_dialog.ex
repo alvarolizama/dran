@@ -12,7 +12,6 @@ defmodule DranWeb.Components.ShareDialog do
 
   use DranWeb, :html
 
-
   attr :id, :string, default: "share-dialog"
   attr :open, :boolean, default: false
   attr :resource_type, :string, required: true
@@ -31,7 +30,10 @@ defmodule DranWeb.Components.ShareDialog do
       phx-window-keydown="close_share"
       phx-key="escape"
     >
-      <div class="surface-2 w-full max-w-md rounded-2xl shadow-xl max-h-[85vh] flex flex-col" phx-click="noop">
+      <div
+        class="surface-2 w-full max-w-md rounded-2xl shadow-xl max-h-[85vh] flex flex-col"
+        phx-click="noop"
+      >
         <header class="flex items-center justify-between px-5 py-4 border-b border-base-content/10">
           <div>
             <h2 class="text-heading">{gettext("Share")}</h2>
@@ -39,7 +41,11 @@ defmodule DranWeb.Components.ShareDialog do
               {gettext("Read access only — editing stays with the owner.")}
             </p>
           </div>
-          <button phx-click="close_share" class="btn btn-ghost btn-sm btn-square" aria-label={gettext("Close")}>
+          <button
+            phx-click="close_share"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label={gettext("Close")}
+          >
             <.icon name="hero-x-mark" class="size-4" />
           </button>
         </header>

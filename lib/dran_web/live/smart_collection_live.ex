@@ -235,9 +235,7 @@ defmodule DranWeb.SmartCollectionLive do
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">{gettext(
-              "Cancel"
-            )}</.link>
+            <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">{gettext("Cancel")}</.link>
             <button
               type="submit"
               class="btn btn-primary btn-sm"
@@ -452,9 +450,7 @@ defmodule DranWeb.SmartCollectionLive do
             {:noreply,
              socket
              |> put_flash(:info, gettext("Smart collection created."))
-             |> push_navigate(
-               to: ~p"/collections/#{collection.slug}"
-             )}
+             |> push_navigate(to: ~p"/collections/#{collection.slug}")}
 
           {:error, _changeset} ->
             {:noreply,

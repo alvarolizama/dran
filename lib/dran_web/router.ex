@@ -250,7 +250,6 @@ defmodule DranWeb.Router do
     end
   end
 
-
   # ── Public routes (login page, session, health) ──
 
   scope "/", DranWeb do

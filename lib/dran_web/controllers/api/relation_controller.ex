@@ -133,7 +133,6 @@ defmodule DranWeb.API.RelationController do
   defp blank?(str) when is_binary(str), do: String.trim(str) == ""
   defp blank?(_), do: false
 
-
   @doc "DELETE /api/relations/:id — delete a relation by id."
   def delete(conn, %{"id" => id}) do
     # SEC-011: validate the user has access to the relation's context before deleting

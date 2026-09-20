@@ -35,7 +35,7 @@ defmodule DranWeb.ControllerHelpers do
       end
   """
   @spec with_context(Plug.Conn.t(), binary() | nil, (Plug.Conn.t(), Dran.Workspace.t() ->
-                                                     Plug.Conn.t())) ::
+                                                       Plug.Conn.t())) ::
           Plug.Conn.t()
   def with_context(conn, _legacy_slug, fun) do
     case Dran.Auth.instance_workspace() do

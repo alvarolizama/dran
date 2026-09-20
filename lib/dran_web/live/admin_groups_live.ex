@@ -133,7 +133,9 @@ defmodule DranWeb.AdminGroupsLive do
         <div>
           <h1 class="text-title">{gettext("Groups")}</h1>
           <p class="text-caption mt-1">
-            {gettext("Share content with several people at once — a group is a list of users used as a share target.")}
+            {gettext(
+              "Share content with several people at once — a group is a list of users used as a share target."
+            )}
           </p>
         </div>
 
@@ -194,7 +196,10 @@ defmodule DranWeb.AdminGroupsLive do
 
           <form id="group-add-member-form" phx-submit="add_member" class="flex gap-2">
             <input type="hidden" name="group_id" value={@members_group.id} />
-            <select name="user_id" class="select select-sm flex-1 rounded-lg border-base-300 bg-base-100">
+            <select
+              name="user_id"
+              class="select select-sm flex-1 rounded-lg border-base-300 bg-base-100"
+            >
               <option value="">{gettext("Add a user…")}</option>
               <option :for={u <- @all_users} value={u.id}>{u.email}</option>
             </select>

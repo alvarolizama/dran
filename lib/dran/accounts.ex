@@ -731,50 +731,50 @@ defmodule Dran.Accounts do
     # creator-membership gate on the requested workspaces stopped meaning
     # anything when the instance became the only workspace.
     with :ok <- validate_key_creator(attrs[:created_by_user_id]) do
-        token = ApiKey.generate_token()
+      token = ApiKey.generate_token()
 
-        # W3 (M6): creating a key NO LONGER creates/links an actor. The key is
-        # its own agent identity (its `name`) and the only ownership link is
-        # `created_by_user_id` — which is what `Auth.resolve_owner_user_id/1`
-        # reads for attribution. `actor_id` stays NULL on new rows until the
-        # M3 drop.
-        Ecto.Multi.new()
-        |> Ecto.Multi.insert(
-          :api_key,
-          %ApiKey{}
-          |> ApiKey.changeset(%{
-            name: attrs.name,
-            created_by_user_id: attrs[:created_by_user_id],
-            token_hash: ApiKey.hash_token(token),
-            token_prefix: ApiKey.prefix_of(token)
-          })
-        )
-        |> Ecto.Multi.run(:workspace_entries, fn _repo, %{api_key: api_key} ->
-          entries =
-            Enum.map(workspace_ids, fn {wid, level} ->
-              %ApiKeyWorkspace{}
-              |> ApiKeyWorkspace.changeset(%{
-                api_key_id: api_key.id,
-                workspace_id: wid,
-                access_level: level
-              })
-            end)
-
-          {:ok, entries}
-        end)
-        |> Ecto.Multi.run(:insert_workspace_entries, fn _repo, %{workspace_entries: entries} ->
-          Enum.each(entries, fn changeset ->
-            Repo.insert!(changeset)
+      # W3 (M6): creating a key NO LONGER creates/links an actor. The key is
+      # its own agent identity (its `name`) and the only ownership link is
+      # `created_by_user_id` — which is what `Auth.resolve_owner_user_id/1`
+      # reads for attribution. `actor_id` stays NULL on new rows until the
+      # M3 drop.
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(
+        :api_key,
+        %ApiKey{}
+        |> ApiKey.changeset(%{
+          name: attrs.name,
+          created_by_user_id: attrs[:created_by_user_id],
+          token_hash: ApiKey.hash_token(token),
+          token_prefix: ApiKey.prefix_of(token)
+        })
+      )
+      |> Ecto.Multi.run(:workspace_entries, fn _repo, %{api_key: api_key} ->
+        entries =
+          Enum.map(workspace_ids, fn {wid, level} ->
+            %ApiKeyWorkspace{}
+            |> ApiKeyWorkspace.changeset(%{
+              api_key_id: api_key.id,
+              workspace_id: wid,
+              access_level: level
+            })
           end)
 
-          {:ok, :done}
+        {:ok, entries}
+      end)
+      |> Ecto.Multi.run(:insert_workspace_entries, fn _repo, %{workspace_entries: entries} ->
+        Enum.each(entries, fn changeset ->
+          Repo.insert!(changeset)
         end)
-        |> Repo.transaction()
-        |> case do
-          {:ok, %{api_key: key}} -> {:ok, %{key | token: token}}
-          {:error, :api_key, changeset, _} -> {:error, changeset}
-          {:error, _step, reason, _} -> {:error, reason}
-        end
+
+        {:ok, :done}
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{api_key: key}} -> {:ok, %{key | token: token}}
+        {:error, :api_key, changeset, _} -> {:error, changeset}
+        {:error, _step, reason, _} -> {:error, reason}
+      end
     end
   end
 
@@ -850,28 +850,28 @@ defmodule Dran.Accounts do
   def replace_api_key_workspaces(%ApiKey{} = key, workspace_ids, _creator \\ nil) do
     # W5: no membership matrix to validate — the key acts as its owner.
     Ecto.Multi.new()
-        |> Ecto.Multi.delete_all(
-          :drop_old,
-          from(akw in ApiKeyWorkspace, where: akw.api_key_id == ^key.id)
-        )
-        |> Ecto.Multi.insert_all(
-          :insert_new,
-          ApiKeyWorkspace,
-          Enum.map(workspace_ids, fn {wid, level} ->
-            %{
-              api_key_id: key.id,
-              workspace_id: wid,
-              access_level: level,
-              inserted_at: DateTime.utc_now() |> DateTime.truncate(:second)
-            }
-          end),
-          on_conflict: :nothing
-        )
-        |> Repo.transaction()
-        |> case do
-          {:ok, _} -> {:ok, reload_api_key(key)}
-          {:error, _step, reason, _} -> {:error, reason}
-        end
+    |> Ecto.Multi.delete_all(
+      :drop_old,
+      from(akw in ApiKeyWorkspace, where: akw.api_key_id == ^key.id)
+    )
+    |> Ecto.Multi.insert_all(
+      :insert_new,
+      ApiKeyWorkspace,
+      Enum.map(workspace_ids, fn {wid, level} ->
+        %{
+          api_key_id: key.id,
+          workspace_id: wid,
+          access_level: level,
+          inserted_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        }
+      end),
+      on_conflict: :nothing
+    )
+    |> Repo.transaction()
+    |> case do
+      {:ok, _} -> {:ok, reload_api_key(key)}
+      {:error, _step, reason, _} -> {:error, reason}
+    end
   end
 
   defp reload_api_key(%ApiKey{} = key) do
