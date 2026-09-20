@@ -110,7 +110,21 @@ defmodule DranWeb.Layouts do
            —fuera del drawer— para que las reglas funcionen por hermandad. --%>
       <input id="sidebar-collapse" type="checkbox" class="hidden" />
 
-      <div class="drawer lg:drawer-open h-full">
+      <%!-- El `lg:grid-rows-1` NO es cosmético. El drawer de daisyUI es un grid y
+           declara solo `grid-auto-columns`: la fila queda IMPLÍCITA y su tamaño
+           (`grid-auto-rows: auto`) se infla con el contenido de la página. Con
+           contenido largo la fila medía 3024px para una ventana de 900, así que
+           `main` dejaba de scrollear por dentro (2968/2968) y scrolleaba el
+           DOCUMENTO entero: el sidebar y el topbar se iban con la rueda
+           (medido: sidebar top -400 con la ventana scrolleada 400px).
+           `repeat(1, minmax(0, 1fr))` acota la fila al viewport y el scroll
+           vuelve a vivir dentro de `main` (844/2968), con el sidebar fijo.
+           Funciona porque este daisyUI ya pone `grid-row-start: 1` en
+           `.drawer-content` y `.drawer-side`; el `minmax(0, …)` es lo que
+           permite bajar por debajo del contenido.
+           Scope `lg` a propósito: en < lg el `.drawer-side` es un overlay
+           `position: fixed` y no hay columna que acotar. --%>
+      <div class="drawer lg:drawer-open lg:grid-rows-1 h-full">
         <%!-- Móvil: el drawer-toggle abre/cierra la gaveta con overlay --%>
         <input id="app-drawer" type="checkbox" class="drawer-toggle" />
 

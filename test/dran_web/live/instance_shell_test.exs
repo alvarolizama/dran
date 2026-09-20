@@ -84,6 +84,20 @@ defmodule DranWeb.InstanceShellTest do
     refute has_element?(view, "a[aria-current='page']")
   end
 
+  # El drawer es un grid y daisyUI solo declara `grid-auto-columns`: sin acotar la
+  # fila, `grid-auto-rows: auto` la infla con el contenido, `main` deja de
+  # scrollear por dentro y scrollea el DOCUMENTO — el sidebar y el topbar se van
+  # con la rueda (medido: sidebar top -400 con la ventana scrolleada 400px).
+  # `lg:grid-rows-1` acota la fila al viewport y es la invariante a mantener: si
+  # alguien la quita, el shell vuelve a scrollear entero.
+  test "el drawer acota su fila: el scroll vive en main, no en el documento", %{conn: conn} do
+    conn = owner_conn(conn, "shell_owner@test.dev")
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, ".drawer[class~='lg:grid-rows-1']")
+    assert has_element?(view, "main.overflow-y-auto")
+  end
+
   test "the Admin group is hidden for non-owners", %{conn: conn} do
     {:ok, _user} =
       Accounts.create_user(%{email: "shell_plain@test.dev", name: "Plain", is_owner: false})
