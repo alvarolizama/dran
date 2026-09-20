@@ -5,12 +5,28 @@
 /priv/static/assets
 /priv/static/cache_manifest.json
 
+# Local uploads — NEVER inside the image: `COPY priv priv` would bake them in.
+# Being in .gitignore is not enough, the build context is a different thing
+# (one audit found 93 files / 72 MB of uploads in a build context for missing
+# this line).
+/priv/static/uploads
+
 # Dev / test only
 /.env
 /.env.*
 /.hermes
 /.git
 /.github
+
+# Tests, docs and tooling do not enter the image (the Dockerfile copies lib,
+# priv, assets and rel only).
+/test
+/docs
+/tmp
+/erl_crash.dump
+
+# Riel local state — never committed, never built.
+/.riel
 
 # Misc
 /Dockerfile

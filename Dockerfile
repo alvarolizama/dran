@@ -45,7 +45,11 @@ COPY mix.exs mix.lock ./
 COPY config config
 
 RUN mix deps.get --only prod
-RUN mix deps.compile
+
+# OOM guard: build containers (Coolify and friends) usually have 512 MB–1 GB and
+# the Erlang VM starts one scheduler per core, so deps.compile dies with
+# exit 255. +S 1:1 limits it to a single scheduler.
+RUN ERL_AFLAGS="+S 1:1" mix deps.compile
 
 # --- Application + assets --------------------------------------------------
 COPY lib lib
@@ -104,5 +108,12 @@ ENV HOME=/app MIX_ENV=prod PHX_SERVER=true PORT=4000
 # UI). To actually toggle force_ssl, rebuild with the build ARG.
 ARG DISABLE_FORCE_SSL=""
 ENV DISABLE_FORCE_SSL=${DISABLE_FORCE_SSL}
+
+# Liveness probe. curl only fails on status >= 400, so /health (a bare 200 that
+# touches no database) is an honest probe while the boot tasks warm the pool.
+# NEVER point the healthcheck at `/`: it redirects to /login (302) and a proxy
+# expecting 200 reads a healthy container as down (502).
+HEALTHCHECK --interval=15s --timeout=3s --start-period=60s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${PORT:-4000}/health" || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]

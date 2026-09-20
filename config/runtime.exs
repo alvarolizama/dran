@@ -16,14 +16,14 @@ import Config
 #
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
-# Always start the HTTP listener. The endpoint is a child of Dran.Application
-# and is the only listener in this app, so the boot script (start/daemon)
-# will pick it up automatically. Leaving this on `true` makes the release
-# work the same whether started via `bin/server`, `bin/dran start`, or any
-# other entrypoint (Coolify, Railpack, Nixpacks, bare metal).
-# Guard: in :test this would fight the Endpoint's `server: false` and try to
-# bind the port during `mix test` / `mix precommit` (eaddrinuse).
-if config_env() != :test do
+# The listener starts in production and whenever PHX_SERVER is set: that is how
+# `bin/dran start`, `bin/server` (which exports PHX_SERVER=true), the container
+# and any deploy platform start it. The gate keeps `mix test` and `mix
+# precommit` from trying to bind the port (eaddrinuse with a dev server up).
+# In dev the listener still comes up through `mix phx.server`, which sets
+# `:phoenix, :serve_endpoints` (Phoenix.Endpoint.Supervisor.server?/2 falls back
+# to it when the `:server` key is absent).
+if config_env() == :prod or System.get_env("PHX_SERVER") do
   config :dran, DranWeb.Endpoint, server: true
 end
 
@@ -57,16 +57,21 @@ if config_env() == :prod do
   # the system CA bundle breaks the connection. Set ECTO_SSL=false to disable
   # SSL entirely for local dev or non-SSL databases, or ECTO_SSL_VERIFY=true
   # to opt back into strict verification against the system CA bundle.
+  #
+  # The TLS options go INSIDE `ssl:` (a keyword list): Postgrex >= 0.22
+  # deprecated the old pair `ssl: true, ssl_opts: [...]` and logs
+  # `":ssl_opts is deprecated, pass opts to :ssl instead"` once per pool
+  # connection, so the deprecated shape would fill the boot log of every deploy.
   maybe_ssl =
     cond do
       System.get_env("ECTO_SSL") in ~w(false 0) ->
         []
 
       System.get_env("ECTO_SSL_VERIFY") in ~w(true 1) ->
-        [ssl: true, ssl_opts: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]]
+        [ssl: [verify: :verify_peer, cacerts: :public_key.cacerts_get()]]
 
       true ->
-        [ssl: true, ssl_opts: [verify: :verify_none]]
+        [ssl: [verify: :verify_none]]
     end
 
   config :dran,
