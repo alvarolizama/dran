@@ -1,12 +1,16 @@
 #!/bin/sh
 # Dran container entrypoint.
 #
-# Runs Dran.Release.setup/0 (create DB if missing → migrate → seed default
-# context → backfill personal workspaces) before starting the Phoenix release.
-# On a fresh database it creates the schema and the default context. On
-# subsequent deploys it short-circuits (DB already exists) and only runs
-# pending migrations. Demo content (goals, todos, notes) is NOT seeded in prod
-# — use `bin/dran eval Dran.Release.seed` manually for that.
+# Runs Dran.Release.setup/0 (create DB if missing → migrate → seed the default
+# context → production seed → backfill personal workspaces) before starting the
+# Phoenix release. On a fresh database it creates the schema and the default
+# context. On subsequent deploys it short-circuits (DB already exists) and only
+# runs pending migrations.
+#
+# The production seed (priv/repo/seeds_prod.exs) is OPT-IN: it creates the
+# instance owner only when DRAN_ADMIN_PASSWORD is set. Without it the first
+# visitor gets the /setup screen. Demo content is NEVER seeded by a release —
+# Dran.Release.seed_demo/0 refuses to run outside dev.
 #
 # Env vars:
 #   SKIP_MIGRATIONS=1   bypass setup entirely (one-off task containers).

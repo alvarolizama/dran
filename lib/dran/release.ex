@@ -5,9 +5,10 @@ defmodule Dran.Release do
 
   All public functions are safe to call from a release container:
 
-    * `setup/0`         — create DB (if missing) → migrate → seed context → backfill personal workspaces. Idempotent.
+    * `setup/0`         — create DB (if missing) → migrate → seed default context → production seed → backfill personal workspaces. Idempotent.
     * `migrate/0`       — run pending migrations.
-    * `seed/0`          — run priv/repo/seeds.exs (full demo content). Dev/test only.
+    * `seed/0`          — run priv/repo/seeds_prod.exs (opt-in first owner). Safe on every deploy.
+    * `seed_demo/0`     — run priv/repo/seeds.exs (full demo content). Dev/demo only: it refuses to run inside a release.
     * `seed_context/0`  — create the default context only. Safe for prod.
     * `backfill_personal_workspaces/0` — give accounts that lack one their personal workspace. Idempotent.
     * `rollback/2`      — roll a single repo back to a given version.
@@ -25,7 +26,8 @@ defmodule Dran.Release do
 
   @doc """
   Idempotent first-run setup: create the database if it does not exist,
-  run any pending migrations, and seed the default context.
+  run any pending migrations, seed the default context, run the production seed
+  (opt-in first owner) and give accounts without one their personal workspace.
 
   Safe to invoke on every deploy — it short-circuits when the database
   already exists, and migrations are themselves idempotent.
@@ -38,6 +40,7 @@ defmodule Dran.Release do
     create()
     migrate()
     seed_context()
+    seed()
     backfill_personal_workspaces()
     :ok
   end
@@ -165,29 +168,72 @@ defmodule Dran.Release do
   end
 
   @doc """
-  Run priv/repo/seeds.exs inside an active repo connection.
+  Run the **production seed**, `priv/repo/seeds_prod.exs`, inside an active repo
+  connection.
 
-  This seeds the **full demo content** (notes, concepts,
-  relations) on top of the default context. Intended for dev/test only —
-  production should use `seed_context/0` instead.
+  The file is OPT-IN and idempotent: it creates the instance owner only when
+  `DRAN_ADMIN_PASSWORD` is set, and without that variable it creates nothing —
+  the first account comes in through `/setup`. `setup/0` calls it on every
+  deploy, so it must stay safe against a database that already has data.
 
-  The seeds file is expected to use `alias Dran.Repo` and call functions on
-  it directly. We use `Ecto.Migrator.with_repo/2` so the repo (and only the
-  repo) is started for the duration of the seed run.
+  Never point it at `priv/repo/seeds.exs`: that is the development demo dataset
+  and it creates content with public passwords. `seed_demo/0` is the only way in
+  and it refuses to run inside a release.
+
+  `Ecto.Migrator.with_repo/2` starts the repo (and only the repo) for the
+  duration of the run: during `bin/dran eval` the supervision tree is not up.
   """
   def seed do
+    eval_seed_file(seeds_file())
+  end
+
+  @doc """
+  Absolute path of the seed `seed/0` evaluates.
+
+  Public so a test can assert it points at the production seed and not at the
+  development one — confusing the two is what sows demo data in production.
+  """
+  @spec seeds_file() :: String.t()
+  def seeds_file, do: Application.app_dir(@app, "priv/repo/seeds_prod.exs")
+
+  @doc """
+  Run the **demo** dataset, `priv/repo/seeds.exs`, inside an active repo
+  connection.
+
+  Demo content (notes, concepts, relations, accounts with public passwords) is
+  for a development instance. It REFUSES to run inside a release: a release has
+  no `MIX_ENV` and its config is `:prod`, so there is no legitimate case for
+  seeding demo data through it.
+
+      mix run -e 'Dran.Release.seed_demo()'   # dev/test
+      bin/dran eval Dran.Release.seed_demo    # raises: it is a release
+  """
+  def seed_demo do
+    if release?() do
+      raise "refusing to run the demo seed (priv/repo/seeds.exs) inside a release: " <>
+              "use Dran.Release.seed/0 (priv/repo/seeds_prod.exs) instead"
+    end
+
+    eval_seed_file(Application.app_dir(@app, "priv/repo/seeds.exs"))
+  end
+
+  defp eval_seed_file(path) do
     load_config()
-    seeds_file = Application.app_dir(@app, "priv/repo/seeds.exs")
 
     for repo <- repos() do
       {:ok, _, _} =
         Ecto.Migrator.with_repo(
           repo,
-          fn _repo -> Code.eval_file(seeds_file) end,
+          fn _repo -> Code.eval_file(path) end,
           timeout: @start_timeout
         )
     end
   end
+
+  # A release runs with no MIX_ENV, and `bin/dran eval` from an image built with
+  # MIX_ENV=prod reports "prod": both are a release. In dev/test the variable is
+  # there and the demo seed is allowed.
+  defp release?, do: System.get_env("MIX_ENV") in [nil, "prod"]
 
   @doc """
   Create only the default workspace if it does not exist.
