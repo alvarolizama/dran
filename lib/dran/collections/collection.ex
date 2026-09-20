@@ -31,6 +31,9 @@ defmodule Dran.Collections.Collection do
     field :summary, :string
     field :filters, :map, default: %{}
 
+    # Per-item read visibility (W2).
+    field :visibility, :string, default: "private"
+
     belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
@@ -39,7 +42,7 @@ defmodule Dran.Collections.Collection do
   @doc "Changeset for creating or updating a collection"
   def changeset(collection, attrs) do
     collection
-    |> cast(attrs, [:workspace_id, :name, :slug, :summary, :filters])
+    |> cast(attrs, [:workspace_id, :name, :slug, :summary, :filters, :visibility])
     |> validate_required([:workspace_id, :name, :slug])
     |> validate_length(:name, max: 500)
     |> validate_length(:slug, max: 500)

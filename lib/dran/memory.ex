@@ -77,6 +77,11 @@ defmodule Dran.Memory do
     field :owner_user_id, :integer
     # The Hermes profile that produced the write (`X-Hermes-Agent`).
     field :agent_name, :string
+
+    # Per-item read visibility (W2): "private" (default) | "public" |
+    # "shared". ALWAYS private at creation via tool/API (contract Rules#6);
+    # only the web UI can change it.
+    field :visibility, :string, default: "private"
     # search_vector is a Postgres generated column — not mapped in Ecto.
 
     belongs_to :workspace, Dran.Workspace
@@ -110,7 +115,8 @@ defmodule Dran.Memory do
       :created_by,
       :trust_score,
       :owner_user_id,
-      :agent_name
+      :agent_name,
+      :visibility
     ])
     |> validate_required([:workspace_id, :content])
     |> update_change(:content, &normalize_content/1)

@@ -103,6 +103,10 @@ defmodule Dran.Knowledge.Page do
     field :updated_by, :string
     field :on_behalf_of, :string
 
+    # Per-item read visibility (W2): "private" (default) | "public" |
+    # "shared" (read grants via Dran.Sharing / content_shares).
+    field :visibility, :string, default: "private"
+
     # Ownership snapshot, injected server-side on every write (never
     # client-settable). NULL = workspace-wide content (system producers).
     field :owner_user_id, :integer
@@ -138,7 +142,8 @@ defmodule Dran.Knowledge.Page do
       :owner_user_id,
       :agent_name,
       :archived,
-      :pinned
+      :pinned,
+      :visibility
     ])
     |> validate_required([:workspace_id, :title, :slug, :page_type])
     |> validate_length(:title, max: 500)
