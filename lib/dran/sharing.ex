@@ -60,6 +60,18 @@ defmodule Dran.Sharing do
     :ok
   end
 
+  @doc "The users belonging to `group_id` (for the members panel)."
+  def list_group_members(group_id) do
+    Repo.all(
+      from(m in UserGroupMember,
+        join: u in assoc(m, :user),
+        where: m.user_group_id == ^group_id,
+        order_by: [asc: u.email],
+        select: %{id: u.id, email: u.email, name: u.name}
+      )
+    )
+  end
+
   @doc "The ids of every group `user_id` belongs to."
   def group_ids_for(user_id) when is_integer(user_id) do
     Repo.all(from(m in UserGroupMember, where: m.user_id == ^user_id, select: m.user_group_id))

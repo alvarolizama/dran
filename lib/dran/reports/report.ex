@@ -53,6 +53,7 @@ defmodule Dran.Reports.Report do
     |> validate_length(:title, max: 500)
     |> validate_length(:slug, max: 500)
     |> validate_inclusion(:report_type, @report_types)
+    |> validate_inclusion(:visibility, ~w(private public shared))
     |> unique_constraint([:workspace_id, :slug], name: :reports_workspace_id_slug_index)
   end
 end

@@ -44,6 +44,7 @@ defmodule Dran.Collections.Collection do
     collection
     |> cast(attrs, [:workspace_id, :name, :slug, :summary, :filters, :visibility])
     |> validate_required([:workspace_id, :name, :slug])
+    |> validate_inclusion(:visibility, ~w(private public shared))
     |> validate_length(:name, max: 500)
     |> validate_length(:slug, max: 500)
     |> unique_constraint([:workspace_id, :slug], name: :collections_workspace_id_slug_index)

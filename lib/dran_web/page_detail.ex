@@ -84,7 +84,12 @@ defmodule DranWeb.PageDetail do
         editing: false,
         save_status: "idle",
         active_nav: active_nav,
-        cluster_summary: nil
+        cluster_summary: nil,
+        # W4 share dialog defaults (closed, empty)
+        share_open: false,
+        shares: [],
+        share_users: [],
+        share_groups: []
       ]
       |> Keyword.merge(extra_assigns)
 

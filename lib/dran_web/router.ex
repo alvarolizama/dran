@@ -325,6 +325,7 @@ defmodule DranWeb.Router do
     live_session :admin, on_mount: {DranWeb.LiveAuth, :require_admin} do
       live "/", AdminLive, :index
       live "/users", AdminUsersLive, :index
+      live "/groups", AdminGroupsLive, :index
       live "/workspaces", AdminWorkspacesLive, :index
       live "/models", AdminModelsLive, :index
       live "/system", AdminSystemLive, :index

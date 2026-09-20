@@ -437,7 +437,7 @@ defmodule DranWeb.PageEdit do
   defp maybe_autosave_fields(socket, %Page{} = page, save_params) do
     # Only keep fields that are real Page fields and changed
     known_fields =
-      ~w(title slug summary tags meta kb_confidence kb_source_url kb_contested owner created_by updated_by on_behalf_of)
+      ~w(title slug summary tags meta kb_confidence kb_source_url kb_contested visibility owner created_by updated_by on_behalf_of)
 
     save_params =
       save_params

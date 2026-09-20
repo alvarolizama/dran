@@ -153,6 +153,7 @@ defmodule Dran.Knowledge.Page do
     # level, so the fail-closed check lives in `Knowledge.create_page/1` /
     # `Knowledge.update_page/2`. `@confidence_levels` stays static.
     |> validate_inclusion(:kb_confidence, @confidence_levels)
+    |> validate_inclusion(:visibility, ~w(private public shared))
     |> put_body_hash()
     |> unique_constraint([:workspace_id, :slug], name: :knowledge_pages_workspace_id_slug_index)
   end

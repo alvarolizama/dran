@@ -539,6 +539,12 @@ defmodule DranWeb.Layouts do
           active={@active == "admin_users"}
         />
         <.nav_link
+          label={gettext("Groups")}
+          icon="hero-user-group"
+          path={~p"/admin/groups"}
+          active={@active == "admin_groups"}
+        />
+        <.nav_link
           label={gettext("All workspaces")}
           icon="hero-building-office-2"
           path={~p"/admin/workspaces"}

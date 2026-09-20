@@ -122,6 +122,7 @@ defmodule Dran.Memory do
     |> update_change(:content, &normalize_content/1)
     |> validate_length(:content, min: 1)
     |> validate_inclusion(:status, @statuses)
+    |> validate_inclusion(:visibility, ~w(private public shared))
     |> unique_constraint(:content_hash,
       name: :memories_workspace_owner_content_hash_idx,
       error_message: "has already been taken"

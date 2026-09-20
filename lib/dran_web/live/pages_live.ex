@@ -12,6 +12,7 @@ defmodule DranWeb.PagesLive do
   alias Dran.Knowledge
   alias Dran.Knowledge.Page
   alias Dran.Workspace
+  alias DranWeb.Components.ShareDialog
   alias DranWeb.PageDetail
   alias DranWeb.PageEdit
   alias DranWeb.ListPagination
@@ -34,8 +35,18 @@ defmodule DranWeb.PagesLive do
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show}>
+        <ShareDialog.share_dialog
+          open={@share_open || false}
+          resource_type="page"
+          resource_id={@page && @page.id}
+          shares={@shares || []}
+          users={@share_users || []}
+          groups={@share_groups || []}
+        />
+
         <.page_detail
           page={@page}
+          share_target={true}
           creator_labels={@creator_labels}
           relations={@relations}
           versions={@versions}
@@ -335,6 +346,60 @@ defmodule DranWeb.PagesLive do
 
   def handle_event("save_page", params, socket),
     do: PageEdit.handle_event("save_page", params, socket)
+
+  def handle_event("open_share", _params, %{assigns: %{page: %Dran.Knowledge.Page{} = page}} = socket) do
+    {:noreply,
+     socket
+     |> assign(:share_open, true)
+     |> assign(:shares, Dran.Sharing.list_shares("page", page.id))
+     |> assign(:share_users, Dran.Accounts.list_users())
+     |> assign(:share_groups, Dran.Sharing.list_groups())}
+  end
+
+  def handle_event("open_share", _params, socket), do: {:noreply, socket}
+
+  def handle_event("close_share", _params, socket) do
+    {:noreply, assign(socket, :share_open, false)}
+  end
+
+  def handle_event("noop", _params, socket), do: {:noreply, socket}
+
+  def handle_event("share_with_user", %{"user_id" => user_id}, %{assigns: %{page: page}} = socket)
+      when user_id != "" do
+    case Dran.Sharing.share_with_user("page", page.id, String.to_integer(user_id)) do
+      {:ok, :shared} ->
+        {:noreply,
+         socket
+         |> assign(:shares, Dran.Sharing.list_shares("page", page.id))
+         |> put_flash(:info, gettext("Shared."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not share."))}
+    end
+  end
+
+  def handle_event("share_with_user", _params, socket), do: {:noreply, socket}
+
+  def handle_event("share_with_group", %{"group_id" => group_id}, %{assigns: %{page: page}} = socket)
+      when group_id != "" do
+    case Dran.Sharing.share_with_group("page", page.id, String.to_integer(group_id)) do
+      {:ok, :shared} ->
+        {:noreply,
+         socket
+         |> assign(:shares, Dran.Sharing.list_shares("page", page.id))
+         |> put_flash(:info, gettext("Shared."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not share."))}
+    end
+  end
+
+  def handle_event("share_with_group", _params, socket), do: {:noreply, socket}
+
+  def handle_event("unshare", %{"id" => share_id}, %{assigns: %{page: page}} = socket) do
+    :ok = Dran.Sharing.unshare(share_id)
+    {:noreply, assign(socket, :shares, Dran.Sharing.list_shares("page", page.id))}
+  end
 
   def handle_event("body_change", params, socket),
     do: PageEdit.handle_event("body_change", params, socket)
