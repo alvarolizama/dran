@@ -13,20 +13,36 @@ defmodule DranWeb.Endpoint do
       _ -> []
     end
 
+  # The dev fallbacks are TWO DIFFERENT values and are not used in prod:
+  # runtime.exs requires both salts from the environment when config_env() ==
+  # :prod. Equal salts (the old default: one single string for both) make the
+  # cookie forgeable/decryptable — see the family standard, SPEC-config.md
+  # §Session and cookies.
   @session_options [
                      store: :cookie,
                      key: "_dran_key",
-                     signing_salt: System.get_env("SESSION_SIGNING_SALT", "ejg+AcWI"),
-                     encryption_salt: System.get_env("SESSION_ENCRYPTION_SALT", "ejg+AcWI"),
+                     signing_salt:
+                       System.get_env("SESSION_SIGNING_SALT", "dran-dev-signing-salt"),
+                     encryption_salt:
+                       System.get_env("SESSION_ENCRYPTION_SALT", "dran-dev-encryption-salt"),
                      same_site: "Lax",
                      http_only: true,
+                     # Sliding renewal: the cookie is re-issued with a fresh
+                     # max_age on every response, so an active person stays in
+                     # and an idle browser expires. Without it the lifetime is
+                     # absolute.
+                     renew: true,
                      max_age:
                        String.to_integer(System.get_env("SESSION_MAX_AGE_SECONDS", "31536000"))
                    ] ++ session_secure
 
+  # connect_info on BOTH entries (websocket and longpoll): the socket needs the
+  # session, and peer_data/user_agent are what the app reads for the IP and the
+  # user agent of a LiveView. A longpoll fallback without them behaves
+  # differently from the websocket.
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options]],
-    longpoll: [connect_info: [session: @session_options]]
+    websocket: [connect_info: [session: @session_options, peer_data: true, user_agent: true]],
+    longpoll: [connect_info: [session: @session_options, peer_data: true, user_agent: true]]
 
   # Serve at "/" the static files from "priv/static" directory.
   #

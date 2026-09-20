@@ -67,6 +67,11 @@ defmodule DranWeb.Plugs.Auth do
     workspace_slug = workspace_slug || Dran.Auth.default_workspace_slug()
 
     conn
+    # A fresh login RENEWS the session id: without it a session id fixed before
+    # the login (an attacker-supplied cookie) survives the authentication and
+    # becomes an authenticated session (fixation). See the family standard,
+    # SPEC-auth.md §Hard rules #3.
+    |> configure_session(renew: true)
     # A fresh login must always drop any stale impersonation session (F6): the
     # impersonated user logging out and back in, or logging in under another
     # account, must not keep riding on the admin's impersonation.
