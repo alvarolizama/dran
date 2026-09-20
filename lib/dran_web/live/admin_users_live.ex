@@ -1,9 +1,14 @@
 defmodule DranWeb.AdminUsersLive do
   @moduledoc """
-  Admin user management (owner-only). Mirrors the old SettingsLive "users"
-  tab: list users, create (email + name + assign to workspaces), delete,
-  toggle workspace membership, set the default workspace, copy a user's API
-  token, and impersonate. The impersonation route/controller lands in F6.
+  Admin user management (owner-only): list users, create (email + name +
+  password), edit, grant or revoke ACCESS to the instance, delete, copy a
+  user's API token, and impersonate.
+
+  W6 (contract-instance-visibility-20260919): the per-user "default workspace"
+  selector and the "may create workspaces" toggle are gone — with a single
+  container neither one has anything to point at. What survives is membership
+  as the ACCESS grant (the checkbox list), which is why the column says Access
+  instead of the older "Contexts".
   """
 
   use DranWeb, :live_view
@@ -144,63 +149,6 @@ defmodule DranWeb.AdminUsersLive do
   end
 
   @impl true
-  def handle_event(
-        "toggle_context_user",
-        %{"workspace_id" => workspace_id, "user_id" => user_id},
-        socket
-      ) do
-    user = Dran.Accounts.get_user!(user_id)
-    context = Dran.Knowledge.get_workspace!(workspace_id)
-
-    if Dran.Accounts.user_in_workspace?(user, context) do
-      Dran.Accounts.remove_user_from_workspace(user, context)
-    else
-      Dran.Accounts.add_user_to_workspace(user, context)
-    end
-
-    {:noreply, assign_users(socket)}
-  end
-
-  @impl true
-  def handle_event("set_default_context", %{"user_id" => id, "slug" => slug}, socket) do
-    user = Dran.Accounts.get_user!(id)
-
-    case Dran.Accounts.set_default_context(user, slug) do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> assign_users()
-         |> put_flash(:info, gettext("Default context updated"))}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update default context"))}
-    end
-  end
-
-  @doc """
-  Grant or revoke the `can_create_workspaces` permission.
-
-  Off by default: creating workspaces is a privilege, not something every
-  account has. The personal workspace is exempt (the system creates it) and the
-  instance owner always has it, so the toggle is not rendered for them.
-  """
-  @impl true
-  def handle_event("toggle_can_create_workspaces", %{"id" => id}, socket) do
-    user = Dran.Accounts.get_user!(id)
-
-    case Dran.Accounts.update_user(user, %{can_create_workspaces: not user.can_create_workspaces}) do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> assign_users()
-         |> put_flash(:info, gettext("Permission updated"))}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not update the permission"))}
-    end
-  end
-
-  @impl true
   def handle_event("toggle_wiki_google_signup", _params, socket) do
     current = Dran.Settings.get("wiki_google_open_signup") == true
     Dran.Settings.put("wiki_google_open_signup", !current)
@@ -251,7 +199,6 @@ defmodule DranWeb.AdminUsersLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace_slug}
-      workspaces={@workspaces}
       active_nav={@active_nav}
       nav={:instance}
     >
@@ -303,9 +250,7 @@ defmodule DranWeb.AdminUsersLive do
                     <th>{gettext("Email")}</th>
                     <th>{gettext("Name")}</th>
                     <th>{gettext("Admin")}</th>
-                    <th>{gettext("Contexts")}</th>
-                    <th>{gettext("Default context")}</th>
-                    <th>{gettext("New workspaces")}</th>
+                    <th>{gettext("Access")}</th>
                     <th>{gettext("API Token")}</th>
                     <th></th>
                   </tr>
@@ -323,63 +268,13 @@ defmodule DranWeb.AdminUsersLive do
                       <div :if={user.workspaces != []} class="flex flex-wrap gap-1">
                         <span
                           :for={ctx <- user.workspaces}
-                          class={[
-                            "badge badge-sm",
-                            if(ctx.id == user.personal_workspace_id,
-                              do: "badge-primary",
-                              else: "badge-ghost"
-                            )
-                          ]}
-                          title={
-                            if(ctx.id == user.personal_workspace_id,
-                              do: gettext("This user's personal workspace"),
-                              else: nil
-                            )
-                          }
+                          class="badge badge-ghost badge-sm"
+                          title={gettext("This account can open the instance")}
                         >
                           {ctx.name}
-                          <span :if={ctx.id == user.personal_workspace_id} class="ml-1 opacity-70">
-                            {gettext("personal")}
-                          </span>
                         </span>
                       </div>
                       <span :if={user.workspaces == []} class="text-base-content/40 text-xs">—</span>
-                    </td>
-                    <td>
-                      <form phx-change="set_default_context" id={"default-context-form-#{user.id}"}>
-                        <input type="hidden" name="user_id" value={user.id} />
-                        <select
-                          name="slug"
-                          class="select select-bordered select-xs w-full max-w-[12rem]"
-                          id={"default-context-select-#{user.id}"}
-                        >
-                          <option value="" selected={is_nil(user.default_workspace_slug)}>
-                            {gettext("— Global default —")}
-                          </option>
-                          <option
-                            :for={ctx <- @all_workspaces}
-                            value={ctx.slug}
-                            selected={user.default_workspace_slug == ctx.slug}
-                          >
-                            {ctx.name}
-                          </option>
-                        </select>
-                      </form>
-                    </td>
-                    <td>
-                      <span :if={user.is_owner} class="text-xs text-base-content/50">
-                        {gettext("always (admin)")}
-                      </span>
-                      <input
-                        :if={not user.is_owner}
-                        type="checkbox"
-                        id={"can-create-workspaces-#{user.id}"}
-                        checked={user.can_create_workspaces}
-                        phx-click="toggle_can_create_workspaces"
-                        phx-value-id={user.id}
-                        class="toggle toggle-sm toggle-primary"
-                        title={gettext("Allow this user to create workspaces")}
-                      />
                     </td>
                     <td>
                       <div class="flex items-center gap-1">
@@ -481,11 +376,6 @@ defmodule DranWeb.AdminUsersLive do
             <.input
               field={@user_form[:name]}
               label={gettext("Name")}
-              hint={
-                if @editing_user,
-                  do: nil,
-                  else: gettext("Their personal workspace is created with this name.")
-              }
               required
             />
           </div>
@@ -522,7 +412,7 @@ defmodule DranWeb.AdminUsersLive do
           />
 
           <div>
-            <label class="text-sm font-medium">{gettext("Contexts")}</label>
+            <label class="text-sm font-medium">{gettext("Access")}</label>
             <div class="flex flex-wrap gap-2 mt-2">
               <label :for={ctx <- @all_workspaces} class="flex items-center gap-2">
                 <input

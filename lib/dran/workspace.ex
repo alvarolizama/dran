@@ -17,7 +17,6 @@ defmodule Dran.Workspace do
              :slug,
              :disabled_page_types,
              :workspace_page_types,
-             :is_default,
              :visibility,
              :enabled_features,
              :share_memory,
@@ -33,7 +32,6 @@ defmodule Dran.Workspace do
     # "icon" => _, "color" => _, "meta_fields" => [...]}. `slug` and `path`
     # are explicit and unique within the workspace (see normalize_page_types/1).
     field :workspace_page_types, {:array, :map}, default: []
-    field :is_default, :boolean, default: false
     field :visibility, :string, default: "private"
     field :enabled_features, :map, default: %{}
     field :semantic_threshold_short, :float
@@ -50,20 +48,18 @@ defmodule Dran.Workspace do
   @doc """
   Changeset for creating a workspace.
 
-  `name` is a LABEL, not an identifier: it is not unique, so two workspaces can
-  be called "Personal" (two people on the same instance, or one person with two
-  projects). Only `slug` is the identity, and only because it sits in the URL —
+  `name` is a LABEL, not an identifier: it is not unique, so the name can be
+  repeated. Only `slug` is the identity, and only because it sits in the URL —
   it stays globally unique and `create_workspace/2` suffixes it on collision.
   """
   def changeset(context, attrs) do
     context
-    |> cast(attrs, [:name, :slug, :is_default])
+    |> cast(attrs, [:name, :slug])
     |> force_private_visibility()
     |> validate_required([:name, :slug])
     |> validate_length(:name, max: 100)
     |> validate_length(:slug, max: 100)
     |> unique_constraint(:slug)
-    |> unique_constraint(:is_default)
   end
 
   @doc "Changeset for updating settings like disabled page types, enabled features, and brain tuning"
@@ -73,7 +69,6 @@ defmodule Dran.Workspace do
       :disabled_page_types,
       :workspace_page_types,
       :enabled_features,
-      :is_default,
       :semantic_threshold_short,
       :semantic_threshold_mid,
       :semantic_threshold_long,

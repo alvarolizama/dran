@@ -328,7 +328,9 @@ defmodule DranWeb.SettingsLiveTest do
     {:ok, _view, html} = live(conn, ~p"/admin")
 
     # Navigation links to every admin section
-    for tab_path <- ~w(/admin/users /admin/workspaces /admin/models /admin/system /admin/jobs) do
+    # W6: /admin/workspaces se retiró — el landing enlaza las cinco secciones
+    # que quedan.
+    for tab_path <- ~w(/admin/users /admin/groups /admin/models /admin/system /admin/jobs) do
       assert html =~ tab_path
     end
 
@@ -446,7 +448,7 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, ws: ws}
     end
 
-    test "the General tab shows the slug, the private access note and the default flag", %{
+    test "the General tab shows the slug and the private access note", %{
       conn: conn,
       ws: ws
     } do
@@ -456,7 +458,9 @@ defmodule DranWeb.SettingsLiveTest do
       # The workspace slug is the URL identity: visible, and clearly read-only.
       assert html =~ ws.slug
       assert html =~ t("read-only")
-      assert has_element?(view, "#workspace-is-default")
+
+      # W6: no default flag — with one container there is nothing to pick.
+      refute has_element?(view, "#workspace-is-default")
 
       # No visibility control any more: the section states the invariant (every
       # workspace is private, access is granted from the Users tab) instead of
@@ -477,9 +481,7 @@ defmodule DranWeb.SettingsLiveTest do
 
       html =
         view
-        |> form("#workspace-general-form", %{
-          "workspace" => %{"name" => ws.name, "is_default" => "false"}
-        })
+        |> form("#workspace-general-form", %{"workspace" => %{"name" => ws.name}})
         |> render_submit()
 
       assert html =~ t("Workspace saved")
@@ -882,10 +884,14 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   # Tests L222, L229, L236 → /admin/system
-  test "the Sistema header exists with monitoring and instance sections", %{conn: conn} do
+  test "the System header exists with monitoring and instance sections", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/admin/system")
 
-    assert html =~ t("Sistema")
+    # t("System") — NOT a Spanish literal: the msgid is English and the page
+    # follows the locale. (It used to be gettext("Sistema"), i.e. Spanish
+    # hard-coded as the source string, which is why the assertion had to say
+    # "Sistema" and the English UI showed Spanish.)
+    assert html =~ t("System")
     assert html =~ t("Monitoring, instance configuration and environment.")
     assert html =~ t("Instance")
     assert html =~ t("Database")

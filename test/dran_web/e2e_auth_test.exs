@@ -41,22 +41,19 @@ defmodule DranWeb.E2EAuthTest do
   test "owner can access all contexts", %{admin: admin, ctx1: _ctx1, ctx2: _ctx2} do
     assert Accounts.is_owner?(admin)
 
-    # Creating the owner created the owner's OWN personal workspace, so that is
-    # the only membership it has. "The owner reaches every workspace" is a rule
-    # of require_workspace_access/2, not of list_user_workspaces/1.
-    assert [personal] = Accounts.list_user_workspaces(admin)
-    assert personal.id == admin.personal_workspace_id
+    # W6: una cuenta ya no nace con membresía (el workspace personal dejó de
+    # existir). El owner NO necesita membresía: `instance_workspace/0` y el
+    # pipeline `:admin` son las que le dan acceso a todo.
+    assert Accounts.list_user_workspaces(admin) == []
+    assert Dran.Auth.instance_workspace()
   end
 
   test "regular user only sees assigned contexts", %{user: user, ctx1: ctx1, ctx2: ctx2} do
     contexts = Accounts.list_user_workspaces(user)
 
-    # The account's own personal workspace (created with it) plus the one it was
-    # assigned to — and neither of them is the private context it has no
-    # membership in.
-    assert Enum.map(contexts, & &1.id) |> Enum.sort() ==
-             Enum.sort([user.personal_workspace_id, ctx1.id])
-
+    # La única membresía es la que se le dio aquí: no hay workspace personal y
+    # la membresía que no tiene (ctx2) no aparece.
+    assert Enum.map(contexts, & &1.id) == [ctx1.id]
     refute Enum.map(contexts, & &1.id) |> Enum.member?(ctx2.id)
   end
 
@@ -330,71 +327,14 @@ defmodule DranWeb.E2EAuthTest do
     end
   end
 
-  describe "per-user default context" do
-    test "set_default_context persists the slug", %{user: user, ctx2: ctx2} do
-      {:ok, updated} = Accounts.set_default_context(user, ctx2.slug)
-      assert updated.default_workspace_slug == ctx2.slug
-
-      reloaded = Accounts.get_user!(user.id)
-      assert reloaded.default_workspace_slug == ctx2.slug
-    end
-  end
-
   describe "sidebar integration" do
-    test "workspace CRUD lives in /admin/workspaces", %{
-      conn: conn,
-      admin: admin,
-      ctx1: ctx1
-    } do
-      conn =
-        conn
-        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
-
-      {:ok, view, html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
-
-      # The workspaces table lists existing workspaces and their controls
-      assert html =~ ctx1.slug
-      # Manage users button per workspace
-      assert html =~ "manage_workspace_users"
-
-      # Opening the "New workspace" modal exposes the create form
-      html = Phoenix.LiveViewTest.render_click(view, "new_workspace")
-      assert html =~ "workspace-form"
-    end
-
-    test "manage users modal opens with user checkboxes", %{
-      conn: conn,
-      admin: admin,
-      user: user,
-      ctx1: ctx1
-    } do
-      conn =
-        conn
-        |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
-
-      {:ok, view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
-
-      # Open the modal for ctx1
-      html = Phoenix.LiveViewTest.render_click(view, "manage_workspace_users", %{"id" => ctx1.id})
-
-      # Modal shows users with checkboxes
-      assert html =~ "toggle_workspace_user"
-      assert html =~ user.email
-      assert html =~ "close_workspace_users"
-
-      # Close the modal
-      html = Phoenix.LiveViewTest.render_click(view, "close_workspace_users")
-      refute html =~ "toggle_workspace_user"
-    end
-
     # W1 single-workspace: no ctx-per-user scoping left. The admin sees the
-    # instance links from any workspace page; /admin/workspaces still lists
-    # the (single) workspace row for the owner.
-    test "admin session sees the sidebars links and all workspaces", %{
+    # instance links from any workspace page. W6: /admin/workspaces ya no
+    # existe, así que no hay tabla de contenedores que listar.
+    test "admin session sees the sidebar links", %{
       conn: conn,
       admin: admin,
-      ctx1: ctx1,
-      ctx2: ctx2
+      ctx1: ctx1
     } do
       conn =
         conn
@@ -409,10 +349,10 @@ defmodule DranWeb.E2EAuthTest do
       {:ok, _view, dash_html} = Phoenix.LiveViewTest.live(conn, ~p"/")
       assert dash_html =~ ~p"/settings/account"
 
-      # /admin/workspaces lists every (folded) workspace row for the owner
-      {:ok, _view, ws_html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
-      assert ws_html =~ ctx1.slug
-      assert ws_html =~ ctx2.slug
+      # Y el grupo Admin del menú de perfil lleva a cada sección de /admin.
+      for path <- ~w(/admin/users /admin/groups /admin/models /admin/system /admin/jobs) do
+        assert html =~ path
+      end
     end
 
     test "non-admin session hides the Settings link and only sees assigned contexts", %{

@@ -61,10 +61,16 @@ defmodule DranWeb.WorkspaceSettingsLive do
       socket
       |> assign(
         active_nav: "workspace_settings",
-        page_title: gettext("Workspace settings"),
+        # The route (and the user menu) call this "Instance settings": the page
+        # configures the INSTANCE — page types, features, tuning — not a
+        # workspace inside it. Title and shell follow the route name.
+        page_title: gettext("Instance settings"),
         current_user_struct: user,
         workspace: workspace,
-        workspace_slug: workspace && workspace.slug,
+        # Instance shell (DESIGN §T2): /settings/* renders the instance nav, so
+        # the sidebar loses the knowledge nav AND the search box — same shell as
+        # /admin/*, which is what makes it feel like one app.
+        workspace_slug: nil,
         workspace_role: role,
         features: @features,
         feature_groups: @feature_groups,
@@ -101,18 +107,18 @@ defmodule DranWeb.WorkspaceSettingsLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace_slug}
-      workspaces={@workspaces}
       active_nav={@active_nav}
+      nav={:instance}
     >
       <div class="flex-1 overflow-y-auto">
         <div class="w-full p-6 space-y-6">
           <%!-- Page header --%>
           <div>
-            <h1 class="text-title">{gettext("Workspace settings")}</h1>
+            <h1 class="text-title">{gettext("Instance settings")}</h1>
             <p class="text-caption mt-1">
               {if @workspace,
                 do: @workspace.name,
-                else: gettext("No workspace")}
+                else: gettext("No instance")}
             </p>
           </div>
 
@@ -203,10 +209,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
   def handle_event("save_general", %{"workspace" => params}, socket) do
     workspace = socket.assigns.workspace
 
-    attrs = %{
-      "name" => params["name"],
-      "is_default" => params["is_default"] == "true"
-    }
+    # W6: `is_default` se fue con el modelo multi-workspace — con un solo
+    # contenedor no hay nada que marcar.
+    attrs = %{"name" => params["name"]}
 
     case workspace |> Workspace.changeset(attrs) |> Repo.update() do
       {:ok, updated} ->
@@ -564,33 +569,6 @@ defmodule DranWeb.WorkspaceSettingsLive do
                   )}
                 </span>
               </div>
-            </div>
-
-            <div>
-              <input type="hidden" name="workspace[is_default]" value="false" />
-              <label
-                for="workspace-is-default"
-                class="flex items-start gap-3 cursor-pointer rounded-xl border border-base-content/10 px-3 py-2.5 transition-colors duration-150 hover:bg-base-200/40"
-              >
-                <input
-                  type="checkbox"
-                  id="workspace-is-default"
-                  name="workspace[is_default]"
-                  value="true"
-                  checked={@workspace.is_default}
-                  class="mt-0.5 size-4 rounded border-base-300 text-primary focus:ring-1 focus:ring-primary"
-                />
-                <span class="min-w-0">
-                  <span class="block text-sm font-medium text-base-content">
-                    {gettext("Default workspace")}
-                  </span>
-                  <span class="block text-xs text-base-content/60 mt-1">
-                    {gettext(
-                      "Where an account lands when it has no personal workspace of its own. Only one workspace can be the default."
-                    )}
-                  </span>
-                </span>
-              </label>
             </div>
           </div>
 
@@ -1630,7 +1608,8 @@ defmodule DranWeb.WorkspaceSettingsLive do
     end
   end
 
-  # General tab form: name, visibility, is_default from the workspace itself.
+  # General tab form: the instance's name (W6: visibility is forced private and
+  # the default flag no longer exists).
   defp assign_general_form(socket) do
     workspace = socket.assigns.workspace
     changeset = Workspace.changeset(workspace, %{})

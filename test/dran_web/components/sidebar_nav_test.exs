@@ -189,7 +189,7 @@ defmodule DranWeb.SidebarNavTest do
       render_component(&Layouts.user_footer/1, assigns)
     end
 
-    test "Workspaces (back to the list) is always in the menu" do
+    test "Home (back to the brain) is always in the menu" do
       for assigns <- [
             %{workspace_slug: nil, is_owner: true},
             %{workspace_slug: "personal", workspace_role: "viewer", is_owner: false}
@@ -197,17 +197,35 @@ defmodule DranWeb.SidebarNavTest do
         html = menu(assigns)
 
         assert html =~ ~s(href="/")
-        assert html =~ t("Workspaces")
+        assert html =~ t("Home")
       end
     end
 
-    test "Workspaces is marked active on the dashboard" do
-      html = menu(%{workspace_slug: nil, is_owner: true, active: "dashboard"})
+    test "Home is marked active on the brain home" do
+      html = menu(%{workspace_slug: nil, is_owner: true, active: "home"})
 
       {pos, _} = :binary.match(html, ~s(href="/"))
       {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
       anchor = binary_part(html, pos, end_pos - pos)
       assert anchor =~ ~s(aria-current="page")
+    end
+
+    # El grupo Admin es lo único que hace /admin alcanzable desde el shell de
+    # conocimiento (el sidebar ahí es el nav de conocimiento). Owner-only.
+    test "el owner ve el grupo Admin completo; el viewer no ve nada de /admin" do
+      owner = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: true})
+      viewer = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: false})
+
+      # /admin/workspaces murió en W6 (una instancia = un cerebro), así que el
+      # grupo Admin del menú son cinco secciones, no seis.
+      for path <- ~w(users groups models system jobs) do
+        assert owner =~ ~s(href="/admin/#{path}")
+        refute viewer =~ ~s(href="/admin/#{path}")
+      end
+
+      # El resto del menú no depende del grupo: el viewer conserva sus enlaces.
+      assert viewer =~ ~s(href="/settings/account")
+      assert viewer =~ ~s(href="/settings/api-keys")
     end
 
     test "workspace owner sees Activity + Workspace settings after a divider" do

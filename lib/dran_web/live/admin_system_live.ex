@@ -6,7 +6,7 @@ defmodule DranWeb.AdminSystemLive do
       counts, refreshed on demand.
     * Instancia — the legacy admin API token (Settings key, persisted in DB).
       The default workspace is NOT here: it is the workspace flagged as
-      default in /admin/workspaces.
+      instance row, created by the release setup when the database has none.
     * Entorno — read-only inference/workers/uploads config loaded from env
       vars at startup, plus an inference connection test button.
   """
@@ -24,7 +24,7 @@ defmodule DranWeb.AdminSystemLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin_system", page_title: gettext("Sistema"), workspace_slug: nil)
+      |> assign(active_nav: "admin_system", page_title: gettext("System"), workspace_slug: nil)
       |> assign(inference_test: nil)
       |> assign(monitoring: nil)
       |> assign_instance_form()
@@ -116,14 +116,13 @@ defmodule DranWeb.AdminSystemLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace_slug}
-      workspaces={@workspaces}
       active_nav={@active_nav}
       nav={:instance}
     >
       <div class="w-full">
         <div class="w-full space-y-6">
           <div>
-            <h1 class="text-title">{gettext("Sistema")}</h1>
+            <h1 class="text-title">{gettext("System")}</h1>
             <p class="text-caption mt-0.5">
               {gettext("Monitoring, instance configuration and environment.")}
             </p>

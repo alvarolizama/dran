@@ -93,45 +93,42 @@ defmodule Dran.Knowledge do
   def get_workspace!(id), do: Repo.get!(Workspace, id)
 
   @doc """
-  The workspace flagged as the instance default (`is_default = true`), or `nil`.
+  The instance: the ONE workspace row that carries the instance's settings
+  (page types, features, tuning). `nil` only on a database with no row at all
+  (a fresh install before seeding).
 
-  At most one row can hold the flag — the partial unique index
-  `workspaces_is_default_index` guarantees it. This is the single source of
-  truth for the instance default: `Dran.Auth.default_workspace_slug/0` reads it
-  first and only then falls back to the only-workspace rule and finally the
-  `"personal"` literal.
+  W6 (contract-instance-visibility-20260919): there is no "default" flag to read
+  any more — the flag existed to CHOOSE among several containers, and after the
+  fold there is only one. Ordering by `inserted_at` keeps the answer stable even
+  if a database somehow carries several rows.
   """
-  def get_default_workspace do
-    Repo.one(from w in Workspace, where: w.is_default == true, limit: 1)
+  def the_instance do
+    Repo.one(from w in Workspace, order_by: [asc: w.inserted_at, asc: w.id], limit: 1)
   end
 
   @doc """
-  Create a new workspace. The slug is auto-managed: an explicit non-blank
-  `slug` in attrs wins (API); otherwise it is derived from the name,
-  suffixed with a random hex while it collides with another workspace.
+  Create the instance's workspace row. W6: this is a SEED/bootstrap operation
+  (seeds, release setup, tests) — there is no UI that creates containers any
+  more, and no "first one becomes the default" rule: with a single row there is
+  nothing to flag.
 
-  Bootstrap rule: with nothing flagged as default yet, the workspace being
-  created becomes THE default (see `maybe_flag_first_default/1`). With a default
-  in place, an explicit `is_default: true` clears the previous holder first (the
-  flag is exclusive) — both inside the same transaction.
+  The slug is auto-managed: an explicit non-blank `slug` in attrs wins (API);
+  otherwise it is derived from the name, suffixed with a random hex while it
+  collides with another row.
 
-  Every workspace is created PRIVATE (see `Dran.Workspace.changeset/2`): access
-  is by membership or by being the instance owner, never by being discoverable.
+  The row is created PRIVATE (see `Dran.Workspace.changeset/2`): access is by
+  membership or by being the instance owner, never by being discoverable.
 
   ## Options
 
-    * `:owner_user_id` — when given, the created workspace is linked to that
-      user as its `owner` member, in the SAME transaction (either both rows
-      exist or neither does). Callers that create a workspace *for* a user must
-      pass it: without a membership the creator of a private workspace could not
-      reach their own workspace (see `Dran.Accounts.create_workspace_for/2`).
-      System callers (release seeding) omit it.
+    * `:owner_user_id` — when given, the created row is linked to that user as
+      its `owner` member, in the SAME transaction (either both rows exist or
+      neither does). Without a membership the creator of a private container
+      could not reach it.
   """
   def create_workspace(attrs, opts \\ []) do
     attrs =
-      attrs
-      |> maybe_flag_first_default()
-      |> Dran.Slug.inject_create(
+      Dran.Slug.inject_create(attrs,
         field: "name",
         fallback: "workspace",
         taken?: &get_workspace_by_slug/1
@@ -140,7 +137,6 @@ defmodule Dran.Knowledge do
     changeset = Workspace.changeset(%Workspace{}, attrs)
 
     Repo.transaction(fn ->
-      clear_default_flag(changeset)
       workspace = insert_or_rollback(changeset)
       insert_owner_membership(workspace, Keyword.get(opts, :owner_user_id))
       workspace
@@ -173,67 +169,20 @@ defmodule Dran.Knowledge do
   for, never a side effect of a rename.
 
   This used to regenerate the slug from the new name (via
-  `Dran.Slug.inject_update/3`), so renaming from /admin/workspaces or from the
+  `Dran.Slug.inject_update/3`), so renaming from the instance settings page or from the
   API silently moved the workspace's URL — while the same rename from
   /:slug/settings (which goes through `Workspace.changeset/2` directly) did not.
   Same field, two behaviors; now there is one.
 
-  Setting `is_default` clears the previous default first, inside the same
-  transaction.
+  W6: the `is_default` juggling is gone — the flag died with the multi-workspace
+  model, so a rename/settings update is a plain write.
   """
   def update_workspace(%Workspace{} = context, attrs) do
     changeset = Workspace.changeset(context, attrs)
 
     Repo.transaction(fn ->
-      clear_default_flag(changeset)
       update_or_rollback(changeset)
     end)
-  end
-
-  # Bootstrap rule: while nothing is flagged as default, the workspace being
-  # created takes the flag. Without it a clean install (no flag) resolves the
-  # default slug to "personal" — a workspace nobody created — and every
-  # fallback (session, cookie, seeds, release, jobs) points at the void. An
-  # incoming `is_default` is dropped in this case: with no default to begin
-  # with there is nothing for a `false` to be relative to.
-  # Any later workspace is created unflagged, so a false from the UI is honored
-  # there.
-  #
-  # The visibility no longer enters into it: every workspace is private now, so
-  # there is no invariant the flag could contradict (it used to be skipped for
-  # workspaces requested as private, back when the default had to be public).
-  #
-  # The flag is written with the SAME key style as the incoming params: the UI
-  # posts string keys and the domain callers pass atoms, and Ecto.cast/3 raises
-  # on a mixed-key map.
-  defp maybe_flag_first_default(attrs) do
-    cond do
-      not is_nil(get_default_workspace()) ->
-        attrs
-
-      string_keyed?(attrs) ->
-        attrs |> Map.drop(["is_default"]) |> Map.put("is_default", true)
-
-      true ->
-        attrs |> Map.drop([:is_default]) |> Map.put(:is_default, true)
-    end
-  end
-
-  defp string_keyed?(attrs), do: Enum.all?(Map.keys(attrs), &is_binary/1)
-
-  # The default flag is exclusive by DB constraint. Flipping it on one
-  # workspace clears the previous holder so the admin UI's single checkbox
-  # behaves as a switch instead of failing on the unique index. Must run inside
-  # the same transaction as the write it belongs to.
-  defp clear_default_flag(%Ecto.Changeset{} = changeset) do
-    if Ecto.Changeset.get_change(changeset, :is_default) == true do
-      except_id = Ecto.Changeset.get_field(changeset, :id)
-      query = from(w in Workspace, where: w.is_default == true)
-      query = if is_nil(except_id), do: query, else: from(w in query, where: w.id != ^except_id)
-      Repo.update_all(query, set: [is_default: false])
-    end
-
-    :ok
   end
 
   defp insert_or_rollback(changeset) do
@@ -627,7 +576,6 @@ defmodule Dran.Knowledge do
     changeset = Workspace.settings_changeset(context, attrs)
 
     Repo.transaction(fn ->
-      clear_default_flag(changeset)
       update_or_rollback(changeset)
     end)
   end

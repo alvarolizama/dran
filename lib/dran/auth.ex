@@ -5,11 +5,10 @@ defmodule Dran.Auth do
 
     * Admin API token — Settings key `"api_token"`. Legacy bearer token for
       API/agent access (full owner, no user row). Unset = disabled.
-    * Default workspace — the workspace flagged as default (`is_default`, set
-      from /admin/workspaces). Used as the workspace slug when a user has no
-      session/cookie and no personal default, and as the workspace auto-created
-      by release setup / seeds. No other control exists: no env var, no
-      settings override.
+    * Instance — the ONE workspace row that carries the instance's settings
+      (page types, features, tuning). `Dran.Auth.instance_workspace/0`; there is
+      no default flag and no per-user landing workspace any more (W6).
+    * No other control exists: no env var, no settings override.
 
   Web login is handled entirely by `Dran.Accounts` (email + bcrypt password)
   and the first-run `/setup` flow — there are no env-var login credentials.
@@ -36,88 +35,48 @@ defmodule Dran.Auth do
   end
 
   @doc """
-  The single instance workspace (W1, single-workspace model): the flagged
-  default, else the sole workspace, else nil. Everything instance-scoped
-  (settings, page types, tuning) reads through here.
+  The instance: the ONE workspace row that carries the instance's settings
+  (page types, features, tuning). Everything instance-scoped reads through here.
+
+  W6 (contract-instance-visibility-20260919): there is no "flagged default" and
+  no "sole workspace" rule any more — after the fold there is a single row, and
+  the flag that used to choose among several columns (`is_default`) is gone.
+  `nil` only on an empty database (fresh install before seeding).
   """
   def instance_workspace do
-    default_workspace() || sole_workspace()
+    the_instance()
   end
 
   @doc """
-  The default workspace slug, resolved in this order:
+  The slug of the instance — where a session lands.
 
-    1. the workspace flagged as the instance default (`is_default = true`,
-       toggled from /admin/workspaces),
-    2. the only workspace in the instance when there is exactly one — with a
-       single workspace there is nothing to choose, flag or not,
-    3. the built-in `"personal"` literal.
-
-  Per-user resolution (a user who can only reach one workspace) is
-  `Dran.Accounts.session_workspace_slug/1`.
+  The name still says "default": renaming it belongs to the vocabulary wave, and
+  it is still true in the sense that the instance IS the default (and only)
+  container. What it no longer does is CHOOSE: the `is_default` flag died with
+  the multi-workspace model, so this resolves the single row's slug.
   """
   def default_workspace_slug do
-    case default_workspace() do
+    case the_instance() do
       %{slug: slug} when is_binary(slug) and slug != "" -> slug
-      _ -> sole_workspace_slug() || @fallback_workspace_slug
+      _ -> @fallback_workspace_slug
     end
   end
 
   @doc """
-  The default workspace display name: the flagged workspace's name, else the
-  only workspace's, else the slug-derived default.
+  The instance's display name (what the shell shows as the brain's name), else
+  the slug-derived default.
   """
   def default_workspace_name do
-    case default_workspace() do
+    case the_instance() do
       %{name: name} when is_binary(name) and name != "" -> name
-      _ -> sole_workspace_name() || String.capitalize(@fallback_workspace_slug)
+      _ -> String.capitalize(@fallback_workspace_slug)
     end
   end
 
-  @doc """
-  True when the default workspace was explicitly configured — a workspace
-  carries the default flag. Only then should it be auto-created (seeds,
-  release setup): a deleted workspace stays deleted across deploys when
-  nothing is flagged.
-  """
-  def default_workspace_configured? do
-    not is_nil(default_workspace())
-  rescue
-    _ -> false
-  catch
-    :exit, _ -> false
-  end
-
-  # The flagged default lives in the DB: a missing or unavailable repo must
-  # never break resolution — the fallbacks still answer.
-  defp default_workspace do
-    Dran.Knowledge.get_default_workspace()
-  rescue
-    _ -> nil
-  catch
-    :exit, _ -> nil
-  end
-
-  # Exactly one workspace in the instance: it is the default by definition.
-  defp sole_workspace_slug do
-    case sole_workspace() do
-      %{slug: slug} when is_binary(slug) and slug != "" -> slug
-      _ -> nil
-    end
-  end
-
-  defp sole_workspace_name do
-    case sole_workspace() do
-      %{name: name} when is_binary(name) and name != "" -> name
-      _ -> nil
-    end
-  end
-
-  defp sole_workspace do
-    case Dran.Knowledge.list_workspaces() do
-      [workspace] -> workspace
-      _ -> nil
-    end
+  # The instance row lives in the DB: a missing or unavailable repo must never
+  # break resolution — the fallbacks still answer.
+  defp the_instance do
+    Dran.Knowledge.the_instance()
   rescue
     _ -> nil
   catch

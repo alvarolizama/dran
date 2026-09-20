@@ -734,8 +734,12 @@ no hay paleta que declarar acá.
 - **Modo 2** (Google): el botón sólo se renderiza si `Google.configured?/0` — sin
   `GOOGLE_OAUTH_CLIENT_ID` no hay botón.
 - **Modo 3 (Umbral SSO): NO adoptado.**
-- Primera cuenta: **`/setup`**, que se apaga sola en cuanto existe un usuario; el
-  owner nace con su workspace personal.
+- Primera cuenta: **`/setup`**, que se apaga sola en cuanto existe un usuario.
+  La primera cuenta de la instancia **es su owner, por cualquier puerta**: el
+  criterio vive en `Dran.Accounts.claims_instance?/0` y lo honran `/setup` y el
+  auto-registro de Google (`OAuthController`) — si Google entrara primero sin
+  nacer owner, la instancia quedaría con usuarios, sin admin y con `/setup` ya
+  apagado (puerta sellada).
 - Sesión propia del app (cookie `_dran_key`, `renew: true`): el contrato es
   `SPEC-config.md` §Session and cookies.
 
@@ -828,25 +832,37 @@ La mecánica del shell (drawer, barra con el toggle único, rail, anatomía de l
 sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
 
 - **Opciones del shell:** `nav={:workspace}` (default) | `nav={:instance}` |
-  `sidebar={false}` (sólo login/setup) y `active_nav`.
+  `sidebar={false}` (sólo login/setup) y `active_nav`. **No existe attr
+  `workspaces`**: el shell pinta UN cerebro y el sidebar no tiene selector, así
+  que pasarlo era alimentar un attr que nadie leía.
 - **Header de la sidebar: logo + wordmark, sin selector de contexto.** En el
   modelo de un solo workspace (la instancia ES el workspace) no hay nada que
   elegir, así que el `select select-xs` de §C12.2 no aplica: la zona gira a la
   **búsqueda** (`#sidebar-search-form`, GET a `/search`, con la pista `⌘K`) y al
-  `user_footer`.
+  `user_footer`. La caja de búsqueda se renderiza **sólo en el shell de
+  conocimiento**: las páginas de instancia pasan `workspace_slug: nil`.
 - **Nav de workspace:** bloque de vistas — Home · Graph · Journey — y **Memory en
   su propio bloque** (el nav separa bloques con su `gap`, así que entre Journey y
   Memory queda un hueco: Memory son hechos de los workers, no una vista de
   páginas) + grupo *Knowledge base* (tipos de página + Clusters). **Ninguna acción
   de workspace en el nav**: Activity y Workspace settings viven en el menú de
   usuario.
-- **Nav de instancia (`nav={:instance}`):** Workspaces arriba; grupo *Account*
-  (Profile, API keys); grupo *Admin* (Users, **Groups**, All workspaces, Models,
-  System, Jobs) — visible para owners. **Sin item Overview**: `/admin` sigue
-  existiendo como ruta (impersonation redirige ahí) pero el index de cards no es
-  destino.
-- **`<.user_footer>` (menú de usuario):** Workspaces · Profile · API keys ·
-  Activity · Instance settings · separador · Log out.
+- **Nav de instancia (`nav={:instance}`):** **Home arriba** (`hero-home`,
+  `active_nav="home"` — antes decía «Workspaces» y el destino es el home de
+  conocimiento); grupo *Account* (Profile, API keys); grupo *Admin* (Users,
+  **Groups**, Models, System, Jobs) — visible para owners. **Sin item
+  Overview**: `/admin` sigue existiendo como ruta (impersonation redirige ahí)
+  pero el index de cards no es destino. `/settings/instance` y `/admin/*` usan
+  este nav; sin él el sidebar cae al de conocimiento y el grupo Admin
+  desaparece (era el bug de `/admin/groups`).
+  **`/admin/workspaces` no existe** (W6): con una instancia = un cerebro no hay
+  contenedores que crear ni que listar, así que el grupo Admin son cinco
+  secciones, no seis.
+- **`<.user_footer>` (menú de perfil):** Home · Profile · API keys · Activity ·
+  Instance settings · **grupo *Admin*** (Users · Groups · Models · System ·
+  Jobs, sólo owners) · separador · Log out. El grupo Admin vive **también acá**
+  porque el sidebar del shell de conocimiento es el nav de conocimiento: sin él
+  `/admin` era inalcanzable desde `/notes` sin escribir la URL.
 - **Banner de impersonación** (`root.html.heex`, `id="impersonation-banner"`):
   `bg-warning text-warning-content`, centrado, icono `hero-eye` y botón
   `btn-xs btn-neutral` (`id="stop-impersonating"`).
@@ -854,10 +870,10 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
   `⌘K`) — overlay `fixed inset-0 z-50 bg-black/50 backdrop-blur-sm`, panel
   `mx-auto max-w-lg rounded-xl border border-base-300 bg-base-100 shadow-2xl`
   (margen superior 15vh), selección `bg-primary/10`.
-- **Un solo shell para toda la app:** las páginas de instancia (`/`,
-  `/settings/*`, `/admin/*`) usan el mismo sidebar con `nav={:instance}`; el
-  flujo topbar (`<.app_topbar>`) fue eliminado y `topbar`/`topbar_active` quedan
-  como attrs deprecados no-op.
+- **Un solo shell para toda la app:** las páginas de instancia (`/settings/*`,
+  `/admin/*`) usan el mismo sidebar con `nav={:instance}`; el contenido (`/` y
+  el resto) usa el nav de conocimiento. El flujo topbar (`<.app_topbar>`) fue
+  eliminado y `topbar`/`topbar_active` quedan como attrs deprecados no-op.
 - **CSS del shell en `app.css`:** el bloque de `#sidebar-collapse` /
   `.shell-hide` / `.shell-collapse-icon` que implementa el rail (§T1). La fila
   del drawer se acota en el markup con `lg:grid-rows-1` (§C12.5: uno de los dos
@@ -1033,6 +1049,13 @@ grep -c 'class="drawer lg:drawer-open[^"]*lg:grid-rows-1' lib/dran_web/component
 grep -n 'shell-hide' assets/css/app.css                                # colapso a rail (desktop)
 grep -c '<.button' lib/dran_web/live/*.ex                               # CTAs de crear como componente
 grep -rn 'flex-wrap items-center justify-between' lib/dran_web/live/   # headers que envuelven
+grep -rn '^      workspaces={' lib/dran_web/live/*.ex                  # 0 (Layouts.app no tiene attr `workspaces`)
+grep -c 'nav={:instance}' lib/dran_web/live/admin_groups_live.ex        # 1 (todo /admin/* lo lleva; sin él el nav cae al de conocimiento)
+grep -c 'nav={:instance}' lib/dran_web/live/workspace_settings_live.ex  # 1 (/settings/instance es página de instancia)
+grep -c 'href={~p"/admin/users"}' lib/dran_web/components/layouts.ex  # 2 (nav de instancia + grupo Admin del menú de perfil)
+grep -rn 'admin/workspaces' lib/ | grep -v 'redirect'                    # 0 (/admin/workspaces murió en W6)
+grep -rnE 'is_default|personal_workspace_id|can_create_workspaces' lib/   # 0 (columnas y flag retirados en W6)
+grep -rn 'user-menu a\[href' test/dran_web/live/instance_shell_test.exs # el grupo Admin del menú está pinchado
 grep -rn 'p-4 sm:p-6' lib/dran_web/                                    # padding mobile-first
 grep -c 'for="sidebar-collapse"' lib/dran_web/components/layouts.ex     # 1 (toggle único, en la barra)
 grep -c 'aside[^>]*label for="sidebar' lib/dran_web/components/layouts.ex  # 0 (el sidebar no lleva toggle propio)

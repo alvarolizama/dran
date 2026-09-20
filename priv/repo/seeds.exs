@@ -12,36 +12,26 @@
 import Ecto.Query
 alias Dran.Repo
 alias Dran.Knowledge
-alias Dran.Workspace
 
 # ──────────────────────────────────────────────────────────────────────────
-# Seeds only run when the default workspace is configured — a workspace flagged
-# as default in /admin/workspaces (see
-# Dran.Auth.default_workspace_configured?/0). Otherwise a deleted "personal"
-# workspace would keep coming back from the dead.
-# ──────────────────────────────────────────────────────────────────────────
-
-unless Dran.Auth.default_workspace_configured?() do
-  IO.puts("Default workspace not configured — skipping seeds.")
-  exit(:normal)
-end
-
-# ──────────────────────────────────────────────────────────────────────────
-# Ensure the default context exists
+# Ensure the instance row exists. W6: `mix seed` IS the deliberate act that
+# creates it — the flag that used to gate this (`is_default`, set from the
+# retired /admin/workspaces) died with the multi-workspace model, and the row is
+# now the brain itself, not one of several.
 # ──────────────────────────────────────────────────────────────────────────
 
 workspace_slug = Dran.Auth.default_workspace_slug()
 context_name = Dran.Auth.default_workspace_name()
 
 context =
-  case Repo.get_by(Workspace, slug: workspace_slug) do
+  case Knowledge.the_instance() do
     nil ->
       {:ok, ctx} = Knowledge.create_workspace(%{name: context_name, slug: workspace_slug})
-      IO.puts("Created context: #{ctx.name} (#{ctx.slug})")
+      IO.puts("Created the instance row: #{ctx.name} (#{ctx.slug})")
       ctx
 
     existing ->
-      IO.puts("Context already exists: #{existing.name} (#{existing.slug})")
+      IO.puts("Instance row already exists: #{existing.name} (#{existing.slug})")
       existing
   end
 

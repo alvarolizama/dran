@@ -20,6 +20,11 @@ defmodule DranWeb.AdminGroupsLive do
       socket
       |> assign(:active_nav, "admin_groups")
       |> assign(:page_title, gettext("Groups"))
+      # Instance shell (DESIGN §T2): /admin/* renders the instance nav. Without
+      # this the sidebar fell back to the KNOWLEDGE nav and the whole Admin
+      # group vanished on the one page that IS admin. `workspace_slug: nil`
+      # mirrors the rest of /admin/* — no sidebar search box on instance pages.
+      |> assign(:workspace_slug, nil)
       |> assign_groups()
       |> assign(:group_form, to_form(%{"name" => ""}, as: :group))
       |> assign(:members_group, nil)
@@ -127,7 +132,9 @@ defmodule DranWeb.AdminGroupsLive do
       current_scope={@current_scope}
       current_user={@current_user}
       user={@user}
+      workspace_slug={@workspace_slug}
       active_nav={@active_nav}
+      nav={:instance}
     >
       <div class="p-6 space-y-6 max-w-4xl">
         <div>

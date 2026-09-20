@@ -50,7 +50,7 @@ defmodule DranWeb.SetupLive do
                 class="w-full px-3 py-2 rounded-lg border border-base-300 bg-base-100 focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <p class="text-xs text-base-content/50 mt-1">
-                Your personal workspace is created with this name.
+                Shown in the sidebar and in the instance's user list.
               </p>
             </div>
 

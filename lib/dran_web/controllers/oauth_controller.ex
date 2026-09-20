@@ -68,11 +68,17 @@ defmodule DranWeb.OAuthController do
         # User doesn't exist. If wiki open-signup is enabled, auto-register
         # them as a wiki-only user (no contexts, not admin). Otherwise reject.
         if Dran.Settings.get("wiki_google_open_signup") == true do
+          # The FIRST account of a fresh instance CLAIMS it (see
+          # `Accounts.claims_instance?/0`): signing in with Google before
+          # anybody ran /setup must not leave the instance with users and no
+          # owner — /setup is already off by then and /admin would be sealed
+          # forever.
           case Accounts.create_user(%{
                  email: email,
                  name: Map.get(google_user, :name),
                  google_id: Map.get(google_user, :google_id),
-                 avatar_url: Map.get(google_user, :avatar_url)
+                 avatar_url: Map.get(google_user, :avatar_url),
+                 is_owner: Accounts.claims_instance?()
                }) do
             {:ok, user} ->
               conn

@@ -3,7 +3,7 @@ defmodule DranWeb.DigestedStaticTest do
   Digested top-level static assets must be served by `Plug.Static`.
 
   In production the endpoint loads `cache_static_manifest`, so `~p"/logo.png"`
-  (the in-app header logo in `Layouts`/`DashboardLive`) resolves to the
+  (the in-app header logo in `Layouts`) resolves to the
   digested path `/logo-<md5>.png?vsn=d`. `Plug.Static`'s `:only` list matches
   the first path segment *exactly*, so the digested name (`logo-<hash>.png`) is
   rejected unless the endpoint also sets `:only_matching`. When rejected, the

@@ -34,7 +34,7 @@ defmodule DranWeb.AdminModelsLive do
 
     socket =
       socket
-      |> assign(active_nav: "admin_models", page_title: gettext("Modelos"), workspace_slug: nil)
+      |> assign(active_nav: "admin_models", page_title: gettext("Models"), workspace_slug: nil)
       |> assign(model_test_status: %{})
       |> assign_models()
 
@@ -182,14 +182,13 @@ defmodule DranWeb.AdminModelsLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace_slug}
-      workspaces={@workspaces}
       active_nav={@active_nav}
       nav={:instance}
     >
       <div class="w-full">
         <div class="w-full space-y-6">
           <div>
-            <h1 class="text-title">{gettext("Modelos")}</h1>
+            <h1 class="text-title">{gettext("Models")}</h1>
             <p class="text-caption mt-0.5">
               {gettext("Pick the model used for each purpose from the provider's model list.")}
             </p>
@@ -215,7 +214,7 @@ defmodule DranWeb.AdminModelsLive do
   defp models_section(assigns) do
     ~H"""
     <.section
-      title={gettext("Modelos")}
+      title={gettext("Models")}
       icon="hero-cpu-chip"
       caption={gettext("Pick the model used for each purpose from the provider's model list.")}
     >

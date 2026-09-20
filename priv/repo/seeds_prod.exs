@@ -11,13 +11,12 @@
 #     DRAN_ADMIN_PASSWORD is set (8+ chars). Without it the boot creates nobody
 #     and the first account comes in through /setup. Never a fallback password
 #     living in this repository.
-#   * The account is created as instance owner and already carries its personal
-#     workspace (Dran.Accounts.create_user_with_password/1 creates it in the
-#     same insert path), so whoever logs in lands somewhere usable.
+#   * The account is created as instance owner, so whoever logs in lands on the
+#     instance's content right away.
 #
-# The rest of the production state is not seeded here: the default workspace is
-# created by Dran.Release.seed_context/0 (only when one is flagged as default in
-# /admin/workspaces, so a deleted workspace stays deleted across deploys).
+# The rest of the production state is not seeded here: the instance row is
+# created by Dran.Release.seed_context/0 (idempotent: an existing row is left
+# alone, so a rename done in the UI survives every deploy).
 
 alias Dran.Accounts
 
@@ -34,10 +33,7 @@ case System.get_env("DRAN_ADMIN_PASSWORD") do
           {:ok, user} ->
             {:ok, owner} = Accounts.update_user(user, %{is_owner: true})
 
-            IO.puts(
-              "[seed] instance owner #{owner.email} created " <>
-                "(personal workspace: #{inspect(owner.personal_workspace_id)})"
-            )
+            IO.puts("[seed] instance owner #{owner.email} created")
 
             owner
 

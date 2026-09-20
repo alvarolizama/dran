@@ -63,7 +63,6 @@ defmodule DranWeb.ActivityLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace_slug}
-      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div class="flex-1 overflow-y-auto">

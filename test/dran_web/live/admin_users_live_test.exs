@@ -111,14 +111,14 @@ defmodule DranWeb.AdminUsersLiveTest do
       assert modal(view) =~ et("should be at least 8 character(s)")
     end
 
-    test "el nombre es obligatorio y es el que da nombre al workspace personal", %{conn: conn} do
+    test "el nombre es obligatorio para una cuenta", %{conn: conn} do
       email = "con-nombre-#{uniq()}@test.dev"
 
       {:ok, view, _html} = live(owner_conn(conn), ~p"/admin/users")
       open_new_user_modal(view)
 
-      # Sin nombre no hay cuenta: es con lo que se nombra su workspace personal
-      # (y de donde sale su URL).
+      # Sin nombre no hay cuenta: es lo que la UI muestra como identidad de la
+      # persona (W6: ya no nombra ningún workspace personal, que dejó de existir).
       submit_user(view, %{"email" => email, "name" => "", "password" => "contrasena-larga-123"})
 
       refute Accounts.get_user_by_email(email)
@@ -132,10 +132,6 @@ defmodule DranWeb.AdminUsersLiveTest do
 
       user = Accounts.get_user_by_email(email)
       assert user.name == "Marta Ruiz"
-
-      personal = Accounts.personal_workspace(user)
-      assert personal.name == "Marta Ruiz"
-      assert personal.slug == "marta-ruiz"
     end
 
     test "el email repetido se avisa en el campo, no en un flash con inspect", %{conn: conn} do

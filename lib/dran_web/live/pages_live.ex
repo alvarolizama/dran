@@ -31,7 +31,6 @@ defmodule DranWeb.PagesLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace_slug}
-      workspaces={@workspaces}
       active_nav={@active_nav}
     >
       <div :if={@live_action == :show}>

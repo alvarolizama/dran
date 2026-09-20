@@ -29,7 +29,6 @@ defmodule DranWeb.AdminLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace_slug}
-      workspaces={@workspaces}
       active_nav={@active_nav}
       nav={:instance}
     >
@@ -51,10 +50,10 @@ defmodule DranWeb.AdminLive do
             />
 
             <.admin_card
-              href={~p"/admin/workspaces"}
-              icon="hero-building-office-2"
-              title={gettext("Workspaces")}
-              description={gettext("Create, delete, set default, add members.")}
+              href={~p"/admin/groups"}
+              icon="hero-user-group"
+              title={gettext("Groups")}
+              description={gettext("Named lists of users used as share targets.")}
             />
 
             <.admin_card

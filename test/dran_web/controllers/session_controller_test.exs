@@ -239,10 +239,11 @@ defmodule DranWeb.SessionControllerTest do
   end
 
   describe "POST /setup — first-run onboarding" do
-    # No users at all (that is what /setup is for) and no pre-made workspaces,
-    # so the owner's personal workspace is created by this very flow.
+    # No users at all: that is what /setup is for. W6: the account is the only
+    # thing this flow creates (no personal workspace any more) and the session
+    # lands on the instance.
     @tag :no_default_workspace
-    test "creates the owner WITH its personal workspace and lands there", %{conn: conn} do
+    test "creates the instance owner and lands on the instance", %{conn: conn} do
       conn = get(conn, ~p"/setup")
       csrf = conn.private.plug_session["_csrf_token"]
 
@@ -263,22 +264,9 @@ defmodule DranWeb.SessionControllerTest do
       assert owner.is_owner
       assert owner.name == "Álvaro Lizama"
 
-      personal = Dran.Accounts.personal_workspace(owner)
-      assert personal
-      assert personal.visibility == "private"
-      refute personal.is_default
-      assert Dran.Accounts.user_role_in_workspace(owner, personal) == "owner"
-
-      # El workspace personal se llama como la PERSONA y su URL sale del nombre,
-      # no del correo: con el correo founder@example.com el nombre se inventaba
-      # a partir de la dirección y la URL acababa siendo /founder.
-      assert personal.name == "Álvaro Lizama"
-      assert personal.slug == "alvaro-lizama"
-      refute personal.slug =~ "founder"
-      refute personal.name =~ "@"
-
-      # The onboarding default landing: the account's own personal workspace.
-      assert owner.default_workspace_slug == personal.slug
+      # W6: el nombre ya no nombra ningún workspace — es la identidad de la
+      # persona en la UI (sidebar, lista de usuarios, atribución).
+      assert owner.name == "Álvaro Lizama"
 
       # W1 (single-workspace): login always lands the session on the
       # instance-wide default workspace — there is nothing to switch to.

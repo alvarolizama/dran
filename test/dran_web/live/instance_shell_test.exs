@@ -37,7 +37,7 @@ defmodule DranWeb.InstanceShellTest do
     {"/settings/account", "settings"},
     {"/settings/api-keys", "api_keys"},
     {"/admin/users", "admin_users"},
-    {"/admin/workspaces", "admin_workspaces"},
+    {"/admin/groups", "admin_groups"},
     {"/admin/models", "admin_models"},
     {"/admin/system", "admin_system"},
     {"/admin/jobs", "admin_jobs"}
@@ -115,5 +115,52 @@ defmodule DranWeb.InstanceShellTest do
     assert has_element?(view, "a[href='/settings/account']")
     refute has_element?(view, "a[href='/admin']")
     refute has_element?(view, "a[href='/admin/users']")
+  end
+
+  # El síntoma reportado: desde el shell de CONOCIMIENTO (`/`, `/notes`, `/graph`…)
+  # no había NINGUNA ruta a /admin — el sidebar ahí es el nav de conocimiento y el
+  # menú de perfil sólo llevaba Workspaces/Profile/API keys/Activity/Instance
+  # settings. El grupo Admin vive en el menú de perfil para que /admin sea
+  # alcanzable desde cualquier página, no sólo desde /settings/* o /admin/*.
+  test "el menú de perfil lleva el grupo Admin completo (owner), desde una página de conocimiento",
+       %{conn: conn} do
+    conn = owner_conn(conn, "shell_owner@test.dev")
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    for path <- ~w(/admin/users /admin/groups /admin/models /admin/system /admin/jobs) do
+      assert has_element?(view, "#user-menu a[href='#{path}']"),
+             "falta #{path} en el menú de perfil"
+    end
+  end
+
+  test "el grupo Admin no aparece en el menú de perfil para quien no es owner", %{conn: conn} do
+    {:ok, _user} =
+      Accounts.create_user(%{email: "shell_plain@test.dev", name: "Plain", is_owner: false})
+
+    conn =
+      conn
+      |> Plug.Test.init_test_session(%{})
+      |> Plug.Conn.put_session(:user, "shell_plain@test.dev")
+      |> Plug.Conn.put_session(:workspace_slug, "personal")
+      |> Plug.Conn.put_session(:is_owner, false)
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "#user-menu a[href='/settings/account']")
+    refute has_element?(view, "#user-menu a[href='/admin/users']")
+    refute has_element?(view, "#user-menu a[href='/admin/system']")
+  end
+
+  # /settings/instance es una página de INSTANCIA: shell de instancia, sin el nav
+  # de conocimiento y sin la caja de búsqueda del sidebar (DESIGN §T2).
+  test "/settings/instance usa el shell de instancia, no el de conocimiento", %{conn: conn} do
+    conn = owner_conn(conn, "shell_owner@test.dev")
+    {:ok, view, _html} = live(conn, ~p"/settings/instance")
+
+    assert has_element?(view, "a[href='/admin/users']")
+    assert has_element?(view, "a[href='/admin/groups']")
+    # El nav de conocimiento (Journey/Memory, o el buscador del sidebar) no está.
+    refute has_element?(view, "a[href='/journey']")
+    refute has_element?(view, "#sidebar-search-form")
   end
 end

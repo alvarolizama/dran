@@ -314,7 +314,6 @@ defmodule DranWeb.Router do
       live "/", AdminLive, :index
       live "/users", AdminUsersLive, :index
       live "/groups", AdminGroupsLive, :index
-      live "/workspaces", AdminWorkspacesLive, :index
       live "/models", AdminModelsLive, :index
       live "/system", AdminSystemLive, :index
       live "/jobs", AdminJobsLive, :index

@@ -7,7 +7,6 @@ defmodule Dran.Accounts do
   """
 
   import Ecto.Query
-  require Logger
   alias Dran.Repo
   alias Dran.Accounts.{User, UserWorkspace}
   alias Dran.Workspace
@@ -20,6 +19,25 @@ defmodule Dran.Accounts do
 
   @doc "True when at least one user exists (setup already completed)."
   def any_users?, do: Repo.exists?(User)
+
+  @doc """
+  True when the instance has NO accounts yet: the account about to be created
+  is the one that CLAIMS it, and is therefore its owner (`is_owner: true`).
+
+  This is the ONE criterion behind "the first account is the admin", and every
+  door into a fresh instance has to honour it:
+
+    * `/setup` (`SessionController.setup/2`) — it only runs while this is true,
+      and hard-codes the owner flag.
+    * Google open-signup (`OAuthController.handle_google_user/2`) — it can fire
+      BEFORE anybody ran /setup. `SetupLive` turns itself off as soon as ANY
+      user exists, so without this rule the instance would be left with users
+      and no owner: nobody able to reach `/admin`, ever.
+
+  Callers use it to decide the flag, they do not assume it:
+  `Accounts.create_user(%{…, is_owner: Accounts.claims_instance?()})`.
+  """
+  def claims_instance?, do: not any_users?()
 
   def get_user!(id), do: Repo.get!(User, id) |> Repo.preload(:workspaces)
   def get_user(id), do: Repo.get(User, id) |> Repo.preload(:workspaces)
@@ -70,9 +88,9 @@ defmodule Dran.Accounts do
     |> insert_user(attrs)
   end
 
-  # One insert path for both creations: the identity actor, the api_token and
-  # the personal workspace happen the same way whichever changeset — password or
-  # not — built the row, so the two cannot drift apart.
+  # One insert path for both creations: the identity actor and the api_token
+  # happen the same way whichever changeset — password or not — built the row,
+  # so the two cannot drift apart.
   #
   # The `put_change/3` calls are NOT redundant: `User.changeset/2` casts neither
   # `:actor_id` nor `:password`, so putting them in the attrs is dropped in
@@ -83,7 +101,6 @@ defmodule Dran.Accounts do
     |> Ecto.Changeset.put_change(:actor_id, resolve_or_create_user_actor(email_from(attrs)))
     |> Ecto.Changeset.put_change(:api_token, User.generate_api_token())
     |> Repo.insert()
-    |> with_personal_workspace()
   end
 
   # Attrs arrive with atom keys (release setup, OAuth, tests) or with string
@@ -132,9 +149,8 @@ defmodule Dran.Accounts do
   `User.admin_changeset/2` for why that is the point, not an oversight.
 
   Deliberately narrower than `update_user/2`: only the fields that surface edits
-  are castable. The instance-level flags (`is_owner`, `can_create_workspaces`,
-  `default_workspace_slug`…) keep going through their own functions, and the
-  whole thing is unreachable outside the `:admin` scope.
+  are castable. The instance-level flag (`is_owner`) keeps going through its own
+  function, and the whole thing is unreachable outside the `:admin` scope.
   """
   def update_user_as_admin(%User{} = user, attrs) do
     user
@@ -215,207 +231,6 @@ defmodule Dran.Accounts do
     end
   end
 
-  # ── Personal workspaces ──
-
-  @doc """
-  The user's personal workspace struct, or `nil` when they have none (or the
-  pointer is stale).
-
-  Read by the landing resolution (`session_workspace_slug/1`) and the admin
-  surfaces. One PK lookup — never preloaded on `get_user_by_email/1`, which
-  runs on every request.
-  """
-  def personal_workspace(%User{personal_workspace_id: id}) when is_binary(id),
-    do: Repo.get(Workspace, id)
-
-  def personal_workspace(_user), do: nil
-
-  @doc """
-  Idempotently ensure `user` has a personal workspace, creating it when missing.
-
-  The personal workspace is PRIVATE (it is the user's own silo — nobody else
-  sees it in their workspace list) and is linked back to the user two ways: the
-  `users.personal_workspace_id` pointer (survives slug renames) and an `owner`
-  membership (so every existing access check keeps working).
-
-  `users.default_workspace_slug` is seeded with its slug ONLY when still blank —
-  an explicit choice of landing workspace is never clobbered.
-
-  Returns `{:ok, %Dran.Workspace{}}` or `{:error, changeset}`. Callers creating
-  accounts degrade gracefully (see `with_personal_workspace/1`) and the release
-  backfill re-runs it for everyone.
-  """
-  def ensure_personal_workspace(%User{} = user) do
-    case do_ensure_personal_workspace(user) do
-      {:ok, workspace, _user} -> {:ok, workspace}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  @doc """
-  Give every user that lacks one a personal workspace. Idempotent and safe to
-  run on every deploy (release setup).
-
-  Returns `{created, failed}` counts.
-  """
-  def backfill_personal_workspaces do
-    User
-    |> where([u], is_nil(u.personal_workspace_id))
-    |> Repo.all()
-    |> Enum.reduce({0, 0}, fn user, {created, failed} ->
-      case ensure_personal_workspace(user) do
-        {:ok, _workspace} -> {created + 1, failed}
-        {:error, _reason} -> {created, failed + 1}
-      end
-    end)
-  end
-
-  # Returns `{:ok, workspace, user}` — the user being the row AS UPDATED, so the
-  # caller can put it straight on the socket/return value without a re-fetch.
-  # (Re-fetching with `get_user/1` would preload `:workspaces`/`:user_workspaces`
-  # and `Repo.preload/2` never reloads an already-loaded association, so a later
-  # `list_user_workspaces(user)` on that struct would report stale memberships.)
-  #
-  # The account row is locked FOR UPDATE and re-read INSIDE the transaction. That
-  # is what turns "one personal workspace per account" into a guarantee instead
-  # of a hope: without it, two concurrent calls — a signup racing the release
-  # backfill, a double submit, two devices — both read
-  # `personal_workspace_id = nil`, both create a workspace, and the loser's row
-  # stays behind as an orphan the user still sees in their list. With the lock
-  # the loser waits, re-reads, finds the winner's id and creates nothing.
-  defp do_ensure_personal_workspace(%User{id: user_id}) do
-    outcome =
-      Repo.transaction(fn ->
-        case Repo.one(from u in User, where: u.id == ^user_id, lock: "FOR UPDATE") do
-          nil ->
-            Repo.rollback(:user_not_found)
-
-          user ->
-            case user.personal_workspace_id && Repo.get(Workspace, user.personal_workspace_id) do
-              %Workspace{} = workspace ->
-                {:ok, workspace, user}
-
-              nil ->
-                case create_personal_workspace(user) do
-                  {:ok, workspace, updated_user} -> {:ok, workspace, updated_user}
-                  {:error, reason} -> Repo.rollback(reason)
-                end
-            end
-        end
-      end)
-
-    case outcome do
-      {:ok, result} -> result
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp create_personal_workspace(%User{} = user) do
-    # The display name is NOT uniquified: `workspaces.name` stopped being unique
-    # once every account got a personal workspace, because two people called
-    # "Alice" are two people called "Alice". The slug — the URL identity — is
-    # derived from it by create_workspace/2, which suffixes it on collision, so
-    # the second "Alice" gets /alice-3f9a2b.
-    #
-    # Private on purpose: a personal workspace is never the instance default and
-    # never shows up in another user's workspace list.
-    attrs = %{"name" => personal_workspace_name(user), "visibility" => "private"}
-
-    case Dran.Knowledge.create_workspace(attrs, owner_user_id: user.id) do
-      {:ok, %Workspace{} = workspace} ->
-        case Repo.update(
-               Ecto.Changeset.change(user,
-                 personal_workspace_id: workspace.id,
-                 default_workspace_slug: seed_default_slug(user, workspace.slug)
-               )
-             ) do
-          {:ok, updated_user} -> {:ok, workspace, updated_user}
-          {:error, changeset} -> {:error, changeset}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  # Seed the landing workspace only when nothing was chosen: a default the user
-  # (or an admin) set on purpose always wins.
-  defp seed_default_slug(%User{default_workspace_slug: slug}, _fallback)
-       when is_binary(slug) and slug != "",
-       do: slug
-
-  defp seed_default_slug(_user, fallback), do: fallback
-
-  # El workspace personal se llama como la PERSONA; "Personal" cuando la cuenta
-  # no tiene nombre. NUNCA la parte del correo, que es lo que hacía antes: con
-  # nekrox@gmail.com nacía "Nekrox" y el slug salía de ahí, o sea que el correo
-  # acababa eligiendo la URL del workspace.
-  defp personal_workspace_name(%User{name: name}) when is_binary(name) do
-    case String.trim(name) do
-      "" -> "Personal"
-      trimmed -> trimmed
-    end
-  end
-
-  defp personal_workspace_name(_user), do: "Personal"
-
-  # ── Creating additional workspaces ──
-
-  @doc """
-  True when `user` may create additional workspaces: the instance owner always,
-  or anyone explicitly granted `can_create_workspaces`.
-  """
-  def can_create_workspaces?(%User{} = user), do: User.can_create_workspaces?(user)
-  def can_create_workspaces?(_user), do: false
-
-  @doc """
-  Create a workspace FOR `user`: they become its `owner` member in the same
-  transaction as the workspace row.
-
-  Two refusals, both enforced here and not only in the UI:
-
-    * `{:error, :forbidden}` — the user has no `can_create_workspaces`
-      permission. The personal workspace is exempt from it: that one is created
-      by `ensure_personal_workspace/1`, never through here.
-    * `{:error, :name_taken}` — they ALREADY have a workspace with that name in
-      their own list. Names are not unique in the database (two people may both
-      have a "Personal"), so the check is scoped to what this user can reach:
-      refusing because of a workspace they cannot even open would leak its
-      existence and help nobody. Inside their own list the repetition is a
-      mistake worth catching — the alternative is silently handing them
-      /trabajo-3f9a2b for a URL they never chose.
-  """
-  def create_workspace_for(%User{} = user, attrs) do
-    cond do
-      not can_create_workspaces?(user) -> {:error, :forbidden}
-      name_taken_for?(user, attrs) -> {:error, :name_taken}
-      true -> Dran.Knowledge.create_workspace(attrs, owner_user_id: user.id)
-    end
-  end
-
-  # Case-insensitive and trimmed: to the person typing it, "Trabajo" and
-  # " trabajo " are the same workspace — and they slugify to the same URL.
-  defp name_taken_for?(%User{} = user, attrs) do
-    case attrs_name(attrs) do
-      nil ->
-        false
-
-      name ->
-        wanted = normalize_name(name)
-        Enum.any?(accessible_workspaces(user), &(normalize_name(&1.name) == wanted))
-    end
-  end
-
-  defp attrs_name(attrs) do
-    case Map.get(attrs, "name") || Map.get(attrs, :name) do
-      name when is_binary(name) and name != "" -> name
-      _ -> nil
-    end
-  end
-
-  defp normalize_name(name) when is_binary(name), do: name |> String.trim() |> String.downcase()
-  defp normalize_name(_name), do: ""
-
   # ── Context membership ──
 
   @doc """
@@ -483,111 +298,18 @@ defmodule Dran.Accounts do
   end
 
   @doc """
-  Returns every workspace the user can reach: their MEMBERSHIPS only — the
-  workspaces they were added to, plus their own personal one, which leads the
-  list.
-
-  Every workspace is private (`Dran.Workspace.changeset/2`), so there is nothing
-  to discover: being able to open a workspace means somebody put you in it.
-
-  Note the asymmetry with `DranWeb.Router.require_workspace_access/2` — the
-  INSTANCE OWNER reaches every workspace of the instance, and that is where "the
-  owner sees all" lives. This list carries only the owner's own memberships,
-  which is exactly what the landing resolution and the org/propios split depend
-  on.
-
-  `nil` (no user row) yields `[]` — fail-closed, a session user with no DB row
-  has no accessible workspaces.
-  """
-  def accessible_workspaces(%User{} = user) do
-    user
-    |> list_user_workspaces()
-    |> order_personal_first(user.personal_workspace_id)
-  end
-
-  def accessible_workspaces(_), do: []
-
-  # The personal workspace leads the list (and therefore the switcher): it is
-  # where the user lands by default, so it should be the first thing they see.
-  defp order_personal_first(workspaces, nil), do: workspaces
-
-  defp order_personal_first(workspaces, personal_id) do
-    {personal, rest} = Enum.split_with(workspaces, &(&1.id == personal_id))
-    personal ++ rest
-  end
-
-  @doc """
   The workspace a session should open for `%User{}` — the ONE place that
   decides where a user lands (login, cookie restoration, LiveView mounts,
   impersonation).
 
-  The landing workspace is the user's PERSONAL workspace: every account is
-  created with one and `ensure_personal_workspace/1` seeds
-  `default_workspace_slug` with it, so in the normal case the first rule below
-  is what resolves. `default_workspace_slug` only ever differs from the
-  personal slug when the user (from account settings) or an admin (from
-  /admin/users) changes it on purpose — an explicit choice always wins.
-
-  In order:
-
-    1. the user's own `default_workspace_slug`, while they still have access,
-    2. their personal workspace's slug, while the workspace still exists,
-    3. the instance default, when they have access,
-    4. the ONLY workspace they can access — no reason to drop them on an
-       empty page because the flagged default is someone else's workspace,
-    5. the instance default (fail-open to the same slug the app has always
-       used; the caller decides how to render a missing workspace).
-
-  For the instance owner rules 3-5 collapse into the instance default: the
-  owner reaches every workspace (see `require_workspace_access/2`), so
-  memberships never narrow their landing workspace.
-
-  A nil / unknown user resolves to the instance default.
+  W6 (contract-instance-visibility-20260919): there is nothing to resolve any
+  more. The instance IS the container, so every account — owner, admin, editor,
+  viewer, or an unknown/nil user — lands on the instance's slug. What is left of
+  the old landing matrix is the fail-open fallback: the app always had a slug to
+  answer with, and it still does.
   """
-  def session_workspace_slug(%User{is_owner: true} = user) do
-    user_default_workspace(user) ||
-      personal_workspace_slug(user) ||
-      Dran.Auth.default_workspace_slug()
-  end
-
-  def session_workspace_slug(%User{} = user) do
-    accessible = accessible_workspaces(user)
-    slugs = Enum.map(accessible, & &1.slug)
-    instance = Dran.Auth.default_workspace_slug()
-    personal = personal_workspace_slug(user)
-
-    cond do
-      user.default_workspace_slug in slugs -> user.default_workspace_slug
-      personal && personal in slugs -> personal
-      instance in slugs -> instance
-      true -> only_accessible_slug(accessible, instance)
-    end
-  end
-
+  def session_workspace_slug(%User{} = _user), do: Dran.Auth.default_workspace_slug()
   def session_workspace_slug(_), do: Dran.Auth.default_workspace_slug()
-
-  # The personal workspace's slug, while the row still exists. One PK lookup:
-  # `session_workspace_slug/1` runs on login / cookie restoration / a mount
-  # without a session slug, never per request.
-  defp personal_workspace_slug(%User{personal_workspace_id: id}) when is_binary(id) do
-    case Repo.get(Workspace, id) do
-      %Workspace{slug: slug} -> slug
-      nil -> nil
-    end
-  end
-
-  defp personal_workspace_slug(_user), do: nil
-
-  # The user's configured default, only while the workspace still exists.
-  defp user_default_workspace(%User{default_workspace_slug: slug})
-       when is_binary(slug) and slug != "" do
-    if Dran.Knowledge.get_workspace_by_slug(slug), do: slug, else: nil
-  end
-
-  defp user_default_workspace(_), do: nil
-
-  defp only_accessible_slug([%{slug: slug}], _instance), do: slug
-  defp only_accessible_slug(_accessible, instance), do: instance
 
   # ── Owner / Role-based access ──
 
@@ -943,40 +665,7 @@ defmodule Dran.Accounts do
   """
   def delete_api_key(%ApiKey{} = key), do: Repo.delete(key)
 
-  # ── Per-user default context ──
-
-  @doc """
-  Set a user's default context slug. Used as fallback when no context has
-  been explicitly chosen in the session/cookie yet.
-  """
-  def set_default_context(%User{} = user, slug) when is_binary(slug) do
-    user
-    |> Ecto.Changeset.change(default_workspace_slug: slug)
-    |> Repo.update()
-  end
-
   # ── Actor linkage ──
-
-  # Every account gets its personal workspace at creation time. A failure here
-  # must NOT abort account creation — the account is valid and the idempotent
-  # `backfill_personal_workspaces/0` (run by release setup) will create it on
-  # the next boot. Loud in the logs, never silent.
-  defp with_personal_workspace({:ok, %User{} = user}) do
-    case do_ensure_personal_workspace(user) do
-      {:ok, _workspace, updated_user} ->
-        {:ok, updated_user}
-
-      {:error, reason} ->
-        Logger.warning(
-          "[accounts] personal workspace for #{user.email} could not be created " <>
-            "(#{inspect(reason)}); run Dran.Release.setup (backfill) to retry"
-        )
-
-        {:ok, user}
-    end
-  end
-
-  defp with_personal_workspace(other), do: other
 
   # Resolve (or lazily create) the kind=user actor for an email, used when
   # a user row is created. Never nil for a valid email — the actors table

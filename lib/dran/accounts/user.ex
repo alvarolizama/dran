@@ -16,18 +16,12 @@ defmodule Dran.Accounts.User do
     field :is_owner, :boolean, default: false
     field :api_token, :string
     field :password_hash, :string
-    field :default_workspace_slug, :string
 
-    # The user's own workspace (created with the account, private). It is the
-    # default landing workspace — see `Dran.Accounts.session_workspace_slug/1`.
-    # Set programmatically by `Dran.Accounts.ensure_personal_workspace/1`,
-    # never castable from params.
-    field :personal_workspace_id, :binary_id
-
-    # Permission to create ADDITIONAL workspaces (the personal one is exempt).
-    # Defaults to false: only the instance owner — or a user explicitly granted
-    # this from /admin/users — can create workspaces.
-    field :can_create_workspaces, :boolean, default: false
+    # W6 (contract-instance-visibility-20260919): `default_workspace_slug`,
+    # `personal_workspace_id` and `can_create_workspaces` are GONE. The instance
+    # IS the container (one row), so there is nothing to choose as landing, no
+    # per-account silo and nothing to create: the three columns only made sense
+    # in the multi-workspace model.
 
     # Instance-wide role (single-workspace model, W1 of the instance-visibility
     # contract): "owner" | "admin" | "editor" | "viewer". Backfilled from the
@@ -52,10 +46,6 @@ defmodule Dran.Accounts.User do
     has_many :workspaces, through: [:user_workspaces, :workspace]
     belongs_to :actor, Dran.Actors.Actor, define_field: false, foreign_key: :actor_id
 
-    belongs_to :personal_workspace, Dran.Workspace,
-      define_field: false,
-      foreign_key: :personal_workspace_id
-
     timestamps()
   end
 
@@ -67,9 +57,7 @@ defmodule Dran.Accounts.User do
       :google_id,
       :avatar_url,
       :is_owner,
-      :api_token,
-      :default_workspace_slug,
-      :can_create_workspaces
+      :api_token
     ])
     |> validate_required([:email])
     |> unique_constraint(:email)
@@ -78,23 +66,11 @@ defmodule Dran.Accounts.User do
   end
 
   @doc """
-  True when the user may create ADDITIONAL workspaces.
-
-  The instance owner always may; everyone else only with the explicit
-  `can_create_workspaces` grant. Personal workspaces are created by the system
-  and never go through this check.
-  """
-  def can_create_workspaces?(%__MODULE__{is_owner: true}), do: true
-  def can_create_workspaces?(%__MODULE__{can_create_workspaces: true}), do: true
-  def can_create_workspaces?(_user), do: false
-
-  @doc """
   Changeset for password-based registration: the account of a PERSON.
 
   Requires email + NAME + password. The name is not decoration: it is what the
-  account's personal workspace is called, and its URL comes from it (see
-  `Dran.Accounts.ensure_personal_workspace/1`). Without it there is nothing to
-  name that workspace with, and the email would end up deciding the URL.
+  UI shows in the sidebar, the user list and the content attribution. Without it
+  the account would only be an address.
   """
   def registration_changeset(user, attrs) do
     user
@@ -163,13 +139,16 @@ defmodule Dran.Accounts.User do
     |> put_password_hash()
   end
 
-  # Un input de contraseña vacío llega como "" (la clave viaja en los params,
-  # fiel al formulario). Para el cast "" NO es "sin cambio": sin sacarlo de
-  # `changes`, `validate_length` lo rechazaría y `put_password_hash` guardaría el
-  # hash de la cadena vacía.
+  # Un input de contraseña vacío significa "no la toques". Para el cast, `""` es
+  # un empty value y llega a `changes` como `nil` — NUNCA como `""`, que es lo
+  # que esta función creía: comparar contra `""` dejaba el cambio puesto con
+  # `nil` y `put_password_hash/1` acababa hasheando la nada (Bcrypt con un
+  # no-binario). Se cubren las dos formas porque `nil` es como lo entrega Ecto y
+  # `""` como lo entrega cualquier caller que arme el changeset a mano.
   defp drop_blank_password(changeset) do
     case get_change(changeset, :password) do
       "" -> delete_change(changeset, :password)
+      nil -> delete_change(changeset, :password)
       _ -> changeset
     end
   end

@@ -127,21 +127,15 @@ defmodule DranWeb.Plugs.Auth do
   def assign_to_socket(socket, session, params \\ nil) when is_map(session) do
     %{current_user: current_user} = from_session(session)
 
-    # Per-user scoping: a DB user (created via Dran.Accounts) sees the
-    # workspaces they are a member of (their personal one first). Every
-    # workspace is private, so there is no public tier to add on top (F2).
-    # SEC-002: fail closed — a session user with no row in the users table gets
-    # NO workspaces and is NOT owner (previously nil -> {all_workspaces, true},
-    # which escalated deleted users to full admin).
-    #
-    # Loaded BEFORE the workspace: with no slug in the session, where the mount
-    # lands depends on the user (their own default, the instance default, or the
-    # only workspace they can reach).
-    {user, user_workspaces, is_owner} =
+    # SEC-002: fail closed — a session user with no row in the users table is
+    # NOT owner (previously nil -> owner, which escalated deleted users to full
+    # admin). W6: there is no per-user workspace LIST any more; the instance is
+    # the only container, so the only thing resolved here is the role flag.
+    {user, is_owner} =
       case Dran.Accounts.get_user_by_email(current_user) do
-        nil -> {nil, [], false}
-        %{is_owner: true} = user -> {user, Dran.Accounts.accessible_workspaces(user), true}
-        user -> {user, Dran.Accounts.accessible_workspaces(user), false}
+        nil -> {nil, false}
+        %{is_owner: true} = user -> {user, true}
+        user -> {user, false}
       end
 
     # The URL wins over the session: a LiveView mounted at
@@ -190,7 +184,6 @@ defmodule DranWeb.Plugs.Auth do
       |> Phoenix.Component.assign(:current_user, current_user)
       |> Phoenix.Component.assign(:is_owner, is_owner)
       |> Phoenix.Component.assign(:workspace_slug, workspace_slug)
-      |> Phoenix.Component.assign(:workspaces, user_workspaces)
       |> Phoenix.Component.assign(:workspace_role, workspace_role)
       |> Phoenix.Component.assign(:page_counts, page_counts)
       |> Phoenix.Component.assign(:current_scope, current_user)

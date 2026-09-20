@@ -385,7 +385,6 @@ defmodule DranWeb.HomeLive do
       current_user={@current_user}
       user={@user}
       workspace_slug={@workspace && @workspace.slug}
-      workspaces={@contexts}
       active_nav={@active_nav}
     >
       <%= if @search_results do %>

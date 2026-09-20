@@ -27,7 +27,9 @@ defmodule DranWeb.Layouts do
   attr :user, :map, default: nil, doc: "the authenticated user struct (ownership/visibility)"
   attr :is_owner, :boolean, default: false, doc: "whether the current user is the instance owner"
   attr :workspace_slug, :string, default: nil, doc: "the active workspace slug"
-  attr :workspaces, :list, default: [], doc: "available workspaces for the selector"
+  # NOTE: there is NO `workspaces` attr. The shell renders ONE brain (the
+  # instance) and the sidebar has no selector — the 20 call sites that used to
+  # pass `workspaces={@workspaces}` were feeding an attribute nothing read.
   attr :page_counts, :map, default: %{}, doc: "map of workspace_id => page count"
 
   attr :active_nav, :string,
@@ -55,8 +57,6 @@ defmodule DranWeb.Layouts do
   slot :inner_block, required: true
 
   def app(assigns) do
-    counts = compute_counts(assigns[:workspace_slug])
-
     # Resolve admin status for the sidebar's admin-only links. A session user
     # with a row in users is admin iff users.is_owner; a session user without
     # a DB row (pre-multi-user sessions) is treated as a full admin.
@@ -77,12 +77,20 @@ defmodule DranWeb.Layouts do
     sidebar? = assigns[:sidebar] != false
     instance_nav? = assigns[:nav] == :instance
 
+    # ONLY the workspace nav consumes these aggregates (badges). The instance
+    # shell and the sidebar-less pages (login/setup) must not pay the ~7
+    # queries per mount — they are not rendering a single one of those numbers.
+    workspace_nav? = sidebar? and not instance_nav?
+
+    counts =
+      if workspace_nav?, do: compute_counts(assigns[:workspace_slug]), else: %{}
+
     page_counts =
       case assigns[:page_counts] do
         counts_by_context when is_map(counts_by_context) and map_size(counts_by_context) > 0 ->
           counts_by_context
 
-        _ when not sidebar? or instance_nav? ->
+        _ when not workspace_nav? ->
           %{}
 
         _ ->
@@ -508,11 +516,14 @@ defmodule DranWeb.Layouts do
     ~H"""
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-1">
+        <%!-- The way back to the brain. It used to read "Workspaces" and point
+             at "/" — in the single-workspace model (the instance IS the brain)
+             the destination is the knowledge home, so it says what it is. --%>
         <.nav_link
-          label={gettext("Workspaces")}
-          icon="hero-squares-2x2"
+          label={gettext("Home")}
+          icon="hero-home"
           path={~p"/"}
-          active={@active == "dashboard"}
+          active={@active == "home"}
         />
       </div>
 
@@ -543,12 +554,6 @@ defmodule DranWeb.Layouts do
           icon="hero-user-group"
           path={~p"/admin/groups"}
           active={@active == "admin_groups"}
-        />
-        <.nav_link
-          label={gettext("All workspaces")}
-          icon="hero-building-office-2"
-          path={~p"/admin/workspaces"}
-          active={@active == "admin_workspaces"}
         />
         <.nav_link
           label={gettext("Models")}
@@ -626,10 +631,12 @@ defmodule DranWeb.Layouts do
   Shows the current user row at the bottom of the sidebar: avatar with the
   initial, name + email truncated, and a menu.
 
-  The menu is the global fallback from any URL: Workspaces (back to the list)
-  plus the account entries (Profile · API keys). When the shell is showing a
-  workspace it also carries the workspace-scoped entries (Activity · Workspace
-  settings) after a divider — the nav itself stays for the workspace content.
+  The menu is the global fallback from any URL: Home (back to the brain) plus
+  the account entries (Profile · API keys). When the shell is showing the
+  knowledge content it also carries the brain-scoped entries (Activity ·
+  Instance settings) after a divider, and — for instance owners — the ADMIN
+  group (Users · Groups · All workspaces · Models · System · Jobs), which is
+  what makes /admin reachable from the knowledge shell at all.
 
   `user` is the DB struct when available (provides the display name); the
   email always comes from `current_user`.
@@ -682,9 +689,9 @@ defmodule DranWeb.Layouts do
         <div class="absolute bottom-full right-0 mb-1 w-48 bg-base-100 border border-base-300 rounded-lg shadow-lg py-1 z-50">
           <.menu_item
             href={~p"/"}
-            icon="hero-squares-2x2"
-            label={gettext("Workspaces")}
-            active={@active == "dashboard"}
+            icon="hero-home"
+            label={gettext("Home")}
+            active={@active == "home"}
           />
           <.menu_item
             href={~p"/settings/account"}
@@ -711,6 +718,53 @@ defmodule DranWeb.Layouts do
             icon="hero-cog-6-tooth"
             label={gettext("Instance settings")}
             active={@active == "workspace_settings"}
+          />
+
+          <%!-- Admin (owner-only) — the same six sections the instance nav
+               carries. They live here too so the admin surface is reachable
+               from the KNOWLEDGE shell: the sidebar there is the workspace nav
+               and /admin would otherwise be unreachable without typing the URL. --%>
+          <div :if={@is_owner} class="border-t border-base-300 my-1"></div>
+          <div
+            :if={@is_owner}
+            class="px-3 pt-0.5 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/60"
+          >
+            {gettext("Admin")}
+          </div>
+          <.menu_item
+            :if={@is_owner}
+            href={~p"/admin/users"}
+            icon="hero-users"
+            label={gettext("Users")}
+            active={@active == "admin_users"}
+          />
+          <.menu_item
+            :if={@is_owner}
+            href={~p"/admin/groups"}
+            icon="hero-user-group"
+            label={gettext("Groups")}
+            active={@active == "admin_groups"}
+          />
+          <.menu_item
+            :if={@is_owner}
+            href={~p"/admin/models"}
+            icon="hero-cpu-chip"
+            label={gettext("Models")}
+            active={@active == "admin_models"}
+          />
+          <.menu_item
+            :if={@is_owner}
+            href={~p"/admin/system"}
+            icon="hero-server-stack"
+            label={gettext("System")}
+            active={@active == "admin_system"}
+          />
+          <.menu_item
+            :if={@is_owner}
+            href={~p"/admin/jobs"}
+            icon="hero-clock"
+            label={gettext("Jobs")}
+            active={@active == "admin_jobs"}
           />
 
           <div class="border-t border-base-300 my-1"></div>

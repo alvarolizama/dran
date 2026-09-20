@@ -5,12 +5,11 @@ defmodule Dran.Release do
 
   All public functions are safe to call from a release container:
 
-    * `setup/0`         — create DB (if missing) → migrate → seed default context → production seed → backfill personal workspaces. Idempotent.
+    * `setup/0`         — create DB (if missing) → migrate → seed the instance row → production seed. Idempotent.
     * `migrate/0`       — run pending migrations.
     * `seed/0`          — run priv/repo/seeds_prod.exs (opt-in first owner). Safe on every deploy.
     * `seed_demo/0`     — run priv/repo/seeds.exs (full demo content). Dev/demo only: it refuses to run inside a release.
-    * `seed_context/0`  — create the default context only. Safe for prod.
-    * `backfill_personal_workspaces/0` — give accounts that lack one their personal workspace. Idempotent.
+    * `seed_context/0`  — create the instance row only. Safe for prod.
     * `rollback/2`      — roll a single repo back to a given version.
     * `reset/0`         — DESTRUCTIVE: drop the `public` schema (all data) and run setup/0 again, for a from-scratch onboarding.
 
@@ -26,8 +25,8 @@ defmodule Dran.Release do
 
   @doc """
   Idempotent first-run setup: create the database if it does not exist,
-  run any pending migrations, seed the default context, run the production seed
-  (opt-in first owner) and give accounts without one their personal workspace.
+  run any pending migrations, seed the instance row and run the production seed
+  (opt-in first owner).
 
   Safe to invoke on every deploy — it short-circuits when the database
   already exists, and migrations are themselves idempotent.
@@ -41,21 +40,20 @@ defmodule Dran.Release do
     migrate()
     seed_context()
     seed()
-    backfill_personal_workspaces()
     :ok
   end
 
   @doc """
   DESTROY the instance and start over from an empty database.
 
-  Drops the `public` schema — every table, so every workspace (personal
-  included) with its content, every user, API key and setting — recreates it
-  and runs the normal `setup/0` (create → migrate → seed default context →
-  backfill personal workspaces). Extensions (`pg_trgm`, `unaccent`, `pgcrypto`,
-  `vector`) live in the same schema and are recreated by the migrations.
+  Drops the `public` schema — every table, so the brain with its content, every
+  user, API key and setting — recreates it and runs the normal `setup/0`
+  (create → migrate → seed the instance row). Extensions (`pg_trgm`, `unaccent`,
+  `pgcrypto`, `vector`) live in the same schema and are recreated by the
+  migrations.
 
   Afterwards the instance is back at `/setup`, the first-run screen that
-  creates the owner account, and that account gets its own personal workspace.
+  creates the owner account.
 
   The container entrypoint triggers this with `DRAN_RESET=1` (see
   docker/entrypoint.sh).
@@ -75,37 +73,6 @@ defmodule Dran.Release do
     Logger.warning(
       "[release] RESET done: the instance is empty. Open /setup to create the owner."
     )
-
-    :ok
-  end
-
-  @doc """
-  Give every account that lacks one a personal workspace.
-
-  Idempotent — safe on every deploy. Covers instances that existed before
-  personal workspaces (and any account whose creation-time workspace failed).
-  """
-  def backfill_personal_workspaces do
-    load_config()
-
-    for repo <- repos() do
-      {:ok, _, _} =
-        Ecto.Migrator.with_repo(
-          repo,
-          fn _repo ->
-            case Dran.Accounts.backfill_personal_workspaces() do
-              {0, 0} ->
-                Logger.info("[release] personal workspaces: nothing to backfill")
-
-              {created, failed} ->
-                Logger.info(
-                  "[release] personal workspaces backfilled: #{created} created, #{failed} failed"
-                )
-            end
-          end,
-          timeout: @start_timeout
-        )
-    end
 
     :ok
   end
@@ -236,27 +203,19 @@ defmodule Dran.Release do
   defp release?, do: System.get_env("MIX_ENV") in [nil, "prod"]
 
   @doc """
-  Create only the default workspace if it does not exist.
+  Create the instance row if the database has none.
 
-  Skipped unless a default workspace is configured — a workspace flagged as
-  default in /admin/workspaces (see
-  `Dran.Auth.default_workspace_configured?/0`). A deleted workspace stays
-  deleted across deploys when nothing is flagged.
+  W6 (contract-instance-visibility-20260919): there is no "is it flagged as
+  default?" question any more — the instance row is not one of several, it IS
+  the brain. Idempotent: an existing row is left untouched, so a rename done in
+  the UI survives every deploy.
 
   Safe for production: does not create demo pages, todos, or relations.
-  Used by `setup/0` so a fresh prod deploy gets a working context without
-  polluting the brain with seed content.
+  Used by `setup/0` so a fresh prod deploy gets a working brain without
+  polluting it with seed content.
   """
   def seed_context do
-    if Dran.Auth.default_workspace_configured?() do
-      do_seed_context()
-    else
-      Logger.info(
-        "[release] default workspace not configured in settings, skipping default context seed"
-      )
-
-      :ok
-    end
+    do_seed_context()
   end
 
   defp do_seed_context do
@@ -267,21 +226,19 @@ defmodule Dran.Release do
         Ecto.Migrator.with_repo(
           repo,
           fn _repo ->
-            alias Dran.Repo
             alias Dran.Knowledge
-            alias Dran.Workspace
 
             slug = Dran.Auth.default_workspace_slug()
             name = Dran.Auth.default_workspace_name()
 
-            case Repo.get_by(Workspace, slug: slug) do
+            case Knowledge.the_instance() do
               nil ->
                 {:ok, ctx} = Knowledge.create_workspace(%{name: name, slug: slug})
-                Logger.info("[release] created context: #{ctx.name} (#{ctx.slug})")
+                Logger.info("[release] created the instance row: #{ctx.name} (#{ctx.slug})")
 
               existing ->
                 Logger.info(
-                  "[release] context already exists: #{existing.name} (#{existing.slug})"
+                  "[release] instance row already exists: #{existing.name} (#{existing.slug})"
                 )
             end
           end,
