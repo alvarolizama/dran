@@ -396,11 +396,13 @@ defmodule Dran.AccountsTest do
                })
     end
 
-    test "create_api_key/1 disallows non-member from creating key for unassigned workspace", %{
+    # W5: the membership gate died — a key acts as its owner (single
+    # workspace); creating one for any workspace id is fine.
+    test "create_api_key/1 no longer gates on the creator's membership (W5)", %{
       non_member: non_member,
       ctx2: ctx2
     } do
-      assert {:error, :workspace_not_allowed} =
+      assert {:ok, _key} =
                Accounts.create_api_key(%{
                  name: "non-member-key",
                  workspace_ids: [{ctx2.id, "read"}],
@@ -487,7 +489,8 @@ defmodule Dran.AccountsTest do
       assert {:ok, _} = Accounts.valid_api_key?(key.token)
     end
 
-    test "replace_api_key_workspaces/3 rejects workspaces outside the creator's membership", %{
+    # W5: same — the replace path no longer validates memberships.
+    test "replace_api_key_workspaces/3 no longer validates memberships (W5)", %{
       non_member: non_member,
       ctx2: ctx2
     } do
@@ -498,7 +501,7 @@ defmodule Dran.AccountsTest do
           created_by_user_id: non_member.id
         })
 
-      assert {:error, :workspace_not_allowed} =
+      assert {:ok, _} =
                Accounts.replace_api_key_workspaces(key, [{ctx2.id, "read"}], non_member)
     end
   end

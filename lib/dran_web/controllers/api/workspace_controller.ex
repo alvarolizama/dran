@@ -1,31 +1,23 @@
 defmodule DranWeb.API.WorkspaceController do
   use DranWeb, :controller
 
-  alias Dran.Accounts
   alias Dran.Knowledge
 
   # SEC-007: context CRUD is admin-only. The :api_auth pipeline validates the
   # token but not the user's role — we plug require_admin on top.
   plug :require_admin when action in [:create, :update, :delete]
 
-  @doc "GET /api/workspaces — list contexts reachable by this identity"
+  @doc """
+  GET /api/workspaces (also /api/instance) — the instance workspace.
+
+  W5 single-workspace: there is exactly one container. The response keeps
+  the list shape (the plugin iterates it) with one entry.
+  """
   def index(conn, _params) do
-    user = conn.assigns[:user]
-
-    contexts =
-      cond do
-        user.is_owner or Map.get(user, :workspaces) == :all ->
-          Knowledge.list_workspaces()
-
-        Map.has_key?(user, :workspaces) ->
-          Map.get(user, :workspaces, [])
-
-        true ->
-          # Per-user tokens — same membership rule as ResourceAuthorization
-          Accounts.accessible_workspaces(user)
-      end
-
-    json(conn, %{data: contexts})
+    case DranWeb.API.Instance.instance_context() do
+      nil -> json(conn, %{data: []})
+      context -> json(conn, %{data: [context]})
+    end
   end
 
   @doc "POST /api/workspaces — create a context"
@@ -49,9 +41,14 @@ defmodule DranWeb.API.WorkspaceController do
     |> json(%{errors: %{detail: "name and slug are required"}})
   end
 
-  @doc "GET /api/workspaces/:slug — get a context"
-  def show(conn, %{"slug" => slug}) do
-    case Knowledge.get_workspace_by_slug(slug) do
+  @doc """
+  GET /api/workspaces/:slug — the instance (any legacy slug segment).
+
+  W5: the slug stopped selecting anything; unknown slugs still answer the
+  instance so old plugin builds keep working after the fold.
+  """
+  def show(conn, %{"slug" => _legacy}) do
+    case DranWeb.API.Instance.instance_context() do
       nil ->
         conn
         |> put_status(:not_found)

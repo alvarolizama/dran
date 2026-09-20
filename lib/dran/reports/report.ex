@@ -23,6 +23,7 @@ defmodule Dran.Reports.Report do
              :report_type,
              :meta,
              :archived,
+             :visibility,
              :inserted_at,
              :updated_at
            ]}

@@ -131,6 +131,9 @@ def _load_dran_config(hermes_home: str) -> dict:
     if api_key in ("", "${DRAN_API_KEY}", "${env:DRAN_API_KEY}"):
         api_key = _resolve_secret()
     config["api_key"] = api_key
+    # W5 (single-workspace): the value is informational only — Dran decides
+    # nothing by it and the plugin sends it nowhere. Kept so old config files
+    # load without edits.
     config["workspace"] = str(config.get("workspace") or DEFAULT_WORKSPACE).strip()
     config["auto_recall"] = bool(config.get("auto_recall", True))
     config["auto_capture"] = bool(config.get("auto_capture", True))
@@ -170,7 +173,7 @@ class _DranClient:
     Dran doesn't add a timeout to every turn.
     """
 
-    def __init__(self, base_url: str, api_key: str, workspace: str,
+    def __init__(self, base_url: str, api_key: str, workspace: str = "",
                  agent_identity: str = "", timeout: float = REQUEST_TIMEOUT):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -250,7 +253,7 @@ class _DranClient:
     # -- Memory endpoints ------------------------------------------------
 
     def add_memory(self, content: str, source_session: str = "", force: bool = False) -> dict:
-        payload: Dict[str, Any] = {"workspace": self.workspace, "content": content}
+        payload: Dict[str, Any] = {"content": content}
         if source_session:
             payload["source_session"] = source_session
         if force:
@@ -271,12 +274,12 @@ class _DranClient:
     def update_memory(self, memory_id: str, content: str) -> dict:
         """Rewrite a fact in place; trust/feedback counters are preserved."""
         return self.request("PATCH", f"/api/memory/{memory_id}", {
-            "content": content, "workspace": self.workspace,
+            "content": content, 
         })
 
     def search(self, query: str, limit: int = 5) -> list:
         from urllib.parse import urlencode
-        qs = urlencode({"q": query, "workspace": self.workspace, "limit": limit})
+        qs = urlencode({"q": query, "limit": limit})
         data = self.request("GET", f"/api/memory/search?{qs}")
         return data.get("data", [])
 
@@ -284,7 +287,7 @@ class _DranClient:
 
     def search_pages(self, query: str, strategy: str = "auto", limit: int = 10) -> list:
         from urllib.parse import urlencode
-        qs = urlencode({"q": query, "workspace": self.workspace,
+        qs = urlencode({"q": query, 
                         "strategy": strategy, "limit": limit})
         try:
             data = self.request("GET", f"/api/search?{qs}")
@@ -296,17 +299,18 @@ class _DranClient:
 
     def list_pages(self, page_type: str = "", limit: int = 20) -> list:
         from urllib.parse import urlencode
-        params = {"workspace": self.workspace, "limit": limit}
+        params = {"limit": limit}
         if page_type:
             params["type"] = page_type
         data = self.request("GET", f"/api/knowledge-pages?{urlencode(params)}")
         return data.get("data", []) if isinstance(data, dict) else []
 
     def list_page_types(self) -> dict:
-        """Effective page types of the workspace (built-in ∪ custom) with their
-        full definitions, via GET /api/workspaces/:slug/page-types."""
+        """Effective page types of the instance (built-in ∪ custom) with their
+        full definitions. W5: Dran is single-workspace — any legacy slug path
+        answers the instance, so the configured value only names the call."""
         from urllib.parse import quote
-        slug = quote(str(self.workspace), safe="")
+        slug = quote(str(self.workspace or "instance"), safe="")
         try:
             data = self.request("GET", f"/api/workspaces/{slug}/page-types")
         except urllib.error.HTTPError as exc:
@@ -320,7 +324,7 @@ class _DranClient:
 
     def get_page(self, slug: str) -> Optional[dict]:
         from urllib.parse import urlencode
-        qs = urlencode({"workspace": self.workspace, "include": "body"})
+        qs = urlencode({"include": "body"})
         try:
             data = self.request("GET", f"/api/knowledge-pages/{slug}?{qs}")
         except urllib.error.HTTPError as exc:
@@ -331,10 +335,14 @@ class _DranClient:
 
     def create_page(self, title: str, body: str = "", page_type: str = "note",
                     tags: Optional[List[str]] = None, summary: str = "",
-                    meta: Optional[dict] = None) -> dict:
+                    meta: Optional[dict] = None,
+                    visibility: str = "private") -> dict:
         payload: Dict[str, Any] = {
-            "workspace": self.workspace, "title": title, "body": body,
+            "title": title, "body": body,
             "page_type": page_type,
+            # Per-item visibility: private (default) | public | shared.
+            # Memories are NOT settable here — Dran rejects the param (422).
+            "visibility": visibility,
         }
         if tags:
             payload["tags"] = tags
@@ -347,14 +355,14 @@ class _DranClient:
     def update_page(self, slug: str, **fields: Any) -> dict:
         from urllib.parse import urlencode
         payload = {k: v for k, v in fields.items() if v is not None}
-        return self.request("PUT", f"/api/knowledge-pages/{slug}?{urlencode({'workspace': self.workspace})}",
+        return self.request("PUT", f"/api/knowledge-pages/{slug}",
                             payload)
 
     def delete_page(self, slug: str) -> bool:
         from urllib.parse import urlencode
         try:
             self.request("DELETE",
-                         f"/api/knowledge-pages/{slug}?{urlencode({'workspace': self.workspace})}")
+                         f"/api/knowledge-pages/{slug}")
             return True
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -364,7 +372,7 @@ class _DranClient:
     def get_links(self, slug: str) -> dict:
         from urllib.parse import urlencode
         try:
-            data = self.request("GET", f"/api/knowledge-pages/{slug}/links?{urlencode({'workspace': self.workspace})}")
+            data = self.request("GET", f"/api/knowledge-pages/{slug}/links")
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 return {}
@@ -374,7 +382,7 @@ class _DranClient:
     def create_relation(self, source_slug: str, target_slug: str, relation_type: str = "related",
                         description: str = "") -> dict:
         payload: Dict[str, Any] = {
-            "workspace": self.workspace, "source_slug": source_slug,
+            "source_slug": source_slug,
             "target_slug": target_slug, "relation_type": relation_type,
         }
         if description:
@@ -384,7 +392,7 @@ class _DranClient:
     def delete_relation(self, source_slug: str, target_slug: str,
                         relation_type: str = "") -> bool:
         from urllib.parse import urlencode
-        params = {"workspace": self.workspace, "source_slug": source_slug,
+        params = {"source_slug": source_slug,
                   "target_slug": target_slug}
         if relation_type:
             params["relation_type"] = relation_type
@@ -398,14 +406,14 @@ class _DranClient:
 
     def lint_brain(self) -> dict:
         from urllib.parse import urlencode
-        data = self.request("GET", f"/api/lint?{urlencode({'workspace': self.workspace})}")
+        data = self.request("GET", f"/api/lint")
         return data.get("data", data) if isinstance(data, dict) else {}
 
     def rename_slug(self, slug: str, new_slug: str) -> dict:
         from urllib.parse import urlencode
         return self.request(
             "POST",
-            f"/api/knowledge-pages/{slug}/rename?{urlencode({'workspace': self.workspace})}",
+            f"/api/knowledge-pages/{slug}/rename",
             {"new_slug": new_slug},
         )
 
@@ -413,14 +421,14 @@ class _DranClient:
         from urllib.parse import urlencode
         return self.request(
             "POST",
-            f"/api/knowledge-pages/{slug}/reaugment?{urlencode({'workspace': self.workspace})}",
+            f"/api/knowledge-pages/{slug}/reaugment",
         )
 
     def generate_cluster_summaries(self) -> dict:
-        return self.request("POST", "/api/cluster-summaries", {"workspace": self.workspace})
+        return self.request("POST", "/api/cluster-summaries", {})
 
     def start_worker(self, worker_type: str, input: str = "") -> dict:
-        payload = {"workspace": self.workspace, "worker_type": worker_type, "input": input}
+        payload = {"worker_type": worker_type, "input": input}
         return self.request("POST", "/api/workers", payload)
 
     def get_worker_session(self, session_id: str) -> Optional[dict]:
@@ -428,7 +436,7 @@ class _DranClient:
         try:
             data = self.request(
                 "GET",
-                f"/api/workers/{session_id}?{urlencode({'workspace': self.workspace})}",
+                f"/api/workers/{session_id}",
             )
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -442,11 +450,11 @@ class _DranClient:
 
     def feedback(self, memory_id: str, helpful: bool) -> dict:
         return self.request("POST", "/api/memory/feedback", {
-            "id": memory_id, "helpful": helpful, "workspace": self.workspace,
+            "id": memory_id, "helpful": helpful, 
         })
 
     def ingest(self, transcript: str, source_session: str = "") -> dict:
-        payload = {"workspace": self.workspace, "transcript": transcript}
+        payload = {"transcript": transcript}
         if source_session:
             payload["source_session"] = source_session
         return self.request("POST", "/api/memory/ingest", payload,
@@ -1135,6 +1143,10 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                     "page_type": {"type": "string", "description": f"One of the workspace's effective page types: {_types_enum}"},
                     "tags": {"type": "array", "items": {"type": "string"}},
                     "summary": {"type": "string"},
+                    "visibility": {"type": "string", "enum": ["private", "public", "shared"],
+                                   "description": "Read visibility. private (default): only the key's owner. "
+                                   "public: everyone on the instance. shared: only explicit share targets "
+                                   "(managed from the Dran web UI)."},
                 },
                 "required": ["title"],
             },
@@ -1150,6 +1162,8 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                     "body": {"type": "string"},
                     "summary": {"type": "string"},
                     "tags": {"type": "array", "items": {"type": "string"}},
+                    "visibility": {"type": "string", "enum": ["private", "public", "shared"],
+                                   "description": "Change the page's read visibility."},
                 },
                 "required": ["slug"],
             },
@@ -1314,12 +1328,16 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
                     "error": f"unknown page type {page_type!r}",
                     "effective_page_types": available,
                 })
+            visibility = str(args.get("visibility") or "private").strip()
+            if visibility not in ("private", "public", "shared"):
+                return json.dumps({"error": "visibility must be private | public | shared"})
             data = client.create_page(
                 title=title,
                 body=str(args.get("body") or ""),
                 page_type=page_type,
                 tags=list(args.get("tags") or []),
                 summary=str(args.get("summary") or ""),
+                visibility=visibility,
             )
             page = data.get("data") or {}
             return json.dumps({"created": True, "slug": page.get("slug"), "id": page.get("id")})
@@ -1328,7 +1346,7 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
             slug = str(args.get("slug", "")).strip()
             if not slug:
                 return json.dumps({"error": "slug is required"})
-            fields = {k: args.get(k) for k in ("title", "body", "summary", "tags") if args.get(k) is not None}
+            fields = {k: args.get(k) for k in ("title", "body", "summary", "tags", "visibility") if args.get(k) is not None}
             if not fields:
                 return json.dumps({"error": "nothing to update"})
             data = client.update_page(slug, **fields)

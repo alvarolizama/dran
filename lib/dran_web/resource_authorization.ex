@@ -46,20 +46,13 @@ defmodule DranWeb.ResourceAuthorization do
 
   defp do_authorize(%{is_owner: true}, _mode, _ws_id), do: :ok
 
-  # ── Real user (per-user token): the workspaces they are a member of ──────
+  # ── Real user (per-user token): the instance role (W5 single-workspace) ──
+  #
+  # Every authenticated user reaches the instance; per-item visibility
+  # decides WHAT they read, the instance role decides write.
 
-  defp do_authorize(%Accounts.User{} = user, mode, ws_id) do
-    ws = Enum.find(Accounts.accessible_workspaces(user), &(&1.id == ws_id))
-
-    case ws do
-      nil ->
-        {:error, :forbidden}
-
-      workspace ->
-        role = Accounts.user_role_in_workspace(user, workspace)
-
-        if allowed_role?(role, mode), do: :ok, else: {:error, :forbidden}
-    end
+  defp do_authorize(%Accounts.User{} = user, mode, _ws_id) do
+    if allowed_role?(user.instance_role, mode), do: :ok, else: {:error, :forbidden}
   end
 
   # ── API key: per-workspace access levels ──────────────────────────────────
@@ -91,7 +84,7 @@ defmodule DranWeb.ResourceAuthorization do
 
   defp allowed_role?(role, mode) do
     case mode do
-      :read -> role != nil
+      :read -> role in ~w(owner admin editor viewer)
       :write -> role in ~w(owner admin editor)
     end
   end

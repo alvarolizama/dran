@@ -33,11 +33,8 @@ defmodule DranWeb.GraphVisibilityTest do
 
     unique = System.unique_integer([:positive])
 
-    {:ok, workspace} =
-      Knowledge.create_workspace(%{
-        name: "Graph vis #{unique}",
-        slug: "graph-vis-#{unique}"
-      })
+    # W5: the graph endpoint answers the instance workspace.
+    workspace = Dran.DataCase.ensure_workspace!()
 
     {:ok, owner} =
       Accounts.create_user(%{

@@ -19,24 +19,20 @@ defmodule DranWeb.E2EAuthTest do
         name: "Regular User"
       })
 
-    # Create contexts — use unique slugs/names so they don't collide with
-    # fixtures created by other async:false tests sharing this database.
+    # W5: the instance IS the workspace — ctx1 is the instance; ctx2 keeps
+    # existing only as a legacy fold leftover for the redirect surfaces.
     unique = System.unique_integer([:positive])
 
-    {:ok, ctx1} =
-      Knowledge.create_workspace(%{name: "Personal #{unique}", slug: "personal-#{unique}"})
+    ctx1 = Dran.DataCase.ensure_workspace!()
 
     {:ok, ctx2} =
       Knowledge.create_workspace(%{
         name: "Work #{unique}",
         slug: "work-#{unique}",
-        # F2: ctx2 must be private to still test the restrict-access path;
-        # with the old default (public), accessible_workspaces broadens access
-        # and the 403 assertion no longer holds.
         visibility: "private"
       })
 
-    # Assign user to only the personal context
+    # Assign user to the instance (legacy membership, kept until W6)
     Accounts.add_user_to_workspace(user, ctx1)
 
     {:ok, conn: conn, admin: admin, user: user, ctx1: ctx1, ctx2: ctx2}
@@ -84,21 +80,23 @@ defmodule DranWeb.E2EAuthTest do
     refute Dran.Auth.valid_token?("invalid-token")
   end
 
-  test "REST restricts regular user to their assigned context", %{
+  # W5: any authenticated user reaches the instance through any slug —
+  # the old per-workspace restriction is gone (per-item visibility decides
+  # WHAT is read, not WHICH workspace).
+  test "REST serves a regular user through a legacy slug (W5)", %{
     conn: conn,
     user: user,
     ctx2: ctx2
   } do
     assert {:ok, _} = Accounts.valid_token?(user.api_token)
 
-    # A workspace the user does NOT have access to must be forbidden.
     conn =
       conn
       |> Plug.Conn.put_req_header("authorization", "Bearer #{user.api_token}")
       |> Plug.Conn.put_req_header("accept", "application/json")
       |> Phoenix.ConnTest.get("/api/workspaces/#{ctx2.slug}/export")
 
-    assert conn.status == 403
+    assert conn.status == 200
   end
 
   test "REST allows regular user access to their assigned context", %{
@@ -183,7 +181,9 @@ defmodule DranWeb.E2EAuthTest do
       assert conn.status == 200
     end
 
-    test "REST rejects a context API key used against a DIFFERENT context", %{
+    # W5: cross-context rejection died with the single-workspace model —
+    # any legacy slug resolves the instance, so a valid key is accepted.
+    test "REST accepts a key through a legacy slug (W5)", %{
       conn: conn,
       ctx1: ctx1,
       ctx2: ctx2
@@ -196,7 +196,7 @@ defmodule DranWeb.E2EAuthTest do
         |> Plug.Conn.put_req_header("accept", "application/json")
         |> Phoenix.ConnTest.get("/api/knowledge-pages?workspace=#{ctx2.slug}")
 
-      assert conn.status == 403
+      assert conn.status == 200
     end
 
     test "REST rejects a revoked key", %{conn: conn, ctx1: ctx1} do

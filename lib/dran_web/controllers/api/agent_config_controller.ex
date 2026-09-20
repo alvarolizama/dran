@@ -3,9 +3,10 @@ defmodule DranWeb.API.AgentConfigController do
   GET /api/agent/config — self-description for agent clients (the Hermes
   memory plugin) authenticated with their per-agent API key.
 
-  Returns the agent's identity and the workspaces its key may reach with
-  their access levels. The plugin chooses its memory workspace LOCALLY
-  (dran_memory.json) from this list — Dran never decides it server-side.
+  W5 (single-workspace): the answer is the INSTANCE. `workspaces` keeps its
+  array shape with exactly one entry (backward compatibility for plugin
+  versions that still iterate it), and the effective page types come from
+  the instance workspace.
   """
 
   use DranWeb, :controller
@@ -22,9 +23,13 @@ defmodule DranWeb.API.AgentConfigController do
       actor ->
         user = conn.assigns[:user]
 
+        # The single instance workspace (nil-safe: an empty instance answers
+        # an empty list rather than crashing the plugin).
         workspaces =
-          user
-          |> Map.get(:workspaces, [])
+          case DranWeb.API.Instance.instance_context() do
+            nil -> []
+            ws -> [ws]
+          end
           |> Enum.map(fn ws ->
             %{
               id: ws.id,
@@ -39,15 +44,12 @@ defmodule DranWeb.API.AgentConfigController do
           data: %{
             agent: %{id: actor.id, name: actor.name, display_name: actor.display_name},
             workspaces: workspaces,
-            # Effective types for the workspaces this key reaches, so the agent
-            # discovers custom types instead of hardcoding the built-in set.
+            # Effective types of the instance, so the agent discovers custom
+            # types instead of hardcoding the built-in set.
             page_types: workspaces |> Enum.flat_map(& &1.page_types) |> Enum.uniq(),
             access_levels: Map.get(user, :access_levels, %{})
           }
         })
     end
   end
-
-  # Full definitions are composed in Dran.Knowledge.page_type_defs/1 — shared
-  # with GET /api/workspaces/:slug/page-types so both endpoints serve one shape.
 end

@@ -73,48 +73,33 @@ defmodule DranWeb.ResourceAuthorizationTest do
       assert Authz.authorize(user, :write, ws_from_setup().id) == :ok
     end
 
-    test "member with viewer role: read allowed, write denied" do
-      {:ok, user} = Accounts.create_user(%{email: uniq_email()})
-      {:ok, _} = Accounts.add_user_to_workspace(user, ws_from_setup())
 
-      assert Authz.authorize(user, :read, ws_from_setup().id) == :ok
-      assert {:error, :forbidden} = Authz.authorize(user, :write, ws_from_setup().id)
+
+
+
+    # ── W5: the instance role decides (single-workspace) ────────────────────
+
+    test "instance viewer: read allowed, write denied" do
+      {:ok, user} = Accounts.create_user(%{email: uniq_email()})
+      user = user |> Ecto.Changeset.change(instance_role: "viewer") |> Dran.Repo.update!()
+
+      assert Authz.authorize(user, :read, "authz-ws") == :ok
+      assert {:error, :forbidden} = Authz.authorize(user, :write, "authz-ws")
     end
 
-    test "non-member of a workspace: read and write denied (no public fallback)" do
+    test "instance editor: read + write" do
       {:ok, user} = Accounts.create_user(%{email: uniq_email()})
+      user = user |> Ecto.Changeset.change(instance_role: "editor") |> Dran.Repo.update!()
 
-      # Every workspace is private, so not being a member means no access at
-      # all. There used to be a viewer fallback for public workspaces.
-      ws = ws_from_setup()
-      assert ws.visibility == "private"
-
-      assert {:error, :forbidden} = Authz.authorize(user, :read, ws.id)
-      assert {:error, :forbidden} = Authz.authorize(user, :write, ws.id)
+      assert Authz.authorize(user, :read, "authz-ws") == :ok
+      assert Authz.authorize(user, :write, "authz-ws") == :ok
     end
 
-    test "member of another workspace: denied on this one", %{} do
+    test "default role (editor): write allowed on any workspace id" do
       {:ok, user} = Accounts.create_user(%{email: uniq_email()})
 
-      {:ok, other} = Knowledge.create_workspace(%{name: "Other", slug: "authz-other"})
-      {:ok, _} = Accounts.add_user_to_workspace(user, other)
-
-      # Membership is per workspace: being in one grants nothing in another.
-      assert {:error, :forbidden} = Authz.authorize(user, :read, ws_from_setup().id)
-    end
-
-    test "private workspace non-member: read and write denied" do
-      {:ok, private} =
-        Knowledge.create_workspace(%{
-          name: "Private",
-          slug: "authz-private",
-          visibility: "private"
-        })
-
-      {:ok, user} = Accounts.create_user(%{email: uniq_email()})
-
-      assert {:error, :forbidden} = Authz.authorize(user, :read, private.id)
-      assert {:error, :forbidden} = Authz.authorize(user, :write, private.id)
+      assert Authz.authorize(user, :read, "authz-ws") == :ok
+      assert Authz.authorize(user, :write, "authz-ws") == :ok
     end
   end
 
@@ -167,10 +152,10 @@ defmodule DranWeb.ResourceAuthorizationTest do
   end
 
   describe "unknown workspace" do
-    test "authenticated user without access: forbidden" do
+    test "authenticated user is authorized regardless of the ws id (W5)" do
       {:ok, user} = Accounts.create_user(%{email: uniq_email()})
 
-      assert {:error, :forbidden} = Authz.authorize(user, :read, "no-such-ws")
+      assert :ok = Authz.authorize(user, :read, "no-such-ws")
     end
   end
 

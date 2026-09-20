@@ -2,23 +2,22 @@ defmodule DranWeb.API.PageController do
   use DranWeb, :controller
 
   alias Dran.Knowledge
+  alias DranWeb.API.Instance
 
   @doc "GET /api/knowledge-pages — list pages with filters"
-  def index(conn, params) do
-    # Resolve context slug to workspace_id
-    params = resolve_workspace_id(conn, params)
-
+  def index(conn, _params) do
+    # W5: the instance IS the workspace — no context param to resolve.
     opts =
       []
-      |> maybe_put(:workspace_id, params["workspace_id"])
-      |> maybe_put(:type, params["type"])
-      |> maybe_put(:tag, params["tag"])
-      |> maybe_put(:status, params["status"])
-      |> maybe_put(:owner, params["owner"])
-      |> maybe_put(:created_by, params["created_by"])
-      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
-      |> maybe_put(:include_body, params["include"] == "body")
-      |> Keyword.put(:scope, scope_for(conn, params["workspace_id"], :pages))
+      |> maybe_put(:workspace_id, Instance.instance_context_id())
+      |> Keyword.put(:scope, Instance.scope_for(conn, :pages))
+      |> maybe_put(:type, conn.query_params["type"])
+      |> maybe_put(:tag, conn.query_params["tag"])
+      |> maybe_put(:status, conn.query_params["status"])
+      |> maybe_put(:owner, conn.query_params["owner"])
+      |> maybe_put(:created_by, conn.query_params["created_by"])
+      |> maybe_put(:limit, conn.query_params["limit"] && String.to_integer(conn.query_params["limit"]))
+      |> maybe_put(:include_body, conn.query_params["include"] == "body")
 
     pages = Knowledge.list_pages(opts)
 
@@ -33,7 +32,9 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/knowledge-pages/:slug — get a page"
   def show(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
     with_context(conn, workspace_slug, fn conn, context ->
-      case Knowledge.get_page_by_slug(slug, context.id) do
+      scope = Instance.scope_for(conn, :pages)
+
+      case Knowledge.get_page_by_slug(slug, context.id, scope: scope) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -49,16 +50,21 @@ defmodule DranWeb.API.PageController do
     end)
   end
 
+  # W5: no workspace param required — the flat surface resolves the instance.
+  def show(conn, %{"slug" => slug}) do
+    show(conn, %{"slug" => slug, "workspace" => nil})
+  end
+
   def show(conn, _params) do
     conn
     |> put_status(:bad_request)
-    |> json(%{errors: %{detail: "context query param is required"}})
+    |> json(%{errors: %{detail: "slug is required"}})
   end
 
   @doc "POST /api/knowledge-pages — create a page"
   def create(conn, params) do
-    # Resolve context slug to ID if needed
-    params = resolve_workspace_id(conn, params)
+    # W5: writes always target the instance workspace.
+    params = Map.put(params, "workspace_id", Instance.instance_context_id())
 
     # Inject attribution from the authenticated identity.
     # created_by is derived server-side from the actor — never client-settable.
@@ -86,8 +92,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "PUT /api/knowledge-pages/:slug — update a page"
-  def update(conn, %{"slug" => slug, "workspace" => workspace_slug} = params) do
-    with_context(conn, workspace_slug, fn conn, context ->
+  def update(conn, %{"slug" => slug} = params) do
+    with_context(conn, nil, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -100,17 +106,8 @@ defmodule DranWeb.API.PageController do
           # created_by, etc. updated_by is injected server-side from the
           # authenticated actor (never taken from the client).
           params =
-            Map.take(params, [
-              "title",
-              "body",
-              "tags",
-              "meta",
-              "summary",
-              "archived",
-              "kb_confidence",
-              "kb_source_url",
-              "kb_contested"
-            ])
+            params
+            |> Instance.permit_page_params()
             |> Map.put("updated_by", Dran.Auth.resolve_created_by(conn.assigns[:user]))
 
           case Knowledge.update_page(page, params) do
@@ -133,8 +130,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "DELETE /api/knowledge-pages/:slug — delete a page"
-  def delete(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
-    with_context(conn, workspace_slug, fn conn, context ->
+  def delete(conn, %{"slug" => slug}) do
+    with_context(conn, nil, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -162,8 +159,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "POST /api/knowledge-pages/:slug/rename — rename a page's slug (rewrites embeds)."
-  def rename(conn, %{"slug" => slug, "workspace" => workspace_slug} = params) do
-    with_context(conn, workspace_slug, fn conn, context ->
+  def rename(conn, %{"slug" => slug} = params) do
+    with_context(conn, nil, fn conn, context ->
       new_slug = params["new_slug"]
 
       cond do
@@ -197,8 +194,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "POST /api/knowledge-pages/:slug/reaugment — refresh embeddings/summary."
-  def reaugment(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
-    with_context(conn, workspace_slug, fn conn, context ->
+  def reaugment(conn, %{"slug" => slug}) do
+    with_context(conn, nil, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -220,9 +217,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "POST /api/cluster-summaries — regenerate the nightly cluster summaries."
-  def cluster_summaries(conn, params) do
-    params = resolve_workspace_id(conn, params)
-    workspace_id = params["workspace_id"]
+  def cluster_summaries(conn, _params) do
+    workspace_id = Instance.instance_context_id()
 
     if workspace_id do
       case Dran.Graph.ClusterSummaries.generate_all(workspace_id) do
@@ -243,8 +239,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "GET /api/knowledge-pages/:slug/links — inbound + outbound relations"
-  def links(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
-    with_context(conn, workspace_slug, fn conn, context ->
+  def links(conn, %{"slug" => slug}) do
+    with_context(conn, nil, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -265,8 +261,8 @@ defmodule DranWeb.API.PageController do
   end
 
   @doc "GET /api/knowledge-pages/:slug/graph — subgraph centered on a page"
-  def graph(conn, %{"slug" => slug, "workspace" => workspace_slug}) do
-    with_context(conn, workspace_slug, fn conn, context ->
+  def graph(conn, %{"slug" => slug}) do
+    with_context(conn, nil, fn conn, context ->
       case Knowledge.get_page_by_slug(slug, context.id) do
         nil ->
           conn
@@ -308,39 +304,6 @@ defmodule DranWeb.API.PageController do
     %{page | body: nil}
   end
 
-  defp resolve_workspace_id(conn, params) do
-    case params["workspace_id"] || params["workspace"] || conn.query_params["workspace"] do
-      nil ->
-        params
-
-      context_val ->
-        # Always try slug first, then fall back to ID lookup
-        context = Knowledge.get_workspace_by_slug(context_val)
-
-        context =
-          if context do
-            context
-          else
-            # Try by ID — use Repo.get to avoid raising on invalid UUIDs
-            case Ecto.UUID.cast(context_val) do
-              {:ok, uuid} -> Dran.Repo.get(Dran.Workspace, uuid)
-              :error -> nil
-            end
-          end
-
-        if context do
-          Map.put(params, "workspace_id", context.id)
-        else
-          params
-        end
-    end
-  end
-
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
-
-  # The read scope comes from the SINGLE policy module — never a local rule.
-  defp scope_for(conn, workspace_id, kind) do
-    Dran.ContentVisibility.resolve(workspace_id, conn.assigns[:user], kind)
-  end
 end

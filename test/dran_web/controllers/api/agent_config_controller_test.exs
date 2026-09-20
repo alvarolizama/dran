@@ -1,9 +1,8 @@
 defmodule DranWeb.API.AgentConfigControllerTest do
   @moduledoc """
   GET /api/agent/config — the self-description endpoint the Hermes memory
-  plugin hits to learn which workspaces its key may reach. The memory
-  workspace CHOICE is made locally in Hermes (dran_memory.json); this
-  endpoint only lists the options + access levels.
+  plugin hits. W5 (single-workspace): the answer is the INSTANCE — one
+  workspace entry, its effective page types, and the key's access level.
   """
   use DranWeb.ConnCase, async: false
 
@@ -19,27 +18,19 @@ defmodule DranWeb.API.AgentConfigControllerTest do
         is_owner: true
       })
 
-    {:ok, ws_a} =
-      Knowledge.create_workspace(%{name: "Alpha #{unique}", slug: "alpha-#{unique}"})
+    # W5: the instance is the only workspace.
+    ws = Dran.DataCase.ensure_workspace!()
 
-    {:ok, ws_b} =
-      Knowledge.create_workspace(%{name: "Beta #{unique}", slug: "beta-#{unique}"})
-
-    %{owner: owner, ws_a: ws_a, ws_b: ws_b, unique: unique}
+    %{owner: owner, ws_a: ws, ws_b: ws, unique: unique}
   end
 
-  defp agent_conn(owner, ws_a, ws_b, unique, levels \\ {"write", "read"}) do
+  defp agent_conn(owner, ws_a, _ws_b, unique, _levels \\ nil) do
     {:ok, actor} = Dran.Actors.create_actor(%{name: "cfg-agent-#{unique}", kind: "agent"})
-
-    {lvl_a, lvl_b} = levels
 
     {:ok, key} =
       Accounts.create_api_key(%{
         name: actor.name,
-        workspace_ids: [
-          {ws_a.id, lvl_a},
-          {ws_b.id, lvl_b}
-        ],
+        workspace_ids: [{ws_a.id, "write"}],
         created_by_user_id: owner.id,
         actor_id: actor.id
       })
@@ -69,14 +60,13 @@ defmodule DranWeb.API.AgentConfigControllerTest do
     assert data["agent"]["name"] == key.name
     assert data["agent"]["id"] == key.id
 
-    slugs = data["workspaces"] |> Enum.map(& &1["slug"]) |> Enum.sort()
-    assert slugs == Enum.sort([ws_a.slug, ws_b.slug])
+    # Exactly one entry: the instance.
+    slugs = data["workspaces"] |> Enum.map(& &1["slug"])
+    assert slugs == [ws_a.slug]
 
-    # access levels keyed by workspace id — what the plugin checks to know
-    # if its memory workspace choice is writable
+    # Access levels keyed by workspace id (the key's level on the instance).
     levels = data["access_levels"]
     assert levels[ws_a.id] == "write"
-    assert levels[ws_b.id] == "read"
   end
 
   # W2 (?04/?07): the endpoint now also exposes the EFFECTIVE page types per
@@ -106,15 +96,12 @@ defmodule DranWeb.API.AgentConfigControllerTest do
 
     assert %{"data" => data} = json_response(conn, 200)
 
-    # Top-level union across the key's workspaces
+    # Top-level: the instance's effective types
     assert "recipe" in data["page_types"]
     assert "note" in data["page_types"]
 
     alpha = Enum.find(data["workspaces"], &(&1["slug"] == ws_a.slug))
     assert alpha["page_types"] == ~w(note entity concept reference recipe)
-
-    beta = Enum.find(data["workspaces"], &(&1["slug"] == ws_b.slug))
-    assert beta["page_types"] == ~w(note entity concept reference)
 
     # Full per-type shape: the custom entry carries its declared path/UI attrs
     custom = Enum.find(alpha["page_type_defs"], &(&1["slug"] == "recipe"))

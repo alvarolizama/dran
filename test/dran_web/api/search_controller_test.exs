@@ -52,8 +52,7 @@ defmodule DranWeb.API.SearchControllerTest do
       # embeddings from other tests in the shared sandbox transaction.
       uniq = System.unique_integer([:positive])
 
-      {:ok, context} =
-        Knowledge.create_workspace(%{name: "Semantic #{uniq}", slug: "semantic-#{uniq}"})
+      context = Dran.DataCase.ensure_workspace!()
 
       {:ok, page} =
         Knowledge.create_page(%{

@@ -43,6 +43,7 @@ defmodule Dran.Memory do
              :helpful_count,
              :retrieval_count,
              :status,
+             :visibility,
              :source_session,
              :created_by,
              :owner_user_id,

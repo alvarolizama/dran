@@ -90,7 +90,7 @@ defmodule DranWeb.API.RelationController do
         |> json(%{errors: %{detail: "workspace query param is required"}})
 
       true ->
-        case resolve_workspace(workspace_slug) do
+        case DranWeb.API.Instance.instance_context() do
           nil ->
             conn
             |> put_status(:not_found)
@@ -133,13 +133,6 @@ defmodule DranWeb.API.RelationController do
   defp blank?(str) when is_binary(str), do: String.trim(str) == ""
   defp blank?(_), do: false
 
-  defp resolve_workspace(slug) do
-    Dran.Knowledge.get_workspace_by_slug(slug) ||
-      case Ecto.UUID.cast(slug) do
-        {:ok, uuid} -> Dran.Repo.get(Dran.Workspace, uuid)
-        :error -> nil
-      end
-  end
 
   @doc "DELETE /api/relations/:id — delete a relation by id."
   def delete(conn, %{"id" => id}) do

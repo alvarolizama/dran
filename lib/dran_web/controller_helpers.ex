@@ -20,31 +20,25 @@ defmodule DranWeb.ControllerHelpers do
   end
 
   @doc """
-  Resolve a context by slug and invoke `fun` with the connection and the
-  context. Responds 404 `context not found` when the slug does not resolve.
+  Invoke `fun` with the connection and the INSTANCE context
+  (single-workspace model, W5): the legacy `workspace_slug` argument is
+  accepted for call-site compatibility but no longer selects anything.
 
-  Replaces the recurring pattern in API controllers:
-
-      context = Knowledge.get_workspace_by_slug(slug)
-      if context do
-        # ...happy path with context
-      else
-        conn |> put_status(:not_found) |> json(%{errors: %{detail: "context not found"}})
-      end
+  Responds 404 `context not found` when the instance has no workspace.
 
   ## Usage
 
-      def index(conn, %{"workspace" => slug}) do
+      def show(conn, %{"slug" => slug, "workspace" => slug}) do
         with_context(conn, slug, fn conn, context ->
-          json(conn, %{data: Knowledge.list_pages(workspace_id: context.id)})
+          json(conn, %{data: Knowledge.get_page_by_slug(slug, context.id)})
         end)
       end
   """
-  @spec with_context(Plug.Conn.t(), binary(), (Plug.Conn.t(), Dran.Workspace.t() ->
-                                                 Plug.Conn.t())) ::
+  @spec with_context(Plug.Conn.t(), binary() | nil, (Plug.Conn.t(), Dran.Workspace.t() ->
+                                                     Plug.Conn.t())) ::
           Plug.Conn.t()
-  def with_context(conn, workspace_slug, fun) do
-    case Dran.Knowledge.get_workspace_by_slug(workspace_slug) do
+  def with_context(conn, _legacy_slug, fun) do
+    case Dran.Auth.instance_workspace() do
       nil ->
         conn
         |> Plug.Conn.put_status(:not_found)

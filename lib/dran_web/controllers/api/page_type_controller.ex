@@ -1,21 +1,20 @@
 defmodule DranWeb.API.PageTypeController do
   @moduledoc """
-  GET /api/workspaces/:slug/page-types — the workspace's effective page types.
+  GET /api/workspaces/:slug/page-types — the INSTANCE's effective page types.
 
-  Read-only introspection so any identity with read access to the workspace
-  can discover its vocabulary — the four built-in types (`note`, `entity`,
-  `concept`, `reference`) plus the workspace's own custom types — instead of
-  hardcoding the built-ins. Same shape as the `page_types` / `page_type_defs`
-  fields of `GET /api/agent/config`, but reachable by any token (agent/config
-  is agent-key-only).
+  W5 (single-workspace): the `:slug` segment is legacy — the answer is always
+  the instance workspace's types. Read-only introspection so any identity can
+  discover the vocabulary (the four built-ins plus custom types). Same shape
+  as `GET /api/agent/config`'s `page_types` / `page_type_defs`, but reachable
+  by any token.
   """
 
   use DranWeb, :controller
 
   alias Dran.Knowledge
 
-  def index(conn, %{"slug" => slug}) do
-    with_context(conn, slug, fn conn, context ->
+  def index(conn, params) do
+    with_context(conn, params["slug"], fn conn, context ->
       json(conn, %{
         data: %{
           page_types: Knowledge.effective_page_types(context),

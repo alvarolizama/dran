@@ -5,35 +5,30 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search?q=...&context=...&type=...&strategy=..."
   def search(conn, %{"q" => query} = params) do
-    case resolve_workspace_id(params["workspace"]) do
-      :error ->
+    # W5: the instance IS the workspace — the legacy context param is ignored.
+    workspace_id = DranWeb.API.Instance.instance_context_id()
+
+    opts =
+      []
+      |> maybe_put(:workspace_id, workspace_id)
+      |> maybe_put(:type, params["type"])
+      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+      |> maybe_put(:strategy, parse_strategy(params["strategy"]))
+      |> Keyword.put(:scope, DranWeb.API.Instance.scope_for(conn, :pages))
+
+    case Knowledge.search(query, opts) do
+      {:ok, results} ->
+        json(conn, %{data: results})
+
+      {:error, :not_configured} ->
         conn
-        |> put_status(:not_found)
-        |> json(%{errors: %{detail: "context not found"}})
+        |> put_status(:service_unavailable)
+        |> json(%{errors: %{detail: "Inference API is not configured"}})
 
-      workspace_id ->
-        opts =
-          []
-          |> maybe_put(:workspace_id, workspace_id)
-          |> maybe_put(:type, params["type"])
-          |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
-          |> maybe_put(:strategy, parse_strategy(params["strategy"]))
-          |> Keyword.put(:scope, scope_for(conn, workspace_id, :pages))
-
-        case Knowledge.search(query, opts) do
-          {:ok, results} ->
-            json(conn, %{data: results})
-
-          {:error, :not_configured} ->
-            conn
-            |> put_status(:service_unavailable)
-            |> json(%{errors: %{detail: "Inference API is not configured"}})
-
-          {:error, reason} ->
-            conn
-            |> put_status(:bad_gateway)
-            |> json(%{errors: %{detail: inspect(reason)}})
-        end
+      {:error, reason} ->
+        conn
+        |> put_status(:bad_gateway)
+        |> json(%{errors: %{detail: inspect(reason)}})
     end
   end
 
@@ -45,23 +40,15 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search/fuzzy?q=...&context=..."
   def fuzzy(conn, %{"q" => query} = params) do
-    case resolve_workspace_id(params["workspace"]) do
-      :error ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{errors: %{detail: "context not found"}})
+    opts =
+      []
+      |> maybe_put(:workspace_id, DranWeb.API.Instance.instance_context_id())
+      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+      |> Keyword.put(:scope, DranWeb.API.Instance.scope_for(conn, :pages))
 
-      workspace_id ->
-        opts =
-          []
-          |> maybe_put(:workspace_id, workspace_id)
-          |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
-          |> Keyword.put(:scope, scope_for(conn, workspace_id, :pages))
-
-        case Knowledge.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
-          {:ok, results} -> json(conn, %{data: results})
-          {:error, reason} -> json(conn, %{errors: %{detail: inspect(reason)}})
-        end
+    case Knowledge.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
+      {:ok, results} -> json(conn, %{data: results})
+      {:error, reason} -> json(conn, %{errors: %{detail: inspect(reason)}})
     end
   end
 
@@ -73,36 +60,28 @@ defmodule DranWeb.API.SearchController do
 
   @doc "GET /api/search/semantic?q=...&context=...&strategy=..."
   def semantic(conn, %{"q" => query} = params) do
-    case resolve_workspace_id(params["workspace"]) do
-      :error ->
+    opts =
+      []
+      |> maybe_put(:workspace_id, DranWeb.API.Instance.instance_context_id())
+      |> maybe_put(:type, params["type"])
+      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+      |> Keyword.put(:scope, DranWeb.API.Instance.scope_for(conn, :pages))
+
+    strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
+
+    case Knowledge.search(query, Keyword.put(opts, :strategy, strategy)) do
+      {:ok, results} ->
+        json(conn, %{data: results})
+
+      {:error, :not_configured} ->
         conn
-        |> put_status(:not_found)
-        |> json(%{errors: %{detail: "context not found"}})
+        |> put_status(:service_unavailable)
+        |> json(%{errors: %{detail: "Inference API is not configured"}})
 
-      workspace_id ->
-        opts =
-          []
-          |> maybe_put(:workspace_id, workspace_id)
-          |> maybe_put(:type, params["type"])
-          |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
-          |> Keyword.put(:scope, scope_for(conn, workspace_id, :pages))
-
-        strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
-
-        case Knowledge.search(query, Keyword.put(opts, :strategy, strategy)) do
-          {:ok, results} ->
-            json(conn, %{data: results})
-
-          {:error, :not_configured} ->
-            conn
-            |> put_status(:service_unavailable)
-            |> json(%{errors: %{detail: "Inference API is not configured"}})
-
-          {:error, reason} ->
-            conn
-            |> put_status(:bad_gateway)
-            |> json(%{errors: %{detail: inspect(reason)}})
-        end
+      {:error, reason} ->
+        conn
+        |> put_status(:bad_gateway)
+        |> json(%{errors: %{detail: inspect(reason)}})
     end
   end
 
@@ -112,24 +91,8 @@ defmodule DranWeb.API.SearchController do
     |> json(%{errors: %{detail: "q parameter is required"}})
   end
 
-  defp resolve_workspace_id(nil), do: nil
-
-  defp resolve_workspace_id(slug) do
-    # SEC-012: fail closed — return :error for unknown contexts instead of nil
-    # (nil would mean "search all contexts" which is a fail-open IDOR)
-    case Knowledge.get_workspace_by_slug(slug) do
-      nil -> :error
-      context -> context.id
-    end
-  end
-
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
-
-  # The read scope comes from the SINGLE policy module — never a local rule.
-  defp scope_for(conn, workspace_id, kind) do
-    Dran.ContentVisibility.resolve(workspace_id, conn.assigns[:user], kind)
-  end
 
   defp parse_strategy(nil), do: nil
   defp parse_strategy("fts"), do: :fts

@@ -16,7 +16,6 @@ defmodule DranWeb.API.MemoryController do
 
   alias Dran.Auth
   alias Dran.Inference
-  alias Dran.Knowledge
   alias Dran.Memory
 
   @max_transcript_chars 12_000
@@ -35,8 +34,21 @@ defmodule DranWeb.API.MemoryController do
   examined the near-duplicate and confirmed the fact is genuinely new.
   """
   def create(conn, params) do
-    params = resolve_workspace_id(conn, params)
+    # W5: writes always target the instance workspace. Memory visibility is
+    # web-only (Rules#6): an explicit `visibility` param is rejected — failing
+    # explicitly teaches the agent the rule instead of silently ignoring it.
+    if Map.has_key?(params, "visibility") do
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{errors: %{visibility: "memory visibility is managed from the web UI only"}})
+    else
+      create_memory(conn, params)
+    end
+  end
+
+  defp create_memory(conn, params) do
     user = conn.assigns[:user]
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     attrs = %{
       "workspace_id" => params["workspace_id"],
@@ -89,7 +101,7 @@ defmodule DranWeb.API.MemoryController do
   content is re-embedded. Same-content PATCH is a no-op returning the row.
   """
   def update(conn, %{"id" => id} = params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     with :ok <- require_content(params),
          memory when not is_nil(memory) <-
@@ -134,7 +146,7 @@ defmodule DranWeb.API.MemoryController do
 
   @doc "GET /api/memory/search?q=&workspace=&limit= — trust-weighted hybrid search."
   def search(conn, params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     cond do
       blank?(params["q"]) ->
@@ -163,7 +175,7 @@ defmodule DranWeb.API.MemoryController do
 
   @doc "GET /api/memory — list memories of a workspace, newest first."
   def index(conn, params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     memories =
       Memory.list_memories(params["workspace_id"],
@@ -178,7 +190,7 @@ defmodule DranWeb.API.MemoryController do
 
   @doc "POST /api/memory/feedback — rate a fact as helpful/unhelpful."
   def feedback(conn, %{"id" => id, "helpful" => helpful} = params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     helpful? =
       case helpful do
@@ -235,7 +247,7 @@ defmodule DranWeb.API.MemoryController do
   server-side and store them. The transcript is never persisted.
   """
   def ingest(conn, params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
     user = conn.assigns[:user]
 
     cond do
@@ -334,7 +346,7 @@ defmodule DranWeb.API.MemoryController do
   Pass `purge=true` to hard-delete the row permanently instead.
   """
   def delete(conn, %{"id" => id} = params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     case Memory.get_scoped_memory(id, params["workspace_id"]) do
       nil ->
@@ -531,29 +543,6 @@ defmodule DranWeb.API.MemoryController do
       inserted_at: m.inserted_at,
       updated_at: m.updated_at
     }
-  end
-
-  defp resolve_workspace_id(conn, params) do
-    case params["workspace_id"] || params["workspace"] || conn.query_params["workspace"] do
-      nil ->
-        params
-
-      workspace_val ->
-        workspace = Knowledge.get_workspace_by_slug(workspace_val)
-
-        workspace =
-          workspace ||
-            case Ecto.UUID.cast(workspace_val) do
-              {:ok, uuid} -> Dran.Repo.get(Dran.Workspace, uuid)
-              :error -> nil
-            end
-
-        if workspace do
-          Map.put(params, "workspace_id", workspace.id)
-        else
-          params
-        end
-    end
   end
 
   defp blank?(nil), do: true

@@ -727,9 +727,10 @@ defmodule Dran.Accounts do
   end
 
   defp do_create_api_key(attrs, workspace_ids) do
-    # Workspace membership validation
-    case validate_workspace_access(attrs[:created_by_user_id], workspace_ids) do
-      :ok ->
+    # W5 (single-workspace): a key reads/writes as its owner — the old
+    # creator-membership gate on the requested workspaces stopped meaning
+    # anything when the instance became the only workspace.
+    with :ok <- validate_key_creator(attrs[:created_by_user_id]) do
         token = ApiKey.generate_token()
 
         # W3 (M6): creating a key NO LONGER creates/links an actor. The key is
@@ -774,57 +775,11 @@ defmodule Dran.Accounts do
           {:error, :api_key, changeset, _} -> {:error, changeset}
           {:error, _step, reason, _} -> {:error, reason}
         end
-
-      {:error, reason} ->
-        {:error, reason}
     end
   end
 
-  # Keys without a creator user (system/test-created): the workspace list
-  # cannot be membership-validated, so require every referenced workspace to
-  # exist — no blanket allow of arbitrary ids.
-  defp validate_workspace_access(nil, workspace_ids) do
-    {ids, _levels} = Enum.unzip(workspace_ids)
-
-    existing =
-      from(w in Workspace, where: w.id in ^ids, select: w.id)
-      |> Repo.all()
-      |> MapSet.new()
-
-    missing = Enum.reject(ids, &MapSet.member?(existing, &1))
-
-    if missing == [],
-      do: :ok,
-      else: {:error, :workspace_not_found}
-  end
-
-  defp validate_workspace_access(user_id, workspace_ids) do
-    user = Repo.get(User, user_id)
-
-    cond do
-      user == nil ->
-        {:error, :user_not_found}
-
-      is_owner?(user) ->
-        :ok
-
-      true ->
-        allowed_workspaces =
-          UserWorkspace
-          |> where([uw], uw.user_id == ^user_id)
-          |> select([uw], uw.workspace_id)
-          |> Repo.all()
-          |> MapSet.new()
-
-        requested_workspaces =
-          Enum.map(workspace_ids, fn {wid, _level} -> wid end)
-
-        if Enum.all?(requested_workspaces, &MapSet.member?(allowed_workspaces, &1)) do
-          :ok
-        else
-          {:error, :workspace_not_allowed}
-        end
-    end
+  defp validate_key_creator(user_id) do
+    if is_nil(user_id) or Repo.get(User, user_id) != nil, do: :ok, else: {:error, :user_not_found}
   end
 
   @doc """
@@ -892,13 +847,9 @@ defmodule Dran.Accounts do
   `creator` is the user performing the change — membership of every
   requested workspace is validated against them (owners may use any).
   """
-  def replace_api_key_workspaces(%ApiKey{} = key, workspace_ids, creator \\ nil) do
-    case validate_workspace_access(creator && creator.id, workspace_ids) do
-      {:error, reason} ->
-        {:error, reason}
-
-      :ok ->
-        Ecto.Multi.new()
+  def replace_api_key_workspaces(%ApiKey{} = key, workspace_ids, _creator \\ nil) do
+    # W5: no membership matrix to validate — the key acts as its owner.
+    Ecto.Multi.new()
         |> Ecto.Multi.delete_all(
           :drop_old,
           from(akw in ApiKeyWorkspace, where: akw.api_key_id == ^key.id)
@@ -921,7 +872,6 @@ defmodule Dran.Accounts do
           {:ok, _} -> {:ok, reload_api_key(key)}
           {:error, _step, reason, _} -> {:error, reason}
         end
-    end
   end
 
   defp reload_api_key(%ApiKey{} = key) do

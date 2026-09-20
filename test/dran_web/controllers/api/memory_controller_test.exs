@@ -35,11 +35,8 @@ defmodule DranWeb.API.MemoryControllerTest do
         is_owner: true
       })
 
-    {:ok, workspace} =
-      Knowledge.create_workspace(%{
-        name: "Memory API #{unique}",
-        slug: "memory-api-#{unique}"
-      })
+    # W5: the API always targets the instance workspace.
+    workspace = Dran.DataCase.ensure_workspace!()
 
     {:ok, key} =
       Accounts.create_api_key(%{

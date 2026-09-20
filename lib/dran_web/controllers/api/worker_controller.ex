@@ -12,7 +12,6 @@ defmodule DranWeb.API.WorkerController do
 
   use DranWeb, :controller
 
-  alias Dran.Knowledge
   alias Dran.Repo
   alias Dran.Worker
 
@@ -24,7 +23,7 @@ defmodule DranWeb.API.WorkerController do
 
   @doc "POST /api/workers — start a worker session."
   def create(conn, params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
     workspace_id = params["workspace_id"]
     worker_type = params["worker_type"] || params["type"]
     input = params["input"] || ""
@@ -61,7 +60,7 @@ defmodule DranWeb.API.WorkerController do
 
   @doc "GET /api/workers/:id — poll a worker session (status, summary, steps)."
   def show(conn, %{"id" => session_id} = params) do
-    params = resolve_workspace_id(conn, params)
+    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     case Ecto.UUID.cast(session_id) do
       {:ok, id} ->
@@ -100,29 +99,6 @@ defmodule DranWeb.API.WorkerController do
 
   # Slug/UUID → workspace_id in the params, same convention as the other API
   # controllers (MemoryController.resolve_workspace_id/2).
-  defp resolve_workspace_id(conn, params) do
-    case params["workspace_id"] || params["workspace"] || conn.query_params["workspace"] do
-      nil ->
-        params
-
-      workspace_val ->
-        workspace = Knowledge.get_workspace_by_slug(workspace_val)
-
-        workspace =
-          workspace ||
-            case Ecto.UUID.cast(workspace_val) do
-              {:ok, uuid} -> Repo.get(Dran.Workspace, uuid)
-              :error -> nil
-            end
-
-        if workspace do
-          Map.put(params, "workspace_id", workspace.id)
-        else
-          params
-        end
-    end
-  end
-
   defp start_worker("curator", input, workspace_id, opts),
     do: Worker.Curator.run(input, workspace_id, normalize_opts(opts))
 

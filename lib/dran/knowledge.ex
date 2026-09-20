@@ -486,6 +486,15 @@ defmodule Dran.Knowledge do
     Repo.one(from p in Page, where: p.slug == ^slug and p.workspace_id == ^workspace_id)
   end
 
+  # W5: scope-aware fetch — a row outside the reader's scope is the same as a
+  # missing row (404, no existence leak).
+  def get_page_by_slug(slug, workspace_id, scope: scope) when is_binary(slug) and is_binary(workspace_id) do
+    Page
+    |> where(slug: ^slug, workspace_id: ^workspace_id)
+    |> Dran.ContentVisibility.filter(scope, :page)
+    |> Repo.one()
+  end
+
   @doc "Batch-fetch slug → page_type map for many slugs in one query"
   def get_pages_by_slugs(slugs, workspace_id) when is_list(slugs) and is_binary(workspace_id) do
     slugs =

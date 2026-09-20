@@ -241,26 +241,15 @@ defmodule DranWeb.Router do
     end
   end
 
-  defp get_requested_workspace_id(conn) do
-    # Extract workspace_id from params or path.
-    # The access_levels map is keyed by workspace UUID, so a slug in
-    # params["workspace"] must be resolved to its ID before the check,
-    # otherwise every write with a slug would 403 for API keys.
-    raw =
-      conn.params["workspace_id"] || conn.params["workspace"] ||
-        conn.params["slug"] || conn.query_params["workspace"]
-
-    resolve_workspace_ref(raw)
-  end
-
-  defp resolve_workspace_ref(nil), do: nil
-
-  defp resolve_workspace_ref(ws_id) when is_binary(ws_id) do
-    case Dran.Knowledge.get_workspace_by_slug(ws_id) do
+  defp get_requested_workspace_id(_conn) do
+    # W5: the instance IS the workspace — there is exactly one container and
+    # no request-side id to resolve.
+    case Dran.Auth.instance_workspace() do
       %{id: id} -> id
-      _ -> ws_id
+      nil -> nil
     end
   end
+
 
   # ── Public routes (login page, session, health) ──
 
@@ -347,7 +336,10 @@ defmodule DranWeb.Router do
   scope "/api", DranWeb.API do
     pipe_through [:api, :api_auth, :api_read_access]
 
-    # Contexts (read + export)
+    # W5: flat instance routes. The legacy /workspaces/:slug/* paths keep
+    # answering (any segment resolves the instance) so old plugin builds
+    # survive an upgrade.
+    get "/instance", WorkspaceController, :index
     get "/workspaces", WorkspaceController, :index
     get "/workspaces/:slug", WorkspaceController, :show
     get "/workspaces/:slug/page-types", PageTypeController, :index

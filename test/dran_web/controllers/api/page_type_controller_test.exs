@@ -20,8 +20,8 @@ defmodule DranWeb.API.PageTypeControllerTest do
         is_owner: true
       })
 
-    {:ok, ws} =
-      Knowledge.create_workspace(%{name: "PT #{unique}", slug: "pt-#{unique}"})
+    # W5: the endpoint answers the INSTANCE workspace — reuse it.
+    ws = Dran.DataCase.ensure_workspace!()
 
     %{owner: owner, ws: ws, unique: unique}
   end

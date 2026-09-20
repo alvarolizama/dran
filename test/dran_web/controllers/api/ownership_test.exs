@@ -44,20 +44,8 @@ defmodule DranWeb.API.OwnershipTest do
         is_owner: true
       })
 
-    {:ok, workspace} =
-      Knowledge.create_workspace(%{
-        name: "Ownership #{unique}",
-        slug: "ownership-#{unique}"
-      })
-
-    {:ok, _} =
-      %Accounts.UserWorkspace{}
-      |> Accounts.UserWorkspace.changeset(%{
-        user_id: owner.id,
-        workspace_id: workspace.id,
-        role: "owner"
-      })
-      |> Repo.insert()
+    # W5: the API targets the instance workspace — reuse it.
+    workspace = Dran.DataCase.ensure_workspace!()
 
     {:ok, key} =
       Accounts.create_api_key(%{

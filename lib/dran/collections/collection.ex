@@ -21,6 +21,7 @@ defmodule Dran.Collections.Collection do
              :slug,
              :summary,
              :filters,
+             :visibility,
              :inserted_at,
              :updated_at
            ]}

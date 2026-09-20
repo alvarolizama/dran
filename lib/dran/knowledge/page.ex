@@ -60,6 +60,7 @@ defmodule Dran.Knowledge.Page do
              :version,
              :archived,
              :pinned,
+             :visibility,
              :created_by,
              :updated_by,
              :on_behalf_of,
