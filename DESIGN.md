@@ -608,9 +608,14 @@ padding.
    el contenido de la página**. Con contenido largo scrollea el shell ENTERO — la
    barra del contenido y la sidebar se van con la rueda, y `main` se queda sin
    scroll propio — en lugar de scrollear el contenido por dentro con la sidebar
-   fija. `repeat(1, minmax(0, 1fr))` acota la fila al viewport: el `minmax(0, …)`
-   es lo que permite bajar por debajo del contenido, y funciona porque daisyUI
-   (≥5.5) ya pone `grid-row-start: 1` en `.drawer-content` y `.drawer-side`.
+   fija. Hay **dos palancas equivalentes** y la familia usa las dos: la utilidad
+   en el markup (`lg:grid-rows-1`, que funciona porque daisyUI ya trae
+   `grid-row-start: 1` en los dos hijos) o la regla en `app.css`
+   (`grid-auto-rows: minmax(0, 1fr)` sobre `.drawer`, que es la general — vale
+   también si la fila fuera de verdad implícita). **Una de las dos, nunca
+   ninguna**; en Dran es la utilidad (`layouts.ex`).
+   `repeat(1, minmax(0, 1fr))` acota la fila al viewport: el `minmax(0, …)` es lo
+   que permite bajar por debajo del contenido.
    **Scope `lg`**, no negociable: en `< lg` el `.drawer-side` es overlay
    `position: fixed` y no hay columna que acotar (móvil se comporta igual con y
    sin la clase).
@@ -959,7 +964,7 @@ grep -n 'do: "p-6 pb-16"' lib/dran_web/components/layouts.ex           # padding
 grep -c 'btn-soft' lib/dran_web/components/layouts.ex                  # 0 (el activo usa bg-primary/15)
 mix tailwind dran && grep -c 'data-theme=dim' priv/static/assets/css/app.css  # 1
 grep -n 'drawer lg:drawer-open' lib/dran_web/components/layouts.ex      # shell responsive
-grep -c 'class="drawer lg:drawer-open lg:grid-rows-1' lib/dran_web/components/layouts.ex  # 1 (fila acotada, §C12.5)
+grep -c 'class="drawer lg:drawer-open[^"]*lg:grid-rows-1' lib/dran_web/components/layouts.ex  # 1 (fila acotada, §C12.5)
 grep -n 'shell-hide' assets/css/app.css                                # colapso a rail (desktop)
 grep -c '<.button' lib/dran_web/live/*.ex                               # CTAs de crear como componente
 grep -rn 'flex-wrap items-center justify-between' lib/dran_web/live/   # headers que envuelven
