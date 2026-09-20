@@ -641,6 +641,10 @@ defmodule Dran.Knowledge do
 
       case Repo.insert(changeset) do
         {:ok, page} ->
+          # The graph cache may already hold a build for this workspace (a
+          # reader mounted before the page existed); a new node must wipe it.
+          Dran.GraphCache.invalidate_context(page.workspace_id)
+
           log_action(page.workspace_id, "page.create", page.slug, %{
             page_id: page.id,
             page_type: page.page_type,

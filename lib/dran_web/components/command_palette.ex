@@ -263,7 +263,7 @@ defmodule DranWeb.CommandPalette do
   # their fixed path.
   defp quick_action_path(%{page_type: type}, workspace_slug, context)
        when is_binary(workspace_slug) do
-    "/#{workspace_slug}/#{Workspace.page_type_path(context, type)}"
+    "/#{Workspace.page_type_path(context, type)}"
   end
 
   defp quick_action_path(%{page_type: type}, _workspace_slug, context),

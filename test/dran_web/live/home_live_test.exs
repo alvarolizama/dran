@@ -23,7 +23,8 @@ defmodule DranWeb.HomeLiveTest do
       end
     end)
 
-    {:ok, wiki_ctx} = Knowledge.create_workspace(%{name: "Wiki Test", slug: "wiki-test"})
+    # W1 single-workspace: the flat home renders the instance workspace.
+    wiki_ctx = Dran.DataCase.ensure_workspace!()
 
     {:ok, page} =
       Knowledge.create_page(%{
@@ -45,7 +46,7 @@ defmodule DranWeb.HomeLiveTest do
 
   describe "workspace home" do
     test "GET /:workspace_slug renders the workspace home", %{conn: conn, wiki_ctx: wiki_ctx} do
-      {:ok, _view, html} = live(conn, ~p"/#{wiki_ctx.slug}")
+      {:ok, _view, html} = live(conn, ~p"/")
 
       assert html =~ wiki_ctx.name
     end
@@ -57,7 +58,7 @@ defmodule DranWeb.HomeLiveTest do
       wiki_ctx: wiki_ctx,
       page: page
     } do
-      {:ok, _view, html} = live(conn, ~p"/#{wiki_ctx.slug}/notes/#{page.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{page.slug}")
 
       assert html =~ "Wiki Test Note"
       assert html =~ "A note visible through the wiki"
@@ -78,11 +79,11 @@ defmodule DranWeb.HomeLiveTest do
       wiki_ctx: wiki_ctx,
       page: page
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{wiki_ctx.slug}/graph")
+      {:ok, view, _html} = live(conn, ~p"/graph")
 
       render_click(view, "node_click", %{"slug" => page.slug, "type" => "note"})
 
-      assert_redirect(view, "/#{wiki_ctx.slug}/notes/#{page.slug}")
+      assert_redirect(view, "/notes/#{page.slug}")
     end
   end
 
@@ -93,7 +94,7 @@ defmodule DranWeb.HomeLiveTest do
     end
 
     test "GET /settings redirects to /login without a session" do
-      conn = build_conn() |> get(~p"/settings")
+      conn = build_conn() |> get(~p"/settings/instance")
       assert redirected_to(conn) == ~p"/login"
     end
   end

@@ -31,8 +31,9 @@ defmodule DranWeb.InstanceShellTest do
   end
 
   # {path, active nav key}
+  # W1: "/" is the workspace home now (workspace nav, not instance nav) — the
+  # dashboard launcher died with the multi-workspace model.
   @pages [
-    {"/", "dashboard"},
     {"/settings/account", "settings"},
     {"/settings/api-keys", "api_keys"},
     {"/admin/users", "admin_users"},

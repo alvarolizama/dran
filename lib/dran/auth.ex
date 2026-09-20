@@ -36,6 +36,15 @@ defmodule Dran.Auth do
   end
 
   @doc """
+  The single instance workspace (W1, single-workspace model): the flagged
+  default, else the sole workspace, else nil. Everything instance-scoped
+  (settings, page types, tuning) reads through here.
+  """
+  def instance_workspace do
+    default_workspace() || sole_workspace()
+  end
+
+  @doc """
   The default workspace slug, resolved in this order:
 
     1. the workspace flagged as the instance default (`is_default = true`,

@@ -54,7 +54,7 @@ defmodule DranWeb.PagesLive do
             </.link>
             <.link
               :if={@workspace_slug}
-              navigate={~p"/#{@workspace_slug}/graph"}
+              navigate={~p"/graph"}
               class="btn btn-ghost btn-sm"
             >
               <.icon name="hero-share" class="size-4" /> {gettext("Graph")}
@@ -161,9 +161,19 @@ defmodule DranWeb.PagesLive do
 
     case page_type_from_params(params, socket.assigns[:context]) do
       nil ->
-        # Unknown type path for THIS workspace — a retired built-in path or a
-        # path no custom type declares. 404, no redirect.
-        {:ok, raise(DranWeb.NotFoundError)}
+        # Legacy multi-workspace URL landing on the flat router: the first
+        # segment is a retired workspace slug, not a type path. The router
+        # puts `/:type(/:slug)` ahead of the legacy redirect routes, so the
+        # hop lives HERE: drop the slug segment and navigate (D2). A
+        # genuinely unknown single segment ends at "/" (the old router
+        # flashed "no access" and sent the user home too).
+        target =
+          case params do
+            %{"slug" => slug} -> "/" <> slug
+            _ -> "/"
+          end
+
+        {:ok, push_navigate(socket, to: target)}
 
       page_type ->
         PageDetail.mount_page_viewer(socket, params, session,
@@ -295,17 +305,15 @@ defmodule DranWeb.PagesLive do
 
   def handle_event("new_page", _params, socket) do
     page_type = socket.assigns[:page_type]
-    workspace_slug = socket.assigns[:workspace_slug]
     type_path = Workspace.page_type_path(socket.assigns[:context], page_type)
-    {:noreply, push_patch(socket, to: ~p"/#{workspace_slug}/#{type_path}?new=true")}
+    {:noreply, push_patch(socket, to: ~p"/#{type_path}?new=true")}
   end
 
   def handle_event("close_page_modal", _params, socket) do
     page_type = socket.assigns[:page_type]
-    workspace_slug = socket.assigns[:workspace_slug]
     type_path = Workspace.page_type_path(socket.assigns[:context], page_type)
 
-    {:noreply, push_patch(socket, to: ~p"/#{workspace_slug}/#{type_path}")}
+    {:noreply, push_patch(socket, to: ~p"/#{type_path}")}
   end
 
   # ── Editing (delegated to PageEdit) ──
@@ -415,14 +423,14 @@ defmodule DranWeb.PagesLive do
   defp build_back_path(nil, context, page_type),
     do: "/#{Workspace.page_type_path(context, page_type)}"
 
-  defp build_back_path(workspace_slug, context, page_type),
-    do: "/#{workspace_slug}/#{Workspace.page_type_path(context, page_type)}"
+  defp build_back_path(_workspace_slug, context, page_type),
+    do: "/#{Workspace.page_type_path(context, page_type)}"
 
   defp build_page_path(nil, context, page_type, slug),
     do: "/#{Workspace.page_type_path(context, page_type)}/#{slug}"
 
-  defp build_page_path(workspace_slug, context, page_type, slug),
-    do: "/#{workspace_slug}/#{Workspace.page_type_path(context, page_type)}/#{slug}"
+  defp build_page_path(_workspace_slug, context, page_type, slug),
+    do: "/#{Workspace.page_type_path(context, page_type)}/#{slug}"
 
   # El scope de lectura sale del módulo único de política.
   defp page_scope(socket) do

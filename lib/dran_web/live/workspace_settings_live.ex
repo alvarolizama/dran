@@ -41,19 +41,19 @@ defmodule DranWeb.WorkspaceSettingsLive do
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
   @impl true
-  def mount(%{"workspace_slug" => slug} = _params, session, socket) do
+  def mount(_params, session, socket) do
     {socket, _context} = Auth.assign_to_socket(socket, session)
 
-    # Corrección #10: resolve the workspace from the URL slug, not the
-    # session. `assign_to_socket` loads the session workspace; we override it
-    # with the workspace behind the URL.
+    # Single-workspace model (W1): the instance IS the workspace — always the
+    # instance workspace, never a URL slug. The admin guard is the
+    # instance-wide role, not a workspace membership.
     user = Accounts.get_user_by_email(socket.assigns.current_user)
-    workspace = Knowledge.get_workspace_by_slug(slug)
+    workspace = Dran.Auth.instance_workspace()
 
     role =
       cond do
         user && user.is_owner -> "owner"
-        user && workspace -> Accounts.user_role_in_workspace(user, workspace)
+        user && Dran.Accounts.User.instance_admin?(user) -> user.instance_role
         true -> nil
       end
 
@@ -64,7 +64,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         page_title: gettext("Workspace settings"),
         current_user_struct: user,
         workspace: workspace,
-        workspace_slug: slug,
+        workspace_slug: workspace && workspace.slug,
         workspace_role: role,
         features: @features,
         feature_groups: @feature_groups,
@@ -144,9 +144,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
               >
                 {gettext("Automation")}
               </.tab_button>
-              <.tab_button active={@active_tab == :users} tab="users" icon="hero-users">
-                {gettext("Users")}
-              </.tab_button>
+              <%!-- Users tab: workspace membership died with the multi-workspace
+                   model (W1). User management lives in /admin/users; the
+                   instance_role column replaces membership roles (W2 wires the
+                   editor; the tab returns as "Users & groups" then). --%>
             </div>
 
             <%!-- Tab content --%>

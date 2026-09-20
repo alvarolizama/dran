@@ -34,7 +34,9 @@ defmodule DranWeb.SessionControllerTest do
     {:ok, conn: conn, personal: personal, work: work}
   end
 
-  describe "POST /context — switch_context" do
+      describe "POST /context — switch_context" do
+    # W1: removed behavior (workspace switching / cookie restoration).
+    @tag :skip
     test "sets the signed dran_last_workspace cookie", %{conn: conn} do
       conn =
         post(conn, ~p"/workspace", %{"workspace_slug" => "work"})
@@ -46,6 +48,7 @@ defmodule DranWeb.SessionControllerTest do
       assert conn.resp_cookies["dran_last_workspace"]
     end
 
+    @tag :skip
     test "redirects back to referer or /notes", %{conn: conn} do
       conn =
         conn
@@ -55,6 +58,7 @@ defmodule DranWeb.SessionControllerTest do
       assert redirected_to(conn, 302) == "/"
     end
 
+    @tag :skip
     test "without workspace_slug shows error flash", %{conn: conn} do
       conn = post(conn, ~p"/workspace", %{})
       assert redirected_to(conn, 302) == "/"
@@ -62,7 +66,9 @@ defmodule DranWeb.SessionControllerTest do
     end
   end
 
-  describe "cookie-based context restoration" do
+      describe "cookie-based context restoration" do
+    # W1: removed behavior (workspace switching / cookie restoration).
+    @tag :skip
     test "fetch_workspace_cookie restores context from signed cookie when session has none", %{
       conn: conn
     } do
@@ -93,6 +99,7 @@ defmodule DranWeb.SessionControllerTest do
       assert Plug.Conn.get_session(fresh_conn, :workspace_slug) == "work"
     end
 
+    @tag :skip
     test "fetch_workspace_cookie does nothing when session already has context", %{conn: conn} do
       # Session already has "personal" — cookie should be ignored.
       # Even if a signed cookie for "work" is present, the session takes precedence.
@@ -113,6 +120,7 @@ defmodule DranWeb.SessionControllerTest do
       assert Plug.Conn.get_session(conn, :workspace_slug) == "personal"
     end
 
+    @tag :skip
     test "fetch_workspace_cookie does nothing when no cookie present", %{conn: conn} do
       conn =
         conn
@@ -122,6 +130,7 @@ defmodule DranWeb.SessionControllerTest do
       assert Plug.Conn.get_session(conn, :workspace_slug) == "personal"
     end
 
+    @tag :skip
     test "the :browser pipeline restores it (regression: the plug was wired to a name that no longer exists)",
          %{conn: conn} do
       secret_key_base = DranWeb.Endpoint.config(:secret_key_base)
@@ -153,7 +162,9 @@ defmodule DranWeb.SessionControllerTest do
     end
   end
 
-  describe "page counts in context selector" do
+      describe "page counts in context selector" do
+    # W1: removed behavior (workspace switching / cookie restoration).
+    @tag :skip
     test "page_counts_by_workspace returns map of workspace_id => count", %{
       personal: personal
     } do
@@ -178,12 +189,15 @@ defmodule DranWeb.SessionControllerTest do
     end
   end
 
-  describe "sidebar workspace selector" do
+      describe "sidebar workspace selector" do
+    # W1: removed behavior (workspace switching / cookie restoration).
+    @tag :skip
     # Regression: the selector form posted the field as "context_slug" — a
     # leftover from the contexts→workspaces rename — while
     # SessionController.switch_workspace/2 reads "workspace_slug". Every switch
     # therefore fell through to the catch-all ("Context slug is required") and
     # the active workspace never changed. The two names must stay in sync.
+    @tag :skip
     test "posts the field name the switch controller reads" do
       html =
         render_component(&DranWeb.Layouts.workspace_selector/1, %{
@@ -200,6 +214,7 @@ defmodule DranWeb.SessionControllerTest do
       refute html =~ ~s(name="context_slug")
     end
 
+    @tag :skip
     test "desambiguates two workspaces that share a name" do
       html =
         render_component(&DranWeb.Layouts.workspace_selector/1, %{
@@ -264,7 +279,12 @@ defmodule DranWeb.SessionControllerTest do
 
       # The onboarding default landing: the account's own personal workspace.
       assert owner.default_workspace_slug == personal.slug
-      assert get_session(conn, "workspace_slug") == personal.slug
+
+      # W1 (single-workspace): login always lands the session on the
+      # instance-wide default workspace — there is nothing to switch to.
+      # (Not a hard-coded slug: with :no_default_workspace the sandbox may
+      # carry leftover flagged defaults from earlier tests.)
+      assert get_session(conn, "workspace_slug") == Dran.Auth.default_workspace_slug()
     end
 
     @tag :no_default_workspace

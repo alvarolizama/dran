@@ -45,7 +45,7 @@ defmodule DranWeb.ClusterLiveTest do
 
   describe "index" do
     test "lists cluster summaries", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/clusters")
+      {:ok, _view, html} = live(conn, ~p"/clusters")
 
       assert html =~ "Cluster"
       assert html =~ "Cluster of 2 pages"
@@ -57,7 +57,7 @@ defmodule DranWeb.ClusterLiveTest do
     # explicitly given; missing :workspace_slug crashed the render with
     # KeyError on /clusters/:id (2026-09).
     test "renders summary, top pages and member pages", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/clusters/7")
+      {:ok, _view, html} = live(conn, ~p"/clusters/7")
 
       assert html =~ "Cluster of 2 pages"
       assert html =~ "Page One"
@@ -65,7 +65,7 @@ defmodule DranWeb.ClusterLiveTest do
     end
 
     test "renders not-found state for unknown cluster", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/clusters/999")
+      {:ok, _view, html} = live(conn, ~p"/clusters/999")
 
       assert html =~ Gettext.gettext(DranWeb.Gettext, "Cluster not found")
     end
@@ -74,7 +74,7 @@ defmodule DranWeb.ClusterLiveTest do
       conn: conn,
       ws: ws
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/clusters")
+      {:ok, view, _html} = live(conn, ~p"/clusters")
 
       assert has_element?(view, ~S|div[phx-value-id="7"]|)
 
@@ -90,11 +90,11 @@ defmodule DranWeb.ClusterLiveTest do
       ws: ws,
       page: page
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/clusters/7")
+      {:ok, view, _html} = live(conn, ~p"/clusters/7")
 
       render_click(view, "show_page", %{"slug" => page.slug, "type" => page.page_type})
 
-      assert_redirect(view, "/#{ws.slug}/notes/page-one")
+      assert_redirect(view, "/notes/page-one")
     end
   end
 end

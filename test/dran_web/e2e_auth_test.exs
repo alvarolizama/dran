@@ -387,6 +387,9 @@ defmodule DranWeb.E2EAuthTest do
       refute html =~ "toggle_workspace_user"
     end
 
+    # W1 single-workspace: no ctx-per-user scoping left. The admin sees the
+    # instance links from any workspace page; /admin/workspaces still lists
+    # the (single) workspace row for the owner.
     test "admin session sees the sidebars links and all workspaces", %{
       conn: conn,
       admin: admin,
@@ -397,20 +400,16 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: admin.email, workspace_slug: ctx1.slug, is_owner: true})
 
-      # Workspace-scoped page: admin sees the workspace Config link in the
-      # sidebar nav. Instance links (/admin, /settings/account) now live in
-      # the instance sidebar (nav={:instance}), not in the workspace sidebar.
-      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
-      assert html =~ ~p"/#{ctx1.slug}/settings"
-      assert html =~ ~p"/#{ctx1.slug}/activity"
-      assert html =~ ctx1.slug
+      # Workspace page: the admin sees the instance settings link.
+      {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
+      assert html =~ ~p"/settings/instance"
+      assert html =~ ~p"/activity"
 
-      # The instance sidebar carries the instance-level links for admins
+      # The workspace home carries the account links.
       {:ok, _view, dash_html} = Phoenix.LiveViewTest.live(conn, ~p"/")
-      assert dash_html =~ ~p"/admin"
       assert dash_html =~ ~p"/settings/account"
 
-      # /admin/workspaces lists ALL workspaces for the instance owner
+      # /admin/workspaces lists every (folded) workspace row for the owner
       {:ok, _view, ws_html} = Phoenix.LiveViewTest.live(conn, ~p"/admin/workspaces")
       assert ws_html =~ ctx1.slug
       assert ws_html =~ ctx2.slug
@@ -426,13 +425,10 @@ defmodule DranWeb.E2EAuthTest do
         conn
         |> init_test_session(%{user: user.email, workspace_slug: ctx1.slug})
 
-      # Viewer CAN access ctx1 — they are a member AND ctx1 is public.
-      assert {:ok, _view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/#{ctx1.slug}/notes")
-
-      # Viewer should be redirected when accessing ctx2 (private workspace
-      # they are NOT a member of).
-      assert {:error, {:redirect, %{to: "/"}}} =
-               Phoenix.LiveViewTest.live(conn, ~p"/#{ctx2.slug}/notes")
+      # W1 single-workspace: any logged-in user reaches the flat routes —
+      # per-workspace gating died with the multi-workspace model (per-item
+      # visibility lands in W2/W3).
+      assert {:ok, _view, _html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
     end
   end
 end

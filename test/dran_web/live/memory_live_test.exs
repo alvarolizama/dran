@@ -60,7 +60,7 @@ defmodule DranWeb.MemoryLiveTest do
   end
 
   test "renders memories with attribution (who, when, what)", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/personal/memory")
+    {:ok, _view, html} = live(conn, ~p"/memory")
 
     assert html =~ t("Memory")
     assert html =~ "El proyecto Dran usa Postgres con pgvector"
@@ -71,15 +71,15 @@ defmodule DranWeb.MemoryLiveTest do
   end
 
   test "sidebar shows the memory nav item with the badge count", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/personal/memory")
+    {:ok, _view, html} = live(conn, ~p"/memory")
 
-    assert html =~ ~s(href="/personal/memory")
+    assert html =~ ~s(href="/memory")
     # active nav highlight on the memory item
     assert html =~ ~s(aria-current="page")
   end
 
   test "search filters memories via the hybrid search", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     html =
       view
@@ -100,7 +100,7 @@ defmodule DranWeb.MemoryLiveTest do
 
     {:ok, _} = Memory.delete_memory(m3)
 
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     # Active by default — the superseded fact is hidden
     refute render(view) =~ "Fact obsoleto"
@@ -115,7 +115,7 @@ defmodule DranWeb.MemoryLiveTest do
   end
 
   test "feedback updates the trust score in place", %{conn: conn, context: context} do
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     [entry | _] = Memory.list_memories(context.id, status: "active", limit: 1)
 
@@ -131,7 +131,7 @@ defmodule DranWeb.MemoryLiveTest do
     conn: conn,
     context: context
   } do
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     [entry | _] = Memory.list_memories(context.id, status: "active", limit: 1)
 
@@ -146,7 +146,7 @@ defmodule DranWeb.MemoryLiveTest do
     [entry | _] = Memory.list_memories(context.id, status: "active", limit: 1)
     {:ok, _} = Memory.delete_memory(entry)
 
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     view
     |> element("#memory-filter-superseded")
@@ -161,7 +161,7 @@ defmodule DranWeb.MemoryLiveTest do
     entries = Memory.list_memories(context.id, status: "active", limit: 2)
     Enum.each(entries, &({:ok, _} = Memory.delete_memory(&1)))
 
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     view
     |> element("#memory-filter-superseded")
@@ -178,7 +178,7 @@ defmodule DranWeb.MemoryLiveTest do
   end
 
   test "feedback rejects ids from another workspace (forged phx event)", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     # A memory in a DIFFERENT workspace (not visible in this view's socket)
     {:ok, other} = Knowledge.create_workspace(%{name: "Otro WS", slug: "otro-ws-feedback"})
@@ -200,7 +200,7 @@ defmodule DranWeb.MemoryLiveTest do
   end
 
   test "updates live when an agent stores a new fact (handle_info)", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/personal/memory")
+    {:ok, view, _html} = live(conn, ~p"/memory")
 
     context = Knowledge.get_workspace_by_slug("personal")
 
@@ -231,7 +231,7 @@ defmodule DranWeb.MemoryLiveTest do
         })
     end
 
-    {:ok, view, html} = live(conn, ~p"/personal/memory")
+    {:ok, view, html} = live(conn, ~p"/memory")
 
     assert html =~ ~s(id="memory-load-more")
 
@@ -277,7 +277,7 @@ defmodule DranWeb.MemoryLiveTest do
   end
 
   test "global search surfaces memory facts", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/personal/search?q=pgvector")
+    {:ok, _view, html} = live(conn, ~p"/search?q=pgvector")
 
     # Memory section present with the matching fact and its attribution
     assert html =~ ~s(data-testid="memory-results")
@@ -286,7 +286,7 @@ defmodule DranWeb.MemoryLiveTest do
   end
 
   test "set_mode keeps the current mode for unknown client-sent modes", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/personal/search?q=pgvector")
+    {:ok, view, _html} = live(conn, ~p"/search?q=pgvector")
 
     active_btn = "button[phx-value-mode='semantic']"
 

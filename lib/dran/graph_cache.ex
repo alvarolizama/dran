@@ -55,7 +55,13 @@ defmodule Dran.GraphCache do
         %{json: json, cached: true}
 
       [] ->
-        GenServer.call(__MODULE__, {:build_graph, workspace_id, scope})
+        # Built in the CALLER's process (not the GenServer): the DB reads must
+        # run under the caller's transaction — a global cache process cannot
+        # see sandboxed data (tests) and would poison the cache with an empty
+        # build. The GenServer stays as the ETS owner/serializer only.
+        json = build_graph_json(workspace_id, scope)
+        :ets.insert(@graph_table, {key, json})
+        %{json: json, cached: false}
     end
   end
 
@@ -69,8 +75,23 @@ defmodule Dran.GraphCache do
     case :ets.lookup(@page_table, key) do
       [{^key, :not_found}] -> nil
       [{^key, page}] -> page
-      [] -> GenServer.call(__MODULE__, {:fetch_page, slug, workspace_id})
+      # Caller's process — same sandbox rationale as get/2.
+      [] ->
+        page = Knowledge.get_page_by_slug(slug, workspace_id)
+        :ets.insert(@page_table, {key, page || :not_found})
+        page
     end
+  end
+
+  @doc """
+  Clears every cached graph and page entry (tests: the ETS tables are global
+  and survive sandbox rollbacks, so a build from a rolled-back transaction
+  would poison later reads).
+  """
+  def clear do
+    :ets.delete_all_objects(@graph_table)
+    :ets.delete_all_objects(@page_table)
+    :ok
   end
 
   @doc """

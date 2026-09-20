@@ -52,7 +52,7 @@ defmodule DranWeb.ReportLiveTest do
 
   describe "show" do
     test "renders the report detail at /reports/:slug", %{conn: conn, report: report} do
-      {:ok, _view, html} = live(conn, ~p"/personal/reports/#{report.slug}")
+      {:ok, _view, html} = live(conn, ~p"/reports/#{report.slug}")
 
       # Title, rendered body and the localized type badge
       assert html =~ report.title
@@ -61,8 +61,8 @@ defmodule DranWeb.ReportLiveTest do
     end
 
     test "redirects to /activity when the report does not exist", %{conn: conn} do
-      result = live(conn, ~p"/personal/reports/no-such-report")
-      assert {:error, {:live_redirect, %{to: "/personal/activity"}}} = result
+      result = live(conn, ~p"/reports/no-such-report")
+      assert {:error, {:live_redirect, %{to: "/activity"}}} = result
     end
   end
 end

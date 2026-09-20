@@ -1,6 +1,9 @@
 defmodule DranWeb.DashboardAuthFlowTest do
   use DranWeb.ConnCase, async: false
 
+  # W1: the dashboard/workspace-launcher died with the multi-workspace model; / is the workspace home.
+  @moduletag :skip
+
   alias Dran.Accounts
 
   # Gettext wrapper. English is the app default locale, so `t/1` returns

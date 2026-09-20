@@ -160,7 +160,7 @@ defmodule DranWeb.ClusterLive do
             </span>
           </p>
         </div>
-        <.link navigate={~p"/#{@workspace_slug}/clusters"} class="btn btn-ghost btn-sm">
+        <.link navigate={~p"/clusters"} class="btn btn-ghost btn-sm">
           <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
         </.link>
       </div>
@@ -216,7 +216,7 @@ defmodule DranWeb.ClusterLive do
     <div :if={!@summary} class="text-center py-16">
       <.icon name="hero-squares-2x2" class="size-12 text-base-content/30 mx-auto mb-4" />
       <h2 class="text-title">{gettext("Cluster not found")}</h2>
-      <.link navigate={~p"/#{@workspace_slug}/clusters"} class="btn btn-ghost btn-sm mt-4">
+      <.link navigate={~p"/clusters"} class="btn btn-ghost btn-sm mt-4">
         <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
       </.link>
     </div>
@@ -286,24 +286,22 @@ defmodule DranWeb.ClusterLive do
 
   @impl true
   def handle_event("show_cluster", %{"id" => id}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/clusters/#{id}")}
+    {:noreply, push_navigate(socket, to: ~p"/clusters/#{id}")}
   end
 
   def handle_event("show_page", %{"slug" => slug} = params, socket) do
     type = Map.get(params, "type")
-    ws_slug = socket.assigns[:workspace_slug]
     context = socket.assigns.context
 
-    # Page show routes are workspace-scoped (/:ws/:type_path/:slug) — the
-    # prefix is mandatory or the navigation lands on a 404-ish wildcard.
+    # W1 flat router: /:type_path/:slug — no workspace prefix.
     path =
       if type do
-        "/#{ws_slug}/#{PageTypes.path(type)}/#{slug}"
+        "/#{PageTypes.path(type)}/#{slug}"
       else
         # For top_pages we don't have the type — try searching
         case context && Knowledge.get_page_by_slug(slug, context.id) do
-          nil -> "/#{ws_slug}"
-          page -> PageTypes.page_show_path(page, ws_slug)
+          nil -> "/"
+          page -> PageTypes.page_show_path(page)
         end
       end
 

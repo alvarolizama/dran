@@ -1,23 +1,22 @@
 defmodule DranWeb.HomeGraphController do
   @moduledoc """
-  Workspace-scoped JSON endpoint for the 3D graph.
+  Instance graph JSON endpoint for the 3D graph (single-workspace model, W1).
 
-  Accessible to all logged-in users with access to the workspace. The payload
-  is cached in `Dran.GraphCache` (ETS-backed GenServer): the first request
-  builds the graph, subsequent requests serve the cached JSON.
+  Accessible to all logged-in users. The payload is cached in `Dran.GraphCache`
+  (ETS-backed GenServer): the first request builds the graph, subsequent
+  requests serve the cached JSON.
   """
 
   use DranWeb, :controller
 
-  alias Dran.Knowledge
   alias Dran.GraphCache
 
-  def show(conn, %{"workspace_slug" => workspace_slug}) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
-      %{} = context ->
+  def show(conn, _params) do
+    case Dran.Auth.instance_workspace() do
+      %{id: workspace_id} = context ->
         # El grafo se cachea POR SCOPE: el lector pide su propia vista.
         scope = Dran.ContentVisibility.resolve(context, conn.assigns[:user], :pages)
-        cached = GraphCache.get(context.id, scope)
+        cached = GraphCache.get(workspace_id, scope)
 
         conn
         |> put_resp_content_type("application/json")

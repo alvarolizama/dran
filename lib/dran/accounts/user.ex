@@ -29,6 +29,13 @@ defmodule Dran.Accounts.User do
     # this from /admin/users — can create workspaces.
     field :can_create_workspaces, :boolean, default: false
 
+    # Instance-wide role (single-workspace model, W1 of the instance-visibility
+    # contract): "owner" | "admin" | "editor" | "viewer". Backfilled from the
+    # max SHARED-workspace role each user held (personal silos do not count).
+    # The `is_owner` flag remains the source of truth for full admin — a user
+    # with instance_role "owner" but is_owner false is NOT an instance admin.
+    field :instance_role, :string, default: "editor"
+
     # UI language: "en" (default) or "es". Read by DranWeb.Plugs.Locale and
     # DranWeb.Plugs.Auth.assign_to_socket/3 to pin Gettext per request.
     field :locale, :string, default: "en"
@@ -188,6 +195,39 @@ defmodule Dran.Accounts.User do
 
   @doc "Idiomas ofrecidos en la UI (inglés por defecto)."
   def locales, do: @locales
+
+  @valid_instance_roles ~w(owner admin editor viewer)
+  @admin_roles ~w(owner admin)
+
+  @doc "Valid instance-wide roles."
+  def instance_roles, do: @valid_instance_roles
+
+  @doc """
+  Changeset for the instance-wide role (/admin/users): only the four valid
+  roles are accepted.
+  """
+  def instance_role_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:instance_role])
+    |> validate_inclusion(:instance_role, @valid_instance_roles)
+  end
+
+  @doc """
+  True when `user` may administer the instance (users, groups, settings):
+  the `is_owner` flag or an admin/owner `instance_role`.
+  """
+  def instance_admin?(%__MODULE__{is_owner: true}), do: true
+  def instance_admin?(%__MODULE__{instance_role: role}), do: role in @admin_roles
+  def instance_admin?(_), do: false
+
+  @doc """
+  True when `user` may WRITE content (pages, memories, relations): any role
+  except "viewer".
+  """
+  def instance_writer?(%__MODULE__{is_owner: true}), do: true
+  def instance_writer?(%__MODULE__{instance_role: "viewer"}), do: false
+  def instance_writer?(%__MODULE__{}), do: true
+  def instance_writer?(_), do: false
 
   defp put_password_hash(%Ecto.Changeset{valid?: true, changes: %{password: pass}} = changeset) do
     put_change(changeset, :password_hash, Bcrypt.hash_pwd_salt(pass))

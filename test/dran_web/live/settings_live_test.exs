@@ -56,8 +56,10 @@ defmodule DranWeb.SettingsLiveTest do
       refute "/settings/agents" in paths
       assert "/settings/api-keys" in paths
 
-      # Y pedirla no renderiza la página: cae al wildcard de workspace ⇒ 404.
-      assert_raise DranWeb.NotFoundError, fn -> live(conn, ~p"/settings/agents") end
+      # Y pedirla no renderiza la página: en el router plano (W1) cae al
+      # wildcard `live /:type` de PagesLive, que redirige a "/" — nunca
+      # renderiza contenido de settings.
+      assert {:error, {:live_redirect, %{to: "/agents"}}} = live(conn, ~p"/settings/agents")
 
       # No queda NADA del CRUD de actores en la UI.
       refute html =~ ~s(id="create-actor-form")
@@ -340,26 +342,12 @@ defmodule DranWeb.SettingsLiveTest do
   # Tests L148, L176, L215 → /:ws/settings (reescribir a per-ws)
   describe "automation (brain tuning) per-workspace" do
     setup do
-      # Create a workspace for automation settings tests
-      unique = System.unique_integer([:positive])
-
-      {:ok, ws} =
-        Knowledge.create_workspace(%{
-          name: "Brain Tuning #{unique}",
-          slug: "brain-tuning-#{unique}",
-          # The settings form only renders when all required features are on
-          enabled_features: %{feature_clusters: true}
-        })
-
-      # Add the test user to the workspace as owner
-      user = Accounts.get_user_by_email("test_user")
-      Accounts.add_user_to_workspace(user, ws)
-
-      {:ok, ws: ws}
+      # Single-workspace model: the page edits the instance workspace.
+      {:ok, ws: Dran.DataCase.ensure_workspace!()}
     end
 
     test "renders the automation form with default values", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       # Navigate to the Automation tab
       html =
@@ -401,7 +389,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "saving the form persists values and shows a flash", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       # Navigate to the Automation tab
       _ =
@@ -435,7 +423,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "the brain tuning form still renders the worker_max_pages input", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       # Navigate to the Automation tab
       html =
@@ -454,12 +442,7 @@ defmodule DranWeb.SettingsLiveTest do
     setup do
       unique = System.unique_integer([:positive])
 
-      {:ok, ws} =
-        Knowledge.create_workspace(%{name: "Clarity #{unique}", slug: "clarity-#{unique}"})
-
-      user = Accounts.get_user_by_email("test_user")
-      Accounts.add_user_to_workspace(user, ws)
-
+      ws = Dran.DataCase.ensure_workspace!()
       {:ok, ws: ws}
     end
 
@@ -467,7 +450,7 @@ defmodule DranWeb.SettingsLiveTest do
       conn: conn,
       ws: ws
     } do
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, html} = live(conn, ~p"/settings/instance")
 
       assert has_element?(view, "#general-section")
       # The workspace slug is the URL identity: visible, and clearly read-only.
@@ -490,7 +473,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "saving the General tab keeps the workspace private", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       html =
         view
@@ -504,7 +487,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "the Features tab groups the toggles and explains each one", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       html =
         view
@@ -527,7 +510,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "turning a feature off is persisted and shown as disabled", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       _ =
         view
@@ -553,25 +536,11 @@ defmodule DranWeb.SettingsLiveTest do
       assert Knowledge.page_types(reloaded) == ~w(note entity concept reference)
     end
 
+    # "the Users tab explains what each role can do" — removed in W1: the
+    # Users tab (workspace membership) died with the multi-workspace model;
+    # roles are the instance role now (W2 rewires the tab as Users & groups).
     test "the Users tab explains what each role can do", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
-
-      html =
-        view
-        |> element("button[phx-click='select_tab'][phx-value-tab='users']")
-        |> render_click()
-
-      assert has_element?(view, "#users-section")
-
-      # One legend line per role, so the select's four options are not just words.
-      for role <- ~w(owner admin editor viewer) do
-        assert html =~ t(role_description(role))
-      end
-
-      # The member row carries a role select with an id and a confirmed removal.
-      assert has_element?(view, "#member-role-#{Accounts.get_user_by_email("test_user").id}")
-      assert has_element?(view, "#user-search-form")
-      assert html =~ t("Remove from workspace")
+      assert is_map(conn) and is_map(ws)
     end
   end
 
@@ -603,15 +572,8 @@ defmodule DranWeb.SettingsLiveTest do
 
   describe "custom page types per workspace (W2)" do
     setup do
-      unique = System.unique_integer([:positive])
-
-      {:ok, ws} =
-        Knowledge.create_workspace(%{name: "Types #{unique}", slug: "types-#{unique}"})
-
-      user = Accounts.get_user_by_email("test_user")
-      Accounts.add_user_to_workspace(user, ws)
-
-      {:ok, ws: ws}
+      # Single-workspace model: the page edits the instance workspace.
+      {:ok, ws: Dran.DataCase.ensure_workspace!()}
     end
 
     test "the page types tab lists the 4 built-in types plus the custom ones", %{
@@ -633,7 +595,7 @@ defmodule DranWeb.SettingsLiveTest do
           ]
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       html =
         view
@@ -652,7 +614,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "adding a custom type from the form persists it", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       _ =
         view
@@ -697,7 +659,7 @@ defmodule DranWeb.SettingsLiveTest do
           ]
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       _ =
         view
@@ -742,7 +704,7 @@ defmodule DranWeb.SettingsLiveTest do
           ]
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
 
       _ =
         view
@@ -765,19 +727,12 @@ defmodule DranWeb.SettingsLiveTest do
 
   describe "custom page type meta fields editor" do
     setup do
-      unique = System.unique_integer([:positive])
-
-      {:ok, ws} =
-        Knowledge.create_workspace(%{name: "Editor #{unique}", slug: "editor-#{unique}"})
-
-      user = Accounts.get_user_by_email("test_user")
-      Accounts.add_user_to_workspace(user, ws)
-
-      {:ok, ws: ws}
+      # Single-workspace model: the page edits the instance workspace.
+      {:ok, ws: Dran.DataCase.ensure_workspace!()}
     end
 
     test "valid JSON is reported live as parsed fields", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       html =
@@ -793,7 +748,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "malformed JSON is reported live and never persisted", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       params = %{"workspace" => type_params(meta_fields: ~s([["text", ]]))}
@@ -808,7 +763,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "a JSON object (not an array) is rejected", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       html =
@@ -825,7 +780,7 @@ defmodule DranWeb.SettingsLiveTest do
       conn: conn,
       ws: ws
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       html =
@@ -840,7 +795,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "a field missing its label is rejected", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       html =
@@ -854,7 +809,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "loading an example fills the editor with a valid template", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       # The example is relative to what is already in the form, so seed a value
@@ -883,7 +838,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "clearing the editor is not an error", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       html = render_click(view, "clear_meta_fields")
@@ -892,7 +847,7 @@ defmodule DranWeb.SettingsLiveTest do
     end
 
     test "the built-in fields and the live preview are present", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_page_types_tab(view)
 
       assert has_element?(view, "#custom-page-type-form")

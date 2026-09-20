@@ -17,13 +17,6 @@ defmodule DranWeb.Router do
     plug :put_root_layout, html: {DranWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    # Restores the active workspace from the signed `dran_last_workspace`
-    # cookie when the session has none. The name here MUST match the clause
-    # implemented in DranWeb.Plugs.Auth.call/2: it used to say
-    # `:fetch_context_cookie` — a leftover from the contexts→workspaces rename —
-    # which fell through to the catch-all `call(conn, _opts) -> conn` and made
-    # this plug a silent no-op.
-    plug DranWeb.Plugs.Auth, :fetch_workspace_cookie
     # Pin the request language for Gettext (user preference → Accept-Language →
     # English). LiveViews re-pin it in their own process, see the plug docs.
     plug DranWeb.Plugs.Locale
@@ -50,22 +43,6 @@ defmodule DranWeb.Router do
 
   pipeline :admin do
     plug :require_instance_owner
-  end
-
-  pipeline :admin_or_editor do
-    plug :require_workspace_role
-  end
-
-  # Per-workspace access (by URL slug) — members ∪ public ∪ owner.
-  pipeline :workspace_access do
-    plug :require_workspace_access
-  end
-
-  # Per-workspace admin (for /:workspace_slug/settings) — owner/admin of the
-  # workspace ∪ instance owner.
-  pipeline :workspace_admin do
-    plug :require_workspace_access
-    plug :require_workspace_admin
   end
 
   # ── Browser auth plug ──
@@ -108,150 +85,6 @@ defmodule DranWeb.Router do
 
       true ->
         conn
-    end
-  end
-
-  # ── Workspace role auth plug ──
-  # Grants access if the user is the instance owner OR has at least one
-  # workspace membership with a role in ["owner", "admin", "editor"].
-  defp require_workspace_role(conn, _opts) do
-    cond do
-      is_nil(Plug.Conn.get_session(conn, "user")) ->
-        conn
-        |> Phoenix.Controller.redirect(to: ~p"/login")
-        |> Plug.Conn.halt()
-
-      Plug.Conn.get_session(conn, "is_owner") == true ->
-        conn
-
-      true ->
-        user_email = Plug.Conn.get_session(conn, "user")
-        user = user_email && Dran.Accounts.get_user_by_email(user_email)
-
-        has_role? =
-          case user do
-            # No DB row: pre-multi-user session, treat as owner (matches the
-            # legacy require_admin behavior of nil -> admin).
-            nil ->
-              true
-
-            # Instance owner has full access to every workspace.
-            %{is_owner: true} ->
-              true
-
-            user ->
-              Dran.Accounts.list_user_workspaces(user)
-              |> Enum.any?(fn ws -> Map.get(ws, :role) in ~w(owner admin editor) end)
-          end
-
-        if has_role? do
-          conn
-        else
-          conn
-          |> Phoenix.Controller.put_flash(:error, "Insufficient permissions")
-          |> Phoenix.Controller.redirect(to: ~p"/")
-          |> Plug.Conn.halt()
-        end
-    end
-  end
-
-  # ── Workspace access plug (per-slug) ──
-  # Validates that the user can access the workspace in the URL slug
-  # (conn.params["workspace_slug"]). Grants if: instance owner, OR the
-  # workspace is public, OR the user is a member. This closes the gap where
-  # require_workspace_role only checked GLOBAL role (any workspace) and left
-  # private workspaces reachable by URL.
-  defp require_workspace_access(conn, _opts) do
-    cond do
-      is_nil(Plug.Conn.get_session(conn, "user")) ->
-        conn
-        |> Phoenix.Controller.redirect(to: ~p"/login")
-        |> Plug.Conn.halt()
-
-      Plug.Conn.get_session(conn, "is_owner") == true ->
-        conn
-
-      true ->
-        slug = conn.params["workspace_slug"]
-        user_email = Plug.Conn.get_session(conn, "user")
-        user = user_email && Dran.Accounts.get_user_by_email(user_email)
-
-        accessible? =
-          case {user, slug} do
-            {_, nil} ->
-              false
-
-            {nil, _} ->
-              false
-
-            # Instance owner always passes (already handled above, defense-in-depth).
-            {%{is_owner: true}, _} ->
-              true
-
-            {logged_in, slug} when is_binary(slug) ->
-              Dran.Accounts.accessible_workspaces(logged_in)
-              |> Enum.any?(fn ws -> ws.slug == slug end)
-          end
-
-        if accessible? do
-          conn
-        else
-          conn
-          |> Phoenix.Controller.put_flash(:error, "You don't have access to this workspace")
-          |> Phoenix.Controller.redirect(to: ~p"/")
-          |> Plug.Conn.halt()
-        end
-    end
-  end
-
-  # ── Workspace admin plug (for /:workspace_slug/settings) ──
-  # Grants if the user is the instance owner OR has a role in ["owner", "admin"]
-  # in the workspace of the URL slug. Editors/viewers are excluded from
-  # workspace configuration.
-  defp require_workspace_admin(conn, _opts) do
-    cond do
-      is_nil(Plug.Conn.get_session(conn, "user")) ->
-        conn
-        |> Phoenix.Controller.redirect(to: ~p"/login")
-        |> Plug.Conn.halt()
-
-      Plug.Conn.get_session(conn, "is_owner") == true ->
-        conn
-
-      true ->
-        slug = conn.params["workspace_slug"]
-        user_email = Plug.Conn.get_session(conn, "user")
-        user = user_email && Dran.Accounts.get_user_by_email(user_email)
-
-        admin? =
-          case {user, slug} do
-            {_, nil} ->
-              false
-
-            {nil, _} ->
-              false
-
-            {%{is_owner: true}, _} ->
-              true
-
-            {logged_in, slug} when is_binary(slug) ->
-              case Dran.Knowledge.get_workspace_by_slug(slug) do
-                nil ->
-                  false
-
-                ws ->
-                  Dran.Accounts.user_role_in_workspace(logged_in, ws) in ~w(owner admin)
-              end
-          end
-
-        if admin? do
-          conn
-        else
-          conn
-          |> Phoenix.Controller.put_flash(:error, "Insufficient permissions")
-          |> Phoenix.Controller.redirect(to: ~p"/")
-          |> Plug.Conn.halt()
-        end
     end
   end
 
@@ -453,33 +286,24 @@ defmodule DranWeb.Router do
     get "/health", HealthController, :show
   end
 
-  # ── Global routes (instance-level, no workspace) ──────────────────────────
-  #
-  # The dashboard is the instance overview (workspaces + metrics) and is
-  # reachable by every authenticated user: owners/admins manage all
-  # workspaces, regular users see their own workspaces and can enter them.
-
-  scope "/", DranWeb do
-    pipe_through [:browser, :auth]
-
-    # Dashboard — overview of the entire instance + all workspaces
-    live "/", DashboardLive, :index
-
-    # Workspace switching
-    post "/workspace", SessionController, :switch_workspace
-  end
+  # ── Global routes (instance-level, single workspace) ─────────────────────
+  # (No routes: the workspace home below serves "/". Kept as a placeholder
+  # for future instance-level routes.)
 
   # ── Settings: API keys (per-user, any logged-in user) ──────────────────────
   #
-  # API keys are personal: every user manages their own keys, scoped to the
-  # workspaces they belong to. Defined BEFORE the admin scope so the static
-  # segment wins over the admin-only `/:tab` wildcard below.
+  # API keys are personal: every user manages their own keys. Defined BEFORE
+  # the admin scope so the static segment wins over the admin-only wildcard.
 
   scope "/settings", DranWeb do
     pipe_through [:browser, :auth]
 
     live "/account", SettingsLive, :account
     live "/api-keys", SettingsLive, :api_keys
+
+    # Instance settings (page types, features, tuning) — instance admins
+    # (owner ∪ instance_role admin/owner), the old workspace_admin guard.
+    live "/instance", WorkspaceSettingsLive, :index
   end
 
   # ── Admin (instance-level, owner-only) ────────────────────────────────────
@@ -612,60 +436,57 @@ defmodule DranWeb.Router do
     end
   end
 
-  # ── Workspace admin routes ──────────────────────────────────────────────
-  # Settings is admin-only (owner/admin of the workspace ∪ instance owner).
-  # Separate scope from workspace_access so editors/viewers can't open it.
-  scope "/", DranWeb do
-    pipe_through [:browser, :auth, :workspace_admin]
-
-    live "/:workspace_slug/settings", WorkspaceSettingsLive, :index
-  end
-
-  # ── Workspace-scoped routes ──────────────────────────────────────────────
+  # ── Instance routes (single-workspace model, W1) ─────────────────────────
   #
-  # Everything below /:workspace_slug is workspace-scoped. This scope MUST
-  # stay last: /:workspace_slug is a wildcard and would swallow any static
-  # route defined after it. Reserved segments (settings, api, dev, login,
-  # session, auth, health, docs, admin) are unreachable as workspace slugs
-  # because they are defined above.
-  #
-  # The :workspace_access pipeline validates access to the workspace in the
-  # URL slug (member ∪ public ∪ owner), closing the gap where the old
-  # :admin_or_editor only checked a GLOBAL role.
+  # The instance IS the workspace: no /:workspace_slug prefix, no per-slug
+  # access plugs. Old URLs redirect 301 to their flat equivalent (D2) so
+  # bookmarks, browser history and plugin-built links survive.
   scope "/", DranWeb do
-    pipe_through [:browser, :auth, :workspace_access]
+    pipe_through [:browser, :auth]
 
     # Workspace home
-    live "/:workspace_slug", HomeLive, :workspace_home
+    live "/", HomeLive, :workspace_home
 
     # First-class entities (their own schemas, not page types) — MUST be
-    # defined BEFORE the generic /:workspace_slug/:type route, otherwise
-    # /:workspace_slug/:type would swallow them.
-    live "/:workspace_slug/collections", SmartCollectionLive, :index
-    live "/:workspace_slug/collections/new", SmartCollectionLive, :new
-    live "/:workspace_slug/collections/:slug", SmartCollectionLive, :show
+    # defined BEFORE the generic /:type route, otherwise /:type would
+    # swallow them.
+    live "/collections", SmartCollectionLive, :index
+    live "/collections/new", SmartCollectionLive, :new
+    live "/collections/:slug", SmartCollectionLive, :show
 
-    live "/:workspace_slug/clusters", ClusterLive, :index
-    live "/:workspace_slug/clusters/:id", ClusterLive, :show
+    live "/clusters", ClusterLive, :index
+    live "/clusters/:id", ClusterLive, :show
 
-    live "/:workspace_slug/reports/:slug", ReportLive, :show
+    live "/reports/:slug", ReportLive, :show
 
     # Views — also before the generic /:type route
-    live "/:workspace_slug/search", SearchLive, :index
-    live "/:workspace_slug/activity", ActivityLive, :index
-    live "/:workspace_slug/journey", JourneyLive, :index
-    live "/:workspace_slug/graph", HomeLive, :graph
-    get "/:workspace_slug/graph/json", HomeGraphController, :show
+    live "/search", SearchLive, :index
+    live "/activity", ActivityLive, :index
+    live "/journey", JourneyLive, :index
+    live "/graph", HomeLive, :graph
+    get "/graph/json", HomeGraphController, :show
 
     # Shared multi-agent memory (first-class, own table — not page types).
-    live "/:workspace_slug/memory", MemoryLive, :index
+    live "/memory", MemoryLive, :index
 
-    live "/:workspace_slug/collection/:slug", HomeLive, :collection
-    live "/:workspace_slug/letter/:letter", HomeLive, :letter
+    live "/collection/:slug", HomeLive, :collection
+    live "/letter/:letter", HomeLive, :letter
 
-    # Generic page type routes — PagesLive handles note/concept/entity/reference.
-    # MUST be defined LAST so first-class entity routes above win.
-    live "/:workspace_slug/:type", PagesLive, :index
-    live "/:workspace_slug/:type/:slug", PagesLive, :show
+    # Generic page type routes — PagesLive handles note/concept/entity/reference
+    # and the instance's custom types. MUST be defined LAST so first-class
+    # entity routes above win.
+    live "/:type", PagesLive, :index
+    live "/:type/:slug", PagesLive, :show
+  end
+
+  # ── Legacy /:workspace_slug URLs → 301 to the flat routes (D2) ───────────
+  # Single-segment and 2-segment GETs are shadowed by `live /:type(/:slug)`
+  # above — PagesLive performs that hop (unknown type → flat redirect). These
+  # routes only catch what the live routes cannot: 3+ segment paths.
+  scope "/", DranWeb do
+    pipe_through [:browser, :auth]
+
+    get "/:workspace_slug/graph/json", RedirectController, :graph_json
+    get "/:workspace_slug/*rest", RedirectController, :rest
   end
 end

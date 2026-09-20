@@ -182,21 +182,15 @@ defmodule DranWeb.Layouts do
                   <img src={~p"/logo.png"} class="size-6 shrink-0" alt="" />
                   <span class="shell-hide text-lg font-bold tracking-tight">Dran</span>
                 </a>
-                <.workspace_selector
-                  :if={not @instance_nav? and @workspace_slug}
-                  workspace_slug={@workspace_slug}
-                  workspaces={@workspaces}
-                  page_counts={@page_counts}
-                />
               </div>
             </div>
 
-            <div :if={not @instance_nav? and @workspace_slug} class="p-3 border-b border-base-300">
+            <div :if={@workspace_slug} class="p-3 border-b border-base-300">
               <%!-- The id is not decorative: without it LiveView cannot restore the
                field after a crash/reconnect and warns on every page load. --%>
               <form
                 id="sidebar-search-form"
-                action={~p"/#{@workspace_slug}/search"}
+                action={~p"/search"}
                 method="get"
                 class="relative"
               >
@@ -408,10 +402,15 @@ defmodule DranWeb.Layouts do
     end
   end
 
+  # "" is truthy in Elixir — the flat router's empty base must still land on
+  # "/" for the Home link.
+  defp home_path(""), do: "/"
+  defp home_path(base), do: base
+
   # Builds the workspace nav: the always-visible entries (Inicio, Grafo,
   # Journey, Memory) plus the labelled Knowledge base group, gated by feature
   # flags.
-  defp workspace_groups(ws, slug, counts) do
+  defp workspace_groups(ws, _slug, counts) do
     enabled? = fn feature ->
       case ws do
         nil -> true
@@ -419,7 +418,8 @@ defmodule DranWeb.Layouts do
       end
     end
 
-    base = "/#{slug}"
+    # Single-workspace model (W1): flat URLs — no /:workspace_slug prefix.
+    base = ""
 
     disabled = (ws && ws.disabled_page_types) || []
 
@@ -457,7 +457,7 @@ defmodule DranWeb.Layouts do
     # viven en el menú de usuario (#user-menu), no en el nav.
     view_items =
       [
-        %{key: "home", label: gettext("Home"), icon: "hero-home", path: base},
+        %{key: "home", label: gettext("Home"), icon: "hero-home", path: home_path(base)},
         enabled?.("graph") &&
           %{key: "graph", label: gettext("Graph"), icon: "hero-share", path: base <> "/graph"},
         enabled?.("journey") &&
@@ -617,60 +617,6 @@ defmodule DranWeb.Layouts do
   end
 
   @doc """
-  Context selector dropdown. Shown when multiple contexts are available.
-
-  Displays the page count next to each context name, e.g. "Personal (142)".
-  The `<select>` has `id="context-selector"` so the ⌘⇧C keyboard shortcut
-  in app.js can focus and open it.
-  """
-  attr :workspace_slug, :string, default: nil
-  attr :workspaces, :list, default: []
-  attr :page_counts, :map, default: %{}
-
-  def workspace_selector(assigns) do
-    # `workspaces.name` stopped being unique, so two workspaces can share a
-    # display name. When they do, the row shows the slug as well — otherwise the
-    # dropdown offers two identical entries and picking one is a coin toss.
-    assigns =
-      assign(assigns, :name_counts, Enum.frequencies_by(assigns.workspaces, & &1.name))
-
-    ~H"""
-    <div :if={length(@workspaces) > 0} class="shell-hide flex-1">
-      <%!-- The id is not decorative: LiveView needs it to restore the selection
-           after a crash/reconnect, and warns on every mount without it. --%>
-      <form id="workspace-selector-form" action={~p"/workspace"} method="post">
-        <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-        <%!-- The field name must match what SessionController.switch_workspace/2
-             reads ("workspace_slug"). It used to post "context_slug", a leftover
-             from the rename, so EVERY switch fell through to the catch-all and
-             flashed "Context slug is required" while the selection stayed put. --%>
-        <select
-          id="context-selector"
-          name="workspace_slug"
-          onchange="this.form.submit()"
-          class="select select-xs w-full"
-        >
-          <option :for={ctx <- @workspaces} value={ctx.slug} selected={ctx.slug == @workspace_slug}>
-            {selector_label(ctx, @name_counts, @page_counts)}
-          </option>
-        </select>
-      </form>
-    </div>
-    """
-  end
-
-  # "Personal (12)" — or "Personal · personal-3f9a2b (12)" when the name alone
-  # does not identify the workspace.
-  defp selector_label(workspace, name_counts, page_counts) do
-    base =
-      if Map.get(name_counts, workspace.name, 0) > 1,
-        do: "#{workspace.name} · #{workspace.slug}",
-        else: workspace.name
-
-    "#{base} (#{Map.get(page_counts, workspace.id, 0)})"
-  end
-
-  @doc """
   Shows the current user row at the bottom of the sidebar: avatar with the
   initial, name + email truncated, and a menu.
 
@@ -748,16 +694,16 @@ defmodule DranWeb.Layouts do
           <div :if={@workspace_slug} class="border-t border-base-300 my-1"></div>
           <.menu_item
             :if={@workspace_slug}
-            href={~p"/#{@workspace_slug}/activity"}
+            href={~p"/activity"}
             icon="hero-signal"
             label={gettext("Activity")}
             active={@active == "activity"}
           />
           <.menu_item
             :if={@workspace_slug && @can_config}
-            href={~p"/#{@workspace_slug}/settings"}
+            href={~p"/settings/instance"}
             icon="hero-cog-6-tooth"
-            label={gettext("Workspace settings")}
+            label={gettext("Instance settings")}
             active={@active == "workspace_settings"}
           />
 

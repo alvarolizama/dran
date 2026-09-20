@@ -6,18 +6,13 @@ defmodule DranWeb.Plugs.Auth do
   This module provides helpers for controllers and LiveViews to manage the
   session, context selection, and extracting auth data from LiveView sessions.
 
-  ## Context persistence
+  ## Single-workspace model (W1)
 
-  The active context is stored in two places:
-
-  1. **Session** (`:workspace_slug`) — the source of truth for the current tab.
-  2. **Signed cookie** (`dran_last_workspace`) — persists across browser restarts
-     and new tabs. When a LiveView mounts without a `workspace_slug` in the
-     session (e.g. a fresh login or a new tab that hasn't switched yet), the
-     cookie is read and the context is restored.
-
-  The cookie is signed via `Plug.Conn.put_resp_cookie/4` with `:signed` using
-  the endpoint's signing salt, and verified with `Plug.Conn.fetch_cookies/2`.
+  The instance IS one workspace: the active workspace is always the instance
+  workspace (`Dran.Knowledge.instance_workspace/0`), resolved from the URL
+  or the session slug only to keep old links landing somewhere sane. The
+  `dran_last_workspace` cookie and workspace switching died with the
+  multi-workspace router.
   """
 
   import Plug.Conn
@@ -33,9 +28,6 @@ defmodule DranWeb.Plugs.Auth do
   @owner_key :is_owner
   @workspace_key :workspace_slug
   @impersonator_key :impersonator
-  @workspace_cookie "dran_last_workspace"
-  # 30 days in seconds
-  @workspace_cookie_max_age 30 * 24 * 60 * 60
 
   # ── Plug callbacks (for use in router pipelines) ──
 
@@ -46,9 +38,7 @@ defmodule DranWeb.Plugs.Auth do
 
   @doc """
   Plug call — dispatches to the named function.
-  Used as `plug DranWeb.Plugs.Auth, :fetch_workspace_cookie`.
   """
-  def call(conn, :fetch_workspace_cookie), do: fetch_workspace_cookie(conn, [])
   def call(conn, _opts), do: conn
 
   # ── Session management (for controllers) ──
@@ -56,10 +46,8 @@ defmodule DranWeb.Plugs.Auth do
   @doc """
   Opens a session for `username`.
 
-  The workspace is resolved per-user when the caller does not pass one
-  explicitly (`Dran.Accounts.session_workspace_slug/1`), which keeps the
-  landing workspace consistent for every entry point: login form, Google
-  OAuth, first-run setup and impersonation.
+  Single-workspace model: the landing workspace is always the instance
+  workspace. The `workspace_slug` param stays for caller compatibility.
   """
   def login(conn, username, workspace_slug \\ nil) do
     # Cache `is_owner` in the session so router pipelines don't hit the DB on
@@ -74,7 +62,9 @@ defmodule DranWeb.Plugs.Auth do
         %{is_owner: owner?} -> owner?
       end
 
-    workspace_slug = workspace_slug || Dran.Accounts.session_workspace_slug(user)
+    # Single workspace: the landing workspace is always the instance
+    # workspace. The param stays for caller compatibility.
+    workspace_slug = workspace_slug || Dran.Auth.default_workspace_slug()
 
     conn
     # A fresh login must always drop any stale impersonation session (F6): the
@@ -83,7 +73,7 @@ defmodule DranWeb.Plugs.Auth do
     |> delete_session(@impersonator_key)
     |> put_session(@session_key, username)
     |> put_session(@owner_key, is_owner)
-    |> put_workspace(workspace_slug)
+    |> put_session(@workspace_key, workspace_slug)
   end
 
   def logout(conn) do
@@ -92,20 +82,6 @@ defmodule DranWeb.Plugs.Auth do
     |> delete_session(@owner_key)
     |> delete_session(@workspace_key)
     |> delete_session(@impersonator_key)
-    |> delete_resp_cookie(@workspace_cookie)
-  end
-
-  @doc """
-  Switches the active context in the session and persists it to a signed
-  cookie so it survives browser restarts and new tabs.
-  """
-  def put_workspace(conn, workspace_slug) do
-    conn
-    |> put_session(@workspace_key, workspace_slug)
-    |> put_resp_cookie(@workspace_cookie, workspace_slug,
-      max_age: @workspace_cookie_max_age,
-      sign: true
-    )
   end
 
   # ── Post-login redirect helper ──
@@ -239,52 +215,6 @@ defmodule DranWeb.Plugs.Auth do
 
   # Owner / created_by resolution lives in Dran.Auth (domain layer, no web deps).
   # See Dran.Auth.resolve_owner/1 and Dran.Auth.resolve_created_by/1.
-
-  # ── Cookie-based context restoration plug ──
-
-  @doc """
-  Plug that restores the context from the signed `dran_last_workspace` cookie
-  when the session doesn't already carry a `workspace_slug`.
-
-  This runs in the `:browser` pipeline (or `:auth` pipeline) so that by the
-  time a LiveView connects, the session already has the right context.
-  """
-  def fetch_workspace_cookie(conn, _opts) do
-    if get_session(conn, @workspace_key) do
-      conn
-    else
-      conn = fetch_cookies(conn, signed: [@workspace_cookie])
-
-      case conn.cookies[@workspace_cookie] do
-        slug when is_binary(slug) and slug != "" ->
-          put_session(conn, @workspace_key, slug)
-
-        _ ->
-          # No cookie either — resolve the workspace for the logged-in user
-          # (their own default, the instance default, or the only workspace
-          # they can reach). Anonymous requests keep no session slug.
-          case user_session_workspace(conn) do
-            nil -> conn
-            slug -> put_session(conn, @workspace_key, slug)
-          end
-      end
-    end
-  end
-
-  # The landing workspace for the session user, or nil when there is no user
-  # row (fail-closed: a stale session must not pin a workspace).
-  defp user_session_workspace(conn) do
-    case get_session(conn, @session_key) do
-      nil ->
-        nil
-
-      email ->
-        case Dran.Accounts.get_user_by_email(email) do
-          %Dran.Accounts.User{} = user -> Dran.Accounts.session_workspace_slug(user)
-          _ -> nil
-        end
-    end
-  end
 
   # ── URL-based context resolution ──
 

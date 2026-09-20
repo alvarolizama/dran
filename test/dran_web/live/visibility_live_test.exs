@@ -110,7 +110,7 @@ defmodule DranWeb.VisibilityLiveTest do
           "owner_user_id" => bob.id
         })
 
-      {:ok, view, html} = conn |> login(alice) |> live(~p"/#{ws.slug}/memory")
+      {:ok, view, html} = conn |> login(alice) |> live(~p"/memory")
 
       assert has_element?(view, "#memory-scope-toggle")
       assert html =~ "Fact A #{unique}"
@@ -140,7 +140,7 @@ defmodule DranWeb.VisibilityLiveTest do
           "owner_user_id" => bob.id
         })
 
-      {:ok, view, _html} = conn |> login(alice) |> live(~p"/#{ws.slug}/memory")
+      {:ok, view, _html} = conn |> login(alice) |> live(~p"/memory")
 
       html =
         view
@@ -154,7 +154,7 @@ defmodule DranWeb.VisibilityLiveTest do
       assert Dran.ContentVisibility.content_scope_for(alice.id, ws.id) == "own"
 
       # Y sobrevive a un remount.
-      {:ok, _view2, html2} = conn |> login(alice) |> live(~p"/#{ws.slug}/memory")
+      {:ok, _view2, html2} = conn |> login(alice) |> live(~p"/memory")
       assert html2 =~ "Mía #{unique}"
       refute html2 =~ "Ajena #{unique}"
     end
@@ -182,7 +182,7 @@ defmodule DranWeb.VisibilityLiveTest do
           "owner_user_id" => bob.id
         })
 
-      {:ok, view, html} = conn |> login(alice) |> live(~p"/#{ws.slug}/memory")
+      {:ok, view, html} = conn |> login(alice) |> live(~p"/memory")
 
       refute has_element?(view, "#memory-scope-toggle"),
              "en aislado la política ya filtra: el toggle sería mentira"
@@ -214,7 +214,7 @@ defmodule DranWeb.VisibilityLiveTest do
           "owner_user_id" => other.id
         })
 
-      {:ok, _view, html} = conn |> login(admin) |> live(~p"/#{ws.slug}/memory")
+      {:ok, _view, html} = conn |> login(admin) |> live(~p"/memory")
 
       assert html =~ "Del admin #{unique}"
       assert html =~ "Del otro #{unique}"
@@ -223,12 +223,14 @@ defmodule DranWeb.VisibilityLiveTest do
 
   describe "settings — toggles de compartición" do
     test "el form expone ambos toggles y persiste el cambio", %{conn: conn} do
+      # W1 single-workspace: the settings page edits the instance workspace
+      # and the guard is the instance role, not a workspace membership.
       unique = System.unique_integer([:positive])
-      ws = create_workspace(unique, true)
+      ws = Dran.DataCase.ensure_workspace!()
       {owner, _} = create_user(unique * 10 + 9)
-      member(owner, ws, "owner")
+      owner |> Ecto.Changeset.change(instance_role: "admin") |> Repo.update!()
 
-      {:ok, view, _html} = conn |> login(owner) |> live(~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = conn |> login(owner) |> live(~p"/settings/instance")
 
       # El form de automatización (donde viven los toggles) está en su tab.
       view |> element("button[phx-value-tab='brain_tuning']") |> render_click()

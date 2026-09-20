@@ -559,8 +559,8 @@ defmodule DranWeb.PageEdit do
 
   defp page_path(type, slug, nil), do: "/#{DranWeb.PageTypes.path(type)}/#{slug}"
 
-  defp page_path(type, slug, workspace_slug),
-    do: "/#{workspace_slug}/#{DranWeb.PageTypes.path(type)}/#{slug}"
+  defp page_path(type, slug, _workspace_slug),
+    do: "/#{DranWeb.PageTypes.path(type)}/#{slug}"
 
   # Index path for the current page type — workspace-scoped when a slug is
   # assigned (e.g. "/test/notes"), bare otherwise ("/notes").
@@ -568,10 +568,8 @@ defmodule DranWeb.PageEdit do
     type = socket.assigns[:page_type]
     base = "/#{DranWeb.PageTypes.path(type)}"
 
-    case socket.assigns[:workspace_slug] do
-      slug when is_binary(slug) and slug != "" -> "/" <> slug <> base
-      _ -> base
-    end
+    # W1 flat router: no workspace prefix.
+    base
   end
 
   defp store_file_and_create_page(socket, workspace_id, binary, filename, client_type) do

@@ -36,7 +36,7 @@ defmodule DranWeb.SmartCollectionLive do
               {gettext("Saved queries that auto-update as your brain changes")}
             </p>
           </div>
-          <.link navigate={~p"/#{@workspace_slug}/collections/new"} class="btn btn-primary btn-sm">
+          <.link navigate={~p"/collections/new"} class="btn btn-primary btn-sm">
             <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New Collection")}
           </.link>
         </div>
@@ -48,7 +48,7 @@ defmodule DranWeb.SmartCollectionLive do
           caption={gettext("Save a set of filters from search or any page list to create one.")}
         >
           <.link
-            navigate={~p"/#{@workspace_slug}/collections/new"}
+            navigate={~p"/collections/new"}
             class="btn btn-primary btn-sm mt-4"
           >
             <.icon name="hero-plus" class="w-4 h-4" />
@@ -59,7 +59,7 @@ defmodule DranWeb.SmartCollectionLive do
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <.link
             :for={collection <- @collections}
-            navigate={~p"/#{@workspace_slug}/collections/#{collection.slug}"}
+            navigate={~p"/collections/#{collection.slug}"}
             class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer"
           >
             <div class="card-body p-5">
@@ -96,7 +96,7 @@ defmodule DranWeb.SmartCollectionLive do
             <p :if={@collection.summary} class="text-caption">{@collection.summary}</p>
           </div>
           <div class="flex gap-2">
-            <.link navigate={~p"/#{@workspace_slug}/collections"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">
               <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Back")}
             </.link>
             <button
@@ -235,7 +235,7 @@ defmodule DranWeb.SmartCollectionLive do
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/#{@workspace_slug}/collections"} class="btn btn-ghost btn-sm">{gettext(
+            <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">{gettext(
               "Cancel"
             )}</.link>
             <button
@@ -319,7 +319,7 @@ defmodule DranWeb.SmartCollectionLive do
     if context do
       case Collections.get_collection_by_slug(slug, context.id) do
         nil ->
-          push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/collections")
+          push_navigate(socket, to: ~p"/collections")
 
         collection ->
           filters = collection.filters || %{}
@@ -335,7 +335,7 @@ defmodule DranWeb.SmartCollectionLive do
           )
       end
     else
-      push_navigate(socket, to: ~p"/#{socket.assigns[:workspace_slug]}/collections")
+      push_navigate(socket, to: ~p"/collections")
     end
   end
 
@@ -388,11 +388,8 @@ defmodule DranWeb.SmartCollectionLive do
     # path, so it must come from the workspace, not the global registry.
     context = socket.assigns[:context]
 
-    path =
-      case socket.assigns[:workspace_slug] do
-        nil -> "/#{type_path(context, type)}/#{slug}"
-        workspace_slug -> "/#{workspace_slug}/#{type_path(context, type)}/#{slug}"
-      end
+    # W1 flat router: no workspace prefix.
+    path = "/#{type_path(context, type)}/#{slug}"
 
     {:noreply, push_navigate(socket, to: path)}
   end
@@ -411,7 +408,7 @@ defmodule DranWeb.SmartCollectionLive do
           {:noreply,
            socket
            |> put_flash(:info, gettext("Smart collection deleted."))
-           |> push_navigate(to: ~p"/#{socket.assigns[:workspace_slug]}/collections")}
+           |> push_navigate(to: ~p"/collections")}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, gettext("Could not delete collection."))}
@@ -456,7 +453,7 @@ defmodule DranWeb.SmartCollectionLive do
              socket
              |> put_flash(:info, gettext("Smart collection created."))
              |> push_navigate(
-               to: ~p"/#{socket.assigns[:workspace_slug]}/collections/#{collection.slug}"
+               to: ~p"/collections/#{collection.slug}"
              )}
 
           {:error, _changeset} ->

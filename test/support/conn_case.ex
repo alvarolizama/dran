@@ -38,6 +38,10 @@ defmodule DranWeb.ConnCase do
     # Same as DataCase: the settings ETS cache survives the sandbox rollback.
     Dran.Settings.clear_cache()
 
+    # The graph ETS cache is global too — entries built by an earlier test
+    # under a rolled-back sandbox would poison later reads.
+    Dran.GraphCache.clear()
+
     # Many LiveView tests assume the default "personal" workspace exists AND
     # that the "test_user" session user has owner access (the old behavior
     # treated pre-multi-user sessions as full admin). Create both by default

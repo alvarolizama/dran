@@ -60,6 +60,6 @@ defmodule DranWeb.PageTypes do
 
   defp build_page_show_path(type, slug, nil), do: "/#{Dran.PageRegistry.path(type)}/#{slug}"
 
-  defp build_page_show_path(type, slug, workspace_slug),
-    do: "/#{workspace_slug}/#{Dran.PageRegistry.path(type)}/#{slug}"
+  defp build_page_show_path(type, slug, _workspace_slug),
+    do: "/#{Dran.PageRegistry.path(type)}/#{slug}"
 end

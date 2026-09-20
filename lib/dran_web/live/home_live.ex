@@ -105,9 +105,9 @@ defmodule DranWeb.HomeLive do
   end
 
   # ── :workspace_home — collections + pinned + index by type ───────────────────
-
-  defp apply_action(socket, :workspace_home, %{"workspace_slug" => workspace_slug}) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
+  # Single-workspace model (W1): no URL slug — always the instance workspace.
+  defp apply_action(socket, :workspace_home, _params) do
+    case Dran.Auth.instance_workspace() do
       %Workspace{} = workspace ->
         collections = Collections.list_collections(workspace.id)
         pinned = Knowledge.list_pinned_pages(workspace.id)
@@ -142,11 +142,8 @@ defmodule DranWeb.HomeLive do
 
   # ── :type_list — alphabetical list of pages of one type ───────────────────
 
-  defp apply_action(socket, :type_list, %{
-         "workspace_slug" => workspace_slug,
-         "page_type" => page_type
-       }) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
+  defp apply_action(socket, :type_list, %{"page_type" => page_type}) do
+    case Dran.Auth.instance_workspace() do
       %Workspace{} = workspace ->
         pages =
           Knowledge.list_pages(
@@ -184,12 +181,8 @@ defmodule DranWeb.HomeLive do
 
   # ── :page_show — rendered page (markdown + mermaid, read-only) ────────────
 
-  defp apply_action(socket, :page_show, %{
-         "workspace_slug" => workspace_slug,
-         "page_type" => page_type,
-         "slug" => slug
-       }) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
+  defp apply_action(socket, :page_show, %{"page_type" => page_type, "slug" => slug}) do
+    case Dran.Auth.instance_workspace() do
       %Workspace{} = workspace ->
         case Knowledge.get_page_by_slug(slug, workspace.id) do
           %{page_type: ^page_type} = page ->
@@ -218,7 +211,7 @@ defmodule DranWeb.HomeLive do
             )
 
           nil ->
-            push_navigate(socket, to: ~p"/#{workspace_slug}/#{page_type}")
+            push_navigate(socket, to: ~p"/#{page_type}")
         end
 
       nil ->
@@ -228,12 +221,12 @@ defmodule DranWeb.HomeLive do
 
   # ── :collection — smart collection results in wiki mode ────────────────────
 
-  defp apply_action(socket, :collection, %{"workspace_slug" => workspace_slug, "slug" => slug}) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
+  defp apply_action(socket, :collection, %{"slug" => slug}) do
+    case Dran.Auth.instance_workspace() do
       %Workspace{} = workspace ->
         case Collections.get_collection_by_slug(slug, workspace.id) do
           nil ->
-            push_navigate(socket, to: ~p"/#{workspace_slug}")
+            push_navigate(socket, to: ~p"/")
 
           collection ->
             results = execute_filters(collection.filters || %{}, workspace.id)
@@ -264,12 +257,12 @@ defmodule DranWeb.HomeLive do
 
   # ── :graph — graph view of the workspace (progressive, mirrors GraphLive) ───
 
-  defp apply_action(socket, :graph, %{"workspace_slug" => workspace_slug}) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
+  defp apply_action(socket, :graph, _params) do
+    case Dran.Auth.instance_workspace() do
       %Workspace{} = workspace ->
         # Progressive: no data load here — the Graph3D hook fetches
-        # /<workspace_slug>/graph/json via HTTP after the shell renders,
-        # keeping initial page load instant. Same pattern as GraphLive panel.
+        # /graph/json via HTTP after the shell renders, keeping initial page
+        # load instant. Same pattern as GraphLive panel.
         # Sidebar data
         collections = Collections.list_collections(workspace.id)
         pinned = Knowledge.list_pinned_pages(workspace.id)
@@ -297,8 +290,8 @@ defmodule DranWeb.HomeLive do
 
   # ── :letter — all pages starting with a given letter (read-only) ───────────
 
-  defp apply_action(socket, :letter, %{"workspace_slug" => workspace_slug, "letter" => letter}) do
-    case Knowledge.get_workspace_by_slug(workspace_slug) do
+  defp apply_action(socket, :letter, %{"letter" => letter}) do
+    case Dran.Auth.instance_workspace() do
       %Workspace{} = workspace ->
         all_pages =
           Knowledge.list_pages(
@@ -1115,7 +1108,7 @@ defmodule DranWeb.HomeLive do
       # declares its `path`, so resolve through the workspace (the server
       # hands the hook a type_paths map for the same reason).
       type_path = Workspace.page_type_path(workspace, params["type"] || "note")
-      {:noreply, push_navigate(socket, to: ~p"/#{workspace.slug}/#{type_path}/#{slug}")}
+      {:noreply, push_navigate(socket, to: ~p"/#{type_path}/#{slug}")}
     else
       {:noreply, socket}
     end

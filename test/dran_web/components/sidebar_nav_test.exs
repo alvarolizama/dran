@@ -21,7 +21,7 @@ defmodule DranWeb.SidebarNavTest do
       refute html =~ ~s(href="/")
       refute html =~ ~s(href="/admin")
       refute html =~ ~s(href="/settings/account")
-      refute html =~ ~s(href="/personal/settings")
+      refute html =~ ~s(href="/settings")
       refute html =~ t("Workspace")
     end
 
@@ -75,12 +75,12 @@ defmodule DranWeb.SidebarNavTest do
 
       [first_summary | _rest] = summary_positions(html)
 
-      home_pos = pos(html, ~s(href="/personal"))
-      graph_pos = pos(html, ~s(href="/personal/graph"))
-      journey_pos = pos(html, ~s(href="/personal/journey"))
-      memory_pos = pos(html, ~s(href="/personal/memory"))
-      refute html =~ ~s(href="/personal/goals")
-      refute html =~ ~s(href="/personal/workflows")
+      home_pos = pos(html, ~s(href="/"))
+      graph_pos = pos(html, ~s(href="/graph"))
+      journey_pos = pos(html, ~s(href="/journey"))
+      memory_pos = pos(html, ~s(href="/memory"))
+      refute html =~ ~s(href="/goals")
+      refute html =~ ~s(href="/workflows")
 
       # Inicio → Grafo → Journey → Memory, todos antes del primer grupo
       assert home_pos < graph_pos
@@ -96,8 +96,8 @@ defmodule DranWeb.SidebarNavTest do
       summaries = summary_positions(html)
       kb_index = Enum.find_index(labels, &(&1 == t("Knowledge base")))
 
-      assert refs_pos = pos(html, ~s(href="/personal/references"))
-      assert clusters_pos = pos(html, ~s(href="/personal/clusters"))
+      assert refs_pos = pos(html, ~s(href="/references"))
+      assert clusters_pos = pos(html, ~s(href="/clusters"))
 
       # clusters sigue dentro de Knowledge base: después de references.
       assert refs_pos < clusters_pos
@@ -108,14 +108,14 @@ defmodule DranWeb.SidebarNavTest do
       html = workspace_nav()
       [first_summary | _rest] = summary_positions(html)
 
-      home_pos = pos(html, ~s(href="/personal"))
+      home_pos = pos(html, ~s(href="/"))
       assert home_pos < first_summary
     end
 
     test "active key highlights the right link" do
       html = workspace_nav("memory")
 
-      p = pos(html, ~s(href="/personal/memory"))
+      p = pos(html, ~s(href="/memory"))
       {end_pos, _len} = :binary.match(html, "</a>", scope: {p, byte_size(html) - p})
       anchor = binary_part(html, p, end_pos - p)
       assert anchor =~ ~s(aria-current="page")
@@ -127,8 +127,8 @@ defmodule DranWeb.SidebarNavTest do
 
       views_pos = pos(html, ~s(data-nav-block="views"))
       memory_block_pos = pos(html, ~s(data-nav-block="memory"))
-      journey_pos = pos(html, ~s(href="/personal/journey"))
-      memory_pos = pos(html, ~s(href="/personal/memory"))
+      journey_pos = pos(html, ~s(href="/journey"))
+      memory_pos = pos(html, ~s(href="/memory"))
 
       # Bloques hermanos dentro del nav (que los separa con gap-4): primero las
       # vistas, después Memory, y el grupo Knowledge base al final.
@@ -145,9 +145,9 @@ defmodule DranWeb.SidebarNavTest do
 
       memory_block = binary_part(html, memory_block_pos, summary_pos - memory_block_pos)
 
-      assert memory_block =~ ~s(href="/personal/memory")
-      refute memory_block =~ ~s(href="/personal/journey")
-      refute memory_block =~ ~s(href="/personal/graph")
+      assert memory_block =~ ~s(href="/memory")
+      refute memory_block =~ ~s(href="/journey")
+      refute memory_block =~ ~s(href="/graph")
     end
   end
 
@@ -161,7 +161,7 @@ defmodule DranWeb.SidebarNavTest do
           workspace_role: "viewer"
         })
 
-      refute html =~ ~s(href="/personal/activity")
+      refute html =~ ~s(href="/activity")
       refute html =~ t("Activity")
     end
 
@@ -174,7 +174,7 @@ defmodule DranWeb.SidebarNavTest do
           workspace_role: "owner"
         })
 
-      refute html =~ ~s(href="/personal/settings")
+      refute html =~ ~s(href="/settings")
       refute html =~ t("Workspace settings")
     end
   end
@@ -213,34 +213,35 @@ defmodule DranWeb.SidebarNavTest do
     test "workspace owner sees Activity + Workspace settings after a divider" do
       html = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: false})
 
-      assert html =~ ~s(href="/personal/activity")
+      assert html =~ ~s(href="/activity")
       assert html =~ t("Activity")
-      assert html =~ ~s(href="/personal/settings")
-      assert html =~ t("Workspace settings")
+      assert html =~ ~s(href="/settings/instance")
+      assert html =~ t("Instance settings")
       # account links siguen arriba
       assert html =~ ~s(href="/settings/account")
       assert html =~ ~s(href="/settings/api-keys")
       assert html =~ ~s(id="logout-form")
     end
 
-    test "viewer sees Activity but not Workspace settings" do
+    test "viewer sees Activity but not Instance settings" do
       html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: false})
 
-      assert html =~ ~s(href="/personal/activity")
-      refute html =~ ~s(href="/personal/settings")
+      assert html =~ ~s(href="/activity")
+      # can_config is owner/admin-only: viewer gets no settings link
+      refute html =~ ~s(href="/settings/instance")
     end
 
-    test "instance owner sees Workspace settings regardless of role" do
+    test "instance owner sees Instance settings regardless of role" do
       html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: true})
 
-      assert html =~ ~s(href="/personal/settings")
+      assert html =~ ~s(href="/settings/instance")
     end
 
     test "outside a workspace the menu has the account + Workspaces entries only" do
       html = menu(%{workspace_slug: nil, is_owner: true})
 
       refute html =~ "/activity"
-      refute html =~ ~s(href="/personal/settings")
+      refute html =~ ~s(href="/settings/instance")
       assert html =~ ~s(href="/")
       assert html =~ ~s(href="/settings/account")
       assert html =~ ~s(href="/settings/api-keys")
@@ -254,7 +255,7 @@ defmodule DranWeb.SidebarNavTest do
           active: "workspace_settings"
         })
 
-      {pos, _} = :binary.match(html, ~s(href="/personal/settings"))
+      {pos, _} = :binary.match(html, ~s(href="/settings/instance"))
       {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
       anchor = binary_part(html, pos, end_pos - pos)
       assert anchor =~ ~s(aria-current="page")

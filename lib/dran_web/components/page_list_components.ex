@@ -48,8 +48,8 @@ defmodule DranWeb.PageListComponents do
   # workspace's own path for the page's type.
   defp show_path(context, page, nil), do: "/#{ui_path(context, page.page_type)}/#{page.slug}"
 
-  defp show_path(context, page, workspace_slug),
-    do: "/#{workspace_slug}/#{ui_path(context, page.page_type)}/#{page.slug}"
+  defp show_path(context, page, _workspace_slug),
+    do: "/#{ui_path(context, page.page_type)}/#{page.slug}"
 
   # Returns the empty-state metadata (title, description, cta) for a page type.
   # Falls back to the default "All Pages" state when `page_type` is `nil`.
@@ -126,7 +126,7 @@ defmodule DranWeb.PageListComponents do
           <.link
             :if={@page_type}
             navigate={
-              "/#{@workspace_slug}/collections/new?type=#{@page_type}&title=" <>
+              "/collections/new?type=#{@page_type}&title=" <>
                 URI.encode_www_form("#{gettext("All")} #{ui_plural(@context, @page_type)}")
             }
             class="btn btn-ghost btn-sm"
@@ -153,7 +153,7 @@ defmodule DranWeb.PageListComponents do
               else: gettext("Archived")} ({if @show_archived, do: @total_count, else: @total_archived})
           </button>
           <.link
-            patch={"/#{@workspace_slug}/#{ui_path(@context, @page_type)}?new=true"}
+            patch={"/#{ui_path(@context, @page_type)}?new=true"}
             class="btn btn-primary btn-sm"
             data-testid="new-page-button"
           >
@@ -263,7 +263,7 @@ defmodule DranWeb.PageListComponents do
             <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
           </div>
           <.link
-            patch={"/#{@workspace_slug}/#{ui_path(@context, @page_type)}?new=true"}
+            patch={"/#{ui_path(@context, @page_type)}?new=true"}
             class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
           >
             <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
@@ -333,7 +333,7 @@ defmodule DranWeb.PageListComponents do
           <div class="flex gap-1">
             <.link
               :for={tag <- Enum.take(@page.tags || [], 5)}
-              navigate={"/#{@workspace_slug}/search?q=#{URI.encode_www_form(tag)}"}
+              navigate={"/search?q=#{URI.encode_www_form(tag)}"}
               class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
             >
               {tag}

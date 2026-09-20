@@ -26,11 +26,11 @@ defmodule DranWeb.PagesLiveTest do
 
   describe "index — list pages" do
     test "renders the empty state with a workspace-scoped CTA", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes")
+      {:ok, _view, html} = live(conn, ~p"/notes")
 
       assert html =~ t("No notes yet")
       # The CTA opens the create modal inside the workspace (patch, not navigate)
-      assert html =~ ~s(href="/#{ws.slug}/notes?new=true")
+      assert html =~ ~s(href="/notes?new=true")
     end
 
     test "lists created pages with workspace-scoped links", %{conn: conn, ws: ws} do
@@ -43,12 +43,12 @@ defmodule DranWeb.PagesLiveTest do
           tags: ["elixir"]
         })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes")
+      {:ok, _view, html} = live(conn, ~p"/notes")
 
       assert html =~ "Mi nota de prueba"
-      assert html =~ ~s(href="/#{ws.slug}/notes/#{page.slug}")
+      assert html =~ ~s(href="/notes/#{page.slug}")
       # Tag chips link to workspace search, not the dead /tags/:tag route
-      assert html =~ ~s(href="/#{ws.slug}/search?q=elixir")
+      assert html =~ ~s(href="/search?q=elixir")
     end
 
     test "card badge shows the page type, ignoring legacy meta.kind", %{conn: conn, ws: ws} do
@@ -72,7 +72,7 @@ defmodule DranWeb.PagesLiveTest do
           meta: %{"kind" => "technical"}
         })
 
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/notes")
+      {:ok, view, html} = live(conn, ~p"/notes")
 
       assert has_element?(view, "[data-testid='page-card-#{plan.slug}']", t("Note"))
       assert has_element?(view, "[data-testid='page-card-#{technical.slug}']", t("Note"))
@@ -80,7 +80,7 @@ defmodule DranWeb.PagesLiveTest do
     end
 
     test "no kind filter dropdown is rendered (the vocabulary is gone)", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes")
+      {:ok, _view, html} = live(conn, ~p"/notes")
 
       refute html =~ ~s(data-testid="kind-filters")
       refute html =~ ~s(data-testid="kind-filter-toggle")
@@ -96,7 +96,7 @@ defmodule DranWeb.PagesLiveTest do
         meta: %{"kind" => "journal"}
       })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?kind=journal")
+      {:ok, _view, html} = live(conn, ~p"/notes?kind=journal")
 
       assert html =~ "Entrada con kind legacy"
     end
@@ -107,7 +107,7 @@ defmodule DranWeb.PagesLiveTest do
       # type, so the LiveView raises NotFoundError. Before this change
       # pages_live.ex redirected to "/", which is what the gate forbids.
       for retired <- ~w(ideas knowledge technical food) do
-        assert_raise DranWeb.NotFoundError, fn -> live(conn, "/#{ws.slug}/#{retired}") end
+        assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, "/#{retired}")
       end
 
       # …and the exception really is a 404 (not a 500): Plug.Exception.status
@@ -139,11 +139,11 @@ defmodule DranWeb.PagesLiveTest do
           ]
         })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/recipes")
+      {:ok, _view, html} = live(conn, ~p"/recipes")
       assert html =~ "Receta"
 
       # …and an undeclared path still 404s
-      assert_raise DranWeb.NotFoundError, fn -> live(conn, "/#{ws.slug}/gadgets") end
+      assert {:error, {:live_redirect, %{to: "/"}}} = live(conn, "/gadgets")
     end
 
     test "a page of a custom type is reachable and listable at its own path", %{
@@ -173,11 +173,11 @@ defmodule DranWeb.PagesLiveTest do
           page_type: "recipe"
         })
 
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/recipes")
+      {:ok, view, html} = live(conn, ~p"/recipes")
       assert html =~ "Paella valenciana"
-      assert html =~ ~s(href="/#{ws.slug}/recipes/#{page.slug}")
+      assert html =~ ~s(href="/recipes/#{page.slug}")
 
-      {:ok, _view, show_html} = live(conn, ~p"/#{ws.slug}/recipes/#{page.slug}")
+      {:ok, _view, show_html} = live(conn, ~p"/recipes/#{page.slug}")
       assert show_html =~ "Paella valenciana"
     end
   end
@@ -192,7 +192,7 @@ defmodule DranWeb.PagesLiveTest do
           page_type: "note"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{page.slug}")
 
       assert html =~ "Nota visible"
       assert html =~ "A note visible through the wiki"
@@ -222,7 +222,7 @@ defmodule DranWeb.PagesLiveTest do
       # La BD sigue guardando el identificador; la pantalla resuelve la etiqueta.
       assert page.created_by == "autora@example.com"
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{page.slug}")
 
       assert html =~ "Marta Ruiz"
       refute html =~ "autora@example.com"
@@ -237,7 +237,7 @@ defmodule DranWeb.PagesLiveTest do
           created_by: "agent-hermes"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{page.slug}")
 
       assert html =~ "agent-hermes"
     end
@@ -245,7 +245,7 @@ defmodule DranWeb.PagesLiveTest do
 
   describe "new — create a page (resource modal)" do
     test "renders the creation modal (over the list)", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+      {:ok, _view, html} = live(conn, ~p"/notes?new=true")
 
       assert html =~ "page-resource-modal"
       assert html =~ "page-new-form-note"
@@ -253,7 +253,7 @@ defmodule DranWeb.PagesLiveTest do
     end
 
     test "creation form has no kind select and no duplicate Tags label", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+      {:ok, _view, html} = live(conn, ~p"/notes?new=true")
 
       # Replaces "kind select offers the type's registered kinds": the kind
       # vocabulary is gone from the page model, so the creation form must not
@@ -272,7 +272,7 @@ defmodule DranWeb.PagesLiveTest do
       # Replaces the per-type kind-sample loop: every surviving type renders a
       # creation form under its path segment, and none of them offers kinds.
       for type_path <- ~w(notes entities concepts references) do
-        {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/#{type_path}?new=true")
+        {:ok, _view, html} = live(conn, ~p"/#{type_path}?new=true")
 
         assert html =~ "page-resource-modal", "no creation modal for #{type_path}"
         refute html =~ ~s(name="page[meta][kind]"), "#{type_path} still offers a kind select"
@@ -283,7 +283,7 @@ defmodule DranWeb.PagesLiveTest do
       conn: conn,
       ws: ws
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+      {:ok, view, _html} = live(conn, ~p"/notes?new=true")
 
       view
       |> form("#page-new-form-note", %{
@@ -295,11 +295,11 @@ defmodule DranWeb.PagesLiveTest do
       page = Knowledge.get_page_by_slug("nota-desde-form", ws.id)
       assert page, "page should have been created with a slugified title"
 
-      assert_redirect(view, "/#{ws.slug}/notes/nota-desde-form?edit=true")
+      assert_redirect(view, "/notes/nota-desde-form?edit=true")
     end
 
     test "close_page_modal patches back to the list", %{conn: conn, ws: ws} do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+      {:ok, view, _html} = live(conn, ~p"/notes?new=true")
 
       render_click(view, "close_page_modal", %{})
 
@@ -317,7 +317,7 @@ defmodule DranWeb.PagesLiveTest do
           page_type: "note"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
+      {:ok, _view, html} = live(conn, ~p"/notes/#{page.slug}?edit=true")
 
       assert html =~ "page-edit-form"
       assert html =~ "Editable"
@@ -338,7 +338,7 @@ defmodule DranWeb.PagesLiveTest do
           meta: %{"location" => "CDMX"}
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/entities/#{page.slug}?edit=true")
+      {:ok, view, _html} = live(conn, ~p"/entities/#{page.slug}?edit=true")
 
       assert has_element?(view, "#entity-editor-attributes-form")
 
@@ -361,7 +361,7 @@ defmodule DranWeb.PagesLiveTest do
           page_type: "note"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}")
+      {:ok, view, _html} = live(conn, ~p"/notes/#{page.slug}")
 
       # tag_input's hidden input submits "alfa,beta" (a string); the schema
       # casts :tags as {:array, :string} and would reject the changeset
@@ -386,7 +386,7 @@ defmodule DranWeb.PagesLiveTest do
           page_type: "note"
         })
 
-      {:ok, view, html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
+      {:ok, view, html} = live(conn, ~p"/notes/#{page.slug}?edit=true")
 
       # The summary IS visible in the attributes sidebar…
       assert html =~ "Resumen escrito por un agente via las tools"
@@ -396,7 +396,7 @@ defmodule DranWeb.PagesLiveTest do
     end
 
     test "creation form modal has no summary input", %{conn: conn, ws: ws} do
-      {:ok, _view, html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+      {:ok, _view, html} = live(conn, ~p"/notes?new=true")
 
       assert html =~ "page-new-form-note"
       # Summary is machine-owned — the creation form must not include it.
@@ -412,7 +412,7 @@ defmodule DranWeb.PagesLiveTest do
           page_type: "note"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
+      {:ok, view, _html} = live(conn, ~p"/notes/#{page.slug}?edit=true")
 
       # The edit form autosaves title changes via phx-change (validate_page)
       view
@@ -429,7 +429,7 @@ defmodule DranWeb.PagesLiveTest do
       conn: conn,
       ws: ws
     } do
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes?new=true")
+      {:ok, view, _html} = live(conn, ~p"/notes?new=true")
 
       view
       |> form("#page-new-form-note", %{page: %{"title" => "Nota atribuida"}})
@@ -452,7 +452,7 @@ defmodule DranWeb.PagesLiveTest do
           page_type: "note"
         })
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/notes/#{page.slug}?edit=true")
+      {:ok, view, _html} = live(conn, ~p"/notes/#{page.slug}?edit=true")
 
       view
       |> form("#page-edit-form", %{page: %{"title" => "Editable con atribución v2"}})

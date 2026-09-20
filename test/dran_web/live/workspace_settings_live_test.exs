@@ -1,6 +1,13 @@
 defmodule DranWeb.WorkspaceSettingsLiveTest do
   use DranWeb.ConnCase, async: false
 
+  # W1 (contract-instance-visibility-20260919): workspace membership and the
+  # Users tab died with the multi-workspace model — user access is the
+  # instance role (/admin/users), and the tab returns as "Users & groups"
+  # in W2. These membership tests are excluded until then.
+  @moduletag :skip
+  @moduletag reason: "W1: workspace membership removed; W2 rewires users/groups"
+
   alias Dran.Accounts
   alias Dran.DataCase
 
@@ -29,7 +36,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
       ws = DataCase.ensure_workspace!()
       {:ok, member} = Accounts.create_user(%{email: "invitee@example.com", name: "Invitee"})
 
-      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/settings/instance")
       open_users_tab(view)
 
       html =
@@ -46,7 +53,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
     test "refuses an email with no account — Dran has no invitation emails", %{conn: conn} do
       ws = DataCase.ensure_workspace!()
 
-      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/settings/instance")
       open_users_tab(view)
 
       html =
@@ -67,7 +74,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
       {:ok, member} = Accounts.create_user(%{email: "dup@example.com", name: "Dup"})
       {:ok, _} = Accounts.add_user_to_workspace(member, ws)
 
-      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/settings/instance")
       open_users_tab(view)
 
       html =
@@ -90,7 +97,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
         |> Plug.Conn.put_session(:is_owner, false)
 
       # The :workspace_admin pipeline bounces them out of the settings page.
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/#{ws.slug}/settings")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/settings/instance")
     end
   end
 
@@ -128,7 +135,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
         |> Plug.Conn.put_session(:workspace_slug, ws.slug)
         |> Plug.Conn.put_session(:is_owner, false)
 
-      {:ok, view, _html} = live(conn, ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(conn, ~p"/settings/instance")
       open_users_tab(view)
 
       view
@@ -151,7 +158,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
 
       {:ok, invitee} = Accounts.create_user(%{email: "invitado-admin-#{unique}@example.com"})
 
-      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/#{ws.slug}/settings")
+      {:ok, view, _html} = live(admin_conn(conn, ws.slug), ~p"/settings/instance")
       open_users_tab(view)
 
       view
@@ -176,7 +183,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
 
       # Un editor trabaja EN el workspace; quién entra y con qué rol es
       # configuración, y eso es de owner/admin (o del admin de la instancia).
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/#{ws.slug}/settings")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/settings/instance")
     end
   end
 end
