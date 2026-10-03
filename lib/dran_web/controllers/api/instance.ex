@@ -55,4 +55,32 @@ defmodule DranWeb.API.Instance do
   def permit_page_params(params) do
     Map.take(params, @page_write_fields)
   end
+
+  @doc """
+  Extrae el destino de escritura (`scope`) de los params del cliente (W6).
+
+  Devuelve `{scoped?, scope, params}`:
+
+    * `scoped?` distingue "sin `scope`" (la escritura conserva el default /
+      el `visibility` legacy de páginas) de un `scope` explícito, que gobierna.
+    * `scope` es el valor crudo (`"private"` | `"public"` | `%{"group" => slug}`).
+    * `params` ya sin el campo, para que no viaje a los attrs del recurso.
+
+  Con `drop_visibility: true` (páginas) también quita el `visibility` legacy
+  cuando hay `scope`, para que el destino declarado no se contradiga.
+  """
+  def pop_write_scope(params, opts \\ []) do
+    if Map.has_key?(params, "scope") do
+      scope = params["scope"]
+
+      params =
+        params
+        |> Map.delete("scope")
+        |> then(fn p -> if opts[:drop_visibility], do: Map.delete(p, "visibility"), else: p end)
+
+      {true, scope, params}
+    else
+      {false, nil, params}
+    end
+  end
 end

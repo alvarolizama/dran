@@ -30,6 +30,18 @@ defmodule Dran.Sharing do
 
   def get_group!(id), do: Repo.get!(UserGroup, id)
 
+  @doc "Busca un grupo por su slug — la identidad que el cliente usa en `scope` (W6)."
+  def get_group_by_slug(slug) when is_binary(slug), do: Repo.get_by(UserGroup, slug: slug)
+
+  @doc "¿`user_id` pertenece a `group_id`? La membresía que valida el scope por escritura."
+  def group_member?(group_id, user_id) when is_integer(group_id) and is_integer(user_id) do
+    Repo.exists?(
+      from(m in UserGroupMember, where: m.user_group_id == ^group_id and m.user_id == ^user_id)
+    )
+  end
+
+  def group_member?(_group_id, _user_id), do: false
+
   def create_group(attrs) do
     %UserGroup{}
     |> UserGroup.changeset(attrs)
@@ -158,5 +170,101 @@ defmodule Dran.Sharing do
             (s.user_id == ^reader_id or s.user_group_id in ^reader_group_ids)
       )
     )
+  end
+
+  # ── Scope por escritura (W6) ───────────────────────────────────────────────
+
+  # S32 (backfill): NO se crea migración. Medición sobre `dran_dev` — las
+  # cuatro tablas ya tienen `visibility` desde W2 y con 0 filas NULL:
+  # knowledge_pages 8 (todas `private`), memories 0, collections 0, reports 0.
+  # No queda nada que backfillear; una migración inventada sería peor que
+  # ninguna.
+
+  @doc """
+  Traduce el destino de UNA escritura (`scope`) a la `visibility` de la fila
+  más la fila de `content_shares` que corresponda, validando la membresía
+  server-side y fallando cerrado (contract Rules#5, W6).
+
+  `scope` es el vocabulario de la INTENCIÓN — destino de escritura, nunca de
+  lectura (constraint 9):
+
+    * `"private"` — `visibility: "private"`, sin share (el DEFAULT del schema).
+    * `"public"`  — `visibility: "public"`, sin share.
+    * `%{"group" => slug}` — `visibility: "shared"` + un share para ESE grupo.
+
+  El grupo debe existir y el DUEÑO de la fila (`resource.owner_user_id`) debe
+  ser miembro. Si el grupo no existe, el dueño no es miembro, o el `scope` no
+  es del vocabulario, devuelve `{:error, mensaje}` — NUNCA un fallback
+  silencioso a `private` (P20): un destino que no se puede honrar es un error,
+  no una degradación.
+
+  Recibe el recurso YA insertado (necesita su id para el share); el
+  controlador la envuelve junto con el insert en UN `Repo.transaction`, así un
+  destino inválido revierte la fila y no deja huérfanos.
+  """
+  @spec apply_scope(struct(), term(), atom()) :: {:ok, struct()} | {:error, binary()}
+  def apply_scope(resource, "private", _resource_type) do
+    {:ok, put_visibility(resource, "private")}
+  end
+
+  def apply_scope(resource, "public", _resource_type) do
+    {:ok, put_visibility(resource, "public")}
+  end
+
+  def apply_scope(resource, %{"group" => slug}, resource_type) when is_binary(slug) do
+    apply_group_scope(resource, slug, resource_type)
+  end
+
+  # Forma con átomo — para callers internos y tests.
+  def apply_scope(resource, %{group: slug}, resource_type) when is_binary(slug) do
+    apply_group_scope(resource, slug, resource_type)
+  end
+
+  def apply_scope(_resource, scope, _resource_type) do
+    {:error,
+     "invalid scope #{inspect(scope)}: expected \"private\", \"public\" or %{\"group\" => \"<slug>\"}"}
+  end
+
+  defp apply_group_scope(resource, slug, resource_type) do
+    owner_id = Map.get(resource, :owner_user_id)
+
+    with %UserGroup{} = group <- get_group_by_slug(slug),
+         :ok <- ensure_group_member(group, owner_id),
+         {:ok, :shared} <- share_with_group(to_string(resource_type), resource.id, group.id) do
+      {:ok, put_visibility(resource, "shared")}
+    else
+      nil ->
+        {:error, "unknown group #{inspect(slug)}"}
+
+      {:error, message} when is_binary(message) ->
+        {:error, message}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, "could not share: #{inspect(format_share_errors(changeset))}"}
+    end
+  end
+
+  # Membresía fail-closed: sin identidad dueña no se puede validar el grupo, así
+  # que la escritura no se honra (nunca `private` en silencio).
+  defp ensure_group_member(_group, nil) do
+    {:error, "scope %{\"group\" => ...} requires an owned identity to validate membership"}
+  end
+
+  defp ensure_group_member(%UserGroup{} = group, owner_id) do
+    if group_member?(group.id, owner_id) do
+      :ok
+    else
+      {:error, "the owner is not a member of group #{group.slug}"}
+    end
+  end
+
+  defp put_visibility(resource, visibility) do
+    resource
+    |> Ecto.Changeset.change(visibility: visibility)
+    |> Repo.update!()
+  end
+
+  defp format_share_errors(%Ecto.Changeset{} = changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, _opts} -> msg end)
   end
 end

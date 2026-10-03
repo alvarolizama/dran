@@ -17,6 +17,7 @@ defmodule DranWeb.API.MemoryController do
   alias Dran.Auth
   alias Dran.Inference
   alias Dran.Memory
+  alias Dran.Repo
 
   @max_transcript_chars 12_000
   @max_facts_per_ingest 5
@@ -32,11 +33,20 @@ defmodule DranWeb.API.MemoryController do
 
   Pass `force=true` to skip the semantic grey zone when the caller has
   examined the near-duplicate and confirmed the fact is genuinely new.
+
+  El destino de ESTA escritura se declara con `scope` (W6, Rules#5/#10): la
+  memoria entra por la MISMA puerta que las páginas (`"private"` default |
+  `"public"` | `%{"group" => slug}`), traducida server-side por
+  `Dran.Sharing.apply_scope/3` y validada fail-closed (grupo inexistente o
+  ajeno → 422). Un `visibility` crudo sigue rechazándose: el cliente declara
+  intención, no columna.
   """
   def create(conn, params) do
     # W5: writes always target the instance workspace. Memory visibility is
     # web-only (Rules#6): an explicit `visibility` param is rejected — failing
     # explicitly teaches the agent the rule instead of silently ignoring it.
+    # W6: el destino de escritura se pide con `scope` (Rules#10), no con la
+    # columna `visibility`.
     if Map.has_key?(params, "visibility") do
       conn
       |> put_status(:unprocessable_entity)
@@ -48,6 +58,7 @@ defmodule DranWeb.API.MemoryController do
 
   defp create_memory(conn, params) do
     user = conn.assigns[:user]
+    {scoped?, scope, params} = DranWeb.API.Instance.pop_write_scope(params)
     params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     attrs = %{
@@ -63,7 +74,7 @@ defmodule DranWeb.API.MemoryController do
 
     opts = if params["force"] in [true, "true", "1"], do: [force: true], else: []
 
-    case Memory.add(attrs, opts) do
+    case add_with_scope(attrs, opts, scoped?, scope) do
       {:ok, memory, :created} ->
         conn
         |> put_status(:created)
@@ -83,6 +94,11 @@ defmodule DranWeb.API.MemoryController do
           submitted: params["content"]
         })
 
+      {:error, {:scope, message}} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: %{detail: message}})
+
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -92,6 +108,28 @@ defmodule DranWeb.API.MemoryController do
         conn
         |> put_status(:internal_server_error)
         |> json(%{errors: %{detail: to_string(reason)}})
+    end
+  end
+
+  # El alta de la memoria y la traducción del `scope` van en UNA transacción:
+  # un grupo inválido revierte el hecho recién creado (nada de huérfanos) y
+  # NUNCA cae a `private` en silencio (P20). El scope solo se aplica a la
+  # escritura nueva; un duplicado/grey-zone no re-escribe una fila ajena.
+  defp add_with_scope(attrs, opts, scoped?, scope) do
+    case Repo.transaction(fn ->
+           case Memory.add(attrs, opts) do
+             {:ok, memory, :created} when scoped? ->
+               case Dran.Sharing.apply_scope(memory, scope, :memory) do
+                 {:ok, memory} -> {:ok, memory, :created}
+                 {:error, message} -> Repo.rollback({:scope, message})
+               end
+
+             other ->
+               other
+           end
+         end) do
+      {:ok, result} -> result
+      {:error, reason} -> {:error, reason}
     end
   end
 

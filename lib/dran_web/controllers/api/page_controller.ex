@@ -70,6 +70,13 @@ defmodule DranWeb.API.PageController do
 
   @doc "POST /api/knowledge-pages — create a page"
   def create(conn, params) do
+    # W6: el destino de ESTA escritura se declara con `scope` (contract
+    # Rules#5) y se traduce en la FRONTERA, en `Dran.Sharing.apply_scope/3`.
+    # Sin `scope`, la escritura conserva el default `private` (y el
+    # `visibility` legacy de la superficie de páginas); con `scope`, este
+    # gobierna y el servidor valida membresía, fallando cerrado con 422.
+    {scoped?, scope, params} = Instance.pop_write_scope(params, drop_visibility: true)
+
     # W5: writes always target the instance workspace.
     params = Map.put(params, "workspace_id", Instance.instance_context_id())
 
@@ -85,17 +92,49 @@ defmodule DranWeb.API.PageController do
       |> Map.put("owner_user_id", Dran.Auth.resolve_owner_user_id(user))
       |> Map.put("agent_name", Dran.Auth.agent_name_from_headers(conn.req_headers))
 
-    case Knowledge.create_page(params) do
+    case create_with_scope(params, scoped?, scope) do
       {:ok, page} ->
         conn
         |> put_status(:created)
         |> json(%{data: page})
 
-      {:error, changeset} ->
+      {:error, {:scope, message}} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: %{detail: message}})
+
+      {:error, {:create, %Ecto.Changeset{} = changeset}} ->
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{errors: format_errors(changeset)})
+
+      {:error, {:create, reason}} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: %{detail: to_string(reason)}})
     end
+  end
+
+  # El insert y la traducción del `scope` van en UNA transacción: un destino
+  # inválido (grupo inexistente o ajeno) revierte la página — nada de
+  # huérfanos, y nunca cae a `private` en silencio (P20).
+  defp create_with_scope(params, scoped?, scope) do
+    Repo.transaction(fn ->
+      case Knowledge.create_page(params) do
+        {:ok, page} ->
+          if scoped? do
+            case Dran.Sharing.apply_scope(page, scope, :page) do
+              {:ok, page} -> page
+              {:error, message} -> Repo.rollback({:scope, message})
+            end
+          else
+            page
+          end
+
+        {:error, reason} ->
+          Repo.rollback({:create, reason})
+      end
+    end)
   end
 
   @doc "PUT /api/knowledge-pages/:slug — update a page"
