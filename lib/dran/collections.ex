@@ -27,6 +27,20 @@ defmodule Dran.Collections do
   end
 
   @doc """
+  Get a collection by slug within ONE owner's namespace (W4a, F30) — the
+  canonical slug scope. `nil` owner is the system bucket, folded with
+  `COALESCE(owner_user_id, 0)` exactly like the unique index.
+  """
+  def get_collection_by_owner_slug(slug, owner_user_id) when is_binary(slug) do
+    Repo.one(
+      from c in Collection,
+        where:
+          c.slug == ^slug and
+            fragment("COALESCE(?, 0) = COALESCE(?, 0)", c.owner_user_id, ^owner_user_id)
+    )
+  end
+
+  @doc """
   Scope-aware fetch (W2): a row outside the reader's scope reads as a missing
   row — no existence leak. Same shape as `Knowledge.get_page_by_slug/3`.
   """
@@ -50,15 +64,12 @@ defmodule Dran.Collections do
     |> Dran.Slug.inject_create(
       field: "name",
       fallback: "collection",
-      taken?: fn candidate ->
-        case Dran.Slug.fetch_attr(attrs, "workspace_id") do
-          workspace_id when is_binary(workspace_id) ->
-            get_collection_by_slug(candidate, workspace_id) != nil
-
-          _ ->
-            false
-        end
-      end
+      # W4a (F30): the `taken?` predicate resolves per `(dueño, tipo)`, not
+      # per workspace — two owners may share a name; one owner may not.
+      taken?:
+        Dran.Slug.owner_scope_taken?(fn candidate ->
+          get_collection_by_owner_slug(candidate, Dran.Slug.fetch_attr(attrs, "owner_user_id"))
+        end)
     )
     |> then(&(%Collection{} |> Collection.changeset(&1) |> Repo.insert()))
   end

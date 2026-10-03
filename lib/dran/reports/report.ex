@@ -69,6 +69,8 @@ defmodule Dran.Reports.Report do
     |> validate_length(:slug, max: 500)
     |> validate_inclusion(:report_type, @report_types)
     |> validate_inclusion(:visibility, ~w(private public shared))
-    |> unique_constraint([:workspace_id, :slug], name: :reports_workspace_id_slug_index)
+    # W4a (F30): unique per `(dueño, tipo)` — reports are one type, so the
+    # owner scopes the slug. NULL owner folds into one bucket.
+    |> unique_constraint(:slug, name: :reports_owner_slug_index)
   end
 end

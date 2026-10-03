@@ -348,6 +348,10 @@ defmodule DranWeb.Router do
     delete "/workspaces/:slug", WorkspaceController, :delete
 
     # Pages (write)
+    #
+    # W4a (F31): `:slug` is an OPAQUE id-or-slug segment. The controller casts
+    # it as a uuid FIRST and falls back to a slug lookup; a forged binary is a
+    # clean 404, never a Postgres uuid-cast crash.
     post "/knowledge-pages", PageController, :create
     put "/knowledge-pages/:slug", PageController, :update
     delete "/knowledge-pages/:slug", PageController, :delete
@@ -430,6 +434,9 @@ defmodule DranWeb.Router do
     # Generic page type routes — PagesLive handles note/concept/entity/reference
     # and the instance's custom types. MUST be defined LAST so first-class
     # entity routes above win.
+    #
+    # W4a (F31): `:slug` is id-or-slug. A uuid is canonical; the slug is a
+    # fallback that PageDetail resolves in place (no redirect hop).
     live "/:type", PagesLive, :index
     live "/:type/:slug", PagesLive, :show
   end

@@ -1,7 +1,11 @@
 defmodule DranWeb.API.PageController do
   use DranWeb, :controller
 
+  import Ecto.Query, only: [where: 3]
+
   alias Dran.Knowledge
+  alias Dran.Knowledge.Page
+  alias Dran.Repo
   alias DranWeb.API.Instance
 
   @doc "GET /api/knowledge-pages — list pages with filters"
@@ -37,7 +41,7 @@ defmodule DranWeb.API.PageController do
     with_context(conn, workspace_slug, fn conn, context ->
       scope = Instance.scope_for(conn, :pages)
 
-      case Knowledge.get_page_by_slug(slug, context.id, scope: scope) do
+      case fetch_page(slug, context.id, scope) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -97,7 +101,7 @@ defmodule DranWeb.API.PageController do
   @doc "PUT /api/knowledge-pages/:slug — update a page"
   def update(conn, %{"slug" => slug} = params) do
     with_context(conn, nil, fn conn, context ->
-      case Knowledge.get_page_by_slug(slug, context.id) do
+      case fetch_page(slug, context.id, nil) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -135,7 +139,7 @@ defmodule DranWeb.API.PageController do
   @doc "DELETE /api/knowledge-pages/:slug — delete a page"
   def delete(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case Knowledge.get_page_by_slug(slug, context.id) do
+      case fetch_page(slug, context.id, nil) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -173,7 +177,7 @@ defmodule DranWeb.API.PageController do
           |> json(%{errors: %{detail: "new_slug is required"}})
 
         true ->
-          case Knowledge.get_page_by_slug(slug, context.id) do
+          case fetch_page(slug, context.id, nil) do
             nil ->
               conn
               |> put_status(:not_found)
@@ -199,7 +203,7 @@ defmodule DranWeb.API.PageController do
   @doc "POST /api/knowledge-pages/:slug/reaugment — refresh embeddings/summary."
   def reaugment(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case Knowledge.get_page_by_slug(slug, context.id) do
+      case fetch_page(slug, context.id, nil) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -244,7 +248,7 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/knowledge-pages/:slug/links — inbound + outbound relations"
   def links(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case Knowledge.get_page_by_slug(slug, context.id) do
+      case fetch_page(slug, context.id, nil) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -266,7 +270,7 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/knowledge-pages/:slug/graph — subgraph centered on a page"
   def graph(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case Knowledge.get_page_by_slug(slug, context.id) do
+      case fetch_page(slug, context.id, nil) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -309,4 +313,46 @@ defmodule DranWeb.API.PageController do
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
+
+  # ── Canonical addressing (W4a, F31) ───────────────────────────────────────
+  #
+  # A page is addressed by its UUID first; a slug only if the value is not a
+  # uuid. `Ecto.UUID.cast/1` runs BEFORE any `Repo.get/2`: a forged binary
+  # (the plugin's `?workspace=` mixed into a path, a stray token) would reach
+  # Postgres as an invalid uuid and blow up the query — the guard turns it
+  # into a normal 404/fallback instead.
+
+  defp fetch_page(id_or_slug, context_id, scope) do
+    case cast_uuid(id_or_slug) do
+      {:ok, uuid} -> fetch_page_by_id(uuid, scope)
+      :error -> fetch_page_by_slug(id_or_slug, context_id, scope)
+    end
+  end
+
+  # A canonical uuid STRING is 36 bytes; `Ecto.UUID.cast/1` also accepts a raw
+  # 16-byte binary, so a 16-char slug would be silently encoded as a uuid.
+  # Require the canonical length — anything else takes the slug path, so a
+  # forged binary never reaches Postgres as an invalid uuid.
+  defp cast_uuid(value) when is_binary(value) do
+    if byte_size(value) == 36, do: Ecto.UUID.cast(value), else: :error
+  end
+
+  defp cast_uuid(_), do: :error
+
+  # Scoped by-id fetch (single policy): a row outside the reader's scope reads
+  # as missing — same no-existence-leak contract as the slug path.
+  defp fetch_page_by_id(uuid, nil), do: Knowledge.get_page(uuid)
+
+  defp fetch_page_by_id(uuid, scope) do
+    Page
+    |> where([p], p.id == ^uuid)
+    |> Dran.ContentVisibility.filter(scope, :page)
+    |> Repo.one()
+  end
+
+  defp fetch_page_by_slug(_slug, nil, _scope), do: nil
+  defp fetch_page_by_slug(slug, context_id, nil), do: Knowledge.get_page_by_slug(slug, context_id)
+
+  defp fetch_page_by_slug(slug, context_id, scope),
+    do: Knowledge.get_page_by_slug(slug, context_id, scope: scope)
 end

@@ -8,6 +8,9 @@ defmodule Dran.Slug do
 
   alias Dran.Knowledge
 
+  # Techo de reintentos al resolver una colisión de slug (ver `ensure_unique/3`).
+  @max_attempts 20
+
   @doc """
   Convert a string to a URL-safe slug.
 
@@ -49,8 +52,10 @@ defmodule Dran.Slug do
   @doc """
   Generate a unique slug from a title within a context.
 
-  Slugifies `title`, falls back to `fallback_type` if the result is empty,
-  then ensures the slug is unique within the given context.
+  LEGACY workspace scope: kept for `Knowledge.create_page/1` until the page
+  context passes an owner. The canonical scope is `owner_scope_taken?/1`
+  (`(dueño, tipo)`), which is what collections/reports and the page editor
+  use (W4a, F30).
   """
   @spec generate(binary() | nil, binary() | nil, binary()) :: binary()
   def generate(title, workspace_id, fallback_type) do
@@ -87,11 +92,45 @@ defmodule Dran.Slug do
   updates, closes over the record's own slug so it is NOT treated as taken.
 
   Attempt 0 returns `base` as-is; later attempts append a random hex suffix.
+
+  The loop is BOUNDED: a predicate that always answers "taken" (a lookup
+  passed where a boolean predicate was expected, say) must not hang the
+  writer — past `@max_attempts` it gives up loudly instead.
   """
   @spec ensure_unique(binary(), (binary() -> boolean()), non_neg_integer()) :: binary()
   def ensure_unique(base, taken?, attempt \\ 0) when is_function(taken?, 1) do
     slug = candidate_slug(base, attempt)
-    if taken?.(slug), do: ensure_unique(base, taken?, attempt + 1), else: slug
+
+    # `if` (no `not`) a propósito: hay llamadores cuyo predicado devuelve el
+    # registro encontrado en vez de un booleano, y eso es truthy igual.
+    if taken?.(slug) do
+      if attempt >= @max_attempts do
+        raise ArgumentError,
+              "no unique slug for #{inspect(base)} after #{@max_attempts} attempts"
+      end
+
+      ensure_unique(base, taken?, attempt + 1)
+    else
+      slug
+    end
+  end
+
+  @doc """
+  The canonical `taken?` predicate: a slug is taken when it already exists
+  for the SAME `(dueño, tipo)` — never by workspace (W4a, shaping F30/F31).
+
+  `lookup` is a 1-arity fn `candidate_slug -> record | nil` the caller has
+  ALREADY narrowed to ONE owner and ONE resource type (a page's `page_type`,
+  or the table's own kind for collections/reports). A `nil` owner is a real
+  bucket, not a free pass: system content collides with other system content
+  of the same type — the same folding the unique index does with
+  `COALESCE(owner_user_id, 0)`.
+
+  Pass the result as `:taken?` to `inject_create/2`.
+  """
+  @spec owner_scope_taken?((binary() -> term())) :: (binary() -> boolean())
+  def owner_scope_taken?(lookup) when is_function(lookup, 1) do
+    fn candidate -> lookup.(candidate) != nil end
   end
 
   # ──────────────────────────────────────────────────────────────────────────

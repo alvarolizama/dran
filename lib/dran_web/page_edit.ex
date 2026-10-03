@@ -231,10 +231,10 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("archive_page", %{"slug" => slug}, socket) do
-    # List view — find page by slug and archive it
+    # List view — find page by id-or-slug and archive it
     workspace_id = workspace_id(socket)
 
-    case Knowledge.get_page_by_slug(slug, workspace_id) do
+    case fetch_page(slug, workspace_id) do
       nil ->
         {:noreply, put_flash(socket, :error, gettext("Page not found."))}
 
@@ -277,10 +277,10 @@ defmodule DranWeb.PageEdit do
   end
 
   def handle_event("unarchive_page", %{"slug" => slug}, socket) do
-    # List view — find page by slug and unarchive it
+    # List view — find page by id-or-slug and unarchive it
     workspace_id = workspace_id(socket)
 
-    case Knowledge.get_page_by_slug(slug, workspace_id) do
+    case fetch_page(slug, workspace_id) do
       nil ->
         {:noreply, put_flash(socket, :error, gettext("Page not found."))}
 
@@ -583,6 +583,25 @@ defmodule DranWeb.PageEdit do
 
   defp page_path(type, slug, _workspace_slug),
     do: "/#{DranWeb.PageTypes.path(type)}/#{slug}"
+
+  # W4a (F31): canonical addressing is the uuid; the slug is a fallback.
+  # `id_or_slug` is either — the resolver decides. A forged binary never
+  # reaches `Repo.get/2`: it takes the slug path.
+  defp fetch_page(id_or_slug, workspace_id) do
+    case cast_uuid(id_or_slug) do
+      {:ok, uuid} -> Knowledge.get_page(uuid)
+      :error when is_binary(workspace_id) -> Knowledge.get_page_by_slug(id_or_slug, workspace_id)
+      :error -> nil
+    end
+  end
+
+  # Canonical uuid string = 36 bytes; `Ecto.UUID.cast/1` also accepts a raw
+  # 16-byte binary (a 16-char slug would be misread as a uuid).
+  defp cast_uuid(value) when is_binary(value) do
+    if byte_size(value) == 36, do: Ecto.UUID.cast(value), else: :error
+  end
+
+  defp cast_uuid(_), do: :error
 
   # Index path for the current page type — workspace-scoped when a slug is
   # assigned (e.g. "/test/notes"), bare otherwise ("/notes").

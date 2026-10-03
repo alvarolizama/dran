@@ -10,8 +10,11 @@ defmodule Dran.PropsMaterializer do
 
   For each materializable prop on a page:
 
-  1. **Get-or-create** a target page in the same context (deduped by slug).
-     The target's `page_type` depends on the prop (see `@prop_map`).
+  1. **Resolve the target.** A pointer that casts as a uuid is resolved BY
+     ID (W4a, F32) — renaming the target's slug never breaks the edge and no
+     page is created with a uuid slug. A non-id value keeps the legacy
+     get-or-create path, deduped by slug in the same context. The target's
+     `page_type` depends on the prop (see `@prop_map`).
   2. **Create a typed relation** from the source page to the target page.
 
   Like `Dran.EntityLinker`, this runs inside the augmenter with a `rescue`
@@ -34,9 +37,11 @@ defmodule Dran.PropsMaterializer do
 
   * Props NOT in `@prop_map` are silently ignored (they stay in `meta.props`
     but generate no edge).
-  * Skips self-links (a page whose slug matches the target slug).
-  * Skips targets whose slug collides with an existing page of a different
-    `page_type` than the mapped one (never hijack a note's slug).
+  * Skips self-links (a prop whose target id is the page itself).
+  * Skips id pointers that do not resolve, or that resolve to a page of a
+    different `page_type` than the mapped one.
+  * Skips (legacy) slug targets that collide with an existing page of a
+    different `page_type` than the mapped one (never hijack a note's slug).
   * Caps materializations per page at `@max_props_per_page`.
   * Relations use `Knowledge.create_relation/1` (on_conflict: :nothing), so
     re-running the augmenter is idempotent.
@@ -105,12 +110,8 @@ defmodule Dran.PropsMaterializer do
 
   defp materialize_one(page, prop_key, prop_value) do
     with {:ok, {relation_type, target_type}} <- fetch_mapping(prop_key),
-         {:ok, target_slug} <- normalize_value(prop_value),
-         :ok <- skip_self_link(page, target_slug),
-         {:ok, target_page} <-
-           PageFactory.get_or_create(page, target_slug, target_type,
-             created_by: "props_materializer"
-           ),
+         {:ok, target_page} <- resolve_target(page, prop_value, target_type),
+         :ok <- skip_self_link(page, target_page),
          :ok <- PageFactory.create_edge(page, target_page, relation_type, "props_materializer") do
       {:ok, :linked}
     else
@@ -121,6 +122,26 @@ defmodule Dran.PropsMaterializer do
       {:error, reason} ->
         Logger.warning("PropsMaterializer failed #{page.slug}.#{prop_key}: #{inspect(reason)}")
         {:error, reason}
+    end
+  end
+
+  # A pointer is an ID when the value casts as a uuid (W4a, F32): the target
+  # is fetched BY ID, so renaming its slug never breaks the edge and no page
+  # is ever created with a uuid as its slug. Non-id values keep the legacy
+  # slug path (get-or-create the target of `target_type`).
+  defp resolve_target(page, value, target_type) do
+    case normalize_id(value) do
+      {:ok, id} ->
+        case Dran.Knowledge.get_page(id) do
+          %Page{page_type: ^target_type} = target -> {:ok, target}
+          %Page{page_type: other} -> {:skip, "id points to #{other} page"}
+          nil -> {:skip, "id does not resolve"}
+        end
+
+      :error ->
+        with {:ok, slug} <- normalize_value(value) do
+          PageFactory.get_or_create(page, slug, target_type, created_by: "props_materializer")
+        end
     end
   end
 
@@ -146,6 +167,22 @@ defmodule Dran.PropsMaterializer do
 
   defp normalize_value(_), do: {:skip, "prop value is not a string"}
 
-  defp skip_self_link(%Page{slug: slug}, slug), do: {:skip, "self-link"}
+  # Cast a prop value as a uuid — the id pointer form (W4a, F32). Forged /
+  # non-uuid strings are NOT ids; they take the slug path. The canonical uuid
+  # string is 36 bytes: `Ecto.UUID.cast/1` also accepts a raw 16-byte binary,
+  # so a 16-char prop value would be silently read as a uuid.
+  defp normalize_id(value) when is_binary(value) do
+    trimmed = String.trim(value)
+
+    if byte_size(trimmed) == 36 do
+      Ecto.UUID.cast(trimmed)
+    else
+      :error
+    end
+  end
+
+  defp normalize_id(_), do: :error
+
+  defp skip_self_link(%Page{id: id}, %Page{id: id}), do: {:skip, "self-link"}
   defp skip_self_link(_, _), do: :ok
 end

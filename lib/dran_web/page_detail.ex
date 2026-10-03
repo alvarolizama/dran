@@ -28,8 +28,10 @@ defmodule DranWeb.PageDetail do
 
   import Phoenix.LiveView, only: [allow_upload: 3, push_navigate: 2, connected?: 1]
   import Phoenix.Component, only: [assign: 2, to_form: 2]
+  import Ecto.Query, only: [where: 3]
 
   alias Dran.Knowledge
+  alias Dran.Knowledge.Page
   alias DranWeb.Plugs.Auth
 
   @upload_accept ~w(image/* video/* audio/* application/pdf text/plain text/markdown text/csv text/html application/json application/zip)
@@ -120,8 +122,7 @@ defmodule DranWeb.PageDetail do
 
     with %{} = context <- context,
          false <- is_nil(scope),
-         %Dran.Knowledge.Page{} = page <-
-           Knowledge.get_page_by_slug(slug, context.id, scope: scope) do
+         %Dran.Knowledge.Page{} = page <- fetch_page(slug, context.id, scope) do
       active_tab = Map.get(socket.assigns, :active_tab, "content")
 
       {:noreply,
@@ -162,6 +163,43 @@ defmodule DranWeb.PageDetail do
       nil -> nil
       user -> Dran.ContentVisibility.resolve(socket.assigns[:context], user, :pages)
     end
+  end
+
+  # ── Canonical addressing (W4a, F31) ───────────────────────────────────────
+  #
+  # A page is addressed by its UUID first; the slug is a fallback. The cast
+  # runs BEFORE any Repo lookup, so a forged binary never reaches Postgres as
+  # an invalid uuid. The by-id read goes through the same single policy.
+  #
+  # The slug path resolves IN PLACE: a `push_patch` to the canonical
+  # `/:type/:id` during mount is surfaced by `Phoenix.LiveViewTest.live/2` as
+  # a live_redirect and would break every slug-addressed web test. Canonical
+  # links (uuid) are what the link builders emit going forward; the slug URL
+  # keeps working as a bookmark/legacy fallback.
+
+  defp fetch_page(id_or_slug, context_id, scope) do
+    case cast_uuid(id_or_slug) do
+      {:ok, uuid} -> fetch_page_by_id(uuid, scope)
+      :error -> Knowledge.get_page_by_slug(id_or_slug, context_id, scope: scope)
+    end
+  end
+
+  # A canonical uuid STRING is 36 bytes. `Ecto.UUID.cast/1` ALSO accepts a
+  # raw 16-byte binary, so a 16-char slug ("antes-del-rename") would be
+  # silently encoded as a uuid and the lookup would miss. Require the
+  # canonical length before letting the cast decide — a forged binary of any
+  # other length takes the slug path instead of crashing a `Repo.get/2`.
+  defp cast_uuid(value) when is_binary(value) do
+    if byte_size(value) == 36, do: Ecto.UUID.cast(value), else: :error
+  end
+
+  defp cast_uuid(_), do: :error
+
+  defp fetch_page_by_id(uuid, scope) do
+    Page
+    |> where([p], p.id == ^uuid)
+    |> Dran.ContentVisibility.filter(scope, :page)
+    |> Dran.Repo.one()
   end
 
   @doc """

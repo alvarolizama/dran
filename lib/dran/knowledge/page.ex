@@ -156,7 +156,12 @@ defmodule Dran.Knowledge.Page do
     |> validate_inclusion(:kb_confidence, @confidence_levels)
     |> validate_inclusion(:visibility, ~w(private public shared))
     |> put_body_hash()
-    |> unique_constraint([:workspace_id, :slug], name: :knowledge_pages_workspace_id_slug_index)
+    # W4a (F30): the slug is unique per `(dueño, tipo)`, not per workspace.
+    # The index folds a NULL owner into one shared bucket (COALESCE … , 0),
+    # so system content stays unique per type instead of collision-free.
+    # The error lands on `:slug` (the field the writer can change) — the
+    # constraint NAME does the matching, not the field list.
+    |> unique_constraint(:slug, name: :knowledge_pages_owner_type_slug_index)
   end
 
   @doc "Changeset for creating a new page"

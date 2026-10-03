@@ -138,32 +138,35 @@ defmodule DranWeb.API.RelationController do
     # SEC-011: validate the user has access to the relation's context before deleting
     user = conn.assigns[:user]
 
-    case Dran.Repo.get(Dran.Relation, id) do
-      nil ->
+    # W4a (F31): canonical addressing is the uuid. `Ecto.UUID.cast/1` runs
+    # before `Repo.get/2` — a forged/non-uuid binary is a clean 404, never a
+    # Postgres uuid-cast crash.
+    with {:ok, uuid} <- Ecto.UUID.cast(id),
+         %Dran.Relation{} = relation <- Dran.Repo.get(Dran.Relation, uuid) do
+      # Load the source page to check context access
+      source_page = Dran.Knowledge.get_page(relation.source_id)
+
+      if user && source_page &&
+           (user.is_owner or user_has_context_access?(user, source_page.workspace_id)) do
+        case Knowledge.delete_relation(relation) do
+          {:ok, _} ->
+            conn |> send_resp(:no_content, "")
+
+          {:error, _} ->
+            conn
+            |> put_status(:internal_server_error)
+            |> json(%{errors: %{detail: "could not delete"}})
+        end
+      else
+        conn
+        |> put_status(:forbidden)
+        |> json(%{errors: %{detail: "access to context denied"}})
+      end
+    else
+      _ ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "relation not found"}})
-
-      relation ->
-        # Load the source page to check context access
-        source_page = Dran.Knowledge.get_page(relation.source_id)
-
-        if user && source_page &&
-             (user.is_owner or user_has_context_access?(user, source_page.workspace_id)) do
-          case Knowledge.delete_relation(relation) do
-            {:ok, _} ->
-              conn |> send_resp(:no_content, "")
-
-            {:error, _} ->
-              conn
-              |> put_status(:internal_server_error)
-              |> json(%{errors: %{detail: "could not delete"}})
-          end
-        else
-          conn
-          |> put_status(:forbidden)
-          |> json(%{errors: %{detail: "access to context denied"}})
-        end
     end
   end
 

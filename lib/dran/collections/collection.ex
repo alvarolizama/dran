@@ -52,6 +52,8 @@ defmodule Dran.Collections.Collection do
     |> validate_inclusion(:visibility, ~w(private public shared))
     |> validate_length(:name, max: 500)
     |> validate_length(:slug, max: 500)
-    |> unique_constraint([:workspace_id, :slug], name: :collections_workspace_id_slug_index)
+    # W4a (F30): unique per `(dueño, tipo)` — one type per table, so the
+    # owner is the discriminating axis. NULL owner folds into one bucket.
+    |> unique_constraint(:slug, name: :collections_owner_slug_index)
   end
 end
