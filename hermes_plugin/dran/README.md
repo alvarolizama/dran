@@ -4,27 +4,62 @@ Memoria compartida multi-agente respaldada por tu instancia de Dran. El plugin
 es transporte delgado: dedupe, trust, search híbrido y extracción de facts
 viven server-side en Dran (`/api/memory`).
 
+## Dos mitades, un solo archivo de config
+
+El plugin se parte en dos mitades que comparten **una única fuente de verdad**
+(`$HERMES_HOME/dran/config.json` + el token en el `.env` del perfil):
+
+- **Runtime headless** (`__init__.py`): sin UI y sin estado propio; se
+  configura **solo por archivos**. Lee `config.json` y el `.env`, y funciona
+  sin el panel.
+- **Panel desktop** (`config_schema.py`, declarado en `plugin.yaml`): la página
+  **Hermes → Memory → Dran**. Escribe **ese mismo** `config.json` y además
+  puede aplicar esa config a un **perfil headless remoto** (por su CLI y sus
+  archivos del host). Es una vista sobre el archivo que el runtime lee, nunca
+  una segunda fuente.
+
+No hay un segundo archivo de config ni una segunda credencial: **un solo token**
+(`DRAN_API_KEY`, el `api_token` de la cuenta) para las dos mitades (W9/A10).
+
 > **Single-workspace (W5):** la instancia de Dran ES el workspace — no hay
 > elección de workspace ni matriz workspaces×nivel. Toda llamada apunta a la
-> instancia; el setting `workspace` queda solo como valor informativo.
+> instancia; ya no existe un setting `workspace` en la config del plugin.
 
-## Configuración — con UI en el dashboard de Hermes
+## Configuración — panel desktop
 
 El plugin declara su config (`config_schema.py`), así que el panel de memoria
 del dashboard la renderiza solo: **Hermes → Memory → Dran** (fields: API key,
-Base URL, Memory workspace, Auto recall, Auto capture, Max recall results,
-Recall char budget, Recall cadence).
+Base URL, Write scope, Group slug, Auto recall, Auto capture, Max recall
+results, Recall char budget, Recall cadence).
 También funciona `hermes memory setup` → elegir "dran".
 
-Se persiste en `$HERMES_HOME/dran/config.json` (la API key al `.env` del
-perfil — `DRAN_API_KEY`, single source of truth para todas las tools).
+Se persiste en `$HERMES_HOME/dran/config.json` (la credencial al `.env` del
+perfil — `DRAN_API_KEY`, único hogar del token, compartido por el runtime y
+todas las tools).
 
 ## La instancia es el workspace
 
 El agente guarda sus facts y páginas en la instancia que sirve su `base_url`,
-sin más. La API key define el alcance: la key lee y escribe **exactamente lo
-que su dueño** (lo privado del dueño, lo público, y lo compartido con él). El
-campo `workspace` de la config queda aceptado pero Dran no decide nada con él.
+sin más. La credencial define el alcance: el token lee y escribe **exactamente
+lo que su dueño** (lo privado del dueño, lo público, y lo compartido con él).
+
+### El destino de escritura: `scope`
+
+Cada escritura declara a dónde va con **`scope`** (W6, Rules#5) — el
+vocabulario de la **intención**, no la columna de almacenamiento:
+
+| `scope` | Qué significa |
+|---|---|
+| `private` (default) | Solo la cuenta dueña del token. |
+| `public` | Todos en la instancia. |
+| `group` + slug | Solo los miembros de ese grupo. |
+
+El servidor traduce `scope` a `visibility` + un share en `content_shares`,
+**valida la membresía y falla cerrado (422)** si el grupo no existe o no es
+tuyo. El grupo viaja por **slug** (su identidad estable y copiable);
+`GET /api/groups` (W7) lista los grupos donde sos miembro. En el panel, el
+default del perfil se elige con los campos **Write scope** y **Group slug**
+(el slug solo aplica cuando el scope es `group`).
 
 La misma respuesta trae los **page types efectivos** de la instancia
 (`page_types` y `page_type_defs`: los 4 built-in — `note`, `entity`, `concept`,
@@ -40,12 +75,12 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
 
 ## Setup (por perfil de Hermes)
 
-1. En Dran → Settings → API Keys: crea la key con nivel `write` (la key lee
-   y escribe exactamente lo que su dueño). La
-   key **no crea un actor**: el `created_by` de cada recuerdo lo resuelve el
-   servidor — el header `X-Hermes-Agent` si viene, si no el **nombre de la
-   key** — y `owner_user_id` es el usuario dueño de la key.
-2. Guarda la key **una sola vez** en el `.env` del perfil:
+1. En Dran → Settings → **Account**: copia el **API token** de la cuenta. Es la
+   credencial única (W3, `users.api_token`): **no crea un actor**. El
+   `created_by` de cada recuerdo lo resuelve el servidor — el header
+   `X-Hermes-Agent` si viene, si no el **email de la cuenta** — y
+   `owner_user_id` es la cuenta dueña del token.
+2. Guarda el token **una sola vez** en el `.env` del perfil:
 
    ```bash
    # ~/.hermes/profiles/<perfil>/.env
@@ -54,7 +89,7 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
 
    Ese mismo valor lo consume el plugin entero (memory provider + tools).
 3. Configura el resto desde la UI: **dashboard de Hermes → Memory → Dran**
-   (o `hermes memory setup` → elegir "dran"). La API key pégala en el campo
+   (o `hermes memory setup` → elegir "dran"). El token pégalo en el campo
    del panel — va al `.env`, no al JSON.
 
    Editada a mano, la config vive en `$HERMES_HOME/dran/config.json`:
@@ -62,7 +97,8 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
    ```json
    {
      "base_url": "http://localhost:4000",
-     "workspace": "personal",
+     "scope": "private",
+     "scope_group": "",
 
      "auto_recall": true,
      "auto_capture": true,
@@ -77,6 +113,7 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
 
    | Key | Default | Qué controla |
    |---|---|---|
+   | `scope` | `private` | Destino por escritura del perfil: `private` \| `public` \| `group` (+ `scope_group`) |
    | `max_recall_results` | 5 | Facts por recall (1–20) |
    | `max_recall_chars` | 800 | Budget de caracteres inyectados por turno — corta en hechos completos, nunca a media frase |
    | `recall_cadence` | 1 | Mínimo de turnos entre búsquedas de recall. 1 = cada turno; 2+ se salta la búsqueda (y sus tokens) en los turnos off |
@@ -119,10 +156,10 @@ estas tools son el consumo del agente.
 | Tool | Qué hace |
 |---|---|
 | `dran_search` | Busca páginas (fts / fuzzy / semantic / hybrid) |
-| `dran_list_pages` | Lista páginas, filtrable por tipo (los válidos son los efectivos del workspace, leídos de `/api/agent/config`) |
+| `dran_list_pages` | Lista páginas, filtrable por tipo (los válidos son los efectivos de la instancia, leídos de `/api/agent/config`) |
 | `dran_list_page_types` | Lista los page types efectivos (4 built-in + custom) con sus definiciones — slug, label, plural, path, icon, color, meta fields — vía `GET /api/workspaces/instance/page-types` |
 | `dran_get_page` | Lee el cuerpo completo por slug |
-| `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas (`page_type` se valida fail-closed contra los tipos efectivos del workspace) |
+| `dran_create_page` / `dran_update_page` / `dran_delete_page` | Ciclo de vida de páginas (`page_type` se valida fail-closed contra los tipos efectivos de la instancia) |
 | `dran_get_links` | Relaciones entrantes/salientes de una página |
 | `dran_create_relation` / `dran_delete_relation` | Relaciones tipadas y dirigidas |
 | `dran_start_worker` / `dran_get_worker_session` | Dispara y sondea curator / link_gardener / graph_rag |
@@ -139,8 +176,9 @@ por closure (`_make_handler`).
 - `initialize` recibe `agent_identity` (nombre del perfil) → header
   `X-Hermes-Agent` en cada request. Dran lo persiste server-side como
   `agent_name` del contenido escrito; si el header falta, el `created_by` es el
-  nombre de la key. `owner_user_id` = `api_keys.created_by_user_id` (dueño de
-  la key). El header es atribución, no autorización: nunca amplía acceso.
+  **email de la cuenta** dueña del token. `owner_user_id` = la cuenta dueña del
+  token (W3: una sola credencial, `users.api_token`). El header es atribución,
+  no autorización: nunca amplía acceso.
 - `agent_context != "primary"` (subagent, cron): prefetch permitido,
   **writes deshabilitados** — los agentes secundarios no contaminan la
   memoria compartida.
