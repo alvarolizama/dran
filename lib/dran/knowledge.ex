@@ -644,12 +644,38 @@ defmodule Dran.Knowledge do
       if is_binary(slug) and String.trim(slug) != "" do
         slug
       else
-        Dran.Slug.generate(title, attrs["workspace_id"], attrs["page_type"])
+        # W4a (F30): el slug auto-gestionado es único por `(dueño, tipo)` — el
+        # mismo scope que impone `knowledge_pages_owner_type_slug_index` —, no
+        # por workspace: dos cuentas pueden sostener el mismo título, una no.
+        page_slug(title, attrs["owner_user_id"], attrs["page_type"])
       end
 
     attrs
     |> Map.put("title", title)
     |> Map.put("slug", slug)
+  end
+
+  # El scope canónico del slug de una página (W4a, F30): `(dueño, tipo)`,
+  # plegando el dueño NULL con `COALESCE(owner_user_id, 0)` exactamente como
+  # `knowledge_pages_owner_type_slug_index`. Un dueño NULL es el balde del
+  # sistema: el contenido de sistema sigue siendo único por tipo en vez de
+  # libre de colisiones.
+  defp page_slug(title, owner_user_id, page_type) do
+    taken? = fn candidate -> page_slug_taken?(candidate, owner_user_id, page_type) end
+
+    Dran.Slug.ensure_unique(Dran.Slug.base_from_title(title, page_type), taken?)
+  end
+
+  # `owner_scope_taken?/1` es para `inject_create/2` (que espera un lookup
+  # registro-o-nil); acá el predicado ya es booleano: `Repo.exists?`.
+  defp page_slug_taken?(candidate, owner_user_id, page_type) do
+    Repo.exists?(
+      from(p in Page,
+        where:
+          p.slug == ^candidate and p.page_type == ^page_type and
+            fragment("COALESCE(?, 0) = COALESCE(?, 0)", p.owner_user_id, ^owner_user_id)
+      )
+    )
   end
 
   defp derive_title(body) when is_binary(body) do
@@ -823,10 +849,23 @@ defmodule Dran.Knowledge do
     log_action(page.workspace_id, "page.delete", page.slug, %{page_id: page.id})
     workspace_id = page.workspace_id
 
-    case Repo.delete(page) do
-      {:ok, page} ->
-        broadcast_page_change(workspace_id, :deleted, page)
-        {:ok, page}
+    result =
+      Repo.transaction(fn ->
+        # `relations` es polimórfica y no tiene FK (F29): sin esta limpieza
+        # quedarían aristas huérfanas — el `@doc` prometía lo que el código
+        # no hacía.
+        Relation.delete_edges("page", page.id)
+
+        case Repo.delete(page) do
+          {:ok, deleted} -> deleted
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+
+    case result do
+      {:ok, deleted} ->
+        broadcast_page_change(workspace_id, :deleted, deleted)
+        {:ok, deleted}
 
       {:error, changeset} ->
         {:error, changeset}

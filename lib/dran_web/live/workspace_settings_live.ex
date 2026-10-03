@@ -1441,7 +1441,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
   # not describe a field, is reported with the reason instead of being silently
   # dropped (the old behaviour turned a typo into "no fields, saved fine").
 
-  @meta_field_types ~w(text date props)
+  @meta_field_types ~w(text date props checklist)
 
   defp parse_meta_fields(nil), do: {:ok, []}
   defp parse_meta_fields(""), do: {:ok, []}

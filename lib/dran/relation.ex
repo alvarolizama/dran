@@ -43,7 +43,7 @@ defmodule Dran.Relation do
              :inserted_at
            ]}
   @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with informs)
-  @node_types ~w(page collection memory)
+  @node_types ~w(page collection memory goal task)
 
   schema "relations" do
     field :source_id, :binary_id
@@ -128,5 +128,26 @@ defmodule Dran.Relation do
   defp endpoint_module("page"), do: Dran.Knowledge.Page
   defp endpoint_module("collection"), do: Dran.Collections.Collection
   defp endpoint_module("memory"), do: Dran.Memory
+  defp endpoint_module("goal"), do: Dran.Goals.Goal
+  defp endpoint_module("task"), do: Dran.Tasks.Task
   defp endpoint_module(_), do: nil
+
+  # ── Edge cleanup ──────────────────────────────────────────────────────────
+
+  @doc """
+  Delete every edge where `(type, id)` participates as source or target.
+
+  `relations` is polymorphic and has NO FK (F29): deleting a node without
+  this leaves an orphan edge — a dead node in the graph. `Dran.Knowledge`,
+  `Dran.Goals` and `Dran.Tasks` call it from their deletes.
+  """
+  @spec delete_edges(binary(), binary()) :: {non_neg_integer(), nil}
+  def delete_edges(type, id) when is_binary(type) and is_binary(id) do
+    Dran.Repo.delete_all(
+      from r in __MODULE__,
+        where:
+          (r.source_type == ^type and r.source_id == ^id) or
+            (r.target_type == ^type and r.target_id == ^id)
+    )
+  end
 end

@@ -201,7 +201,11 @@ defmodule DranWeb.MarkdownEditorComponents do
 
   def meta_fields(assigns) do
     raw_fields = Dran.Knowledge.PageMeta.meta_fields_for(assigns.page_type)
-    fields = Enum.map(raw_fields, &normalise_meta_field/1)
+
+    fields =
+      raw_fields
+      |> Enum.map(&normalise_meta_field/1)
+      |> Enum.reject(&is_nil/1)
 
     {link_fields, plain_fields} =
       Enum.split_with(fields, fn {type, _, _, _} -> type == :slug_select end)
@@ -284,7 +288,7 @@ defmodule DranWeb.MarkdownEditorComponents do
           else
             []
           end %>
-        <% options = Enum.map(pages, fn p -> {p.title, p.slug} end) %>
+        <% options = Enum.map(pages, fn p -> {p.title, p.id} end) %>
         <% prompt =
           case slug_type do
             "project" -> gettext("No project")
@@ -320,6 +324,21 @@ defmodule DranWeb.MarkdownEditorComponents do
           placeholder={placeholder || @label}
           label={@label}
         />
+      <% :checklist -> %>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{@label}</span>
+            <span class="label-text-alt text-base-content/50">pasos</span>
+          </label>
+          <.checklist_editor
+            id={"page-meta-checklist-#{@key}"}
+            name={"page[meta][#{@key}]"}
+            value={@value}
+          />
+          <p class="mt-1.5 text-xs leading-snug text-base-content/50">
+            {gettext("Ordered steps. Checking one does not create a task.")}
+          </p>
+        </div>
       <% :props -> %>
         <div class="form-control">
           <label class="label">
@@ -580,6 +599,162 @@ defmodule DranWeb.MarkdownEditorComponents do
   defp format_prop_row({key, value}) when is_binary(value), do: {to_string(key), value}
   defp format_prop_row({key, value}), do: {to_string(key), Jason.encode!(value)}
 
+  # ── Checklist editor ──────────────────────────────────────────────────────
+  #
+  # El campo compuesto `:checklist` (molde de `props_editor`): filas de
+  # checkbox + texto, un botón para agregar y un input oculto con el array
+  # canónico `[%{"text", "done"}]`. Es la MISMA forma que el checklist de una
+  # task, pero su hogar es el jsonb de la página-plan: tachar un ítem no crea
+  # ni mueve tasks ni toca el board.
+  #
+  # Puramente cliente por hook colocado — sin round-trips al servidor.
+
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :value, :any, default: nil
+
+  def checklist_editor(assigns) do
+    items = checklist_items(assigns.value)
+    json = if items == [], do: "[]", else: Jason.encode!(items)
+
+    assigns =
+      assigns
+      |> assign(:items, items)
+      |> assign(:json, json)
+
+    ~H"""
+    <div id={@id} phx-hook=".ChecklistEditor" data-checklist-editor>
+      <div class="flex flex-col gap-1.5" data-checklist-rows>
+        <div
+          :for={{item, index} <- Enum.with_index(@items)}
+          class="flex items-center gap-2"
+          data-checklist-row
+        >
+          <input
+            type="checkbox"
+            data-checklist-done
+            checked={item["done"]}
+            class="checkbox checkbox-sm"
+          />
+          <input
+            type="text"
+            data-checklist-text
+            value={item["text"]}
+            placeholder={gettext("Step")}
+            autocomplete="off"
+            aria-label={gettext("Step %{n}", n: index + 1)}
+            class="min-w-0 flex-1 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button
+            type="button"
+            data-checklist-remove
+            aria-label={gettext("Remove step")}
+            class="btn btn-ghost btn-xs btn-square shrink-0 text-base-content/40 hover:text-error"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      <button
+        type="button"
+        data-checklist-add
+        class="mt-1.5 w-full rounded-lg border border-dashed border-base-300 py-1.5 text-sm text-base-content/50 transition-colors hover:border-primary hover:text-primary"
+      >
+        + {gettext("Add step")}
+      </button>
+      <input type="hidden" name={@name} value={@json} data-checklist-value />
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ChecklistEditor">
+        export default {
+          mounted() {
+            const root = this.el;
+            const hidden = root.querySelector("[data-checklist-value]");
+            const rowsEl = root.querySelector("[data-checklist-rows]");
+
+            const sync = () => {
+              const items = [];
+              rowsEl.querySelectorAll("[data-checklist-row]").forEach((row) => {
+                const text = row.querySelector("[data-checklist-text]").value;
+                const done = row.querySelector("[data-checklist-done]").checked;
+                if (text.trim().length > 0) items.push({ text: text, done: done });
+              });
+              hidden.value = JSON.stringify(items);
+              hidden.dispatchEvent(new Event("change", { bubbles: true }));
+            };
+
+            const bind = (row) => {
+              row.querySelector("[data-checklist-text]").addEventListener("input", sync);
+              row.querySelector("[data-checklist-done]").addEventListener("change", sync);
+              row.querySelector("[data-checklist-remove]").addEventListener("click", () => {
+                row.remove();
+                sync();
+              });
+            };
+
+            rowsEl.querySelectorAll("[data-checklist-row]").forEach(bind);
+
+            const addRow = () => {
+              const div = document.createElement("div");
+              div.className = "flex items-center gap-2";
+              div.dataset.checklistRow = "";
+
+              const cb = document.createElement("input");
+              cb.type = "checkbox";
+              cb.dataset.checklistDone = "";
+              cb.className = "checkbox checkbox-sm";
+
+              const txt = document.createElement("input");
+              txt.type = "text";
+              txt.dataset.checklistText = "";
+              txt.placeholder = "Step";
+              txt.autocomplete = "off";
+              txt.className =
+                "min-w-0 flex-1 rounded-lg border border-base-300 bg-base-100 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
+
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.dataset.checklistRemove = "";
+              btn.className =
+                "btn btn-ghost btn-xs btn-square shrink-0 text-base-content/40 hover:text-error";
+              btn.textContent = "×";
+
+              div.appendChild(cb);
+              div.appendChild(txt);
+              div.appendChild(btn);
+              rowsEl.appendChild(div);
+              bind(div);
+              txt.focus();
+            };
+
+            root.querySelector("[data-checklist-add]").addEventListener("click", addRow);
+          }
+        };
+      </script>
+    </div>
+    """
+  end
+
+  # Ítems para el render inicial. Acepta la lista persistida, el JSON de la
+  # lista (valor vivo del form a medio editar) o cualquier otra cosa.
+  defp checklist_items(value), do: value |> checklist_list() |> Enum.map(&checklist_item/1)
+
+  defp checklist_list(value) when is_list(value), do: Enum.filter(value, &is_map/1)
+
+  defp checklist_list(value) when is_binary(value) do
+    case Jason.decode(value) do
+      {:ok, list} when is_list(list) -> Enum.filter(list, &is_map/1)
+      _ -> []
+    end
+  end
+
+  defp checklist_list(_), do: []
+
+  defp checklist_item(item) do
+    %{
+      "text" => Map.get(item, "text") || Map.get(item, :text) || "",
+      "done" => (Map.get(item, "done") || Map.get(item, :done)) == true
+    }
+  end
+
   # ── Tuple normalisation ───────────────────────────────────────────────────
   #
   # `meta_fields_for/1` returns tuples of variable arity. We normalise every
@@ -619,6 +794,35 @@ defmodule DranWeb.MarkdownEditorComponents do
     # 5-arity: options list + trailing keyword opts.
     merged = Keyword.merge([options: options], extra_opts)
     {type, key, label, merged}
+  end
+
+  # Un tipo declarado por la instancia (`workspace_page_types`) viaja como
+  # array JSON con el tipo en string (`Dran.Workspace.page_type_meta_fields/2`).
+  # Se mapea al átomo equivalente para que el renderer lo trate como un campo
+  # built-in (es lo que hace posible `:checklist` en un plan declarado); un
+  # tipo fuera del vocabulario se descarta en vez de romper el render.
+  @known_field_types ~w(text date props checklist select slug_select number)
+
+  defp normalise_meta_field({type, key, label})
+       when is_binary(type) and is_binary(key) and is_binary(label) do
+    case field_type_atom(type) do
+      nil -> nil
+      atom -> normalise_meta_field({atom, key, label})
+    end
+  end
+
+  defp normalise_meta_field({type, key, label, opts})
+       when is_binary(type) and is_binary(key) and is_binary(label) and is_list(opts) do
+    case field_type_atom(type) do
+      nil -> nil
+      atom -> normalise_meta_field({atom, key, label, opts})
+    end
+  end
+
+  defp normalise_meta_field(_), do: nil
+
+  defp field_type_atom(type) do
+    if type in @known_field_types, do: String.to_existing_atom(type), else: nil
   end
 
   # A keyword list is a list of 2-tuples whose first element is an atom.
