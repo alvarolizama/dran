@@ -96,7 +96,7 @@ defmodule Dran.Sharing do
   returns the existing row.
   """
   def share_with_user(resource_type, resource_id, user_id)
-      when resource_type in ~w(page memory collection report) and is_integer(user_id) do
+      when resource_type in ~w(page memory collection report event) and is_integer(user_id) do
     %ContentShare{}
     |> ContentShare.changeset(%{
       resource_type: resource_type,
@@ -112,7 +112,7 @@ defmodule Dran.Sharing do
 
   @doc "Share `resource` with every member of a group (one share row)."
   def share_with_group(resource_type, resource_id, group_id)
-      when resource_type in ~w(page memory collection report) and is_integer(group_id) do
+      when resource_type in ~w(page memory collection report event) and is_integer(group_id) do
     %ContentShare{}
     |> ContentShare.changeset(%{
       resource_type: resource_type,

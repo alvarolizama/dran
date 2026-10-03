@@ -14,7 +14,7 @@ defmodule Dran.ContentShare do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @resource_types ~w(page memory collection report)
+  @resource_types ~w(page memory collection report event)
   @visibility ~w(private public shared)
 
   schema "content_shares" do
