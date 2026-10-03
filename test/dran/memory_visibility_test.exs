@@ -1,18 +1,17 @@
 defmodule Dran.MemoryVisibilityTest do
   @moduledoc """
-  Gate W3 (P6 + P5): la matriz de visibilidad aplicada al CONTEXTO de memoria.
+  Matriz de visibilidad aplicada al CONTEXTO de memoria, contra el modelo v2
+  (per-item visibility, contract-instance-visibility-20260919).
 
-  Dos usuarios con facts en el mismo workspace: en aislado cada uno ve solo lo
-  suyo (y lo de sus agentes), el admin ve todo, y el dedupe no filtra la
-  existencia de facts ajenos vía 409.
+  El modelo v1 (share_memory / content_scope / aislamiento por workspace) murió:
+  la lectura se resuelve por ÍTEM — un lector común ve `{:reader, id}` =
+  propio ∪ público ∪ compartido-conmigo, y solo un rol de instancia owner/admin
+  ve `:all`. Cada test lleva su decisión: `# VIVE` (el invariante sigue vivo,
+  reescrito al modelo actual) o se borró (el invariante murió con su modelo, se
+  registra en el reporte). El vocabulario `{:own, id}` de v1 ya no existe:
+  `ContentVisibility.filter/3` solo acepta `:all` y `{:reader, id}`.
   """
   use DranWeb.ConnCase, async: false
-
-  # W3 (contract-instance-visibility-20260919): the v1 sharing semantics died —
-  # share_memory/content_scope/workspace isolation are replaced by per-item
-  # visibility (own ∪ public ∪ shared). The live matrix is covered by
-  # test/dran/content_visibility_test.exs.
-  @moduletag :skip
 
   alias Dran.{ContentVisibility, Knowledge, Memory, Repo}
   alias Dran.Accounts.{User, UserWorkspace}
@@ -97,7 +96,7 @@ defmodule Dran.MemoryVisibilityTest do
     })
   end
 
-  describe "P6 — workspace aislado" do
+  describe "P6 — la matriz por ítem (v2)" do
     setup do
       ws = create_workspace(false)
 
@@ -107,7 +106,10 @@ defmodule Dran.MemoryVisibilityTest do
 
       member(alice, ws, "editor")
       member(bob, ws, "editor")
-      member(admin, ws, "admin")
+
+      # VIVE: el visor completo ya NO es el rol de workspace "admin" sino el
+      # rol de INSTANCIA owner/admin — el eje se movió de contenedor a instancia.
+      admin = admin |> Ecto.Changeset.change(instance_role: "admin") |> Repo.update!()
 
       {:ok, _, _} = add_fact(ws, "Alice prefiere Elixir", alice.id)
       {:ok, _, _} = add_fact(ws, "Bob prefiere Rust", bob.id)
@@ -116,11 +118,12 @@ defmodule Dran.MemoryVisibilityTest do
     end
 
     test "cada usuario ve solo sus facts con su scope", %{ws: ws, alice: alice, bob: bob} do
+      # VIVE: el vocabulario v1 {:own, id} se reescribió a {:reader, id}.
       alice_scope = ContentVisibility.scope(ws, alice, :memory)
       bob_scope = ContentVisibility.scope(ws, bob, :memory)
 
-      assert alice_scope == {:own, alice.id}
-      assert bob_scope == {:own, bob.id}
+      assert alice_scope == {:reader, alice.id}
+      assert bob_scope == {:reader, bob.id}
 
       alice_sees = Memory.list_memories(ws.id, scope: alice_scope)
       assert Enum.map(alice_sees, & &1.content) == ["Alice prefiere Elixir"]
@@ -129,35 +132,37 @@ defmodule Dran.MemoryVisibilityTest do
       assert Enum.map(bob_sees, & &1.content) == ["Bob prefiere Rust"]
     end
 
-    test "el admin ve todo", %{ws: ws, alice: alice, admin: admin} do
+    test "un admin de instancia ve todo", %{ws: ws, admin: admin} do
+      # VIVE: la autoridad plena es el rol de instancia, no la membresía.
       scope = ContentVisibility.scope(ws, admin, :memory)
       assert scope == :all
 
       contents = Memory.list_memories(ws.id, scope: scope) |> Enum.map(& &1.content)
       assert "Alice prefiere Elixir" in contents
       assert "Bob prefiere Rust" in contents
-      assert alice.id != admin.id
     end
 
-    test "search respeta el scope en aislado", %{ws: ws, alice: alice, bob: bob} do
+    test "search respeta el scope", %{ws: ws, alice: alice, bob: bob} do
+      # VIVE: reescrito a {:reader, id} (v1 usaba {:own, id}).
       alice_hits =
-        Memory.search(ws.id, "prefiere", scope: {:own, alice.id}, bump_retrieval: false)
+        Memory.search(ws.id, "prefiere", scope: {:reader, alice.id}, bump_retrieval: false)
 
       assert Enum.map(alice_hits, & &1.memory.content) == ["Alice prefiere Elixir"]
 
       bob_hits =
-        Memory.search(ws.id, "prefiere", scope: {:own, bob.id}, bump_retrieval: false)
+        Memory.search(ws.id, "prefiere", scope: {:reader, bob.id}, bump_retrieval: false)
 
       assert Enum.map(bob_hits, & &1.memory.content) == ["Bob prefiere Rust"]
     end
 
     test "count_memories cuenta solo lo visible", %{ws: ws, alice: alice} do
-      assert Memory.count_memories(ws.id, scope: {:own, alice.id}) == 1
+      # VIVE: reescrito a {:reader, id}.
+      assert Memory.count_memories(ws.id, scope: {:reader, alice.id}) == 1
       assert Memory.count_memories(ws.id, scope: :all) == 2
     end
 
-    test "P6 — el dedupe por owner deja que dos dueños sostengan el MISMO fact" do
-      ws = create_workspace(false)
+    test "el dedupe por owner deja que dos dueños sostengan el MISMO fact", %{ws: ws} do
+      # VIVE: reescrito a {:reader, id}.
       a = create_user()
       b = create_user()
       member(a, ws, "editor")
@@ -166,16 +171,16 @@ defmodule Dran.MemoryVisibilityTest do
       assert {:ok, _m1, :created} = add_fact(ws, "El deploy es los martes", a.id)
       assert {:ok, _m2, :created} = add_fact(ws, "El deploy es los martes", b.id)
 
-      a_sees = Memory.list_memories(ws.id, scope: {:own, a.id})
-      b_sees = Memory.list_memories(ws.id, scope: {:own, b.id})
+      a_sees = Memory.list_memories(ws.id, scope: {:reader, a.id})
+      b_sees = Memory.list_memories(ws.id, scope: {:reader, b.id})
 
       assert length(a_sees) == 1
       assert length(b_sees) == 1
       assert hd(a_sees).id != hd(b_sees).id
     end
 
-    test "P6 — el mismo dueño re-agregando su fact sigue recibiendo :duplicate" do
-      ws = create_workspace(false)
+    test "el mismo dueño re-agregando su fact sigue recibiendo :duplicate", %{ws: ws} do
+      # VIVE: sin cambios — el dedupe por owner es el comportamiento actual.
       a = create_user()
       member(a, ws, "editor")
 
@@ -185,48 +190,9 @@ defmodule Dran.MemoryVisibilityTest do
     end
   end
 
-  describe "P6 — workspace compartido (comportamiento previo)" do
-    setup do
-      ws = create_workspace(true)
-      alice = create_user()
-      bob = create_user()
-      member(alice, ws, "editor")
-      member(bob, ws, "editor")
-
-      %{ws: ws, alice: alice, bob: bob}
-    end
-
-    test "el dedupe sigue siendo GLOBAL del workspace", %{ws: ws, alice: alice, bob: bob} do
-      assert {:ok, first, :created} = add_fact(ws, "El workspace comparte facts", alice.id)
-
-      # Otro dueño, mismo contenido ⇒ duplicate (no se duplica el fact)
-      assert {:ok, second, :duplicate} = add_fact(ws, "El workspace comparte facts", bob.id)
-      assert first.id == second.id
-    end
-
-    test "con content_scope 'all' los dos ven todo", %{ws: ws, alice: alice, bob: bob} do
-      {:ok, _, _} = add_fact(ws, "Fact compartido", alice.id)
-
-      assert ContentVisibility.scope(ws, alice, :memory) == :all
-      assert ContentVisibility.scope(ws, bob, :memory) == :all
-
-      assert length(Memory.list_memories(ws.id, scope: :all)) == 1
-    end
-
-    test "content_scope 'own' filtra sin aislar el dedupe", %{ws: ws, alice: alice, bob: bob} do
-      unique = System.unique_integer([:positive])
-      member_with_scope(alice, ws, "own")
-
-      {:ok, _, _} = add_fact(ws, "Fact de Alice #{unique}", alice.id)
-      {:ok, _, _} = add_fact(ws, "Fact de Bob #{unique}", bob.id)
-
-      alice_sees = Memory.list_memories(ws.id, scope: {:own, alice.id})
-      assert Enum.map(alice_sees, & &1.content) == ["Fact de Alice #{unique}"]
-    end
-  end
-
   describe "backwards-compat (guard de la feature)" do
     test "sin :scope los facts de todos los dueños vuelven (pre-feature)" do
+      # VIVE: sin :scope no hay filtro (comportamiento pre-feature).
       ws = create_workspace(false)
       a = create_user()
       b = create_user()
@@ -241,86 +207,72 @@ defmodule Dran.MemoryVisibilityTest do
       assert Memory.count_memories(ws.id) == 2
     end
 
-    test "contenido sin dueño (owner nil) es visible con {:own, nil}" do
+    test "contenido sin dueño y privado no se lee por un lector común (fail-closed)" do
+      # VIVE reescrito: el vocabulario v1 {:own, nil} murió. En v2 una fila sin
+      # dueño con la visibilidad por defecto (private) NO la ve un lector
+      # concreto; solo un lector privilegiado (:all) la ve. El invariante que
+      # sobrevive es el fail-closed para contenido huérfano.
       ws = create_workspace(false)
       {:ok, _, _} = add_fact(ws, "Fact del workspace (sin dueño)", nil)
 
-      workspace_only = Memory.list_memories(ws.id, scope: {:own, nil})
-      assert Enum.map(workspace_only, & &1.content) == ["Fact del workspace (sin dueño)"]
-
-      # Y NO es visible para un dueño concreto
       a = create_user()
       member(a, ws, "editor")
-      assert Memory.list_memories(ws.id, scope: {:own, a.id}) == []
+
+      assert Memory.list_memories(ws.id, scope: {:reader, a.id}) == []
+      assert Memory.count_memories(ws.id, scope: :all) == 1
     end
   end
 
-  describe "agentes heredan la preferencia del dueño (P4)" do
-    test "la misma key cambia su vista cuando cambia content_scope del dueño" do
-      ws = create_workspace(true)
+  describe "los agentes leen con el alcance de su dueño" do
+    test "una identidad de agente con owner_user_id resuelve {:reader, owner}" do
+      # VIVE reescrito: la identidad del agente es un mapa con owner_user_id
+      # (el dueño de la credencial). La preferencia content_scope murió con el
+      # modelo v2 — la lectura ya está acotada por el filtro por ítem.
+      ws = create_workspace(false)
       owner = create_user()
-      member(owner, ws, "editor", "all")
+      member(owner, ws, "editor")
+      other = create_user()
+      member(other, ws, "editor")
 
-      actor = agent_actor("pref-#{System.unique_integer([:positive])}")
-      {:ok, actor} = actor |> Ecto.Changeset.change(%{owner_user_id: owner.id}) |> Repo.update()
-      identity = %{actor: actor}
+      {:ok, _, _} = add_fact(ws, "Del dueño para su agente", owner.id)
+      {:ok, _, _} = add_fact(ws, "De otro dueño", other.id)
 
-      # Preferencia "all": el agente ve todo
-      assert ContentVisibility.scope(ws, identity, :memory) == :all
+      identity = %{owner_user_id: owner.id, agent_name: "agent-x"}
+      scope = ContentVisibility.scope(ws, identity, :memory)
+      assert scope == {:reader, owner.id}
 
-      # Cambia la preferencia del dueño a "own"
-      {:ok, _} =
-        Dran.Accounts.UserWorkspace
-        |> Repo.get_by(user_id: owner.id, workspace_id: ws.id)
-        |> Dran.Accounts.UserWorkspace.changeset(%{content_scope: "own"})
-        |> Repo.update()
-
-      assert ContentVisibility.scope(ws, identity, :memory) == {:own, owner.id}
+      contents = Memory.list_memories(ws.id, scope: scope) |> Enum.map(& &1.content)
+      assert contents == ["Del dueño para su agente"]
     end
   end
 
-  describe "P4 — la misma credencial cambia de vista al cambiar content_scope (REST)" do
-    test "GET /api/memory responde distinto para la MISMA credencial" do
+  describe "P4 — la credencial REST lee con el alcance de su dueño" do
+    test "GET /api/memory aplica el filtro por ítem al token de cuenta" do
+      # VIVE reescrito: la versión v1 giraba content_scope para cambiar la
+      # vista. Ese eje murió; lo que sobrevive es que la credencial de cuenta
+      # lee EXACTAMENTE lo que su dueño puede ver (propio ∪ público ∪
+      # compartido), nunca lo ajeno privado. El API targeta la instancia
+      # (W5), así que el test escribe en el workspace de instancia.
       unique = System.unique_integer([:positive])
-      ws = create_workspace(true)
+      ws = Dran.DataCase.ensure_workspace!()
 
       owner = create_user()
-      member(owner, ws, "owner", "all")
+      other = create_user()
 
       conn =
         Phoenix.ConnTest.build_conn()
         |> Plug.Conn.put_req_header("accept", "application/json")
         |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
 
-      # Un fact del dueño y otro de un tercero.
-      other = create_user()
-      member(other, ws, "editor")
+      {:ok, _, _} = add_fact(ws, "Del dueño #{unique}", owner.id)
+      {:ok, _, _} = add_fact(ws, "De otro #{unique}", other.id)
 
-      {:ok, _, _} =
-        add_fact(ws, "Del dueño #{unique}", owner.id)
+      resp = get(conn, ~p"/api/memory?workspace=#{ws.slug}")
+      assert %{"data" => data} = json_response(resp, 200)
+      contents = Enum.map(data, & &1["content"])
 
-      {:ok, _, _} =
-        add_fact(ws, "De otro #{unique}", other.id)
-
-      # Preferencia "all" ⇒ la key ve ambos.
-      first = get(conn, ~p"/api/memory?workspace=#{ws.slug}")
-      assert %{"data" => data_all} = json_response(first, 200)
-      contents_all = Enum.map(data_all, & &1["content"])
-      assert "Del dueño #{unique}" in contents_all
-      assert "De otro #{unique}" in contents_all
-
-      # El dueño cambia su preferencia a "own" ⇒ la MISMA key ve solo lo suyo.
-      {:ok, _} =
-        Dran.Accounts.UserWorkspace
-        |> Repo.get_by(user_id: owner.id, workspace_id: ws.id)
-        |> Dran.Accounts.UserWorkspace.changeset(%{content_scope: "own"})
-        |> Repo.update()
-
-      second = get(conn, ~p"/api/memory?workspace=#{ws.slug}")
-      assert %{"data" => data_own} = json_response(second, 200)
-      contents_own = Enum.map(data_own, & &1["content"])
-      assert "Del dueño #{unique}" in contents_own
-      refute "De otro #{unique}" in contents_own
+      assert "Del dueño #{unique}" in contents
+      refute "De otro #{unique}" in contents
     end
   end
 
@@ -359,19 +311,5 @@ defmodule Dran.MemoryVisibilityTest do
       "model" => "Qwen3-Embedding",
       "usage" => %{"prompt_tokens" => 2, "total_tokens" => 2}
     }
-  end
-
-  defp member_with_scope(user, workspace, content_scope) do
-    Dran.Accounts.UserWorkspace
-    |> Repo.get_by(user_id: user.id, workspace_id: workspace.id)
-    |> Dran.Accounts.UserWorkspace.changeset(%{content_scope: content_scope})
-    |> Repo.update()
-  end
-
-  # W3: la key ya no crea actores; los tests de visibilidad construyen la
-  # identidad de agente con un actor explícito.
-  defp agent_actor(name) do
-    {:ok, actor} = Dran.Actors.create_actor(%{name: name, kind: "agent"})
-    actor
   end
 end

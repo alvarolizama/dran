@@ -438,6 +438,7 @@ defmodule Dran.Memory do
     limit = Keyword.get(opts, :limit, 10)
     bump? = Keyword.get(opts, :bump_retrieval, true)
     scope = Keyword.get(opts, :scope)
+    reader_id = priority_reader(scope)
     fts = fts_candidates(workspace_id, query, limit, scope)
     semantic = semantic_candidates(workspace_id, query, limit, scope)
 
@@ -448,7 +449,12 @@ defmodule Dran.Memory do
       |> Map.new(fn {id, %{score: score, memory: m}} ->
         {id, %{memory: m, relevance: score, score: score * m.trust_score}}
       end)
-      |> Enum.sort_by(fn {_id, %{score: s}} -> s end, :desc)
+      # Orden EXTERIOR (F18): la capa de lectura manda sobre el score del
+      # recall, pero DENTRO de cada capa el ranking queda intacto — la
+      # prioridad privado > público > grupo no reemplaza la relevancia.
+      |> Enum.sort_by(fn {_id, %{score: s, memory: m}} ->
+        {priority_rank(m, reader_id), -s}
+      end)
       |> Enum.take(limit)
 
     ids = Enum.map(fused, fn {id, _} -> id end)
@@ -460,7 +466,36 @@ defmodule Dran.Memory do
     from(m in __MODULE__, where: m.id in ^ids)
     |> Repo.all()
     |> Enum.map(fn m -> %{memory: m, score: Map.fetch!(by_id, m.id)} end)
-    |> Enum.sort_by(fn %{score: score} -> score end, :desc)
+    # El `Repo.all` no preserva el orden del `in`: reaplicamos la misma clave
+    # (capa, score) para que la salida final respete la prioridad declarada.
+    |> Enum.sort_by(fn %{memory: m, score: score} ->
+      {priority_rank(m, reader_id), -score}
+    end)
+  end
+
+  # ── Prioridad de lectura (F18) ──────────────────────────────────────────────
+  # Capas, de mayor a menor prioridad: lo propio del lector, lo público, lo
+  # que llega por un share. El código NO distingue un share directo a persona
+  # de uno a grupo en la lectura (la `EXISTS` de `ContentVisibility.filter/3`
+  # los trata igual), así que ambas formas caen en la MISMA capa `shared`.
+  @layer_own 0
+  @layer_public 1
+  @layer_shared 2
+
+  # La prioridad solo tiene sentido para un lector concreto: un lector
+  # privilegiado (:all) no tiene "propio", y sin identidad (:all o nil) el
+  # orden es el del ranking. Sin lector, todas las filas comparten capa.
+  defp priority_reader({:reader, reader_id}), do: reader_id
+  defp priority_reader(_scope), do: nil
+
+  defp priority_rank(_memory, nil), do: @layer_own
+
+  defp priority_rank(%__MODULE__{} = memory, reader_id) do
+    cond do
+      memory.owner_user_id == reader_id -> @layer_own
+      memory.visibility == "public" -> @layer_public
+      true -> @layer_shared
+    end
   end
 
   defp fuse(acc, ranked) do

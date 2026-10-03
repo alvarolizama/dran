@@ -354,6 +354,65 @@ defmodule Dran.MemoryTest do
     end
   end
 
+  describe "prioridad de lectura (F18): privado > público > grupo" do
+    test "con relevancia equivalente el recall ordena por capa", %{workspace: ws} do
+      reader = reader_fixture()
+      other = reader_fixture()
+
+      # Tres hechos de relevancia equivalente (todos contienen "deploy"): lo
+      # propio, lo público y lo compartido a un grupo del que el lector es
+      # miembro. La prioridad es del modelo, no del azar del ranking.
+      {:ok, own, :created} =
+        add_visibility_fact(ws, "deploy privado de la cuenta", reader.id, "private")
+
+      {:ok, pub, :created} =
+        add_visibility_fact(ws, "deploy público de la instancia", other.id, "public")
+
+      {:ok, shared, :created} =
+        add_visibility_fact(ws, "deploy compartido con el grupo", other.id, "shared")
+
+      {:ok, group} =
+        Dran.Sharing.create_group(%{name: "prio-#{System.unique_integer([:positive])}"})
+
+      {:ok, _} = Dran.Sharing.add_group_member(group, reader.id)
+      {:ok, :shared} = Dran.Sharing.share_with_group("memory", shared.id, group.id)
+
+      results =
+        Memory.search(ws.id, "deploy", scope: {:reader, reader.id}, bump_retrieval: false)
+
+      assert Enum.map(results, & &1.memory.content) == [own.content, pub.content, shared.content]
+    end
+
+    test "la capa manda sobre el score y el ranking se conserva dentro de cada capa",
+         %{workspace: ws} do
+      reader = reader_fixture()
+      other = reader_fixture()
+
+      {:ok, own, :created} =
+        add_visibility_fact(ws, "deploy propia de baja confianza", reader.id, "private")
+
+      {:ok, pub_top, :created} =
+        add_visibility_fact(ws, "deploy pública de alta confianza", other.id, "public")
+
+      {:ok, pub_low, :created} =
+        add_visibility_fact(ws, "deploy pública de baja confianza", other.id, "public")
+
+      # La pública gana confianza y por score supera a la propia: aun así va
+      # SEGUNDA — la capa exterior manda. Dentro de la capa pública, la de más
+      # confianza va primero: el ranking no se reemplaza.
+      Enum.each(1..3, fn _ -> {:ok, _} = Memory.record_feedback(pub_top.id, true) end)
+
+      results =
+        Memory.search(ws.id, "deploy", scope: {:reader, reader.id}, bump_retrieval: false)
+
+      assert Enum.map(results, & &1.memory.content) == [
+               own.content,
+               pub_top.content,
+               pub_low.content
+             ]
+    end
+  end
+
   describe "list_memories/2" do
     test "lists newest first and filters by status", %{workspace: ws} do
       {:ok, m1, :created} = add_fact(ws, "primero")
@@ -518,6 +577,31 @@ defmodule Dran.MemoryTest do
   defp add_fact(ws, content) do
     stub_embeddings()
     Memory.add(%{"workspace_id" => ws.id, "content" => content})
+  end
+
+  # Un lector concreto (usuario común): su recall resuelve {:reader, id}.
+  defp reader_fixture do
+    unique = System.unique_integer([:positive])
+
+    {:ok, user} =
+      Dran.Accounts.create_user(%{
+        email: "prio-#{unique}@dran.test",
+        api_token: "prio-#{unique}"
+      })
+
+    user
+  end
+
+  # Un hecho con dueño y visibilidad explícitos (la puerta de escritura).
+  defp add_visibility_fact(ws, content, owner_id, visibility) do
+    stub_embeddings()
+
+    Memory.add(%{
+      "workspace_id" => ws.id,
+      "content" => content,
+      "owner_user_id" => owner_id,
+      "visibility" => visibility
+    })
   end
 
   # Deterministic per-content vectors: the semantic dedupe in Memory.add
