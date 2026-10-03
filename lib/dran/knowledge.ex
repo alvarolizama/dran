@@ -101,9 +101,26 @@ defmodule Dran.Knowledge do
   any more — the flag existed to CHOOSE among several containers, and after the
   fold there is only one. Ordering by `inserted_at` keeps the answer stable even
   if a database somehow carries several rows.
+
+  El desempate NO puede ser `id`: el `inserted_at` se guarda con precisión de
+  segundo (`:utc_datetime`), así que dos filas creadas en el mismo segundo —el
+  caso normal en tests y el de un doble `create_workspace`— empatan y el UUID
+  aleatorio decidía "cuál es la instancia" al 50%. Eso hacía flaky a cualquier
+  lector de identidad (p.ej. el 404 cross-workspace de MemoryControllerTest:
+  cuando ganaba el workspace ajeno, el fact "ajeno" era en realidad de la
+  instancia y el 404 no correspondía). `ctid` es el orden FÍSICO: desempata
+  quedándose con la fila original, que es la que sobrevive al fold. Es un
+  desempate defensivo, no una garantía de «orden de creación»: una reescritura
+  física (`VACUUM FULL`, `CLUSTER`) puede reordenar las tuplas, y en producción
+  la tabla tiene UNA fila, así que la rama solo se ejerce cuando algo dejó
+  contenedores de más.
   """
   def the_instance do
-    Repo.one(from w in Workspace, order_by: [asc: w.inserted_at, asc: w.id], limit: 1)
+    Repo.one(
+      from w in Workspace,
+        order_by: [asc: w.inserted_at, asc: fragment("ctid")],
+        limit: 1
+    )
   end
 
   @doc """
