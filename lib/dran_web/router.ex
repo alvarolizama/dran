@@ -416,6 +416,15 @@ defmodule DranWeb.Router do
     live "/clusters", ClusterLive, :index
     live "/clusters/:id", ClusterLive, :show
 
+    # El contenedor de trabajo: goals + board. First-class, ANTES de la ruta
+    # genérica /:type, que si no los traga. `/tasks/:id` es el board de UN goal
+    # (:id es el goal, uuid primero y slug de respaldo); `/tasks` es el board
+    # global filtrable por goal.
+    live "/goals", GoalLive, :index
+    live "/goals/:id", GoalLive, :show
+    live "/tasks", TaskBoardLive, :index
+    live "/tasks/:id", TaskBoardLive, :show
+
     live "/reports/:slug", ReportLive, :show
 
     # Views — also before the generic /:type route

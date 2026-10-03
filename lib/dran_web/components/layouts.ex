@@ -474,7 +474,13 @@ defmodule DranWeb.Layouts do
             label: gettext("Journey"),
             icon: "hero-clock",
             path: base <> "/journey"
-          }
+          },
+        %{
+          key: "board",
+          label: gettext("Board"),
+          icon: "hero-view-columns",
+          path: base <> "/tasks"
+        }
       ]
       |> Enum.reject(&(!&1))
 
