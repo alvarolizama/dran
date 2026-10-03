@@ -182,9 +182,13 @@ defmodule DranWeb.HomeLive do
   # ── :page_show — rendered page (markdown + mermaid, read-only) ────────────
 
   defp apply_action(socket, :page_show, %{"page_type" => page_type, "slug" => slug}) do
-    case Dran.Auth.instance_workspace() do
-      %Workspace{} = workspace ->
-        case Knowledge.get_page_by_slug(slug, workspace.id) do
+    # A session with no row in `users` fails CLOSED (same rule as
+    # `PageDetail.reader_scope/1`): the policy module answers `:all` for a nil
+    # identity, so this surface must not fall through to it — that is the read
+    # leak, not a fallback.
+    case {Dran.Auth.instance_workspace(), socket.assigns[:user]} do
+      {%Workspace{} = workspace, user} when not is_nil(user) ->
+        case Knowledge.get_page_by_slug(slug, workspace.id, scope: page_scope(socket)) do
           %{page_type: ^page_type} = page ->
             # Load page with full body
             page = Knowledge.get_page!(page.id)
@@ -214,7 +218,7 @@ defmodule DranWeb.HomeLive do
             push_navigate(socket, to: ~p"/#{page_type}")
         end
 
-      nil ->
+      _ ->
         push_navigate(socket, to: ~p"/")
     end
   end

@@ -391,11 +391,16 @@ defmodule DranWeb.PageEdit do
   # ── Helpers ──
 
   defp create_page(socket, page_params) do
-    # Web: owner is always "system" (no API key). created_by is the logged-in user.
+    # Web: `owner` is the legacy display string and `created_by` is the
+    # attribution label. Neither is what the read policy consults — that is
+    # `owner_user_id`, stamped SERVER-SIDE from the session (see
+    # `owner_attrs/1`), never from the form.
     page_params =
       page_params
+      |> Map.delete("owner_user_id")
       |> Map.put_new("owner", "system")
       |> Map.put_new("created_by", session_identity(socket))
+      |> Map.merge(owner_attrs(socket))
 
     case Knowledge.create_page(page_params) do
       {:ok, page} ->
@@ -487,6 +492,23 @@ defmodule DranWeb.PageEdit do
     case socket.assigns[:current_user] do
       email when is_binary(email) -> Auth.resolve_created_by(%{email: email})
       _ -> "system"
+    end
+  end
+
+  # Ownership of a NEW page: the acting user's id, resolved SERVER-SIDE from the
+  # session `:user` (the same resolution the REST write path applies). Returns
+  # `%{}` when there is no user row (system producers, pre-auth mounts), in
+  # which case the row keeps a NULL owner.
+  #
+  # Why this matters: the read policy (`Dran.ContentVisibility`) decides with
+  # `owner_user_id` + `visibility`, and `visibility` defaults to "private". A
+  # private row with a NULL owner matches NO reader — not even whoever created
+  # it — so a page created without this stamp vanished from its author's own
+  # list and detail view.
+  defp owner_attrs(socket) do
+    case Auth.resolve_owner_user_id(socket.assigns[:user]) do
+      nil -> %{}
+      user_id -> %{"owner_user_id" => user_id}
     end
   end
 
@@ -583,23 +605,25 @@ defmodule DranWeb.PageEdit do
 
       slug = unique_slug(filename, workspace_id, "reference")
 
-      attrs = %{
-        workspace_id: workspace_id,
-        title: filename,
-        slug: slug,
-        page_type: "reference",
-        body: "",
-        tags: [],
-        owner: "system",
-        created_by: socket.assigns[:current_user] || "system",
-        meta: %{
-          "filename" => stored.filename,
-          "mime_type" => stored.mime_type,
-          "size" => stored.size,
-          "storage_path" => stored.storage_path,
-          "sha256" => stored.sha256
+      attrs =
+        %{
+          workspace_id: workspace_id,
+          title: filename,
+          slug: slug,
+          page_type: "reference",
+          body: "",
+          tags: [],
+          owner: "system",
+          created_by: socket.assigns[:current_user] || "system",
+          meta: %{
+            "filename" => stored.filename,
+            "mime_type" => stored.mime_type,
+            "size" => stored.size,
+            "storage_path" => stored.storage_path,
+            "sha256" => stored.sha256
+          }
         }
-      }
+        |> Map.merge(owner_attrs(socket))
 
       case Knowledge.create_page(attrs) do
         {:ok, page} -> page

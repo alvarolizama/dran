@@ -116,9 +116,12 @@ defmodule DranWeb.PageDetail do
   def load_page_detail(socket, params, slug, opts) do
     redirect_to = Keyword.fetch!(opts, :redirect_to)
     {socket, context} = Auth.resolve_workspace(socket, params)
+    scope = reader_scope(socket)
 
     with %{} = context <- context,
-         %Dran.Knowledge.Page{} = page <- Knowledge.get_page_by_slug(slug, context.id) do
+         false <- is_nil(scope),
+         %Dran.Knowledge.Page{} = page <-
+           Knowledge.get_page_by_slug(slug, context.id, scope: scope) do
       active_tab = Map.get(socket.assigns, :active_tab, "content")
 
       {:noreply,
@@ -143,6 +146,21 @@ defmodule DranWeb.PageDetail do
        )}
     else
       _ -> {:noreply, push_navigate(socket, to: redirect_to)}
+    end
+  end
+
+  # Read scope for the page surfaces, resolved from the ONE policy module.
+  #
+  # Returns `nil` when the session carries no row in `users` — the caller then
+  # redirects instead of querying. It cannot hand that case to
+  # `ContentVisibility`, which documents `:all` for a nil identity (the pre-v2
+  # posture other surfaces rely on): inheriting the full view here is exactly
+  # the leak this scope closes, and a `{:reader, nil}` scope would translate to
+  # `owner_user_id IS NULL`, matching every system-produced private row.
+  defp reader_scope(socket) do
+    case socket.assigns[:user] do
+      nil -> nil
+      user -> Dran.ContentVisibility.resolve(socket.assigns[:context], user, :pages)
     end
   end
 
