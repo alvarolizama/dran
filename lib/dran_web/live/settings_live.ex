@@ -365,6 +365,22 @@ defmodule DranWeb.SettingsLive do
   end
 
   @impl true
+  def handle_event("regenerate_api_token", _params, socket) do
+    case Dran.Accounts.regenerate_api_token(socket.assigns.current_user_struct) do
+      {:ok, updated_user} ->
+        socket =
+          socket
+          |> assign(current_user_struct: updated_user)
+          |> put_flash(:info, gettext("API key regenerated — copy the new token now"))
+
+        {:noreply, socket}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not regenerate the API key"))}
+    end
+  end
+
+  @impl true
   def handle_event("unlink_google", _params, socket) do
     case Dran.Accounts.unlink_google(socket.assigns.current_user_struct) do
       {:ok, updated_user} ->
@@ -549,6 +565,65 @@ defmodule DranWeb.SettingsLive do
                 </.form>
               </.section>
 
+              <%!-- The account's ONE key. It is minted when the account is
+                   created (`Accounts.insert_user/2`), so this section SHOWS it
+                   instead of offering to create another one: copy, or
+                   regenerate in place. --%>
+              <.section
+                title={gettext("API key")}
+                caption={gettext("The key your agents use to call the Dran REST API.")}
+                icon="hero-key"
+              >
+                <div class="flex items-center gap-2">
+                  <code
+                    id="account-api-token"
+                    data-token={@current_user_struct.api_token}
+                    class="flex-1 text-sm font-mono bg-base-100 rounded-md px-3 py-2 border border-base-300 select-all break-all"
+                  >
+                    {@current_user_struct.api_token}
+                  </code>
+                  <button
+                    type="button"
+                    id="copy-account-api-key-btn"
+                    data-copy-target="account-api-token"
+                    phx-hook=".CopyAccountApiToken"
+                    class="btn btn-outline btn-sm gap-1 transition-all active:scale-95"
+                    title={gettext("Copy")}
+                  >
+                    <span data-copy-icon class="flex items-center gap-1">
+                      <.icon name="hero-clipboard-document" class="size-4" />
+                      {gettext("Copy")}
+                    </span>
+                    <span data-check-icon class="hidden items-center gap-1">
+                      <.icon name="hero-clipboard-document-check" class="size-4" />
+                      {gettext("Copied!")}
+                    </span>
+                  </button>
+                </div>
+
+                <p class="text-xs text-base-content/60 mt-3">
+                  {gettext(
+                    "It reads and writes as you do. Regenerating it invalidates the current one immediately."
+                  )}
+                </p>
+
+                <button
+                  type="button"
+                  id="regenerate-api-key-btn"
+                  phx-click="regenerate_api_token"
+                  data-confirm={
+                    gettext(
+                      "Regenerate your API key? Every client using the current one stops working immediately."
+                    )
+                  }
+                  class="btn btn-ghost btn-sm gap-1.5 text-error mt-2"
+                  phx-disable-with={gettext("Regenerating…")}
+                >
+                  <.icon name="hero-arrow-path" class="size-4" />
+                  {gettext("Regenerate")}
+                </button>
+              </.section>
+
               <.section
                 title={gettext("Language")}
                 caption={gettext("Interface language for your account.")}
@@ -612,6 +687,50 @@ defmodule DranWeb.SettingsLive do
                   <% end %>
                 </div>
               </.section>
+
+              <%!-- Self-contained copy: reads the token from the code block's
+                   `data-token` (the id in `data-copy-target`), with the same
+                   clipboard fallback as the API keys tab. --%>
+              <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyAccountApiToken">
+                export default {
+                  mounted() {
+                    this.el.addEventListener("click", () => {
+                      const target = document.getElementById(this.el.dataset.copyTarget);
+                      if (!target) return;
+                      const text = target.dataset.token;
+                      if (!text) return;
+                      const copied = () => {
+                        const icon = this.el.querySelector("[data-copy-icon]");
+                        const check = this.el.querySelector("[data-check-icon]");
+                        if (icon && check) {
+                          icon.classList.add("hidden");
+                          check.classList.remove("hidden");
+                          check.classList.add("flex");
+                          setTimeout(() => {
+                            icon.classList.remove("hidden");
+                            check.classList.add("hidden");
+                            check.classList.remove("flex");
+                          }, 1500);
+                        }
+                      };
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).then(copied);
+                      } else {
+                        const ta = document.createElement("textarea");
+                        ta.value = text;
+                        ta.setAttribute("readonly", "");
+                        ta.style.position = "absolute";
+                        ta.style.left = "-9999px";
+                        document.body.appendChild(ta);
+                        ta.select();
+                        try { document.execCommand("copy"); } catch (_e) { /* noop */ }
+                        document.body.removeChild(ta);
+                        copied();
+                      }
+                    });
+                  }
+                }
+              </script>
             </div>
           <% else %>
             <.api_keys_tab

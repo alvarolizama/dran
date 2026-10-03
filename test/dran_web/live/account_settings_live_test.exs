@@ -112,6 +112,50 @@ defmodule DranWeb.AccountSettingsLiveTest do
     end
   end
 
+  # ── API key ────────────────────────────────────────────────────────────────
+  #
+  # The account has exactly ONE key and it is minted with the account
+  # (`Dran.Accounts.insert_user/2`) — the page shows it, copies it and
+  # regenerates it in place. No second key is ever created.
+
+  describe "API key" do
+    test "shows the key the account was created with", %{conn: conn} do
+      {user, _attrs} = create_user()
+      assert is_binary(user.api_token) and user.api_token != ""
+
+      {:ok, view, html} = live(owner_conn(conn), ~p"/settings/account")
+
+      assert html =~ t("API key")
+      assert has_element?(view, "#account-api-token", user.api_token)
+      assert has_element?(view, "#copy-account-api-key-btn")
+      assert has_element?(view, "#regenerate-api-key-btn")
+      # The token travels in the DOM for the clipboard hook to read.
+      assert has_element?(view, "#account-api-token[data-token='#{user.api_token}']")
+    end
+
+    test "regenerate mints a new one and the old token stops authenticating", %{conn: conn} do
+      {user, _attrs} = create_user()
+      old_token = user.api_token
+
+      {:ok, view, _html} = live(owner_conn(conn), ~p"/settings/account")
+
+      view
+      |> element("#regenerate-api-key-btn")
+      |> render_click()
+
+      fresh_token = Accounts.get_user_by_email("account@test.dev").api_token
+
+      refute fresh_token == old_token
+      assert Accounts.valid_token?(old_token) == :error
+      assert {:ok, _} = Accounts.valid_token?(fresh_token)
+
+      # The page shows the NEW token without a remount.
+      assert has_element?(view, "#account-api-token", fresh_token)
+      refute render(view) =~ old_token
+      assert render(view) =~ t("API key regenerated — copy the new token now")
+    end
+  end
+
   # ── language preference ────────────────────────────────────────────────────
 
   # Decodes the payload of a signed flash carried by a live navigation
