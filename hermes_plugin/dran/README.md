@@ -4,34 +4,48 @@ Memoria compartida multi-agente respaldada por tu instancia de Dran. El plugin
 es transporte delgado: dedupe, trust, search híbrido y extracción de facts
 viven server-side en Dran (`/api/memory`).
 
-## Dos mitades, un solo archivo de config
+## Un plugin, un archivo de config, dos superficies
 
-El plugin se parte en dos mitades que comparten **una única fuente de verdad**
-(`$HERMES_HOME/dran/config.json` + el token en el `.env` del perfil):
+No hay un segundo plugin ni una segunda instalación: las dos superficies viven
+en **este** directorio y leen/escriben el **mismo**
+`$HERMES_HOME/dran/config.json` (+ el token en el `.env` del perfil).
 
-- **Runtime headless** (`__init__.py`): sin UI y sin estado propio; se
-  configura **solo por archivos**. Lee `config.json` y el `.env`, y funciona
-  sin el panel.
-- **Panel desktop** (`config_schema.py`, declarado en `plugin.yaml`): la página
-  **Hermes → Memory → Dran**. Escribe **ese mismo** `config.json` y además
-  puede aplicar esa config a un **perfil headless remoto** (por su CLI y sus
-  archivos del host). Es una vista sobre el archivo que el runtime lee, nunca
-  una segunda fuente.
+- **Runtime** (`__init__.py`): el MemoryProvider (sus tools salen de
+  `get_tool_schemas()`) y las tools de agente que registra `register(ctx)`.
+  Headless por construcción: archivos + `DRAN_API_KEY`, sin UI propia.
+- **Panel** (`config_schema.py`): Hermes lo lee **del disco, al lado de este
+  archivo** (`plugins/memory/__init__.py::find_provider_dir` →
+  `get_provider_config_schema`) y lo renderiza como el panel de configuración
+  del proveedor de memoria. Escribe **ese mismo** `config.json`.
+
+El panel se direcciona **por nombre de proveedor**, y por eso no puede vivir en
+otro plugin: pertenece al proveedor que configura. Como el pedido del panel
+viaja con el perfil (`?profile=<nombre>`), configura **el perfil que el app
+tenga seleccionado, remotos incluidos** — sin plugin extra y sin código extra.
 
 No hay un segundo archivo de config ni una segunda credencial: **un solo token**
-(`DRAN_API_KEY`, el `api_token` de la cuenta) para las dos mitades (W9/A10).
+(`DRAN_API_KEY`, el `api_token` de la cuenta) para las dos superficies (W9/A10).
 
 > **Single-workspace (W5):** la instancia de Dran ES el workspace — no hay
 > elección de workspace ni matriz workspaces×nivel. Toda llamada apunta a la
 > instancia; ya no existe un setting `workspace` en la config del plugin.
 
-## Configuración — panel desktop
+## Configuración — el panel de memoria del perfil
 
-El plugin declara su config (`config_schema.py`), así que el panel de memoria
-del dashboard la renderiza solo: **Hermes → Memory → Dran** (fields: API key,
-Base URL, Write scope, Group slug, Auto recall, Auto capture, Max recall
-results, Recall char budget, Recall cadence).
-También funciona `hermes memory setup` → elegir "dran".
+El plugin trae `config_schema.py`, así que Hermes renderiza el panel solo. En el
+**app desktop**: **Settings → Memory & Context** → elegí **Memory provider:
+`dran`** y el panel de Dran aparece **justo debajo** (fields: API key, Base
+URL, Write scope, Group slug, Auto recall, Auto capture, Max recall results,
+Recall char budget, Recall cadence). Guarda campo por campo (autosave).
+
+Por **perfil**, remotos incluidos: el panel se pide con el perfil activo
+(`GET/PUT /api/memory/providers/dran/config?surface=declared&profile=<perfil>`),
+así que si el app está conectado a un gateway remoto, estás editando **la config
+de ESE perfil** — la que vive en el `config.json` de su host. Nada extra que
+instalar del lado del app: alcanza con que el plugin esté instalado y con
+`memory.provider: dran` en ese perfil.
+
+También funciona `hermes memory setup` → elegir "dran" (CLI, mismo archivo).
 
 Se persiste en `$HERMES_HOME/dran/config.json` (la credencial al `.env` del
 perfil — `DRAN_API_KEY`, único hogar del token, compartido por el runtime y
@@ -88,9 +102,12 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
    ```
 
    Ese mismo valor lo consume el plugin entero (memory provider + tools).
-3. Configura el resto desde la UI: **dashboard de Hermes → Memory → Dran**
-   (o `hermes memory setup` → elegir "dran"). El token pégalo en el campo
-   del panel — va al `.env`, no al JSON.
+3. Configura el resto desde el **app desktop**: **Settings → Memory & Context**
+   → elegí Memory provider **`dran`** y completá el panel que aparece justo
+   debajo (o `hermes memory setup` → "dran"). El token pégalo en el campo del
+   panel — va al `.env`, no al JSON.
+   **Perfil remoto**: lo mismo con el app apuntando a ese perfil; el panel
+   escribe la config de ESE host (el perfil viaja en el pedido).
 
    Editada a mano, la config vive en `$HERMES_HOME/dran/config.json`:
 

@@ -4,41 +4,40 @@ description: "Dran — shared multi-agent memory store + knowledge tools backed 
 author: Álvaro Lizama
 license: MIT
 kind: standalone
-# ── One plugin, two halves, ONE config file (contract W9 / A10) ──────────────
-# The plugin ships the SAME source as two halves over a single source of truth:
-#   * runtime — the headless half. Configured by FILES only (no UI, no state
-#               of its own): $HERMES_HOME/dran/config.json plus the profile
-#               .env's DRAN_API_KEY. The top-level hooks/provides_tools below
-#               are its surface; it reads that file and needs neither the panel
-#               nor a second config to run.
-#   * panel   — the desktop half (config_schema.py, rendered by the dashboard's
-#               Memory → Dran page). It WRITES that same flat JSON and can also
-#               apply it to a REMOTE headless profile (via that host's CLI and
-#               files). It is a VIEW over the runtime's config, never a second
-#               source: no second config file, no second credential.
-halves:
-  runtime:
-    label: Headless runtime
-    configured_by: files      # $HERMES_HOME/dran/config.json + profile .env
-    config_file: "$HERMES_HOME/dran/config.json"
-    credential_env: DRAN_API_KEY
-    ui: false
-    own_state: none
-  panel:
-    label: Desktop panel
-    kind: declarative-config-ui  # config_schema.py, loaded by path
-    schema: config_schema.py
-    writes_config_file: "$HERMES_HOME/dran/config.json"
-    applies_to_remote_headless: true
-    ui: true
+# ── One plugin, one config file, two surfaces ───────────────────────────────
+# There is no desktop plugin and no second install: the two surfaces live in
+# THIS directory and read/write the SAME $HERMES_HOME/dran/config.json.
+#
+#   * runtime  — __init__.py. The MemoryProvider (get_tool_schemas) and the
+#                agent tools registered from register(ctx); `hooks` and
+#                `provides_tools` below are its manifest surface. Headless by
+#                construction: files + DRAN_API_KEY, no UI of its own.
+#   * panel    — config_schema.py. Hermes reads it from disk next to this file
+#                (plugins/memory/__init__.py::find_provider_dir →
+#                get_provider_config_schema) and renders it as the memory
+#                provider's config panel — Desktop → Settings → Memory &
+#                Context (below the `memory.provider` field) and `hermes
+#                memory setup`. It WRITES the same flat JSON the runtime reads.
+#
+# The panel is addressed by PROVIDER NAME, which is why it cannot live in a
+# separate plugin: it belongs to the provider it configures. Because the panel
+# request carries the profile (?profile=<name>), it configures whichever
+# profile the app is pointed at, remote profiles included — no extra plugin
+# and no extra code for that.
 hooks:
   - on_session_end
 # Tool names this plugin registers from register(ctx). Listed so the plugins
 # hub can show what it provides (and surface `requires_env` hints); the
 # schemas themselves live in __init__.py and are the source of truth.
+# ONLY register()-registered tools belong here: the memory tools
+# (dran_memory_search/add/update/feedback) come from the provider's
+# get_tool_schemas(), not from register(), so they are deliberately absent —
+# `hermes plugins validate` fails on a registered-but-undeclared tool and
+# warns on a declared-but-unregistered one.
 provides_tools:
   - dran_search
   - dran_list_pages
+  - dran_list_page_types
   - dran_get_page
   - dran_create_page
   - dran_update_page
@@ -53,15 +52,9 @@ provides_tools:
   - dran_generate_cluster_summaries
   - dran_lint_brain
   - dran_stats
-  - dran_memory_search
-  - dran_memory_add
-  - dran_memory_update
-  - dran_memory_feedback
-# Config surface of the DESKTOP PANEL — the declarative config_schema.py the
-# dashboard's Memory → Dran page renders (and `hermes memory setup` mirrors).
-# It is loaded by path from the web server, so it stays out of this manifest;
-# it writes the SAME $HERMES_HOME/dran/config.json the runtime reads, and
-# `api_key` resolves from DRAN_API_KEY (the profile .env) — one credential.
+# Credential for BOTH surfaces — one token, one attribution: the account token
+# (Dran → Settings → Account → API token). The runtime reads it from the
+# profile .env; the panel's `api_key` field resolves to it.
 requires_env:
   - name: DRAN_API_KEY
     description: "Dran account token (Dran → Settings → Account → API token) — one credential per account (W3, users.api_token). Shared by the memory provider and the knowledge tools: same token, same attribution; no per-agent key is created."
