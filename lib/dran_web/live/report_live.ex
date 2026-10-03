@@ -82,20 +82,17 @@ defmodule DranWeb.ReportLive do
   def handle_params(%{"slug" => slug} = params, _url, socket) do
     {socket, context} = Auth.resolve_workspace(socket, params)
 
-    if context do
-      case Reports.get_report_by_slug(slug, context.id) do
-        nil ->
-          {:noreply, push_navigate(socket, to: ~p"/activity")}
-
-        report ->
-          {:noreply,
-           assign(socket,
-             report: report,
-             page_title: report.title
-           )}
-      end
+    with %{} = context <- context,
+         scope when not is_nil(scope) <- reader_scope(socket),
+         report when not is_nil(report) <-
+           Reports.get_report_by_slug(slug, context.id, scope: scope) do
+      {:noreply,
+       assign(socket,
+         report: report,
+         page_title: report.title
+       )}
     else
-      {:noreply, push_navigate(socket, to: ~p"/activity")}
+      _ -> {:noreply, push_navigate(socket, to: ~p"/activity")}
     end
   end
 
@@ -108,12 +105,18 @@ defmodule DranWeb.ReportLive do
   @impl true
   def handle_info({:page_changed, _action, changed_report}, socket) do
     if socket.assigns[:report] && socket.assigns.report.id == changed_report.id do
-      report = Reports.get_report(changed_report.id)
+      # Re-read through the reader's scope: a report that left the scope
+      # stops being shown, it is not kept on screen from the earlier read.
+      report =
+        case reader_scope(socket) do
+          nil -> nil
+          scope -> Reports.get_report(changed_report.id, scope: scope)
+        end
 
       if report do
         {:noreply, assign(socket, report: report)}
       else
-        {:noreply, socket}
+        {:noreply, push_navigate(socket, to: ~p"/activity")}
       end
     else
       {:noreply, socket}
@@ -121,4 +124,15 @@ defmodule DranWeb.ReportLive do
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  # Read scope for this surface, resolved from the ONE policy module. A session
+  # with no row in `users` returns `nil` and the caller navigates away instead
+  # of querying — handing that case to the policy would inherit the `:all` it
+  # documents for a nil identity (same posture as `DranWeb.PageDetail`).
+  defp reader_scope(socket) do
+    case socket.assigns[:user] do
+      nil -> nil
+      user -> Dran.ContentVisibility.resolve(socket.assigns[:workspace], user, :reports)
+    end
+  end
 end

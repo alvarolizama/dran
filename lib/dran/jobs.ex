@@ -369,6 +369,11 @@ defmodule Dran.Jobs do
       slug: slug,
       body: report_body(status, trigger, duration_ms, result_text),
       report_type: "log",
+      # W2: a job run is workspace-wide output with no human author, so the
+      # report is written `public` with a NULL owner — the read filter would
+      # otherwise hide it from every non-admin reader (it was readable by all
+      # before the filter existed). A person's report stays `private` + owned.
+      visibility: "public",
       meta: %{
         kind: "log",
         job_key: key_str,

@@ -109,7 +109,7 @@ defmodule DranWeb.HomeLive do
   defp apply_action(socket, :workspace_home, _params) do
     case Dran.Auth.instance_workspace() do
       %Workspace{} = workspace ->
-        collections = Collections.list_collections(workspace.id)
+        collections = readable_collections(socket, workspace)
         pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
@@ -156,7 +156,7 @@ defmodule DranWeb.HomeLive do
         grouped = group_alphabetically(pages)
 
         # Sidebar data
-        collections = Collections.list_collections(workspace.id)
+        collections = readable_collections(socket, workspace)
         pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
@@ -196,7 +196,7 @@ defmodule DranWeb.HomeLive do
             relations = Knowledge.list_relations_for_page(page.id)
 
             # Sidebar data
-            collections = Collections.list_collections(workspace.id)
+            collections = readable_collections(socket, workspace)
             pinned = Knowledge.list_pinned_pages(workspace.id)
             type_index = build_type_index(workspace)
 
@@ -226,36 +226,33 @@ defmodule DranWeb.HomeLive do
   # ── :collection — smart collection results in wiki mode ────────────────────
 
   defp apply_action(socket, :collection, %{"slug" => slug}) do
-    case Dran.Auth.instance_workspace() do
-      %Workspace{} = workspace ->
-        case Collections.get_collection_by_slug(slug, workspace.id) do
-          nil ->
-            push_navigate(socket, to: ~p"/")
+    with %Workspace{} = workspace <- Dran.Auth.instance_workspace(),
+         scope when not is_nil(scope) <- collection_scope(socket),
+         collection when not is_nil(collection) <-
+           Collections.get_collection_by_slug(slug, workspace.id, scope: scope) do
+      # The collection's results are pages: they read through the same
+      # per-item filter as every other page list (W2).
+      results = execute_filters(collection.filters || %{}, workspace.id, scope)
 
-          collection ->
-            results = execute_filters(collection.filters || %{}, workspace.id)
+      # Sidebar data
+      all_collections = readable_collections(socket, workspace)
+      pinned = Knowledge.list_pinned_pages(workspace.id)
+      type_index = build_type_index(workspace)
 
-            # Sidebar data
-            all_collections = Collections.list_collections(workspace.id)
-            pinned = Knowledge.list_pinned_pages(workspace.id)
-            type_index = build_type_index(workspace)
-
-            socket
-            |> assign(
-              active_nav: nil,
-              workspace: workspace,
-              collection: collection,
-              results: results,
-              page_title: collection.name,
-              collections: all_collections,
-              pinned_pages: pinned,
-              type_index: type_index,
-              search_results: nil
-            )
-        end
-
-      nil ->
-        push_navigate(socket, to: ~p"/")
+      socket
+      |> assign(
+        active_nav: nil,
+        workspace: workspace,
+        collection: collection,
+        results: results,
+        page_title: collection.name,
+        collections: all_collections,
+        pinned_pages: pinned,
+        type_index: type_index,
+        search_results: nil
+      )
+    else
+      _ -> push_navigate(socket, to: ~p"/")
     end
   end
 
@@ -268,7 +265,7 @@ defmodule DranWeb.HomeLive do
         # /graph/json via HTTP after the shell renders, keeping initial page
         # load instant. Same pattern as GraphLive panel.
         # Sidebar data
-        collections = Collections.list_collections(workspace.id)
+        collections = readable_collections(socket, workspace)
         pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
 
@@ -309,7 +306,7 @@ defmodule DranWeb.HomeLive do
         pages = Enum.find_value(grouped, [], fn {l, p} -> if l == letter, do: p end)
 
         # Sidebar data
-        collections = Collections.list_collections(workspace.id)
+        collections = readable_collections(socket, workspace)
         pinned = Knowledge.list_pinned_pages(workspace.id)
         type_index = build_type_index(workspace)
         alphabet = build_alphabet(all_pages)
@@ -1171,7 +1168,7 @@ defmodule DranWeb.HomeLive do
   # ── Helpers ─────────────────────────────────────────────────────────────────
 
   # Execute a collection's saved filters, same pattern as SmartCollectionLive.
-  defp execute_filters(filters, workspace_id) when is_map(filters) do
+  defp execute_filters(filters, workspace_id, scope) when is_map(filters) and not is_nil(scope) do
     opts = [workspace_id: workspace_id]
 
     opts =
@@ -1181,10 +1178,13 @@ defmodule DranWeb.HomeLive do
       |> maybe_add_filter(:tag, filters["tag"])
       |> maybe_add_filter(:owner, filters["owner"])
 
-    Knowledge.list_pages(opts)
+    # A collection is a saved query over PAGES: its results read through the
+    # same per-item filter as every other page list (W2).
+    Knowledge.list_pages(opts ++ [scope: scope])
   end
 
-  defp execute_filters(_filters, _workspace_id), do: []
+  # No session user (or no filters): nothing is readable.
+  defp execute_filters(_filters, _workspace_id, _scope), do: []
 
   defp maybe_add_filter(opts, _key, nil), do: opts
   defp maybe_add_filter(opts, _key, ""), do: opts
@@ -1355,5 +1355,23 @@ defmodule DranWeb.HomeLive do
   # El scope de lectura sale del módulo único de política.
   defp page_scope(socket) do
     Dran.ContentVisibility.resolve(socket.assigns[:workspace], socket.assigns[:user], :pages)
+  end
+
+  # Read scope for the collection surfaces — the ONE policy module again, with
+  # `nil` for a session that carries no row in `users` (the surface reads no
+  # collections instead of inheriting the `:all` the policy documents for a
+  # nil identity).
+  defp collection_scope(socket) do
+    case socket.assigns[:user] do
+      nil -> nil
+      user -> Dran.ContentVisibility.resolve(socket.assigns[:workspace], user, :collections)
+    end
+  end
+
+  defp readable_collections(socket, workspace) do
+    case collection_scope(socket) do
+      nil -> []
+      scope -> Collections.list_collections(workspace.id, scope: scope)
+    end
   end
 end

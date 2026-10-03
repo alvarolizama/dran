@@ -325,6 +325,10 @@ defmodule Dran.Worker.Curator do
         slug: slug,
         body: body,
         report_type: "log",
+        # W2: same rule as a job run — the curator writes on behalf of the
+        # workspace, so its report is `public` with a NULL owner (see
+        # `Dran.Reports.create_report/1`).
+        visibility: "public",
         meta: %{"worker_session_id" => state.session.id}
       }
 

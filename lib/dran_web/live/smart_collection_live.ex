@@ -300,12 +300,7 @@ defmodule DranWeb.SmartCollectionLive do
   end
 
   defp apply_action(socket, :index, _params) do
-    collections =
-      if socket.assigns.context do
-        Collections.list_collections(socket.assigns.context.id)
-      else
-        []
-      end
+    collections = readable_collections(socket)
 
     assign(socket, collections: collections, page_title: gettext("Smart Collections"))
   end
@@ -313,26 +308,23 @@ defmodule DranWeb.SmartCollectionLive do
   defp apply_action(socket, :show, %{"slug" => slug}) do
     context = socket.assigns.context
 
-    if context do
-      case Collections.get_collection_by_slug(slug, context.id) do
-        nil ->
-          push_navigate(socket, to: ~p"/collections")
+    with %{} = context <- context,
+         scope when not is_nil(scope) <- reader_scope(socket),
+         collection when not is_nil(collection) <-
+           Collections.get_collection_by_slug(slug, context.id, scope: scope) do
+      filters = collection.filters || %{}
+      results = execute_filters(filters, context.id, scope)
+      query_tags = format_filters(collection)
 
-        collection ->
-          filters = collection.filters || %{}
-          results = execute_filters(filters, context.id)
-          query_tags = format_filters(collection)
-
-          assign(socket,
-            collection: collection,
-            results: results,
-            result_count: length(results),
-            query_tags: query_tags,
-            page_title: collection.name
-          )
-      end
+      assign(socket,
+        collection: collection,
+        results: results,
+        result_count: length(results),
+        query_tags: query_tags,
+        page_title: collection.name
+      )
     else
-      push_navigate(socket, to: ~p"/collections")
+      _ -> push_navigate(socket, to: ~p"/collections")
     end
   end
 
@@ -436,13 +428,17 @@ defmodule DranWeb.SmartCollectionLive do
           |> Enum.reject(fn {_k, v} -> v in ["", nil, []] end)
           |> Map.new()
 
-        # Slug is auto-managed by the context (derived from name).
-        attrs = %{
-          "workspace_id" => context.id,
-          "name" => params["name"],
-          "summary" => params["summary"],
-          "filters" => filters
-        }
+        # Slug is auto-managed by the context (derived from name). The owner is
+        # stamped from the SESSION, never from the form (W2): the read policy
+        # consults it, and nothing else does.
+        attrs =
+          %{
+            "workspace_id" => context.id,
+            "name" => params["name"],
+            "summary" => params["summary"],
+            "filters" => filters
+          }
+          |> Map.merge(owner_attrs(socket))
 
         case Collections.create_collection(attrs) do
           {:ok, collection} ->
@@ -468,11 +464,12 @@ defmodule DranWeb.SmartCollectionLive do
     if socket.assigns.live_action == :show && socket.assigns.collection do
       context = socket.assigns.context
       filters = socket.assigns.collection.filters || %{}
-      results = execute_filters(filters, context.id)
+      results = execute_filters(filters, context.id, reader_scope(socket))
       {:noreply, assign(socket, results: results, result_count: length(results))}
     else
       if socket.assigns.live_action == :index && socket.assigns.context do
-        collections = Collections.list_collections(socket.assigns.context.id)
+        collections = readable_collections(socket)
+
         {:noreply, assign(socket, collections: collections)}
       else
         {:noreply, socket}
@@ -484,7 +481,40 @@ defmodule DranWeb.SmartCollectionLive do
 
   # ── Helpers ──
 
-  defp execute_filters(filters, workspace_id) do
+  # Read scope for this surface, resolved from the ONE policy module
+  # (`Dran.ContentVisibility`). A session with no row in `users` returns `nil`
+  # — the caller navigates away instead of querying, because handing that case
+  # to the policy would inherit the `:all` it documents for a nil identity
+  # (same posture as `DranWeb.PageDetail.reader_scope/1`).
+  defp reader_scope(socket) do
+    case socket.assigns[:user] do
+      nil -> nil
+      user -> Dran.ContentVisibility.resolve(socket.assigns[:context], user, :collections)
+    end
+  end
+
+  # The collections this reader may see — empty when there is no reader.
+  defp readable_collections(socket) do
+    case {socket.assigns.context, reader_scope(socket)} do
+      {%{} = context, scope} when not is_nil(scope) ->
+        Collections.list_collections(context.id, scope: scope)
+
+      _ ->
+        []
+    end
+  end
+
+  # The session user this write belongs to — same shape as
+  # `DranWeb.PageEdit.owner_attrs/1`: a session with no row in `users` stamps
+  # nothing, so the row is workspace-wide instead of falsely owned.
+  defp owner_attrs(socket) do
+    case Dran.Auth.resolve_owner_user_id(socket.assigns[:user]) do
+      nil -> %{}
+      user_id -> %{"owner_user_id" => user_id}
+    end
+  end
+
+  defp execute_filters(filters, workspace_id, scope) when is_map(filters) and not is_nil(scope) do
     opts = [workspace_id: workspace_id]
 
     opts =
@@ -494,8 +524,14 @@ defmodule DranWeb.SmartCollectionLive do
       |> maybe_add_filter(:tag, filters["tag"])
       |> maybe_add_filter(:owner, filters["owner"])
 
-    Knowledge.list_pages(opts)
+    # A collection is a saved query over PAGES: its results read through the
+    # same per-item filter as the page lists (W2), or the collection would be
+    # a second door into content the reader cannot read.
+    Knowledge.list_pages(opts ++ [scope: scope])
   end
+
+  # No session user (or no filters): nothing is readable.
+  defp execute_filters(_filters, _workspace_id, _scope), do: []
 
   defp maybe_add_filter(opts, _key, nil), do: opts
   defp maybe_add_filter(opts, _key, ""), do: opts

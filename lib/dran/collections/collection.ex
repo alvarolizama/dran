@@ -35,6 +35,10 @@ defmodule Dran.Collections.Collection do
     # Per-item read visibility (W2).
     field :visibility, :string, default: "private"
 
+    # Ownership snapshot, injected server-side on every write (never
+    # client-settable). NULL = workspace-wide content (system producers).
+    field :owner_user_id, :integer
+
     belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
@@ -43,7 +47,7 @@ defmodule Dran.Collections.Collection do
   @doc "Changeset for creating or updating a collection"
   def changeset(collection, attrs) do
     collection
-    |> cast(attrs, [:workspace_id, :name, :slug, :summary, :filters, :visibility])
+    |> cast(attrs, [:workspace_id, :name, :slug, :summary, :filters, :visibility, :owner_user_id])
     |> validate_required([:workspace_id, :name, :slug])
     |> validate_inclusion(:visibility, ~w(private public shared))
     |> validate_length(:name, max: 500)

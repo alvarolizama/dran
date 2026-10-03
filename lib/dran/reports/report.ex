@@ -41,6 +41,10 @@ defmodule Dran.Reports.Report do
     # Per-item read visibility (W2).
     field :visibility, :string, default: "private"
 
+    # Ownership snapshot, injected server-side on every write (never
+    # client-settable). NULL = workspace-wide content (system producers).
+    field :owner_user_id, :integer
+
     belongs_to :workspace, Dran.Workspace
 
     timestamps(type: :utc_datetime)
@@ -57,7 +61,8 @@ defmodule Dran.Reports.Report do
       :report_type,
       :meta,
       :archived,
-      :visibility
+      :visibility,
+      :owner_user_id
     ])
     |> validate_required([:workspace_id, :title, :slug])
     |> validate_length(:title, max: 500)
