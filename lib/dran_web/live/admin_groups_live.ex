@@ -164,11 +164,39 @@ defmodule DranWeb.AdminGroupsLive do
             id={"group-row-#{group.id}"}
             class="surface-2 rounded-xl p-4 flex items-center justify-between gap-3"
           >
-            <div class="min-w-0">
+            <div class="min-w-0 space-y-1">
               <p class="font-medium truncate">{group.name}</p>
-              <p class="text-caption text-base-content/50">
-                {group.members} {gettext("members")} · /{group.slug}
-              </p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <%!-- El slug es la identidad que el cliente copia a su config
+                       de agente (shaping A9/F17, P19): visible y copiable. --%>
+                <code
+                  id={"group-slug-#{group.id}"}
+                  data-slug={group.slug}
+                  class="text-caption font-mono bg-base-100 rounded-md px-2 py-0.5 border border-base-300 select-all"
+                >
+                  {group.slug}
+                </code>
+                <button
+                  type="button"
+                  id={"copy-group-slug-#{group.id}"}
+                  data-copy-target={"group-slug-#{group.id}"}
+                  phx-hook=".CopyGroupSlug"
+                  class="btn btn-ghost btn-xs gap-1"
+                  title={gettext("Copy the group slug")}
+                >
+                  <span data-copy-icon class="flex items-center gap-1">
+                    <.icon name="hero-clipboard-document" class="size-3.5" />
+                    {gettext("Copy")}
+                  </span>
+                  <span data-check-icon class="hidden items-center gap-1">
+                    <.icon name="hero-clipboard-document-check" class="size-3.5" />
+                    {gettext("Copied!")}
+                  </span>
+                </button>
+                <span class="text-caption text-base-content/50">
+                  {group.members} {gettext("members")}
+                </span>
+              </div>
             </div>
             <div class="flex gap-2 shrink-0">
               <button phx-click="manage_members" phx-value-id={group.id} class="btn btn-ghost btn-sm">
@@ -236,6 +264,50 @@ defmodule DranWeb.AdminGroupsLive do
             </p>
           </div>
         </div>
+
+        <%!-- Copia del slug: lee el valor del `data-slug` del `<code>` apuntado
+               por `data-copy-target`, con fallback de clipboard. Mismo molde
+               que `.CopyAccountApiToken` del panel de la cuenta. --%>
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyGroupSlug">
+          export default {
+            mounted() {
+              this.el.addEventListener("click", () => {
+                const target = document.getElementById(this.el.dataset.copyTarget);
+                if (!target) return;
+                const text = target.dataset.slug;
+                if (!text) return;
+                const copied = () => {
+                  const icon = this.el.querySelector("[data-copy-icon]");
+                  const check = this.el.querySelector("[data-check-icon]");
+                  if (icon && check) {
+                    icon.classList.add("hidden");
+                    check.classList.remove("hidden");
+                    check.classList.add("flex");
+                    setTimeout(() => {
+                      icon.classList.remove("hidden");
+                      check.classList.add("hidden");
+                      check.classList.remove("flex");
+                    }, 1500);
+                  }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(text).then(copied);
+                } else {
+                  const ta = document.createElement("textarea");
+                  ta.value = text;
+                  ta.setAttribute("readonly", "");
+                  ta.style.position = "absolute";
+                  ta.style.left = "-9999px";
+                  document.body.appendChild(ta);
+                  ta.select();
+                  try { document.execCommand("copy"); } catch (_e) { /* noop */ }
+                  document.body.removeChild(ta);
+                  copied();
+                }
+              });
+            }
+          }
+        </script>
       </div>
     </Layouts.app>
     """

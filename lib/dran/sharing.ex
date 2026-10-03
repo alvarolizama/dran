@@ -89,6 +89,25 @@ defmodule Dran.Sharing do
     Repo.all(from(m in UserGroupMember, where: m.user_id == ^user_id, select: m.user_group_id))
   end
 
+  @doc """
+  Los grupos donde `user_id` es MIEMBRO, ordenados por nombre (W7/P19).
+
+  Es el MISMO conjunto con el que `apply_scope/3` autoriza un `scope` de grupo
+  (W6 valida la membresía del dueño del recurso): la lista que el cliente ve y
+  los slugs a los que puede escribir no pueden divergir — si divergieran, el
+  agente elegiría un slug que la lista dejaba prever y comería un 422.
+
+  Sin identidad (o sin membresías) devuelve `[]`: la lectura es membresía, no
+  visibilidad (un grupo no es contenido con `visibility`/`owner_user_id`).
+  """
+  def list_groups_for_user(user_id) when is_integer(user_id) do
+    group_ids = group_ids_for(user_id)
+
+    Repo.all(from(g in UserGroup, where: g.id in ^group_ids, order_by: [asc: g.name]))
+  end
+
+  def list_groups_for_user(_user_id), do: []
+
   @doc "Groups with their member count, for the admin UI."
   def list_groups_with_counts do
     Repo.all(

@@ -36,10 +36,12 @@ defmodule DranWeb.Router do
 
   # Row-level read authorization for the REST read surface. Exempts the
   # workspace *listing* (no single workspace to authorize — the controller
-  # scopes it to the identity) and /agent/config (authenticated-only by
-  # construction).
+  # scopes it to the identity), /agent/config (authenticated-only by
+  # construction) and /groups (W7: the payload is scoped to the reader's own
+  # memberships — there is no workspace to authorize against; without the
+  # exemption `require_read_access` fails closed and answers 403).
   pipeline :api_read_access do
-    plug :require_read_access, exempt_index: ["workspaces", "agent"]
+    plug :require_read_access, exempt_index: ["workspaces", "agent", "groups"]
   end
 
   pipeline :admin do
@@ -332,6 +334,11 @@ defmodule DranWeb.Router do
     # Shared multi-agent memory (read)
     get "/memory", MemoryController, :index
     get "/memory/search", MemoryController, :search
+
+    # Groups (read) — W7/P19: los grupos donde el lector es MIEMBRO, el mismo
+    # conjunto al que puede apuntar con un `scope` de grupo (W6). El payload
+    # está acotado al lector, así que no hay workspace que autorizar.
+    get "/groups", GroupController, :index
 
     # Worker sessions (read: poll a running session by id)
     get "/workers/:id", WorkerController, :show
