@@ -4,8 +4,7 @@ defmodule Dran.Actors.Actor do
 
   One row per human (`kind: "user"`), agent (`kind: "agent"`), or internal
   system producer (`kind: "system"`). NOT workspace-scoped — an actor is who
-  someone *is*; permissions live in `api_key_workspaces` (for keys) and
-  user-workspace roles (for users).
+  someone *is*; permissions live in the user-workspace roles.
 
   Attribution (owner/created_by strings on pages/tasks/memories) resolves to
   an actor's `name` server-side; the `name` is the join key with historical
@@ -32,7 +31,6 @@ defmodule Dran.Actors.Actor do
     # content is workspace-wide). See Dran.ContentVisibility.
     field :owner_user_id, :integer
 
-    has_many :api_keys, Dran.Accounts.ApiKey
     # users.actor_id is a plain FK column (no belongs_to needed here)
     timestamps(type: :utc_datetime, updated_at: false)
   end

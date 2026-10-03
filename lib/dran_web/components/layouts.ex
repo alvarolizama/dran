@@ -505,9 +505,9 @@ defmodule DranWeb.Layouts do
 
   # ── Instance nav (/, /settings/*, /admin/*) ───────────────────────────────
   #
-  # The sidebar nav for instance-level pages: Workspaces at the top, then
-  # Account (with its two tabs), then Admin for owners (with its sub-pages).
-  # Same link style as sidebar_nav's nav_link, so both navs read as one shell.
+  # The sidebar nav for instance-level pages: Home at the top, then Account,
+  # then Admin for owners (with its sub-pages). Same link style as
+  # sidebar_nav's nav_link, so both navs read as one shell.
 
   attr :active, :string, default: nil
   attr :is_owner, :boolean, default: false
@@ -533,12 +533,6 @@ defmodule DranWeb.Layouts do
           icon="hero-user"
           path={~p"/settings/account"}
           active={@active == "settings"}
-        />
-        <.nav_link
-          label={gettext("API keys")}
-          icon="hero-key"
-          path={~p"/settings/api-keys"}
-          active={@active == "api_keys"}
         />
       </.nav_group>
 
@@ -632,11 +626,11 @@ defmodule DranWeb.Layouts do
   initial, name + email truncated, and a menu.
 
   The menu is the global fallback from any URL: Home (back to the brain) plus
-  the account entries (Profile · API keys). When the shell is showing the
-  knowledge content it also carries the brain-scoped entries (Activity ·
-  Instance settings) after a divider, and — for instance owners — the ADMIN
-  group (Users · Groups · All workspaces · Models · System · Jobs), which is
-  what makes /admin reachable from the knowledge shell at all.
+  the account entry (Profile, which carries the API credential). When the shell
+  is showing the knowledge content it also carries the brain-scoped entries
+  (Activity · Instance settings) after a divider, and — for instance owners —
+  the ADMIN group (Users · Groups · All workspaces · Models · System · Jobs),
+  which is what makes /admin reachable from the knowledge shell at all.
 
   `user` is the DB struct when available (provides the display name); the
   email always comes from `current_user`.
@@ -697,11 +691,6 @@ defmodule DranWeb.Layouts do
             href={~p"/settings/account"}
             icon="hero-user"
             label={gettext("Profile")}
-          />
-          <.menu_item
-            href={~p"/settings/api-keys"}
-            icon="hero-key"
-            label={gettext("API keys")}
           />
 
           <div :if={@workspace_slug} class="border-t border-base-300 my-1"></div>

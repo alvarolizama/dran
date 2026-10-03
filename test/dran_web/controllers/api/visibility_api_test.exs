@@ -6,14 +6,14 @@ defmodule DranWeb.API.VisibilityAPITest do
   - P2 (Rules#6): POST /api/memory with `visibility` → 422; without it the
     memory is born PRIVATE.
   - Rules#5: POST/PUT /api/knowledge-pages accept `visibility`.
-  - P3 (Rules#3): an API key reads exactly what its owner reads — the
+  - P3 (Rules#3): an API credential reads exactly what its owner reads — the
     owner's private items, public items, and items shared with the owner
     (user shares AND group shares).
   """
 
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Accounts, Knowledge, Repo, Sharing}
+  alias Dran.{Accounts, Knowledge, Sharing}
 
   setup do
     ws = Dran.DataCase.ensure_workspace!()
@@ -32,35 +32,20 @@ defmodule DranWeb.API.VisibilityAPITest do
         api_token: "t#{u()}"
       })
 
-    # owner's key: the agent identity (write level on the instance)
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "agent-#{u()}",
-        workspace_ids: [{ws.id, "write"}],
-        created_by_user_id: owner.id
-      })
-
-    # stranger's key
-    {:ok, stranger_key} =
-      Accounts.create_api_key(%{
-        name: "agent-s-#{u()}",
-        workspace_ids: [{ws.id, "write"}],
-        created_by_user_id: stranger.id
-      })
-
-    %{ws: ws, owner: owner, stranger: stranger, key: key, stranger_key: stranger_key}
+    # W3: the credential is each account's api_token.
+    %{ws: ws, owner: owner, stranger: stranger}
   end
 
-  defp conn_for(key) do
+  defp conn_for(user) do
     Phoenix.ConnTest.build_conn()
     |> Plug.Conn.put_req_header("accept", "application/json")
-    |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+    |> Plug.Conn.put_req_header("authorization", "Bearer #{user.api_token}")
   end
 
   describe "memory visibility is web-only (Rules#6 / P2)" do
     test "POST /api/memory with visibility => 422, nothing stored", ctx do
       conn =
-        conn_for(ctx.key)
+        conn_for(ctx.owner)
         |> post("/api/memory", %{
           "content" => "fact con visibility #{u()}",
           "visibility" => "public"
@@ -71,7 +56,7 @@ defmodule DranWeb.API.VisibilityAPITest do
 
     test "POST /api/memory without visibility => born private", ctx do
       conn =
-        conn_for(ctx.key)
+        conn_for(ctx.owner)
         |> post("/api/memory", %{"content" => "fact privado por defecto #{u()}"})
 
       assert %{"data" => memory} = json_response(conn, 201)
@@ -82,7 +67,7 @@ defmodule DranWeb.API.VisibilityAPITest do
   describe "page visibility is settable via API (Rules#5)" do
     test "create accepts visibility; default private", ctx do
       conn =
-        conn_for(ctx.key)
+        conn_for(ctx.owner)
         |> post("/api/knowledge-pages", %{
           "title" => "API Private #{u()}",
           "page_type" => "note"
@@ -92,7 +77,7 @@ defmodule DranWeb.API.VisibilityAPITest do
       assert page["visibility"] == "private"
 
       conn =
-        conn_for(ctx.key)
+        conn_for(ctx.owner)
         |> post("/api/knowledge-pages", %{
           "title" => "API Public #{u()}",
           "page_type" => "note",
@@ -114,7 +99,7 @@ defmodule DranWeb.API.VisibilityAPITest do
         })
 
       conn =
-        conn_for(ctx.key)
+        conn_for(ctx.owner)
         |> put("/api/knowledge-pages/#{page.slug}", %{"visibility" => "public"})
 
       assert %{"data" => updated} = json_response(conn, 200)
@@ -122,9 +107,9 @@ defmodule DranWeb.API.VisibilityAPITest do
     end
   end
 
-  describe "an API key reads exactly as its owner (Rules#3 / P3)" do
+  describe "an API credential reads exactly as its owner (Rules#3 / P3)" do
     setup ctx do
-      # stranger's private page — must be invisible to owner's key
+      # stranger's private page — must be invisible to owner's credential
       {:ok, stranger_private} =
         Knowledge.create_page(%{
           workspace_id: ctx.ws.id,
@@ -134,7 +119,7 @@ defmodule DranWeb.API.VisibilityAPITest do
           visibility: "private"
         })
 
-      # a page shared with OWNER (user share) — must be visible to owner's key
+      # a page shared with OWNER (user share) — must be visible to owner's credential
       {:ok, shared_with_owner} =
         Knowledge.create_page(%{
           workspace_id: ctx.ws.id,
@@ -188,8 +173,8 @@ defmodule DranWeb.API.VisibilityAPITest do
       })
     end
 
-    test "owner's key: own + public + shared-with-owner (user and group)", ctx do
-      conn = conn_for(ctx.key) |> get("/api/knowledge-pages")
+    test "owner's credential: own + public + shared-with-owner (user and group)", ctx do
+      conn = conn_for(ctx.owner) |> get("/api/knowledge-pages")
       assert %{"data" => pages} = json_response(conn, 200)
       titles = Enum.map(pages, & &1["title"])
 
@@ -198,8 +183,8 @@ defmodule DranWeb.API.VisibilityAPITest do
       assert Enum.any?(titles, &String.starts_with?(&1, "Group Page"))
     end
 
-    test "stranger's key sees their own private page but not owner-shared", ctx do
-      conn = conn_for(ctx.stranger_key) |> get("/api/knowledge-pages")
+    test "stranger's credential sees their own private page but not owner-shared", ctx do
+      conn = conn_for(ctx.stranger) |> get("/api/knowledge-pages")
       assert %{"data" => pages} = json_response(conn, 200)
       titles = Enum.map(pages, & &1["title"])
 
@@ -212,13 +197,13 @@ defmodule DranWeb.API.VisibilityAPITest do
 
     test "show follows the same rule (404 for the invisible)", ctx do
       conn =
-        conn_for(ctx.key)
+        conn_for(ctx.owner)
         |> get("/api/knowledge-pages/#{ctx.stranger_private.slug}")
 
       assert json_response(conn, 404)
 
       conn =
-        conn_for(ctx.key)
+        conn_for(ctx.owner)
         |> get("/api/knowledge-pages/#{ctx.shared_with_owner.slug}")
 
       assert %{"data" => _} = json_response(conn, 200)

@@ -11,7 +11,8 @@ defmodule DranWeb.ResourceAuthorization do
 
     * legacy admin token — `%{is_owner: true, email: "admin", contexts: :all}`
     * per-user token     — `%Dran.Accounts.User{}` (access = members ∪ public)
-    * API key            — `%{workspaces: [...], access_levels: %{ws_id => "read" | "write"}, ...}`
+    * account map        — `%{is_owner: ..., instance_role: ..., ...}` (the
+      `api_token` credential; same instance-role rule as the struct)
     * legacy admin token — `%{is_owner: true, email: "admin", workspaces: :all}`
     * no user (tests)    — `nil` (fail-open, matching today's behavior)
 
@@ -55,15 +56,13 @@ defmodule DranWeb.ResourceAuthorization do
     if allowed_role?(user.instance_role, mode), do: :ok, else: {:error, :forbidden}
   end
 
-  # ── API key: per-workspace access levels ──────────────────────────────────
+  # ── API account identity (a map, not a struct) ────────────────────────────
+  #
+  # The `api_token` credential carries the owner's instance role explicitly;
+  # same rule as the struct, applied to the map shape the router assigns.
 
-  defp do_authorize(%{access_levels: levels}, mode, ws_id) when is_map(levels) do
-    level = Map.get(levels, ws_id)
-
-    case level do
-      nil -> {:error, :forbidden}
-      level -> if level_allowed?(level, mode), do: :ok, else: {:error, :forbidden}
-    end
+  defp do_authorize(%{instance_role: role}, mode, _ws_id) when is_binary(role) do
+    if allowed_role?(role, mode), do: :ok, else: {:error, :forbidden}
   end
 
   # ── Legacy `contexts` list maps (fallback; new code should not produce them)

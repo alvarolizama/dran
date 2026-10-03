@@ -113,158 +113,13 @@ defmodule DranWeb.E2EAuthTest do
     assert Jason.decode!(conn.resp_body) |> Map.has_key?("data")
   end
 
-  describe "context-scoped API keys" do
-    test "create_api_key returns plaintext token once, stores only hash + prefix", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-
-      assert is_binary(key.token)
-      assert String.length(key.token) > 30
-      assert key.token_prefix == String.slice(key.token, 0, 8)
-      assert key.token_hash == Accounts.ApiKey.hash_token(key.token)
-      refute key.token_hash == key.token
-    end
-
-    test "valid_api_key? accepts active keys and preloads the context", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-
-      assert {:ok, found} = Accounts.valid_api_key?(key.token)
-      assert found.id == key.id
-      assert Enum.any?(found.api_key_workspaces, &(&1.workspace.slug == ctx1.slug))
-    end
-
-    test "revoked keys fail validation, restored keys work again", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-
-      {:ok, revoked} = Accounts.revoke_api_key(key)
-      assert revoked.revoked_at
-      assert Accounts.valid_api_key?(key.token) == :error
-
-      {:ok, _} = Accounts.restore_api_key(revoked)
-      assert {:ok, _} = Accounts.valid_api_key?(key.token)
-    end
-
-    test "regenerate_api_key invalidates the old token and returns a new one", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-      old_token = key.token
-
-      {:ok, regenerated} = Accounts.regenerate_api_key(key)
-      assert regenerated.token != old_token
-
-      assert Accounts.valid_api_key?(old_token) == :error
-      assert {:ok, _} = Accounts.valid_api_key?(regenerated.token)
-    end
-
-    test "regenerating a revoked key reactivates it", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-      {:ok, revoked} = Accounts.revoke_api_key(key)
-
-      {:ok, regenerated} = Accounts.regenerate_api_key(revoked)
-      assert is_nil(regenerated.revoked_at)
-      assert {:ok, _} = Accounts.valid_api_key?(regenerated.token)
-    end
-
-    test "REST accepts a context API key for its own context", %{
-      conn: conn,
-      ctx1: ctx1
-    } do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
+  describe "write enforcement — REST (identidad de cuenta)" do
+    test "a viewer account is blocked from creating a page", %{conn: conn, ctx1: ctx1} do
+      viewer = viewer_user()
 
       conn =
         conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
-        |> Plug.Conn.put_req_header("accept", "application/json")
-        |> Phoenix.ConnTest.get("/api/knowledge-pages?workspace=#{ctx1.slug}")
-
-      assert conn.status == 200
-    end
-
-    # W5: cross-context rejection died with the single-workspace model —
-    # any legacy slug resolves the instance, so a valid key is accepted.
-    test "REST accepts a key through a legacy slug (W5)", %{
-      conn: conn,
-      ctx1: ctx1,
-      ctx2: ctx2
-    } do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-
-      conn =
-        conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
-        |> Plug.Conn.put_req_header("accept", "application/json")
-        |> Phoenix.ConnTest.get("/api/knowledge-pages?workspace=#{ctx2.slug}")
-
-      assert conn.status == 200
-    end
-
-    test "REST rejects a revoked key", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-      {:ok, _} = Accounts.revoke_api_key(key)
-
-      conn =
-        conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
-        |> Plug.Conn.put_req_header("accept", "application/json")
-        |> Phoenix.ConnTest.get("/api/knowledge-pages?workspace=#{ctx1.slug}")
-
-      assert conn.status == 401
-    end
-
-    test "deleting a context revokes API keys whose last workspace it was", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Hermes", workspace_id: ctx1.id})
-
-      {:ok, _} = Knowledge.delete_workspace(ctx1)
-
-      # Multi-workspace model: the join rows cascade away, and a key left
-      # with zero workspaces is revoked (not deleted) so the audit trail
-      # survives. The token must stop working immediately.
-      assert Accounts.valid_api_key?(key.token) == :error
-      revoked = Dran.Repo.reload!(key)
-      assert revoked.revoked_at
-    end
-
-    test "new API key defaults to read-only (write_access=false)", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
-      refute Dran.Accounts.ApiKey.write_access?(key)
-    end
-
-    test "create_api_key with write_access: true", %{ctx1: ctx1} do
-      {:ok, key} =
-        Accounts.create_api_key(%{name: "Writer", workspace_id: ctx1.id, write_access: true})
-
-      assert Dran.Accounts.ApiKey.write_access?(key)
-    end
-
-    test "update_api_key toggles write_access", %{ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
-      refute Dran.Accounts.ApiKey.write_access?(key)
-
-      {:ok, updated} = Accounts.update_api_key(key, %{write_access: true})
-      assert Dran.Accounts.ApiKey.write_access?(updated)
-
-      {:ok, updated2} = Accounts.update_api_key(updated, %{write_access: false})
-      refute Dran.Accounts.ApiKey.write_access?(updated2)
-    end
-
-    test "REST read-only key can call read routes (search)", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
-
-      conn =
-        conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
-        |> Plug.Conn.put_req_header("accept", "application/json")
-        |> Phoenix.ConnTest.get("/api/search?q=test&workspace=#{ctx1.slug}")
-
-      assert conn.status == 200
-    end
-  end
-
-  describe "write_access enforcement — REST" do
-    test "read-only key is blocked from creating a page", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
-
-      conn =
-        conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{viewer.api_token}")
         |> Plug.Conn.put_req_header("accept", "application/json")
         |> Phoenix.ConnTest.post("/api/knowledge-pages", %{
           "workspace" => ctx1.slug,
@@ -275,12 +130,12 @@ defmodule DranWeb.E2EAuthTest do
       assert conn.status == 403
     end
 
-    test "read-only key is blocked from storing memory", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} = Accounts.create_api_key(%{name: "Reader", workspace_id: ctx1.id})
+    test "a viewer account is blocked from storing memory", %{conn: conn, ctx1: ctx1} do
+      viewer = viewer_user()
 
       conn =
         conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{viewer.api_token}")
         |> Plug.Conn.put_req_header("accept", "application/json")
         |> Phoenix.ConnTest.post("/api/memory", %{
           "workspace" => ctx1.slug,
@@ -290,13 +145,10 @@ defmodule DranWeb.E2EAuthTest do
       assert conn.status == 403
     end
 
-    test "write-enabled key can create a page", %{conn: conn, ctx1: ctx1} do
-      {:ok, key} =
-        Accounts.create_api_key(%{name: "Writer", workspace_id: ctx1.id, write_access: true})
-
+    test "an editor account can create a page", %{conn: conn, user: user, ctx1: ctx1} do
       conn =
         conn
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{user.api_token}")
         |> Plug.Conn.put_req_header("accept", "application/json")
         |> Phoenix.ConnTest.post("/api/knowledge-pages", %{
           "workspace" => ctx1.slug,
@@ -309,7 +161,7 @@ defmodule DranWeb.E2EAuthTest do
       assert Jason.decode!(conn.resp_body)["data"]["slug"]
     end
 
-    test "legacy admin token bypasses write_access check", %{conn: conn, ctx1: ctx1} do
+    test "legacy admin token bypasses write access check", %{conn: conn, ctx1: ctx1} do
       Dran.Settings.put("api_token", "test-legacy-admin-token")
 
       conn =
@@ -325,6 +177,22 @@ defmodule DranWeb.E2EAuthTest do
 
       assert conn.status == 201
     end
+  end
+
+  # A read-only instance role: the account credential writes only as its role
+  # allows (the per-key access level died with the key).
+  defp viewer_user do
+    unique = System.unique_integer([:positive])
+
+    {:ok, user} =
+      Accounts.create_user(%{email: "viewer-#{unique}@example.com", name: "Viewer"})
+
+    {:ok, user} =
+      user
+      |> Dran.Accounts.User.instance_role_changeset(%{instance_role: "viewer"})
+      |> Dran.Repo.update()
+
+    user
   end
 
   describe "sidebar integration" do
@@ -359,7 +227,7 @@ defmodule DranWeb.E2EAuthTest do
       conn: conn,
       user: user,
       ctx1: ctx1,
-      ctx2: ctx2
+      ctx2: _ctx2
     } do
       conn =
         conn

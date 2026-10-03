@@ -91,27 +91,24 @@ defmodule Dran.Auth do
 
   # ── Owner / created_by resolution ──
 
-  # The synthetic user map built by the API auth pipelines carries the KEY as
-  # the agent identity (W3): `:key_name` is `api_keys.name`, and `:agent_name`
-  # is the X-Hermes-Agent header — resolved in ONE place
+  # The identity map built by the API auth pipeline (W3) carries `:agent_name`
+  # (the `X-Hermes-Agent` header) — resolved in ONE place
   # (`DranWeb.Router.require_api_token/2`), never re-derived here.
   # Legacy admin token maps to "system" for owner and "admin" for created_by.
-  defp key_name(user), do: Map.get(user, :key_name)
 
   @doc """
   Resolve the owner identity for a page being created.
 
-  Prefers the API key name; otherwise falls back to the authenticated user's
-  email (the literal `"admin"` email maps to `"system"`), then `"system"` when
-  no identity is available. Not client-settable.
+  Falls back to the authenticated identity's email (the literal `"admin"`
+  email maps to `"system"`), then `"system"` when no identity is available.
+  Not client-settable.
   """
   def resolve_owner(user) when is_map(user) do
-    key_name(user) ||
-      case Map.get(user, :email) do
-        "admin" -> "system"
-        email when is_binary(email) -> email
-        _ -> "system"
-      end
+    case Map.get(user, :email) do
+      "admin" -> "system"
+      email when is_binary(email) -> email
+      _ -> "system"
+    end
   end
 
   def resolve_owner(_), do: "system"
@@ -119,13 +116,12 @@ defmodule Dran.Auth do
   @doc """
   Resolve the created_by identity for a page being created.
 
-  For API key auth: the `X-Hermes-Agent` header when it came, otherwise the
-  key `name` (M7). For user auth, the user email. Falls back to `"system"`
-  when no identity is available.
+  For an API identity: the `X-Hermes-Agent` header when it came, otherwise
+  the identity's email (M7). Falls back to `"system"` when no identity is
+  available.
   """
   def resolve_created_by(user) when is_map(user) do
     Map.get(user, :agent_name) ||
-      key_name(user) ||
       case Map.get(user, :email) do
         "admin" -> "admin"
         email when is_binary(email) -> email
@@ -139,9 +135,8 @@ defmodule Dran.Auth do
   Resolve the OWNER user id for content being written — the user that owns the
   agent behind the request. Injected server-side, never client-settable.
 
-  * API key identity — `api_keys.created_by_user_id` (the user that created
-    the key), or `nil` for keys with no creator (historical / system-created
-    keys). The actor is no longer part of this chain (W3).
+  * API identity (account map) — `:created_by_user_id` (the credential's
+    owner). The actor is not part of this chain (W3).
   * user identity (`%Dran.Accounts.User{}`) — that user.
   * legacy admin token / `nil` — `nil`: historical producer content is
     workspace-wide (see `Dran.ContentVisibility`).

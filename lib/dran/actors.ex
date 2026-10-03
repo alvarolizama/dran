@@ -4,7 +4,7 @@ defmodule Dran.Actors do
 
   System actors are code-managed: `ensure_system_actors!/0` upserts them
   idempotently (migration + boot). User/agent actors are created via the
-  settings CRUD; every API key is attached to exactly one actor.
+  settings CRUD.
   """
 
   import Ecto.Query
@@ -44,15 +44,13 @@ defmodule Dran.Actors do
 
   @doc """
   List agent actors for the Agents management UI (users and system are
-  automatic). Preloads api_keys + their workspaces so the Agents tab can
-  render the access matrix without extra queries.
+  automatic).
   """
   def list_managed_actors do
     Actor
     |> where([a], a.kind == "agent")
     |> order_by([a], asc: a.name)
     |> Repo.all()
-    |> Repo.preload(api_keys: [api_key_workspaces: :workspace])
   end
 
   @doc """
@@ -128,8 +126,7 @@ defmodule Dran.Actors do
   end
 
   @doc """
-  Delete a managed actor. Refuses when the actor still has API keys
-  (revoke/delete those first), when it is a code-managed system actor, or
+  Delete a managed actor. Refuses when it is a code-managed system actor or
   when it is the identity actor of a user row (deleting it would silently
   nilify users.actor_id and break web attribution).
   """
@@ -137,9 +134,6 @@ defmodule Dran.Actors do
     cond do
       Actor.system?(actor) ->
         {:error, :system_actor}
-
-      Repo.exists?(from k in Dran.Accounts.ApiKey, where: k.actor_id == ^actor.id) ->
-        {:error, :actor_has_api_keys}
 
       Repo.exists?(from u in Dran.Accounts.User, where: u.actor_id == ^actor.id) ->
         {:error, :actor_is_user_identity}

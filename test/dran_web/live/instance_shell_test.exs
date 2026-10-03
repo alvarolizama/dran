@@ -35,7 +35,6 @@ defmodule DranWeb.InstanceShellTest do
   # dashboard launcher died with the multi-workspace model.
   @pages [
     {"/settings/account", "settings"},
-    {"/settings/api-keys", "api_keys"},
     {"/admin/users", "admin_users"},
     {"/admin/groups", "admin_groups"},
     {"/admin/models", "admin_models"},
@@ -53,7 +52,6 @@ defmodule DranWeb.InstanceShellTest do
       assert has_element?(view, "aside")
       assert has_element?(view, "a[href='/']")
       assert has_element?(view, "a[href='/settings/account']")
-      assert has_element?(view, "a[href='/settings/api-keys']")
       assert has_element?(view, "a[href='/admin/users']")
       assert has_element?(view, "a[href='/admin/system']")
 
@@ -71,7 +69,6 @@ defmodule DranWeb.InstanceShellTest do
 
   defp path_for("dashboard"), do: "/"
   defp path_for("settings"), do: "/settings/account"
-  defp path_for("api_keys"), do: "/settings/api-keys"
   defp path_for(key), do: "/admin/" <> String.replace(key, "admin_", "")
 
   test "/admin (overview) renders the instance sidebar with no active item", %{conn: conn} do
@@ -119,7 +116,7 @@ defmodule DranWeb.InstanceShellTest do
 
   # El síntoma reportado: desde el shell de CONOCIMIENTO (`/`, `/notes`, `/graph`…)
   # no había NINGUNA ruta a /admin — el sidebar ahí es el nav de conocimiento y el
-  # menú de perfil sólo llevaba Workspaces/Profile/API keys/Activity/Instance
+  # menú de perfil sólo llevaba Workspaces/Profile/Activity/Instance
   # settings. El grupo Admin vive en el menú de perfil para que /admin sea
   # alcanzable desde cualquier página, no sólo desde /settings/* o /admin/*.
   test "el menú de perfil lleva el grupo Admin completo (owner), desde una página de conocimiento",

@@ -36,7 +36,8 @@ defmodule DranWeb.Router do
 
   # Row-level read authorization for the REST read surface. Exempts the
   # workspace *listing* (no single workspace to authorize — the controller
-  # scopes it to the identity) and /agent/config (key-scoped by construction).
+  # scopes it to the identity) and /agent/config (authenticated-only by
+  # construction).
   pipeline :api_read_access do
     plug :require_read_access, exempt_index: ["workspaces", "agent"]
   end
@@ -98,42 +99,30 @@ defmodule DranWeb.Router do
           Plug.Crypto.secure_compare(token, Dran.Auth.api_token() || "") ->
             assign(conn, :user, %{is_owner: true, email: "admin", contexts: :all})
 
-          # Per-user token — look up the user and assign it
+          # Account token — the ONE credential. Resolves to the user, but the
+          # identity is a map (not the struct) because the agent identity is
+          # resolved here and nowhere else.
           match?({:ok, _}, Dran.Accounts.valid_token?(token)) ->
             {:ok, user} = Dran.Accounts.valid_token?(token)
-            assign(conn, :user, user)
 
-          # Context-scoped API key — synthetic user with multi-workspace access
-          match?({:ok, _}, Dran.Accounts.valid_api_key?(token)) ->
-            {:ok, key} = Dran.Accounts.valid_api_key?(token)
-
-            workspaces =
-              key.api_key_workspaces
-              |> Enum.map(& &1.workspace)
-
-            access_levels =
-              key.api_key_workspaces
-              |> Enum.into(%{}, fn akw -> {akw.workspace_id, akw.access_level} end)
+            agent_name = Dran.Auth.agent_name_from_headers(conn.req_headers)
 
             assign(conn, :user, %{
-              role: "viewer",
-              email: "api-key:#{key.id}",
-              key_name: key.name,
-              # Agent identity DERIVED FROM THE KEY (W3): a key is its own
-              # agent — no actor row is created for it. Exposed as `:actor`
-              # (id = key id, name = key name) so consumers written before the
-              # change (e.g. /api/agent/config) keep working; the ownership
-              # clauses of ContentVisibility are served by `:owner_user_id`
-              # below, not by this map.
-              actor: %{id: key.id, name: key.name, display_name: nil},
-              workspaces: workspaces,
-              access_levels: access_levels,
-              # Attribution, resolved in this SINGLE point (P13/M7):
-              # created_by = X-Hermes-Agent header, else the key name;
-              # owner_user_id = api_keys.created_by_user_id.
-              agent_name: Dran.Auth.agent_name_from_headers(conn.req_headers),
-              created_by_user_id: key.created_by_user_id,
-              owner_user_id: key.created_by_user_id
+              id: user.id,
+              email: user.email,
+              is_owner: user.is_owner,
+              instance_role: user.instance_role,
+              # Attribution, resolved in this SINGLE point: created_by = header,
+              # else the email; owner_user_id = the credential's owner.
+              agent_name: agent_name,
+              created_by_user_id: user.id,
+              owner_user_id: user.id,
+              # The agent IS its owner's credential (no `actors` row).
+              actor: %{
+                id: "account:#{user.id}",
+                name: agent_name || user.email,
+                display_name: user.name
+              }
             })
 
           true ->
@@ -165,49 +154,26 @@ defmodule DranWeb.Router do
   defp require_write_access(conn, _opts) do
     user = conn.assigns[:user]
 
-    # Check per-workspace access_level for API keys
-    if user && Map.has_key?(user, :access_levels) do
-      # API key user - check if they have write access to the requested workspace
-      workspace_id = get_requested_workspace_id(conn)
-
-      if DranWeb.ResourceAuthorization.authorize(user, :write, workspace_id) == :ok do
-        conn
-      else
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(
-          403,
-          Jason.encode!(%{
-            errors: %{detail: "API key does not have write access to this workspace"}
-          })
-        )
-        |> Plug.Conn.halt()
-      end
+    # One identity shape at the API surface now: authorize via the shared
+    # matrix, failing closed when the request names no resolvable workspace.
+    if DranWeb.ResourceAuthorization.authorize(user, :write, get_requested_workspace_id(conn)) ==
+         :ok do
+      conn
     else
-      # Other identity shapes (per-user tokens) — authorize via the shared
-      # matrix instead of passing through. Fails closed when the request
-      # names no resolvable workspace.
-      if DranWeb.ResourceAuthorization.authorize(user, :write, get_requested_workspace_id(conn)) ==
-           :ok do
-        conn
-      else
-        conn
-        |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(
-          403,
-          Jason.encode!(%{
-            errors: %{detail: "Token does not have write access to this workspace"}
-          })
-        )
-        |> Plug.Conn.halt()
-      end
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(
+        403,
+        Jason.encode!(%{errors: %{detail: "Token does not have write access to this workspace"}})
+      )
+      |> Plug.Conn.halt()
     end
   end
 
   # ── API read-access plug (SEC: row-level read authorization) ──
   #
   # The read pipeline authenticates the identity but the controllers resolve
-  # workspaces by slug themselves — without this plug any valid key could
+  # workspaces by slug themselves — without this plug any valid token could
   # read any workspace (IDOR). Authorize against the same matrix the write
   # plug uses, failing closed when the request names no resolvable workspace.
 
@@ -233,9 +199,7 @@ defmodule DranWeb.Router do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           403,
-          Jason.encode!(%{
-            errors: %{detail: "API key does not have read access to this workspace"}
-          })
+          Jason.encode!(%{errors: %{detail: "Token does not have read access to this workspace"}})
         )
         |> Plug.Conn.halt()
     end
@@ -278,16 +242,16 @@ defmodule DranWeb.Router do
   # (No routes: the workspace home below serves "/". Kept as a placeholder
   # for future instance-level routes.)
 
-  # ── Settings: API keys (per-user, any logged-in user) ──────────────────────
+  # ── Settings: account (any logged-in user) ─────────────────────────────────
   #
-  # API keys are personal: every user manages their own keys. Defined BEFORE
-  # the admin scope so the static segment wins over the admin-only wildcard.
+  # The account page carries the user's ONE credential (users.api_token).
+  # Defined BEFORE the admin scope so the static segment wins over the
+  # admin-only wildcard.
 
   scope "/settings", DranWeb do
     pipe_through [:browser, :auth]
 
     live "/account", SettingsLive, :account
-    live "/api-keys", SettingsLive, :api_keys
 
     # Instance settings (page types, features, tuning) — instance admins
     # (owner ∪ instance_role admin/owner), the old workspace_admin guard.
@@ -324,8 +288,8 @@ defmodule DranWeb.Router do
 
   scope "/api", DranWeb.API do
     # Agent self-description — authenticated only: the payload is scoped to
-    # the key itself (returns ONLY the workspaces the key reaches), so there
-    # is no workspace to authorize against.
+    # the calling account (returns the instance it reaches), so there is no
+    # workspace to authorize against.
     pipe_through [:api, :api_auth]
 
     get "/agent/config", AgentConfigController, :show
@@ -373,7 +337,7 @@ defmodule DranWeb.Router do
     get "/workers/:id", WorkerController, :show
   end
 
-  # ── REST API — write routes (requires write_access on API keys) ────────────
+  # ── REST API — write routes (requires write access) ────────────
 
   scope "/api", DranWeb.API do
     pipe_through [:api, :api_auth, :require_write_access]
@@ -402,7 +366,7 @@ defmodule DranWeb.Router do
     post "/workers", WorkerController, :create
   end
 
-  # ── REST API — memory write routes (requires write_access on API keys) ─────
+  # ── REST API — memory write routes (requires write access) ─────
   # Agents store facts, rate them, ingest transcripts and soft-delete via the
   # same write-scoped gate as pages/relations (DranWeb.API.MemoryController).
   scope "/api/memory", DranWeb.API do

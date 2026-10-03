@@ -103,7 +103,8 @@ defmodule DranWeb.AddedPagesSurfacesTest do
     conn |> get(~p"/graph/json") |> json_response(200)
   end
 
-  # Conexión de agente: usuario dueño + key con write sobre el workspace.
+  # Conexión de agente: la credencial es el api_token de una cuenta con write
+  # sobre la instancia (is_owner).
   defp api_conn(ws, unique) do
     {:ok, owner} =
       Accounts.create_user(%{
@@ -121,16 +122,9 @@ defmodule DranWeb.AddedPagesSurfacesTest do
       })
       |> Repo.insert()
 
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "surfaces-agent-#{unique}",
-        workspace_ids: [{ws.id, "write"}],
-        created_by_user_id: owner.id
-      })
-
     build_conn()
     |> Plug.Conn.put_req_header("accept", "application/json")
-    |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+    |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
   end
 
   # Badge de conteo del nav para un path: 0 cuando no hay badge (el 0 se oculta).

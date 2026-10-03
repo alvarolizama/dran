@@ -9,7 +9,7 @@ defmodule DranWeb.API.OwnershipTest do
   """
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Accounts, Knowledge, Memory, Repo}
+  alias Dran.{Accounts, Memory, Repo}
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -40,30 +40,20 @@ defmodule DranWeb.API.OwnershipTest do
     {:ok, owner} =
       Accounts.create_user(%{
         email: "own-owner-#{unique}@example.com",
-        name: "Owner",
-        is_owner: true
+        name: "Owner"
       })
 
     # W5: the API targets the instance workspace — reuse it.
     workspace = Dran.DataCase.ensure_workspace!()
 
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "own-agent-#{unique}",
-        workspace_ids: [{workspace.id, "write"}],
-        created_by_user_id: owner.id
-      })
-
-    # W3: la key ya no crea un actor. El propietario de lo escrito sale de
-    # `api_keys.created_by_user_id` (el creador de la key), no de un
-    # `actors.owner_user_id`.
-
+    # W3: la credencial es el api_token de la cuenta. El dueño de lo escrito
+    # sale de ese usuario; el agente se atribuye por el header X-Hermes-Agent.
     conn =
       Phoenix.ConnTest.build_conn()
       |> Plug.Conn.put_req_header("accept", "application/json")
-      |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+      |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
 
-    %{conn: conn, owner: owner, workspace: workspace, key: key, unique: unique}
+    %{conn: conn, owner: owner, workspace: workspace, unique: unique}
   end
 
   describe "POST /api/memory — atribución server-side" do

@@ -1,7 +1,11 @@
 defmodule DranWeb.API.AgentConfigController do
   @moduledoc """
   GET /api/agent/config — self-description for agent clients (the Hermes
-  memory plugin) authenticated with their per-agent API key.
+  memory plugin) authenticated with the account's `api_token`.
+
+  W3 (single credential): there is no per-agent key any more. The agent
+  identity comes from the `X-Hermes-Agent` header (else the account email),
+  resolved by the auth pipeline.
 
   W5 (single-workspace): the answer is the INSTANCE. `workspaces` keeps its
   array shape with exactly one entry (backward compatibility for plugin
@@ -12,16 +16,14 @@ defmodule DranWeb.API.AgentConfigController do
   use DranWeb, :controller
 
   def show(conn, _params) do
-    case conn.assigns[:user][:actor] do
+    case conn.assigns[:user] do
       nil ->
-        # Non API-key identities (user tokens / legacy admin) have no agent
-        # identity — the endpoint is agent-key-only.
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "agent config requires an agent API key"}})
+        |> json(%{errors: %{detail: "agent config requires an authenticated token"}})
 
-      actor ->
-        user = conn.assigns[:user]
+      user ->
+        agent = Map.get(user, :actor) || fallback_agent(user)
 
         # The single instance workspace (nil-safe: an empty instance answers
         # an empty list rather than crashing the plugin).
@@ -42,14 +44,27 @@ defmodule DranWeb.API.AgentConfigController do
 
         json(conn, %{
           data: %{
-            agent: %{id: actor.id, name: actor.name, display_name: actor.display_name},
+            agent: %{id: agent.id, name: agent.name, display_name: agent.display_name},
             workspaces: workspaces,
             # Effective types of the instance, so the agent discovers custom
             # types instead of hardcoding the built-in set.
             page_types: workspaces |> Enum.flat_map(& &1.page_types) |> Enum.uniq(),
-            access_levels: Map.get(user, :access_levels, %{})
+            # The per-workspace access matrix died with the per-agent key; the
+            # account credential carries no levels. Kept as an empty map so old
+            # plugin builds that read it keep working without inventing data.
+            access_levels: %{}
           }
         })
     end
+  end
+
+  # Non-account identities (e.g. the legacy admin token) have no `:actor`;
+  # describe them from the header/email the pipeline resolved.
+  defp fallback_agent(user) do
+    %{
+      id: nil,
+      name: Map.get(user, :agent_name) || Map.get(user, :email) || "agent",
+      display_name: nil
+    }
   end
 end

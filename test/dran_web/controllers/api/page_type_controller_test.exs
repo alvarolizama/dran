@@ -26,25 +26,18 @@ defmodule DranWeb.API.PageTypeControllerTest do
     %{owner: owner, ws: ws, unique: unique}
   end
 
-  defp key_conn(owner, workspace_levels, unique) do
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "pt-key-#{unique}",
-        workspace_ids: workspace_levels,
-        created_by_user_id: owner.id
-      })
-
+  defp token_conn(owner) do
     Phoenix.ConnTest.build_conn()
     |> Plug.Conn.put_req_header("accept", "application/json")
-    |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+    |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
   end
 
   test "lists the built-in effective types with their full definitions", %{
     owner: owner,
     ws: ws,
-    unique: unique
+    unique: _unique
   } do
-    conn = key_conn(owner, [{ws.id, "read"}], unique)
+    conn = token_conn(owner)
     conn = get(conn, "/api/workspaces/#{ws.slug}/page-types")
 
     assert %{"data" => data} = json_response(conn, 200)
@@ -62,7 +55,7 @@ defmodule DranWeb.API.PageTypeControllerTest do
   test "includes the workspace's custom types (declaration order, builtin: false)", %{
     owner: owner,
     ws: ws,
-    unique: unique
+    unique: _unique
   } do
     recipe = %{
       "slug" => "recipe",
@@ -76,7 +69,7 @@ defmodule DranWeb.API.PageTypeControllerTest do
 
     {:ok, ws} = Knowledge.update_workspace_settings(ws, %{workspace_page_types: [recipe]})
 
-    conn = key_conn(owner, [{ws.id, "read"}], unique)
+    conn = token_conn(owner)
     conn = get(conn, "/api/workspaces/#{ws.slug}/page-types")
 
     data = json_response(conn, 200)["data"]
@@ -86,20 +79,6 @@ defmodule DranWeb.API.PageTypeControllerTest do
     assert custom["path"] == "recipes"
     assert custom["label"] == "Receta"
     assert custom["builtin"] == false
-  end
-
-  test "403 when the key does not reach the workspace", %{
-    owner: owner,
-    ws: ws,
-    unique: unique
-  } do
-    {:ok, other} =
-      Knowledge.create_workspace(%{name: "Other #{unique}", slug: "pt-other-#{unique}"})
-
-    conn = key_conn(owner, [{other.id, "read"}], unique)
-    conn = get(conn, "/api/workspaces/#{ws.slug}/page-types")
-
-    assert json_response(conn, 403)
   end
 
   test "401 without a token", %{ws: ws} do

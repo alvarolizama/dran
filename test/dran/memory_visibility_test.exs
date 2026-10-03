@@ -15,7 +15,7 @@ defmodule Dran.MemoryVisibilityTest do
   @moduletag :skip
 
   alias Dran.{ContentVisibility, Knowledge, Memory, Repo}
-  alias Dran.Accounts.{ApiKey, User, UserWorkspace}
+  alias Dran.Accounts.{User, UserWorkspace}
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -279,26 +279,18 @@ defmodule Dran.MemoryVisibilityTest do
     end
   end
 
-  describe "P4 — la misma key cambia de vista al cambiar content_scope (REST)" do
-    test "GET /api/memory responde distinto para la MISMA key" do
+  describe "P4 — la misma credencial cambia de vista al cambiar content_scope (REST)" do
+    test "GET /api/memory responde distinto para la MISMA credencial" do
       unique = System.unique_integer([:positive])
       ws = create_workspace(true)
 
       owner = create_user()
       member(owner, ws, "owner", "all")
 
-      # La key se crea DESPUÉS de la membresía: hereda el owner del actor.
-      {:ok, key} =
-        Dran.Accounts.create_api_key(%{
-          name: "p4-key-#{unique}",
-          created_by_user_id: owner.id,
-          workspace_ids: [{ws.id, "write"}]
-        })
-
       conn =
         Phoenix.ConnTest.build_conn()
         |> Plug.Conn.put_req_header("accept", "application/json")
-        |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
 
       # Un fact del dueño y otro de un tercero.
       other = create_user()

@@ -99,51 +99,39 @@ defmodule DranWeb.ResourceAuthorizationTest do
     end
   end
 
-  describe "API key shape (access_levels)" do
-    test "read-only key: read ok, write forbidden" do
+  describe "account identity map (la credencial única de la cuenta)" do
+    # La forma que `DranWeb.Router.require_api_token/2` asigna al `api_token`
+    # de la cuenta (W3): un mapa, no el struct, porque la identidad del agente
+    # (`agent_name` del header) se resuelve ahí y en ningún otro lado.
+    test "editor: read + write" do
       ws = ws_from_setup()
-
-      user = %{
-        is_owner: false,
-        email: "api-key:reader",
-        key_name: "Reader",
-        workspaces: [ws],
-        access_levels: %{ws.id => "read"},
-        created_by_user_id: nil
-      }
-
-      assert Authz.authorize(user, :read, ws.id) == :ok
-      assert {:error, :forbidden} = Authz.authorize(user, :write, ws.id)
-    end
-
-    test "write-enabled key: read + write ok" do
-      ws = ws_from_setup()
-
-      user = %{
-        is_owner: false,
-        email: "api-key:writer",
-        key_name: "Writer",
-        workspaces: [ws],
-        access_levels: %{ws.id => "write"},
-        created_by_user_id: nil
-      }
+      user = account_identity(instance_role: "editor")
 
       assert Authz.authorize(user, :read, ws.id) == :ok
       assert Authz.authorize(user, :write, ws.id) == :ok
     end
 
-    test "key with no entry for the workspace is forbidden" do
-      user = %{
-        is_owner: false,
-        email: "api-key:elsewhere",
-        key_name: "Elsewhere",
-        workspaces: [],
-        access_levels: %{"some-other-ws-id" => "write"},
-        created_by_user_id: nil
-      }
+    test "viewer: read ok, write forbidden" do
+      ws = ws_from_setup()
+      user = account_identity(instance_role: "viewer")
 
-      assert {:error, :forbidden} = Authz.authorize(user, :read, ws_from_setup().id)
-      assert {:error, :forbidden} = Authz.authorize(user, :write, ws_from_setup().id)
+      assert Authz.authorize(user, :read, ws.id) == :ok
+      assert {:error, :forbidden} = Authz.authorize(user, :write, ws.id)
+    end
+
+    test "dueño de la instancia: read + write aunque su rol de instancia sea editor" do
+      ws = ws_from_setup()
+      user = account_identity(is_owner: true, instance_role: "editor")
+
+      assert Authz.authorize(user, :read, ws.id) == :ok
+      assert Authz.authorize(user, :write, ws.id) == :ok
+    end
+
+    test "mapa autenticado sin rol de instancia: prohibido (fail-closed)" do
+      ws = ws_from_setup()
+
+      assert {:error, :forbidden} = Authz.authorize(%{email: "agent@dran.test"}, :read, ws.id)
+      assert {:error, :forbidden} = Authz.authorize(%{email: "agent@dran.test"}, :write, ws.id)
     end
   end
 
@@ -160,4 +148,21 @@ defmodule DranWeb.ResourceAuthorizationTest do
   defp ws_from_setup, do: Knowledge.get_workspace_by_slug("authz-ws")
 
   defp uniq_email, do: "user-#{System.unique_integer([:positive])}@test.local"
+
+  # The exact shape the API auth pipeline assigns for an account token (W3).
+  defp account_identity(overrides) do
+    Map.merge(
+      %{
+        id: 1,
+        email: "agent@dran.test",
+        is_owner: false,
+        instance_role: "editor",
+        agent_name: "hermes",
+        created_by_user_id: 1,
+        owner_user_id: 1,
+        actor: %{id: "account:1", name: "hermes", display_name: nil}
+      },
+      Map.new(overrides)
+    )
+  end
 end

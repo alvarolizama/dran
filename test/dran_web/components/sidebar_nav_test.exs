@@ -225,7 +225,8 @@ defmodule DranWeb.SidebarNavTest do
 
       # El resto del menú no depende del grupo: el viewer conserva sus enlaces.
       assert viewer =~ ~s(href="/settings/account")
-      assert viewer =~ ~s(href="/settings/api-keys")
+      # W3: la pestaña /settings/api-keys murió — la credencial vive en Account.
+      refute viewer =~ ~s(href="/settings/api-keys")
     end
 
     test "workspace owner sees Activity + Workspace settings after a divider" do
@@ -237,7 +238,6 @@ defmodule DranWeb.SidebarNavTest do
       assert html =~ t("Instance settings")
       # account links siguen arriba
       assert html =~ ~s(href="/settings/account")
-      assert html =~ ~s(href="/settings/api-keys")
       assert html =~ ~s(id="logout-form")
     end
 
@@ -262,7 +262,7 @@ defmodule DranWeb.SidebarNavTest do
       refute html =~ ~s(href="/settings/instance")
       assert html =~ ~s(href="/")
       assert html =~ ~s(href="/settings/account")
-      assert html =~ ~s(href="/settings/api-keys")
+      refute html =~ ~s(href="/settings/api-keys")
     end
 
     test "the active workspace entry is marked" do

@@ -14,6 +14,34 @@ defmodule Dran.ContentVisibilityMigrationTest do
 
   @migration_version 20_260_916_183_343
 
+  # W3 (una sola credencial): el sistema `api_keys` no existe. Se verifica el
+  # ESTADO de la base — el runner de Ecto aplica las migraciones antes de la
+  # suite, así que aquí se comprueba que el drop dejó lo que la ola promete.
+  describe "credencial única (W3)" do
+    test "las tablas api_keys y api_key_workspaces ya no existen" do
+      %{rows: [[keys, key_workspaces]]} =
+        Repo.query!(
+          "SELECT to_regclass('public.api_keys')::text, to_regclass('public.api_key_workspaces')::text"
+        )
+
+      assert keys == nil, "api_keys debe estar dropeada: la credencial es users.api_token"
+      assert key_workspaces == nil, "api_key_workspaces debe estar dropeada"
+    end
+
+    test "users.api_token es una credencial no nullable (una por usuario)" do
+      %{rows: rows} =
+        Repo.query!("""
+        SELECT data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'api_token'
+        """)
+
+      assert [[data_type, is_nullable]] = rows
+      assert data_type == "character varying"
+      assert is_nullable == "NO"
+    end
+  end
+
   describe "schema de visibilidad" do
     test "actors.owner_user_id existe como FK nullable a users" do
       %{rows: rows} =
@@ -118,66 +146,6 @@ defmodule Dran.ContentVisibilityMigrationTest do
 
       assert [[_version]] = rows,
              "la migración #{@migration_version} debe estar aplicada"
-    end
-
-    test "un actor con key de un creador resuelve a ese usuario (backfill)" do
-      unique = System.unique_integer([:positive])
-
-      {:ok, user} =
-        %Dran.Accounts.User{}
-        |> Dran.Accounts.User.changeset(%{
-          email: "backfill-#{unique}@dran.test",
-          api_token: "backfill-token-#{unique}"
-        })
-        |> Repo.insert()
-
-      {:ok, workspace} =
-        Dran.Knowledge.create_workspace(%{
-          name: "Backfill #{unique}",
-          slug: "backfill-#{unique}"
-        })
-
-      {:ok, _} =
-        %Dran.Accounts.UserWorkspace{}
-        |> Dran.Accounts.UserWorkspace.changeset(%{
-          user_id: user.id,
-          workspace_id: workspace.id,
-          role: "owner"
-        })
-        |> Repo.insert()
-
-      # W3: la key ya no crea un actor; el backfill de W1 sigue alimentándose
-      # del vínculo key → created_by_user_id, así que se reproduce con un
-      # actor explícito + el actor_id legacy (columna todavía presente).
-      {:ok, actor} =
-        Dran.Actors.create_actor(%{name: "backfill-agent-#{unique}", kind: "agent"})
-
-      {:ok, key} =
-        Dran.Accounts.create_api_key(%{
-          name: "backfill-agent-#{unique}",
-          created_by_user_id: user.id,
-          workspace_ids: [{workspace.id, "write"}]
-        })
-
-      Repo.query!(
-        "UPDATE api_keys SET actor_id = $1 WHERE id = $2",
-        [Ecto.UUID.dump!(actor.id), Ecto.UUID.dump!(key.id)]
-      )
-
-      # El backfill corre en SQL dentro de la migración; aquí se comprueba que
-      # el vínculo que lo alimenta (key → created_by_user_id) es resoluble, que
-      # es la precondición del backfill.
-      %{rows: [[resolved]]} =
-        Repo.query!(
-          """
-          SELECT min(k.created_by_user_id)
-          FROM api_keys k
-          WHERE k.actor_id = $1 AND k.created_by_user_id IS NOT NULL
-          """,
-          [Ecto.UUID.dump!(actor.id)]
-        )
-
-      assert resolved == user.id || to_string(resolved) == to_string(user.id)
     end
   end
 end

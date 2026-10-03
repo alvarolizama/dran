@@ -18,8 +18,8 @@ defmodule Dran.ContentVisibility do
     * `"shared"`  — readable by the owner, instance admins, and the users /
       groups holding a `content_shares` row for it
 
-  A reader sees: **own ∪ public ∪ shared-with-me**. An API key reads with
-  exactly the reach of its owner (the user behind the actor).
+  A reader sees: **own ∪ public ∪ shared-with-me**. An API identity (the
+  account's `api_token`) reads with exactly the reach of its owner.
 
   ## The vocabulary: the scope
 
@@ -65,7 +65,10 @@ defmodule Dran.ContentVisibility do
   def scope(_workspace, %User{instance_role: role}, _kind) when role in @roles_full_view,
     do: :all
 
-  # API-key / agent identity: reads with the reach of its owner.
+  # API identity (a map, not a struct): the instance role travels explicitly.
+  def scope(_workspace, %{instance_role: role}, _kind) when role in @roles_full_view, do: :all
+
+  # API account / agent identity: reads with the reach of its owner.
   def scope(_workspace, %{owner_user_id: owner_id} = identity, _kind)
       when not is_nil(owner_id) do
     if privileged_identity?(identity), do: :all, else: {:reader, owner_id}

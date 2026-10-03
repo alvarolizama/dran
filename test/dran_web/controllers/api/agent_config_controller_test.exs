@@ -1,8 +1,9 @@
 defmodule DranWeb.API.AgentConfigControllerTest do
   @moduledoc """
   GET /api/agent/config — the self-description endpoint the Hermes memory
-  plugin hits. W5 (single-workspace): the answer is the INSTANCE — one
-  workspace entry, its effective page types, and the key's access level.
+  plugin hits. W3/W5: authenticated with the account's `api_token`; the answer
+  is the INSTANCE (one workspace entry, its effective page types) and the agent
+  name comes from the `X-Hermes-Agent` header.
   """
   use DranWeb.ConnCase, async: false
 
@@ -24,59 +25,54 @@ defmodule DranWeb.API.AgentConfigControllerTest do
     %{owner: owner, ws_a: ws, ws_b: ws, unique: unique}
   end
 
-  defp agent_conn(owner, ws_a, _ws_b, unique, _levels \\ nil) do
-    {:ok, actor} = Dran.Actors.create_actor(%{name: "cfg-agent-#{unique}", kind: "agent"})
-
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: actor.name,
-        workspace_ids: [{ws_a.id, "write"}],
-        created_by_user_id: owner.id,
-        actor_id: actor.id
-      })
-
-    conn =
-      Phoenix.ConnTest.build_conn()
-      |> Plug.Conn.put_req_header("accept", "application/json")
-      |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
-
-    {conn, actor, key}
+  defp agent_conn(owner, unique) do
+    Phoenix.ConnTest.build_conn()
+    |> Plug.Conn.put_req_header("accept", "application/json")
+    |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
+    |> Plug.Conn.put_req_header("x-hermes-agent", "cfg-agent-#{unique}")
   end
 
-  test "lists the agent identity and the workspaces its key may reach", %{
+  test "lists the agent identity and the instance it reaches", %{
     owner: owner,
     ws_a: ws_a,
-    ws_b: ws_b,
     unique: unique
   } do
-    {conn, _actor, key} = agent_conn(owner, ws_a, ws_b, unique)
-
+    conn = agent_conn(owner, unique)
     conn = get(conn, "/api/agent/config")
 
     assert %{"data" => data} = json_response(conn, 200)
 
-    # W3: la identidad del agente se DERIVA de la key (una key ya no tiene
-    # actor) — el `name` de la key es el nombre del agente y su `id` la key.
-    assert data["agent"]["name"] == key.name
-    assert data["agent"]["id"] == key.id
+    # W3: la identidad del agente sale del header X-Hermes-Agent; el agente ES
+    # la credencial de su dueño (id sintético).
+    assert data["agent"]["name"] == "cfg-agent-#{unique}"
+    assert data["agent"]["id"] == "account:#{owner.id}"
 
     # Exactly one entry: the instance.
     slugs = data["workspaces"] |> Enum.map(& &1["slug"])
     assert slugs == [ws_a.slug]
 
-    # Access levels keyed by workspace id (the key's level on the instance).
-    levels = data["access_levels"]
-    assert levels[ws_a.id] == "write"
+    # La matriz por workspace murió con la key: vacía, nunca inventada.
+    assert data["access_levels"] == %{}
   end
 
-  # W2 (?04/?07): the endpoint now also exposes the EFFECTIVE page types per
-  # workspace (built-in ∪ custom) so the agent discovers a workspace's own
-  # vocabulary instead of hardcoding the built-in set. The Python plugin's
-  # hardcoded list is untouched here — that is W5.
+  test "agent.name falls back to the owner email when no header came", %{owner: owner} do
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> Plug.Conn.put_req_header("accept", "application/json")
+      |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
+
+    conn = get(conn, "/api/agent/config")
+
+    assert %{"data" => data} = json_response(conn, 200)
+    assert data["agent"]["name"] == owner.email
+  end
+
+  # W2 (?04/?07): the endpoint exposes the EFFECTIVE page types per workspace
+  # (built-in ∪ custom) so the agent discovers a workspace's own vocabulary
+  # instead of hardcoding the built-in set.
   test "exposes the effective page types (built-in ∪ custom) per workspace", %{
     owner: owner,
     ws_a: ws_a,
-    ws_b: ws_b,
     unique: unique
   } do
     recipe = %{
@@ -91,7 +87,7 @@ defmodule DranWeb.API.AgentConfigControllerTest do
 
     {:ok, ws_a} = Knowledge.update_workspace_settings(ws_a, %{workspace_page_types: [recipe]})
 
-    {conn, _actor, _key} = agent_conn(owner, ws_a, ws_b, unique)
+    conn = agent_conn(owner, unique)
     conn = get(conn, "/api/agent/config")
 
     assert %{"data" => data} = json_response(conn, 200)

@@ -38,23 +38,18 @@ defmodule DranWeb.API.MemoryControllerTest do
     # W5: the API always targets the instance workspace.
     workspace = Dran.DataCase.ensure_workspace!()
 
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "agent-coder-#{unique}",
-        workspace_ids: [{workspace.id, "write"}],
-        created_by_user_id: owner.id
-      })
-
+    # W3: the credential is the account's api_token; the agent identity for
+    # attribution rides the X-Hermes-Agent header.
     conn =
       Phoenix.ConnTest.build_conn()
       |> Plug.Conn.put_req_header("accept", "application/json")
-      |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+      |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
+      |> Plug.Conn.put_req_header("x-hermes-agent", "agent-coder-#{unique}")
 
     %{
       conn: conn,
       owner: owner,
       workspace: workspace,
-      key: key,
       unique: unique
     }
   end

@@ -39,8 +39,7 @@ defmodule DranWeb.GraphVisibilityTest do
     {:ok, owner} =
       Accounts.create_user(%{
         email: "graph-owner-#{unique}@example.com",
-        name: "Graph Owner",
-        is_owner: true
+        name: "Graph Owner"
       })
 
     {:ok, _} =
@@ -52,17 +51,11 @@ defmodule DranWeb.GraphVisibilityTest do
       })
       |> Repo.insert()
 
-    {:ok, key} =
-      Accounts.create_api_key(%{
-        name: "graph-key-#{unique}",
-        workspace_ids: [{workspace.id, "write"}],
-        created_by_user_id: owner.id
-      })
-
+    # W3: the credential is the account's api_token (no per-agent key).
     conn =
       Phoenix.ConnTest.build_conn()
       |> Plug.Conn.put_req_header("accept", "application/json")
-      |> Plug.Conn.put_req_header("authorization", "Bearer #{key.token}")
+      |> Plug.Conn.put_req_header("authorization", "Bearer #{owner.api_token}")
 
     %{conn: conn, owner: owner, workspace: workspace, unique: unique}
   end
