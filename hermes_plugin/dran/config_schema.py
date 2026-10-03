@@ -48,18 +48,6 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             group="Connection",
         ),
         ProviderField(
-            key="workspace",
-            label="Workspace (deprecated)",
-            kind=KIND_TEXT,
-            description="Informational only — Dran is single-workspace: the instance "
-            "IS the workspace and every call targets it. Kept so existing config "
-            "files keep loading.",
-            default="personal",
-            placeholder="personal",
-            inline=True,
-            group="Connection",
-        ),
-        ProviderField(
             key="auto_recall",
             label="Auto recall",
             kind=KIND_BOOL,

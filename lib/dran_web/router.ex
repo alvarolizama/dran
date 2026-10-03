@@ -342,10 +342,13 @@ defmodule DranWeb.Router do
   scope "/api", DranWeb.API do
     pipe_through [:api, :api_auth, :require_write_access]
 
-    # Contexts (write)
-    post "/workspaces", WorkspaceController, :create
-    put "/workspaces/:slug", WorkspaceController, :update
-    delete "/workspaces/:slug", WorkspaceController, :delete
+    # Contexts (READ ONLY)
+    #
+    # W5 (F11/P6): the instance does not admit extra containers through the
+    # API. `POST /workspaces` left orphan containers behind; `PUT`/`DELETE`
+    # were the same class one step further (`DELETE` removed the ONLY
+    # instance). The container set is instance policy, not an agent
+    # capability — the operations stay in the admin UI. Reads below.
 
     # Pages (write)
     #
