@@ -44,9 +44,13 @@ defmodule DranWeb.PlanLive do
       overdue?: 1,
       status_class: 1,
       status_label: 1,
-      updated_meta: 1
+      updated_meta: 1,
+      # El aside del detalle (mismo molde que pages)
+      sidebar_section: 1,
+      visibility_label: 1
     ]
 
+  alias Dran.Accounts
   alias Dran.Plans
   alias Dran.Plans.Plan
   alias DranWeb.Components.ShareDialog
@@ -186,79 +190,139 @@ defmodule DranWeb.PlanLive do
           <.resource_visibility_pill visibility={@plan.visibility} id="plan-visibility-badge" />
         </div>
 
-        <div class="space-y-6">
-          <%= if @editing do %>
-            <div id="plan-edit-panel" class="surface-2 rounded-xl p-4">
-              <%!-- El checklist del EDIT tiene su propia puerta (el editor del
-              panel de pasos): el form de edición no lo pisa. --%>
-              <.plan_form
-                form={@form}
-                workspace_id={@workspace_id}
-                statuses={@statuses}
-                editing={true}
-              />
-            </div>
-          <% else %>
-            <div
-              :if={@plan.body != nil and @plan.body != ""}
-              class="prose prose-base dark:prose-invert max-w-none"
-            >
-              {render_markdown(@plan.body, [])}
-            </div>
-          <% end %>
+        <div class="flex flex-col lg:flex-row gap-6">
+          <%!-- Columna principal: cuerpo (o el panel de edición) y los PASOS. El
+          progreso NO vive acá: es el titular del aside, y el dato se pinta UNA
+          vez. --%>
+          <div class="flex-1 min-w-0 space-y-6">
+            <%= if @editing do %>
+              <div id="plan-edit-panel" class="surface-2 rounded-xl p-4">
+                <%!-- El checklist del EDIT tiene su propia puerta (el editor del
+                panel de pasos): el form de edición no lo pisa. --%>
+                <.plan_form
+                  form={@form}
+                  workspace_id={@workspace_id}
+                  statuses={@statuses}
+                  editing={true}
+                />
+              </div>
+            <% else %>
+              <div
+                :if={@plan.body != nil and @plan.body != ""}
+                class="prose prose-base dark:prose-invert max-w-none"
+              >
+                {render_markdown(@plan.body, [])}
+              </div>
+            <% end %>
 
-          <div class="surface-2 rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-sm font-semibold flex items-center gap-2">
-                <.icon name="hero-chart-bar" class="size-4 text-primary" /> {gettext("Progress")}
+            <div class="surface-2 rounded-xl p-4">
+              <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+                <.icon name="hero-list-bullet" class="size-4 text-primary" /> {gettext("Steps")}
+                <span class="badge badge-sm badge-ghost">{@progress.total}</span>
               </h3>
-              <span id="plan-progress-count" class="text-sm text-base-content/70">
-                {@progress.done}/{@progress.total}
-              </span>
-            </div>
-            <div id="plan-progress" data-done={@progress.done} data-total={@progress.total}>
-              <div class="w-full bg-base-200 rounded-full h-2 overflow-hidden">
-                <div class="bg-primary h-2 rounded-full" style={"width: #{@progress.percent}%"}></div>
-              </div>
+
+              <p :if={@progress.total == 0} class="text-sm text-base-content/40 mb-4">
+                {gettext("No steps yet.")}
+              </p>
+
+              <form
+                id="plan-steps-form"
+                phx-submit="save_checklist"
+                class="border-t border-base-300 pt-4"
+              >
+                <h4 class="text-xs font-semibold text-base-content/60 mb-2">
+                  {gettext("Add, remove or reorder steps")}
+                </h4>
+                <.checklist_editor id="plan-steps-detail" name="steps" value={@plan.checklist} />
+                <div class="flex justify-end mt-3">
+                  <button type="submit" id="plan-steps-save" class="btn btn-primary btn-sm">
+                    {gettext("Save steps")}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
 
-          <div class="surface-2 rounded-xl p-4">
-            <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
-              <.icon name="hero-list-bullet" class="size-4 text-primary" /> {gettext("Steps")}
-              <span class="badge badge-sm badge-ghost">{@progress.total}</span>
-            </h3>
+          <%!-- Aside del molde: Progress (titular, sin chevron), Related pages y
+          Metadata colapsado. Es el MISMO aside del detalle de página. --%>
+          <aside id="plan-sidebar" class="lg:w-72 xl:w-80 shrink-0 space-y-4">
+            <%!-- El progreso se DERIVA del checklist: tachar un paso lo mueve. --%>
+            <div class="surface-2 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-semibold flex items-center gap-2">
+                  <.icon name="hero-chart-bar" class="size-4 text-primary" /> {gettext("Progress")}
+                </h3>
+                <span id="plan-progress-count" class="text-sm text-base-content/70">
+                  {@progress.done}/{@progress.total}
+                </span>
+              </div>
+              <div id="plan-progress" data-done={@progress.done} data-total={@progress.total}>
+                <div class="w-full bg-base-200 rounded-full h-2 overflow-hidden">
+                  <div class="bg-primary h-2 rounded-full" style={"width: #{@progress.percent}%"}>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            <p :if={@progress.total == 0} class="text-sm text-base-content/40 mb-4">
-              {gettext("No steps yet.")}
-            </p>
-
-            <form
-              id="plan-steps-form"
-              phx-submit="save_checklist"
-              class="border-t border-base-300 pt-4"
+            <%!-- Páginas relacionadas: relaciones reales primero y, si no hay
+            ninguna, el fallback semántico — con la FUENTE declarada y el alta
+            EXPLÍCITA (el picker). El panel va EMBEBIDO: el título lo pone la
+            sección del aside y el badge de la fuente nunca se esconde. --%>
+            <.sidebar_section
+              id="plan-related-section"
+              title={gettext("Related")}
+              open
+              body_class="mt-2"
             >
-              <h4 class="text-xs font-semibold text-base-content/60 mb-2">
-                {gettext("Add, remove or reorder steps")}
-              </h4>
-              <.checklist_editor id="plan-steps-detail" name="steps" value={@plan.checklist} />
-              <div class="flex justify-end mt-3">
-                <button type="submit" id="plan-steps-save" class="btn btn-primary btn-sm">
-                  {gettext("Save steps")}
-                </button>
-              </div>
-            </form>
-          </div>
+              <.related_panel
+                id="plan-related"
+                related={@related}
+                candidates={@related_candidates}
+                workspace={@context}
+                embedded
+              />
+            </.sidebar_section>
 
-          <%!-- Páginas relacionadas: relaciones reales primero y, si no hay
-          ninguna, el fallback semántico — con la FUENTE declarada y el alta
-          EXPLÍCITA (el picker). --%>
-          <.related_panel
-            id="plan-related"
-            related={@related}
-            candidates={@related_candidates}
-            workspace={@context}
-          />
+            <%!-- Metadata: todo sale de la FILA del plan (sin migración). Los
+            pasos se cuentan acá (cuántos son) y su avance vive en el bloque de
+            progreso de arriba; el plan no declara actor ni versionado. --%>
+            <.sidebar_section
+              id="plan-metadata"
+              title={gettext("Metadata")}
+              body_class="divide-y divide-base-300/50 mt-2"
+            >
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Status")}</span>
+                <span class="font-medium">{status_label(@plan.status)}</span>
+              </div>
+              <div :if={@plan.starts_on} class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Starts on")}</span>
+                <span>{format_date(@plan.starts_on)}</span>
+              </div>
+              <div :if={@plan.due_on} class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Due on")}</span>
+                <span>{format_date(@plan.due_on)}</span>
+              </div>
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Steps")}</span>
+                <span>{ngettext("%{count} step", "%{count} steps", @progress.total,
+                  count: @progress.total
+                )}</span>
+              </div>
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Visibility")}</span>
+                <span>{visibility_label(@plan.visibility)}</span>
+              </div>
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Owner")}</span>
+                <span>{owner_label(@plan.owner_user_id)}</span>
+              </div>
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Updated")}</span>
+                <span>{format_date(@plan.updated_at)}</span>
+              </div>
+            </.sidebar_section>
+          </aside>
         </div>
       </div>
 
@@ -731,6 +795,20 @@ defmodule DranWeb.PlanLive do
   # diálogo agrega y quita grants; compartir fija `shared` en la misma operación.
   defp can_manage_scope?(%{owner_user_id: owner_id}, %{id: id}), do: owner_id == id
   defp can_manage_scope?(_resource, _user), do: false
+
+  # El dueño del plan para el bloque Metadata del aside: la tabla guarda el id
+  # (`owner_user_id`) y NULL es contenido de sistema. Se pinta el NOMBRE de la
+  # cuenta, nunca el id crudo (C11) — el plan no declara actor ni versionado.
+  defp owner_label(nil), do: gettext("Instance")
+
+  defp owner_label(user_id) when is_integer(user_id) do
+    case Accounts.get_user(user_id) do
+      nil -> gettext("Unknown")
+      user -> user.name || user.email
+    end
+  end
+
+  defp owner_label(_other), do: gettext("Unknown")
 
   defp reader_scope(socket) do
     case socket.assigns[:user] do

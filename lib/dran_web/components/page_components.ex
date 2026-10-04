@@ -12,7 +12,12 @@ defmodule DranWeb.PageComponents do
     only: [meta_fields: 1, tag_input: 1]
 
   import DranWeb.ResourceComponents,
-    only: [markdown_body_field: 1, resource_scope_field: 1, resource_visibility_pill: 1]
+    only: [
+      markdown_body_field: 1,
+      resource_scope_field: 1,
+      resource_visibility_pill: 1,
+      sidebar_section: 1
+    ]
 
   alias Dran.Actors
   alias Dran.Knowledge
@@ -259,108 +264,67 @@ defmodule DranWeb.PageComponents do
             {render_slot(@attributes)}
 
             <%!-- Metadata collapsible ─────────────────────────────────────── % --%>
-            <details class="group surface-2 rounded-lg p-4">
-              <summary class="flex items-center gap-2 cursor-pointer select-none">
-                <.icon
-                  name="hero-chevron-right"
-                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-                />
-                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-                  {gettext("Metadata")}
-                </h3>
-              </summary>
-              <div class="divide-y divide-base-300/50 mt-2">
-                <div class="flex justify-between gap-2 py-2 text-sm">
-                  <span class="text-base-content/60">{gettext("Type")}</span>
-                  <span class="font-medium">{@page.page_type}</span>
-                </div>
-                <div class="flex justify-between gap-2 py-2 text-sm">
-                  <span class="text-base-content/60">{gettext("Version")}</span>
-                  <span class="font-mono">v{@page.version}</span>
-                </div>
-                <div class="flex justify-between gap-2 py-2 text-sm">
-                  <span class="text-base-content/60">{gettext("Created by")}</span>
-                  <span>{Actors.creator_label(@creator_labels, @page.created_by)}</span>
-                </div>
-                <div :if={@page.updated_by} class="flex justify-between gap-2 py-2 text-sm">
-                  <span class="text-base-content/60">{gettext("Updated by")}</span>
-                  <span>{Actors.creator_label(@creator_labels, @page.updated_by)}</span>
-                </div>
-                <div
-                  :for={
-                    {key, value} <-
-                      Enum.reject(@page.meta || %{}, fn {k, _v} -> k == "inline_links" end)
-                  }
-                  class="flex justify-between gap-2 py-2 text-sm break-words"
-                >
-                  <span class="text-base-content/60">{format_meta_key(key)}</span>
-                  <span class="text-right">{format_meta_value(value)}</span>
-                </div>
+            <.sidebar_section
+              title={gettext("Metadata")}
+              body_class="divide-y divide-base-300/50 mt-2"
+            >
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Type")}</span>
+                <span class="font-medium">{@page.page_type}</span>
               </div>
-            </details>
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Version")}</span>
+                <span class="font-mono">v{@page.version}</span>
+              </div>
+              <div class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Created by")}</span>
+                <span>{Actors.creator_label(@creator_labels, @page.created_by)}</span>
+              </div>
+              <div :if={@page.updated_by} class="flex justify-between gap-2 py-2 text-sm">
+                <span class="text-base-content/60">{gettext("Updated by")}</span>
+                <span>{Actors.creator_label(@creator_labels, @page.updated_by)}</span>
+              </div>
+              <div
+                :for={
+                  {key, value} <-
+                    Enum.reject(@page.meta || %{}, fn {k, _v} -> k == "inline_links" end)
+                }
+                class="flex justify-between gap-2 py-2 text-sm break-words"
+              >
+                <span class="text-base-content/60">{format_meta_key(key)}</span>
+                <span class="text-right">{format_meta_value(value)}</span>
+              </div>
+            </.sidebar_section>
 
-            <details class="group surface-2 rounded-lg p-4">
-              <summary class="flex items-center gap-2 cursor-pointer select-none">
-                <.icon
-                  name="hero-chevron-right"
-                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-                />
-                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-                  {gettext("Links")}
-                </h3>
-              </summary>
-              <div class="mt-2">
-                <.backlinks_section relations={@relations} />
-              </div>
-            </details>
+            <.sidebar_section title={gettext("Links")} body_class="mt-2">
+              <.backlinks_section relations={@relations} />
+            </.sidebar_section>
 
-            <details class="group surface-2 rounded-lg p-4">
-              <summary class="flex items-center gap-2 cursor-pointer select-none">
-                <.icon
-                  name="hero-chevron-right"
-                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-                />
-                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-                  {gettext("Changelog")}
-                </h3>
-              </summary>
-              <div class="space-y-1 mt-2">
-                <div
-                  :for={version <- @versions}
-                  class="px-3 py-2 text-sm text-base-content/60 transition hover:bg-base-200/50 rounded"
-                >
-                  {gettext("v%{version} — %{date} by %{author}",
-                    version: version.version,
-                    date: format_date(version.inserted_at),
-                    author: version.changed_by || gettext("system")
-                  )}
-                </div>
-                <p :if={@versions == []} class="text-caption text-base-content/40">
-                  {gettext("No version history yet.")}
-                </p>
+            <.sidebar_section title={gettext("Changelog")} body_class="space-y-1 mt-2">
+              <div
+                :for={version <- @versions}
+                class="px-3 py-2 text-sm text-base-content/60 transition hover:bg-base-200/50 rounded"
+              >
+                {gettext("v%{version} — %{date} by %{author}",
+                  version: version.version,
+                  date: format_date(version.inserted_at),
+                  author: version.changed_by || gettext("system")
+                )}
               </div>
-            </details>
+              <p :if={@versions == []} class="text-caption text-base-content/40">
+                {gettext("No version history yet.")}
+              </p>
+            </.sidebar_section>
 
             <%!-- Activity collapsible ──────────────────────────────────────── % --%>
-            <details class="group surface-2 rounded-lg p-4">
-              <summary class="flex items-center gap-2 cursor-pointer select-none">
-                <.icon
-                  name="hero-chevron-right"
-                  class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-                />
-                <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-                  {gettext("Activity")}
-                </h3>
-              </summary>
-              <div class="space-y-1 mt-2">
-                <div :for={log <- @logs} class="text-xs text-base-content/60">
-                  <span class="font-mono">{log.action}</span> — {format_date(log.inserted_at)}
-                </div>
-                <p :if={@logs == []} class="text-xs text-base-content/40">
-                  {gettext("No activity recorded.")}
-                </p>
+            <.sidebar_section title={gettext("Activity")} body_class="space-y-1 mt-2">
+              <div :for={log <- @logs} class="text-xs text-base-content/60">
+                <span class="font-mono">{log.action}</span> — {format_date(log.inserted_at)}
               </div>
-            </details>
+              <p :if={@logs == []} class="text-xs text-base-content/40">
+                {gettext("No activity recorded.")}
+              </p>
+            </.sidebar_section>
           </aside>
         </div>
       </div>
@@ -821,41 +785,30 @@ defmodule DranWeb.PageComponents do
     assigns = assign(assigns, :tag_suggestions, suggestions)
 
     ~H"""
-    <details class="group surface-2 rounded-lg p-4" open>
-      <summary class="flex items-center gap-2 cursor-pointer select-none">
-        <.icon
-          name="hero-chevron-right"
-          class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
-        />
-        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-          {gettext("Attributes")}
-        </h3>
-      </summary>
-      <div class="space-y-3 mt-2">
-        <%!-- summary is machine-owned (REST/augmentation) — never edited here --%>
-        <div :if={@page.summary not in [nil, ""]} class="text-sm">
-          <span class="text-caption font-semibold text-base-content/60 uppercase tracking-wider block mb-1">
-            {gettext("Summary")} · {gettext("Auto")}
-          </span>
-          <p class="text-base-content/70">{@page.summary}</p>
-        </div>
+    <.sidebar_section title={gettext("Attributes")} open body_class="space-y-3 mt-2">
+      <%!-- summary is machine-owned (REST/augmentation) — never edited here --%>
+      <div :if={@page.summary not in [nil, ""]} class="text-sm">
+        <span class="text-caption font-semibold text-base-content/60 uppercase tracking-wider block mb-1">
+          {gettext("Summary")} · {gettext("Auto")}
+        </span>
+        <p class="text-base-content/70">{@page.summary}</p>
+      </div>
 
-        <%!-- Own form so the sidebar inputs (outside the main page-edit-form
+      <%!-- Own form so the sidebar inputs (outside the main page-edit-form
              in the two-column layout) still fire phx-change on every edit —
              validate_page autosaves tags/meta server-side. --%>
-        <.form for={@form} id={"#{@editor_id}-attributes-form"} phx-change="validate_page">
-          <.tag_input
-            id={"#{@editor_id}-tags"}
-            name="page[tags]"
-            value={Phoenix.HTML.Form.input_value(@form, :tags)}
-            label={gettext("Tags")}
-            suggestions={@tag_suggestions}
-          />
+      <.form for={@form} id={"#{@editor_id}-attributes-form"} phx-change="validate_page">
+        <.tag_input
+          id={"#{@editor_id}-tags"}
+          name="page[tags]"
+          value={Phoenix.HTML.Form.input_value(@form, :tags)}
+          label={gettext("Tags")}
+          suggestions={@tag_suggestions}
+        />
 
-          <.meta_fields page_type={@page_type} meta={@page.meta || %{}} workspace_id={@workspace_id} />
-        </.form>
-      </div>
-    </details>
+        <.meta_fields page_type={@page_type} meta={@page.meta || %{}} workspace_id={@workspace_id} />
+      </.form>
+    </.sidebar_section>
     """
   end
 

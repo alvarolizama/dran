@@ -586,6 +586,19 @@ defmodule DranWeb.ResourceComponents do
   def visibility_label("private"), do: gettext("Private")
   def visibility_label(other), do: other
 
+  @doc """
+  La etiqueta de un horizonte de goal. El vocabulario es cerrado
+  (`Dran.Goals.Goal.horizons/0`) y en pantalla va TRADUCIDO, nunca el valor
+  crudo de la columna.
+  """
+  def horizon_label("someday"), do: gettext("Someday")
+  def horizon_label("day"), do: gettext("Day")
+  def horizon_label("week"), do: gettext("Week")
+  def horizon_label("month"), do: gettext("Month")
+  def horizon_label("quarter"), do: gettext("Quarter")
+  def horizon_label("year"), do: gettext("Year")
+  def horizon_label(other), do: other
+
   @doc "The icon of a level: a lock, the globe, or the group."
   def scope_icon("public"), do: "hero-globe-alt"
   def scope_icon("shared"), do: "hero-user-group"
@@ -706,11 +719,20 @@ defmodule DranWeb.ResourceComponents do
   attr :workspace, :map, default: nil
   attr :picker_event, :string, default: "link_related"
 
+  attr :embedded, :boolean,
+    default: false,
+    doc:
+      "dentro de un `.sidebar_section` (el título lo pone la sección: acá sólo queda el badge de la FUENTE, que nunca se esconde)"
+
   def related_panel(assigns) do
     ~H"""
-    <div id={@id} class="surface-2 rounded-xl p-4">
-      <div class="flex items-center justify-between gap-2 mb-3">
-        <h3 class="text-sm font-semibold flex items-center gap-2">
+    <div id={@id} class={[not @embedded && "surface-2 rounded-xl p-4"]}>
+      <div class={[
+        "flex items-center gap-2",
+        @embedded && "justify-end mb-2",
+        not @embedded && "justify-between mb-3"
+      ]}>
+        <h3 :if={not @embedded} class="text-sm font-semibold flex items-center gap-2">
           <.icon name="hero-link" class="size-4 text-primary" /> {gettext("Related pages")}
         </h3>
         <span
@@ -760,6 +782,37 @@ defmodule DranWeb.ResourceComponents do
         </button>
       </form>
     </div>
+    """
+  end
+
+  @doc """
+  El bloque COLAPSABLE del aside del detalle: el `<details>` con el chevron, el
+  título en versalitas y el cuerpo con su propia densidad (`body_class`).
+
+  Es el molde que comparten el detalle de página y los de goal y plan. Antes
+  estaba copiado cinco veces en `PageComponents`, así que un cambio de forma
+  había que hacerlo cinco veces (o se hacía en una y las otras divergían).
+  """
+  attr :id, :string, default: nil
+  attr :title, :string, required: true
+  attr :open, :boolean, default: false
+  attr :body_class, :string, default: "space-y-3 mt-2"
+  slot :inner_block, required: true
+
+  def sidebar_section(assigns) do
+    ~H"""
+    <details id={@id} class="group surface-2 rounded-lg p-4" open={@open}>
+      <summary class="flex items-center gap-2 cursor-pointer select-none">
+        <.icon
+          name="hero-chevron-right"
+          class="size-4 shrink-0 text-base-content/40 transition-transform duration-150 group-open:rotate-90"
+        />
+        <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
+          {@title}
+        </h3>
+      </summary>
+      <div class={@body_class}>{render_slot(@inner_block)}</div>
+    </details>
     """
   end
 

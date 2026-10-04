@@ -574,6 +574,78 @@ defmodule DranWeb.PlanLiveTest do
     end
   end
 
+  # ── W1: el aside del molde (contrato superficies-al-molde) ───────────────
+
+  describe "el aside del detalle (W1)" do
+    test "monta el aside con el progreso ARRIBA, relacionados debajo y la metadata al final",
+         %{author: author, conn: conn} do
+      plan = plan!(author, %{"title" => "Con aside", "checklist" => ["uno", "dos"]})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/plans/#{plan.id}")
+
+      assert has_element?(view, "#plan-sidebar")
+
+      before?(render(view), ~s(id="plan-progress"), ~s(id="plan-related-section"))
+      before?(render(view), ~s(id="plan-related-section"), ~s(id="plan-metadata"))
+    end
+
+    test "el progreso vive UNA vez (en el aside) y los PASOS siguen en la principal",
+         %{author: author, conn: conn} do
+      plan = plan!(author, %{"title" => "Un solo progreso", "checklist" => ["uno", "dos"]})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/plans/#{plan.id}")
+
+      assert has_element?(view, "#plan-sidebar #plan-progress[data-done='0'][data-total='2']")
+      assert length(String.split(render(view), ~s(id="plan-progress"))) == 2
+
+      # El editor de pasos NO se movió al aside: la columna principal lo conserva.
+      assert has_element?(view, "#plan-steps-form")
+      refute has_element?(view, "#plan-sidebar #plan-steps-form")
+    end
+
+    test "la metadata del plan sale de la fila (status, fechas, pasos, destino, dueño, updated)",
+         %{author: author, conn: conn} do
+      plan =
+        plan!(author, %{
+          "title" => "Con metadata",
+          "status" => "active",
+          "visibility" => "shared",
+          "starts_on" => ~D[2026-11-01],
+          "due_on" => ~D[2026-12-31],
+          "checklist" => ["uno", "dos"]
+        })
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/plans/#{plan.id}")
+
+      assert has_element?(view, "#plan-metadata", t("Status"))
+      assert has_element?(view, "#plan-metadata", t("Active"))
+      assert has_element?(view, "#plan-metadata", t("Starts on"))
+      assert has_element?(view, "#plan-metadata", "Nov 01, 2026")
+      assert has_element?(view, "#plan-metadata", t("Due on"))
+      assert has_element?(view, "#plan-metadata", "Dec 31, 2026")
+      assert has_element?(view, "#plan-metadata", t("Steps"))
+      assert has_element?(view, "#plan-metadata", "2 steps")
+      assert has_element?(view, "#plan-metadata", t("Visibility"))
+      assert has_element?(view, "#plan-metadata", t("Shared"))
+      assert has_element?(view, "#plan-metadata", t("Owner"))
+      assert has_element?(view, "#plan-metadata", author.name)
+      assert has_element?(view, "#plan-metadata", t("Updated"))
+    end
+
+    test "relacionados sigue con su FUENTE declarada dentro del aside",
+         %{author: author, conn: conn} do
+      plan = plan!(author, %{"title" => "Con vecina"})
+      page = page!(author, "Página del aside", "public")
+      {:ok, _} = Related.link("plan", plan, page.id, author, scope: {:reader, author.id})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/plans/#{plan.id}")
+
+      assert has_element?(view, "#plan-sidebar #plan-related-section #plan-related")
+      assert has_element?(view, "#plan-sidebar #plan-related-source", t("From the graph"))
+      assert has_element?(view, "#plan-related-page-#{page.id}", "Página del aside")
+    end
+  end
+
   defp page!(owner, title, visibility) do
     workspace = Dran.DataCase.ensure_workspace!()
 
@@ -591,6 +663,14 @@ defmodule DranWeb.PlanLiveTest do
   end
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
+
+  # Posición de un marcador en el HTML: el orden del aside se afirma sobre el DOM.
+  defp before?(html, first, second) do
+    {first_pos, _len} = :binary.match(html, first)
+    {second_pos, _len} = :binary.match(html, second)
+    assert first_pos < second_pos
+    true
+  end
 
   defp login(conn, user) do
     conn

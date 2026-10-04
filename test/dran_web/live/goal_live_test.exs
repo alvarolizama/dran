@@ -776,6 +776,80 @@ defmodule DranWeb.GoalLiveTest do
     end
   end
 
+  # ── W1: el aside del molde (contrato superficies-al-molde) ───────────────
+
+  describe "el aside del detalle (W1)" do
+    test "monta el aside con el progreso ARRIBA, relacionados debajo y la metadata al final",
+         %{author: author, conn: conn} do
+      goal = goal!(author, %{"title" => "Con aside", "horizon" => "quarter"})
+      {:ok, _task} = Tasks.create_task(%{"goal_id" => goal.id, "title" => "una task"})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-sidebar")
+
+      # El orden del esquema: Progress → Related → Metadata. Se afirma sobre el
+      # HTML (la posición), no sobre la lista de assigns.
+      before?(render(view), "id=\"goal-progress\"", "id=\"goal-related-section\"")
+      before?(render(view), "id=\"goal-related-section\"", "id=\"goal-metadata\"")
+    end
+
+    test "el progreso vive UNA vez y dentro del aside", %{author: author, conn: conn} do
+      goal = goal!(author, %{"title" => "Un solo progreso"})
+      {:ok, _task} = Tasks.create_task(%{"goal_id" => goal.id, "title" => "una task"})
+      {:ok, _task} = Tasks.create_task(%{"goal_id" => goal.id, "title" => "otra task"})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/goals/#{goal.id}")
+
+      # Salió de la columna principal: ahora cuelga del aside.
+      assert has_element?(view, "#goal-sidebar #goal-progress[data-done='0'][data-total='2']")
+
+      # Y el dato se pinta UNA vez: el id aparece exactamente una vez en el DOM.
+      assert length(String.split(render(view), ~s(id="goal-progress"))) == 2
+      refute has_element?(view, "main > div > div > #goal-progress")
+    end
+
+    test "la metadata del goal sale de la fila (status, horizonte, destino, dueño, updated)",
+         %{author: author, conn: conn} do
+      goal =
+        goal!(author, %{
+          "title" => "Con metadata",
+          "status" => "on_hold",
+          "horizon" => "quarter",
+          "visibility" => "shared",
+          "due_on" => ~D[2026-12-31]
+        })
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-metadata", t("Status"))
+      assert has_element?(view, "#goal-metadata", t("On hold"))
+      # El horizonte va TRADUCIDO, nunca el valor crudo de la columna.
+      assert has_element?(view, "#goal-metadata", t("Horizon"))
+      assert has_element?(view, "#goal-metadata", t("Quarter"))
+      assert has_element?(view, "#goal-metadata", t("Due on"))
+      assert has_element?(view, "#goal-metadata", "Dec 31, 2026")
+      assert has_element?(view, "#goal-metadata", t("Visibility"))
+      assert has_element?(view, "#goal-metadata", t("Shared"))
+      assert has_element?(view, "#goal-metadata", t("Owner"))
+      assert has_element?(view, "#goal-metadata", author.name)
+      assert has_element?(view, "#goal-metadata", t("Updated"))
+    end
+
+    test "relacionados sigue con su FUENTE declarada dentro del aside",
+         %{author: author, conn: conn} do
+      goal = goal!(author, %{"title" => "Con vecina"})
+      page = page!(author, "Página del aside", "public")
+      {:ok, _} = Related.link("goal", goal, page.id, author, scope: {:reader, author.id})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-sidebar #goal-related-section #goal-related")
+      assert has_element?(view, "#goal-sidebar #goal-related-source", t("From the graph"))
+      assert has_element?(view, "#goal-related-page-#{page.id}", "Página del aside")
+    end
+  end
+
   # ── Helpers ───────────────────────────────────────────────────────────────
 
   defp page!(owner, title, visibility) do

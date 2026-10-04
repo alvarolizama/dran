@@ -39,10 +39,14 @@ defmodule DranWeb.GoalLive do
       overdue?: 1,
       status_class: 1,
       status_label: 1,
-      updated_meta: 1
+      updated_meta: 1,
+      # El aside del detalle (mismo molde que pages)
+      sidebar_section: 1,
+      visibility_label: 1,
+      horizon_label: 1
     ]
 
-  alias Dran.{Goals, Sharing, Tasks}
+  alias Dran.{Accounts, Goals, Sharing, Tasks}
   alias Dran.Goals.Goal
   alias Dran.Tasks.Task
   alias DranWeb.Components.ShareDialog
@@ -211,133 +215,189 @@ defmodule DranWeb.GoalLive do
             />
           </div>
         <% else %>
-          <div class="space-y-6">
-            <div
-              :if={@goal.body != nil and @goal.body != ""}
-              class="prose prose-base dark:prose-invert max-w-none"
-            >
-              {render_markdown(@goal.body, [])}
-            </div>
+          <div class="flex flex-col lg:flex-row gap-6">
+            <%!-- Columna principal: cuerpo, subgoals y tasks. El progreso NO vive
+            acá: es el titular del aside (abajo), y el dato se pinta UNA vez. --%>
+            <div class="flex-1 min-w-0 space-y-6">
+              <div
+                :if={@goal.body != nil and @goal.body != ""}
+                class="prose prose-base dark:prose-invert max-w-none"
+              >
+                {render_markdown(@goal.body, [])}
+              </div>
 
-            <%!-- Progreso DERIVADO de las tasks: nunca un campo guardado. --%>
-            <div class="surface-2 rounded-xl p-4">
-              <h3 class="text-sm font-semibold mb-2 flex items-center gap-2">
-                <.icon name="hero-chart-bar" class="size-4 text-primary" /> {gettext("Progress")}
-              </h3>
-              <div id="goal-progress" data-done={@progress.done} data-total={@progress.total}>
-                <div class="flex items-center justify-between text-sm mb-1">
-                  <span class="text-base-content/70">{gettext("Done")}</span>
-                  <span class="font-medium">{@progress.done}/{@progress.total}</span>
-                </div>
-                <div class="w-full bg-base-200 rounded-full h-2 overflow-hidden">
-                  <div class="bg-primary h-2 rounded-full" style={"width: #{@progress.percent}%"}>
+              <div :if={@children != []} class="surface-2 rounded-xl p-4">
+                <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <.icon name="hero-flag" class="size-4 text-primary" /> {gettext("Subgoals")}
+                  <span class="badge badge-sm badge-ghost">{length(@children)}</span>
+                </h3>
+                <ul id="goal-children" class="space-y-1.5">
+                  <li :for={child <- @children} id={"goal-child-#{child.id}"}>
+                    <.link
+                      navigate={~p"/goals/#{child.id}"}
+                      class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+                    >
+                      <.icon name="hero-flag" class="size-4 shrink-0 text-base-content/40" />
+                      <span class="flex-1 min-w-0 truncate">{child.title}</span>
+                    </.link>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="surface-2 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold flex items-center gap-2">
+                    <.icon name="hero-check-circle" class="size-4 text-primary" /> {gettext("Tasks")}
+                    <span class="badge badge-sm badge-ghost">{@task_count}</span>
+                  </h3>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      id="goal-task-new"
+                      phx-click="new_task"
+                      class="btn btn-primary btn-xs"
+                    >
+                      <.icon name="hero-plus" class="size-3.5" /> {gettext("New task")}
+                    </button>
+                    <.link
+                      navigate={~p"/tasks/#{@goal.id}"}
+                      class="text-xs text-base-content/60 hover:underline"
+                    >
+                      {gettext("Open board")}
+                    </.link>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div :if={@children != []} class="surface-2 rounded-xl p-4">
-              <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
-                <.icon name="hero-flag" class="size-4 text-primary" /> {gettext("Subgoals")}
-                <span class="badge badge-sm badge-ghost">{length(@children)}</span>
-              </h3>
-              <ul id="goal-children" class="space-y-1.5">
-                <li :for={child <- @children} id={"goal-child-#{child.id}"}>
-                  <.link
-                    navigate={~p"/goals/#{child.id}"}
-                    class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
-                  >
-                    <.icon name="hero-flag" class="size-4 shrink-0 text-base-content/40" />
-                    <span class="flex-1 min-w-0 truncate">{child.title}</span>
-                  </.link>
-                </li>
-              </ul>
-            </div>
+                <p :if={@task_count == 0} class="text-sm text-base-content/40 py-2">
+                  {gettext("No tasks yet.")}
+                </p>
 
-            <div class="surface-2 rounded-xl p-4">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold flex items-center gap-2">
-                  <.icon name="hero-check-circle" class="size-4 text-primary" /> {gettext("Tasks")}
-                  <span class="badge badge-sm badge-ghost">{@task_count}</span>
-                </h3>
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    id="goal-task-new"
-                    phx-click="new_task"
-                    class="btn btn-primary btn-xs"
-                  >
-                    <.icon name="hero-plus" class="size-3.5" /> {gettext("New task")}
-                  </button>
-                  <.link
-                    navigate={~p"/tasks/#{@goal.id}"}
-                    class="text-xs text-base-content/60 hover:underline"
-                  >
-                    {gettext("Open board")}
-                  </.link>
-                </div>
-              </div>
-
-              <p :if={@task_count == 0} class="text-sm text-base-content/40 py-2">
-                {gettext("No tasks yet.")}
-              </p>
-
-              <%!-- Agrupadas por STATUS: el estado se VE en el encabezado y se
+                <%!-- Agrupadas por STATUS: el estado se VE en el encabezado y se
               CAMBIA por la única puerta del dominio (Tasks.move_task/2). --%>
-              <div :for={{status, tasks} <- @task_groups} class="mb-3 last:mb-0">
-                <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-1.5 flex items-center gap-1.5">
-                  <span class={["size-2 rounded-full shrink-0", dot_class(status)]} />
-                  {task_status_label(status)}
-                  <span class="badge badge-xs badge-ghost">{length(tasks)}</span>
-                </h4>
+                <div :for={{status, tasks} <- @task_groups} class="mb-3 last:mb-0">
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-1.5 flex items-center gap-1.5">
+                    <span class={["size-2 rounded-full shrink-0", dot_class(status)]} />
+                    {task_status_label(status)}
+                    <span class="badge badge-xs badge-ghost">{length(tasks)}</span>
+                  </h4>
 
-                <div class="space-y-1.5">
-                  <div
-                    :for={task <- tasks}
-                    id={"tasks-#{task.id}"}
-                    data-status={task.status}
-                    class="rounded-lg bg-base-100 border border-base-300 p-2 space-y-1.5"
-                  >
-                    <div class="flex items-center gap-2 text-sm">
-                      <span class={[
-                        "flex-1 min-w-0 truncate",
-                        task.status in ~w(done cancelled) && "line-through text-base-content/40"
-                      ]}>
-                        {task.title}
-                      </span>
-                      <span :if={task.due_date} class="shrink-0 text-xs text-base-content/50">
-                        {Calendar.strftime(task.due_date, "%d %b")}
-                      </span>
-                    </div>
+                  <div class="space-y-1.5">
+                    <div
+                      :for={task <- tasks}
+                      id={"tasks-#{task.id}"}
+                      data-status={task.status}
+                      class="rounded-lg bg-base-100 border border-base-300 p-2 space-y-1.5"
+                    >
+                      <div class="flex items-center gap-2 text-sm">
+                        <span class={[
+                          "flex-1 min-w-0 truncate",
+                          task.status in ~w(done cancelled) && "line-through text-base-content/40"
+                        ]}>
+                          {task.title}
+                        </span>
+                        <span :if={task.due_date} class="shrink-0 text-xs text-base-content/50">
+                          {Calendar.strftime(task.due_date, "%d %b")}
+                        </span>
+                      </div>
 
-                    <%!-- El estado NO se cambia acá: la lista no lleva select. Se
+                      <%!-- El estado NO se cambia acá: la lista no lleva select. Se
                     ve en el encabezado de su grupo y se cambia en el modal de
                     edición (mismos campos que el alta). --%>
-                    <div class="flex items-center gap-2">
-                      <button
-                        type="button"
-                        id={"goal-task-edit-#{task.id}"}
-                        phx-click="edit_task"
-                        phx-value-task_id={task.id}
-                        class="text-xs text-base-content/50 hover:text-base-content/80"
-                      >
-                        {gettext("Edit")}
-                      </button>
+                      <div class="flex items-center gap-2">
+                        <button
+                          type="button"
+                          id={"goal-task-edit-#{task.id}"}
+                          phx-click="edit_task"
+                          phx-value-task_id={task.id}
+                          class="text-xs text-base-content/50 hover:text-base-content/80"
+                        >
+                          {gettext("Edit")}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <%!-- Páginas relacionadas: relaciones reales primero y, si no hay
-            ninguna, el fallback semántico — con la FUENTE declarada y el alta
-            EXPLÍCITA (el picker). --%>
-            <.related_panel
-              id="goal-related"
-              related={@related}
-              candidates={@related_candidates}
-              workspace={@context}
-            />
+            <%!-- Aside del molde: Progress (titular, sin chevron), Related pages y
+            Metadata colapsado. Es el MISMO aside del detalle de página. --%>
+            <aside id="goal-sidebar" class="lg:w-72 xl:w-80 shrink-0 space-y-4">
+              <%!-- Progreso DERIVADO de las tasks: nunca un campo guardado. --%>
+              <div class="surface-2 rounded-lg p-4">
+                <h3 class="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <.icon name="hero-chart-bar" class="size-4 text-primary" /> {gettext("Progress")}
+                </h3>
+                <div id="goal-progress" data-done={@progress.done} data-total={@progress.total}>
+                  <div class="flex items-center justify-between text-sm mb-1">
+                    <span class="text-base-content/70">{gettext("Done")}</span>
+                    <span class="font-medium">{@progress.done}/{@progress.total}</span>
+                  </div>
+                  <div class="w-full bg-base-200 rounded-full h-2 overflow-hidden">
+                    <div class="bg-primary h-2 rounded-full" style={"width: #{@progress.percent}%"}>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <%!-- Páginas relacionadas: relaciones reales primero y, si no hay
+              ninguna, el fallback semántico — con la FUENTE declarada y el alta
+              EXPLÍCITA (el picker). El panel va EMBEBIDO: el título lo pone la
+              sección del aside y el badge de la fuente nunca se esconde. --%>
+              <.sidebar_section
+                id="goal-related-section"
+                title={gettext("Related")}
+                open
+                body_class="mt-2"
+              >
+                <.related_panel
+                  id="goal-related"
+                  related={@related}
+                  candidates={@related_candidates}
+                  workspace={@context}
+                  embedded
+                />
+              </.sidebar_section>
+
+              <%!-- Metadata: todo sale de la FILA del goal (sin migración). Lo que
+              el molde de pages muestra como «Created by / Version» no existe acá:
+              goals no tienen actor ni versionado — el dueño y el updated_at son
+              los que la tabla sí declara. --%>
+              <.sidebar_section
+                id="goal-metadata"
+                title={gettext("Metadata")}
+                body_class="divide-y divide-base-300/50 mt-2"
+              >
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Status")}</span>
+                  <span class="font-medium">{status_label(@goal.status)}</span>
+                </div>
+                <div :if={@goal.horizon} class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Horizon")}</span>
+                  <span>{horizon_label(@goal.horizon)}</span>
+                </div>
+                <div :if={@goal.starts_on} class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Starts on")}</span>
+                  <span>{format_date(@goal.starts_on)}</span>
+                </div>
+                <div :if={@goal.due_on} class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Due on")}</span>
+                  <span>{format_date(@goal.due_on)}</span>
+                </div>
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Visibility")}</span>
+                  <span>{visibility_label(@goal.visibility)}</span>
+                </div>
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Owner")}</span>
+                  <span>{owner_label(@goal.owner_user_id)}</span>
+                </div>
+                <div class="flex justify-between gap-2 py-2 text-sm">
+                  <span class="text-base-content/60">{gettext("Updated")}</span>
+                  <span>{format_date(@goal.updated_at)}</span>
+                </div>
+              </.sidebar_section>
+            </aside>
           </div>
         <% end %>
       </div>
@@ -993,6 +1053,21 @@ defmodule DranWeb.GoalLive do
   defp blank_to_nil(value) when value in [nil, ""], do: nil
   defp blank_to_nil(value) when is_binary(value), do: String.trim(value)
   defp blank_to_nil(value), do: value
+
+  # El dueño del goal para el bloque Metadata del aside: la tabla guarda el id
+  # (`owner_user_id`) y NULL es contenido de sistema (workspace-wide). Se pinta
+  # el NOMBRE de la cuenta, nunca el id crudo (C11). El goal no declara actor ni
+  # versionado, así que esto es lo que hay — igual que el `updated_at` de al lado.
+  defp owner_label(nil), do: gettext("Instance")
+
+  defp owner_label(user_id) when is_integer(user_id) do
+    case Accounts.get_user(user_id) do
+      nil -> gettext("Unknown")
+      user -> user.name || user.email
+    end
+  end
+
+  defp owner_label(_other), do: gettext("Unknown")
 
   defp task_status_label("backlog"), do: gettext("Backlog")
   defp task_status_label("todo"), do: gettext("To Do")

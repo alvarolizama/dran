@@ -11,6 +11,72 @@ defmodule DranWeb.PagesLiveTest do
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
+  # ── W1: la extracción del bloque colapsable (contrato superficies-al-molde) ──
+  #
+  # El aside de pages es el MOLDE que goal y plan copian. Esta ola extrajo su
+  # bloque `<details>` a `sidebar_section/1`; la suite de pages es el gate de esa
+  # extracción: mismos bloques, mismo orden y los mismos anchors internos.
+
+  describe "el aside del molde (W1)" do
+    setup %{ws: ws} do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Nota con aside",
+          body: "cuerpo",
+          page_type: "note",
+          tags: ["elixir"]
+        })
+
+      %{page: page}
+    end
+
+    test "los cinco bloques siguen en el aside, con su orden de siempre", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = live(conn, ~p"/notes/#{page.slug}")
+
+      html = render(view)
+
+      # Attributes · Metadata · Links · Changelog · Activity — cinco bloques
+      # colapsables, todos con la clase del molde.
+      assert length(String.split(html, ~s(class="group surface-2 rounded-lg p-4"))) == 6
+
+      # El ORDEN se lee del DOM: el título de cada bloque, en su posición real.
+      before?(html, t("Attributes"), t("Metadata"))
+      before?(html, t("Metadata"), t("Links"))
+      before?(html, t("Links"), t("Changelog"))
+
+      # Activity es el ÚLTIMO bloque. El marcador también vive en el nav (que va
+      # ANTES del contenido), así que se afirma sobre su última aparición.
+      {last_activity, _len} = html |> :binary.matches(t("Activity")) |> List.last()
+      {changelog_pos, _len} = :binary.match(html, t("Changelog"))
+      assert changelog_pos < last_activity
+
+      before?(html, ~s(id="note-editor-attributes-form"), t("Created by"))
+    end
+
+    test "los anchors internos del aside no se movieron", %{conn: conn, page: page} do
+      {:ok, view, _html} = live(conn, ~p"/notes/#{page.slug}")
+
+      # El bloque Attributes sigue siendo UN form propio (autosave de tags/meta)…
+      assert has_element?(view, "#note-editor-attributes-form")
+      assert has_element?(view, "#note-editor-tags")
+      # …y el vacío de Links y de Activity siguen declarados.
+      assert has_element?(view, "aside details", t("No backlinks yet"))
+      assert has_element?(view, "aside details", t("No version history yet."))
+    end
+  end
+
+  # Posición de un marcador en el HTML: el orden se afirma sobre el DOM.
+  defp before?(html, first, second) do
+    {first_pos, _len} = :binary.match(html, first)
+    {second_pos, _len} = :binary.match(html, second)
+    assert first_pos < second_pos
+    true
+  end
+
   setup do
     {:ok, ctx} = Knowledge.create_workspace(%{name: "Test WS", slug: "test-ws"})
 
