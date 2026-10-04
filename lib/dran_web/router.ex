@@ -433,6 +433,19 @@ defmodule DranWeb.Router do
     delete "/:id", MemoryController, :delete
   end
 
+  # ── REST API — services (write routes) ────────────────────────────────────
+  #
+  # Emitir un link de conexión y desconectar son ESCRITURAS (autoridad de
+  # ejecución, no lectura de contenido): pasan por el mismo gate que
+  # pages/relations. La identidad la resuelve `:api_auth` en su punto único y
+  # ninguna ruta acepta `user_id` ni `session_id` de un cliente.
+  scope "/api/services", DranWeb.API do
+    pipe_through [:api, :api_auth, :require_write_access]
+
+    post "/:toolkit/connect", ServiceController, :connect
+    delete "/:toolkit", ServiceController, :delete
+  end
+
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:dran, :dev_routes) do
     import Phoenix.LiveDashboard.Router
@@ -498,6 +511,12 @@ defmodule DranWeb.Router do
 
     # Shared multi-agent memory (first-class, own table — not page types).
     live "/memory", MemoryLive, :index
+
+    # Retorno del consentimiento de un servicio: la ÚNICA ruta de aterrizaje
+    # (la fija el servidor en `Dran.Services.callback_url/0`). No lee nada de la
+    # query — los params de una vuelta OAuth son input, no prueba de propiedad —
+    # y redirige a la sección, que vuelve a leer el estado al montar.
+    get "/services/callback", API.ServiceController, :callback
 
     live "/collection/:slug", HomeLive, :collection
     live "/letter/:letter", HomeLive, :letter

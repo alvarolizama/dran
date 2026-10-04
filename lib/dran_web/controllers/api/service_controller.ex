@@ -37,6 +37,55 @@ defmodule DranWeb.API.ServiceController do
     end
   end
 
+  @doc """
+  POST /api/services/:toolkit/connect — emite un link hospedado NUEVO.
+
+  Un `user_id` o un `session_id` que venga en el body NO se lee: la identidad
+  sale del token y la sesión del contexto. Se ignoran en vez de rechazarse — un
+  rechazo obligaría a cada cliente a saber qué no mandar, y aceptarlos sería
+  dejar que el cliente elija de quién es la sesión.
+  """
+  def connect(conn, %{"toolkit" => toolkit}) do
+    case Services.connect_link(conn.assigns[:user], toolkit, Services.callback_url()) do
+      {:ok, link} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: link})
+
+      {:error, reason} ->
+        failure(conn, reason)
+    end
+  end
+
+  @doc """
+  DELETE /api/services/:toolkit — desconecta borrando, con revocación upstream.
+
+  Irreversible: la vista lo advierte antes de llegar aquí.
+  """
+  def delete(conn, %{"toolkit" => toolkit}) do
+    case Services.disconnect(conn.assigns[:user], toolkit) do
+      {:ok, result} -> json(conn, %{data: result})
+      {:error, reason} -> failure(conn, reason)
+    end
+  end
+
+  @doc """
+  GET /services/callback — dónde aterriza el navegador después del
+  consentimiento del proveedor.
+
+  NADA de la query string se lee: ni `status`, ni `connected_account_id`, ni el
+  toolkit. Los params de una vuelta OAuth son input no verificado — el mismo
+  material con el que se teje la fijación de sesión. El estado real lo dicta la
+  próxima lectura server-side: la sección que aterriza aquí lo vuelve a consultar
+  al montar, y el agente con su `GET /api/services`.
+
+  Redirige a una ruta fija y sin reflejar ningún parámetro (nada que convertir
+  en redirect abierto ni en contenido inyectado).
+  """
+  def callback(conn, _params) do
+    redirect(conn, to: "/services?returned=1")
+  end
+
   # ── Errores ────────────────────────────────────────────────────────────────
 
   @doc false

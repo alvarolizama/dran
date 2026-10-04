@@ -204,6 +204,105 @@ defmodule Dran.Services do
     :ok
   end
 
+  # ── Conectar / desconectar ────────────────────────────────────────────────
+  #
+  # El vocabulario es conectar | reconectar | desconectar: no hay pausa (el
+  # endpoint del vendor está deprecado) y reconectar NO refresca — emite un link
+  # NUEVO (F33/F35).
+
+  @doc """
+  El link hospedado para conectar (o reconectar) un servicio.
+
+  Vive 10 minutos (F32): cuando vence se emite otro, nunca se reintenta el
+  vencido. El link es de la SESIÓN — el body que sale hacia el vendor lleva
+  `{toolkit, callback_url}` y ningún `user_id`, porque la sesión ya es del
+  lector.
+
+  La `callback_url` la decide el servidor (`callback_url/0`): una URL de vuelta
+  que llega del cliente convierte el retorno del consentimiento en un redirect
+  abierto.
+  """
+  @spec connect_link(map() | struct() | integer(), String.t(), String.t() | nil) ::
+          {:ok, map()} | {:error, term()}
+  def connect_link(user, toolkit, callback \\ nil) do
+    cond do
+      not enabled?() ->
+        {:error, :not_configured}
+
+      not allowed?(toolkit) ->
+        {:error, :not_allowed}
+
+      true ->
+        with {:ok, identity} <- identity_for(user),
+             {:ok, session} <- ensure_session(identity),
+             {:ok, link} <-
+               Composio.link(
+                 session.composio_session_id,
+                 toolkit,
+                 callback || callback_url()
+               ),
+             {:ok, redirect} <- link_url(link) do
+          {:ok, %{toolkit: toolkit, redirect_url: redirect, expires_in: link.expires_in}}
+        end
+    end
+  end
+
+  @doc """
+  La URL de vuelta de una conexión: la superficie del usuario en ESTA instancia.
+
+  Una sola, y la fija el servidor. Aceptarla del cliente (o reflejar lo que
+  venga en la query) sería un redirect abierto.
+  """
+  @spec callback_url() :: String.t()
+  def callback_url, do: DranWeb.Endpoint.url() <> "/services/callback"
+
+  @doc """
+  Desconectar: BORRA la conexión del lector con `revoke_on_delete=true` (F35).
+
+  La revocación upstream es irreversible, así que la advertencia va ANTES en la
+  UI. Solo el dueño desconecta: las conexiones que se borran son las que la
+  lectura filtró para SU identidad — la conexión de otro no está en la lista, y
+  pedirla es un no-op, no un 200 accidental (Q16).
+  """
+  @spec disconnect(map() | struct() | integer(), String.t()) :: {:ok, map()} | {:error, term()}
+  def disconnect(user, toolkit) do
+    cond do
+      not enabled?() ->
+        {:error, :not_configured}
+
+      not allowed?(toolkit) ->
+        {:error, :not_allowed}
+
+      true ->
+        with {:ok, identity} <- identity_for(user),
+             {:ok, accounts} <- connected_accounts_for(identity, [toolkit]) do
+          revoke(accounts, toolkit)
+        end
+    end
+  end
+
+  defp revoke([], toolkit), do: {:ok, %{toolkit: toolkit, disconnected: false, revoked: 0}}
+
+  defp revoke(accounts, toolkit) do
+    deletable = Enum.filter(accounts, &is_binary(&1["id"]))
+
+    results =
+      Enum.map(deletable, fn account ->
+        Composio.delete_connected_account(account["id"], revoke: true)
+      end)
+
+    case Enum.find(results, &match?({:error, _}, &1)) do
+      nil ->
+        {:ok, %{toolkit: toolkit, disconnected: deletable != [], revoked: length(deletable)}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp link_url(%{redirect_url: url}) when is_binary(url) and url != "", do: {:ok, url}
+  defp link_url(_link), do: {:error, :no_link}
+
   # ── Lectura: el estado real de lo conectado ───────────────────────────────
 
   @doc """
