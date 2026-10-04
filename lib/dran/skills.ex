@@ -177,4 +177,83 @@ defmodule Dran.Skills do
   end
 
   defp frontmatter_value(_value), do: ~s("")
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Escritura
+  # ──────────────────────────────────────────────────────────────────────────
+
+  @doc """
+  Crea un skill. El `owner_user_id` llega resuelto server-side (la credencial),
+  NUNCA del body.
+
+  El slug es la dirección del wire y se escribe UNA vez: no hay rename — lo
+  único que se edita es el cuerpo, la descripción y el destino.
+  """
+  def create_skill(attrs, opts \\ []) do
+    attrs
+    |> normalize_attrs()
+    |> put_owner(opts[:owner_user_id])
+    |> then(&(%Skill{} |> Skill.changeset(&1) |> Repo.insert()))
+  end
+
+  @doc """
+  Actualiza un skill: el cuerpo versionado y el destino.
+
+  * Una escritura que CAMBIA el cuerpo bumpea `version` y recalcula
+    `content_hash`; reescribir el MISMO cuerpo deja hash y versión iguales — es
+    lo que sostiene el `unchanged` del agente.
+  * `slug`/`name` NO se renombran: pedirlo devuelve `{:error, :rename}` (explícito,
+    no un descarte en silencio), porque el slug es la dirección del wire.
+  """
+  def update_skill(%Skill{} = skill, attrs) do
+    if rename_attempted?(skill, attrs) do
+      {:error, :rename}
+    else
+      skill
+      |> Skill.changeset(drop_rename(attrs))
+      |> bump_version(skill)
+      |> Repo.update()
+    end
+  end
+
+  @doc """
+  Borra un skill.
+
+  Los grants de `content_shares` no tienen FK polimórfica y quedan inertes (la
+  misma postura que pages, goals y planes): sin la fila, el `EXISTS` no puede
+  alcanzarlos.
+  """
+  def delete_skill(%Skill{} = skill), do: Repo.delete(skill)
+
+  # El `content_hash` sólo cambia cuando el cuerpo cambió (lo decide el
+  # changeset), así que esa es la señal de la versión: dos textos distintos no
+  # pueden producir el mismo hash.
+  defp bump_version(changeset, skill) do
+    if Ecto.Changeset.get_change(changeset, :content_hash) do
+      Ecto.Changeset.put_change(changeset, :version, (skill.version || 1) + 1)
+    else
+      changeset
+    end
+  end
+
+  defp put_owner(attrs, owner_user_id) when is_integer(owner_user_id),
+    do: Map.put(attrs, "owner_user_id", owner_user_id)
+
+  defp put_owner(attrs, _owner_user_id), do: attrs
+
+  defp normalize_attrs(attrs) when is_map(attrs), do: attrs
+  defp normalize_attrs(_attrs), do: %{}
+
+  defp drop_rename(attrs) when is_map(attrs), do: Map.drop(attrs, ["slug", "name", :slug, :name])
+  defp drop_rename(_attrs), do: %{}
+
+  defp rename_attempted?(%Skill{} = skill, attrs) when is_map(attrs) do
+    renamed?(Map.get(attrs, "slug", Map.get(attrs, :slug)), skill.slug) or
+      renamed?(Map.get(attrs, "name", Map.get(attrs, :name)), skill.name)
+  end
+
+  defp rename_attempted?(_skill, _attrs), do: false
+
+  defp renamed?(nil, _current), do: false
+  defp renamed?(value, current), do: to_string(value) != current
 end

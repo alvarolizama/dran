@@ -5,10 +5,13 @@ defmodule DranWeb.API.SkillController do
   * la LECTURA pasa por `Dran.ContentVisibility` con el scope del lector en su
     punto único: un skill ajeno privado es 404, nunca 403 — la existencia no se
     filtra, igual que páginas, goals y planes;
+  * la ESCRITURA es del DUEÑO (y de los lectores privilegiados): un skill
+    `public` ajeno se LEE, no se edita — ahí sí hay 403, porque la existencia ya
+    es pública y lo que se niega es la autoridad;
   * el ÍNDICE sirve el catálogo SIN cuerpos y el DETALLE sirve el `SKILL.md`
     montado (frontmatter + body) más el body crudo, para que un cliente que no
     sea Hermes lo escriba o lo pase tal cual;
-  * `:slug` es la dirección del wire (inmutable), no un id.
+  * `:slug` es la dirección del wire (inmutable): no hay rename.
   """
 
   use DranWeb, :controller
@@ -36,9 +39,144 @@ defmodule DranWeb.API.SkillController do
     end
   end
 
+  @doc """
+  POST /api/skills — da de alta un skill con el dueño de la credencial.
+
+  El `owner_user_id` sale del punto único que resolvió la credencial
+  (`:api_auth`), nunca del body; `version` y `content_hash` los administra el
+  changeset.
+  """
+  def create(conn, params) do
+    {scoped?, scope, params} = Instance.pop_write_scope(params, drop_visibility: true)
+    attrs = Instance.permit_skill_params(params)
+    owner_id = reader_id(conn)
+
+    case create_with_scope(attrs, owner_id, scoped?, scope) do
+      {:ok, skill} ->
+        conn
+        |> put_status(:created)
+        |> json(%{data: Skills.show_payload(skill, owner_id)})
+
+      {:error, {:scope, message}} ->
+        unprocessable(conn, %{detail: message})
+
+      {:error, {:create, %Ecto.Changeset{} = changeset}} ->
+        unprocessable(conn, format_errors(changeset))
+
+      {:error, {:create, reason}} ->
+        unprocessable(conn, %{detail: to_string(reason)})
+    end
+  end
+
+  @doc """
+  PUT /api/skills/:slug — edición versionada del cuerpo y del destino.
+
+  El slug no se renombra (`{:error, :rename}`): es la dirección del wire. Un
+  skill legible pero ajeno es 403 — la lectura de lo público no da la escritura.
+  """
+  def update(conn, %{"slug" => slug} = params) do
+    {scoped?, write_scope, params} = Instance.pop_write_scope(params, drop_visibility: true)
+    attrs = Instance.permit_skill_params(params)
+
+    case writable_skill(slug, conn) do
+      nil ->
+        not_found(conn, "skill not found")
+
+      :forbidden ->
+        forbidden(conn)
+
+      skill ->
+        case update_with_scope(skill, attrs, scoped?, write_scope) do
+          {:ok, updated} ->
+            json(conn, %{data: Skills.show_payload(updated, reader_id(conn))})
+
+          {:error, {:rename}} ->
+            unprocessable(conn, %{detail: "the slug is the wire address and cannot be renamed"})
+
+          {:error, {:scope, message}} ->
+            unprocessable(conn, %{detail: message})
+
+          {:error, {:update, %Ecto.Changeset{} = changeset}} ->
+            unprocessable(conn, format_errors(changeset))
+
+          {:error, {:update, reason}} ->
+            unprocessable(conn, %{detail: to_string(reason)})
+        end
+    end
+  end
+
+  @doc "DELETE /api/skills/:slug — borra el skill (sólo su dueño)."
+  def delete(conn, %{"slug" => slug}) do
+    case writable_skill(slug, conn) do
+      nil ->
+        not_found(conn, "skill not found")
+
+      :forbidden ->
+        forbidden(conn)
+
+      skill ->
+        {:ok, _} = Skills.delete_skill(skill)
+        send_resp(conn, :no_content, "")
+    end
+  end
+
   # ──────────────────────────────────────────────────────────────────────────
   # Internals
   # ──────────────────────────────────────────────────────────────────────────
+
+  # El insert y la traducción del `scope` van en UNA transacción: un destino que
+  # no se puede honrar (grupo inexistente o ajeno) revierte la fila y devuelve
+  # 422, nunca un `private` en silencio.
+  defp create_with_scope(attrs, owner_id, scoped?, scope) do
+    Dran.Repo.transaction(fn ->
+      case Skills.create_skill(attrs, owner_user_id: owner_id) do
+        {:ok, skill} -> translate_scope(skill, scope, scoped?)
+        {:error, reason} -> Dran.Repo.rollback({:create, reason})
+      end
+    end)
+  end
+
+  defp update_with_scope(skill, attrs, scoped?, scope) do
+    Dran.Repo.transaction(fn ->
+      case Skills.update_skill(skill, attrs) do
+        {:ok, updated} -> translate_scope(updated, scope, scoped?)
+        {:error, :rename} -> Dran.Repo.rollback({:rename})
+        {:error, reason} -> Dran.Repo.rollback({:update, reason})
+      end
+    end)
+  end
+
+  defp translate_scope(skill, _scope, false), do: skill
+
+  defp translate_scope(skill, scope, true) do
+    case Dran.Sharing.apply_scope(skill, scope, :skill) do
+      {:ok, skill} -> skill
+      {:error, message} -> Dran.Repo.rollback({:scope, message})
+    end
+  end
+
+  # La fila que el lector puede ESCRIBIR: `nil` cuando no la puede leer (404, sin
+  # fuga de existencia), `:forbidden` cuando la lee pero no es suya (403) y el
+  # struct cuando el lector es su dueño o un lector privilegiado.
+  defp writable_skill(slug, conn) do
+    case Skills.get_skill(slug, scope: Instance.scope_for(conn, :skill)) do
+      nil -> nil
+      skill -> if can_write?(skill, conn), do: skill, else: :forbidden
+    end
+  end
+
+  defp can_write?(%Skill{} = skill, conn) do
+    case Instance.scope_for(conn, :skill) do
+      :all -> true
+      {:reader, reader_id} -> is_integer(reader_id) and skill.owner_user_id == reader_id
+    end
+  end
+
+  defp forbidden(conn) do
+    conn
+    |> put_status(:forbidden)
+    |> json(%{errors: %{detail: "forbidden"}})
+  end
 
   # El id del lector, resuelto en el punto único de la credencial: `nil` cuando
   # el token no tiene dueño (el admin legacy). Nunca sale del body.

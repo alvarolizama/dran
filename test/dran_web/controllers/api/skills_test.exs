@@ -14,6 +14,9 @@ defmodule DranWeb.API.SkillsTest do
   use DranWeb.ConnCase, async: false
 
   alias Dran.Accounts
+  alias Dran.Repo
+  alias Dran.Sharing
+  alias Dran.Skills
   alias Dran.Skills.Skill
 
   setup do
@@ -34,7 +37,14 @@ defmodule DranWeb.API.SkillsTest do
         api_token: "tok-skill-stranger-#{u}"
       })
 
-    %{owner: owner, stranger: stranger}
+    {:ok, member} =
+      Accounts.create_user(%{
+        email: "skill-member-#{u}@example.com",
+        name: "Member",
+        api_token: "tok-skill-member-#{u}"
+      })
+
+    %{owner: owner, stranger: stranger, member: member}
   end
 
   describe "el índice (P2, P3)" do
@@ -159,7 +169,235 @@ defmodule DranWeb.API.SkillsTest do
     end
   end
 
+  describe "la escritura (P5)" do
+    test "el alta sella el dueño de la credencial y arranca en versión 1", %{owner: owner} do
+      body = json_response(post_json(conn_for(owner), "/api/skills", params("nuevo")), 201)
+      skill = body["data"]
+
+      assert skill["slug"] == "nuevo"
+      assert skill["version"] == 1
+      assert skill["visibility"] == "private"
+      assert skill["content_hash"] == Skills.content_hash("# uno")
+      assert skill["mine"] == true
+      assert Repo.get_by(Skill, slug: "nuevo").owner_user_id == owner.id
+    end
+
+    test "el cliente NO puede declarar el dueño", %{owner: owner, stranger: stranger} do
+      body =
+        json_response(
+          post_json(
+            conn_for(owner),
+            "/api/skills",
+            Map.put(params("mio"), "owner_user_id", stranger.id)
+          ),
+          201
+        )
+
+      assert body["data"]["mine"] == true
+      assert Repo.get_by(Skill, slug: "mio").owner_user_id == owner.id
+    end
+
+    test "nombre fuera de formato, descripción de 61 y cuerpo fuera de tamaño: 422 y SIN fila",
+         %{owner: owner} do
+      before = Repo.aggregate(Skill, :count, :id)
+
+      assert json_response(
+               post_json(
+                 conn_for(owner),
+                 "/api/skills",
+                 Map.put(params("malo"), "name", "Bad Name")
+               ),
+               422
+             )["errors"]["name"]
+
+      assert json_response(
+               post_json(conn_for(owner), "/api/skills", %{
+                 "slug" => "sin-desc",
+                 "name" => "sin-desc"
+               }),
+               422
+             )["errors"]["description"]
+
+      assert json_response(
+               post_json(
+                 conn_for(owner),
+                 "/api/skills",
+                 Map.put(params("grande"), "body", String.duplicate("a", 100_001))
+               ),
+               422
+             )["errors"]["body"]
+
+      assert json_response(
+               post_json(conn_for(owner), "/api/skills", Map.put(params("vacio"), "body", "")),
+               422
+             )["errors"]["body"]
+
+      assert Repo.aggregate(Skill, :count, :id) == before
+    end
+
+    test "un PUT con cuerpo nuevo versiona y el mismo cuerpo no", %{owner: owner} do
+      insert_skill!(owner, %{"slug" => "demo", "body" => "# uno"})
+
+      first =
+        json_response(put_json(conn_for(owner), "/api/skills/demo", %{"body" => "# dos"}), 200)[
+          "data"
+        ]
+
+      assert first["version"] == 2
+
+      second =
+        json_response(put_json(conn_for(owner), "/api/skills/demo", %{"body" => "# dos"}), 200)[
+          "data"
+        ]
+
+      assert second["version"] == 2
+      assert second["content_hash"] == first["content_hash"]
+    end
+
+    test "el slug no se renombra: 422 y la fila queda igual", %{owner: owner} do
+      insert_skill!(owner, %{"slug" => "demo"})
+
+      # El rename se pide por el `name` del wire: el `slug` de la ruta gana
+      # sobre el del body (params de path mandan en Phoenix), así que la
+      # dirección la fija la URL y lo que puede intentar renombrar es el nombre.
+      body =
+        json_response(put_json(conn_for(owner), "/api/skills/demo", %{"name" => "otro"}), 422)
+
+      assert body["errors"]["detail"] =~ "cannot be renamed"
+      assert Repo.get_by(Skill, slug: "demo")
+    end
+
+    test "un skill público ajeno se LEE pero no se escribe (403)", %{
+      owner: owner,
+      stranger: stranger
+    } do
+      insert_skill!(owner, %{"slug" => "publico", "visibility" => "public"})
+
+      assert json_response(get_json(conn_for(stranger), "/api/skills/publico"), 200)
+
+      assert json_response(
+               put_json(conn_for(stranger), "/api/skills/publico", %{"body" => "# hack"}),
+               403
+             )
+
+      assert conn_for(stranger) |> delete_json("/api/skills/publico") |> response(403)
+      assert Repo.get_by(Skill, slug: "publico").body == "# x"
+    end
+
+    test "lo ajeno privado ni se escribe ni se borra: 404 sin fuga", %{
+      owner: owner,
+      stranger: stranger
+    } do
+      insert_skill!(owner, %{"slug" => "privado"})
+
+      assert json_response(
+               put_json(conn_for(stranger), "/api/skills/privado", %{"body" => "# x"}),
+               404
+             )
+
+      assert conn_for(stranger) |> delete_json("/api/skills/privado") |> response(404)
+      assert Repo.get_by(Skill, slug: "privado")
+    end
+
+    test "borrar deja 204 y la fila se va", %{owner: owner} do
+      insert_skill!(owner, %{"slug" => "borrable"})
+
+      assert conn_for(owner) |> delete_json("/api/skills/borrable") |> response(204)
+      assert Repo.get_by(Skill, slug: "borrable") == nil
+    end
+  end
+
+  describe "el destino por escritura (P6)" do
+    test "scope de grupo: nace shared y el miembro lo lee", %{owner: owner, member: member} do
+      group = group_with(owner, [member])
+
+      body =
+        json_response(
+          post_json(
+            conn_for(owner),
+            "/api/skills",
+            Map.put(params("equipo"), "scope", %{"group" => group.slug})
+          ),
+          201
+        )
+
+      assert body["data"]["visibility"] == "shared"
+
+      assert json_response(get_json(conn_for(member), "/api/skills/equipo"), 200)["data"]["slug"] ==
+               "equipo"
+    end
+
+    test "scope de grupo ajeno: 422 y el conteo no cambia", %{owner: owner, stranger: stranger} do
+      {:ok, group} = Sharing.create_group(%{name: "Ajeno #{u()}"})
+      {:ok, _} = Sharing.add_group_member(group, stranger.id)
+
+      before = Repo.aggregate(Skill, :count, :id)
+
+      body =
+        json_response(
+          post_json(
+            conn_for(owner),
+            "/api/skills",
+            Map.put(params("nada"), "scope", %{"group" => group.slug})
+          ),
+          422
+        )
+
+      assert body["errors"]["detail"] =~ "member"
+      assert Repo.aggregate(Skill, :count, :id) == before
+    end
+
+    test "scope fuera del vocabulario: 422, nunca private en silencio", %{owner: owner} do
+      before = Repo.aggregate(Skill, :count, :id)
+
+      body =
+        json_response(
+          post_json(conn_for(owner), "/api/skills", Map.put(params("raro"), "scope", "amigos")),
+          422
+        )
+
+      assert body["errors"]["detail"] =~ "invalid scope"
+      assert Repo.aggregate(Skill, :count, :id) == before
+    end
+
+    test "un update con scope re-traduce la visibilidad", %{owner: owner, member: member} do
+      group = group_with(owner, [member])
+      insert_skill!(owner, %{"slug" => "demo"})
+
+      body =
+        json_response(
+          put_json(conn_for(owner), "/api/skills/demo", %{"scope" => %{"group" => group.slug}}),
+          200
+        )
+
+      assert body["data"]["visibility"] == "shared"
+      assert json_response(get_json(conn_for(member), "/api/skills/demo"), 200)
+    end
+
+    test "visibility `shared` por el body: sólo el dueño lo lee hasta que haya grant", %{
+      owner: owner,
+      stranger: stranger
+    } do
+      insert_skill!(owner, %{"slug" => "demo"})
+
+      body =
+        json_response(
+          put_json(conn_for(owner), "/api/skills/demo", %{"visibility" => "shared"}),
+          200
+        )
+
+      assert body["data"]["visibility"] == "shared"
+      assert json_response(get_json(conn_for(stranger), "/api/skills/demo"), 404)
+    end
+  end
+
   # ── Helpers ───────────────────────────────────────────────────────────────
+
+  defp params(slug, body \\ "# uno") do
+    %{"slug" => slug, "name" => slug, "description" => "para probar", "body" => body}
+  end
+
+  defp u, do: System.unique_integer([:positive])
 
   defp conn_for(user) do
     Phoenix.ConnTest.build_conn()
@@ -169,18 +407,32 @@ defmodule DranWeb.API.SkillsTest do
 
   defp get_json(conn, path), do: get(conn, path)
 
+  defp post_json(conn, path, body) do
+    conn
+    |> Plug.Conn.put_req_header("content-type", "application/json")
+    |> post(path, Jason.encode!(body))
+  end
+
+  defp put_json(conn, path, body) do
+    conn
+    |> Plug.Conn.put_req_header("content-type", "application/json")
+    |> put(path, Jason.encode!(body))
+  end
+
+  defp delete_json(conn, path), do: delete(conn, path)
+
+  defp group_with(owner, members) do
+    {:ok, group} = Sharing.create_group(%{name: "Equipo #{u()}"})
+    {:ok, _} = Sharing.add_group_member(group, owner.id)
+    Enum.each(members, fn m -> {:ok, _} = Sharing.add_group_member(group, m.id) end)
+    group
+  end
+
   defp insert_skill(owner, attrs) do
     slug = Map.get(attrs, "slug", "demo")
+    base = %{"slug" => slug, "name" => slug, "description" => "para probar", "body" => "# x"}
 
-    attrs =
-      Map.merge(
-        %{"slug" => slug, "name" => slug, "description" => "para probar", "body" => "# x"},
-        attrs
-      )
-
-    %Skill{}
-    |> Skill.changeset(Map.put(attrs, "owner_user_id", owner.id))
-    |> Dran.Repo.insert()
+    Skills.create_skill(Map.merge(base, attrs), owner_user_id: owner.id)
   end
 
   defp insert_skill!(owner, attrs) do

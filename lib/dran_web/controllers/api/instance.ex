@@ -59,10 +59,15 @@ defmodule DranWeb.API.Instance do
   @goal_write_fields ~w(title slug summary body horizon starts_on due_on status progress_manual pinned archived)
   @task_write_fields ~w(title slug body priority due_date assignee_id checklist recurrence completed_at archived)
   @plan_write_fields ~w(title slug summary body status starts_on due_on archived)
+  # Skills: el contrato de wire es la superficie de escritura. `owner_user_id`
+  # NO está (el dueño sale de la credencial) y `version`/`content_hash` tampoco:
+  # los administra el changeset y el contexto, nunca el cliente.
+  @skill_write_fields ~w(slug name description body visibility)
 
   def goal_write_fields, do: @goal_write_fields
   def task_write_fields, do: @task_write_fields
   def plan_write_fields, do: @plan_write_fields
+  def skill_write_fields, do: @skill_write_fields
 
   @doc "Strips client params to the goal write fields."
   def permit_goal_params(params), do: Map.take(params, @goal_write_fields)
@@ -72,6 +77,9 @@ defmodule DranWeb.API.Instance do
 
   @doc "Strips client params to the plan write fields (`checklist` has its own door)."
   def permit_plan_params(params), do: Map.take(params, @plan_write_fields)
+
+  @doc "Strips client params to the skill write fields (owner and version are server-side)."
+  def permit_skill_params(params), do: Map.take(params, @skill_write_fields)
 
   @doc """
   Resolves an id-or-slug route segment (Constraint 11).

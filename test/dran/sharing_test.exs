@@ -169,6 +169,24 @@ defmodule Dran.SharingTest do
                _ -> false
              end)
     end
+
+    test "`skill` is a known resource_type (contrato de skills remotos, P6)", %{reader: reader} do
+      # El vocabulario cerrado del grant suma el tipo nuevo: el changeset es la
+      # única puerta, así que un `skill` se comparte con la misma fila que una
+      # página y sin migración (los índices únicos ya cubren el tipo).
+      assert "skill" in ContentShare.resource_types()
+
+      assert {:ok, share} =
+               %ContentShare{}
+               |> ContentShare.changeset(%{
+                 resource_type: "skill",
+                 resource_id: Ecto.UUID.generate(),
+                 user_id: reader.id
+               })
+               |> Repo.insert()
+
+      assert share.resource_type == "skill"
+    end
   end
 
   describe "visibility column" do

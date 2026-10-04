@@ -434,6 +434,14 @@ defmodule DranWeb.Router do
     delete "/plans/:slug", PlanController, :delete
     put "/plans/:slug/checklist", PlanController, :checklist
     post "/checklist/toggle", PlanController, :toggle
+
+    # Skills (write): el MISMO contrato de wire que la web (el changeset es una
+    # sola puerta), con el dueño de la credencial y el destino traducido a
+    # `visibility` + `content_shares` en la misma transacción. El slug es la
+    # dirección del wire: no hay ruta de rename.
+    post "/skills", SkillController, :create
+    put "/skills/:slug", SkillController, :update
+    delete "/skills/:slug", SkillController, :delete
   end
 
   # ── REST API — memory write routes (requires write access) ─────
