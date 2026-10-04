@@ -183,6 +183,32 @@ estas tools son el consumo del agente.
 | `dran_lint_brain` | Auditoría estructural (read-only) |
 | `dran_stats` | Números del dashboard |
 
+### Goals, tasks y planes (contrato de superficies)
+
+El contenedor de trabajo y el plan, cada uno cliente delgado de una ruta del
+REST. El **destino de una escritura** se declara con `scope` (`private` —
+default — o `public`) o con `group` (el slug del grupo donde el dueño es
+miembro): el servidor valida la membresía y falla cerrado con 422.
+
+| Tool | Ruta que golpea |
+|---|---|
+| `dran_list_goals` / `dran_get_goal` | `GET /api/goals`, `GET /api/goals/:id` (+ sus tasks) |
+| `dran_create_goal` / `dran_update_goal` / `dran_delete_goal` | `POST`, `PUT`, `DELETE /api/goals[/:id]` |
+| `dran_list_tasks` / `dran_get_task` | `GET /api/tasks`, `GET /api/tasks/:id` |
+| `dran_create_task` | `POST /api/tasks` — sin `goal` aterriza en el **goal bandeja** del dueño |
+| `dran_capture` | `POST /api/capture` — la captura rápida, misma bandeja |
+| `dran_update_task` | `PUT /api/tasks/:id` — contenido, **nunca** `status`/`goal_id` (eso es del move) |
+| `dran_move_task` | `POST /api/tasks/:id/move` — columna, posición y/o goal, atómico, con `lock_version` (409 al desfase) |
+| `dran_delete_task` | `DELETE /api/tasks/:id` |
+| `dran_list_plans` / `dran_get_plan` | `GET /api/plans`, `GET /api/plans/:id` (+ su checklist y el progreso DERIVADO) |
+| `dran_create_plan` / `dran_update_plan` / `dran_delete_plan` | `POST`, `PUT`, `DELETE /api/plans[/:id]` |
+| `dran_set_plan_checklist` | `PUT /api/plans/:id/checklist` — reemplaza el array ordenado |
+| `dran_toggle_checklist` | `POST /api/checklist/toggle` — tacha/destacha UN ítem de un plan o de una task (`{"target": "plan"\|"task", "id", "index"\|"text"}`) |
+
+El plan es una **entidad** (tabla `plans`, dueño + visibilidad), no un tipo de
+página: sus pasos son el mismo checklist jsonb `[%{text, done}]` de la task, y
+`plan` no se declara como tipo de página custom (el vocabulario es uno solo).
+
 Cada tool escribe por `_DranClient`, así que **todo write lleva
 `X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`
 — Hermes no pasa el nombre de la tool — así que `register()` ata el nombre

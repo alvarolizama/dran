@@ -444,6 +444,175 @@ class _DranClient:
             raise
         return data.get("data") if isinstance(data, dict) else None
 
+    # -- Goals / Tasks / Plans (W2, contrato de superficies) --------------
+    #
+    # Transporte delgado del REST nuevo: el destino de una escritura viaja como
+    # `scope` (mismo vocabulario que la API: "private" | "public" | un grupo por
+    # su slug) y NUNCA como estado del cliente. El uuid es la dirección canónica
+    # y el slug el atajo legible: los dos viajan en el mismo segmento.
+
+    @staticmethod
+    def _goal_scope(scope: str = "", group: str = "") -> Any:
+        """El `scope` de la API: string, o `{"group": slug}` cuando hay grupo."""
+        group = (group or "").strip()
+        if group:
+            return {"group": group}
+        scope = (scope or "").strip()
+        return scope or None
+
+    def list_goals(self, status: str = "", limit: int = 50) -> list:
+        from urllib.parse import urlencode
+        params: Dict[str, Any] = {"limit": limit}
+        if status:
+            params["status"] = status
+        data = self.request("GET", f"/api/goals?{urlencode(params)}")
+        return data.get("data", []) if isinstance(data, dict) else []
+
+    def get_goal(self, goal_id: str) -> Optional[dict]:
+        try:
+            data = self.request("GET", f"/api/goals/{goal_id}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+        return data.get("data") if isinstance(data, dict) else None
+
+    def create_goal(self, title: str, **fields: Any) -> dict:
+        payload = {"title": title}
+        payload.update({k: v for k, v in fields.items() if v is not None and v != ""})
+        return self.request("POST", "/api/goals", payload)
+
+    def update_goal(self, goal_id: str, **fields: Any) -> dict:
+        payload = {k: v for k, v in fields.items() if v is not None}
+        return self.request("PUT", f"/api/goals/{goal_id}", payload)
+
+    def delete_goal(self, goal_id: str) -> bool:
+        try:
+            self.request("DELETE", f"/api/goals/{goal_id}")
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return False
+            raise
+
+    def list_goal_tasks(self, goal_id: str) -> list:
+        try:
+            data = self.request("GET", f"/api/goals/{goal_id}/tasks")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return []
+            raise
+        return data.get("data", []) if isinstance(data, dict) else []
+
+    def list_tasks(self, goal: str = "", status: str = "", limit: int = 100) -> list:
+        from urllib.parse import urlencode
+        params: Dict[str, Any] = {"limit": limit}
+        if goal:
+            params["goal"] = goal
+        if status:
+            params["status"] = status
+        data = self.request("GET", f"/api/tasks?{urlencode(params)}")
+        return data.get("data", []) if isinstance(data, dict) else []
+
+    def get_task(self, task_id: str) -> Optional[dict]:
+        try:
+            data = self.request("GET", f"/api/tasks/{task_id}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+        return data.get("data") if isinstance(data, dict) else None
+
+    def create_task(self, title: str, **fields: Any) -> dict:
+        payload = {"title": title}
+        payload.update({k: v for k, v in fields.items() if v is not None and v != ""})
+        return self.request("POST", "/api/tasks", payload)
+
+    def capture(self, title: str, **fields: Any) -> dict:
+        """Captura rápida: sin `goal`, el servidor la manda a la bandeja."""
+        payload = {"title": title}
+        payload.update({k: v for k, v in fields.items() if v is not None and v != ""})
+        return self.request("POST", "/api/capture", payload)
+
+    def update_task(self, task_id: str, **fields: Any) -> dict:
+        payload = {k: v for k, v in fields.items() if v is not None}
+        return self.request("PUT", f"/api/tasks/{task_id}", payload)
+
+    def move_task(self, task_id: str, **fields: Any) -> dict:
+        """Columna y/o goal: la ÚNICA puerta del move (respeta lock_version)."""
+        payload = {k: v for k, v in fields.items() if v is not None}
+        return self.request("POST", f"/api/tasks/{task_id}/move", payload)
+
+    def delete_task(self, task_id: str) -> bool:
+        try:
+            self.request("DELETE", f"/api/tasks/{task_id}")
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return False
+            raise
+
+    def list_plans(self, status: str = "", limit: int = 50) -> list:
+        from urllib.parse import urlencode
+        params: Dict[str, Any] = {"limit": limit}
+        if status:
+            params["status"] = status
+        data = self.request("GET", f"/api/plans?{urlencode(params)}")
+        return data.get("data", []) if isinstance(data, dict) else []
+
+    def get_plan(self, plan_id: str) -> Optional[dict]:
+        try:
+            data = self.request("GET", f"/api/plans/{plan_id}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+        if not isinstance(data, dict):
+            return None
+        plan = data.get("data")
+        if isinstance(plan, dict) and data.get("progress") is not None:
+            plan = dict(plan)
+            plan["progress"] = data["progress"]
+        return plan
+
+    def create_plan(self, title: str, **fields: Any) -> dict:
+        payload = {"title": title}
+        payload.update({k: v for k, v in fields.items() if v is not None and v != ""})
+        return self.request("POST", "/api/plans", payload)
+
+    def update_plan(self, plan_id: str, **fields: Any) -> dict:
+        payload = {k: v for k, v in fields.items() if v is not None}
+        return self.request("PUT", f"/api/plans/{plan_id}", payload)
+
+    def set_plan_checklist(self, plan_id: str, items: Any,
+                           lock_version: Any = None) -> dict:
+        payload: Dict[str, Any] = {"checklist": items}
+        if lock_version is not None:
+            payload["lock_version"] = lock_version
+        return self.request("PUT", f"/api/plans/{plan_id}/checklist", payload)
+
+    def toggle_checklist(self, target: str, resource_id: str,
+                         index: Any = None, text: str = "",
+                         lock_version: Any = None) -> dict:
+        """La MISMA puerta para los dos contenedores (plan y task)."""
+        payload: Dict[str, Any] = {"target": target, "id": resource_id}
+        if index is not None:
+            payload["index"] = index
+        if text:
+            payload["text"] = text
+        if lock_version is not None:
+            payload["lock_version"] = lock_version
+        return self.request("POST", "/api/checklist/toggle", payload)
+
+    def delete_plan(self, plan_id: str) -> bool:
+        try:
+            self.request("DELETE", f"/api/plans/{plan_id}")
+            return True
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return False
+            raise
+
     def stats(self) -> dict:
         data = self.request("GET", "/api/workspaces")
         return data.get("data", data) if isinstance(data, dict) else {}
@@ -1272,7 +1441,292 @@ def _tool_schemas() -> List[Dict[str, Any]]:
             "description": "Dashboard numbers for the Dran workspace: page counts by type, memory count, relations.",
             "parameters": {"type": "object", "properties": {}},
         },
+        # ── Goals, tasks y planes (contrato de superficies) ────────────────
+        #
+        # El contenedor de trabajo y el plan: tools delgadas sobre el REST
+        # (/api/goals, /api/tasks, /api/plans). El destino de una escritura se
+        # declara con `scope` (`private` | `public`) o con `group` (el slug del
+        # grupo donde el dueño es miembro) — se valida server-side y falla
+        # cerrado con 422.
+        {
+            "name": "dran_list_goals",
+            "description": "List the goals the agent's owner can read (own ∪ public ∪ shared), optionally filtered by status.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["draft", "active", "on_hold", "done", "archived"],
+                               "description": "Optional status filter"},
+                    "limit": {"type": "integer", "description": "Max results (default 50)"},
+                },
+            },
+        },
+        {
+            "name": "dran_get_goal",
+            "description": "Read one goal by uuid or slug (mine, public, or shared with me), with its tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {"id": {"type": "string", "description": "Goal uuid or slug"}},
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_create_goal",
+            "description": "Create a goal (the WHAT: container of work). Destinations: private (default), public, or a group by slug.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Goal title"},
+                    "summary": {"type": "string", "description": "One-line summary"},
+                    "body": {"type": "string", "description": "Markdown body"},
+                    "horizon": {"type": "string", "enum": ["someday", "day", "week", "month", "quarter", "year"]},
+                    "status": {"type": "string", "enum": ["draft", "active", "on_hold", "done", "archived"]},
+                    "due_on": {"type": "string", "description": "Due date (YYYY-MM-DD)"},
+                    "scope": {"type": "string", "enum": ["private", "public"],
+                              "description": "Write destination (default private)"},
+                    "group": {"type": "string", "description": "Group slug to share with (overrides scope)"},
+                },
+                "required": ["title"],
+            },
+        },
+        {
+            "name": "dran_update_goal",
+            "description": "Update a goal's fields (by uuid or slug). The owner is resolved server-side; a share never grants write.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Goal uuid or slug"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "body": {"type": "string"},
+                    "status": {"type": "string", "enum": ["draft", "active", "on_hold", "done", "archived"]},
+                    "horizon": {"type": "string"},
+                    "due_on": {"type": "string", "description": "YYYY-MM-DD"},
+                    "progress_manual": {"type": "integer", "description": "0-100 override for a goal without tasks"},
+                    "pinned": {"type": "boolean"},
+                    "archived": {"type": "boolean"},
+                    "scope": {"type": "string", "enum": ["private", "public"], "description": "Re-declare the destination"},
+                    "group": {"type": "string", "description": "Group slug to share with"},
+                },
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_delete_goal",
+            "description": "Delete a goal by uuid or slug: its tasks (FK delete_all) and its graph edges go with it. Irreversible.",
+            "parameters": {
+                "type": "object",
+                "properties": {"id": {"type": "string", "description": "Goal uuid or slug"}},
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_list_tasks",
+            "description": "List tasks the agent's owner can read (visibility is inherited from the goal), optionally filtered by goal (uuid or slug) and/or status.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": "Goal uuid or slug"},
+                    "status": {"type": "string", "enum": ["backlog", "todo", "in_progress", "done", "cancelled"]},
+                    "limit": {"type": "integer", "description": "Max results (default 100)"},
+                },
+            },
+        },
+        {
+            "name": "dran_create_task",
+            "description": "Create a task. Without `goal` it lands in the owner's inbox goal (created lazily) — that is the quick-capture path.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Task title"},
+                    "goal": {"type": "string", "description": "Goal uuid or slug; omit for the inbox"},
+                    "body": {"type": "string"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
+                    "due_date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "checklist": {"type": "array", "items": {"type": "string"},
+                                  "description": "Ordered steps; each becomes {text, done:false}"},
+                },
+                "required": ["title"],
+            },
+        },
+        {
+            "name": "dran_capture",
+            "description": "Quick capture: one task into the owner's inbox goal, no goal needed. Use it when the user drops a thought to deal with later.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "What to capture"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
+                    "due_date": {"type": "string", "description": "YYYY-MM-DD"},
+                },
+                "required": ["title"],
+            },
+        },
+        {
+            "name": "dran_get_task",
+            "description": "Read one task by uuid, with its checklist and lock_version (needed to move it safely).",
+            "parameters": {
+                "type": "object",
+                "properties": {"id": {"type": "string", "description": "Task uuid"}},
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_update_task",
+            "description": "Update a task's content (title, body, priority, due date, assignee, checklist, recurrence, archived). Status and goal changes go through dran_move_task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Task uuid"},
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
+                    "due_date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "assignee_id": {"type": "integer", "description": "User id"},
+                    "checklist": {"type": "array", "items": {"type": "string"},
+                                  "description": "Replaces the whole checklist (ordered steps)"},
+                    "recurrence": {"type": "string", "enum": ["none", "daily", "weekly", "monthly"]},
+                    "archived": {"type": "boolean"},
+                },
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_move_task",
+            "description": "Move a task: column (status), position (before_id/after_id) and/or goal (uuid or slug), atomically. Pass lock_version to avoid clobbering a concurrent move (409 when stale).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Task uuid"},
+                    "status": {"type": "string", "enum": ["backlog", "todo", "in_progress", "done", "cancelled"]},
+                    "goal": {"type": "string", "description": "Target goal uuid or slug"},
+                    "before_id": {"type": "string", "description": "Put it above this task"},
+                    "after_id": {"type": "string", "description": "Put it below this task"},
+                    "lock_version": {"type": "integer", "description": "Expected version (from a prior read)"},
+                },
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_delete_task",
+            "description": "Delete a task by uuid and its graph edges.",
+            "parameters": {
+                "type": "object",
+                "properties": {"id": {"type": "string", "description": "Task uuid"}},
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_list_plans",
+            "description": "List the plans the agent's owner can read (own ∪ public ∪ shared). A plan is a first-class entity: its steps live in an ordered checklist.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["draft", "active", "on_hold", "done", "archived"]},
+                    "limit": {"type": "integer", "description": "Max results (default 50)"},
+                },
+            },
+        },
+        {
+            "name": "dran_get_plan",
+            "description": "Read one plan by uuid or slug, with its checklist and derived progress (done/total).",
+            "parameters": {
+                "type": "object",
+                "properties": {"id": {"type": "string", "description": "Plan uuid or slug"}},
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_create_plan",
+            "description": "Create a plan with its ordered steps. Destinations: private (default), public, or a group by slug.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Plan title"},
+                    "summary": {"type": "string"},
+                    "body": {"type": "string", "description": "Markdown body"},
+                    "status": {"type": "string", "enum": ["draft", "active", "on_hold", "done", "archived"]},
+                    "due_on": {"type": "string", "description": "YYYY-MM-DD"},
+                    "checklist": {"type": "array", "items": {"type": "string"},
+                                  "description": "The steps, in order"},
+                    "scope": {"type": "string", "enum": ["private", "public"],
+                              "description": "Write destination (default private)"},
+                    "group": {"type": "string", "description": "Group slug to share with (overrides scope)"},
+                },
+                "required": ["title"],
+            },
+        },
+        {
+            "name": "dran_update_plan",
+            "description": "Update a plan's fields (by uuid or slug). The checklist has its own tool (dran_set_plan_checklist / dran_toggle_checklist).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Plan uuid or slug"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "body": {"type": "string"},
+                    "status": {"type": "string", "enum": ["draft", "active", "on_hold", "done", "archived"]},
+                    "due_on": {"type": "string", "description": "YYYY-MM-DD"},
+                    "archived": {"type": "boolean"},
+                    "scope": {"type": "string", "enum": ["private", "public"], "description": "Re-declare the destination"},
+                    "group": {"type": "string", "description": "Group slug to share with"},
+                },
+                "required": ["id"],
+            },
+        },
+        {
+            "name": "dran_set_plan_checklist",
+            "description": "Replace a plan's whole checklist with an ordered list of steps (same canonical shape as a task's checklist).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Plan uuid or slug"},
+                    "checklist": {"type": "array", "items": {"type": "string"},
+                                  "description": "The steps, in order"},
+                    "lock_version": {"type": "integer", "description": "Expected version (409 when stale)"},
+                },
+                "required": ["id", "checklist"],
+            },
+        },
+        {
+            "name": "dran_toggle_checklist",
+            "description": "Check or uncheck ONE checklist item of a plan or a task, by index (0-based) or by its text. Same door for both containers.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string", "enum": ["plan", "task"], "description": "Which container holds the checklist"},
+                    "id": {"type": "string", "description": "Plan/task uuid (or a plan slug)"},
+                    "index": {"type": "integer", "description": "0-based item index"},
+                    "text": {"type": "string", "description": "Item text (case-insensitive) instead of index"},
+                    "lock_version": {"type": "integer", "description": "Expected version (409 when stale)"},
+                },
+                "required": ["target", "id"],
+            },
+        },
+        {
+            "name": "dran_delete_plan",
+            "description": "Delete a plan by uuid or slug and its graph edges. Irreversible.",
+            "parameters": {
+                "type": "object",
+                "properties": {"id": {"type": "string", "description": "Plan uuid or slug"}},
+                "required": ["id"],
+            },
+        },
     ]
+
+
+# Las tools del contenedor de trabajo y del plan (contrato de superficies):
+# goals, tasks, la captura rápida y el checklist. Se despachan juntas para que
+# el dispatcher principal no crezca con 18 ramas, y cada una es un cliente
+# delgado de una ruta del REST.
+_WORK_TOOLS = frozenset({
+    "dran_list_goals", "dran_get_goal", "dran_create_goal", "dran_update_goal",
+    "dran_delete_goal",
+    "dran_list_tasks", "dran_create_task", "dran_get_task", "dran_capture",
+    "dran_update_task", "dran_move_task", "dran_delete_task",
+    "dran_list_plans", "dran_get_plan", "dran_create_plan", "dran_update_plan",
+    "dran_set_plan_checklist", "dran_toggle_checklist", "dran_delete_plan",
+})
 
 
 def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> str:
@@ -1435,10 +1889,247 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
         if tool_name == "dran_stats":
             return json.dumps(client.stats())
 
+        if tool_name in _WORK_TOOLS:
+            return _handle_work_tool(client, tool_name, args)
+
         return json.dumps({"error": f"unknown tool {tool_name}"})
     except Exception as exc:
         logger.warning("Dran plugin tool %s failed: %s", tool_name, exc)
         return json.dumps({"error": f"dran unavailable: {exc}"})
+
+
+def _handle_work_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
+    """Goals, tasks, planes y checklist: cliente delgado del REST (W2).
+
+    Devuelve respuestas acotadas (id/slug/título/estado y, cuando importa, el
+    checklist) y traduce los errores que el agente necesita distinguir: 404
+    (fuera de su alcance o no existe) y 409 (perdió la carrera del
+    `lock_version`) — nunca inventa un resultado.
+    """
+    from urllib.parse import quote
+
+    def seg(key: str = "id") -> str:
+        return quote(str(args.get(key, "")).strip(), safe="")
+
+    def fields(*keys: str) -> Dict[str, Any]:
+        return {k: args[k] for k in keys if args.get(k) is not None and args.get(k) != ""}
+
+    def scope() -> Dict[str, Any]:
+        resolved = client._goal_scope(args.get("scope"), args.get("group"))
+        return {"scope": resolved} if resolved is not None else {}
+
+    def conflict(exc: "urllib.error.HTTPError") -> str:
+        return json.dumps({"error": "stale", "status": exc.code,
+                           "hint": "read it again and retry with the new lock_version"})
+
+    try:
+        if tool_name == "dran_list_goals":
+            goals = client.list_goals(status=str(args.get("status") or ""),
+                                      limit=int(args.get("limit") or 50))
+            return json.dumps({"goals": [_brief(g) for g in goals]})
+
+        if tool_name == "dran_get_goal":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            goal = client.get_goal(seg())
+            if goal is None:
+                return json.dumps({"error": "goal not found"})
+            tasks = client.list_goal_tasks(seg())
+            body = dict(goal)
+            body["tasks"] = [_brief(t) for t in tasks]
+            return json.dumps(body)
+
+        if tool_name == "dran_create_goal":
+            title = str(args.get("title", "")).strip()
+            if not title:
+                return json.dumps({"error": "title is required"})
+            data = client.create_goal(
+                title,
+                **fields("summary", "body", "horizon", "status", "due_on"),
+                **scope(),
+            )
+            return json.dumps({"created": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_update_goal":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            data = client.update_goal(
+                seg(),
+                **fields("title", "summary", "body", "status", "horizon", "due_on",
+                         "progress_manual", "pinned", "archived"),
+                **scope(),
+            )
+            return json.dumps({"updated": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_delete_goal":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            return json.dumps({"deleted": client.delete_goal(seg())})
+
+        if tool_name == "dran_list_tasks":
+            tasks = client.list_tasks(goal=str(args.get("goal") or ""),
+                                      status=str(args.get("status") or ""),
+                                      limit=int(args.get("limit") or 100))
+            return json.dumps({"tasks": [_brief(t) for t in tasks]})
+
+        if tool_name == "dran_create_task":
+            title = str(args.get("title", "")).strip()
+            if not title:
+                return json.dumps({"error": "title is required"})
+            data = client.create_task(
+                title,
+                **fields("goal", "body", "priority", "due_date", "checklist"),
+            )
+            return json.dumps({"created": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_capture":
+            title = str(args.get("title", "")).strip()
+            if not title:
+                return json.dumps({"error": "title is required"})
+            data = client.capture(title, **fields("priority", "due_date"))
+            return json.dumps({"captured": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_get_task":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            task = client.get_task(seg())
+            if task is None:
+                return json.dumps({"error": "task not found"})
+            return json.dumps(_brief(task))
+
+        if tool_name == "dran_update_task":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            data = client.update_task(
+                seg(),
+                **fields("title", "body", "priority", "due_date", "assignee_id",
+                         "checklist", "recurrence", "archived"),
+            )
+            return json.dumps({"updated": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_move_task":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            try:
+                data = client.move_task(
+                    seg(),
+                    **fields("status", "goal", "before_id", "after_id", "lock_version"),
+                )
+            except urllib.error.HTTPError as exc:
+                if exc.code == 409:
+                    return conflict(exc)
+                raise
+            return json.dumps({"moved": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_delete_task":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            return json.dumps({"deleted": client.delete_task(seg())})
+
+        if tool_name == "dran_list_plans":
+            plans = client.list_plans(status=str(args.get("status") or ""),
+                                      limit=int(args.get("limit") or 50))
+            return json.dumps({"plans": [_brief(p) for p in plans]})
+
+        if tool_name == "dran_get_plan":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            plan = client.get_plan(seg())
+            if plan is None:
+                return json.dumps({"error": "plan not found"})
+            return json.dumps(plan)
+
+        if tool_name == "dran_create_plan":
+            title = str(args.get("title", "")).strip()
+            if not title:
+                return json.dumps({"error": "title is required"})
+            data = client.create_plan(
+                title,
+                **fields("summary", "body", "status", "due_on", "checklist"),
+                **scope(),
+            )
+            return json.dumps({"created": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_update_plan":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            data = client.update_plan(
+                seg(),
+                **fields("title", "summary", "body", "status", "due_on", "archived"),
+                **scope(),
+            )
+            return json.dumps({"updated": True, **_brief(data.get("data") or {})})
+
+        if tool_name == "dran_set_plan_checklist":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            checklist = args.get("checklist")
+            if checklist is None:
+                return json.dumps({"error": "checklist is required"})
+            try:
+                data = client.set_plan_checklist(seg(), checklist,
+                                                 lock_version=args.get("lock_version"))
+            except urllib.error.HTTPError as exc:
+                if exc.code == 409:
+                    return conflict(exc)
+                raise
+            return json.dumps(_checklist_answer(data))
+
+        if tool_name == "dran_toggle_checklist":
+            target = str(args.get("target", "")).strip()
+            if target not in ("plan", "task"):
+                return json.dumps({"error": "target must be plan or task"})
+            if args.get("index") is None and not str(args.get("text") or "").strip():
+                return json.dumps({"error": "index or text is required"})
+            try:
+                data = client.toggle_checklist(
+                    target,
+                    seg(),
+                    index=args.get("index"),
+                    text=str(args.get("text") or ""),
+                    lock_version=args.get("lock_version"),
+                )
+            except urllib.error.HTTPError as exc:
+                if exc.code == 409:
+                    return conflict(exc)
+                raise
+            return json.dumps(_checklist_answer(data))
+
+        if tool_name == "dran_delete_plan":
+            if not str(args.get("id", "")).strip():
+                return json.dumps({"error": "id is required"})
+            return json.dumps({"deleted": client.delete_plan(seg())})
+
+        return json.dumps({"error": f"unknown tool {tool_name}"})
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", "replace")
+        try:
+            detail = json.loads(raw).get("errors", {}).get("detail")
+        except ValueError:
+            detail = None
+        return json.dumps({"error": detail or f"dran answered HTTP {exc.code}",
+                           "status": exc.code})
+
+
+def _brief(row: Any) -> Dict[str, Any]:
+    """La fila resumida de un goal/task/plan: lo que el agente necesita para decidir."""
+    if not isinstance(row, dict):
+        return {}
+    keys = ("id", "slug", "title", "status", "priority", "due_date", "due_on",
+            "goal_id", "lock_version", "checklist", "visibility", "owner_user_id",
+            "archived")
+    return {k: row[k] for k in keys if k in row}
+
+
+def _checklist_answer(data: Any) -> Dict[str, Any]:
+    """Respuesta del checklist: la fila, su checklist y el progreso si vino."""
+    payload = data.get("data") if isinstance(data, dict) else None
+    out: Dict[str, Any] = {"data": _brief(payload or {})}
+    if isinstance(data, dict) and isinstance(payload, dict):
+        out["checklist"] = payload.get("checklist")
+    if isinstance(data, dict) and data.get("progress") is not None:
+        out["progress"] = data["progress"]
+    return out
 
 
 def _trim_results(results: Any, *, body_chars: int = 600) -> list:

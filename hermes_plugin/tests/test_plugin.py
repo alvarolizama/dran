@@ -106,6 +106,27 @@ def test_register_registers_memory_provider_and_tools(plugin):
         "dran_start_worker",
         "dran_get_worker_session",
         "dran_stats",
+        # Goals, tasks y planes (contrato de superficies, W2) — en el orden en
+        # que `_tool_schemas()` los declara.
+        "dran_list_goals",
+        "dran_get_goal",
+        "dran_create_goal",
+        "dran_update_goal",
+        "dran_delete_goal",
+        "dran_list_tasks",
+        "dran_create_task",
+        "dran_capture",
+        "dran_get_task",
+        "dran_update_task",
+        "dran_move_task",
+        "dran_delete_task",
+        "dran_list_plans",
+        "dran_get_plan",
+        "dran_create_plan",
+        "dran_update_plan",
+        "dran_set_plan_checklist",
+        "dran_toggle_checklist",
+        "dran_delete_plan",
     ]
     assert len(set(names)) == len(names), "no duplicate tool names"
 
@@ -242,11 +263,14 @@ def test_tool_calls_hit_documented_routes(plugin):
         assert any(p.startswith("/api/search?") for p in paths), paths
         assert any(p.startswith("/api/knowledge-pages?") for p in paths), paths
         assert "/api/workspaces/personal/page-types" in paths, paths
-        assert any(p.startswith("/api/knowledge-pages/s/links?") for p in paths), paths
+        # La ruta REAL del router es `GET /knowledge-pages/:slug/links` (el slug
+        # viaja en el path, sin query): la assert vieja esperaba `…?` y quedaba
+        # roja contra un plugin que llamaba bien. Se corrige contra el router.
+        assert "/api/knowledge-pages/s/links" in paths, paths
         assert "/api/relations" in paths, paths
-        assert any(p.startswith("/api/lint?") for p in paths), paths
+        assert "/api/lint" in paths, paths
         assert "/api/workers" in paths, paths
-        assert any(p.startswith("/api/workers/abc?") for p in paths), paths
+        assert "/api/workers/abc" in paths, paths
         assert "/api/workspaces" in paths, paths
 
         # The workspace is always pinned in the query string.
@@ -424,3 +448,171 @@ def test_create_page_accepts_a_custom_workspace_type(plugin):
 
     assert out["created"] is True
     assert captured["page_type"] == "recipe"
+
+
+# ── Goals / tasks / plans (contrato de superficies, W2) ──────────────────────
+# P10/P11: las tools del contenedor de trabajo y del plan son cliente DELGADO de
+# las rutas del router, y el `scope` viaja con el vocabulario del REST
+# (string del vocabulario, o el grupo anidado) — nunca como estado del cliente.
+
+_WORK_TOOL_CALLS = [
+    ("dran_list_goals", {"status": "active"}),
+    ("dran_get_goal", {"id": "s"}),
+    ("dran_create_goal", {"title": "Meta", "scope": "public"}),
+    ("dran_update_goal", {"id": "s", "status": "done"}),
+    ("dran_delete_goal", {"id": "s"}),
+    ("dran_list_tasks", {"goal": "s", "status": "done"}),
+    ("dran_create_task", {"title": "T", "goal": "s"}),
+    ("dran_get_task", {"id": "1"}),
+    ("dran_capture", {"title": "Idea suelta"}),
+    ("dran_update_task", {"id": "1", "priority": "high"}),
+    ("dran_move_task", {"id": "1", "status": "done", "lock_version": 3}),
+    ("dran_delete_task", {"id": "1"}),
+    ("dran_list_plans", {}),
+    ("dran_get_plan", {"id": "s"}),
+    ("dran_create_plan", {"title": "Lanzamiento", "group": "equipo", "checklist": ["uno"]}),
+    ("dran_update_plan", {"id": "s", "status": "active"}),
+    ("dran_set_plan_checklist", {"id": "s", "checklist": ["uno", "dos"]}),
+    ("dran_toggle_checklist", {"target": "task", "id": "1", "index": 0}),
+    ("dran_delete_plan", {"id": "s"}),
+]
+
+
+def _record_work_routes(plugin):
+    """Corre las 18 tools de trabajo con un cliente falso y devuelve lo llamados."""
+    ctx = FakeCtx(config={"api_key": "k", "base_url": "http://dran.test",
+                          "workspace": "personal"})
+    import os
+    with mock.patch.object(plugin, "_load_dran_config", lambda _home: {}), \
+            mock.patch.object(os.path, "expanduser", lambda p: p):
+        plugin.register(ctx)
+        handlers = {t["name"]: t["handler"] for t in ctx.tools}
+        routes = []
+
+        def fake_request(m, path, payload=None, timeout=None):
+            routes.append((m, path, payload))
+            if m == "GET":
+                return {"data": [], "progress": {"done": 0, "total": 0, "percent": 0}}
+            return {"data": {"id": "1", "slug": "s", "checklist": []},
+                    "progress": {"done": 0, "total": 0, "percent": 0}}
+
+        with mock.patch.object(plugin, "_client_for") as client_for:
+            client = plugin._DranClient("http://dran.test", "k", "personal")
+            client.request = fake_request  # type: ignore[assignment]
+            client_for.return_value = client
+
+            answers = {}
+            for name, args in _WORK_TOOL_CALLS:
+                answers[name] = json.loads(handlers[name](args, ctx=ctx))
+
+    return routes, answers
+
+
+def test_work_tools_hit_the_documented_routes(plugin):
+    """Las 18 tools golpean las rutas que el router sirve (una por verbo)."""
+    routes, answers = _record_work_routes(plugin)
+    verbs = {(m, p) for m, p, _ in routes}
+
+    for expected in [
+        ("GET", "/api/goals?limit=50&status=active"),
+        ("GET", "/api/goals/s"),
+        ("GET", "/api/goals/s/tasks"),
+        ("POST", "/api/goals"),
+        ("PUT", "/api/goals/s"),
+        ("DELETE", "/api/goals/s"),
+        ("GET", "/api/tasks?limit=100&goal=s&status=done"),
+        ("POST", "/api/tasks"),
+        ("GET", "/api/tasks/1"),
+        ("POST", "/api/tasks/1/move"),
+        ("PUT", "/api/tasks/1"),
+        ("DELETE", "/api/tasks/1"),
+        ("POST", "/api/capture"),
+        ("GET", "/api/plans?limit=50"),
+        ("GET", "/api/plans/s"),
+        ("POST", "/api/plans"),
+        ("PUT", "/api/plans/s"),
+        ("DELETE", "/api/plans/s"),
+        ("PUT", "/api/plans/s/checklist"),
+        ("POST", "/api/checklist/toggle"),
+    ]:
+        assert expected in verbs, (expected, sorted(verbs))
+
+    # Ninguna tool falló: la respuesta es la fila (o el sobre de borrado).
+    for name, answer in answers.items():
+        assert "error" not in answer, (name, answer)
+
+
+def test_work_tools_send_the_scope_vocabulary_not_client_state(plugin):
+    """El destino viaja como `scope` del REST: string del vocabulario o grupo."""
+    routes, _ = _record_work_routes(plugin)
+    payloads = {}
+    for _method, path, payload in routes:
+        if isinstance(payload, dict):
+            payloads.setdefault(path, []).append(payload)
+
+    goal = payloads["/api/goals"][0]
+    assert goal["title"] == "Meta"
+    assert goal["scope"] == "public"
+
+    plan = payloads["/api/plans"][0]
+    assert plan["scope"] == {"group": "equipo"}
+    assert plan["checklist"] == ["uno"]
+
+    move = payloads["/api/tasks/1/move"][0]
+    assert move["status"] == "done"
+    assert move["lock_version"] == 3
+
+    toggle = payloads["/api/checklist/toggle"][0]
+    assert toggle == {"target": "task", "id": "1", "index": 0}
+
+    # Un update sin scope NO manda el campo: el destino no se re-declara solo.
+    goal_update = payloads["/api/goals/s"][0]
+    assert "scope" not in goal_update
+
+
+def test_work_tools_reject_missing_arguments_without_calling_the_api(plugin):
+    """Fail-closed en el cliente: sin título/id no hay llamada."""
+    ctx = FakeCtx(config={"api_key": "k", "base_url": "http://dran.test",
+                          "workspace": "personal"})
+
+    class Exploding:
+        def __getattr__(self, _name):
+            raise AssertionError("the API must not be called")
+
+    with mock.patch.object(plugin, "_client_for", return_value=Exploding()):
+        for name, args in [
+            ("dran_create_goal", {}),
+            ("dran_create_task", {}),
+            ("dran_capture", {}),
+            ("dran_get_task", {}),
+            ("dran_create_plan", {}),
+            ("dran_get_goal", {}),
+            ("dran_update_task", {}),
+            ("dran_move_task", {}),
+            ("dran_set_plan_checklist", {"id": "s"}),
+            ("dran_toggle_checklist", {"target": "plan", "id": "s"}),
+            ("dran_toggle_checklist", {"target": "goal", "id": "s", "index": 0}),
+        ]:
+            out = json.loads(plugin._handle_work_tool(
+                plugin._client_for(None), name, args))
+            assert "error" in out, (name, out)
+
+
+def test_toggle_checklist_surfaces_a_stale_lock_as_a_conflict(plugin):
+    """409 del lock optimista: la tool lo dice, no lo esconde."""
+    import io
+    import urllib.error
+
+    class Conflict:
+        def _goal_scope(self, scope, group):
+            return None
+
+        def toggle_checklist(self, *a, **kw):
+            raise urllib.error.HTTPError(
+                "http://dran.test/api/checklist/toggle", 409, "Conflict",
+                {}, io.BytesIO(b'{"errors":{"detail":"checklist changed elsewhere"}}'))
+
+    out = json.loads(plugin._handle_work_tool(Conflict(), "dran_toggle_checklist",
+                                              {"target": "plan", "id": "s", "index": 0}))
+    assert out["error"] == "stale"
+    assert out["status"] == 409

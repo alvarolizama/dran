@@ -52,6 +52,28 @@ provides_tools:
   - dran_generate_cluster_summaries
   - dran_lint_brain
   - dran_stats
+  # Goals, tasks y planes (contrato de superficies, W2): el contenedor de trabajo,
+  # la captura rápida y el checklist. Cada uno es un cliente delgado del REST
+  # (/api/goals, /api/tasks, /api/plans, /api/capture, /api/checklist/toggle).
+  - dran_list_goals
+  - dran_get_goal
+  - dran_create_goal
+  - dran_update_goal
+  - dran_delete_goal
+  - dran_list_tasks
+  - dran_create_task
+  - dran_get_task
+  - dran_move_task
+  - dran_update_task
+  - dran_delete_task
+  - dran_capture
+  - dran_list_plans
+  - dran_get_plan
+  - dran_create_plan
+  - dran_update_plan
+  - dran_set_plan_checklist
+  - dran_toggle_checklist
+  - dran_delete_plan
 # Credential for BOTH surfaces — one token, one attribution: the account token
 # (Dran → Settings → Account → API token). The runtime reads it from the
 # profile .env; the panel's `api_key` field resolves to it.
